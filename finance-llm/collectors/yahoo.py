@@ -9,6 +9,17 @@ RAW_DIR.mkdir(parents=True, exist_ok=True)
 
 TICKERS = ["AAPL", "MSFT", "GOOGL", "TSLA", "AMZN", "NVDA", "META", "JPM"]
 
+# European / Lisbon tickers e ETFs para diversificar o corpus.
+EXTENDED_TICKERS = [
+    "V", "MA", "JNJ", "WMT", "UNH", "HD", "PG", "BAC", "KO", "PEP",
+    "ADBE", "CSCO", "NFLX", "CRM", "IBM", "INTC", "AMD", "QCOM", "COST", "DIS",
+    "MRK", "PFE", "ABT", "TMO", "ACN", "TXN", "NEE", "PM", "RTX", "HON",
+    "UNP", "LOW", "UPS", "LIN", "AMGN", "SPGI", "CAT", "MDT", "BKNG", "SBUX",
+    "MMM", "DUK", "SO", "D", "EDP.LS", "GALP.LS", "BCP.LS", "EGL.LS", "NOS.LS",
+    "EWU", "EWG", "EWP", "EWQ", "EFA", "QQQ", "SPY", "IWM",
+    "XLF", "XLK", "XLE", "XLU", "XLI", "XLP", "XLV", "XLB", "XRT", "ARKK",
+]
+
 
 def download_prices(ticker: str, period: str = "5y", interval: str = "1d") -> pd.DataFrame:
     """Descarrega preços históricos para um ticker."""
@@ -33,5 +44,8 @@ def save_raw(ticker: str, period: str = "5y", interval: str = "1d") -> tuple[Pat
 
 
 if __name__ == "__main__":
-    for t in TICKERS:
-        print(t, "->", save_raw(t))
+    for t in TICKERS + EXTENDED_TICKERS:
+        try:
+            print(t, "->", save_raw(t))
+        except Exception as exc:
+            print("FAIL", t, exc)

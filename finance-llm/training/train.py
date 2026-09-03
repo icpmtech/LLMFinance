@@ -87,4 +87,22 @@ def train_model(
 
 
 if __name__ == "__main__":
-    train_model()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Treina o modelo GPT-2 Finance-LLM")
+    parser.add_argument("--epochs", type=int, default=1)
+    parser.add_argument("--batch_size", type=int, default=8)
+    parser.add_argument("--max_length", type=int, default=128)
+    parser.add_argument("--learning_rate", type=float, default=5e-5)
+    parser.add_argument("--max_samples", type=int, default=None)
+    parser.add_argument("--save_checkpoints", action="store_true", default=True)
+    args = parser.parse_args()
+
+    train_model(
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        max_length=args.max_length,
+        learning_rate=args.learning_rate,
+        max_samples=args.max_samples,
+        save_checkpoints=args.save_checkpoints,
+    )

@@ -34,4 +34,8 @@ export interface ChatResponse {
   message: {
     role: Role;
     content: string;
- 
+    timestamp?: string;
+  };
+  sources: Source[];
+  tools: ToolCall[];
+}

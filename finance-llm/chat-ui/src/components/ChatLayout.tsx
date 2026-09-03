@@ -50,4 +50,14 @@ export function ChatLayout({
           <h2 className="font-semibold">{activeId ? conversations.find((c) => c.id === activeId)?.title || "Conversa" : "Nova conversa"}</h2>
         </header>
 
-        <MessageList messages={messages} streami
+        <MessageList messages={messages} streaming={streaming} />
+        <ChatInput
+          onSend={onSend}
+          loading={loading || streaming}
+          backend={backend}
+          onBackendChange={onBackendChange}
+        />
+      </main>
+    </div>
+  );
+}

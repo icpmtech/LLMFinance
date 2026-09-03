@@ -138,4 +138,11 @@ export default function App() {
       streaming={false}
       backend={backend}
       onSelectConversation={handleSelect}
-      on
+      onNewConversation={handleNew}
+      onDeleteConversation={handleDelete}
+      onSend={handleSend}
+      onBackendChange={setBackend}
+    />
+  );
+}
+

@@ -49,4 +49,19 @@ export function ChatInput({ onSend, loading, backend = "gpt2", onBackendChange }
           rows={1}
           disabled={loading}
           placeholder="Pergunta sobre finanças, ações, indicadores macro..."
-          className="w-full resize-none max-h-40 bg-muted rounded-2xl pl
+          className="w-full resize-none max-h-40 bg-muted rounded-2xl pl-4 pr-12 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/50 border border-transparent focus:border-primary transition"
+        />
+        <button
+          type="submit"
+          disabled={!text.trim() || loading}
+          className="absolute right-2 bottom-2 p-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition"
+        >
+          {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+        </button>
+      </div>
+      <p className="text-center text-xs text-muted-foreground mt-2">
+        O FinanceLLM pode cometer erros. Verifica dados críticos antes de investir.
+      </p>
+    </form>
+  );
+}

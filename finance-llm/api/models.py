@@ -32,4 +32,4 @@ class ChatResponse(BaseModel):
     message: ChatMessage
     sources: List[Source] = []
     tools: List[ToolCall] = []
-    cha
+    chart: Optional[dict] = None

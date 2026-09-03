@@ -1,6 +1,6 @@
 import type { ChatRequest, ChatResponse, Message, ModelBackend } from "./types";
 
-const API_BASE = import.meta.env.VITE_API_URL || "";
+const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001";
 
 export async function sendChat(
   messages: Message[],
@@ -129,4 +129,11 @@ function parseSSELine(
     if (data.token) {
       onToken(data.token);
     }
-    if (data.sour
+    if (data.sources || data.tools) {
+      onDone(data.sources || [], data.tools || []);
+      close();
+    }
+  } catch {
+    onToken(dataMatch[1]);
+  }
+}

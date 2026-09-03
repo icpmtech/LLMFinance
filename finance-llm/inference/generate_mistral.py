@@ -20,18 +20,29 @@ class InferenceModel:
         self.model.to(self.device)
         self.model.eval()
 
-    def generate(self, prompt: str, max_new_tokens: int = 80, temperature: float = 0.8) -> str:
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+    def generate(self, prompt: str, max_new_tokens: int = 50, temperature: float = 0.8) -> str:
+        prompt_with_bos = f"{self.tokenizer.bos_token}{prompt}"
+        encoded = self.tokenizer(prompt_with_bos, return_tensors="pt")
+        input_len = encoded["input_ids"].shape[-1]
+        encoded = encoded.to(self.device)
         with torch.no_grad():
             outputs = self.model.generate(
-                **inputs,
+                **encoded,
                 max_new_tokens=max_new_tokens,
                 do_sample=temperature > 0,
                 temperature=temperature if temperature > 0 else 1.0,
                 pad_token_id=self.tokenizer.pad_token_id,
                 eos_token_id=self.tokenizer.eos_token_id,
+                bos_token_id=self.tokenizer.bos_token_id,
+                top_k=50,
+                top_p=0.95,
+                use_cache=True,
+                early_stopping=True,
+                num_beams=1,
             )
-        return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        new_ids = outputs[0][input_len:]
+        decoded = self.tokenizer.decode(new_ids, skip_special_tokens=True)
+        return decoded.strip()
 
 
 _generate = None

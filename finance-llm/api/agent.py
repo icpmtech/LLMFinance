@@ -89,7 +89,11 @@ def build_context(question: str) -> Dict:
 
 
 def generate_answer(context: Dict, backend: str = "gpt2") -> str:
-    """Gera resposta final com o modelo treinado, enriquecido com dados de mercado."""
+    """Gera resposta final com o modelo treinado, enriquecido com dados de mercado.
+
+    Se o modelo gerativo ainda não estiver suficientemente treinado e devolver
+    texto incoerente, cai numa resposta factual baseada nos dados das ferramentas.
+    """
     q = context["question"]
     stock = context.get("stock")
 
@@ -124,11 +128,73 @@ def generate_answer(context: Dict, backend: str = "gpt2") -> str:
 
     try:
         model = get_inference_model(backend)
-        answer = model.generate(prompt, max_new_tokens=80, temperature=0.8)
+        raw_answer = model.generate(prompt, max_new_tokens=80, temperature=0.7)
     except Exception as exc:
         return f"Erro ao gerar resposta com o modelo {backend}: {exc}"
 
-    return answer.strip()
+    answer = raw_answer.strip()
+    # Tenta isolar a resposta depois de "Answer:" se o modelo repete o contexto.
+    if "Answer:" in answer:
+        answer = answer.split("Answer:", 1)[-1].strip()
+    # Se ainda for lixo, usa fallback factual.
+    if _is_gibberish(answer):
+        answer = _fallback_answer(name, symbol, price, currency, sector, dy, pe, trend, backend)
+    return answer
+
+
+def _is_gibberish(text: str) -> bool:
+    """Heurística para detectar texto gerado incoerente / alucinado."""
+    if not text or len(text.strip()) < 3:
+        return True
+    cleaned = text.strip()
+    words = [w for w in re.split(r"[^a-zA-ZáàâãéêíóôõúçÇ]+", cleaned) if w and len(w) > 1]
+    tokens = [t for t in re.split(r"\s+", cleaned) if t]
+
+    # Poucas palavras reais -> incoerente.
+    if len(words) < 4:
+        return True
+
+    # Muitas palavras repetidas (ex: "and and and...").
+    if len(words) > 5:
+        from collections import Counter
+
+        most_common = Counter(words).most_common(1)
+        if most_common and most_common[0][1] >= 3 and most_common[0][1] / len(words) > 0.25:
+            return True
+
+    # Palavras muito curtas (< 3 letras) ou palavras de ligação dominam o texto.
+    short_words = [w for w in words if len(w) < 3]
+    stopwords = {"the", "and", "of", "in", "to", "a", "is", "for", "on", "at", "as", "or", "it", "its", "an", "do", "that", "this", "with", "from", "by", "are", "was", "were", "be", "been", "have", "has", "had", "will", "would", "could", "should", "can", "may", "might", "so", "if", "but", "not", "no", "yes", "um", "uma", "o", "os", "a", "as", "de", "da", "do", "das", "dos", "em", "no", "na", "nos", "nas", "para", "por", "com", "sem", "que", "e", "ou", "se", "mas", "são", "foi", "ser", "estar"}
+    meaningful = [w for w in words if w.lower() not in stopwords]
+    if len(words) > 5 and len(meaningful) / len(words) < 0.35:
+        return True
+    if len(words) > 5 and len(short_words) / len(words) > 0.5:
+        return True
+
+    # Presença de muitas repetições de duplicatas (ex: "and and", "the the").
+    dupes = sum(1 for i in range(len(words) - 1) if words[i].lower() == words[i + 1].lower())
+    if len(words) > 5 and dupes / len(words) > 0.08:
+        return True
+
+    # Tokens com lixo alfanumérico ou pontuação estranha.
+    weird_tokens = [t for t in tokens if re.search(r"[^a-zA-ZáàâãéêíóôõúçÇ0-9.,;:!?€$%-]", t)]
+    if len(tokens) > 5 and len(weird_tokens) / len(tokens) > 0.2:
+        return True
+
+    return False
+
+
+def _fallback_answer(name, symbol, price, currency, sector, dy, pe, trend, backend: str) -> str:
+    """Resposta factual de fallback quando o modelo gerativo falha."""
+    dy_str = _format_pct(dy)
+    pe_str = "N/A" if pe in (None, "N/A") else f"{float(pe):.2f}"
+    price_str = _format_currency(price, currency)
+    return (
+        f"{name} ({symbol}) cotava a {price_str}. "
+        f"O sector é {sector}, com dividend yield de {dy_str} e P/E de {pe_str}. "
+        f"Tendência de 1 ano: {trend}. "
+        f"Esta resposta é baseada nos dados do Yahoo Finance enquanto o modelo Finance-LLM ({backend}) continua a ser treinado."
+    )
 
 
 def run_chat(messages: List[ChatMessage], backend: str = "gpt2") -> Dict:
