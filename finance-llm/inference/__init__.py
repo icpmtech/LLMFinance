@@ -1,0 +1,1 @@
+"""Inferência do modelo financeiro."""
