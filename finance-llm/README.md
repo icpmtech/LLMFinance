@@ -69,6 +69,13 @@ npm install
 
 Após a instalação, usa os scripts helper para iniciar tudo:
 
+```powershell
+# Backend + frontend (ports 8003 / 4180)
+.\start_solution.ps1
+```
+
+Ou em passos separados:
+
 ```bash
 # Backend na porta 8003 (evita processos fantasmas na 8002)
 start_backend_8003.bat
@@ -79,7 +86,13 @@ npm run build
 npm run preview
 ```
 
-Abre http://127.0.0.1:4173 no browser.
+Abre http://127.0.0.1:4180 no browser.
+
+Para parar a solução completa:
+
+```powershell
+.\stop_solution.ps1
+```
 
 ### Docker Compose
 
