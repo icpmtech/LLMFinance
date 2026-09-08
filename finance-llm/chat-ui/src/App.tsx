@@ -1,7 +1,12 @@
 import { useState, useCallback, useEffect } from "react";
 import { ChatLayout } from "./components/ChatLayout";
-import { sendChat } from "./api";
+import { ForecastPage } from "./pages/ForecastPage";
+import { TickerPage } from "./pages/TickerPage";
+import { RagPage } from "./pages/RagPage";
+import { sendChat } from "./sendChat";
 import type { Message, ModelBackend } from "./types";
+
+type AppView = "chat" | "forecast" | "tickers" | "rag";
 
 const STORAGE_KEY = "finance-llm-conversations";
 
@@ -40,10 +45,23 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [backend, setBackend] = useState<ModelBackend>("gpt2");
   const [loading, setLoading] = useState(false);
+  const [view, setView] = useState<AppView>(() => {
+    if (typeof window === "undefined") return "chat";
+    const path = window.location.pathname.replace(/\/$/, "");
+    if (path === "/rag") return "rag";
+    if (path === "/forecast") return "forecast";
+    if (path === "/tickers") return "tickers";
+    const saved = localStorage.getItem("finance-llm-view");
+    return (saved as AppView) || "chat";
+  });
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
   }, [conversations]);
+
+  useEffect(() => {
+    localStorage.setItem("finance-llm-view", view);
+  }, [view]);
 
   const ensureActiveConversation = useCallback(
     (text: string) => {
@@ -102,7 +120,7 @@ export default function App() {
         updateConversation(id, [...currentMessages, assistantMsg]);
       }
     },
-    [messages, ensureActiveConversation, updateConversation],
+    [messages, backend, ensureActiveConversation, updateConversation],
   );
 
   const handleSelect = useCallback(
@@ -129,6 +147,9 @@ export default function App() {
     [activeId],
   );
 
+  if (view === "forecast") return <ForecastPage onSwitchView={() => setView("chat")} />;
+  if (view === "tickers") return <TickerPage onSwitchView={() => setView("chat")} />;
+  if (view === "rag") return <RagPage onSwitchView={() => setView("chat")} />;
   return (
     <ChatLayout
       conversations={conversations}
@@ -142,6 +163,9 @@ export default function App() {
       onDeleteConversation={handleDelete}
       onSend={handleSend}
       onBackendChange={setBackend}
+      onSwitchView={() => setView("forecast")}
+      onSwitchTickers={() => setView("tickers")}
+      onSwitchRag={() => setView("rag")}
     />
   );
 }

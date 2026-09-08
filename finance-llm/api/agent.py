@@ -6,7 +6,13 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import AsyncIterator, Dict, List, Optional
 
 from api.models import ChatMessage, Source, ToolCall
-from api.tools import TOOLS, extract_tickers, get_stock_history, get_stock_info
+from api.tools import (
+    TOOLS,
+    extract_tickers,
+    forecast_prices,
+    get_stock_history,
+    get_stock_info,
+)
 from inference.generate import InferenceModel as Gpt2InferenceModel
 from inference.generate_mistral import InferenceModel as MistralInferenceModel
 
@@ -65,9 +71,34 @@ def _trend_bars(history) -> str:
     return f"{bar}  {signal} ({change:+.1%})"
 
 
+def _is_forecast_question(question: str) -> bool:
+    """Detecta se o utilizador pede uma previsão/projeção de preços."""
+    keywords = [
+        "previs",
+        "prever",
+        "projet",
+        "projec",
+        "forecast",
+        "predict",
+        "prognos",
+        "expectativa",
+        "futuro",
+        "próximos",
+        "proximos",
+        "irá subir",
+        "vai subir",
+        "vai descer",
+        "irá descer",
+        "preço amanh",
+    ]
+    q = question.lower()
+    return any(k in q for k in keywords)
+
+
 def build_context(question: str) -> Dict:
     """Executa ferramentas relevantes e constroi o contexto da resposta."""
     tickers = extract_tickers(question)
+    wants_forecast = _is_forecast_question(question)
     context = {
         "question": question,
         "tickers": tickers,
@@ -75,6 +106,7 @@ def build_context(question: str) -> Dict:
         "sources": [],
         "stock": None,
         "history": None,
+        "forecast": None,
     }
     for t in tickers[:1]:  # analisar o primeiro ticker identificado
         info = get_stock_info(t)
@@ -85,6 +117,16 @@ def build_context(question: str) -> Dict:
         context["tools"].append(ToolCall(tool="get_stock_history", input={"symbol": t, "period": "1y"}, output=f"{len(history)} dias"))
         if "website" in info and info["website"]:
             context["sources"].append(Source(name=f"Yahoo Finance — {info.get('name', t)}", url=f"https://finance.yahoo.com/quote/{t}", value=str(info.get("price"))))
+
+        if wants_forecast:
+            try:
+                fc = forecast_prices(t, future_days=5, period="5y")
+                context["forecast"] = fc
+                context["tools"].append(ToolCall(tool="forecast_prices", input={"symbol": t, "future_days": 5}, output=json.dumps(fc, default=str, ensure_ascii=False)))
+                if fc.get("plot_path"):
+                    context["sources"].append(Source(name=f"Previsão ARIMA — {info.get('name', t)}", url=f"file://{fc['plot_path']}", value=fc["forecast"][-1]["price"] if fc.get("forecast") else None))
+            except Exception as exc:
+                context["tools"].append(ToolCall(tool="forecast_prices", input={"symbol": t}, output=f"Erro: {exc}"))
     return context
 
 
@@ -114,6 +156,21 @@ def generate_answer(context: Dict, backend: str = "gpt2") -> str:
     currency = stock.get("currency", "EUR")
     symbol = stock["ticker"]
     trend = _trend_bars(context.get("history"))
+    forecast = context.get("forecast")
+
+    forecast_block = ""
+    if forecast and "error" not in forecast:
+        fc_text = "\n".join(
+            f"  {f['date']}: {f['price']:.2f} {currency}"
+            for f in forecast.get("forecast", [])
+        )
+        forecast_block = (
+            f"\nARIMA{forecast['order']} Forecast (next {len(forecast.get('forecast', []))} business days):\n"
+            f"{fc_text}\n"
+            f"  RMSE (test set): {forecast['rmse']:.2f}\n"
+            f"  MAPE (test set): {forecast['mape']:.2f}%\n"
+            f"  Ljung-Box p-value: {forecast['ljung_box_pvalue']:.4f}\n"
+        )
 
     prompt = (
         f"Question: {q}\n"
@@ -123,12 +180,13 @@ def generate_answer(context: Dict, backend: str = "gpt2") -> str:
         f"Dividend Yield: {dy}\n"
         f"P/E: {pe}\n"
         f"Trend (1y): {trend}\n"
+        f"{forecast_block}"
         f"Answer:"
     )
 
     try:
         model = get_inference_model(backend)
-        raw_answer = model.generate(prompt, max_new_tokens=80, temperature=0.7)
+        raw_answer = model.generate(prompt, max_new_tokens=120, temperature=0.7)
     except Exception as exc:
         return f"Erro ao gerar resposta com o modelo {backend}: {exc}"
 
@@ -138,7 +196,9 @@ def generate_answer(context: Dict, backend: str = "gpt2") -> str:
         answer = answer.split("Answer:", 1)[-1].strip()
     # Se ainda for lixo, usa fallback factual.
     if _is_gibberish(answer):
-        answer = _fallback_answer(name, symbol, price, currency, sector, dy, pe, trend, backend)
+        answer = _fallback_answer(
+            name, symbol, price, currency, sector, dy, pe, trend, backend, forecast
+        )
     return answer
 
 
@@ -184,15 +244,32 @@ def _is_gibberish(text: str) -> bool:
     return False
 
 
-def _fallback_answer(name, symbol, price, currency, sector, dy, pe, trend, backend: str) -> str:
+def _fallback_answer(
+    name, symbol, price, currency, sector, dy, pe, trend, backend: str, forecast=None
+) -> str:
     """Resposta factual de fallback quando o modelo gerativo falha."""
     dy_str = _format_pct(dy)
     pe_str = "N/A" if pe in (None, "N/A") else f"{float(pe):.2f}"
     price_str = _format_currency(price, currency)
+
+    forecast_text = ""
+    if forecast and "error" not in forecast:
+        fc_lines = "\n".join(
+            f"- {f['date']}: **{f['price']:.2f} {currency}**" for f in forecast.get("forecast", [])
+        )
+        forecast_text = (
+            f"\n\nPrevisão ARIMA{forecast['order']} para os próximos {len(forecast.get('forecast', []))} dias úteis:\n"
+            f"{fc_lines}\n\n"
+            f"Métricas no conjunto de teste: RMSE={forecast['rmse']:.2f}, MAPE={forecast['mape']:.2f}%. "
+            f"Ljung-Box p-value={forecast['ljung_box_pvalue']:.4f} "
+            f"({'resíduos sem padrão' if forecast['ljung_box_pvalue'] > 0.05 else 'resíduos mostram autocorrelação'})."
+        )
+
     return (
         f"{name} ({symbol}) cotava a {price_str}. "
         f"O sector é {sector}, com dividend yield de {dy_str} e P/E de {pe_str}. "
-        f"Tendência de 1 ano: {trend}. "
+        f"Tendência de 1 ano: {trend}."
+        f"{forecast_text}\n\n"
         f"Esta resposta é baseada nos dados do Yahoo Finance enquanto o modelo Finance-LLM ({backend}) continua a ser treinado."
     )
 

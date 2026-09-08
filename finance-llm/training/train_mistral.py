@@ -2,6 +2,13 @@
 
 Suporta pausa/continuação via sinal SIGUSR1/SIGUSR2 (Linux) ou ficheiro de
 controlo ``training/pause.flag`` em todos os sistemas.
+
+Otimizações para treino em CPU:
+- ``torch.set_num_threads(8)`` equilibra throughput e latência em CPUs Intel
+  de consumo.
+- Acumulação de gradientes permite aumentar o batch virtual sem estourar
+  memória nem tempo por passo.
+- Estado guardado periodicamente permite continuar treino interrompido.
 """
 from pathlib import Path
 from transformers import MistralForCausalLM, PreTrainedTokenizerFast
@@ -18,6 +25,13 @@ FINAL_DIR = ROOT / "data" / "final"
 MODEL_DIR = ROOT / "model" / "mistral-finance"
 PAUSE_FLAG = ROOT / "training" / "pause.flag"
 STATE_FILE = ROOT / "training" / "mistral_state.pt"
+
+# Otimização de CPU: benchmark interno mostrou melhor throughput com 8 threads
+# no Intel Core Ultra 7 255U (14 lógicos / 12 físicos). Ajustar conforme CPU.
+CPU_THREADS = int(os.environ.get("LLMFINANCE_CPU_THREADS", "8"))
+torch.set_num_threads(CPU_THREADS)
+torch.set_num_interop_threads(min(2, CPU_THREADS // 2))
+torch.backends.mkldnn.enabled = True
 
 _pause_requested = False
 _resume_requested = False
@@ -95,6 +109,7 @@ def train_model(
     max_samples: int | None = None,
     save_checkpoints: bool = True,
     resume: bool = False,
+    gradient_accumulation_steps: int = 1,
 ):
     _register_signals()
     tokenizer = PreTrainedTokenizerFast.from_pretrained(MODEL_DIR)
@@ -112,16 +127,29 @@ def train_model(
     if max_samples:
         texts = texts[:max_samples]
 
+    # Pré-truncar a nível de caracteres para acelerar a tokenização (o tokenizer
+    # iria truncar a max_length tokens de qualquer forma).
+    char_limit = max_length * 8
     print(f"[TOKENIZE] tokenizando {len(texts)} exemplos com max_length={max_length}...")
-    encodings = tokenizer(
-        texts,
-        truncation=True,
-        padding="max_length",
-        max_length=max_length,
-        return_tensors="pt",
-    )
-    input_ids = encodings["input_ids"]
-    attention_mask = encodings["attention_mask"]
+    all_input_ids = []
+    all_attention_mask = []
+    for i, txt in enumerate(texts):
+        if len(txt) > char_limit:
+            txt = txt[:char_limit]
+        enc = tokenizer(
+            txt,
+            truncation=True,
+            padding="max_length",
+            max_length=max_length,
+            return_tensors="pt",
+        )
+        all_input_ids.append(enc["input_ids"].squeeze(0))
+        all_attention_mask.append(enc["attention_mask"].squeeze(0))
+        if (i + 1) % 10000 == 0:
+            print(f"  tokenizado {i+1}/{len(texts)}")
+
+    input_ids = torch.stack(all_input_ids)
+    attention_mask = torch.stack(all_attention_mask)
     labels = input_ids.clone()
     labels[attention_mask == 0] = -100
 
@@ -143,10 +171,14 @@ def train_model(
             if rng_state is not None:
                 torch.set_rng_state(rng_state)
 
-    total_steps = len(loader) * epochs
-    step = start_step
+    steps_per_epoch = len(loader)
+    # Contabilizamos "step" como cada passo de gradiente efetivo (depois de accum).
+    effective_steps_per_epoch = (steps_per_epoch + gradient_accumulation_steps - 1) // gradient_accumulation_steps
+    total_steps = effective_steps_per_epoch * epochs
+    step = start_epoch * effective_steps_per_epoch + start_step // max(1, gradient_accumulation_steps)
     epoch = start_epoch
     paused = False
+    accum_counter = 0
 
     while epoch < epochs:
         for batch_idx, batch in enumerate(loader):
@@ -158,7 +190,6 @@ def train_model(
                 print("[PAUSED] treino em pausa. Apague training/pause.flag ou envie SIGUSR2 para continuar.")
 
             if paused:
-                step += 1
                 while paused:
                     _, resume_requested = _check_flag_and_signal()
                     if resume_requested or not PAUSE_FLAG.exists():
@@ -168,27 +199,33 @@ def train_model(
                     time.sleep(1)
                 continue
 
-            step += 1
-            if step <= start_step and resume:
+            # Continuação de treino: saltar batches já processados na época atual.
+            if resume and epoch == start_epoch and batch_idx < start_step:
                 continue
 
             b_input, b_mask, b_labels = (x.to(device) for x in batch)
-            optimizer.zero_grad()
             outputs = model(input_ids=b_input, attention_mask=b_mask, labels=b_labels)
-            loss = outputs.loss
+            loss = outputs.loss / gradient_accumulation_steps
             loss.backward()
-            optimizer.step()
+            accum_counter += 1
 
-            if step % 20 == 0:
-                print(f"step {step}/{total_steps} | epoch {epoch+1}/{epochs} | loss {loss.item():.4f}")
+            if accum_counter % gradient_accumulation_steps == 0:
+                optimizer.step()
+                optimizer.zero_grad()
+                step += 1
 
-            if save_checkpoints and step % 200 == 0:
+            if step % 20 == 0 and accum_counter % gradient_accumulation_steps == 0:
+                print(f"step {step}/{total_steps} | epoch {epoch+1}/{epochs} | loss {loss.item() * gradient_accumulation_steps:.4f}")
+
+            if save_checkpoints and step % 200 == 0 and accum_counter % gradient_accumulation_steps == 0:
+                _save_state(step, epoch, model, optimizer, loss.item() * gradient_accumulation_steps, torch.get_rng_state())
                 ckpt_dir = MODEL_DIR / "checkpoints" / f"step-{step}"
                 ckpt_dir.mkdir(parents=True, exist_ok=True)
                 model.save_pretrained(ckpt_dir)
 
         epoch += 1
         start_step = 0  # Nova época: ignora o offset de step.
+        accum_counter = 0
 
     final_dir = MODEL_DIR / "final"
     final_dir.mkdir(parents=True, exist_ok=True)
@@ -206,6 +243,8 @@ if __name__ == "__main__":
     parser.add_argument("--max_length", type=int, default=128)
     parser.add_argument("--learning_rate", type=float, default=5e-5)
     parser.add_argument("--max_samples", type=int, default=None)
+    parser.add_argument("--gradient_accumulation_steps", type=int, default=1,
+                        help="Número de mini-batches a acumular antes de efetuar optimizer.step().")
     parser.add_argument("--save_checkpoints", action="store_true", default=True)
     parser.add_argument("--resume", action="store_true", default=False,
                         help="Retoma treino a partir do ficheiro training/mistral_state.pt")
@@ -235,4 +274,5 @@ if __name__ == "__main__":
         max_samples=args.max_samples,
         save_checkpoints=args.save_checkpoints,
         resume=args.resume,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
     )

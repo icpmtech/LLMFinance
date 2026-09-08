@@ -39,6 +39,7 @@ export function ChatInput({ onSend, loading, backend = "gpt2", onBackendChange }
         >
           <option value="gpt2">GPT-2 Finance</option>
           <option value="mistral">Mistral Finance</option>
+          <option value="bloomberg">BloombergGPT-style (RAG)</option>
         </select>
       </div>
       <div className="max-w-4xl mx-auto relative">

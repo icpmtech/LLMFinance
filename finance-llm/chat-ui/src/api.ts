@@ -1,139 +1,286 @@
-import type { ChatRequest, ChatResponse, Message, ModelBackend } from "./types";
+import type {
+  Actions,
+  AddTickerRequest,
+  AddTickerResponse,
+  Calendar,
+  Financials,
+  Holders,
+  News,
+  Options,
+  Recommendations,
+  SecFilingsResponse,
+  Sustainability,
+  TechnicalAnalysis,
+  TechnicalExplanation,
+  TickerHistory,
+  TickerInfo,
+  TickerSearchResponse,
+  ForecastRequest,
+  ForecastResponse,
+  RagChatRequest,
+  RagChatResponse,
+  RagDocument,
+  RagExplainResponse,
+  RagSource,
+  UploadPdfResponse,
+} from "./types";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001";
+export const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8003";
 
-export async function sendChat(
-  messages: Message[],
-  backend: ModelBackend = "gpt2"
-): Promise<ChatResponse> {
-  const body: ChatRequest = {
-    messages: messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-      timestamp: m.timestamp,
-    })),
-    model: "finance-llm",
-    backend,
-    stream: false,
-  };
-
-  const res = await fetch(`${API_BASE}/chat?backend=${backend}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Erro do servidor: ${res.status}`);
+export function getPlotUrl(plot_url: string): string {
+  if (plot_url.startsWith("http://") || plot_url.startsWith("https://")) {
+    return plot_url;
   }
+  const path = plot_url.startsWith("/") ? plot_url : `/forecast/plot/${encodeURIComponent(plot_url)}`;
+  return `${API_BASE}${path}`;
+}
 
+
+export async function searchLocalTickers(query: string): Promise<string[]> {
+  const res = await fetch(
+    `${API_BASE}/tickers?${new URLSearchParams({ query: query.trim() })}`,
+  );
+  if (!res.ok) throw new Error(`Erro ao procurar tickers: ${res.status}`);
+  const data: TickerSearchResponse = await res.json();
+  return data.tickers ?? [];
+}
+
+export async function searchYahooTickers(query: string): Promise<TickerSearchResponse> {
+  const res = await fetch(
+    `${API_BASE}/tickers/search/yahoo?${new URLSearchParams({ query: query.trim() })}`,
+  );
+  if (!res.ok) throw new Error(`Erro na pesquisa Yahoo: ${res.status}`);
   return res.json();
 }
 
-export function streamChat(
-  messages: Message[],
-  backend: ModelBackend,
-  onToken: (token: string) => void,
-  onDone: (sources: Message["sources"], tools: Message["tools"]) => void,
-  onError: (err: Error) => void,
-) {
-  const body: ChatRequest = {
-    messages: messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-      timestamp: m.timestamp,
-    })),
-    model: "finance-llm",
-    backend,
-    stream: true,
-  };
+export async function getTickerInfo(ticker: string): Promise<TickerInfo> {
+  const res = await fetch(`${API_BASE}/tickers/${encodeURIComponent(ticker)}/info`);
+  if (!res.ok) throw new Error(`Erro ao obter info: ${res.status}`);
+  return res.json();
+}
 
-  const controller = new AbortController();
-  let closed = false;
-  let buffer = "";
+export async function getTickerHistory(ticker: string, period = "1y"): Promise<TickerHistory> {
+  const res = await fetch(
+    `${API_BASE}/tickers/${encodeURIComponent(ticker)}/history?period=${period}`,
+  );
+  if (!res.ok) throw new Error(`Erro ao obter histórico: ${res.status}`);
+  return res.json();
+}
 
-  fetch(`${API_BASE}/chat/stream?backend=${backend}`, {
+export async function getTickerFinancials(ticker: string): Promise<Financials> {
+  const res = await fetch(`${API_BASE}/tickers/${encodeURIComponent(ticker)}/financials`);
+  if (!res.ok) throw new Error(`Erro ao obter financials: ${res.status}`);
+  return res.json();
+}
+
+export async function getTickerSecFilings(ticker: string, days = 365): Promise<SecFilingsResponse> {
+  const res = await fetch(
+    `${API_BASE}/tickers/${encodeURIComponent(ticker)}/sec-filings?days=${days}`,
+  );
+  if (!res.ok) throw new Error(`Erro ao obter SEC filings: ${res.status}`);
+  return res.json();
+}
+
+export async function getTickerHolders(ticker: string): Promise<Holders> {
+  const res = await fetch(`${API_BASE}/tickers/${encodeURIComponent(ticker)}/holders`);
+  if (!res.ok) throw new Error(`Erro ao obter holders: ${res.status}`);
+  return res.json();
+}
+
+export async function getTickerSustainability(ticker: string): Promise<Sustainability> {
+  const res = await fetch(`${API_BASE}/tickers/${encodeURIComponent(ticker)}/sustainability`);
+  if (!res.ok) throw new Error(`Erro ao obter sustentabilidade: ${res.status}`);
+  return res.json();
+}
+
+export async function getTickerRecommendations(ticker: string): Promise<Recommendations> {
+  const res = await fetch(`${API_BASE}/tickers/${encodeURIComponent(ticker)}/recommendations`);
+  if (!res.ok) throw new Error(`Erro ao obter recomendações: ${res.status}`);
+  return res.json();
+}
+
+export async function getTickerCalendar(ticker: string): Promise<Calendar> {
+  const res = await fetch(`${API_BASE}/tickers/${encodeURIComponent(ticker)}/calendar`);
+  if (!res.ok) throw new Error(`Erro ao obter calendário: ${res.status}`);
+  return res.json();
+}
+
+export async function getTickerNews(ticker: string, maxItems = 10): Promise<News> {
+  const res = await fetch(`${API_BASE}/tickers/${encodeURIComponent(ticker)}/news?max_items=${maxItems}`);
+  if (!res.ok) throw new Error(`Erro ao obter notícias: ${res.status}`);
+  return res.json();
+}
+
+export async function getTickerOptions(ticker: string): Promise<Options> {
+  const res = await fetch(`${API_BASE}/tickers/${encodeURIComponent(ticker)}/options`);
+  if (!res.ok) throw new Error(`Erro ao obter opções: ${res.status}`);
+  return res.json();
+}
+
+export async function getTickerActions(ticker: string): Promise<Actions> {
+  const res = await fetch(`${API_BASE}/tickers/${encodeURIComponent(ticker)}/actions`);
+  if (!res.ok) throw new Error(`Erro ao obter actions: ${res.status}`);
+  return res.json();
+}
+
+export async function getTickerTechnical(
+  ticker: string,
+  period = "1y"
+): Promise<TechnicalAnalysis> {
+  const res = await fetch(
+    `${API_BASE}/tickers/${encodeURIComponent(ticker)}/technical?period=${period}`
+  );
+  if (!res.ok) throw new Error(`Erro ao obter análise técnica: ${res.status}`);
+  return res.json();
+}
+
+export async function getTickerTechnicalExplain(
+  ticker: string,
+  period = "1y"
+): Promise<TechnicalExplanation> {
+  const res = await fetch(
+    `${API_BASE}/tickers/${encodeURIComponent(ticker)}/technical/explain?period=${period}`
+  );
+  if (!res.ok) throw new Error(`Erro ao obter explicação técnica: ${res.status}`);
+  return res.json();
+}
+
+export async function addTicker(ticker: string): Promise<AddTickerResponse> {
+  const res = await fetch(`${API_BASE}/tickers/add`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal: controller.signal,
-  })
-    .then(async (res) => {
-      if (!res.ok || !res.body) {
-        throw new Error(`Erro do servidor: ${res.status}`);
-      }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          parseSSELine(line, onToken, onDone, onError, () => {
-            if (!closed) {
-              closed = true;
-              reader.cancel().catch(() => {});
-              controller.abort();
-            }
-          });
-        }
-      }
-      // process remaining buffer
-      for (const line of buffer.split("\n")) {
-        parseSSELine(line, onToken, onDone, onError, () => {
-          if (!closed) {
-            closed = true;
-            controller.abort();
-          }
-        });
-      }
-    })
-    .catch((err) => {
-      if ((err as Error).name !== "AbortError") {
-        onError(err instanceof Error ? err : new Error(String(err)));
-      }
-    });
-
-  return () => {
-    if (!closed) {
-      closed = true;
-      controller.abort();
-    }
-  };
+    body: JSON.stringify({ ticker } as AddTickerRequest),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao adicionar ticker: ${res.status} - ${text}`);
+  }
+  return res.json();
 }
 
-function parseSSELine(
-  line: string,
-  onToken: (token: string) => void,
-  onDone: (sources: Message["sources"], tools: Message["tools"]) => void,
-  _onError: (err: Error) => void,
-  close: () => void,
-) {
-  const trimmed = line.trim();
-  if (!trimmed || trimmed.startsWith(":")) return;
-
-  const eventMatch = trimmed.match(/^event:\s*(.+)$/);
-  if (eventMatch) {
-    // next line will contain the data; store is not needed for simple parser
-    return;
+export async function runForecast(request: ForecastRequest): Promise<ForecastResponse> {
+  const res = await fetch(`${API_BASE}/forecast`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ${res.status}: ${text}`);
   }
+  return res.json();
+}
 
-  const dataMatch = trimmed.match(/^data:\s*(.+)$/);
-  if (!dataMatch) return;
+export async function uploadPdf(
+  file: File,
+  converter: "auto" | "markitdown" | "pymupdf" = "auto",
+): Promise<UploadPdfResponse> {
+  const form = new FormData();
+  form.append("file", file);
+  const params = new URLSearchParams({ converter });
+  const res = await fetch(`${API_BASE}/rag/upload?${params}`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro no upload: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
 
+export async function listRagDocuments(): Promise<RagDocument[]> {
+  const res = await fetch(`${API_BASE}/rag/documents`);
+  if (!res.ok) throw new Error(`Erro ao listar documentos: ${res.status}`);
+  const data = await res.json();
+  return data.documents ?? [];
+}
+
+export async function deleteRagDocument(docId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/rag/documents/${encodeURIComponent(docId)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`Erro ao apagar documento: ${res.status}`);
+}
+
+export async function askRag(request: RagChatRequest, timeoutMs = 120000): Promise<RagChatResponse> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const data = JSON.parse(dataMatch[1]);
-    if (data.token) {
-      onToken(data.token);
+    const res = await fetch(`${API_BASE}/rag/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Erro RAG: ${res.status} - ${text}`);
     }
-    if (data.sources || data.tools) {
-      onDone(data.sources || [], data.tools || []);
-      close();
-    }
-  } catch {
-    onToken(dataMatch[1]);
+    return res.json();
+  } finally {
+    clearTimeout(timeout);
   }
 }
+
+export async function explainRagAnswer(request: RagChatRequest): Promise<RagExplainResponse> {
+  const res = await fetch(`${API_BASE}/rag/explain`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao explicar: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function streamRagAnswer(
+  request: RagChatRequest,
+  onToken: (token: string) => void,
+  onSources: (sources: RagSource[]) => void,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/rag/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok || !res.body) {
+    const text = await res.text();
+    throw new Error(`Erro streaming RAG: ${res.status} - ${text}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let lines: string[];
+    while ((lines = buffer.split("\n\n")).length > 1) {
+      const raw = lines.shift()!;
+      buffer = lines.join("\n\n");
+      const match = raw.match(/^event: (\w+)\ndata: (.+)$/ms);
+      if (!match) continue;
+      const [, event, data] = match;
+      const parsed = JSON.parse(data);
+      if (event === "sources") onSources(parsed);
+      else if (event === "done") return;
+      else if (parsed.token) onToken(parsed.token);
+    }
+  }
+}
+
+export async function sendBloombergChat(
+  messages: { role: "user" | "assistant" | "system"; content: string }[],
+): Promise<string> {
+  const lastUser = [...messages].reverse().find((m) => m.role === "user");
+  const question = lastUser?.content || "";
+  const res = await askRag({ question });
+  return res.answer;
+}
+

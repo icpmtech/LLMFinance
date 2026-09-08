@@ -20,6 +20,9 @@ interface ChatLayoutProps {
   onDeleteConversation: (id: string) => void;
   onSend: (text: string) => void;
   onBackendChange: (backend: ModelBackend) => void;
+  onSwitchView?: () => void;
+  onSwitchTickers?: () => void;
+  onSwitchRag?: () => void;
 }
 
 export function ChatLayout({
@@ -34,6 +37,9 @@ export function ChatLayout({
   onDeleteConversation,
   onSend,
   onBackendChange,
+  onSwitchView,
+  onSwitchTickers,
+  onSwitchRag,
 }: ChatLayoutProps) {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
@@ -43,6 +49,9 @@ export function ChatLayout({
         onSelect={onSelectConversation}
         onNew={onNewConversation}
         onDelete={onDeleteConversation}
+        onSwitchView={onSwitchView}
+        onSwitchTickers={onSwitchTickers}
+        onSwitchRag={onSwitchRag}
       />
 
       <main className="flex-1 flex flex-col min-w-0">

@@ -1,4 +1,4 @@
-import { Trash2, Plus, MessageSquare } from "lucide-react";
+import { Trash2, Plus, MessageSquare, TrendingUp, LineChart, FolderOpen } from "lucide-react";
 
 interface Conversation {
   id: string;
@@ -11,12 +11,15 @@ interface SidebarProps {
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
+  onSwitchView?: () => void;
+  onSwitchTickers?: () => void;
+  onSwitchRag?: () => void;
 }
 
-export function Sidebar({ conversations, activeId, onSelect, onNew, onDelete }: SidebarProps) {
+export function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, onSwitchView, onSwitchTickers, onSwitchRag }: SidebarProps) {
   return (
     <aside className="w-64 bg-sidebar border-r border-border flex flex-col h-full shrink-0">
-      <div className="p-4">
+      <div className="p-4 space-y-2">
         <button
           onClick={onNew}
           className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl bg-primary text-primary-foreground font-medium hover:opacity-90 transition"
@@ -24,6 +27,33 @@ export function Sidebar({ conversations, activeId, onSelect, onNew, onDelete }: 
           <Plus size={18} />
           Nova conversa
         </button>
+        {onSwitchView && (
+          <button
+            onClick={onSwitchView}
+            className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl bg-card border border-border text-foreground font-medium hover:bg-accent transition"
+          >
+            <TrendingUp size={18} />
+            Previsões
+          </button>
+        )}
+        {onSwitchTickers && (
+          <button
+            onClick={onSwitchTickers}
+            className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl bg-card border border-border text-foreground font-medium hover:bg-accent transition"
+          >
+            <LineChart size={18} />
+            Tickers
+          </button>
+        )}
+        {onSwitchRag && (
+          <button
+            onClick={onSwitchRag}
+            className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl bg-card border border-border text-foreground font-medium hover:bg-accent transition"
+          >
+            <FolderOpen size={18} />
+            RAG Docs
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
