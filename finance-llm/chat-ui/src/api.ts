@@ -20,12 +20,16 @@ import type {
   RagChatRequest,
   RagChatResponse,
   RagDocument,
+  RagDocumentHistoryResponse,
+  RagDocumentUpdate,
   RagExplainResponse,
   RagSource,
   UploadPdfResponse,
 } from "./types";
 
-export const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8003";
+export const API_BASE =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? "" : "http://127.0.0.1:8003");
 
 export function getPlotUrl(plot_url: string): string {
   if (plot_url.startsWith("http://") || plot_url.startsWith("https://")) {
@@ -196,11 +200,57 @@ export async function listRagDocuments(): Promise<RagDocument[]> {
   return data.documents ?? [];
 }
 
+export async function getRagDocument(docId: string): Promise<RagDocument> {
+  const res = await fetch(`${API_BASE}/rag/documents/${encodeURIComponent(docId)}`);
+  if (!res.ok) throw new Error(`Erro ao obter documento: ${res.status}`);
+  return res.json();
+}
+
+export async function updateRagDocument(
+  docId: string,
+  payload: RagDocumentUpdate,
+): Promise<RagDocument> {
+  const res = await fetch(`${API_BASE}/rag/documents/${encodeURIComponent(docId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao atualizar documento: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
 export async function deleteRagDocument(docId: string): Promise<void> {
   const res = await fetch(`${API_BASE}/rag/documents/${encodeURIComponent(docId)}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error(`Erro ao apagar documento: ${res.status}`);
+}
+
+export async function reprocessRagDocument(
+  docId: string,
+  converter: "auto" | "markitdown" | "pymupdf" = "auto",
+): Promise<UploadPdfResponse> {
+  const params = new URLSearchParams({ converter });
+  const res = await fetch(
+    `${API_BASE}/rag/documents/${encodeURIComponent(docId)}/reprocess?${params}`,
+    { method: "POST" },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao reprocessar documento: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function getRagDocumentHistory(
+  docId: string,
+): Promise<RagDocumentHistoryResponse> {
+  const res = await fetch(`${API_BASE}/rag/documents/${encodeURIComponent(docId)}/history`);
+  if (!res.ok) throw new Error(`Erro ao obter histórico: ${res.status}`);
+  return res.json();
 }
 
 export async function askRag(request: RagChatRequest, timeoutMs = 120000): Promise<RagChatResponse> {

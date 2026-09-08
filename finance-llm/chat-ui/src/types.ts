@@ -29,6 +29,25 @@ export interface RagDocument {
   filename: string;
   pages: number;
   indexed: boolean;
+  size_bytes?: number;
+  created_at?: number;
+  updated_at?: number;
+  converter?: "auto" | "markitdown" | "pymupdf";
+}
+
+export interface RagDocumentUpdate {
+  title: string;
+}
+
+export interface RagDocumentHistoryItem {
+  action: string;
+  detail: string;
+  timestamp: number;
+}
+
+export interface RagDocumentHistoryResponse {
+  doc_id: string;
+  history: RagDocumentHistoryItem[];
 }
 
 export interface RagSource {

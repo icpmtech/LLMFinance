@@ -58,6 +58,7 @@ finance-llm/
 # Ambiente Python
 uv venv --python 3.11 .venv
 .venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\pip install markitdown[pdf]
 
 # Frontend
 cd chat-ui
@@ -79,6 +80,25 @@ npm run preview
 ```
 
 Abre http://127.0.0.1:4173 no browser.
+
+### Docker Compose
+
+Para correr backend + frontend em containers, garante que tens Docker Desktop/Engine instalado e corre:
+
+```bash
+docker compose up --build -d
+```
+
+- Frontend: http://127.0.0.1:4180
+- API docs (Swagger): http://127.0.0.1:8003/docs
+
+Para parar:
+
+```bash
+docker compose down
+```
+
+Mais detalhes em [`docs/docker-setup.md`](docs/docker-setup.md).
 
 ## Recolha de dados
 

@@ -10,6 +10,7 @@ from api.models import (
     RagChatRequest,
     RagChatResponse,
     RagDocument,
+    RagDocumentUpdate,
     RagDocumentsResponse,
     RagExplainResponse,
     RagSource,
@@ -48,6 +49,7 @@ async def upload_pdf(
     existing_id = engine.document_store.exists(hashlib_sha256(content))
     if existing_id:
         entry = engine.document_store.get(existing_id)
+        engine.document_store.add_history(existing_id, "upload", "tentativa duplicada")
         return UploadPdfResponse(
             doc_id=entry.doc_id,
             title=entry.title,
@@ -57,11 +59,15 @@ async def upload_pdf(
             message="Documento já existia; não foi re-ingerido.",
         )
 
+    return _ingest_pdf(pdf_path, content, engine, converter)
+
+
+def _ingest_pdf(pdf_path: Path, content: bytes, engine, converter: str) -> UploadPdfResponse:
     use_markitdown = converter in ("auto", "markitdown")
     md_meta = convert_pdf_to_markdown(
         pdf_path,
         MARKDOWN_DIR,
-        title=file.filename[:-4],
+        title=pdf_path.stem,
         use_markitdown=use_markitdown,
     )
     md_path = Path(md_meta["md_path"])
@@ -73,6 +79,7 @@ async def upload_pdf(
     chunk_file = md_path.parent / f"{md_meta['id']}_chunks.jsonl"
     save_chunks(chunks, chunk_file)
 
+    extra = {"converter": converter}
     engine.document_store.add(
         DocumentEntry(
             doc_id=md_meta["id"],
@@ -84,6 +91,8 @@ async def upload_pdf(
             md_path=md_meta["md_path"],
             chunk_file=str(chunk_file),
             indexed=True,
+            converter=converter,
+            extra=extra,
         )
     )
 
@@ -100,6 +109,7 @@ async def upload_pdf(
         ]
     )
     engine.document_store.set_indexed(md_meta["id"], True)
+    engine.document_store.add_history(md_meta["id"], "ingest", f"converter={converter}")
 
     return UploadPdfResponse(
         doc_id=md_meta["id"],
@@ -121,19 +131,109 @@ def hashlib_sha256(data: bytes) -> str:
 def list_documents():
     """Lista os documentos PDF/Markdown disponíveis para o RAG."""
     engine = get_rag_engine()
-    docs = engine.list_documents()
+    docs = engine.document_store.list()
     return RagDocumentsResponse(
         documents=[
             RagDocument(
-                doc_id=d["doc_id"],
-                title=d["title"],
-                filename=d["filename"],
-                pages=d["pages"],
-                indexed=d["indexed"],
+                doc_id=d.doc_id,
+                title=d.title,
+                filename=d.filename,
+                pages=d.pages,
+                indexed=d.indexed,
+                size_bytes=d.size_bytes,
+                created_at=d.created_at,
+                updated_at=d.updated_at,
+                converter=d.converter,
             )
             for d in docs
         ]
     )
+
+
+@router.get("/documents/{doc_id}", response_model=RagDocument)
+def get_document(doc_id: str):
+    """Devolve os detalhes de um documento indexado."""
+    engine = get_rag_engine()
+    entry = engine.document_store.get(doc_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Documento não encontrado.")
+    return RagDocument(
+        doc_id=entry.doc_id,
+        title=entry.title,
+        filename=entry.filename,
+        pages=entry.pages,
+        indexed=entry.indexed,
+        size_bytes=entry.size_bytes,
+        created_at=entry.created_at,
+        updated_at=entry.updated_at,
+        converter=entry.converter,
+    )
+
+
+@router.get("/documents/{doc_id}/history")
+def document_history(doc_id: str):
+    """Devolve o histórico de ações (upload, ingest, update, reprocess, delete) de um documento."""
+    engine = get_rag_engine()
+    entry = engine.document_store.get(doc_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Documento não encontrado.")
+    history = engine.document_store.get_history(doc_id)
+    return {"doc_id": doc_id, "history": history}
+
+
+@router.patch("/documents/{doc_id}", response_model=RagDocument)
+def update_document(doc_id: str, payload: RagDocumentUpdate):
+    """Edita o título de um documento indexado."""
+    engine = get_rag_engine()
+    updated = engine.document_store.update(doc_id, payload.title)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Documento não encontrado.")
+    engine.document_store.add_history(doc_id, "update", f"title={payload.title}")
+    return RagDocument(
+        doc_id=updated.doc_id,
+        title=updated.title,
+        filename=updated.filename,
+        pages=updated.pages,
+        indexed=updated.indexed,
+        size_bytes=updated.size_bytes,
+        created_at=updated.created_at,
+        updated_at=updated.updated_at,
+        converter=updated.converter,
+    )
+
+
+@router.post("/documents/{doc_id}/reprocess", response_model=UploadPdfResponse)
+def reprocess_document(
+    doc_id: str,
+    converter: str = Query("auto", pattern="^(auto|markitdown|pymupdf)$"),
+):
+    """Reprocessa um documento já carregado, regenerando Markdown, chunks e embeddings."""
+    engine = get_rag_engine()
+    entry = engine.document_store.get(doc_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Documento não encontrado.")
+
+    pdf_path = UPLOADS_DIR / entry.filename
+    if not pdf_path.exists():
+        raise HTTPException(status_code=404, detail="Ficheiro PDF original não encontrado.")
+
+    # remover embeddings antigos
+    engine.vector_store.delete_by_doc_id(doc_id)
+    # limpar ficheiros antigos
+    old_md = Path(entry.md_path)
+    if old_md.exists():
+        old_md.unlink()
+    old_chunks = Path(entry.chunk_file)
+    if old_chunks.exists():
+        old_chunks.unlink()
+    # remover entrada para permitir nova ingestão
+    engine.document_store._docs.pop(doc_id, None)
+    engine.document_store._save()
+
+    content = pdf_path.read_bytes()
+    resp = _ingest_pdf(pdf_path, content, engine, converter)
+    engine.document_store.add_history(resp.doc_id, "reprocess", f"converter={converter}")
+    return resp
 
 
 @router.delete("/documents/{doc_id}")

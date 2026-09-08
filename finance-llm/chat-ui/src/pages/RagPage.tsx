@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { deleteRagDocument, listRagDocuments } from "../api";
-import type { RagDocument } from "../types";
+import { deleteRagDocument, getRagDocumentHistory, listRagDocuments, reprocessRagDocument, updateRagDocument } from "../api";
+import type { RagDocument, RagDocumentHistoryItem } from "../types";
 import { PdfUploader } from "../components/PdfUploader";
 import { RagChat } from "../components/RagChat";
 
@@ -33,6 +33,24 @@ export function RagPage({ onSwitchView }: RagPageProps) {
     await refresh();
   };
 
+  const handleUpdate = async (docId: string, title: string) => {
+    await updateRagDocument(docId, { title });
+    await refresh();
+  };
+
+  const handleReprocess = async (
+    docId: string,
+    converter: "auto" | "markitdown" | "pymupdf",
+  ) => {
+    await reprocessRagDocument(docId, converter);
+    await refresh();
+  };
+
+  const handleLoadHistory = async (docId: string): Promise<RagDocumentHistoryItem[]> => {
+    const data = await getRagDocumentHistory(docId);
+    return data.history;
+  };
+
   return (
     <div className="flex flex-col h-screen w-full overflow-hidden bg-background text-foreground">
       <header className="h-14 border-b border-border flex items-center justify-between px-6 bg-card/50 shrink-0">
@@ -55,6 +73,7 @@ export function RagPage({ onSwitchView }: RagPageProps) {
                 <li>Upload converte PDF para Markdown.</li>
                 <li>O texto é dividido em chunks e indexado vetorialmente (FAISS).</li>
                 <li>O BloombergGPT-style responde apenas com base nos documentos.</li>
+                <li>Cada documento tem histórico, edição de título e reprocessamento.</li>
               </ul>
             </div>
           </div>
@@ -64,6 +83,9 @@ export function RagPage({ onSwitchView }: RagPageProps) {
               documents={documents}
               loadingDocs={loadingDocs}
               onDeleteDocument={handleDelete}
+              onUpdateDocument={handleUpdate}
+              onReprocessDocument={handleReprocess}
+              onLoadHistory={handleLoadHistory}
               onRefreshDocuments={refresh}
             />
           </div>

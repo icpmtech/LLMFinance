@@ -306,6 +306,14 @@ class RagDocument(BaseModel):
     filename: str
     pages: int
     indexed: bool
+    size_bytes: int = 0
+    created_at: float = 0.0
+    updated_at: Optional[float] = None
+    converter: Optional[str] = None
+
+
+class RagDocumentUpdate(BaseModel):
+    title: str = Field(..., min_length=1)
 
 
 class RagDocumentsResponse(BaseModel):
