@@ -1,5 +1,6 @@
 """Vector store local com sentence-transformers + FAISS."""
 import json
+import threading
 from pathlib import Path
 from typing import List, Optional, Sequence
 
@@ -13,6 +14,23 @@ try:
 except Exception:  # pragma: no cover
     SentenceTransformer = None
 
+# Cache global do modelo de embeddings para evitar recarregar a cada instância.
+_embed_model_cache: dict = {}
+_embed_model_lock = threading.Lock()
+
+
+def _get_embedding_model(model_name: str, device: str):
+    key = f"{model_name}:{device}"
+    cached = _embed_model_cache.get(key)
+    if cached is not None:
+        return cached
+    if SentenceTransformer is None:
+        raise RuntimeError("sentence-transformers não está instalado.")
+    with _embed_model_lock:
+        if key not in _embed_model_cache:
+            _embed_model_cache[key] = SentenceTransformer(model_name, device=device)
+    return _embed_model_cache[key]
+
 
 class VectorStore:
     def __init__(
@@ -25,15 +43,12 @@ class VectorStore:
 
         if faiss is None:
             raise RuntimeError("faiss-cpu não está instalado.")
-        if SentenceTransformer is None:
-            raise RuntimeError("sentence-transformers não está instalado.")
 
         self.index_dir = Path(index_dir) if index_dir else VECTORS_DIR
         self.index_dir.mkdir(parents=True, exist_ok=True)
         self.model_name = model_name
         self.device = device
-        self.model = SentenceTransformer(model_name, device=device)
-        self.dim = self.model.get_sentence_embedding_dimension()
+        self._model: Optional[SentenceTransformer] = None  # lazy load
 
         self.index_path = self.index_dir / "faiss.index"
         self.chunks_path = self.index_dir / "chunks.jsonl"
@@ -41,6 +56,16 @@ class VectorStore:
         self._chunks: List[dict] = []
         self.index = self._load_or_create_index()
         self._load_chunks()
+
+    @property
+    def model(self):
+        if self._model is None:
+            self._model = _get_embedding_model(self.model_name, self.device)
+        return self._model
+
+    @property
+    def dim(self):
+        return self.model.get_sentence_embedding_dimension()
 
     def _load_or_create_index(self):
         if self.index_path.exists():

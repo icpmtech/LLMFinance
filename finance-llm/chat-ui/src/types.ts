@@ -246,6 +246,87 @@ export interface News {
   error?: string;
 }
 
+export interface ElasticStatus {
+  available: boolean;
+  version?: string;
+  cluster_name?: string;
+  message: string;
+}
+
+export interface ElasticIngestRequest {
+  period?: string;
+  interval?: string;
+}
+
+export interface ElasticIngestPricesResponse {
+  ticker: string;
+  indexed_count: number;
+  total_points: number;
+  period: string;
+  interval: string;
+  message?: string;
+  error?: string;
+}
+
+export interface ElasticIngestNewsResponse {
+  ticker: string;
+  indexed_count: number;
+  total_items: number;
+  message?: string;
+  error?: string;
+}
+
+export interface ElasticSearchPoint {
+  ticker: string;
+  date: string;
+  open?: number;
+  high?: number;
+  low?: number;
+  close?: number;
+  volume?: number;
+  period?: string;
+  ingested_at?: string;
+}
+
+export interface ElasticSearchPricesResponse {
+  ticker: string;
+  total: number;
+  points: ElasticSearchPoint[];
+  start_date?: string;
+  end_date?: string;
+  error?: string;
+}
+
+export interface ElasticSearchNewsItem {
+  ticker: string;
+  title?: string;
+  summary?: string;
+  publisher?: string;
+  published?: string;
+  url?: string;
+  source?: string;
+  ingested_at?: string;
+}
+
+export interface ElasticSearchNewsResponse {
+  ticker: string;
+  total: number;
+  items: ElasticSearchNewsItem[];
+  query?: string;
+  error?: string;
+}
+
+export interface ElasticTickerListResponse {
+  tickers: string[];
+}
+
+export interface ElasticDeleteResponse {
+  ticker: string;
+  prices_deleted?: number;
+  news_deleted?: number;
+  error?: string;
+}
+
 export interface Options {
   ticker: string;
   expiration_dates: string[];

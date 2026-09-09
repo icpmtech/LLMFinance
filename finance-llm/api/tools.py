@@ -224,10 +224,11 @@ def get_stock_info(symbol: str) -> Dict:
         return {"ticker": ticker, "error": str(e)}
 
 
-def get_stock_history(symbol: str, period: str = "1y") -> pd.DataFrame:
-    """Obtém histórico de preços."""
+def get_stock_history(symbol: str, period: str = "1y", interval: str = "1d") -> pd.DataFrame:
+    """Obtém histórico de preços usando Ticker.history (mais robusto que download)."""
     ticker = _normalize_ticker(symbol)
-    df = yf.download(ticker, period=period, interval="1d", progress=False, auto_adjust=True)
+    ticker_obj = yf.Ticker(ticker)
+    df = ticker_obj.history(period=period, interval=interval, auto_adjust=True)
     if df.empty:
         return df
     df = df.reset_index()

@@ -6,6 +6,14 @@ import type {
   AddTickerRequest,
   AddTickerResponse,
   Calendar,
+  ElasticDeleteResponse,
+  ElasticIngestNewsResponse,
+  ElasticIngestPricesResponse,
+  ElasticIngestRequest,
+  ElasticSearchNewsResponse,
+  ElasticSearchPricesResponse,
+  ElasticStatus,
+  ElasticTickerListResponse,
   Financials,
   Holders,
   News,
@@ -120,6 +128,107 @@ export async function getTickerNews(ticker: string, maxItems = 10): Promise<News
 export async function getTickerOptions(ticker: string): Promise<Options> {
   const res = await fetch(`${API_BASE}/tickers/${encodeURIComponent(ticker)}/options`);
   if (!res.ok) throw new Error(`Erro ao obter opções: ${res.status}`);
+  return res.json();
+}
+
+export async function getElasticStatus(): Promise<ElasticStatus> {
+  const res = await fetch(`${API_BASE}/elastic/status`);
+  if (!res.ok) throw new Error(`Erro ao obter estado Elasticsearch: ${res.status}`);
+  return res.json();
+}
+
+export async function ingestElasticPrices(
+  ticker: string,
+  period = "1y",
+  interval = "1d",
+): Promise<ElasticIngestPricesResponse> {
+  const params = new URLSearchParams({ period, interval });
+  const res = await fetch(
+    `${API_BASE}/elastic/ingest/prices/${encodeURIComponent(ticker)}?${params}`,
+    { method: "POST" },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao indexar preços: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function ingestElasticNews(ticker: string): Promise<ElasticIngestNewsResponse> {
+  const res = await fetch(
+    `${API_BASE}/elastic/ingest/news/${encodeURIComponent(ticker)}`,
+    { method: "POST" },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao indexar notícias: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function ingestElasticTicker(
+  ticker: string,
+  request: ElasticIngestRequest,
+): Promise<{ ticker: string; prices: ElasticIngestPricesResponse; news: ElasticIngestNewsResponse }> {
+  const res = await fetch(`${API_BASE}/elastic/ingest/${encodeURIComponent(ticker)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao indexar ticker: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function searchElasticPrices(
+  ticker: string,
+  startDate?: string,
+  endDate?: string,
+  size = 1000,
+): Promise<ElasticSearchPricesResponse> {
+  const params = new URLSearchParams();
+  if (startDate) params.append("start_date", startDate);
+  if (endDate) params.append("end_date", endDate);
+  params.append("size", String(size));
+  const res = await fetch(
+    `${API_BASE}/elastic/search/prices/${encodeURIComponent(ticker)}?${params}`,
+  );
+  if (!res.ok) throw new Error(`Erro ao pesquisar preços: ${res.status}`);
+  return res.json();
+}
+
+export async function searchElasticNews(
+  ticker: string,
+  q?: string,
+  startDate?: string,
+  endDate?: string,
+  size = 50,
+): Promise<ElasticSearchNewsResponse> {
+  const params = new URLSearchParams();
+  if (q) params.append("q", q);
+  if (startDate) params.append("start_date", startDate);
+  if (endDate) params.append("end_date", endDate);
+  params.append("size", String(size));
+  const res = await fetch(
+    `${API_BASE}/elastic/search/news/${encodeURIComponent(ticker)}?${params}`,
+  );
+  if (!res.ok) throw new Error(`Erro ao pesquisar notícias: ${res.status}`);
+  return res.json();
+}
+
+export async function listElasticTickers(): Promise<ElasticTickerListResponse> {
+  const res = await fetch(`${API_BASE}/elastic/tickers`);
+  if (!res.ok) throw new Error(`Erro ao listar tickers indexados: ${res.status}`);
+  return res.json();
+}
+
+export async function deleteElasticTicker(ticker: string): Promise<ElasticDeleteResponse> {
+  const res = await fetch(`${API_BASE}/elastic/tickers/${encodeURIComponent(ticker)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`Erro ao apagar dados: ${res.status}`);
   return res.json();
 }
 

@@ -322,6 +322,89 @@ class RagDocumentsResponse(BaseModel):
     documents: List[RagDocument] = []
 
 
+# --- Elasticsearch schemas ---
+
+class ElasticStatus(BaseModel):
+    available: bool
+    version: Optional[str] = None
+    cluster_name: Optional[str] = None
+    message: str
+
+
+class ElasticIngestPricesResponse(BaseModel):
+    ticker: str
+    indexed_count: int
+    total_points: int
+    period: str = "1y"
+    interval: str = "1d"
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
+class ElasticIngestNewsResponse(BaseModel):
+    ticker: str
+    indexed_count: int
+    total_items: int
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
+class ElasticSearchPoint(BaseModel):
+    ticker: str
+    date: str
+    open: Optional[float] = None
+    high: Optional[float] = None
+    low: Optional[float] = None
+    close: Optional[float] = None
+    volume: Optional[int] = None
+    period: Optional[str] = None
+    ingested_at: Optional[str] = None
+
+
+class ElasticSearchPricesResponse(BaseModel):
+    ticker: str
+    total: int
+    points: List[ElasticSearchPoint] = []
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    error: Optional[str] = None
+
+
+class ElasticSearchNewsItem(BaseModel):
+    ticker: str
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    publisher: Optional[str] = None
+    published: Optional[str] = None
+    url: Optional[str] = None
+    source: Optional[str] = None
+    ingested_at: Optional[str] = None
+
+
+class ElasticSearchNewsResponse(BaseModel):
+    ticker: str
+    total: int
+    items: List[ElasticSearchNewsItem] = []
+    query: Optional[str] = None
+    error: Optional[str] = None
+
+
+class ElasticTickerListResponse(BaseModel):
+    tickers: List[str] = []
+
+
+class ElasticDeleteResponse(BaseModel):
+    ticker: str
+    prices_deleted: Optional[int] = None
+    news_deleted: Optional[int] = None
+    error: Optional[str] = None
+
+
+class ElasticIngestRequest(BaseModel):
+    period: str = "1y"
+    interval: str = "1d"
+
+
 class RagExplainResponse(BaseModel):
     question: str
     answer_preview: str

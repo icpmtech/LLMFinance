@@ -3,10 +3,11 @@ import { ChatLayout } from "./components/ChatLayout";
 import { ForecastPage } from "./pages/ForecastPage";
 import { TickerPage } from "./pages/TickerPage";
 import { RagPage } from "./pages/RagPage";
+import { ElasticPage } from "./pages/ElasticPage";
 import { sendChat } from "./sendChat";
 import type { Message, ModelBackend } from "./types";
 
-type AppView = "chat" | "forecast" | "tickers" | "rag";
+type AppView = "chat" | "forecast" | "tickers" | "rag" | "elastic";
 
 const STORAGE_KEY = "finance-llm-conversations";
 
@@ -51,6 +52,7 @@ export default function App() {
     if (path === "/rag") return "rag";
     if (path === "/forecast") return "forecast";
     if (path === "/tickers") return "tickers";
+    if (path === "/elastic") return "elastic";
     const saved = localStorage.getItem("finance-llm-view");
     return (saved as AppView) || "chat";
   });
@@ -150,6 +152,7 @@ export default function App() {
   if (view === "forecast") return <ForecastPage onSwitchView={() => setView("chat")} />;
   if (view === "tickers") return <TickerPage onSwitchView={() => setView("chat")} />;
   if (view === "rag") return <RagPage onSwitchView={() => setView("chat")} />;
+  if (view === "elastic") return <ElasticPage onSwitchView={() => setView("chat")} />;
   return (
     <ChatLayout
       conversations={conversations}
@@ -166,6 +169,7 @@ export default function App() {
       onSwitchView={() => setView("forecast")}
       onSwitchTickers={() => setView("tickers")}
       onSwitchRag={() => setView("rag")}
+      onSwitchElastic={() => setView("elastic")}
     />
   );
 }

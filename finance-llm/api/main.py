@@ -3,7 +3,6 @@ import json
 from pathlib import Path
 from typing import Annotated, List
 
-import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -16,6 +15,14 @@ from api.models import (
     ChatMessage,
     ChatRequest,
     ChatResponse,
+    ElasticDeleteResponse,
+    ElasticIngestNewsResponse,
+    ElasticIngestPricesResponse,
+    ElasticIngestRequest,
+    ElasticSearchNewsResponse,
+    ElasticSearchPricesResponse,
+    ElasticStatus,
+    ElasticTickerListResponse,
     FinancialsResponse,
     ForecastPoint,
     ForecastRequest,
@@ -39,6 +46,14 @@ from api.models import (
     YahooSearchResult,
 )
 from api.agent import run_chat, stream_chat
+from api.elasticsearch_ingest import (
+    get_elastic_status,
+    ingest_ticker_all,
+    ingest_ticker_news,
+    ingest_ticker_prices,
+    search_ticker_news,
+    search_ticker_prices,
+)
 from api.tools import (
     _normalize_ticker,
     add_ticker,
@@ -61,7 +76,6 @@ from forecasting.arima_model import run_full_pipeline
 
 
 from api.rag_routes import router as rag_router
-from api.rag_service import get_bloomberg_model
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -87,24 +101,18 @@ app.include_router(rag_router)
 
 @app.get("/")
 def read_root():
-    model_path = None
-    try:
-        model = get_bloomberg_model()
-        model_path = model.model_path if model else None
-    except Exception:
-        pass
     return {
         "status": "ok",
         "service": "FinanceLLM API",
         "models": ["gpt2", "mistral", "bloomberg"],
-        "features": ["chat", "forecast", "rag"],
-        "rag_model": model_path,
+        "features": ["chat", "forecast", "rag", "elasticsearch"],
+        "rag_model": None,
     }
 
 
 @app.get("/health")
 def health():
-    return {"status": "healthy", "models": ["gpt2", "mistral", "bloomberg"], "features": ["chat", "forecast", "rag"]}
+    return {"status": "healthy", "models": ["gpt2", "mistral", "bloomberg"], "features": ["chat", "forecast", "rag", "elasticsearch"]}
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -262,6 +270,8 @@ def ticker_history(
     period: str = Query("1y", pattern="^(1mo|3mo|6mo|1y|2y|5y|10y|max)$"),
 ):
     """Devolve histórico de preços de um ticker."""
+    import pandas as pd
+
     ticker = _normalize_ticker(ticker)
     df = get_stock_history(ticker, period=period)
     if df.empty:
@@ -406,3 +416,83 @@ def ticker_technical_explain(ticker: str, period: str = Query("1y", pattern="^(1
         raise HTTPException(status_code=502, detail=f"Erro ao calcular indicadores para {ticker}: {data['error']}")
     explanation = explain_technical_indicators(data)
     return TechnicalExplanation(ticker=ticker, period=period, **explanation)
+
+
+@app.get("/elastic/status", response_model=ElasticStatus)
+def elastic_status():
+    """Devolve o estado de ligação ao Elasticsearch."""
+    return get_elastic_status()
+
+
+@app.post("/elastic/ingest/prices/{ticker}", response_model=ElasticIngestPricesResponse)
+async def elastic_ingest_prices(
+    ticker: str,
+    period: str = Query("1y", pattern="^(1mo|3mo|6mo|1y|2y|5y|10y|max)$"),
+    interval: str = Query("1d", pattern="^(1d|1wk|1mo)$"),
+):
+    """Obtém histórico de preços via yfinance e indexa no Elasticsearch."""
+    ticker = _normalize_ticker(ticker)
+    return await ingest_ticker_prices(ticker, period=period, interval=interval)
+
+
+@app.post("/elastic/ingest/news/{ticker}", response_model=ElasticIngestNewsResponse)
+async def elastic_ingest_news(ticker: str):
+    """Obtém notícias via yfinance e indexa no Elasticsearch."""
+    ticker = _normalize_ticker(ticker)
+    return await ingest_ticker_news(ticker)
+
+
+@app.post("/elastic/ingest/{ticker}")
+async def elastic_ingest_ticker(
+    ticker: str,
+    req: ElasticIngestRequest = ElasticIngestRequest(),
+):
+    """Indexa preços e notícias de um ticker no Elasticsearch."""
+    ticker = _normalize_ticker(ticker)
+    return await ingest_ticker_all(ticker, period=req.period, interval=req.interval)
+
+
+@app.get("/elastic/search/prices/{ticker}", response_model=ElasticSearchPricesResponse)
+def elastic_search_prices(
+    ticker: str,
+    start_date: str = Query(None, description="Data inicial (YYYY-MM-DD)"),
+    end_date: str = Query(None, description="Data final (YYYY-MM-DD)"),
+    size: int = Query(1000, ge=1, le=10000),
+):
+    """Pesquisa preços indexados por ticker e intervalo de datas."""
+    ticker = _normalize_ticker(ticker)
+    return search_ticker_prices(ticker, start_date=start_date, end_date=end_date, size=size)
+
+
+@app.get("/elastic/search/news/{ticker}", response_model=ElasticSearchNewsResponse)
+def elastic_search_news(
+    ticker: str,
+    q: str = Query(None, description="Termo de pesquisa no título/resumo"),
+    start_date: str = Query(None, description="Data inicial (YYYY-MM-DD)"),
+    end_date: str = Query(None, description="Data final (YYYY-MM-DD)"),
+    size: int = Query(50, ge=1, le=500),
+):
+    """Pesquisa notícias indexadas por ticker e texto."""
+    ticker = _normalize_ticker(ticker)
+    return search_ticker_news(ticker, q=q, start_date=start_date, end_date=end_date, size=size)
+
+
+@app.get("/elastic/tickers", response_model=ElasticTickerListResponse)
+def elastic_list_tickers():
+    """Lista os tickers com dados de preços indexados no Elasticsearch."""
+    from api.elasticsearch_client import list_indexed_tickers
+    return ElasticTickerListResponse(tickers=list_indexed_tickers())
+
+
+@app.delete("/elastic/tickers/{ticker}", response_model=ElasticDeleteResponse)
+def elastic_delete_ticker(ticker: str):
+    """Apaga todos os dados de preços e notícias de um ticker no Elasticsearch."""
+    from api.elasticsearch_client import delete_ticker_data
+    ticker = _normalize_ticker(ticker)
+    result = delete_ticker_data(ticker)
+    return ElasticDeleteResponse(
+        ticker=result.get("ticker", ticker),
+        prices_deleted=result.get("prices_deleted"),
+        news_deleted=result.get("news_deleted"),
+        error=result.get("error"),
+    )

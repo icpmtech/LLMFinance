@@ -1,4 +1,4 @@
-import { Trash2, Plus, MessageSquare, TrendingUp, LineChart, FolderOpen } from "lucide-react";
+import { Trash2, Plus, MessageSquare, TrendingUp, LineChart, FolderOpen, Database } from "lucide-react";
 
 interface Conversation {
   id: string;
@@ -14,9 +14,10 @@ interface SidebarProps {
   onSwitchView?: () => void;
   onSwitchTickers?: () => void;
   onSwitchRag?: () => void;
+  onSwitchElastic?: () => void;
 }
 
-export function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, onSwitchView, onSwitchTickers, onSwitchRag }: SidebarProps) {
+export function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, onSwitchView, onSwitchTickers, onSwitchRag, onSwitchElastic }: SidebarProps) {
   return (
     <aside className="w-64 bg-sidebar border-r border-border flex flex-col h-full shrink-0">
       <div className="p-4 space-y-2">
@@ -52,6 +53,15 @@ export function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, on
           >
             <FolderOpen size={18} />
             RAG Docs
+          </button>
+        )}
+        {onSwitchElastic && (
+          <button
+            onClick={onSwitchElastic}
+            className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl bg-card border border-border text-foreground font-medium hover:bg-accent transition"
+          >
+            <Database size={18} />
+            Elasticsearch
           </button>
         )}
       </div>
