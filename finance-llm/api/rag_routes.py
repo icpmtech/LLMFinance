@@ -1,5 +1,7 @@
 """Endpoints FastAPI para RAG: upload de PDFs, chat, documentos e explicação."""
+import asyncio
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import List
 
@@ -10,6 +12,9 @@ from api.models import (
     RagChatRequest,
     RagChatResponse,
     RagDocument,
+    RagDocumentGraphEdge,
+    RagDocumentGraphNode,
+    RagDocumentGraphResponse,
     RagDocumentUpdate,
     RagDocumentsResponse,
     RagExplainResponse,
@@ -24,6 +29,12 @@ from rag.paths import MARKDOWN_DIR, UPLOADS_DIR
 from rag.storage.document_store import DocumentEntry
 
 router = APIRouter(prefix="/rag", tags=["rag"])
+
+# Executor para operações de ingestão pesadas (PDF → Markdown, chunks, embeddings, grafo)
+_ingest_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="rag_ingest_")
+
+# Cache simples para grafos: (doc_id, updated_at, top_k) -> dict
+_graph_cache: dict[str, tuple[float, int, dict]] = {}
 
 
 @router.post("/upload", response_model=UploadPdfResponse)
@@ -59,7 +70,10 @@ async def upload_pdf(
             message="Documento já existia; não foi re-ingerido.",
         )
 
-    return _ingest_pdf(pdf_path, content, engine, converter)
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        _ingest_executor, _ingest_pdf, pdf_path, content, engine, converter
+    )
 
 
 def _ingest_pdf(pdf_path: Path, content: bytes, engine, converter: str) -> UploadPdfResponse:
@@ -203,7 +217,7 @@ def update_document(doc_id: str, payload: RagDocumentUpdate):
 
 
 @router.post("/documents/{doc_id}/reprocess", response_model=UploadPdfResponse)
-def reprocess_document(
+async def reprocess_document(
     doc_id: str,
     converter: str = Query("auto", pattern="^(auto|markitdown|pymupdf)$"),
 ):
@@ -231,7 +245,10 @@ def reprocess_document(
     engine.document_store._save()
 
     content = pdf_path.read_bytes()
-    resp = _ingest_pdf(pdf_path, content, engine, converter)
+    loop = asyncio.get_running_loop()
+    resp = await loop.run_in_executor(
+        _ingest_executor, _ingest_pdf, pdf_path, content, engine, converter
+    )
     engine.document_store.add_history(resp.doc_id, "reprocess", f"converter={converter}")
     return resp
 
@@ -248,14 +265,19 @@ def delete_document(doc_id: str):
 
 
 @router.post("/chat", response_model=RagChatResponse)
-def rag_chat(req: RagChatRequest):
+async def rag_chat(req: RagChatRequest):
     """Responde a uma pergunta usando o RAG com contexto dos documentos."""
     engine = get_rag_engine()
-    result = engine.answer(
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(
+        None,
+        engine.answer,
         req.question,
-        top_k=req.top_k,
-        max_new_tokens=req.max_new_tokens,
-        temperature=req.temperature,
+        req.top_k,
+        req.max_new_tokens,
+        req.temperature,
+        True,
+        req.doc_id,
     )
     return RagChatResponse(
         answer=result["answer"],
@@ -275,7 +297,7 @@ def rag_chat(req: RagChatRequest):
 
 
 @router.post("/chat/stream")
-def rag_chat_stream(req: RagChatRequest):
+async def rag_chat_stream(req: RagChatRequest):
     """Responde via SSE com as sources primeiro e depois os tokens gerados."""
     engine = get_rag_engine()
 
@@ -286,6 +308,7 @@ def rag_chat_stream(req: RagChatRequest):
             top_k=req.top_k,
             max_new_tokens=req.max_new_tokens,
             temperature=req.temperature,
+            doc_id=req.doc_id,
         ):
             if event["type"] == "sources":
                 sources_sent = True
@@ -304,14 +327,19 @@ def rag_chat_stream(req: RagChatRequest):
 
 
 @router.post("/explain", response_model=RagExplainResponse)
-def explain_rag_answer(req: RagChatRequest):
+async def explain_rag_answer(req: RagChatRequest):
     """Explica como a resposta RAG foi construída."""
     engine = get_rag_engine()
-    result = engine.answer(
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(
+        None,
+        engine.answer,
         req.question,
-        top_k=req.top_k,
-        max_new_tokens=req.max_new_tokens,
-        temperature=req.temperature,
+        req.top_k,
+        req.max_new_tokens,
+        req.temperature,
+        True,
+        req.doc_id,
     )
     explanation = explain_prediction(
         req.question,
@@ -320,3 +348,73 @@ def explain_rag_answer(req: RagChatRequest):
         model_name=result.get("model_used"),
     )
     return RagExplainResponse(**explanation)
+
+
+def _build_document_graph(doc_id: str, top_k: int = 5):
+    """Devolve um grafo de chunks do documento ligados por similaridade."""
+    engine = get_rag_engine()
+    entry = engine.document_store.get(doc_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Documento não encontrado.")
+
+    chunks = [c for c in engine.vector_store._chunks if c.get("doc_id") == doc_id]
+    if not chunks:
+        return {"doc_id": doc_id, "title": entry.title, "nodes": [], "edges": []}
+
+    import numpy as np
+
+    embeddings = engine.vector_store.model.encode(
+        [c["text"] for c in chunks],
+        convert_to_numpy=True,
+        normalize_embeddings=True,
+    )
+    sim_matrix = np.matmul(embeddings, embeddings.T)
+    n = len(chunks)
+
+    node_dicts = [
+        {
+            "id": c.get("chunk_id", f"{doc_id}_chunk_{i}"),
+            "doc_id": doc_id,
+            "page": c.get("page"),
+            "text_preview": c.get("text", "")[:180].replace("\n", " "),
+            "section": c.get("metadata", {}).get("section") if isinstance(c.get("metadata"), dict) else None,
+            "chunk_index": i,
+        }
+        for i, c in enumerate(chunks)
+    ]
+
+    edge_dicts = []
+    for i in range(n):
+        ranked = sorted(
+            [(j, float(sim_matrix[i][j])) for j in range(n) if j != i],
+            key=lambda x: x[1],
+            reverse=True,
+        )[:top_k]
+        for j, weight in ranked:
+            # Evita duplicatas simétricas mantendo apenas i < j com peso > threshold.
+            if i < j and weight > 0.55:
+                edge_dicts.append({"source": node_dicts[i]["id"], "target": node_dicts[j]["id"], "weight": weight})
+
+    return {"doc_id": doc_id, "title": entry.title, "nodes": node_dicts, "edges": edge_dicts}
+
+
+@router.get("/documents/{doc_id}/graph", response_model=RagDocumentGraphResponse)
+async def get_document_graph(doc_id: str, top_k: int = Query(5, ge=1, le=20)):
+    """Devolve um grafo de chunks do documento ligados por similaridade (async, cache)."""
+    engine = get_rag_engine()
+    entry = engine.document_store.get(doc_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Documento não encontrado.")
+
+    cache_key = f"{doc_id}:{top_k}"
+    cached = _graph_cache.get(cache_key)
+    if cached and cached[0] == getattr(entry, "updated_at", 0) and cached[1] == top_k:
+        return RagDocumentGraphResponse(**cached[2])
+
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(
+        _ingest_executor,
+        lambda: _build_document_graph(doc_id, top_k),
+    )
+    _graph_cache[cache_key] = (getattr(entry, "updated_at", 0), top_k, result)
+    return RagDocumentGraphResponse(**result)

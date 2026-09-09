@@ -1,6 +1,25 @@
-import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, FileText, Trash2, MessageSquare, Bot, History, Edit2, RefreshCw, Check, X } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import {
+  Send,
+  Loader2,
+  FileText,
+  Trash2,
+  MessageSquare,
+  Bot,
+  History,
+  Edit2,
+  RefreshCw,
+  Check,
+  X,
+  Sparkles,
+  Network,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 import type { RagChatResponse, RagDocument, RagDocumentHistoryItem, RagSource } from "../types";
+import { askRag, explainRagAnswer, streamRagAnswer } from "../api";
+import { Button, Card, CardHeader, CardTitle, Badge } from "./ui";
+import { DocumentGraph } from "./DocumentGraph";
 
 interface RagChatProps {
   documents: RagDocument[];
@@ -21,6 +40,16 @@ function formatDate(ts?: number) {
   return new Date(ts * 1000).toLocaleString("pt-PT");
 }
 
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  sources?: RagSource[];
+  explanation?: string;
+  model?: string;
+  elapsed?: number;
+}
+
 export function RagChat({
   documents,
   loadingDocs,
@@ -32,7 +61,10 @@ export function RagChat({
 }: RagChatProps) {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState<{ id: string; role: "user" | "assistant"; content: string; sources?: RagSource[] }[]>([]);
+  const [streaming, setStreaming] = useState(false);
+  const [llmMode, setLlmMode] = useState(false);
+  const [selectedDocId, setSelectedDocId] = useState<string | "">("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selectedDoc, setSelectedDoc] = useState<RagDocument | null>(null);
   const [history, setHistory] = useState<RagDocumentHistoryItem[]>([]);
@@ -42,7 +74,11 @@ export function RagChat({
   const [reprocessingId, setReprocessingId] = useState<string | null>(null);
   const [reprocessDoc, setReprocessDoc] = useState<RagDocument | null>(null);
   const [reprocessConverter, setReprocessConverter] = useState<"auto" | "markitdown" | "pymupdf">("auto");
+  const [graphDoc, setGraphDoc] = useState<RagDocument | null>(null);
+  const [expandedSources, setExpandedSources] = useState<Record<string, boolean>>({});
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const selectedDocObj = documents.find((d) => d.doc_id === selectedDocId) || null;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -60,32 +96,75 @@ export function RagChat({
       .finally(() => setHistoryLoading(false));
   }, [selectedDoc, onLoadHistory]);
 
-  const handleSend = async () => {
+  const toggleSources = (id: string) => {
+    setExpandedSources((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const handleSend = useCallback(async () => {
     if (!question.trim() || loading) return;
     setLoading(true);
+    setStreaming(false);
     setError(null);
     const q = question.trim();
     setQuestion("");
-    const userMsg = { id: generateId(), role: "user" as const, content: q };
-    const loadingMsg = { id: generateId(), role: "assistant" as const, content: "A pensar..." };
+    const userMsg: ChatMessage = { id: generateId(), role: "user", content: q };
+    const loadingId = generateId();
+    const loadingMsg: ChatMessage = { id: loadingId, role: "assistant", content: "A pensar..." };
     setMessages((prev) => [...prev, userMsg, loadingMsg]);
 
     try {
-      const { askRag } = await import("../api");
-      const res: RagChatResponse = await askRag({ question: q, top_k: 5, temperature: 0.1, max_new_tokens: 64 });
-      setMessages((prev) => prev.map((m) => (m.id === loadingMsg.id ? { id: generateId(), role: "assistant", content: res.answer, sources: res.sources } : m)));
+      if (llmMode) {
+        await streamRagAnswer(
+          { question: q, top_k: 5, temperature: 0.1, max_new_tokens: 128, doc_id: selectedDocId || undefined, stream: true },
+          (token) => {
+            setStreaming(true);
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              if (last?.id !== loadingId) return prev;
+              return [...prev.slice(0, -1), { ...last, content: last.content === "A pensar..." ? token : last.content + token }];
+            });
+          },
+          (sources) => {
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              if (last?.id !== loadingId) return prev;
+              return [...prev.slice(0, -1), { ...last, sources }];
+            });
+          },
+        );
+      } else {
+        const res: RagChatResponse = await askRag({
+          question: q,
+          top_k: 5,
+          temperature: 0.1,
+          max_new_tokens: 128,
+          doc_id: selectedDocId || undefined,
+        });
+        setMessages((prev) =>
+          prev.map((m) => (m.id === loadingId ? { id: generateId(), role: "assistant", content: res.answer, sources: res.sources, model: res.model_used, elapsed: res.elapsed_seconds } : m)),
+        );
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
-      setMessages((prev) => prev.map((m) => (m.id === loadingMsg.id ? { id: generateId(), role: "assistant", content: "❌ Não foi possível responder." } : m)));
+      setMessages((prev) => prev.map((m) => (m.id === loadingId ? { id: generateId(), role: "assistant", content: "❌ Não foi possível responder." } : m)));
     } finally {
       setLoading(false);
+      setStreaming(false);
+    }
+  }, [question, loading, llmMode, selectedDocId]);
+
+  const handleExplain = async (msgId: string) => {
+    const msg = messages.find((m) => m.id === msgId);
+    if (!msg) return;
+    try {
+      const res = await explainRagAnswer({ question: msg.content, top_k: 5 });
+      setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, explanation: res.analysis } : m)));
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  const openDetails = (doc: RagDocument) => {
-    setSelectedDoc(doc);
-  };
-
+  const openDetails = (doc: RagDocument) => setSelectedDoc(doc);
   const closeDetails = () => {
     setSelectedDoc(null);
     setHistory([]);
@@ -112,9 +191,7 @@ export function RagChat({
     setReprocessConverter(doc.converter || "auto");
   };
 
-  const closeReprocess = () => {
-    setReprocessDoc(null);
-  };
+  const closeReprocess = () => setReprocessDoc(null);
 
   const confirmReprocess = async () => {
     if (!reprocessDoc) return;
@@ -122,6 +199,7 @@ export function RagChat({
     setReprocessDoc(null);
     try {
       await onReprocessDocument(reprocessDoc.doc_id, reprocessConverter);
+      await onRefreshDocuments();
     } finally {
       setReprocessingId(null);
     }
@@ -130,20 +208,30 @@ export function RagChat({
   return (
     <div className="flex h-full min-h-0 gap-4">
       {/* Documentos */}
-      <aside className="w-72 xl:w-80 bg-card border border-border rounded-2xl flex flex-col h-full min-h-0 overflow-hidden">
-        <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
-          <h3 className="font-semibold flex items-center gap-2">
-            <FileText size={18} />
-            Documentos
-          </h3>
-          <button
-            onClick={onRefreshDocuments}
-            disabled={loadingDocs}
-            className="text-xs text-muted-foreground hover:text-foreground transition"
-          >
+      <aside className="w-72 xl:w-80 bg-card border border-border rounded-2xl flex flex-col h-full min-h-0 overflow-hidden shadow-sm">
+        <CardHeader className="p-4 border-b border-border shrink-0">
+          <CardTitle icon={<FileText size={18} className="text-primary" />}>Documentos</CardTitle>
+          <Button variant="ghost" size="sm" loading={loadingDocs} onClick={onRefreshDocuments}>
             {loadingDocs ? "A carregar..." : "Atualizar"}
-          </button>
+          </Button>
+        </CardHeader>
+
+        <div className="p-3 border-b border-border">
+          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Selecionar contexto (opcional)</label>
+          <select
+            value={selectedDocId}
+            onChange={(e) => setSelectedDocId(e.target.value)}
+            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+          >
+            <option value="">Todos os documentos</option>
+            {documents.map((doc) => (
+              <option key={doc.doc_id} value={doc.doc_id}>
+                {doc.title}
+              </option>
+            ))}
+          </select>
         </div>
+
         <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
           {documents.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
@@ -151,15 +239,16 @@ export function RagChat({
             </p>
           ) : (
             documents.map((doc) => (
-              <div
+              <Card
                 key={doc.doc_id}
-                className="group flex flex-col gap-2 p-3 rounded-xl bg-muted/50 hover:bg-muted transition"
+                padding="sm"
+                className={`group transition hover:border-primary/30 ${selectedDocId === doc.doc_id ? "border-primary/60 bg-primary/5" : "bg-muted/40"}`}
               >
                 <div className="flex items-start gap-2">
-                  <button onClick={() => openDetails(doc)} className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground" title="Ver detalhes">
+                  <Button variant="ghost" size="sm" className="p-1 h-auto" onClick={() => openDetails(doc)} title="Ver detalhes">
                     <History size={16} />
-                  </button>
-                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openDetails(doc)}>
+                  </Button>
+                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setSelectedDocId(doc.doc_id)}>
                     {editingId === doc.doc_id ? (
                       <input
                         value={editTitle}
@@ -168,107 +257,161 @@ export function RagChat({
                           if (e.key === "Enter") confirmEdit(doc.doc_id);
                           if (e.key === "Escape") cancelEdit();
                         }}
-                        className="w-full text-sm bg-background border border-border rounded px-2 py-1"
+                        className="w-full text-sm bg-background border border-border rounded-lg px-2 py-1"
                         autoFocus
                       />
                     ) : (
                       <p className="text-sm font-medium truncate">{doc.title}</p>
                     )}
                     <p className="text-xs text-muted-foreground">
-                      {doc.pages} pág. • {doc.converter || "auto"} {doc.indexed ? "• indexado" : ""}
+                      {doc.pages} pág. • {doc.converter || "auto"} {doc.indexed && <Badge variant="success" className="ml-1">indexado</Badge>}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition">
+                <div className="flex items-center justify-end gap-1 mt-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition">
                   {editingId === doc.doc_id ? (
                     <>
-                      <button onClick={() => confirmEdit(doc.doc_id)} className="p-1 hover:text-green-600" title="Guardar">
-                        <Check size={14} />
-                      </button>
-                      <button onClick={cancelEdit} className="p-1 hover:text-destructive" title="Cancelar">
-                        <X size={14} />
-                      </button>
+                      <Button variant="ghost" size="sm" className="p-1 h-auto" onClick={() => confirmEdit(doc.doc_id)} title="Guardar">
+                        <Check size={14} className="text-emerald-400" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="p-1 h-auto" onClick={cancelEdit} title="Cancelar">
+                        <X size={14} className="text-destructive" />
+                      </Button>
                     </>
                   ) : (
                     <>
-                      <button onClick={() => startEdit(doc)} className="p-1 hover:text-primary" title="Editar título">
+                      <Button variant="ghost" size="sm" className="p-1 h-auto" onClick={() => startEdit(doc)} title="Editar título">
                         <Edit2 size={14} />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="p-1 h-auto"
+                        onClick={() => setGraphDoc(doc)}
+                        title="Ver grafo"
+                      >
+                        <Network size={14} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="p-1 h-auto"
                         onClick={() => openReprocess(doc)}
-                        disabled={reprocessingId === doc.doc_id}
-                        className="p-1 hover:text-primary disabled:opacity-40"
+                        loading={reprocessingId === doc.doc_id}
                         title="Reprocessar"
                       >
-                        {reprocessingId === doc.doc_id ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                      </button>
-                      <button
+                        {reprocessingId !== doc.doc_id && <RefreshCw size={14} />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="p-1 h-auto"
                         onClick={() => onDeleteDocument(doc.doc_id)}
-                        className="p-1 hover:text-destructive"
                         title="Apagar"
                       >
-                        <Trash2 size={14} />
-                      </button>
+                        <Trash2 size={14} className="text-destructive" />
+                      </Button>
                     </>
                   )}
                 </div>
-              </div>
+              </Card>
             ))
           )}
         </div>
       </aside>
 
       {/* Chat */}
-      <div className="rag-chat-container flex-1 min-h-0 flex flex-col bg-card border border-border rounded-2xl h-full overflow-hidden">
-        <div className="p-4 border-b border-border shrink-0">
-          <h3 className="font-semibold flex items-center gap-2">
-            <Bot size={18} />
-            Chat RAG BloombergGPT
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            Respostas baseadas apenas nos documentos carregados.
-          </p>
+      <div className="flex-1 min-h-0 flex flex-col bg-card border border-border rounded-2xl h-full overflow-hidden shadow-sm">
+        <div className="p-4 border-b border-border shrink-0 flex items-start justify-between gap-4">
+          <div>
+            <h3 className="font-semibold flex items-center gap-2">
+              <Bot size={18} className="text-primary" />
+              Chat RAG BloombergGPT
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Respostas baseadas apenas nos documentos carregados.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {selectedDocObj && <Badge variant="info">{selectedDocObj.title}</Badge>}
+            <Button
+              variant={llmMode ? "primary" : "outline"}
+              size="sm"
+              icon={<Sparkles size={14} />}
+              onClick={() => setLlmMode((v) => !v)}
+              title={llmMode ? "Desativar modo LLM streaming" : "Ativar modo LLM streaming"}
+            >
+              LLM
+            </Button>
+          </div>
         </div>
 
-        <div className="rag-messages flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
           {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-            >
+            <div key={msg.id} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
               <div
-                className={`max-w-[80%] p-4 rounded-2xl text-sm ${
+                className={`max-w-[85%] p-4 rounded-2xl text-sm ${
                   msg.role === "user"
                     ? "bg-primary text-primary-foreground rounded-br-md"
-                    : "bg-muted text-foreground rounded-bl-md"
+                    : "bg-muted text-foreground rounded-bl-md border border-border"
                 }`}
               >
-                {msg.role === "assistant" && <Bot size={14} className="inline mr-2 mb-0.5 text-muted-foreground" />}
-                {msg.role === "user" && <MessageSquare size={14} className="inline mr-2 mb-0.5" />}
+                <div className="flex items-center gap-2 mb-1 text-xs opacity-80">
+                  {msg.role === "assistant" ? <Bot size={12} /> : <MessageSquare size={12} />}
+                  <span className="capitalize">{msg.role === "user" ? "Tu" : "BloombergGPT"}</span>
+                  {msg.model && <span className="ml-auto">{msg.model}</span>}
+                </div>
                 <div className="whitespace-pre-wrap">{msg.content}</div>
                 {msg.sources && msg.sources.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-border/50 space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground">Fontes:</p>
-                    {msg.sources.map((s, idx) => (
-                      <p key={idx} className="text-xs text-muted-foreground truncate" title={s.text}>
-                        {idx + 1}. {s.doc_title} {s.page ? `(p. ${s.page})` : ""}
-                      </p>
-                    ))}
+                  <div className="mt-3 pt-3 border-t border-border/50">
+                    <button
+                      onClick={() => toggleSources(msg.id)}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-1"
+                    >
+                      {expandedSources[msg.id] ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                      Fontes ({msg.sources.length})
+                    </button>
+                    {expandedSources[msg.id] && (
+                      <div className="space-y-1">
+                        {msg.sources.map((s, idx) => (
+                          <p key={idx} className="text-xs text-muted-foreground truncate" title={s.text}>
+                            {idx + 1}. {s.doc_title} {s.page ? `(p. ${s.page})` : ""}
+                            {s.score != null && <span className="ml-1 text-sky-400">({s.score.toFixed(2)})</span>}
+                          </p>
+                        ))}
+                      </div>
+                    )}
                   </div>
+                )}
+                {msg.explanation && (
+                  <div className="mt-3 pt-3 border-t border-border/50 text-xs text-muted-foreground">
+                    <strong>Porque esta resposta?</strong> <br />{msg.explanation}
+                  </div>
+                )}
+                {msg.role === "assistant" && !msg.explanation && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2 h-auto py-1 px-2 text-xs"
+                    onClick={() => handleExplain(msg.id)}
+                    icon={<Sparkles size={12} />}
+                  >
+                    Explicar resposta
+                  </Button>
                 )}
               </div>
             </div>
           ))}
-          {loading && (
+          {loading && !streaming && (
             <div className="flex gap-3 justify-start">
-              <div className="bg-muted p-4 rounded-2xl rounded-bl-md flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="bg-muted p-4 rounded-2xl rounded-bl-md flex items-center gap-2 text-sm text-muted-foreground border border-border">
                 <Loader2 size={16} className="animate-spin" />
                 A pensar...
               </div>
             </div>
           )}
           {error && (
-            <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">
+            <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 p-3 rounded-xl">
               {error}
             </div>
           )}
@@ -282,16 +425,18 @@ export function RagChat({
               onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
               disabled={loading}
-              placeholder="Pergunta sobre os documentos carregados..."
+              placeholder={llmMode ? "Pergunta em modo LLM streaming..." : "Pergunta sobre os documentos carregados..."}
               className="flex-1 bg-muted rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/50 border border-transparent focus:border-primary transition"
             />
-            <button
+            <Button
               onClick={handleSend}
               disabled={!question.trim() || loading}
-              className="px-4 py-3 rounded-xl bg-primary text-primary-foreground disabled:opacity-40 hover:opacity-90 transition"
+              loading={loading}
+              icon={<Send size={18} />}
+              size="lg"
             >
-              {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-            </button>
+              Enviar
+            </Button>
           </div>
         </div>
       </div>
@@ -299,28 +444,51 @@ export function RagChat({
       {/* Detalhes / Histórico */}
       {selectedDoc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-card border border-border rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col shadow-lg">
-            <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
-              <h4 className="font-semibold flex items-center gap-2">
-                <History size={18} />
-                Histórico do documento
-              </h4>
-              <button onClick={closeDetails} className="p-1 hover:text-destructive">
+          <Card className="w-full max-w-md max-h-[80vh] flex flex-col" padding="none">
+            <CardHeader className="p-4 border-b border-border shrink-0">
+              <CardTitle icon={<History size={18} className="text-primary" />}>Detalhes do documento</CardTitle>
+              <Button variant="ghost" size="sm" className="p-1 h-auto" onClick={closeDetails}>
                 <X size={18} />
-              </button>
-            </div>
-            <div className="p-4 overflow-y-auto space-y-3">
-              <div className="text-sm space-y-1">
-                <p><span className="font-medium">Título:</span> {selectedDoc.title}</p>
-                <p><span className="font-medium">Ficheiro:</span> {selectedDoc.filename}</p>
-                <p><span className="font-medium">Páginas:</span> {selectedDoc.pages}</p>
-                <p><span className="font-medium">Tamanho:</span> {selectedDoc.size_bytes ? `${(selectedDoc.size_bytes / 1024).toFixed(1)} KB` : "—"}</p>
-                <p><span className="font-medium">Conversor:</span> {selectedDoc.converter || "auto"}</p>
-                <p><span className="font-medium">Criado:</span> {formatDate(selectedDoc.created_at)}</p>
-                <p><span className="font-medium">Atualizado:</span> {formatDate(selectedDoc.updated_at)}</p>
+              </Button>
+            </CardHeader>
+
+            <div className="p-5 overflow-y-auto space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Título</p>
+                  <p className="font-medium">{selectedDoc.title}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Ficheiro</p>
+                  <p className="font-medium truncate">{selectedDoc.filename}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Páginas</p>
+                  <p className="font-medium">{selectedDoc.pages}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Tamanho</p>
+                  <p className="font-medium">{selectedDoc.size_bytes ? `${(selectedDoc.size_bytes / 1024).toFixed(1)} KB` : "—"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Conversor</p>
+                  <p className="font-medium capitalize">{selectedDoc.converter || "auto"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Estado</p>
+                  <p className="font-medium">{selectedDoc.indexed ? <Badge variant="success">indexado</Badge> : <Badge>pendente</Badge>}</p>
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <p className="text-xs text-muted-foreground">Criado / Atualizado</p>
+                  <p className="font-medium">{formatDate(selectedDoc.created_at)} • {formatDate(selectedDoc.updated_at)}</p>
+                </div>
               </div>
+
               <hr className="border-border" />
-              <h5 className="text-sm font-medium">Ações</h5>
+
+              <h5 className="text-sm font-medium flex items-center gap-2">
+                <History size={14} className="text-primary" /> Histórico
+              </h5>
               {historyLoading ? (
                 <p className="text-sm text-muted-foreground flex items-center gap-2">
                   <Loader2 size={14} className="animate-spin" /> A carregar histórico...
@@ -339,33 +507,31 @@ export function RagChat({
                 </ul>
               )}
             </div>
+
             <div className="p-4 border-t border-border flex justify-end shrink-0">
-              <button onClick={closeDetails} className="px-4 py-2 rounded-lg bg-muted hover:bg-muted/80 text-sm">Fechar</button>
+              <Button variant="secondary" size="sm" onClick={closeDetails}>Fechar</Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* Reprocessar modal */}
       {reprocessDoc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-card border border-border rounded-2xl w-full max-w-sm flex flex-col shadow-lg">
-            <div className="p-4 border-b border-border">
-              <h4 className="font-semibold flex items-center gap-2">
-                <RefreshCw size={18} />
-                Reprocessar documento
-              </h4>
-            </div>
-            <div className="p-4 space-y-3">
-              <p className="text-sm">
+          <Card className="w-full max-w-sm" padding="none">
+            <CardHeader className="p-4 border-b border-border">
+              <CardTitle icon={<RefreshCw size={18} className="text-primary" />}>Reprocessar documento</CardTitle>
+            </CardHeader>
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-muted-foreground">
                 Escolhe o conversor para regenerar o Markdown, chunks e embeddings de
-                <span className="font-medium"> {reprocessDoc.title}</span>.
+                <span className="text-foreground font-medium"> {reprocessDoc.title}</span>.
               </p>
               <label className="text-sm font-medium">Conversor PDF → Markdown</label>
               <select
                 value={reprocessConverter}
                 onChange={(e) => setReprocessConverter(e.target.value as "auto" | "markitdown" | "pymupdf")}
-                className="w-full text-sm bg-background border border-border rounded-lg px-3 py-2"
+                className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2.5"
               >
                 <option value="auto">Auto (markitdown → PyMuPDF fallback)</option>
                 <option value="markitdown">Microsoft markitdown</option>
@@ -373,24 +539,20 @@ export function RagChat({
               </select>
             </div>
             <div className="p-4 border-t border-border flex justify-end gap-2">
-              <button onClick={closeReprocess} className="px-4 py-2 rounded-lg bg-muted hover:bg-muted/80 text-sm">Cancelar</button>
-              <button
+              <Button variant="secondary" size="sm" onClick={closeReprocess}>Cancelar</Button>
+              <Button
+                size="sm"
                 onClick={confirmReprocess}
-                disabled={reprocessingId === reprocessDoc.doc_id}
-                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 text-sm"
+                loading={reprocessingId === reprocessDoc.doc_id}
               >
-                {reprocessingId === reprocessDoc.doc_id ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 size={14} className="animate-spin" /> A processar...
-                  </span>
-                ) : (
-                  "Reprocessar"
-                )}
-              </button>
+                Reprocessar
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
+
+      {graphDoc && <DocumentGraph doc={graphDoc} onClose={() => setGraphDoc(null)} />}
     </div>
   );
 }

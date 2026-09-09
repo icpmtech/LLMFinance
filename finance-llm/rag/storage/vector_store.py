@@ -75,9 +75,40 @@ class VectorStore:
         query: str,
         top_k: int = 5,
         min_score: float = 0.0,
+        doc_id: Optional[str] = None,
     ) -> List[dict]:
         if not self._chunks:
             return []
+
+        # Se for pedido filtro por documento, restringe o índice a esse subconjunto.
+        if doc_id:
+            candidate_indices = [
+                i for i, c in enumerate(self._chunks) if c.get("doc_id") == doc_id
+            ]
+            if not candidate_indices:
+                return []
+            candidate_chunks = [self._chunks[i] for i in candidate_indices]
+            query_embedding = self.model.encode(
+                [query], convert_to_numpy=True, normalize_embeddings=True
+            )
+            sub_index = faiss.IndexFlatIP(self.dim)
+            sub_embeddings = self.model.encode(
+                [c["text"] for c in candidate_chunks],
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+            )
+            sub_index.add(sub_embeddings)
+            scores, positions = sub_index.search(query_embedding, min(top_k, len(candidate_chunks)))
+            results = []
+            for score, pos in zip(scores[0], positions[0]):
+                if pos < 0 or pos >= len(candidate_chunks):
+                    continue
+                chunk = candidate_chunks[pos].copy()
+                chunk["score"] = float(score)
+                if score >= min_score:
+                    results.append(chunk)
+            return results
+
         query_embedding = self.model.encode(
             [query], convert_to_numpy=True, normalize_embeddings=True
         )

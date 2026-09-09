@@ -30,11 +30,18 @@ class RagEngine:
         self.top_k = top_k
         self.prompt_template = prompt_template or DEFAULT_RAG_PROMPT
 
-    def retrieve(self, question: str, top_k: Optional[int] = None, min_score: float = 0.0) -> List[dict]:
+    def retrieve(
+        self,
+        question: str,
+        top_k: Optional[int] = None,
+        min_score: float = 0.0,
+        doc_id: Optional[str] = None,
+    ) -> List[dict]:
         return self.vector_store.search(
             question,
             top_k=top_k or self.top_k,
             min_score=min_score,
+            doc_id=doc_id,
         )
 
     def build_prompt(self, question: str, context_chunks: List[dict]) -> str:
@@ -51,11 +58,12 @@ class RagEngine:
         max_new_tokens: int = 64,
         temperature: float = 0.1,
         return_sources: bool = True,
+        doc_id: Optional[str] = None,
     ) -> dict:
         import time
 
         t0 = time.time()
-        chunks = self.retrieve(question, top_k=top_k)
+        chunks = self.retrieve(question, top_k=top_k, doc_id=doc_id)
         prompt = self.build_prompt(question, chunks)
 
         if not chunks:
@@ -177,9 +185,10 @@ class RagEngine:
         top_k: Optional[int] = None,
         max_new_tokens: int = 256,
         temperature: float = 0.5,
+        doc_id: Optional[str] = None,
     ):
         """Gera resposta em streaming; primeiro yield são as sources."""
-        chunks = self.retrieve(question, top_k=top_k)
+        chunks = self.retrieve(question, top_k=top_k, doc_id=doc_id)
         prompt = self.build_prompt(question, chunks)
 
         yield {"type": "sources", "sources": chunks}

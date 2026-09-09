@@ -292,6 +292,8 @@ class RagChatRequest(BaseModel):
     top_k: int = 5
     max_new_tokens: int = 64
     temperature: float = 0.1
+    doc_id: Optional[str] = None
+    stream: bool = False
 
 
 class RagChatResponse(BaseModel):
@@ -328,3 +330,25 @@ class RagExplainResponse(BaseModel):
     pages_used: List[int] = []
     retrieval_scores: List[float] = []
     analysis: str
+
+
+class RagDocumentGraphNode(BaseModel):
+    id: str
+    doc_id: str
+    page: Optional[int] = None
+    text_preview: str
+    section: Optional[str] = None
+    chunk_index: int = 0
+
+
+class RagDocumentGraphEdge(BaseModel):
+    source: str
+    target: str
+    weight: float
+
+
+class RagDocumentGraphResponse(BaseModel):
+    doc_id: str
+    title: str
+    nodes: List[RagDocumentGraphNode] = []
+    edges: List[RagDocumentGraphEdge] = []

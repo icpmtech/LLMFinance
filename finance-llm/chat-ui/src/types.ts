@@ -64,12 +64,15 @@ export interface RagChatRequest {
   top_k?: number;
   max_new_tokens?: number;
   temperature?: number;
+  doc_id?: string;
+  stream?: boolean;
 }
 
 export interface RagChatResponse {
   answer: string;
   sources: RagSource[];
   model_used?: string;
+  elapsed_seconds?: number;
 }
 
 export interface RagExplainResponse {
@@ -80,6 +83,28 @@ export interface RagExplainResponse {
   pages_used: number[];
   retrieval_scores: number[];
   analysis: string;
+}
+
+export interface RagDocumentGraphNode {
+  id: string;
+  doc_id: string;
+  page?: number;
+  text_preview: string;
+  section?: string;
+  chunk_index: number;
+}
+
+export interface RagDocumentGraphEdge {
+  source: string;
+  target: string;
+  weight: number;
+}
+
+export interface RagDocumentGraphResponse {
+  doc_id: string;
+  title: string;
+  nodes: RagDocumentGraphNode[];
+  edges: RagDocumentGraphEdge[];
 }
 
 export interface UploadPdfResponse {

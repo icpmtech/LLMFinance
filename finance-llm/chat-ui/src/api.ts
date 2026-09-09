@@ -1,3 +1,6 @@
+export const API_BASE =
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:8003";
+
 import type {
   Actions,
   AddTickerRequest,
@@ -20,6 +23,7 @@ import type {
   RagChatRequest,
   RagChatResponse,
   RagDocument,
+  RagDocumentGraphResponse,
   RagDocumentHistoryResponse,
   RagDocumentUpdate,
   RagExplainResponse,
@@ -27,9 +31,7 @@ import type {
   UploadPdfResponse,
 } from "./types";
 
-export const API_BASE =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.PROD ? "" : "http://127.0.0.1:8003");
+
 
 export function getPlotUrl(plot_url: string): string {
   if (plot_url.startsWith("http://") || plot_url.startsWith("https://")) {
@@ -251,6 +253,25 @@ export async function getRagDocumentHistory(
   const res = await fetch(`${API_BASE}/rag/documents/${encodeURIComponent(docId)}/history`);
   if (!res.ok) throw new Error(`Erro ao obter histórico: ${res.status}`);
   return res.json();
+}
+
+export async function getRagDocumentGraph(
+  docId: string,
+  topK = 5,
+  timeoutMs = 90000,
+): Promise<RagDocumentGraphResponse> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(
+      `${API_BASE}/rag/documents/${encodeURIComponent(docId)}/graph?top_k=${topK}`,
+      { signal: controller.signal },
+    );
+    if (!res.ok) throw new Error(`Erro ao obter grafo: ${res.status}`);
+    return res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function askRag(request: RagChatRequest, timeoutMs = 120000): Promise<RagChatResponse> {
