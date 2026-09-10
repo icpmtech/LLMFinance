@@ -6,10 +6,14 @@ import type {
   AddTickerRequest,
   AddTickerResponse,
   Calendar,
+  ElasticAnalyzeNewsResponse,
+  ElasticAutocompleteResponse,
   ElasticDeleteResponse,
   ElasticIngestNewsResponse,
   ElasticIngestPricesResponse,
   ElasticIngestRequest,
+  ElasticNewsGraphResponse,
+  ElasticSearchGlobalResponse,
   ElasticSearchNewsResponse,
   ElasticSearchPricesResponse,
   ElasticStatus,
@@ -218,6 +222,26 @@ export async function searchElasticNews(
   return res.json();
 }
 
+export async function searchElasticGlobal(
+  q: string,
+  size = 20,
+): Promise<ElasticSearchGlobalResponse> {
+  const params = new URLSearchParams({ q: q.trim(), size: String(size) });
+  const res = await fetch(`${API_BASE}/elastic/search/global?${params}`);
+  if (!res.ok) throw new Error(`Erro na pesquisa global: ${res.status}`);
+  return res.json();
+}
+
+export async function autocompleteElastic(
+  q: string,
+  size = 12,
+): Promise<ElasticAutocompleteResponse> {
+  const params = new URLSearchParams({ q: q.trim(), size: String(size) });
+  const res = await fetch(`${API_BASE}/elastic/search/autocomplete?${params}`);
+  if (!res.ok) throw new Error(`Erro no autocomplete: ${res.status}`);
+  return res.json();
+}
+
 export async function listElasticTickers(): Promise<ElasticTickerListResponse> {
   const res = await fetch(`${API_BASE}/elastic/tickers`);
   if (!res.ok) throw new Error(`Erro ao listar tickers indexados: ${res.status}`);
@@ -229,6 +253,43 @@ export async function deleteElasticTicker(ticker: string): Promise<ElasticDelete
     method: "DELETE",
   });
   if (!res.ok) throw new Error(`Erro ao apagar dados: ${res.status}`);
+  return res.json();
+}
+
+export async function analyzeElasticNews(
+  ticker: string,
+  q?: string,
+  startDate?: string,
+  endDate?: string,
+  size = 50,
+  backend: "gpt2" | "mistral" = "gpt2",
+): Promise<ElasticAnalyzeNewsResponse> {
+  const params = new URLSearchParams();
+  if (q) params.append("q", q);
+  if (startDate) params.append("start_date", startDate);
+  if (endDate) params.append("end_date", endDate);
+  params.append("size", String(size));
+  params.append("backend", backend);
+  const res = await fetch(
+    `${API_BASE}/elastic/analyze/news/${encodeURIComponent(ticker)}?${params}`,
+    { method: "POST" },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao analisar notícias: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function getElasticNewsGraph(
+  ticker: string,
+  source: "es" | "build" = "es",
+): Promise<ElasticNewsGraphResponse> {
+  const params = new URLSearchParams({ source });
+  const res = await fetch(
+    `${API_BASE}/elastic/graph/news/${encodeURIComponent(ticker)}?${params}`,
+  );
+  if (!res.ok) throw new Error(`Erro ao obter grafo: ${res.status}`);
   return res.json();
 }
 

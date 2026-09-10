@@ -154,11 +154,25 @@ def extract_tickers(text: str) -> List[str]:
 
 
 def _safe_pct(value: Optional[float]) -> Optional[float]:
-    """Normaliza percentagens yfinance (0.015 -> 1.5%)."""
+    """Normaliza percentagens yfinance (fração decimal -> valor percentual)."""
     if value is None or not isinstance(value, (int, float)) or pd.isna(value):
         return None
-    # yfinance devolve dividendYield e returnOnEquity como fração decimal
-    return round(value * 100, 3) if abs(value) < 1 else round(value, 3)
+    return round(value * 100, 3)
+
+
+def _safe_pct_field(info: Dict, preferred_key: str, fallback_key: str) -> Optional[float]:
+    """Usa campo decimal preferido; fallback pode já vir como percentagem."""
+    v = info.get(preferred_key)
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        v = info.get(fallback_key)
+    if v is None or not isinstance(v, (int, float)) or pd.isna(v):
+        return None
+    # trailingAnnualDividendYield vem como fração decimal (0.0033).
+    # dividendYield pode, em alguns casos, vir já como 0.34 (percentagem).
+    # Usamos heurística: se <= 0.1 assume decimal e multiplica por 100.
+    if abs(v) <= 0.1:
+        return round(v * 100, 3)
+    return round(v, 3)
 
 
 def get_stock_info(symbol: str) -> Dict:
@@ -201,7 +215,7 @@ def get_stock_info(symbol: str) -> Dict:
             "market_cap": info.get("marketCap"),
             "pe": info.get("trailingPE", info.get("forwardPE")),
             "eps": info.get("trailingEps", info.get("forwardEps")),
-            "dividend_yield": _safe_pct(info.get("dividendYield")),
+            "dividend_yield": _safe_pct_field(info, "trailingAnnualDividendYield", "dividendYield"),
             "roe": _safe_pct(info.get("returnOnEquity")),
             "sector": info.get("sector", "N/A"),
             "industry": info.get("industry", "N/A"),

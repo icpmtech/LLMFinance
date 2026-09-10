@@ -345,6 +345,7 @@ class ElasticIngestNewsResponse(BaseModel):
     ticker: str
     indexed_count: int
     total_items: int
+    analyzed_count: Optional[int] = None
     message: Optional[str] = None
     error: Optional[str] = None
 
@@ -370,6 +371,11 @@ class ElasticSearchPricesResponse(BaseModel):
     error: Optional[str] = None
 
 
+class NewsEntity(BaseModel):
+    name: str
+    type: str
+
+
 class ElasticSearchNewsItem(BaseModel):
     ticker: str
     title: Optional[str] = None
@@ -379,6 +385,14 @@ class ElasticSearchNewsItem(BaseModel):
     url: Optional[str] = None
     source: Optional[str] = None
     ingested_at: Optional[str] = None
+    analyzed_at: Optional[str] = None
+    sentiment: Optional[str] = None
+    language: Optional[str] = None
+    translated_title: Optional[str] = None
+    translated_summary: Optional[str] = None
+    summary_pt: Optional[str] = None
+    topics: List[str] = []
+    entities: List[NewsEntity] = []
 
 
 class ElasticSearchNewsResponse(BaseModel):
@@ -386,6 +400,25 @@ class ElasticSearchNewsResponse(BaseModel):
     total: int
     items: List[ElasticSearchNewsItem] = []
     query: Optional[str] = None
+    error: Optional[str] = None
+
+
+class ElasticAnalyzeNewsResponse(BaseModel):
+    ticker: str
+    analyzed_count: int
+    total_items: int
+    errors: int = 0
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
+class ElasticNewsGraphResponse(BaseModel):
+    ticker: str
+    graph_type: str = "news_entities"
+    node_count: int = 0
+    edge_count: int = 0
+    nodes: List[Dict[str, Any]] = []
+    edges: List[Dict[str, Any]] = []
     error: Optional[str] = None
 
 
@@ -403,6 +436,39 @@ class ElasticDeleteResponse(BaseModel):
 class ElasticIngestRequest(BaseModel):
     period: str = "1y"
     interval: str = "1d"
+
+
+class ElasticSearchResult(BaseModel):
+    ticker: str
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    publisher: Optional[str] = None
+    published: Optional[str] = None
+    url: Optional[str] = None
+    source: Optional[str] = None
+    score: Optional[float] = None
+    sentiment: Optional[str] = None
+    topics: List[str] = []
+
+
+class ElasticSearchGlobalResponse(BaseModel):
+    query: str
+    total: int
+    items: List[ElasticSearchResult] = []
+    error: Optional[str] = None
+
+
+class ElasticSuggestion(BaseModel):
+    text: str
+    type: Literal["ticker", "title", "publisher", "topic"]
+    ticker: Optional[str] = None
+    count: Optional[int] = None
+
+
+class ElasticAutocompleteResponse(BaseModel):
+    query: str
+    suggestions: List[ElasticSuggestion] = []
+    error: Optional[str] = None
 
 
 class RagExplainResponse(BaseModel):

@@ -1,5 +1,6 @@
 """Backend FastAPI para a Chat UI do FinanceLLM."""
 import json
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, List
 
@@ -15,13 +16,19 @@ from api.models import (
     ChatMessage,
     ChatRequest,
     ChatResponse,
+    ElasticAnalyzeNewsResponse,
+    ElasticAutocompleteResponse,
     ElasticDeleteResponse,
     ElasticIngestNewsResponse,
     ElasticIngestPricesResponse,
     ElasticIngestRequest,
+    ElasticNewsGraphResponse,
+    ElasticSearchGlobalResponse,
     ElasticSearchNewsResponse,
     ElasticSearchPricesResponse,
+    ElasticSearchResult,
     ElasticStatus,
+    ElasticSuggestion,
     ElasticTickerListResponse,
     FinancialsResponse,
     ForecastPoint,
@@ -54,6 +61,10 @@ from api.elasticsearch_ingest import (
     search_ticker_news,
     search_ticker_prices,
 )
+from api.elasticsearch_client import (
+    autocomplete_suggestions,
+    search_all_tickers,
+)
 from api.tools import (
     _normalize_ticker,
     add_ticker,
@@ -81,10 +92,26 @@ from api.rag_routes import router as rag_router
 ROOT = Path(__file__).resolve().parents[1]
 FORECAST_DIR = ROOT / "data" / "forecasting"
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Pré-carrega o modelo de tradução em background para evitar bloquear o primeiro pedido.
+    import threading
+    def _preload_translation():
+        try:
+            from api.news_nlp import _TranslationModel
+            _TranslationModel.translate("warmup")
+        except Exception:
+            pass
+    threading.Thread(target=_preload_translation, daemon=True).start()
+    yield
+
+
 app = FastAPI(
     title="FinanceLLM API",
     version="0.4.0",
     description="API de chat, previsão de séries temporais e RAG FinanceLLM (GPT-2, Mistral e BloombergGPT-style).",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -157,10 +184,14 @@ def list_tickers(query: str = Query("", min_length=0)):
 @app.post("/forecast", response_model=ForecastResponse)
 def forecast(req: ForecastRequest):
     """Executa o pipeline ARIMA para o ticker pedido e devolve previsões + séries."""
-    try:
-        order = tuple(int(x) for x in req.order.split(","))
-    except Exception:
-        raise HTTPException(status_code=400, detail="Ordem ARIMA inválida. Use o formato p,d,q (ex: 2,1,2).")
+    order_str = (req.order or "2,1,2").strip().lower()
+    if order_str == "auto":
+        order = (2, 1, 2)
+    else:
+        try:
+            order = tuple(int(x) for x in order_str.split(","))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Ordem ARIMA inválida. Use o formato p,d,q (ex: 2,1,2) ou 'auto'.")
 
     ticker = _normalize_ticker(req.ticker)
     try:
@@ -436,10 +467,14 @@ async def elastic_ingest_prices(
 
 
 @app.post("/elastic/ingest/news/{ticker}", response_model=ElasticIngestNewsResponse)
-async def elastic_ingest_news(ticker: str):
+async def elastic_ingest_news(
+    ticker: str,
+    auto_analyze: bool = Query(True, description="Executar análise NLP automaticamente após ingestão"),
+    backend: str = Query("gpt2", pattern="^(gpt2|mistral)$", description="Modelo de NLP a utilizar"),
+):
     """Obtém notícias via yfinance e indexa no Elasticsearch."""
     ticker = _normalize_ticker(ticker)
-    return await ingest_ticker_news(ticker)
+    return await ingest_ticker_news(ticker, backend=backend, auto_analyze=auto_analyze)
 
 
 @app.post("/elastic/ingest/{ticker}")
@@ -465,7 +500,7 @@ def elastic_search_prices(
 
 
 @app.get("/elastic/search/news/{ticker}", response_model=ElasticSearchNewsResponse)
-def elastic_search_news(
+async def elastic_search_news(
     ticker: str,
     q: str = Query(None, description="Termo de pesquisa no título/resumo"),
     start_date: str = Query(None, description="Data inicial (YYYY-MM-DD)"),
@@ -474,7 +509,61 @@ def elastic_search_news(
 ):
     """Pesquisa notícias indexadas por ticker e texto."""
     ticker = _normalize_ticker(ticker)
-    return search_ticker_news(ticker, q=q, start_date=start_date, end_date=end_date, size=size)
+    return await search_ticker_news(ticker, q=q, start_date=start_date, end_date=end_date, size=size)
+
+
+@app.get("/elastic/search/global", response_model=ElasticSearchGlobalResponse)
+async def elastic_search_global(
+    q: str = Query(..., min_length=1, description="Termo de pesquisa global"),
+    size: int = Query(20, ge=1, le=100),
+):
+    """Pesquisa global tipo Google em todas as notícias indexadas por texto."""
+    result = search_all_tickers(q, size=size)
+    if result.get("error"):
+        return ElasticSearchGlobalResponse(query=q, total=0, error=result["error"])
+
+    items = [
+        ElasticSearchResult(
+            ticker=item.get("ticker", ""),
+            title=item.get("title"),
+            summary=item.get("summary"),
+            publisher=item.get("publisher"),
+            published=item.get("published"),
+            url=item.get("url"),
+            source=item.get("source"),
+            score=item.get("score"),
+            sentiment=item.get("sentiment") or item.get("sentiment_label"),
+            topics=item.get("topics") or [],
+        )
+        for item in result.get("items", [])
+    ]
+    return ElasticSearchGlobalResponse(
+        query=q,
+        total=result.get("total", 0),
+        items=items,
+    )
+
+
+@app.get("/elastic/search/autocomplete", response_model=ElasticAutocompleteResponse)
+async def elastic_search_autocomplete(
+    q: str = Query(..., min_length=1, description="Prefixo para autocomplete"),
+    size: int = Query(12, ge=1, le=50),
+):
+    """Sugestões de autocomplete (tickers, títulos, publishers, tópicos)."""
+    result = autocomplete_suggestions(q, size=size)
+    if result.get("error"):
+        return ElasticAutocompleteResponse(query=q, error=result["error"])
+
+    suggestions = [
+        ElasticSuggestion(
+            text=s.get("text", ""),
+            type=s.get("type", "title"),
+            ticker=s.get("ticker"),
+            count=s.get("count"),
+        )
+        for s in result.get("suggestions", [])
+    ]
+    return ElasticAutocompleteResponse(query=q, suggestions=suggestions)
 
 
 @app.get("/elastic/tickers", response_model=ElasticTickerListResponse)
@@ -495,4 +584,95 @@ def elastic_delete_ticker(ticker: str):
         prices_deleted=result.get("prices_deleted"),
         news_deleted=result.get("news_deleted"),
         error=result.get("error"),
+    )
+
+
+from api.elasticsearch_ingest import _run_in_thread
+
+
+@app.post("/elastic/analyze/news/{ticker}", response_model=ElasticAnalyzeNewsResponse)
+async def elastic_analyze_news(
+    ticker: str,
+    q: str = Query(None, description="Termo de pesquisa no título/resumo"),
+    start_date: str = Query(None, description="Data inicial (YYYY-MM-DD)"),
+    end_date: str = Query(None, description="Data final (YYYY-MM-DD)"),
+    size: int = Query(50, ge=1, le=200),
+    backend: str = Query("gpt2", pattern="^(gpt2|mistral)$"),
+):
+    """Analisa notícias indexadas com NLP (classificação, tradução PT, sumário, entidades)."""
+    from api.elasticsearch_client import fetch_news_for_analysis, index_analyzed_news_items
+    from api.news_nlp import analyze_news_batch
+
+    ticker = _normalize_ticker(ticker)
+    items = fetch_news_for_analysis(ticker, q=q, start_date=start_date, end_date=end_date, size=size)
+    if not items:
+        return ElasticAnalyzeNewsResponse(
+            ticker=ticker,
+            analyzed_count=0,
+            total_items=0,
+            message="Nenhuma notícia encontrada para análise.",
+        )
+
+    batch = [{"title": it.get("title", ""), "summary": it.get("summary", ""), "ticker": ticker} for it in items]
+    analyses = await _run_in_thread(analyze_news_batch, batch, backend, ticker)
+    result = index_analyzed_news_items(ticker, items, analyses)
+
+    # Reconstrói e guarda o grafo de entidades/notícias para refletir a análise atualizada.
+    try:
+        from api.elasticsearch_client import fetch_news_for_analysis, save_news_graph
+        from api.news_nlp import build_news_entity_graph
+
+        analyzed_items = fetch_news_for_analysis(ticker, q=q, start_date=start_date, end_date=end_date, size=size)
+        graph = build_news_entity_graph(ticker, analyzed_items)
+        save_news_graph(ticker, graph)
+    except Exception as exc:
+        # O grafo é opcional; não falha a análise se algo correr mal aqui.
+        import logging
+        logging.getLogger(__name__).warning(f"Falha ao reconstruir grafo para {ticker}: {exc}")
+
+    return ElasticAnalyzeNewsResponse(
+        ticker=result.get("ticker", ticker),
+        analyzed_count=result.get("indexed_count", 0),
+        total_items=result.get("total_items", len(items)),
+        errors=result.get("errors", 0),
+        message=f"Analisadas e indexadas {result.get('indexed_count', 0)} notícias.",
+        error=result.get("error"),
+    )
+
+
+@app.get("/elastic/graph/news/{ticker}", response_model=ElasticNewsGraphResponse)
+def elastic_news_graph(
+    ticker: str,
+    source: str = Query("es", pattern="^(es|build)$"),
+):
+    """Devolve grafo de notícias e entidades (carregado do ES ou construído a partir das notícias)."""
+    from api.elasticsearch_client import fetch_news_for_analysis, load_news_graph, save_news_graph
+    from api.news_nlp import build_news_entity_graph
+
+    ticker = _normalize_ticker(ticker)
+    if source == "es":
+        graph = load_news_graph(ticker)
+        if graph:
+            return ElasticNewsGraphResponse(
+                ticker=graph.get("ticker", ticker),
+                graph_type=graph.get("graph_type", "news_entities"),
+                node_count=len(graph.get("nodes", [])),
+                edge_count=len(graph.get("edges", [])),
+                nodes=graph.get("nodes", []),
+                edges=graph.get("edges", []),
+            )
+
+    items = fetch_news_for_analysis(ticker, size=200)
+    if not items:
+        return ElasticNewsGraphResponse(ticker=ticker, graph_type="news_entities", node_count=0, edge_count=0)
+
+    graph = build_news_entity_graph(ticker, items)
+    save_news_graph(ticker, graph)
+    return ElasticNewsGraphResponse(
+        ticker=ticker,
+        graph_type="news_entities",
+        node_count=len(graph.get("nodes", [])),
+        edge_count=len(graph.get("edges", [])),
+        nodes=graph.get("nodes", []),
+        edges=graph.get("edges", []),
     )

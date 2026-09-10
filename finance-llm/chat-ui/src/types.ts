@@ -238,6 +238,7 @@ export interface NewsItem {
   published?: string;
   url?: string;
   summary?: string;
+  ticker?: string;
 }
 
 export interface News {
@@ -297,6 +298,11 @@ export interface ElasticSearchPricesResponse {
   error?: string;
 }
 
+export interface NewsEntity {
+  name: string;
+  type: string;
+}
+
 export interface ElasticSearchNewsItem {
   ticker: string;
   title?: string;
@@ -306,6 +312,14 @@ export interface ElasticSearchNewsItem {
   url?: string;
   source?: string;
   ingested_at?: string;
+  analyzed_at?: string;
+  sentiment?: string;
+  language?: string;
+  translated_title?: string;
+  translated_summary?: string;
+  summary_pt?: string;
+  topics?: string[];
+  entities?: NewsEntity[];
 }
 
 export interface ElasticSearchNewsResponse {
@@ -313,6 +327,77 @@ export interface ElasticSearchNewsResponse {
   total: number;
   items: ElasticSearchNewsItem[];
   query?: string;
+  error?: string;
+}
+
+export interface ElasticSearchGlobalItem {
+  ticker: string;
+  title?: string;
+  summary?: string;
+  publisher?: string;
+  published?: string;
+  url?: string;
+  source?: string;
+  score?: number;
+  sentiment?: string;
+  topics?: string[];
+}
+
+export interface ElasticSearchGlobalResponse {
+  query: string;
+  total: number;
+  items: ElasticSearchGlobalItem[];
+  error?: string;
+}
+
+export type ElasticSuggestionType = "ticker" | "title" | "publisher" | "topic";
+
+export interface ElasticSuggestion {
+  text: string;
+  type: ElasticSuggestionType;
+  ticker?: string;
+  count?: number;
+}
+
+export interface ElasticAutocompleteResponse {
+  query: string;
+  suggestions: ElasticSuggestion[];
+  error?: string;
+}
+
+export interface ElasticAnalyzeNewsResponse {
+  ticker: string;
+  analyzed_count: number;
+  total_items: number;
+  errors?: number;
+  message?: string;
+  error?: string;
+}
+
+export interface NewsGraphEdge {
+  source: string;
+  target: string;
+  weight?: number;
+}
+
+export interface NewsGraphNode {
+  id: string;
+  type: "noticia" | "entidade" | string;
+  label: string;
+  entity_type?: string;
+  ticker?: string;
+  sentiment?: string;
+  published?: string;
+  url?: string;
+}
+
+export interface ElasticNewsGraphResponse {
+  ticker: string;
+  graph_type: string;
+  node_count: number;
+  edge_count: number;
+  nodes: NewsGraphNode[];
+  edges: NewsGraphEdge[];
   error?: string;
 }
 

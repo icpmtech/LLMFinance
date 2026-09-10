@@ -1,13 +1,17 @@
 import { useState, useCallback, useEffect } from "react";
 import { ChatLayout } from "./components/ChatLayout";
+import { DashboardPage } from "./pages/DashboardPage";
+import { TickerDetailPage } from "./pages/TickerDetailPage";
 import { ForecastPage } from "./pages/ForecastPage";
 import { TickerPage } from "./pages/TickerPage";
 import { RagPage } from "./pages/RagPage";
 import { ElasticPage } from "./pages/ElasticPage";
+import { GlobalSearchPage } from "./pages/GlobalSearchPage";
 import { sendChat } from "./sendChat";
 import type { Message, ModelBackend } from "./types";
 
-type AppView = "chat" | "forecast" | "tickers" | "rag" | "elastic";
+type AppView = "dashboard" | "chat" | "forecast" | "tickers" | "ticker-detail" | "rag" | "elastic" | "search";
+const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
 
 const STORAGE_KEY = "finance-llm-conversations";
 
@@ -46,16 +50,29 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [backend, setBackend] = useState<ModelBackend>("gpt2");
   const [loading, setLoading] = useState(false);
+  const [selectedTicker, setSelectedTicker] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem(TICKER_DETAIL_KEY);
+  });
+
   const [view, setView] = useState<AppView>(() => {
-    if (typeof window === "undefined") return "chat";
+    if (typeof window === "undefined") return "dashboard";
     const path = window.location.pathname.replace(/\/$/, "");
     if (path === "/rag") return "rag";
     if (path === "/forecast") return "forecast";
     if (path === "/tickers") return "tickers";
     if (path === "/elastic") return "elastic";
     const saved = localStorage.getItem("finance-llm-view");
-    return (saved as AppView) || "chat";
+    return (saved as AppView) || "dashboard";
   });
+
+  useEffect(() => {
+    if (selectedTicker) {
+      localStorage.setItem(TICKER_DETAIL_KEY, selectedTicker);
+    } else {
+      localStorage.removeItem(TICKER_DETAIL_KEY);
+    }
+  }, [selectedTicker]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
@@ -149,10 +166,53 @@ export default function App() {
     [activeId],
   );
 
-  if (view === "forecast") return <ForecastPage onSwitchView={() => setView("chat")} />;
-  if (view === "tickers") return <TickerPage onSwitchView={() => setView("chat")} />;
-  if (view === "rag") return <RagPage onSwitchView={() => setView("chat")} />;
-  if (view === "elastic") return <ElasticPage onSwitchView={() => setView("chat")} />;
+  const handleSwitchView = (v: string) => {
+    if (v === "tickers" || v === "tickers-old") {
+      setView("tickers");
+      return;
+    }
+    if (v === "ticker-detail") {
+      if (!selectedTicker && typeof window !== "undefined") {
+        const saved = localStorage.getItem(TICKER_DETAIL_KEY);
+        setSelectedTicker(saved || "AAPL");
+      }
+      setView("ticker-detail");
+      return;
+    }
+    if (v === "search") {
+      setView("search");
+      return;
+    }
+    setView(v as AppView);
+  };
+
+  const handleSelectTicker = (ticker: string) => {
+    setSelectedTicker(ticker);
+    setView("ticker-detail");
+  };
+
+  if (view === "dashboard") return <DashboardPage onSwitchView={handleSwitchView} onSelectTicker={handleSelectTicker} />;
+  if (view === "ticker-detail" && selectedTicker) {
+    return (
+      <TickerDetailPage
+        ticker={selectedTicker}
+        onBack={() => setView("dashboard")}
+        onSwitchView={handleSwitchView}
+      />
+    );
+  }
+  if (view === "forecast") return <ForecastPage onSwitchView={() => setView("dashboard")} />;
+  if (view === "tickers") return <TickerPage onSwitchView={() => setView("dashboard")} />;
+  if (view === "rag") return <RagPage onSwitchView={() => setView("dashboard")} />;
+  if (view === "elastic") return <ElasticPage onSwitchView={() => setView("dashboard")} />;
+  if (view === "search") {
+    return (
+      <GlobalSearchPage
+        onSwitchView={() => setView("dashboard")}
+        onSelectTicker={handleSelectTicker}
+      />
+    );
+  }
   return (
     <ChatLayout
       conversations={conversations}
@@ -170,6 +230,7 @@ export default function App() {
       onSwitchTickers={() => setView("tickers")}
       onSwitchRag={() => setView("rag")}
       onSwitchElastic={() => setView("elastic")}
+      onSwitchSearch={() => setView("search")}
     />
   );
 }

@@ -24,6 +24,7 @@ interface ChatLayoutProps {
   onSwitchTickers?: () => void;
   onSwitchRag?: () => void;
   onSwitchElastic?: () => void;
+  onSwitchSearch?: () => void;
 }
 
 export function ChatLayout({
@@ -42,9 +43,10 @@ export function ChatLayout({
   onSwitchTickers,
   onSwitchRag,
   onSwitchElastic,
+  onSwitchSearch,
 }: ChatLayoutProps) {
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
+    <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-background text-foreground pb-16 md:pb-0">
       <Sidebar
         conversations={conversations}
         activeId={activeId}
@@ -55,9 +57,10 @@ export function ChatLayout({
         onSwitchTickers={onSwitchTickers}
         onSwitchRag={onSwitchRag}
         onSwitchElastic={onSwitchElastic}
+        onSwitchSearch={onSwitchSearch}
       />
 
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 min-h-0">
         <header className="h-14 border-b border-border flex items-center px-6 bg-card/50">
           <h2 className="font-semibold">{activeId ? conversations.find((c) => c.id === activeId)?.title || "Conversa" : "Nova conversa"}</h2>
         </header>

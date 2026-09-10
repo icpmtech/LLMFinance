@@ -61,8 +61,17 @@ async def ingest_ticker_prices(
     )
 
 
-async def ingest_ticker_news(ticker: str) -> ElasticIngestNewsResponse:
-    """Obtém e indexa notícias de um ticker."""
+async def ingest_ticker_news(
+    ticker: str,
+    backend: str = "gpt2",
+    auto_analyze: bool = True,
+) -> ElasticIngestNewsResponse:
+    """Obtém e indexa notícias de um ticker.
+
+    Se auto_analyze=True, as notícias são imediatamente analisadas com NLP
+    (sentimento, tradução PT, entidades, tópicos) e o grafo de entidades é
+    reconstruído e persistido.
+    """
     news = await _run_in_thread(get_news, ticker)
     if isinstance(news, dict) and "error" in news:
         raise HTTPException(status_code=404, detail=news["error"])
@@ -73,12 +82,45 @@ async def ingest_ticker_news(ticker: str) -> ElasticIngestNewsResponse:
 
     es = get_es_client()
     result = index_news_items(ticker, items, es=es)
+
+    analyzed_count = 0
+    graph_error = None
+    if auto_analyze and result.get("indexed_count", 0) and not result.get("error"):
+        try:
+            from api.elasticsearch_client import (
+                fetch_news_for_analysis,
+                index_analyzed_news_items,
+                save_news_graph,
+            )
+            from api.news_nlp import analyze_news_batch, build_news_entity_graph
+
+            batch = [
+                {"title": it.get("title", ""), "summary": it.get("summary", ""), "ticker": ticker}
+                for it in items
+            ]
+            analyses = await _run_in_thread(analyze_news_batch, batch, backend, ticker)
+            analyzed = index_analyzed_news_items(ticker, items, analyses, es=es)
+            analyzed_count = analyzed.get("indexed_count", 0)
+
+            analyzed_items = fetch_news_for_analysis(ticker, size=200, es=es)
+            graph = build_news_entity_graph(ticker, analyzed_items)
+            save_news_graph(ticker, graph, es=es)
+        except Exception as exc:
+            graph_error = str(exc)
+
+    message = f"Notícias indexadas com sucesso"
+    if auto_analyze and analyzed_count:
+        message += f" e {analyzed_count} analisadas"
+    if graph_error:
+        message += " (grafo: erro)"
+
     return ElasticIngestNewsResponse(
         ticker=result["ticker"],
         indexed_count=result.get("indexed_count", 0),
         total_items=result.get("total_items", 0),
-        message="Notícias indexadas com sucesso" if not result.get("error") else None,
-        error=result.get("error"),
+        analyzed_count=analyzed_count if analyzed_count else None,
+        message=message if not result.get("error") else None,
+        error=result.get("error") or graph_error,
     )
 
 
