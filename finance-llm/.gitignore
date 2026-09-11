@@ -30,3 +30,4 @@ chat-ui/node_modules/
 kronos_upstream/
 data/forecasting/*.png
 .vite/
+*.log
