@@ -27,3 +27,6 @@ model/gpt2-finance/checkpoints/
 model/mistral-finance/final/
 model/gpt2-finance/final/
 chat-ui/node_modules/
+kronos_upstream/
+data/forecasting/*.png
+.vite/
