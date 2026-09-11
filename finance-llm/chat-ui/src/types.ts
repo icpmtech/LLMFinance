@@ -498,6 +498,7 @@ export interface ForecastRequest {
   period?: string;
   order?: string;
   train_ratio?: number;
+  backend?: "arima" | "kronos";
 }
 
 export interface ForecastPoint {

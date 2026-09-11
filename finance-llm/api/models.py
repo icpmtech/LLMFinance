@@ -41,6 +41,7 @@ class ForecastRequest(BaseModel):
     period: str = "5y"
     order: str = "2,1,2"
     train_ratio: float = 0.85
+    backend: Literal["arima", "kronos"] = "arima"
 
 
 class ForecastPoint(BaseModel):

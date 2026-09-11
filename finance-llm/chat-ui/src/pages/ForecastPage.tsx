@@ -28,12 +28,17 @@ import { runForecast, searchLocalTickers, getPlotUrl } from "../api";
 import type { ForecastRequest, ForecastResponse, ForecastSeries } from "../types";
 
 const PERIODS = ["1y", "2y", "5y", "10y", "max"];
+const BACKENDS: { value: "arima" | "kronos"; label: string }[] = [
+  { value: "arima", label: "ARIMA" },
+  { value: "kronos", label: "Kronos (fundational)" },
+];
 const DEFAULT_REQUEST: ForecastRequest = {
   ticker: "AAPL",
   future_days: 5,
   period: "5y",
   order: "2,1,2",
   train_ratio: 0.85,
+  backend: "arima",
 };
 
 function formatDateLabel(value: string) {
@@ -275,6 +280,26 @@ export function ForecastPage({ onSwitchView }: { onSwitchView?: () => void }) {
             </div>
 
             <div>
+              <label className="block text-sm font-medium mb-1">Modelo</label>
+              <select
+                value={request.backend ?? "arima"}
+                onChange={(e) => setRequest((r) => ({ ...r, backend: e.target.value as "arima" | "kronos" }))}
+                className="w-full px-3 py-2 rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {BACKENDS.map((b) => (
+                  <option key={b.value} value={b.value}>
+                    {b.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">
+                {request.backend === "kronos"
+                  ? "Kronos: LLM fundacional para séries financeiras."
+                  : "ARIMA: modelo estatístico clássico."}
+              </p>
+            </div>
+
+            <div className={request.backend === "kronos" ? "opacity-50 pointer-events-none" : ""}>
               <label className="block text-sm font-medium mb-1">Ordem ARIMA (p,d,q)</label>
               <input
                 type="text"

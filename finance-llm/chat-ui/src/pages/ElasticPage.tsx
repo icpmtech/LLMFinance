@@ -1,5 +1,20 @@
-import { useEffect, useState } from "react";
-import { ArrowLeft, Database, Search, Trash2, Upload, Activity, BrainCircuit, Network } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  Database,
+  Search,
+  Trash2,
+  Upload,
+  Activity,
+  Network,
+  Filter,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
+  BarChart3,
+  Calendar,
+} from "lucide-react";
 import {
   getElasticStatus,
   ingestElasticPrices,
@@ -32,6 +47,26 @@ const formatDate = (d?: string) => {
   }
 };
 
+const sentimentOrder: Record<string, number> = { negativo: 0, neutro: 1, positivo: 2 };
+
+const sortNews = (
+  items: ElasticSearchNewsItem[],
+  by: "published" | "relevance" | "sentiment",
+) => {
+  const copy = [...items];
+  if (by === "published") {
+    copy.sort((a, b) => new Date(b.published || 0).getTime() - new Date(a.published || 0).getTime());
+  } else if (by === "sentiment") {
+    copy.sort((a, b) => {
+      const sa = sentimentOrder[a.sentiment || "neutro"] ?? 1;
+      const sb = sentimentOrder[b.sentiment || "neutro"] ?? 1;
+      if (sa !== sb) return sb - sa;
+      return new Date(b.published || 0).getTime() - new Date(a.published || 0).getTime();
+    });
+  }
+  return copy;
+};
+
 export function ElasticPage({ onSwitchView }: ElasticPageProps) {
   const [status, setStatus] = useState<ElasticStatus | null>(null);
   const [tickers, setTickers] = useState<string[]>([]);
@@ -50,7 +85,25 @@ export function ElasticPage({ onSwitchView }: ElasticPageProps) {
   const [graph, setGraph] = useState<ElasticNewsGraphResponse | null>(null);
   const [graphLoading, setGraphLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"prices" | "news" | "analyzed" | "graph">("prices");
-  const [analysisBackend, setAnalysisBackend] = useState<"gpt2" | "mistral">("gpt2");
+  const [analysisBackend, setAnalysisBackend] = useState<"heuristic" | "gpt2" | "mistral">("heuristic");
+  const [sortBy, setSortBy] = useState<"published" | "relevance" | "sentiment">("published");
+  const [showAnalyzedOnly, setShowAnalyzedOnly] = useState(false);
+  const [newsPage, setNewsPage] = useState(1);
+  const [expandedNews, setExpandedNews] = useState<Set<number>>(new Set());
+  const newsPageSize = 10;
+
+  const displayedNews = useMemo(() => {
+    let list = activeTab === "analyzed" ? analyzedNews : news;
+    if (activeTab === "analyzed" && showAnalyzedOnly) {
+      list = list.filter((n) => n.analyzed_at || n.sentiment || n.entities?.length || n.topics?.length);
+    }
+    const sorted = sortNews(list, sortBy);
+    return sorted;
+  }, [activeTab, analyzedNews, news, showAnalyzedOnly, sortBy]);
+
+  const totalNews = displayedNews.length;
+  const newsTotalPages = Math.max(1, Math.ceil(totalNews / newsPageSize));
+  const newsSlice = displayedNews.slice((newsPage - 1) * newsPageSize, newsPage * newsPageSize);
 
   const show = (msg: string) => {
     setMessage(msg);
@@ -145,7 +198,7 @@ export function ElasticPage({ onSwitchView }: ElasticPageProps) {
     }
   };
 
-  const handleSearchNews = async () => {
+  const handleSearchNews = async (tab = true) => {
     if (!ticker.trim()) return;
     setLoading(true);
     try {
@@ -154,15 +207,28 @@ export function ElasticPage({ onSwitchView }: ElasticPageProps) {
         query || undefined,
         startDate || undefined,
         endDate || undefined,
+        200,
       );
       setNews(res.items);
-      setActiveTab("news");
+      setNewsPage(1);
+      if (tab) setActiveTab("news");
     } catch (err) {
       show(err instanceof Error ? err.message : "Erro ao pesquisar notícias");
     } finally {
       setLoading(false);
     }
   };
+
+  const clearFilters = () => {
+    setQuery("");
+    setStartDate("");
+    setEndDate("");
+    setSortBy("published");
+    setShowAnalyzedOnly(false);
+    setNewsPage(1);
+  };
+
+  const activeFiltersCount = [query, startDate, endDate].filter(Boolean).length + (sortBy !== "published" ? 1 : 0);
 
   const handleDelete = async () => {
     if (!ticker.trim()) return;
@@ -198,7 +264,6 @@ export function ElasticPage({ onSwitchView }: ElasticPageProps) {
         analysisBackend,
       );
       setAnalyzedCount({ total: res.total_items, analyzed: res.analyzed_count, errors: res.errors });
-      setActiveTab("analyzed");
       const searchRes = await searchElasticNews(
         ticker.trim().toUpperCase(),
         query || undefined,
@@ -206,7 +271,10 @@ export function ElasticPage({ onSwitchView }: ElasticPageProps) {
         endDate || undefined,
         200,
       );
+      setNews(searchRes.items);
       setAnalyzedNews(searchRes.items);
+      setActiveTab("analyzed");
+      setShowAnalyzedOnly(false);
       show(res.message || `Analisadas ${res.analyzed_count}/${res.total_items} notícias`);
       // Recarrega grafo atualizado após análise.
       await handleLoadGraph("build");
@@ -358,77 +426,147 @@ export function ElasticPage({ onSwitchView }: ElasticPageProps) {
           </div>
 
           <div className="space-y-4 p-4 rounded-xl bg-card border border-border">
-            <h2 className="font-semibold flex items-center gap-2">
-              <Search size={18} /> Pesquisa
-            </h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="px-3 py-2 rounded-lg bg-background border border-border"
-                placeholder="Data início"
-              />
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="px-3 py-2 rounded-lg bg-background border border-border"
-                placeholder="Data fim"
-              />
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold flex items-center gap-2">
+                <Search size={18} /> Pesquisa de notícias
+              </h2>
+              {activeFiltersCount > 0 && (
+                <button
+                  onClick={clearFilters}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition"
+                >
+                  <X size={14} /> Limpar filtros
+                </button>
+              )}
             </div>
 
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Termo nas notícias (opcional)"
-              className="w-full px-3 py-2 rounded-lg bg-background border border-border"
-            />
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSearchNews(true);
+              }}
+              className="space-y-3"
+            >
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Pesquisar palavras no título ou resumo..."
+                    className="w-full pl-10 pr-3 py-2 rounded-lg bg-background border border-border focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading || !ticker.trim()}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground disabled:opacity-50 hover:bg-secondary/90 transition"
+                >
+                  {loading ? <Activity size={16} className="animate-spin" /> : <Search size={16} />}
+                  <span className="hidden sm:inline">Pesquisar</span>
+                </button>
+              </div>
 
-            <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Calendar size={12} /> De
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="px-3 py-2 rounded-lg bg-background border border-border text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Calendar size={12} /> Até
+                  </label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="px-3 py-2 rounded-lg bg-background border border-border text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Filter size={12} /> Ordenar
+                  </label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as "published" | "relevance" | "sentiment")}
+                    className="px-3 py-2 rounded-lg bg-background border border-border text-sm"
+                  >
+                    <option value="published">Mais recentes</option>
+                    <option value="relevance">Relevância</option>
+                    <option value="sentiment">Sentimento</option>
+                  </select>
+                </div>
+                {activeTab === "analyzed" && (
+                  <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={showAnalyzedOnly}
+                      onChange={(e) => setShowAnalyzedOnly(e.target.checked)}
+                      className="rounded border-border"
+                    />
+                    Só analisadas
+                  </label>
+                )}
+              </div>
+            </form>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border">
+              <span className="text-xs text-muted-foreground">Ações:</span>
+              <button
+                onClick={() => handleSearchNews(false)}
+                disabled={loading || !ticker.trim()}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-primary/10 text-primary text-sm hover:bg-primary/20 transition disabled:opacity-50"
+              >
+                <Search size={14} /> Notícias
+              </button>
               <button
                 onClick={handleSearchPrices}
                 disabled={loading || !ticker.trim()}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground disabled:opacity-50 hover:bg-secondary/90 transition"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-primary/10 text-primary text-sm hover:bg-primary/20 transition disabled:opacity-50"
               >
-                <Search size={16} /> Preços
-              </button>
-              <button
-                onClick={handleSearchNews}
-                disabled={loading || !ticker.trim()}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground disabled:opacity-50 hover:bg-secondary/90 transition"
-              >
-                <Search size={16} /> Notícias
+                <BarChart3 size={14} /> Preços
               </button>
               <button
                 onClick={handleAnalyzeNews}
                 disabled={loading || !ticker.trim()}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground disabled:opacity-50 hover:bg-secondary/90 transition"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-accent text-accent-foreground text-sm hover:bg-accent/80 transition disabled:opacity-50"
               >
-                <BrainCircuit size={16} /> Analisar NLP
+                <Sparkles size={14} /> Analisar NLP
               </button>
+              <div className="flex items-center gap-1 ml-auto">
+                <span className="text-xs text-muted-foreground hidden sm:inline">Backend:</span>
+                <select
+                  value={analysisBackend}
+                  onChange={(e) => setAnalysisBackend(e.target.value as "heuristic" | "gpt2" | "mistral")}
+                  className="px-2 py-1.5 rounded-md bg-background border border-border text-sm"
+                  title="Modelo usado no Analisar NLP"
+                >
+                  <option value="heuristic">Heurística (rápido)</option>
+                  <option value="gpt2">GPT-2</option>
+                  <option value="mistral">Mistral</option>
+                </select>
+              </div>
               <button
                 onClick={() => handleLoadGraph("build")}
                 disabled={loading || graphLoading || !ticker.trim()}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground disabled:opacity-50 hover:bg-secondary/90 transition"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-primary/10 text-primary text-sm hover:bg-primary/20 transition disabled:opacity-50"
               >
-                <Network size={16} /> Grafo
+                <Network size={14} /> Grafo
               </button>
-              <select
-                value={analysisBackend}
-                onChange={(e) => setAnalysisBackend(e.target.value as "gpt2" | "mistral")}
-                className="px-3 py-2 rounded-lg bg-background border border-border"
-              >
-                <option value="gpt2">GPT-2</option>
-                <option value="mistral">Mistral</option>
-              </select>
               <button
                 onClick={handleDelete}
                 disabled={loading || !ticker.trim()}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-destructive text-destructive-foreground disabled:opacity-50 hover:bg-destructive/90 transition"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-destructive/10 text-destructive text-sm hover:bg-destructive/20 transition disabled:opacity-50"
               >
-                <Trash2 size={16} /> Apagar
+                <Trash2 size={14} /> Apagar
               </button>
             </div>
           </div>
@@ -502,78 +640,170 @@ export function ElasticPage({ onSwitchView }: ElasticPageProps) {
                   </table>
                 </div>
               )
-            ) : activeTab === "analyzed" ? (
-              analyzedNews.length === 0 ? (
-                <p className="text-muted-foreground text-sm">Sem notícias analisadas. Use "Analisar NLP" para enriquecer as notícias.</p>
+            ) : activeTab === "news" || activeTab === "analyzed" ? (
+              totalNews === 0 ? (
+                <div className="text-center py-8 space-y-3">
+                  <Search className="mx-auto text-muted-foreground" size={40} />
+                  <p className="text-muted-foreground text-sm">
+                    {activeTab === "analyzed"
+                      ? "Sem notícias analisadas para este filtro. Use 'Analisar NLP' para enriquecer as notícias."
+                      : "Nenhuma notícia encontrada para este ticker e filtro. Experimenta indexar notícias ou limpar os filtros."}
+                  </p>
+                  {activeTab !== "analyzed" && (
+                    <button
+                      onClick={clearFilters}
+                      className="px-4 py-2 rounded-lg bg-accent text-accent-foreground text-sm hover:bg-accent/80 transition"
+                    >
+                      Limpar filtros
+                    </button>
+                  )}
+                </div>
               ) : (
                 <div className="space-y-4">
-                  {analyzedCount && (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm text-muted-foreground">
+                      {totalNews} {totalNews === 1 ? "resultado" : "resultados"}
+                      {query && <span className="ml-1">• pesquisa por "{query}"</span>}
+                    </p>
+                    <div className="flex items-center gap-1 text-sm">
+                      <button
+                        onClick={() => setNewsPage((p) => Math.max(1, p - 1))}
+                        disabled={newsPage <= 1}
+                        className="px-2 py-1 rounded-md bg-accent disabled:opacity-50"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <span className="px-2 text-muted-foreground text-xs">
+                        {newsPage}/{newsTotalPages}
+                      </span>
+                      <button
+                        onClick={() => setNewsPage((p) => Math.min(newsTotalPages, p + 1))}
+                        disabled={newsPage >= newsTotalPages}
+                        className="px-2 py-1 rounded-md bg-accent disabled:opacity-50"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {activeTab === "analyzed" && analyzedCount && (
                     <p className="text-sm text-muted-foreground">
                       Última análise: {analyzedCount.analyzed}/{analyzedCount.total} enriquecidas
                       {analyzedCount.errors ? ` (${analyzedCount.errors} erros)` : ""}
                     </p>
                   )}
-                  {analyzedNews.map((n, idx) => (
-                    <div key={idx} className="p-4 rounded-lg bg-background border border-border">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <h3 className="font-medium">{n.translated_title || n.title || "Sem título"}</h3>
-                        {n.sentiment && (
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                              n.sentiment === "positivo"
-                                ? "bg-emerald-500/15 text-emerald-400"
-                                : n.sentiment === "negativo"
-                                ? "bg-red-500/15 text-red-400"
-                                : "bg-amber-500/15 text-amber-400"
-                            }`}
+
+                  {newsSlice.map((n, idx) => {
+                    const realIdx = (newsPage - 1) * newsPageSize + idx;
+                    const isExpanded = expandedNews.has(realIdx);
+                    const sentiment = n.sentiment || "neutro";
+                    return (
+                      <article
+                        key={realIdx}
+                        className="p-4 rounded-lg bg-background border border-border hover:border-ring/50 transition"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
+                          <h3 className="font-medium leading-snug">
+                            {n.translated_title || n.title || "Sem título"}
+                          </h3>
+                          {sentiment && (
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${
+                                sentiment === "positivo"
+                                  ? "bg-emerald-500/15 text-emerald-400"
+                                  : sentiment === "negativo"
+                                  ? "bg-red-500/15 text-red-400"
+                                  : "bg-amber-500/15 text-amber-400"
+                              }`}
+                            >
+                              {sentiment}
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-sm text-muted-foreground mb-2">
+                          {isExpanded
+                            ? n.summary_pt || n.translated_summary || n.summary || "Sem resumo"
+                            : (n.summary_pt || n.translated_summary || n.summary || "Sem resumo").slice(0, 220)}
+                          {!isExpanded && (n.summary_pt || n.translated_summary || n.summary || "").length > 220 && "…"}
+                          {(n.summary_pt || n.translated_summary || n.summary || "").length > 220 && (
+                            <button
+                              onClick={() => {
+                                const next = new Set(expandedNews);
+                                if (next.has(realIdx)) next.delete(realIdx);
+                                else next.add(realIdx);
+                                setExpandedNews(next);
+                              }}
+                              className="ml-1 text-xs text-primary hover:underline"
+                            >
+                              {isExpanded ? "Mostrar menos" : "Mostrar mais"}
+                            </button>
+                          )}
+                        </p>
+
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground mb-2">
+                          <span>{n.publisher}</span>
+                          <span>{formatDate(n.published)}</span>
+                          {n.language && <span>idioma: {n.language}</span>}
+                          {n.analyzed_at && <span>analisada: {formatDate(n.analyzed_at)}</span>}
+                        </div>
+
+                        {(n.entities?.length || n.topics?.length) ? (
+                          <div className="flex flex-wrap gap-1">
+                            {n.entities?.map((e, eidx) => (
+                              <span
+                                key={`e-${eidx}`}
+                                className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border"
+                              >
+                                {e.name} ({e.type})
+                              </span>
+                            ))}
+                            {n.topics?.map((t, tidx) => (
+                              <span
+                                key={`t-${tidx}`}
+                                className="text-xs px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30"
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        {n.url && (
+                          <a
+                            href={n.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-blue-500 hover:underline mt-2 inline-block"
                           >
-                            {n.sentiment}
-                          </span>
+                            Ver fonte
+                          </a>
                         )}
-                      </div>
-                      {n.summary_pt && <p className="text-sm mb-1">{n.summary_pt}</p>}
-                      {n.translated_summary && n.translated_summary !== n.summary_pt && (
-                        <p className="text-sm text-muted-foreground line-clamp-3">{n.translated_summary}</p>
-                      )}
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {n.publisher} • {formatDate(n.published)} • idioma: {n.language}
-                      </p>
-                      {n.entities && n.entities.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {n.entities.map((e, eidx) => (
-                            <span
-                              key={eidx}
-                              className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border"
-                            >
-                              {e.name} ({e.type})
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {n.topics && n.topics.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {n.topics.map((t, tidx) => (
-                            <span
-                              key={tidx}
-                              className="text-xs px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30"
-                            >
-                              {t}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {n.url && (
-                        <a
-                          href={n.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs text-blue-500 hover:underline mt-2 inline-block"
-                        >
-                          Ver fonte
-                        </a>
-                      )}
+                      </article>
+                    );
+                  })}
+
+                  {newsTotalPages > 1 && (
+                    <div className="flex items-center justify-end gap-1 pt-2 text-sm">
+                      <button
+                        onClick={() => setNewsPage((p) => Math.max(1, p - 1))}
+                        disabled={newsPage <= 1}
+                        className="px-2 py-1 rounded-md bg-accent disabled:opacity-50"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <span className="px-2 text-muted-foreground text-xs">
+                        {newsPage}/{newsTotalPages}
+                      </span>
+                      <button
+                        onClick={() => setNewsPage((p) => Math.min(newsTotalPages, p + 1))}
+                        disabled={newsPage >= newsTotalPages}
+                        className="px-2 py-1 rounded-md bg-accent disabled:opacity-50"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
                     </div>
-                  ))}
+                  )}
                 </div>
               )
             ) : graph && graph.nodes.length === 0 ? (

@@ -196,6 +196,44 @@ def forecast(req: ForecastRequest):
     ticker = _normalize_ticker(req.ticker)
     try:
         info = get_stock_info(ticker)
+        if req.backend == "kronos":
+            from forecasting.kronos_model import run_kronos_pipeline
+
+            data = run_kronos_pipeline(
+                ticker=ticker,
+                period=req.period,
+                future_steps=req.future_days,
+                variant="kronos-mini",
+            )
+            forecast_points = [
+                ForecastPoint(date=f["date"], price=f["price"], lower=f.get("lower"), upper=f.get("upper"))
+                for f in data["forecast"]
+            ]
+            series = [ForecastSeries(date=s["date"], value=s["value"], type=s["type"]) for s in data["series"]]
+            plot_url = None
+            if data.get("plot_path"):
+                plot_path = Path(data["plot_path"])
+                plot_url = f"/forecast/plot/{plot_path.name}"
+            return ForecastResponse(
+                ticker=ticker,
+                order=data.get("order", (0, 0, 0)),
+                train_days=data["train_days"],
+                test_days=data["test_days"],
+                rmse=data["rmse"],
+                mape=data["mape"],
+                ljung_box_pvalue=data.get("ljung_box_pvalue"),
+                last_train_date=data["last_train_date"],
+                last_test_date=data["last_test_date"],
+                currency=info.get("currency", "USD"),
+                company_name=info.get("name", ticker),
+                forecast=forecast_points,
+                series=series,
+                plot_url=plot_url,
+                plot_path=data.get("plot_path"),
+                model_summary=data.get("model_summary"),
+                explanation=data.get("explanation"),
+            )
+
         result = run_full_pipeline(
             ticker=ticker,
             period=req.period,
@@ -470,7 +508,7 @@ async def elastic_ingest_prices(
 async def elastic_ingest_news(
     ticker: str,
     auto_analyze: bool = Query(True, description="Executar análise NLP automaticamente após ingestão"),
-    backend: str = Query("gpt2", pattern="^(gpt2|mistral)$", description="Modelo de NLP a utilizar"),
+    backend: str = Query("heuristic", pattern="^(heuristic|gpt2|mistral)$", description="Modelo de NLP a utilizar"),
 ):
     """Obtém notícias via yfinance e indexa no Elasticsearch."""
     ticker = _normalize_ticker(ticker)
@@ -597,7 +635,7 @@ async def elastic_analyze_news(
     start_date: str = Query(None, description="Data inicial (YYYY-MM-DD)"),
     end_date: str = Query(None, description="Data final (YYYY-MM-DD)"),
     size: int = Query(50, ge=1, le=200),
-    backend: str = Query("gpt2", pattern="^(gpt2|mistral)$"),
+    backend: str = Query("heuristic", pattern="^(heuristic|gpt2|mistral)$"),
 ):
     """Analisa notícias indexadas com NLP (classificação, tradução PT, sumário, entidades)."""
     from api.elasticsearch_client import fetch_news_for_analysis, index_analyzed_news_items

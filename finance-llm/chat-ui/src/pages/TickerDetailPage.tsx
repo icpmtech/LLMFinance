@@ -173,7 +173,7 @@ export function TickerDetailPage({
 
       setLoadingForecast(true);
       try {
-        const f = await runForecast({ ticker, future_days: 30, period: "1y", order: "2,1,2" });
+        const f = await runForecast({ ticker, future_days: 30, period: "1y", order: "2,1,2", backend: "arima" });
         setForecast(f);
       } catch (e) {
         // forecast is optional

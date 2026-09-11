@@ -1,5 +1,5 @@
 export const API_BASE =
-  import.meta.env.VITE_API_URL || "http://127.0.0.1:8003";
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 import type {
   Actions,
@@ -49,8 +49,10 @@ export function getPlotUrl(plot_url: string): string {
   if (plot_url.startsWith("http://") || plot_url.startsWith("https://")) {
     return plot_url;
   }
-  const path = plot_url.startsWith("/") ? plot_url : `/forecast/plot/${encodeURIComponent(plot_url)}`;
-  return `${API_BASE}${path}`;
+  if (plot_url.startsWith("/")) {
+    return `${API_BASE}${plot_url}`;
+  }
+  return `${API_BASE}/forecast/plot/${encodeURIComponent(plot_url)}`;
 }
 
 
@@ -262,7 +264,7 @@ export async function analyzeElasticNews(
   startDate?: string,
   endDate?: string,
   size = 50,
-  backend: "gpt2" | "mistral" = "gpt2",
+  backend: "heuristic" | "gpt2" | "mistral" = "heuristic",
 ): Promise<ElasticAnalyzeNewsResponse> {
   const params = new URLSearchParams();
   if (q) params.append("q", q);

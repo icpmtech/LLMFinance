@@ -25,6 +25,7 @@ interface ChatLayoutProps {
   onSwitchRag?: () => void;
   onSwitchElastic?: () => void;
   onSwitchSearch?: () => void;
+  onSwitchTrading?: () => void;
 }
 
 export function ChatLayout({
@@ -44,6 +45,7 @@ export function ChatLayout({
   onSwitchRag,
   onSwitchElastic,
   onSwitchSearch,
+  onSwitchTrading,
 }: ChatLayoutProps) {
   return (
     <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-background text-foreground pb-16 md:pb-0">
@@ -58,6 +60,7 @@ export function ChatLayout({
         onSwitchRag={onSwitchRag}
         onSwitchElastic={onSwitchElastic}
         onSwitchSearch={onSwitchSearch}
+        onSwitchTrading={onSwitchTrading}
       />
 
       <main className="flex-1 flex flex-col min-w-0 min-h-0">

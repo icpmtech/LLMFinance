@@ -607,16 +607,24 @@ def get_macro_indicator(series_id: str = "DGS10") -> Dict:
         return {"series_id": series_id, "error": str(e)}
 
 
-def forecast_prices(symbol: str, future_days: int = 5, period: str = "5y") -> Dict:
-    """Gera previsão ARIMA de preços para um ticker.
+def forecast_prices(symbol: str, future_days: int = 5, period: str = "5y", backend: str = "arima") -> Dict:
+    """Gera previsão de preços para um ticker usando ARIMA ou Kronos.
 
-    Usa log-retornos, divisão temporal estrita, métricas de erro e
-    bandas de confiança. Guarda o gráfico em data/forecasting/.
+    backend: "arima" (padrão) ou "kronos". Guarda o gráfico em data/forecasting/.
     """
     from forecasting.arima_model import run_full_pipeline
 
     ticker = _normalize_ticker(symbol)
     try:
+        if backend == "kronos":
+            from forecasting.kronos_model import run_kronos_pipeline
+
+            return run_kronos_pipeline(
+                ticker=ticker,
+                period=period,
+                future_steps=future_days,
+                variant="kronos-mini",
+            )
         result = run_full_pipeline(
             ticker=ticker,
             period=period,

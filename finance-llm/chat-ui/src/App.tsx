@@ -3,6 +3,7 @@ import { ChatLayout } from "./components/ChatLayout";
 import { DashboardPage } from "./pages/DashboardPage";
 import { TickerDetailPage } from "./pages/TickerDetailPage";
 import { ForecastPage } from "./pages/ForecastPage";
+import { TradingPage } from "./pages/TradingPage";
 import { TickerPage } from "./pages/TickerPage";
 import { RagPage } from "./pages/RagPage";
 import { ElasticPage } from "./pages/ElasticPage";
@@ -10,7 +11,7 @@ import { GlobalSearchPage } from "./pages/GlobalSearchPage";
 import { sendChat } from "./sendChat";
 import type { Message, ModelBackend } from "./types";
 
-type AppView = "dashboard" | "chat" | "forecast" | "tickers" | "ticker-detail" | "rag" | "elastic" | "search";
+type AppView = "dashboard" | "chat" | "forecast" | "trading" | "tickers" | "ticker-detail" | "rag" | "elastic" | "search";
 const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
 
 const STORAGE_KEY = "finance-llm-conversations";
@@ -60,6 +61,7 @@ export default function App() {
     const path = window.location.pathname.replace(/\/$/, "");
     if (path === "/rag") return "rag";
     if (path === "/forecast") return "forecast";
+    if (path === "/trading") return "trading";
     if (path === "/tickers") return "tickers";
     if (path === "/elastic") return "elastic";
     const saved = localStorage.getItem("finance-llm-view");
@@ -183,6 +185,10 @@ export default function App() {
       setView("search");
       return;
     }
+    if (v === "trading") {
+      setView("trading");
+      return;
+    }
     setView(v as AppView);
   };
 
@@ -202,6 +208,7 @@ export default function App() {
     );
   }
   if (view === "forecast") return <ForecastPage onSwitchView={() => setView("dashboard")} />;
+  if (view === "trading") return <TradingPage onSwitchView={() => setView("dashboard")} />;
   if (view === "tickers") return <TickerPage onSwitchView={() => setView("dashboard")} />;
   if (view === "rag") return <RagPage onSwitchView={() => setView("dashboard")} />;
   if (view === "elastic") return <ElasticPage onSwitchView={() => setView("dashboard")} />;
@@ -231,6 +238,7 @@ export default function App() {
       onSwitchRag={() => setView("rag")}
       onSwitchElastic={() => setView("elastic")}
       onSwitchSearch={() => setView("search")}
+      onSwitchTrading={() => setView("trading")}
     />
   );
 }

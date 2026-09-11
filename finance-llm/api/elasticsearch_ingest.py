@@ -63,7 +63,7 @@ async def ingest_ticker_prices(
 
 async def ingest_ticker_news(
     ticker: str,
-    backend: str = "gpt2",
+    backend: str = "heuristic",
     auto_analyze: bool = True,
 ) -> ElasticIngestNewsResponse:
     """Obtém e indexa notícias de um ticker.

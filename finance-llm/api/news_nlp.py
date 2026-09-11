@@ -9,9 +9,18 @@ import re
 import threading
 import time
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
-from api.agent import get_inference_model
+# Import adiado para não carregar GPT-2/Mistral apenas para usar o tradutor.
+_get_inference_model = None
+
+def get_inference_model(backend: str = "gpt2"):
+    global _get_inference_model
+    if _get_inference_model is None:
+        from api.agent import get_inference_model as _gim
+        _get_inference_model = _gim
+    return _get_inference_model(backend)
 
 # -----------------------------------------------------------------------------
 # Tradutor EN-PT baseado em Helsinki-NLP/opus-mt-tc-big-en-pt (mirror acessível
@@ -239,11 +248,55 @@ def _heuristic_sentiment(title: str, summary: Optional[str]) -> str:
 
 
 def _translate_simple(text: Optional[str]) -> str:
-    """Tradução EN-PT real via Helsinki-NLP/opus-mt-tc-big-en-pt."""
+    """Tradução EN-PT real via Helsinki-NLP/opus-mt-tc-big-en-pt (cache LRU)."""
     if not text:
         return ""
-    translated = _translate_en_to_pt(text)
-    return translated or text.strip()
+    key = text.strip()[:200]
+    return _cached_translate(key) or text.strip()
+
+
+@lru_cache(maxsize=512)
+def _cached_translate(text: str) -> str:
+    return _translate_en_to_pt(text)
+
+
+def _translate_batch(texts: List[str]) -> List[str]:
+    """Traduz um lote de textos EN-PT numa única passagem do modelo (limitado)."""
+    if not texts:
+        return []
+    non_empty = [(i, t) for i, t in enumerate(texts) if t and t.strip()]
+    if not non_empty:
+        return [""] * len(texts)
+
+    try:
+        with _TranslationModel._lock:
+            if _TranslationModel._instance is None:
+                from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+                _TranslationModel._tokenizer = AutoTokenizer.from_pretrained(TRANSLATION_MODEL_NAME)
+                _TranslationModel._instance = AutoModelForSeq2SeqLM.from_pretrained(TRANSLATION_MODEL_NAME)
+
+        # Limita o tamanho do lote e trunca textos para reduzir latência em CPU.
+        MAX_BATCH = 16
+        MAX_LEN = 128
+        chunks = non_empty[:MAX_BATCH]
+        inputs = _TranslationModel._tokenizer(
+            [t[:MAX_LEN] for _, t in chunks],
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=MAX_LEN,
+        )
+        translated = _TranslationModel._instance.generate(
+            **inputs, max_length=MAX_LEN, num_beams=1, do_sample=False
+        )
+        decoded = _TranslationModel._tokenizer.batch_decode(translated, skip_special_tokens=True)
+    except Exception:
+        decoded = [t for _, t in non_empty]
+
+    out = [""] * len(texts)
+    for (i, _), d in zip(chunks, decoded):
+        out[i] = d.strip()
+    return out
 
 
 def _summarize_pt(title: str, summary: Optional[str], sentiment: str) -> str:
@@ -404,6 +457,8 @@ def _build_prompt(title: str, summary: Optional[str]) -> str:
 
 
 def _run_model(prompt: str, backend: str = "gpt2", max_new_tokens: int = 180) -> str:
+    if backend == "heuristic":
+        return ""
     model = get_inference_model(backend)
     return model.generate(prompt, max_new_tokens=max_new_tokens, temperature=0.3)
 
@@ -413,6 +468,7 @@ def analyze_news_item(
     summary: Optional[str] = None,
     backend: str = "gpt2",
     ticker: Optional[str] = None,
+    translate_summary: bool = True,
 ) -> NewsAnalysisResult:
     """Analisa uma notícia individual combinando modelo local e heurísticas."""
     start = time.time()
@@ -429,14 +485,14 @@ def analyze_news_item(
         translated_summary_default = summary or ""
     else:
         translated_title_default = _translate_simple(title)
-        translated_summary_default = _translate_simple(summary)
+        translated_summary_default = _translate_simple(summary) if translate_summary else (summary or "")
 
     default = {
         "sentiment": _heuristic_sentiment(title, summary),
         "language": detected_language,
         "translated_title": translated_title_default,
         "translated_summary": translated_summary_default,
-        "summary_pt": _summarize_pt(title, summary, _heuristic_sentiment(title, summary)),
+        "summary_pt": _summarize_pt(title, summary if translate_summary else None, _heuristic_sentiment(title, summary)),
         "entities": _extract_entities(title, summary, ticker),
         "topics": _extract_topics(title, summary),
     }
@@ -492,15 +548,31 @@ def analyze_news_batch(
     backend: str = "gpt2",
     ticker: Optional[str] = None,
 ) -> List[NewsAnalysisResult]:
-    """Analisa um lote de notícias (uma de cada vez, dado modelos pequenos)."""
+    """Analisa um lote de notícias, traduzindo apenas os títulos em batch.
+
+    O resumo original em inglês é mantido (não traduzido) para evitar alta
+    latência de CPU. O sumário PT é gerado a partir do título traduzido.
+    """
+    titles = [item.get("title") or "" for item in items]
+    translated_titles = _translate_batch(titles)
+
     results = []
-    for item in items:
-        results.append(analyze_news_item(
-            title=item.get("title") or "",
-            summary=item.get("summary") or item.get("text") or "",
+    for item, tt in zip(items, translated_titles):
+        title = item.get("title") or ""
+        summary = item.get("summary") or item.get("text") or ""
+        result = analyze_news_item(
+            title=title,
+            summary=summary,
             backend=backend,
             ticker=ticker or item.get("ticker"),
-        ))
+            translate_summary=False,
+        )
+        # Sobrepõe a tradução batch do título para garantir PT fluente.
+        if tt and result.language != "pt":
+            result.translated_title = tt
+            result.translated_summary = summary or ""
+            result.summary_pt = _summarize_pt(tt, None, result.sentiment)
+        results.append(result)
     return results
 
 
