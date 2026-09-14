@@ -24,8 +24,11 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
+  Loader2,
+  Newspaper,
 } from "lucide-react";
 import {
+  analyzeSentiment,
   getTickerHistory,
   getTickerInfo,
   runForecast,
@@ -33,7 +36,7 @@ import {
   searchYahooTickers,
   getPlotUrl,
 } from "../api";
-import type { ForecastResponse, HistoryPoint, TickerHistory, TickerInfo } from "../types";
+import type { ForecastResponse, HistoryPoint, SentimentBlendedResponse, TickerHistory, TickerInfo } from "../types";
 
 const PERIODS = ["1mo", "3mo", "6mo", "1y", "2y", "5y"];
 const DEFAULT_TICKER = "AAPL";
@@ -107,9 +110,12 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
   const [history, setHistory] = useState<TickerHistory | null>(null);
   const [info, setInfo] = useState<TickerInfo | null>(null);
   const [forecast, setForecast] = useState<ForecastResponse | null>(null);
+  const [sentiment, setSentiment] = useState<SentimentBlendedResponse | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [loadingForecast, setLoadingForecast] = useState(false);
+  const [loadingSentiment, setLoadingSentiment] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [useSentiment, setUseSentiment] = useState(true);
 
   const [suggestions, setSuggestions] = useState<{ symbol: string; name?: string }[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -122,6 +128,7 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
   const [simulation, setSimulation] = useState<SimulationResult | null>(null);
   const [showForecast, setShowForecast] = useState(true);
   const [showVolume, setShowVolume] = useState(true);
+  const [showSentiment, setShowSentiment] = useState(true);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
@@ -132,6 +139,7 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
   const forecastLineRef = useRef<ISeriesApi<"Line"> | null>(null);
   const forecastUpperRef = useRef<ISeriesApi<"Line"> | null>(null);
   const forecastLowerRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const sentimentLineRef = useRef<ISeriesApi<"Line"> | null>(null);
   const todayLineRef = useRef<ISeriesApi<"Line"> | null>(null);
 
   const fetchSuggestions = useCallback(async (q: string) => {
@@ -189,30 +197,37 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
     }
   }, [ticker, period]);
 
-  const runKronos = useCallback(async () => {
+  const runForecastAndSentiment = useCallback(async () => {
     if (!ticker) return;
     setLoadingForecast(true);
+    setLoadingSentiment(true);
     setError(null);
     try {
-      const res = await runForecast({
-        ticker,
-        future_days: 10,
-        period: "5y",
-        train_ratio: 0.85,
-        backend: "kronos",
-      });
-      setForecast(res);
+      const [forecastRes, sentimentRes] = await Promise.all([
+        runForecast({
+          ticker,
+          future_days: 10,
+          period: "5y",
+          train_ratio: 0.85,
+          backend: "kronos",
+          use_sentiment: useSentiment,
+        }),
+        analyzeSentiment(ticker, "kronos", 10, "5y", false).catch((err) => {
+          console.warn("Sentiment analyze failed:", err);
+          return null;
+        }),
+      ]);
+      setForecast(forecastRes);
+      setSentiment(sentimentRes);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setForecast(null);
+      setSentiment(null);
     } finally {
       setLoadingForecast(false);
+      setLoadingSentiment(false);
     }
-  }, [ticker]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  }, [ticker, useSentiment]);
 
   const chartData: ChartRow[] = useMemo(() => {
     if (!history?.points?.length) return [];
@@ -280,6 +295,11 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
       .filter((p) => p.lower != null)
       .map((p) => ({ time: p.date.slice(0, 10), value: p.lower! }));
   }, [forecast]);
+
+  const sentimentLine: LinePoint[] = useMemo(() => {
+    if (!sentiment?.adjusted_forecast?.length) return [];
+    return sentiment.adjusted_forecast.map((p) => ({ time: p.date.slice(0, 10), value: p.price }));
+  }, [sentiment]);
 
   const runSimulation = useCallback(() => {
     if (!history?.points?.length || !lastPrice) return;
@@ -370,7 +390,7 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
 
   useEffect(() => {
     setSimulation(null);
-  }, [ticker, period, mode, manualSide, capital, positionSizePct, forecast]);
+  }, [ticker, period, mode, manualSide, capital, positionSizePct, forecast, sentiment]);
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -433,12 +453,22 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
       visible: false,
     });
 
+    const sentimentLineSeries = chart.addSeries(LineSeries, {
+      color: "#f59e0b",
+      lineStyle: 0,
+      lineWidth: 2,
+      lastValueVisible: false,
+      title: "Ajustado sentimento",
+      visible: false,
+    });
+
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
     volumeSeriesRef.current = volumeSeries;
     forecastLineRef.current = forecastLineSeries;
     forecastUpperRef.current = forecastUpperSeries;
     forecastLowerRef.current = forecastLowerSeries;
+    sentimentLineRef.current = sentimentLineSeries;
 
     return () => {
       chart.remove();
@@ -448,6 +478,7 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
       forecastLineRef.current = null;
       forecastUpperRef.current = null;
       forecastLowerRef.current = null;
+      sentimentLineRef.current = null;
     };
   }, [history]);
 
@@ -493,6 +524,12 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
     forecastLowerRef.current.setData(forecastLower);
     forecastLowerRef.current.applyOptions({ visible: showForecast });
   }, [forecastLower, showForecast]);
+
+  useEffect(() => {
+    if (!sentimentLineRef.current) return;
+    sentimentLineRef.current.setData(sentimentLine);
+    sentimentLineRef.current.applyOptions({ visible: showSentiment });
+  }, [sentimentLine, showSentiment]);
 
   useEffect(() => {
     if (!chartRef.current || !candleSeriesRef.current) return;
@@ -644,7 +681,7 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
               {loadingHistory ? "A carregar histórico…" : "Carregar histórico"}
             </button>
             <button
-              onClick={runKronos}
+              onClick={runForecastAndSentiment}
               disabled={loadingForecast || !ticker}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-card border border-border font-medium hover:bg-accent disabled:opacity-50 transition"
             >
@@ -652,6 +689,25 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
               {loadingForecast ? "Kronos a pensar…" : "Gerar previsão Kronos"}
             </button>
             {error && <p className="text-destructive text-sm">{error}</p>}
+          </div>
+
+          <div className="flex items-center gap-2 pt-2 border-t border-border">
+            <input
+              id="use-sentiment"
+              type="checkbox"
+              checked={useSentiment}
+              onChange={(e) => setUseSentiment(e.target.checked)}
+              className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
+            />
+            <label htmlFor="use-sentiment" className="text-sm font-medium">
+              Misturar previsão com sentimento, macro e resultados
+            </label>
+            {loadingSentiment && (
+              <span className="ml-auto text-xs text-muted-foreground inline-flex items-center gap-1">
+                <Loader2 size={12} className="animate-spin" />
+                Analisar sentimento…
+              </span>
+            )}
           </div>
         </section>
 
@@ -719,6 +775,7 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
                   <h3 className="font-semibold">Gráfico {ticker}</h3>
                   <div className="flex flex-wrap items-center gap-2">
                     <Toggle active={showForecast} onClick={() => setShowForecast((v) => !v)} label="Previsão" />
+                    <Toggle active={showSentiment} onClick={() => setShowSentiment((v) => !v)} label="Sentimento" />
                     <Toggle active={showVolume} onClick={() => setShowVolume((v) => !v)} label="Volume" />
                     <button
                       onClick={() => {
@@ -759,6 +816,7 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
                   <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-600" /> Alta</span>
                   <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-600" /> Baixa</span>
                   <span className="inline-flex items-center gap-1"><span className="w-4 h-0.5 bg-red-600" /> Previsão Kronos</span>
+                  <span className="inline-flex items-center gap-1"><span className="w-4 h-0.5 bg-amber-500" /> Ajustado sentimento</span>
                   <span className="inline-flex items-center gap-1"><span className="w-4 h-0.5 bg-red-300" /> Limite superior</span>
                   <span className="inline-flex items-center gap-1"><span className="w-4 h-0.5 bg-blue-300" /> Limite inferior</span>
                 </div>
@@ -936,6 +994,47 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
               </div>
             </section>
 
+            {sentiment && (
+              <section className="bg-card border border-border rounded-2xl p-5 shadow-sm">
+                <h3 className="font-semibold mb-3 flex items-center gap-2">
+                  <Newspaper className="text-primary" size={18} />
+                  Análise de Sentimento &amp; Sinais
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                  <SignalCard label="Notícias" signal={sentiment.signals.sentiment_signal} />
+                  <SignalCard label="Macro" signal={sentiment.signals.macro_signal} />
+                  <SignalCard label="Resultados" signal={sentiment.signals.earnings_signal} />
+                  <SignalCard label="Combinado" signal={sentiment.signals.blended_signal} highlighted />
+                </div>
+                {sentiment.features && (
+                  <div className="text-xs text-muted-foreground">
+                    <div className="flex flex-wrap gap-2">
+                      {sentiment.features.news_count != null && (
+                        <span className="bg-muted rounded px-2 py-1">
+                          notícias: {String(sentiment.features.news_count)}
+                        </span>
+                      )}
+                      {sentiment.features.avg_daily_sentiment != null && (
+                        <span className="bg-muted rounded px-2 py-1">
+                          sent. médio: {fmt(Number(sentiment.features.avg_daily_sentiment), 3)}
+                        </span>
+                      )}
+                      {sentiment.features.next_earnings_days != null && (
+                        <span className="bg-muted rounded px-2 py-1">
+                          próx. resultados: {String(sentiment.features.next_earnings_days)}d
+                        </span>
+                      )}
+                      {sentiment.features.macro_features_count != null && (
+                        <span className="bg-muted rounded px-2 py-1">
+                          indicadores macro: {String(sentiment.features.macro_features_count)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+
             {forecast?.explanation && (
               <section className="bg-card border border-border rounded-2xl p-5 shadow-sm">
                 <h3 className="font-semibold mb-3 flex items-center gap-2">
@@ -950,6 +1049,27 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function SignalCard({
+  label,
+  signal,
+  highlighted = false,
+}: {
+  label: string;
+  signal: number;
+  highlighted?: boolean;
+}) {
+  const side = signal > 0.1 ? "Bullish" : signal < -0.1 ? "Bearish" : "Neutro";
+  const color =
+    signal > 0.1 ? "text-emerald-600 bg-emerald-50 border-emerald-200" : signal < -0.1 ? "text-red-600 bg-red-50 border-red-200" : "text-slate-600 bg-slate-50 border-slate-200";
+  return (
+    <div className={classNames("rounded-xl p-4 border", highlighted ? "ring-1 ring-primary/30" : "", color)}>
+      <div className="text-xs font-medium opacity-80">{label}</div>
+      <div className="text-xl font-bold">{side}</div>
+      <div className="text-xs opacity-70">{fmt(signal, 3)}</div>
     </div>
   );
 }

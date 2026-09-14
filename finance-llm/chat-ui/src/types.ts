@@ -499,6 +499,8 @@ export interface ForecastRequest {
   order?: string;
   train_ratio?: number;
   backend?: "arima" | "kronos";
+  use_sentiment?: boolean;
+  include_features?: boolean;
 }
 
 export interface ForecastPoint {
@@ -512,6 +514,26 @@ export interface ForecastSeries {
   date: string;
   value: number;
   type: string;
+}
+
+export interface ForecastSignal {
+  sentiment_signal: number;
+  macro_signal: number;
+  earnings_signal: number;
+  blended_signal: number;
+  weights: Record<string, number>;
+}
+
+export interface SentimentBlendedResponse {
+  ticker: string;
+  base_model: string;
+  period: string;
+  future_days: number;
+  base_forecast: ForecastPoint[];
+  adjusted_forecast: ForecastPoint[];
+  signals: ForecastSignal;
+  features: Record<string, unknown>;
+  error?: string;
 }
 
 export interface ForecastResponse {

@@ -79,7 +79,48 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
-    for name, mappings in [("finance_prices", prices_mappings), ("finance_news", news_mappings)]:
+    sentiment_mappings = {
+        "properties": {
+            "ticker": {"type": "keyword"},
+            "date": {"type": "date"},
+            "news_count": {"type": "integer"},
+            "sentiment_mean": {"type": "float"},
+            "sentiment_std": {"type": "float"},
+            "positive_count": {"type": "integer"},
+            "negative_count": {"type": "integer"},
+            "positive_ratio": {"type": "float"},
+            "negative_ratio": {"type": "float"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
+    macro_mappings = {
+        "properties": {
+            "name": {"type": "keyword"},
+            "date": {"type": "date"},
+            "value": {"type": "float"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
+    earnings_mappings = {
+        "properties": {
+            "ticker": {"type": "keyword"},
+            "date": {"type": "date"},
+            "eps_estimate": {"type": "float"},
+            "reported_eps": {"type": "float"},
+            "surprise_pct": {"type": "float"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
+    for name, mappings in [
+        ("finance_prices", prices_mappings),
+        ("finance_news", news_mappings),
+        ("finance_sentiment_daily", sentiment_mappings),
+        ("finance_macro", macro_mappings),
+        ("finance_earnings", earnings_mappings),
+    ]:
         if not client.indices.exists(index=name):
             client.indices.create(
                 index=name,

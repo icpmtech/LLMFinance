@@ -32,6 +32,7 @@ import type {
   TickerSearchResponse,
   ForecastRequest,
   ForecastResponse,
+  SentimentBlendedResponse,
   RagChatRequest,
   RagChatResponse,
   RagDocument,
@@ -342,6 +343,30 @@ export async function runForecast(request: ForecastRequest): Promise<ForecastRes
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
   });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+export async function analyzeSentiment(
+  ticker: string,
+  backend: "arima" | "kronos" = "arima",
+  futureDays = 5,
+  period = "5y",
+  includeFeatures = true,
+): Promise<SentimentBlendedResponse> {
+  const params = new URLSearchParams({
+    backend,
+    future_days: String(futureDays),
+    period,
+    include_features: String(includeFeatures),
+  });
+  const res = await fetch(
+    `${API_BASE}/sentiment/analyze/${encodeURIComponent(ticker)}?${params}`,
+    { method: "POST" },
+  );
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Erro ${res.status}: ${text}`);

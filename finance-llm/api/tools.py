@@ -3,7 +3,7 @@ import json
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -597,14 +597,96 @@ def get_macro_indicator(series_id: str = "DGS10") -> Dict:
     try:
         fred = Fred(api_key=key)
         s = fred.get_series(series_id)
-        last = s.dropna().iloc[-1]
+        s = s.dropna()
         return {
             "series_id": series_id,
-            "value": float(last),
-            "date": str(s.dropna().index[-1].date()),
+            "value": float(s.iloc[-1]),
+            "date": str(s.index[-1].date()),
+            "series": [
+                {"date": str(d.date()), "value": float(v)}
+                for d, v in s.tail(180).items()
+            ],
         }
     except Exception as e:
         return {"series_id": series_id, "error": str(e)}
+
+
+def get_macro_snapshot() -> Dict[str, Any]:
+    """Devolve snapshot de indicadores macro principais (US/EU)."""
+    indicators = {
+        "US10Y": "DGS10",
+        "US02Y": "DGS2",
+        "USFFR": "FEDFUNDS",
+        "USCPI": "CPIAUCSL",
+        "USCOREPCE": "PCEPI",
+        "USUNEMP": "UNRATE",
+        "EUR10Y": "IRLTLT01EZM156N",
+        "EURCPI": "EA19SL",
+    }
+    result = {}
+    for name, series_id in indicators.items():
+        result[name] = get_macro_indicator(series_id)
+    return result
+
+
+def get_earnings_and_calendar(symbol: str) -> Dict[str, Any]:
+    """Obtém earnings históricos e calendário futuro do Yahoo Finance."""
+    ticker = _normalize_ticker(symbol)
+    try:
+        t = yf.Ticker(ticker)
+        info = t.info or {}
+        earnings_dates = t.earnings_dates
+        earnings = t.earnings
+        quarterly_earnings = t.quarterly_earnings
+
+        def _clean_earnings_df(df: Optional[pd.DataFrame]) -> List[Dict[str, Any]]:
+            if df is None or df.empty:
+                return []
+            df = df.reset_index()
+            date_col = None
+            for c in df.columns:
+                if str(c).lower() in {"date", "period ending", "periodending", "earnings date"}:
+                    date_col = c
+                    break
+            rows = []
+            for _, row in df.iterrows():
+                r = {}
+                if date_col:
+                    d = row[date_col]
+                    r["date"] = str(d.date()) if hasattr(d, "date") else str(d)
+                else:
+                    r["date"] = None
+                for col in ["revenue", "earnings", "eps estimate", "reported eps", "surprise pct"]:
+                    for c in df.columns:
+                        if str(c).lower() == col.lower():
+                            r[col.replace(" ", "_")] = float(row[c]) if pd.notna(row[c]) and isinstance(row[c], (int, float)) else None
+                rows.append(r)
+            return rows
+
+        next_earnings = None
+        if earnings_dates is not None and not earnings_dates.empty:
+            future = earnings_dates[earnings_dates.index > pd.Timestamp.now(tz="UTC")]
+            if future.empty:
+                future = earnings_dates
+            next_row = future.iloc[0] if not future.empty else earnings_dates.iloc[0]
+            next_earnings = {
+                "date": str(future.index[0].date()) if not future.empty else str(earnings_dates.index[0].date()),
+                "eps_estimate": float(next_row.get("EPS Estimate")) if pd.notna(next_row.get("EPS Estimate")) else None,
+            }
+
+        return {
+            "ticker": ticker,
+            "earnings_annual": _clean_earnings_df(earnings),
+            "earnings_quarterly": _clean_earnings_df(quarterly_earnings),
+            "earnings_dates": _clean_earnings_df(earnings_dates),
+            "next_earnings": next_earnings,
+            "eps": info.get("trailingEps"),
+            "forward_eps": info.get("forwardEps"),
+            "earnings_growth": info.get("earningsGrowth"),
+            "revenue_growth": info.get("revenueGrowth"),
+        }
+    except Exception as e:
+        return {"ticker": ticker, "error": str(e)}
 
 
 def forecast_prices(symbol: str, future_days: int = 5, period: str = "5y", backend: str = "arima") -> Dict:
@@ -657,4 +739,6 @@ TOOLS = {
     "get_news": get_news,
     "get_options": get_options,
     "get_actions": get_actions,
+    "get_earnings_and_calendar": get_earnings_and_calendar,
+    "get_macro_snapshot": get_macro_snapshot,
 }

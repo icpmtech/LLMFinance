@@ -42,6 +42,28 @@ class ForecastRequest(BaseModel):
     order: str = "2,1,2"
     train_ratio: float = 0.85
     backend: Literal["arima", "kronos"] = "arima"
+    use_sentiment: bool = False
+    include_features: bool = True
+
+
+class ForecastSignal(BaseModel):
+    sentiment_signal: float = 0.0
+    macro_signal: float = 0.0
+    earnings_signal: float = 0.0
+    blended_signal: float = 0.0
+    weights: Dict[str, float] = {}
+
+
+class SentimentBlendedResponse(BaseModel):
+    ticker: str
+    base_model: str
+    period: str
+    future_days: int
+    base_forecast: List[ForecastPoint] = []
+    adjusted_forecast: List[ForecastPoint] = []
+    signals: ForecastSignal = Field(default_factory=ForecastSignal)
+    features: Dict[str, Any] = Field(default_factory=dict)
+    error: Optional[str] = None
 
 
 class ForecastPoint(BaseModel):

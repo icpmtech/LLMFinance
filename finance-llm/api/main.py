@@ -1,10 +1,13 @@
 """Backend FastAPI para a Chat UI do FinanceLLM."""
 import json
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, List
 
 from fastapi import FastAPI, HTTPException, Query
+
+logger = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 
@@ -35,6 +38,7 @@ from api.models import (
     ForecastRequest,
     ForecastResponse,
     ForecastSeries,
+    ForecastSignal,
     HistoryPoint,
     HoldersResponse,
     NewsItem,
@@ -43,6 +47,7 @@ from api.models import (
     RecommendationsResponse,
     SecFiling,
     SecFilingsResponse,
+    SentimentBlendedResponse,
     SustainabilityResponse,
     TechnicalExplanation,
     TechnicalPoint,
@@ -251,7 +256,7 @@ def forecast(req: ForecastRequest):
         plot_url = None
         if result.plot_path:
             plot_url = f"/forecast/plot/{result.plot_path.name}"
-        return ForecastResponse(
+        base_response = ForecastResponse(
             ticker=ticker,
             order=result.order,
             train_days=data["train_days"],
@@ -273,8 +278,27 @@ def forecast(req: ForecastRequest):
                 company_name=info.get("name", ticker),
             ),
         )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Erro ao gerar previsão para {ticker}: {exc}")
+        if not req.use_sentiment:
+            return base_response
+
+        try:
+            from sentiment.feature_engineering import blend_forecast_with_sentiment
+
+            blended = blend_forecast_with_sentiment(
+                ticker=ticker,
+                base_forecast=[f.model_dump() for f in base_response.forecast],
+                period=req.period,
+            )
+            if blended.get("error"):
+                return base_response
+            adj_points = [
+                ForecastPoint(date=f["date"], price=f["price"], lower=f.get("lower"), upper=f.get("upper"))
+                for f in blended.get("adjusted_forecast", [])
+            ]
+            return base_response.model_copy(update={"forecast": adj_points})
+        except Exception as exc:
+            logger.warning("Blending sentiment failed for %s: %s", ticker, exc)
+            return base_response
 
 
 @app.get("/forecast/plot/{filename}")
@@ -665,8 +689,7 @@ async def elastic_analyze_news(
         save_news_graph(ticker, graph)
     except Exception as exc:
         # O grafo é opcional; não falha a análise se algo correr mal aqui.
-        import logging
-        logging.getLogger(__name__).warning(f"Falha ao reconstruir grafo para {ticker}: {exc}")
+        logger.warning("Falha ao reconstruir grafo para %s: %s", ticker, exc)
 
     return ElasticAnalyzeNewsResponse(
         ticker=result.get("ticker", ticker),
@@ -675,6 +698,50 @@ async def elastic_analyze_news(
         errors=result.get("errors", 0),
         message=f"Analisadas e indexadas {result.get('indexed_count', 0)} notícias.",
         error=result.get("error"),
+    )
+
+
+@app.post("/sentiment/analyze/{ticker}", response_model=SentimentBlendedResponse)
+async def sentiment_analyze(
+    ticker: str,
+    backend: str = Query("arima", pattern="^(arima|kronos)$"),
+    future_days: int = Query(5, ge=1, le=90),
+    period: str = Query("5y"),
+    include_features: bool = Query(True),
+):
+    """Executa o agente de sentimento: recolhe notícias, macro, resultados e gera previsão misturada."""
+    from sentiment.feature_engineering import generate_sentiment_blended_forecast
+
+    ticker = _normalize_ticker(ticker)
+    result = await _run_in_thread(
+        generate_sentiment_blended_forecast,
+        ticker,
+        backend,
+        future_days,
+        period,
+        include_features,
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=500, detail=result["error"])
+
+    base_points = [
+        ForecastPoint(date=f["date"], price=f["price"], lower=f.get("lower"), upper=f.get("upper"))
+        for f in result.get("base_forecast", [])
+    ]
+    adjusted_points = [
+        ForecastPoint(date=f["date"], price=f["price"], lower=f.get("lower"), upper=f.get("upper"))
+        for f in result.get("adjusted_forecast", [])
+    ]
+    signals = result.get("signals")
+    return SentimentBlendedResponse(
+        ticker=ticker,
+        base_model=result.get("base_model", backend),
+        period=period,
+        future_days=future_days,
+        base_forecast=base_points,
+        adjusted_forecast=adjusted_points,
+        signals=ForecastSignal(**signals) if signals else ForecastSignal(),
+        features=result.get("features") if include_features else {},
     )
 
 
