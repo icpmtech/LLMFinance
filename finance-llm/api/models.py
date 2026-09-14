@@ -524,3 +524,143 @@ class RagDocumentGraphResponse(BaseModel):
     title: str
     nodes: List[RagDocumentGraphNode] = []
     edges: List[RagDocumentGraphEdge] = []
+
+
+# --- Contratos públicos ---
+
+class ContractEntity(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    nif: Optional[str] = None
+    code: Optional[str] = None
+
+
+class ContractCpv(BaseModel):
+    code: Optional[str] = None
+    description: Optional[str] = None
+
+
+class ContractPartyParsed(BaseModel):
+    nif: Optional[str] = None
+    nome: Optional[str] = None
+
+
+class ContractParty(BaseModel):
+    raw: Optional[str] = None
+    parsed: List[ContractPartyParsed] = []
+
+
+class ContractItem(BaseModel):
+    idcontrato: Optional[str] = None
+    nAnuncio: Optional[str] = None
+    TipoAnuncio: Optional[str] = None
+    idprocedimento: Optional[str] = None
+    tipoContrato: Optional[str] = None
+    tipoprocedimento: Optional[str] = None
+    objectoContrato: Optional[str] = None
+    descContrato: Optional[str] = None
+    adjudicantes: List[ContractParty] = []
+    adjudicatarios: List[ContractParty] = []
+    dataPublicacao: Optional[str] = None
+    dataCelebracaoContrato: Optional[str] = None
+    precoContratual: Optional[float] = None
+    PrecoTotalEfetivo: Optional[float] = None
+    precoBaseProcedimento: Optional[float] = None
+    cpv: List[ContractCpv] = []
+    localExecucao: Optional[str] = None
+    Ano: Optional[int] = None
+    NUTs: Optional[str] = None
+    regime: Optional[str] = None
+    regimeCadastro: Optional[str] = None
+    regimeContratacao: Optional[str] = None
+    regimeExecucao: Optional[str] = None
+    entidade: Optional[str] = None
+    entidadeDesc: Optional[str] = None
+    tipoFimContrato: Optional[str] = None
+    search_text: Optional[str] = None
+    entities: List[ContractEntity] = []
+    score: Optional[float] = None
+    doc_id: Optional[str] = None
+
+
+class ContractIngestRequest(BaseModel):
+    year: Optional[int] = None
+    max_records: Optional[int] = None
+    chunk_size: int = 1000
+
+
+class ContractIngestResponse(BaseModel):
+    indexed_count: int
+    total: int
+    errors: int = 0
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
+class ContractSearchRequest(BaseModel):
+    q: Optional[str] = None
+    year: Optional[int] = None
+    entity: Optional[str] = None
+    nif: Optional[str] = None
+    cpv_code: Optional[str] = None
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    size: int = 20
+    from_: int = Field(0, alias="from")
+
+
+class ContractSearchResponse(BaseModel):
+    query: Optional[str] = None
+    total: int = 0
+    items: List[ContractItem] = []
+    from_: int = Field(0, alias="from")
+    size: int = 20
+    error: Optional[str] = None
+
+
+class ContractAutocompleteResponse(BaseModel):
+    query: Optional[str] = None
+    suggestions: List[Dict[str, Any]] = []
+    error: Optional[str] = None
+
+
+class ContractStatusResponse(BaseModel):
+    total: int = 0
+    years: List[int] = []
+    error: Optional[str] = None
+
+
+class ContractYearInfo(BaseModel):
+    year: int
+    count: int
+
+
+class ContractYearsResponse(BaseModel):
+    available: List[int] = []
+    indexed: List[ContractYearInfo] = []
+    error: Optional[str] = None
+
+
+class ContractChatRequest(BaseModel):
+    question: str
+    top_k: int = 5
+    max_new_tokens: int = 256
+    temperature: float = 0.1
+
+
+class ContractChatSource(BaseModel):
+    idcontrato: Optional[str] = None
+    objectoContrato: Optional[str] = None
+    adjudicante: Optional[str] = None
+    adjudicatario: Optional[str] = None
+    precoContratual: Optional[float] = None
+    score: Optional[float] = None
+
+
+class ContractChatResponse(BaseModel):
+    answer: str
+    sources: List[ContractChatSource] = []
+    model_used: Optional[str] = None
+    error: Optional[str] = None

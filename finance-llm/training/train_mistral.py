@@ -101,16 +101,18 @@ def _load_state(model, optimizer):
     return state
 
 
-def train_model(
+def run_training(
+    texts: list[str],
     epochs: int = 1,
     batch_size: int = 4,
     max_length: int = 128,
     learning_rate: float = 5e-5,
-    max_samples: int | None = None,
     save_checkpoints: bool = True,
     resume: bool = False,
     gradient_accumulation_steps: int = 1,
+    output_dir: Path | None = None,
 ):
+    """Executa o loop de treino Mistral a partir de uma lista de textos já prontos."""
     _register_signals()
     tokenizer = PreTrainedTokenizerFast.from_pretrained(MODEL_DIR)
     model = MistralForCausalLM.from_pretrained(MODEL_DIR)
@@ -122,10 +124,6 @@ def train_model(
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
-
-    texts = load_jsonl(FINAL_DIR / "train.jsonl")
-    if max_samples:
-        texts = texts[:max_samples]
 
     # Pré-truncar a nível de caracteres para acelerar a tokenização (o tokenizer
     # iria truncar a max_length tokens de qualquer forma).
@@ -227,11 +225,38 @@ def train_model(
         start_step = 0  # Nova época: ignora o offset de step.
         accum_counter = 0
 
-    final_dir = MODEL_DIR / "final"
+    final_dir = output_dir or (MODEL_DIR / "final")
     final_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(final_dir)
     tokenizer.save_pretrained(final_dir)
     print("Modelo Mistral guardado em", final_dir)
+
+
+def train_model(
+    epochs: int = 1,
+    batch_size: int = 4,
+    max_length: int = 128,
+    learning_rate: float = 5e-5,
+    max_samples: int | None = None,
+    save_checkpoints: bool = True,
+    resume: bool = False,
+    gradient_accumulation_steps: int = 1,
+):
+    """Treina com o dataset financeiro padrão (data/final/train.jsonl)."""
+    texts = load_jsonl(FINAL_DIR / "train.jsonl")
+    if max_samples:
+        texts = texts[:max_samples]
+    run_training(
+        texts=texts,
+        epochs=epochs,
+        batch_size=batch_size,
+        max_length=max_length,
+        learning_rate=learning_rate,
+        save_checkpoints=save_checkpoints,
+        resume=resume,
+        gradient_accumulation_steps=gradient_accumulation_steps,
+        output_dir=MODEL_DIR / "final",
+    )
 
 
 if __name__ == "__main__":

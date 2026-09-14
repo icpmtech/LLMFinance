@@ -26,6 +26,7 @@ interface ChatLayoutProps {
   onSwitchElastic?: () => void;
   onSwitchSearch?: () => void;
   onSwitchTrading?: () => void;
+  onSwitchContracts?: () => void;
 }
 
 export function ChatLayout({
@@ -46,6 +47,7 @@ export function ChatLayout({
   onSwitchElastic,
   onSwitchSearch,
   onSwitchTrading,
+  onSwitchContracts,
 }: ChatLayoutProps) {
   return (
     <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-background text-foreground pb-16 md:pb-0">
@@ -61,6 +63,7 @@ export function ChatLayout({
         onSwitchElastic={onSwitchElastic}
         onSwitchSearch={onSwitchSearch}
         onSwitchTrading={onSwitchTrading}
+        onSwitchContracts={onSwitchContracts}
       />
 
       <main className="flex-1 flex flex-col min-w-0 min-h-0">

@@ -16,6 +16,9 @@ from elasticsearch.helpers import bulk
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# Índice único para contratos públicos normalizados
+CONTRACTS_INDEX = "finance_contracts"
+
 
 def _get_es_url() -> str:
     return os.getenv("ELASTICSEARCH_URL", "http://127.0.0.1:9200")
@@ -114,12 +117,98 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    contracts_mappings = {
+        "properties": {
+            "idcontrato": {"type": "keyword"},
+            "nAnuncio": {"type": "keyword"},
+            "TipoAnuncio": {"type": "keyword"},
+            "idINCM": {"type": "keyword"},
+            "tipoContrato": {"type": "keyword"},
+            "idprocedimento": {"type": "keyword"},
+            "tipoprocedimento": {"type": "text"},
+            "objectoContrato": {"type": "text"},
+            "descContrato": {"type": "text"},
+            "adjudicantes": {
+                "type": "nested",
+                "properties": {
+                    "raw": {"type": "keyword"},
+                    "parsed": {
+                        "type": "nested",
+                        "properties": {
+                            "nif": {"type": "keyword"},
+                            "nome": {"type": "text"},
+                        },
+                    },
+                },
+            },
+            "adjudicatarios": {
+                "type": "nested",
+                "properties": {
+                    "raw": {"type": "keyword"},
+                    "parsed": {
+                        "type": "nested",
+                        "properties": {
+                            "nif": {"type": "keyword"},
+                            "nome": {"type": "text"},
+                        },
+                    },
+                },
+            },
+            "dataPublicacao": {"type": "date", "format": "yyyy-MM-dd||yyyy/MM/dd HH:mm:ss||epoch_millis"},
+            "dataCelebracaoContrato": {"type": "date", "format": "yyyy-MM-dd||yyyy/MM/dd HH:mm:ss||epoch_millis"},
+            "dataDecisaoAdjudicacao": {"type": "date", "format": "yyyy-MM-dd||yyyy/MM/dd HH:mm:ss||epoch_millis"},
+            "dataFechoContrato": {"type": "date", "format": "yyyy-MM-dd||yyyy/MM/dd HH:mm:ss||epoch_millis"},
+            "precoContratual": {"type": "float"},
+            "cpv": {
+                "type": "nested",
+                "properties": {
+                    "code": {"type": "keyword"},
+                    "description": {"type": "text"},
+                },
+            },
+            "prazoExecucao": {"type": "float"},
+            "localExecucao": {"type": "keyword"},
+            "fundamentacao": {"type": "text"},
+            "ProcedimentoCentralizado": {"type": "keyword"},
+            "numAcordoQuadro": {"type": "keyword"},
+            "DescrAcordoQuadro": {"type": "text"},
+            "precoBaseProcedimento": {"type": "float"},
+            "PrecoTotalEfetivo": {"type": "float"},
+            "regime": {"type": "text"},
+            "justifNReducEscrContrato": {"type": "text"},
+            "tipoFimContrato": {"type": "keyword"},
+            "CritMateriais": {"type": "keyword"},
+            "concorrentes": {"type": "text"},
+            "linkPecasProc": {"type": "keyword"},
+            "Observacoes": {"type": "text"},
+            "ContratEcologico": {"type": "keyword"},
+            "Ano": {"type": "integer"},
+            "fundamentAjusteDireto": {"type": "text"},
+            "adjudicatarioPMEs": {"type": "keyword"},
+            "NUTs": {"type": "keyword"},
+            "Lotes": {"type": "text"},
+            "TipoCriterioAdjudicacao": {"type": "keyword"},
+            "ingested_at": {"type": "date"},
+            "search_text": {"type": "text"},
+            "entities": {
+                "type": "nested",
+                "properties": {
+                    "name": {"type": "text"},
+                    "type": {"type": "keyword"},
+                    "nif": {"type": "keyword"},
+                    "code": {"type": "keyword"},
+                },
+            },
+        }
+    }
+
     for name, mappings in [
         ("finance_prices", prices_mappings),
         ("finance_news", news_mappings),
         ("finance_sentiment_daily", sentiment_mappings),
         ("finance_macro", macro_mappings),
         ("finance_earnings", earnings_mappings),
+        (CONTRACTS_INDEX, contracts_mappings),
     ]:
         if not client.indices.exists(index=name):
             client.indices.create(
@@ -646,3 +735,352 @@ def _as_int(value: Any) -> Optional[int]:
         return int(float(value))
     except (ValueError, TypeError):
         return None
+
+
+# --- Contratos públicos ---
+
+def index_contracts(
+    docs: List[Dict[str, Any]],
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa documentos de contratos no índice finance_contracts."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed_count": 0}
+
+    ensure_indices(client)
+    actions = []
+    for doc in docs:
+        doc_id = str(doc.get("idcontrato") or doc.get("idprocedimento"))
+        actions.append({
+            "_op_type": "index",
+            "_index": CONTRACTS_INDEX,
+            "_id": doc_id,
+            **doc,
+        })
+
+    if not actions:
+        return {"indexed_count": 0, "total": 0}
+
+    try:
+        success, errors = bulk(client, actions, raise_on_error=False, refresh=True)
+        return {"indexed_count": success, "total": len(actions), "errors": len(errors)}
+    except Exception as e:
+        return {"error": str(e), "indexed_count": 0, "total": len(actions)}
+
+
+def bulk_index_contracts_from_jsonl(
+    jsonl_path: Path,
+    chunk_size: int = 1000,
+    max_records: Optional[int] = None,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa um ficheiro JSONL de contratos em chunks."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed_count": 0}
+
+    ensure_indices(client)
+    total = 0
+    success_total = 0
+    error_total = 0
+    chunk: List[Dict[str, Any]] = []
+
+    try:
+        with open(jsonl_path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                if max_records and total >= max_records:
+                    break
+                try:
+                    doc = json.loads(line)
+                except Exception:
+                    continue
+                chunk.append(doc)
+                total += 1
+                if len(chunk) >= chunk_size:
+                    res = index_contracts(chunk, client)
+                    success_total += res.get("indexed_count", 0)
+                    error_total += res.get("errors", 0) or (0 if not res.get("error") else len(chunk))
+                    chunk = []
+        if chunk:
+            res = index_contracts(chunk, client)
+            success_total += res.get("indexed_count", 0)
+            error_total += res.get("errors", 0) or (0 if not res.get("error") else len(chunk))
+        return {"indexed_count": success_total, "total": total, "errors": error_total}
+    except Exception as e:
+        return {"error": str(e), "indexed_count": success_total, "total": total}
+
+
+def search_contracts(
+    q: Optional[str] = None,
+    year: Optional[int] = None,
+    entity: Optional[str] = None,
+    nif: Optional[str] = None,
+    cpv_code: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    size: int = 20,
+    from_: int = 0,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa contratos por texto, entidades, datas e valores."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": []}
+
+    query: Dict[str, Any] = {"bool": {"must": [], "filter": []}}
+    must = query["bool"]["must"]
+    filters = query["bool"]["filter"]
+
+    if q:
+        must.append({
+            "multi_match": {
+                "query": q,
+                "fields": [
+                    "objectoContrato^3",
+                    "descContrato^2",
+                    "search_text",
+                    "adjudicantes.parsed.nome",
+                    "adjudicatarios.parsed.nome",
+                    "cpv.description",
+                    "localExecucao",
+                ],
+                "type": "best_fields",
+            }
+        })
+    else:
+        must.append({"match_all": {}})
+
+    if year:
+        filters.append({"term": {"Ano": year}})
+    if entity:
+        filters.append({
+            "nested": {
+                "path": "entities",
+                "query": {
+                    "match": {"entities.name": entity},
+                },
+            }
+        })
+    if nif:
+        filters.append({
+            "nested": {
+                "path": "entities",
+                "query": {
+                    "term": {"entities.nif": nif},
+                },
+            }
+        })
+    if cpv_code:
+        filters.append({
+            "nested": {
+                "path": "cpv",
+                "query": {
+                    "wildcard": {"cpv.code": f"{cpv_code}*"},
+                },
+            }
+        })
+
+    price_range = {}
+    if min_price is not None:
+        price_range["gte"] = min_price
+    if max_price is not None:
+        price_range["lte"] = max_price
+    if price_range:
+        filters.append({
+            "bool": {
+                "should": [
+                    {"range": {"precoContratual": price_range}},
+                    {"range": {"PrecoTotalEfetivo": price_range}},
+                ],
+                "minimum_should_match": 1,
+            }
+        })
+
+    date_range = {}
+    if start_date:
+        date_range["gte"] = start_date
+    if end_date:
+        date_range["lte"] = end_date
+    if date_range:
+        filters.append({
+            "bool": {
+                "should": [
+                    {"range": {"dataPublicacao": date_range}},
+                    {"range": {"dataCelebracaoContrato": date_range}},
+                ],
+                "minimum_should_match": 1,
+            }
+        })
+
+    try:
+        resp = client.search(
+            index=CONTRACTS_INDEX,
+            body={
+                "query": query,
+                "sort": [{"dataPublicacao": {"order": "desc"}}, "_score"],
+                "from": from_,
+                "size": size,
+                "track_scores": True,
+            },
+        )
+        items = []
+        for hit in resp["hits"]["hits"]:
+            source = hit["_source"]
+            source["score"] = hit.get("_score")
+            source["doc_id"] = hit.get("_id")
+            items.append(source)
+        return {
+            "query": q,
+            "total": resp["hits"]["total"]["value"],
+            "items": items,
+            "from": from_,
+            "size": size,
+        }
+    except Exception as e:
+        return {"error": str(e), "items": []}
+
+
+def contracts_autocomplete(
+    q: str,
+    size: int = 12,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Sugestões de autocomplete para entidades e CPV."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "suggestions": []}
+
+    q = q.strip()
+    if not q:
+        return {"suggestions": []}
+
+    lower_q = q.lower()
+
+    try:
+        resp = client.search(
+            index=CONTRACTS_INDEX,
+            body={
+                "size": 0,
+                "query": {
+                    "bool": {
+                        "should": [
+                            {"match_phrase_prefix": {"objectoContrato": q}},
+                            {"match_phrase_prefix": {"descContrato": q}},
+                            {
+                                "nested": {
+                                    "path": "entities",
+                                    "query": {"match_phrase_prefix": {"entities.name": q}},
+                                }
+                            },
+                        ],
+                        "minimum_should_match": 1,
+                    }
+                },
+                "aggs": {
+                    "entities": {
+                        "nested": {"path": "entities"},
+                        "aggs": {
+                            "names": {
+                                "terms": {
+                                    "field": "entities.name.keyword",
+                                    "size": size,
+                                    "include": f".*{lower_q}.*",
+                                    "order": {"_count": "desc"},
+                                }
+                            }
+                        }
+                    },
+                    "cpv_codes": {
+                        "nested": {"path": "cpv"},
+                        "aggs": {
+                            "codes": {
+                                "terms": {
+                                    "field": "cpv.code",
+                                    "size": 5,
+                                    "include": f"{lower_q}.*",
+                                    "order": {"_count": "desc"},
+                                }
+                            }
+                        }
+                    },
+                },
+            },
+        )
+
+        suggestions = []
+        seen = set()
+        for bucket in resp["aggregations"]["entities"]["names"]["buckets"]:
+            text = bucket["key"]
+            if text and text not in seen:
+                seen.add(text)
+                suggestions.append({"text": text, "type": "entity", "count": bucket["doc_count"]})
+        for bucket in resp["aggregations"]["cpv_codes"]["codes"]["buckets"]:
+            text = bucket["key"]
+            if text and text not in seen:
+                seen.add(text)
+                suggestions.append({"text": text, "type": "cpv", "count": bucket["doc_count"]})
+
+        return {"suggestions": suggestions[:size]}
+    except Exception as e:
+        return {"error": str(e), "suggestions": []}
+
+
+def contracts_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Devolve contagem total de contratos indexados e anos conhecidos."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "total": 0, "years": []}
+
+    ensure_indices(client)
+    try:
+        total = client.count(index=CONTRACTS_INDEX).get("count", 0)
+        resp = client.search(
+            index=CONTRACTS_INDEX,
+            body={
+                "size": 0,
+                "aggs": {"years": {"terms": {"field": "Ano", "size": 50, "order": {"_key": "desc"}}}},
+            },
+        )
+        years = [int(bucket["key"]) for bucket in resp["aggregations"]["years"]["buckets"]]
+        return {"total": total, "years": years}
+    except Exception as e:
+        return {"error": str(e), "total": 0, "years": []}
+
+
+def contract_years_available() -> List[int]:
+    """Anos de contratos com JSONL normalizado disponível."""
+    years = []
+    if not (ROOT / "data" / "processed" / "contratos").exists():
+        return years
+    for path in sorted((ROOT / "data" / "processed" / "contratos").glob("contratos_*.jsonl")):
+        m = re.search(r"(\d{4})", path.stem)
+        if m:
+            years.append(int(m.group(1)))
+    return sorted(years)
+
+
+def list_contract_years(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Devolve anos disponíveis e total indexado por ano."""
+    client = es or get_es_client()
+    available = contract_years_available()
+    if not client:
+        return {"available": available, "indexed": []}
+    try:
+        resp = client.search(
+            index=CONTRACTS_INDEX,
+            body={
+                "size": 0,
+                "aggs": {
+                    "by_year": {
+                        "terms": {"field": "Ano", "size": 50, "order": {"_key": "desc"}},
+                    }
+                },
+            },
+        )
+        indexed = [{"year": int(bucket["key"]), "count": bucket["doc_count"]} for bucket in resp["aggregations"]["by_year"]["buckets"]]
+        return {"available": available, "indexed": indexed}
+    except Exception as e:
+        return {"error": str(e), "available": available, "indexed": []}

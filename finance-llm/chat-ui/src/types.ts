@@ -555,3 +555,143 @@ export interface ForecastResponse {
   model_summary?: string;
   explanation?: string;
 }
+
+// --- Contratos públicos ---
+
+export interface ContractPartyParsed {
+  nif?: string;
+  nome?: string;
+}
+
+export interface ContractParty {
+  raw?: string;
+  parsed: ContractPartyParsed[];
+}
+
+export interface ContractCpv {
+  code?: string;
+  description?: string;
+}
+
+export interface ContractEntity {
+  name?: string;
+  type?: string;
+  nif?: string;
+  code?: string;
+}
+
+export interface ContractItem {
+  idcontrato?: string;
+  nAnuncio?: string;
+  TipoAnuncio?: string;
+  idprocedimento?: string;
+  tipoContrato?: string;
+  tipoprocedimento?: string;
+  objectoContrato?: string;
+  descContrato?: string;
+  adjudicantes: ContractParty[];
+  adjudicatarios: ContractParty[];
+  dataPublicacao?: string;
+  dataCelebracaoContrato?: string;
+  precoContratual?: number;
+  PrecoTotalEfetivo?: number;
+  precoBaseProcedimento?: number;
+  cpv: ContractCpv[];
+  localExecucao?: string;
+  Ano?: number;
+  NUTs?: string;
+  regime?: string;
+  search_text?: string;
+  entities: ContractEntity[];
+  score?: number;
+  doc_id?: string;
+}
+
+export interface ContractSearchRequest {
+  q?: string;
+  year?: number;
+  entity?: string;
+  nif?: string;
+  cpv_code?: string;
+  min_price?: number;
+  max_price?: number;
+  start_date?: string;
+  end_date?: string;
+  size?: number;
+  from?: number;
+}
+
+export interface ContractSearchResponse {
+  query?: string;
+  total: number;
+  items: ContractItem[];
+  from: number;
+  size: number;
+  error?: string;
+}
+
+export interface ContractStatusResponse {
+  total: number;
+  years: number[];
+  error?: string;
+}
+
+export interface ContractYearInfo {
+  year: number;
+  count: number;
+}
+
+export interface ContractYearsResponse {
+  available: number[];
+  indexed: ContractYearInfo[];
+  error?: string;
+}
+
+export interface ContractIngestRequest {
+  year?: number;
+  max_records?: number;
+  chunk_size?: number;
+}
+
+export interface ContractIngestResponse {
+  indexed_count: number;
+  total: number;
+  errors?: number;
+  message?: string;
+  error?: string;
+}
+
+export interface ContractAutocompleteSuggestion {
+  text: string;
+  type: "entity" | "cpv" | string;
+  count?: number;
+}
+
+export interface ContractAutocompleteResponse {
+  query?: string;
+  suggestions: ContractAutocompleteSuggestion[];
+  error?: string;
+}
+
+export interface ContractChatRequest {
+  question: string;
+  top_k?: number;
+  max_new_tokens?: number;
+  temperature?: number;
+}
+
+export interface ContractChatSource {
+  idcontrato?: string;
+  objectoContrato?: string;
+  adjudicante?: string;
+  adjudicatario?: string;
+  precoContratual?: number;
+  score?: number;
+}
+
+export interface ContractChatResponse {
+  answer: string;
+  sources: ContractChatSource[];
+  model_used?: string;
+  error?: string;
+}

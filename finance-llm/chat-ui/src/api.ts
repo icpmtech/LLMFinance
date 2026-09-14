@@ -6,6 +6,15 @@ import type {
   AddTickerRequest,
   AddTickerResponse,
   Calendar,
+  ContractAutocompleteResponse,
+  ContractChatRequest,
+  ContractChatResponse,
+  ContractIngestRequest,
+  ContractIngestResponse,
+  ContractSearchRequest,
+  ContractSearchResponse,
+  ContractStatusResponse,
+  ContractYearsResponse,
   ElasticAnalyzeNewsResponse,
   ElasticAutocompleteResponse,
   ElasticDeleteResponse,
@@ -550,5 +559,82 @@ export async function sendBloombergChat(
   const question = lastUser?.content || "";
   const res = await askRag({ question });
   return res.answer;
+}
+
+// --- Contratos públicos ---
+
+export async function getContractStatus(): Promise<ContractStatusResponse> {
+  const res = await fetch(`${API_BASE}/contracts/status`);
+  if (!res.ok) throw new Error(`Erro ao obter estado dos contratos: ${res.status}`);
+  return res.json();
+}
+
+export async function getContractYears(): Promise<ContractYearsResponse> {
+  const res = await fetch(`${API_BASE}/contracts/years`);
+  if (!res.ok) throw new Error(`Erro ao obter anos de contratos: ${res.status}`);
+  return res.json();
+}
+
+export async function ingestContracts(
+  request: ContractIngestRequest,
+): Promise<ContractIngestResponse> {
+  const res = await fetch(`${API_BASE}/contracts/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao indexar contratos: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function searchContracts(
+  request: ContractSearchRequest,
+): Promise<ContractSearchResponse> {
+  const res = await fetch(`${API_BASE}/contracts/search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao pesquisar contratos: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function autocompleteContracts(
+  q: string,
+  size = 12,
+): Promise<ContractAutocompleteResponse> {
+  const params = new URLSearchParams({ q: q.trim(), size: String(size) });
+  const res = await fetch(`${API_BASE}/contracts/autocomplete?${params}`);
+  if (!res.ok) throw new Error(`Erro no autocomplete de contratos: ${res.status}`);
+  return res.json();
+}
+
+export async function chatContracts(
+  request: ContractChatRequest,
+  timeoutMs = 120000,
+): Promise<ContractChatResponse> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${API_BASE}/contracts/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Erro no chat de contratos: ${res.status} - ${text}`);
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 

@@ -1,13 +1,10 @@
 """Backend FastAPI para a Chat UI do FinanceLLM."""
 import json
-import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, List
 
 from fastapi import FastAPI, HTTPException, Query
-
-logger = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 
@@ -19,6 +16,16 @@ from api.models import (
     ChatMessage,
     ChatRequest,
     ChatResponse,
+    ContractAutocompleteResponse,
+    ContractChatRequest,
+    ContractChatResponse,
+    ContractIngestRequest,
+    ContractIngestResponse,
+    ContractItem,
+    ContractSearchRequest,
+    ContractSearchResponse,
+    ContractStatusResponse,
+    ContractYearsResponse,
     ElasticAnalyzeNewsResponse,
     ElasticAutocompleteResponse,
     ElasticDeleteResponse,
@@ -38,7 +45,6 @@ from api.models import (
     ForecastRequest,
     ForecastResponse,
     ForecastSeries,
-    ForecastSignal,
     HistoryPoint,
     HoldersResponse,
     NewsItem,
@@ -47,7 +53,6 @@ from api.models import (
     RecommendationsResponse,
     SecFiling,
     SecFilingsResponse,
-    SentimentBlendedResponse,
     SustainabilityResponse,
     TechnicalExplanation,
     TechnicalPoint,
@@ -68,8 +73,16 @@ from api.elasticsearch_ingest import (
 )
 from api.elasticsearch_client import (
     autocomplete_suggestions,
+    bulk_index_contracts_from_jsonl,
+    contracts_autocomplete,
+    contracts_status,
+    get_es_client,
+    list_contract_years,
     search_all_tickers,
+    search_contracts,
+    CONTRACTS_INDEX,
 )
+from api.rag_service import get_contracts_chat_answer
 from api.tools import (
     _normalize_ticker,
     add_ticker,
@@ -188,7 +201,7 @@ def list_tickers(query: str = Query("", min_length=0)):
 
 @app.post("/forecast", response_model=ForecastResponse)
 def forecast(req: ForecastRequest):
-    """Executa o pipeline ARIMA/Kronos para o ticker pedido e devolve previsões + séries."""
+    """Executa o pipeline ARIMA para o ticker pedido e devolve previsões + séries."""
     order_str = (req.order or "2,1,2").strip().lower()
     if order_str == "auto":
         order = (2, 1, 2)
@@ -201,108 +214,47 @@ def forecast(req: ForecastRequest):
     ticker = _normalize_ticker(req.ticker)
     try:
         info = get_stock_info(ticker)
-        if req.backend == "kronos":
-            from forecasting.kronos_model import run_kronos_pipeline
-
-            data = run_kronos_pipeline(
-                ticker=ticker,
-                period=req.period,
-                future_steps=req.future_days,
-                variant="kronos-mini",
-            )
-            forecast_points = [
-                ForecastPoint(date=f["date"], price=f["price"], lower=f.get("lower"), upper=f.get("upper"))
-                for f in data["forecast"]
-            ]
-            series = [ForecastSeries(date=s["date"], value=s["value"], type=s["type"]) for s in data["series"]]
-            plot_url = None
-            if data.get("plot_path"):
-                plot_path = Path(data["plot_path"])
-                plot_url = f"/forecast/plot/{plot_path.name}"
-            base_response = ForecastResponse(
-                ticker=ticker,
-                order=data.get("order", (0, 0, 0)),
-                train_days=data["train_days"],
-                test_days=data["test_days"],
-                rmse=data["rmse"],
-                mape=data["mape"],
-                ljung_box_pvalue=data.get("ljung_box_pvalue"),
-                last_train_date=data["last_train_date"],
-                last_test_date=data["last_test_date"],
+        result = run_full_pipeline(
+            ticker=ticker,
+            period=req.period,
+            order=order,
+            train_ratio=req.train_ratio,
+            future_steps=req.future_days,
+            save_plot=True,
+        )
+        data = result.to_dict()
+        forecast_points = [
+            ForecastPoint(date=f["date"], price=f["price"], lower=f.get("lower"), upper=f.get("upper"))
+            for f in data["forecast"]
+        ]
+        series = [ForecastSeries(date=s["date"], value=s["value"], type=s["type"]) for s in data["series"]]
+        plot_url = None
+        if result.plot_path:
+            plot_url = f"/forecast/plot/{result.plot_path.name}"
+        return ForecastResponse(
+            ticker=ticker,
+            order=result.order,
+            train_days=data["train_days"],
+            test_days=data["test_days"],
+            rmse=result.rmse,
+            mape=result.mape,
+            ljung_box_pvalue=result.ljung_box_pvalue,
+            last_train_date=data["last_train_date"],
+            last_test_date=data["last_test_date"],
+            currency=info.get("currency", "USD"),
+            company_name=info.get("name", ticker),
+            forecast=forecast_points,
+            series=series,
+            plot_url=plot_url,
+            plot_path=str(result.plot_path) if result.plot_path else None,
+            model_summary=result.model_summary,
+            explanation=result.generate_explanation(
                 currency=info.get("currency", "USD"),
                 company_name=info.get("name", ticker),
-                forecast=forecast_points,
-                series=series,
-                plot_url=plot_url,
-                plot_path=data.get("plot_path"),
-                model_summary=data.get("model_summary"),
-                explanation=data.get("explanation"),
-            )
-        else:
-            result = run_full_pipeline(
-                ticker=ticker,
-                period=req.period,
-                order=order,
-                train_ratio=req.train_ratio,
-                future_steps=req.future_days,
-                save_plot=True,
-            )
-            data = result.to_dict()
-            forecast_points = [
-                ForecastPoint(date=f["date"], price=f["price"], lower=f.get("lower"), upper=f.get("upper"))
-                for f in data["forecast"]
-            ]
-            series = [ForecastSeries(date=s["date"], value=s["value"], type=s["type"]) for s in data["series"]]
-            plot_url = None
-            if result.plot_path:
-                plot_url = f"/forecast/plot/{result.plot_path.name}"
-            base_response = ForecastResponse(
-                ticker=ticker,
-                order=result.order,
-                train_days=data["train_days"],
-                test_days=data["test_days"],
-                rmse=result.rmse,
-                mape=result.mape,
-                ljung_box_pvalue=result.ljung_box_pvalue,
-                last_train_date=data["last_train_date"],
-                last_test_date=data["last_test_date"],
-                currency=info.get("currency", "USD"),
-                company_name=info.get("name", ticker),
-                forecast=forecast_points,
-                series=series,
-                plot_url=plot_url,
-                plot_path=str(result.plot_path) if result.plot_path else None,
-                model_summary=result.model_summary,
-                explanation=result.generate_explanation(
-                    currency=info.get("currency", "USD"),
-                    company_name=info.get("name", ticker),
-                ),
-            )
-
-        if not req.use_sentiment:
-            return base_response
-
-        try:
-            from sentiment.feature_engineering import blend_forecast_with_sentiment
-
-            blended = blend_forecast_with_sentiment(
-                ticker=ticker,
-                base_forecast=[f.model_dump() for f in base_response.forecast],
-                period=req.period,
-            )
-            if blended.get("error"):
-                return base_response
-            adj_points = [
-                ForecastPoint(date=f["date"], price=f["price"], lower=f.get("lower"), upper=f.get("upper"))
-                for f in blended.get("adjusted_forecast", [])
-            ]
-            return base_response.model_copy(update={"forecast": adj_points})
-        except Exception as exc:
-            logger.warning("Blending sentiment failed for %s: %s", ticker, exc)
-            return base_response
+            ),
+        )
     except Exception as exc:
-        logger.exception("Forecast failed for %s: %s", ticker, exc)
-        raise HTTPException(status_code=500, detail=f"Erro ao gerar previsão: {exc}")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar previsão para {ticker}: {exc}")
 
 
 @app.get("/forecast/plot/{filename}")
@@ -536,7 +488,7 @@ async def elastic_ingest_prices(
 async def elastic_ingest_news(
     ticker: str,
     auto_analyze: bool = Query(True, description="Executar análise NLP automaticamente após ingestão"),
-    backend: str = Query("heuristic", pattern="^(heuristic|gpt2|mistral)$", description="Modelo de NLP a utilizar"),
+    backend: str = Query("gpt2", pattern="^(gpt2|mistral)$", description="Modelo de NLP a utilizar"),
 ):
     """Obtém notícias via yfinance e indexa no Elasticsearch."""
     ticker = _normalize_ticker(ticker)
@@ -653,17 +605,14 @@ def elastic_delete_ticker(ticker: str):
     )
 
 
-from api.elasticsearch_ingest import _run_in_thread
-
-
 @app.post("/elastic/analyze/news/{ticker}", response_model=ElasticAnalyzeNewsResponse)
-async def elastic_analyze_news(
+def elastic_analyze_news(
     ticker: str,
     q: str = Query(None, description="Termo de pesquisa no título/resumo"),
     start_date: str = Query(None, description="Data inicial (YYYY-MM-DD)"),
     end_date: str = Query(None, description="Data final (YYYY-MM-DD)"),
     size: int = Query(50, ge=1, le=200),
-    backend: str = Query("heuristic", pattern="^(heuristic|gpt2|mistral)$"),
+    backend: str = Query("gpt2", pattern="^(gpt2|mistral)$"),
 ):
     """Analisa notícias indexadas com NLP (classificação, tradução PT, sumário, entidades)."""
     from api.elasticsearch_client import fetch_news_for_analysis, index_analyzed_news_items
@@ -680,7 +629,7 @@ async def elastic_analyze_news(
         )
 
     batch = [{"title": it.get("title", ""), "summary": it.get("summary", ""), "ticker": ticker} for it in items]
-    analyses = await _run_in_thread(analyze_news_batch, batch, backend, ticker)
+    analyses = analyze_news_batch(batch, backend=backend, ticker=ticker)
     result = index_analyzed_news_items(ticker, items, analyses)
 
     # Reconstrói e guarda o grafo de entidades/notícias para refletir a análise atualizada.
@@ -693,7 +642,8 @@ async def elastic_analyze_news(
         save_news_graph(ticker, graph)
     except Exception as exc:
         # O grafo é opcional; não falha a análise se algo correr mal aqui.
-        logger.warning("Falha ao reconstruir grafo para %s: %s", ticker, exc)
+        import logging
+        logging.getLogger(__name__).warning(f"Falha ao reconstruir grafo para {ticker}: {exc}")
 
     return ElasticAnalyzeNewsResponse(
         ticker=result.get("ticker", ticker),
@@ -702,50 +652,6 @@ async def elastic_analyze_news(
         errors=result.get("errors", 0),
         message=f"Analisadas e indexadas {result.get('indexed_count', 0)} notícias.",
         error=result.get("error"),
-    )
-
-
-@app.post("/sentiment/analyze/{ticker}", response_model=SentimentBlendedResponse)
-async def sentiment_analyze(
-    ticker: str,
-    backend: str = Query("arima", pattern="^(arima|kronos)$"),
-    future_days: int = Query(5, ge=1, le=90),
-    period: str = Query("5y"),
-    include_features: bool = Query(True),
-):
-    """Executa o agente de sentimento: recolhe notícias, macro, resultados e gera previsão misturada."""
-    from sentiment.feature_engineering import generate_sentiment_blended_forecast
-
-    ticker = _normalize_ticker(ticker)
-    result = await _run_in_thread(
-        generate_sentiment_blended_forecast,
-        ticker,
-        backend,
-        future_days,
-        period,
-        include_features,
-    )
-    if result.get("error"):
-        raise HTTPException(status_code=500, detail=result["error"])
-
-    base_points = [
-        ForecastPoint(date=f["date"], price=f["price"], lower=f.get("lower"), upper=f.get("upper"))
-        for f in result.get("base_forecast", [])
-    ]
-    adjusted_points = [
-        ForecastPoint(date=f["date"], price=f["price"], lower=f.get("lower"), upper=f.get("upper"))
-        for f in result.get("adjusted_forecast", [])
-    ]
-    signals = result.get("signals")
-    return SentimentBlendedResponse(
-        ticker=ticker,
-        base_model=result.get("base_model", backend),
-        period=period,
-        future_days=future_days,
-        base_forecast=base_points,
-        adjusted_forecast=adjusted_points,
-        signals=ForecastSignal(**signals) if signals else ForecastSignal(),
-        features=result.get("features") if include_features else {},
     )
 
 
@@ -785,3 +691,117 @@ def elastic_news_graph(
         nodes=graph.get("nodes", []),
         edges=graph.get("edges", []),
     )
+
+
+# --- Contratos públicos ---
+
+@app.post("/contracts/ingest", response_model=ContractIngestResponse)
+def contracts_ingest(req: ContractIngestRequest):
+    """Indexa contratos normalizados para o Elasticsearch."""
+    year = req.year
+    years = [year] if year else list_contract_years()
+    if not years:
+        raise HTTPException(status_code=404, detail="Nenhum JSONL de contratos encontrado")
+
+    total_indexed = 0
+    total_total = 0
+    total_errors = 0
+    messages = []
+    for y in years:
+        jsonl_path = ROOT / "data" / "processed" / "contratos" / f"contratos_{y}.jsonl"
+        if not jsonl_path.exists():
+            continue
+        res = bulk_index_contracts_from_jsonl(
+            jsonl_path=jsonl_path,
+            chunk_size=req.chunk_size,
+            max_records=req.max_records,
+        )
+        if res.get("error"):
+            raise HTTPException(status_code=502, detail=res.get("error"))
+        total_indexed += res.get("indexed_count", 0)
+        total_total += res.get("total", 0)
+        total_errors += res.get("errors", 0)
+        messages.append(f"{y}: {res.get('indexed_count', 0)} indexados")
+
+    return ContractIngestResponse(
+        indexed_count=total_indexed,
+        total=total_total,
+        errors=total_errors,
+        message="; ".join(messages) if messages else None,
+    )
+
+
+@app.post("/contracts/search", response_model=ContractSearchResponse)
+def contracts_search(req: ContractSearchRequest):
+    """Pesquisa contratos públicos no Elasticsearch."""
+    res = search_contracts(
+        q=req.q,
+        year=req.year,
+        entity=req.entity,
+        nif=req.nif,
+        cpv_code=req.cpv_code,
+        min_price=req.min_price,
+        max_price=req.max_price,
+        start_date=req.start_date,
+        end_date=req.end_date,
+        size=req.size,
+        from_=req.from_,
+    )
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res.get("error"))
+    return ContractSearchResponse(
+        query=res.get("query"),
+        total=res.get("total", 0),
+        items=[ContractItem(**item) for item in res.get("items", [])],
+        from_=req.from_,
+        size=req.size,
+    )
+
+
+@app.post("/contracts/chat", response_model=ContractChatResponse)
+def contracts_chat(req: ContractChatRequest):
+    """Responde perguntas sobre contratos públicos usando RAG."""
+    try:
+        answer, sources = get_contracts_chat_answer(
+            question=req.question,
+            top_k=req.top_k,
+            max_new_tokens=req.max_new_tokens,
+            temperature=req.temperature,
+        )
+        return ContractChatResponse(answer=answer, sources=sources)
+    except Exception as exc:
+        return ContractChatResponse(
+            answer=f"Erro ao responder: {exc}",
+            sources=[],
+            error=str(exc),
+        )
+
+
+@app.get("/contracts/status", response_model=ContractStatusResponse)
+def contracts_status_endpoint():
+    """Devolve contagem total e anos indexados de contratos."""
+    res = contracts_status()
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res.get("error"))
+    return ContractStatusResponse(total=res.get("total", 0), years=res.get("years", []))
+
+
+@app.get("/contracts/years", response_model=ContractYearsResponse)
+def contracts_years():
+    """Devolve anos disponíveis e total indexado por ano."""
+    res = list_contract_years()
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res.get("error"))
+    return ContractYearsResponse(
+        available=res.get("available", []),
+        indexed=[{"year": item["year"], "count": item["count"]} for item in res.get("indexed", [])],
+    )
+
+
+@app.get("/contracts/autocomplete", response_model=ContractAutocompleteResponse)
+def contracts_autocomplete_endpoint(q: str = Query(..., min_length=1), size: int = Query(12, ge=1, le=50)):
+    """Autocomplete de entidades e CPV para contratos."""
+    res = contracts_autocomplete(q=q, size=size)
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res.get("error"))
+    return ContractAutocompleteResponse(query=q, suggestions=res.get("suggestions", []))

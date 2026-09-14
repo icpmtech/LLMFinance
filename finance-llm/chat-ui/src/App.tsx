@@ -8,10 +8,11 @@ import { TickerPage } from "./pages/TickerPage";
 import { RagPage } from "./pages/RagPage";
 import { ElasticPage } from "./pages/ElasticPage";
 import { GlobalSearchPage } from "./pages/GlobalSearchPage";
+import { ContractsPage } from "./pages/ContractsPage";
 import { sendChat } from "./sendChat";
 import type { Message, ModelBackend } from "./types";
 
-type AppView = "dashboard" | "chat" | "forecast" | "trading" | "tickers" | "ticker-detail" | "rag" | "elastic" | "search";
+type AppView = "dashboard" | "chat" | "forecast" | "trading" | "tickers" | "ticker-detail" | "rag" | "elastic" | "search" | "contracts";
 const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
 
 const STORAGE_KEY = "finance-llm-conversations";
@@ -64,6 +65,7 @@ export default function App() {
     if (path === "/trading") return "trading";
     if (path === "/tickers") return "tickers";
     if (path === "/elastic") return "elastic";
+    if (path === "/contracts") return "contracts";
     const saved = localStorage.getItem("finance-llm-view");
     return (saved as AppView) || "dashboard";
   });
@@ -189,6 +191,10 @@ export default function App() {
       setView("trading");
       return;
     }
+    if (v === "contracts") {
+      setView("contracts");
+      return;
+    }
     setView(v as AppView);
   };
 
@@ -220,6 +226,9 @@ export default function App() {
       />
     );
   }
+  if (view === "contracts") {
+    return <ContractsPage onSwitchView={() => setView("dashboard")} />;
+  }
   return (
     <ChatLayout
       conversations={conversations}
@@ -239,6 +248,7 @@ export default function App() {
       onSwitchElastic={() => setView("elastic")}
       onSwitchSearch={() => setView("search")}
       onSwitchTrading={() => setView("trading")}
+      onSwitchContracts={() => setView("contracts")}
     />
   );
 }
