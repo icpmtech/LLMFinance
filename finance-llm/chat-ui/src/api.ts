@@ -361,9 +361,9 @@ export async function runForecast(request: ForecastRequest): Promise<ForecastRes
 
 export async function analyzeSentiment(
   ticker: string,
-  backend: "arima" | "kronos" = "arima",
+  backend: "arima" | "kronos" = "kronos",
   futureDays = 5,
-  period = "5y",
+  period = "1y",
   includeFeatures = true,
 ): Promise<SentimentBlendedResponse> {
   const params = new URLSearchParams({

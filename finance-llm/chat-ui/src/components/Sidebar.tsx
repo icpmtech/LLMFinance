@@ -28,70 +28,78 @@ export function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, on
           <button
             onClick={onSwitchSearch}
             className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
+            title="Pesquisar"
           >
-            <Search size={20} className="md:size-[18px]" />
-            <span className="text-[10px] md:text-sm">Pesquisar</span>
+            <Search size={22} className="md:size-[18px]" />
+            <span className="hidden md:inline text-sm">Pesquisar</span>
           </button>
         )}
         <button
           onClick={onNew}
           className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-primary text-foreground md:text-primary-foreground font-medium hover:opacity-90 transition shrink-0"
+          title="Nova conversa"
         >
-          <Plus size={20} className="md:size-[18px]" />
-          <span className="text-[10px] md:text-sm">Nova</span>
+          <Plus size={22} className="md:size-[18px]" />
+          <span className="hidden md:inline text-sm">Nova</span>
         </button>
         {onSwitchView && (
           <button
             onClick={onSwitchView}
             className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
+            title="Previsões"
           >
-            <TrendingUp size={20} className="md:size-[18px]" />
-            <span className="text-[10px] md:text-sm">Previsões</span>
+            <TrendingUp size={22} className="md:size-[18px]" />
+            <span className="hidden md:inline text-sm">Previsões</span>
           </button>
         )}
         {onSwitchTrading && (
           <button
             onClick={onSwitchTrading}
             className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
+            title="Trading"
           >
-            <CandlestickChart size={20} className="md:size-[18px]" />
-            <span className="text-[10px] md:text-sm">Trading</span>
+            <CandlestickChart size={22} className="md:size-[18px]" />
+            <span className="hidden md:inline text-sm">Trading</span>
           </button>
         )}
         {onSwitchTickers && (
           <button
             onClick={onSwitchTickers}
             className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
+            title="Tickers"
           >
-            <LineChart size={20} className="md:size-[18px]" />
-            <span className="text-[10px] md:text-sm">Tickers</span>
+            <LineChart size={22} className="md:size-[18px]" />
+            <span className="hidden md:inline text-sm">Tickers</span>
           </button>
         )}
         {onSwitchRag && (
           <button
             onClick={onSwitchRag}
             className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
+            title="RAG"
           >
-            <FolderOpen size={20} className="md:size-[18px]" />
-            <span className="text-[10px] md:text-sm">RAG</span>
+            <FolderOpen size={22} className="md:size-[18px]" />
+            <span className="hidden md:inline text-sm">RAG</span>
           </button>
         )}
         {onSwitchElastic && (
           <button
             onClick={onSwitchElastic}
             className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
+            title="Elasticsearch"
           >
-            <Database size={20} className="md:size-[18px]" />
-            <span className="text-[10px] md:text-sm">Elastic</span>
+            <Database size={22} className="md:size-[18px]" />
+            <span className="hidden md:inline text-sm">Elastic</span>
           </button>
         )}
         {onSwitchContracts && (
           <button
             onClick={onSwitchContracts}
             className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
+            title="Contratos"
           >
-            <FileText size={20} className="md:size-[18px]" />
-            <span className="text-[10px] md:text-sm">Contratos</span>
+            <FileText size={22} className="md:size-[18px]" />
+            <span className="hidden md:inline text-sm">Contratos</span>
           </button>
         )}
       </div>

@@ -7,6 +7,7 @@
 Ambos suportam pesquisa por ticker, data e texto.
 """
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -599,8 +600,8 @@ def autocomplete_suggestions(q: str, size: int = 12, es: Optional[Elasticsearch]
                         "should": [
                             {"wildcard": {"ticker": f"{upper_q}*"}},
                             {"match_phrase_prefix": {"title": q}},
-                            {"match_phrase_prefix": {"publisher": q}},
-                            {"match_phrase_prefix": {"topics": q}},
+                            {"wildcard": {"publisher": f"*{lower_q}*"}},
+                            {"wildcard": {"topics": f"*{lower_q}*"}},
                         ],
                         "minimum_should_match": 1,
                     }
@@ -787,9 +788,12 @@ def bulk_index_contracts_from_jsonl(
     chunk: List[Dict[str, Any]] = []
 
     try:
-        with open(jsonl_path, "r", encoding="utf-8") as fh:
+        resolved_path = Path(jsonl_path) if not isinstance(jsonl_path, Path) else jsonl_path
+        print(f"[bulk_index_contracts] path={resolved_path} exists={resolved_path.exists()} chunk_size={chunk_size} max_records={max_records}")
+        with open(resolved_path, "r", encoding="utf-8") as fh:
             for line in fh:
                 if max_records and total >= max_records:
+                    print(f"[bulk_index_contracts] max_records reached {total}")
                     break
                 try:
                     doc = json.loads(line)
@@ -799,15 +803,19 @@ def bulk_index_contracts_from_jsonl(
                 total += 1
                 if len(chunk) >= chunk_size:
                     res = index_contracts(chunk, client)
+                    print(f"[bulk_index_contracts] chunk indexed={res.get('indexed_count')} errors={res.get('errors')} error={res.get('error')}")
                     success_total += res.get("indexed_count", 0)
                     error_total += res.get("errors", 0) or (0 if not res.get("error") else len(chunk))
                     chunk = []
         if chunk:
             res = index_contracts(chunk, client)
+            print(f"[bulk_index_contracts] final chunk indexed={res.get('indexed_count')} errors={res.get('errors')} error={res.get('error')}")
             success_total += res.get("indexed_count", 0)
             error_total += res.get("errors", 0) or (0 if not res.get("error") else len(chunk))
+        print(f"[bulk_index_contracts] done total={total} success={success_total} errors={error_total}")
         return {"indexed_count": success_total, "total": total, "errors": error_total}
     except Exception as e:
+        print(f"[bulk_index_contracts] exception {e}")
         return {"error": str(e), "indexed_count": success_total, "total": total}
 
 

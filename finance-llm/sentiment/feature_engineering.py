@@ -119,8 +119,13 @@ def analyze_and_index_news(
     ticker: str,
     items: List[Dict[str, Any]],
     es: Optional[Any] = None,
+    backend: str = "heuristic",
 ) -> Dict[str, Any]:
-    """Analisa notícias com NLP e indexa-as no ES."""
+    """Analisa notícias com NLP e indexa-as no ES.
+
+    O backend por defeito é "heuristic" porque o backend GPT-2 carrega o modelo
+    a cada item e bloqueia o pedido no CPU disponível.
+    """
     if not items:
         return {"ticker": ticker, "analyzed": 0, "indexed": 0}
 
@@ -128,7 +133,7 @@ def analyze_and_index_news(
     if client:
         ensure_indices(client)
 
-    analyses = analyze_news_batch(items, ticker=ticker)
+    analyses = analyze_news_batch(items, ticker=ticker, backend=backend)
     indexed = {"indexed_count": 0}
     if client:
         indexed = index_analyzed_news_items(ticker, items, analyses, es=client)
@@ -720,13 +725,29 @@ def generate_sentiment_blended_forecast(
 
     # 4. Blending
     blended = blend_forecast_with_sentiment(ticker, base_forecast, period=period)
-    blended["base_model"] = backend
-    blended["period"] = period
-    blended["future_days"] = future_days
+
+    # Normalizar resposta para o contrato do endpoint
+    out: Dict[str, Any] = {
+        "ticker": ticker.upper(),
+        "base_model": backend,
+        "period": period,
+        "future_days": future_days,
+        "base_forecast": blended.get("base_forecast", []),
+        "adjusted_forecast": blended.get("adjusted_forecast", []),
+        "signals": {
+            "sentiment_signal": blended.get("sentiment_signal", 0.0),
+            "macro_signal": blended.get("macro_signal", 0.0),
+            "earnings_signal": blended.get("earnings_signal", 0.0),
+            "blended_signal": blended.get("blended_signal", 0.0),
+            "weights": blended.get("weights", {"sentiment": 0.4, "macro": 0.3, "earnings": 0.3}),
+        },
+        "features": blended.get("features", {}),
+        "error": blended.get("error"),
+    }
 
     if not include_features:
-        blended.pop("features", None)
-    return blended
+        out.pop("features", None)
+    return out
 
 
 # -----------------------------------------------------------------------------

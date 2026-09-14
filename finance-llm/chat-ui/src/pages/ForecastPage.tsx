@@ -116,7 +116,7 @@ export function ForecastPage({ onSwitchView }: { onSwitchView?: () => void }) {
       if (useSentiment && data) {
         setLoadingSentiment(true);
         try {
-          const s = await analyzeSentiment(request.ticker, request.backend, request.future_days, request.period, true);
+          const s = await analyzeSentiment(request.ticker, "kronos", request.future_days, request.period, true);
           setSentiment(s);
         } catch (se) {
           console.warn("Sentiment analysis failed:", se);
@@ -639,22 +639,22 @@ export function ForecastPage({ onSwitchView }: { onSwitchView?: () => void }) {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <SignalCard
                       label="Sinal"
-                      value={sentiment.signals?.signal ?? "—"}
-                      hint={sentiment.signals?.reason ?? ""}
+                      value={sentiment.signals?.blended_signal === undefined ? "—" : String(sentiment.signals.blended_signal)}
+                      hint="Sinal combinado de sentimento, macro e resultados"
                     />
                     <SignalCard
                       label="Confiança"
-                      value={sentiment.signals?.confidence === undefined ? "—" : `${sentiment.signals.confidence}%`}
+                      value={sentiment.signals?.sentiment_signal === undefined ? "—" : `${sentiment.signals.sentiment_signal}%`}
                       hint="Confiança do sinal de sentimento"
                     />
                     <SignalCard
-                      label="Notícias analisadas"
-                      value={String(sentiment.signals?.news_count ?? 0)}
-                      hint="Total de notícias no período"
+                      label="Sinal macro"
+                      value={String(sentiment.signals?.macro_signal ?? 0)}
+                      hint="Sinal macro no período"
                     />
                     <SignalCard
-                      label="Blending"
-                      value={`${sentiment.signals?.sentiment_adjustment === undefined ? "—" : `${sentiment.signals.sentiment_adjustment}%`}`}
+                      label="Sinal resultados"
+                      value={`${sentiment.signals?.earnings_signal === undefined ? "—" : `${sentiment.signals.earnings_signal}%`}`}
                       hint="Ajuste aplicado à previsão base"
                     />
                   </div>

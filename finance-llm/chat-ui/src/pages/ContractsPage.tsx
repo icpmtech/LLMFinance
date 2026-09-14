@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { ArrowLeft, Search, FileText, MessageSquare, Loader2, Frown, Database, Download } from "lucide-react";
+import { ArrowLeft, Search, FileText, MessageSquare, Loader2, Frown, Database } from "lucide-react";
 import {
   getContractStatus,
   getContractYears,

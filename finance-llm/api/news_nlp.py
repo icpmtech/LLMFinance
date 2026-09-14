@@ -457,7 +457,7 @@ def _build_prompt(title: str, summary: Optional[str]) -> str:
     )
 
 
-def _run_model(prompt: str, backend: str = "gpt2", max_new_tokens: int = 180) -> str:
+def _run_model(prompt: str, backend: str = "heuristic", max_new_tokens: int = 180) -> str:
     if backend == "heuristic":
         return ""
     model = get_inference_model(backend)
@@ -467,7 +467,7 @@ def _run_model(prompt: str, backend: str = "gpt2", max_new_tokens: int = 180) ->
 def analyze_news_item(
     title: str,
     summary: Optional[str] = None,
-    backend: str = "gpt2",
+    backend: str = "heuristic",
     ticker: Optional[str] = None,
     translate_summary: bool = True,
 ) -> NewsAnalysisResult:
@@ -546,7 +546,7 @@ def analyze_news_item(
 
 def analyze_news_batch(
     items: List[Dict[str, str]],
-    backend: str = "gpt2",
+    backend: str = "heuristic",
     ticker: Optional[str] = None,
 ) -> List[NewsAnalysisResult]:
     """Analisa um lote de notícias, traduzindo apenas os títulos em batch.

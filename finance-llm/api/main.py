@@ -45,6 +45,7 @@ from api.models import (
     ForecastRequest,
     ForecastResponse,
     ForecastSeries,
+    ForecastSignal,
     HistoryPoint,
     HoldersResponse,
     NewsItem,
@@ -53,6 +54,7 @@ from api.models import (
     RecommendationsResponse,
     SecFiling,
     SecFilingsResponse,
+    SentimentBlendedResponse,
     SustainabilityResponse,
     TechnicalExplanation,
     TechnicalPoint,
@@ -102,6 +104,8 @@ from api.tools import (
     yahoo_search,
 )
 from forecasting.arima_model import run_full_pipeline
+
+from sentiment.feature_engineering import generate_sentiment_blended_forecast
 
 
 from api.rag_routes import router as rag_router
@@ -255,6 +259,55 @@ def forecast(req: ForecastRequest):
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar previsão para {ticker}: {exc}")
+
+
+@app.post("/sentiment/analyze/{ticker}", response_model=SentimentBlendedResponse)
+def sentiment_analyze(
+    ticker: str,
+    backend: str = Query("kronos", pattern="^(arima|kronos)$"),
+    future_days: int = Query(5, ge=1, le=30),
+    period: str = Query("1y", min_length=2),
+    include_features: bool = Query(True),
+):
+    """Executa o pipeline de análise de sentimento e blended forecast para um ticker."""
+    ticker = _normalize_ticker(ticker)
+    try:
+        result = generate_sentiment_blended_forecast(
+            ticker=ticker,
+            future_days=future_days,
+            period=period,
+            backend=backend,
+            include_features=include_features,
+        )
+        if result.get("error"):
+            raise HTTPException(status_code=500, detail=f"Erro no pipeline de sentimento para {ticker}: {result['error']}")
+
+        base_forecast = [ForecastPoint(date=f["date"], price=f["price"]) for f in result.get("base_forecast", [])]
+        adjusted_forecast = [
+            ForecastPoint(date=f["date"], price=f["price"], lower=f.get("lower"), upper=f.get("upper"))
+            for f in result.get("adjusted_forecast", [])
+        ]
+        signals = result.get("signals", {})
+        return SentimentBlendedResponse(
+            ticker=ticker,
+            base_model=result.get("base_model", backend),
+            period=period,
+            future_days=future_days,
+            base_forecast=base_forecast,
+            adjusted_forecast=adjusted_forecast,
+            signals=ForecastSignal(
+                sentiment_signal=signals.get("sentiment_signal", 0.0),
+                macro_signal=signals.get("macro_signal", 0.0),
+                earnings_signal=signals.get("earnings_signal", 0.0),
+                blended_signal=signals.get("blended_signal", 0.0),
+                weights=signals.get("weights", {}),
+            ),
+            features=result.get("features", {}),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro no pipeline de sentimento para {ticker}: {exc}")
 
 
 @app.get("/forecast/plot/{filename}")
