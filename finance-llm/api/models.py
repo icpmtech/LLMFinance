@@ -54,6 +54,13 @@ class ForecastSignal(BaseModel):
     weights: Dict[str, float] = {}
 
 
+class ForecastPoint(BaseModel):
+    date: str
+    price: float
+    lower: Optional[float] = None
+    upper: Optional[float] = None
+
+
 class SentimentBlendedResponse(BaseModel):
     ticker: str
     base_model: str
@@ -64,13 +71,6 @@ class SentimentBlendedResponse(BaseModel):
     signals: ForecastSignal = Field(default_factory=ForecastSignal)
     features: Dict[str, Any] = Field(default_factory=dict)
     error: Optional[str] = None
-
-
-class ForecastPoint(BaseModel):
-    date: str
-    price: float
-    lower: Optional[float] = None
-    upper: Optional[float] = None
 
 
 class ForecastSeries(BaseModel):

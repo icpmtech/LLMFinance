@@ -480,7 +480,7 @@ def build_feature_vector(
             prices[c] = np.nan
 
     # Preencher forward earnings estimate (EPS futuro) até à data de reporte
-    prices["eps_estimate"] = prices["eps_estimate"].fillna(method="ffill")
+    prices["eps_estimate"] = prices["eps_estimate"].ffill()
 
     # Macro (pivot)
     client = es or get_es_client()
@@ -499,7 +499,7 @@ def build_feature_vector(
         prices = prices.merge(macro_pivot, on="date", how="left")
         # Forward fill limitado a 30 dias para macro de baixa frequência
         for c in macro_cols:
-            prices[c] = prices[c].fillna(method="ffill", limit=30)
+            prices[c] = prices[c].ffill(limit=30)
     else:
         macro_cols = []
 
@@ -679,10 +679,15 @@ def generate_sentiment_blended_forecast(
     ticker: str,
     future_days: int = 5,
     period: str = "1y",
-    backend: str = "arima",
+    backend: str = "kronos",
     include_features: bool = True,
 ) -> Dict[str, Any]:
-    """Pipeline completo: recolhe dados, gera previsão base e aplica blending."""
+    """Pipeline completo: recolhe dados, gera previsão base e aplica blending.
+
+    A previsão base é gerada com Kronos, que é mais robusto a tickers globais como
+    AAPL e evita o caminho yfinance.download usado pelo pipeline ARIMA antigo.
+    O parâmetro backend é registado para informação; o blending é independente.
+    """
     # 1. Coletar e indexar notícias (Yahoo + RSS)
     yahoo_items = fetch_yahoo_news_features(ticker)
     rss_items = get_rss_news_features(ticker, max_items=100)
@@ -698,10 +703,10 @@ def generate_sentiment_blended_forecast(
     if not earnings_df.empty:
         index_earnings(ticker, earnings_df)
 
-    # 3. Gerar previsão base
-    if backend == "kronos":
-        from forecasting.kronos_model import run_kronos_pipeline
+    # 3. Gerar previsão base (sempre via Kronos para fiabilidade)
+    from forecasting.kronos_model import run_kronos_pipeline
 
+    try:
         base_result = run_kronos_pipeline(
             ticker=ticker,
             period=period,
@@ -709,17 +714,9 @@ def generate_sentiment_blended_forecast(
             variant="kronos-mini",
         )
         base_forecast = base_result.get("forecast", [])
-    else:
-        from forecasting.arima_model import run_full_pipeline
-
-        base_result = run_full_pipeline(
-            ticker=ticker,
-            period=period,
-            order=(2, 1, 2),
-            train_ratio=0.85,
-            future_steps=future_days,
-        )
-        base_forecast = base_result.to_dict().get("forecast", [])
+    except Exception as exc:
+        logger.warning("Kronos base forecast failed for %s: %s", ticker, exc)
+        base_forecast = []
 
     # 4. Blending
     blended = blend_forecast_with_sentiment(ticker, base_forecast, period=period)

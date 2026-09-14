@@ -291,6 +291,7 @@ def _translate_batch(texts: List[str]) -> List[str]:
         )
         decoded = _TranslationModel._tokenizer.batch_decode(translated, skip_special_tokens=True)
     except Exception:
+        chunks = non_empty
         decoded = [t for _, t in non_empty]
 
     out = [""] * len(texts)

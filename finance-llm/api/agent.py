@@ -13,6 +13,7 @@ from api.tools import (
     get_stock_history,
     get_stock_info,
 )
+from sentiment.feature_engineering import generate_sentiment_blended_forecast
 from inference.generate import InferenceModel as Gpt2InferenceModel
 from inference.generate_mistral import InferenceModel as MistralInferenceModel
 
@@ -95,10 +96,33 @@ def _is_forecast_question(question: str) -> bool:
     return any(k in q for k in keywords)
 
 
+def _is_sentiment_question(question: str) -> bool:
+    """Detecta se o utilizador pede análise de sentimento/impacto de notícias."""
+    keywords = [
+        "sentiment",
+        "sentimento",
+        "notícias",
+        "noticias",
+        "news",
+        "headlines",
+        "imprensa",
+        "analise de sentimento",
+        "análise de sentimento",
+        "blending",
+        "misturar",
+        "macro",
+        "earnings",
+        "resultados",
+    ]
+    q = question.lower()
+    return any(k in q for k in keywords)
+
+
 def build_context(question: str) -> Dict:
     """Executa ferramentas relevantes e constroi o contexto da resposta."""
     tickers = extract_tickers(question)
     wants_forecast = _is_forecast_question(question)
+    wants_sentiment = _is_sentiment_question(question)
     context = {
         "question": question,
         "tickers": tickers,
@@ -107,6 +131,7 @@ def build_context(question: str) -> Dict:
         "stock": None,
         "history": None,
         "forecast": None,
+        "sentiment": None,
     }
     for t in tickers[:1]:  # analisar o primeiro ticker identificado
         info = get_stock_info(t)
@@ -127,6 +152,14 @@ def build_context(question: str) -> Dict:
                     context["sources"].append(Source(name=f"Previsão ARIMA — {info.get('name', t)}", url=f"file://{fc['plot_path']}", value=fc["forecast"][-1]["price"] if fc.get("forecast") else None))
             except Exception as exc:
                 context["tools"].append(ToolCall(tool="forecast_prices", input={"symbol": t}, output=f"Erro: {exc}"))
+
+        if wants_sentiment:
+            try:
+                sent = generate_sentiment_blended_forecast(t, future_days=5, period="1y", backend="kronos", include_features=False)
+                context["sentiment"] = sent
+                context["tools"].append(ToolCall(tool="generate_sentiment_blended_forecast", input={"symbol": t, "future_days": 5}, output=json.dumps(sent, default=str, ensure_ascii=False)))
+            except Exception as exc:
+                context["tools"].append(ToolCall(tool="generate_sentiment_blended_forecast", input={"symbol": t}, output=f"Erro: {exc}"))
     return context
 
 
@@ -157,6 +190,7 @@ def generate_answer(context: Dict, backend: str = "gpt2") -> str:
     symbol = stock["ticker"]
     trend = _trend_bars(context.get("history"))
     forecast = context.get("forecast")
+    sentiment = context.get("sentiment")
 
     forecast_block = ""
     if forecast and "error" not in forecast:
@@ -172,6 +206,24 @@ def generate_answer(context: Dict, backend: str = "gpt2") -> str:
             f"  Ljung-Box p-value: {forecast['ljung_box_pvalue']:.4f}\n"
         )
 
+    sentiment_block = ""
+    if sentiment and "error" not in sentiment:
+        adj = sentiment.get("adjusted_forecast", [])
+        if adj:
+            last_adj = adj[-1]
+            sentiment_block = (
+                f"\nSentiment/Macro/Earnings Blended Forecast ({sentiment.get('base_model', 'kronos')}):\n"
+                f"  Sinal: {sentiment.get('sentiment_signal', 0):+.2f}, "
+                f"Macro: {sentiment.get('macro_signal', 0):+.2f}, "
+                f"Earnings: {sentiment.get('earnings_signal', 0):+.2f}\n"
+                f"  Previsão ajustada (último dia): {last_adj.get('date')} → {last_adj.get('price')} {currency}\n"
+            )
+        else:
+            sentiment_block = (
+                f"\nSentiment analysis: sinal={sentiment.get('blended_signal', 0):+.2f} "
+                f"(sentimento {sentiment.get('sentiment_signal', 0):+.2f}, macro {sentiment.get('macro_signal', 0):+.2f}, earnings {sentiment.get('earnings_signal', 0):+.2f}).\n"
+            )
+
     prompt = (
         f"Question: {q}\n"
         f"Company: {name} ({symbol})\n"
@@ -181,6 +233,7 @@ def generate_answer(context: Dict, backend: str = "gpt2") -> str:
         f"P/E: {pe}\n"
         f"Trend (1y): {trend}\n"
         f"{forecast_block}"
+        f"{sentiment_block}"
         f"Answer:"
     )
 
@@ -197,7 +250,7 @@ def generate_answer(context: Dict, backend: str = "gpt2") -> str:
     # Se ainda for lixo, usa fallback factual.
     if _is_gibberish(answer):
         answer = _fallback_answer(
-            name, symbol, price, currency, sector, dy, pe, trend, backend, forecast
+            name, symbol, price, currency, sector, dy, pe, trend, backend, forecast, sentiment
         )
     return answer
 
@@ -245,7 +298,7 @@ def _is_gibberish(text: str) -> bool:
 
 
 def _fallback_answer(
-    name, symbol, price, currency, sector, dy, pe, trend, backend: str, forecast=None
+    name, symbol, price, currency, sector, dy, pe, trend, backend: str, forecast=None, sentiment=None
 ) -> str:
     """Resposta factual de fallback quando o modelo gerativo falha."""
     dy_str = _format_pct(dy)
@@ -265,11 +318,31 @@ def _fallback_answer(
             f"({'resíduos sem padrão' if forecast['ljung_box_pvalue'] > 0.05 else 'resíduos mostram autocorrelação'})."
         )
 
+    sentiment_text = ""
+    if sentiment and "error" not in sentiment:
+        adj = sentiment.get("adjusted_forecast", [])
+        if adj:
+            sentiment_text = (
+                f"\n\nPrevisão ajustada com sentimento/macro/resultados ({sentiment.get('base_model', 'kronos')}):\n"
+                f"- Sinal sentimento: {sentiment.get('sentiment_signal', 0):+.2f}\n"
+                f"- Sinal macro: {sentiment.get('macro_signal', 0):+.2f}\n"
+                f"- Sinal earnings: {sentiment.get('earnings_signal', 0):+.2f}\n"
+                f"- Preço ajustado previsto: {adj[-1].get('price')} {currency} em {adj[-1].get('date')}\n"
+                f"- Ajuste de blending: {sentiment.get('blended_signal', 0):+.2f}"
+            )
+        else:
+            sentiment_text = (
+                f"\n\nAnálise de sentimento: sinal combinado {sentiment.get('blended_signal', 0):+.2f} "
+                f"(sentimento {sentiment.get('sentiment_signal', 0):+.2f}, macro {sentiment.get('macro_signal', 0):+.2f}, "
+                f"earnings {sentiment.get('earnings_signal', 0):+.2f})."
+            )
+
     return (
         f"{name} ({symbol}) cotava a {price_str}. "
         f"O sector é {sector}, com dividend yield de {dy_str} e P/E de {pe_str}. "
         f"Tendência de 1 ano: {trend}."
-        f"{forecast_text}\n\n"
+        f"{forecast_text}"
+        f"{sentiment_text}\n\n"
         f"Esta resposta é baseada nos dados do Yahoo Finance enquanto o modelo Finance-LLM ({backend}) continua a ser treinado."
     )
 

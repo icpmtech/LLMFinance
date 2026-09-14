@@ -188,7 +188,7 @@ def list_tickers(query: str = Query("", min_length=0)):
 
 @app.post("/forecast", response_model=ForecastResponse)
 def forecast(req: ForecastRequest):
-    """Executa o pipeline ARIMA para o ticker pedido e devolve previsões + séries."""
+    """Executa o pipeline ARIMA/Kronos para o ticker pedido e devolve previsões + séries."""
     order_str = (req.order or "2,1,2").strip().lower()
     if order_str == "auto":
         order = (2, 1, 2)
@@ -219,7 +219,7 @@ def forecast(req: ForecastRequest):
             if data.get("plot_path"):
                 plot_path = Path(data["plot_path"])
                 plot_url = f"/forecast/plot/{plot_path.name}"
-            return ForecastResponse(
+            base_response = ForecastResponse(
                 ticker=ticker,
                 order=data.get("order", (0, 0, 0)),
                 train_days=data["train_days"],
@@ -238,46 +238,47 @@ def forecast(req: ForecastRequest):
                 model_summary=data.get("model_summary"),
                 explanation=data.get("explanation"),
             )
-
-        result = run_full_pipeline(
-            ticker=ticker,
-            period=req.period,
-            order=order,
-            train_ratio=req.train_ratio,
-            future_steps=req.future_days,
-            save_plot=True,
-        )
-        data = result.to_dict()
-        forecast_points = [
-            ForecastPoint(date=f["date"], price=f["price"], lower=f.get("lower"), upper=f.get("upper"))
-            for f in data["forecast"]
-        ]
-        series = [ForecastSeries(date=s["date"], value=s["value"], type=s["type"]) for s in data["series"]]
-        plot_url = None
-        if result.plot_path:
-            plot_url = f"/forecast/plot/{result.plot_path.name}"
-        base_response = ForecastResponse(
-            ticker=ticker,
-            order=result.order,
-            train_days=data["train_days"],
-            test_days=data["test_days"],
-            rmse=result.rmse,
-            mape=result.mape,
-            ljung_box_pvalue=result.ljung_box_pvalue,
-            last_train_date=data["last_train_date"],
-            last_test_date=data["last_test_date"],
-            currency=info.get("currency", "USD"),
-            company_name=info.get("name", ticker),
-            forecast=forecast_points,
-            series=series,
-            plot_url=plot_url,
-            plot_path=str(result.plot_path) if result.plot_path else None,
-            model_summary=result.model_summary,
-            explanation=result.generate_explanation(
+        else:
+            result = run_full_pipeline(
+                ticker=ticker,
+                period=req.period,
+                order=order,
+                train_ratio=req.train_ratio,
+                future_steps=req.future_days,
+                save_plot=True,
+            )
+            data = result.to_dict()
+            forecast_points = [
+                ForecastPoint(date=f["date"], price=f["price"], lower=f.get("lower"), upper=f.get("upper"))
+                for f in data["forecast"]
+            ]
+            series = [ForecastSeries(date=s["date"], value=s["value"], type=s["type"]) for s in data["series"]]
+            plot_url = None
+            if result.plot_path:
+                plot_url = f"/forecast/plot/{result.plot_path.name}"
+            base_response = ForecastResponse(
+                ticker=ticker,
+                order=result.order,
+                train_days=data["train_days"],
+                test_days=data["test_days"],
+                rmse=result.rmse,
+                mape=result.mape,
+                ljung_box_pvalue=result.ljung_box_pvalue,
+                last_train_date=data["last_train_date"],
+                last_test_date=data["last_test_date"],
                 currency=info.get("currency", "USD"),
                 company_name=info.get("name", ticker),
-            ),
-        )
+                forecast=forecast_points,
+                series=series,
+                plot_url=plot_url,
+                plot_path=str(result.plot_path) if result.plot_path else None,
+                model_summary=result.model_summary,
+                explanation=result.generate_explanation(
+                    currency=info.get("currency", "USD"),
+                    company_name=info.get("name", ticker),
+                ),
+            )
+
         if not req.use_sentiment:
             return base_response
 
@@ -299,6 +300,9 @@ def forecast(req: ForecastRequest):
         except Exception as exc:
             logger.warning("Blending sentiment failed for %s: %s", ticker, exc)
             return base_response
+    except Exception as exc:
+        logger.exception("Forecast failed for %s: %s", ticker, exc)
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar previsão: {exc}")
 
 
 @app.get("/forecast/plot/{filename}")

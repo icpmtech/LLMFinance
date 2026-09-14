@@ -121,10 +121,10 @@ def _build_ohlcv(ticker: str, period: str = "5y") -> pd.DataFrame:
     df["high"] = np.maximum(np.maximum(df["open"], df["close"]) + half_range.values * 0.4, df[["open", "close"]].max(axis=1))
     df["low"] = np.minimum(np.minimum(df["open"], df["close"]) - half_range.values * 0.4, df[["open", "close"]].min(axis=1))
 
-    # Volume: tentar descarregar do Yahoo. Se falhar, usar zeros.
+    # Volume: tentar descarregar do Yahoo usando Ticker.history (mais thread-safe).
     try:
         import yfinance as yf
-        vol_df = yf.download(ticker, period=period, interval="1d", progress=False)
+        vol_df = yf.Ticker(ticker).history(period=period, interval="1d", auto_adjust=True)
         if not vol_df.empty and "Volume" in vol_df.columns:
             vol = vol_df["Volume"].squeeze()
             vol.index = pd.to_datetime(vol.index)

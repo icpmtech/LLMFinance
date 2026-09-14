@@ -179,10 +179,22 @@ def download_close_prices(
     Caso contrário, usa `period`.
     """
     ticker = ticker.strip().upper()
-    if start and end:
-        df = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=True)
-    else:
-        df = yf.download(ticker, period=period, interval="1d", progress=False, auto_adjust=True)
+    try:
+        # Usar Ticker.history é mais robusto e thread-safe que yf.download.
+        ticker_obj = yf.Ticker(ticker)
+        if start and end:
+            df = ticker_obj.history(start=start, end=end, auto_adjust=True)
+        else:
+            df = ticker_obj.history(period=period, interval="1d", auto_adjust=True)
+    except Exception:
+        df = pd.DataFrame()
+
+    if df.empty:
+        # Fallback para o caminho antigo caso Ticker.history falhe.
+        if start and end:
+            df = yf.download(ticker, start=start, end=end, progress=False, auto_adjust=True)
+        else:
+            df = yf.download(ticker, period=period, interval="1d", progress=False, auto_adjust=True)
 
     if df.empty:
         raise ValueError(f"Sem dados para {ticker} no período pedido.")

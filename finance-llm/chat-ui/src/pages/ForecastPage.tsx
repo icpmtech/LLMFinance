@@ -23,9 +23,11 @@ import {
   EyeOff,
   Sparkles,
   ArrowLeft,
+  Newspaper,
+  Loader2,
 } from "lucide-react";
-import { runForecast, searchLocalTickers, getPlotUrl } from "../api";
-import type { ForecastRequest, ForecastResponse, ForecastSeries } from "../types";
+import { runForecast, searchLocalTickers, getPlotUrl, analyzeSentiment } from "../api";
+import type { ForecastRequest, ForecastResponse, ForecastSeries, SentimentBlendedResponse } from "../types";
 
 const PERIODS = ["1y", "2y", "5y", "10y", "max"];
 const BACKENDS: { value: "arima" | "kronos"; label: string }[] = [
@@ -68,6 +70,9 @@ export function ForecastPage({ onSwitchView }: { onSwitchView?: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [useSentiment, setUseSentiment] = useState(false);
+  const [sentiment, setSentiment] = useState<SentimentBlendedResponse | null>(null);
+  const [loadingSentiment, setLoadingSentiment] = useState(false);
 
   const [visibleSeries, setVisibleSeries] = useState<Record<string, boolean>>({
     train: true,
@@ -103,10 +108,22 @@ export function ForecastPage({ onSwitchView }: { onSwitchView?: () => void }) {
   const handleRun = async () => {
     setError(null);
     setResult(null);
+    setSentiment(null);
     setLoading(true);
     try {
-      const data = await runForecast(request);
+      const data = await runForecast({ ...request, use_sentiment: useSentiment });
       setResult(data);
+      if (useSentiment && data) {
+        setLoadingSentiment(true);
+        try {
+          const s = await analyzeSentiment(request.ticker, request.backend, request.future_days, request.period, true);
+          setSentiment(s);
+        } catch (se) {
+          console.warn("Sentiment analysis failed:", se);
+        } finally {
+          setLoadingSentiment(false);
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -327,7 +344,7 @@ export function ForecastPage({ onSwitchView }: { onSwitchView?: () => void }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <button
               onClick={handleRun}
               disabled={loading || !request.ticker}
@@ -336,6 +353,16 @@ export function ForecastPage({ onSwitchView }: { onSwitchView?: () => void }) {
               <Play size={18} />
               {loading ? "A calcular…" : "Gerar previsão"}
             </button>
+            <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-card cursor-pointer hover:bg-accent transition">
+              <input
+                type="checkbox"
+                checked={useSentiment}
+                onChange={(e) => setUseSentiment(e.target.checked)}
+                className="h-4 w-4 accent-primary"
+              />
+              <Newspaper size={16} />
+              <span className="text-sm font-medium">Incluir análise de sentimento</span>
+            </label>
             {error && <p className="text-destructive text-sm">{error}</p>}
           </div>
         </section>
@@ -595,9 +622,66 @@ export function ForecastPage({ onSwitchView }: { onSwitchView?: () => void }) {
                 )}
               </section>
             )}
+
+            {(sentiment || loadingSentiment) && (
+              <section className="bg-card border border-border rounded-2xl p-5 shadow-sm">
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <Newspaper className="text-primary" size={18} />
+                  Painel de sentimento
+                </h3>
+                {loadingSentiment && (
+                  <div className="flex items-center gap-3 text-muted-foreground">
+                    <Loader2 className="animate-spin" size={18} />
+                    <span className="text-sm">A analisar notícias, macro e resultados…</span>
+                  </div>
+                )}
+                {sentiment && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <SignalCard
+                      label="Sinal"
+                      value={sentiment.signals?.signal ?? "—"}
+                      hint={sentiment.signals?.reason ?? ""}
+                    />
+                    <SignalCard
+                      label="Confiança"
+                      value={sentiment.signals?.confidence === undefined ? "—" : `${sentiment.signals.confidence}%`}
+                      hint="Confiança do sinal de sentimento"
+                    />
+                    <SignalCard
+                      label="Notícias analisadas"
+                      value={String(sentiment.signals?.news_count ?? 0)}
+                      hint="Total de notícias no período"
+                    />
+                    <SignalCard
+                      label="Blending"
+                      value={`${sentiment.signals?.sentiment_adjustment === undefined ? "—" : `${sentiment.signals.sentiment_adjustment}%`}`}
+                      hint="Ajuste aplicado à previsão base"
+                    />
+                  </div>
+                )}
+              </section>
+            )}
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function SignalCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div className="bg-muted/50 border border-border rounded-xl p-4">
+      <p className="text-xs text-muted-foreground uppercase tracking-wide">{label}</p>
+      <p className="text-2xl font-bold mt-1">{value}</p>
+      {hint && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{hint}</p>}
     </div>
   );
 }

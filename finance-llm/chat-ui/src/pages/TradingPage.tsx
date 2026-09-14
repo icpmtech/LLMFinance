@@ -203,28 +203,30 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
     setLoadingSentiment(true);
     setError(null);
     try {
-      const [forecastRes, sentimentRes] = await Promise.all([
-        runForecast({
-          ticker,
-          future_days: 10,
-          period: "5y",
-          train_ratio: 0.85,
-          backend: "kronos",
-          use_sentiment: useSentiment,
-        }),
-        analyzeSentiment(ticker, "kronos", 10, "5y", false).catch((err) => {
-          console.warn("Sentiment analyze failed:", err);
-          return null;
-        }),
-      ]);
+      const forecastRes = await runForecast({
+        ticker,
+        future_days: 10,
+        period: "5y",
+        train_ratio: 0.85,
+        backend: "kronos",
+        use_sentiment: useSentiment,
+      });
       setForecast(forecastRes);
-      setSentiment(sentimentRes);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setForecast(null);
-      setSentiment(null);
     } finally {
       setLoadingForecast(false);
+    }
+
+    // Sentiment analysis runs independently and may be slower.
+    try {
+      const sentimentRes = await analyzeSentiment(ticker, "kronos", 10, "5y", false);
+      setSentiment(sentimentRes);
+    } catch (err) {
+      console.warn("Sentiment analyze failed:", err);
+      setSentiment(null);
+    } finally {
       setLoadingSentiment(false);
     }
   }, [ticker, useSentiment]);
