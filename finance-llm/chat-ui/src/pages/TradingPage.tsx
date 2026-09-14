@@ -7,7 +7,6 @@ import {
   CandlestickSeries,
   HistogramSeries,
   LineSeries,
-  type CandlestickData,
 } from "lightweight-charts";
 import {
   ArrowLeft,
@@ -264,23 +263,23 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
   }, [filteredData]);
 
   const forecastLine: LinePoint[] = useMemo(() => {
-    if (!showForecast || !forecast?.forecast?.length) return [];
+    if (!forecast?.forecast?.length) return [];
     return forecast.forecast.map((p) => ({ time: p.date.slice(0, 10), value: p.price }));
-  }, [forecast, showForecast]);
+  }, [forecast]);
 
   const forecastUpper: LinePoint[] = useMemo(() => {
-    if (!showForecast || !forecast?.forecast?.length) return [];
+    if (!forecast?.forecast?.length) return [];
     return forecast.forecast
       .filter((p) => p.upper != null)
       .map((p) => ({ time: p.date.slice(0, 10), value: p.upper! }));
-  }, [forecast, showForecast]);
+  }, [forecast]);
 
   const forecastLower: LinePoint[] = useMemo(() => {
-    if (!showForecast || !forecast?.forecast?.length) return [];
+    if (!forecast?.forecast?.length) return [];
     return forecast.forecast
       .filter((p) => p.lower != null)
       .map((p) => ({ time: p.date.slice(0, 10), value: p.lower! }));
-  }, [forecast, showForecast]);
+  }, [forecast]);
 
   const runSimulation = useCallback(() => {
     if (!history?.points?.length || !lastPrice) return;
@@ -343,7 +342,11 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
     const totalReturn = (finalCapital - capital) / capital;
     const sellTrades = trades.filter((t) => t.side === "sell");
     const winTrades = sellTrades.filter((t) => (t.pnl ?? 0) > 0);
-    const winRate = sellTrades.length ? winTrades.length / sellTrades.length : 0;
+    const winRate = sellTrades.length
+      ? winTrades.length / sellTrades.length
+      : shares > 0
+        ? NaN
+        : 0;
     const returns = trades
       .filter((t) => t.side === "sell" && t.pnl != null)
       .map((t) => (t.pnl ?? 0) / capital);
@@ -409,6 +412,7 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
       lineStyle: 2,
       lineWidth: 2,
       title: "Previsão Kronos",
+      visible: false,
     });
 
     const forecastUpperSeries = chart.addSeries(LineSeries, {
@@ -417,6 +421,7 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
       lineWidth: 1,
       lastValueVisible: false,
       title: "Limite superior",
+      visible: false,
     });
 
     const forecastLowerSeries = chart.addSeries(LineSeries, {
@@ -425,6 +430,7 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
       lineWidth: 1,
       lastValueVisible: false,
       title: "Limite inferior",
+      visible: false,
     });
 
     chartRef.current = chart;
@@ -448,27 +454,44 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
   useEffect(() => {
     if (!chartRef.current || !candleSeriesRef.current) return;
     candleSeriesRef.current.setData(candles);
-    if (candles.length) chartRef.current.timeScale().fitContent();
-  }, [candles]);
+    if (!candles.length) return;
+    chartRef.current.timeScale().fitContent();
+
+    if (startDate || endDate) {
+      const from = startDate ? startDate.slice(0, 10) : candles[0].time;
+      const to = endDate ? endDate.slice(0, 10) : candles[candles.length - 1].time;
+      if (from <= to) {
+        try {
+          chartRef.current.timeScale().setVisibleRange({ from, to });
+        } catch {
+          chartRef.current.timeScale().fitContent();
+        }
+      }
+    }
+  }, [candles, startDate, endDate]);
 
   useEffect(() => {
     if (!volumeSeriesRef.current) return;
-    volumeSeriesRef.current.setData(showVolume ? volumes : []);
+    volumeSeriesRef.current.setData(volumes);
+    volumeSeriesRef.current.applyOptions({ visible: showVolume });
   }, [volumes, showVolume]);
 
   useEffect(() => {
     if (!forecastLineRef.current) return;
-    forecastLineRef.current.setData(showForecast ? forecastLine : []);
+    forecastLineRef.current.setData(forecastLine);
+    forecastLineRef.current.applyOptions({ visible: showForecast });
   }, [forecastLine, showForecast]);
 
   useEffect(() => {
     if (!forecastUpperRef.current) return;
-    forecastUpperRef.current.setData(showForecast ? forecastUpper : []);
+    forecastUpperRef.current.setData(forecastUpper);
+    forecastUpperRef.current.applyOptions({ visible: showForecast });
   }, [forecastUpper, showForecast]);
 
   useEffect(() => {
     if (!forecastLowerRef.current) return;
-    forecastLowerRef.current.setData(showForecast ? forecastLower : []);
+    forecastLowerRef.current.setData(forecastLower);
+    forecastLowerRef.current.applyOptions({ visible: showForecast });
   }, [forecastLower, showForecast]);
 
   useEffect(() => {
@@ -477,7 +500,7 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
       chartRef.current.removeSeries(todayLineRef.current);
       todayLineRef.current = null;
     }
-    if (forecast?.last_test_date) {
+    if (forecast?.last_test_date && candles.length) {
       const todaySeries = chartRef.current.addSeries(LineSeries, {
         color: "#94a3b8",
         lineStyle: 2,
@@ -486,14 +509,15 @@ export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
         title: "Hoje",
         pointMarkersVisible: false,
       });
-      const firstCandle = candleSeriesRef.current.data()[0] as CandlestickData | undefined;
+      const yMin = Math.min(...candles.map((c) => c.low));
+      const yMax = Math.max(...candles.map((c) => c.high));
       todaySeries.setData([
-        { time: forecast.last_test_date.slice(0, 10), value: firstCandle?.low ?? 0 },
-        { time: forecast.last_test_date.slice(0, 10), value: firstCandle?.high ?? 0 },
+        { time: forecast.last_test_date.slice(0, 10), value: yMin },
+        { time: forecast.last_test_date.slice(0, 10), value: yMax },
       ]);
       todayLineRef.current = todaySeries;
     }
-  }, [forecast?.last_test_date]);
+  }, [forecast?.last_test_date, candles]);
 
   const kronosSignal = useMemo(() => {
     if (!forecast?.forecast?.length || lastPrice == null) return null;
