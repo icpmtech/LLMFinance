@@ -8,6 +8,7 @@ interface SearchBoxProps {
   onResult?: (query: string, results: ElasticSearchGlobalItem[]) => void;
   onSelectSuggestion?: (suggestion: ElasticSuggestion) => void;
   initialQuery?: string;
+  filters?: { source?: string; sentiment?: string; topic?: string };
 }
 
 const ICONS: Record<ElasticSuggestion["type"], React.ReactNode> = {
@@ -29,6 +30,7 @@ export function SearchBox({
   onResult,
   onSelectSuggestion,
   initialQuery = "",
+  filters = {},
 }: SearchBoxProps) {
   const [query, setQuery] = useState(initialQuery);
   const [suggestions, setSuggestions] = useState<ElasticSuggestion[]>([]);
@@ -73,7 +75,7 @@ export function SearchBox({
     setLoading(true);
     setQuery(trimmed);
     try {
-      const data = await searchElasticGlobal(trimmed, 20);
+      const data = await searchElasticGlobal(trimmed, { size: 20, ...filters });
       onResult?.(trimmed, data.items ?? []);
     } finally {
       setLoading(false);

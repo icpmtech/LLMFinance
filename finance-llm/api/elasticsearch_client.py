@@ -6,6 +6,7 @@
 
 Ambos suportam pesquisa por ticker, data e texto.
 """
+import json
 import os
 import re
 from datetime import datetime
@@ -543,19 +544,36 @@ def load_news_graph(ticker: str, es: Optional[Elasticsearch] = None) -> Optional
         return None
 
 
-def search_all_tickers(q: str, size: int = 50, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
-    """Pesquisa notícias de todos os tickers por texto."""
+def search_all_tickers(
+    q: str,
+    from_: int = 0,
+    size: int = 50,
+    source: Optional[str] = None,
+    sentiment: Optional[str] = None,
+    topic: Optional[str] = None,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa notícias de todos os tickers por texto, com filtros e paginação."""
     client = es or get_es_client()
     if not client:
         return {"error": "Elasticsearch indisponível", "items": []}
 
-    query = {
+    must = {
         "multi_match": {
             "query": q,
             "fields": ["ticker^3", "title^2", "summary", "publisher"],
             "type": "best_fields",
         }
     }
+    filters = []
+    if source:
+        filters.append({"wildcard": {"publisher": f"*{source.lower()}*"}})
+    if sentiment:
+        filters.append({"term": {"sentiment": sentiment.lower()}})
+    if topic:
+        filters.append({"wildcard": {"topics": f"*{topic.lower()}*"}})
+
+    query: Dict[str, Any] = {"bool": {"must": [must], "filter": filters}}
 
     try:
         resp = client.search(
@@ -563,6 +581,7 @@ def search_all_tickers(q: str, size: int = 50, es: Optional[Elasticsearch] = Non
             body={
                 "query": query,
                 "sort": [{"published": {"order": "desc"}}, "_score"],
+                "from": from_,
                 "size": size,
                 "track_scores": True,
             },

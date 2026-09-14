@@ -546,7 +546,7 @@ class ContractPartyParsed(BaseModel):
 
 
 class ContractParty(BaseModel):
-    raw: Optional[str] = None
+    raw: Optional[List[str]] = None
     parsed: List[ContractPartyParsed] = []
 
 
@@ -555,21 +555,21 @@ class ContractItem(BaseModel):
     nAnuncio: Optional[str] = None
     TipoAnuncio: Optional[str] = None
     idprocedimento: Optional[str] = None
-    tipoContrato: Optional[str] = None
+    tipoContrato: Optional[List[str]] = None
     tipoprocedimento: Optional[str] = None
     objectoContrato: Optional[str] = None
     descContrato: Optional[str] = None
-    adjudicantes: List[ContractParty] = []
-    adjudicatarios: List[ContractParty] = []
+    adjudicantes: Optional[ContractParty] = None
+    adjudicatarios: Optional[ContractParty] = None
     dataPublicacao: Optional[str] = None
     dataCelebracaoContrato: Optional[str] = None
     precoContratual: Optional[float] = None
     PrecoTotalEfetivo: Optional[float] = None
     precoBaseProcedimento: Optional[float] = None
     cpv: List[ContractCpv] = []
-    localExecucao: Optional[str] = None
+    localExecucao: Optional[List[str]] = None
     Ano: Optional[int] = None
-    NUTs: Optional[str] = None
+    NUTs: Optional[List[str]] = None
     regime: Optional[str] = None
     regimeCadastro: Optional[str] = None
     regimeContratacao: Optional[str] = None

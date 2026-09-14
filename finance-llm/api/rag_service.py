@@ -81,13 +81,22 @@ def _format_entity(contract: dict, kind: str) -> str:
     parties = contract.get(kind) or []
     if not parties:
         return "n/a"
+    if isinstance(parties, dict):
+        parties = [parties]
     names = []
     for party in parties:
+        if isinstance(party, str):
+            names.append(party)
+            continue
         for parsed in party.get("parsed", []):
             if parsed.get("nome"):
                 names.append(parsed["nome"])
-        if party.get("raw") and not party.get("parsed"):
-            names.append(party["raw"])
+        raw = party.get("raw")
+        if raw and not party.get("parsed"):
+            if isinstance(raw, list):
+                names.extend([r for r in raw if isinstance(r, str)])
+            elif isinstance(raw, str):
+                names.append(raw)
     return ", ".join(names) if names else "n/a"
 
 
@@ -157,12 +166,20 @@ def get_contracts_chat_answer(
             )
             return answer, sources
 
-        answer = model.generate(
-            prompt,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            do_sample=temperature > 0,
-        )
+        if hasattr(model, "predict"):
+            answer = model.predict(
+                prompt,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                do_sample=temperature > 0,
+            )
+        else:
+            answer = model.generate(
+                prompt,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                do_sample=temperature > 0,
+            )
         if not answer or not answer.strip():
             answer = "Não consegui gerar uma resposta com base nos contratos recuperados."
         return answer.strip(), sources

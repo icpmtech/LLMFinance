@@ -2,7 +2,7 @@
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated, List
+from typing import Annotated, List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -586,10 +586,21 @@ async def elastic_search_news(
 @app.get("/elastic/search/global", response_model=ElasticSearchGlobalResponse)
 async def elastic_search_global(
     q: str = Query(..., min_length=1, description="Termo de pesquisa global"),
+    from_: int = Query(0, ge=0, alias="from", description="Offset de resultados"),
     size: int = Query(20, ge=1, le=100),
+    source: Optional[str] = Query(None, description="Filtrar por fonte (publisher)"),
+    sentiment: Optional[str] = Query(None, description="Filtrar por sentimento"),
+    topic: Optional[str] = Query(None, description="Filtrar por tópico"),
 ):
     """Pesquisa global tipo Google em todas as notícias indexadas por texto."""
-    result = search_all_tickers(q, size=size)
+    result = search_all_tickers(
+        q,
+        from_=from_,
+        size=size,
+        source=source,
+        sentiment=sentiment,
+        topic=topic,
+    )
     if result.get("error"):
         return ElasticSearchGlobalResponse(query=q, total=0, error=result["error"])
 

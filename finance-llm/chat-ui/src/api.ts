@@ -236,9 +236,14 @@ export async function searchElasticNews(
 
 export async function searchElasticGlobal(
   q: string,
-  size = 20,
+  options: { from?: number; size?: number; source?: string; sentiment?: string; topic?: string } = {},
 ): Promise<ElasticSearchGlobalResponse> {
-  const params = new URLSearchParams({ q: q.trim(), size: String(size) });
+  const params = new URLSearchParams({ q: q.trim() });
+  if (options.from !== undefined) params.append("from", String(options.from));
+  if (options.size !== undefined) params.append("size", String(options.size));
+  if (options.source) params.append("source", options.source);
+  if (options.sentiment) params.append("sentiment", options.sentiment);
+  if (options.topic) params.append("topic", options.topic);
   const res = await fetch(`${API_BASE}/elastic/search/global?${params}`);
   if (!res.ok) throw new Error(`Erro na pesquisa global: ${res.status}`);
   return res.json();
