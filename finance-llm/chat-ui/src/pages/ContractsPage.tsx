@@ -29,16 +29,32 @@ function formatDate(d?: string) {
   return new Date(d).toLocaleDateString("pt-PT");
 }
 
+function normalizeParties(parties: ContractItem["adjudicantes"]): { nome?: string; nif?: string }[] {
+  if (!parties) return [];
+  const arr = Array.isArray(parties) ? parties : [parties];
+  return arr.flatMap((p) => {
+    if (p?.parsed && Array.isArray(p.parsed)) return p.parsed;
+    if (typeof p?.raw === "string") {
+      return p.raw.split(",").map((s) => ({ nome: s.trim() }));
+    }
+    if (Array.isArray(p?.raw)) {
+      return p.raw.map((s: string) => ({ nome: s.trim() }));
+    }
+    return [];
+  });
+}
+
 function partyNames(parties: ContractItem["adjudicantes"]): string {
   return (
-    parties
-      ?.flatMap((p) => p.parsed?.map((x) => x.nome).filter(Boolean))
+    normalizeParties(parties)
+      .map((p) => p.nome)
+      .filter(Boolean)
       .join(", ") || "—"
   );
 }
 
 function firstNif(parties: ContractItem["adjudicantes"]): string {
-  return parties?.flatMap((p) => p.parsed?.map((x) => x.nif).filter(Boolean))[0] || "";
+  return normalizeParties(parties).map((p) => p.nif).filter(Boolean)[0] || "";
 }
 
 export function ContractsPage({ onSwitchView }: ContractsPageProps) {
