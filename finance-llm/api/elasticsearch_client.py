@@ -948,8 +948,13 @@ def export_contracts_to_excel(
     ws.append(headers)
     for cell in ws[1]:
         cell.font = Font(bold=True)
+    def value_to_excel(v: Any) -> Any:
+        if isinstance(v, (list, dict)):
+            return json.dumps(v, ensure_ascii=False)
+        return v
+
     for row in rows:
-        ws.append([row.get(h) for h in headers])
+        ws.append([value_to_excel(row.get(h)) for h in headers])
     for column in ws.columns:
         max_length = 0
         column_letter = column[0].column_letter
@@ -1244,30 +1249,6 @@ def contract_years_available() -> List[int]:
     return sorted(years)
 
 
-def list_contract_years(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
-    """Devolve anos disponíveis e total indexado por ano."""
-    client = es or get_es_client()
-    available = contract_years_available()
-    if not client:
-        return {"available": available, "indexed": []}
-    try:
-        resp = client.search(
-            index=CONTRACTS_INDEX,
-            body={
-                "size": 0,
-                "aggs": {
-                    "by_year": {
-                        "terms": {"field": "Ano", "size": 50, "order": {"_key": "desc"}},
-                    }
-                },
-            },
-        )
-        indexed = [{"year": int(bucket["key"]), "count": bucket["doc_count"]} for bucket in resp["aggregations"]["by_year"]["buckets"]]
-        return {"available": available, "indexed": indexed}
-    except Exception as e:
-        return {"available": available, "indexed": [], "error": str(e)}
-
-
 def _build_contract_query(
     q: Optional[str] = None,
     year: Optional[int] = None,
@@ -1443,31 +1424,37 @@ def get_contract_analytics(
                         }
                     },
                     "top_adjudicantes": {
-                        "nested": {"path": "adjudicantes.parsed"},
+                        "nested": {"path": "adjudicantes"},
                         "aggs": {
                             "names": {
                                 "terms": {
-                                    "field": "adjudicantes.parsed.nome.keyword",
+                                    "field": "adjudicantes.raw",
                                     "size": top_entities,
                                     "order": {"total_value": "desc"},
                                 },
                                 "aggs": {
-                                    "total_value": {"sum": {"field": "precoContratual"}}
+                                    "total_value": {
+                                        "reverse_nested": {},
+                                        "aggs": {"value": {"sum": {"field": "precoContratual"}}},
+                                    }
                                 },
                             }
                         },
                     },
                     "top_adjudicatarios": {
-                        "nested": {"path": "adjudicatarios.parsed"},
+                        "nested": {"path": "adjudicatarios"},
                         "aggs": {
                             "names": {
                                 "terms": {
-                                    "field": "adjudicatarios.parsed.nome.keyword",
+                                    "field": "adjudicatarios.raw",
                                     "size": top_entities,
                                     "order": {"total_value": "desc"},
                                 },
                                 "aggs": {
-                                    "total_value": {"sum": {"field": "precoContratual"}}
+                                    "total_value": {
+                                        "reverse_nested": {},
+                                        "aggs": {"value": {"sum": {"field": "precoContratual"}}},
+                                    }
                                 },
                             }
                         },
@@ -1485,7 +1472,10 @@ def get_contract_analytics(
                                     "description": {
                                         "terms": {"field": "cpv.description.keyword", "size": 1}
                                     },
-                                    "total_value": {"sum": {"field": "precoContratual"}},
+                                    "total_value": {
+                                        "reverse_nested": {},
+                                        "aggs": {"value": {"sum": {"field": "precoContratual"}}},
+                                    },
                                 },
                             }
                         },
@@ -1513,10 +1503,12 @@ def get_contract_analytics(
                 if not key or key in seen_entities:
                     continue
                 seen_entities.add(key)
+                total_value_obj = b.get("total_value", {})
+                value = total_value_obj.get("value", {}).get("value") if isinstance(total_value_obj.get("value"), dict) else total_value_obj.get("value")
                 entity_rows.append({
                     "key": key,
                     "count": b["doc_count"],
-                    "total_value": fmt_money(b.get("total_value", {}).get("value")),
+                    "total_value": fmt_money(value),
                     "description": "",
                 })
         entity_rows.sort(key=lambda x: (x.get("total_value") or 0, x.get("count") or 0), reverse=True)
@@ -1526,10 +1518,12 @@ def get_contract_analytics(
         for b in aggs.get("top_cpv", {}).get("codes", {}).get("buckets", []):
             desc_buckets = b.get("description", {}).get("buckets", [])
             desc = desc_buckets[0].get("key", "") if desc_buckets else ""
+            total_value_obj = b.get("total_value", {})
+            value = total_value_obj.get("value", {}).get("value") if isinstance(total_value_obj.get("value"), dict) else total_value_obj.get("value")
             cpv_rows.append({
                 "key": b["key"],
                 "count": b["doc_count"],
-                "total_value": fmt_money(b.get("total_value", {}).get("value")),
+                "total_value": fmt_money(value),
                 "description": desc,
             })
 
@@ -1545,6 +1539,632 @@ def get_contract_analytics(
             "top_cpv": cpv_rows,
             "procedure_types": [{"key": b["key"], "count": b["doc_count"]} for b in aggs["procedure_types"]["buckets"]],
             "contract_types": [{"key": b["key"], "count": b["doc_count"]} for b in aggs["contract_types"]["buckets"]],
+            "year": year,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# --- Diretório de empresas (entidades) ---
+
+def _entity_lookup_by_nif_query(nif: str) -> Dict[str, Any]:
+    """Devolve uma query nested que procura uma entidade por NIF em ambos os papéis."""
+    return {
+        "bool": {
+            "should": [
+                {"nested": {"path": "adjudicantes.parsed", "query": {"term": {"adjudicantes.parsed.nif": nif}}}},
+                {"nested": {"path": "adjudicatarios.parsed", "query": {"term": {"adjudicatarios.parsed.nif": nif}}}},
+            ],
+            "minimum_should_match": 1,
+        }
+    }
+
+
+def get_company_by_nif(
+    nif: str,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Devolve resumo de uma entidade específica pelo NIF.
+
+    Faz uma pesquisa nested com agregações por papel, devolvendo a estrutura
+    CompanySummary (nif, name, total_value, adjudicante/adjudicatario, etc.).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    ensure_indices(client)
+
+    try:
+        resp = client.search(
+            index=CONTRACTS_INDEX,
+            body={
+                "size": 0,
+                "query": _entity_lookup_by_nif_query(nif),
+                "aggs": {
+                    "adjudicantes": {
+                        "nested": {"path": "adjudicantes.parsed"},
+                        "aggs": {
+                            "filtered": {
+                                "filter": {"term": {"adjudicantes.parsed.nif": nif}},
+                                "aggs": {
+                                    "name": {"top_hits": {"size": 1, "_source": ["adjudicantes.parsed.nome"]}},
+                                    "total_value": {
+                                        "reverse_nested": {},
+                                        "aggs": {"value": {"sum": {"field": "precoContratual"}}},
+                                    },
+                                    "years": {
+                                        "reverse_nested": {},
+                                        "aggs": {"stats": {"stats": {"field": "Ano"}}},
+                                    },
+                                    "count": {"reverse_nested": {}},
+                                },
+                            }
+                        },
+                    },
+                    "adjudicatarios": {
+                        "nested": {"path": "adjudicatarios.parsed"},
+                        "aggs": {
+                            "filtered": {
+                                "filter": {"term": {"adjudicatarios.parsed.nif": nif}},
+                                "aggs": {
+                                    "name": {"top_hits": {"size": 1, "_source": ["adjudicatarios.parsed.nome"]}},
+                                    "total_value": {
+                                        "reverse_nested": {},
+                                        "aggs": {"value": {"sum": {"field": "precoContratual"}}},
+                                    },
+                                    "years": {
+                                        "reverse_nested": {},
+                                        "aggs": {"stats": {"stats": {"field": "Ano"}}},
+                                    },
+                                    "count": {"reverse_nested": {}},
+                                },
+                            }
+                        },
+                    },
+                },
+            },
+        )
+
+        aggs = resp["aggregations"]
+
+        def fmt_money(v):
+            return round(v, 2) if v is not None else None
+
+        def build_role_summary(agg_key: str) -> Optional[Dict[str, Any]]:
+            bucket = aggs.get(agg_key, {}).get("filtered", {})
+            doc_count = bucket.get("doc_count", 0)
+            if not doc_count:
+                return None
+            name_hits = bucket.get("name", {}).get("hits", {}).get("hits", [])
+            name_from_hit: Optional[str] = None
+            if name_hits:
+                src = name_hits[0].get("_source", {})
+                if isinstance(src, dict):
+                    name_from_hit = src.get("nome")
+            total_value_obj = bucket.get("total_value", {})
+            value = total_value_obj.get("value", {}).get("value") if isinstance(total_value_obj.get("value"), dict) else total_value_obj.get("value")
+            years_stats = bucket.get("years", {}).get("stats", {})
+            first_year = years_stats.get("min")
+            last_year = years_stats.get("max")
+            return {
+                "contracts_count": doc_count,
+                "total_value": fmt_money(value) or 0.0,
+                "avg_value": fmt_money(value / doc_count) if value and doc_count else None,
+                "first_year": int(first_year) if first_year is not None else None,
+                "last_year": int(last_year) if last_year is not None else None,
+                "name": name_from_hit,
+            }
+
+        adjudicante = build_role_summary("adjudicantes")
+        adjudicatario = build_role_summary("adjudicatarios")
+        contracts_total = (adjudicante["contracts_count"] if adjudicante else 0) + (adjudicatario["contracts_count"] if adjudicatario else 0)
+        total_value = (adjudicante["total_value"] if adjudicante else 0.0) + (adjudicatario["total_value"] if adjudicatario else 0.0)
+
+        # Escolhe o nome mais comum entre os papéis
+        names: List[str] = []
+        for key in ("adjudicantes", "adjudicatarios"):
+            role_summary = adjudicante if key == "adjudicantes" else adjudicatario
+            if role_summary and role_summary.get("name"):
+                names.append(role_summary["name"])
+        name = names[0] if names else nif
+
+        return {
+            "nif": nif,
+            "name": name,
+            "normalized_name": name,
+            "contracts_total": contracts_total,
+            "total_value": fmt_money(total_value) or 0.0,
+            "adjudicante": adjudicante,
+            "adjudicatario": adjudicatario,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _company_role_filter(role: Optional[str]) -> Optional[List[Dict[str, Any]]]:
+    """Devolve filtro de caminho nested conforme o papel pretendido."""
+    if role == "adjudicante":
+        return [{"nested": {"path": "adjudicantes.parsed", "query": {"exists": {"field": "adjudicantes.parsed.nif"}}}}]
+    if role == "adjudicatario":
+        return [{"nested": {"path": "adjudicatarios.parsed", "query": {"exists": {"field": "adjudicatarios.parsed.nif"}}}}]
+    return None
+
+
+def _company_name_query(q: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Query de texto para nome ou NIF de empresa em qualquer um dos papéis."""
+    if not q:
+        return None
+    q_clean = q.strip()
+    if not q_clean:
+        return None
+    should_clauses: List[Dict[str, Any]] = []
+    for role_path in ("adjudicantes", "adjudicatarios"):
+        should_clauses.append(
+            {
+                "nested": {
+                    "path": f"{role_path}.parsed",
+                    "query": {"match": {f"{role_path}.parsed.nome": {"query": q_clean, "operator": "and"}}},
+                }
+            }
+        )
+        should_clauses.append(
+            {
+                "nested": {
+                    "path": f"{role_path}.parsed",
+                    "query": {"term": {f"{role_path}.parsed.nif": q_clean}},
+                }
+            }
+        )
+    return {
+        "bool": {
+            "should": should_clauses,
+            "minimum_should_match": 1,
+        }
+    }
+
+
+def search_companies(
+    q: Optional[str] = None,
+    role: Optional[str] = "all",
+    min_contracts: int = 1,
+    min_value: Optional[float] = None,
+    max_value: Optional[float] = None,
+    year: Optional[int] = None,
+    size: int = 20,
+    from_: int = 0,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa entidades únicas derivadas dos contratos indexados.
+
+    Utiliza duas agregações nested por NIF (adjudicantes/adjudicatarios) e depois
+    combina os resultados em memória para devolver uma lista paginada de empresas.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "total": 0, "items": []}
+
+    ensure_indices(client)
+
+    base_filters: List[Dict[str, Any]] = []
+    if year:
+        base_filters.append({"term": {"Ano": year}})
+    role_filter = _company_role_filter(role)
+    if role_filter:
+        base_filters.extend(role_filter)
+
+    name_query = _company_name_query(q)
+
+    base_query: Dict[str, Any] = {"bool": {}}
+    if base_filters:
+        base_query["bool"]["filter"] = base_filters
+    if name_query:
+        base_query["bool"]["must"] = name_query
+    if not base_query["bool"]:
+        base_query = {"match_all": {}}
+
+    try:
+        resp = client.search(
+            index=CONTRACTS_INDEX,
+            body={
+                "size": 0,
+                "query": base_query,
+                "aggs": {
+                    "adjudicantes": {
+                        "nested": {"path": "adjudicantes.parsed"},
+                        "aggs": {
+                            "by_nif": {
+                                "terms": {
+                                    "field": "adjudicantes.parsed.nif",
+                                    "size": 2000,
+                                    "order": {"total_value": "desc"},
+                                },
+                                "aggs": {
+                                    "name": {
+                                        "top_hits": {"size": 1, "_source": ["adjudicantes.parsed.nome"]}
+                                    },
+                                    "total_value": {
+                                        "reverse_nested": {},
+                                        "aggs": {"value": {"sum": {"field": "precoContratual"}}},
+                                    },
+                                    "years": {
+                                        "reverse_nested": {},
+                                        "aggs": {"stats": {"stats": {"field": "Ano"}}},
+                                    },
+                                },
+                            }
+                        },
+                    },
+                    "adjudicatarios": {
+                        "nested": {"path": "adjudicatarios.parsed"},
+                        "aggs": {
+                            "by_nif": {
+                                "terms": {
+                                    "field": "adjudicatarios.parsed.nif",
+                                    "size": 2000,
+                                    "order": {"total_value": "desc"},
+                                },
+                                "aggs": {
+                                    "name": {
+                                        "top_hits": {"size": 1, "_source": ["adjudicatarios.parsed.nome"]}
+                                    },
+                                    "total_value": {
+                                        "reverse_nested": {},
+                                        "aggs": {"value": {"sum": {"field": "precoContratual"}}},
+                                    },
+                                    "years": {
+                                        "reverse_nested": {},
+                                        "aggs": {"stats": {"stats": {"field": "Ano"}}},
+                                    },
+                                },
+                            }
+                        },
+                    },
+                },
+            },
+        )
+
+        companies: Dict[str, Dict[str, Any]] = {}
+
+        def fmt_money(v):
+            return round(v, 2) if v is not None else None
+
+        for agg_key in ("adjudicantes", "adjudicatarios"):
+            role_name = "adjudicante" if agg_key == "adjudicantes" else "adjudicatario"
+            for b in resp["aggregations"][agg_key]["by_nif"]["buckets"]:
+                nif = b["key"]
+                name_hits = b.get("name", {}).get("hits", {}).get("hits", [])
+                name = nif or "Nome desconhecido"
+                if name_hits:
+                    src = name_hits[0].get("_source", {})
+                    if isinstance(src, dict):
+                        name = src.get("nome") or name
+                total_value_obj = b.get("total_value", {})
+                value = total_value_obj.get("value", {}).get("value") if isinstance(total_value_obj.get("value"), dict) else total_value_obj.get("value")
+                total_value = value or 0.0
+                years_stats = b.get("years", {}).get("stats", {})
+                first_year = years_stats.get("min")
+                last_year = years_stats.get("max")
+                count = b["doc_count"]
+
+                if count < min_contracts:
+                    continue
+                if min_value is not None and total_value < min_value:
+                    continue
+                if max_value is not None and total_value > max_value:
+                    continue
+
+                if nif and nif not in companies:
+                    companies[nif] = {
+                        "nif": nif,
+                        "name": name,
+                        "normalized_name": name,
+                        "contracts_total": 0,
+                        "total_value": 0.0,
+                        "adjudicante": None,
+                        "adjudicatario": None,
+                    }
+                if not nif:
+                    key = f"__no_nif__{name.lower().strip()}"
+                    if key not in companies:
+                        companies[key] = {
+                            "nif": None,
+                            "name": name,
+                            "normalized_name": name,
+                            "contracts_total": 0,
+                            "total_value": 0.0,
+                            "adjudicante": None,
+                            "adjudicatario": None,
+                        }
+
+                entry = companies[nif if nif else key]
+                role_summary = {
+                    "contracts_count": count,
+                    "total_value": fmt_money(total_value) or 0.0,
+                    "avg_value": fmt_money(total_value / count) if count else None,
+                    "first_year": int(first_year) if first_year is not None else None,
+                    "last_year": int(last_year) if last_year is not None else None,
+                }
+                entry[role_name] = role_summary
+                entry["contracts_total"] = (entry["contracts_total"] or 0) + count
+                entry["total_value"] = (entry["total_value"] or 0.0) + total_value
+
+        items = sorted(companies.values(), key=lambda x: (x.get("total_value") or 0, x.get("contracts_total") or 0), reverse=True)
+        total = len(items)
+        page = items[from_: from_ + size]
+        for it in page:
+            it["total_value"] = fmt_money(it["total_value"]) or 0.0
+
+        return {
+            "query": q,
+            "total": total,
+            "items": page,
+            "from": from_,
+            "size": size,
+        }
+    except Exception as e:
+        return {"query": q, "total": 0, "items": [], "error": str(e)}
+
+
+def get_company_contracts(
+    nif: Optional[str] = None,
+    name: Optional[str] = None,
+    role: Optional[str] = "all",
+    size: int = 20,
+    from_: int = 0,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Devolve contratos onde a entidade aparece como adjudicante/adjudicatário."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "total": 0, "items": []}
+
+    should: List[Dict[str, Any]] = []
+    if nif:
+        if role in ("all", "adjudicante", None):
+            should.append({
+                "nested": {
+                    "path": "adjudicantes.parsed",
+                    "query": {"term": {"adjudicantes.parsed.nif": nif}},
+                }
+            })
+        if role in ("all", "adjudicatario", None):
+            should.append({
+                "nested": {
+                    "path": "adjudicatarios.parsed",
+                    "query": {"term": {"adjudicatarios.parsed.nif": nif}},
+                }
+            })
+    if name:
+        if role in ("all", "adjudicante", None):
+            should.append({
+                "nested": {
+                    "path": "adjudicantes.parsed",
+                    "query": {"match": {"adjudicantes.parsed.nome": name}},
+                }
+            })
+        if role in ("all", "adjudicatario", None):
+            should.append({
+                "nested": {
+                    "path": "adjudicatarios.parsed",
+                    "query": {"match": {"adjudicatarios.parsed.nome": name}},
+                }
+            })
+
+    if not should:
+        return {"error": "É necessário indicar NIF ou nome", "total": 0, "items": []}
+
+    query = {
+        "bool": {
+            "should": should,
+            "minimum_should_match": 1,
+        }
+    }
+
+    try:
+        resp = client.search(
+            index=CONTRACTS_INDEX,
+            body={
+                "size": size,
+                "from": from_,
+                "query": query,
+                "sort": [{"dataPublicacao": {"order": "desc"}}, "_score"],
+                "track_total_hits": True,
+            },
+        )
+        items = []
+        for hit in resp["hits"]["hits"]:
+            src = hit["_source"]
+            src["doc_id"] = hit["_id"]
+            src["score"] = hit.get("_score")
+            items.append(src)
+
+        return {
+            "nif": nif,
+            "name": name,
+            "role": role,
+            "total": resp["hits"]["total"]["value"],
+            "items": items,
+            "from": from_,
+            "size": size,
+        }
+    except Exception as e:
+        return {"error": str(e), "total": 0, "items": []}
+
+
+def get_company_analytics(
+    nif: Optional[str] = None,
+    name: Optional[str] = None,
+    role: Optional[str] = "all",
+    year: Optional[int] = None,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Devolve analytics para uma empresa específica."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    should: List[Dict[str, Any]] = []
+    if nif:
+        if role in ("all", "adjudicante", None):
+            should.append({
+                "nested": {
+                    "path": "adjudicantes.parsed",
+                    "query": {"term": {"adjudicantes.parsed.nif": nif}},
+                }
+            })
+        if role in ("all", "adjudicatario", None):
+            should.append({
+                "nested": {
+                    "path": "adjudicatarios.parsed",
+                    "query": {"term": {"adjudicatarios.parsed.nif": nif}},
+                }
+            })
+    if name:
+        if role in ("all", "adjudicante", None):
+            should.append({
+                "nested": {
+                    "path": "adjudicantes.parsed",
+                    "query": {"match": {"adjudicantes.parsed.nome": name}},
+                }
+            })
+        if role in ("all", "adjudicatario", None):
+            should.append({
+                "nested": {
+                    "path": "adjudicatarios.parsed",
+                    "query": {"match": {"adjudicatarios.parsed.nome": name}},
+                }
+            })
+
+    if not should:
+        return {"error": "É necessário indicar NIF ou nome"}
+
+    filters: List[Dict[str, Any]] = []
+    if year:
+        filters.append({"term": {"Ano": year}})
+
+    query = {"bool": {"should": should, "minimum_should_match": 1}}
+    if filters:
+        query["bool"]["filter"] = filters
+
+    try:
+        resp = client.search(
+            index=CONTRACTS_INDEX,
+            body={
+                "size": 0,
+                "query": query,
+                "aggs": {
+                    "total_value": {"sum": {"field": "precoContratual"}},
+                    "avg_value": {"avg": {"field": "precoContratual"}},
+                    "max_value": {"max": {"field": "precoContratual"}},
+                    "by_year": {"terms": {"field": "Ano", "size": 50, "order": {"_key": "desc"}}},
+                    "by_month": {
+                        "date_histogram": {
+                            "field": "dataPublicacao",
+                            "calendar_interval": "month",
+                            "format": "yyyy-MM",
+                            "min_doc_count": 1,
+                        }
+                    },
+                    "by_cpv": {
+                        "nested": {"path": "cpv"},
+                        "aggs": {
+                            "codes": {
+                                "terms": {"field": "cpv.code", "size": 10, "order": {"total_value": "desc"}},
+                                "aggs": {
+                                    "description": {"terms": {"field": "cpv.description.keyword", "size": 1}},
+                                    "total_value": {
+                                        "reverse_nested": {},
+                                        "aggs": {"value": {"sum": {"field": "precoContratual"}}},
+                                    },
+                                },
+                            }
+                        },
+                    },
+                    "top_partners": {
+                        "nested": {"path": "adjudicatarios.parsed"},
+                        "aggs": {
+                            "by_nif": {
+                                "terms": {"field": "adjudicatarios.parsed.nif", "size": 8, "order": {"total_value": "desc"}},
+                                "aggs": {
+                                    "name": {"top_hits": {"size": 1, "_source": ["adjudicatarios.parsed.nome"]}},
+                                    "total_value": {
+                                        "reverse_nested": {},
+                                        "aggs": {"value": {"sum": {"field": "precoContratual"}}},
+                                    },
+                                },
+                            }
+                        },
+                    },
+                    "procedure_types": {
+                        "terms": {"field": "tipoprocedimento.keyword", "size": 20, "missing": "N/A"}
+                    },
+                    "contract_types": {
+                        "terms": {"field": "tipoContrato.keyword", "size": 20, "missing": "N/A"}
+                    },
+                    "by_value_range": {
+                        "histogram": {"field": "precoContratual", "interval": 25000, "min_doc_count": 1}
+                    },
+                },
+            },
+        )
+
+        aggs = resp["aggregations"]
+
+        def fmt_money(v):
+            return round(v, 2) if v is not None else None
+
+        def extract_value(total_value_obj):
+            if isinstance(total_value_obj.get("value"), dict):
+                return total_value_obj["value"].get("value")
+            return total_value_obj.get("value")
+
+        cpv_rows = []
+        for b in aggs.get("by_cpv", {}).get("codes", {}).get("buckets", []):
+            desc_buckets = b.get("description", {}).get("buckets", [])
+            cpv_rows.append({
+                "key": b["key"],
+                "count": b["doc_count"],
+                "total_value": fmt_money(extract_value(b.get("total_value", {}))),
+                "description": desc_buckets[0].get("key", "") if desc_buckets else "",
+            })
+
+        partner_rows = []
+        for b in aggs.get("top_partners", {}).get("by_nif", {}).get("buckets", []):
+            if b["key"] == nif:
+                continue
+            partner_name_hits = b.get("name", {}).get("hits", {}).get("hits", [])
+            partner_name = ""
+            if partner_name_hits:
+                partner_src = partner_name_hits[0].get("_source", {})
+                if isinstance(partner_src, dict):
+                    partner_name = partner_src.get("nome", "")
+            partner_rows.append({
+                "key": b["key"],
+                "count": b["doc_count"],
+                "total_value": fmt_money(extract_value(b.get("total_value", {}))),
+                "description": partner_name,
+            })
+
+        company_summary = None
+        if nif:
+            company_summary = get_company_by_nif(nif, es=client)
+            if "error" in company_summary:
+                company_summary = None
+
+        return {
+            "company": company_summary,
+            "total_contracts": resp["hits"]["total"]["value"],
+            "total_value": fmt_money(aggs["total_value"].get("value")),
+            "avg_value": fmt_money(aggs["avg_value"].get("value")),
+            "max_value": fmt_money(aggs["max_value"].get("value")),
+            "by_year": [{"key": str(b["key"]), "count": b["doc_count"]} for b in aggs["by_year"]["buckets"]],
+            "by_month": [{"key": b["key_as_string"], "count": b["doc_count"]} for b in aggs["by_month"]["buckets"]],
+            "by_cpv": cpv_rows,
+            "top_partners": partner_rows,
+            "by_procedure_type": [{"key": b["key"], "count": b["doc_count"]} for b in aggs["procedure_types"]["buckets"]],
+            "by_contract_type": [{"key": b["key"], "count": b["doc_count"]} for b in aggs["contract_types"]["buckets"]],
+            "by_value_range": [{"key": f"{int(b['key'])} - {int(b['key']) + 25000}", "count": b["doc_count"]} for b in aggs["by_value_range"]["buckets"][:10]],
             "year": year,
         }
     except Exception as e:

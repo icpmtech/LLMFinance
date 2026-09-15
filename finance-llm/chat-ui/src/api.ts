@@ -1,11 +1,16 @@
 export const API_BASE =
-  import.meta.env.VITE_API_URL || "http://127.0.0.1:8003";
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:8007";
 
 import type {
   Actions,
   AddTickerRequest,
   AddTickerResponse,
   Calendar,
+  CompanyAnalyticsResponse,
+  CompanyContractsResponse,
+  CompanyDetail,
+  CompanySearchRequest,
+  CompanySearchResponse,
   ContractAutocompleteResponse,
   ContractChatRequest,
   ContractChatResponse,
@@ -55,7 +60,7 @@ import type {
   ContractAnalyticsFilters,
 } from "./types";
 
-export type { ContractAnalyticsResponse, ContractAnalyticsFilters };
+export type { ContractAnalyticsResponse, ContractAnalyticsFilters, CompanySearchResponse, CompanyDetail, CompanyContractsResponse, CompanyAnalyticsResponse };
 
 export function getPlotUrl(plot_url: string): string {
   if (plot_url.startsWith("http://") || plot_url.startsWith("https://")) {
@@ -707,5 +712,55 @@ export async function chatContracts(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+// --- Diretório de empresas (entidades) ---
+
+export async function searchCompanies(
+  request: CompanySearchRequest = {},
+): Promise<CompanySearchResponse> {
+  const payload = { ...request, from: request.from ?? 0, size: request.size ?? 20 };
+  const res = await fetch(`${API_BASE}/companies/search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao pesquisar empresas: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function getCompanyDetail(nif: string, year?: number): Promise<CompanyDetail> {
+  const params = new URLSearchParams();
+  if (year !== undefined) params.append("year", String(year));
+  const res = await fetch(`${API_BASE}/companies/${encodeURIComponent(nif)}?${params}`);
+  if (!res.ok) throw new Error(`Erro ao obter detalhes da empresa: ${res.status}`);
+  return res.json();
+}
+
+export async function getCompanyContracts(
+  nif: string,
+  role = "all",
+  from = 0,
+  size = 20,
+): Promise<CompanyContractsResponse> {
+  const params = new URLSearchParams({ role, from: String(from), size: String(size) });
+  const res = await fetch(`${API_BASE}/companies/${encodeURIComponent(nif)}/contracts?${params}`);
+  if (!res.ok) throw new Error(`Erro ao obter contratos da empresa: ${res.status}`);
+  return res.json();
+}
+
+export async function getCompanyAnalytics(
+  nif: string,
+  role = "all",
+  year?: number,
+): Promise<CompanyAnalyticsResponse> {
+  const params = new URLSearchParams({ role });
+  if (year !== undefined) params.append("year", String(year));
+  const res = await fetch(`${API_BASE}/companies/${encodeURIComponent(nif)}/analytics?${params}`);
+  if (!res.ok) throw new Error(`Erro ao obter analytics da empresa: ${res.status}`);
+  return res.json();
 }
 

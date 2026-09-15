@@ -1,4 +1,4 @@
-import { Trash2, Plus, MessageSquare, TrendingUp, LineChart, FolderOpen, Database, Search, CandlestickChart, FileText, BarChart3, Filter } from "lucide-react";
+import { Trash2, Plus, MessageSquare, TrendingUp, LineChart, FolderOpen, Database, Search, CandlestickChart, FileText, BarChart3, Filter, Building2 } from "lucide-react";
 
 interface Conversation {
   id: string;
@@ -20,9 +20,12 @@ interface SidebarProps {
   onSwitchContracts?: () => void;
   onSwitchContractsDashboard?: () => void;
   onSwitchContractsSearch?: () => void;
+  onSwitchCompanies?: () => void;
+  onSwitchCompaniesDashboard?: () => void;
+  onSwitchCompaniesSearch?: () => void;
 }
 
-export function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, onSwitchView, onSwitchTickers, onSwitchRag, onSwitchElastic, onSwitchSearch, onSwitchTrading, onSwitchContracts, onSwitchContractsDashboard, onSwitchContractsSearch }: SidebarProps) {
+export function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, onSwitchView, onSwitchTickers, onSwitchRag, onSwitchElastic, onSwitchSearch, onSwitchTrading, onSwitchContracts, onSwitchContractsDashboard, onSwitchContractsSearch, onSwitchCompanies, onSwitchCompaniesDashboard, onSwitchCompaniesSearch }: SidebarProps) {
   return (
     <aside className="fixed bottom-0 left-0 right-0 z-50 bg-sidebar border-t border-border flex flex-row items-center justify-around h-16 px-2 md:static md:w-64 md:h-full md:flex-col md:border-r md:border-t-0 md:px-0 md:py-0 shrink-0">
       <div className="flex flex-row items-center justify-around w-full h-full md:flex-col md:h-auto md:p-4 md:space-y-2 md:space-x-0 overflow-x-auto">
@@ -122,6 +125,36 @@ export function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, on
           >
             <FileText size={22} className="md:size-[18px]" />
             <span className="hidden md:inline text-sm">Contratos</span>
+          </button>
+        )}
+        {onSwitchCompaniesDashboard && (
+          <button
+            onClick={onSwitchCompaniesDashboard}
+            className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
+            title="Dashboard Empresas"
+          >
+            <BarChart3 size={22} className="md:size-[18px]" />
+            <span className="hidden md:inline text-sm">Dashboard Empresas</span>
+          </button>
+        )}
+        {onSwitchCompaniesSearch && (
+          <button
+            onClick={onSwitchCompaniesSearch}
+            className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
+            title="Pesquisar Empresas"
+          >
+            <Building2 size={22} className="md:size-[18px]" />
+            <span className="hidden md:inline text-sm">Pesquisar Empresas</span>
+          </button>
+        )}
+        {onSwitchCompanies && (
+          <button
+            onClick={onSwitchCompanies}
+            className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
+            title="Empresas"
+          >
+            <Building2 size={22} className="md:size-[18px]" />
+            <span className="hidden md:inline text-sm">Empresas</span>
           </button>
         )}
       </div>

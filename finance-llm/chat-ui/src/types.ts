@@ -732,3 +732,75 @@ export interface ContractAnalyticsResponse {
   year?: number;
   error?: string;
 }
+
+export interface CompanyRoleSummary {
+  contracts_count: number;
+  total_value: number;
+  avg_value?: number;
+  first_year?: number;
+  last_year?: number;
+}
+
+export interface CompanySummary {
+  nif?: string;
+  name: string;
+  normalized_name?: string;
+  contracts_total: number;
+  total_value: number;
+  adjudicante?: CompanyRoleSummary;
+  adjudicatario?: CompanyRoleSummary;
+}
+
+export interface CompanyDetail extends CompanySummary {
+  top_adjudicantes: ContractPartyParsed[];
+  top_adjudicatarios: ContractPartyParsed[];
+  recent_contracts: ContractItem[];
+}
+
+export interface CompanySearchRequest {
+  q?: string;
+  role?: "all" | "adjudicante" | "adjudicatario";
+  min_contracts?: number;
+  min_value?: number;
+  max_value?: number;
+  year?: number;
+  size?: number;
+  from?: number;
+}
+
+export interface CompanySearchResponse {
+  query?: string;
+  total: number;
+  items: CompanySummary[];
+  from: number;
+  size: number;
+  error?: string;
+}
+
+export interface CompanyContractsResponse {
+  nif?: string;
+  name?: string;
+  role?: string;
+  total: number;
+  items: ContractItem[];
+  from: number;
+  size: number;
+  error?: string;
+}
+
+export interface CompanyAnalyticsResponse {
+  company: CompanySummary;
+  total_contracts: number;
+  total_value?: number;
+  avg_value?: number;
+  max_value?: number;
+  by_year: ContractAnalyticsRow[];
+  by_month: ContractAnalyticsRow[];
+  by_cpv: ContractAnalyticsRow[];
+  top_partners: ContractAnalyticsRow[];
+  by_procedure_type: ContractAnalyticsRow[];
+  by_contract_type: ContractAnalyticsRow[];
+  by_value_range: ContractAnalyticsRow[];
+  year?: number;
+  error?: string;
+}

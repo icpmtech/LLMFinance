@@ -701,3 +701,86 @@ class ContractAnalyticsResponse(BaseModel):
     contract_types: List[ContractAnalyticsRow] = []
     year: Optional[int] = None
     error: Optional[str] = None
+
+
+# --- Diretório de empresas (entidades) derivado de contratos ---
+
+class CompanyRoleSummary(BaseModel):
+    contracts_count: int = 0
+    total_value: float = 0.0
+    avg_value: Optional[float] = None
+    first_year: Optional[int] = None
+    last_year: Optional[int] = None
+
+
+class CompanySummary(BaseModel):
+    nif: Optional[str] = None
+    name: str
+    normalized_name: Optional[str] = None
+    contracts_total: int = 0
+    total_value: float = 0.0
+    adjudicante: Optional[CompanyRoleSummary] = None
+    adjudicatario: Optional[CompanyRoleSummary] = None
+
+
+class CompanyDetail(CompanySummary):
+    top_adjudicantes: List[ContractPartyParsed] = []
+    top_adjudicatarios: List[ContractPartyParsed] = []
+    recent_contracts: List[ContractItem] = []
+
+
+class CompanySearchRequest(BaseModel):
+    q: Optional[str] = Field(None, alias="query")
+    role: Optional[Literal["all", "adjudicante", "adjudicatario"]] = "all"
+    min_contracts: int = 1
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    year: Optional[int] = None
+    size: int = 20
+    from_: int = Field(0, alias="from")
+
+    model_config = {"populate_by_name": True}
+
+
+class CompanySearchResponse(BaseModel):
+    query: Optional[str] = None
+    total: int = 0
+    items: List[CompanySummary] = []
+    from_: int = Field(0, alias="from")
+    size: int = 20
+    error: Optional[str] = None
+
+
+class CompanyContractsResponse(BaseModel):
+    nif: Optional[str] = None
+    name: Optional[str] = None
+    role: Optional[str] = None
+    total: int = 0
+    items: List[ContractItem] = []
+    from_: int = Field(0, alias="from")
+    size: int = 20
+    error: Optional[str] = None
+
+
+class CompanyAnalyticsRow(BaseModel):
+    key: str
+    count: int
+    total_value: Optional[float] = None
+    description: Optional[str] = None
+
+
+class CompanyAnalyticsResponse(BaseModel):
+    company: CompanySummary
+    total_contracts: int = 0
+    total_value: Optional[float] = None
+    avg_value: Optional[float] = None
+    max_value: Optional[float] = None
+    by_year: List[CompanyAnalyticsRow] = []
+    by_month: List[CompanyAnalyticsRow] = []
+    by_cpv: List[CompanyAnalyticsRow] = []
+    top_partners: List[CompanyAnalyticsRow] = []
+    by_procedure_type: List[CompanyAnalyticsRow] = []
+    by_contract_type: List[CompanyAnalyticsRow] = []
+    by_value_range: List[CompanyAnalyticsRow] = []
+    year: Optional[int] = None
+    error: Optional[str] = None

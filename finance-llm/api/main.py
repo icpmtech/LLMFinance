@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, List, Optional
 
-from fastapi import FastAPI, HTTPException, Query, Body
+from fastapi import FastAPI, HTTPException, Query, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse, Response
 
@@ -28,6 +28,11 @@ from api.models import (
     ContractSearchResponse,
     ContractStatusResponse,
     ContractYearsResponse,
+    CompanyAnalyticsResponse,
+    CompanyContractsResponse,
+    CompanyDetail,
+    CompanySearchRequest,
+    CompanySearchResponse,
     ElasticAnalyzeNewsResponse,
     ElasticAutocompleteResponse,
     ElasticDeleteResponse,
@@ -83,9 +88,13 @@ from api.elasticsearch_client import (
     export_contracts_to_excel,
     export_contracts_to_pdf,
     get_contract_analytics,
+    get_company_by_nif,
+    get_company_contracts,
     get_es_client,
     list_contract_years,
     search_all_tickers,
+    search_companies,
+    get_company_analytics,
     search_contracts,
     CONTRACTS_INDEX,
 )
@@ -160,6 +169,119 @@ UI_BUILD_DIR = ROOT / "chat-ui" / "dist"
 if UI_BUILD_DIR.is_dir():
     app.mount("/assets", StaticFiles(directory=UI_BUILD_DIR / "assets"), name="assets")
 
+
+# --- Diretório de empresas (entidades) derivado de contratos ---
+
+@app.post("/companies/search", response_model=CompanySearchResponse)
+def companies_search(req: CompanySearchRequest):
+    """Pesquisa empresas/entidades presentes nos contratos indexados."""
+    res = search_companies(
+        q=req.q,
+        role=req.role,
+        min_contracts=req.min_contracts,
+        min_value=req.min_value,
+        max_value=req.max_value,
+        year=req.year,
+        size=req.size,
+        from_=req.from_,
+    )
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res.get("error"))
+    return CompanySearchResponse(
+        query=res.get("query"),
+        total=res.get("total", 0),
+        items=res.get("items", []),
+        from_=req.from_,
+        size=req.size,
+    )
+
+
+# Catch-all da SPA para sub-rotas de /companies devem ser registradas ANTES
+# do endpoint dinâmico GET /companies/{nif}, senão o path "search" é
+# interpretado como NIF.
+@app.get("/companies")
+@app.get("/companies/search")
+@app.get("/companies/dashboard")
+def serve_companies_spa_page():
+    return FileResponse(str(UI_BUILD_DIR / "index.html"))
+
+
+def _accepts_html(request: Request) -> bool:
+    accept = request.headers.get("accept", "")
+    return "text/html" in accept
+
+
+@app.get("/companies/{nif}", response_model=CompanyDetail)
+def companies_detail(request: Request, nif: str, year: Optional[int] = Query(None)):
+    """Detalhes de uma entidade (por NIF), incluindo resumo de papéis e contratos recentes."""
+    if UI_BUILD_DIR.is_dir() and _accepts_html(request):
+        return FileResponse(str(UI_BUILD_DIR / "index.html"))
+    company = get_company_by_nif(nif)
+    if company.get("error"):
+        raise HTTPException(status_code=502, detail=company.get("error"))
+
+    recent = get_company_contracts(nif=nif, role="all", size=10, from_=0)
+    company["recent_contracts"] = recent.get("items", [])
+
+    contracts_list = recent.get("items", [])
+    seen_adjudicantes = set()
+    seen_adjudicatarios = set()
+    top_adjudicantes = []
+    top_adjudicatarios = []
+    for c in contracts_list:
+        for a in c.get("adjudicantes", {}).get("parsed", []):
+            key = a.get("nif") or a.get("nome", "").lower().strip()
+            if key and key not in seen_adjudicantes:
+                seen_adjudicantes.add(key)
+                top_adjudicantes.append({"nif": a.get("nif"), "nome": a.get("nome", ""), "tipo": "adjudicante"})
+        for a in c.get("adjudicatarios", {}).get("parsed", []):
+            key = a.get("nif") or a.get("nome", "").lower().strip()
+            if key and key not in seen_adjudicatarios:
+                seen_adjudicatarios.add(key)
+                top_adjudicatarios.append({"nif": a.get("nif"), "nome": a.get("nome", ""), "tipo": "adjudicatario"})
+    company["top_adjudicantes"] = top_adjudicantes[:10]
+    company["top_adjudicatarios"] = top_adjudicatarios[:10]
+
+    return CompanyDetail(**company)
+
+
+@app.get("/companies/{nif}/contracts", response_model=CompanyContractsResponse)
+def companies_contracts(
+    nif: str,
+    role: Optional[str] = Query("all"),
+    size: int = Query(20, ge=1, le=100),
+    from_: int = Query(0, ge=0, alias="from"),
+):
+    """Contratos de uma entidade específica."""
+    res = get_company_contracts(nif=nif, role=role, size=size, from_=from_)
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res.get("error"))
+    return CompanyContractsResponse(
+        nif=res.get("nif"),
+        name=res.get("name"),
+        role=res.get("role"),
+        total=res.get("total", 0),
+        items=[ContractItem(**item) for item in res.get("items", [])],
+        from_=res.get("from", 0),
+        size=res.get("size", size),
+    )
+
+
+@app.get("/companies/{nif}/analytics", response_model=CompanyAnalyticsResponse)
+def companies_analytics(
+    nif: str,
+    role: Optional[str] = Query("all"),
+    year: Optional[int] = Query(None),
+):
+    """Dashboard de analytics para uma empresa/entidade."""
+    res = get_company_analytics(nif=nif, role=role, year=year)
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res.get("error"))
+    return CompanyAnalyticsResponse(**res)
+
+
+# Servir a React SPA da chat-ui (build estático) — deve ser registrado DEPOIS das rotas de API
+# para que os endpoints JSON sejam resolvidos antes do catch-all da SPA.
 
 @app.get("/forecast")
 @app.get("/trading")
@@ -974,3 +1096,6 @@ def contracts_export_pdf(req: ContractAnalyticsRequest = Body(...)):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+

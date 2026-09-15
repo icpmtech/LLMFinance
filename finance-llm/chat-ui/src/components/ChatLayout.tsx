@@ -29,6 +29,9 @@ interface ChatLayoutProps {
   onSwitchContracts?: () => void;
   onSwitchContractsDashboard?: () => void;
   onSwitchContractsSearch?: () => void;
+  onSwitchCompanies?: () => void;
+  onSwitchCompaniesDashboard?: () => void;
+  onSwitchCompaniesSearch?: () => void;
 }
 
 export function ChatLayout({
@@ -52,6 +55,9 @@ export function ChatLayout({
   onSwitchContracts,
   onSwitchContractsDashboard,
   onSwitchContractsSearch,
+  onSwitchCompanies,
+  onSwitchCompaniesDashboard,
+  onSwitchCompaniesSearch,
 }: ChatLayoutProps) {
   return (
     <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-background text-foreground pb-16 md:pb-0">
@@ -70,6 +76,9 @@ export function ChatLayout({
         onSwitchContracts={onSwitchContracts}
         onSwitchContractsDashboard={onSwitchContractsDashboard}
         onSwitchContractsSearch={onSwitchContractsSearch}
+        onSwitchCompanies={onSwitchCompanies}
+        onSwitchCompaniesDashboard={onSwitchCompaniesDashboard}
+        onSwitchCompaniesSearch={onSwitchCompaniesSearch}
       />
 
       <main className="flex-1 flex flex-col min-w-0 min-h-0">

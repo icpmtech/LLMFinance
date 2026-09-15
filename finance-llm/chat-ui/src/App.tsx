@@ -11,10 +11,14 @@ import { GlobalSearchPage } from "./pages/GlobalSearchPage";
 // import { ContractsPage } from "./pages/ContractsPage"; // página legada, mantida no código mas não usada
 import { ContractsDashboardPage } from "./pages/ContractsDashboardPage";
 import { ContractsSearchPage } from "./pages/ContractsSearchPage";
+import { CompanyDirectoryPage } from "./pages/CompanyDirectoryPage";
+import CompanyDetailPage from "./pages/CompanyDetailPage";
+import CompanyDashboardPage from "./pages/CompanyDashboardPage";
 import { sendChat } from "./sendChat";
 import type { Message, ModelBackend } from "./types";
 
-type AppView = "dashboard" | "chat" | "forecast" | "trading" | "tickers" | "ticker-detail" | "rag" | "elastic" | "search" | "contracts" | "contracts-dashboard" | "contracts-search";
+type AppView = "dashboard" | "chat" | "forecast" | "trading" | "tickers" | "ticker-detail" | "rag" | "elastic" | "search" | "contracts" | "contracts-dashboard" | "contracts-search" | "companies" | "companies-search" | "companies-dashboard" | "company-detail";
+const COMPANY_DETAIL_KEY = "finance-llm-company-detail";
 const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
 
 const STORAGE_KEY = "finance-llm-conversations";
@@ -54,6 +58,10 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [backend, setBackend] = useState<ModelBackend>("gpt2");
   const [loading, setLoading] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem(COMPANY_DETAIL_KEY);
+  });
   const [selectedTicker, setSelectedTicker] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     return localStorage.getItem(TICKER_DETAIL_KEY);
@@ -67,20 +75,37 @@ export default function App() {
     if (path === "/trading") return "trading";
     if (path === "/tickers") return "tickers";
     if (path === "/elastic") return "elastic";
+    if (path === "/search") return "search";
     if (path === "/contracts") return "contracts-search";
     if (path === "/contracts/search") return "contracts-search";
     if (path === "/contracts/dashboard") return "contracts-dashboard";
-    const saved = localStorage.getItem("finance-llm-view");
-    return (saved as AppView) || "dashboard";
+    if (path === "/companies") return "companies-search";
+    if (path === "/companies/search") return "companies-search";
+    if (path === "/companies/dashboard") return "companies-dashboard";
+    if (path.startsWith("/companies/") && !path.startsWith("/companies/search") && !path.startsWith("/companies/dashboard")) {
+      const nif = path.replace("/companies/", "").split("/")[0];
+      if (nif) setSelectedCompany(nif);
+      return "company-detail";
+    }
+    if (path === "/" || path === "") {
+      const saved = localStorage.getItem("finance-llm-view");
+      return (saved as AppView) || "dashboard";
+    }
+    return "dashboard";
   });
 
   useEffect(() => {
+    if (selectedCompany) {
+      localStorage.setItem(COMPANY_DETAIL_KEY, selectedCompany);
+    } else {
+      localStorage.removeItem(COMPANY_DETAIL_KEY);
+    }
     if (selectedTicker) {
       localStorage.setItem(TICKER_DETAIL_KEY, selectedTicker);
     } else {
       localStorage.removeItem(TICKER_DETAIL_KEY);
     }
-  }, [selectedTicker]);
+  }, [selectedCompany, selectedTicker]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
@@ -207,6 +232,18 @@ export default function App() {
       setView("contracts-dashboard");
       return;
     }
+    if (v === "companies") {
+      setView("companies-search");
+      return;
+    }
+    if (v === "companies-search") {
+      setView("companies-search");
+      return;
+    }
+    if (v === "companies-dashboard") {
+      setView("companies-dashboard");
+      return;
+    }
     setView(v as AppView);
   };
 
@@ -254,6 +291,43 @@ export default function App() {
       />
     );
   }
+  if (view === "companies-search" || view === "companies") {
+    const handleSelectCompany = (nif: string | null) => {
+      if (!nif) return;
+      setSelectedCompany(nif);
+      setView("company-detail");
+    };
+    return (
+      <CompanyDirectoryPage
+        onSwitchView={() => setView("dashboard")}
+        onSwitchDashboard={() => setView("companies-dashboard")}
+        onSelectCompany={handleSelectCompany}
+      />
+    );
+  }
+  if (view === "companies-dashboard") {
+    const handleSelectCompany = (nif: string | null) => {
+      if (!nif) return;
+      setSelectedCompany(nif);
+      setView("company-detail");
+    };
+    return (
+      <CompanyDashboardPage
+        onSwitchView={() => setView("companies-search")}
+        onSwitchSearch={() => setView("companies-search")}
+        onSelectCompany={handleSelectCompany}
+      />
+    );
+  }
+  if (view === "company-detail" && selectedCompany) {
+    return (
+      <CompanyDetailPage
+        nif={selectedCompany}
+        onBack={() => setView("companies-search")}
+        onSwitchDashboard={() => setView("companies-dashboard")}
+      />
+    );
+  }
   return (
     <ChatLayout
       conversations={conversations}
@@ -276,6 +350,9 @@ export default function App() {
       onSwitchContracts={() => setView("contracts-search")}
       onSwitchContractsDashboard={() => setView("contracts-dashboard")}
       onSwitchContractsSearch={() => setView("contracts-search")}
+      onSwitchCompanies={() => setView("companies-search")}
+      onSwitchCompaniesDashboard={() => setView("companies-dashboard")}
+      onSwitchCompaniesSearch={() => setView("companies-search")}
     />
   );
 }
