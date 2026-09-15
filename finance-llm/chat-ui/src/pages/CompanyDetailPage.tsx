@@ -10,9 +10,14 @@ import {
   Calendar,
   User,
   ExternalLink,
+  Network,
+  Briefcase,
+  HandCoins,
+  Activity,
+  Tag,
 } from "lucide-react";
 import { getCompanyDetail, getCompanyContracts, getCompanyAnalytics } from "../api";
-import type { CompanyDetail, CompanyContractsResponse, CompanyAnalyticsResponse, ContractItem, ContractParty } from "../types";
+import type { CompanyDetail, CompanyContractsResponse, CompanyAnalyticsResponse, ContractItem, ContractParty, ContractAnalyticsRow } from "../types";
 
 interface CompanyDetailPageProps {
   nif: string;
@@ -45,7 +50,20 @@ function contractValue(c: ContractItem) {
   return c.precoContratual ?? c.PrecoTotalEfetivo ?? undefined;
 }
 
-export function CompanyDetailPage({
+function maxValue(rows: ContractAnalyticsRow[]) {
+  return Math.max(...rows.map((r) => r.total_value || 0), 1);
+}
+
+function MiniBar({ value, max, color = "bg-teal-400" }: { value: number; max: number; color?: string }) {
+  const pct = Math.min(100, Math.round((value / max) * 100));
+  return (
+    <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+      <div className={`h-full ${color} rounded-full`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+export default function CompanyDetailPage({
   nif,
   onBack,
   onSwitchDashboard,
@@ -108,24 +126,24 @@ export function CompanyDetailPage({
 
   if (loading) {
     return (
-      <div className="min-h-screen w-full bg-background text-foreground flex items-center justify-center">
-        <Loader2 size={40} className="animate-spin text-primary" />
+      <div className="min-h-screen w-full bg-background text-foreground flex items-center justify-center orbit-bg">
+        <Loader2 size={44} className="animate-spin text-teal-400" />
       </div>
     );
   }
 
   if (error || !company) {
     return (
-      <div className="min-h-screen w-full bg-background text-foreground">
+      <div className="min-h-screen w-full bg-background text-foreground orbit-bg">
         <div className="max-w-4xl mx-auto px-4 py-6">
           <button
             onClick={onBack}
-            className="mb-4 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition"
+            className="mb-4 flex items-center gap-2 px-3 py-1.5 rounded-full glass-card text-sm text-muted-foreground hover:text-foreground transition"
           >
             <ArrowLeft size={16} />
             Voltar
           </button>
-          <div className="p-6 rounded-lg bg-destructive/10 text-destructive flex items-center gap-3">
+          <div className="p-6 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 flex items-center gap-3">
             <Frown size={24} />
             {error || "Entidade não encontrada"}
           </div>
@@ -134,155 +152,202 @@ export function CompanyDetailPage({
     );
   }
 
-  return (
-    <div className="min-h-screen w-full bg-background text-foreground">
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        <button
-          onClick={onBack}
-          className="mb-4 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition"
-        >
-          <ArrowLeft size={16} />
-          Voltar ao diretório
-        </button>
+  const yearlyMax = maxValue(yearly);
+  const cpvMax = maxValue(cpvBreakdown);
 
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
-          <div className="flex items-start gap-4">
-            <div className="p-3 rounded-xl bg-primary/10 text-primary">
-              <Building2 size={32} />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">{company.name}</h1>
-              {company.nif && <p className="text-sm text-muted-foreground mt-1">NIF: {company.nif}</p>}
-              {company.normalized_name && company.normalized_name !== company.name && (
-                <p className="text-xs text-muted-foreground mt-0.5">{company.normalized_name}</p>
-              )}
-            </div>
-          </div>
+  return (
+    <div className="min-h-screen w-full bg-background text-foreground orbit-bg">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+          <button
+            onClick={onBack}
+            className="self-start flex items-center gap-2 px-3 py-1.5 rounded-full glass-card text-sm text-muted-foreground hover:text-foreground transition"
+          >
+            <ArrowLeft size={16} />
+            Voltar ao diretório
+          </button>
           {onSwitchDashboard && (
             <button
               onClick={onSwitchDashboard}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border hover:bg-accent transition text-sm"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl glass-card hover:bg-white/5 transition text-sm"
             >
-              <TrendingUp size={18} />
+              <TrendingUp size={18} className="text-amber-400" />
               Dashboard
             </button>
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-card border border-border rounded-xl p-4">
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <FileText size={16} />
+        {/* Entity hero */}
+        <div className="glass-card gradient-border rounded-3xl p-6 md:p-8 mb-8 fade-in">
+          <div className="flex flex-col md:flex-row md:items-center gap-5">
+            <div className="shrink-0 p-4 rounded-3xl bg-gradient-to-br from-teal-500/20 via-blue-500/15 to-rose-500/10 border border-white/10 glow-teal">
+              <Building2 size={44} className="text-teal-300" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl md:text-4xl font-bold leading-tight mb-1">{company.name}</h1>
+              <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                {company.nif && <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10">NIF {company.nif}</span>}
+                {company.normalized_name && company.normalized_name !== company.name && (
+                  <span>{company.normalized_name}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Stat cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="glass-card gradient-border rounded-2xl p-5 glow-teal">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+              <FileText size={16} className="text-teal-400" />
               Total de contratos
-            </p>
-            <p className="text-2xl font-bold mt-1">{company.contracts_total ?? 0}</p>
+            </div>
+            <p className="text-3xl font-bold stat-value text-glow-teal">{company.contracts_total ?? 0}</p>
           </div>
-          <div className="bg-card border border-border rounded-xl p-4">
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <Euro size={16} />
+          <div className="glass-card gradient-border rounded-2xl p-5 glow-amber">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+              <Euro size={16} className="text-amber-400" />
               Valor total
-            </p>
-            <p className="text-2xl font-bold mt-1">{formatPrice(company.total_value)}</p>
+            </div>
+            <p className="text-2xl md:text-3xl font-bold stat-value text-glow-amber">{formatPrice(company.total_value)}</p>
           </div>
-          <div className="bg-card border border-border rounded-xl p-4">
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <Calendar size={16} />
+          <div className="glass-card gradient-border rounded-2xl p-5 glow-blue">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+              <Calendar size={16} className="text-blue-400" />
               Período
-            </p>
-            <p className="text-2xl font-bold mt-1">
+            </div>
+            <p className="text-3xl font-bold stat-value text-glow-blue">
               {firstYear ?? "—"} — {lastYear ?? "—"}
+            </p>
+          </div>
+          <div className="glass-card gradient-border rounded-2xl p-5 glow-rose">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+              <Activity size={16} className="text-rose-400" />
+              Média / contrato
+            </div>
+            <p className="text-2xl md:text-3xl font-bold stat-value text-glow-rose">
+              {formatPrice(analytics?.avg_value)}
             </p>
           </div>
         </div>
 
+        {/* Role cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {company.adjudicante && company.adjudicante.contracts_count > 0 && (
-            <div className="bg-card border border-border rounded-xl p-5">
-              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-blue-500" />
-                Como Adjudicante
-              </h2>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">Contratos</p>
-                  <p className="text-xl font-semibold">{company.adjudicante.contracts_count}</p>
+            <div className="glass-card gradient-border rounded-2xl p-6 glow-blue">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 rounded-xl bg-blue-500/15 border border-blue-400/20">
+                  <Briefcase size={22} className="text-blue-400" />
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Valor total</p>
-                  <p className="text-xl font-semibold">{formatPrice(company.adjudicante.total_value)}</p>
+                <h2 className="text-xl font-semibold">Como Adjudicante</h2>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="glass-card rounded-xl p-4">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Contratos</p>
+                  <p className="text-2xl font-bold stat-value mt-1">{company.adjudicante.contracts_count}</p>
+                </div>
+                <div className="glass-card rounded-xl p-4">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Valor total</p>
+                  <p className="text-xl font-bold stat-value text-glow-amber mt-1">{formatPrice(company.adjudicante.total_value)}</p>
                 </div>
               </div>
             </div>
           )}
           {company.adjudicatario && company.adjudicatario.contracts_count > 0 && (
-            <div className="bg-card border border-border rounded-xl p-5">
-              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                Como Adjudicatário
-              </h2>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">Contratos</p>
-                  <p className="text-xl font-semibold">{company.adjudicatario.contracts_count}</p>
+            <div className="glass-card gradient-border rounded-2xl p-6 glow-teal">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-400/20">
+                  <HandCoins size={22} className="text-emerald-400" />
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Valor total</p>
-                  <p className="text-xl font-semibold">{formatPrice(company.adjudicatario.total_value)}</p>
+                <h2 className="text-xl font-semibold">Como Adjudicatário</h2>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="glass-card rounded-xl p-4">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Contratos</p>
+                  <p className="text-2xl font-bold stat-value mt-1">{company.adjudicatario.contracts_count}</p>
+                </div>
+                <div className="glass-card rounded-xl p-4">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Valor total</p>
+                  <p className="text-xl font-bold stat-value text-glow-amber mt-1">{formatPrice(company.adjudicatario.total_value)}</p>
                 </div>
               </div>
             </div>
           )}
         </div>
 
+        {/* Top partners */}
         {(company.top_adjudicantes?.length > 0 || company.top_adjudicatarios?.length > 0) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            {company.top_adjudicantes?.length > 0 && (
-              <div className="bg-card border border-border rounded-xl p-5">
-                <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-blue-500" />
-                  Principais Adjudicantes
-                </h2>
-                <div className="space-y-2">
-                  {company.top_adjudicantes.slice(0, 10).map((e, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm">
-                      <span className="truncate max-w-[75%]" title={e.nome || e.nif}>{e.nome || e.nif || "—"}</span>
-                      {e.nif && <span className="text-xs text-muted-foreground whitespace-nowrap">NIF: {e.nif}</span>}
-                    </div>
-                  ))}
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Network size={20} className="text-teal-400" />
+              <h2 className="text-xl font-semibold">Rede de entidades</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {company.top_adjudicantes?.length > 0 && (
+                <div className="glass-card gradient-border rounded-2xl p-5">
+                  <h3 className="text-sm uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    Principais Adjudicantes
+                  </h3>
+                  <div className="space-y-3">
+                    {company.top_adjudicantes.slice(0, 8).map((e, i) => (
+                      <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                        <div className="w-8 h-8 rounded-full bg-blue-500/15 flex items-center justify-center shrink-0 text-xs font-bold text-blue-300">
+                          {i + 1}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate" title={e.nome || e.nif}>{e.nome || e.nif || "—"}</p>
+                          {e.nif && <p className="text-xs text-muted-foreground">NIF {e.nif}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-            {company.top_adjudicatarios?.length > 0 && (
-              <div className="bg-card border border-border rounded-xl p-5">
-                <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  Principais Adjudicatários
-                </h2>
-                <div className="space-y-2">
-                  {company.top_adjudicatarios.slice(0, 10).map((e, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm">
-                      <span className="truncate max-w-[75%]" title={e.nome || e.nif}>{e.nome || e.nif || "—"}</span>
-                      {e.nif && <span className="text-xs text-muted-foreground whitespace-nowrap">NIF: {e.nif}</span>}
-                    </div>
-                  ))}
+              )}
+              {company.top_adjudicatarios?.length > 0 && (
+                <div className="glass-card gradient-border rounded-2xl p-5">
+                  <h3 className="text-sm uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    Principais Adjudicatários
+                  </h3>
+                  <div className="space-y-3">
+                    {company.top_adjudicatarios.slice(0, 8).map((e, i) => (
+                      <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                        <div className="w-8 h-8 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0 text-xs font-bold text-emerald-300">
+                          {i + 1}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate" title={e.nome || e.nif}>{e.nome || e.nif || "—"}</p>
+                          {e.nif && <p className="text-xs text-muted-foreground">NIF {e.nif}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
 
+        {/* Breakdown columns */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           {yearly.length > 0 && (
-            <div className="bg-card border border-border rounded-xl p-5">
-              <h2 className="text-lg font-semibold mb-3">Por ano</h2>
-              <div className="space-y-2">
+            <div className="glass-card gradient-border rounded-2xl p-5">
+              <h3 className="text-sm uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
+                <TrendingUp size={16} className="text-teal-400" />
+                Por ano
+              </h3>
+              <div className="space-y-3">
                 {yearly.map((row, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <span className="text-sm">{row.key}</span>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">{formatPrice(row.total_value)}</p>
-                      <p className="text-xs text-muted-foreground">{row.count} contratos</p>
+                  <div key={i}>
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span className="font-medium">{row.key}</span>
+                      <div className="text-right">
+                        <span className="font-medium">{formatPrice(row.total_value)}</span>
+                        <span className="text-xs text-muted-foreground ml-2">{row.count} contratos</span>
+                      </div>
                     </div>
+                    <MiniBar value={row.total_value || 0} max={yearlyMax} color="bg-teal-400" />
                   </div>
                 ))}
               </div>
@@ -290,16 +355,22 @@ export function CompanyDetailPage({
           )}
 
           {cpvBreakdown.length > 0 && (
-            <div className="bg-card border border-border rounded-xl p-5">
-              <h2 className="text-lg font-semibold mb-3">Por categoria (CPV)</h2>
-              <div className="space-y-2">
+            <div className="glass-card gradient-border rounded-2xl p-5">
+              <h3 className="text-sm uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
+                <Tag size={16} className="text-amber-400" />
+                Por categoria (CPV)
+              </h3>
+              <div className="space-y-3">
                 {cpvBreakdown.slice(0, 8).map((row, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <span className="text-sm truncate max-w-[60%]" title={row.description || row.key}>{row.description || row.key}</span>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-medium">{formatPrice(row.total_value)}</p>
-                      <p className="text-xs text-muted-foreground">{row.count} contratos</p>
+                  <div key={i}>
+                    <div className="flex items-center justify-between text-sm mb-1 gap-3">
+                      <span className="truncate" title={row.description || row.key}>{row.description || row.key}</span>
+                      <div className="text-right shrink-0">
+                        <span className="font-medium">{formatPrice(row.total_value)}</span>
+                        <span className="text-xs text-muted-foreground ml-2">{row.count}</span>
+                      </div>
                     </div>
+                    <MiniBar value={row.total_value || 0} max={cpvMax} color="bg-amber-400" />
                   </div>
                 ))}
               </div>
@@ -307,18 +378,16 @@ export function CompanyDetailPage({
           )}
 
           {relatedEntities.length > 0 && (
-            <div className="bg-card border border-border rounded-xl p-5">
-              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                <User size={18} />
+            <div className="glass-card gradient-border rounded-2xl p-5">
+              <h3 className="text-sm uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
+                <User size={16} className="text-rose-400" />
                 Entidades relacionadas
-              </h2>
-              <div className="space-y-2 max-h-80 overflow-auto">
+              </h3>
+              <div className="space-y-3 max-h-[28rem] overflow-auto pr-1">
                 {relatedEntities.slice(0, 20).map((entity, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm">
+                  <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5 text-sm">
                     <span className="truncate max-w-[70%]" title={entity.description || entity.key}>{entity.description || entity.key}</span>
-                    <span className="text-muted-foreground whitespace-nowrap">
-                      {entity.count} contratos
-                    </span>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">{entity.count} contratos</span>
                   </div>
                 ))}
               </div>
@@ -326,45 +395,54 @@ export function CompanyDetailPage({
           )}
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-5">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <FileText size={20} />
-            Contratos recentes
-          </h2>
+        {/* Contracts table */}
+        <div className="glass-card gradient-border rounded-2xl p-5 md:p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="p-2 rounded-xl bg-primary/15 border border-primary/20">
+              <FileText size={20} className="text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold">Contratos recentes</h2>
+            <span className="ml-auto text-sm text-muted-foreground">{allContracts.length} visíveis</span>
+          </div>
           {allContracts.length === 0 ? (
             <p className="text-muted-foreground">Sem contratos registados para esta entidade.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="py-2 pr-4">Objeto</th>
-                    <th className="py-2 pr-4">Adjudicante(s)</th>
-                    <th className="py-2 pr-4">Adjudicatário(s)</th>
-                    <th className="py-2 pr-4">Data</th>
-                    <th className="py-2 pr-4">Valor</th>
-                    <th className="py-2">/</th>
+                  <tr className="border-b border-white/10 text-left text-muted-foreground">
+                    <th className="py-3 pr-4 font-medium">Objeto</th>
+                    <th className="py-3 pr-4 font-medium">Adjudicante(s)</th>
+                    <th className="py-3 pr-4 font-medium">Adjudicatário(s)</th>
+                    <th className="py-3 pr-4 font-medium">Data</th>
+                    <th className="py-3 pr-4 font-medium">Valor</th>
+                    <th className="py-3">/</th>
                   </tr>
                 </thead>
                 <tbody>
                   {allContracts.map((c, idx) => (
-                    <tr key={c.idcontrato || c.doc_id || idx} className="border-b border-border/50 hover:bg-accent/30">
+                    <tr
+                      key={c.idcontrato || c.doc_id || idx}
+                      className="border-b border-white/5 hover:bg-white/[0.04] transition"
+                    >
                       <td className="py-3 pr-4 max-w-xs truncate" title={c.objectoContrato || c.descContrato || ""}>
                         {c.objectoContrato || c.descContrato || "—"}
                       </td>
-                      <td className="py-3 pr-4 max-w-xs truncate" title={partyText(c.adjudicantes)}>
+                      <td className="py-3 pr-4 max-w-xs truncate text-muted-foreground" title={partyText(c.adjudicantes)}>
                         {partyText(c.adjudicantes)}
                       </td>
-                      <td className="py-3 pr-4 max-w-xs truncate" title={partyText(c.adjudicatarios)}>
+                      <td className="py-3 pr-4 max-w-xs truncate text-muted-foreground" title={partyText(c.adjudicatarios)}>
                         {partyText(c.adjudicatarios)}
                       </td>
-                      <td className="py-3 pr-4 whitespace-nowrap">{formatDate(c.dataPublicacao || c.dataCelebracaoContrato)}</td>
-                      <td className="py-3 pr-4 font-medium">{formatPrice(contractValue(c))}</td>
+                      <td className="py-3 pr-4 whitespace-nowrap text-muted-foreground">
+                        {formatDate(c.dataPublicacao || c.dataCelebracaoContrato)}
+                      </td>
+                      <td className="py-3 pr-4 font-medium text-glow-amber">{formatPrice(contractValue(c))}</td>
                       <td className="py-3">
                         {onViewContract && c.idcontrato && (
                           <button
                             onClick={() => onViewContract(c.idcontrato!)}
-                            className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground"
+                            className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition"
                             title="Ver contrato"
                           >
                             <ExternalLink size={16} />
@@ -382,5 +460,3 @@ export function CompanyDetailPage({
     </div>
   );
 }
-
-export default CompanyDetailPage;
