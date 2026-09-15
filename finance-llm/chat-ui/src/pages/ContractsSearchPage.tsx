@@ -86,11 +86,13 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
   const [results, setResults] = useState<ContractItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<ContractAutocompleteSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const [chatOpen, setChatOpen] = useState(false);
   const [chatQuestion, setChatQuestion] = useState("");
@@ -123,22 +125,26 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
 
   const doSearch = async (resetFrom = true) => {
     const nextFrom = resetFrom ? 0 : from;
-    setLoading(true);
+    if (resetFrom) setLoading(true);
+    else setLoadingMore(true);
     setError(null);
     try {
       const req = buildRequest();
       req.from = nextFrom;
       const data = await searchContracts(req);
-      setResults(data.items ?? []);
+      setResults((prev) => (resetFrom ? (data.items ?? []) : [...prev, ...(data.items ?? [])]));
       setTotal(data.total ?? 0);
-      setFrom(nextFrom);
+      setFrom(nextFrom + (data.items ?? []).length);
       if (data.error) setError(data.error);
     } catch (err) {
-      setResults([]);
-      setTotal(0);
+      if (resetFrom) {
+        setResults([]);
+        setTotal(0);
+      }
       setError(err instanceof Error ? err.message : "Erro na pesquisa");
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -194,8 +200,7 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
     }
   };
 
-  const pageCount = Math.ceil(total / size) || 1;
-  const page = Math.floor(from / size) + 1;
+  const hasMore = results.length < total;
 
   const indexedYears = useMemo(() => new Set(years?.indexed.map((y) => y.year) ?? []), [years]);
 
@@ -214,6 +219,22 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
     setFrom(0);
     doSearch(true);
   };
+
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first.isIntersecting && hasMore && !loading && !loadingMore) {
+          doSearch(false);
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loading, loadingMore]);
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground">
@@ -506,25 +527,8 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
         {results.length > 0 && (
           <div className="mb-4 text-sm text-muted-foreground flex items-center justify-between">
             <span>
-              {total.toLocaleString("pt-PT")} resultado{total === 1 ? "" : "s"}
+              A mostrar {results.length.toLocaleString("pt-PT")} de {total.toLocaleString("pt-PT")} resultado{total === 1 ? "" : "s"}
             </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => { setFrom(Math.max(0, from - size)); doSearch(false); }}
-                disabled={from === 0 || loading}
-                className="px-3 py-1 rounded-lg border border-border hover:bg-accent disabled:opacity-50 transition"
-              >
-                Anterior
-              </button>
-              <span className="text-xs">Página {page} de {pageCount}</span>
-              <button
-                onClick={() => { setFrom(from + size); doSearch(false); }}
-                disabled={from + size >= total || loading}
-                className="px-3 py-1 rounded-lg border border-border hover:bg-accent disabled:opacity-50 transition"
-              >
-                Seguinte
-              </button>
-            </div>
           </div>
         )}
 
@@ -577,30 +581,26 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
           ))}
         </div>
 
-        {results.length > 0 && (
-          <div className="mt-6 flex items-center justify-between text-sm text-muted-foreground">
-            <span>
-              {total.toLocaleString("pt-PT")} resultado{total === 1 ? "" : "s"}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => { setFrom(Math.max(0, from - size)); doSearch(false); }}
-                disabled={from === 0 || loading}
-                className="px-3 py-1 rounded-lg border border-border hover:bg-accent disabled:opacity-50 transition"
-              >
-                Anterior
-              </button>
-              <span className="text-xs">Página {page} de {pageCount}</span>
-              <button
-                onClick={() => { setFrom(from + size); doSearch(false); }}
-                disabled={from + size >= total || loading}
-                className="px-3 py-1 rounded-lg border border-border hover:bg-accent disabled:opacity-50 transition"
-              >
-                Seguinte
-              </button>
+        <div ref={loadMoreRef} className="py-8 flex flex-col items-center justify-center text-muted-foreground">
+          {loadingMore && (
+            <div className="flex items-center gap-2 text-sm">
+              <Loader2 size={18} className="animate-spin" />
+              A carregar mais contratos...
             </div>
-          </div>
-        )}
+          )}
+          {!loadingMore && hasMore && results.length > 0 && (
+            <button
+              onClick={() => doSearch(false)}
+              disabled={loading || loadingMore}
+              className="px-4 py-2 rounded-lg border border-border hover:bg-accent transition disabled:opacity-50 text-sm"
+            >
+              Carregar mais
+            </button>
+          )}
+          {!loadingMore && !hasMore && results.length > 0 && (
+            <span className="text-xs">Fim dos resultados</span>
+          )}
+        </div>
       </div>
     </div>
   );
