@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, FileText, TrendingUp, BarChart3, PieChart, Activity, Euro, Database, RefreshCw } from "lucide-react";
+import { ArrowLeft, FileText, TrendingUp, BarChart3, PieChart, Activity, Euro, Database, RefreshCw, Filter, Download, FileSpreadsheet } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -17,8 +17,8 @@ import {
   type PieLabel,
 } from "recharts";
 import type { Formatter as RechartsFormatter } from "recharts/types/component/DefaultTooltipContent";
-import { getContractAnalytics, getContractYears, getContractStatus } from "../api";
-import type { ContractAnalyticsResponse } from "../types";
+import { getContractAnalytics, getContractYears, getContractStatus, exportContractsExcel, exportContractsPdf } from "../api";
+import type { ContractAnalyticsResponse, ContractAnalyticsFilters, ContractAnalyticsRow } from "../types";
 
 interface ContractsDashboardPageProps {
   onSwitchView: () => void;
@@ -74,14 +74,26 @@ function StatCard({ icon: Icon, label, value, sub }: { icon: any; label: string;
 }
 
 export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: ContractsDashboardPageProps) {
+  const [filters, setFilters] = useState<ContractAnalyticsFilters>({});
+  const [q, setQ] = useState("");
   const [year, setYear] = useState<number | "">("");
+  const [entity, setEntity] = useState("");
+  const [nif, setNif] = useState("");
+  const [cpvCode, setCpvCode] = useState("");
+  const [minPrice, setMinPrice] = useState<string>("");
+  const [maxPrice, setMaxPrice] = useState<string>("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+
   const [data, setData] = useState<ContractAnalyticsResponse | null>(null);
   const [years, setYears] = useState<number[]>([]);
   const [status, setStatus] = useState<{ total: number; years: number[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null);
 
-  const debouncedYear = useDebounce(year, 300);
+  const debouncedFilters = useDebounce(filters, 500);
 
   useEffect(() => {
     Promise.all([getContractStatus(), getContractYears()])
@@ -92,11 +104,40 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
       .catch((err) => setError(err instanceof Error ? err.message : "Erro ao carregar anos"));
   }, []);
 
+  const buildFilters = (): ContractAnalyticsFilters => {
+    const f: ContractAnalyticsFilters = { top_entities: 8, top_cpv: 8 };
+    if (q.trim()) f.q = q.trim();
+    if (year !== "") f.year = year;
+    if (entity.trim()) f.entity = entity.trim();
+    if (nif.trim()) f.nif = nif.trim();
+    if (cpvCode.trim()) f.cpv_code = cpvCode.trim();
+    if (minPrice.trim() && !Number.isNaN(Number(minPrice))) f.min_price = Number(minPrice);
+    if (maxPrice.trim() && !Number.isNaN(Number(maxPrice))) f.max_price = Number(maxPrice);
+    if (startDate) f.start_date = startDate;
+    if (endDate) f.end_date = endDate;
+    return f;
+  };
+
+  const applyFilters = () => setFilters(buildFilters());
+
+  const resetFilters = () => {
+    setQ("");
+    setYear("");
+    setEntity("");
+    setNif("");
+    setCpvCode("");
+    setMinPrice("");
+    setMaxPrice("");
+    setStartDate("");
+    setEndDate("");
+    setFilters({ top_entities: 8, top_cpv: 8 });
+  };
+
   const loadAnalytics = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await getContractAnalytics(debouncedYear || undefined, 8, 8);
+      const res = await getContractAnalytics(debouncedFilters);
       setData(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao carregar analytics");
@@ -108,7 +149,7 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
   useEffect(() => {
     loadAnalytics();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedYear]);
+  }, [debouncedFilters]);
 
   const byYearSorted = useMemo(() => [...(data?.by_year ?? [])].sort((a, b) => (a.key < b.key ? -1 : 1)), [data]);
   const byMonthSorted = useMemo(() => [...(data?.by_month ?? [])].sort((a, b) => (a.key < b.key ? -1 : 1)), [data]);
@@ -160,6 +201,59 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
               <span className="hidden sm:inline">Atualizar</span>
             </button>
+            <button
+              onClick={() => setShowFilters((s) => !s)}
+              className={`px-3 py-2 rounded-lg border border-border transition flex items-center gap-2 ${showFilters ? "bg-primary text-primary-foreground" : "bg-card hover:bg-muted"}`}
+            >
+              <Filter size={16} />
+              <span className="hidden sm:inline">Filtros</span>
+            </button>
+            <button
+              onClick={async () => {
+                setExporting("excel");
+                try {
+                  const blob = await exportContractsExcel(filters);
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `contratos_${new Date().toISOString().slice(0, 10)}.xlsx`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Erro ao exportar Excel");
+                } finally {
+                  setExporting(null);
+                }
+              }}
+              disabled={exporting !== null}
+              className="px-3 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition disabled:opacity-50 flex items-center gap-2"
+            >
+              <FileSpreadsheet size={16} />
+              <span className="hidden sm:inline">Excel</span>
+            </button>
+            <button
+              onClick={async () => {
+                setExporting("pdf");
+                try {
+                  const blob = await exportContractsPdf(filters);
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `contratos_${new Date().toISOString().slice(0, 10)}.pdf`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Erro ao exportar PDF");
+                } finally {
+                  setExporting(null);
+                }
+              }}
+              disabled={exporting !== null}
+              className="px-3 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition disabled:opacity-50 flex items-center gap-2"
+            >
+              <Download size={16} />
+              <span className="hidden sm:inline">PDF</span>
+            </button>
             {onSwitchSearch && (
               <button
                 onClick={onSwitchSearch}
@@ -175,6 +269,118 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
         {error && (
           <div className="mb-6 rounded-lg px-3 py-2 text-sm bg-destructive/10 text-destructive">
             {error}
+          </div>
+        )}
+
+        {showFilters && (
+          <div className="mb-6 rounded-xl border border-border bg-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold flex items-center gap-2">
+                <Filter size={18} /> Filtros de pesquisa
+              </h2>
+              <span className="text-xs text-muted-foreground">
+                Os mesmos parâmetros usados na pesquisa de contratos
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+              <input
+                type="text"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Texto livre (q)"
+                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <input
+                type="text"
+                value={entity}
+                onChange={(e) => setEntity(e.target.value)}
+                placeholder="Entidade adjudicante/ário"
+                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <input
+                type="text"
+                value={nif}
+                onChange={(e) => setNif(e.target.value)}
+                placeholder="NIF"
+                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <input
+                type="text"
+                value={cpvCode}
+                onChange={(e) => setCpvCode(e.target.value)}
+                placeholder="Código CPV"
+                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <select
+                value={year}
+                onChange={(e) => setYear(e.target.value === "" ? "" : parseInt(e.target.value))}
+                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Todos os anos</option>
+                {years.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                value={minPrice}
+                onChange={(e) => setMinPrice(e.target.value)}
+                placeholder="Preço mínimo €"
+                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <input
+                type="number"
+                value={maxPrice}
+                onChange={(e) => setMaxPrice(e.target.value)}
+                placeholder="Preço máximo €"
+                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                placeholder="Data início"
+                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                placeholder="Data fim"
+                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={applyFilters}
+                className="px-3 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition"
+              >
+                Aplicar filtros
+              </button>
+              <button
+                onClick={resetFilters}
+                className="px-3 py-2 rounded-lg bg-muted text-foreground hover:bg-accent transition"
+              >
+                Limpar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {Object.keys(filters).length > 2 && (
+          <div className="mb-6 rounded-lg px-3 py-2 text-sm bg-muted/50 text-foreground flex flex-wrap gap-2 items-center">
+            <span className="text-muted-foreground">Filtros activos:</span>
+            {filters.q && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">q: {filters.q}</span>}
+            {filters.year !== undefined && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">ano: {filters.year}</span>}
+            {filters.entity && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">entidade: {filters.entity}</span>}
+            {filters.nif && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">nif: {filters.nif}</span>}
+            {filters.cpv_code && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">cpv: {filters.cpv_code}</span>}
+            {filters.min_price !== undefined && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">min: {formatEuro(filters.min_price)}</span>}
+            {filters.max_price !== undefined && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">max: {formatEuro(filters.max_price)}</span>}
+            {filters.start_date && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">desde: {filters.start_date}</span>}
+            {filters.end_date && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">até: {filters.end_date}</span>}
           </div>
         )}
 
@@ -264,7 +470,7 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
                     outerRadius={90}
                     label={cpvPieLabel}
                   >
-                    {topCpv.map((_, i) => (
+                    {topCpv.map((_: ContractAnalyticsRow, i: number) => (
                       <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
@@ -315,7 +521,7 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
                     outerRadius={75}
                     label={percentPieLabel}
                   >
-                    {procedureTypes.map((_, i) => (
+                    {procedureTypes.map((_: ContractAnalyticsRow, i: number) => (
                       <Cell key={`cell-proc-${i}`} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
@@ -344,7 +550,7 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
                     outerRadius={75}
                     label={percentPieLabel}
                   >
-                    {contractTypes.map((_, i) => (
+                    {contractTypes.map((_: ContractAnalyticsRow, i: number) => (
                       <Cell key={`cell-type-${i}`} fill={COLORS[(i + 3) % COLORS.length]} />
                     ))}
                   </Pie>
@@ -375,7 +581,7 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
                     </tr>
                   </thead>
                   <tbody>
-                    {topEntities.map((e, i) => (
+                    {topEntities.map((e: ContractAnalyticsRow, i: number) => (
                       <tr key={i} className="border-t border-border">
                         <td className="px-3 py-2 max-w-[200px] truncate" title={e.key}>{e.key}</td>
                         <td className="px-3 py-2">{formatNumber(e.count)}</td>
@@ -401,7 +607,7 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
                     </tr>
                   </thead>
                   <tbody>
-                    {topCpv.map((c, i) => (
+                    {topCpv.map((c: ContractAnalyticsRow, i: number) => (
                       <tr key={i} className="border-t border-border">
                         <td className="px-3 py-2 font-mono">{c.key}</td>
                         <td className="px-3 py-2">{formatNumber(c.count)}</td>

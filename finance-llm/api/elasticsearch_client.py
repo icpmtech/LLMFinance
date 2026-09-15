@@ -838,6 +838,217 @@ def bulk_index_contracts_from_jsonl(
         return {"error": str(e), "indexed_count": success_total, "total": total}
 
 
+def _contract_to_flat_dict(source: Dict[str, Any]) -> Dict[str, Any]:
+    """Converte documento de contrato num dicionário plano para exportação."""
+    def party_str(parties: Any) -> str:
+        if not parties:
+            return ""
+        if isinstance(parties, dict):
+            parties = [parties]
+        names = []
+        for p in parties:
+            parsed = p.get("parsed") if isinstance(p, dict) else None
+            if isinstance(parsed, list):
+                names.extend([x.get("nome", "") for x in parsed if x.get("nome")])
+            raw = p.get("raw") if isinstance(p, dict) else None
+            if isinstance(raw, list):
+                names.extend([str(r) for r in raw])
+            elif isinstance(raw, str):
+                names.append(raw)
+        return "; ".join(names)
+
+    def nif_str(parties: Any) -> str:
+        if not parties:
+            return ""
+        if isinstance(parties, dict):
+            parties = [parties]
+        nifs = []
+        for p in parties:
+            parsed = p.get("parsed") if isinstance(p, dict) else None
+            if isinstance(parsed, list):
+                nifs.extend([x.get("nif", "") for x in parsed if x.get("nif")])
+        return "; ".join(nifs)
+
+    def cpv_str(cpv: Any) -> str:
+        if not cpv:
+            return ""
+        if isinstance(cpv, dict):
+            cpv = [cpv]
+        return "; ".join([f"{x.get('code','')} {x.get('description','')}".strip() for x in cpv])
+
+    return {
+        "idcontrato": source.get("idcontrato"),
+        "nAnuncio": source.get("nAnuncio"),
+        "tipoContrato": source.get("tipoContrato"),
+        "tipoprocedimento": source.get("tipoprocedimento"),
+        "objectoContrato": source.get("objectoContrato"),
+        "descContrato": source.get("descContrato"),
+        "adjudicante": party_str(source.get("adjudicantes")),
+        "nif_adjudicante": nif_str(source.get("adjudicantes")),
+        "adjudicatario": party_str(source.get("adjudicatarios")),
+        "nif_adjudicatario": nif_str(source.get("adjudicatarios")),
+        "dataPublicacao": source.get("dataPublicacao"),
+        "dataCelebracaoContrato": source.get("dataCelebracaoContrato"),
+        "precoContratual": source.get("precoContratual"),
+        "PrecoTotalEfetivo": source.get("PrecoTotalEfetivo"),
+        "precoBaseProcedimento": source.get("precoBaseProcedimento"),
+        "cpv": cpv_str(source.get("cpv")),
+        "localExecucao": source.get("localExecucao"),
+        "Ano": source.get("Ano"),
+        "NUTs": source.get("NUTs"),
+        "regime": source.get("regime"),
+    }
+
+
+def export_contracts_to_excel(
+    q: Optional[str] = None,
+    year: Optional[int] = None,
+    entity: Optional[str] = None,
+    nif: Optional[str] = None,
+    cpv_code: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    max_records: int = 10000,
+    es: Optional[Elasticsearch] = None,
+) -> bytes:
+    """Exporta contratos filtrados para Excel (bytes)."""
+    try:
+        import openpyxl
+        from openpyxl.styles import Font
+    except ImportError as e:
+        raise RuntimeError("openpyxl não instalado") from e
+
+    client = es or get_es_client()
+    if not client:
+        raise RuntimeError("Elasticsearch indisponível")
+
+    query = _build_contract_query(q, year, entity, nif, cpv_code, min_price, max_price, start_date, end_date)
+    resp = client.search(
+        index=CONTRACTS_INDEX,
+        body={
+            "query": query,
+            "sort": [{"dataPublicacao": {"order": "desc"}}, "_score"],
+            "size": min(max_records, 10000),
+            "track_scores": False,
+        },
+    )
+
+    rows = [_contract_to_flat_dict(hit["_source"]) for hit in resp["hits"]["hits"]]
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Contratos"
+    headers = list(rows[0].keys()) if rows else [
+        "idcontrato", "nAnuncio", "tipoContrato", "tipoprocedimento", "objectoContrato",
+        "descContrato", "adjudicante", "nif_adjudicante", "adjudicatario", "nif_adjudicatario",
+        "dataPublicacao", "dataCelebracaoContrato", "precoContratual", "PrecoTotalEfetivo",
+        "precoBaseProcedimento", "cpv", "localExecucao", "Ano", "NUTs", "regime",
+    ]
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+    for row in rows:
+        ws.append([row.get(h) for h in headers])
+    for column in ws.columns:
+        max_length = 0
+        column_letter = column[0].column_letter
+        for cell in column:
+            try:
+                val_len = len(str(cell.value))
+                if val_len > max_length:
+                    max_length = val_length
+            except Exception:
+                pass
+        ws.column_dimensions[column_letter].width = min(max_length + 2, 60)
+
+    from io import BytesIO
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
+def export_contracts_to_pdf(
+    q: Optional[str] = None,
+    year: Optional[int] = None,
+    entity: Optional[str] = None,
+    nif: Optional[str] = None,
+    cpv_code: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    max_records: int = 500,
+    es: Optional[Elasticsearch] = None,
+) -> bytes:
+    """Exporta contratos filtrados para PDF (bytes)."""
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+    except ImportError as e:
+        raise RuntimeError("reportlab não instalado") from e
+
+    client = es or get_es_client()
+    if not client:
+        raise RuntimeError("Elasticsearch indisponível")
+
+    query = _build_contract_query(q, year, entity, nif, cpv_code, min_price, max_price, start_date, end_date)
+    resp = client.search(
+        index=CONTRACTS_INDEX,
+        body={
+            "query": query,
+            "sort": [{"dataPublicacao": {"order": "desc"}}, "_score"],
+            "size": min(max_records, 1000),
+            "track_scores": False,
+        },
+    )
+
+    rows = [_contract_to_flat_dict(hit["_source"]) for hit in resp["hits"]["hits"]]
+    headers = ["ID", "Ano", "Tipo", "Objecto", "Adjudicante", "Adjudicatário", "Valor", "Publicação"]
+    data = [headers]
+    for r in rows:
+        data.append([
+            str(r.get("idcontrato") or ""),
+            str(r.get("Ano") or ""),
+            str(r.get("tipoContrato") or ""),
+            str(r.get("objectoContrato") or "")[:80],
+            str(r.get("adjudicante") or "")[:50],
+            str(r.get("adjudicatario") or "")[:50],
+            f"{r.get('precoContratual') or 0:.2f} €",
+            str(r.get("dataPublicacao") or ""),
+        ])
+
+    from io import BytesIO
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
+    elements = []
+    styles = getSampleStyleSheet()
+    elements.append(Paragraph("Relatório de Contratos Públicos", styles["Title"]))
+    elements.append(Paragraph(f"Total exportado: {len(rows)} contratos", styles["Normal"]))
+    elements.append(Spacer(1, 12))
+    table = Table(data, repeatRows=1)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#10a37f")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 9),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+        ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#f8f9fa")),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("FONTSIZE", (0, 1), (-1, -1), 8),
+        ("WORDWRAP", (0, 0), (-1, -1), True),
+    ]))
+    elements.append(table)
+    doc.build(elements)
+    buf.seek(0)
+    return buf.read()
+
+
 def search_contracts(
     q: Optional[str] = None,
     year: Optional[int] = None,
@@ -857,90 +1068,7 @@ def search_contracts(
     if not client:
         return {"error": "Elasticsearch indisponível", "items": []}
 
-    query: Dict[str, Any] = {"bool": {"must": [], "filter": []}}
-    must = query["bool"]["must"]
-    filters = query["bool"]["filter"]
-
-    if q:
-        must.append({
-            "multi_match": {
-                "query": q,
-                "fields": [
-                    "objectoContrato^3",
-                    "descContrato^2",
-                    "search_text",
-                    "adjudicantes.parsed.nome",
-                    "adjudicatarios.parsed.nome",
-                    "cpv.description",
-                    "localExecucao",
-                ],
-                "type": "best_fields",
-            }
-        })
-    else:
-        must.append({"match_all": {}})
-
-    if year:
-        filters.append({"term": {"Ano": year}})
-    if entity:
-        filters.append({
-            "nested": {
-                "path": "entities",
-                "query": {
-                    "match": {"entities.name": entity},
-                },
-            }
-        })
-    if nif:
-        filters.append({
-            "nested": {
-                "path": "entities",
-                "query": {
-                    "term": {"entities.nif": nif},
-                },
-            }
-        })
-    if cpv_code:
-        filters.append({
-            "nested": {
-                "path": "cpv",
-                "query": {
-                    "wildcard": {"cpv.code": f"{cpv_code}*"},
-                },
-            }
-        })
-
-    price_range = {}
-    if min_price is not None:
-        price_range["gte"] = min_price
-    if max_price is not None:
-        price_range["lte"] = max_price
-    if price_range:
-        filters.append({
-            "bool": {
-                "should": [
-                    {"range": {"precoContratual": price_range}},
-                    {"range": {"PrecoTotalEfetivo": price_range}},
-                ],
-                "minimum_should_match": 1,
-            }
-        })
-
-    date_range = {}
-    if start_date:
-        date_range["gte"] = start_date
-    if end_date:
-        date_range["lte"] = end_date
-    if date_range:
-        filters.append({
-            "bool": {
-                "should": [
-                    {"range": {"dataPublicacao": date_range}},
-                    {"range": {"dataCelebracaoContrato": date_range}},
-                ],
-                "minimum_should_match": 1,
-            }
-        })
+    query = _build_contract_query(q, year, entity, nif, cpv_code, min_price, max_price, start_date, end_date)
 
     try:
         resp = client.search(
@@ -997,9 +1125,22 @@ def contracts_autocomplete(
                             {"match_phrase_prefix": {"objectoContrato": q}},
                             {"match_phrase_prefix": {"descContrato": q}},
                             {
-                                "nested": {
-                                    "path": "entities",
-                                    "query": {"match_phrase_prefix": {"entities.name": q}},
+                                "bool": {
+                                    "should": [
+                                        {
+                                            "nested": {
+                                                "path": "adjudicantes.parsed",
+                                                "query": {"match_phrase_prefix": {"adjudicantes.parsed.nome": q}},
+                                            }
+                                        },
+                                        {
+                                            "nested": {
+                                                "path": "adjudicatarios.parsed",
+                                                "query": {"match_phrase_prefix": {"adjudicatarios.parsed.nome": q}},
+                                            }
+                                        },
+                                    ],
+                                    "minimum_should_match": 1,
                                 }
                             },
                         ],
@@ -1007,12 +1148,25 @@ def contracts_autocomplete(
                     }
                 },
                 "aggs": {
-                    "entities": {
-                        "nested": {"path": "entities"},
+                    "adjudicantes": {
+                        "nested": {"path": "adjudicantes.parsed"},
                         "aggs": {
                             "names": {
                                 "terms": {
-                                    "field": "entities.name.keyword",
+                                    "field": "adjudicantes.parsed.nome.keyword",
+                                    "size": size,
+                                    "include": f".*{lower_q}.*",
+                                    "order": {"_count": "desc"},
+                                }
+                            }
+                        }
+                    },
+                    "adjudicatarios": {
+                        "nested": {"path": "adjudicatarios.parsed"},
+                        "aggs": {
+                            "names": {
+                                "terms": {
+                                    "field": "adjudicatarios.parsed.nome.keyword",
                                     "size": size,
                                     "include": f".*{lower_q}.*",
                                     "order": {"_count": "desc"},
@@ -1039,11 +1193,12 @@ def contracts_autocomplete(
 
         suggestions = []
         seen = set()
-        for bucket in resp["aggregations"]["entities"]["names"]["buckets"]:
-            text = bucket["key"]
-            if text and text not in seen:
-                seen.add(text)
-                suggestions.append({"text": text, "type": "entity", "count": bucket["doc_count"]})
+        for agg_key in ("adjudicantes", "adjudicatarios"):
+            for bucket in resp["aggregations"][agg_key]["names"]["buckets"]:
+                text = bucket["key"]
+                if text and text not in seen:
+                    seen.add(text)
+                    suggestions.append({"text": text, "type": "entity", "count": bucket["doc_count"]})
         for bucket in resp["aggregations"]["cpv_codes"]["codes"]["buckets"]:
             text = bucket["key"]
             if text and text not in seen:
@@ -1113,8 +1268,140 @@ def list_contract_years(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
         return {"available": available, "indexed": [], "error": str(e)}
 
 
-def get_contract_analytics(
+def _build_contract_query(
+    q: Optional[str] = None,
     year: Optional[int] = None,
+    entity: Optional[str] = None,
+    nif: Optional[str] = None,
+    cpv_code: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> Dict[str, Any]:
+    must: List[Dict[str, Any]] = []
+    filters: List[Dict[str, Any]] = []
+
+    if q:
+        must.append({
+            "multi_match": {
+                "query": q,
+                "fields": [
+                    "objectoContrato^3",
+                    "descContrato^2",
+                    "search_text",
+                    "adjudicantes.parsed.nome",
+                    "adjudicatarios.parsed.nome",
+                    "cpv.description",
+                    "localExecucao",
+                ],
+                "type": "best_fields",
+            }
+        })
+
+    if year:
+        filters.append({"term": {"Ano": year}})
+    if entity:
+        filters.append({
+            "bool": {
+                "should": [
+                    {
+                        "nested": {
+                            "path": "adjudicantes.parsed",
+                            "query": {"match": {"adjudicantes.parsed.nome": entity}},
+                        }
+                    },
+                    {
+                        "nested": {
+                            "path": "adjudicatarios.parsed",
+                            "query": {"match": {"adjudicatarios.parsed.nome": entity}},
+                        }
+                    },
+                ],
+                "minimum_should_match": 1,
+            }
+        })
+    if nif:
+        filters.append({
+            "bool": {
+                "should": [
+                    {
+                        "nested": {
+                            "path": "adjudicantes.parsed",
+                            "query": {"term": {"adjudicantes.parsed.nif": nif}},
+                        }
+                    },
+                    {
+                        "nested": {
+                            "path": "adjudicatarios.parsed",
+                            "query": {"term": {"adjudicatarios.parsed.nif": nif}},
+                        }
+                    },
+                ],
+                "minimum_should_match": 1,
+            }
+        })
+    if cpv_code:
+        filters.append({
+            "nested": {
+                "path": "cpv",
+                "query": {"wildcard": {"cpv.code": f"{cpv_code}*"}},
+            }
+        })
+
+    price_range = {}
+    if min_price is not None:
+        price_range["gte"] = min_price
+    if max_price is not None:
+        price_range["lte"] = max_price
+    if price_range:
+        filters.append({
+            "bool": {
+                "should": [
+                    {"range": {"precoContratual": price_range}},
+                    {"range": {"PrecoTotalEfetivo": price_range}},
+                ],
+                "minimum_should_match": 1,
+            }
+        })
+
+    date_range = {}
+    if start_date:
+        date_range["gte"] = start_date
+    if end_date:
+        date_range["lte"] = end_date
+    if date_range:
+        filters.append({
+            "bool": {
+                "should": [
+                    {"range": {"dataPublicacao": date_range}},
+                    {"range": {"dataCelebracaoContrato": date_range}},
+                ],
+                "minimum_should_match": 1,
+            }
+        })
+
+    if not must and not filters:
+        return {"match_all": {}}
+
+    query: Dict[str, Any] = {"bool": {}}
+    if must:
+        query["bool"]["must"] = must
+    if filters:
+        query["bool"]["filter"] = filters
+    return query
+
+
+def get_contract_analytics(
+    q: Optional[str] = None,
+    year: Optional[int] = None,
+    entity: Optional[str] = None,
+    nif: Optional[str] = None,
+    cpv_code: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     top_entities: int = 8,
     top_cpv: int = 8,
     value_buckets: int = 7,
@@ -1125,11 +1412,7 @@ def get_contract_analytics(
     if not client:
         return {"error": "Elasticsearch indisponível"}
 
-    filters: List[Dict[str, Any]] = []
-    if year:
-        filters.append({"term": {"Ano": year}})
-
-    base_query = {"bool": {"filter": filters}} if filters else {"match_all": {}}
+    base_query = _build_contract_query(q, year, entity, nif, cpv_code, min_price, max_price, start_date, end_date)
 
     try:
         resp = client.search(
@@ -1159,17 +1442,32 @@ def get_contract_analytics(
                             "min_doc_count": 1,
                         }
                     },
-                    "top_entities": {
-                        "nested": {"path": "entities"},
+                    "top_adjudicantes": {
+                        "nested": {"path": "adjudicantes.parsed"},
                         "aggs": {
                             "names": {
                                 "terms": {
-                                    "field": "entities.name.keyword",
+                                    "field": "adjudicantes.parsed.nome.keyword",
                                     "size": top_entities,
                                     "order": {"total_value": "desc"},
                                 },
                                 "aggs": {
-                                    "total_value": {"sum": {"field": "entities.value"}}
+                                    "total_value": {"sum": {"field": "precoContratual"}}
+                                },
+                            }
+                        },
+                    },
+                    "top_adjudicatarios": {
+                        "nested": {"path": "adjudicatarios.parsed"},
+                        "aggs": {
+                            "names": {
+                                "terms": {
+                                    "field": "adjudicatarios.parsed.nome.keyword",
+                                    "size": top_entities,
+                                    "order": {"total_value": "desc"},
+                                },
+                                "aggs": {
+                                    "total_value": {"sum": {"field": "precoContratual"}}
                                 },
                             }
                         },
@@ -1186,7 +1484,8 @@ def get_contract_analytics(
                                 "aggs": {
                                     "description": {
                                         "terms": {"field": "cpv.description.keyword", "size": 1}
-                                    }
+                                    },
+                                    "total_value": {"sum": {"field": "precoContratual"}},
                                 },
                             }
                         },
@@ -1206,24 +1505,31 @@ def get_contract_analytics(
         def fmt_money(v):
             return round(v, 2) if v is not None else None
 
-        entity_rows = []
-        for b in aggs["top_entities"]["names"]["buckets"]:
-            desc_buckets = b.get("description", {}).get("buckets", [])
-            desc = desc_buckets[0].get("key", "") if desc_buckets else ""
-            entity_rows.append({
-                "name": b["key"],
-                "count": b["doc_count"],
-                "total_value": fmt_money(b["total_value"].get("value")),
-                "description": desc,
-            })
+        entity_rows: List[Dict[str, Any]] = []
+        seen_entities: set = set()
+        for agg_key in ("top_adjudicantes", "top_adjudicatarios"):
+            for b in aggs.get(agg_key, {}).get("names", {}).get("buckets", []):
+                key = b["key"]
+                if not key or key in seen_entities:
+                    continue
+                seen_entities.add(key)
+                entity_rows.append({
+                    "key": key,
+                    "count": b["doc_count"],
+                    "total_value": fmt_money(b.get("total_value", {}).get("value")),
+                    "description": "",
+                })
+        entity_rows.sort(key=lambda x: (x.get("total_value") or 0, x.get("count") or 0), reverse=True)
+        entity_rows = entity_rows[:top_entities]
 
         cpv_rows = []
-        for b in aggs["top_cpv"]["codes"]["buckets"]:
+        for b in aggs.get("top_cpv", {}).get("codes", {}).get("buckets", []):
             desc_buckets = b.get("description", {}).get("buckets", [])
             desc = desc_buckets[0].get("key", "") if desc_buckets else ""
             cpv_rows.append({
-                "code": b["key"],
+                "key": b["key"],
                 "count": b["doc_count"],
+                "total_value": fmt_money(b.get("total_value", {}).get("value")),
                 "description": desc,
             })
 
@@ -1232,17 +1538,38 @@ def get_contract_analytics(
             "total_value": fmt_money(aggs["total_value"].get("value")),
             "avg_value": fmt_money(aggs["avg_value"].get("value")),
             "max_value": fmt_money(aggs["max_value"].get("value")),
-            "by_year": [{"year": int(b["key"]), "count": b["doc_count"]} for b in aggs["by_year"]["buckets"]],
-            "by_month": [{"month": b["key_as_string"], "count": b["doc_count"]} for b in aggs["by_month"]["buckets"]],
-            "value_distribution": [{"from": b["key"], "count": b["doc_count"]} for b in aggs["value_distribution"]["buckets"][:value_buckets]],
+            "by_year": [{"key": str(b["key"]), "count": b["doc_count"]} for b in aggs["by_year"]["buckets"]],
+            "by_month": [{"key": b["key_as_string"], "count": b["doc_count"]} for b in aggs["by_month"]["buckets"]],
+            "value_distribution": [{"key": f"{int(b['key'])} - {int(b['key']) + 50000}", "count": b["doc_count"]} for b in aggs["value_distribution"]["buckets"][:value_buckets]],
             "top_entities": entity_rows,
             "top_cpv": cpv_rows,
-            "procedure_types": [{"type": b["key"], "count": b["doc_count"]} for b in aggs["procedure_types"]["buckets"]],
-            "contract_types": [{"type": b["key"], "count": b["doc_count"]} for b in aggs["contract_types"]["buckets"]],
+            "procedure_types": [{"key": b["key"], "count": b["doc_count"]} for b in aggs["procedure_types"]["buckets"]],
+            "contract_types": [{"key": b["key"], "count": b["doc_count"]} for b in aggs["contract_types"]["buckets"]],
             "year": year,
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+def list_contract_years(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Devolve anos disponíveis e total indexado por ano."""
+    client = es or get_es_client()
+    available = contract_years_available()
+    if not client:
+        return {"available": available, "indexed": []}
+    try:
+        resp = client.search(
+            index=CONTRACTS_INDEX,
+            body={
+                "size": 0,
+                "aggs": {
+                    "by_year": {
+                        "terms": {"field": "Ano", "size": 50, "order": {"_key": "desc"}},
+                    }
+                },
+            },
+        )
+        indexed = [{"year": int(bucket["key"]), "count": bucket["doc_count"]} for bucket in resp["aggregations"]["by_year"]["buckets"]]
         return {"available": available, "indexed": indexed}
     except Exception as e:
-        return {"error": str(e), "available": available, "indexed": []}
+        return {"available": available, "indexed": [], "error": str(e)}

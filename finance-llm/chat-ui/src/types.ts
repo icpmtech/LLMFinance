@@ -621,6 +621,20 @@ export interface ContractSearchRequest {
   from?: number;
 }
 
+export interface ContractAnalyticsFilters {
+  q?: string;
+  year?: number;
+  entity?: string;
+  nif?: string;
+  cpv_code?: string;
+  min_price?: number;
+  max_price?: number;
+  start_date?: string;
+  end_date?: string;
+  top_entities?: number;
+  top_cpv?: number;
+}
+
 export interface ContractSearchResponse {
   query?: string;
   total: number;

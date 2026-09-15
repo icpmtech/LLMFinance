@@ -4,9 +4,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, List, Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, Response
 
 from api.models import (
     ActionsResponse,
@@ -16,6 +16,7 @@ from api.models import (
     ChatMessage,
     ChatRequest,
     ChatResponse,
+    ContractAnalyticsRequest,
     ContractAutocompleteResponse,
     ContractChatRequest,
     ContractAnalyticsResponse,
@@ -79,6 +80,8 @@ from api.elasticsearch_client import (
     bulk_index_contracts_from_jsonl,
     contracts_autocomplete,
     contracts_status,
+    export_contracts_to_excel,
+    export_contracts_to_pdf,
     get_contract_analytics,
     get_es_client,
     list_contract_years,
@@ -897,12 +900,24 @@ def contracts_autocomplete_endpoint(q: str = Query(..., min_length=1), size: int
 
 @app.get("/contracts/analytics", response_model=ContractAnalyticsResponse)
 def contracts_analytics(
+    q: Optional[str] = Query(None),
     year: Optional[int] = Query(None, description="Ano para filtrar as agregações"),
+    entity: Optional[str] = Query(None),
+    nif: Optional[str] = Query(None),
+    cpv_code: Optional[str] = Query(None),
+    min_price: Optional[float] = Query(None),
+    max_price: Optional[float] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
     top_entities: int = Query(8, ge=1, le=50),
     top_cpv: int = Query(8, ge=1, le=50),
 ):
     """Devolve analytics/aggregações para o dashboard de contratos."""
-    res = get_contract_analytics(year=year, top_entities=top_entities, top_cpv=top_cpv)
+    res = get_contract_analytics(
+        q=q, year=year, entity=entity, nif=nif, cpv_code=cpv_code,
+        min_price=min_price, max_price=max_price, start_date=start_date, end_date=end_date,
+        top_entities=top_entities, top_cpv=top_cpv,
+    )
     if res.get("error"):
         raise HTTPException(status_code=502, detail=res.get("error"))
 
@@ -914,12 +929,48 @@ def contracts_analytics(
         total_value=res.get("total_value"),
         avg_value=res.get("avg_value"),
         max_value=res.get("max_value"),
-        by_year=[row(str(b["year"]), b["count"]) for b in res.get("by_year", [])],
-        by_month=[row(b["month"], b["count"]) for b in res.get("by_month", [])],
-        value_distribution=[row(f"{int(b['from'])}", b["count"]) for b in res.get("value_distribution", [])],
-        top_entities=[row(b["name"], b["count"], b.get("total_value"), b.get("description")) for b in res.get("top_entities", [])],
-        top_cpv=[row(b["code"], b["count"], description=b.get("description")) for b in res.get("top_cpv", [])],
-        procedure_types=[row(b["type"], b["count"]) for b in res.get("procedure_types", [])],
-        contract_types=[row(b["type"], b["count"]) for b in res.get("contract_types", [])],
+        by_year=[row(b["key"], b["count"]) for b in res.get("by_year", [])],
+        by_month=[row(b["key"], b["count"]) for b in res.get("by_month", [])],
+        value_distribution=[row(b["key"], b["count"]) for b in res.get("value_distribution", [])],
+        top_entities=[row(b["key"], b["count"], b.get("total_value"), b.get("description")) for b in res.get("top_entities", [])],
+        top_cpv=[row(b["key"], b["count"], b.get("total_value"), b.get("description")) for b in res.get("top_cpv", [])],
+        procedure_types=[row(b["key"], b["count"]) for b in res.get("procedure_types", [])],
+        contract_types=[row(b["key"], b["count"]) for b in res.get("contract_types", [])],
         year=year,
     )
+
+
+@app.post("/contracts/export/excel")
+def contracts_export_excel(req: ContractAnalyticsRequest = Body(...)):
+    """Exporta contratos filtrados para Excel."""
+    try:
+        data = export_contracts_to_excel(
+            q=req.q, year=req.year, entity=req.entity, nif=req.nif, cpv_code=req.cpv_code,
+            min_price=req.min_price, max_price=req.max_price, start_date=req.start_date, end_date=req.end_date,
+            max_records=10000,
+        )
+        return Response(
+            content=data,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=contratos.xlsx"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/contracts/export/pdf")
+def contracts_export_pdf(req: ContractAnalyticsRequest = Body(...)):
+    """Exporta contratos filtrados para PDF."""
+    try:
+        data = export_contracts_to_pdf(
+            q=req.q, year=req.year, entity=req.entity, nif=req.nif, cpv_code=req.cpv_code,
+            min_price=req.min_price, max_price=req.max_price, start_date=req.start_date, end_date=req.end_date,
+            max_records=500,
+        )
+        return Response(
+            content=data,
+            media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=contratos.pdf"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -611,6 +611,20 @@ class ContractSearchRequest(BaseModel):
     from_: int = Field(0, alias="from")
 
 
+class ContractAnalyticsRequest(BaseModel):
+    q: Optional[str] = None
+    year: Optional[int] = None
+    entity: Optional[str] = None
+    nif: Optional[str] = None
+    cpv_code: Optional[str] = None
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    top_entities: int = 8
+    top_cpv: int = 8
+
+
 class ContractSearchResponse(BaseModel):
     query: Optional[str] = None
     total: int = 0

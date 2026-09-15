@@ -6,7 +6,6 @@ import type {
   AddTickerRequest,
   AddTickerResponse,
   Calendar,
-  ContractAnalyticsResponse,
   ContractAutocompleteResponse,
   ContractChatRequest,
   ContractChatResponse,
@@ -52,9 +51,11 @@ import type {
   RagExplainResponse,
   RagSource,
   UploadPdfResponse,
+  ContractAnalyticsResponse,
+  ContractAnalyticsFilters,
 } from "./types";
 
-
+export type { ContractAnalyticsResponse, ContractAnalyticsFilters };
 
 export function getPlotUrl(plot_url: string): string {
   if (plot_url.startsWith("http://") || plot_url.startsWith("https://")) {
@@ -575,18 +576,68 @@ export async function getContractStatus(): Promise<ContractStatusResponse> {
   return res.json();
 }
 
+
 export async function getContractAnalytics(
-  year?: number,
-  topEntities = 8,
-  topCpv = 8,
+  filters: ContractAnalyticsFilters = {},
 ): Promise<ContractAnalyticsResponse> {
+  const {
+    q,
+    year,
+    entity,
+    nif,
+    cpv_code,
+    min_price,
+    max_price,
+    start_date,
+    end_date,
+    top_entities = 8,
+    top_cpv = 8,
+  } = filters;
   const params = new URLSearchParams();
+  if (q) params.append("q", q);
   if (year !== undefined) params.append("year", String(year));
-  params.append("top_entities", String(topEntities));
-  params.append("top_cpv", String(topCpv));
+  if (entity) params.append("entity", entity);
+  if (nif) params.append("nif", nif);
+  if (cpv_code) params.append("cpv_code", cpv_code);
+  if (min_price !== undefined) params.append("min_price", String(min_price));
+  if (max_price !== undefined) params.append("max_price", String(max_price));
+  if (start_date) params.append("start_date", start_date);
+  if (end_date) params.append("end_date", end_date);
+  params.append("top_entities", String(top_entities));
+  params.append("top_cpv", String(top_cpv));
   const res = await fetch(`${API_BASE}/contracts/analytics?${params}`);
   if (!res.ok) throw new Error(`Erro ao obter analytics de contratos: ${res.status}`);
   return res.json();
+}
+
+export async function exportContractsExcel(
+  filters: ContractAnalyticsFilters = {},
+): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/contracts/export/excel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(filters),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao exportar Excel: ${res.status} - ${text}`);
+  }
+  return res.blob();
+}
+
+export async function exportContractsPdf(
+  filters: ContractAnalyticsFilters = {},
+): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/contracts/export/pdf`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(filters),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao exportar PDF: ${res.status} - ${text}`);
+  }
+  return res.blob();
 }
 
 export async function getContractYears(): Promise<ContractYearsResponse> {
