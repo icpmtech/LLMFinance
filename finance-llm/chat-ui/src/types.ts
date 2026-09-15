@@ -589,8 +589,8 @@ export interface ContractItem {
   tipoprocedimento?: string;
   objectoContrato?: string;
   descContrato?: string;
-  adjudicantes: ContractParty[];
-  adjudicatarios: ContractParty[];
+  adjudicantes?: ContractParty | ContractParty[];
+  adjudicatarios?: ContractParty | ContractParty[];
   dataPublicacao?: string;
   dataCelebracaoContrato?: string;
   precoContratual?: number;

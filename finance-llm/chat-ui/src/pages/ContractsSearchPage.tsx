@@ -44,10 +44,12 @@ function formatDate(d?: string) {
 
 function normalizeParties(parties: ContractItem["adjudicantes"]): { nome?: string; nif?: string }[] {
   if (!parties) return [];
-  if (!Array.isArray(parties)) return [];
-  return parties.reduce<{ nome?: string; nif?: string }[]>((acc, p: any) => {
+  const list = Array.isArray(parties) ? parties : [parties];
+  return list.reduce<{ nome?: string; nif?: string }[]>((acc, p: any) => {
     if (p?.parsed && Array.isArray(p.parsed)) acc.push(...p.parsed);
-    else if (typeof p?.raw === "string") {
+    else if (Array.isArray(p?.raw)) {
+      acc.push(...p.raw.map((r: any) => (typeof r === "string" ? { nome: r.trim() } : r)).filter((r: any) => r?.nome || r?.nif));
+    } else if (typeof p?.raw === "string") {
       acc.push(...p.raw.split(",").map((s: string) => ({ nome: s.trim() })));
     }
     return acc;

@@ -31,13 +31,16 @@ function formatDate(d?: string) {
 
 function normalizeParties(parties: ContractItem["adjudicantes"]): { nome?: string; nif?: string }[] {
   if (!parties) return [];
-  return parties.flatMap((p) => {
-    if (p?.parsed && Array.isArray(p.parsed)) return p.parsed;
-    if (typeof p?.raw === "string") {
-      return p.raw.split(",").map((s) => ({ nome: s.trim() }));
+  const list = Array.isArray(parties) ? parties : [parties];
+  return list.reduce<{ nome?: string; nif?: string }[]>((acc, p: any) => {
+    if (p?.parsed && Array.isArray(p.parsed)) acc.push(...p.parsed);
+    else if (Array.isArray(p?.raw)) {
+      acc.push(...p.raw.map((r: any) => (typeof r === "string" ? { nome: r.trim() } : r)).filter((r: any) => r?.nome || r?.nif));
+    } else if (typeof p?.raw === "string") {
+      acc.push(...p.raw.split(",").map((s: string) => ({ nome: s.trim() })));
     }
-    return [];
-  });
+    return acc;
+  }, []);
 }
 
 function partyNames(parties: ContractItem["adjudicantes"]): string {
