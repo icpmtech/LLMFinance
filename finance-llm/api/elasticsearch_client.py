@@ -1110,4 +1110,139 @@ def list_contract_years(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
         indexed = [{"year": int(bucket["key"]), "count": bucket["doc_count"]} for bucket in resp["aggregations"]["by_year"]["buckets"]]
         return {"available": available, "indexed": indexed}
     except Exception as e:
+        return {"available": available, "indexed": [], "error": str(e)}
+
+
+def get_contract_analytics(
+    year: Optional[int] = None,
+    top_entities: int = 8,
+    top_cpv: int = 8,
+    value_buckets: int = 7,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Devolve agregações analíticas para o dashboard de contratos."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    filters: List[Dict[str, Any]] = []
+    if year:
+        filters.append({"term": {"Ano": year}})
+
+    base_query = {"bool": {"filter": filters}} if filters else {"match_all": {}}
+
+    try:
+        resp = client.search(
+            index=CONTRACTS_INDEX,
+            body={
+                "size": 0,
+                "query": base_query,
+                "aggs": {
+                    "total_value": {"sum": {"field": "precoContratual"}},
+                    "avg_value": {"avg": {"field": "precoContratual"}},
+                    "max_value": {"max": {"field": "precoContratual"}},
+                    "by_year": {
+                        "terms": {"field": "Ano", "size": 50, "order": {"_key": "desc"}}
+                    },
+                    "by_month": {
+                        "date_histogram": {
+                            "field": "dataPublicacao",
+                            "calendar_interval": "month",
+                            "format": "yyyy-MM",
+                            "min_doc_count": 1,
+                        }
+                    },
+                    "value_distribution": {
+                        "histogram": {
+                            "field": "precoContratual",
+                            "interval": 50000,
+                            "min_doc_count": 1,
+                        }
+                    },
+                    "top_entities": {
+                        "nested": {"path": "entities"},
+                        "aggs": {
+                            "names": {
+                                "terms": {
+                                    "field": "entities.name.keyword",
+                                    "size": top_entities,
+                                    "order": {"total_value": "desc"},
+                                },
+                                "aggs": {
+                                    "total_value": {"sum": {"field": "entities.value"}}
+                                },
+                            }
+                        },
+                    },
+                    "top_cpv": {
+                        "nested": {"path": "cpv"},
+                        "aggs": {
+                            "codes": {
+                                "terms": {
+                                    "field": "cpv.code",
+                                    "size": top_cpv,
+                                    "order": {"_count": "desc"},
+                                },
+                                "aggs": {
+                                    "description": {
+                                        "terms": {"field": "cpv.description.keyword", "size": 1}
+                                    }
+                                },
+                            }
+                        },
+                    },
+                    "procedure_types": {
+                        "terms": {"field": "tipoprocedimento.keyword", "size": 20, "missing": "N/A"}
+                    },
+                    "contract_types": {
+                        "terms": {"field": "tipoContrato.keyword", "size": 20, "missing": "N/A"}
+                    },
+                },
+            },
+        )
+
+        aggs = resp["aggregations"]
+
+        def fmt_money(v):
+            return round(v, 2) if v is not None else None
+
+        entity_rows = []
+        for b in aggs["top_entities"]["names"]["buckets"]:
+            desc_buckets = b.get("description", {}).get("buckets", [])
+            desc = desc_buckets[0].get("key", "") if desc_buckets else ""
+            entity_rows.append({
+                "name": b["key"],
+                "count": b["doc_count"],
+                "total_value": fmt_money(b["total_value"].get("value")),
+                "description": desc,
+            })
+
+        cpv_rows = []
+        for b in aggs["top_cpv"]["codes"]["buckets"]:
+            desc_buckets = b.get("description", {}).get("buckets", [])
+            desc = desc_buckets[0].get("key", "") if desc_buckets else ""
+            cpv_rows.append({
+                "code": b["key"],
+                "count": b["doc_count"],
+                "description": desc,
+            })
+
+        return {
+            "total_contracts": resp["hits"]["total"]["value"],
+            "total_value": fmt_money(aggs["total_value"].get("value")),
+            "avg_value": fmt_money(aggs["avg_value"].get("value")),
+            "max_value": fmt_money(aggs["max_value"].get("value")),
+            "by_year": [{"year": int(b["key"]), "count": b["doc_count"]} for b in aggs["by_year"]["buckets"]],
+            "by_month": [{"month": b["key_as_string"], "count": b["doc_count"]} for b in aggs["by_month"]["buckets"]],
+            "value_distribution": [{"from": b["key"], "count": b["doc_count"]} for b in aggs["value_distribution"]["buckets"][:value_buckets]],
+            "top_entities": entity_rows,
+            "top_cpv": cpv_rows,
+            "procedure_types": [{"type": b["key"], "count": b["doc_count"]} for b in aggs["procedure_types"]["buckets"]],
+            "contract_types": [{"type": b["key"], "count": b["doc_count"]} for b in aggs["contract_types"]["buckets"]],
+            "year": year,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+        return {"available": available, "indexed": indexed}
+    except Exception as e:
         return {"error": str(e), "available": available, "indexed": []}

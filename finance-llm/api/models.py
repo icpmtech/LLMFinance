@@ -664,3 +664,26 @@ class ContractChatResponse(BaseModel):
     sources: List[ContractChatSource] = []
     model_used: Optional[str] = None
     error: Optional[str] = None
+
+
+class ContractAnalyticsRow(BaseModel):
+    key: str
+    count: int
+    total_value: Optional[float] = None
+    description: Optional[str] = None
+
+
+class ContractAnalyticsResponse(BaseModel):
+    total_contracts: int = 0
+    total_value: Optional[float] = None
+    avg_value: Optional[float] = None
+    max_value: Optional[float] = None
+    by_year: List[ContractAnalyticsRow] = []
+    by_month: List[ContractAnalyticsRow] = []
+    value_distribution: List[ContractAnalyticsRow] = []
+    top_entities: List[ContractAnalyticsRow] = []
+    top_cpv: List[ContractAnalyticsRow] = []
+    procedure_types: List[ContractAnalyticsRow] = []
+    contract_types: List[ContractAnalyticsRow] = []
+    year: Optional[int] = None
+    error: Optional[str] = None

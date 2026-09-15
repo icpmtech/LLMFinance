@@ -1,6 +1,0 @@
-INFO:     Started server process [18284]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://127.0.0.1:8003 (Press CTRL+C to quit)
-Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  76%|#######5  | 193/254 [00:00<00:00, 1910.78it/s]Loading weights: 100%|##########| 254/254 [00:00<00:00, 2002.49it/s]

@@ -6,6 +6,7 @@ import type {
   AddTickerRequest,
   AddTickerResponse,
   Calendar,
+  ContractAnalyticsResponse,
   ContractAutocompleteResponse,
   ContractChatRequest,
   ContractChatResponse,
@@ -571,6 +572,20 @@ export async function sendBloombergChat(
 export async function getContractStatus(): Promise<ContractStatusResponse> {
   const res = await fetch(`${API_BASE}/contracts/status`);
   if (!res.ok) throw new Error(`Erro ao obter estado dos contratos: ${res.status}`);
+  return res.json();
+}
+
+export async function getContractAnalytics(
+  year?: number,
+  topEntities = 8,
+  topCpv = 8,
+): Promise<ContractAnalyticsResponse> {
+  const params = new URLSearchParams();
+  if (year !== undefined) params.append("year", String(year));
+  params.append("top_entities", String(topEntities));
+  params.append("top_cpv", String(topCpv));
+  const res = await fetch(`${API_BASE}/contracts/analytics?${params}`);
+  if (!res.ok) throw new Error(`Erro ao obter analytics de contratos: ${res.status}`);
   return res.json();
 }
 

@@ -18,7 +18,7 @@ import signal
 import sys
 import time
 import torch
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, IterableDataset
 
 ROOT = Path(__file__).resolve().parents[1]
 FINAL_DIR = ROOT / "data" / "final"
@@ -41,6 +41,53 @@ def load_jsonl(path: Path) -> list[str]:
     """Carrega linhas de um ficheiro JSONL."""
     with path.open("r", encoding="utf-8") as f:
         return [json.loads(line)["text"] for line in f]
+
+
+class StreamingTextDataset(IterableDataset):
+    """Dataset iterável que tokeniza um texto de cada vez e junta batches com padding dinâmico."""
+
+    def __init__(self, texts: list[str], tokenizer, max_length: int = 512):
+        self.texts = texts
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.texts)
+
+    def __iter__(self):
+        for txt in self.texts:
+            # Corte grosseiro a nível de caracteres para acelerar tokenização.
+            if len(txt) > self.max_length * 8:
+                txt = txt[: self.max_length * 8]
+            yield self.tokenizer(
+                txt,
+                truncation=True,
+                max_length=self.max_length,
+                return_tensors="pt",
+                add_special_tokens=True,
+            )
+
+
+def _collate_batch(batch):
+    """Junta exemplos de comprimento variável com padding apenas até ao maior do batch."""
+    input_ids = [item["input_ids"].squeeze(0) for item in batch]
+    attention_mask = [item["attention_mask"].squeeze(0) for item in batch]
+    # Padding dinâmico
+    max_len = max(len(ids) for ids in input_ids)
+    padded_input_ids = []
+    padded_attention_mask = []
+    for ids, mask in zip(input_ids, attention_mask):
+        pad_len = max_len - len(ids)
+        if pad_len > 0:
+            ids = torch.cat([ids, torch.full((pad_len,), 0, dtype=ids.dtype)])
+            mask = torch.cat([mask, torch.zeros(pad_len, dtype=mask.dtype)])
+        padded_input_ids.append(ids)
+        padded_attention_mask.append(mask)
+    input_ids = torch.stack(padded_input_ids)
+    attention_mask = torch.stack(padded_attention_mask)
+    labels = input_ids.clone()
+    labels[attention_mask == 0] = -100
+    return input_ids, attention_mask, labels
 
 
 def _on_pause(signum=None, frame=None):
@@ -128,35 +175,18 @@ def run_training(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    # Pré-truncar a nível de caracteres para acelerar a tokenização (o tokenizer
-    # iria truncar a max_length tokens de qualquer forma).
     char_limit = max_length * 8
-    print(f"[TOKENIZE] tokenizando {len(texts)} exemplos com max_length={max_length}...")
-    all_input_ids = []
-    all_attention_mask = []
-    for i, txt in enumerate(texts):
-        if len(txt) > char_limit:
-            txt = txt[:char_limit]
-        enc = tokenizer(
-            txt,
-            truncation=True,
-            padding="max_length",
-            max_length=max_length,
-            return_tensors="pt",
-        )
-        all_input_ids.append(enc["input_ids"].squeeze(0))
-        all_attention_mask.append(enc["attention_mask"].squeeze(0))
-        if (i + 1) % 10000 == 0:
-            print(f"  tokenizado {i+1}/{len(texts)}")
+    texts = [txt[:char_limit] if len(txt) > char_limit else txt for txt in texts]
 
-    input_ids = torch.stack(all_input_ids)
-    attention_mask = torch.stack(all_attention_mask)
-    labels = input_ids.clone()
-    labels[attention_mask == 0] = -100
-
-    dataset = TensorDataset(input_ids, attention_mask, labels)
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    print(f"[DATASET] {len(dataset)} exemplos, {len(loader)} batches por época")
+    dataset = StreamingTextDataset(texts, tokenizer, max_length=max_length)
+    loader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=_collate_batch,
+        num_workers=0,
+    )
+    print(f"[DATASET] {len(texts)} exemplos, {len(loader)} batches por época")
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
     model.train()

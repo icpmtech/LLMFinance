@@ -8,11 +8,13 @@ import { TickerPage } from "./pages/TickerPage";
 import { RagPage } from "./pages/RagPage";
 import { ElasticPage } from "./pages/ElasticPage";
 import { GlobalSearchPage } from "./pages/GlobalSearchPage";
-import { ContractsPage } from "./pages/ContractsPage";
+// import { ContractsPage } from "./pages/ContractsPage"; // página legada, mantida no código mas não usada
+import { ContractsDashboardPage } from "./pages/ContractsDashboardPage";
+import { ContractsSearchPage } from "./pages/ContractsSearchPage";
 import { sendChat } from "./sendChat";
 import type { Message, ModelBackend } from "./types";
 
-type AppView = "dashboard" | "chat" | "forecast" | "trading" | "tickers" | "ticker-detail" | "rag" | "elastic" | "search" | "contracts";
+type AppView = "dashboard" | "chat" | "forecast" | "trading" | "tickers" | "ticker-detail" | "rag" | "elastic" | "search" | "contracts" | "contracts-dashboard" | "contracts-search";
 const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
 
 const STORAGE_KEY = "finance-llm-conversations";
@@ -65,7 +67,9 @@ export default function App() {
     if (path === "/trading") return "trading";
     if (path === "/tickers") return "tickers";
     if (path === "/elastic") return "elastic";
-    if (path === "/contracts") return "contracts";
+    if (path === "/contracts") return "contracts-search";
+    if (path === "/contracts/search") return "contracts-search";
+    if (path === "/contracts/dashboard") return "contracts-dashboard";
     const saved = localStorage.getItem("finance-llm-view");
     return (saved as AppView) || "dashboard";
   });
@@ -192,7 +196,15 @@ export default function App() {
       return;
     }
     if (v === "contracts") {
-      setView("contracts");
+      setView("contracts-search");
+      return;
+    }
+    if (v === "contracts-search") {
+      setView("contracts-search");
+      return;
+    }
+    if (v === "contracts-dashboard") {
+      setView("contracts-dashboard");
       return;
     }
     setView(v as AppView);
@@ -226,8 +238,21 @@ export default function App() {
       />
     );
   }
-  if (view === "contracts") {
-    return <ContractsPage onSwitchView={() => setView("dashboard")} />;
+  if (view === "contracts-dashboard") {
+    return (
+      <ContractsDashboardPage
+        onSwitchView={() => setView("dashboard")}
+        onSwitchSearch={() => setView("contracts-search")}
+      />
+    );
+  }
+  if (view === "contracts-search" || view === "contracts") {
+    return (
+      <ContractsSearchPage
+        onSwitchView={() => setView("dashboard")}
+        onSwitchDashboard={() => setView("contracts-dashboard")}
+      />
+    );
   }
   return (
     <ChatLayout
@@ -248,7 +273,9 @@ export default function App() {
       onSwitchElastic={() => setView("elastic")}
       onSwitchSearch={() => setView("search")}
       onSwitchTrading={() => setView("trading")}
-      onSwitchContracts={() => setView("contracts")}
+      onSwitchContracts={() => setView("contracts-search")}
+      onSwitchContractsDashboard={() => setView("contracts-dashboard")}
+      onSwitchContractsSearch={() => setView("contracts-search")}
     />
   );
 }

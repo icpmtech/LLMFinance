@@ -695,3 +695,26 @@ export interface ContractChatResponse {
   model_used?: string;
   error?: string;
 }
+
+export interface ContractAnalyticsRow {
+  key: string;
+  count: number;
+  total_value?: number;
+  description?: string;
+}
+
+export interface ContractAnalyticsResponse {
+  total_contracts: number;
+  total_value?: number;
+  avg_value?: number;
+  max_value?: number;
+  by_year: ContractAnalyticsRow[];
+  by_month: ContractAnalyticsRow[];
+  value_distribution: ContractAnalyticsRow[];
+  top_entities: ContractAnalyticsRow[];
+  top_cpv: ContractAnalyticsRow[];
+  procedure_types: ContractAnalyticsRow[];
+  contract_types: ContractAnalyticsRow[];
+  year?: number;
+  error?: string;
+}
