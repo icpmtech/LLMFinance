@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, FileText, TrendingUp, BarChart3, PieChart, Activity, Euro, Database, RefreshCw, Filter, Download, FileSpreadsheet } from "lucide-react";
+import { ArrowLeft, FileText, TrendingUp, BarChart3, PieChart, Activity, Euro, Database, RefreshCw, Filter, Download, FileSpreadsheet, Sparkles } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -58,17 +58,29 @@ function useDebounce<T>(value: T, delay = 300) {
   return debounced;
 }
 
-function StatCard({ icon: Icon, label, value, sub }: { icon: any; label: string; value: string; sub?: string }) {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  color = "text-teal-400",
+  glow = "glow-teal",
+}: {
+  icon: any;
+  label: string;
+  value: string;
+  sub?: string;
+  color?: string;
+  glow?: string;
+}) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 flex items-start gap-3">
-      <div className="p-2 rounded-lg bg-primary/10 text-primary">
-        <Icon size={20} />
+    <div className={`glass-card gradient-border rounded-2xl p-5 ${glow}`}>
+      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+        <Icon size={18} className={color} />
+        {label}
       </div>
-      <div>
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="text-xl font-bold text-foreground">{value}</p>
-        {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
-      </div>
+      <p className="text-2xl md:text-3xl font-bold stat-value">{value}</p>
+      {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
     </div>
   );
 }
@@ -160,31 +172,21 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
   const valueDistribution = data?.value_distribution ?? [];
 
   return (
-    <div className="min-h-screen w-full bg-background text-foreground">
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <button
-          onClick={onSwitchView}
-          className="mb-4 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition"
-        >
-          <ArrowLeft size={16} />
-          Voltar
-        </button>
-
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <BarChart3 size={28} />
-              Dashboard de Contratos Públicos
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {status ? `${formatNumber(status.total)} contratos indexados` : "A carregar..."}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
+    <div className="min-h-screen w-full bg-background text-foreground orbit-bg">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+          <button
+            onClick={onSwitchView}
+            className="self-start flex items-center gap-2 px-3 py-1.5 rounded-full glass-card text-sm text-muted-foreground hover:text-foreground transition"
+          >
+            <ArrowLeft size={16} />
+            Voltar
+          </button>
+          <div className="flex items-center gap-2 flex-wrap">
             <select
               value={year}
               onChange={(e) => setYear(e.target.value === "" ? "" : parseInt(e.target.value))}
-              className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              className="px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
             >
               <option value="">Todos os anos</option>
               {years.map((y) => (
@@ -196,14 +198,14 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
             <button
               onClick={loadAnalytics}
               disabled={loading}
-              className="px-3 py-2 rounded-lg bg-secondary text-secondary-foreground hover:bg-accent transition disabled:opacity-50 flex items-center gap-2"
+              className="px-3 py-2 rounded-xl glass-card hover:bg-white/5 transition disabled:opacity-50 flex items-center gap-2 text-sm"
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
               <span className="hidden sm:inline">Atualizar</span>
             </button>
             <button
               onClick={() => setShowFilters((s) => !s)}
-              className={`px-3 py-2 rounded-lg border border-border transition flex items-center gap-2 ${showFilters ? "bg-primary text-primary-foreground" : "bg-card hover:bg-muted"}`}
+              className={`px-3 py-2 rounded-xl transition flex items-center gap-2 text-sm ${showFilters ? "glass-card bg-primary/10 text-primary border-primary/20" : "glass-card hover:bg-white/5"}`}
             >
               <Filter size={16} />
               <span className="hidden sm:inline">Filtros</span>
@@ -226,7 +228,7 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
                 }
               }}
               disabled={exporting !== null}
-              className="px-3 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition disabled:opacity-50 flex items-center gap-2"
+              className="px-3 py-2 rounded-xl glass-card text-emerald-400 border-emerald-400/20 hover:bg-emerald-400/10 transition disabled:opacity-50 flex items-center gap-2 text-sm"
             >
               <FileSpreadsheet size={16} />
               <span className="hidden sm:inline">Excel</span>
@@ -249,7 +251,7 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
                 }
               }}
               disabled={exporting !== null}
-              className="px-3 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition disabled:opacity-50 flex items-center gap-2"
+              className="px-3 py-2 rounded-xl glass-card text-rose-400 border-rose-400/20 hover:bg-rose-400/10 transition disabled:opacity-50 flex items-center gap-2 text-sm"
             >
               <Download size={16} />
               <span className="hidden sm:inline">PDF</span>
@@ -257,7 +259,7 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
             {onSwitchSearch && (
               <button
                 onClick={onSwitchSearch}
-                className="px-3 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition flex items-center gap-2"
+                className="px-3 py-2 rounded-xl glass-card bg-primary/10 text-primary border-primary/20 hover:bg-primary/15 transition flex items-center gap-2 text-sm"
               >
                 <FileText size={16} />
                 <span className="hidden sm:inline">Pesquisar</span>
@@ -266,15 +268,31 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
           </div>
         </div>
 
+        <div className="mb-8 fade-in">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass-card text-xs text-amber-300 mb-3">
+            <Sparkles size={14} />
+            Visão agregada da contratação pública
+          </div>
+          <h1 className="text-3xl md:text-4xl font-bold flex items-center gap-3 mb-2">
+            <span className="p-2 rounded-2xl bg-gradient-to-br from-amber-500/20 to-rose-500/15 border border-white/10">
+              <BarChart3 size={32} className="text-amber-400" />
+            </span>
+            Dashboard de Contratos Públicos
+          </h1>
+          <p className="text-muted-foreground max-w-2xl">
+            {status ? `${formatNumber(status.total)} contratos indexados` : "A carregar..."}
+          </p>
+        </div>
+
         {error && (
-          <div className="mb-6 rounded-lg px-3 py-2 text-sm bg-destructive/10 text-destructive">
+          <div className="mb-6 rounded-2xl px-4 py-3 text-sm bg-rose-500/10 border border-rose-500/20 text-rose-300 flex items-center gap-2">
             {error}
           </div>
         )}
 
         {showFilters && (
-          <div className="mb-6 rounded-xl border border-border bg-card p-4">
-            <div className="flex items-center justify-between mb-3">
+          <div className="mb-8 glass-card rounded-2xl p-5 fade-in">
+            <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold flex items-center gap-2">
                 <Filter size={18} /> Filtros de pesquisa
               </h2>
@@ -282,86 +300,111 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
                 Os mesmos parâmetros usados na pesquisa de contratos
               </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
-              <input
-                type="text"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Texto livre (q)"
-                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <input
-                type="text"
-                value={entity}
-                onChange={(e) => setEntity(e.target.value)}
-                placeholder="Entidade adjudicante/ário"
-                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <input
-                type="text"
-                value={nif}
-                onChange={(e) => setNif(e.target.value)}
-                placeholder="NIF"
-                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <input
-                type="text"
-                value={cpvCode}
-                onChange={(e) => setCpvCode(e.target.value)}
-                placeholder="Código CPV"
-                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <select
-                value={year}
-                onChange={(e) => setYear(e.target.value === "" ? "" : parseInt(e.target.value))}
-                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Todos os anos</option>
-                {years.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="number"
-                value={minPrice}
-                onChange={(e) => setMinPrice(e.target.value)}
-                placeholder="Preço mínimo €"
-                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <input
-                type="number"
-                value={maxPrice}
-                onChange={(e) => setMaxPrice(e.target.value)}
-                placeholder="Preço máximo €"
-                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                placeholder="Data início"
-                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                placeholder="Data fim"
-                className="px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+              <div className="sm:col-span-2 lg:col-span-4">
+                <label className="text-xs text-muted-foreground block mb-1">Texto livre</label>
+                <input
+                  type="text"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Texto livre (q)"
+                  className="w-full px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Entidade</label>
+                <input
+                  type="text"
+                  value={entity}
+                  onChange={(e) => setEntity(e.target.value)}
+                  placeholder="Entidade adjudicante/ário"
+                  className="w-full px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">NIF</label>
+                <input
+                  type="text"
+                  value={nif}
+                  onChange={(e) => setNif(e.target.value)}
+                  placeholder="NIF"
+                  className="w-full px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Código CPV</label>
+                <input
+                  type="text"
+                  value={cpvCode}
+                  onChange={(e) => setCpvCode(e.target.value)}
+                  placeholder="Código CPV"
+                  className="w-full px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Ano</label>
+                <select
+                  value={year}
+                  onChange={(e) => setYear(e.target.value === "" ? "" : parseInt(e.target.value))}
+                  className="w-full px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
+                >
+                  <option value="">Todos os anos</option>
+                  {years.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Preço mínimo €</label>
+                <input
+                  type="number"
+                  value={minPrice}
+                  onChange={(e) => setMinPrice(e.target.value)}
+                  placeholder="Preço mínimo €"
+                  className="w-full px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Preço máximo €</label>
+                <input
+                  type="number"
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(e.target.value)}
+                  placeholder="Preço máximo €"
+                  className="w-full px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Data início</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Data fim</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
+                />
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={applyFilters}
-                className="px-3 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition"
+                className="px-4 py-2 rounded-xl glass-card bg-primary/10 text-primary border-primary/20 hover:bg-primary/15 transition"
               >
                 Aplicar filtros
               </button>
               <button
                 onClick={resetFilters}
-                className="px-3 py-2 rounded-lg bg-muted text-foreground hover:bg-accent transition"
+                className="px-4 py-2 rounded-xl glass-card hover:bg-white/5 transition"
               >
                 Limpar
               </button>
@@ -370,32 +413,60 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
         )}
 
         {Object.keys(filters).length > 2 && (
-          <div className="mb-6 rounded-lg px-3 py-2 text-sm bg-muted/50 text-foreground flex flex-wrap gap-2 items-center">
+          <div className="mb-8 rounded-2xl px-4 py-3 text-sm glass-card flex flex-wrap gap-2 items-center">
             <span className="text-muted-foreground">Filtros activos:</span>
-            {filters.q && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">q: {filters.q}</span>}
-            {filters.year !== undefined && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">ano: {filters.year}</span>}
-            {filters.entity && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">entidade: {filters.entity}</span>}
-            {filters.nif && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">nif: {filters.nif}</span>}
-            {filters.cpv_code && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">cpv: {filters.cpv_code}</span>}
-            {filters.min_price !== undefined && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">min: {formatEuro(filters.min_price)}</span>}
-            {filters.max_price !== undefined && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">max: {formatEuro(filters.max_price)}</span>}
-            {filters.start_date && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">desde: {filters.start_date}</span>}
-            {filters.end_date && <span className="px-2 py-1 rounded bg-primary/10 text-primary text-xs">até: {filters.end_date}</span>}
+            {filters.q && <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full glass-card text-xs">q: {filters.q}</span>}
+            {filters.year !== undefined && <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full glass-card text-xs">ano: {filters.year}</span>}
+            {filters.entity && <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full glass-card text-xs">entidade: {filters.entity}</span>}
+            {filters.nif && <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full glass-card text-xs">nif: {filters.nif}</span>}
+            {filters.cpv_code && <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full glass-card text-xs">cpv: {filters.cpv_code}</span>}
+            {filters.min_price !== undefined && <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full glass-card text-xs">min: {formatEuro(filters.min_price)}</span>}
+            {filters.max_price !== undefined && <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full glass-card text-xs">max: {formatEuro(filters.max_price)}</span>}
+            {filters.start_date && <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full glass-card text-xs">desde: {filters.start_date}</span>}
+            {filters.end_date && <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full glass-card text-xs">até: {filters.end_date}</span>}
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <StatCard icon={FileText} label="Total de contratos" value={formatNumber(data?.total_contracts)} />
-          <StatCard icon={Euro} label="Valor total" value={formatEuro(data?.total_value)} />
-          <StatCard icon={Activity} label="Valor médio" value={formatEuro(data?.avg_value)} sub={`Máx: ${formatEuro(data?.max_value)}`} />
-          <StatCard icon={TrendingUp} label="Anos disponíveis" value={String(years.length)} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 fade-in">
+          <StatCard
+            icon={FileText}
+            label="Total de contratos"
+            value={formatNumber(data?.total_contracts)}
+            color="text-teal-400"
+            glow="glow-teal"
+          />
+          <StatCard
+            icon={Euro}
+            label="Valor total"
+            value={formatEuro(data?.total_value)}
+            color="text-amber-400"
+            glow="glow-amber"
+          />
+          <StatCard
+            icon={Activity}
+            label="Valor médio"
+            value={formatEuro(data?.avg_value)}
+            sub={`Máx: ${formatEuro(data?.max_value)}`}
+            color="text-rose-400"
+            glow="glow-rose"
+          />
+          <StatCard
+            icon={TrendingUp}
+            label="Anos disponíveis"
+            value={String(years.length)}
+            color="text-blue-400"
+            glow="glow-blue"
+          />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h2 className="font-semibold mb-4 flex items-center gap-2">
-              <BarChart3 size={18} /> Contratos por ano
-            </h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <div className="glass-card gradient-border rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-5">
+              <div className="p-2 rounded-xl bg-teal-500/15 border border-teal-400/20">
+                <BarChart3 size={20} className="text-teal-400" />
+              </div>
+              <h2 className="text-xl font-semibold">Contratos por ano</h2>
+            </div>
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={byYearSorted}>
@@ -412,10 +483,13 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h2 className="font-semibold mb-4 flex items-center gap-2">
-              <Activity size={18} /> Contratos por mês
-            </h2>
+          <div className="glass-card gradient-border rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-5">
+              <div className="p-2 rounded-xl bg-blue-500/15 border border-blue-400/20">
+                <Activity size={20} className="text-blue-400" />
+              </div>
+              <h2 className="text-xl font-semibold">Contratos por mês</h2>
+            </div>
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={byMonthSorted}>
@@ -433,11 +507,14 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h2 className="font-semibold mb-4 flex items-center gap-2">
-              <TrendingUp size={18} /> Top entidades por valor adjudicado
-            </h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <div className="glass-card gradient-border rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-5">
+              <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-400/20">
+                <TrendingUp size={20} className="text-amber-400" />
+              </div>
+              <h2 className="text-xl font-semibold">Top entidades por valor adjudicado</h2>
+            </div>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={topEntities} layout="vertical">
@@ -454,10 +531,13 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h2 className="font-semibold mb-4 flex items-center gap-2">
-              <PieChart size={18} /> Top CPV
-            </h2>
+          <div className="glass-card gradient-border rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-5">
+              <div className="p-2 rounded-xl bg-rose-500/15 border border-rose-400/20">
+                <PieChart size={20} className="text-rose-400" />
+              </div>
+              <h2 className="text-xl font-semibold">Top CPV</h2>
+            </div>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <RePieChart>
@@ -484,11 +564,14 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h2 className="font-semibold mb-4 flex items-center gap-2">
-              <BarChart3 size={18} /> Distribuição de valores
-            </h2>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="glass-card gradient-border rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-5">
+              <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-400/20">
+                <BarChart3 size={20} className="text-amber-400" />
+              </div>
+              <h2 className="text-xl font-semibold">Distribuição de valores</h2>
+            </div>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={valueDistribution}>
@@ -505,10 +588,13 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h2 className="font-semibold mb-4 flex items-center gap-2">
-              <PieChart size={18} /> Tipos de procedimento
-            </h2>
+          <div className="glass-card gradient-border rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-5">
+              <div className="p-2 rounded-xl bg-teal-500/15 border border-teal-400/20">
+                <PieChart size={20} className="text-teal-400" />
+              </div>
+              <h2 className="text-xl font-semibold">Tipos de procedimento</h2>
+            </div>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <RePieChart>
@@ -534,10 +620,13 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h2 className="font-semibold mb-4 flex items-center gap-2">
-              <PieChart size={18} /> Tipos de contrato
-            </h2>
+          <div className="glass-card gradient-border rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-5">
+              <div className="p-2 rounded-xl bg-blue-500/15 border border-blue-400/20">
+                <PieChart size={20} className="text-blue-400" />
+              </div>
+              <h2 className="text-xl font-semibold">Tipos de contrato</h2>
+            </div>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <RePieChart>
@@ -564,58 +653,61 @@ export function ContractsDashboardPage({ onSwitchView, onSwitchSearch }: Contrac
           </div>
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-4">
-          <h2 className="font-semibold mb-3 flex items-center gap-2">
-            <Database size={18} /> Tabelas resumo
-          </h2>
+        <div className="glass-card rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-5">
+            <div className="p-2 rounded-xl bg-primary/15 border border-primary/20">
+              <Database size={20} className="text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold">Tabelas resumo</h2>
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              <p className="text-sm font-medium mb-2 text-muted-foreground">Top entidades</p>
-              <div className="overflow-auto max-h-64 rounded-lg border border-border">
+            <div className="overflow-hidden rounded-xl border border-white/5">
+              <p className="text-sm font-medium px-4 py-3 bg-white/5 text-muted-foreground border-b border-white/5">Top entidades</p>
+              <div className="overflow-auto max-h-64">
                 <table className="w-full text-sm text-left">
-                  <thead className="bg-muted text-muted-foreground">
+                  <thead className="bg-white/[0.03] text-muted-foreground text-xs uppercase tracking-wider">
                     <tr>
-                      <th className="px-3 py-2">Entidade</th>
-                      <th className="px-3 py-2">Contratos</th>
-                      <th className="px-3 py-2">Valor total</th>
+                      <th className="px-4 py-2.5">Entidade</th>
+                      <th className="px-4 py-2.5">Contratos</th>
+                      <th className="px-4 py-2.5">Valor total</th>
                     </tr>
                   </thead>
                   <tbody>
                     {topEntities.map((e: ContractAnalyticsRow, i: number) => (
-                      <tr key={i} className="border-t border-border">
-                        <td className="px-3 py-2 max-w-[200px] truncate" title={e.key}>{e.key}</td>
-                        <td className="px-3 py-2">{formatNumber(e.count)}</td>
-                        <td className="px-3 py-2">{formatEuro(e.total_value)}</td>
+                      <tr key={i} className="border-t border-white/5 hover:bg-white/[0.03] transition">
+                        <td className="px-4 py-2.5 max-w-[200px] truncate" title={e.key}>{e.key}</td>
+                        <td className="px-4 py-2.5">{formatNumber(e.count)}</td>
+                        <td className="px-4 py-2.5">{formatEuro(e.total_value)}</td>
                       </tr>
                     ))}
                     {topEntities.length === 0 && (
-                      <tr><td colSpan={3} className="px-3 py-4 text-center text-muted-foreground">Sem dados</td></tr>
+                      <tr><td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">Sem dados</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
             </div>
-            <div>
-              <p className="text-sm font-medium mb-2 text-muted-foreground">Top CPV</p>
-              <div className="overflow-auto max-h-64 rounded-lg border border-border">
+            <div className="overflow-hidden rounded-xl border border-white/5">
+              <p className="text-sm font-medium px-4 py-3 bg-white/5 text-muted-foreground border-b border-white/5">Top CPV</p>
+              <div className="overflow-auto max-h-64">
                 <table className="w-full text-sm text-left">
-                  <thead className="bg-muted text-muted-foreground">
+                  <thead className="bg-white/[0.03] text-muted-foreground text-xs uppercase tracking-wider">
                     <tr>
-                      <th className="px-3 py-2">CPV</th>
-                      <th className="px-3 py-2">Contratos</th>
-                      <th className="px-3 py-2">Descrição</th>
+                      <th className="px-4 py-2.5">CPV</th>
+                      <th className="px-4 py-2.5">Contratos</th>
+                      <th className="px-4 py-2.5">Descrição</th>
                     </tr>
                   </thead>
                   <tbody>
                     {topCpv.map((c: ContractAnalyticsRow, i: number) => (
-                      <tr key={i} className="border-t border-border">
-                        <td className="px-3 py-2 font-mono">{c.key}</td>
-                        <td className="px-3 py-2">{formatNumber(c.count)}</td>
-                        <td className="px-3 py-2 max-w-[250px] truncate" title={c.description}>{c.description || "—"}</td>
+                      <tr key={i} className="border-t border-white/5 hover:bg-white/[0.03] transition">
+                        <td className="px-4 py-2.5 font-mono">{c.key}</td>
+                        <td className="px-4 py-2.5">{formatNumber(c.count)}</td>
+                        <td className="px-4 py-2.5 max-w-[250px] truncate" title={c.description}>{c.description || "—"}</td>
                       </tr>
                     ))}
                     {topCpv.length === 0 && (
-                      <tr><td colSpan={3} className="px-3 py-4 text-center text-muted-foreground">Sem dados</td></tr>
+                      <tr><td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">Sem dados</td></tr>
                     )}
                   </tbody>
                 </table>

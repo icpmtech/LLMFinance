@@ -33,6 +33,10 @@ import type {
   ElasticNewsGraphResponse,
 } from "../types";
 
+interface ElasticPageProps {
+  onSwitchView: () => void;
+}
+
 const formatDate = (d?: string) => {
   if (!d) return "-";
   try {
@@ -70,7 +74,7 @@ const sentimentClass = (s?: string) => {
   return "text-amber-400 text-glow-amber";
 };
 
-export function ElasticPage() {
+export function ElasticPage({ onSwitchView }: ElasticPageProps) {
   const [status, setStatus] = useState<ElasticStatus | null>(null);
   const [tickers, setTickers] = useState<string[]>([]);
   const [ticker, setTicker] = useState("");

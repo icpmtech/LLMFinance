@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { ChatLayout } from "./components/ChatLayout";
+import { AppNav, type AppView as AppNavView } from "./components/AppNav";
 import { DashboardPage } from "./pages/DashboardPage";
 import { TickerDetailPage } from "./pages/TickerDetailPage";
 import { ForecastPage } from "./pages/ForecastPage";
@@ -17,7 +18,7 @@ import CompanyDashboardPage from "./pages/CompanyDashboardPage";
 import { sendChat } from "./sendChat";
 import type { Message, ModelBackend } from "./types";
 
-type AppView = "dashboard" | "chat" | "forecast" | "trading" | "tickers" | "ticker-detail" | "rag" | "elastic" | "search" | "contracts" | "contracts-dashboard" | "contracts-search" | "companies" | "companies-search" | "companies-dashboard" | "company-detail";
+type AppView = AppNavView | "chat" | "ticker-detail";
 const COMPANY_DETAIL_KEY = "finance-llm-company-detail";
 const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
 
@@ -93,6 +94,38 @@ export default function App() {
     }
     return "dashboard";
   });
+
+  useEffect(() => {
+    const onPop = () => {
+      if (typeof window === "undefined") return;
+      const path = window.location.pathname.replace(/\/$/, "");
+      let next: AppView = "dashboard";
+      if (path === "/chat") next = "chat";
+      else if (path === "/dashboard") next = "dashboard";
+      else if (path === "/forecast") next = "forecast";
+      else if (path === "/trading") next = "trading";
+      else if (path === "/tickers") next = "tickers";
+      else if (path.startsWith("/tickers/")) {
+        const symbol = path.replace("/tickers/", "").split("/")[0];
+        if (symbol) setSelectedTicker(symbol);
+        next = "ticker-detail";
+      } else if (path === "/rag") next = "rag";
+      else if (path === "/elastic") next = "elastic";
+      else if (path === "/search") next = "search";
+      else if (path === "/contracts" || path === "/contracts/search") next = "contracts-search";
+      else if (path === "/contracts/dashboard") next = "contracts-dashboard";
+      else if (path === "/companies" || path === "/companies/search") next = "companies-search";
+      else if (path === "/companies/dashboard") next = "companies-dashboard";
+      else if (path.startsWith("/companies/")) {
+        const nif = path.replace("/companies/", "").split("/")[0];
+        if (nif) setSelectedCompany(nif);
+        next = "company-detail";
+      }
+      setView(next);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   useEffect(() => {
     if (selectedCompany) {
@@ -199,161 +232,180 @@ export default function App() {
     [activeId],
   );
 
+  const setViewAndHistory = useCallback((next: AppView) => {
+    setView(next);
+    let path = "/";
+    if (next === "chat") path = "/chat";
+    else if (next === "dashboard") path = "/dashboard";
+    else if (next === "forecast") path = "/forecast";
+    else if (next === "trading") path = "/trading";
+    else if (next === "tickers" || next === "ticker-detail") path = selectedTicker ? `/tickers/${selectedTicker}` : "/tickers";
+    else if (next === "rag") path = "/rag";
+    else if (next === "elastic") path = "/elastic";
+    else if (next === "search") path = "/search";
+    else if (next === "contracts-search" || next === "contracts") path = "/contracts/search";
+    else if (next === "contracts-dashboard") path = "/contracts/dashboard";
+    else if (next === "companies-search" || next === "companies") path = "/companies/search";
+    else if (next === "companies-dashboard") path = "/companies/dashboard";
+    else if (next === "company-detail" && selectedCompany) path = `/companies/${selectedCompany}`;
+    if (typeof window !== "undefined" && window.location.pathname !== path) {
+      window.history.pushState({}, "", path);
+    }
+  }, [selectedCompany, selectedTicker]);
+
   const handleSwitchView = (v: string) => {
     if (v === "tickers" || v === "tickers-old") {
-      setView("tickers");
+      setViewAndHistory("tickers");
       return;
     }
     if (v === "ticker-detail") {
       if (!selectedTicker && typeof window !== "undefined") {
         const saved = localStorage.getItem(TICKER_DETAIL_KEY);
         setSelectedTicker(saved || "AAPL");
+        setViewAndHistory("ticker-detail");
+      } else {
+        setViewAndHistory("ticker-detail");
       }
-      setView("ticker-detail");
       return;
     }
     if (v === "search") {
-      setView("search");
+      setViewAndHistory("search");
       return;
     }
     if (v === "trading") {
-      setView("trading");
+      setViewAndHistory("trading");
       return;
     }
-    if (v === "contracts") {
-      setView("contracts-search");
-      return;
-    }
-    if (v === "contracts-search") {
-      setView("contracts-search");
+    if (v === "contracts" || v === "contracts-search") {
+      setViewAndHistory("contracts-search");
       return;
     }
     if (v === "contracts-dashboard") {
-      setView("contracts-dashboard");
+      setViewAndHistory("contracts-dashboard");
       return;
     }
-    if (v === "companies") {
-      setView("companies-search");
-      return;
-    }
-    if (v === "companies-search") {
-      setView("companies-search");
+    if (v === "companies" || v === "companies-search") {
+      setViewAndHistory("companies-search");
       return;
     }
     if (v === "companies-dashboard") {
-      setView("companies-dashboard");
+      setViewAndHistory("companies-dashboard");
       return;
     }
-    setView(v as AppView);
+    setViewAndHistory(v as AppView);
   };
 
   const handleSelectTicker = (ticker: string) => {
     setSelectedTicker(ticker);
-    setView("ticker-detail");
+    setViewAndHistory("ticker-detail");
   };
 
-  if (view === "dashboard") return <DashboardPage onSwitchView={handleSwitchView} onSelectTicker={handleSelectTicker} />;
-  if (view === "ticker-detail" && selectedTicker) {
+  const renderContent = () => {
+    if (view === "dashboard") return <DashboardPage onSwitchView={handleSwitchView} onSelectTicker={handleSelectTicker} />;
+    if (view === "ticker-detail" && selectedTicker) {
+      return (
+        <TickerDetailPage
+          ticker={selectedTicker}
+          onBack={() => setViewAndHistory("tickers")}
+          onSwitchView={handleSwitchView}
+        />
+      );
+    }
+    if (view === "forecast") return <ForecastPage />;
+    if (view === "trading") return <TradingPage onSwitchView={() => setViewAndHistory("dashboard")} />;
+    if (view === "tickers") return <TickerPage onSwitchView={() => setViewAndHistory("dashboard")} />;
+    if (view === "rag") return <RagPage onSwitchView={() => setViewAndHistory("dashboard")} />;
+    if (view === "elastic") return <ElasticPage />;
+    if (view === "search") {
+      return (
+        <GlobalSearchPage
+          onSwitchView={() => setViewAndHistory("dashboard")}
+          onSelectTicker={handleSelectTicker}
+        />
+      );
+    }
+    if (view === "contracts-dashboard") {
+      return (
+        <ContractsDashboardPage
+          onSwitchView={() => setViewAndHistory("dashboard")}
+          onSwitchSearch={() => setViewAndHistory("contracts-search")}
+        />
+      );
+    }
+    if (view === "contracts-search" || view === "contracts") {
+      return (
+        <ContractsSearchPage
+          onSwitchView={() => setViewAndHistory("dashboard")}
+          onSwitchDashboard={() => setViewAndHistory("contracts-dashboard")}
+        />
+      );
+    }
+    if (view === "companies-search" || view === "companies") {
+      const handleSelectCompany = (nif: string | null) => {
+        if (!nif) return;
+        setSelectedCompany(nif);
+        setViewAndHistory("company-detail");
+      };
+      return (
+        <CompanyDirectoryPage
+          onSwitchView={() => setViewAndHistory("dashboard")}
+          onSwitchDashboard={() => setViewAndHistory("companies-dashboard")}
+          onSelectCompany={handleSelectCompany}
+        />
+      );
+    }
+    if (view === "companies-dashboard") {
+      const handleSelectCompany = (nif: string | null) => {
+        if (!nif) return;
+        setSelectedCompany(nif);
+        setViewAndHistory("company-detail");
+      };
+      return (
+        <CompanyDashboardPage
+          onSwitchView={() => setViewAndHistory("companies-search")}
+          onSwitchSearch={() => setViewAndHistory("companies-search")}
+          onSelectCompany={handleSelectCompany}
+        />
+      );
+    }
+    if (view === "company-detail" && selectedCompany) {
+      return (
+        <CompanyDetailPage
+          nif={selectedCompany}
+          onBack={() => setViewAndHistory("companies-search")}
+          onSwitchDashboard={() => setViewAndHistory("companies-dashboard")}
+        />
+      );
+    }
     return (
-      <TickerDetailPage
-        ticker={selectedTicker}
-        onBack={() => setView("dashboard")}
-        onSwitchView={handleSwitchView}
+      <ChatLayout
+        conversations={conversations}
+        activeId={activeId}
+        messages={messages}
+        loading={loading}
+        streaming={false}
+        backend={backend}
+        onSelectConversation={handleSelect}
+        onNewConversation={handleNew}
+        onDeleteConversation={handleDelete}
+        onSend={handleSend}
+        onBackendChange={setBackend}
+        onNavigate={setViewAndHistory}
       />
     );
+  };
+
+  if (view === "chat") {
+    return renderContent();
   }
-  if (view === "forecast") return <ForecastPage onSwitchView={() => setView("dashboard")} />;
-  if (view === "trading") return <TradingPage onSwitchView={() => setView("dashboard")} />;
-  if (view === "tickers") return <TickerPage onSwitchView={() => setView("dashboard")} />;
-  if (view === "rag") return <RagPage onSwitchView={() => setView("dashboard")} />;
-  if (view === "elastic") return <ElasticPage onSwitchView={() => setView("dashboard")} />;
-  if (view === "search") {
-    return (
-      <GlobalSearchPage
-        onSwitchView={() => setView("dashboard")}
-        onSelectTicker={handleSelectTicker}
-      />
-    );
-  }
-  if (view === "contracts-dashboard") {
-    return (
-      <ContractsDashboardPage
-        onSwitchView={() => setView("dashboard")}
-        onSwitchSearch={() => setView("contracts-search")}
-      />
-    );
-  }
-  if (view === "contracts-search" || view === "contracts") {
-    return (
-      <ContractsSearchPage
-        onSwitchView={() => setView("dashboard")}
-        onSwitchDashboard={() => setView("contracts-dashboard")}
-      />
-    );
-  }
-  if (view === "companies-search" || view === "companies") {
-    const handleSelectCompany = (nif: string | null) => {
-      if (!nif) return;
-      setSelectedCompany(nif);
-      setView("company-detail");
-    };
-    return (
-      <CompanyDirectoryPage
-        onSwitchView={() => setView("dashboard")}
-        onSwitchDashboard={() => setView("companies-dashboard")}
-        onSelectCompany={handleSelectCompany}
-      />
-    );
-  }
-  if (view === "companies-dashboard") {
-    const handleSelectCompany = (nif: string | null) => {
-      if (!nif) return;
-      setSelectedCompany(nif);
-      setView("company-detail");
-    };
-    return (
-      <CompanyDashboardPage
-        onSwitchView={() => setView("companies-search")}
-        onSwitchSearch={() => setView("companies-search")}
-        onSelectCompany={handleSelectCompany}
-      />
-    );
-  }
-  if (view === "company-detail" && selectedCompany) {
-    return (
-      <CompanyDetailPage
-        nif={selectedCompany}
-        onBack={() => setView("companies-search")}
-        onSwitchDashboard={() => setView("companies-dashboard")}
-      />
-    );
-  }
+
   return (
-    <ChatLayout
-      conversations={conversations}
-      activeId={activeId}
-      messages={messages}
-      loading={loading}
-      streaming={false}
-      backend={backend}
-      onSelectConversation={handleSelect}
-      onNewConversation={handleNew}
-      onDeleteConversation={handleDelete}
-      onSend={handleSend}
-      onBackendChange={setBackend}
-      onSwitchView={() => setView("forecast")}
-      onSwitchTickers={() => setView("tickers")}
-      onSwitchRag={() => setView("rag")}
-      onSwitchElastic={() => setView("elastic")}
-      onSwitchSearch={() => setView("search")}
-      onSwitchTrading={() => setView("trading")}
-      onSwitchContracts={() => setView("contracts-search")}
-      onSwitchContractsDashboard={() => setView("contracts-dashboard")}
-      onSwitchContractsSearch={() => setView("contracts-search")}
-      onSwitchCompanies={() => setView("companies-search")}
-      onSwitchCompaniesDashboard={() => setView("companies-dashboard")}
-      onSwitchCompaniesSearch={() => setView("companies-search")}
-    />
+    <div className="min-h-screen w-full bg-background text-foreground flex">
+      <AppNav active={view as AppNavView} onNavigate={(v) => setViewAndHistory(v as AppView)} onBackToChat={() => setViewAndHistory("chat")} />
+      <main className="flex-1 min-w-0 min-h-screen overflow-y-auto pt-14 md:pt-0">
+        {renderContent()}
+      </main>
+    </div>
   );
 }
 

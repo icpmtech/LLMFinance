@@ -11,6 +11,7 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  Sparkles,
 } from "lucide-react";
 import {
   getContractStatus,
@@ -206,6 +207,11 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
 
   const activeFiltersCount = [year, entity, nif, cpv, minPrice, maxPrice, startDate, endDate].filter(Boolean).length;
 
+  const resultsTotalValue = useMemo(
+    () => results.reduce((acc, c) => acc + (c.precoContratual || 0), 0),
+    [results],
+  );
+
   const clearFilters = () => {
     setQuery("");
     setYear("");
@@ -237,39 +243,30 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
   }, [hasMore, loading, loadingMore]);
 
   return (
-    <div className="min-h-screen w-full bg-background text-foreground">
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        <button
-          onClick={onSwitchView}
-          className="mb-4 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition"
-        >
-          <ArrowLeft size={16} />
-          Voltar
-        </button>
-
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Search size={28} />
-              Pesquisa de Contratos
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {status ? `${status.total.toLocaleString("pt-PT")} contratos indexados` : "A carregar estado..."}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
+    <div className="min-h-screen w-full bg-background text-foreground orbit-bg">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+          <button
+            onClick={onSwitchView}
+            className="self-start flex items-center gap-2 px-3 py-1.5 rounded-full glass-card text-sm text-muted-foreground hover:text-foreground transition"
+          >
+            <ArrowLeft size={16} />
+            Voltar
+          </button>
+          <div className="flex items-center gap-3">
             {onSwitchDashboard && (
               <button
                 onClick={onSwitchDashboard}
-                className="px-3 py-2 rounded-lg border border-border hover:bg-accent transition flex items-center gap-2"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl glass-card hover:bg-white/5 transition text-sm"
               >
-                <FileText size={16} />
+                <FileText size={18} className="text-amber-400" />
                 <span className="hidden sm:inline">Dashboard</span>
               </button>
             )}
             <button
               onClick={() => setChatOpen((v) => !v)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition"
+              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition text-sm font-medium shadow-lg shadow-primary/20"
             >
               <MessageSquare size={18} />
               {chatOpen ? "Fechar chat" : "Chat IA"}
@@ -277,9 +274,48 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
           </div>
         </div>
 
+        {/* Hero */}
+        <div className="mb-8">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass-card text-xs text-teal-300 mb-3">
+            <Sparkles size={14} />
+            Base contratual pública
+          </div>
+          <h1 className="text-3xl md:text-4xl font-bold flex items-center gap-3 mb-2">
+            <span className="p-2 rounded-2xl bg-gradient-to-br from-teal-500/20 to-blue-500/20 border border-white/10">
+              <Search size={32} className="text-teal-400" />
+            </span>
+            Pesquisa de Contratos
+          </h1>
+          <p className="text-muted-foreground max-w-2xl">
+            {status
+              ? `${status.total.toLocaleString("pt-PT")} contratos indexados. Explora por objeto, entidade, NIF, CPV, preço e datas.`
+              : "A carregar estado..."}
+          </p>
+        </div>
+
+        {/* Metrics */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <div className="glass-card gradient-border rounded-2xl p-5 glow-teal">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Total de contratos</p>
+            <p className="text-3xl font-bold stat-value text-glow-teal mt-1">
+              {status ? status.total.toLocaleString("pt-PT") : "—"}
+            </p>
+          </div>
+          <div className="glass-card gradient-border rounded-2xl p-5 glow-amber">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Total valor dos resultados</p>
+            <p className="text-3xl font-bold stat-value text-glow-amber mt-1">
+              {formatPrice(resultsTotalValue)}
+            </p>
+          </div>
+          <div className="glass-card gradient-border rounded-2xl p-5 glow-blue">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Filtros ativos</p>
+            <p className="text-3xl font-bold stat-value text-glow-blue mt-1">{activeFiltersCount}</p>
+          </div>
+        </div>
+
         {chatOpen && (
-          <div className="mb-6 rounded-xl border border-border bg-card p-4">
-            <h2 className="font-semibold mb-2 flex items-center gap-2">
+          <div className="glass-card rounded-2xl p-5 mb-8">
+            <h2 className="font-semibold mb-3 flex items-center gap-2">
               <MessageSquare size={18} /> Perguntar sobre contratos
             </h2>
             <div className="flex gap-2 mb-3">
@@ -288,12 +324,12 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
                 onChange={(e) => setChatQuestion(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleChat()}
                 placeholder="Ex: quantos contratos foram atribuídos à Mota-Engil em 2024?"
-                className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
               />
               <button
                 onClick={handleChat}
                 disabled={chatLoading || !chatQuestion.trim()}
-                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition disabled:opacity-50"
+                className="px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition disabled:opacity-50"
               >
                 {chatLoading ? <Loader2 size={18} className="animate-spin" /> : "Perguntar"}
               </button>
@@ -306,7 +342,7 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
                     <p className="text-xs text-muted-foreground mb-1">Fontes</p>
                     <div className="space-y-1">
                       {chatSources.map((s, i) => (
-                        <div key={i} className="text-xs bg-muted rounded px-2 py-1">
+                        <div key={i} className="text-xs glass-card rounded-lg px-2 py-1">
                           {s.idcontrato} · {s.objectoContrato} · {formatPrice(s.precoContratual)}
                         </div>
                       ))}
@@ -318,21 +354,22 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
           </div>
         )}
 
-        <div className="rounded-xl border border-border bg-card p-4 mb-6">
+        {/* Search / filters */}
+        <div className="glass-card rounded-2xl p-5 mb-8">
           <div className="relative">
-            <div className="flex gap-2">
+            <div className="flex flex-col md:flex-row gap-3">
               <div className="relative flex-1">
-                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
                   ref={searchInputRef}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onFocus={() => query.trim().length > 1 && setShowSuggestions(true)}
                   placeholder="Pesquisar contratos por objeto, entidade, NIF, CPV..."
-                  className="w-full pl-10 pr-3 py-3 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-base"
+                  className="w-full pl-11 pr-3 py-3 rounded-xl bg-background/60 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/60 text-base"
                 />
                 {showSuggestions && suggestions.length > 0 && (
-                  <div className="absolute z-20 left-0 right-0 top-full mt-1 rounded-lg border border-border bg-card shadow-lg overflow-hidden">
+                  <div className="absolute z-20 left-0 right-0 top-full mt-1 rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-lg overflow-hidden">
                     {suggestions.map((s, i) => (
                       <button
                         key={i}
@@ -347,7 +384,7 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
                           setShowSuggestions(false);
                           doSearch(true);
                         }}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition flex items-center justify-between"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-white/5 transition flex items-center justify-between"
                       >
                         <span className="truncate">{s.text}</span>
                         <span className="text-xs text-muted-foreground ml-2 shrink-0">{s.type} · {s.count}</span>
@@ -359,7 +396,7 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
               <button
                 onClick={() => doSearch(true)}
                 disabled={loading}
-                className="px-5 py-3 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition disabled:opacity-50 flex items-center gap-2"
+                className="px-5 py-3 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2 font-medium shadow-lg shadow-primary/20"
               >
                 {loading ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
                 Pesquisar
@@ -370,39 +407,39 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
               onClick={() => setAdvancedOpen((v) => !v)}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-accent transition text-sm"
+              className="flex items-center gap-2 px-4 py-3 rounded-xl bg-background/60 border border-border hover:bg-white/5 transition text-sm"
             >
               <Filter size={16} />
-              Filtros avançados {activeFiltersCount > 0 && <span className="bg-primary text-primary-foreground rounded-full px-1.5 text-xs">{activeFiltersCount}</span>}
+              Filtros avançados {activeFiltersCount > 0 && <span className="bg-primary text-primary-foreground rounded-full px-2 py-0.5 text-xs">{activeFiltersCount}</span>}
               {advancedOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
             {query && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-xs">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full glass-card text-xs">
                 Pesquisa: {query} <button onClick={() => { setQuery(""); searchInputRef.current?.focus(); }}><X size={12} /></button>
               </span>
             )}
             {year && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-xs">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full glass-card text-xs">
                 Ano: {year} <button onClick={() => setYear("")}><X size={12} /></button>
               </span>
             )}
             {entity && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-xs">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full glass-card text-xs">
                 Entidade: {entity} <button onClick={() => setEntity("")}><X size={12} /></button>
               </span>
             )}
             {nif && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-xs">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full glass-card text-xs">
                 NIF: {nif} <button onClick={() => setNif("")}><X size={12} /></button>
               </span>
             )}
             {cpv && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-xs">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full glass-card text-xs">
                 CPV: {cpv} <button onClick={() => setCpv("")}><X size={12} /></button>
               </span>
             )}
             {(minPrice || maxPrice) && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted text-xs">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full glass-card text-xs">
                 Preço: {minPrice || "0"} - {maxPrice || "∞"} <button onClick={() => { setMinPrice(""); setMaxPrice(""); }}><X size={12} /></button>
               </span>
             )}
@@ -417,13 +454,13 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
           </div>
 
           {advancedOpen && (
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-4 border-t border-border">
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-4 border-t border-border/50">
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">Ano</label>
                 <select
                   value={year}
                   onChange={(e) => setYear(e.target.value === "" ? "" : parseInt(e.target.value))}
-                  className="w-full px-3 py-2 rounded-lg bg-muted border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
                 >
                   <option value="">Todos</option>
                   {years?.available.map((y) => (
@@ -439,7 +476,7 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
                   value={entity}
                   onChange={(e) => setEntity(e.target.value)}
                   placeholder="Nome da entidade"
-                  className="w-full px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
                 />
               </div>
               <div>
@@ -448,7 +485,7 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
                   value={nif}
                   onChange={(e) => setNif(e.target.value)}
                   placeholder="NIF da entidade"
-                  className="w-full px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
                 />
               </div>
               <div>
@@ -457,7 +494,7 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
                   value={cpv}
                   onChange={(e) => setCpv(e.target.value)}
                   placeholder="Código CPV"
-                  className="w-full px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
                 />
               </div>
               <div>
@@ -467,7 +504,7 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
                   value={minPrice}
                   onChange={(e) => setMinPrice(e.target.value)}
                   placeholder="0"
-                  className="w-full px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
                 />
               </div>
               <div>
@@ -477,7 +514,7 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
                   value={maxPrice}
                   onChange={(e) => setMaxPrice(e.target.value)}
                   placeholder="∞"
-                  className="w-full px-3 py-2 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
                 />
               </div>
               <div>
@@ -486,7 +523,7 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-muted border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
                 />
               </div>
               <div>
@@ -495,21 +532,21 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-muted border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 rounded-xl bg-background/60 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
                 />
               </div>
               <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
                 <button
                   onClick={() => handleIngest()}
                   disabled={loading || !year}
-                  className="px-4 py-2 rounded-lg bg-secondary text-secondary-foreground hover:bg-accent transition disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="px-4 py-2 rounded-xl bg-secondary text-secondary-foreground hover:bg-accent transition disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   <Database size={16} />
                   Indexar {year || "ano"}
                 </button>
                 <button
                   onClick={clearFilters}
-                  className="px-4 py-2 rounded-lg border border-border hover:bg-accent transition"
+                  className="px-4 py-2 rounded-xl border border-border hover:bg-white/5 transition"
                 >
                   Limpar
                 </button>
@@ -518,7 +555,7 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
           )}
 
           {error && (
-            <div className={`mt-4 rounded-lg px-3 py-2 text-sm ${error.startsWith("Indexados") ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}>
+            <div className={`mt-4 rounded-xl px-3 py-2 text-sm ${error.startsWith("Indexados") ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}>
               {error}
             </div>
           )}
@@ -533,27 +570,30 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
         )}
 
         {!loading && results.length === 0 && !error && (
-          <div className="py-16 flex flex-col items-center gap-3 text-muted-foreground">
-            <Frown size={40} />
+          <div className="py-16 flex flex-col items-center gap-3 text-muted-foreground fade-in">
+            <div className="inline-flex p-5 rounded-3xl glass-card mb-2">
+              <Frown size={40} className="opacity-60" />
+            </div>
             <p>Nenhum contrato encontrado.</p>
             <p className="text-sm">Experimenta pesquisar por objeto, entidade ou CPV.</p>
           </div>
         )}
 
-        <div className="space-y-3">
+        <div className="space-y-4">
           {results.map((c, i) => (
             <article
               key={`${c.idcontrato || i}-${i}`}
-              className="rounded-xl border border-border bg-card p-4 hover:border-primary/50 transition"
+              className="glass-card gradient-border rounded-2xl p-5 hover:-translate-y-1 hover:bg-white/[0.04] transition-all duration-300 fade-in"
+              style={{ animationDelay: `${Math.min(i * 40, 600)}ms` }}
             >
               <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                    <span className="bg-muted px-2 py-0.5 rounded">{c.Ano ?? "—"}</span>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2 flex-wrap">
+                    <span className="px-2 py-0.5 rounded-full glass-card">{c.Ano ?? "—"}</span>
                     <span>{Array.isArray(c.tipoContrato) ? c.tipoContrato.join(", ") : c.tipoContrato || c.TipoAnuncio || "Contrato"}</span>
                     {c.idcontrato && <span className="truncate">ID: {c.idcontrato}</span>}
                   </div>
-                  <h3 className="font-semibold text-foreground leading-tight mb-1">
+                  <h3 className="font-semibold text-foreground leading-tight mb-1 truncate-2-lines">
                     {c.objectoContrato || "Sem objeto definido"}
                   </h3>
                   {c.descContrato && (
@@ -571,7 +611,7 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <div className="text-lg font-bold text-primary">{formatPrice(c.precoContratual)}</div>
+                  <div className="text-lg font-bold stat-value text-glow-amber">{formatPrice(c.precoContratual)}</div>
                   <div className="text-xs text-muted-foreground">
                     Publicação {formatDate(c.dataPublicacao)} · Celebração {formatDate(c.dataCelebracaoContrato)}
                   </div>
@@ -592,7 +632,7 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
             <button
               onClick={() => doSearch(false)}
               disabled={loading || loadingMore}
-              className="px-4 py-2 rounded-lg border border-border hover:bg-accent transition disabled:opacity-50 text-sm"
+              className="px-4 py-2 rounded-xl border border-border hover:bg-white/5 transition disabled:opacity-50 text-sm"
             >
               Carregar mais
             </button>

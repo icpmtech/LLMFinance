@@ -1,4 +1,4 @@
-import { Trash2, Plus, MessageSquare, TrendingUp, LineChart, FolderOpen, Database, Search, CandlestickChart, FileText, BarChart3, Filter, Building2 } from "lucide-react";
+import { Trash2, Plus, MessageSquare } from "lucide-react";
 
 interface Conversation {
   id: string;
@@ -11,157 +11,24 @@ interface SidebarProps {
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
-  onSwitchView?: () => void;
-  onSwitchTickers?: () => void;
-  onSwitchRag?: () => void;
-  onSwitchElastic?: () => void;
-  onSwitchSearch?: () => void;
-  onSwitchTrading?: () => void;
-  onSwitchContracts?: () => void;
-  onSwitchContractsDashboard?: () => void;
-  onSwitchContractsSearch?: () => void;
-  onSwitchCompanies?: () => void;
-  onSwitchCompaniesDashboard?: () => void;
-  onSwitchCompaniesSearch?: () => void;
 }
 
-export function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, onSwitchView, onSwitchTickers, onSwitchRag, onSwitchElastic, onSwitchSearch, onSwitchTrading, onSwitchContracts, onSwitchContractsDashboard, onSwitchContractsSearch, onSwitchCompanies, onSwitchCompaniesDashboard, onSwitchCompaniesSearch }: SidebarProps) {
+export function Sidebar({ conversations, activeId, onSelect, onNew, onDelete }: SidebarProps) {
   return (
-    <aside className="fixed bottom-0 left-0 right-0 z-50 bg-sidebar border-t border-border flex flex-row items-center justify-around h-16 px-2 md:static md:w-64 md:h-full md:flex-col md:border-r md:border-t-0 md:px-0 md:py-0 shrink-0">
-      <div className="flex flex-row items-center justify-around w-full h-full md:flex-col md:h-auto md:p-4 md:space-y-2 md:space-x-0 overflow-x-auto">
-        {onSwitchSearch && (
-          <button
-            onClick={onSwitchSearch}
-            className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
-            title="Pesquisar"
-          >
-            <Search size={22} className="md:size-[18px]" />
-            <span className="hidden md:inline text-sm">Pesquisar</span>
-          </button>
-        )}
+    <aside className="hidden md:flex w-72 shrink-0 flex-col h-full border-r border-border bg-sidebar/50 backdrop-blur-xl">
+      <div className="p-4 border-b border-border">
         <button
           onClick={onNew}
-          className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-primary text-foreground md:text-primary-foreground font-medium hover:opacity-90 transition shrink-0"
-          title="Nova conversa"
+          className="neumorphic-btn w-full flex items-center justify-center gap-2 text-sm font-medium"
         >
-          <Plus size={22} className="md:size-[18px]" />
-          <span className="hidden md:inline text-sm">Nova</span>
+          <Plus size={18} />
+          Nova conversa
         </button>
-        {onSwitchView && (
-          <button
-            onClick={onSwitchView}
-            className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
-            title="Previsões"
-          >
-            <TrendingUp size={22} className="md:size-[18px]" />
-            <span className="hidden md:inline text-sm">Previsões</span>
-          </button>
-        )}
-        {onSwitchTrading && (
-          <button
-            onClick={onSwitchTrading}
-            className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
-            title="Trading"
-          >
-            <CandlestickChart size={22} className="md:size-[18px]" />
-            <span className="hidden md:inline text-sm">Trading</span>
-          </button>
-        )}
-        {onSwitchTickers && (
-          <button
-            onClick={onSwitchTickers}
-            className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
-            title="Tickers"
-          >
-            <LineChart size={22} className="md:size-[18px]" />
-            <span className="hidden md:inline text-sm">Tickers</span>
-          </button>
-        )}
-        {onSwitchRag && (
-          <button
-            onClick={onSwitchRag}
-            className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
-            title="RAG"
-          >
-            <FolderOpen size={22} className="md:size-[18px]" />
-            <span className="hidden md:inline text-sm">RAG</span>
-          </button>
-        )}
-        {onSwitchElastic && (
-          <button
-            onClick={onSwitchElastic}
-            className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
-            title="Elasticsearch"
-          >
-            <Database size={22} className="md:size-[18px]" />
-            <span className="hidden md:inline text-sm">Elastic</span>
-          </button>
-        )}
-        {onSwitchContractsDashboard && (
-          <button
-            onClick={onSwitchContractsDashboard}
-            className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
-            title="Dashboard Contratos"
-          >
-            <BarChart3 size={22} className="md:size-[18px]" />
-            <span className="hidden md:inline text-sm">Dashboard Contratos</span>
-          </button>
-        )}
-        {onSwitchContractsSearch && (
-          <button
-            onClick={onSwitchContractsSearch}
-            className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
-            title="Pesquisar Contratos"
-          >
-            <Filter size={22} className="md:size-[18px]" />
-            <span className="hidden md:inline text-sm">Pesquisar Contratos</span>
-          </button>
-        )}
-        {onSwitchContracts && (
-          <button
-            onClick={onSwitchContracts}
-            className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
-            title="Contratos"
-          >
-            <FileText size={22} className="md:size-[18px]" />
-            <span className="hidden md:inline text-sm">Contratos</span>
-          </button>
-        )}
-        {onSwitchCompaniesDashboard && (
-          <button
-            onClick={onSwitchCompaniesDashboard}
-            className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
-            title="Dashboard Empresas"
-          >
-            <BarChart3 size={22} className="md:size-[18px]" />
-            <span className="hidden md:inline text-sm">Dashboard Empresas</span>
-          </button>
-        )}
-        {onSwitchCompaniesSearch && (
-          <button
-            onClick={onSwitchCompaniesSearch}
-            className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
-            title="Pesquisar Empresas"
-          >
-            <Building2 size={22} className="md:size-[18px]" />
-            <span className="hidden md:inline text-sm">Pesquisar Empresas</span>
-          </button>
-        )}
-        {onSwitchCompanies && (
-          <button
-            onClick={onSwitchCompanies}
-            className="flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-2 md:w-full md:px-4 md:py-3 rounded-xl md:bg-card md:border md:border-border text-foreground font-medium hover:bg-accent transition shrink-0"
-            title="Empresas"
-          >
-            <Building2 size={22} className="md:size-[18px]" />
-            <span className="hidden md:inline text-sm">Empresas</span>
-          </button>
-        )}
       </div>
 
-      <div className="hidden md:flex flex-1 overflow-y-auto px-3 py-2 space-y-1 flex-col">
+      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
         {conversations.length === 0 ? (
-          <p className="text-sm text-muted-foreground px-3 py-4 text-center">
+          <p className="text-sm text-muted-foreground px-3 py-6 text-center">
             Sem conversas anteriores.
           </p>
         ) : (
@@ -172,7 +39,7 @@ export function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, on
               className={[
                 "group flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-left transition",
                 activeId === conv.id
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  ? "bg-primary/15 text-primary border border-primary/20"
                   : "text-sidebar-foreground hover:bg-sidebar-accent/50",
               ].join(" ")}
             >
@@ -191,12 +58,6 @@ export function Sidebar({ conversations, activeId, onSelect, onNew, onDelete, on
             </button>
           ))
         )}
-      </div>
-
-      <div className="hidden md:block p-4 border-t border-border">
-        <p className="text-xs text-muted-foreground">
-          FinanceLLM Chat
-        </p>
       </div>
     </aside>
   );

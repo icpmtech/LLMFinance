@@ -59,7 +59,7 @@ function classNames(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
 }
 
-export function ForecastPage() {
+export function ForecastPage({ onSwitchView }: { onSwitchView?: () => void }) {
   const [request, setRequest] = useState<ForecastRequest>(DEFAULT_REQUEST);
   const [search, setSearch] = useState(DEFAULT_REQUEST.ticker);
   const [suggestions, setSuggestions] = useState<string[]>([]);
