@@ -31,14 +31,10 @@ function formatDate(d?: string) {
 
 function normalizeParties(parties: ContractItem["adjudicantes"]): { nome?: string; nif?: string }[] {
   if (!parties) return [];
-  const arr = Array.isArray(parties) ? parties : [parties];
-  return arr.flatMap((p) => {
+  return parties.flatMap((p) => {
     if (p?.parsed && Array.isArray(p.parsed)) return p.parsed;
     if (typeof p?.raw === "string") {
       return p.raw.split(",").map((s) => ({ nome: s.trim() }));
-    }
-    if (Array.isArray(p?.raw)) {
-      return p.raw.map((s: string) => ({ nome: s.trim() }));
     }
     return [];
   });

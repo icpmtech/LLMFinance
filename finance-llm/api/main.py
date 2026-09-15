@@ -148,6 +148,26 @@ app.add_middleware(
 app.include_router(rag_router)
 
 
+# Servir a React SPA da chat-ui (build estático)
+from fastapi.staticfiles import StaticFiles
+
+UI_BUILD_DIR = ROOT / "chat-ui" / "dist"
+if UI_BUILD_DIR.is_dir():
+    app.mount("/assets", StaticFiles(directory=UI_BUILD_DIR / "assets"), name="assets")
+
+
+@app.get("/forecast")
+@app.get("/trading")
+@app.get("/tickers")
+@app.get("/ticker-detail")
+@app.get("/rag")
+@app.get("/elastic")
+@app.get("/contracts")
+@app.get("/search")
+def serve_spa_page():
+    return FileResponse(str(UI_BUILD_DIR / "index.html"))
+
+
 @app.get("/")
 def read_root():
     return {

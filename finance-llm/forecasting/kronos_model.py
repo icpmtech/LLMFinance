@@ -223,10 +223,13 @@ def run_kronos_pipeline(
     # Intervalo de confiança empírico com base no erro absoluto.
     abs_err = np.abs(actual_close.values - pred_close.values)
     std_err = float(np.std(abs_err)) if len(abs_err) > 1 else float(np.mean(abs_err)) if len(abs_err) else 0.0
+    if not np.isfinite(std_err) or std_err <= 0:
+        std_err = 0.0
     forecast_points = []
     for i, (d, price) in enumerate(forecast_series.items()):
-        lower = round(float(price - 1.96 * std_err), 4)
-        upper = round(float(price + 1.96 * std_err), 4)
+        band = 1.96 * std_err if std_err > 0 else price * 0.02
+        lower = round(float(max(price - band, 0)), 4)
+        upper = round(float(price + band), 4)
         forecast_points.append({"date": str(d.date()), "price": round(float(price), 4), "lower": lower, "upper": upper})
 
     series_rows: list[dict] = []

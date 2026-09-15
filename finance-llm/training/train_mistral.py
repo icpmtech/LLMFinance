@@ -111,11 +111,14 @@ def run_training(
     resume: bool = False,
     gradient_accumulation_steps: int = 1,
     output_dir: Path | None = None,
+    checkpoint_dir: Path | None = None,
+    model_dir: Path | None = None,
 ):
     """Executa o loop de treino Mistral a partir de uma lista de textos já prontos."""
+    base_dir = model_dir or MODEL_DIR
     _register_signals()
-    tokenizer = PreTrainedTokenizerFast.from_pretrained(MODEL_DIR)
-    model = MistralForCausalLM.from_pretrained(MODEL_DIR)
+    tokenizer = PreTrainedTokenizerFast.from_pretrained(base_dir)
+    model = MistralForCausalLM.from_pretrained(base_dir)
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -217,7 +220,7 @@ def run_training(
 
             if save_checkpoints and step % 200 == 0 and accum_counter % gradient_accumulation_steps == 0:
                 _save_state(step, epoch, model, optimizer, loss.item() * gradient_accumulation_steps, torch.get_rng_state())
-                ckpt_dir = MODEL_DIR / "checkpoints" / f"step-{step}"
+                ckpt_dir = (checkpoint_dir or MODEL_DIR) / "checkpoints" / f"step-{step}"
                 ckpt_dir.mkdir(parents=True, exist_ok=True)
                 model.save_pretrained(ckpt_dir)
 
@@ -229,6 +232,11 @@ def run_training(
     final_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(final_dir)
     tokenizer.save_pretrained(final_dir)
+    # Guarda config explicitamente com pad/eos/bos para evitar warnings em recargas.
+    model.config.pad_token_id = tokenizer.pad_token_id
+    model.config.eos_token_id = tokenizer.eos_token_id
+    model.config.bos_token_id = tokenizer.bos_token_id
+    model.config.save_pretrained(final_dir)
     print("Modelo Mistral guardado em", final_dir)
 
 

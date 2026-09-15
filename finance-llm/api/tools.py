@@ -587,28 +587,75 @@ def get_technical_indicators(symbol: str, period: str = "1y") -> Dict:
 
 
 def get_macro_indicator(series_id: str = "DGS10") -> Dict:
-    """Obtém um indicador macro via FRED (requer chave de API no .env)."""
-    from fredapi import Fred
+    """Obtém um indicador macro via FRED API ou CSV público de fallback."""
     import os
 
     key = os.getenv("FRED_API_KEY")
-    if not key:
-        return {"series_id": series_id, "error": "FRED_API_KEY não configurada"}
+    if key:
+        try:
+            from fredapi import Fred
+            fred = Fred(api_key=key)
+            s = fred.get_series(series_id)
+            s = s.dropna()
+            return {
+                "series_id": series_id,
+                "value": float(s.iloc[-1]),
+                "date": str(s.index[-1].date()),
+                "series": [
+                    {"date": str(d.date()), "value": float(v)}
+                    for d, v in s.tail(180).items()
+                ],
+            }
+        except Exception as e:
+            return {"series_id": series_id, "error": f"FRED API error: {e}"}
+
+    # Fallback público via FRED CSV (não requer API key)
+    fred_csv_map = {
+        "DGS10": "DGS10",
+        "DGS2": "DGS2",
+        "FEDFUNDS": "FEDFUNDS",
+        "CPIAUCSL": "CPIAUCSL",
+        "PCEPI": "PCEPI",
+        "UNRATE": "UNRATE",
+        "IRLTLT01EZM156N": "IRLTLT01EZM156N",
+        "EA19SL": "EA19SL",
+    }
+    # Séries sem URL pública conhecida; desativar fallback.
+    no_csv_fallback = {"EA19SL"}
+    if series_id not in fred_csv_map:
+        return {"series_id": series_id, "error": "FRED_API_KEY não configurada e series_id sem fallback CSV"}
+    if series_id in no_csv_fallback:
+        return {"series_id": series_id, "error": "FRED_API_KEY não configurada e series_id sem fallback CSV"}
     try:
-        fred = Fred(api_key=key)
-        s = fred.get_series(series_id)
-        s = s.dropna()
+        url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
+        r = requests.get(url, timeout=20)
+        r.raise_for_status()
+        from io import StringIO
+        df = pd.read_csv(StringIO(r.text), skipinitialspace=True)
+        df.columns = [c.strip().upper() for c in df.columns]
+        date_col = next((c for c in df.columns if c in ("DATE", "OBSERVATION_DATE")), None)
+        value_col = series_id.upper()
+        if value_col not in df.columns:
+            value_col = next((c for c in df.columns if c not in ("DATE", "OBSERVATION_DATE")), None)
+        if date_col is None or value_col is None:
+            return {"series_id": series_id, "error": f"CSV colunas inesperadas: {list(df.columns)}"}
+        df = df.rename(columns={value_col: "value", date_col: "date"})
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df["value"] = pd.to_numeric(df["value"], errors="coerce")
+        df = df.dropna().sort_values("date")
+        if df.empty:
+            return {"series_id": series_id, "error": "CSV fallback retornou vazio"}
         return {
             "series_id": series_id,
-            "value": float(s.iloc[-1]),
-            "date": str(s.index[-1].date()),
+            "value": float(df["value"].iloc[-1]),
+            "date": str(df["date"].iloc[-1].date()),
             "series": [
-                {"date": str(d.date()), "value": float(v)}
-                for d, v in s.tail(180).items()
+                {"date": str(row["date"].date()), "value": float(row["value"])}
+                for _, row in df.tail(180).iterrows()
             ],
         }
     except Exception as e:
-        return {"series_id": series_id, "error": str(e)}
+        return {"series_id": series_id, "error": f"FRED fallback CSV error: {e}"}
 
 
 def get_macro_snapshot() -> Dict[str, Any]:

@@ -1,0 +1,58 @@
+﻿[LOAD] a carregar corpus de contratos de C:\LLMFinance\finance-llm\data\final\contratos_train.jsonl...
+[LOAD] 5000 exemplos de contratos carregados.
+[PACK] a carregar tokenizer para agrupar exemplos...
+c:\LLMFinance\.venv\Scripts\python.exe : Traceback (most 
+recent call last):
+At line:1 char:46
++ ... nance-llm'; c:\LLMFinance\.venv\Scripts\python.exe 
+training/train_mis ...
++                 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most r 
+   ecent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "C:\LLMFinance\.venv\Lib\site-packages\transformers\util
+s\hub.py", line 438, in cached_files
+    hf_hub_download(
+  File "C:\LLMFinance\.venv\Lib\site-packages\huggingface_hub\u
+tils\_validators.py", line 84, in _inner_fn
+    validate_repo_id(arg_value)
+  File "C:\LLMFinance\.venv\Lib\site-packages\huggingface_hub\u
+tils\_validators.py", line 138, in validate_repo_id
+    raise HFValidationError(
+huggingface_hub.errors.HFValidationError: Repo id must use 
+alphanumeric chars, '-', '_' or '.'. The name cannot start or 
+end with '-' or '.' and the maximum length is 96: 
+'model\mistral-contracts\final'.
+
+The above exception was the direct cause of the following 
+exception:
+
+Traceback (most recent call last):
+  File "C:\LLMFinance\finance-llm\training\train_mistral_contra
+cts.py", line 144, in <module>
+    main()
+  File "C:\LLMFinance\finance-llm\training\train_mistral_contra
+cts.py", line 123, in main
+    tokenizer = 
+PreTrainedTokenizerFast.from_pretrained(str(model_dir / 
+"final"))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\transformers\toke
+nization_utils_base.py", line 1635, in from_pretrained
+    resolved_config_file = cached_file(
+                           ^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\transformers\util
+s\hub.py", line 294, in cached_file
+    file = cached_files(path_or_repo_id=path_or_repo_id, 
+filenames=[filename], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\transformers\util
+s\hub.py", line 496, in cached_files
+    raise OSError(f"{e}") from e
+OSError: Repo id must use alphanumeric chars, '-', '_' or '.'. 
+The name cannot start or end with '-' or '.' and the maximum 
+length is 96: 'model\mistral-contracts\final'.

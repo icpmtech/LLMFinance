@@ -1,0 +1,13 @@
+﻿[LOAD] a carregar corpus de contratos de C:\LLMFinance\finance-llm\data\final\contratos_train.jsonl...
+[LOAD] 5000 exemplos de contratos carregados.
+[PACK] a carregar tokenizer para agrupar exemplos...
+[PACK] 1250 blocos de treino ap¾s agrupamento.
+c:\LLMFinance\.venv\Scripts\python.exe : 
+At line:1 char:46
++ ... nance-llm'; c:\LLMFinance\.venv\Scripts\python.exe training/train_mis ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Loading weights:   0%|          | 0/75 [00:00<?, ?it/s]
+Loading weights: 100%|##########| 75/75 [00:00<00:00, 1724.80it/s]

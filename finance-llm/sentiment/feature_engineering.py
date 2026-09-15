@@ -487,7 +487,7 @@ def build_feature_vector(
     # Preencher forward earnings estimate (EPS futuro) até à data de reporte
     prices["eps_estimate"] = prices["eps_estimate"].ffill()
 
-    # Macro (pivot)
+    # Macro (pivot): tenta ES; se vazio, busca snapshot e indexa.
     client = es or get_es_client()
     macro_df = pd.DataFrame()
     if client:
@@ -497,14 +497,21 @@ def build_feature_vector(
             logger.warning("Macro load error: %s", e)
     if macro_df.empty:
         macro_df = fetch_macro_features()
+        if not macro_df.empty and client:
+            try:
+                index_macro(macro_df, es=client)
+            except Exception as e:
+                logger.warning("Macro index error: %s", e)
 
     if not macro_df.empty:
+        macro_df["date"] = pd.to_datetime(macro_df["date"]).dt.strftime("%Y-%m-%d")
         macro_pivot = macro_df.pivot(index="date", columns="name", values="value").reset_index()
         macro_cols = [c for c in macro_pivot.columns if c != "date"]
+        prices["date"] = pd.to_datetime(prices["date"]).dt.strftime("%Y-%m-%d")
         prices = prices.merge(macro_pivot, on="date", how="left")
-        # Forward fill limitado a 30 dias para macro de baixa frequência
+        # Forward/backward fill limitado a 90 dias para macro de baixa frequência (mensal)
         for c in macro_cols:
-            prices[c] = prices[c].ffill(limit=30)
+            prices[c] = prices[c].ffill(limit=90).bfill(limit=90)
     else:
         macro_cols = []
 
@@ -589,14 +596,16 @@ def blend_forecast_with_sentiment(
         if price is None:
             continue
         adj_price = price * (1 + bias)
-        upper = p.get("upper", adj_price * 1.02) if p.get("upper") else adj_price * 1.02
-        lower = p.get("lower", adj_price * 0.98) if p.get("lower") else adj_price * 0.98
+        raw_upper = p.get("upper")
+        raw_lower = p.get("lower")
+        upper = float(raw_upper) if raw_upper is not None and np.isfinite(raw_upper) else adj_price * 1.02
+        lower = float(raw_lower) if raw_lower is not None and np.isfinite(raw_lower) else adj_price * 0.98
         adjusted.append(
             {
                 "date": p.get("date"),
                 "price": round(adj_price, 4),
-                "upper": round(upper * (1 + abs(bias) * 0.5), 4),
-                "lower": round(lower * (1 - abs(bias) * 0.5), 4),
+                "upper": round(float(upper) * (1 + abs(bias) * 0.5), 4),
+                "lower": round(float(lower) * (1 - abs(bias) * 0.5), 4),
                 "bias": round(bias, 6),
             }
         )
@@ -727,21 +736,41 @@ def generate_sentiment_blended_forecast(
     blended = blend_forecast_with_sentiment(ticker, base_forecast, period=period)
 
     # Normalizar resposta para o contrato do endpoint
+    base_forecast = blended.get("base_forecast", [])
+    adjusted_forecast = blended.get("adjusted_forecast", [])
+    features = blended.get("features", {})
+
+    def _clean_float(v):
+        if v is None:
+            return None
+        try:
+            f = float(v)
+            return None if not np.isfinite(f) else round(f, 6)
+        except Exception:
+            return v
+
+    def _clean_point(p: Dict[str, Any]) -> Dict[str, Any]:
+        return {k: _clean_float(v) for k, v in p.items()}
+
+    base_forecast = [_clean_point(p) for p in base_forecast]
+    adjusted_forecast = [_clean_point(p) for p in adjusted_forecast]
+    features = {k: _clean_float(v) for k, v in features.items()}
+
     out: Dict[str, Any] = {
         "ticker": ticker.upper(),
         "base_model": backend,
         "period": period,
         "future_days": future_days,
-        "base_forecast": blended.get("base_forecast", []),
-        "adjusted_forecast": blended.get("adjusted_forecast", []),
+        "base_forecast": base_forecast,
+        "adjusted_forecast": adjusted_forecast,
         "signals": {
-            "sentiment_signal": blended.get("sentiment_signal", 0.0),
-            "macro_signal": blended.get("macro_signal", 0.0),
-            "earnings_signal": blended.get("earnings_signal", 0.0),
-            "blended_signal": blended.get("blended_signal", 0.0),
+            "sentiment_signal": _clean_float(blended.get("sentiment_signal", 0.0)) or 0.0,
+            "macro_signal": _clean_float(blended.get("macro_signal", 0.0)) or 0.0,
+            "earnings_signal": _clean_float(blended.get("earnings_signal", 0.0)) or 0.0,
+            "blended_signal": _clean_float(blended.get("blended_signal", 0.0)) or 0.0,
             "weights": blended.get("weights", {"sentiment": 0.4, "macro": 0.3, "earnings": 0.3}),
         },
-        "features": blended.get("features", {}),
+        "features": features,
         "error": blended.get("error"),
     }
 

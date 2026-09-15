@@ -1,0 +1,22 @@
+﻿
+
+
+[TOKENIZER] a treinar BPE com vocab_size=32768 sobre C:\LLMFinance\finance-llm\data\final\contratos_train.jsonl...
+[TOKENIZER] vocab efetivo: 32768
+[MODEL] a criar Mistral com max_length=2048 e vocab=32768...
+c:\LLMFinance\.venv\Scripts\python.exe : 
+At line:1 char:46
++ ... nance-llm'; c:\LLMFinance\.venv\Scripts\python.exe 
+model/mistral_cont ...
++                 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], Remo 
+   teException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]
+Writing model shards: 100%|##########| 1/1 [00:00<00:00,  
+3.14it/s]
+Writing model shards: 100%|##########| 1/1 [00:00<00:00,  
+3.14it/s]
+[MODEL] modelo base guardado em C:\LLMFinance\finance-llm\model\mistral-contracts
