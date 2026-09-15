@@ -312,7 +312,7 @@ export default function App() {
       );
     }
     if (view === "forecast") return <ForecastPage />;
-    if (view === "trading") return <TradingPage onSwitchView={() => setViewAndHistory("dashboard")} />;
+    if (view === "trading") return <TradingPage />;
     if (view === "tickers") return <TickerPage onSwitchView={() => setViewAndHistory("dashboard")} />;
     if (view === "rag") return <RagPage onSwitchView={() => setViewAndHistory("dashboard")} />;
     if (view === "elastic") return <ElasticPage />;

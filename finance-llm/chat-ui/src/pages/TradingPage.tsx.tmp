@@ -1,3 +1,4 @@
+```typescript
 // c:\LLMFinance\finance-llm\chat-ui\src\pages\TradingPage.tsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -103,7 +104,7 @@ interface SimulationResult {
   remainingShares: number;
 }
 
-export function TradingPage() {
+export function TradingPage({ onSwitchView }: { onSwitchView?: () => void }) {
   const [ticker, setTicker] = useState(DEFAULT_TICKER);
   const [search, setSearch] = useState(DEFAULT_TICKER);
   const [period, setPeriod] = useState(DEFAULT_PERIOD);
@@ -1100,3 +1101,4 @@ function Toggle({ active, onClick, label }: { active: boolean; onClick: () => vo
     </button>
   );
 }
+```
