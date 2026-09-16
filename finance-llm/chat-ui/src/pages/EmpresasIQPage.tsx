@@ -18,9 +18,11 @@ import {
   Filter,
   FolderHeart,
   FolderOpen,
+  FolderPlus,
   GitBranch,
   HandCoins,
   Heart,
+  History,
   Info,
   LayoutDashboard,
   List,
@@ -31,6 +33,7 @@ import {
   MessageSquare,
   Minimize2,
   Network,
+  PanelLeftClose,
   RefreshCw,
   Scan,
   Search,
@@ -85,6 +88,13 @@ import {
   worldToLat,
   worldToLon,
 } from "../components/graph/geo";
+import { useFavorites, type FavoriteKind } from "../favorites";
+import { useSidebarHidden } from "../layout";
+import { useAuth } from "../auth";
+import { Avatar } from "./SettingsPage";
+import { companiesIn, useWorkspace, type WorkspaceEntry } from "../workspace";
+import { GraphCanvas } from "../components/graph/GraphCanvas";
+import { toStudioGraph, type GraphMetric, type StudioNode } from "../components/graph/graphStudio";
 import type {
   CompanyAnalyticsResponse,
   CompanyContractsResponse,
@@ -93,6 +103,8 @@ import type {
   ContractAnalyticsResponse,
   ContractAnalyzeRequest,
   ContractAnalyzeResponse,
+  ContractGraphBuildNode,
+  ContractGraphBuildResponse,
   ContractGraphResponse,
   ContractItem,
   ContractRegionalResponse,
@@ -173,6 +185,16 @@ function nifFromParty(party?: ContractParty | ContractParty[]) {
 function nifsFromParty(party?: ContractParty | ContractParty[]) {
   const list = Array.isArray(party) ? party : party ? [party] : [];
   return list.flatMap((item) => (item.parsed ?? []).map((entry) => entry.nif).filter(Boolean) as string[]);
+}
+
+/** Entidades associadas a um contrato (adjudicantes e adjudicatários) para guardar no dossier. */
+function contractPartiesOf(contract: ContractItem) {
+  const collect = (party: ContractParty | ContractParty[] | undefined, role: string) =>
+    (Array.isArray(party) ? party : party ? [party] : [])
+      .flatMap((item) => item.parsed ?? [])
+      .filter((entry) => Boolean(entry.nif))
+      .map((entry) => ({ nif: entry.nif as string, label: entry.nome || `NIF ${entry.nif}`, role }));
+  return [...collect(contract.adjudicantes, "Adjudicante"), ...collect(contract.adjudicatarios, "Adjudicatário")];
 }
 
 type ContractCompetitor = { name: string; nif?: string };
@@ -275,6 +297,176 @@ function Card({
       className={`glass-card gradient-border rounded-2xl p-5 min-w-0 ${glowClass} ${className}`}
     >
       {children}
+    </div>
+  );
+}
+
+/** Botão de favorito (entidade ou contrato). Estado vem do módulo `favorites` (localStorage). */
+function FavoriteButton({
+  kind,
+  id,
+  label,
+  sublabel,
+  value,
+  variant = "chip",
+}: {
+  kind: FavoriteKind;
+  id: string;
+  label: string;
+  sublabel?: string;
+  value?: number | null;
+  variant?: "chip" | "solid";
+}) {
+  const { isFavorite, toggle } = useFavorites();
+  const active = isFavorite(kind, id);
+  const base =
+    variant === "solid"
+      ? "rounded-full px-3.5 py-1.5 text-sm"
+      : "rounded-xl px-3 py-1.5 text-sm";
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={() => toggle({ kind, id, label, sublabel, value })}
+      title={active ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+      className={[
+        base,
+        "glass-card flex items-center gap-2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/50",
+        active ? "text-rose-300 ring-1 ring-rose-400/40" : "text-muted-foreground hover:text-rose-200",
+      ].join(" ")}
+    >
+      <Heart size={16} className={active ? "scale-110 transition-transform" : "transition-transform"} fill={active ? "currentColor" : "none"} />
+      {active ? "Nos favoritos" : "Favorito"}
+    </button>
+  );
+}
+
+/**
+ * Guarda a ficha aberta numa pasta do dossier (pastas em Configurações).
+ * Mostra em que pastas já está e permite criar uma pasta nova sem sair da ficha.
+ */
+function SaveToFolderButton({
+  kind,
+  id,
+  label,
+  sublabel,
+  value,
+  parties,
+  variant = "chip",
+}: {
+  kind: FavoriteKind;
+  id: string;
+  label: string;
+  sublabel?: string;
+  value?: number | null;
+  parties?: { nif: string; label: string; role?: string }[];
+  variant?: "chip" | "solid";
+}) {
+  const { folders, addToFolder, createFolder } = useWorkspace();
+  const [open, setOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  const savedIn = folders.filter((folder) => folder.items.some((item) => item.kind === kind && item.id === id));
+  const entry = { kind, id, label, sublabel, value: value ?? null, parties };
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const base = variant === "solid" ? "rounded-full px-3.5 py-1.5 text-sm" : "rounded-xl px-3 py-1.5 text-sm";
+
+  const save = (folderId: string) => {
+    addToFolder(folderId, entry);
+    setOpen(false);
+  };
+
+  const saveToNewFolder = () => {
+    const folderId = createFolder(newName);
+    if (folderId) addToFolder(folderId, entry);
+    setNewName("");
+    setOpen(false);
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        title="Guardar numa pasta do dossier"
+        className={[
+          base,
+          "glass-card flex items-center gap-2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50",
+          savedIn.length > 0 ? "text-teal-300 ring-1 ring-teal-400/30" : "text-muted-foreground hover:text-teal-200",
+        ].join(" ")}
+      >
+        <FolderPlus size={16} />
+        {savedIn.length > 0 ? `${savedIn.length} pasta${savedIn.length === 1 ? "" : "s"}` : "Guardar em pasta"}
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 z-30 mt-2 w-64 rounded-xl border border-white/10 bg-[#07151b]/95 p-2 shadow-2xl backdrop-blur-xl"
+        >
+          <p className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">Dossier</p>
+          {folders.length === 0 && (
+            <p className="px-2 py-1 text-xs text-muted-foreground">Ainda não há pastas. Crie a primeira abaixo.</p>
+          )}
+          <div className="max-h-52 space-y-1 overflow-y-auto">
+            {folders.map((folder) => {
+              const already = folder.items.some((item) => item.kind === kind && item.id === id);
+              return (
+                <button
+                  key={folder.id}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => save(folder.id)}
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-muted-foreground transition hover:bg-white/5 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+                >
+                  <FolderHeart size={14} className={already ? "text-teal-300" : ""} />
+                  <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+                  {already && <span className="text-[10px] text-teal-300">guardado</span>}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-2 flex items-center gap-1.5 border-t border-white/10 pt-2">
+            <input
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") saveToNewFolder();
+              }}
+              placeholder="Nova pasta…"
+              aria-label="Nome da nova pasta"
+              className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+            />
+            <button
+              type="button"
+              onClick={saveToNewFolder}
+              disabled={!newName.trim()}
+              className="rounded-lg border border-teal-400/30 bg-teal-400/10 px-2 py-1.5 text-xs text-teal-200 transition hover:bg-teal-400/20 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Criar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2100,7 +2292,8 @@ type PlatformView =
   | "forecast"
   | "trading"
   | "rag"
-  | "elastic";
+  | "elastic"
+  | "settings";
 
 interface NavGroup {
   id: string;
@@ -2123,6 +2316,9 @@ function ModuleSidebar({
     module: true,
     platform: false,
   });
+  const { favorites: sidebarFavorites } = useFavorites();
+  const { hidden: sidebarHidden, toggle: toggleSidebar } = useSidebarHidden();
+  const { user: sidebarUser, logout } = useAuth();
 
   const navRef = useRef<HTMLDivElement>(null);
 
@@ -2193,10 +2389,10 @@ function ModuleSidebar({
 
   const navContent = (
     <nav className="flex flex-col h-full">
-      <div className="p-4 border-b border-border/60">
+      <div className="p-4 border-b border-border/60 flex items-center gap-2">
         <button
           onClick={() => onNavigate("chat")}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl glass-card hover:bg-white/5 transition text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+          className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl glass-card hover:bg-white/5 transition text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
         >
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-teal-500 to-blue-500 flex items-center justify-center text-white shadow-lg shadow-primary/20">
             <Sparkles size={16} />
@@ -2205,6 +2401,14 @@ function ModuleSidebar({
             <p className="font-semibold text-sm">FinanceLLM</p>
             <p className="text-[11px] text-muted-foreground">Voltar à plataforma</p>
           </div>
+        </button>
+        <button
+          onClick={toggleSidebar}
+          aria-label="Ocultar barra lateral"
+          title="Ocultar barra lateral (Ctrl+B)"
+          className="hidden md:grid shrink-0 place-items-center h-9 w-9 rounded-xl text-muted-foreground transition hover:bg-white/5 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+        >
+          <PanelLeftClose size={17} />
         </button>
       </div>
 
@@ -2248,6 +2452,11 @@ function ModuleSidebar({
                           <Icon size={18} />
                         </span>
                         {item.label}
+                        {item.id === "favorites" && sidebarFavorites.length > 0 && (
+                          <span className="ml-auto rounded-full bg-rose-400/20 px-1.5 py-0.5 text-[10px] font-medium text-rose-200">
+                            {sidebarFavorites.length}
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -2259,10 +2468,35 @@ function ModuleSidebar({
       </div>
 
       <div className="p-4 border-t border-border/60">
-        <div className="glass-card rounded-xl p-3">
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            EmpresasIQ — navegue entre o universo de contratos públicos e as restantes ferramentas da plataforma.
-          </p>
+        <button
+          type="button"
+          onClick={() => onNavigate("settings")}
+          className="w-full flex items-center gap-3 rounded-xl glass-card px-3 py-2.5 text-left transition hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+        >
+          {sidebarUser ? <Avatar user={sidebarUser} size={32} /> : null}
+          <span className="min-w-0 flex-1 leading-tight">
+            <span className="block truncate text-sm font-medium">{sidebarUser?.name ?? "Conta"}</span>
+            <span className="block truncate text-[11px] text-muted-foreground">
+              {sidebarUser?.title || sidebarUser?.email || "Definições da conta"}
+            </span>
+          </span>
+          <Settings size={15} className="text-muted-foreground" />
+        </button>
+        <div className="mt-2 flex gap-2">
+          <button
+            type="button"
+            onClick={() => onNavigate("settings")}
+            className="flex-1 rounded-xl border border-white/10 px-2 py-1.5 text-[11px] text-muted-foreground transition hover:bg-white/5 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+          >
+            Definições
+          </button>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="flex-1 rounded-xl border border-rose-400/20 px-2 py-1.5 text-[11px] text-rose-200 transition hover:bg-rose-400/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300/50"
+          >
+            Terminar sessão
+          </button>
         </div>
       </div>
     </nav>
@@ -2311,9 +2545,29 @@ function ModuleSidebar({
         </div>
       )}
 
+      {/* Pega para voltar a mostrar a barra lateral (desktop). */}
+      {sidebarHidden && (
+        <button
+          onClick={toggleSidebar}
+          aria-label="Mostrar barra lateral"
+          title="Mostrar barra lateral (Ctrl+B)"
+          className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-40 items-center rounded-r-2xl border border-l-0 border-white/10 bg-[#111318]/92 py-4 pl-1 pr-1.5 text-muted-foreground shadow-lg backdrop-blur-xl transition hover:pr-4 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+        >
+          <ChevronRight size={16} />
+        </button>
+      )}
+
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-[220px] shrink-0 h-screen glass-panel border-r border-border/60 flex-col">
-        {navContent}
+      <aside
+        aria-hidden={sidebarHidden || undefined}
+        inert={sidebarHidden || undefined}
+        style={sidebarHidden ? { borderWidth: 0 } : undefined}
+        className={[
+          "hidden md:flex shrink-0 h-screen glass-panel flex-col overflow-hidden transition-[width,opacity] duration-300 ease-out",
+          sidebarHidden ? "w-0 opacity-0 border-0" : "w-[220px] opacity-100 border-r border-border/60",
+        ].join(" ")}
+      >
+        <div className="w-[220px] shrink-0 h-full">{navContent}</div>
       </aside>
     </>
   );
@@ -4172,6 +4426,7 @@ function EntityDetailPanel({
   const [analytics, setAnalytics] = useState<CompanyAnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { recordVisit } = useWorkspace();
 
   useEffect(() => {
     let cancelled = false;
@@ -4200,6 +4455,18 @@ function EntityDetailPanel({
     };
   }, [nif]);
 
+  // Histórico do dossier: registar a consulta assim que a ficha carrega.
+  useEffect(() => {
+    if (!company) return;
+    recordVisit({
+      kind: "entity",
+      id: nif,
+      label: company.name,
+      sublabel: `NIF ${nif}`,
+      value: company.total_value ?? null,
+    });
+  }, [company, nif, recordVisit]);
+
   if (loading) return <Loading />;
   if (error || !company) {
     return (
@@ -4218,16 +4485,27 @@ function EntityDetailPanel({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <button
           onClick={onBack}
           className="px-3 py-1.5 rounded-full glass-card text-sm text-muted-foreground hover:text-foreground transition flex items-center gap-2"
         >
           <ArrowUpRight size={16} className="rotate-[-135deg]" /> Voltar
         </button>
-        <button className="px-3 py-1.5 rounded-xl glass-card text-sm flex items-center gap-2 text-rose-300 hover:bg-white/5">
-          <Heart size={16} /> Adicionar aos Favoritos
-        </button>
+        <FavoriteButton
+          kind="entity"
+          id={nif}
+          label={company.name}
+          sublabel={`NIF ${nif}`}
+          variant="solid"
+        />
+        <SaveToFolderButton
+          kind="entity"
+          id={nif}
+          label={company.name}
+          sublabel={`NIF ${nif}`}
+          variant="solid"
+        />
       </div>
 
       <Card>
@@ -4328,6 +4606,7 @@ function ContractDetailPanel({
   const [contract, setContract] = useState<ContractItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { recordVisit } = useWorkspace();
 
   useEffect(() => {
     let cancelled = false;
@@ -4346,6 +4625,19 @@ function ContractDetailPanel({
       cancelled = true;
     };
   }, [id]);
+
+  // Histórico do dossier: registar a consulta assim que a ficha carrega.
+  useEffect(() => {
+    if (!contract) return;
+    recordVisit({
+      kind: "contract",
+      id,
+      label: contract.objectoContrato || `Contrato ${id}`,
+      sublabel: contract.idcontrato || id,
+      value: contract.precoContratual ?? contract.PrecoTotalEfetivo ?? null,
+      parties: contractPartiesOf(contract),
+    });
+  }, [contract, id, recordVisit]);
 
   if (loading) return <Loading />;
   if (error || !contract) {
@@ -4378,9 +4670,21 @@ function ContractDetailPanel({
             <h2 className="text-2xl font-bold mt-2">{contract.objectoContrato || "Contrato sem descrição"}</h2>
             <p className="text-sm text-muted-foreground mt-1">{contract.idcontrato || "—"}</p>
           </div>
-          <button className="px-3 py-1.5 rounded-xl glass-card text-sm flex items-center gap-2 text-rose-300 hover:bg-white/5">
-            <Heart size={16} /> Favorito
-          </button>
+          <FavoriteButton
+            kind="contract"
+            id={id}
+            label={contract.objectoContrato || `Contrato ${id}`}
+            sublabel={contract.idcontrato || id}
+            value={contract.precoContratual ?? contract.PrecoTotalEfetivo ?? null}
+          />
+          <SaveToFolderButton
+            kind="contract"
+            id={id}
+            label={contract.objectoContrato || `Contrato ${id}`}
+            sublabel={contract.idcontrato || id}
+            value={contract.precoContratual ?? contract.PrecoTotalEfetivo ?? null}
+            parties={contractPartiesOf(contract)}
+          />
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -4457,29 +4761,784 @@ function ContractDetailPanel({
   );
 }
 
-// --- FAVORITES / SETTINGS placeholders ---
+// --- Favoritos ---
 
-function FavoritesSection() {
+function FavoritesSection({
+  onEntity,
+  onContract,
+}: {
+  onEntity: (nif: string) => void;
+  onContract: (id: string) => void;
+}) {
+  const { entities, contracts, remove, clear } = useFavorites();
+  const total = entities.length + contracts.length;
+
+  if (total === 0) {
+    return (
+      <Card className="p-12 text-center">
+        <Heart size={40} className="mx-auto text-rose-400/70 mb-4" />
+        <h2 className="text-xl font-semibold">Favoritos</h2>
+        <p className="text-sm text-muted-foreground mt-2">
+          As entidades e contratos marcados aparecem aqui.
+        </p>
+        <p className="text-xs text-muted-foreground/80 mt-1">
+          Abra uma ficha e use o botão «Favorito» para a marcar.
+        </p>
+      </Card>
+    );
+  }
+
+  const groups = [
+    {
+      key: "entity" as const,
+      title: "Entidades",
+      icon: Building2,
+      items: entities,
+      open: onEntity,
+      openLabel: "Abrir ficha da entidade",
+    },
+    {
+      key: "contract" as const,
+      title: "Contratos",
+      icon: FileText,
+      items: contracts,
+      open: onContract,
+      openLabel: "Abrir ficha do contrato",
+    },
+  ].filter((group) => group.items.length > 0);
+
   return (
-    <Card className="p-12 text-center">
-      <Heart size={40} className="mx-auto text-rose-400 mb-4" />
-      <h2 className="text-xl font-semibold">Favoritos</h2>
-      <p className="text-sm text-muted-foreground mt-2">
-        As entidades e contratos marcados aparecerão aqui.
-      </p>
-    </Card>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">Favoritos</h2>
+          <p className="text-sm text-muted-foreground">
+            {total} {total === 1 ? "marcado" : "marcados"} · {entities.length} entidades · {contracts.length} contratos
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={clear}
+          className="rounded-xl glass-card px-3 py-1.5 text-sm text-muted-foreground transition hover:text-rose-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/50"
+        >
+          Limpar favoritos
+        </button>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {groups.map((group) => {
+          const Icon = group.icon;
+          return (
+            <Card key={group.key}>
+              <div className="flex items-center gap-2">
+                <Icon size={18} className="text-teal-300" />
+                <h3 className="font-semibold">
+                  {group.title} <span className="text-muted-foreground">({group.items.length})</span>
+                </h3>
+              </div>
+              <ul className="mt-3 space-y-2">
+                {group.items.map((item) => (
+                  <li
+                    key={`${item.kind}-${item.id}`}
+                    className="flex items-start gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => group.open(item.id)}
+                      title={group.openLabel}
+                      className="min-w-0 flex-1 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+                    >
+                      <span className="block truncate text-sm text-foreground">{item.label}</span>
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                        {item.sublabel ?? item.id}
+                        {typeof item.value === "number" && item.value > 0 ? ` · ${money(item.value)}` : ""}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => remove(item.kind, item.id)}
+                      aria-label={`Remover ${item.label} dos favoritos`}
+                      title="Remover dos favoritos"
+                      className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] p-1.5 text-muted-foreground transition hover:border-rose-400/30 hover:text-rose-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/50"
+                    >
+                      <X size={14} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
-function SettingsSection() {
+// --- Configurações & Dossier ---
+
+type WorkspaceTab = "companies" | "folders" | "history" | "graph";
+
+const WORKSPACE_TABS: { id: WorkspaceTab; label: string; icon: React.ElementType; hint: string }[] = [
+  { id: "companies", label: "Empresas & contratos", icon: Building2, hint: "Empresas do dossier e os seus contratos" },
+  { id: "folders", label: "Pastas & dossier", icon: FolderHeart, hint: "Organize fichas em pastas" },
+  { id: "history", label: "Histórico", icon: History, hint: "Fichas consultadas recentemente" },
+  { id: "graph", label: "Grafo do dossier", icon: GitBranch, hint: "Grafos de visualização do dossier" },
+];
+
+const contractValue = (contract: ContractItem) => contract.precoContratual ?? contract.PrecoTotalEfetivo ?? 0;
+
+const contractLabel = (contract: ContractItem, fallbackId: string) =>
+  contract.objectoContrato || `Contrato ${contract.idcontrato || fallbackId}`;
+
+/**
+ * Constrói um grafo (empresas → contratos) a partir do dossier, no mesmo formato dos grafos
+ * por dimensões, para reutilizar o canvas (rede, hierárquico e circular).
+ */
+function buildDossierGraph(
+  companies: { nif: string; label: string; value: number }[],
+  previews: Record<string, ContractItem[]>,
+  entries: WorkspaceEntry[]
+): ContractGraphBuildResponse {
+  const nodes: ContractGraphBuildNode[] = [];
+  const edges: { source: string; target: string; count: number; value: number }[] = [];
+  const seenContracts = new Set<string>();
+
+  companies.forEach((company) => {
+    const contracts = (previews[company.nif] ?? []).slice(0, 8);
+    const total = contracts.reduce((acc, contract) => acc + contractValue(contract), 0) || company.value || 0;
+    nodes.push({
+      id: `ent:${company.nif}`,
+      key: company.nif,
+      label: company.label,
+      dimension: "entidade",
+      type: "entidade",
+      role: "Entidade",
+      count: contracts.length || 1,
+      total_value: total,
+    });
+    contracts.forEach((contract) => {
+      const contractId = contract.idcontrato;
+      if (!contractId || seenContracts.has(contractId)) return;
+      seenContracts.add(contractId);
+      nodes.push({
+        id: `ctr:${contractId}`,
+        key: contractId,
+        label: contractLabel(contract, contractId),
+        dimension: "contrato",
+        type: "outra",
+        role: "Contrato",
+        count: 1,
+        total_value: contractValue(contract),
+      });
+      edges.push({ source: `ent:${company.nif}`, target: `ctr:${contractId}`, count: 1, value: contractValue(contract) });
+    });
+  });
+
+  // Contratos guardados no dossier mas sem pré-visualização carregada entram como nó isolado.
+  entries
+    .filter((entry) => entry.kind === "contract")
+    .forEach((entry) => {
+      if (seenContracts.has(entry.id)) return;
+      seenContracts.add(entry.id);
+      nodes.push({
+        id: `ctr:${entry.id}`,
+        key: entry.id,
+        label: entry.label,
+        dimension: "contrato",
+        type: "outra",
+        role: "Contrato",
+        count: 1,
+        total_value: entry.value ?? 0,
+      });
+    });
+
+  const keptNodes = nodes.length;
+  return {
+    nodes,
+    edges,
+    meta: {
+      dimension_a: "entidade",
+      dimension_b: "contrato",
+      metric: "valor",
+      mode: "dossier",
+      complete: true,
+      scan_capped: false,
+      sample_order: "dossier",
+      sample_limit: null,
+      documents_scanned: edges.length,
+      documents_matching: edges.length,
+      scanned_value: edges.reduce((acc, edge) => acc + edge.value, 0),
+      nodes_total: keptNodes,
+      edges_total: edges.length,
+      kept_nodes: keptNodes,
+      kept_edges: edges.length,
+      omitted_edges: 0,
+      directed: true,
+      notes: ["Grafo construído a partir das fichas guardadas no dossier."],
+      filters: {},
+    },
+  };
+}
+
+/** Pré-visualização dos contratos das empresas do dossier (limitada para não pesar). */
+function useDossierContracts(companies: { nif: string }[], perCompany = 6) {
+  const [previews, setPreviews] = useState<Record<string, ContractItem[]>>({});
+  const [loading, setLoading] = useState(false);
+  const companiesRef = useRef(companies);
+  companiesRef.current = companies;
+  const key = companies.map((company) => company.nif).join(",");
+
+  useEffect(() => {
+    const list = companiesRef.current.slice(0, 8);
+    if (list.length === 0) {
+      setPreviews({});
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    Promise.all(
+      list.map(async (company) => {
+        try {
+          const response = await getCompanyContracts(company.nif, "all", 0, perCompany);
+          return [company.nif, response.items ?? []] as const;
+        } catch {
+          return [company.nif, [] as ContractItem[]] as const;
+        }
+      })
+    )
+      .then((pairs) => {
+        if (!cancelled) setPreviews(Object.fromEntries(pairs));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [key, perCompany]);
+
+  return { previews, loading };
+}
+
+function DossierEntryRow({
+  entry,
+  onOpen,
+  onRemove,
+}: {
+  entry: WorkspaceEntry;
+  onOpen: () => void;
+  onRemove?: () => void;
+}) {
+  const Icon = entry.kind === "entity" ? Building2 : FileText;
   return (
-    <Card className="p-12 text-center">
-      <Settings size={40} className="mx-auto text-muted-foreground mb-4" />
-      <h2 className="text-xl font-semibold">Configurações</h2>
-      <p className="text-sm text-muted-foreground mt-2">
-        Preferências do módulo EmpresasIQ em desenvolvimento.
-      </p>
-    </Card>
+    <li className="flex items-start gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-2.5">
+      <span className="mt-0.5 text-muted-foreground/80">
+        <Icon size={15} />
+      </span>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="min-w-0 flex-1 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+      >
+        <span className="block truncate text-sm text-foreground">{entry.label}</span>
+        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+          {entry.kind === "entity" ? "Entidade" : "Contrato"}
+          {entry.sublabel ? ` · ${entry.sublabel}` : ""}
+          {entry.value ? ` · ${money(entry.value)}` : ""}
+        </span>
+      </button>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Remover ${entry.label}`}
+          title="Remover"
+          className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] p-1.5 text-muted-foreground transition hover:border-rose-400/30 hover:text-rose-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/50"
+        >
+          <X size={13} />
+        </button>
+      )}
+    </li>
+  );
+}
+
+function SettingsSection({
+  onEntity,
+  onContract,
+}: {
+  onEntity: (nif: string) => void;
+  onContract: (id: string) => void;
+}) {
+  const { history, folders, createFolder, renameFolder, deleteFolder, addToFolder, removeFromFolder, clearHistory } =
+    useWorkspace();
+  const { favorites } = useFavorites();
+  const [tab, setTab] = useState<WorkspaceTab>("companies");
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+  const [newFolderName, setNewFolderName] = useState("");
+
+  const activeFolder = useMemo(
+    () => folders.find((folder) => folder.id === activeFolderId) ?? folders[0] ?? null,
+    [activeFolderId, folders]
+  );
+
+  const favouriteEntries: WorkspaceEntry[] = useMemo(
+    () =>
+      favorites.map((favorite) => ({
+        kind: favorite.kind,
+        id: favorite.id,
+        label: favorite.label,
+        sublabel: favorite.sublabel,
+        value: favorite.value ?? null,
+        seenAt: favorite.addedAt,
+      })),
+    [favorites]
+  );
+
+  // Sem pasta escolhida, o dossier é o conjunto de favoritos + histórico recente.
+  // As identidades são estáveis (só mudam quando o armazém muda) para não reiniciar
+  // o layout do grafo nem refazer pedidos em cada render.
+  const dossierEntries: WorkspaceEntry[] = useMemo(
+    () =>
+      activeFolder
+        ? activeFolder.items
+        : [
+            ...favouriteEntries,
+            ...history.filter(
+              (item) => !favouriteEntries.some((favorite) => favorite.kind === item.kind && favorite.id === item.id)
+            ),
+          ].slice(0, 24),
+    [activeFolder, favouriteEntries, history]
+  );
+
+  const companies = useMemo(() => companiesIn(dossierEntries), [dossierEntries]);
+  const { previews, loading: loadingContracts } = useDossierContracts(companies);
+
+  const openEntry = (entry: WorkspaceEntry) => {
+    if (entry.kind === "entity") onEntity(entry.id);
+    else onContract(entry.id);
+  };
+
+  const addFavouritesToActiveFolder = () => {
+    if (!activeFolder) return;
+    favouriteEntries.forEach((entry) => addToFolder(activeFolder.id, entry));
+  };
+
+  const handleCreateFolder = () => {
+    const id = createFolder(newFolderName);
+    if (id) {
+      setNewFolderName("");
+      setActiveFolderId(id);
+      setTab("folders");
+    }
+  };
+
+  const handleGraphNode = (node: StudioNode) => {
+    if (node.dimension === "entidade") onEntity(node.key);
+    else onContract(node.key);
+  };
+
+  const [metric, setMetric] = useState<GraphMetric>("valor");
+  const [layout, setLayout] = useState<"network" | "hierarchical" | "circular">("network");
+  const [layoutVersion, setLayoutVersion] = useState(0);
+
+  const dossierGraphResponse = useMemo(
+    () => buildDossierGraph(companies, previews, dossierEntries),
+    // `previews`/`companies` derivam do dossier; recalcular quando muda o conjunto.
+    [companies, dossierEntries, previews]
+  );
+  const dossierGraph = useMemo(() => toStudioGraph(dossierGraphResponse, metric), [dossierGraphResponse, metric]);
+  const dossierValue = dossierEntries.reduce((acc, entry) => acc + (entry.value ?? 0), 0);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Settings size={20} className="text-teal-300" /> Configurações & dossier
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Área de trabalho: empresas e os seus contratos, pastas de fichas guardadas, histórico de consultas e
+            grafos de visualização do dossier.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-muted-foreground">
+            {folders.length} pastas
+          </span>
+          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-muted-foreground">
+            {favouriteEntries.length} favoritos
+          </span>
+          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-muted-foreground">
+            {history.length} no histórico
+          </span>
+          <span className="rounded-full border border-teal-400/20 bg-teal-400/10 px-3 py-1.5 text-teal-200">
+            {money(dossierValue)} no dossier
+          </span>
+        </div>
+      </div>
+
+      <div role="tablist" aria-label="Secções das configurações" className="flex flex-wrap gap-2">
+        {WORKSPACE_TABS.map((item) => {
+          const Icon = item.icon;
+          const active = tab === item.id;
+          return (
+            <button
+              key={item.id}
+              role="tab"
+              aria-selected={active}
+              title={item.hint}
+              onClick={() => setTab(item.id)}
+              className={[
+                "flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50",
+                active
+                  ? "glass-card text-teal-200 ring-1 ring-teal-400/30"
+                  : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+              ].join(" ")}
+            >
+              <Icon size={16} />
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === "companies" && (
+        <div className="space-y-4">
+          {dossierEntries.length === 0 ? (
+            <Card className="p-10 text-center">
+              <Building2 size={36} className="mx-auto mb-3 text-muted-foreground/70" />
+              <h2 className="text-lg font-semibold">Sem empresas no dossier</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Marque fichas como favoritas ou guarde-as numa pasta para as ver aqui com os respetivos contratos.
+              </p>
+            </Card>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">
+                {activeFolder ? `Pasta «${activeFolder.name}»` : "Favoritos + histórico recente"} · {companies.length}{" "}
+                empresas · contratos dos últimos {Object.values(previews).reduce((acc, list) => acc + list.length, 0)} carregados
+                {loadingContracts ? " (a carregar…)" : ""}
+              </p>
+              <div className="grid gap-4 xl:grid-cols-2">
+                {companies.map((company) => {
+                  const contracts = previews[company.nif] ?? [];
+                  const total = contracts.reduce((acc, contract) => acc + contractValue(contract), 0) || company.value;
+                  return (
+                    <Card key={company.nif}>
+                      <div className="flex items-start justify-between gap-3">
+                        <button
+                          type="button"
+                          onClick={() => onEntity(company.nif)}
+                          className="min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+                        >
+                          <span className="flex items-center gap-2">
+                            <Building2 size={16} className="shrink-0 text-teal-300" />
+                            <span className="truncate font-semibold">{company.label}</span>
+                          </span>
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            NIF {company.nif}
+                            {company.role ? ` · ${company.role}` : ""}
+                          </span>
+                        </button>
+                        <div className="shrink-0 text-right">
+                          <p className="text-sm font-semibold text-amber-300">{money(total)}</p>
+                          <p className="text-[11px] text-muted-foreground">{contracts.length} contratos recentes</p>
+                        </div>
+                      </div>
+                      {contracts.length > 0 ? (
+                        <ul className="mt-3 space-y-1.5">
+                          {contracts.slice(0, 5).map((contract) => (
+                            <li key={contract.idcontrato ?? contract.doc_id}>
+                              <button
+                                type="button"
+                                onClick={() => contract.idcontrato && onContract(contract.idcontrato)}
+                                className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2 text-left transition hover:border-teal-400/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+                              >
+                                <span className="block truncate text-xs text-foreground">
+                                  {contractLabel(contract, company.nif)}
+                                </span>
+                                <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                                  {contract.idcontrato} · {fmtDate(contract.dataCelebracaoContrato ?? contract.dataPublicacao)} ·{" "}
+                                  {money(contractValue(contract))}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-3 text-xs text-muted-foreground">
+                          {loadingContracts ? "A carregar contratos…" : "Sem contratos recentes indexados."}
+                        </p>
+                      )}
+                      {activeFolder && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            addToFolder(activeFolder.id, {
+                              kind: "entity",
+                              id: company.nif,
+                              label: company.label,
+                              sublabel: `NIF ${company.nif}`,
+                              value: company.value,
+                            })
+                          }
+                          className="mt-3 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-xs text-muted-foreground transition hover:text-teal-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+                        >
+                          Guardar empresa na pasta
+                        </button>
+                      )}
+                    </Card>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {tab === "folders" && (
+        <div className="space-y-4">
+          <Card>
+            <div className="flex flex-wrap items-center gap-2">
+              <FolderPlus size={18} className="text-teal-300" />
+              <h2 className="text-sm font-semibold">Nova pasta</h2>
+              <input
+                value={newFolderName}
+                onChange={(event) => setNewFolderName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") handleCreateFolder();
+                }}
+                placeholder="Ex.: Concorrência 2026, Auditoria Coimbra…"
+                aria-label="Nome da nova pasta"
+                className="min-w-[220px] flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+              />
+              <button
+                type="button"
+                onClick={handleCreateFolder}
+                disabled={!newFolderName.trim()}
+                className="rounded-xl border border-teal-400/30 bg-teal-400/10 px-3 py-2 text-sm text-teal-200 transition hover:bg-teal-400/20 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Criar pasta
+              </button>
+            </div>
+          </Card>
+
+          {folders.length === 0 ? (
+            <Card className="p-10 text-center">
+              <FolderHeart size={36} className="mx-auto mb-3 text-muted-foreground/70" />
+              <h2 className="text-lg font-semibold">Ainda não há pastas</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Crie uma pasta e guarde fichas de entidades e contratos — ou use «Guardar em pasta» dentro de cada ficha.
+              </p>
+            </Card>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,300px)_1fr]">
+              <div className="space-y-2">
+                {folders.map((folder) => {
+                  const isActive = activeFolder?.id === folder.id;
+                  return (
+                    <div
+                      key={folder.id}
+                      className={[
+                        "rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition",
+                        isActive ? "ring-1 ring-teal-400/40" : "",
+                      ].join(" ")}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setActiveFolderId(folder.id)}
+                        className="flex w-full items-center gap-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+                      >
+                        <FolderHeart size={16} className={isActive ? "text-teal-300" : "text-muted-foreground"} />
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">{folder.name}</span>
+                        <span className="text-[11px] text-muted-foreground">{folder.items.length}</span>
+                      </button>
+                      <div className="mt-2 flex items-center gap-1.5">
+                        <input
+                          defaultValue={folder.name}
+                          onBlur={(event) => renameFolder(folder.id, event.target.value)}
+                          aria-label={`Renomear pasta ${folder.name}`}
+                          className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => deleteFolder(folder.id)}
+                          aria-label={`Apagar pasta ${folder.name}`}
+                          title="Apagar pasta"
+                          className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] p-1.5 text-muted-foreground transition hover:border-rose-400/30 hover:text-rose-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/50"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {activeFolder && (
+                <Card>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <FolderOpen size={18} className="text-teal-300" />
+                      <h3 className="font-semibold">{activeFolder.name}</h3>
+                      <span className="text-xs text-muted-foreground">
+                        {activeFolder.items.length} fichas ·{" "}
+                        {money(activeFolder.items.reduce((acc, entry) => acc + (entry.value ?? 0), 0))}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={addFavouritesToActiveFolder}
+                        disabled={favouriteEntries.length === 0}
+                        className="rounded-xl glass-card px-3 py-1.5 text-xs text-muted-foreground transition hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+                      >
+                        Juntar favoritos ({favouriteEntries.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTab("graph")}
+                        className="rounded-xl glass-card px-3 py-1.5 text-xs text-teal-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+                      >
+                        Ver grafo do dossier
+                      </button>
+                    </div>
+                  </div>
+                  {activeFolder.items.length === 0 ? (
+                    <p className="mt-4 text-sm text-muted-foreground">
+                      Pasta vazia. Abra fichas e use «Guardar em pasta», ou junte os favoritos.
+                    </p>
+                  ) : (
+                    <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {activeFolder.items.map((entry) => (
+                        <DossierEntryRow
+                          key={`${entry.kind}-${entry.id}`}
+                          entry={entry}
+                          onOpen={() => openEntry(entry)}
+                          onRemove={() => removeFromFolder(activeFolder.id, entry)}
+                        />
+                      ))}
+                    </ul>
+                  )}
+                </Card>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "history" && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              Registo local (neste browser) das fichas abertas, mais recentes primeiro.
+            </p>
+            <button
+              type="button"
+              onClick={clearHistory}
+              disabled={history.length === 0}
+              className="rounded-xl glass-card px-3 py-1.5 text-xs text-muted-foreground transition hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/40"
+            >
+              Limpar histórico
+            </button>
+          </div>
+          {history.length === 0 ? (
+            <Card className="p-10 text-center">
+              <History size={36} className="mx-auto mb-3 text-muted-foreground/70" />
+              <h2 className="text-lg font-semibold">Sem consultas registadas</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Abra uma ficha de entidade ou de contrato.</p>
+            </Card>
+          ) : (
+            <Card>
+              <ul className="grid gap-2 sm:grid-cols-2">
+                {history.map((entry) => (
+                  <DossierEntryRow
+                    key={`${entry.kind}-${entry.id}`}
+                    entry={entry}
+                    onOpen={() => openEntry(entry)}
+                    onRemove={activeFolder ? () => addToFolder(activeFolder.id, entry) : undefined}
+                  />
+                ))}
+              </ul>
+              <p className="mt-3 text-[11px] text-muted-foreground">
+                {activeFolder
+                  ? `O botão «×» move a ficha para a pasta «${activeFolder.name}» (em vez de remover).`
+                  : "Crie uma pasta para poder guardar entradas a partir daqui."}
+              </p>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {tab === "graph" && (
+        <div className="space-y-4">
+          <Card>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="flex items-center gap-2 font-semibold">
+                  <GitBranch size={18} className="text-teal-300" /> Grafo do dossier
+                </h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {activeFolder ? `Pasta «${activeFolder.name}»` : "Favoritos + histórico recente"} ·{" "}
+                  {dossierGraphResponse.nodes.length} nós · {dossierGraphResponse.edges.length} ligações
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {(["network", "hierarchical", "circular"] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={layout === option}
+                    onClick={() => {
+                      setLayout(option);
+                      setLayoutVersion((version) => version + 1);
+                    }}
+                    className={[
+                      "rounded-xl px-3 py-1.5 text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40",
+                      layout === option ? "glass-card text-teal-200 ring-1 ring-teal-400/30" : "text-muted-foreground hover:text-foreground",
+                    ].join(" ")}
+                  >
+                    {option === "network" ? "Rede" : option === "hierarchical" ? "Hierárquico" : "Circular"}
+                  </button>
+                ))}
+                <span className="mx-1 h-5 w-px bg-white/10" />
+                {(["valor", "contratos"] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={metric === option}
+                    onClick={() => setMetric(option)}
+                    className={[
+                      "rounded-xl px-3 py-1.5 text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40",
+                      metric === option ? "glass-card text-teal-200 ring-1 ring-teal-400/30" : "text-muted-foreground hover:text-foreground",
+                    ].join(" ")}
+                  >
+                    {option === "valor" ? "Valor" : "Contratos"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-3">
+              {dossierGraph && dossierGraph.nodes.length > 0 ? (
+                <GraphCanvas
+                  graph={dossierGraph}
+                  layout={layout}
+                  metric={metric}
+                  layoutVersion={layoutVersion}
+                  loading={loadingContracts}
+                  heightClass="h-[440px]"
+                  onNodeClick={handleGraphNode}
+                />
+              ) : (
+                <p className="rounded-xl border border-white/10 bg-white/[0.03] p-8 text-center text-sm text-muted-foreground">
+                  Sem fichas suficientes no dossier para desenhar um grafo. Guarde empresas e contratos numa pasta.
+                </p>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -4493,6 +5552,7 @@ export default function EmpresasIQPage({
   const [section, setSection] = useState<EmpresasIQSection>("dashboard");
   const [q, setQ] = useState("");
   const [detail, setDetail] = useState<{ type: "entity" | "contract"; id: string } | null>(null);
+  const [detailClosing, setDetailClosing] = useState(false);
   const [analytics, setAnalytics] = useState<ContractAnalyticsResponse | null>(null);
   const [regional, setRegional] = useState<ContractRegionalResponse | null>(null);
   const [status, setStatus] = useState<{ total: number; years: number[] } | null>(null);
@@ -4525,10 +5585,11 @@ export default function EmpresasIQPage({
   useEffect(() => {
     if (!detail) return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setDetail(null);
+      if (event.key === "Escape") closeDetail();
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail]);
 
   const handleSearch = () => {
@@ -4544,7 +5605,15 @@ export default function EmpresasIQPage({
     setDetail({ type: "contract", id });
   };
 
-  const closeDetail = () => setDetail(null);
+  // Fecha a ficha com o gesto inverso ao de abertura (o ficheiro volta a fechar-se).
+  const closeDetail = () => {
+    if (detailClosing) return;
+    setDetailClosing(true);
+    window.setTimeout(() => {
+      setDetailClosing(false);
+      setDetail(null);
+    }, 175);
+  };
 
   const content = useMemo(() => {
     if (loading) return <Loading />;
@@ -4586,9 +5655,9 @@ export default function EmpresasIQPage({
       case "analysis":
         return <AnalysisSection analytics={analytics} regional={regional} onEntity={openEntity} />;
       case "favorites":
-        return <FavoritesSection />;
+        return <FavoritesSection onEntity={openEntity} onContract={openContract} />;
       case "settings":
-        return <SettingsSection />;
+        return <SettingsSection onEntity={openEntity} onContract={openContract} />;
       default:
         return null;
     }
@@ -4609,6 +5678,7 @@ export default function EmpresasIQPage({
         trading: "/trading",
         rag: "/rag",
         elastic: "/elastic",
+        settings: "/settings",
       };
       window.history.pushState({}, "", map[view]);
       window.dispatchEvent(new PopStateEvent("popstate"));
@@ -4632,7 +5702,7 @@ export default function EmpresasIQPage({
       </div>
       {detail && (
         <div
-          className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-[#03080b]/55 p-3 backdrop-blur-sm sm:p-6 lg:p-10"
+          className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-[#03080b]/55 p-3 pt-5 backdrop-blur-sm sm:p-6 sm:pt-8 lg:p-10 lg:pt-12"
           role="dialog"
           aria-modal="true"
           aria-label={detail.type === "entity" ? "Ficha da entidade" : "Detalhe do contrato"}
@@ -4640,22 +5710,34 @@ export default function EmpresasIQPage({
             if (event.target === event.currentTarget) closeDetail();
           }}
         >
-          <div className="relative w-full max-w-6xl glass-modal gradient-border rounded-2xl">
-            <button
-              type="button"
-              onClick={closeDetail}
-              aria-label="Fechar ficha"
-              title="Fechar ficha (Esc)"
-              className="absolute right-3 top-3 z-10 rounded-lg border border-white/10 bg-white/[0.06] p-2 text-muted-foreground backdrop-blur-sm transition hover:bg-white/10 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
-            >
-              <X size={18} />
-            </button>
-            <div className="max-h-[calc(100vh-1.5rem)] overflow-y-auto p-3 sm:max-h-[calc(100vh-3rem)] sm:p-6 lg:p-8">
-              {detail.type === "entity" ? (
-                <EntityDetailPanel nif={detail.id} onBack={closeDetail} onContract={openContract} />
-              ) : (
-                <ContractDetailPanel id={detail.id} onBack={closeDetail} onEntity={openEntity} />
-              )}
+          {/* Ficheiro: aba por cima, folha de vidro por baixo (abre com um desdobrar). */}
+          <div
+            className={`flex w-full max-w-6xl flex-col ${detailClosing ? "file-closing" : "file-opening"}`}
+          >
+            <div className="file-tab pl-3 text-[11px] uppercase tracking-wide text-muted-foreground">
+              <FileText size={13} className="text-teal-300" />
+              <span className="text-foreground">
+                {detail.type === "entity" ? "Ficha da entidade" : "Ficha do contrato"}
+              </span>
+              <span className="hidden truncate opacity-70 sm:inline">#{detail.id}</span>
+            </div>
+            <div className="file-sheet glass-modal gradient-border relative rounded-tl-none rounded-tr-2xl rounded-b-2xl">
+              <button
+                type="button"
+                onClick={closeDetail}
+                aria-label="Fechar ficha"
+                title="Fechar ficha (Esc)"
+                className="absolute right-3 top-3 z-10 rounded-lg border border-white/10 bg-white/[0.06] p-2 text-muted-foreground backdrop-blur-sm transition hover:bg-white/10 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+              >
+                <X size={18} />
+              </button>
+              <div className="file-body max-h-[calc(100vh-3.5rem)] overflow-y-auto p-3 pt-10 sm:max-h-[calc(100vh-5rem)] sm:p-6 sm:pt-12 lg:p-8 lg:pt-12">
+                {detail.type === "entity" ? (
+                  <EntityDetailPanel nif={detail.id} onBack={closeDetail} onContract={openContract} />
+                ) : (
+                  <ContractDetailPanel id={detail.id} onBack={closeDetail} onEntity={openEntity} />
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -47,6 +47,18 @@ FIRMAS_INDEX = "finance_firmas"
 # Índice para o cadastro de entidades do portal base (data/entidades-gov-portal-base/entidades.json)
 ENTITIES_INDEX = "finance_entities"
 
+# Índice para preferências do utilizador (favoritos, pastas do dossier e histórico do EmpresasIQ).
+# Evita depender do localStorage do browser, que se perde ao mudar de origem/porta ou ao limpar dados.
+USER_STATE_INDEX = "finance_user_state"
+
+# Índice de contas de utilizador (autenticação). O `_id` do documento é o email
+# normalizado, o que garante unicidade sem necessitar de transações.
+AUTH_USERS_INDEX = "finance_users"
+
+# Índice de sessões (uma por início de sessão). Guarda a validade e a revogação,
+# para que o "terminar sessão" seja imediato e auditável.
+AUTH_SESSIONS_INDEX = "finance_sessions"
+
 # Definições (settings) específicas de determinados índices — nomeadamente
 # analisadores usados em subcampos de pesquisa por prefixo.
 INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
@@ -372,6 +384,69 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    user_state_mappings = {
+        "properties": {
+            "kind": {"type": "keyword"},
+            "entry_kind": {"type": "keyword"},
+            "id": {"type": "keyword"},
+            "folder_id": {"type": "keyword"},
+            "name": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "label": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "sublabel": {"type": "keyword"},
+            "value": {"type": "float"},
+            "parties": {
+                "type": "nested",
+                "properties": {
+                    "nif": {"type": "keyword"},
+                    "label": {"type": "text"},
+                    "role": {"type": "keyword"},
+                },
+            },
+            "items": {"type": "object", "enabled": False},
+            "added_at": {"type": "date"},
+            "created_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
+    auth_users_mappings = {
+        "properties": {
+            "id": {"type": "keyword"},
+            "email": {"type": "keyword"},
+            "name": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+            "initials": {"type": "keyword"},
+            "title": {"type": "keyword"},
+            "organization": {"type": "keyword"},
+            "phone": {"type": "keyword"},
+            "role": {"type": "keyword"},
+            "status": {"type": "keyword"},
+            "locale": {"type": "keyword"},
+            "timezone": {"type": "keyword"},
+            # O hash nunca é pesquisado: fica como objeto opaco.
+            "password": {"type": "object", "enabled": False},
+            "preferences": {"type": "object", "enabled": False},
+            "created_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+            "last_login_at": {"type": "date"},
+            "login_count": {"type": "integer"},
+        }
+    }
+
+    auth_sessions_mappings = {
+        "properties": {
+            "session_id": {"type": "keyword"},
+            "user_id": {"type": "keyword"},
+            "email": {"type": "keyword"},
+            "created_at": {"type": "date"},
+            "last_seen_at": {"type": "date"},
+            "expires_at": {"type": "date"},
+            "revoked": {"type": "boolean"},
+            "revoked_at": {"type": "date"},
+            "user_agent": {"type": "keyword", "ignore_above": 512},
+            "ip": {"type": "keyword"},
+        }
+    }
+
     for name, mappings in [
         ("finance_prices", prices_mappings),
         ("finance_news", news_mappings),
@@ -382,6 +457,9 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (TRADEMARKS_INDEX, trademarks_mappings),
         (FIRMAS_INDEX, firmas_mappings),
         (ENTITIES_INDEX, entities_mappings),
+        (USER_STATE_INDEX, user_state_mappings),
+        (AUTH_USERS_INDEX, auth_users_mappings),
+        (AUTH_SESSIONS_INDEX, auth_sessions_mappings),
     ]:
         if not client.indices.exists(index=name):
             settings: Dict[str, Any] = {"number_of_shards": 1, "number_of_replicas": 0}
@@ -1891,7 +1969,13 @@ def get_contract_analytics(
             "max_value": fmt_money(aggs["max_value"].get("value")),
             "by_year": [{"key": str(b["key"]), "count": b["doc_count"], "total_value": fmt_money(b.get("total_value", {}).get("value"))} for b in aggs["by_year"]["buckets"]],
             "by_month": [{"key": b["key_as_string"], "count": b["doc_count"]} for b in aggs["by_month"]["buckets"]],
-            "value_distribution": [{"key": f"{int(b['key'])} - {int(b['key']) + 50000}", "count": b["doc_count"]} for b in aggs["value_distribution"]["buckets"][:value_buckets]],
+            # `precoContratual` tem valores negativos (correções/notas de crédito) que
+            # caíam nos primeiros escalões do histograma; ignoram-se aqui.
+            "value_distribution": [
+                {"key": f"{int(b['key'])} - {int(b['key']) + 50000}", "count": b["doc_count"]}
+                for b in aggs["value_distribution"]["buckets"]
+                if b.get("key") is not None and b["key"] >= 0
+            ][:value_buckets],
             "top_entities": entity_rows,
             "top_cpv": cpv_rows,
             "procedure_types": [{"key": b["key"], "count": b["doc_count"]} for b in aggs["procedure_types"]["buckets"]],
@@ -4500,3 +4584,203 @@ def list_entity_countries(es: Optional[Elasticsearch] = None) -> List[Dict[str, 
         ]
     except Exception:
         return []
+
+# --- Preferências do utilizador (favoritos, pastas e histórico do EmpresasIQ) ---
+# Um único índice guarda o estado que antes vivia apenas no browser. Favoritos e pastas
+# têm um documento por item (permite marcar/remover de forma isolada); o histórico é
+# um documento único com a lista completa.
+
+def _user_state_index() -> str:
+    return USER_STATE_INDEX
+
+
+def list_favorites(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Lista os favoritos guardados no Elasticsearch (mais recentes primeiro)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": []}
+
+    ensure_indices(client)
+    try:
+        resp = client.search(
+            index=USER_STATE_INDEX,
+            body={
+                "query": {"term": {"kind": "favorite"}},
+                "size": 1000,
+                "sort": [{"added_at": {"order": "desc", "missing": "_last"}}],
+            },
+        )
+        items = []
+        for hit in resp["hits"]["hits"]:
+            src = hit["_source"]
+            # No índice `kind` identifica o tipo de documento ("favorite"/"folder"/"history");
+            # na resposta o campo `kind` é o tipo de ficha ("entity"/"contract").
+            items.append(
+                {
+                    "kind": src.get("entry_kind"),
+                    "id": src.get("id"),
+                    "label": src.get("label") or src.get("id"),
+                    "sublabel": src.get("sublabel"),
+                    "value": src.get("value"),
+                    "parties": src.get("parties") or [],
+                    "added_at": src.get("added_at"),
+                    "doc_id": hit["_id"],
+                }
+            )
+        return {"items": items, "total": len(items)}
+    except Exception as exc:
+        return {"error": str(exc), "items": []}
+
+
+def save_favorite(doc: Dict[str, Any], es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Guarda (ou substitui) um favorito. O id do documento é ``kind:id``."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    ensure_indices(client)
+    kind = str(doc.get("kind") or "").strip()
+    item_id = str(doc.get("id") or "").strip()
+    if kind not in {"entity", "contract"} or not item_id:
+        return {"error": "Favorito inválido: precisa de kind ('entity'|'contract') e id"}
+
+    source = {
+        "kind": "favorite",
+        "entry_kind": kind,
+        "id": item_id,
+        "label": doc.get("label") or item_id,
+        "sublabel": doc.get("sublabel"),
+        "value": doc.get("value"),
+        "parties": doc.get("parties") or [],
+        "added_at": doc.get("added_at") or _today(),
+    }
+    try:
+        client.index(index=USER_STATE_INDEX, id=f"favorite:{kind}:{item_id}", document=source, refresh=True)
+        return {"ok": True, "id": item_id, "kind": kind}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def delete_favorite(kind: str, item_id: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Remove um favorito."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    ensure_indices(client)
+    try:
+        client.delete(index=USER_STATE_INDEX, id=f"favorite:{kind}:{item_id}", ignore=[404], refresh=True)
+        return {"ok": True}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def clear_favorites(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Remove todos os favoritos."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    ensure_indices(client)
+    try:
+        resp = client.delete_by_query(
+            index=USER_STATE_INDEX,
+            body={"query": {"term": {"kind": "favorite"}}},
+            refresh=True,
+            conflicts="proceed",
+        )
+        return {"ok": True, "deleted": resp.get("deleted", 0)}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def get_workspace(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Devolve o dossier (pastas) e o histórico guardados."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "folders": [], "history": []}
+
+    ensure_indices(client)
+    try:
+        resp = client.search(
+            index=USER_STATE_INDEX,
+            body={"query": {"terms": {"kind": ["folder", "history"]}}, "size": 1000},
+        )
+        folders = []
+        history = []
+        for hit in resp["hits"]["hits"]:
+            src = hit["_source"]
+            if src.get("kind") == "folder":
+                folders.append(
+                    {
+                        "id": src.get("folder_id") or hit["_id"],
+                        "name": src.get("name") or "Pasta",
+                        "createdAt": src.get("created_at"),
+                        "items": src.get("items") or [],
+                    }
+                )
+            elif src.get("kind") == "history":
+                history = src.get("items") or []
+        folders.sort(key=lambda folder: folder.get("createdAt") or "")
+        return {"folders": folders, "history": history}
+    except Exception as exc:
+        return {"error": str(exc), "folders": [], "history": []}
+
+
+def save_folder(folder: Dict[str, Any], es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Guarda (ou substitui) uma pasta do dossier com as suas fichas."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    ensure_indices(client)
+    folder_id = str(folder.get("id") or "").strip()
+    if not folder_id:
+        return {"error": "Pasta inválida: falta o id"}
+
+    source = {
+        "kind": "folder",
+        "folder_id": folder_id,
+        "name": folder.get("name") or "Pasta",
+        "created_at": folder.get("createdAt") or _today(),
+        "items": folder.get("items") or [],
+        "updated_at": _today(),
+    }
+    try:
+        client.index(index=USER_STATE_INDEX, id=f"folder:{folder_id}", document=source, refresh=True)
+        return {"ok": True, "id": folder_id}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def delete_folder(folder_id: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Remove uma pasta do dossier."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    ensure_indices(client)
+    try:
+        client.delete(index=USER_STATE_INDEX, id=f"folder:{folder_id}", ignore=[404], refresh=True)
+        return {"ok": True}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def save_history(items: List[Dict[str, Any]], es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Guarda o histórico de fichas consultadas (documento único)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    ensure_indices(client)
+    try:
+        client.index(
+            index=USER_STATE_INDEX,
+            id="history",
+            document={"kind": "history", "items": items, "updated_at": _today()},
+            refresh=True,
+        )
+        return {"ok": True, "count": len(items)}
+    except Exception as exc:
+        return {"error": str(exc)}

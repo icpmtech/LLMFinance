@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   MessageSquare,
   LayoutDashboard,
@@ -10,13 +10,21 @@ import {
   FolderOpen,
   Database,
   ChevronDown,
+  ChevronRight,
   Menu,
   X,
   Sparkles,
   BarChart3,
   Network,
+  PanelLeftClose,
+  Settings,
+  LogOut,
+  ChevronUp,
   Upload,
 } from "lucide-react";
+import { useSidebarHidden } from "../layout";
+import { useAuth } from "../auth";
+import { Avatar } from "../pages/SettingsPage";
 
 export type AppView =
   | "dashboard"
@@ -38,6 +46,7 @@ export type AppView =
   | "entities-search"
   | "empresas-iq"
   | "import"
+  | "settings"
   | "contracts-list";
 
 interface NavGroup {
@@ -126,6 +135,9 @@ function isGroupActive(view: AppView, group: NavGroup): boolean {
 
 export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const { hidden: sidebarHidden, toggle: toggleSidebar } = useSidebarHidden();
+  const { user, logout } = useAuth();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     groups.forEach((g) => (initial[g.id] = isGroupActive("dashboard", g)));
@@ -141,12 +153,65 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
     setMobileOpen(false);
   };
 
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setUserMenuOpen(false);
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [userMenuOpen]);
+
+  const accountMenu = (positionClass: string) => (
+    <>
+      {userMenuOpen && user && (
+        <>
+          <div className="fixed inset-0 z-[55]" onMouseDown={() => setUserMenuOpen(false)} aria-hidden="true" />
+          <div
+            role="menu"
+            aria-label="Conta"
+            className={`z-[60] overflow-hidden rounded-2xl border border-white/10 bg-[#14161b]/97 p-1.5 shadow-2xl backdrop-blur-xl ${positionClass}`}
+          >
+            <div className="flex items-center gap-3 rounded-xl px-3 py-2.5">
+              <Avatar user={user} size={36} />
+              <div className="min-w-0 leading-tight">
+                <p className="truncate text-sm font-medium">{user.name}</p>
+                <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
+              </div>
+            </div>
+            <div className="my-1 h-px bg-white/8" />
+            <button
+              role="menuitem"
+              onClick={() => {
+                setUserMenuOpen(false);
+                handleClick("settings");
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-white/8 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+            >
+              <Settings size={14} /> Definições da conta
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => {
+                setUserMenuOpen(false);
+                void logout();
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-300 transition hover:bg-rose-400/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300/50"
+            >
+              <LogOut size={14} /> Terminar sessão
+            </button>
+          </div>
+        </>
+      )}
+    </>
+  );
+
   const navContent = (
     <nav className="flex flex-col h-full">
-      <div className="p-4 border-b border-border/60">
+      <div className="p-4 border-b border-border/60 flex items-center gap-2">
         <button
           onClick={() => (onBackToChat ? onBackToChat() : handleClick("chat"))}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl glass-card hover:bg-white/5 transition text-left"
+          className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl glass-card hover:bg-white/5 transition text-left"
         >
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-teal-500 to-blue-500 flex items-center justify-center text-white shadow-lg shadow-primary/20">
             <Sparkles size={16} />
@@ -155,6 +220,14 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
             <p className="font-semibold text-sm">FinanceLLM</p>
             <p className="text-[11px] text-muted-foreground">Plataforma inteligente</p>
           </div>
+        </button>
+        <button
+          onClick={toggleSidebar}
+          aria-label="Ocultar barra lateral"
+          title="Ocultar barra lateral (Ctrl+B)"
+          className="hidden md:grid shrink-0 place-items-center h-9 w-9 rounded-xl text-muted-foreground transition hover:bg-white/5 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+        >
+          <PanelLeftClose size={17} />
         </button>
       </div>
 
@@ -209,12 +282,22 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
         })}
       </div>
 
-      <div className="p-4 border-t border-border/60">
-        <div className="glass-card rounded-xl p-3">
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Use o menu acima para navegar entre dados públicos, mercados e ferramentas.
-          </p>
-        </div>
+      <div className="p-4 border-t border-border/60 relative">
+        <button
+          type="button"
+          onClick={() => setUserMenuOpen((open) => !open)}
+          aria-haspopup="menu"
+          aria-expanded={userMenuOpen}
+          className="w-full flex items-center gap-3 rounded-xl glass-card px-3 py-2.5 text-left transition hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+        >
+          {user ? <Avatar user={user} size={34} /> : null}
+          <span className="min-w-0 flex-1 leading-tight">
+            <span className="block truncate text-sm font-medium">{user?.name ?? "Conta"}</span>
+            <span className="block truncate text-[11px] text-muted-foreground">{user?.title || user?.email || ""}</span>
+          </span>
+          <ChevronUp size={15} className={userMenuOpen ? "text-foreground" : "text-muted-foreground"} />
+        </button>
+        {accountMenu("absolute bottom-full left-4 right-4 mb-2")}
       </div>
     </nav>
   );
@@ -229,25 +312,62 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
           </div>
           <span className="font-semibold text-sm">FinanceLLM</span>
         </div>
-        <button
-          onClick={() => setMobileOpen((v) => !v)}
-          className="p-2 rounded-lg hover:bg-white/5 transition"
-          aria-label="Menu"
-        >
-          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
+        <div className="flex items-center gap-2">
+          {user && (
+            <button
+              type="button"
+              onClick={() => setUserMenuOpen((open) => !open)}
+              aria-haspopup="menu"
+              aria-expanded={userMenuOpen}
+              aria-label="Conta"
+              className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+            >
+              <Avatar user={user} size={30} />
+            </button>
+          )}
+          <button
+            onClick={() => setMobileOpen((v) => !v)}
+            className="p-2 rounded-lg hover:bg-white/5 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+            aria-label="Menu"
+            aria-controls="finance-llm-mobile-nav"
+            aria-expanded={mobileOpen}
+          >
+            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+        {accountMenu("fixed right-3 top-16 w-64")}
       </div>
 
       {/* Mobile drawer */}
       {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-40 pt-14 bg-background/95 backdrop-blur-xl">
+        <div id="finance-llm-mobile-nav" className="md:hidden fixed inset-0 z-40 pt-14 bg-background/95 backdrop-blur-xl">
           {navContent}
         </div>
       )}
 
+      {/* Pega para voltar a mostrar a barra lateral (desktop). */}
+      {sidebarHidden && (
+        <button
+          onClick={toggleSidebar}
+          aria-label="Mostrar barra lateral"
+          title="Mostrar barra lateral (Ctrl+B)"
+          className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-40 items-center rounded-r-2xl border border-l-0 border-white/10 bg-[#111318]/92 py-4 pl-1 pr-1.5 text-muted-foreground shadow-lg backdrop-blur-xl transition hover:pr-4 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+        >
+          <ChevronRight size={16} />
+        </button>
+      )}
+
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-[260px] shrink-0 h-screen glass-panel border-r border-border/60 flex-col">
-        {navContent}
+      <aside
+        aria-hidden={sidebarHidden || undefined}
+        inert={sidebarHidden || undefined}
+        style={sidebarHidden ? { borderWidth: 0 } : undefined}
+        className={[
+          "hidden md:flex shrink-0 h-screen glass-panel flex-col overflow-hidden transition-[width,opacity] duration-300 ease-out",
+          sidebarHidden ? "w-0 opacity-0 border-0" : "w-[260px] opacity-100 border-r border-border/60",
+        ].join(" ")}
+      >
+        <div className="w-[260px] shrink-0 h-full">{navContent}</div>
       </aside>
     </>
   );

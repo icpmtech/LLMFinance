@@ -65,6 +65,7 @@ export function GraphCanvas({
   const draggingRef = useRef(false);
   const dragMovedRef = useRef(false);
   const userMovedRef = useRef(false);
+  const layoutVersionRef = useRef(layoutVersion);
   const lastPointerRef = useRef({ x: 0, y: 0 });
 
   const [scale, setScale] = useState(1);
@@ -269,6 +270,13 @@ export function GraphCanvas({
   // Layout: determinístico (circular/hierárquico) ou simulação de forças.
   useEffect(() => {
     if (nodes.length === 0) return;
+    // "Recalcular layout" (layoutVersion) reinicia as posições: tem de ser feito AQUI,
+    // antes de semear — um efeito separado correria depois do layout e deixaria o grafo vazio.
+    if (layoutVersionRef.current !== layoutVersion) {
+      layoutVersionRef.current = layoutVersion;
+      userMovedRef.current = false;
+      positionsRef.current.clear();
+    }
     setSettled(false);
     const positions = positionsRef.current;
     const activeIds = new Set(nodes.map((node) => node.id));
@@ -414,17 +422,12 @@ export function GraphCanvas({
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draw, fitToView, layoutKey]);
+  }, [draw, fitToView, layoutKey, layoutVersion]);
 
   useEffect(() => {
     draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draw, nodes, edges, hovered, hoveredEdge, scale, offset, size, selectedNodeId, labelledIds]);
-
-  useEffect(() => {
-    userMovedRef.current = false;
-    positionsRef.current.clear();
-  }, [layoutVersion]);
 
   // Zoom com scroll sem arrastar a página.
   useEffect(() => {

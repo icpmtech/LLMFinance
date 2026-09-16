@@ -1,6 +1,13 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { ChatLayout } from "./components/ChatLayout";
 import { AppNav, type AppView as AppNavView } from "./components/AppNav";
+import { Dock } from "./components/Dock";
+import { useDockSpacer, updateDockPrefs } from "./dock";
+import { setSidebarHidden, useSidebarShortcut } from "./layout";
+import { useAuth } from "./auth";
+import LoginPage from "./pages/LoginPage";
+import SettingsPage from "./pages/SettingsPage";
+import { Loader2, Sparkles } from "lucide-react";
 import { DashboardPage } from "./pages/DashboardPage";
 import { TickerDetailPage } from "./pages/TickerDetailPage";
 import { ForecastPage } from "./pages/ForecastPage";
@@ -22,7 +29,7 @@ import { ContractsListPage } from "./pages/ContractsListPage";
 import { sendChat } from "./sendChat";
 import type { Message, ModelBackend } from "./types";
 
-type AppView = AppNavView | "chat" | "ticker-detail" | "empresas-iq" | "contracts-list";
+type AppView = AppNavView | "chat" | "ticker-detail" | "empresas-iq" | "contracts-list" | "settings";
 const COMPANY_DETAIL_KEY = "finance-llm-company-detail";
 const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
 
@@ -52,6 +59,8 @@ function titleFromText(text: string) {
 }
 
 export default function App() {
+  const { status: authStatus, user } = useAuth();
+  const prefAppliedRef = useRef(false);
   const [conversations, setConversations] = useState<Conversation[]>(() => {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
@@ -89,6 +98,7 @@ export default function App() {
     if (path === "/entities" || path === "/entities/search" || path === "/empresas") return "entities-search";
     if (path === "/companies/dashboard") return "companies-dashboard";
     if (path === "/import") return "import";
+    if (path === "/settings") return "settings";
     if (path === "/contracts-list" || path.startsWith("/contracts-list/")) return "contracts-list";
     if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) return "empresas-iq";
     if (path.startsWith("/companies/") && !path.startsWith("/companies/search") && !path.startsWith("/companies/dashboard")) {
@@ -126,6 +136,7 @@ export default function App() {
       else if (path === "/entities" || path === "/entities/search" || path === "/empresas") next = "entities-search";
       else if (path === "/companies/dashboard") next = "companies-dashboard";
       else if (path === "/import") next = "import";
+      else if (path === "/settings") next = "settings";
       else if (path === "/contracts-list" || path.startsWith("/contracts-list/")) next = "contracts-list";
       else if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) next = "empresas-iq";
       else if (path.startsWith("/companies/")) {
@@ -261,6 +272,7 @@ export default function App() {
     else if (next === "entities-search") path = "/entities/search";
     else if (next === "companies-dashboard") path = "/companies/dashboard";
     else if (next === "import") path = "/import";
+    else if (next === "settings") path = "/settings";
     else if (next === "empresas-iq") path = "/empresas-iq";
     else if (next === "company-detail" && selectedCompany) path = `/companies/${selectedCompany}`;
     if (typeof window !== "undefined" && window.location.pathname !== path) {
@@ -327,6 +339,49 @@ export default function App() {
     setViewAndHistory("ticker-detail");
   };
 
+  const dockSpacer = useDockSpacer();
+  useSidebarShortcut();
+
+  // Aplica as preferências da conta quando a sessão abre (uma vez por login).
+  useEffect(() => {
+    if (authStatus !== "authenticated") {
+      prefAppliedRef.current = false;
+      return;
+    }
+    if (!user || prefAppliedRef.current) return;
+    prefAppliedRef.current = true;
+    const preferences = (user.preferences || {}) as Record<string, unknown>;
+    if (typeof preferences.sidebar_hidden === "boolean") setSidebarHidden(preferences.sidebar_hidden);
+    const dockPosition = preferences.dock_position;
+    if (dockPosition === "bottom" || dockPosition === "left" || dockPosition === "right") {
+      updateDockPrefs({ position: dockPosition });
+    }
+    const defaultView = preferences.default_view;
+    if (typeof defaultView === "string" && typeof window !== "undefined" && window.location.pathname === "/") {
+      handleSwitchView(defaultView);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authStatus, user]);
+
+  if (authStatus === "loading") {
+    return (
+      <div className="grid min-h-screen w-full place-items-center bg-background text-foreground">
+        <div className="flex flex-col items-center gap-3">
+          <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-teal-400 to-blue-500 text-white shadow-lg shadow-teal-500/25">
+            <Sparkles size={22} />
+          </span>
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 size={14} className="animate-spin" /> A validar a sessão…
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (authStatus === "anonymous") {
+    return <LoginPage />;
+  }
+
   const renderContent = () => {
     if (view === "dashboard") return <DashboardPage onSwitchView={handleSwitchView} onSelectTicker={handleSelectTicker} />;
       if (view === "empresas-iq") return <EmpresasIQPage onNavigate={(v) => {
@@ -349,6 +404,7 @@ export default function App() {
     if (view === "rag") return <RagPage onSwitchView={() => setViewAndHistory("dashboard")} />;
     if (view === "elastic") return <ElasticPage />;
     if (view === "import") return <ImportPage onSwitchView={() => setViewAndHistory("dashboard")} />;
+    if (view === "settings") return <SettingsPage />;
     if (view === "contracts-list") return <ContractsListPage onSwitchView={() => setViewAndHistory("dashboard")} />;
     if (view === "search") {
       return (
@@ -442,20 +498,35 @@ export default function App() {
     );
   };
 
+  const renderDock = () =>
+    view === "chat" ? null : (
+      <Dock active={view} onOpen={(id) => handleSwitchView(id)} />
+    );
+
   if (view === "chat") {
     return renderContent();
   }
 
   if (view === "empresas-iq") {
-    return renderContent();
+    return (
+      <div className={["relative w-full bg-background text-foreground", dockSpacer.sides, dockSpacer.bottom].join(" ")}>
+        {renderContent()}
+        {renderDock()}
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen w-full bg-background text-foreground flex">
-      <AppNav active={view as AppNavView} onNavigate={(v) => setViewAndHistory(v as AppView)} onBackToChat={() => setViewAndHistory("chat")} />
-      <main className="flex-1 min-w-0 min-h-screen overflow-y-auto pt-14 md:pt-0">
+    <div className={["min-h-screen w-full bg-background text-foreground flex", dockSpacer.sides].join(" ")}>
+      <AppNav
+        active={view as AppNavView}
+        onNavigate={(next) => setViewAndHistory(next as AppView)}
+        onBackToChat={() => setViewAndHistory("chat")}
+      />
+      <main className={["flex-1 min-w-0 min-h-screen overflow-y-auto pt-14 md:pt-0", dockSpacer.bottom].join(" ")}>
         {renderContent()}
       </main>
+      {renderDock()}
     </div>
   );
 }

@@ -467,10 +467,6 @@ export default function CompanyDashboardPage({
 
   const maxCpvCount = maxCount(topCpv);
   const maxContractTypeCount = maxCount(contractTypes);
-  const totalForPies = Math.max(
-    procedureTypes.reduce((acc, r) => acc + (r.count || 0), 0),
-    1,
-  );
 
   const procedureData = useMemo(() => {
     const sorted = [...procedureTypes].sort((a, b) => (b.count || 0) - (a.count || 0));
@@ -631,9 +627,9 @@ export default function CompanyDashboardPage({
             Dashboard de Empresas
           </h1>
           <p className="text-muted-foreground mt-2">
-            {formatNumber(analytics?.total_contracts)} contratos
-            {yearsCovered && ` · ${yearsCovered}`}
-            {analytics?.total_value ? ` · ${formatPrice(analytics.total_value, 0)}` : ""}
+            {analytics
+              ? `${formatNumber(analytics.total_contracts)} contratos${yearsCovered ? ` · ${yearsCovered}` : ""}${analytics.total_value ? ` · ${formatPrice(analytics.total_value, 0)}` : ""}`
+              : "A carregar métricas sobre todos os contratos indexados…"}
           </p>
         </div>
 
@@ -903,8 +899,8 @@ export default function CompanyDashboardPage({
                 icon={TrendingUp}
                 iconClass="text-blue-400"
                 iconBg="bg-blue-500/15 border border-blue-400/20"
-                title="Entidades com mais contratos"
-                hint={`${formatNumber(companiesTotal)} entidades · página ${page + 1} de ${totalPages}`}
+                title="Entidades com maior valor contratado"
+                hint={`${formatNumber(companiesTotal)} NIF mais relevantes · página ${page + 1} de ${totalPages}`}
                 action={
                   <div className="flex items-center gap-1">
                     <button
@@ -985,7 +981,7 @@ export default function CompanyDashboardPage({
                 iconClass="text-violet-400"
                 iconBg="bg-violet-500/15 border border-violet-400/20"
                 title="Tipo de procedimento"
-                hint={`${formatNumber(totalForPies)} contratos`}
+                hint="Distribuição dos contratos filtrados"
               >
                 {procedureData.length === 0 ? (
                   <p className="text-muted-foreground">Sem dados para os filtros aplicados.</p>

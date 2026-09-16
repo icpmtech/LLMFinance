@@ -2,6 +2,7 @@
 import json
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, List, Optional
 
@@ -43,6 +44,12 @@ from api.models import (
     ContractYearsResponse,
     GraphDimensionOption,
     GraphDimensionsResponse,
+    FavoriteItem,
+    FavoriteListResponse,
+    FavoriteMutationResponse,
+    WorkspaceFolderRequest,
+    WorkspaceHistoryRequest,
+    WorkspaceResponse,
     CompanyAnalyticsResponse,
     CompanyContractsResponse,
     CompanyDetail,
@@ -121,8 +128,11 @@ from api.elasticsearch_client import (
     autocomplete_suggestions,
     build_contract_graph,
     bulk_index_contracts_from_jsonl,
+    clear_favorites,
     contracts_autocomplete,
     contracts_status,
+    delete_favorite,
+    delete_folder,
     export_contracts_to_excel,
     export_contracts_to_pdf,
     get_contract_analytics,
@@ -137,10 +147,15 @@ from api.elasticsearch_client import (
     get_entity_by_nif,
     get_entity_stats,
     get_es_client,
+    get_workspace,
     index_company_firmas,
     index_company_trademarks,
     list_contract_years,
     list_entity_countries,
+    list_favorites,
+    save_favorite,
+    save_folder,
+    save_history,
     search_all_tickers,
     search_companies,
     get_company_analytics,
@@ -180,6 +195,7 @@ from sentiment.feature_engineering import generate_sentiment_blended_forecast
 
 
 from api.rag_routes import router as rag_router
+from api.auth_routes import router as auth_router
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -217,6 +233,7 @@ app.add_middleware(
 )
 
 app.include_router(rag_router)
+app.include_router(auth_router)
 
 
 # Servir a React SPA da chat-ui (build estático)
@@ -1709,6 +1726,88 @@ def contracts_graph(
     if result.get("error"):
         raise HTTPException(status_code=502, detail=result["error"])
     return ContractGraphBuildResponse(**result)
+
+
+# --- Preferências do utilizador (favoritos, pastas do dossier e histórico) ---
+# Guardadas no Elasticsearch (índice finance_user_state) para não se perderem ao
+# recarregar a página ou ao mudar de origem (localhost vs 127.0.0.1).
+
+@app.get("/favorites", response_model=FavoriteListResponse)
+def favorites_list():
+    """Lista as fichas favoritas (entidades e contratos)."""
+    result = list_favorites()
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=result["error"])
+    return FavoriteListResponse(**result)
+
+
+@app.put("/favorites", response_model=FavoriteMutationResponse)
+def favorites_save(item: FavoriteItem):
+    """Marca uma ficha como favorita (idempotente)."""
+    payload = item.model_dump()
+    payload["added_at"] = datetime.utcnow().isoformat() + "Z"
+    result = save_favorite(payload)
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=result["error"])
+    return FavoriteMutationResponse(**result)
+
+
+@app.delete("/favorites/{kind}/{item_id}", response_model=FavoriteMutationResponse)
+def favorites_delete(kind: str, item_id: str):
+    """Remove uma ficha dos favoritos."""
+    if kind not in {"entity", "contract"}:
+        raise HTTPException(status_code=400, detail="kind tem de ser 'entity' ou 'contract'")
+    result = delete_favorite(kind, item_id)
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=result["error"])
+    return FavoriteMutationResponse(**result)
+
+
+@app.delete("/favorites", response_model=FavoriteMutationResponse)
+def favorites_clear():
+    """Remove todos os favoritos."""
+    result = clear_favorites()
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=result["error"])
+    return FavoriteMutationResponse(**result)
+
+
+@app.get("/workspace", response_model=WorkspaceResponse)
+def workspace_get():
+    """Devolve o dossier: pastas de fichas e histórico de consultas."""
+    result = get_workspace()
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=result["error"])
+    return WorkspaceResponse(**result)
+
+
+@app.put("/workspace/folders/{folder_id}", response_model=FavoriteMutationResponse)
+def workspace_save_folder(folder_id: str, folder: WorkspaceFolderRequest):
+    """Guarda (ou substitui) uma pasta do dossier com as suas fichas."""
+    payload = folder.model_dump()
+    payload["id"] = folder_id
+    result = save_folder(payload)
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=result["error"])
+    return FavoriteMutationResponse(**result)
+
+
+@app.delete("/workspace/folders/{folder_id}", response_model=FavoriteMutationResponse)
+def workspace_delete_folder(folder_id: str):
+    """Apaga uma pasta do dossier."""
+    result = delete_folder(folder_id)
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=result["error"])
+    return FavoriteMutationResponse(**result)
+
+
+@app.put("/workspace/history", response_model=FavoriteMutationResponse)
+def workspace_save_history(req: WorkspaceHistoryRequest):
+    """Guarda o histórico de fichas consultadas."""
+    result = save_history(req.items)
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=result["error"])
+    return FavoriteMutationResponse(ok=True)
 
 
 # --- Importação de entidades e contratos ---

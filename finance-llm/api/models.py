@@ -820,6 +820,65 @@ class GraphDimensionsResponse(BaseModel):
     error: Optional[str] = None
 
 
+# --- Preferências do utilizador: favoritos, pastas (dossier) e histórico ---
+
+class FavoriteParty(BaseModel):
+    nif: str
+    label: str
+    role: Optional[str] = None
+
+
+class FavoriteItem(BaseModel):
+    """Ficha guardada como favorita (entidade ou contrato)."""
+
+    kind: Literal["entity", "contract"]
+    id: str
+    label: str
+    sublabel: Optional[str] = None
+    value: Optional[float] = None
+    parties: List[FavoriteParty] = []
+
+
+class FavoriteListResponse(BaseModel):
+    items: List[Dict[str, Any]] = []
+    total: int = 0
+    error: Optional[str] = None
+
+
+class FavoriteMutationResponse(BaseModel):
+    ok: bool = False
+    id: Optional[str] = None
+    kind: Optional[str] = None
+    deleted: Optional[int] = None
+    error: Optional[str] = None
+
+
+class WorkspaceFolder(BaseModel):
+    id: str
+    name: str
+    createdAt: Optional[str] = None
+    items: List[Dict[str, Any]] = []
+
+
+class WorkspaceResponse(BaseModel):
+    """Dossier: pastas de fichas e histórico de consultas."""
+
+    folders: List[WorkspaceFolder] = []
+    history: List[Dict[str, Any]] = []
+    error: Optional[str] = None
+
+
+class WorkspaceFolderRequest(BaseModel):
+    id: str
+    name: str = "Pasta"
+    createdAt: Optional[str] = None
+    items: List[Dict[str, Any]] = []
+
+
+class WorkspaceHistoryRequest(BaseModel):
+    items: List[Dict[str, Any]] = []
+
+
 class ContractRelationsResponse(BaseModel):
     relations: List[Dict[str, Any]] = []
     error: Optional[str] = None
