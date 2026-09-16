@@ -35,6 +35,10 @@ export default defineConfig({
         target: 'http://127.0.0.1:8007',
         changeOrigin: true,
       },
+      '/import': {
+        target: 'http://127.0.0.1:8007',
+        changeOrigin: true,
+      },
     },
   },
 })

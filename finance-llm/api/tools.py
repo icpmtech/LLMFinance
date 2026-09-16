@@ -1,5 +1,6 @@
 """Ferramentas financeiras para o agente FinanceLLM."""
 import json
+import os
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -768,6 +769,90 @@ def forecast_prices(symbol: str, future_days: int = 5, period: str = "5y", backe
 
 from api.explain_technical import explain_technical_indicators
 
+
+def web_search(query: str, max_results: int = 5, source: str = "auto") -> List[Dict]:
+    """Pesquisa web via DuckDuckGo (padrão), Brave ou SerpAPI conforme configuração.
+
+    Args:
+        query: Termos de pesquisa.
+        max_results: Número máximo de resultados a devolver.
+        source: Motor a usar: "auto", "duckduckgo", "brave", "serpapi".
+
+    Devolve lista de resultados com title, href, body e source.
+    """
+    source = (source or "auto").lower()
+    if source in ("auto", "brave") and os.getenv("BRAVE_API_KEY"):
+        return _web_search_brave(query, max_results)
+    if source in ("auto", "serpapi") and os.getenv("SERPAPI_KEY"):
+        return _web_search_serpapi(query, max_results)
+    return _web_search_duckduckgo(query, max_results)
+
+
+def _web_search_duckduckgo(query: str, max_results: int = 5) -> List[Dict]:
+    try:
+        from duckduckgo_search import DDGS
+        with DDGS() as ddgs:
+            results = ddgs.text(query, max_results=max_results)
+            return [
+                {
+                    "title": r.get("title", ""),
+                    "href": r.get("href", ""),
+                    "body": r.get("body", ""),
+                    "source": "duckduckgo",
+                }
+                for r in results
+            ]
+    except Exception as e:
+        return [{"error": str(e), "source": "duckduckgo"}]
+
+
+def _web_search_brave(query: str, max_results: int = 5) -> List[Dict]:
+    api_key = os.getenv("BRAVE_API_KEY")
+    if not api_key:
+        return []
+    try:
+        url = "https://api.search.brave.com/res/v1/web/search"
+        headers = {"X-Subscription-Token": api_key, "Accept": "application/json"}
+        params = {"q": query, "count": max_results, "offset": 0}
+        r = requests.get(url, headers=headers, params=params, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        return [
+            {
+                "title": item.get("title", ""),
+                "href": item.get("url", ""),
+                "body": item.get("description", ""),
+                "source": "brave",
+            }
+            for item in data.get("web", {}).get("results", [])
+        ]
+    except Exception as e:
+        return [{"error": str(e), "source": "brave"}]
+
+
+def _web_search_serpapi(query: str, max_results: int = 5) -> List[Dict]:
+    api_key = os.getenv("SERPAPI_KEY")
+    if not api_key:
+        return []
+    try:
+        url = "https://serpapi.com/search"
+        params = {"q": query, "api_key": api_key, "engine": "google", "num": max_results}
+        r = requests.get(url, params=params, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        return [
+            {
+                "title": item.get("title", ""),
+                "href": item.get("link", ""),
+                "body": item.get("snippet", ""),
+                "source": "serpapi",
+            }
+            for item in data.get("organic_results", [])
+        ]
+    except Exception as e:
+        return [{"error": str(e), "source": "serpapi"}]
+
+
 # Registo de ferramentas disponíveis para o agente
 TOOLS = {
     "get_stock_info": get_stock_info,
@@ -788,4 +873,5 @@ TOOLS = {
     "get_actions": get_actions,
     "get_earnings_and_calendar": get_earnings_and_calendar,
     "get_macro_snapshot": get_macro_snapshot,
+    "web_search": web_search,
 }

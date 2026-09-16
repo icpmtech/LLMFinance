@@ -16,10 +16,12 @@ import { CompanyDirectoryPage } from "./pages/CompanyDirectoryPage";
 import CompanyDetailPage from "./pages/CompanyDetailPage";
 import CompanyDashboardPage from "./pages/CompanyDashboardPage";
 import EmpresasIQPage from "./pages/EmpresasIQPage";
+import { ImportPage } from "./pages/ImportPage";
+import { ContractsListPage } from "./pages/ContractsListPage";
 import { sendChat } from "./sendChat";
 import type { Message, ModelBackend } from "./types";
 
-type AppView = AppNavView | "chat" | "ticker-detail" | "empresas-iq";
+type AppView = AppNavView | "chat" | "ticker-detail" | "empresas-iq" | "contracts-list";
 const COMPANY_DETAIL_KEY = "finance-llm-company-detail";
 const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
 
@@ -84,7 +86,9 @@ export default function App() {
     if (path === "/companies") return "companies-search";
     if (path === "/companies/search") return "companies-search";
     if (path === "/companies/dashboard") return "companies-dashboard";
-      if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) return "empresas-iq";
+    if (path === "/import") return "import";
+    if (path === "/contracts-list" || path.startsWith("/contracts-list/")) return "contracts-list";
+    if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) return "empresas-iq";
     if (path.startsWith("/companies/") && !path.startsWith("/companies/search") && !path.startsWith("/companies/dashboard")) {
       const nif = path.replace("/companies/", "").split("/")[0];
       if (nif) setSelectedCompany(nif);
@@ -118,7 +122,9 @@ export default function App() {
       else if (path === "/contracts/dashboard") next = "contracts-dashboard";
       else if (path === "/companies" || path === "/companies/search") next = "companies-search";
       else if (path === "/companies/dashboard") next = "companies-dashboard";
-        else if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) next = "empresas-iq";
+      else if (path === "/import") next = "import";
+      else if (path === "/contracts-list" || path.startsWith("/contracts-list/")) next = "contracts-list";
+      else if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) next = "empresas-iq";
       else if (path.startsWith("/companies/")) {
         const nif = path.replace("/companies/", "").split("/")[0];
         if (nif) setSelectedCompany(nif);
@@ -250,6 +256,7 @@ export default function App() {
     else if (next === "contracts-dashboard") path = "/contracts/dashboard";
     else if (next === "companies-search" || next === "companies") path = "/companies/search";
     else if (next === "companies-dashboard") path = "/companies/dashboard";
+    else if (next === "import") path = "/import";
     else if (next === "empresas-iq") path = "/empresas-iq";
     else if (next === "company-detail" && selectedCompany) path = `/companies/${selectedCompany}`;
     if (typeof window !== "undefined" && window.location.pathname !== path) {
@@ -300,6 +307,10 @@ export default function App() {
       setViewAndHistory("empresas-iq");
       return;
     }
+    if (v === "import") {
+      setViewAndHistory("import");
+      return;
+    }
     setViewAndHistory(v as AppView);
   };
 
@@ -329,6 +340,8 @@ export default function App() {
     if (view === "tickers") return <TickerPage onSwitchView={() => setViewAndHistory("dashboard")} />;
     if (view === "rag") return <RagPage onSwitchView={() => setViewAndHistory("dashboard")} />;
     if (view === "elastic") return <ElasticPage />;
+    if (view === "import") return <ImportPage onSwitchView={() => setViewAndHistory("dashboard")} />;
+    if (view === "contracts-list") return <ContractsListPage onSwitchView={() => setViewAndHistory("dashboard")} />;
     if (view === "search") {
       return (
         <GlobalSearchPage

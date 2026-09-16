@@ -15,6 +15,7 @@ import {
   Sparkles,
   BarChart3,
   Network,
+  Upload,
 } from "lucide-react";
 
 export type AppView =
@@ -34,7 +35,9 @@ export type AppView =
   | "companies-search"
   | "companies-dashboard"
   | "company-detail"
-  | "empresas-iq";
+  | "empresas-iq"
+  | "import"
+  | "contracts-list";
 
 interface NavGroup {
   id: string;
@@ -103,6 +106,8 @@ const groups: NavGroup[] = [
     items: [
       { id: "rag", label: "RAG Documentos", icon: <FolderOpen size={18} /> },
       { id: "elastic", label: "Elasticsearch", icon: <Database size={18} /> },
+      { id: "contracts-list", label: "Contratos", icon: <FileText size={18} />, match: ["contracts-list"] },
+      { id: "import", label: "Importar Dados", icon: <Upload size={18} /> },
     ],
   },
 ];

@@ -25,7 +25,6 @@ import type {
   ContractItem,
   ContractSearchRequest,
   ContractAutocompleteSuggestion,
-  ContractChatSource,
 } from "../types";
 
 interface ContractsSearchPageProps {
@@ -98,7 +97,7 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
   const [chatOpen, setChatOpen] = useState(false);
   const [chatQuestion, setChatQuestion] = useState("");
   const [chatAnswer, setChatAnswer] = useState<string | null>(null);
-  const [chatSources, setChatSources] = useState<ContractChatSource[]>([]);
+  const [chatSources, setChatSources] = useState<{ idcontrato?: string; objectoContrato?: string; adjudicante?: string; adjudicatario?: string; precoContratual?: number; score?: number }[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
 
   useEffect(() => {

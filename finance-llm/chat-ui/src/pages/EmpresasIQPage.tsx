@@ -68,6 +68,7 @@ import {
   getCompanyDetail,
   getCompanyContracts,
   getCompanyAnalytics,
+  analyzeContract,
 } from "../api";
 import type {
   CompanyAnalyticsResponse,
@@ -75,6 +76,8 @@ import type {
   CompanyDetail,
   CompanySearchResponse,
   ContractAnalyticsResponse,
+  ContractAnalyzeRequest,
+  ContractAnalyzeResponse,
   ContractGraphResponse,
   ContractItem,
   ContractRegionalResponse,
@@ -211,19 +214,31 @@ function useDebounce<T>(value: T, delay = 350) {
 function Badge({
   children,
   color = "teal",
+  variant,
 }: {
   children: React.ReactNode;
   color?: "teal" | "blue" | "amber" | "rose" | "violet";
+  variant?: "default" | "success" | "warning" | "info" | "danger" | "outline" | "secondary";
 }) {
-  const map = {
+  const colorMap = {
     teal: "bg-emerald-400/10 text-emerald-400 border-emerald-400/20",
     blue: "bg-blue-400/10 text-blue-400 border-blue-400/20",
     amber: "bg-amber-400/10 text-amber-400 border-amber-400/20",
     rose: "bg-rose-400/10 text-rose-400 border-rose-400/20",
     violet: "bg-violet-400/10 text-violet-400 border-violet-400/20",
   };
+  const variantMap: Record<NonNullable<typeof variant>, string> = {
+    default: "bg-muted text-muted-foreground",
+    success: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
+    warning: "bg-amber-500/15 text-amber-400 border border-amber-500/30",
+    info: "bg-sky-500/15 text-sky-400 border border-sky-500/30",
+    danger: "bg-red-500/15 text-red-400 border border-red-500/30",
+    outline: "bg-transparent border border-border text-muted-foreground",
+    secondary: "bg-secondary text-secondary-foreground border border-border",
+  };
+  const cls = color ? colorMap[color] : variantMap[variant ?? "default"];
   return (
-    <span className={`px-2 py-0.5 rounded-full border text-xs ${map[color]}`}>
+    <span className={`px-2 py-0.5 rounded-full border text-xs ${cls}`}>
       {children}
     </span>
   );
@@ -420,7 +435,7 @@ function useGraphModel(graph: ContractGraphResponse | null, options: {
         lon: n.lon,
       }))
       .sort((a, b) => b.degree - a.degree)
-      .slice(0, options.nodeLimit);
+      .slice(0, options.nodeLimit > 0 ? options.nodeLimit : undefined);
 
     // 4. Pruning leaf/orphan nodes + supernodes
     if (options.pruneLeaves) {
@@ -501,6 +516,8 @@ function NetworkCanvas({
     hideSupernodes: false,
     supernodeThreshold: 12,
   });
+  const maxNodes = useMemo(() => (graph?.nodes?.length || 100), [graph]);
+  const maxEdges = useMemo(() => (graph?.edges?.length || 400), [graph]);
 
   const { nodes, edges } = useGraphModel(graph, options);
   const searchMatches = useMemo(() => {
@@ -1186,12 +1203,36 @@ function NetworkCanvas({
             <input
               type="range"
               min={10}
-              max={100}
-              value={options.nodeLimit}
-              onChange={(e) => setOptions((o) => ({ ...o, nodeLimit: Number(e.target.value) }))}
+              max={Math.max(maxNodes, 100)}
+              value={Math.min(options.nodeLimit || maxNodes, maxNodes)}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setOptions((o) => ({
+                  ...o,
+                  nodeLimit: v >= maxNodes ? Number.MAX_SAFE_INTEGER : v,
+                }));
+              }}
               className="w-24 accent-teal-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50 rounded"
             />
-            <span className="text-[11px] w-6 text-right">{options.nodeLimit}</span>
+            <span className="text-[11px] w-8 text-right">{(options.nodeLimit || 0) >= maxNodes ? "All" : options.nodeLimit}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-[11px] text-muted-foreground">Máx arestas</label>
+            <input
+              type="range"
+              min={10}
+              max={Math.max(maxEdges, 400)}
+              value={Math.min(options.edgeLimit || maxEdges, maxEdges)}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setOptions((o) => ({
+                  ...o,
+                  edgeLimit: v >= maxEdges ? Number.MAX_SAFE_INTEGER : v,
+                }));
+              }}
+              className="w-24 accent-teal-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50 rounded"
+            />
+            <span className="text-[11px] w-8 text-right">{(options.edgeLimit || 0) >= maxEdges ? "All" : options.edgeLimit}</span>
           </div>
           <div className="flex items-center justify-between gap-3">
             <label className="text-[11px] text-muted-foreground">Valor mín. (€)</label>
@@ -2905,6 +2946,181 @@ function ContractParticipantsGraph({
   );
 }
 
+function ContractAIAnalysis({
+  idcontrato,
+}: {
+  idcontrato: string;
+}) {
+  const [question, setQuestion] = useState("");
+  const [model, setModel] = useState("");
+  const [maxTokens, setMaxTokens] = useState(2048);
+  const [temperature, setTemperature] = useState(0.3);
+  const [useWeb, setUseWeb] = useState(true);
+  const [useRelated, setUseRelated] = useState(true);
+  const [result, setResult] = useState<ContractAnalyzeResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleAnalyze = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const body: ContractAnalyzeRequest = {
+        question: question.trim() || undefined,
+        model: model.trim() || undefined,
+        max_tokens: maxTokens,
+        temperature,
+        use_web_search: useWeb,
+        use_related_contracts: useRelated,
+      };
+      const res = await analyzeContract(idcontrato, body);
+      setResult(res);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao analisar contrato");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card className="mt-6">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-teal-300">Análise IA</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Analisa este contrato com Ollama/cloud + web search e contratos relacionados
+          </p>
+        </div>
+        <Sparkles size={18} className="text-teal-300" />
+      </div>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="sm:col-span-2 lg:col-span-2">
+          <label className="block text-xs text-muted-foreground mb-1">Modelo (vazio = auto)</label>
+          <input
+            type="text"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder="ex: llama3.2, mistral, gpt-4o-mini"
+            className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm outline-none focus:border-teal-400/50"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">Max tokens</label>
+          <input
+            type="number"
+            value={maxTokens}
+            onChange={(e) => setMaxTokens(Number(e.target.value))}
+            className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm outline-none focus:border-teal-400/50"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-muted-foreground mb-1">Temperatura</label>
+          <input
+            type="number"
+            step="0.1"
+            min="0"
+            max="2"
+            value={temperature}
+            onChange={(e) => setTemperature(Number(e.target.value))}
+            className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm outline-none focus:border-teal-400/50"
+          />
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-4">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={useWeb}
+            onChange={(e) => setUseWeb(e.target.checked)}
+            className="accent-teal-400"
+          />
+          Web search
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={useRelated}
+            onChange={(e) => setUseRelated(e.target.checked)}
+            className="accent-teal-400"
+          />
+          Contratos relacionados
+        </label>
+      </div>
+
+      <div className="mt-4">
+        <label className="block text-xs text-muted-foreground mb-1">Pergunta / instrução</label>
+        <textarea
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="Ex: Identifica riscos de corrupção, compara preço com o mercado, resume as partes..."
+          rows={3}
+          className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm outline-none focus:border-teal-400/50 resize-none"
+        />
+      </div>
+
+      <div className="mt-4 flex items-center gap-3">
+        <button
+          onClick={handleAnalyze}
+          disabled={loading}
+          className="px-4 py-2 rounded-xl bg-teal-500/20 border border-teal-400/40 text-teal-100 text-sm font-medium hover:bg-teal-500/30 transition disabled:opacity-60 flex items-center gap-2"
+        >
+          {loading && <Loader2 size={16} className="animate-spin" />}
+          <Sparkles size={16} /> Analisar contrato
+        </button>
+      </div>
+
+      {error && (
+        <div className="mt-4 rounded-xl border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200">
+          {error}
+        </div>
+      )}
+
+      {result && !error && (
+        <div className="mt-5 space-y-4">
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+            <p className="text-xs text-muted-foreground mb-2">Análise</p>
+            <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
+              {result.analysis}
+            </div>
+          </div>
+
+          {result.sources && result.sources.length > 0 && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-2">Fontes web</p>
+              <div className="space-y-2">
+                {result.sources.map((s, i) => (
+                  <div
+                    key={i}
+                    className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm"
+                  >
+                    <a
+                      href={s.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-teal-300 hover:underline"
+                    >
+                      {s.title || s.url}
+                    </a>
+                    {s.snippet && (
+                      <p className="mt-1 text-xs text-muted-foreground">{s.snippet}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {result.model_used && (
+            <p className="text-xs text-muted-foreground">Modelo: {result.model_used}</p>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // --- ANALYSIS ---
 
 function AnalysisSection({
@@ -2960,29 +3176,48 @@ function AnalysisSection({
               <LineChart data={byYear}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                 <XAxis dataKey="key" stroke="rgba(255,255,255,0.3)" fontSize={12} />
-                <YAxis stroke="rgba(255,255,255,0.3)" fontSize={12} tickFormatter={(v) => compact(v)} />
+                <YAxis
+                  yAxisId="left"
+                  orientation="left"
+                  stroke="rgba(255,255,255,0.3)"
+                  fontSize={12}
+                  tickFormatter={(v) => compact(v)}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  stroke="rgba(255,255,255,0.3)"
+                  fontSize={12}
+                  tickFormatter={(v) => full(v)}
+                />
                 <Tooltip
                   contentStyle={{
                     background: "rgba(7,21,27,0.95)",
                     border: "1px solid rgba(255,255,255,0.1)",
                     borderRadius: 12,
                   }}
-                  formatter={euroFormatter}
+                  formatter={(value, name) => {
+                    const val = typeof value === "number" ? value : Number(value);
+                    return [name === "Nº contratos" ? full(val) : money(val), name];
+                  }}
                 />
                 <Line
                   type="monotone"
                   dataKey="total_value"
+                  yAxisId="left"
                   stroke="#10a37f"
                   strokeWidth={2}
                   dot={{ r: 3, fill: "#10a37f" }}
+                  name="Valor adjudicado"
                 />
                 <Line
                   type="monotone"
                   dataKey="count"
+                  yAxisId="right"
                   stroke="#3b82f6"
                   strokeWidth={2}
                   dot={{ r: 3, fill: "#3b82f6" }}
-                  yAxisId={1}
+                  name="Nº contratos"
                 />
                 <Legend />
               </LineChart>
@@ -3360,6 +3595,8 @@ function ContractDetailPanel({
         </div>
 
         <ContractParticipantsGraph contract={contract} onEntity={onEntity} />
+
+        <ContractAIAnalysis idcontrato={id} />
 
         <div className="mt-6">
           <p className="text-xs text-muted-foreground mb-2">Descrição</p>

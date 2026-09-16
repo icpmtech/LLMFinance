@@ -1,4 +1,5 @@
 """Esquemas Pydantic para a API FinanceLLM Chat."""
+from enum import Enum
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal, Dict, Any
 
@@ -611,6 +612,8 @@ class ContractSearchRequest(BaseModel):
     end_date: Optional[str] = None
     size: int = 20
     from_: int = Field(0, alias="from")
+    sort_by: Optional[Literal["relevance", "dataPublicacao", "dataCelebracaoContrato", "precoContratual", "objectoContrato", "tipoContrato", "adjudicantes", "adjudicatarios"]] = "dataPublicacao"
+    sort_order: Optional[Literal["asc", "desc"]] = "desc"
 
 
 class ContractAnalyticsRequest(BaseModel):
@@ -666,6 +669,15 @@ class ContractChatRequest(BaseModel):
     temperature: float = 0.1
 
 
+class ContractAnalyzeRequest(BaseModel):
+    question: Optional[str] = None
+    model: str = "llama3.2"
+    max_tokens: int = 1024
+    temperature: float = 0.3
+    use_web_search: bool = True
+    use_related_contracts: bool = True
+
+
 class ContractChatSource(BaseModel):
     idcontrato: Optional[str] = None
     objectoContrato: Optional[str] = None
@@ -680,6 +692,70 @@ class ContractChatResponse(BaseModel):
     sources: List[ContractChatSource] = []
     model_used: Optional[str] = None
     error: Optional[str] = None
+
+
+class ImportFileType(str, Enum):
+    zip = "zip"
+    xlsx = "xlsx"
+    json = "json"
+
+
+class ImportDataType(str, Enum):
+    contracts = "contracts"
+    entities = "entities"
+    auto = "auto"
+
+
+class ImportPreviewRow(BaseModel):
+    id: Optional[str] = None
+    name: Optional[str] = None
+    nif: Optional[str] = None
+    objectoContrato: Optional[str] = None
+    precoContratual: Optional[float] = None
+    dataCelebracaoContrato: Optional[str] = None
+    adjudicante: Optional[str] = None
+    adjudicatario: Optional[str] = None
+    raw: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ImportPreviewResponse(BaseModel):
+    data_type: ImportDataType
+    file_type: ImportFileType
+    filename: str
+    rows: List[ImportPreviewRow] = []
+    total_rows: int = 0
+    sample_schema: List[str] = []
+    errors: List[str] = []
+    warnings: List[str] = []
+
+
+class ImportOptions(BaseModel):
+    link_entities: bool = True
+    max_records: Optional[int] = None
+    skip_validation: bool = False
+    hard_reprocess: bool = False
+
+
+class ImportIngestRequest(BaseModel):
+    data_type: ImportDataType
+    file_type: ImportFileType
+    filename: str
+    rows: List[ImportPreviewRow] = []
+    options: ImportOptions = Field(default_factory=ImportOptions)
+
+
+class ImportIngestResponse(BaseModel):
+    success: bool = False
+    indexed_count: int = 0
+    total: int = 0
+    errors: int = 0
+    linked_entities: int = 0
+    duplicate_count: int = 0
+    deleted_count: int = 0
+    duplicate_ids: List[str] = []
+    message: Optional[str] = None
+    error: Optional[str] = None
+    details: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ContractAnalyticsRow(BaseModel):

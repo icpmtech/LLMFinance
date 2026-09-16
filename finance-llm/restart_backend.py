@@ -28,7 +28,7 @@ log_path = os.path.join(cwd, 'logs', 'api_server_8003_new.log')
 print("Starting backend...")
 with open(log_path, 'wb') as log:
     proc = subprocess.Popen(
-        [r'c:\LLMFinance\.venv\Scripts\python.exe', '-m', 'uvicorn', 'api.main:app',
+        [r'c:\LLMFinance\finance-llm\.venv\Scripts\python.exe', '-m', 'uvicorn', 'api.main:app',
          '--host', '127.0.0.1', '--port', '8003', '--workers', '1', '--log-level', 'info'],
         cwd=cwd,
         env=env,

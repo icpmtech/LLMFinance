@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, List, Optional
 
-from fastapi import FastAPI, HTTPException, Query, Body, Request
+from fastapi import FastAPI, File, Form, HTTPException, Query, Body, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse, Response
 
@@ -17,14 +17,22 @@ from api.models import (
     ChatRequest,
     ChatResponse,
     ContractAnalyticsRequest,
+    ContractAnalyticsResponse,
+    ContractAnalyzeRequest,
     ContractAutocompleteResponse,
     ContractChatRequest,
-    ContractAnalyticsResponse,
     ContractGraphResponse,
     ContractChatResponse,
     ContractIngestRequest,
     ContractIngestResponse,
     ContractItem,
+    ImportDataType,
+    ImportFileType,
+    ImportIngestRequest,
+    ImportIngestResponse,
+    ImportOptions,
+    ImportPreviewResponse,
+    ImportPreviewRow,
     ContractSearchRequest,
     ContractSearchResponse,
     ContractRegionalResponse,
@@ -106,6 +114,8 @@ from api.elasticsearch_client import (
     CONTRACTS_INDEX,
 )
 from api.rag_service import get_contracts_chat_answer
+from api.contract_agent import analyze_contract
+from api.import_service import ingest_rows, parse_file
 from api.tools import (
     _normalize_ticker,
     add_ticker,
@@ -301,6 +311,7 @@ def companies_analytics(
 @app.get("/contracts/search")
 @app.get("/empresas-iq")
 @app.get("/search")
+@app.get("/import")
 def serve_spa_page():
     return FileResponse(str(UI_BUILD_DIR / "index.html"))
 
@@ -969,6 +980,8 @@ def contracts_search(req: ContractSearchRequest):
         end_date=req.end_date,
         size=req.size,
         from_=req.from_,
+        sort_by=req.sort_by,
+        sort_order=req.sort_order,
     )
     if res.get("error"):
         raise HTTPException(status_code=502, detail=res.get("error"))
@@ -1099,6 +1112,59 @@ def contracts_relations(
     return ContractRelationsResponse(**result)
 
 
+# --- Importação de entidades e contratos ---
+
+@app.post("/import/preview", response_model=ImportPreviewResponse)
+def import_preview(
+    file: UploadFile = File(...),
+    data_type: ImportDataType = Form("auto"),
+):
+    """Recebe um ficheiro .zip/.xlsx/.json e devolve pré-visualização das linhas."""
+    try:
+        content = file.file.read()
+        result = parse_file(file.filename or "upload", content, data_type=data_type.value)
+        return ImportPreviewResponse(
+            data_type=ImportDataType(result["data_type"]),
+            file_type=ImportFileType(result["file_type"]),
+            filename=result["filename"],
+            rows=[ImportPreviewRow(**row) for row in result["rows"]],
+            total_rows=result["total_rows"],
+            sample_schema=result["sample_schema"],
+            errors=result["errors"],
+            warnings=result["warnings"],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao processar ficheiro: {exc}")
+
+
+@app.post("/import/ingest", response_model=ImportIngestResponse)
+def import_ingest(req: ImportIngestRequest):
+    """Indexa as linhas pré-visualizadas (contratos no ES; entidades em ficheiro JSONL)."""
+    try:
+        res = ingest_rows(
+            rows=[row.model_dump() if hasattr(row, "model_dump") else row.dict() for row in req.rows],
+            data_type=req.data_type.value,
+            options=(req.options.model_dump() if hasattr(req.options, "model_dump") else req.options.dict()),
+        )
+        return ImportIngestResponse(
+            success=res.get("success", False),
+            indexed_count=res.get("indexed_count", 0),
+            total=res.get("total", 0),
+            errors=res.get("errors", 0),
+            linked_entities=res.get("linked_entities", 0),
+            duplicate_count=res.get("duplicate_count", 0),
+            deleted_count=res.get("deleted_count", 0),
+            duplicate_ids=res.get("duplicate_ids", []),
+            message=res.get("message"),
+            error=res.get("error"),
+            details=res.get("details", {}),
+        )
+    except Exception as exc:
+        return ImportIngestResponse(success=False, error=str(exc), indexed_count=0, total=0, errors=0, linked_entities=0)
+
+
 @app.get("/contracts/{idcontrato}", response_model=ContractItem)
 def contract_detail(idcontrato: str):
     """Devolve um contrato individual para a ficha EmpresasIQ."""
@@ -1106,6 +1172,26 @@ def contract_detail(idcontrato: str):
     if result.get("error"):
         raise HTTPException(status_code=result.get("status_code", 502), detail=result["error"])
     return ContractItem(**result)
+
+
+@app.post("/contracts/{idcontrato}/analyze")
+def analyze_contract_endpoint(idcontrato: str, req: ContractAnalyzeRequest = Body(...)):
+    """Analisa um contrato com IA (Ollama/OpenAI/local) e ferramentas de pesquisa."""
+    result = get_contract_by_id(idcontrato)
+    if result.get("error"):
+        raise HTTPException(status_code=result.get("status_code", 502), detail=result["error"])
+
+    contract = result
+    answer = analyze_contract(
+        contract,
+        question=req.question,
+        model=req.model,
+        max_tokens=req.max_tokens,
+        temperature=req.temperature,
+        use_web_search=req.use_web_search,
+        use_related_contracts=req.use_related_contracts,
+    )
+    return answer
 
 
 @app.post("/contracts/export/excel")

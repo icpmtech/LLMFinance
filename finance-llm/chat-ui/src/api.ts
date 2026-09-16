@@ -12,8 +12,8 @@ import type {
   CompanySearchRequest,
   CompanySearchResponse,
   ContractAutocompleteResponse,
-  ContractChatRequest,
-  ContractChatResponse,
+  ContractAnalyzeRequest,
+  ContractAnalyzeResponse,
   ContractIngestRequest,
   ContractIngestResponse,
   ContractSearchRequest,
@@ -58,13 +58,23 @@ import type {
   UploadPdfResponse,
   ContractAnalyticsResponse,
   ContractAnalyticsFilters,
+  ContractChatRequest,
+  ContractChatResponse,
   ContractGraphResponse,
   ContractRegionalResponse,
   ContractRelationsResponse,
   ContractItem,
+  ImportFileType,
+  ImportDataType,
+  ImportPreviewRow,
+  ImportPreviewResponse,
+  ImportIngestRequest,
+  ImportIngestResponse,
+  ImportStatusResponse,
 } from "./types";
 
 export type { ContractAnalyticsResponse, ContractAnalyticsFilters, CompanySearchResponse, CompanyDetail, CompanyContractsResponse, CompanyAnalyticsResponse };
+export type { ImportFileType, ImportDataType, ImportPreviewRow, ImportPreviewResponse, ImportIngestRequest, ImportIngestResponse, ImportStatusResponse };
 
 export function getPlotUrl(plot_url: string): string {
   if (plot_url.startsWith("http://") || plot_url.startsWith("https://")) {
@@ -625,6 +635,19 @@ export async function getContract(id: string): Promise<ContractItem> {
   return res.json();
 }
 
+export async function analyzeContract(
+  id: string,
+  request: ContractAnalyzeRequest,
+): Promise<ContractAnalyzeResponse> {
+  const res = await fetch(`${API_BASE}/contracts/${encodeURIComponent(id)}/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) throw new Error(`Erro ao analisar contrato: ${res.status}`);
+  return res.json();
+}
+
 export async function getContractRegionalAnalytics(year?: number): Promise<ContractRegionalResponse> {
   const params = new URLSearchParams({ size: "30" });
   if (year !== undefined) params.set("year", String(year));
@@ -711,6 +734,55 @@ export async function ingestContracts(
     throw new Error(`Erro ao indexar contratos: ${res.status} - ${text}`);
   }
   return res.json();
+}
+
+export async function previewImportFile(
+  file: File,
+  dataType: ImportDataType = "auto",
+): Promise<ImportPreviewResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("data_type", dataType);
+  const res = await fetch(`${API_BASE}/import/preview`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro na pré-visualização: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function ingestImport(
+  request: ImportIngestRequest,
+): Promise<ImportIngestResponse> {
+  const res = await fetch(`${API_BASE}/import/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao importar: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function uploadAndImportFile(
+  file: File,
+  dataType: ImportDataType = "auto",
+  options: ImportIngestRequest["options"] = { link_entities: true },
+): Promise<ImportIngestResponse> {
+  const preview = await previewImportFile(file, dataType);
+  const request: ImportIngestRequest = {
+    data_type: preview.data_type,
+    file_type: preview.file_type,
+    filename: preview.filename,
+    rows: preview.rows,
+    options,
+  };
+  return ingestImport(request);
 }
 
 export async function searchContracts(

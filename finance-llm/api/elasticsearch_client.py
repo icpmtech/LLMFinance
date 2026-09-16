@@ -11,7 +11,7 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
@@ -20,6 +20,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # Índice único para contratos públicos normalizados
 CONTRACTS_INDEX = "finance_contracts"
+
+# Índice para marcas do INPI indexadas por entidade
+TRADEMARKS_INDEX = "finance_trademarks"
 
 
 def _get_es_url() -> str:
@@ -138,7 +141,12 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
                         "type": "nested",
                         "properties": {
                             "nif": {"type": "keyword"},
-                            "nome": {"type": "text"},
+                            "nome": {
+                                "type": "text",
+                                "fields": {
+                                    "keyword": {"type": "keyword", "ignore_above": 512}
+                                }
+                            },
                         },
                     },
                 },
@@ -151,7 +159,12 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
                         "type": "nested",
                         "properties": {
                             "nif": {"type": "keyword"},
-                            "nome": {"type": "text"},
+                            "nome": {
+                                "type": "text",
+                                "fields": {
+                                    "keyword": {"type": "keyword", "ignore_above": 512}
+                                }
+                            },
                         },
                     },
                 },
@@ -839,6 +852,64 @@ def bulk_index_contracts_from_jsonl(
         return {"error": str(e), "indexed_count": success_total, "total": total}
 
 
+def find_contract_ids_by_idcontrato(
+    idcontratos: Iterable[str],
+    es: Optional[Elasticsearch] = None,
+) -> List[str]:
+    """Devolve os _id de documentos existentes no índice finance_contracts cujo idcontrato corresponde aos valores fornecidos."""
+    client = es or get_es_client()
+    if not client or not idcontratos:
+        return []
+
+    ids = [str(v).strip() for v in idcontratos if v is not None and str(v).strip()]
+    if not ids:
+        return []
+
+    existing: set = set()
+    batch_size = 1000
+    try:
+        for i in range(0, len(ids), batch_size):
+            batch = ids[i : i + batch_size]
+            resp = client.search(
+                index=CONTRACTS_INDEX,
+                body={
+                    "query": {"terms": {"idcontrato": batch}},
+                    "_source": False,
+                    "size": len(batch),
+                },
+            )
+            for hit in resp.get("hits", {}).get("hits", []):
+                existing.add(hit.get("_id"))
+    except Exception as e:
+        print(f"[find_contract_ids_by_idcontrato] error: {e}")
+        return []
+    return sorted(existing)
+
+
+def delete_contracts_by_ids(
+    doc_ids: Iterable[str],
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Apaga documentos do índice finance_contracts pelos respetivos _id."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "deleted_count": 0}
+
+    ids = [str(v).strip() for v in doc_ids if v is not None and str(v).strip()]
+    if not ids:
+        return {"deleted_count": 0, "total": 0}
+
+    try:
+        resp = client.delete_by_query(
+            index=CONTRACTS_INDEX,
+            body={"query": {"terms": {"_id": ids}}},
+            refresh=True,
+        )
+        return {"deleted_count": resp.get("deleted", 0), "total": len(ids)}
+    except Exception as e:
+        return {"error": str(e), "deleted_count": 0, "total": len(ids)}
+
+
 def _contract_to_flat_dict(source: Dict[str, Any]) -> Dict[str, Any]:
     """Converte documento de contrato num dicionário plano para exportação."""
     def party_str(parties: Any) -> str:
@@ -1069,6 +1140,8 @@ def search_contracts(
     end_date: Optional[str] = None,
     size: int = 20,
     from_: int = 0,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = None,
     es: Optional[Elasticsearch] = None,
 ) -> Dict[str, Any]:
     """Pesquisa contratos por texto, entidades, datas e valores."""
@@ -1077,13 +1150,14 @@ def search_contracts(
         return {"error": "Elasticsearch indisponível", "items": []}
 
     query = _build_contract_query(q, year, entity, nif, counterparty_nif, region, cpv_code, min_price, max_price, start_date, end_date)
+    sort = _build_contract_sort(sort_by, sort_order)
 
     try:
         resp = client.search(
             index=CONTRACTS_INDEX,
             body={
                 "query": query,
-                "sort": [{"dataPublicacao": {"order": "desc"}}, "_score"],
+                "sort": sort,
                 "from": from_,
                 "size": size,
                 "track_scores": True,
@@ -1105,6 +1179,29 @@ def search_contracts(
         }
     except Exception as e:
         return {"error": str(e), "items": []}
+
+
+def _build_contract_sort(
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    order = sort_order if sort_order in ("asc", "desc") else "desc"
+    field = sort_by or "dataPublicacao"
+    if field == "relevance":
+        return ["_score"]
+    if field == "adjudicantes":
+        return [{"adjudicantes.parsed.nome.keyword": {"order": order, "nested": {"path": "adjudicantes.parsed"}}}, "_score"]
+    if field == "adjudicatarios":
+        return [{"adjudicatarios.parsed.nome.keyword": {"order": order, "nested": {"path": "adjudicatarios.parsed"}}}, "_score"]
+    if field == "tipoContrato":
+        return [{"tipoContrato.keyword": {"order": order}}, "_score"]
+    if field == "objectoContrato":
+        return [{"objectoContrato.keyword": {"order": order}}, "_score"]
+    if field in ("dataPublicacao", "dataCelebracaoContrato"):
+        return [{field: {"order": order, "missing": "_last", "unmapped_type": "date"}}, "_score"]
+    if field == "precoContratual":
+        return [{field: {"order": order, "missing": "_last", "unmapped_type": "float"}}, "_score"]
+    return [{"dataPublicacao": {"order": "desc"}}, "_score"]
 
 
 def contracts_autocomplete(
@@ -1434,7 +1531,8 @@ def get_contract_analytics(
                     "avg_value": {"avg": {"field": "precoContratual"}},
                     "max_value": {"max": {"field": "precoContratual"}},
                     "by_year": {
-                        "terms": {"field": "Ano", "size": 50, "order": {"_key": "desc"}}
+                        "terms": {"field": "Ano", "size": 50, "order": {"_key": "desc"}},
+                        "aggs": {"total_value": {"sum": {"field": "precoContratual"}}},
                     },
                     "by_month": {
                         "date_histogram": {
@@ -1560,7 +1658,7 @@ def get_contract_analytics(
             "total_value": fmt_money(aggs["total_value"].get("value")),
             "avg_value": fmt_money(aggs["avg_value"].get("value")),
             "max_value": fmt_money(aggs["max_value"].get("value")),
-            "by_year": [{"key": str(b["key"]), "count": b["doc_count"]} for b in aggs["by_year"]["buckets"]],
+            "by_year": [{"key": str(b["key"]), "count": b["doc_count"], "total_value": fmt_money(b.get("total_value", {}).get("value"))} for b in aggs["by_year"]["buckets"]],
             "by_month": [{"key": b["key_as_string"], "count": b["doc_count"]} for b in aggs["by_month"]["buckets"]],
             "value_distribution": [{"key": f"{int(b['key'])} - {int(b['key']) + 50000}", "count": b["doc_count"]} for b in aggs["value_distribution"]["buckets"][:value_buckets]],
             "top_entities": entity_rows,
@@ -2088,7 +2186,10 @@ def get_company_analytics(
                     "total_value": {"sum": {"field": "precoContratual"}},
                     "avg_value": {"avg": {"field": "precoContratual"}},
                     "max_value": {"max": {"field": "precoContratual"}},
-                    "by_year": {"terms": {"field": "Ano", "size": 50, "order": {"_key": "desc"}}},
+                    "by_year": {
+                        "terms": {"field": "Ano", "size": 50, "order": {"_key": "desc"}},
+                        "aggs": {"total_value": {"sum": {"field": "precoContratual"}}},
+                    },
                     "by_month": {
                         "date_histogram": {
                             "field": "dataPublicacao",
@@ -2189,7 +2290,7 @@ def get_company_analytics(
             "total_value": fmt_money(aggs["total_value"].get("value")),
             "avg_value": fmt_money(aggs["avg_value"].get("value")),
             "max_value": fmt_money(aggs["max_value"].get("value")),
-            "by_year": [{"key": str(b["key"]), "count": b["doc_count"]} for b in aggs["by_year"]["buckets"]],
+            "by_year": [{"key": str(b["key"]), "count": b["doc_count"], "total_value": fmt_money(b.get("total_value", {}).get("value"))} for b in aggs["by_year"]["buckets"]],
             "by_month": [{"key": b["key_as_string"], "count": b["doc_count"]} for b in aggs["by_month"]["buckets"]],
             "by_cpv": cpv_rows,
             "top_partners": partner_rows,

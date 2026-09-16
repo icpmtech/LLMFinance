@@ -622,6 +622,8 @@ export interface ContractSearchRequest {
   end_date?: string;
   size?: number;
   from?: number;
+  sort_by?: "relevance" | "dataPublicacao" | "dataCelebracaoContrato" | "precoContratual" | "objectoContrato" | "tipoContrato" | "adjudicantes" | "adjudicatarios";
+  sort_order?: "asc" | "desc";
 }
 
 export interface ContractAnalyticsFilters {
@@ -709,6 +711,28 @@ export interface ContractChatSource {
 export interface ContractChatResponse {
   answer: string;
   sources: ContractChatSource[];
+  model_used?: string;
+  error?: string;
+}
+
+export interface ContractAnalyzeRequest {
+  question?: string;
+  model?: string;
+  max_tokens?: number;
+  temperature?: number;
+  use_web_search?: boolean;
+  use_related_contracts?: boolean;
+}
+
+export interface ContractAnalyzeSource {
+  title?: string;
+  url?: string;
+  snippet?: string;
+}
+
+export interface ContractAnalyzeResponse {
+  analysis: string;
+  sources?: ContractAnalyzeSource[];
   model_used?: string;
   error?: string;
 }
@@ -839,5 +863,70 @@ export interface CompanyAnalyticsResponse {
   by_contract_type: ContractAnalyticsRow[];
   by_value_range: ContractAnalyticsRow[];
   year?: number;
+  error?: string;
+}
+
+// --- Importação de entidades e contratos ---
+
+export type ImportFileType = "zip" | "xlsx" | "json";
+export type ImportDataType = "contracts" | "entities" | "auto";
+
+export interface ImportPreviewRow {
+  id?: string;
+  name?: string;
+  nif?: string;
+  objectoContrato?: string;
+  precoContratual?: number;
+  dataCelebracaoContrato?: string;
+  adjudicante?: string;
+  adjudicatario?: string;
+  raw: Record<string, unknown>;
+}
+
+export interface ImportPreviewResponse {
+  data_type: ImportDataType;
+  file_type: ImportFileType;
+  filename: string;
+  rows: ImportPreviewRow[];
+  total_rows: number;
+  sample_schema: string[];
+  errors: string[];
+  warnings: string[];
+}
+
+export interface ImportIngestRequest {
+  data_type: ImportDataType;
+  file_type: ImportFileType;
+  filename: string;
+  rows?: ImportPreviewRow[];
+  options?: {
+    link_entities?: boolean;
+    max_records?: number;
+    skip_validation?: boolean;
+    hard_reprocess?: boolean;
+  };
+}
+
+export interface ImportIngestResponse {
+  success: boolean;
+  indexed_count: number;
+  total: number;
+  errors: number;
+  linked_entities: number;
+  duplicate_count?: number;
+  deleted_count?: number;
+  duplicate_ids?: string[];
+  message?: string;
+  error?: string;
+  details?: Record<string, number | string>;
+}
+
+export interface ImportStatusResponse {
+  ready: boolean;
+  data_type?: ImportDataType;
+  filename?: string;
+  stage?: "parsing" | "normalizing" | "indexing" | "linking" | "done" | "error";
+  progress?: number;
+  message?: string;
   error?: string;
 }
