@@ -602,6 +602,8 @@ class ContractSearchRequest(BaseModel):
     year: Optional[int] = None
     entity: Optional[str] = None
     nif: Optional[str] = None
+    counterparty_nif: Optional[str] = None
+    region: Optional[str] = None
     cpv_code: Optional[str] = None
     min_price: Optional[float] = None
     max_price: Optional[float] = None
@@ -756,6 +758,7 @@ class CompanyDetail(CompanySummary):
 class CompanySearchRequest(BaseModel):
     q: Optional[str] = Field(None, alias="query")
     role: Optional[Literal["all", "adjudicante", "adjudicatario"]] = "all"
+    region: Optional[str] = None
     min_contracts: int = 1
     min_value: Optional[float] = None
     max_value: Optional[float] = None

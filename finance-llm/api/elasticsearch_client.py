@@ -584,6 +584,7 @@ def search_all_tickers(
                 "from": from_,
                 "size": size,
                 "track_scores": True,
+                "track_total_hits": True,
             },
         )
         items = []
@@ -1059,6 +1060,8 @@ def search_contracts(
     year: Optional[int] = None,
     entity: Optional[str] = None,
     nif: Optional[str] = None,
+    counterparty_nif: Optional[str] = None,
+    region: Optional[str] = None,
     cpv_code: Optional[str] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
@@ -1073,7 +1076,7 @@ def search_contracts(
     if not client:
         return {"error": "Elasticsearch indisponível", "items": []}
 
-    query = _build_contract_query(q, year, entity, nif, cpv_code, min_price, max_price, start_date, end_date)
+    query = _build_contract_query(q, year, entity, nif, counterparty_nif, region, cpv_code, min_price, max_price, start_date, end_date)
 
     try:
         resp = client.search(
@@ -1084,6 +1087,7 @@ def search_contracts(
                 "from": from_,
                 "size": size,
                 "track_scores": True,
+                "track_total_hits": True,
             },
         )
         items = []
@@ -1254,6 +1258,8 @@ def _build_contract_query(
     year: Optional[int] = None,
     entity: Optional[str] = None,
     nif: Optional[str] = None,
+    counterparty_nif: Optional[str] = None,
+    region: Optional[str] = None,
     cpv_code: Optional[str] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
@@ -1302,7 +1308,7 @@ def _build_contract_query(
                 "minimum_should_match": 1,
             }
         })
-    if nif:
+    if nif and not counterparty_nif:
         filters.append({
             "bool": {
                 "should": [
@@ -1322,6 +1328,27 @@ def _build_contract_query(
                 "minimum_should_match": 1,
             }
         })
+    elif nif and counterparty_nif:
+        filters.append({
+            "bool": {
+                "must": [
+                    {
+                        "nested": {
+                            "path": "adjudicantes.parsed",
+                            "query": {"term": {"adjudicantes.parsed.nif": nif}},
+                        }
+                    },
+                    {
+                        "nested": {
+                            "path": "adjudicatarios.parsed",
+                            "query": {"term": {"adjudicatarios.parsed.nif": counterparty_nif}},
+                        }
+                    },
+                ]
+            }
+        })
+    if region:
+        filters.append(_region_filter(region))
     if cpv_code:
         filters.append({
             "nested": {
@@ -1728,6 +1755,7 @@ def _company_name_query(q: Optional[str]) -> Optional[Dict[str, Any]]:
 def search_companies(
     q: Optional[str] = None,
     role: Optional[str] = "all",
+    region: Optional[str] = None,
     min_contracts: int = 1,
     min_value: Optional[float] = None,
     max_value: Optional[float] = None,
@@ -1750,6 +1778,8 @@ def search_companies(
     base_filters: List[Dict[str, Any]] = []
     if year:
         base_filters.append({"term": {"Ano": year}})
+    if region:
+        base_filters.append(_region_filter(region))
     role_filter = _company_role_filter(role)
     if role_filter:
         base_filters.extend(role_filter)
@@ -2228,6 +2258,7 @@ def get_contract_regional_analytics(year: Optional[int] = None, size: int = 30, 
         response = client.search(
             index=CONTRACTS_INDEX,
             body={
+                "track_total_hits": True,
                 "size": 0,
                 "query": query,
                 "aggs": {
@@ -2252,18 +2283,80 @@ def get_contract_regional_analytics(year: Optional[int] = None, size: int = 30, 
         return {"error": str(exc), "regions": []}
 
 
-def get_contract_relationships(limit: int = 1000, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+def _region_filter(region: Optional[str] = None) -> Dict[str, Any]:
+    """Filtro de região. Aceita código curto (ex: PT11A) ou string completa NUTS.
+
+    ES armazena NUTs como strings completas (ex: "PT11A - Área Metropolitana do Porto"),
+    por isso usamos wildcard/prefixo quando a região fornecida não contém o separador.
+    """
+    if not region:
+        return None
+    if " - " in region:
+        return {"term": {"NUTs": region}}
+    return {"wildcard": {"NUTs": f"{region}*"}}
+
+
+def _match_pair_query(nif: Optional[str] = None, counterparty_nif: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Returns nested must query for adjudicante/adjudicatario pair when both provided."""
+    if nif and counterparty_nif:
+        return {
+            "bool": {
+                "must": [
+                    {
+                        "nested": {
+                            "path": "adjudicantes.parsed",
+                            "query": {"term": {"adjudicantes.parsed.nif": nif}},
+                        }
+                    },
+                    {
+                        "nested": {
+                            "path": "adjudicatarios.parsed",
+                            "query": {"term": {"adjudicatarios.parsed.nif": counterparty_nif}},
+                        }
+                    },
+                ]
+            }
+        }
+    return None
+
+
+def get_contract_relationships(
+    limit: int = 1000,
+    region: Optional[str] = None,
+    nif: Optional[str] = None,
+    counterparty_nif: Optional[str] = None,
+    role: Optional[str] = "all",
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
     """Constrói relações adjudicante -> adjudicatário a partir dos contratos recentes."""
     client = es or get_es_client()
     if not client:
         return {"error": "Elasticsearch indisponível", "relations": []}
+    filters: List[Dict[str, Any]] = []
+    if region:
+        filters.append(_region_filter(region))
+    pair_query = _match_pair_query(nif, counterparty_nif)
+    if pair_query:
+        filters.append(pair_query)
+    elif nif:
+        # Include any contract where this NIF appears (adjudicante or adjudicatario)
+        filters.append({
+            "bool": {
+                "should": [
+                    {"nested": {"path": "adjudicantes.parsed", "query": {"term": {"adjudicantes.parsed.nif": nif}}}},
+                    {"nested": {"path": "adjudicatarios.parsed", "query": {"term": {"adjudicatarios.parsed.nif": nif}}}},
+                ],
+                "minimum_should_match": 1,
+            }
+        })
+    query: Dict[str, Any] = {"bool": {"filter": filters}} if filters else {"match_all": {}}
     try:
         response = client.search(
             index=CONTRACTS_INDEX,
             body={
                 "size": limit,
                 "_source": ["adjudicantes.parsed", "adjudicatarios.parsed", "precoContratual", "Ano"],
-                "query": {"match_all": {}},
+                "query": query,
                 "sort": [{"Ano": {"order": "desc", "unmapped_type": "integer"}}],
             },
         )
@@ -2279,6 +2372,12 @@ def get_contract_relationships(limit: int = 1000, es: Optional[Elasticsearch] = 
                     supplier_id = supplier.get("nif") or supplier.get("nome")
                     if not buyer_id or not supplier_id:
                         continue
+                    # Apply role filter after the fact when only one NIF provided
+                    if nif and not pair_query:
+                        if role == "adjudicante" and buyer_id != nif:
+                            continue
+                        if role == "adjudicatario" and supplier_id != nif:
+                            continue
                     key = f"{buyer_id}|{supplier_id}"
                     pair = pairs.setdefault(key, {
                         "source": buyer_id, "source_name": buyer.get("nome") or buyer_id,
@@ -2295,9 +2394,15 @@ def get_contract_relationships(limit: int = 1000, es: Optional[Elasticsearch] = 
         return {"error": str(exc), "relations": []}
 
 
-def get_contract_network(limit: int = 500, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+def get_contract_network(
+    limit: int = 500,
+    region: Optional[str] = None,
+    nif: Optional[str] = None,
+    role: Optional[str] = "all",
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
     """Devolve nós e ligações para uma visualização de rede de entidades."""
-    result = get_contract_relationships(limit=limit, es=es)
+    result = get_contract_relationships(limit=limit, region=region, nif=nif, role=role, es=es)
     if result.get("error"):
         return result
     nodes: Dict[str, Dict[str, Any]] = {}

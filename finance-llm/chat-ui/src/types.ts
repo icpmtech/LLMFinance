@@ -601,6 +601,7 @@ export interface ContractItem {
   Ano?: number;
   NUTs?: string;
   regime?: string;
+  concorrentes?: string | string[];
   search_text?: string;
   entities: ContractEntity[];
   score?: number;
@@ -612,6 +613,8 @@ export interface ContractSearchRequest {
   year?: number;
   entity?: string;
   nif?: string;
+  counterparty_nif?: string;
+  region?: string;
   cpv_code?: string;
   min_price?: number;
   max_price?: number;
@@ -747,7 +750,7 @@ export interface ContractRegionalResponse {
 }
 
 export interface ContractGraphResponse {
-  nodes: { id: string; label: string; type: string }[];
+  nodes: { id: string; label: string; type: string; count?: number; total_value?: number; contract_id?: string }[];
   edges: { source: string; target: string; count: number; value: number }[];
   error?: string;
 }
@@ -793,6 +796,7 @@ export interface CompanyDetail extends CompanySummary {
 export interface CompanySearchRequest {
   q?: string;
   role?: "all" | "adjudicante" | "adjudicatario";
+  region?: string;
   min_contracts?: number;
   min_value?: number;
   max_value?: number;

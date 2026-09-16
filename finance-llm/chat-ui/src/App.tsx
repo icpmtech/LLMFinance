@@ -310,7 +310,11 @@ export default function App() {
 
   const renderContent = () => {
     if (view === "dashboard") return <DashboardPage onSwitchView={handleSwitchView} onSelectTicker={handleSelectTicker} />;
-      if (view === "empresas-iq") return <EmpresasIQPage />;
+      if (view === "empresas-iq") return <EmpresasIQPage onNavigate={(v) => {
+        if (v === "chat" || v === "dashboard" || v === "search" || v.startsWith("contracts") || v.startsWith("companies") || v === "tickers" || v === "forecast" || v === "trading" || v === "rag" || v === "elastic") {
+          setViewAndHistory(v as AppView);
+        }
+      }} />;
     if (view === "ticker-detail" && selectedTicker) {
       return (
         <TickerDetailPage
@@ -405,6 +409,10 @@ export default function App() {
   };
 
   if (view === "chat") {
+    return renderContent();
+  }
+
+  if (view === "empresas-iq") {
     return renderContent();
   }
 

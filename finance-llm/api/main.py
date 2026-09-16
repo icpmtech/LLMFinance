@@ -185,6 +185,7 @@ def companies_search(req: CompanySearchRequest):
     res = search_companies(
         q=req.q,
         role=req.role,
+        region=req.region,
         min_contracts=req.min_contracts,
         min_value=req.min_value,
         max_value=req.max_value,
@@ -959,6 +960,8 @@ def contracts_search(req: ContractSearchRequest):
         year=req.year,
         entity=req.entity,
         nif=req.nif,
+        counterparty_nif=req.counterparty_nif,
+        region=req.region,
         cpv_code=req.cpv_code,
         min_price=req.min_price,
         max_price=req.max_price,
@@ -1062,18 +1065,35 @@ def contracts_regional_analytics(year: Optional[int] = Query(None), size: int = 
 
 
 @app.get("/contracts/analytics/network", response_model=ContractGraphResponse)
-def contracts_network(limit: int = Query(500, ge=1, le=2000)):
-    """Devolve a rede de entidades ligadas por contratos."""
-    result = get_contract_network(limit=limit)
+def contracts_network(
+    limit: int = Query(500, ge=1, le=2000),
+    region: Optional[str] = Query(None),
+    nif: Optional[str] = Query(None),
+    role: Optional[str] = Query("all"),
+):
+    """Devolve a rede de entidades ligadas por contratos, filtrável por região e entidade."""
+    result = get_contract_network(limit=limit, region=region, nif=nif, role=role)
     if result.get("error"):
         raise HTTPException(status_code=502, detail=result["error"])
     return ContractGraphResponse(**result)
 
 
 @app.get("/contracts/analytics/relations", response_model=ContractRelationsResponse)
-def contracts_relations(limit: int = Query(1000, ge=1, le=2000)):
-    """Devolve relações agregadas entre adjudicantes e adjudicatários."""
-    result = get_contract_relationships(limit=limit)
+def contracts_relations(
+    limit: int = Query(1000, ge=1, le=2000),
+    region: Optional[str] = Query(None),
+    nif: Optional[str] = Query(None),
+    counterparty_nif: Optional[str] = Query(None),
+    role: Optional[str] = Query("all"),
+):
+    """Devolve relações agregadas entre adjudicantes e adjudicatários, filtráveis."""
+    result = get_contract_relationships(
+        limit=limit,
+        region=region,
+        nif=nif,
+        counterparty_nif=counterparty_nif,
+        role=role,
+    )
     if result.get("error"):
         raise HTTPException(status_code=502, detail=result["error"])
     return ContractRelationsResponse(**result)

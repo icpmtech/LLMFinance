@@ -633,14 +633,31 @@ export async function getContractRegionalAnalytics(year?: number): Promise<Contr
   return res.json();
 }
 
-export async function getContractNetwork(limit = 500): Promise<ContractGraphResponse> {
-  const res = await fetch(`${API_BASE}/contracts/analytics/network?limit=${limit}`);
+export async function getContractNetwork(
+  limit = 500,
+  region?: string,
+  nif?: string,
+  role = "all",
+): Promise<ContractGraphResponse> {
+  const params = new URLSearchParams({ limit: String(limit), role });
+  if (region) params.set("region", region);
+  if (nif) params.set("nif", nif);
+  const res = await fetch(`${API_BASE}/contracts/analytics/network?${params}`);
   if (!res.ok) throw new Error(`Erro ao obter rede de entidades: ${res.status}`);
   return res.json();
 }
 
-export async function getContractRelations(limit = 1000): Promise<ContractRelationsResponse> {
-  const res = await fetch(`${API_BASE}/contracts/analytics/relations?limit=${limit}`);
+export async function getContractRelations(
+  limit = 1000,
+  region?: string,
+  nif?: string,
+  counterpartyNif?: string,
+): Promise<ContractRelationsResponse> {
+  const params = new URLSearchParams({ limit: String(limit), role: "all" });
+  if (region) params.set("region", region);
+  if (nif) params.set("nif", nif);
+  if (counterpartyNif) params.set("counterparty_nif", counterpartyNif);
+  const res = await fetch(`${API_BASE}/contracts/analytics/relations?${params}`);
   if (!res.ok) throw new Error(`Erro ao obter relações: ${res.status}`);
   return res.json();
 }
