@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import GraphStudioPage from "./GraphStudioPage";
 import {
   AlertCircle,
   ArrowRight,
@@ -9,6 +10,7 @@ import {
   Circle,
   ChevronDown,
   ChevronRight,
+  Crosshair,
   Database,
   Download,
   FileSearch,
@@ -19,6 +21,7 @@ import {
   GitBranch,
   HandCoins,
   Heart,
+  Info,
   LayoutDashboard,
   List,
   Loader2,
@@ -29,8 +32,10 @@ import {
   Minimize2,
   Network,
   RefreshCw,
+  Scan,
   Search,
   Settings,
+  Shuffle,
   Sparkles,
   TrendingUp,
   Users,
@@ -70,6 +75,16 @@ import {
   getCompanyAnalytics,
   analyzeContract,
 } from "../api";
+import {
+  MAP_CENTER,
+  TILE_SIZE,
+  jitterAround,
+  latToWorld,
+  lonToWorld,
+  lookupPlace,
+  worldToLat,
+  worldToLon,
+} from "../components/graph/geo";
 import type {
   CompanyAnalyticsResponse,
   CompanyContractsResponse,
@@ -95,6 +110,7 @@ type EmpresasIQSection =
   | "contracts"
   | "entities"
   | "graph"
+  | "studio"
   | "analysis"
   | "favorites"
   | "settings";
@@ -318,22 +334,21 @@ function MiniBar({
 
 type GraphView = "network" | "hierarchical" | "circular" | "map" | "list";
 
+/** Nó normalizado para simulação/desenho. As coordenadas ficam em `positionsRef` (mutáveis). */
 type SimNode = {
   id: string;
   label: string;
   type: string;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
   radius: number;
   color: string;
   mass: number;
   degree: number;
   contracts?: number;
+  group: string;
   region?: string;
   lat?: number;
   lon?: number;
+  approx?: boolean;
   contractId?: string;
 };
 
@@ -344,21 +359,85 @@ type SimEdge = {
   value: number;
 };
 
+type NodePosition = { x: number; y: number; vx: number; vy: number };
+
 const NODE_COLORS: Record<string, string> = {
   regiao: "#fbbf24",
   adjudicante: "#2dd4bf",
   adjudicatario: "#60a5fa",
+  ambos: "#f59e0b",
   contrato: "#a78bfa",
   outra: "#fb7185",
 };
 
-function seedLatLon(label: string): { lat: number; lon: number } {
-  // Deterministic pseudo-geographic seed for demo purposes (Portugal + islands)
-  let hash = 0;
-  for (let i = 0; i < label.length; i++) hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
-  const lat = 36.8 + (hash % 600) / 100;
-  const lon = -9.8 + ((hash >> 10) % 500) / 100;
-  return { lat, lon };
+const NODE_LEGEND: { type: string; label: string }[] = [
+  { type: "regiao", label: "Região" },
+  { type: "adjudicante", label: "Adjudicante" },
+  { type: "adjudicatario", label: "Adjudicatário" },
+  { type: "ambos", label: "Adjudicante e adjudicatário" },
+  { type: "contrato", label: "Contrato" },
+];
+
+/** Opções por omissão do painel de filtros do grafo (usadas no "Repor filtros"). */
+const DEFAULT_GRAPH_OPTIONS = {
+  nodeLimit: 250,
+  edgeLimit: 400,
+  minValue: 0,
+  showAdjudicantes: true,
+  showAdjudicatarios: true,
+  showContracts: true,
+  groupByRegion: false,
+  pruneLeaves: false,
+  hideSupernodes: false,
+  supernodeThreshold: 12,
+};
+
+function nodeTypeLabel(type: string) {
+  switch (type) {
+    case "regiao":
+      return "Região";
+    case "adjudicante":
+      return "Adjudicante";
+    case "adjudicatario":
+      return "Adjudicatário";
+    case "ambos":
+      return "Adjudicante e adjudicatário";
+    case "contrato":
+      return "Contrato";
+    default:
+      return "Outro";
+  }
+}
+
+/** Raio codifica centralidade (grau) ou volume contratual (regiões). */
+function nodeRadius(type: string, degree: number, contracts?: number) {
+  const base = type === "regiao" ? 17 : type === "adjudicante" ? 13 : type === "contrato" ? 11 : 11;
+  const weight = type === "regiao" ? Math.sqrt(contracts ?? 0) / 3 : Math.sqrt(degree);
+  return Math.min(30, base + Math.min(9, weight * 2));
+}
+
+function normalizeLabel(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+/** Posição inicial determinística (anel simples ou anéis por grupo). */
+function seedPosition(index: number, count: number, groupIndex = 0, groupCount = 1): NodePosition {
+  if (groupCount > 1) {
+    const groupAngle = (groupIndex / groupCount) * Math.PI * 2;
+    const localAngle = (index / Math.max(count, 1)) * Math.PI * 2;
+    return {
+      x: Math.cos(groupAngle) * 220 + Math.cos(localAngle) * 54,
+      y: Math.sin(groupAngle) * 220 + Math.sin(localAngle) * 54,
+      vx: 0,
+      vy: 0,
+    };
+  }
+  const angle = (index / Math.max(count, 1)) * Math.PI * 2;
+  return { x: Math.cos(angle) * 150, y: Math.sin(angle) * 150, vx: 0, vy: 0 };
 }
 
 function useGraphModel(graph: ContractGraphResponse | null, options: {
@@ -374,102 +453,75 @@ function useGraphModel(graph: ContractGraphResponse | null, options: {
   supernodeThreshold: number;
 }) {
   return useMemo(() => {
-    const rawNodes = (graph?.nodes ?? []).map((n) => {
-      const { lat, lon } = seedLatLon(n.label);
-      return {
-        ...n,
-        lat,
-        lon,
-      };
-    });
-
-    // 1. Back-end filtering: value threshold + type filters
-    const filteredEdges = (graph?.edges ?? [])
-      .filter((e) => e.value >= options.minValue)
-      .sort((a, b) => b.value - a.value);
-
-    // 2. Back-end aggregation: collapse duplicate edges by (source,target)
+    // 1. Filtragem por valor + agregação de arestas duplicadas por (source,target).
     const edgeMap = new Map<string, SimEdge>();
-    filteredEdges.forEach((e) => {
-      const key = [e.source, e.target].sort().join("-");
-      const existing = edgeMap.get(key);
-      if (existing) {
-        existing.count += e.count;
-        existing.value += e.value;
-      } else {
-        edgeMap.set(key, { source: e.source, target: e.target, count: e.count, value: e.value });
-      }
-    });
-    let edges = Array.from(edgeMap.values()).slice(0, options.edgeLimit);
+    (graph?.edges ?? [])
+      .filter((edge) => (edge.value ?? 0) >= options.minValue)
+      .forEach((edge) => {
+        const key = [edge.source, edge.target].sort().join("|");
+        const existing = edgeMap.get(key);
+        if (existing) {
+          existing.count += edge.count;
+          existing.value += edge.value;
+        } else {
+          edgeMap.set(key, { source: edge.source, target: edge.target, count: edge.count, value: edge.value });
+        }
+      });
 
-    // Degree counting after aggregation
+    // 2. Grau calculado sobre a rede agregada (dimensiona e ordena os nós).
     const degree = new Map<string, number>();
-    edges.forEach((e) => {
-      degree.set(e.source, (degree.get(e.source) || 0) + 1);
-      degree.set(e.target, (degree.get(e.target) || 0) + 1);
+    edgeMap.forEach((edge) => {
+      degree.set(edge.source, (degree.get(edge.source) || 0) + 1);
+      degree.set(edge.target, (degree.get(edge.target) || 0) + 1);
     });
 
-    let nodes = rawNodes
-      .filter((n) => {
-        if (!options.showAdjudicantes && n.type === "adjudicante") return false;
-        if (!options.showAdjudicatarios && n.type === "adjudicatario") return false;
-        if (!options.showContracts && n.type === "contrato") return false;
+    // 3. Nós: filtros de tipo -> centralidade -> limite.
+    let nodes: SimNode[] = (graph?.nodes ?? [])
+      .filter((node) => {
+        if (!options.showAdjudicantes && node.type === "adjudicante") return false;
+        if (!options.showAdjudicatarios && node.type === "adjudicatario") return false;
+        if (!options.showAdjudicantes && !options.showAdjudicatarios && node.type === "ambos") return false;
+        if (!options.showContracts && node.type === "contrato") return false;
         return true;
       })
-      .map((n) => ({
-        id: n.id,
-        label: n.label,
-        type: n.type,
-        x: 0,
-        y: 0,
-        vx: 0,
-        vy: 0,
-        radius: n.type === "regiao" ? 18 : n.type === "adjudicante" ? 22 : n.type === "contrato" ? 19 : 16,
-        color: NODE_COLORS[n.type] || NODE_COLORS.outra,
-        mass: n.type === "regiao" ? 3 : n.type === "adjudicante" ? 2 : n.type === "contrato" ? 1.5 : 1,
-        degree: degree.get(n.id) || 0,
-        contracts: n.count,
-        contractId: n.contract_id,
-        region: n.label.split(/[\s,]+/).pop(),
-        lat: n.lat,
-        lon: n.lon,
-      }))
-      .sort((a, b) => b.degree - a.degree)
-      .slice(0, options.nodeLimit > 0 ? options.nodeLimit : undefined);
+      .map((node) => {
+        const nodeDegree = degree.get(node.id) || 0;
+        // Só nós de região têm geografia nos dados. Entidades/contratos nunca são colocados
+        // por semelhança de nome (isso punha, por exemplo, "Startup Madeira" na Madeira e
+        // "Euromar" em qualquer sítio): ficam sem lat/lon e o mapa posiciona-os dentro da
+        // região ativa (marcados como aproximados) ou omite-os.
+        const place = node.type === "regiao" ? lookupPlace(node.id, node.label) : null;
+        return {
+          id: node.id,
+          label: node.label,
+          type: node.type,
+          radius: nodeRadius(node.type, nodeDegree, node.count),
+          color: NODE_COLORS[node.type] || NODE_COLORS.outra,
+          mass: node.type === "regiao" ? 3 : node.type === "adjudicante" ? 2 : node.type === "contrato" ? 1.5 : 1,
+          degree: nodeDegree,
+          contracts: node.count,
+          group: node.type === "regiao" ? node.label : node.type,
+          region: node.type === "regiao" ? node.label : undefined,
+          lat: place?.lat,
+          lon: place?.lon,
+          approx: Boolean(place && !place.exact),
+          contractId: node.contract_id,
+        };
+      })
+      .sort((a, b) => b.degree - a.degree || (b.contracts ?? 0) - (a.contracts ?? 0));
+    if (options.nodeLimit > 0) nodes = nodes.slice(0, options.nodeLimit);
 
-    // 4. Pruning leaf/orphan nodes + supernodes
-    if (options.pruneLeaves) {
-      nodes = nodes.filter((n) => n.degree >= 2);
-    }
-    if (options.hideSupernodes) {
-      nodes = nodes.filter((n) => n.degree <= options.supernodeThreshold);
-    }
+    // 4. Podas: folhas (grau < 2) e supernós (grau acima do limiar).
+    if (options.pruneLeaves) nodes = nodes.filter((node) => node.degree >= 2);
+    if (options.hideSupernodes) nodes = nodes.filter((node) => node.degree <= options.supernodeThreshold);
 
-    // Keep only edges whose endpoints survived
-    const nodeSet = new Set(nodes.map((n) => n.id));
-    edges = edges.filter((e) => nodeSet.has(e.source) && nodeSet.has(e.target));
-
-    // 3. Clever visual model: region combos
-    if (options.groupByRegion) {
-      const regions = new Map<string, SimNode[]>();
-      nodes.forEach((n) => {
-        const key = n.region || "Outro";
-        if (!regions.has(key)) regions.set(key, []);
-        regions.get(key)!.push(n);
-      });
-      nodes = nodes.map((n) => {
-        const group = regions.get(n.region || "Outro") || [];
-        const idx = group.indexOf(n);
-        const angle = (idx / Math.max(group.length, 1)) * Math.PI * 2;
-        return { ...n, x: Math.cos(angle) * 180, y: Math.sin(angle) * 180 };
-      });
-    } else {
-      nodes.forEach((n, i) => {
-        const angle = (i / Math.max(nodes.length, 1)) * Math.PI * 2;
-        n.x = Math.cos(angle) * 140;
-        n.y = Math.sin(angle) * 140;
-      });
-    }
+    // 5. Arestas: apenas entre nós visíveis, ordenadas por valor e limitadas.
+    const nodeIds = new Set(nodes.map((node) => node.id));
+    let edges = Array.from(edgeMap.values()).filter(
+      (edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target)
+    );
+    edges.sort((a, b) => b.value - a.value);
+    if (options.edgeLimit > 0) edges = edges.slice(0, options.edgeLimit);
 
     return { nodes, edges };
   }, [graph, options]);
@@ -483,6 +535,10 @@ function NetworkCanvas({
   selectedEdgeKey,
   onNodeClick,
   onEdgeClick,
+  disabledViews = [],
+  disabledHint = "Disponível depois de escolher uma região.",
+  emptyHint,
+  regionHint,
 }: {
   graph: ContractGraphResponse | null;
   view: GraphView;
@@ -491,40 +547,58 @@ function NetworkCanvas({
   selectedEdgeKey?: string | null;
   onNodeClick?: (node: SimNode) => void;
   onEdgeClick?: (edge: SimEdge) => void;
+  disabledViews?: GraphView[];
+  disabledHint?: string;
+  emptyHint?: string;
+  /** Região ativa (NUTS): usada para posicionar entidades que não têm coordenadas próprias. */
+  regionHint?: string | null;
 }) {
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [hovered, setHovered] = useState<SimNode | null>(null);
+  const [hoveredEdge, setHoveredEdge] = useState<SimEdge | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [size, setSize] = useState({ width: 0, height: 0 });
   const [isExpanded, setIsExpanded] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [nodeSearch, setNodeSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(
+    // No layout de duas colunas (xl) há espaço para o painel aberto; abaixo disso, recolhido.
+    () => typeof window === "undefined" || window.innerWidth >= 1280
+  );
+  const [layoutRun, setLayoutRun] = useState(0);
+  const [tilesLoaded, setTilesLoaded] = useState(0);
+  const [mapZoom, setMapZoom] = useState(6);
+  const [mapCenter, setMapCenter] = useState(MAP_CENTER);
+  const [mapDragging, setMapDragging] = useState(false);
+  const [mapFitNonce, setMapFitNonce] = useState(0);
+  const mapManualRef = useRef(false);
+  const mapFitKeyRef = useRef("");
+  const mapDragRef = useRef<{ x: number; y: number; lat: number; lon: number } | null>(null);
+  const mapDragMovedRef = useRef(false);
+  const mapWheelAccumRef = useRef(0);
+
   const draggingRef = useRef(false);
   const dragMovedRef = useRef(false);
   const lastPosRef = useRef({ x: 0, y: 0 });
+  const userMovedRef = useRef(false);
+  const positionsRef = useRef(new Map<string, NodePosition>());
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
 
-  const [options, setOptions] = useState({
-    nodeLimit: 250,
-    edgeLimit: 400,
-    minValue: 0,
-    showAdjudicantes: true,
-    showAdjudicatarios: true,
-    showContracts: true,
-    groupByRegion: false,
-    pruneLeaves: false,
-    hideSupernodes: false,
-    supernodeThreshold: 12,
-  });
+  const [options, setOptions] = useState({ ...DEFAULT_GRAPH_OPTIONS });
   const maxNodes = useMemo(() => (graph?.nodes?.length || 100), [graph]);
   const maxEdges = useMemo(() => (graph?.edges?.length || 400), [graph]);
 
   const { nodes, edges } = useGraphModel(graph, options);
+  const isRegionLevel = nodes.length > 0 && nodes.every((node) => node.type === "regiao");
   const searchMatches = useMemo(() => {
-    const query = nodeSearch.trim().toLocaleLowerCase();
+    // Pesquisa sem sensibilidade a maiúsculas nem acentos ("saude" encontra "Saúde").
+    const query = normalizeLabel(nodeSearch);
     if (!query) return [];
     return nodes
-      .filter((node) => `${node.label} ${node.id} ${node.contractId ?? ""}`.toLocaleLowerCase().includes(query))
+      .filter((node) => normalizeLabel(`${node.label} ${node.id} ${node.contractId ?? ""}`).includes(query))
       .slice(0, 8);
   }, [nodeSearch, nodes]);
   const searchMatchIds = useMemo(() => new Set(searchMatches.map((node) => node.id)), [searchMatches]);
@@ -539,45 +613,69 @@ function NetworkCanvas({
     });
     return ids;
   }, [edges, searchFocused, searchMatches]);
-  const renderNodes = visibleNodeIds ? nodes.filter((node) => visibleNodeIds.has(node.id)) : nodes;
-  const renderEdges = visibleNodeIds
-    ? edges.filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target))
-    : edges;
+  const renderNodes = useMemo(
+    () => (visibleNodeIds ? nodes.filter((node) => visibleNodeIds.has(node.id)) : nodes),
+    [nodes, visibleNodeIds]
+  );
+  const renderEdges = useMemo(
+    () =>
+      visibleNodeIds
+        ? edges.filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target))
+        : edges,
+    [edges, visibleNodeIds]
+  );
+  const hasData = renderNodes.length > 0;
 
-  // Map state
-  // Reset viewport when navigation changes the graph dataset.
+  // Orçamento de etiquetas por centralidade: evita o "muro de texto" em grafos densos.
+  const labelledIds = useMemo(() => {
+    const limit = view === "circular" ? 16 : view === "hierarchical" ? 22 : 12;
+    return new Set(
+      [...renderNodes]
+        .sort((a, b) => b.degree - a.degree || (b.contracts ?? 0) - (a.contracts ?? 0))
+        .slice(0, limit)
+        .map((node) => node.id)
+    );
+  }, [renderNodes, view]);
+
+  const legendTypes = useMemo(() => [...new Set(renderNodes.map((node) => node.type))], [renderNodes]);
+
+  // Qualquer alteração à composição do grafo reinicia a simulação (e o enquadramento).
+  const layoutKey = useMemo(() => {
+    const nodeIds = renderNodes.map((node) => node.id).sort().join("|");
+    const edgeIds = renderEdges.map((edge) => `${edge.source}>${edge.target}`).sort().join("|");
+    return `${view}#${options.groupByRegion ? "grouped" : "free"}#${layoutRun}#${nodeIds}#${edgeIds}`;
+  }, [layoutRun, options.groupByRegion, renderEdges, renderNodes, view]);
+
+  const activeFilterCount =
+    (options.minValue > 0 ? 1 : 0) +
+    (options.groupByRegion ? 1 : 0) +
+    (options.pruneLeaves ? 1 : 0) +
+    (options.hideSupernodes ? 1 : 0) +
+    (!options.showAdjudicantes ? 1 : 0) +
+    (!options.showAdjudicatarios ? 1 : 0) +
+    (!options.showContracts ? 1 : 0);
+
+  // Um novo conjunto de nós/arestas invalida o hover (evita tooltips "fantasma").
+  useEffect(() => {
+    setHovered(null);
+    setHoveredEdge(null);
+  }, [layoutKey]);
+
+  // Ao mudar de conjunto de dados, volta ao enquadramento inicial.
   useEffect(() => {
     setScale(1);
     setOffset({ x: 0, y: 0 });
     setNodeSearch("");
     setSearchFocused(false);
+    setHovered(null);
+    setHoveredEdge(null);
+    positionsRef.current.clear();
+    userMovedRef.current = false;
   }, [graph]);
 
-  const [mapZoom, setMapZoom] = useState(6);
-  const [mapCenter] = useState({ lat: 39.5, lon: -8.2 });
-  const [mapOffset] = useState({ x: 0, y: 0 });
-  const [tilesReady, setTilesReady] = useState(0);
-
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
-
-  // Resize canvas to wrapper size with device pixel ratio
   useEffect(() => {
-    const resize = () => {
-      const canvas = canvasRef.current;
-      const wrapper = wrapperRef.current;
-      if (!canvas || !wrapper) return;
-      const rect = wrapper.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
-    };
-    resize();
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
-  }, [isExpanded, isFullscreen]);
+    setTilesLoaded(0);
+  }, [mapZoom, size.height, size.width]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -618,80 +716,478 @@ function NetworkCanvas({
     }
   };
 
+  // Espelho do estado atual: mantém o desenho estável sem reiniciar a simulação em cada hover/pan.
+  const frame = useRef({
+    nodes: renderNodes,
+    edges: renderEdges,
+    view,
+    scale,
+    offset,
+    hovered,
+    hoveredEdge,
+    selectedNodeId,
+    selectedEdgeKey,
+    hasSearch: false,
+    searchMatchIds,
+    labelledIds,
+  });
+
   useEffect(() => {
-    if (view !== "network" && view !== "hierarchical" && view !== "circular") return;
+    frame.current = {
+      nodes: renderNodes,
+      edges: renderEdges,
+      view,
+      scale,
+      offset,
+      hovered,
+      hoveredEdge,
+      selectedNodeId,
+      selectedEdgeKey,
+      hasSearch: Boolean(nodeSearch.trim()),
+      searchMatchIds,
+      labelledIds,
+    };
+  });
+
+  const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    let raf = 0;
-    let ticks = 0;
+    const current = frame.current;
+    const positions = positionsRef.current;
+    // O contexto é escalado por DPR: as coordenadas usadas (layout, hit-test, tooltip) ficam em CSS px.
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const rect = canvas.getBoundingClientRect();
+    const width = rect.width || canvas.width / dpr;
+    const height = rect.height || canvas.height / dpr;
 
-    function step() {
-      if (!ctx || !canvas) return;
-      ticks++;
-      const width = canvas.width;
-      const height = canvas.height;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (current.nodes.length === 0) return;
 
-      if (view === "hierarchical") {
-        const levels = new Map<string, SimNode[]>();
-        renderNodes.forEach((node) => {
-          const level = node.type === "adjudicante" ? "adjudicante" : node.type === "adjudicatario" ? "adjudicatario" : "outra";
-          if (!levels.has(level)) levels.set(level, []);
-          levels.get(level)!.push(node);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.translate(width / 2 + current.offset.x, height / 2 + current.offset.y);
+    ctx.scale(current.scale, current.scale);
+
+    const edgeKeyOf = (edge: SimEdge) => [edge.source, edge.target].sort().join("|");
+    const activeEdgeKey = current.hoveredEdge ? edgeKeyOf(current.hoveredEdge) : null;
+
+    // Arestas
+    current.edges.forEach((edge) => {
+      const a = positions.get(edge.source);
+      const b = positions.get(edge.target);
+      if (!a || !b) return;
+      const key = edgeKeyOf(edge);
+      const active = key === current.selectedEdgeKey || key === activeEdgeKey;
+      const inSearch =
+        !current.hasSearch ||
+        current.searchMatchIds.has(edge.source) ||
+        current.searchMatchIds.has(edge.target);
+      const baseAlpha = Math.min(0.62, 0.18 + edge.count * 0.045);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.strokeStyle = active
+        ? `rgba(251,191,36,${Math.min(0.95, baseAlpha + 0.3)})`
+        : `rgba(125,211,252,${baseAlpha})`;
+      ctx.globalAlpha = inSearch ? 1 : 0.12;
+      ctx.lineWidth = active
+        ? Math.max(3, Math.log(edge.count + 1) + 1.5)
+        : Math.max(1.5, Math.log(edge.count + 1) + 0.5);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    });
+
+    // Etiquetas com deteção simples de colisões (a última palavra é sempre visível).
+    const labelBoxes: { x: number; y: number; width: number; height: number }[] = [];
+    const drawLabel = (text: string, x: number, y: number, emphasised: boolean) => {
+      ctx.font = emphasised ? "bold 12px ui-sans-serif, system-ui" : "600 10px ui-sans-serif, system-ui";
+      const label = text.length > 22 ? `${text.slice(0, 20)}…` : text;
+      const box = { x: x - 4, y: y - 10, width: ctx.measureText(label).width + 8, height: 16 };
+      const collides = labelBoxes.some(
+        (other) =>
+          !(
+            box.x + box.width < other.x ||
+            other.x + other.width < box.x ||
+            box.y + box.height < other.y ||
+            other.y + other.height < box.y
+          )
+      );
+      if (collides && !emphasised) return;
+      labelBoxes.push(box);
+      ctx.fillStyle = "rgba(3,12,17,0.88)";
+      ctx.fillRect(box.x, box.y, box.width, box.height);
+      ctx.fillStyle = emphasised ? "#ffffff" : "#dbeafe";
+      ctx.fillText(label, x, y);
+    };
+
+    // Nós
+    current.nodes.forEach((node) => {
+      const p = positions.get(node.id);
+      if (!p) return;
+      const isSelected = current.selectedNodeId === node.id;
+      const isHovered = current.hovered?.id === node.id;
+      const isMatch = !current.hasSearch || current.searchMatchIds.has(node.id);
+      const showLabel =
+        isSelected || isHovered || node.type === "regiao" || (current.labelledIds.has(node.id) && isMatch);
+      const radius = isSelected ? node.radius + 5 : isHovered ? node.radius + 3 : node.radius;
+      ctx.globalAlpha = isMatch ? 1 : 0.18;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+      ctx.shadowBlur = isSelected || isHovered ? 20 : 10;
+      ctx.shadowColor = node.color;
+      const fill = ctx.createRadialGradient(p.x - radius * 0.35, p.y - radius * 0.35, 1, p.x, p.y, radius);
+      fill.addColorStop(0, node.color);
+      fill.addColorStop(0.38, `${node.color}cc`);
+      fill.addColorStop(1, "rgba(7,21,27,0.98)");
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = isSelected ? 4 : isHovered ? 3.5 : 2.5;
+      ctx.strokeStyle = isSelected || isHovered ? "#ffffff" : node.color;
+      ctx.stroke();
+      if (showLabel) drawLabel(node.label, p.x + radius + 6, p.y + 3, isSelected || isHovered);
+      ctx.globalAlpha = 1;
+    });
+  }, []);
+
+  useEffect(() => {
+    draw();
+  }, [
+    draw,
+    hovered,
+    hoveredEdge,
+    labelledIds,
+    nodeSearch,
+    offset,
+    renderEdges,
+    renderNodes,
+    scale,
+    searchMatchIds,
+    selectedEdgeKey,
+    selectedNodeId,
+    size,
+    view,
+  ]);
+
+  /** Enquadra todos os nós visíveis (usado no arranque, no botão "Ajustar" e na tecla 0). */
+  const fitToView = useCallback(() => {
+    const canvas = canvasRef.current;
+    const positions = positionsRef.current;
+    const visibleNodes = frame.current.nodes;
+    if (!canvas || visibleNodes.length === 0) return;
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+    visibleNodes.forEach((node) => {
+      const p = positions.get(node.id);
+      if (!p) return;
+      minX = Math.min(minX, p.x - node.radius);
+      maxX = Math.max(maxX, p.x + node.radius);
+      minY = Math.min(minY, p.y - node.radius);
+      maxY = Math.max(maxY, p.y + node.radius);
+    });
+    if (!Number.isFinite(minX) || !Number.isFinite(minY)) return;
+    const rect = canvas.getBoundingClientRect();
+    // Reserva espaço para os painéis sobrepostos (barra superior e filtros).
+    const availableWidth = Math.max(120, rect.width - 128);
+    const availableHeight = Math.max(120, rect.height - 96);
+    const nextScale = Math.min(
+      2.4,
+      Math.max(
+        0.35,
+        Math.min(availableWidth / Math.max(maxX - minX, 1), availableHeight / Math.max(maxY - minY, 1))
+      )
+    );
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    setScale(nextScale);
+    setOffset({ x: -centerX * nextScale, y: -centerY * nextScale });
+  }, []);
+
+  // Dimensiona o canvas pelo wrapper. O ResizeObserver + deps em `hasData`/`view` garantem o
+  // dimensionamento mesmo quando o canvas só é montado depois de os dados chegarem, e o
+  // reenquadramento automático evita que o grafo fique cortado se o cartão mudar de tamanho.
+  // A medição do wrapper é feita sempre (mesmo sem canvas, como na vista de mapa) porque a
+  // projeção do mapa depende das dimensões reais do contentor.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const applySize = () => {
+      const rect = wrapper.getBoundingClientRect();
+      setSize((current) =>
+        current.width === rect.width && current.height === rect.height
+          ? current
+          : { width: rect.width, height: rect.height }
+      );
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const nextWidth = Math.max(1, Math.floor(rect.width * dpr));
+      const nextHeight = Math.max(1, Math.floor(rect.height * dpr));
+      if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+        canvas.width = nextWidth;
+        canvas.height = nextHeight;
+      }
+      if (!userMovedRef.current && positionsRef.current.size > 0) fitToView();
+      draw();
+    };
+    applySize();
+    const observer = new ResizeObserver(applySize);
+    observer.observe(wrapper);
+    window.addEventListener("resize", applySize);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", applySize);
+    };
+  }, [draw, fitToView, hasData, isExpanded, isFullscreen, view]);
+
+  const toGraphCoords = (clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left - rect.width / 2 - offset.x) / scale,
+      y: (clientY - rect.top - rect.height / 2 - offset.y) / scale,
+    };
+  };
+
+  const hitTestNode = (x: number, y: number) => {
+    const positions = positionsRef.current;
+    return (
+      frame.current.nodes.find((node) => {
+        const p = positions.get(node.id);
+        if (!p) return false;
+        return Math.hypot(p.x - x, p.y - y) <= node.radius + 5;
+      }) ?? null
+    );
+  };
+
+  const hitTestEdge = (x: number, y: number, currentScale: number) => {
+    const positions = positionsRef.current;
+    return (
+      frame.current.edges.find((edge) => {
+        const a = positions.get(edge.source);
+        const b = positions.get(edge.target);
+        if (!a || !b) return false;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const lengthSquared = dx * dx + dy * dy || 1;
+        const projection = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / lengthSquared));
+        const nearX = a.x + projection * dx;
+        const nearY = a.y + projection * dy;
+        return Math.hypot(x - nearX, y - nearY) <= 9 / Math.max(currentScale, 0.3);
+      }) ?? null
+    );
+  };
+
+  // Pan com pointer events (rato, caneta e toque) e captura do ponteiro.
+  const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    draggingRef.current = true;
+    dragMovedRef.current = false;
+    lastPosRef.current = { x: event.clientX, y: event.clientY };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (draggingRef.current) {
+      const dx = event.clientX - lastPosRef.current.x;
+      const dy = event.clientY - lastPosRef.current.y;
+      lastPosRef.current = { x: event.clientX, y: event.clientY };
+      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+        dragMovedRef.current = true;
+        userMovedRef.current = true;
+        setOffset((currentOffset) => ({ x: currentOffset.x + dx, y: currentOffset.y + dy }));
+      }
+      return;
+    }
+    const point = toGraphCoords(event.clientX, event.clientY);
+    const node = hitTestNode(point.x, point.y);
+    const edge = node ? null : hitTestEdge(point.x, point.y, scale);
+    if ((node?.id ?? null) !== (hovered?.id ?? null)) setHovered(node);
+    if (edge !== hoveredEdge) setHoveredEdge(edge);
+    if (node || edge) {
+      const rect = canvas.getBoundingClientRect();
+      setMousePos({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+    }
+  };
+
+  const handlePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    draggingRef.current = false;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  };
+
+  const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (dragMovedRef.current) return;
+    const point = toGraphCoords(event.clientX, event.clientY);
+    const node = hitTestNode(point.x, point.y);
+    if (node) {
+      onNodeClick?.(node);
+      return;
+    }
+    const edge = hitTestEdge(point.x, point.y, scale);
+    if (edge) onEdgeClick?.(edge);
+  };
+
+  const handleCanvasKeyDown = (event: React.KeyboardEvent<HTMLCanvasElement>) => {
+    const step = 48;
+    const pan = (dx: number, dy: number) => {
+      event.preventDefault();
+      userMovedRef.current = true;
+      setOffset((currentOffset) => ({ x: currentOffset.x + dx, y: currentOffset.y + dy }));
+    };
+    if (event.key === "ArrowLeft") pan(step, 0);
+    else if (event.key === "ArrowRight") pan(-step, 0);
+    else if (event.key === "ArrowUp") pan(0, step);
+    else if (event.key === "ArrowDown") pan(0, -step);
+    else if (event.key === "+" || event.key === "=") {
+      event.preventDefault();
+      setScale((current) => Math.min(3, current + 0.15));
+    } else if (event.key === "-" || event.key === "_") {
+      event.preventDefault();
+      setScale((current) => Math.max(0.35, current - 0.15));
+    } else if (event.key === "0") {
+      event.preventDefault();
+      fitToView();
+    }
+  };
+
+  // Zoom com scroll sem arrastar a página (listener não-passivo).
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || view === "map" || view === "list") return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      userMovedRef.current = true;
+      setScale((current) => Math.min(3, Math.max(0.35, current - event.deltaY * 0.0015)));
+    };
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
+  }, [view]);
+
+  useEffect(() => {
+    if (view === "map" || view === "list") return;
+    const data = frame.current;
+    const positions = positionsRef.current;
+    const canvas = canvasRef.current;
+    const rect = canvas?.getBoundingClientRect();
+
+    // Descarta posições de nós que já não pertencem à vista atual.
+    const activeIds = new Set(data.nodes.map((node) => node.id));
+    positions.forEach((_position, id) => {
+      if (!activeIds.has(id)) positions.delete(id);
+    });
+
+    // Semeia posições determinísticas (em anéis por grupo, quando pedido).
+    const groups = new Map<string, SimNode[]>();
+    if (options.groupByRegion) {
+      data.nodes.forEach((node) => {
+        const bucket = groups.get(node.group) ?? [];
+        bucket.push(node);
+        groups.set(node.group, bucket);
+      });
+    }
+    const groupKeys = [...groups.keys()];
+    data.nodes.forEach((node, index) => {
+      if (positions.has(node.id)) return;
+      const bucket = groups.get(node.group) ?? [];
+      positions.set(
+        node.id,
+        seedPosition(
+          options.groupByRegion ? Math.max(bucket.indexOf(node), 0) : index,
+          options.groupByRegion ? Math.max(bucket.length, 1) : data.nodes.length,
+          options.groupByRegion ? Math.max(groupKeys.indexOf(node.group), 0) : 0,
+          options.groupByRegion ? Math.max(groupKeys.length, 1) : 1
+        )
+      );
+    });
+
+    // Layouts determinísticos: anel (circular) e camadas (hierárquico).
+    const applyDeterministicLayout = () => {
+      const width = rect?.width ?? 900;
+      const height = rect?.height ?? 600;
+      if (view === "circular") {
+        const ordered = [...data.nodes].sort(
+          (a, b) => b.degree - a.degree || (b.contracts ?? 0) - (a.contracts ?? 0)
+        );
+        const isRegionRing = ordered.length > 0 && ordered.every((node) => node.type === "regiao");
+        const radius = isRegionRing
+          ? Math.max(120, Math.min(260, Math.min(width, height) * 0.3))
+          : Math.max(140, Math.min(360, Math.min(width, height) * 0.38));
+        ordered.forEach((node, index) => {
+          const angle = (index / Math.max(ordered.length, 1)) * Math.PI * 2 - Math.PI / 2;
+          positions.set(node.id, { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius, vx: 0, vy: 0 });
         });
-        const orderedLevels = ["adjudicante", "outra", "adjudicatario"];
-        orderedLevels.forEach((level, levelIndex) => {
-          const levelNodes = levels.get(level) ?? [];
-          const spacing = Math.max(110, Math.min(220, 760 / Math.max(levelNodes.length, 1)));
-          levelNodes.forEach((node, index) => {
-            node.x = (index - (levelNodes.length - 1) / 2) * spacing;
-            node.y = (levelIndex - 1) * 190;
-            node.vx = 0;
-            node.vy = 0;
+        return;
+      }
+      const laneOf = (node: SimNode) =>
+        node.type === "adjudicante" || node.type === "regiao" ? 0 : node.type === "adjudicatario" ? 2 : 1;
+      [0, 1, 2].forEach((lane) => {
+        const laneNodes = data.nodes.filter((node) => laneOf(node) === lane);
+        const spacing = Math.max(64, Math.min(210, width / Math.max(laneNodes.length, 1)));
+        laneNodes.forEach((node, index) => {
+          positions.set(node.id, {
+            x: (index - (laneNodes.length - 1) / 2) * spacing,
+            y: (lane - 1) * 170,
+            vx: 0,
+            vy: 0,
           });
         });
-      } else if (view === "circular") {
-        const isRegionRoot = renderNodes.length > 0 && renderNodes.every((node) => node.type === "regiao");
-        const radius = isRegionRoot
-          ? Math.max(100, Math.min(220, Math.min(width, height) * 0.23))
-          : Math.max(130, Math.min(330, Math.min(width, height) * 0.36));
-        renderNodes.slice().sort((a, b) => b.degree - a.degree).forEach((node, index, ordered) => {
-          const angle = (index / Math.max(ordered.length, 1)) * Math.PI * 2 - Math.PI / 2;
-          node.x = Math.cos(angle) * radius;
-          node.y = Math.sin(angle) * radius;
-          node.vx = 0;
-          node.vy = 0;
-        });
-      }
+      });
+    };
 
-      // Organic layout: force-directed motion reveals natural clusters.
-      if (view === "network") {
-      for (let i = 0; i < renderNodes.length; i++) {
-        for (let j = i + 1; j < renderNodes.length; j++) {
-          const a = renderNodes[i];
-          const b = renderNodes[j];
-          let dx = a.x - b.x;
-          let dy = a.y - b.y;
-          let dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const force = (2200 * a.mass * b.mass) / (dist * dist);
-          const fx = (dx / dist) * force;
-          const fy = (dy / dist) * force;
-          a.vx += fx / a.mass;
-          a.vy += fy / a.mass;
-          b.vx -= fx / b.mass;
-          b.vy -= fy / b.mass;
+    // Repulsão em grelha espacial (O(n)) em vez de O(n²): escala para redes densas.
+    const cell = 170;
+    const runNetworkStep = () => {
+      const grid = new Map<string, SimNode[]>();
+      data.nodes.forEach((node) => {
+        const p = positions.get(node.id);
+        if (!p) return;
+        const key = `${Math.floor(p.x / cell)}:${Math.floor(p.y / cell)}`;
+        const bucket = grid.get(key) ?? [];
+        bucket.push(node);
+        grid.set(key, bucket);
+      });
+      data.nodes.forEach((node) => {
+        const p = positions.get(node.id);
+        if (!p) return;
+        const cx = Math.floor(p.x / cell);
+        const cy = Math.floor(p.y / cell);
+        for (let gx = cx - 1; gx <= cx + 1; gx++) {
+          for (let gy = cy - 1; gy <= cy + 1; gy++) {
+            const bucket = grid.get(`${gx}:${gy}`);
+            if (!bucket) continue;
+            bucket.forEach((other) => {
+              if (other.id <= node.id) return;
+              const q = positions.get(other.id);
+              if (!q) return;
+              const dx = p.x - q.x;
+              const dy = p.y - q.y;
+              const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+              if (dist > cell * 3) return;
+              const force = (2600 * node.mass * other.mass) / (dist * dist);
+              const fx = (dx / dist) * force;
+              const fy = (dy / dist) * force;
+              p.vx += fx / node.mass;
+              p.vy += fy / node.mass;
+              q.vx -= fx / other.mass;
+              q.vy -= fy / other.mass;
+            });
+          }
         }
-      }
-      renderEdges.forEach((edge) => {
-        const a = renderNodes.find((n) => n.id === edge.source)!;
-        const b = renderNodes.find((n) => n.id === edge.target)!;
+      });
+      data.edges.forEach((edge) => {
+        const a = positions.get(edge.source);
+        const b = positions.get(edge.target);
         if (!a || !b) return;
-        let dx = b.x - a.x;
-        let dy = b.y - a.y;
-        let dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const target = 90;
-        const force = ((dist - target) * 0.025) / 2;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const force = ((dist - 96) * 0.025) / 2;
         const fx = (dx / dist) * force;
         const fy = (dy / dist) * force;
         a.vx += fx;
@@ -699,172 +1195,324 @@ function NetworkCanvas({
         b.vx -= fx;
         b.vy -= fy;
       });
-      renderNodes.forEach((n) => {
-        n.vx -= n.x * 0.003;
-        n.vy -= n.y * 0.003;
-        n.vx *= 0.88;
-        n.vy *= 0.88;
-        n.x += n.vx;
-        n.y += n.vy;
+      let energy = 0;
+      data.nodes.forEach((node) => {
+        const p = positions.get(node.id);
+        if (!p) return;
+        p.vx = (p.vx - p.x * 0.003) * 0.88;
+        p.vy = (p.vy - p.y * 0.003) * 0.88;
+        p.x += p.vx;
+        p.y += p.vy;
+        energy += Math.abs(p.vx) + Math.abs(p.vy);
       });
-      }
+      return energy / Math.max(data.nodes.length, 1);
+    };
 
-      ctx.clearRect(0, 0, width, height);
-      ctx.save();
-      ctx.translate(width / 2 + offset.x, height / 2 + offset.y);
-      ctx.scale(scale, scale);
+    // Só enquadra automaticamente se o utilizador ainda não mexeu na vista.
+    const finish = () => {
+      if (userMovedRef.current) return;
+      fitToView();
+    };
 
-      // edges
-      renderEdges.forEach((edge) => {
-        const a = renderNodes.find((n) => n.id === edge.source)!;
-        const b = renderNodes.find((n) => n.id === edge.target)!;
-        if (!a || !b) return;
-        const key = [edge.source, edge.target].sort().join("-");
-        const isSelected = selectedEdgeKey === key;
-        const isSearchRelated = !nodeSearch || searchMatchIds.has(edge.source) || searchMatchIds.has(edge.target);
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        const baseAlpha = Math.min(0.62, 0.18 + edge.count * 0.045);
-        const alpha = isSelected ? Math.min(0.95, baseAlpha + 0.28) : baseAlpha;
-        ctx.strokeStyle = isSelected
-          ? `rgba(251,191,36,${alpha})`
-          : `rgba(125,211,252,${alpha})`;
-        ctx.globalAlpha = isSearchRelated ? 1 : 0.14;
-        ctx.lineWidth = isSelected
-          ? Math.max(3, Math.log(edge.count + 1) + 1.5)
-          : Math.max(1.5, Math.log(edge.count + 1) + 0.5);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      });
-
-      // nodes
-      renderNodes.forEach((n) => {
-        const isSelected = selectedNodeId === n.id;
-        const isHovered = n.id === hovered?.id;
-        const isSearchMatch = !nodeSearch || searchMatchIds.has(n.id);
-        const nodeRadius = isSelected ? n.radius + 5 : isHovered ? n.radius + 3 : n.radius;
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, nodeRadius, 0, Math.PI * 2);
-        ctx.globalAlpha = isSearchMatch ? 1 : 0.2;
-        ctx.shadowBlur = isSelected || (nodeSearch && isSearchMatch) ? 24 : isHovered ? 18 : 10;
-        ctx.shadowColor = n.color;
-        const fill = ctx.createRadialGradient(
-          n.x - nodeRadius * 0.35,
-          n.y - nodeRadius * 0.35,
-          1,
-          n.x,
-          n.y,
-          nodeRadius
-        );
-        fill.addColorStop(0, n.color);
-        fill.addColorStop(0.38, `${n.color}cc`);
-        fill.addColorStop(1, "rgba(7,21,27,0.98)");
-        ctx.fillStyle = fill;
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.lineWidth = isSelected ? 4 : isHovered ? 3.5 : 2.5;
-        ctx.strokeStyle = isSelected || isHovered ? "#ffffff" : n.color;
-        ctx.stroke();
-        ctx.fillStyle = "#f8fafc";
-        const showLabel = n.type === "regiao" || isSelected || n.id === hovered?.id || n.degree >= (view === "circular" ? 3 : 1);
-        if (showLabel) {
-          ctx.font = isSelected ? "bold 12px ui-sans-serif, system-ui" : isHovered ? "bold 11px ui-sans-serif, system-ui" : "10px ui-sans-serif, system-ui";
-          const text = n.label.length > 18 ? n.label.slice(0, 16) + "…" : n.label;
-          const labelX = n.x + nodeRadius + 6 + (isSelected ? 2 : 0);
-          const labelY = n.y + 3;
-          const labelWidth = ctx.measureText(text).width + 8;
-          ctx.fillStyle = "rgba(3,12,17,0.88)";
-          ctx.fillRect(labelX - 4, labelY - 10, labelWidth, 16);
-          ctx.fillStyle = isSelected || isHovered ? "#ffffff" : "#dbeafe";
-          ctx.fillText(text, labelX, labelY);
-        }
-        ctx.globalAlpha = 1;
-      });
-
-      ctx.restore();
-      if (ticks < 250) {
-        raf = requestAnimationFrame(step);
-      }
+    if (view === "circular" || view === "hierarchical") {
+      applyDeterministicLayout();
+      draw();
+      finish();
+      return;
     }
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [renderNodes, renderEdges, scale, offset, view, hovered, selectedNodeId, selectedEdgeKey, nodeSearch, searchMatchIds]);
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.stopPropagation();
-    setScale((s) => Math.min(3, Math.max(0.5, s - e.deltaY * 0.001)));
+    // Sem movimento animado quando o sistema pede menos animações: assenta o layout de imediato.
+    const reduceMotion = Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+    if (reduceMotion) {
+      for (let tick = 0; tick < 320; tick++) runNetworkStep();
+      draw();
+      finish();
+      return;
+    }
+
+    let raf = 0;
+    let ticks = 0;
+    const loop = () => {
+      const energy = runNetworkStep();
+      draw();
+      ticks += 1;
+      // Para quando o layout estabilizou (ou após o limite de iterações).
+      if (ticks < 480 && Number.isFinite(energy) && energy > 0.4) {
+        raf = requestAnimationFrame(loop);
+      } else {
+        finish();
+      }
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [draw, fitToView, layoutKey, options.groupByRegion, view]);
+
+  const labelForId = (id: string) => nodes.find((node) => node.id === id)?.label ?? id;
+
+  const tooltipVisible = Boolean(hovered || hoveredEdge);
+  const tooltipStyle = {
+    left: Math.max(8, Math.min(mousePos.x + 16, Math.max(size.width - 248, 8))),
+    top: Math.max(8, Math.min(mousePos.y + 16, Math.max(size.height - 112, 8))),
   };
 
   const hoveredInfo = hovered ? (
     <div
-      className="absolute z-20 max-w-[220px] rounded-xl border border-white/10 bg-[#07151b]/95 p-3 shadow-xl pointer-events-none"
-      style={{ left: mousePos.x + 14, top: mousePos.y + 14 }}
+      className="pointer-events-none absolute z-30 w-[236px] rounded-xl border border-white/10 bg-[#07151b]/95 p-3 shadow-xl"
+      style={tooltipStyle}
     >
-      <p className="text-sm font-medium text-foreground">{hovered.label}</p>
-      <p className="text-xs text-muted-foreground capitalize mt-0.5">{hovered.type}</p>
-        <p className="text-xs text-teal-300 mt-1">
-          {hovered.type === "regiao" ? `${compact(hovered.contracts ?? 0)} contratos` : `${hovered.degree} ligações`}
-        </p>
+      <p className="text-sm font-medium text-foreground break-words">{hovered.label}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{nodeTypeLabel(hovered.type)}</p>
+      <p className="mt-1 text-xs text-teal-300">
+        {hovered.type === "regiao" ? `${compact(hovered.contracts ?? 0)} contratos` : `${hovered.degree} ligações`}
+        {hovered.approx ? " · localização aproximada" : ""}
+      </p>
+      <p className="mt-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+        {hovered.type === "contrato" ? "Clique para abrir o contrato" : "Clique para expandir"}
+      </p>
+    </div>
+  ) : hoveredEdge ? (
+    <div
+      className="pointer-events-none absolute z-30 w-[236px] rounded-xl border border-white/10 bg-[#07151b]/95 p-3 shadow-xl"
+      style={tooltipStyle}
+    >
+      <p className="text-xs text-teal-300 break-words">{labelForId(hoveredEdge.source)}</p>
+      <p className="text-xs text-blue-300 break-words">
+        <ArrowRight size={11} className="mr-1 inline" />
+        {labelForId(hoveredEdge.target)}
+      </p>
+      <p className="mt-1.5 text-xs text-muted-foreground">
+        {hoveredEdge.count} contratos · <span className="text-foreground">{money(hoveredEdge.value)}</span>
+      </p>
+      <p className="mt-2 text-[10px] uppercase tracking-wide text-muted-foreground">Clique na linha para ver contratos</p>
     </div>
   ) : null;
 
-  // OSM helpers
-  function deg2num(lat: number, lon: number, zoom: number) {
-    const n = 2 ** zoom;
-    const xtile = Math.floor(((lon + 180) / 360) * n);
-    const latRad = (lat * Math.PI) / 180;
-    const ytile = Math.floor(((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n);
-    return { x: xtile, y: ytile, n };
-  }
+  /**
+   * Projeção Mercator: converte lat/lon em pixels do mundo e centra o mapa no canvas.
+   * A grelha de tiles é calculada a partir do tamanho real do canvas (sem offsets fixos),
+   * garantindo que os nós caem exatamente sobre os tiles.
+   */
+  const mapProjection = useMemo(() => {
+    const zoom = mapZoom;
+    const width = size.width || 800;
+    const height = size.height || 520;
+    const centerX = lonToWorld(mapCenter.lon, zoom);
+    const centerY = latToWorld(mapCenter.lat, zoom);
+    const worldTiles = 2 ** zoom;
 
-  function osmUrl(z: number, x: number, y: number) {
-    return `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
-  }
+    const firstTileX = Math.floor((centerX - width / 2) / TILE_SIZE);
+    const lastTileX = Math.floor((centerX + width / 2) / TILE_SIZE);
+    const firstTileY = Math.max(0, Math.floor((centerY - height / 2) / TILE_SIZE));
+    const lastTileY = Math.min(worldTiles - 1, Math.floor((centerY + height / 2) / TILE_SIZE));
 
-  const mapTiles = useMemo(() => {
-    const { x, y, n } = deg2num(mapCenter.lat, mapCenter.lon, mapZoom);
-    const cols = 4;
-    const rows = 3;
-    const tiles: { url: string; left: number; top: number; x: number; y: number }[] = [];
-    for (let dy = -Math.floor(rows / 2); dy <= Math.floor(rows / 2); dy++) {
-      for (let dx = -Math.floor(cols / 2); dx <= Math.floor(cols / 2); dx++) {
-        const tx = (x + dx + n) % n;
-        const ty = y + dy;
-        if (ty < 0 || ty >= n) continue;
+    const tiles: { key: string; url: string; left: number; top: number }[] = [];
+    for (let tileY = firstTileY; tileY <= lastTileY; tileY++) {
+      for (let tileX = firstTileX; tileX <= lastTileX; tileX++) {
+        const wrappedX = ((tileX % worldTiles) + worldTiles) % worldTiles;
         tiles.push({
-          url: osmUrl(mapZoom, tx, ty),
-          left: (dx + 1.5) * 256 + mapOffset.x,
-          top: (dy + 1) * 256 + mapOffset.y,
-          x: tx,
-          y: ty,
+          key: `${zoom}/${wrappedX}/${tileY}`,
+          url: `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${tileY}.png`,
+          left: width / 2 + (tileX * TILE_SIZE - centerX),
+          top: height / 2 + (tileY * TILE_SIZE - centerY),
         });
       }
     }
-    return tiles;
-  }, [mapCenter, mapZoom, mapOffset]);
 
-  const projectMap = (lat: number, lon: number) => {
-    const { x: cx, y: cy, n } = deg2num(mapCenter.lat, mapCenter.lon, mapZoom);
-    const p = deg2num(lat, lon, mapZoom);
-    const dx = p.x - cx + (p.x < cx - n / 2 ? n : p.x > cx + n / 2 ? -n : 0);
-    const dy = p.y - cy;
     return {
-      left: (dx + 1.5) * 256 + mapOffset.x + 128,
-      top: (dy + 1) * 256 + mapOffset.y + 64,
+      tiles,
+      project: (lat: number, lon: number) => ({
+        left: width / 2 + (lonToWorld(lon, zoom) - centerX),
+        top: height / 2 + (latToWorld(lat, zoom) - centerY),
+      }),
     };
+  }, [mapCenter.lat, mapCenter.lon, mapZoom, size.height, size.width]);
+
+  /**
+   * Nós posicionáveis no mapa. Entidades não têm coordenadas nos dados: quando o grafo
+   * está limitado a uma região, são espalhadas em torno do centroide dessa região
+   * (marcadas como aproximadas); caso contrário não são desenhadas (não se inventam posições).
+   */
+  const regionCenter = useMemo(() => (regionHint ? lookupPlace(regionHint, regionHint) : null), [regionHint]);
+
+  const mapNodes = useMemo(
+    () =>
+      renderNodes.flatMap((node) => {
+        if (node.lat != null && node.lon != null) {
+          return [{ node, lat: node.lat, lon: node.lon, approximated: Boolean(node.approx) }];
+        }
+        if (regionCenter) {
+          const point = jitterAround(regionCenter, node.id);
+          return [{ node, lat: point.lat, lon: point.lon, approximated: true }];
+        }
+        return [];
+      }),
+    [regionCenter, renderNodes]
+  );
+  const approximateNodes = mapNodes.filter((entry) => entry.approximated).length;
+  const unplacedNodes = renderNodes.length - mapNodes.length;
+
+  /**
+   * Enquadra o mapa nos nós visíveis (inclui ilhas e nós estrangeiros) na primeira vez que
+   * a vista é aberta, ou quando o conjunto de nós/modo muda. Não reenquadra depois de o
+   * utilizador ter feito zoom manualmente.
+   */
+  useEffect(() => {
+    if (view !== "map" || mapNodes.length === 0) return;
+    const key = `${regionHint ?? "todos"}|${mapNodes.length}|${Math.round(size.width)}x${Math.round(size.height)}`;
+    if (mapFitKeyRef.current === key || mapManualRef.current) return;
+    mapFitKeyRef.current = key;
+
+    const lats = mapNodes.map((entry) => entry.lat);
+    const lons = mapNodes.map((entry) => entry.lon);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLon = Math.min(...lons);
+    const maxLon = Math.max(...lons);
+    const width = Math.max(320, size.width || 800);
+    const height = Math.max(240, size.height || 520);
+
+    let zoom = 4;
+    for (let candidate = 11; candidate >= 3; candidate--) {
+      const spanX = lonToWorld(maxLon, candidate) - lonToWorld(minLon, candidate);
+      const spanY = latToWorld(minLat, candidate) - latToWorld(maxLat, candidate);
+      if (spanX <= width - 120 && spanY <= height - 120) {
+        zoom = candidate;
+        break;
+      }
+    }
+
+    setMapCenter({ lat: (minLat + maxLat) / 2, lon: (minLon + maxLon) / 2 });
+    setMapZoom(zoom);
+  }, [mapFitNonce, mapNodes, regionHint, size.height, size.width, view]);
+
+  const mapRadius = (radius: number) => Math.max(5, Math.min(13, radius * 0.45));
+
+  const mapBounds = () => {
+    const width = Math.max(320, size.width || 800);
+    const height = Math.max(240, size.height || 520);
+    return { width, height };
   };
 
-  const hasData = renderNodes.length > 0;
+  /** Mantém um ponto geográfico debaixo do cursor/ponto de referência após mudar de zoom. */
+  const zoomMapAt = (deltaZoom: number, anchor?: { x: number; y: number }) => {
+    const nextZoom = Math.max(3, Math.min(18, mapZoom + deltaZoom));
+    if (nextZoom === mapZoom) return;
+    const { width, height } = mapBounds();
+    const offsetX = (anchor?.x ?? width / 2) - width / 2;
+    const offsetY = (anchor?.y ?? height / 2) - height / 2;
+    const anchorLon = worldToLon(lonToWorld(mapCenter.lon, mapZoom) + offsetX, mapZoom);
+    const anchorLat = worldToLat(latToWorld(mapCenter.lat, mapZoom) + offsetY, mapZoom);
+    const centerX = lonToWorld(anchorLon, nextZoom) - offsetX;
+    const centerY = latToWorld(anchorLat, nextZoom) - offsetY;
+    mapManualRef.current = true;
+    setMapZoom(nextZoom);
+    setMapCenter({ lat: worldToLat(centerY, nextZoom), lon: worldToLon(centerX, nextZoom) });
+  };
+
+  const panMapBy = (dx: number, dy: number) => {
+    const centerX = lonToWorld(mapCenter.lon, mapZoom) - dx;
+    const centerY = latToWorld(mapCenter.lat, mapZoom) - dy;
+    mapManualRef.current = true;
+    setMapCenter({ lat: worldToLat(centerY, mapZoom), lon: worldToLon(centerX, mapZoom) });
+  };
+
+  /** Um evento que caia sobre a barra de ferramentas/caixa de pesquisa não navega o mapa. */
+  const isMapChrome = (target: EventTarget | null) => {
+    const element = target as HTMLElement | null;
+    if (!element?.closest) return false;
+    if (element.closest("input")) return true;
+    const button = element.closest("button");
+    return Boolean(button && !button.hasAttribute("data-map-node"));
+  };
+
+  const handleMapPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (view !== "map" || event.button !== 0 || isMapChrome(event.target)) return;
+    mapDragRef.current = { x: event.clientX, y: event.clientY, lat: mapCenter.lat, lon: mapCenter.lon };
+    mapDragMovedRef.current = false;
+    mapWheelAccumRef.current = 0;
+    setMapDragging(true);
+    // Captura o ponteiro para continuar a navegar mesmo que o cursor saia do mapa.
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Alguns apontadores não suportam captura; o arrastar continua a funcionar dentro do mapa.
+    }
+  };
+
+  const handleMapPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = mapDragRef.current;
+    if (!drag) return;
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    if (!mapDragMovedRef.current && Math.hypot(dx, dy) < 4) return;
+    mapDragMovedRef.current = true;
+    // Arrasta o conteúdo com o cursor: o centro desloca-se no sentido inverso ao movimento.
+    const centerX = lonToWorld(drag.lon, mapZoom) - dx;
+    const centerY = latToWorld(drag.lat, mapZoom) - dy;
+    mapManualRef.current = true;
+    setMapCenter({ lat: worldToLat(centerY, mapZoom), lon: worldToLon(centerX, mapZoom) });
+  };
+
+  const handleMapPointerUp = () => {
+    mapDragRef.current = null;
+    setMapDragging(false);
+  };
+
+  const handleMapDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (view !== "map" || isMapChrome(event.target)) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    zoomMapAt(1, { x: event.clientX - rect.left, y: event.clientY - rect.top });
+  };
+
+  const fitMapToNodes = () => {
+    mapManualRef.current = false;
+    mapFitKeyRef.current = "";
+    setMapFitNonce((nonce) => nonce + 1);
+  };
+
+  // Zoom com a roda do rato/apontador, ancorado no cursor (listener não-passivo).
+  // A referência à função mais recente evita re-subscrir o listener a cada movimento do mapa.
+  const zoomMapAtRef = useRef(zoomMapAt);
+  zoomMapAtRef.current = zoomMapAt;
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper || view !== "map") return;
+    const onWheel = (event: WheelEvent) => {
+      if (isMapChrome(event.target)) return;
+      event.preventDefault();
+      mapWheelAccumRef.current += event.deltaY;
+      if (Math.abs(mapWheelAccumRef.current) < 100) return;
+      const direction = mapWheelAccumRef.current < 0 ? 1 : -1;
+      mapWheelAccumRef.current = 0;
+      const rect = wrapper.getBoundingClientRect();
+      zoomMapAtRef.current(direction, { x: event.clientX - rect.left, y: event.clientY - rect.top });
+    };
+    wrapper.addEventListener("wheel", onWheel, { passive: false });
+    return () => wrapper.removeEventListener("wheel", onWheel);
+  }, [view]);
+
+  const handleMapKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = 96;
+    if (event.key === "ArrowLeft") panMapBy(step, 0);
+    else if (event.key === "ArrowRight") panMapBy(-step, 0);
+    else if (event.key === "ArrowUp") panMapBy(0, step);
+    else if (event.key === "ArrowDown") panMapBy(0, -step);
+    else if (event.key === "+" || event.key === "=") zoomMapAt(1);
+    else if (event.key === "-" || event.key === "_") zoomMapAt(-1);
+    else if (event.key === "0") fitMapToNodes();
+    else return;
+    event.preventDefault();
+  };
+
   const handleMapSurfaceClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (view !== "map" || (event.target as HTMLElement).closest("button")) return;
+    if (view !== "map" || mapDragMovedRef.current || (event.target as HTMLElement).closest("button")) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const clickX = event.clientX - rect.left;
     const clickY = event.clientY - rect.top;
-    const nearest = renderNodes
-      .map((node) => {
-        const position = projectMap(node.lat ?? mapCenter.lat, node.lon ?? mapCenter.lon);
-        return { node, distance: Math.hypot(position.left - clickX, position.top - clickY) };
+    const nearest = mapNodes
+      .map((entry) => {
+        const position = mapProjection.project(entry.lat, entry.lon);
+        return { node: entry.node, distance: Math.hypot(position.left - clickX, position.top - clickY) };
       })
       .sort((a, b) => a.distance - b.distance)[0];
     if (nearest && nearest.distance <= 55) onNodeClick?.(nearest.node);
@@ -874,45 +1522,67 @@ function NetworkCanvas({
     <div
       ref={wrapperRef}
       onClick={handleMapSurfaceClick}
-      onPointerDown={handleMapSurfaceClick}
+      onPointerDown={handleMapPointerDown}
+      onPointerMove={handleMapPointerMove}
+      onPointerUp={handleMapPointerUp}
+      onPointerLeave={handleMapPointerUp}
+      onPointerCancel={handleMapPointerUp}
+      onDoubleClick={handleMapDoubleClick}
       className={[
-        isExpanded ? "fixed inset-3 z-[70] shadow-2xl" : "relative w-full h-full",
+        // `absolute inset-0` (e não `h-full`) porque a altura do cartão vem de `min-height`:
+        // percentagens não resolvem nesse caso e o canvas colapsaria para 0.
+        isExpanded ? "fixed inset-3 z-[70] shadow-2xl" : "absolute inset-0",
         "rounded-2xl border border-white/10 bg-[#07151b] overflow-hidden",
+        view === "map" && (mapDragging ? "cursor-grabbing" : "cursor-grab"),
       ].join(" ")}
     >
-      {/* Toolbar */}
-      <div className="pointer-events-auto absolute top-3 right-3 z-40 flex flex-col gap-2">
-        <div className="relative self-end">
+      {/* Barra de ferramentas */}
+      <div className="pointer-events-auto absolute top-3 right-3 z-40 flex flex-col items-end gap-2 rounded-2xl bg-[#07151b]/80 p-1.5 backdrop-blur-sm">
+        <div className="relative">
           <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#07151b]/95 px-2 py-1.5 shadow-xl">
             <Search size={14} className="text-muted-foreground" />
             <input
               value={nodeSearch}
-              onChange={(event) => setNodeSearch(event.target.value)}
+              type="text"
+              onChange={(event) => {
+                setNodeSearch(event.target.value);
+                setSearchFocused(false);
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && searchMatches[0]) onNodeClick?.(searchMatches[0]);
+                if (event.key === "Escape") {
+                  setNodeSearch("");
+                  setSearchFocused(false);
+                }
               }}
-              placeholder="Pesquisar no grafo..."
-              aria-label="Pesquisar no grafo"
-              className="w-48 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
+              placeholder="Pesquisar no grafo…"
+              aria-label="Pesquisar nós no grafo"
+              aria-expanded={Boolean(nodeSearch) && searchMatches.length > 0}
+              aria-controls="graph-search-results"
+              className="w-40 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground sm:w-48"
             />
             {nodeSearch && <span className="text-[10px] text-teal-300">{searchMatches.length}</span>}
             {nodeSearch && searchMatches.length > 0 && (
               <button
                 type="button"
-                onClick={() => setSearchFocused(true)}
-                aria-label="Criar grafo da pesquisa"
-                title="Criar grafo da pesquisa"
+                onClick={() => setSearchFocused((focused) => !focused)}
+                aria-pressed={searchFocused}
+                aria-label={searchFocused ? "Mostrar grafo completo" : "Destacar apenas os resultados da pesquisa"}
+                title={searchFocused ? "Mostrar grafo completo" : "Destacar apenas os resultados da pesquisa"}
                 className={searchFocused ? "rounded bg-teal-400/20 p-1 text-teal-200" : "rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-teal-200"}
               >
                 <Network size={13} />
               </button>
             )}
-            {searchFocused && (
+            {nodeSearch && (
               <button
                 type="button"
-                onClick={() => setSearchFocused(false)}
-                aria-label="Mostrar grafo completo"
-                title="Mostrar grafo completo"
+                onClick={() => {
+                  setNodeSearch("");
+                  setSearchFocused(false);
+                }}
+                aria-label="Limpar pesquisa"
+                title="Limpar pesquisa (Esc)"
                 className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
               >
                 <X size={13} />
@@ -920,7 +1590,10 @@ function NetworkCanvas({
             )}
           </div>
           {nodeSearch && searchMatches.length > 0 && (
-            <div className="absolute right-0 top-full mt-1 w-64 overflow-hidden rounded-lg border border-white/10 bg-[#07151b]/98 shadow-xl">
+            <div
+              id="graph-search-results"
+              className="absolute right-0 top-full mt-1 w-64 overflow-hidden rounded-lg border border-white/10 bg-[#07151b]/98 shadow-xl"
+            >
               {searchMatches.map((match) => (
                 <button
                   key={match.id}
@@ -929,154 +1602,261 @@ function NetworkCanvas({
                   className="block w-full border-b border-white/5 px-3 py-2 text-left last:border-0 hover:bg-white/10"
                 >
                   <span className="block truncate text-xs text-foreground">{match.label}</span>
-                  <span className="block truncate text-[10px] capitalize text-muted-foreground">{match.type} · {match.id}</span>
+                  <span className="block truncate text-[10px] text-muted-foreground">
+                    {nodeTypeLabel(match.type)} · {match.id}
+                  </span>
                 </button>
               ))}
             </div>
           )}
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          {(["network", "hierarchical", "circular", "map", "list"] as GraphView[]).map((v) => (
-            <button
-              key={v}
-              onClick={() => onViewChange(v)}
-              className={[
-                "px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition border",
-                view === v
-                  ? "bg-teal-400/15 text-teal-300 border-teal-400/30"
-                  : "glass-card border-white/10 hover:bg-white/5",
-              ].join(" ")}
-            >
-              {v === "network" && <Network size={14} />}
-              {v === "hierarchical" && <GitBranch size={14} />}
-              {v === "circular" && <Circle size={14} />}
-              {v === "map" && <MapPin size={14} />}
-              {v === "list" && <List size={14} />}
-              {v === "network" ? "Organic" : v === "hierarchical" ? "Hierarchical" : v === "circular" ? "Circular" : v === "map" ? "Mapa" : "Lista"}
-            </button>
-          ))}
+          {(["network", "hierarchical", "circular", "map", "list"] as GraphView[]).map((v) => {
+            const disabled = disabledViews.includes(v);
+            const label =
+              v === "network"
+                ? "Orgânica"
+                : v === "hierarchical"
+                ? "Hierárquica"
+                : v === "circular"
+                ? "Circular"
+                : v === "map"
+                ? "Mapa"
+                : "Lista";
+            return (
+              <button
+                key={v}
+                type="button"
+                onClick={() => onViewChange(v)}
+                disabled={disabled}
+                aria-pressed={view === v}
+                title={disabled ? disabledHint : `Vista ${label}`}
+                className={[
+                  "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50",
+                  view === v
+                    ? "border-teal-400/30 bg-teal-400/15 text-teal-300"
+                    : "glass-card border-white/10 hover:bg-white/5",
+                  disabled ? "cursor-not-allowed opacity-40 hover:bg-transparent" : "",
+                ].join(" ")}
+              >
+                {v === "network" && <Network size={14} />}
+                {v === "hierarchical" && <GitBranch size={14} />}
+                {v === "circular" && <Circle size={14} />}
+                {v === "map" && <MapPin size={14} />}
+                {v === "list" && <List size={14} />}
+                {label}
+              </button>
+            );
+          })}
           <button
+            type="button"
             onClick={() => void toggleFullscreen()}
             aria-label={isFullscreen || isExpanded ? "Sair do ecrã inteiro" : "Abrir ecrã inteiro"}
             title={isFullscreen || isExpanded ? "Sair do ecrã inteiro (Esc)" : "Abrir ecrã inteiro"}
-            className="px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition border glass-card border-white/10 hover:bg-white/5"
+            className="glass-card flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs transition hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
           >
             {isFullscreen || isExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
             {isFullscreen || isExpanded ? "Sair" : "Ecrã inteiro"}
           </button>
         </div>
-        <div className="self-end rounded-lg border border-white/10 bg-[#07151b]/90 px-2.5 py-1 text-[11px] text-muted-foreground">
-          Clique num node para expandir · linha para ver contratos
+        <div className="self-end rounded-lg border border-white/10 bg-[#07151b]/90 px-2.5 py-1 text-right text-[11px] leading-4 text-muted-foreground">
+          {view === "map" ? (
+            <span className="block">Arraste para navegar · roda para zoom · duplo clique aproxima</span>
+          ) : (
+            <span className="block">Clique num nó para expandir · linha para ver contratos</span>
+          )}
         </div>
+      </div>
+
+      {/* Legenda dinâmica: só as categorias presentes na vista atual */}
+      <div className="pointer-events-none absolute left-3 top-3 z-20 hidden max-w-[55%] flex-wrap gap-x-3 gap-y-1 rounded-lg border border-white/10 bg-[#07151b]/85 px-2.5 py-1.5 text-[11px] sm:flex">
+        {legendTypes.map((type) => (
+          <span key={type} className="flex items-center gap-1.5 text-muted-foreground">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: NODE_COLORS[type] || NODE_COLORS.outra }} />
+            {nodeTypeLabel(type)}
+          </span>
+        ))}
       </div>
 
       {hoveredInfo}
 
+      <p className="sr-only" aria-live="polite">
+        {`Vista ${view}. ${renderNodes.length} nós e ${renderEdges.length} ligações visíveis.`}
+      </p>
+
       {!hasData && view !== "list" ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground z-10">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center text-muted-foreground">
           <Search size={32} className="mb-3 opacity-40" />
           <p className="text-sm">Sem dados para visualizar</p>
-          <p className="text-xs mt-1">Escolha uma região ou aguarde carregamento.</p>
+          <p className="mt-1 max-w-xs text-center text-xs">
+            {emptyHint ?? "Escolha uma região na lista lateral ou alivie os filtros do grafo."}
+          </p>
         </div>
       ) : view === "list" ? (
         <div className="absolute inset-0 z-10 overflow-auto bg-[#07151b] p-4 pt-20">
-          <div className="mb-3 flex items-center justify-between border-b border-white/10 pb-2 text-xs text-muted-foreground">
-            <span>{renderNodes.length} nós no grafo</span>
-            <span>Selecione um nó para navegar</span>
+          <div className="mb-3 flex items-center justify-between gap-3 border-b border-white/10 pb-2 text-xs text-muted-foreground">
+            <span className="truncate">
+              {renderNodes.length} nós por centralidade
+              {nodeSearch.trim() ? ` · pesquisa "${nodeSearch.trim()}"` : ""}
+            </span>
+            <span className="shrink-0">Selecione um nó para navegar</span>
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {renderNodes.map((node) => (
-              <button
-                key={node.id}
-                type="button"
-                onClick={() => onNodeClick?.(node)}
-                className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left transition hover:border-teal-300/50 hover:bg-white/[0.08]"
-              >
-                <span className="block truncate text-sm text-foreground">{node.label}</span>
-                <span className="mt-1 block text-xs capitalize text-muted-foreground">
-                  {node.type === "regiao" ? `${compact(node.contracts ?? 0)} contratos` : node.type === "contrato" ? "Contrato" : `${node.degree} ligações`}
-                </span>
-              </button>
-            ))}
+            {[...renderNodes]
+              .sort((a, b) => b.degree - a.degree || (b.contracts ?? 0) - (a.contracts ?? 0))
+              .map((node) => (
+                <button
+                  key={node.id}
+                  type="button"
+                  onClick={() => onNodeClick?.(node)}
+                  className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left transition hover:border-teal-300/50 hover:bg-white/[0.08] focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: node.color }} />
+                    <span className="truncate text-sm text-foreground">{node.label}</span>
+                  </span>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {nodeTypeLabel(node.type)} ·{" "}
+                    {node.type === "regiao" ? `${compact(node.contracts ?? 0)} contratos` : `${node.degree} ligações`}
+                  </span>
+                </button>
+              ))}
           </div>
           {renderNodes.length === 0 && <p className="py-12 text-center text-sm text-muted-foreground">Sem nós para apresentar.</p>}
         </div>
       ) : view === "map" ? (
         <div
-          className="relative w-full h-full overflow-hidden bg-[#0a1f29]"
+          tabIndex={0}
+          role="application"
+          aria-label="Mapa interativo: arraste para deslocar, roda do rato para zoom, setas para navegar, 0 para reenquadrar"
+          onKeyDown={handleMapKeyDown}
+          className="relative h-full w-full touch-none overflow-hidden bg-[#0a1f29] focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
         >
-          {/* OSM tiles */}
-          {mapTiles.map((t) => (
+          {/* Tiles OpenStreetMap (grelha calculada pelo canvas) */}
+          {mapProjection.tiles.map((t) => (
             <img
-              key={`${t.x}-${t.y}`}
+              key={t.key}
               src={t.url}
               alt=""
-              crossOrigin="anonymous"
+              draggable={false}
+              decoding="async"
               className="absolute opacity-70 transition-opacity duration-300"
-              style={{ left: t.left, top: t.top, width: 256, height: 256 }}
-              onLoad={() => setTilesReady((n) => n + 1)}
-              onError={() => setTilesReady((n) => n + 1)}
+              style={{ left: t.left, top: t.top, width: TILE_SIZE, height: TILE_SIZE }}
+              onLoad={() => setTilesLoaded((count) => count + 1)}
+              onError={() => setTilesLoaded((count) => count + 1)}
             />
           ))}
-          {tilesReady < mapTiles.length && mapTiles.length > 0 && (
-            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-xs z-10">
-              <RefreshCw size={16} className="animate-spin mr-2" /> A carregar mapa…
+          {tilesLoaded < mapProjection.tiles.length && mapProjection.tiles.length > 0 && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center text-xs text-muted-foreground">
+              <RefreshCw size={16} className="mr-2 animate-spin" /> A carregar mapa…
             </div>
           )}
-          {/* Overlay nodes */}
-          <div className="absolute inset-0 z-10 pointer-events-auto">
-            {renderNodes.map((n) => {
-              const pos = projectMap(n.lat, n.lon);
+
+          {/* Nós sobrepostos ao mapa */}
+          <div className="absolute inset-0 z-10">
+            {mapNodes.map(({ node, lat, lon, approximated }) => {
+              const pos = mapProjection.project(lat, lon);
               return (
                 <button
-                  key={n.id}
+                  key={node.id}
                   type="button"
+                  data-map-node="true"
                   onClick={(event) => {
+                    // Um arrastar do mapa não deve abrir o nó onde o gesto terminou.
+                    if (mapDragMovedRef.current) return;
                     event.stopPropagation();
-                    onNodeClick?.(n);
+                    onNodeClick?.(node);
                   }}
-                  onPointerDown={(event) => {
-                    event.stopPropagation();
-                    onNodeClick?.(n);
-                  }}
-                  className="absolute z-10 flex cursor-pointer flex-col items-center"
-                  style={{ left: pos.left, top: pos.top, transform: "translate(-50%, -50%)" }}
-                  title={`Abrir ${n.label}`}
+                  className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 cursor-pointer flex-col items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60"
+                  style={{ left: pos.left, top: pos.top }}
+                  aria-label={`${node.label} — ${nodeTypeLabel(node.type)}`}
+                  title={`${node.label}${approximated ? " (posição aproximada)" : ""}`}
                 >
-                  <div
-                    className="rounded-full border-2 shadow-[0_2px_8px_rgba(0,0,0,0.6]"
+                  <span
+                    className="rounded-full border-2 shadow-[0_2px_8px_rgba(0,0,0,0.6)]"
                     style={{
-                      width: n.radius * 2,
-                      height: n.radius * 2,
+                      width: mapRadius(node.radius) * 2,
+                      height: mapRadius(node.radius) * 2,
                       background: "rgba(8,28,36,0.95)",
-                      borderColor: n.color,
+                      borderColor: node.color,
+                      borderStyle: approximated ? "dashed" : "solid",
+                      opacity: approximated ? 0.75 : 1,
                     }}
                   />
-                  <span className="text-[9px] whitespace-nowrap mt-0.5 px-1.5 py-0.5 rounded bg-[#07151b]/90 text-white shadow-sm">
-                    {n.label.length > 14 ? n.label.slice(0, 12) + "…" : n.label}
+                  <span className="mt-0.5 whitespace-nowrap rounded bg-[#07151b]/90 px-1.5 py-0.5 text-[9px] text-white shadow-sm">
+                    {node.label.length > 14 ? `${node.label.slice(0, 12)}…` : node.label}
                   </span>
                 </button>
               );
             })}
           </div>
-          {/* Map controls */}
-          <div className="absolute bottom-3 right-3 flex gap-2">
-            <span className="flex items-center rounded-lg border border-white/10 bg-[#07151b]/90 px-2 text-[11px] text-muted-foreground">
-              {Math.round(scale * 100)}%
+
+          {/* Controlos do mapa (com atribuição obrigatória do OpenStreetMap) */}
+          <div className="absolute bottom-3 right-3 z-20 flex flex-wrap items-center justify-end gap-2">
+            {mapNodes.length > 0 && (
+              <span className="rounded-lg border border-white/10 bg-[#07151b]/90 px-2 py-1 text-[10px] text-muted-foreground">
+                {mapNodes.length} nós no mapa
+              </span>
+            )}
+            {approximateNodes > 0 && (
+              <span
+                className="flex items-center gap-1.5 rounded-lg border border-amber-300/25 bg-[#07151b]/90 px-2 py-1 text-[10px] text-amber-200"
+                title={
+                  regionCenter
+                    ? `${approximateNodes} de ${mapNodes.length} nós não têm coordenadas próprias: foram espalhados dentro de ${regionHint}.`
+                    : `${approximateNodes} de ${mapNodes.length} nós sem coordenadas próprias.`
+                }
+              >
+                <Info size={12} />
+                {approximateNodes}/{mapNodes.length} aproximadas
+              </span>
+            )}
+            {unplacedNodes > 0 && (
+              <span
+                className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-[#07151b]/90 px-2 py-1 text-[10px] text-muted-foreground"
+                title="Entidades não têm coordenadas nos dados. Selecione uma região para as posicionar dentro dessa área."
+              >
+                <Info size={12} />
+                {unplacedNodes} sem localização
+              </span>
+            )}
+            <a
+              href="https://www.openstreetmap.org/copyright"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="rounded-lg border border-white/10 bg-[#07151b]/90 px-2 py-1 text-[10px] text-muted-foreground hover:text-teal-300"
+            >
+              © OpenStreetMap
+            </a>
+            <span className="flex items-center rounded-lg border border-white/10 bg-[#07151b]/90 px-2 py-1 text-[11px] text-muted-foreground">
+              Nível {mapZoom}
             </span>
             <button
-              onClick={() => setMapZoom((z) => Math.min(18, z + 1))}
+              type="button"
+              onClick={fitMapToNodes}
+              aria-label="Reenquadrar mapa nos nós"
+              title="Reenquadrar mapa nos nós"
+              className="glass-card rounded-lg p-1.5 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+            >
+              <Crosshair size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => zoomMapAt(1)}
+              disabled={mapZoom >= 18}
               aria-label="Aproximar mapa"
               title="Aproximar mapa"
-              className="p-1.5 rounded-lg glass-card hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+              className="glass-card rounded-lg p-1.5 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ZoomIn size={16} />
             </button>
             <button
-              onClick={() => setMapZoom((z) => Math.max(3, z - 1))}
+              type="button"
+              onClick={() => zoomMapAt(-1)}
+              disabled={mapZoom <= 3}
               aria-label="Afastar mapa"
               title="Afastar mapa"
-              className="p-1.5 rounded-lg glass-card hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+              className="glass-card rounded-lg p-1.5 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ZoomOut size={16} />
             </button>
@@ -1086,105 +1866,67 @@ function NetworkCanvas({
         <>
           <canvas
             ref={canvasRef}
-            className={`w-full h-full ${hovered ? "cursor-pointer" : "cursor-move"}`}
-            onWheel={handleWheel}
-            onMouseMove={(e) => {
-              const canvas = canvasRef.current;
-              if (!canvas) return;
-              const rect = canvas.getBoundingClientRect();
-              const x = (e.clientX - rect.left - rect.width / 2 - offset.x) / scale;
-              const y = (e.clientY - rect.top - rect.height / 2 - offset.y) / scale;
-              const found = renderNodes.find((n) => {
-                const dx = n.x - x;
-                const dy = n.y - y;
-                return Math.sqrt(dx * dx + dy * dy) <= n.radius + 4;
-              });
-              setHovered(found || null);
-              setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-              if (draggingRef.current) {
-                const dx = e.clientX - lastPosRef.current.x;
-                const dy = e.clientY - lastPosRef.current.y;
-                lastPosRef.current = { x: e.clientX, y: e.clientY };
-                dragMovedRef.current = dragMovedRef.current || Math.abs(dx) > 2 || Math.abs(dy) > 2;
-                setOffset((o) => ({ x: o.x + dx, y: o.y + dy }));
-              }
-            }}
-            onMouseDown={(e) => {
-              draggingRef.current = true;
-              dragMovedRef.current = false;
-              lastPosRef.current = { x: e.clientX, y: e.clientY };
-            }}
-            onMouseUp={() => {
-              draggingRef.current = false;
-            }}
-            onClick={(e) => {
-              if (dragMovedRef.current) return;
-              const canvas = canvasRef.current;
-              if (!canvas) return;
-              const rect = canvas.getBoundingClientRect();
-              const x = (e.clientX - rect.left - rect.width / 2 - offset.x) / scale;
-              const y = (e.clientY - rect.top - rect.height / 2 - offset.y) / scale;
-              const found = renderNodes.find((n) => {
-                const dx = n.x - x;
-                const dy = n.y - y;
-                return Math.sqrt(dx * dx + dy * dy) <= n.radius + 4;
-              });
-              if (found) {
-                onNodeClick?.(found);
-                return;
-              }
-              const edgeHit = renderEdges.find((edge) => {
-                const source = renderNodes.find((n) => n.id === edge.source);
-                const target = renderNodes.find((n) => n.id === edge.target);
-                if (!source || !target) return false;
-                const dx = target.x - source.x;
-                const dy = target.y - source.y;
-                const lengthSquared = dx * dx + dy * dy || 1;
-                const projection = Math.max(
-                  0,
-                  Math.min(1, ((x - source.x) * dx + (y - source.y) * dy) / lengthSquared)
-                );
-                const nearX = source.x + projection * dx;
-                const nearY = source.y + projection * dy;
-                return Math.hypot(x - nearX, y - nearY) <= 8 / scale;
-              });
-              if (edgeHit) {
-                onEdgeClick?.(edgeHit);
-              }
-            }}
-            onMouseLeave={() => {
+            role="img"
+            tabIndex={0}
+            aria-label={`Grafo interativo com ${renderNodes.length} nós e ${renderEdges.length} ligações. Use as setas para mover, mais e menos para zoom, zero para ajustar à vista.`}
+            className={`absolute inset-0 h-full w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-400/50 ${
+              tooltipVisible ? "cursor-pointer" : "cursor-move"
+            }`}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={() => {
               draggingRef.current = false;
               setHovered(null);
+              setHoveredEdge(null);
             }}
+            onClick={handleCanvasClick}
+            onKeyDown={handleCanvasKeyDown}
           />
-          <div className="absolute bottom-3 right-3 flex gap-2">
-            <span className="flex items-center rounded-lg border border-white/10 bg-[#07151b]/90 px-2 text-[11px] text-muted-foreground">
+          <div className="absolute bottom-3 right-3 z-20 flex items-center gap-2">
+            <span className="flex items-center rounded-lg border border-white/10 bg-[#07151b]/90 px-2 py-1 text-[11px] text-muted-foreground">
               {Math.round(scale * 100)}%
             </span>
             <button
+              type="button"
               onClick={() => {
-                setScale(1);
-                setOffset({ x: 0, y: 0 });
+                userMovedRef.current = false;
+                positionsRef.current.clear();
+                setLayoutRun((run) => run + 1);
               }}
-              aria-label="Recentrar grafo"
-              title="Recentrar grafo"
-              className="p-1.5 rounded-lg glass-card hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+              aria-label="Voltar a calcular o layout"
+              title="Voltar a calcular o layout"
+              className="glass-card rounded-lg p-1.5 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
             >
-              <RefreshCw size={16} />
+              <Shuffle size={16} />
             </button>
             <button
-              onClick={() => setScale((s) => Math.min(3, s + 0.2))}
+              type="button"
+              onClick={() => {
+                userMovedRef.current = true;
+                fitToView();
+              }}
+              aria-label="Ajustar à vista"
+              title="Ajustar à vista (0)"
+              className="glass-card rounded-lg p-1.5 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+            >
+              <Scan size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setScale((current) => Math.min(3, current + 0.2))}
               aria-label="Aproximar"
-              title="Aproximar"
-              className="p-1.5 rounded-lg glass-card hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+              title="Aproximar (+)"
+              className="glass-card rounded-lg p-1.5 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
             >
               <ZoomIn size={16} />
             </button>
             <button
-              onClick={() => setScale((s) => Math.max(0.5, s - 0.2))}
+              type="button"
+              onClick={() => setScale((current) => Math.max(0.35, current - 0.2))}
               aria-label="Afastar"
-              title="Afastar"
-              className="p-1.5 rounded-lg glass-card hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+              title="Afastar (-)"
+              className="glass-card rounded-lg p-1.5 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
             >
               <ZoomOut size={16} />
             </button>
@@ -1192,59 +1934,95 @@ function NetworkCanvas({
         </>
       )}
 
-      {/* Filter panel */}
-      <div className="absolute bottom-3 left-3 z-20 max-w-[260px] rounded-xl border border-white/10 bg-[#07151b]/95 p-3 shadow-xl">
-        <p className="text-xs font-semibold mb-2 flex items-center gap-1.5">
-          <Filter size={12} /> Filtros do grafo
-        </p>
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <label className="text-[11px] text-muted-foreground">Máx nós</label>
+      {/* Painel de filtros: colapsável, com contadores em direto */}
+      <div className="absolute bottom-3 left-3 z-20 w-[250px] overflow-hidden rounded-xl border border-white/10 bg-[#07151b]/95 shadow-xl">
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((open) => !open)}
+          aria-expanded={filtersOpen}
+          aria-controls="graph-filter-panel"
+          className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-400/50"
+        >
+          <Filter size={12} />
+          Filtros
+          {activeFilterCount > 0 && (
+            <span className="rounded-full bg-teal-400/20 px-1.5 text-[10px] font-medium text-teal-200">
+              {activeFilterCount}
+            </span>
+          )}
+          <span className="ml-auto flex items-center gap-1 text-[10px] font-normal text-muted-foreground">
+            {renderNodes.length} nós · {renderEdges.length} arestas
+          </span>
+          <ChevronDown size={13} className={`transition-transform ${filtersOpen ? "" : "-rotate-90"}`} />
+        </button>
+
+        <div id="graph-filter-panel" className={filtersOpen ? "space-y-2 px-3 pb-3" : "hidden"}>
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-[11px] text-muted-foreground" htmlFor="graph-max-nodes">
+              Máx. nós
+            </label>
             <input
+              id="graph-max-nodes"
               type="range"
               min={10}
               max={Math.max(maxNodes, 100)}
               value={Math.min(options.nodeLimit || maxNodes, maxNodes)}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setOptions((o) => ({
-                  ...o,
-                  nodeLimit: v >= maxNodes ? Number.MAX_SAFE_INTEGER : v,
+              aria-valuetext={`${Math.min(options.nodeLimit || maxNodes, maxNodes)} nós`}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                setOptions((current) => ({
+                  ...current,
+                  nodeLimit: value >= maxNodes ? Number.MAX_SAFE_INTEGER : value,
                 }));
               }}
-              className="w-24 accent-teal-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50 rounded"
+              className="w-24 rounded accent-teal-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
             />
-            <span className="text-[11px] w-8 text-right">{(options.nodeLimit || 0) >= maxNodes ? "All" : options.nodeLimit}</span>
+            <span className="w-8 text-right text-[11px]">
+              {(options.nodeLimit || 0) >= maxNodes ? "Todos" : options.nodeLimit}
+            </span>
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <label className="text-[11px] text-muted-foreground">Máx arestas</label>
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-[11px] text-muted-foreground" htmlFor="graph-max-edges">
+              Máx. arestas
+            </label>
             <input
+              id="graph-max-edges"
               type="range"
               min={10}
               max={Math.max(maxEdges, 400)}
               value={Math.min(options.edgeLimit || maxEdges, maxEdges)}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setOptions((o) => ({
-                  ...o,
-                  edgeLimit: v >= maxEdges ? Number.MAX_SAFE_INTEGER : v,
+              aria-valuetext={`${Math.min(options.edgeLimit || maxEdges, maxEdges)} arestas`}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                setOptions((current) => ({
+                  ...current,
+                  edgeLimit: value >= maxEdges ? Number.MAX_SAFE_INTEGER : value,
                 }));
               }}
-              className="w-24 accent-teal-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50 rounded"
+              className="w-24 rounded accent-teal-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
             />
-            <span className="text-[11px] w-8 text-right">{(options.edgeLimit || 0) >= maxEdges ? "All" : options.edgeLimit}</span>
+            <span className="w-8 text-right text-[11px]">
+              {(options.edgeLimit || 0) >= maxEdges ? "Todas" : options.edgeLimit}
+            </span>
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <label className="text-[11px] text-muted-foreground">Valor mín. (€)</label>
+          <div className="flex items-center justify-between gap-2">
+            <label className="text-[11px] text-muted-foreground" htmlFor="graph-min-value">
+              Valor mín.
+            </label>
             <input
+              id="graph-min-value"
               type="number"
               min={0}
               step={1000}
               value={options.minValue}
-              onChange={(e) => setOptions((o) => ({ ...o, minValue: Number(e.target.value) }))}
-              className="w-20 bg-white/5 border border-white/10 rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus-visible:border-teal-400/50 focus-visible:ring-1 focus-visible:ring-teal-400/30"
+              aria-label="Valor mínimo do contrato em euros"
+              onChange={(event) => setOptions((current) => ({ ...current, minValue: Number(event.target.value) }))}
+              className="w-20 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[11px] focus:outline-none focus-visible:border-teal-400/50 focus-visible:ring-1 focus-visible:ring-teal-400/30"
             />
           </div>
+          <p className="text-right text-[10px] text-muted-foreground">
+            {options.minValue > 0 ? `≥ ${money(options.minValue)}` : "sem limite de valor"}
+          </p>
           <div className="flex flex-wrap gap-2 pt-1">
             {[
               { key: "showAdjudicantes", label: "Adjudicantes" },
@@ -1252,24 +2030,32 @@ function NetworkCanvas({
               { key: "showContracts", label: "Contratos" },
               { key: "pruneLeaves", label: "Sem folhas" },
               { key: "hideSupernodes", label: "Ocultar supernós" },
-              { key: "groupByRegion", label: "Agrupar por região" },
+              {
+                key: "groupByRegion",
+                label: isRegionLevel ? "Agrupar por região" : "Agrupar por tipo",
+              },
             ].map((opt) => {
               const key = opt.key as keyof typeof options;
               const checked = Boolean(options[key]);
+              const hint =
+                key === "pruneLeaves"
+                  ? "Esconde nós com uma única ligação"
+                  : key === "hideSupernodes"
+                  ? "Esconde nós com muitas ligações (supernós)"
+                  : key === "groupByRegion"
+                  ? "Dispõe os nós em anéis agrupados"
+                  : `Mostrar ${opt.label.toLowerCase()}`;
               return (
-                <label
-                  key={opt.key}
-                  className="flex items-center gap-1.5 text-[11px] cursor-pointer select-none"
-                >
-                  <span className="relative inline-flex items-center justify-center w-4 h-4 rounded border border-white/20 bg-white/5 transition focus-within:ring-2 focus-within:ring-teal-400/50">
+                <label key={opt.key} title={hint} className="flex cursor-pointer select-none items-center gap-1.5 text-[11px]">
+                  <span className="relative inline-flex h-4 w-4 items-center justify-center rounded border border-white/20 bg-white/5 transition focus-within:ring-2 focus-within:ring-teal-400/50">
                     <input
                       type="checkbox"
                       className="peer sr-only"
                       checked={checked}
-                      onChange={(e) => setOptions((o) => ({ ...o, [key]: e.target.checked }))}
+                      onChange={(event) => setOptions((current) => ({ ...current, [key]: event.target.checked }))}
                     />
                     <svg
-                      className={`w-3 h-3 text-teal-400 transition ${checked ? "opacity-100" : "opacity-0"}`}
+                      className={`h-3 w-3 text-teal-400 transition ${checked ? "opacity-100" : "opacity-0"}`}
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -1283,6 +2069,17 @@ function NetworkCanvas({
               );
             })}
           </div>
+          <button
+            type="button"
+            onClick={() => setOptions({ ...DEFAULT_GRAPH_OPTIONS })}
+            disabled={activeFilterCount === 0}
+            className="mt-1 w-full rounded-lg border border-white/10 px-2 py-1 text-[11px] text-muted-foreground transition hover:bg-white/10 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Repor filtros
+          </button>
+          <p className="text-[10px] leading-4 text-muted-foreground">
+            Arrastar para mover · scroll para zoom · 0 ajusta à vista
+          </p>
         </div>
       </div>
     </div>
@@ -1354,6 +2151,7 @@ function ModuleSidebar({
         { id: "contracts", label: "Contratos Públicos", icon: FileSearch },
         { id: "entities", label: "Entidades", icon: Building2 },
         { id: "graph", label: "Grafo de Relações", icon: Network },
+        { id: "studio", label: "Grafos & Visualizações", icon: GitBranch },
         { id: "analysis", label: "Análise e Relatórios", icon: BarChart3 },
         { id: "favorites", label: "Favoritos", icon: FolderHeart },
         { id: "settings", label: "Configurações", icon: Settings },
@@ -2255,9 +3053,11 @@ function errMsg(e: unknown, fallback = "Erro") {
 function GraphSection({
   onEntity,
   onContract,
+  onStudio,
 }: {
   onEntity: (nif: string) => void;
   onContract: (id: string) => void;
+  onStudio?: () => void;
 }) {
   const [regions, setRegions] = useState<ContractRegionalRow[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
@@ -2277,17 +3077,16 @@ function GraphSection({
   const requestVersionRef = useRef(0);
 
   const activeRegion = selectedRegion;
+  // Todos os grupos regionais entram no grafo, incluindo "Não especificado" (contratos sem NUTs).
   const regionOverviewGraph = useMemo<ContractGraphResponse>(
     () => ({
-      nodes: regions
-        .filter((region) => !/não especificado/i.test(region.key))
-        .map((region) => ({
-          id: region.key,
-          label: region.key,
-          type: "regiao",
-          count: region.count ?? 0,
-          total_value: region.total_value ?? 0,
-        })),
+      nodes: regions.map((region) => ({
+        id: region.key,
+        label: region.key,
+        type: "regiao",
+        count: region.count ?? 0,
+        total_value: region.total_value ?? 0,
+      })),
       edges: [],
     }),
     [regions]
@@ -2314,7 +3113,8 @@ function GraphSection({
 
   useEffect(() => {
     if (!activeRegion) {
-      setView("circular");
+      // Ao voltar às regiões só "Orgânica"/"Hierárquica" deixam de fazer sentido.
+      setView((current) => (current === "network" || current === "hierarchical" ? "circular" : current));
       setRegionNetwork(null);
       setSelectedEntity(null);
       setEntityNetwork(null);
@@ -2478,11 +3278,36 @@ function GraphSection({
   }, [entityContracts, entityNetwork, selectedEntity]);
 
   const activeNetwork = selectedEntity ? entityGraphWithContracts : activeRegion ? regionNetwork : regionOverviewGraph;
-  const graphView = !activeRegion && view !== "map" && view !== "list" ? "circular" : view;
+  // Sem override silencioso: no nível de regiões os layouts de força ficam desativados na barra.
+  const graphView = view;
+  const disabledGraphViews: GraphView[] = activeRegion ? [] : ["network", "hierarchical"];
   const activeNodeId = selectedEntity?.id ?? null;
 
+  const legendEntries = useMemo(() => {
+    const types = new Set((activeNetwork?.nodes ?? []).map((node) => node.type));
+    const entries = NODE_LEGEND.filter((entry) => types.has(entry.type));
+    return entries.length > 0 ? entries : NODE_LEGEND;
+  }, [activeNetwork]);
+
   const breadcrumb = useMemo(() => {
-    const steps: { label: string; onClick?: () => void }[] = [{ label: "Regiões" }];
+    const steps: { label: string; onClick?: () => void }[] = [
+      {
+        label: "Regiões",
+        // Permite voltar ao nível das regiões diretamente pelo breadcrumb.
+        onClick: activeRegion
+          ? () => {
+              setSelectedRegion(null);
+              setSelectedEntity(null);
+              setEntityNetwork(null);
+              setEntityContracts([]);
+              setRelations(null);
+              setSelectedEdgeKey(null);
+              setPairSelection(null);
+              setPairContracts(null);
+            }
+          : undefined,
+      },
+    ];
     if (activeRegion) {
       const r = regions.find((x) => x.key === activeRegion);
       steps.push({
@@ -2543,6 +3368,17 @@ function GraphSection({
             ))}
           </div>
         </div>
+        {onStudio && (
+          <button
+            type="button"
+            onClick={onStudio}
+            className="glass-card flex shrink-0 items-center gap-2 self-start rounded-xl border border-white/10 px-3 py-2 text-xs hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50 md:self-end"
+            title="Construir grafos por dimensões (CPV, território, concorrência, fluxos de valor)"
+          >
+            <GitBranch size={14} className="text-teal-300" />
+            Grafos &amp; Visualizações
+          </button>
+        )}
       </div>
 
       {error && (
@@ -2555,7 +3391,7 @@ function GraphSection({
         </div>
       )}
 
-      <div className="flex flex-col xl:flex-row gap-4 w-full flex-1 min-h-0">
+      <div className="flex flex-col xl:flex-row gap-4 w-full flex-1 min-h-0 xl:max-h-[calc(100vh-15rem)]">
         <Card className="p-0 overflow-hidden min-w-0 flex-1 w-full flex flex-col min-h-[520px]">
           {/* Breadcrumb toolbar */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#07151b]/80">
@@ -2615,6 +3451,8 @@ function GraphSection({
                 selectedEdgeKey={selectedEdgeKey}
                 onNodeClick={handleSelectGraphNode}
                 onEdgeClick={handleSelectEdge}
+                disabledViews={disabledGraphViews}
+                regionHint={activeRegion}
               />
             )}
 
@@ -2640,7 +3478,8 @@ function GraphSection({
                   <button
                     key={r.key}
                     onClick={() => setSelectedRegion(r.key)}
-                    className="w-full text-left rounded-xl border border-white/8 bg-white/[0.03] hover:bg-white/[0.06] px-3 py-2.5 transition"
+                    title={`Explorar ${r.key}`}
+                    className="w-full text-left rounded-xl border border-white/8 bg-white/[0.03] hover:bg-white/[0.06] px-3 py-2.5 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm truncate">{r.key}</span>
@@ -2662,23 +3501,19 @@ function GraphSection({
               <Card>
                 <h3 className="font-semibold mb-3">Legenda</h3>
                 <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-[#2dd4bf]" />
-                    <span>Adjudicante</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-[#60a5fa]" />
-                    <span>Adjudicatário</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-[#f59e0b]" />
-                    <span>Ambos os papéis</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-[#a78bfa]" />
-                    <span>Contrato</span>
-                  </div>
+                  {legendEntries.map((entry) => (
+                    <div key={entry.type} className="flex items-center gap-2">
+                      <span
+                        className="w-3 h-3 shrink-0 rounded-full"
+                        style={{ background: NODE_COLORS[entry.type] || NODE_COLORS.outra }}
+                      />
+                      <span>{entry.label}</span>
+                    </div>
+                  ))}
                 </div>
+                <p className="mt-3 text-[11px] leading-4 text-muted-foreground">
+                  O tamanho do nó reflete a centralidade; a espessura da linha, o número de contratos do par.
+                </p>
               </Card>
 
               <Card className="flex-1 flex flex-col min-h-0">
@@ -3745,7 +4580,9 @@ export default function EmpresasIQPage({
       case "entities":
         return <EntitiesSection onEntity={openEntity} />;
       case "graph":
-        return <GraphSection onEntity={openEntity} onContract={openContract} />;
+        return <GraphSection onEntity={openEntity} onContract={openContract} onStudio={() => setSection("studio")} />;
+      case "studio":
+        return <GraphStudioPage />;
       case "analysis":
         return <AnalysisSection analytics={analytics} regional={regional} onEntity={openEntity} />;
       case "favorites":
@@ -3795,7 +4632,7 @@ export default function EmpresasIQPage({
       </div>
       {detail && (
         <div
-          className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/70 p-3 backdrop-blur-md sm:p-6 lg:p-10"
+          className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-[#03080b]/55 p-3 backdrop-blur-sm sm:p-6 lg:p-10"
           role="dialog"
           aria-modal="true"
           aria-label={detail.type === "entity" ? "Ficha da entidade" : "Detalhe do contrato"}
@@ -3803,13 +4640,13 @@ export default function EmpresasIQPage({
             if (event.target === event.currentTarget) closeDetail();
           }}
         >
-          <div className="relative w-full max-w-6xl rounded-2xl border border-white/15 bg-[#07151b]/95 shadow-2xl shadow-black/50 backdrop-blur-xl">
+          <div className="relative w-full max-w-6xl glass-modal gradient-border rounded-2xl">
             <button
               type="button"
               onClick={closeDetail}
               aria-label="Fechar ficha"
               title="Fechar ficha (Esc)"
-              className="absolute right-3 top-3 z-10 rounded-lg border border-white/10 bg-white/[0.06] p-2 text-muted-foreground transition hover:bg-white/10 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+              className="absolute right-3 top-3 z-10 rounded-lg border border-white/10 bg-white/[0.06] p-2 text-muted-foreground backdrop-blur-sm transition hover:bg-white/10 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
             >
               <X size={18} />
             </button>

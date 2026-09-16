@@ -35,6 +35,7 @@ export type AppView =
   | "companies-search"
   | "companies-dashboard"
   | "company-detail"
+  | "entities-search"
   | "empresas-iq"
   | "import"
   | "contracts-list";
@@ -77,7 +78,8 @@ const groups: NavGroup[] = [
     label: "Diretório de Empresas",
     icon: <Building2 size={18} />,
     items: [
-      { id: "companies-search", label: "Pesquisar Empresas", icon: <Search size={18} />, match: ["companies", "companies-search"] },
+      { id: "entities-search", label: "Pesquisar Empresas", icon: <Search size={18} />, match: ["entities-search"] },
+      { id: "companies-search", label: "Pesquisar Entidades (Contratos)", icon: <Search size={18} />, match: ["companies", "companies-search"] },
       { id: "companies-dashboard", label: "Dashboard Empresas", icon: <BarChart3 size={18} />, match: ["companies-dashboard"] },
     ],
   },

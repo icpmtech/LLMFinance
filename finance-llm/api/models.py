@@ -800,6 +800,26 @@ class ContractGraphResponse(BaseModel):
     error: Optional[str] = None
 
 
+class ContractGraphBuildResponse(BaseModel):
+    """Grafo construído dinamicamente a partir de dimensões dos contratos."""
+
+    nodes: List[Dict[str, Any]] = []
+    edges: List[Dict[str, Any]] = []
+    meta: Dict[str, Any] = {}
+    error: Optional[str] = None
+
+
+class GraphDimensionOption(BaseModel):
+    key: str
+    label: str
+    type: str
+
+
+class GraphDimensionsResponse(BaseModel):
+    dimensions: List[GraphDimensionOption] = []
+    error: Optional[str] = None
+
+
 class ContractRelationsResponse(BaseModel):
     relations: List[Dict[str, Any]] = []
     error: Optional[str] = None
@@ -829,6 +849,10 @@ class CompanyDetail(CompanySummary):
     top_adjudicantes: List[ContractPartyParsed] = []
     top_adjudicatarios: List[ContractPartyParsed] = []
     recent_contracts: List[ContractItem] = []
+    trademarks: List["TrademarkItem"] = []
+    trademarks_total: int = 0
+    firmas: List["FirmaItem"] = []
+    firmas_total: int = 0
 
 
 class CompanySearchRequest(BaseModel):
@@ -851,6 +875,11 @@ class CompanySearchResponse(BaseModel):
     items: List[CompanySummary] = []
     from_: int = Field(0, alias="from")
     size: int = 20
+    # NIF distintos encontrados pelos filtros (contagens reais de adjudicantes e
+    # adjudicatários). `total` refere-se apenas à lista de entidades devolvida,
+    # limitada aos NIF mais relevantes por papel.
+    unique_adjudicantes: int = 0
+    unique_adjudicatarios: int = 0
     error: Optional[str] = None
 
 
@@ -887,3 +916,270 @@ class CompanyAnalyticsResponse(BaseModel):
     by_value_range: List[CompanyAnalyticsRow] = []
     year: Optional[int] = None
     error: Optional[str] = None
+
+
+# --- Marcas do INPI (enriquecimento da ficha da empresa) ---
+
+class TrademarkEntity(BaseModel):
+    name: Optional[str] = None
+    nif: Optional[str] = None
+    role: Optional[str] = None
+
+
+class TrademarkPhase(BaseModel):
+    phase: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+
+class TrademarkDocument(BaseModel):
+    doc_id: Optional[str] = None
+    type: Optional[str] = None
+    description: Optional[str] = None
+    url: Optional[str] = None
+
+
+class TrademarkItem(BaseModel):
+    nord: Optional[int] = None
+    process_number: Optional[str] = None
+    mark_name: Optional[str] = None
+    mark_type: Optional[str] = None
+    modality: Optional[str] = None
+    holder_name: Optional[str] = None
+    holder_nif: Optional[str] = None
+    company_nif: Optional[str] = None
+    application_date: Optional[str] = None
+    current_phase: Optional[str] = None
+    phase_start_date: Optional[str] = None
+    phase_end_date: Optional[str] = None
+    nice_classes: List[str] = []
+    entities: List[TrademarkEntity] = []
+    phases: List[TrademarkPhase] = []
+    documents: List[TrademarkDocument] = []
+    source_query: Optional[str] = None
+    ingested_at: Optional[str] = None
+    doc_id: Optional[str] = None
+    score: Optional[float] = None
+    holder_similarity: Optional[float] = None
+
+
+class CompanyTrademarksResponse(BaseModel):
+    nif: Optional[str] = None
+    name: Optional[str] = None
+    total: int = 0
+    items: List[TrademarkItem] = []
+    from_: int = Field(0, alias="from")
+    size: int = 100
+    error: Optional[str] = None
+
+
+class TrademarkSearchRequest(BaseModel):
+    q: Optional[str] = None
+    holder_name: Optional[str] = None
+    nice_class: Optional[str] = None
+    mark_type: Optional[str] = None
+    current_phase: Optional[str] = None
+    size: int = 20
+    from_: int = Field(0, alias="from")
+
+
+class TrademarkSearchResponse(BaseModel):
+    query: Optional[str] = None
+    total: int = 0
+    items: List[TrademarkItem] = []
+    from_: int = Field(0, alias="from")
+    size: int = 20
+    error: Optional[str] = None
+
+
+class TrademarkIngestRequest(BaseModel):
+    nif: Optional[str] = Field(None, description="NIF da empresa (para associar as marcas)")
+    name: str = Field(..., description="Nome da empresa/titular a pesquisar no INPI")
+    max_results: Optional[int] = Field(None, ge=1, le=200, description="Limite de marcas a obter")
+    include_detail: bool = Field(True, description="Carregar o detalhe completo de cada marca")
+
+
+class TrademarkIngestResponse(BaseModel):
+    nif: Optional[str] = None
+    name: Optional[str] = None
+    fetched: int = 0
+    indexed_count: int = 0
+    errors: int = 0
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
+# --- Firmas / nomes comerciais RNPC (Pesquisa de Nomes Existentes) ---
+
+class FirmaItem(BaseModel):
+    nome: Optional[str] = None
+    nipc: Optional[str] = None
+    company_nif: Optional[str] = None
+    numero_certificado: Optional[str] = None
+    certificado_admissibilidade: Optional[str] = None
+    concelho: Optional[str] = None
+    concelho_sede: Optional[str] = None
+    situacao: Optional[str] = None
+    situacao_detalhe: Optional[str] = None
+    cae_principal: Optional[str] = None
+    score: Optional[float] = None
+    search_query: Optional[str] = None
+    source: Optional[str] = None
+    ingested_at: Optional[str] = None
+    doc_id: Optional[str] = None
+    name_similarity: Optional[float] = None
+
+
+class CompanyFirmasResponse(BaseModel):
+    nif: Optional[str] = None
+    name: Optional[str] = None
+    total: int = 0
+    items: List[FirmaItem] = []
+    from_: int = Field(0, alias="from")
+    size: int = 100
+    error: Optional[str] = None
+
+
+class FirmaSearchRequest(BaseModel):
+    q: Optional[str] = None
+    concelho: Optional[str] = None
+    cae: Optional[str] = None
+    situacao: Optional[str] = None
+    min_score: Optional[float] = None
+    size: int = 20
+    from_: int = Field(0, alias="from")
+
+
+class FirmaSearchResponse(BaseModel):
+    query: Optional[str] = None
+    total: int = 0
+    items: List[FirmaItem] = []
+    from_: int = Field(0, alias="from")
+    size: int = 20
+    error: Optional[str] = None
+
+
+class FirmaIngestRequest(BaseModel):
+    name: str = Field(..., description="Nome/firma a pesquisar no Registo Nacional de Pessoas Colectivas")
+    nif: Optional[str] = Field(None, description="NIF da empresa na nossa base (associação)")
+    cae: Optional[str] = Field(None, description="Filtrar por C.A.E. (opcional)")
+    concelho: Optional[str] = Field(None, description="Código de concelho do serviço (opcional)")
+    max_results: Optional[int] = Field(None, ge=1, le=20, description="Limite de firmas (máx. 20)")
+    include_detail: bool = Field(True, description="Carregar ficha de detalhe (CAE, concelho da sede)")
+
+
+class FirmaIngestResponse(BaseModel):
+    nif: Optional[str] = None
+    name: Optional[str] = None
+    fetched: int = 0
+    indexed_count: int = 0
+    errors: int = 0
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
+class CompanyEnrichmentResponse(BaseModel):
+    """Resultado combinado do enriquecimento de uma empresa (marcas INPI + firmas RNPC)."""
+
+    nif: Optional[str] = None
+    name: Optional[str] = None
+    trademarks: Optional[TrademarkIngestResponse] = None
+    firmas: Optional[FirmaIngestResponse] = None
+    error: Optional[str] = None
+
+
+# --- Cadastro de entidades do portal base (finance_entities) ---
+
+class EntityItem(BaseModel):
+    nif: Optional[str] = None
+    name: str
+    country: Optional[str] = None
+    country_code: Optional[str] = None
+    has_nif: bool = False
+    contracts_count: int = 0
+    as_adjudicante_count: int = 0
+    as_adjudicatario_count: int = 0
+    total_value: float = 0.0
+    as_adjudicante_value: float = 0.0
+    source: Optional[str] = None
+    ingested_at: Optional[str] = None
+    doc_id: Optional[str] = None
+
+
+class EntityDetailResponse(EntityItem):
+    """Ficha da entidade com o enriquecimento já guardado (marcas INPI + firmas RNPC)."""
+
+    trademarks: List["TrademarkItem"] = []
+    trademarks_total: int = 0
+    firmas: List["FirmaItem"] = []
+    firmas_total: int = 0
+    error: Optional[str] = None
+
+
+class EntitySearchRequest(BaseModel):
+    q: Optional[str] = Field(None, alias="query")
+    country: Optional[str] = None
+    only_with_nif: Optional[bool] = None
+    min_contracts: Optional[int] = None
+    max_contracts: Optional[int] = None
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    role: Optional[Literal["all", "adjudicante", "adjudicatario"]] = "all"
+    sort_by: Optional[Literal[
+        "name", "contracts_count", "total_value",
+        "as_adjudicante_value", "as_adjudicante_count", "as_adjudicatario_count",
+    ]] = "total_value"
+    sort_order: Optional[Literal["asc", "desc"]] = "desc"
+    size: int = 20
+    from_: int = Field(0, alias="from")
+
+    model_config = {"populate_by_name": True}
+
+
+class EntitySearchResponse(BaseModel):
+    query: Optional[str] = None
+    total: int = 0
+    items: List[EntityItem] = []
+    from_: int = Field(0, alias="from")
+    size: int = 20
+    error: Optional[str] = None
+
+    model_config = {"populate_by_name": True}
+
+
+class EntityCountryStat(BaseModel):
+    country: str
+    count: int = 0
+    total_value: float = 0.0
+
+
+class EntityStatsResponse(BaseModel):
+    total: int = 0
+    with_nif: int = 0
+    without_nif: int = 0
+    total_value: float = 0.0
+    total_contracts: int = 0
+    adjudicante_count: int = 0
+    adjudicatario_count: int = 0
+    countries: List[EntityCountryStat] = []
+    error: Optional[str] = None
+
+
+class EntityIngestRequest(BaseModel):
+    path: Optional[str] = Field(None, description="Caminho alternativo do entidades.json")
+    max_records: Optional[int] = Field(None, ge=1, description="Limite de registos a indexar")
+    chunk_size: int = Field(2000, ge=100, le=10000, description="Tamanho dos lotes de indexação")
+    refresh: bool = Field(True, description="Refrescar o índice no fim para leitura imediata")
+
+
+class EntityIngestResponse(BaseModel):
+    indexed_count: int = 0
+    total: int = 0
+    errors: int = 0
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
+# Resolver as referências antecipadas usadas em CompanyDetail / EntityDetailResponse.
+CompanyDetail.model_rebuild()
+EntityDetailResponse.model_rebuild()

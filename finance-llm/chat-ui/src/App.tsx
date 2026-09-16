@@ -16,6 +16,7 @@ import { CompanyDirectoryPage } from "./pages/CompanyDirectoryPage";
 import CompanyDetailPage from "./pages/CompanyDetailPage";
 import CompanyDashboardPage from "./pages/CompanyDashboardPage";
 import EmpresasIQPage from "./pages/EmpresasIQPage";
+import { EntitiesSearchPage } from "./pages/EntitiesSearchPage";
 import { ImportPage } from "./pages/ImportPage";
 import { ContractsListPage } from "./pages/ContractsListPage";
 import { sendChat } from "./sendChat";
@@ -85,6 +86,7 @@ export default function App() {
     if (path === "/contracts/dashboard") return "contracts-dashboard";
     if (path === "/companies") return "companies-search";
     if (path === "/companies/search") return "companies-search";
+    if (path === "/entities" || path === "/entities/search" || path === "/empresas") return "entities-search";
     if (path === "/companies/dashboard") return "companies-dashboard";
     if (path === "/import") return "import";
     if (path === "/contracts-list" || path.startsWith("/contracts-list/")) return "contracts-list";
@@ -121,6 +123,7 @@ export default function App() {
       else if (path === "/contracts" || path === "/contracts/search") next = "contracts-search";
       else if (path === "/contracts/dashboard") next = "contracts-dashboard";
       else if (path === "/companies" || path === "/companies/search") next = "companies-search";
+      else if (path === "/entities" || path === "/entities/search" || path === "/empresas") next = "entities-search";
       else if (path === "/companies/dashboard") next = "companies-dashboard";
       else if (path === "/import") next = "import";
       else if (path === "/contracts-list" || path.startsWith("/contracts-list/")) next = "contracts-list";
@@ -255,6 +258,7 @@ export default function App() {
     else if (next === "contracts-search" || next === "contracts") path = "/contracts/search";
     else if (next === "contracts-dashboard") path = "/contracts/dashboard";
     else if (next === "companies-search" || next === "companies") path = "/companies/search";
+    else if (next === "entities-search") path = "/entities/search";
     else if (next === "companies-dashboard") path = "/companies/dashboard";
     else if (next === "import") path = "/import";
     else if (next === "empresas-iq") path = "/empresas-iq";
@@ -297,6 +301,10 @@ export default function App() {
     }
     if (v === "companies" || v === "companies-search") {
       setViewAndHistory("companies-search");
+      return;
+    }
+    if (v === "entities-search") {
+      setViewAndHistory("entities-search");
       return;
     }
     if (v === "companies-dashboard") {
@@ -363,6 +371,19 @@ export default function App() {
         <ContractsSearchPage
           onSwitchView={() => setViewAndHistory("dashboard")}
           onSwitchDashboard={() => setViewAndHistory("contracts-dashboard")}
+        />
+      );
+    }
+    if (view === "entities-search") {
+      const handleSelectEntity = (nif: string | null) => {
+        if (!nif) return;
+        setSelectedCompany(nif);
+        setViewAndHistory("company-detail");
+      };
+      return (
+        <EntitiesSearchPage
+          onSelectCompany={handleSelectEntity}
+          onSwitchDashboard={() => setViewAndHistory("companies-dashboard")}
         />
       );
     }

@@ -1,5 +1,6 @@
 """Backend FastAPI para a Chat UI do FinanceLLM."""
 import json
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, List, Optional
@@ -21,6 +22,7 @@ from api.models import (
     ContractAnalyzeRequest,
     ContractAutocompleteResponse,
     ContractChatRequest,
+    ContractGraphBuildResponse,
     ContractGraphResponse,
     ContractChatResponse,
     ContractIngestRequest,
@@ -39,11 +41,16 @@ from api.models import (
     ContractRelationsResponse,
     ContractStatusResponse,
     ContractYearsResponse,
+    GraphDimensionOption,
+    GraphDimensionsResponse,
     CompanyAnalyticsResponse,
     CompanyContractsResponse,
     CompanyDetail,
+    CompanyEnrichmentResponse,
+    CompanyFirmasResponse,
     CompanySearchRequest,
     CompanySearchResponse,
+    CompanyTrademarksResponse,
     ElasticAnalyzeNewsResponse,
     ElasticAutocompleteResponse,
     ElasticDeleteResponse,
@@ -58,7 +65,20 @@ from api.models import (
     ElasticStatus,
     ElasticSuggestion,
     ElasticTickerListResponse,
+    EntityCountryStat,
+    EntityDetailResponse,
+    EntityIngestRequest,
+    EntityIngestResponse,
+    EntityItem,
+    EntitySearchRequest,
+    EntitySearchResponse,
+    EntityStatsResponse,
     FinancialsResponse,
+    FirmaIngestRequest,
+    FirmaIngestResponse,
+    FirmaItem,
+    FirmaSearchRequest,
+    FirmaSearchResponse,
     ForecastPoint,
     ForecastRequest,
     ForecastResponse,
@@ -80,6 +100,11 @@ from api.models import (
     TickerHistoryResponse,
     TickerInfoResponse,
     TickerSearchResponse,
+    TrademarkIngestRequest,
+    TrademarkIngestResponse,
+    TrademarkItem,
+    TrademarkSearchRequest,
+    TrademarkSearchResponse,
     YahooSearchResult,
 )
 from api.agent import run_chat, stream_chat
@@ -92,7 +117,9 @@ from api.elasticsearch_ingest import (
     search_ticker_prices,
 )
 from api.elasticsearch_client import (
+    GRAPH_DIMENSIONS,
     autocomplete_suggestions,
+    build_contract_graph,
     bulk_index_contracts_from_jsonl,
     contracts_autocomplete,
     contracts_status,
@@ -105,13 +132,26 @@ from api.elasticsearch_client import (
     get_contract_relationships,
     get_company_by_nif,
     get_company_contracts,
+    get_company_firmas,
+    get_company_trademarks,
+    get_entity_by_nif,
+    get_entity_stats,
     get_es_client,
+    index_company_firmas,
+    index_company_trademarks,
     list_contract_years,
+    list_entity_countries,
     search_all_tickers,
     search_companies,
     get_company_analytics,
     search_contracts,
+    search_entities,
+    search_firmas,
+    search_trademarks,
     CONTRACTS_INDEX,
+    ENTITIES_INDEX,
+    FIRMAS_INDEX,
+    TRADEMARKS_INDEX,
 )
 from api.rag_service import get_contracts_chat_answer
 from api.contract_agent import analyze_contract
@@ -211,6 +251,8 @@ def companies_search(req: CompanySearchRequest):
         items=res.get("items", []),
         from_=req.from_,
         size=req.size,
+        unique_adjudicantes=res.get("unique_adjudicantes", 0),
+        unique_adjudicatarios=res.get("unique_adjudicatarios", 0),
     )
 
 
@@ -260,6 +302,22 @@ def companies_detail(request: Request, nif: str, year: Optional[int] = Query(Non
     company["top_adjudicantes"] = top_adjudicantes[:10]
     company["top_adjudicatarios"] = top_adjudicatarios[:10]
 
+    # Enriquecimento: marcas do INPI e firmas do RNPC já indexadas na ficha da empresa.
+    company_name = company.get("name")
+    try:
+        trademarks = get_company_trademarks(company_nif=nif, company_name=company_name, size=50)
+        company["trademarks"] = trademarks.get("items", [])
+        company["trademarks_total"] = trademarks.get("total", 0)
+    except Exception as exc:
+        logging.getLogger(__name__).warning(f"Falha ao ler marcas de {nif}: {exc}")
+
+    try:
+        firmas = get_company_firmas(company_nif=nif, company_name=company_name, size=50)
+        company["firmas"] = firmas.get("items", [])
+        company["firmas_total"] = firmas.get("total", 0)
+    except Exception as exc:
+        logging.getLogger(__name__).warning(f"Falha ao ler firmas de {nif}: {exc}")
+
     return CompanyDetail(**company)
 
 
@@ -296,6 +354,481 @@ def companies_analytics(
     if res.get("error"):
         raise HTTPException(status_code=502, detail=res.get("error"))
     return CompanyAnalyticsResponse(**res)
+
+
+# --- Marcas (INPI) e firmas (RNPC/PNS) por empresa ---
+
+@app.get("/companies/{nif}/trademarks", response_model=CompanyTrademarksResponse)
+def companies_trademarks(
+    nif: str,
+    q: Optional[str] = Query(None, description="Filtrar pelo nome da marca"),
+    size: int = Query(100, ge=1, le=500),
+    from_: int = Query(0, ge=0, alias="from"),
+):
+    """Marcas do INPI já indexadas na ficha da empresa."""
+    res = get_company_trademarks(company_nif=nif, q=q, size=size, from_=from_)
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res.get("error"))
+    return CompanyTrademarksResponse(
+        nif=nif,
+        name=res.get("company_name"),
+        total=res.get("total", 0),
+        items=[TrademarkItem(**item) for item in res.get("items", [])],
+        from_=res.get("from", 0),
+        size=res.get("size", size),
+    )
+
+
+@app.get("/companies/{nif}/firmas", response_model=CompanyFirmasResponse)
+def companies_firmas(
+    nif: str,
+    q: Optional[str] = Query(None, description="Filtrar pelo nome da firma"),
+    size: int = Query(100, ge=1, le=500),
+    from_: int = Query(0, ge=0, alias="from"),
+):
+    """Firmas/nomes comerciais do RNPC já indexados na ficha da empresa."""
+    res = get_company_firmas(company_nif=nif, q=q, size=size, from_=from_)
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res.get("error"))
+    return CompanyFirmasResponse(
+        nif=nif,
+        name=res.get("company_name"),
+        total=res.get("total", 0),
+        items=[FirmaItem(**item) for item in res.get("items", [])],
+        from_=res.get("from", 0),
+        size=res.get("size", size),
+    )
+
+
+@app.post("/companies/{nif}/enrich", response_model=CompanyEnrichmentResponse)
+def companies_enrich(
+    nif: str,
+    include_trademarks: bool = Query(True, description="Obter marcas do INPI"),
+    include_firmas: bool = Query(True, description="Obter firmas do RNPC (PNS)"),
+    max_trademarks: int = Query(50, ge=1, le=200),
+    max_firmas: int = Query(20, ge=1, le=20),
+    trademark_detail_limit: int = Query(10, ge=0, le=100, description="Nº de marcas com detalhe completo"),
+):
+    """Obtém dados do INPI (marcas) e/ou RNPC (firmas) e guarda-os na ficha da empresa no Elasticsearch.
+
+    Os nomes das empresas do portal base incluem sufixos societários e pontuação que
+    fazem falhar a pesquisa por semelhança dos serviços públicos; por isso são testadas
+    variantes do nome até haver resultados.
+    """
+    company = get_company_by_nif(nif)
+    name = company.get("name") if not company.get("error") else None
+    if not name:
+        entity = get_entity_by_nif(nif)
+        name = entity.get("name") if not entity.get("error") else None
+    if not name:
+        raise HTTPException(status_code=404, detail=f"Empresa {nif} não encontrada")
+
+    response = CompanyEnrichmentResponse(nif=nif, name=name)
+
+    if include_trademarks:
+        from collectors.inpi_marcas import search_trademarks_with_fallback
+        from collectors.name_utils import rank_items_by_similarity
+
+        try:
+            data = search_trademarks_with_fallback(
+                name,
+                nif=nif,
+                include_detail=True,
+                max_results=max_trademarks,
+                detail_limit=trademark_detail_limit,
+            )
+            docs = data.get("trademarks", [])
+            # Ordena pela semelhança do titular com o nome da empresa e descarta
+            # marcas de titulares claramente diferentes (acontece quando a pesquisa
+            # teve de recorrer a um termo genérico).
+            docs = rank_items_by_similarity(
+                docs, name, key="holder_name", similarity_field="holder_similarity"
+            )
+            result = index_company_trademarks(nif, name, docs)
+            matched = data.get("matched_term")
+            response.trademarks = TrademarkIngestResponse(
+                nif=nif,
+                name=name,
+                fetched=len(docs),
+                indexed_count=result.get("indexed_count", 0),
+                errors=result.get("errors", 0),
+                message=(
+                    f"{len(docs)} marcas obtidas do INPI (termo: {matched})."
+                    if matched
+                    else f"Sem marcas no INPI para «{name}» (testados {len(data.get('tried', []))} termos)."
+                ),
+                error=result.get("error"),
+            )
+        except Exception as exc:
+            logging.getLogger(__name__).warning(f"Enriquecimento INPI falhou para {name}: {exc}")
+            response.trademarks = TrademarkIngestResponse(nif=nif, name=name, error=str(exc))
+
+    if include_firmas:
+        from collectors.pns_firmas import fetch_firmas_for_company
+        from collectors.name_utils import rank_items_by_similarity
+
+        try:
+            data = fetch_firmas_for_company(name, include_detail=True, max_results=max_firmas)
+            docs = data.get("firmas", [])
+            docs = rank_items_by_similarity(docs, name, key="nome")
+            result = index_company_firmas(nif, name, docs)
+            matched = data.get("matched_term")
+            response.firmas = FirmaIngestResponse(
+                nif=nif,
+                name=name,
+                fetched=len(docs),
+                indexed_count=result.get("indexed_count", 0),
+                errors=result.get("errors", 0),
+                message=(
+                    f"{len(docs)} firmas obtidas do RNPC (termo: {matched})."
+                    if matched
+                    else f"Sem firmas no RNPC para «{name}» (testados {len(data.get('tried', []))} termos)."
+                ),
+                error=result.get("error"),
+            )
+        except Exception as exc:
+            logging.getLogger(__name__).warning(f"Enriquecimento RNPC falhou para {name}: {exc}")
+            response.firmas = FirmaIngestResponse(nif=nif, name=name, error=str(exc))
+
+    return response
+
+
+@app.post("/trademarks/ingest", response_model=TrademarkIngestResponse)
+def trademarks_ingest(req: TrademarkIngestRequest):
+    """Obtém marcas do INPI por nome/titular e indexa-as para a empresa indicada."""
+    from collectors.inpi_marcas import InpiMarcasClient, search_trademarks_by_entity
+
+    try:
+        client = InpiMarcasClient()
+        trademarks = search_trademarks_by_entity(
+            client,
+            nome=req.name,
+            nif=req.nif or "",
+            intervencao="TIT",
+            include_detail=req.include_detail,
+            max_results=req.max_results,
+        )
+        docs = [tm.to_dict() for tm in trademarks]
+        result = index_company_trademarks(req.nif, req.name, docs)
+        return TrademarkIngestResponse(
+            nif=req.nif,
+            name=req.name,
+            fetched=len(docs),
+            indexed_count=result.get("indexed_count", 0),
+            errors=result.get("errors", 0),
+            message=result.get("error") or f"{len(docs)} marcas obtidas do INPI.",
+            error=result.get("error"),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Erro na ingestão de marcas: {exc}")
+
+
+@app.get("/trademarks/search", response_model=TrademarkSearchResponse)
+def trademarks_search(
+    q: Optional[str] = Query(None),
+    holder_name: Optional[str] = Query(None),
+    nice_class: Optional[str] = Query(None),
+    mark_type: Optional[str] = Query(None),
+    current_phase: Optional[str] = Query(None),
+    size: int = Query(20, ge=1, le=200),
+    from_: int = Query(0, ge=0, alias="from"),
+):
+    """Pesquisa marcas indexadas no Elasticsearch."""
+    res = search_trademarks(
+        q=q,
+        holder_name=holder_name,
+        nice_class=nice_class,
+        mark_type=mark_type,
+        current_phase=current_phase,
+        size=size,
+        from_=from_,
+    )
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res.get("error"))
+    return TrademarkSearchResponse(
+        query=q,
+        total=res.get("total", 0),
+        items=[TrademarkItem(**item) for item in res.get("items", [])],
+        from_=res.get("from", 0),
+        size=res.get("size", size),
+    )
+
+
+@app.post("/trademarks/search", response_model=TrademarkSearchResponse)
+def trademarks_search_post(req: TrademarkSearchRequest):
+    """Pesquisa marcas indexadas no Elasticsearch (variante POST)."""
+    res = search_trademarks(
+        q=req.q,
+        holder_name=req.holder_name,
+        nice_class=req.nice_class,
+        mark_type=req.mark_type,
+        current_phase=req.current_phase,
+        size=req.size,
+        from_=req.from_,
+    )
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res.get("error"))
+    return TrademarkSearchResponse(
+        query=req.q,
+        total=res.get("total", 0),
+        items=[TrademarkItem(**item) for item in res.get("items", [])],
+        from_=res.get("from", 0),
+        size=res.get("size", req.size),
+    )
+
+
+@app.post("/firmas/ingest", response_model=FirmaIngestResponse)
+def firmas_ingest(req: FirmaIngestRequest):
+    """Obtém firmas/nomes comerciais do RNPC (Pesquisa de Nomes Existentes) e indexa-as."""
+    from collectors.pns_firmas import fetch_firmas_for_company
+
+    try:
+        data = fetch_firmas_for_company(
+            req.name,
+            cae=req.cae,
+            concelho=req.concelho,
+            include_detail=req.include_detail,
+            max_results=req.max_results,
+        )
+        docs = data.get("firmas", [])
+        result = index_company_firmas(req.nif, req.name, docs)
+        return FirmaIngestResponse(
+            nif=req.nif,
+            name=req.name,
+            fetched=len(docs),
+            indexed_count=result.get("indexed_count", 0),
+            errors=result.get("errors", 0),
+            message=result.get("error") or f"{len(docs)} firmas obtidas do RNPC.",
+            error=result.get("error"),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Erro na ingestão de firmas: {exc}")
+
+
+@app.get("/firmas/search", response_model=FirmaSearchResponse)
+def firmas_search(
+    q: Optional[str] = Query(None),
+    concelho: Optional[str] = Query(None),
+    cae: Optional[str] = Query(None),
+    situacao: Optional[str] = Query(None),
+    min_score: Optional[float] = Query(None),
+    size: int = Query(20, ge=1, le=200),
+    from_: int = Query(0, ge=0, alias="from"),
+):
+    """Pesquisa firmas/nomes comerciais indexados no Elasticsearch."""
+    res = search_firmas(
+        q=q, concelho=concelho, cae=cae, situacao=situacao, min_score=min_score, size=size, from_=from_
+    )
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res.get("error"))
+    return FirmaSearchResponse(
+        query=q,
+        total=res.get("total", 0),
+        items=[FirmaItem(**item) for item in res.get("items", [])],
+        from_=res.get("from", 0),
+        size=res.get("size", size),
+    )
+
+
+@app.post("/firmas/search", response_model=FirmaSearchResponse)
+def firmas_search_post(req: FirmaSearchRequest):
+    """Pesquisa firmas/nomes comerciais indexados no Elasticsearch (variante POST)."""
+    res = search_firmas(
+        q=req.q,
+        concelho=req.concelho,
+        cae=req.cae,
+        situacao=req.situacao,
+        min_score=req.min_score,
+        size=req.size,
+        from_=req.from_,
+    )
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res.get("error"))
+    return FirmaSearchResponse(
+        query=req.q,
+        total=res.get("total", 0),
+        items=[FirmaItem(**item) for item in res.get("items", [])],
+        from_=res.get("from", 0),
+        size=res.get("size", req.size),
+    )
+
+
+@app.get("/enrichment/indices")
+def enrichment_indices():
+    """Estado dos índices de enriquecimento (marcas INPI e firmas RNPC)."""
+    client = get_es_client()
+    if not client:
+        raise HTTPException(status_code=502, detail="Elasticsearch indisponível")
+    out = {"elasticsearch": True, "indices": {}}
+    for index in (TRADEMARKS_INDEX, FIRMAS_INDEX, ENTITIES_INDEX):
+        try:
+            if client.indices.exists(index=index):
+                count = client.count(index=index).get("count", 0)
+                out["indices"][index] = {"exists": True, "count": count}
+            else:
+                out["indices"][index] = {"exists": False, "count": 0}
+        except Exception as exc:
+            out["indices"][index] = {"exists": False, "error": str(exc)}
+    return out
+
+
+# --- Cadastro de entidades do portal base (pesquisa de empresas) ---
+
+@app.post("/entities/ingest", response_model=EntityIngestResponse)
+def entities_ingest(req: EntityIngestRequest = Body(default=EntityIngestRequest())):
+    """Importa o `entidades.json` do portal base para o Elasticsearch.
+
+    A leitura é feita em streaming, pelo que o ficheiro (~74 MB, ~214 mil entidades)
+    não é carregado integralmente em memória.
+    """
+    from api.entities_service import ENTITIES_JSON, iter_normalized_entities
+    from api.elasticsearch_client import index_entities
+
+    path = Path(req.path) if req.path else ENTITIES_JSON
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Ficheiro de entidades não encontrado: {path}")
+
+    result = index_entities(
+        iter_normalized_entities(path),
+        chunk_size=req.chunk_size,
+        max_records=req.max_records,
+        refresh=req.refresh,
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=result["error"])
+    return EntityIngestResponse(
+        indexed_count=result.get("indexed_count", 0),
+        total=result.get("total", 0),
+        errors=result.get("errors", 0),
+        message=result.get("message"),
+    )
+
+
+@app.get("/entities/search", response_model=EntitySearchResponse)
+def entities_search_get(
+    q: Optional[str] = Query(None, description="Nome da empresa ou NIF"),
+    country: Optional[str] = Query(None, description="País (ex.: Portugal)"),
+    only_with_nif: Optional[bool] = Query(None, description="Apenas entidades com NIF válido"),
+    min_contracts: Optional[int] = Query(None, ge=0),
+    max_contracts: Optional[int] = Query(None, ge=0),
+    min_value: Optional[float] = Query(None, ge=0),
+    max_value: Optional[float] = Query(None, ge=0),
+    role: Optional[str] = Query("all", pattern="^(all|adjudicante|adjudicatario)$"),
+    sort_by: Optional[str] = Query(
+        "total_value",
+        pattern="^(name|contracts_count|total_value|as_adjudicante_value|as_adjudicante_count|as_adjudicatario_count)$",
+    ),
+    sort_order: Optional[str] = Query("desc", pattern="^(asc|desc)$"),
+    size: int = Query(20, ge=1, le=200),
+    from_: int = Query(0, ge=0, alias="from"),
+):
+    """Pesquisa de empresas no cadastro de entidades importado."""
+    res = search_entities(
+        q=q,
+        country=country,
+        only_with_nif=only_with_nif,
+        min_contracts=min_contracts,
+        max_contracts=max_contracts,
+        min_value=min_value,
+        max_value=max_value,
+        role=role,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        size=size,
+        from_=from_,
+    )
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res["error"])
+    return EntitySearchResponse(
+        query=q,
+        total=res.get("total", 0),
+        items=[EntityItem(**item) for item in res.get("items", [])],
+        from_=res.get("from", 0),
+        size=res.get("size", size),
+    )
+
+
+@app.post("/entities/search", response_model=EntitySearchResponse)
+def entities_search_post(req: EntitySearchRequest):
+    """Pesquisa de empresas no cadastro de entidades (variante POST)."""
+    res = search_entities(
+        q=req.q,
+        country=req.country,
+        only_with_nif=req.only_with_nif,
+        min_contracts=req.min_contracts,
+        max_contracts=req.max_contracts,
+        min_value=req.min_value,
+        max_value=req.max_value,
+        role=req.role,
+        sort_by=req.sort_by,
+        sort_order=req.sort_order,
+        size=req.size,
+        from_=req.from_,
+    )
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res["error"])
+    return EntitySearchResponse(
+        query=req.q,
+        total=res.get("total", 0),
+        items=[EntityItem(**item) for item in res.get("items", [])],
+        from_=res.get("from", 0),
+        size=res.get("size", req.size),
+    )
+
+
+@app.get("/entities/stats", response_model=EntityStatsResponse)
+def entities_stats():
+    """Estatísticas do cadastro de entidades (totais, países, com/sem NIF)."""
+    res = get_entity_stats()
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res["error"])
+    return EntityStatsResponse(**res)
+
+
+@app.get("/entities/countries")
+def entities_countries():
+    """Lista de países disponíveis no cadastro de entidades."""
+    return {"countries": list_entity_countries()}
+
+
+@app.get("/entities/autocomplete")
+def entities_autocomplete(q: str = Query(..., min_length=1), size: int = Query(10, ge=1, le=30)):
+    """Sugestões de empresas a partir do cadastro de entidades."""
+    res = search_entities(q=q, size=size, sort_by="contracts_count", sort_order="desc")
+    return {
+        "query": q,
+        "suggestions": [
+            {"nif": it.get("nif"), "name": it.get("name"), "country": it.get("country")}
+            for it in res.get("items", [])
+        ],
+    }
+
+
+@app.get("/entities/{nif}", response_model=EntityDetailResponse)
+def entities_detail(nif: str):
+    """Ficha da empresa do cadastro de entidades, com o enriquecimento já guardado."""
+    entity = get_entity_by_nif(nif)
+    if entity.get("error") and not entity.get("name"):
+        raise HTTPException(status_code=404, detail=entity["error"])
+
+    name = entity.get("name")
+
+    try:
+        trademarks = get_company_trademarks(company_nif=nif, company_name=name, size=50)
+        entity["trademarks"] = trademarks.get("items", [])
+        entity["trademarks_total"] = trademarks.get("total", 0)
+    except Exception as exc:
+        logging.getLogger(__name__).warning(f"Falha ao ler marcas de {nif}: {exc}")
+
+    try:
+        firmas = get_company_firmas(company_nif=nif, company_name=name, size=50)
+        entity["firmas"] = firmas.get("items", [])
+        entity["firmas_total"] = firmas.get("total", 0)
+    except Exception as exc:
+        logging.getLogger(__name__).warning(f"Falha ao ler firmas de {nif}: {exc}")
+
+    entity.pop("error", None)
+    return EntityDetailResponse(**entity)
 
 
 # Servir a React SPA da chat-ui (build estático) — deve ser registrado DEPOIS das rotas de API
@@ -1050,6 +1583,7 @@ def contracts_analytics(
     entity: Optional[str] = Query(None),
     nif: Optional[str] = Query(None),
     cpv_code: Optional[str] = Query(None),
+    region: Optional[str] = Query(None, description="Região NUTS (código ou string completa)"),
     min_price: Optional[float] = Query(None),
     max_price: Optional[float] = Query(None),
     start_date: Optional[str] = Query(None),
@@ -1059,7 +1593,7 @@ def contracts_analytics(
 ):
     """Devolve analytics/aggregações para o dashboard de contratos."""
     res = get_contract_analytics(
-        q=q, year=year, entity=entity, nif=nif, cpv_code=cpv_code,
+        q=q, year=year, entity=entity, nif=nif, cpv_code=cpv_code, region=region,
         min_price=min_price, max_price=max_price, start_date=start_date, end_date=end_date,
         top_entities=top_entities, top_cpv=top_cpv,
     )
@@ -1110,6 +1644,71 @@ def contracts_relations(
     if result.get("error"):
         raise HTTPException(status_code=502, detail=result["error"])
     return ContractRelationsResponse(**result)
+
+
+# --- Grafos dinâmicos (construtor por dimensões) ---
+
+@app.get("/contracts/analytics/graph/dimensions", response_model=GraphDimensionsResponse)
+def contracts_graph_dimensions():
+    """Lista as dimensões disponíveis para construir grafos de contratos."""
+    return GraphDimensionsResponse(
+        dimensions=[
+            GraphDimensionOption(key=key, label=spec["label"], type=spec["type"])
+            for key, spec in GRAPH_DIMENSIONS.items()
+        ]
+    )
+
+
+@app.get("/contracts/analytics/graph", response_model=ContractGraphBuildResponse)
+def contracts_graph(
+    dimension_a: str = Query(..., description="Dimensão dos nós (ex.: adjudicante, cpv_classe, regiao)"),
+    dimension_b: Optional[str] = Query(
+        None,
+        description="Dimensão das arestas. Igual a dimension_a cria uma rede de co-ocorrência; "
+        "omisso devolve apenas nós.",
+    ),
+    metric: str = Query("valor", pattern="^(valor|contratos)$"),
+    mode: str = Query(
+        "auto",
+        pattern="^(auto|exato|amostra)$",
+        description="`exato` usa agregações (todos os contratos, sem amostragem) quando só há uma "
+        "dimensão; com arestas percorre todos os contratos até ao teto do servidor.",
+    ),
+    q: Optional[str] = Query(None),
+    year: Optional[int] = Query(None),
+    region: Optional[str] = Query(None),
+    cpv_code: Optional[str] = Query(None),
+    min_value: Optional[float] = Query(None, ge=0),
+    max_value: Optional[float] = Query(None, ge=0),
+    limit: int = Query(60, ge=0, le=10_000, description="Nós a manter (0 = todos)"),
+    edge_limit: int = Query(400, ge=0, le=30_000, description="Arestas a manter (0 = todas)"),
+    sample: int = Query(3000, ge=0, le=400_000, description="Contratos analisados (0 = todos)"),
+    sample_order: str = Query("valor", pattern="^(valor|recentes)$"),
+):
+    """Constrói um grafo de contratos a partir de dimensões (entidades, CPV, território, tempo).
+
+    Devolve nós e arestas agregados com contagem de contratos e valor, permitindo
+    montar redes de entidades, hierarquias CPV, fluxos de valor e mapas de território.
+    """
+    result = build_contract_graph(
+        dimension_a=dimension_a,
+        dimension_b=dimension_b,
+        metric=metric,
+        mode=mode,
+        q=q,
+        year=year,
+        region=region,
+        cpv_code=cpv_code,
+        min_value=min_value,
+        max_value=max_value,
+        limit=limit,
+        edge_limit=edge_limit,
+        sample=sample,
+        sample_order=sample_order,
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=result["error"])
+    return ContractGraphBuildResponse(**result)
 
 
 # --- Importação de entidades e contratos ---

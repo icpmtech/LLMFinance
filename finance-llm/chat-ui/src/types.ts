@@ -632,6 +632,7 @@ export interface ContractAnalyticsFilters {
   entity?: string;
   nif?: string;
   cpv_code?: string;
+  region?: string;
   min_price?: number;
   max_price?: number;
   start_date?: string;
@@ -779,6 +780,89 @@ export interface ContractGraphResponse {
   error?: string;
 }
 
+/** Nó de um grafo construído dinamicamente por dimensões (entidade, CPV, região, ano…). */
+export interface ContractGraphBuildNode {
+  id: string;
+  key: string;
+  label: string;
+  dimension: string;
+  type: string;
+  role?: string;
+  count: number;
+  total_value: number;
+}
+
+export interface ContractGraphBuildEdge {
+  source: string;
+  target: string;
+  count: number;
+  value: number;
+}
+
+export interface ContractGraphBuildMeta {
+  dimension_a: string;
+  dimension_b?: string | null;
+  metric: string;
+  mode?: string;
+  complete?: boolean;
+  scan_capped?: boolean;
+  sample_order: string;
+  sample_limit?: number | null;
+  documents_scanned: number;
+  documents_matching: number;
+  scanned_value: number;
+  nodes_total: number;
+  edges_total: number;
+  kept_nodes: number;
+  kept_edges: number;
+  omitted_edges: number;
+  coverage_value_share?: number | null;
+  coverage_count_share?: number | null;
+  directed: boolean;
+  limits?: Record<string, number>;
+  notes: string[];
+  filters: Record<string, unknown>;
+}
+
+export interface ContractGraphBuildResponse {
+  nodes: ContractGraphBuildNode[];
+  edges: ContractGraphBuildEdge[];
+  meta: ContractGraphBuildMeta;
+  error?: string;
+}
+
+export interface GraphDimensionOption {
+  key: string;
+  label: string;
+  type: string;
+}
+
+export interface GraphDimensionsResponse {
+  dimensions: GraphDimensionOption[];
+  error?: string;
+}
+
+export interface ContractGraphRequest {
+  dimension_a: string;
+  dimension_b?: string | null;
+  metric?: "valor" | "contratos";
+  /** `exato` = todos os contratos (agregações), `amostra` = subconjunto rápido, `auto` decide. */
+  mode?: "auto" | "exato" | "amostra";
+  q?: string;
+  year?: number;
+  region?: string;
+  cpv_code?: string;
+  min_value?: number;
+  max_value?: number;
+  /** 0 = todos os nós. */
+  limit?: number;
+  /** 0 = todas as arestas. */
+  edge_limit?: number;
+  /** 0 = todos os contratos. */
+  sample?: number;
+  sample_order?: "valor" | "recentes";
+}
+
 export interface ContractRelation {
   source: string;
   source_name: string;
@@ -815,6 +899,10 @@ export interface CompanyDetail extends CompanySummary {
   top_adjudicantes: ContractPartyParsed[];
   top_adjudicatarios: ContractPartyParsed[];
   recent_contracts: ContractItem[];
+  trademarks?: TrademarkItem[];
+  trademarks_total?: number;
+  firmas?: FirmaItem[];
+  firmas_total?: number;
 }
 
 export interface CompanySearchRequest {
@@ -835,6 +923,10 @@ export interface CompanySearchResponse {
   items: CompanySummary[];
   from: number;
   size: number;
+  /** NIF distintos de adjudicantes que correspondem aos filtros. */
+  unique_adjudicantes?: number;
+  /** NIF distintos de adjudicatários que correspondem aos filtros. */
+  unique_adjudicatarios?: number;
   error?: string;
 }
 
@@ -927,6 +1019,183 @@ export interface ImportStatusResponse {
   filename?: string;
   stage?: "parsing" | "normalizing" | "indexing" | "linking" | "done" | "error";
   progress?: number;
+  message?: string;
+  error?: string;
+}
+
+// --- Enriquecimento: marcas INPI e firmas RNPC ---
+
+export interface TrademarkEntity {
+  name?: string;
+  nif?: string;
+  role?: string;
+}
+
+export interface TrademarkPhase {
+  phase?: string;
+  start_date?: string;
+  end_date?: string;
+  bpi?: string;
+  entity?: string;
+}
+
+export interface TrademarkDocument {
+  doc_id?: string;
+  type?: string;
+  description?: string;
+  url?: string;
+  requester?: string;
+  entry_date?: string;
+  execution_date?: string;
+}
+
+export interface TrademarkItem {
+  nord?: number;
+  process_number?: string;
+  mark_name?: string;
+  mark_type?: string;
+  modality?: string;
+  holder_name?: string;
+  holder_nif?: string;
+  company_nif?: string;
+  application_date?: string;
+  current_phase?: string;
+  phase_start_date?: string;
+  phase_end_date?: string;
+  nice_classes?: string[];
+  entities?: TrademarkEntity[];
+  phases?: TrademarkPhase[];
+  documents?: TrademarkDocument[];
+  source_query?: string;
+  ingested_at?: string;
+  doc_id?: string;
+  score?: number;
+  holder_similarity?: number;
+}
+
+export interface FirmaItem {
+  nome?: string;
+  nipc?: string;
+  company_nif?: string;
+  numero_certificado?: string;
+  certificado_admissibilidade?: string;
+  concelho?: string;
+  concelho_sede?: string;
+  situacao?: string;
+  situacao_detalhe?: string;
+  cae_principal?: string;
+  score?: number;
+  search_query?: string;
+  source?: string;
+  ingested_at?: string;
+  doc_id?: string;
+  name_similarity?: number;
+}
+
+export interface EnrichmentIngestResult {
+  nif?: string;
+  name?: string;
+  fetched: number;
+  indexed_count: number;
+  errors: number;
+  message?: string;
+  error?: string;
+}
+
+export interface CompanyEnrichmentResponse {
+  nif?: string;
+  name?: string;
+  trademarks?: EnrichmentIngestResult;
+  firmas?: EnrichmentIngestResult;
+  error?: string;
+}
+
+// --- Cadastro de entidades do portal base (pesquisa de empresas) ---
+
+export interface EntityItem {
+  nif?: string;
+  name: string;
+  country?: string;
+  country_code?: string;
+  has_nif: boolean;
+  contracts_count: number;
+  as_adjudicante_count: number;
+  as_adjudicatario_count: number;
+  total_value: number;
+  as_adjudicante_value: number;
+  source?: string;
+  ingested_at?: string;
+  doc_id?: string;
+}
+
+export interface EntityDetail extends EntityItem {
+  trademarks: TrademarkItem[];
+  trademarks_total: number;
+  firmas: FirmaItem[];
+  firmas_total: number;
+}
+
+export type EntitySortField =
+  | "name"
+  | "contracts_count"
+  | "total_value"
+  | "as_adjudicante_value"
+  | "as_adjudicante_count"
+  | "as_adjudicatario_count";
+
+export interface EntitySearchRequest {
+  q?: string;
+  country?: string;
+  only_with_nif?: boolean;
+  min_contracts?: number;
+  max_contracts?: number;
+  min_value?: number;
+  max_value?: number;
+  role?: "all" | "adjudicante" | "adjudicatario";
+  sort_by?: EntitySortField;
+  sort_order?: "asc" | "desc";
+  size?: number;
+  from?: number;
+}
+
+export interface EntitySearchResponse {
+  query?: string;
+  total: number;
+  items: EntityItem[];
+  from: number;
+  size: number;
+  error?: string;
+}
+
+export interface EntityCountryStat {
+  country: string;
+  count: number;
+  total_value: number;
+}
+
+export interface EntityStats {
+  total: number;
+  with_nif: number;
+  without_nif: number;
+  total_value: number;
+  total_contracts: number;
+  adjudicante_count: number;
+  adjudicatario_count: number;
+  countries: EntityCountryStat[];
+  error?: string;
+}
+
+export interface EntityIngestRequest {
+  path?: string;
+  max_records?: number;
+  chunk_size?: number;
+  refresh?: boolean;
+}
+
+export interface EntityIngestResponse {
+  indexed_count: number;
+  total: number;
+  errors: number;
   message?: string;
   error?: string;
 }

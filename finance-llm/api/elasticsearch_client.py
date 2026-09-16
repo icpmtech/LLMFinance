@@ -7,6 +7,7 @@
 Ambos suportam pesquisa por ticker, data e texto.
 """
 import json
+import logging
 import os
 import re
 from datetime import datetime
@@ -16,13 +17,65 @@ from typing import Any, Dict, Iterable, List, Optional
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 
+logger = logging.getLogger(__name__)
+
 ROOT = Path(__file__).resolve().parents[1]
 
 # Índice único para contratos públicos normalizados
-CONTRACTS_INDEX = "finance_contracts"
+CONTRACTS_INDEX = "contratos"
+
+# Grupo usado para contratos sem valor no campo (ex.: sem NUTs): mantém estes
+# contratos visíveis nos grafos em vez de os descartar silenciosamente.
+UNSPECIFIED_LABEL = "Não especificado"
+_UNSPECIFIED_KEYS = {"nao especificado", "não especificado", "unspecified", "n/a", "na"}
+
+
+def is_unspecified(value: Optional[str]) -> bool:
+    """Indica se um valor representa o grupo "sem informação" (aceita acentos/maiúsculas)."""
+    if not value:
+        return False
+    normalized = value.strip().lower()
+    normalized = normalized.replace("ã", "a").replace("á", "a")
+    return normalized in _UNSPECIFIED_KEYS
 
 # Índice para marcas do INPI indexadas por entidade
 TRADEMARKS_INDEX = "finance_trademarks"
+
+# Índice para firmas/nomes comerciais do RNPC (Pesquisa de Nomes Existentes)
+FIRMAS_INDEX = "finance_firmas"
+
+# Índice para o cadastro de entidades do portal base (data/entidades-gov-portal-base/entidades.json)
+ENTITIES_INDEX = "finance_entities"
+
+# Definições (settings) específicas de determinados índices — nomeadamente
+# analisadores usados em subcampos de pesquisa por prefixo.
+INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
+    ENTITIES_INDEX: {
+        "analysis": {
+            "tokenizer": {
+                # Permite pesquisa incremental: "SONAE" encontra "SONAECOM".
+                "entity_edge_ngram": {
+                    "type": "edge_ngram",
+                    "min_gram": 2,
+                    "max_gram": 20,
+                    "token_chars": ["letter", "digit"],
+                }
+            },
+            "analyzer": {
+                "entity_index_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "entity_edge_ngram",
+                    "filter": ["lowercase", "asciifolding"],
+                },
+                "entity_search_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                },
+            },
+        }
+    }
+}
 
 
 def _get_es_url() -> str:
@@ -217,6 +270,108 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    trademarks_mappings = {
+        "properties": {
+            "nord": {"type": "long"},
+            "process_number": {"type": "keyword"},
+            "mark_name": {
+                "type": "text",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "mark_type": {"type": "keyword"},
+            "modality": {"type": "keyword"},
+            "holder_name": {
+                "type": "text",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "holder_nif": {"type": "keyword"},
+            "company_nif": {"type": "keyword"},
+            "application_date": {"type": "date", "format": "yyyy-MM-dd"},
+            "current_phase": {"type": "keyword"},
+            "phase_start_date": {"type": "date", "format": "yyyy-MM-dd"},
+            "phase_end_date": {"type": "date", "format": "yyyy-MM-dd"},
+            "nice_classes": {"type": "keyword"},
+            "entities": {
+                "type": "nested",
+                "properties": {
+                    "name": {"type": "text"},
+                    "nif": {"type": "keyword"},
+                    "role": {"type": "keyword"},
+                },
+            },
+            "phases": {
+                "type": "nested",
+                "properties": {
+                    "phase": {"type": "text"},
+                    "start_date": {"type": "date", "format": "yyyy-MM-dd"},
+                    "end_date": {"type": "date", "format": "yyyy-MM-dd"},
+                },
+            },
+            "documents": {
+                "type": "nested",
+                "properties": {
+                    "doc_id": {"type": "keyword"},
+                    "type": {"type": "text"},
+                    "description": {"type": "text"},
+                    "url": {"type": "keyword"},
+                },
+            },
+            "ingested_at": {"type": "date"},
+            "source_query": {"type": "keyword"},
+            "holder_similarity": {"type": "float"},
+        }
+    }
+
+    firmas_mappings = {
+        "properties": {
+            "nome": {
+                "type": "text",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "nipc": {"type": "keyword"},
+            "company_nif": {"type": "keyword"},
+            "numero_certificado": {"type": "keyword"},
+            "certificado_admissibilidade": {"type": "keyword"},
+            "concelho": {"type": "keyword"},
+            "concelho_sede": {"type": "keyword"},
+            "situacao": {"type": "keyword"},
+            "situacao_detalhe": {"type": "keyword"},
+            "cae_principal": {"type": "keyword"},
+            "score": {"type": "float"},
+            "search_query": {"type": "keyword"},
+            "source": {"type": "keyword"},
+            "name_similarity": {"type": "float"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    entities_mappings = {
+        "properties": {
+            "nif": {"type": "keyword"},
+            "name": {
+                "type": "text",
+                "fields": {
+                    "keyword": {"type": "keyword", "ignore_above": 512},
+                    "autocomplete": {
+                        "type": "text",
+                        "analyzer": "entity_index_analyzer",
+                        "search_analyzer": "entity_search_analyzer",
+                    },
+                },
+            },
+            "country": {"type": "keyword"},
+            "country_code": {"type": "keyword"},
+            "has_nif": {"type": "boolean"},
+            "contracts_count": {"type": "integer"},
+            "as_adjudicante_count": {"type": "integer"},
+            "as_adjudicatario_count": {"type": "integer"},
+            "total_value": {"type": "float"},
+            "as_adjudicante_value": {"type": "float"},
+            "source": {"type": "keyword"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
     for name, mappings in [
         ("finance_prices", prices_mappings),
         ("finance_news", news_mappings),
@@ -224,15 +379,29 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         ("finance_macro", macro_mappings),
         ("finance_earnings", earnings_mappings),
         (CONTRACTS_INDEX, contracts_mappings),
+        (TRADEMARKS_INDEX, trademarks_mappings),
+        (FIRMAS_INDEX, firmas_mappings),
+        (ENTITIES_INDEX, entities_mappings),
     ]:
         if not client.indices.exists(index=name):
-            client.indices.create(
-                index=name,
-                body={"mappings": mappings, "settings": {"number_of_shards": 1, "number_of_replicas": 0}},
-            )
+            settings: Dict[str, Any] = {"number_of_shards": 1, "number_of_replicas": 0}
+            settings.update(INDEX_SETTINGS.get(name, {}))
+            client.indices.create(index=name, body={"mappings": mappings, "settings": settings})
         else:
-            # Garante que todos os campos esperados existem; Elasticsearch não permite alterar mapeamentos.
-            pass
+            # Elasticsearch permite acrescentar campos novos a um índice existente
+            # (não permite alterar/remover os já definidos). Enviamos apenas os campos
+            # em falta, para manter índices antigos compatíveis com o código atual.
+            try:
+                existing = client.indices.get_mapping(index=name)[name]["mappings"].get("properties", {})
+                missing = {
+                    field: spec
+                    for field, spec in (mappings.get("properties") or {}).items()
+                    if field not in existing
+                }
+                if missing:
+                    client.indices.put_mapping(index=name, body={"properties": missing})
+            except Exception as exc:
+                logger.debug("put_mapping ignorado para %s: %s", name, exc)
     return True
 
 
@@ -1497,12 +1666,63 @@ def _build_contract_query(
     return query
 
 
+_AGG_FIELD_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
+def _resolve_agg_target(client: Elasticsearch, field: str) -> Dict[str, Any]:
+    """Descobre como agregar um campo textual: campo direto, subcampo `.keyword` ou campo de execução.
+
+    O mapeamento real do índice manda: alguns campos declarados como `text` acabam
+    indexados como `keyword` (e vice-versa), pelo que agregar `campo.keyword` às cegas
+    produzia agregações vazias ("N/A" em todos os contratos).
+    """
+    cached = _AGG_FIELD_CACHE.get(field)
+    if cached:
+        return cached
+
+    spec: Dict[str, Any] = {}
+    try:
+        mapping = client.indices.get_mapping(index=CONTRACTS_INDEX)
+        props = list(mapping.values())[0].get("mappings", {}).get("properties", {})
+        spec = props.get(field) or {}
+    except Exception:
+        spec = {}
+
+    if spec.get("type") == "keyword":
+        resolved = {"field": field, "runtime": None}
+    elif (spec.get("fields") or {}).get("keyword"):
+        resolved = {"field": f"{field}.keyword", "runtime": None}
+    else:
+        runtime_name = f"{field}_kw"
+        resolved = {
+            "field": runtime_name,
+            "runtime": {
+                runtime_name: {
+                    "type": "keyword",
+                    "script": {
+                        "source": (
+                            "def v = params._source == null ? null : params._source.get('"
+                            + field
+                            + "'); if (v == null) { return; }"
+                            " if (v instanceof List) { for (def item : v) { if (item != null) { emit(item); } } }"
+                            " else { emit(v); }"
+                        )
+                    },
+                }
+            },
+        }
+
+    _AGG_FIELD_CACHE[field] = resolved
+    return resolved
+
+
 def get_contract_analytics(
     q: Optional[str] = None,
     year: Optional[int] = None,
     entity: Optional[str] = None,
     nif: Optional[str] = None,
     cpv_code: Optional[str] = None,
+    region: Optional[str] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
     start_date: Optional[str] = None,
@@ -1517,16 +1737,23 @@ def get_contract_analytics(
     if not client:
         return {"error": "Elasticsearch indisponível"}
 
-    base_query = _build_contract_query(q, year, entity, nif, cpv_code, min_price, max_price, start_date, end_date)
+    base_query = _build_contract_query(
+        q, year, entity, nif, region=region, cpv_code=cpv_code,
+        min_price=min_price, max_price=max_price, start_date=start_date, end_date=end_date,
+    )
 
-    try:
-        resp = client.search(
-            index=CONTRACTS_INDEX,
-            body={
-                "size": 0,
-                "track_total_hits": True,
-                "query": base_query,
-                "aggs": {
+    procedure_agg = _resolve_agg_target(client, "tipoprocedimento")
+    contract_agg = _resolve_agg_target(client, "tipoContrato")
+    runtime_mappings: Dict[str, Any] = {}
+    for resolved in (procedure_agg, contract_agg):
+        if resolved.get("runtime"):
+            runtime_mappings.update(resolved["runtime"])
+
+    analytics_body: Dict[str, Any] = {
+        "size": 0,
+        "track_total_hits": True,
+        "query": base_query,
+        "aggs": {
                     "total_value": {"sum": {"field": "precoContratual"}},
                     "avg_value": {"avg": {"field": "precoContratual"}},
                     "max_value": {"max": {"field": "precoContratual"}},
@@ -1550,11 +1777,11 @@ def get_contract_analytics(
                         }
                     },
                     "top_adjudicantes": {
-                        "nested": {"path": "adjudicantes"},
+                        "nested": {"path": "adjudicantes.parsed"},
                         "aggs": {
                             "names": {
                                 "terms": {
-                                    "field": "adjudicantes.raw",
+                                    "field": "adjudicantes.parsed.nif",
                                     "size": top_entities,
                                     "order": {"total_value": "desc"},
                                 },
@@ -1568,11 +1795,11 @@ def get_contract_analytics(
                         },
                     },
                     "top_adjudicatarios": {
-                        "nested": {"path": "adjudicatarios"},
+                        "nested": {"path": "adjudicatarios.parsed"},
                         "aggs": {
                             "names": {
                                 "terms": {
-                                    "field": "adjudicatarios.raw",
+                                    "field": "adjudicatarios.parsed.nif",
                                     "size": top_entities,
                                     "order": {"total_value": "desc"},
                                 },
@@ -1607,14 +1834,18 @@ def get_contract_analytics(
                         },
                     },
                     "procedure_types": {
-                        "terms": {"field": "tipoprocedimento.keyword", "size": 20, "missing": "N/A"}
+                        "terms": {"field": procedure_agg["field"], "size": 20, "missing": "N/A"}
                     },
                     "contract_types": {
-                        "terms": {"field": "tipoContrato.keyword", "size": 20, "missing": "N/A"}
+                        "terms": {"field": contract_agg["field"], "size": 20, "missing": "N/A"}
                     },
-                },
-            },
-        )
+        },
+    }
+    if runtime_mappings:
+        analytics_body["runtime_mappings"] = runtime_mappings
+
+    try:
+        resp = client.search(index=CONTRACTS_INDEX, body=analytics_body)
 
         aggs = resp["aggregations"]
 
@@ -1949,6 +2180,31 @@ def search_companies(
                             }
                         },
                     },
+                    # Contagens reais de NIF distintos (a lista acima é limitada aos
+                    # 2000 maiores por papel, pelo que `total` é sempre um limite
+                    # inferior do universo de entidades).
+                    "unique_adjudicantes": {
+                        "nested": {"path": "adjudicantes.parsed"},
+                        "aggs": {
+                            "nifs": {
+                                "cardinality": {
+                                    "field": "adjudicantes.parsed.nif",
+                                    "precision_threshold": 40000,
+                                }
+                            }
+                        },
+                    },
+                    "unique_adjudicatarios": {
+                        "nested": {"path": "adjudicatarios.parsed"},
+                        "aggs": {
+                            "nifs": {
+                                "cardinality": {
+                                    "field": "adjudicatarios.parsed.nif",
+                                    "precision_threshold": 40000,
+                                }
+                            }
+                        },
+                    },
                 },
             },
         )
@@ -2024,12 +2280,17 @@ def search_companies(
         for it in page:
             it["total_value"] = fmt_money(it["total_value"]) or 0.0
 
+        unique_adjudicantes = resp["aggregations"].get("unique_adjudicantes", {}).get("nifs", {}).get("value", 0)
+        unique_adjudicatarios = resp["aggregations"].get("unique_adjudicatarios", {}).get("nifs", {}).get("value", 0)
+
         return {
             "query": q,
             "total": total,
             "items": page,
             "from": from_,
             "size": size,
+            "unique_adjudicantes": int(unique_adjudicantes or 0),
+            "unique_adjudicatarios": int(unique_adjudicatarios or 0),
         }
     except Exception as e:
         return {"query": q, "total": 0, "items": [], "error": str(e)}
@@ -2389,9 +2650,20 @@ def _region_filter(region: Optional[str] = None) -> Dict[str, Any]:
 
     ES armazena NUTs como strings completas (ex: "PT11A - Área Metropolitana do Porto"),
     por isso usamos wildcard/prefixo quando a região fornecida não contém o separador.
+    O grupo "Não especificado" corresponde aos contratos sem NUTs (campo ausente ou vazio).
     """
     if not region:
         return None
+    if is_unspecified(region):
+        return {
+            "bool": {
+                "should": [
+                    {"bool": {"must_not": {"exists": {"field": "NUTs"}}}},
+                    {"term": {"NUTs": ""}},
+                ],
+                "minimum_should_match": 1,
+            }
+        }
     if " - " in region:
         return {"term": {"NUTs": region}}
     return {"wildcard": {"NUTs": f"{region}*"}}
@@ -2516,3 +2788,1715 @@ def get_contract_network(
             nodes.setdefault(node_id, {"id": node_id, "label": name, "type": node_type})
         edges.append({"source": relation["source"], "target": relation["target"], "count": relation["count"], "value": relation["total_value"]})
     return {"nodes": list(nodes.values()), "edges": edges}
+
+
+# --- Marcas INPI (por entidade) e firmas RNPC (Pesquisa de Nomes Existentes) ---
+
+def _enrich_docs_with_company(
+    docs: List[Dict[str, Any]],
+    company_nif: Optional[str] = None,
+    company_name: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Acrescenta company_nif/company_name a cada documento antes de indexar."""
+    enriched = []
+    for doc in docs:
+        item = dict(doc)
+        if company_nif:
+            item["company_nif"] = str(company_nif)
+        if company_name:
+            item["company_name"] = company_name
+        enriched.append(item)
+    return enriched
+
+
+def _bulk_index_docs(
+    index: str,
+    docs: List[Dict[str, Any]],
+    id_field: str,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa documentos num índice, usando id_field para o _id (idempotente)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed_count": 0}
+
+    ensure_indices(client)
+    if not docs:
+        return {"index": index, "indexed_count": 0, "total": 0}
+
+    actions = []
+    for doc in docs:
+        doc_id = doc.get(id_field)
+        action: Dict[str, Any] = {"_index": index, "_source": doc}
+        if doc_id not in (None, ""):
+            action["_id"] = f"{index}:{doc_id}"
+        actions.append(action)
+
+    try:
+        success, errors = bulk(client, actions, raise_on_error=False, stats_only=False)
+        error_count = len(errors) if isinstance(errors, list) else 0
+        # Elasticsearch é near-real-time: refrescar garante que os dados ficam
+        # imediatamente visíveis na ficha da empresa após o enriquecimento.
+        try:
+            client.indices.refresh(index=index)
+        except Exception:
+            pass
+        return {
+            "index": index,
+            "indexed_count": success,
+            "errors": error_count,
+            "total": len(docs),
+            "error_details": [str(e)[:300] for e in errors[:5]] if error_count else [],
+        }
+    except Exception as exc:
+        return {"index": index, "error": str(exc), "indexed_count": 0, "total": len(docs)}
+
+
+def _delete_stale_company_docs(
+    index: str,
+    company_nif: str,
+    keep_ids: List[str],
+    es: Optional[Elasticsearch] = None,
+) -> int:
+    """Remove documentos de uma empresa que já não constam do resultado atual.
+
+    Evita acumular registos obsoletos quando a ficha é reenriquecida com um
+    conjunto de resultados diferente (ex.: marcas entretanto expiradas).
+    """
+    client = es or get_es_client()
+    if not client or not company_nif:
+        return 0
+    try:
+        body: Dict[str, Any] = {
+            "query": {
+                "bool": {
+                    "filter": [{"term": {"company_nif": str(company_nif)}}],
+                }
+            }
+        }
+        if keep_ids:
+            # Só apaga os que não estão na lista de ids a manter.
+            body["query"]["bool"]["must_not"] = [{"ids": {"values": keep_ids}}]
+        resp = client.delete_by_query(index=index, body=body, refresh=True, conflicts="proceed")
+        return resp.get("deleted", 0)
+    except Exception as exc:
+        logger.warning("Falha a remover documentos obsoletos de %s em %s: %s", company_nif, index, exc)
+        return 0
+
+
+def index_company_trademarks(
+    company_nif: Optional[str],
+    company_name: str,
+    trademarks: List[Dict[str, Any]],
+    replace_existing: bool = True,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa as marcas INPI de uma empresa no índice TRADEMARKS_INDEX."""
+    docs = _enrich_docs_with_company(trademarks, company_nif=company_nif, company_name=company_name)
+    result = _bulk_index_docs(TRADEMARKS_INDEX, docs, id_field="nord", es=es)
+    if replace_existing and company_nif:
+        keep_ids = [f"{TRADEMARKS_INDEX}:{d.get('nord')}" for d in docs if d.get("nord") is not None]
+        result["deleted_stale"] = _delete_stale_company_docs(TRADEMARKS_INDEX, str(company_nif), keep_ids, es=es)
+    result["company_nif"] = company_nif
+    result["company_name"] = company_name
+    return result
+
+
+def index_company_firmas(
+    company_nif: Optional[str],
+    company_name: str,
+    firmas: List[Dict[str, Any]],
+    replace_existing: bool = True,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa firmas/nomes comerciais (RNPC/PNS) de uma empresa no índice FIRMAS_INDEX."""
+    docs = _enrich_docs_with_company(firmas, company_nif=company_nif, company_name=company_name)
+    # Usar NIPC quando existe; caso contrário o nome pesquisado + nome da firma.
+    for doc in docs:
+        doc.setdefault("_doc_key", doc.get("nipc") or f"{doc.get('search_query', '')}|{doc.get('nome', '')}")
+    for doc in docs:
+        doc["_source_id"] = doc.pop("_doc_key", None)
+    result = _bulk_index_docs(FIRMAS_INDEX, docs, id_field="_source_id", es=es)
+    if replace_existing and company_nif:
+        keep_ids = [f"{FIRMAS_INDEX}:{d.get('_source_id')}" for d in docs if d.get("_source_id")]
+        result["deleted_stale"] = _delete_stale_company_docs(FIRMAS_INDEX, str(company_nif), keep_ids, es=es)
+    for doc in docs:
+        doc.pop("_source_id", None)
+    result["company_nif"] = company_nif
+    result["company_name"] = company_name
+    return result
+
+
+# --- Construtor genérico de grafos de contratos ---------------------------------
+#
+# Cada dimensão descreve uma forma de agrupar contratos em nós. O construtor
+# agrega uma amostra de contratos (por valor ou por data) em nós/arestas,
+# devolvendo sempre `count` e `total_value`/`value` para a UI poder alternar
+# entre a métrica de contratos e a métrica de valor sem novo pedido.
+
+GRAPH_DIMENSIONS: Dict[str, Dict[str, str]] = {
+    "adjudicante": {"label": "Entidade adjudicante", "type": "entidade"},
+    "adjudicatario": {"label": "Entidade adjudicatária", "type": "entidade"},
+    "entidade": {"label": "Entidade (qualquer papel)", "type": "entidade"},
+    "concorrente": {"label": "Concorrente", "type": "concorrente"},
+    "regiao": {"label": "Região (NUTS)", "type": "regiao"},
+    "local_execucao": {"label": "Local de execução", "type": "regiao"},
+    "cpv_divisao": {"label": "CPV — divisão (2 dígitos)", "type": "cpv"},
+    "cpv_classe": {"label": "CPV — classe (4 dígitos)", "type": "cpv"},
+    "procedimento": {"label": "Tipo de procedimento", "type": "processo"},
+    "tipo_contrato": {"label": "Tipo de contrato", "type": "processo"},
+    "pme": {"label": "Adjudicatário PME", "type": "processo"},
+    "ano": {"label": "Ano", "type": "tempo"},
+}
+
+_GRAPH_SOURCE_FIELDS = [
+    "idcontrato",
+    "precoContratual",
+    "PrecoTotalEfetivo",
+    "Ano",
+    "NUTs",
+    "localExecucao",
+    "tipoprocedimento",
+    "tipoContrato",
+    "adjudicatarioPMEs",
+    "concorrentes",
+    "cpv",
+    "adjudicantes.parsed",
+    "adjudicatarios.parsed",
+]
+
+# Separa "500233810-NOME, LDA., 502540249-OUTRA, LDA." em pares NIF/nome.
+# O NIF pode vir mascarado como "--" em alguns contratos, daí a alternância.
+_COMPETITOR_SPLIT_RE = re.compile(r",?\s*(?=(?:\d{9}|--)\s*-)")
+_COMPETITOR_RE = re.compile(r"^(\d{9})\s*-\s*(.+)$")
+
+# Máximo de valores considerados por contrato e por lado (evita explosão combinatória).
+_GRAPH_MAX_VALUES_PER_DOC = 10
+
+# Tetos de segurança do servidor. O cliente pode pedir "sem limite" (0), ficando
+# sujeito a estes valores — devolvidos em `meta` para serem visíveis na UI.
+GRAPH_MAX_SCAN = 400_000
+GRAPH_MAX_NODES = 10_000
+GRAPH_MAX_EDGES = 30_000
+GRAPH_MAX_AGG_BUCKETS = 10_000
+# Orçamento de buckets por pedido de agregação (o Elasticsearch falha acima de ~65 mil).
+GRAPH_AGG_BUCKET_BUDGET = 20_000
+
+# Dimensões agregáveis por termos (as restantes exigem varredura por documento,
+# como `concorrente`, cujo campo textual tem vários valores por contrato).
+_GRAPH_AGG_FIELDS: Dict[str, Dict[str, Optional[str]]] = {
+    "adjudicante": {
+        "nested": "adjudicantes.parsed",
+        "field": "adjudicantes.parsed.nif",
+        "label": "adjudicantes.parsed.nome",
+    },
+    "adjudicatario": {
+        "nested": "adjudicatarios.parsed",
+        "field": "adjudicatarios.parsed.nif",
+        "label": "adjudicatarios.parsed.nome",
+    },
+    "regiao": {"nested": None, "field": "NUTs", "label": None, "missing": True},
+    "local_execucao": {"nested": None, "field": "localExecucao", "label": None, "missing": True},
+    "cpv_classe": {"nested": "cpv", "field": "cpv.code", "label": None},
+    "cpv_divisao": {"nested": "cpv", "field": "cpv.code", "label": None},
+    "procedimento": {"nested": None, "field": "tipoprocedimento", "label": None, "missing": True},
+    "tipo_contrato": {"nested": None, "field": "tipoContrato", "label": None, "missing": True},
+    "pme": {"nested": None, "field": "adjudicatarioPMEs", "label": None, "missing": True},
+    "ano": {"nested": None, "field": "Ano", "label": None},
+}
+
+
+def _as_list(value: Any) -> List[Any]:
+    """Normaliza valores que o Elasticsearch pode devolver como escalar ou lista."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def _graph_parties(source: Dict[str, Any], key: str) -> List[Dict[str, str]]:
+    """Extrai as entidades de `adjudicantes`/`adjudicatarios` (nested parsed)."""
+    block = source.get(key) or {}
+    if not isinstance(block, dict):
+        return []
+    out: List[Dict[str, str]] = []
+    for party in _as_list(block.get("parsed")):
+        if not isinstance(party, dict):
+            continue
+        nif = str(party.get("nif") or "").strip()
+        nome = str(party.get("nome") or "").strip()
+        if not nif and not nome:
+            continue
+        out.append({"id": nif or nome, "label": nome or nif})
+    return out
+
+
+def _graph_competitors(source: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Extrai os concorrentes do campo textual `concorrentes`."""
+    raw = source.get("concorrentes")
+    if not raw:
+        return []
+    chunks: List[str] = []
+    for part in _as_list(raw):
+        chunks.extend(_COMPETITOR_SPLIT_RE.split(str(part)))
+    out: List[Dict[str, str]] = []
+    seen: set = set()
+    for chunk in chunks:
+        text = chunk.strip().strip(",").strip()
+        if not text:
+            continue
+        # Alguns contratos mascaram o NIF como "--"; nesses casos só há nome.
+        if text.startswith("--"):
+            text = text.lstrip("-").strip()
+        match = _COMPETITOR_RE.match(text)
+        if match:
+            nif, nome = match.group(1), match.group(2).strip()
+        else:
+            nif, nome = "", text
+        node_id = nif or nome
+        if not node_id or node_id in seen:
+            continue
+        seen.add(node_id)
+        out.append({"id": node_id, "label": nome or node_id})
+    return out
+
+
+def _dimension_values(source: Dict[str, Any], dimension: str) -> List[Dict[str, Any]]:
+    """Devolve os valores de uma dimensão para um contrato: [{id, label, description?}]."""
+    if dimension in ("adjudicante", "adjudicatario", "entidade"):
+        values: List[Dict[str, Any]] = []
+        if dimension in ("adjudicante", "entidade"):
+            values.extend(_graph_parties(source, "adjudicantes"))
+        if dimension in ("adjudicatario", "entidade"):
+            values.extend(_graph_parties(source, "adjudicatarios"))
+        return values
+
+    if dimension == "concorrente":
+        return _graph_competitors(source)
+
+    if dimension == "regiao":
+        out = []
+        for nuts in _as_list(source.get("NUTs")):
+            text = str(nuts or "").strip()
+            if not text:
+                continue
+            code = text.split(" - ")[0].strip() or text
+            out.append({"id": code, "label": text})
+        # Contratos sem NUTs entram como "Não especificado" (em vez de desaparecerem).
+        return out or [{"id": UNSPECIFIED_LABEL, "label": UNSPECIFIED_LABEL}]
+
+    if dimension == "local_execucao":
+        out = []
+        for local in _as_list(source.get("localExecucao")):
+            text = str(local or "").strip()
+            if text:
+                out.append({"id": text, "label": text})
+        return out or [{"id": UNSPECIFIED_LABEL, "label": UNSPECIFIED_LABEL}]
+
+    if dimension in ("cpv_divisao", "cpv_classe"):
+        size = 2 if dimension == "cpv_divisao" else 4
+        out = []
+        seen_codes: set = set()
+        for entry in _as_list(source.get("cpv")):
+            if not isinstance(entry, dict):
+                continue
+            digits = re.sub(r"\D", "", str(entry.get("code") or ""))
+            if len(digits) < size:
+                continue
+            prefix = digits[:size]
+            if prefix in seen_codes:
+                continue
+            seen_codes.add(prefix)
+            description = str(entry.get("description") or "").strip()
+            if dimension == "cpv_divisao":
+                # A descrição ao nível da divisão não é representativa (varia por classe).
+                out.append({"id": prefix, "label": f"CPV {prefix}"})
+            else:
+                out.append({
+                    "id": prefix,
+                    "label": f"{prefix} — {description}" if description else prefix,
+                    "description": description,
+                })
+        return out
+
+    if dimension == "ano":
+        ano = source.get("Ano")
+        return [{"id": str(ano), "label": str(ano)}] if ano not in (None, "") else []
+
+    if dimension == "procedimento":
+        out = []
+        for value in _as_list(source.get("tipoprocedimento")):
+            text = str(value or "").strip()
+            if text:
+                out.append({"id": text, "label": text})
+        return out or [{"id": UNSPECIFIED_LABEL, "label": UNSPECIFIED_LABEL}]
+
+    if dimension == "tipo_contrato":
+        out = []
+        for value in _as_list(source.get("tipoContrato")):
+            text = str(value or "").strip()
+            if text:
+                out.append({"id": text, "label": text})
+        return out or [{"id": UNSPECIFIED_LABEL, "label": UNSPECIFIED_LABEL}]
+
+    if dimension == "pme":
+        out = []
+        for value in _as_list(source.get("adjudicatarioPMEs")):
+            text = str(value or "").strip()
+            if text:
+                out.append({"id": text, "label": text})
+        return out or [{"id": UNSPECIFIED_LABEL, "label": UNSPECIFIED_LABEL}]
+
+    return []
+
+
+def _graph_add_node(
+    nodes: Dict[str, Dict[str, Any]],
+    descriptions: Dict[str, Dict[str, int]],
+    dimension: str,
+    item: Dict[str, Any],
+    value: float,
+) -> str:
+    """Acumula um nó (contagem + valor) e devolve o seu id único."""
+    node_id = f"{dimension}|{item['id']}"
+    node = nodes.get(node_id)
+    if node is None:
+        node = nodes[node_id] = {
+            "id": node_id,
+            "key": item["id"],
+            "label": item.get("label") or item["id"],
+            "dimension": dimension,
+            "type": GRAPH_DIMENSIONS[dimension]["type"],
+            "role": GRAPH_DIMENSIONS[dimension]["label"],
+            "count": 0,
+            "total_value": 0.0,
+        }
+    node["count"] += 1
+    node["total_value"] += value
+    description = item.get("description")
+    if description:
+        bucket = descriptions.setdefault(node_id, {})
+        bucket[description] = bucket.get(description, 0) + 1
+    return node_id
+
+
+def _graph_add_edge(
+    edges: Dict[str, Dict[str, Any]],
+    source: str,
+    target: str,
+    value: float,
+    directed: bool,
+) -> None:
+    """Acumula uma aresta; em grafos não dirigidos os extremos são normalizados."""
+    if not directed and target < source:
+        source, target = target, source
+    key = f"{source}->{target}"
+    edge = edges.get(key)
+    if edge is None:
+        edge = edges[key] = {"source": source, "target": target, "count": 0, "value": 0.0}
+    edge["count"] += 1
+    edge["value"] += value
+
+
+def _aggregate_dimension_buckets(
+    client: Elasticsearch,
+    query: Dict[str, Any],
+    target: str,
+    metric: str,
+    size: int,
+    with_description: bool,
+) -> Optional[Dict[str, Any]]:
+    """Agrega uma dimensão em termos (exato sobre todos os contratos filtrados)."""
+    spec = _GRAPH_AGG_FIELDS.get(target)
+    if not spec:
+        return None
+
+    field = spec["field"] or ""
+    runtime: Optional[Dict[str, Any]] = None
+    if spec["nested"] is None:
+        resolved = _resolve_agg_target(client, field)
+        field = resolved["field"]
+        runtime = resolved.get("runtime")
+
+    order: Dict[str, Any] = {"valor": "desc"} if metric == "valor" else {"_count": "desc"}
+    bucket_aggs: Dict[str, Any] = {}
+    if spec["nested"]:
+        bucket_aggs["valor"] = {
+            "reverse_nested": {},
+            "aggs": {"total": {"sum": {"field": "precoContratual"}}},
+        }
+    else:
+        bucket_aggs["valor"] = {"sum": {"field": "precoContratual"}}
+    if spec["label"]:
+        bucket_aggs["rotulo"] = {"terms": {"field": spec["label"], "size": 1}}
+    if with_description and spec["nested"] == "cpv":
+        # `cpv.description` é texto (fielddata desativada): só é recolhido quando há
+        # poucos buckets, para não devolver milhares de documentos.
+        bucket_aggs["amostra"] = {"top_hits": {"size": 1, "_source": ["cpv"]}}
+
+    terms_agg: Dict[str, Any] = {
+        "terms": {"field": field, "size": size, "order": order},
+        "aggs": bucket_aggs,
+    }
+    if spec.get("missing"):
+        # Contratos sem valor no campo formam o grupo "Não especificado".
+        terms_agg["terms"]["missing"] = UNSPECIFIED_LABEL
+    agg_body: Dict[str, Any] = (
+        {"nested": {"path": spec["nested"]}, "aggs": {"buckets": terms_agg}}
+        if spec["nested"]
+        else terms_agg
+    )
+
+    body: Dict[str, Any] = {
+        "size": 0,
+        "track_total_hits": True,
+        "query": query,
+        "aggs": {"dim": agg_body, "total_value": {"sum": {"field": "precoContratual"}}},
+    }
+    if runtime:
+        body["runtime_mappings"] = runtime
+
+    resp = client.search(index=CONTRACTS_INDEX, body=body)
+    node = resp["aggregations"]["dim"]
+    if spec["nested"]:
+        node = node["buckets"]
+    total_block = resp.get("hits", {}).get("total") or {}
+    return {
+        "buckets": node.get("buckets", []),
+        "other_doc_count": node.get("sum_other_doc_count", 0),
+        "documents_matching": total_block.get("value", 0) if isinstance(total_block, dict) else 0,
+        "documents_value": resp["aggregations"]["total_value"].get("value") or 0.0,
+    }
+
+
+def aggregate_graph_nodes(
+    client: Elasticsearch,
+    query: Dict[str, Any],
+    dimension: str,
+    metric: str,
+    limit: int,
+    max_buckets: int = GRAPH_MAX_AGG_BUCKETS,
+) -> Optional[Dict[str, Any]]:
+    """Grafo de um nível calculado por agregações: exato sobre TODOS os contratos.
+
+    Devolve `None` quando a dimensão não é agregável (ex.: concorrentes), para o
+    chamador fazer a varredura por documento.
+    """
+    targets = ["adjudicante", "adjudicatario"] if dimension == "entidade" else [dimension]
+    if not targets or any(target not in _GRAPH_AGG_FIELDS for target in targets):
+        return None
+
+    requested = limit if limit else max_buckets
+    size = max(10, min(requested * (2 if len(targets) > 1 else 1), max_buckets))
+    with_description = size <= 400
+    use_prefix = dimension in ("cpv_classe", "cpv_divisao")
+    prefix_size = 4 if dimension == "cpv_classe" else 2
+
+    aggregated: Dict[str, Dict[str, Any]] = {}
+    other_doc_count = 0
+    documents_matching = 0
+    documents_value = 0.0
+
+    for target in targets:
+        result = _aggregate_dimension_buckets(client, query, target, metric, size, with_description)
+        if result is None:
+            return None
+        other_doc_count += result["other_doc_count"]
+        documents_matching = max(documents_matching, result["documents_matching"])
+        documents_value = max(documents_value, result["documents_value"])
+
+        for bucket in result["buckets"]:
+            raw_key = str(bucket["key"])
+            if not raw_key:
+                if not spec.get("missing"):
+                    continue
+                raw_key = UNSPECIFIED_LABEL
+            if raw_key == "N/A":
+                continue
+            label = raw_key
+            description = ""
+            rotulo = bucket.get("rotulo", {}).get("buckets") or []
+            if rotulo:
+                label = str(rotulo[0]["key"])
+            if use_prefix:
+                digits = re.sub(r"\D", "", raw_key)
+                if len(digits) < prefix_size:
+                    continue
+                key = digits[:prefix_size]
+                label = f"CPV {key}"
+                samples = (bucket.get("amostra", {}).get("hits", {}).get("hits") or [])
+                if samples:
+                    for entry in _as_list((samples[0].get("_source") or {}).get("cpv")):
+                        if not isinstance(entry, dict):
+                            continue
+                        code = re.sub(r"\D", "", str(entry.get("code") or ""))
+                        if code.startswith(key):
+                            description = str(entry.get("description") or "").strip()
+                            if description:
+                                break
+            elif dimension == "regiao":
+                key = raw_key.split(" - ")[0].strip() or raw_key
+                label = raw_key
+            elif dimension == "ano":
+                key = raw_key
+                label = raw_key
+            else:
+                key = raw_key
+
+            value = bucket.get("valor")
+            value = value.get("total", {}).get("value") if isinstance(value, dict) and "total" in value else value
+            value = value.get("value") if isinstance(value, dict) else value
+            entry = aggregated.get(key)
+            if entry is None:
+                entry = aggregated[key] = {
+                    "id": f"{dimension}|{key}",
+                    "key": key,
+                    "label": label,
+                    "dimension": dimension,
+                    "type": GRAPH_DIMENSIONS[dimension]["type"],
+                    "role": GRAPH_DIMENSIONS[dimension]["label"],
+                    "count": 0,
+                    "total_value": 0.0,
+                }
+            entry["count"] += int(bucket.get("doc_count") or 0)
+            entry["total_value"] += float(value or 0)
+            if use_prefix and description and " — " not in entry["label"]:
+                entry["label"] = f"{key} — {description}"
+
+    metric_key = "total_value" if metric == "valor" else "count"
+    ordered = sorted(aggregated.values(), key=lambda node: node.get(metric_key) or 0, reverse=True)
+    kept = ordered[:limit] if limit else ordered
+    kept_value = sum(node["total_value"] for node in kept)
+    kept_count = sum(node["count"] for node in kept)
+
+    notes = ["Valores exatos para todos os contratos que correspondem aos filtros (sem amostragem)."]
+    if len(ordered) > len(kept):
+        notes.append(f"Mostrados {len(kept)} de {len(ordered)} nós agregados.")
+    if other_doc_count:
+        notes.append("Existem agrupamentos além dos apresentados (limite de buckets do Elasticsearch).")
+    if use_prefix and not with_description and len(kept) > 400:
+        notes.append("Descrições CPV omitidas acima de 400 nós.")
+
+    return {
+        "nodes": kept,
+        "edges": [],
+        "meta": {
+            "dimension_a": dimension,
+            "dimension_b": None,
+            "metric": metric,
+            "mode": "exato",
+            "complete": len(ordered) <= len(kept) and other_doc_count == 0,
+            "sample_order": "exato",
+            "sample_limit": None,
+            "documents_scanned": documents_matching,
+            "documents_matching": documents_matching,
+            "scanned_value": round(documents_value, 2),
+            "nodes_total": len(ordered),
+            "edges_total": 0,
+            "kept_nodes": len(kept),
+            "kept_edges": 0,
+            "omitted_edges": 0,
+            "coverage_value_share": round(kept_value / documents_value, 4) if documents_value else None,
+            "coverage_count_share": None if not documents_matching else round(kept_count / max(documents_matching, 1), 4),
+            "directed": False,
+            "limits": {
+                "max_scan": GRAPH_MAX_SCAN,
+                "max_nodes": GRAPH_MAX_NODES,
+                "max_edges": GRAPH_MAX_EDGES,
+                "max_buckets": max_buckets,
+            },
+            "notes": notes,
+            "filters": {"query": None},
+        },
+    }
+
+
+def _resolve_dimension_spec(client: Elasticsearch, dimension: str) -> Optional[Dict[str, Any]]:
+    """Resolve o campo agregável de uma dimensão (campo/subcampo/runtime) ou None."""
+    spec = _GRAPH_AGG_FIELDS.get(dimension)
+    if not spec:
+        return None
+    resolved = dict(spec)
+    if spec["nested"] is None:
+        target = _resolve_agg_target(client, spec["field"] or "")
+        resolved["field"] = target["field"]
+        resolved["runtime"] = target.get("runtime")
+    return resolved
+
+
+def _terms_block(spec: Dict[str, Any], metric: str, size: int, with_label: bool) -> Dict[str, Any]:
+    """Bloco de agregação de termos com contagem de contratos e soma de valor."""
+    order: Dict[str, Any] = {"valor": "desc"} if metric == "valor" else {"_count": "desc"}
+    aggs: Dict[str, Any] = {}
+    if spec["nested"]:
+        aggs["valor"] = {"reverse_nested": {}, "aggs": {"total": {"sum": {"field": "precoContratual"}}}}
+    else:
+        aggs["valor"] = {"sum": {"field": "precoContratual"}}
+    if with_label and spec.get("label"):
+        aggs["rotulo"] = {"terms": {"field": spec["label"], "size": 1}}
+    if with_label and spec.get("nested") == "cpv" and size <= 400:
+        # `cpv.description` é texto (fielddata desativada): recolhido só com poucos buckets.
+        aggs["amostra"] = {"top_hits": {"size": 1, "_source": ["cpv"]}}
+    block: Dict[str, Any] = {
+        "terms": {"field": spec["field"], "size": size, "order": order},
+        "aggs": aggs,
+    }
+    if spec.get("missing"):
+        # Contratos sem valor no campo passam a formar o grupo "Não especificado".
+        block["terms"]["missing"] = UNSPECIFIED_LABEL
+    if spec["nested"]:
+        return {"nested": {"path": spec["nested"]}, "aggs": {"buckets": block}}
+    return block
+
+
+def _graph_key_for(dimension: str, raw_key: str) -> Optional[str]:
+    """Normaliza a chave de um valor agregado (prefixo CPV, código NUTS) — igual em nós e arestas."""
+    if dimension in ("cpv_classe", "cpv_divisao"):
+        size = 4 if dimension == "cpv_classe" else 2
+        digits = re.sub(r"\D", "", raw_key)
+        return digits[:size] if len(digits) >= size else None
+    if dimension == "regiao":
+        return raw_key.split(" - ")[0].strip() or raw_key
+    return raw_key
+
+
+def _descriptions_from_bucket(bucket: Dict[str, Any], key: str) -> str:
+    """Extrai a descrição CPV (top_hits) correspondente ao prefixo do bucket."""
+    samples = bucket.get("amostra", {}).get("hits", {}).get("hits") or []
+    for sample in samples:
+        for entry in _as_list((sample.get("_source") or {}).get("cpv")):
+            if not isinstance(entry, dict):
+                continue
+            code = re.sub(r"\D", "", str(entry.get("code") or ""))
+            if code.startswith(key):
+                description = str(entry.get("description") or "").strip()
+                if description:
+                    return description
+    return ""
+
+
+def _extract_buckets(node: Any) -> List[Dict[str, Any]]:
+    """Extrai a lista de buckets de um bloco de termos (aceita wrappers de `nested`)."""
+    for _hop in range(3):
+        if isinstance(node, dict) and isinstance(node.get("buckets"), dict):
+            node = node["buckets"]
+            continue
+        break
+    if isinstance(node, dict):
+        node = node.get("buckets")
+    return node if isinstance(node, list) else []
+
+
+def _bucket_value(bucket: Dict[str, Any]) -> float:
+    value = bucket.get("valor")
+    if isinstance(value, dict) and "total" in value and isinstance(value["total"], dict):
+        value = value["total"].get("value")
+    elif isinstance(value, dict):
+        value = value.get("value")
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _nodes_from_buckets(
+    block: Dict[str, Any],
+    dimension: str,
+    spec: Dict[str, Any],
+    total: Dict[str, Dict[str, Any]],
+) -> None:
+    """Acumula buckets de termos no dicionário de nós (chave, rótulo, contagem, valor)."""
+    buckets = block.get("buckets") if spec.get("nested") else block
+    buckets = _extract_buckets(buckets)
+    use_prefix = dimension in ("cpv_classe", "cpv_divisao")
+    prefix_size = 4 if dimension == "cpv_classe" else 2
+
+    for bucket in buckets:
+        raw_key = str(bucket.get("key"))
+        if raw_key == "N/A":
+            continue
+        if not raw_key:
+            # Campo presente mas vazio: conta como "Não especificado".
+            if not spec.get("missing"):
+                continue
+            raw_key = UNSPECIFIED_LABEL
+        key = _graph_key_for(dimension, raw_key)
+        if not key:
+            continue
+        label = raw_key
+        rotulo = (bucket.get("rotulo") or {}).get("buckets") or []
+        if rotulo:
+            label = str(rotulo[0]["key"])
+        if use_prefix:
+            label = f"CPV {key}" if dimension == "cpv_divisao" else key
+            description = _descriptions_from_bucket(bucket, key)
+            if description and dimension == "cpv_classe":
+                label = f"{key} — {description}"
+        elif dimension == "regiao":
+            label = raw_key
+
+        node = total.get(key)
+        if node is None:
+            node = total[key] = {
+                "id": f"{dimension}|{key}",
+                "key": key,
+                "label": label,
+                "dimension": dimension,
+                "type": GRAPH_DIMENSIONS[dimension]["type"],
+                "role": GRAPH_DIMENSIONS[dimension]["label"],
+                "count": 0,
+                "total_value": 0.0,
+            }
+        node["count"] += int(bucket.get("doc_count") or 0)
+        node["total_value"] += _bucket_value(bucket)
+
+
+def aggregate_graph_edges(
+    client: Elasticsearch,
+    query: Dict[str, Any],
+    dimension_a: str,
+    dimension_b: str,
+    metric: str,
+    limit: int,
+    edge_limit: int,
+) -> Optional[Dict[str, Any]]:
+    """Grafo de dois níveis exato (todos os contratos) por agregações.
+
+    Corre três agregações no mesmo pedido: nós do lado A, nós do lado B (ambas
+    exatas) e os pares A→B. Devolve `None` quando alguma dimensão não é agregável.
+    """
+    spec_a = _resolve_dimension_spec(client, dimension_a)
+    spec_b = _resolve_dimension_spec(client, dimension_b)
+    if not spec_a or not spec_b:
+        return None
+
+    node_size = min(limit or GRAPH_MAX_AGG_BUCKETS, GRAPH_MAX_AGG_BUCKETS)
+    pair_budget = max(5, GRAPH_AGG_BUCKET_BUDGET // max(node_size, 1))
+    pair_size = max(5, min(edge_limit or 200, pair_budget))
+
+    edges_agg = _terms_block(spec_a, metric, node_size, with_label=False)
+    inner = _terms_block(spec_b, metric, pair_size, with_label=False)
+    if spec_a["nested"]:
+        # `reverse_nested` volta ao documento pai: é aí que a dimensão B tem de viver.
+        edges_agg["aggs"]["buckets"]["aggs"]["valor"]["aggs"]["links"] = inner
+    else:
+        edges_agg["aggs"]["links"] = inner
+
+    runtime_mappings: Dict[str, Any] = {}
+    for spec in (spec_a, spec_b):
+        if spec.get("runtime"):
+            runtime_mappings.update(spec["runtime"])
+
+    body: Dict[str, Any] = {
+        "size": 0,
+        "track_total_hits": True,
+        "query": query,
+        "aggs": {
+            "nodes_a": _terms_block(spec_a, metric, node_size, with_label=True),
+            "nodes_b": _terms_block(spec_b, metric, node_size, with_label=True),
+            "edges": edges_agg,
+            "total_value": {"sum": {"field": "precoContratual"}},
+        },
+    }
+    if runtime_mappings:
+        body["runtime_mappings"] = runtime_mappings
+
+    try:
+        resp = client.search(index=CONTRACTS_INDEX, body=body)
+    except Exception:
+        # Por exemplo, acima do teto de buckets: o chamador cai para a varredura.
+        return None
+    aggregations = resp["aggregations"]
+
+    nodes_a: Dict[str, Dict[str, Any]] = {}
+    nodes_b: Dict[str, Dict[str, Any]] = {}
+    _nodes_from_buckets(aggregations["nodes_a"], dimension_a, spec_a, nodes_a)
+    _nodes_from_buckets(aggregations["nodes_b"], dimension_b, spec_b, nodes_b)
+
+    metric_key = "total_value" if metric == "valor" else "count"
+    ordered_a = sorted(nodes_a.values(), key=lambda node: node.get(metric_key) or 0, reverse=True)
+    ordered_b = sorted(nodes_b.values(), key=lambda node: node.get(metric_key) or 0, reverse=True)
+    kept_a = ordered_a[:limit] if limit else ordered_a
+    kept_b = ordered_b[:limit] if limit else ordered_b
+    kept_ids = {node["id"] for node in kept_a} | {node["id"] for node in kept_b}
+
+    edges: Dict[str, Dict[str, Any]] = {}
+    edges_block = aggregations["edges"]
+    a_buckets = _extract_buckets(edges_block.get("buckets") if spec_a["nested"] else edges_block)
+    for a_bucket in a_buckets:
+        a_key = _graph_key_for(dimension_a, str(a_bucket.get("key")))
+        if not a_key:
+            continue
+        a_id = f"{dimension_a}|{a_key}"
+        if a_id not in kept_ids:
+            continue
+        links = a_bucket["valor"].get("links") if spec_a["nested"] else a_bucket.get("links")
+        if not links:
+            continue
+        for b_bucket in _extract_buckets(links):
+            b_key = _graph_key_for(dimension_b, str(b_bucket.get("key")))
+            if not b_key:
+                continue
+            b_id = f"{dimension_b}|{b_key}"
+            if b_id not in kept_ids:
+                continue
+            key = f"{a_id}->{b_id}"
+            edge = edges.get(key)
+            if edge is None:
+                edge = edges[key] = {"source": a_id, "target": b_id, "count": 0, "value": 0.0}
+            edge["count"] += int(b_bucket.get("doc_count") or 0)
+            edge["value"] += _bucket_value(b_bucket)
+
+    edge_metric = "value" if metric == "valor" else "count"
+    ordered_edges = sorted(edges.values(), key=lambda edge: edge.get(edge_metric) or 0, reverse=True)
+    dropped_edges = max(0, len(ordered_edges) - edge_limit) if edge_limit else 0
+    kept_edges = ordered_edges[:edge_limit] if edge_limit else ordered_edges
+
+    total_value = aggregations["total_value"].get("value") or 0.0
+    total_block = resp.get("hits", {}).get("total") or {}
+    documents_matching = total_block.get("value", 0) if isinstance(total_block, dict) else 0
+    kept_value = sum(node["total_value"] for node in kept_a)
+    kept_count = sum(node["count"] for node in kept_a)
+
+    notes = ["Valores exatos para todos os contratos que correspondem aos filtros (sem amostragem)."]
+    if len(ordered_a) > len(kept_a) or len(ordered_b) > len(kept_b):
+        notes.append(
+            f"Mostrados {len(kept_a)} nós de {len(ordered_a)} no lado A e "
+            f"{len(kept_b)} de {len(ordered_b)} no lado B."
+        )
+    if pair_size < (edge_limit or 200):
+        notes.append(
+            f"Cada nó mostra até {pair_size} ligações por pedido de agregação "
+            "(aumente as arestas ou reduza os nós para ver pares adicionais)."
+        )
+    if dropped_edges:
+        notes.append(f"{dropped_edges} arestas omitidas por limite (aumente 'arestas' ou reduza os nós).")
+
+    return {
+        "nodes": kept_a + kept_b,
+        "edges": kept_edges,
+        "meta": {
+            "dimension_a": dimension_a,
+            "dimension_b": dimension_b,
+            "metric": metric,
+            "mode": "exato",
+            "complete": len(ordered_a) <= len(kept_a) and len(ordered_b) <= len(kept_b) and not dropped_edges,
+            "sample_order": "exato",
+            "sample_limit": None,
+            "documents_scanned": documents_matching,
+            "documents_matching": documents_matching,
+            "scanned_value": round(total_value, 2),
+            "nodes_total": len(ordered_a) + len(ordered_b),
+            "edges_total": len(ordered_edges),
+            "kept_nodes": len(kept_a) + len(kept_b),
+            "kept_edges": len(kept_edges),
+            "omitted_edges": dropped_edges,
+            "coverage_value_share": round(kept_value / total_value, 4) if total_value else None,
+            "coverage_count_share": round(kept_count / max(documents_matching, 1), 4) if documents_matching else None,
+            "directed": True,
+            "limits": {
+                "max_scan": GRAPH_MAX_SCAN,
+                "max_nodes": GRAPH_MAX_NODES,
+                "max_edges": GRAPH_MAX_EDGES,
+                "max_buckets": GRAPH_MAX_AGG_BUCKETS,
+            },
+            "notes": notes,
+            "filters": {"query": None},
+        },
+    }
+
+
+def build_contract_graph(
+    dimension_a: str,
+    dimension_b: Optional[str] = None,
+    metric: str = "valor",
+    mode: str = "auto",
+    q: Optional[str] = None,
+    year: Optional[int] = None,
+    region: Optional[str] = None,
+    cpv_code: Optional[str] = None,
+    min_value: Optional[float] = None,
+    max_value: Optional[float] = None,
+    limit: int = 60,
+    edge_limit: int = 400,
+    sample: int = 3000,
+    sample_order: str = "valor",
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Constrói um grafo de contratos segundo duas dimensões (nós e arestas).
+
+    - `dimension_b` igual a `dimension_a` → rede de co-ocorrência (ex.: concorrentes
+      que participam nos mesmos contratos).
+    - `dimension_b` nulo → apenas nós (para treemaps, rankings e mapas).
+    - `metric` decide que nós/arestas são mantidos nos limites pedidos; os dois
+      valores (contratos e valor) são sempre devolvidos.
+    - `mode`:
+      - `exato`: sem amostragem. Com uma só dimensão usa agregações do Elasticsearch
+        (todos os contratos que correspondem aos filtros); com arestas percorre todos
+        os contratos até ao teto do servidor.
+      - `amostra`: percorre apenas `sample` contratos (ordem `sample_order`).
+      - `auto` (por omissão): `exato` quando não há dimensão B.
+    - `limit`, `edge_limit` e `sample` aceitam 0 = "todos" (sujeito aos tetos
+      `GRAPH_MAX_NODES`, `GRAPH_MAX_EDGES` e `GRAPH_MAX_SCAN`, devolvidos em `meta`).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "nodes": [], "edges": []}
+    if dimension_a not in GRAPH_DIMENSIONS:
+        return {"error": f"Dimensão desconhecida: {dimension_a}", "nodes": [], "edges": []}
+    if dimension_b and dimension_b not in GRAPH_DIMENSIONS:
+        return {"error": f"Dimensão desconhecida: {dimension_b}", "nodes": [], "edges": []}
+
+    dimension_b = dimension_b or None
+    metric = metric if metric in ("valor", "contratos") else "valor"
+    mode = mode if mode in ("auto", "exato", "amostra") else "auto"
+    same_dimension = dimension_b == dimension_a
+
+    query = _build_contract_query(
+        q=q,
+        year=year,
+        region=region,
+        cpv_code=cpv_code,
+        min_price=min_value,
+        max_price=max_value,
+    )
+
+    # Caminho exato (sem amostragem) para grafos de um só nível.
+    if mode in ("auto", "exato") and not dimension_b:
+        exact = aggregate_graph_nodes(
+            client,
+            query,
+            dimension_a,
+            metric,
+            limit=0 if int(limit) <= 0 else max(2, min(int(limit), GRAPH_MAX_NODES)),
+        )
+        if exact is not None:
+            exact["meta"]["filters"] = {
+                "q": q,
+                "year": year,
+                "region": region,
+                "cpv_code": cpv_code,
+                "min_value": min_value,
+                "max_value": max_value,
+            }
+            return exact
+
+    # Caminho exato com arestas: agregações de dois níveis (todos os contratos).
+    if mode in ("auto", "exato") and dimension_b and not same_dimension:
+        exact_edges = aggregate_graph_edges(
+            client,
+            query,
+            dimension_a,
+            dimension_b,
+            metric,
+            limit=0 if int(limit) <= 0 else max(2, min(int(limit), GRAPH_MAX_NODES)),
+            edge_limit=0 if int(edge_limit) <= 0 else max(0, min(int(edge_limit), GRAPH_MAX_EDGES)),
+        )
+        if exact_edges is not None:
+            exact_edges["meta"]["filters"] = {
+                "q": q,
+                "year": year,
+                "region": region,
+                "cpv_code": cpv_code,
+                "min_value": min_value,
+                "max_value": max_value,
+            }
+            return exact_edges
+
+    all_documents = int(sample) <= 0
+    scan_ceiling = GRAPH_MAX_SCAN
+    sample = scan_ceiling if all_documents else max(100, min(int(sample), scan_ceiling))
+    limit = 0 if int(limit) <= 0 else max(2, min(int(limit), GRAPH_MAX_NODES))
+    edge_limit = 0 if int(edge_limit) <= 0 else max(0, min(int(edge_limit), GRAPH_MAX_EDGES))
+    page_size = 5000 if all_documents else min(1000, sample)
+
+    if sample_order == "recentes":
+        sort: List[Any] = [
+            {"dataPublicacao": {"order": "desc", "unmapped_type": "date"}},
+            {"idcontrato": {"order": "asc"}},
+        ]
+    else:
+        sort = [
+            {"precoContratual": {"order": "desc", "unmapped_type": "float"}},
+            {"idcontrato": {"order": "asc"}},
+        ]
+
+    nodes: Dict[str, Dict[str, Any]] = {}
+    edges: Dict[str, Dict[str, Any]] = {}
+    descriptions: Dict[str, Dict[str, int]] = {}
+    scanned = 0
+    scanned_value = 0.0
+    total_hits = 0
+    scan_capped = False
+
+    try:
+        search_after: Optional[List[Any]] = None
+        while all_documents or scanned < sample:
+            remaining = scan_ceiling - scanned
+            if remaining <= 0:
+                scan_capped = True
+                break
+            page = min(page_size, remaining)
+            body: Dict[str, Any] = {
+                "size": page,
+                "query": query,
+                "sort": sort,
+                "_source": _GRAPH_SOURCE_FIELDS,
+                "track_total_hits": True,
+            }
+            if search_after:
+                body["search_after"] = search_after
+            resp = client.search(index=CONTRACTS_INDEX, body=body)
+            hits = resp.get("hits", {}).get("hits", [])
+            total_block = resp.get("hits", {}).get("total") or {}
+            total_hits = total_block.get("value", total_hits) if isinstance(total_block, dict) else total_hits
+            if not hits:
+                break
+
+            for hit in hits:
+                source = hit.get("_source") or {}
+                scanned += 1
+                raw_value = source.get("precoContratual") or source.get("PrecoTotalEfetivo") or 0
+                try:
+                    value = float(raw_value)
+                except (TypeError, ValueError):
+                    value = 0.0
+                scanned_value += value
+
+                values_a = _dimension_values(source, dimension_a)
+                if not values_a:
+                    continue
+                ids_a = list(
+                    dict.fromkeys(
+                        _graph_add_node(nodes, descriptions, dimension_a, item, value)
+                        for item in values_a[:_GRAPH_MAX_VALUES_PER_DOC]
+                    )
+                )
+                if not dimension_b:
+                    continue
+                if same_dimension:
+                    # Co-ocorrência: liga todos os pares presentes no mesmo contrato.
+                    for index, left in enumerate(ids_a):
+                        for right in ids_a[index + 1:]:
+                            _graph_add_edge(edges, left, right, value, directed=False)
+                    continue
+                values_b = _dimension_values(source, dimension_b)
+                ids_b = list(
+                    dict.fromkeys(
+                        _graph_add_node(nodes, descriptions, dimension_b, item, value)
+                        for item in values_b[:_GRAPH_MAX_VALUES_PER_DOC]
+                    )
+                )
+                for left in ids_a:
+                    for right in ids_b:
+                        _graph_add_edge(edges, left, right, value, directed=True)
+
+            if len(hits) < page:
+                break
+            last_sort = hits[-1].get("sort")
+            if not last_sort:
+                break
+            search_after = last_sort
+    except Exception as exc:
+        return {"error": str(exc), "nodes": [], "edges": []}
+
+    # Rótulo descritivo mais frequente (ex.: classe CPV "4521 — Construção de edifícios").
+    for node_id, bucket in descriptions.items():
+        node = nodes.get(node_id)
+        if not node or not bucket:
+            continue
+        best = max(bucket.items(), key=lambda kv: kv[1])[0]
+        if best:
+            node["label"] = f"{node['key']} — {best}"
+
+    metric_key = "total_value" if metric == "valor" else "count"
+    scored_nodes = sorted(nodes.values(), key=lambda node: (node.get(metric_key) or 0), reverse=True)
+    kept_nodes = scored_nodes[:limit] if limit else scored_nodes
+    kept_ids = {node["id"] for node in kept_nodes}
+    kept_edges = [
+        edge for edge in edges.values() if edge["source"] in kept_ids and edge["target"] in kept_ids
+    ]
+    edge_metric = "value" if metric == "valor" else "count"
+    kept_edges.sort(key=lambda edge: (edge.get(edge_metric) or 0), reverse=True)
+    dropped_edges = max(0, len(kept_edges) - edge_limit) if edge_limit else 0
+    if edge_limit:
+        kept_edges = kept_edges[:edge_limit]
+
+    # Cobertura: independentemente do lado, usa os nós do lado A para reportar
+    # quanto do valor/contratos ficou representado.
+    side_a = [node for node in nodes.values() if node["dimension"] == dimension_a]
+    side_a_total_count = sum(node["count"] for node in side_a) or 0
+    side_a_total_value = sum(node["total_value"] for node in side_a) or 0.0
+    kept_a = [node for node in kept_nodes if node["dimension"] == dimension_a]
+    kept_a_count = sum(node["count"] for node in kept_a)
+    kept_a_value = sum(node["total_value"] for node in kept_a)
+
+    sampled = scanned < total_hits or scan_capped
+    complete = not sampled and len(kept_nodes) == len(nodes) and not dropped_edges
+
+    notes = []
+    if scan_capped:
+        notes.append(
+            f"Varredura limitada a {scanned} de {total_hits} contratos (teto do servidor: "
+            f"{GRAPH_MAX_SCAN}). Aplique filtros (ano, região, valor mínimo) para reduzir o conjunto."
+        )
+    elif sampled:
+        notes.append(
+            f"Amostra de {scanned} de {total_hits} contratos "
+            f"({'maior valor' if sample_order == 'valor' else 'mais recentes'}). "
+            "Use o modo exato ou 'todos os contratos' para valores completos."
+        )
+    else:
+        notes.append(f"Todos os {total_hits} contratos do filtro foram analisados (sem amostragem).")
+    if len(nodes) > len(kept_nodes):
+        notes.append(f"Mostrados {len(kept_nodes)} de {len(nodes)} nós agregados.")
+    if dropped_edges:
+        notes.append(f"{dropped_edges} arestas omitidas por limite.")
+    if same_dimension:
+        notes.append("Arestas representam co-ocorrência no mesmo contrato; o valor é o total desses contratos.")
+
+    return {
+        "nodes": kept_nodes,
+        "edges": kept_edges,
+        "meta": {
+            "dimension_a": dimension_a,
+            "dimension_b": dimension_b,
+            "metric": metric,
+            "mode": "varredura-total" if all_documents else "amostra",
+            "complete": complete,
+            "scan_capped": scan_capped,
+            "sample_order": sample_order,
+            "sample_limit": None if all_documents else sample,
+            "documents_scanned": scanned,
+            "documents_matching": total_hits,
+            "scanned_value": round(scanned_value, 2),
+            "nodes_total": len(nodes),
+            "edges_total": len(edges),
+            "kept_nodes": len(kept_nodes),
+            "kept_edges": len(kept_edges),
+            "omitted_edges": dropped_edges,
+            "coverage_value_share": round(kept_a_value / side_a_total_value, 4) if side_a_total_value else None,
+            "coverage_count_share": round(kept_a_count / side_a_total_count, 4) if side_a_total_count else None,
+            "directed": bool(dimension_b) and not same_dimension,
+            "limits": {
+                "max_scan": GRAPH_MAX_SCAN,
+                "max_nodes": GRAPH_MAX_NODES,
+                "max_edges": GRAPH_MAX_EDGES,
+            },
+            "notes": notes,
+            "filters": {
+                "q": q,
+                "year": year,
+                "region": region,
+                "cpv_code": cpv_code,
+                "min_value": min_value,
+                "max_value": max_value,
+            },
+        },
+    }
+
+
+def get_company_trademarks(
+    company_nif: Optional[str] = None,
+    company_name: Optional[str] = None,
+    holder_name: Optional[str] = None,
+    q: Optional[str] = None,
+    size: int = 100,
+    from_: int = 0,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Lê as marcas indexadas de uma empresa (por NIF, nome de empresa ou titular)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+
+    ensure_indices(client)
+
+    should: List[Dict[str, Any]] = []
+    if company_nif:
+        should.append({"term": {"company_nif": str(company_nif)}})
+    if company_name:
+        should.append({"match_phrase": {"holder_name": company_name}})
+        should.append({"match": {"company_name": company_name}})
+    if holder_name:
+        should.append({"match_phrase": {"holder_name": holder_name}})
+    if q:
+        should.append({"match": {"mark_name": q}})
+
+    if not should:
+        query: Dict[str, Any] = {"match_all": {}}
+    else:
+        query = {"bool": {"should": should, "minimum_should_match": 1}}
+
+    try:
+        resp = client.search(
+            index=TRADEMARKS_INDEX,
+            body={
+                "query": query,
+                "from": from_,
+                "size": size,
+                "track_total_hits": True,
+                # Semelhança do titular primeiro (docs antigos ficam no fim), depois data.
+                "sort": [
+                    {"holder_similarity": {"order": "desc", "missing": "_last"}},
+                    {"application_date": {"order": "desc", "missing": "_last"}},
+                ],
+            },
+        )
+        items = [{**hit["_source"], "doc_id": hit["_id"]} for hit in resp["hits"]["hits"]]
+        return {
+            "company_nif": company_nif,
+            "company_name": company_name,
+            "total": resp["hits"]["total"]["value"],
+            "items": items,
+            "from": from_,
+            "size": size,
+        }
+    except Exception as exc:
+        return {"error": str(exc), "items": [], "total": 0}
+
+
+def search_trademarks(
+    q: Optional[str] = None,
+    holder_name: Optional[str] = None,
+    nice_class: Optional[str] = None,
+    mark_type: Optional[str] = None,
+    current_phase: Optional[str] = None,
+    size: int = 20,
+    from_: int = 0,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa global de marcas indexadas no Elasticsearch."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+
+    ensure_indices(client)
+
+    must: List[Dict[str, Any]] = []
+    filters: List[Dict[str, Any]] = []
+    if q:
+        must.append({
+            "multi_match": {
+                "query": q,
+                "fields": ["mark_name^3", "holder_name^2", "process_number"],
+                "operator": "and",
+            }
+        })
+    if holder_name:
+        must.append({"match_phrase": {"holder_name": holder_name}})
+    if nice_class:
+        filters.append({"term": {"nice_classes": nice_class}})
+    if mark_type:
+        filters.append({"term": {"mark_type": mark_type}})
+    if current_phase:
+        filters.append({"term": {"current_phase": current_phase}})
+
+    query: Dict[str, Any]
+    if must or filters:
+        query = {"bool": {}}
+        if must:
+            query["bool"]["must"] = must
+        if filters:
+            query["bool"]["filter"] = filters
+    else:
+        query = {"match_all": {}}
+
+    try:
+        resp = client.search(
+            index=TRADEMARKS_INDEX,
+            body={
+                "query": query,
+                "from": from_,
+                "size": size,
+                "track_total_hits": True,
+                "sort": [
+                    {"application_date": {"order": "desc", "missing": "_last"}},
+                    "_score",
+                ],
+            },
+        )
+        items = [{**hit["_source"], "doc_id": hit["_id"], "relevance": hit.get("_score")} for hit in resp["hits"]["hits"]]
+        return {"query": q, "total": resp["hits"]["total"]["value"], "items": items, "from": from_, "size": size}
+    except Exception as exc:
+        return {"error": str(exc), "items": [], "total": 0}
+
+
+def get_company_firmas(
+    company_nif: Optional[str] = None,
+    company_name: Optional[str] = None,
+    q: Optional[str] = None,
+    size: int = 100,
+    from_: int = 0,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Lê as firmas/nomes comerciais indexados de uma empresa (RNPC/PNS)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+
+    ensure_indices(client)
+
+    should: List[Dict[str, Any]] = []
+    if company_nif:
+        should.append({"term": {"company_nif": str(company_nif)}})
+        should.append({"term": {"nipc": str(company_nif)}})
+    if company_name:
+        should.append({"match": {"nome": company_name}})
+        should.append({"term": {"search_query": company_name}})
+    if q:
+        should.append({"match": {"nome": q}})
+
+    if not should:
+        query: Dict[str, Any] = {"match_all": {}}
+    else:
+        query = {"bool": {"should": should, "minimum_should_match": 1}}
+
+    try:
+        resp = client.search(
+            index=FIRMAS_INDEX,
+            body={
+                "query": query,
+                "from": from_,
+                "size": size,
+                "track_total_hits": True,
+                # Semelhança do nome primeiro, depois o score de confundibilidade do RNPC.
+                "sort": [
+                    {"name_similarity": {"order": "desc", "missing": "_last"}},
+                    {"score": {"order": "desc", "missing": "_last"}},
+                ],
+            },
+        )
+        items = [{**hit["_source"], "doc_id": hit["_id"]} for hit in resp["hits"]["hits"]]
+        return {
+            "company_nif": company_nif,
+            "company_name": company_name,
+            "total": resp["hits"]["total"]["value"],
+            "items": items,
+            "from": from_,
+            "size": size,
+        }
+    except Exception as exc:
+        return {"error": str(exc), "items": [], "total": 0}
+
+
+def search_firmas(
+    q: Optional[str] = None,
+    concelho: Optional[str] = None,
+    cae: Optional[str] = None,
+    situacao: Optional[str] = None,
+    min_score: Optional[float] = None,
+    size: int = 20,
+    from_: int = 0,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa firmas/nomes comerciais (RNPC) indexados no Elasticsearch."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+
+    ensure_indices(client)
+
+    must: List[Dict[str, Any]] = []
+    filters: List[Dict[str, Any]] = []
+    if q:
+        must.append({"match": {"nome": {"query": q, "operator": "and"}}})
+    if concelho:
+        filters.append({"term": {"concelho": concelho}})
+    if cae:
+        filters.append({"term": {"cae_principal": cae}})
+    if situacao:
+        filters.append({"term": {"situacao": situacao}})
+    if min_score is not None:
+        filters.append({"range": {"score": {"gte": min_score}}})
+
+    query: Dict[str, Any]
+    if must or filters:
+        query = {"bool": {}}
+        if must:
+            query["bool"]["must"] = must
+        if filters:
+            query["bool"]["filter"] = filters
+    else:
+        query = {"match_all": {}}
+
+    try:
+        resp = client.search(
+            index=FIRMAS_INDEX,
+            body={
+                "query": query,
+                "from": from_,
+                "size": size,
+                "track_total_hits": True,
+                "sort": [{"score": {"order": "desc", "missing": "_last"}}, "_score"],
+            },
+        )
+        items = [{**hit["_source"], "doc_id": hit["_id"]} for hit in resp["hits"]["hits"]]
+        return {"query": q, "total": resp["hits"]["total"]["value"], "items": items, "from": from_, "size": size}
+    except Exception as exc:
+        return {"error": str(exc), "items": [], "total": 0}
+
+
+# --- Cadastro de entidades do portal base (finance_entities) ---
+
+def index_entities(
+    docs: Iterable[Dict[str, Any]],
+    chunk_size: int = 2000,
+    max_records: Optional[int] = None,
+    refresh: bool = False,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa entidades normalizadas no índice ENTITIES_INDEX.
+
+    Aceita qualquer iterável (por exemplo o gerador de ``iter_normalized_entities``),
+    pelo que não é necessário carregar o ficheiro todo em memória. O ``_id`` é o NIF
+    ou um hash do nome, garantindo reingestões idempotentes.
+    """
+    from api.entities_service import entity_doc_id
+
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed_count": 0, "total": 0}
+
+    ensure_indices(client)
+
+    indexed = 0
+    errors = 0
+    seen = 0
+    buffer: List[Dict[str, Any]] = []
+
+    try:
+        for doc in docs:
+            if max_records is not None and seen >= max_records:
+                break
+            seen += 1
+            source = {k: v for k, v in doc.items() if not k.startswith("_")}
+            source["ingested_at"] = _today()
+            buffer.append({"_index": ENTITIES_INDEX, "_id": f"{ENTITIES_INDEX}:{entity_doc_id(doc)}", "_source": source})
+
+            if len(buffer) >= chunk_size:
+                success, errs = bulk(client, buffer, raise_on_error=False, stats_only=False)
+                indexed += success
+                errors += len(errs) if isinstance(errs, list) else 0
+                buffer = []
+
+        if buffer:
+            success, errs = bulk(client, buffer, raise_on_error=False, stats_only=False)
+            indexed += success
+            errors += len(errs) if isinstance(errs, list) else 0
+
+        if refresh:
+            try:
+                client.indices.refresh(index=ENTITIES_INDEX)
+            except Exception:
+                pass
+
+        return {
+            "index": ENTITIES_INDEX,
+            "indexed_count": indexed,
+            "total": seen,
+            "errors": errors,
+            "message": f"{indexed} entidades indexadas de {seen}",
+        }
+    except Exception as exc:
+        return {"index": ENTITIES_INDEX, "error": str(exc), "indexed_count": indexed, "total": seen}
+
+
+def search_entities(
+    q: Optional[str] = None,
+    country: Optional[str] = None,
+    only_with_nif: Optional[bool] = None,
+    min_contracts: Optional[int] = None,
+    max_contracts: Optional[int] = None,
+    min_value: Optional[float] = None,
+    max_value: Optional[float] = None,
+    role: Optional[str] = "all",
+    sort_by: Optional[str] = "total_value",
+    sort_order: Optional[str] = "desc",
+    size: int = 20,
+    from_: int = 0,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa o cadastro de entidades com filtros e ordenação.
+
+    ``role`` permite restringir a entidades que aparecem como adjudicante
+    (``totAdjudicante``), adjudicatário (``totAdjudicatario``) ou ambos.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+
+    ensure_indices(client)
+
+    must: List[Dict[str, Any]] = []
+    filters: List[Dict[str, Any]] = []
+    text_query: Optional[Dict[str, Any]] = None
+
+    if q:
+        term = q.strip()
+        if term:
+            # Combina: NIF exato, nome exato (frase) e correspondência incremental
+            # por prefixo (edge-ngram), para que "SONAE" encontre "SONAECOM".
+            text_query = {
+                "bool": {
+                    "should": [
+                        {"term": {"nif": term}},
+                        {"match_phrase": {"name": {"query": term, "boost": 5}}},
+                        {"multi_match": {"query": term, "fields": ["name^3"], "operator": "and", "boost": 3}},
+                        {"match": {"name.autocomplete": {"query": term, "boost": 1}}},
+                    ],
+                    "minimum_should_match": 1,
+                }
+            }
+    if country:
+        filters.append({"term": {"country": country}})
+    if only_with_nif:
+        filters.append({"term": {"has_nif": True}})
+    if min_contracts is not None:
+        filters.append({"range": {"contracts_count": {"gte": min_contracts}}})
+    if max_contracts is not None:
+        filters.append({"range": {"contracts_count": {"lte": max_contracts}}})
+    if min_value is not None:
+        filters.append({"range": {"total_value": {"gte": min_value}}})
+    if max_value is not None:
+        filters.append({"range": {"total_value": {"lte": max_value}}})
+    if role == "adjudicante":
+        filters.append({"range": {"as_adjudicante_count": {"gte": 1}}})
+    elif role == "adjudicatario":
+        filters.append({"range": {"as_adjudicatario_count": {"gte": 1}}})
+
+    query: Dict[str, Any]
+    if text_query or filters:
+        query = {"bool": {}}
+        if text_query:
+            query["bool"]["must"] = [text_query]
+        if filters:
+            query["bool"]["filter"] = filters
+    else:
+        query = {"match_all": {}}
+
+    allowed_sort = {
+        "name", "contracts_count", "total_value", "as_adjudicante_value",
+        "as_adjudicante_count", "as_adjudicatario_count",
+    }
+    sort_field = sort_by if sort_by in allowed_sort else "total_value"
+    order = "asc" if (sort_order or "desc").lower() == "asc" else "desc"
+    # Em empates ordena por nome para garantir paginação estável.
+    sort_spec: List[Any] = [{sort_field: {"order": order}}, {"name.keyword": {"order": "asc"}}]
+
+    try:
+        resp = client.search(
+            index=ENTITIES_INDEX,
+            body={
+                "query": query,
+                "from": from_,
+                "size": size,
+                "track_total_hits": True,
+                "sort": sort_spec,
+            },
+        )
+        items = [{**hit["_source"], "doc_id": hit["_id"]} for hit in resp["hits"]["hits"]]
+        return {
+            "query": q,
+            "total": resp["hits"]["total"]["value"],
+            "items": items,
+            "from": from_,
+            "size": size,
+        }
+    except Exception as exc:
+        return {"error": str(exc), "items": [], "total": 0}
+
+
+def get_entity_stats(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Estatísticas agregadas do cadastro de entidades (totais, países, com/sem NIF)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    ensure_indices(client)
+
+    try:
+        resp = client.search(
+            index=ENTITIES_INDEX,
+            body={
+                "size": 0,
+                "track_total_hits": True,
+                "aggs": {
+                    "with_nif": {"filter": {"term": {"has_nif": True}}},
+                    "without_nif": {"filter": {"term": {"has_nif": False}}},
+                    "countries": {
+                        "terms": {"field": "country", "size": 15, "order": {"_count": "desc"}},
+                        "aggs": {"value": {"sum": {"field": "total_value"}}},
+                    },
+                    "total_value": {"sum": {"field": "total_value"}},
+                    "total_contracts": {"sum": {"field": "contracts_count"}},
+                    "as_adjudicante": {"filter": {"range": {"as_adjudicante_count": {"gte": 1}}}},
+                    "as_adjudicatario": {"filter": {"range": {"as_adjudicatario_count": {"gte": 1}}}},
+                },
+            },
+        )
+        aggs = resp["aggregations"]
+        countries = [
+            {
+                "country": b["key"],
+                "count": b["doc_count"],
+                "total_value": round(b.get("value", {}).get("value") or 0.0, 2),
+            }
+            for b in aggs.get("countries", {}).get("buckets", [])
+        ]
+        return {
+            "total": resp["hits"]["total"]["value"],
+            "with_nif": aggs.get("with_nif", {}).get("doc_count", 0),
+            "without_nif": aggs.get("without_nif", {}).get("doc_count", 0),
+            "total_value": round(aggs.get("total_value", {}).get("value") or 0.0, 2),
+            "total_contracts": int(aggs.get("total_contracts", {}).get("value") or 0),
+            "adjudicante_count": aggs.get("as_adjudicante", {}).get("doc_count", 0),
+            "adjudicatario_count": aggs.get("as_adjudicatario", {}).get("doc_count", 0),
+            "countries": countries,
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def get_entity_by_nif(nif: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Devolve o registo do cadastro de entidades para um NIF."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    ensure_indices(client)
+
+    try:
+        resp = client.search(
+            index=ENTITIES_INDEX,
+            body={"query": {"bool": {"should": [{"term": {"nif": nif}}, {"term": {"_id": f"{ENTITIES_INDEX}:{nif}"}}], "minimum_should_match": 1}}, "size": 1},
+        )
+        hits = resp["hits"]["hits"]
+        if not hits:
+            return {"nif": nif, "error": "Entidade não encontrada no cadastro"}
+        return {"nif": nif, **hits[0]["_source"], "doc_id": hits[0]["_id"]}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def list_entity_countries(es: Optional[Elasticsearch] = None) -> List[Dict[str, Any]]:
+    """Lista os países presentes no cadastro de entidades, com contagem."""
+    client = es or get_es_client()
+    if not client:
+        return []
+
+    ensure_indices(client)
+
+    try:
+        resp = client.search(
+            index=ENTITIES_INDEX,
+            body={"size": 0, "aggs": {"countries": {"terms": {"field": "country", "size": 300, "order": {"_key": "asc"}}}}},
+        )
+        return [
+            {"country": b["key"], "count": b["doc_count"]}
+            for b in resp["aggregations"]["countries"]["buckets"]
+            if b["key"]
+        ]
+    except Exception:
+        return []

@@ -1,5 +1,5 @@
 export const API_BASE =
-  import.meta.env.VITE_API_URL || "http://127.0.0.1:8007";
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:8002";
 
 import type {
   Actions,
@@ -32,6 +32,13 @@ import type {
   ElasticSearchPricesResponse,
   ElasticStatus,
   ElasticTickerListResponse,
+  CompanyEnrichmentResponse,
+  EntityDetail,
+  EntityIngestRequest,
+  EntityIngestResponse,
+  EntitySearchRequest,
+  EntitySearchResponse,
+  EntityStats,
   Financials,
   Holders,
   News,
@@ -60,10 +67,13 @@ import type {
   ContractAnalyticsFilters,
   ContractChatRequest,
   ContractChatResponse,
+  ContractGraphRequest,
+  ContractGraphBuildResponse,
   ContractGraphResponse,
   ContractRegionalResponse,
   ContractRelationsResponse,
   ContractItem,
+  GraphDimensionsResponse,
   ImportFileType,
   ImportDataType,
   ImportPreviewRow,
@@ -605,6 +615,7 @@ export async function getContractAnalytics(
     entity,
     nif,
     cpv_code,
+    region,
     min_price,
     max_price,
     start_date,
@@ -618,6 +629,7 @@ export async function getContractAnalytics(
   if (entity) params.append("entity", entity);
   if (nif) params.append("nif", nif);
   if (cpv_code) params.append("cpv_code", cpv_code);
+  if (region) params.append("region", region);
   if (min_price !== undefined) params.append("min_price", String(min_price));
   if (max_price !== undefined) params.append("max_price", String(max_price));
   if (start_date) params.append("start_date", start_date);
@@ -682,6 +694,59 @@ export async function getContractRelations(
   if (counterpartyNif) params.set("counterparty_nif", counterpartyNif);
   const res = await fetch(`${API_BASE}/contracts/analytics/relations?${params}`);
   if (!res.ok) throw new Error(`Erro ao obter relações: ${res.status}`);
+  return res.json();
+}
+
+/** Dimensões disponíveis para construir grafos de contratos. */
+export async function getGraphDimensions(): Promise<GraphDimensionsResponse> {
+  const res = await fetch(`${API_BASE}/contracts/analytics/graph/dimensions`);
+  if (!res.ok) throw new Error(`Erro ao obter dimensões de grafo: ${res.status}`);
+  return res.json();
+}
+
+/** Constrói um grafo de contratos por dimensões (nós e arestas agregados). */
+export async function buildContractGraph(
+  request: ContractGraphRequest,
+): Promise<ContractGraphBuildResponse> {
+  const params = new URLSearchParams({
+    dimension_a: request.dimension_a,
+    metric: request.metric ?? "valor",
+    mode: request.mode ?? "auto",
+    limit: String(request.limit ?? 60),
+    edge_limit: String(request.edge_limit ?? 400),
+    sample: String(request.sample ?? 3000),
+    sample_order: request.sample_order ?? "valor",
+  });
+  if (request.dimension_b) params.set("dimension_b", request.dimension_b);
+  if (request.q) params.set("q", request.q);
+  if (request.year !== undefined) params.set("year", String(request.year));
+  if (request.region) params.set("region", request.region);
+  if (request.cpv_code) params.set("cpv_code", request.cpv_code);
+  if (request.min_value !== undefined) params.set("min_value", String(request.min_value));
+  if (request.max_value !== undefined) params.set("max_value", String(request.max_value));
+  const res = await fetch(`${API_BASE}/contracts/analytics/graph?${params}`);
+  if (!res.ok) {
+    let message = `Erro ao construir grafo: ${res.status}`;
+    try {
+      const payload = await res.json();
+      const detail = (payload as { detail?: unknown }).detail;
+      if (Array.isArray(detail) && detail.length > 0) {
+        const first = detail[0] as { loc?: unknown; msg?: string };
+        const loc = Array.isArray(first.loc) ? first.loc : [];
+        const field = loc.length > 0 ? String(loc[loc.length - 1]) : "parâmetro";
+        message = `Parâmetro inválido «${field}»: ${first.msg ?? "valor não aceite"}.`;
+      } else if (typeof detail === "string") {
+        message = detail;
+      }
+    } catch {
+      // resposta sem corpo JSON: mantém a mensagem genérica
+    }
+    if (res.status === 422) {
+      message +=
+        " Se acabou de atualizar o frontend, reinicie o backend (uvicorn na porta 8002) para aplicar os novos limites.";
+    }
+    throw new Error(message);
+  }
   return res.json();
 }
 
@@ -880,6 +945,92 @@ export async function getCompanyAnalytics(
   if (year !== undefined) params.append("year", String(year));
   const res = await fetch(`${API_BASE}/companies/${encodeURIComponent(nif)}/analytics?${params}`);
   if (!res.ok) throw new Error(`Erro ao obter analytics da empresa: ${res.status}`);
+  return res.json();
+}
+
+// --- Cadastro de entidades (pesquisa de empresas) ---
+
+export async function searchEntities(
+  request: EntitySearchRequest = {},
+): Promise<EntitySearchResponse> {
+  const payload = { ...request, from: request.from ?? 0, size: request.size ?? 20 };
+  const res = await fetch(`${API_BASE}/entities/search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao pesquisar empresas: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function getEntityDetail(nif: string): Promise<EntityDetail> {
+  const res = await fetch(`${API_BASE}/entities/${encodeURIComponent(nif)}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter ficha da empresa: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function getEntityStats(): Promise<EntityStats> {
+  const res = await fetch(`${API_BASE}/entities/stats`);
+  if (!res.ok) throw new Error(`Erro ao obter estatísticas de entidades: ${res.status}`);
+  return res.json();
+}
+
+export async function entityAutocomplete(
+  q: string,
+  size = 10,
+): Promise<{ query: string; suggestions: { nif?: string; name: string; country?: string }[] }> {
+  const params = new URLSearchParams({ q: q.trim(), size: String(size) });
+  const res = await fetch(`${API_BASE}/entities/autocomplete?${params}`);
+  if (!res.ok) throw new Error(`Erro no autocomplete de empresas: ${res.status}`);
+  return res.json();
+}
+
+export async function ingestEntities(
+  request: EntityIngestRequest = {},
+): Promise<EntityIngestResponse> {
+  const res = await fetch(`${API_BASE}/entities/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao importar entidades: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Obtém marcas (INPI) e firmas (RNPC) e guarda-as na ficha da empresa. */
+export async function enrichCompany(
+  nif: string,
+  options: {
+    include_trademarks?: boolean;
+    include_firmas?: boolean;
+    max_trademarks?: number;
+    max_firmas?: number;
+    trademark_detail_limit?: number;
+  } = {},
+): Promise<CompanyEnrichmentResponse> {
+  const params = new URLSearchParams({
+    include_trademarks: String(options.include_trademarks ?? true),
+    include_firmas: String(options.include_firmas ?? true),
+    max_trademarks: String(options.max_trademarks ?? 40),
+    max_firmas: String(options.max_firmas ?? 15),
+    trademark_detail_limit: String(options.trademark_detail_limit ?? 8),
+  });
+  const res = await fetch(`${API_BASE}/companies/${encodeURIComponent(nif)}/enrich?${params}`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao enriquecer empresa: ${res.status} - ${text}`);
+  }
   return res.json();
 }
 

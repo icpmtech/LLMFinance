@@ -57,8 +57,7 @@ def kill_existing_on_port(port: int) -> None:
         import subprocess as _subprocess
 
         output = _subprocess.check_output(
-            ["netstat", "-ano", "|", "findstr", f":{port}"],
-            shell=True,
+            ["netstat", "-ano"],
             text=True,
             errors="ignore",
         )
@@ -68,7 +67,7 @@ def kill_existing_on_port(port: int) -> None:
             if not parts:
                 continue
             # Local address normalmente é o segundo campo; PID o último.
-            if f":{port}" in parts[1]:
+            if len(parts) >= 5 and parts[1].endswith(f":{port}"):
                 try:
                     pids.add(int(parts[-1]))
                 except ValueError:

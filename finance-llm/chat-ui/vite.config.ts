@@ -8,35 +8,35 @@ export default defineConfig({
   server: {
     proxy: {
       '/chat': {
-        target: 'http://127.0.0.1:8007',
+        target: 'http://127.0.0.1:8002',
         changeOrigin: true,
       },
       '/health': {
-        target: 'http://127.0.0.1:8007',
+        target: 'http://127.0.0.1:8002',
         changeOrigin: true,
       },
       '/companies': {
-        target: 'http://127.0.0.1:8007',
+        target: 'http://127.0.0.1:8002',
         changeOrigin: true,
       },
       '/contracts': {
-        target: 'http://127.0.0.1:8007',
+        target: 'http://127.0.0.1:8002',
         changeOrigin: true,
       },
       '/tickers': {
-        target: 'http://127.0.0.1:8007',
+        target: 'http://127.0.0.1:8002',
         changeOrigin: true,
       },
       '/forecast': {
-        target: 'http://127.0.0.1:8007',
+        target: 'http://127.0.0.1:8002',
         changeOrigin: true,
       },
       '/elastic': {
-        target: 'http://127.0.0.1:8007',
+        target: 'http://127.0.0.1:8002',
         changeOrigin: true,
       },
       '/import': {
-        target: 'http://127.0.0.1:8007',
+        target: 'http://127.0.0.1:8002',
         changeOrigin: true,
       },
     },

@@ -43,17 +43,6 @@ DEFAULT_HEADERS = {
 # Evitar flood ao INPI (segundos entre pedidos consecutivos)
 MIN_REQUEST_INTERVAL = 0.4
 
-# Campos de data conhecidos no INPI (dd-MM-yyyy)
-_INPI_DATE_FIELDS = {
-    "dt_apresentacao",
-    "dt_pedido",
-    "dt_ini_fase_actual",
-    "dt_fim_fase_actual",
-    "dt_concessao",
-    "dt_publicacao",
-    "dt_expiracao",
-}
-
 
 @dataclass
 class InpiTrademark:
@@ -76,6 +65,7 @@ class InpiTrademark:
     documents: List[Dict[str, Any]] = field(default_factory=list)
     ingested_at: Optional[str] = None
     source_query: Optional[str] = None
+    holder_similarity: Optional[float] = None
 
     def to_dict(self, include_raw: bool = False) -> Dict[str, Any]:
         doc: Dict[str, Any] = {
@@ -166,19 +156,23 @@ class InpiMarcasClient:
         return self._post(payload)
 
     def get_detail(self, nord: int) -> Dict[str, Any]:
-        return self._post({"cmd": "DetalheMarca", "nord": nord})
+        """Ficha detalhada do processo. O parâmetro ``lang`` é obrigatório no INPI."""
+        return self._post({"cmd": "DetalheMarca", "lang": "PT", "nord": nord})
 
     def get_nice(self, nord: int) -> Dict[str, Any]:
-        return self._post({"cmd": "DetalheMarcaNice", "nord": nord})
+        return self._post({"cmd": "DetalheMarcaNice", "lang": "PT", "nord": nord})
 
     def get_phases(self, nord: int) -> Dict[str, Any]:
-        return self._post({"cmd": "DetalheMarcaFases", "nord": nord})
+        return self._post({"cmd": "DetalheMarcaFases", "lang": "PT", "nord": nord})
 
     def get_entities(self, nord: int) -> Dict[str, Any]:
-        return self._post({"cmd": "DetalheEntidades", "nord": nord})
+        return self._post({"cmd": "DetalheEntidades", "lang": "PT", "nord": nord})
 
     def get_documents(self, nord: int) -> Dict[str, Any]:
-        return self._post({"cmd": "DetalheDocumentos", "nord": nord})
+        return self._post({"cmd": "DetalheDocumentos", "lang": "PT", "nord": nord})
+
+    def get_bulletins(self, nord: int) -> Dict[str, Any]:
+        return self._post({"cmd": "DetalheBoletins", "lang": "PT", "nord": nord})
 
 
 def _parse_inpi_date(value: Any) -> Optional[str]:
@@ -202,6 +196,7 @@ def _norm_text(value: Any) -> str:
 
 
 def _extract_nice_classes(nice_resp: Dict[str, Any]) -> List[str]:
+    """Extrai as classes de Nice. O INPI devolve ``{edicao, classe, texto}``."""
     classes: List[str] = []
     data = nice_resp if isinstance(nice_resp, dict) else {}
     items = data.get("items") or data.get("data") or []
@@ -210,48 +205,71 @@ def _extract_nice_classes(nice_resp: Dict[str, Any]) -> List[str]:
     for item in items or []:
         if not isinstance(item, dict):
             continue
-        code = item.get("classe") or item.get("nice") or item.get("codigo") or item.get("class")
-        desc = item.get("especificacao") or item.get("descricao") or item.get("description") or ""
+        code = _norm_text(item.get("classe") or item.get("codigo") or item.get("nice"))
+        desc = _norm_text(
+            item.get("texto") or item.get("especificacao") or item.get("descricao")
+        )
         if code:
             classes.append(f"{code}: {desc}".strip(" :"))
     return classes
 
 
 def _extract_entities(entities_resp: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Extrai entidades intervenientes. O INPI devolve ``nome_enti``/``tipo_int``."""
     data = entities_resp if isinstance(entities_resp, dict) else {}
-    items = data.get("items") or data.get("data") or data.get("enti") or []
+    items = data.get("items") or data.get("data") or []
     if isinstance(items, dict):
         items = [items]
     result: List[Dict[str, Any]] = []
     for item in items or []:
         if not isinstance(item, dict):
             continue
-        name = item.get("nome") or item.get("titular") or item.get("designacao") or ""
+        name = item.get("nome_enti") or item.get("nome") or item.get("designacao") or ""
         nif = item.get("nif") or item.get("nif_entidade") or ""
-        role = item.get("intervencao") or item.get("tipo") or "Titular"
+        role = item.get("tipo_int") or item.get("intervencao") or item.get("tipo") or "Titular"
         if name:
-            result.append({"name": _norm_text(name), "nif": _norm_text(nif), "role": role})
+            result.append(
+                {
+                    "name": _norm_text(name),
+                    "nif": _norm_text(nif),
+                    "role": _norm_text(role),
+                    "start_date": _parse_inpi_date(item.get("dt_inicio")),
+                    "end_date": _parse_inpi_date(item.get("dt_fim")),
+                }
+            )
     return result
 
 
 def _extract_phases(phases_resp: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Extrai fases jurídicas. O INPI devolve ``fase``/``dt_inicio``/``dt_fim_efect``."""
     data = phases_resp if isinstance(phases_resp, dict) else {}
-    items = data.get("items") or data.get("data") or data.get("fases") or []
+    items = data.get("items") or data.get("data") or []
     if isinstance(items, dict):
         items = [items]
     result: List[Dict[str, Any]] = []
     for item in items or []:
         if not isinstance(item, dict):
             continue
-        phase = item.get("fase") or item.get("fase_actual") or item.get("descricao") or ""
-        start = _parse_inpi_date(item.get("dt_ini") or item.get("dt_inicio") or item.get("dt_ini_fase"))
-        end = _parse_inpi_date(item.get("dt_fim") or item.get("dt_fim_fase"))
+        phase = _norm_text(item.get("fase") or item.get("fase_actual") or item.get("descricao"))
+        start = _parse_inpi_date(item.get("dt_inicio") or item.get("dt_ini"))
+        end = _parse_inpi_date(
+            item.get("dt_fim_efect") or item.get("dt_fim_prev") or item.get("dt_fim")
+        )
         if phase:
-            result.append({"phase": phase, "start_date": start, "end_date": end})
+            result.append(
+                {
+                    "phase": phase,
+                    "start_date": start,
+                    "end_date": end,
+                    "bpi": _norm_text(item.get("bpi")),
+                    "entity": _norm_text(item.get("entidade")),
+                }
+            )
     return result
 
 
 def _extract_documents(docs_resp: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Extrai documentos. O INPI devolve ``nume_doc``/``acto_req``/``desp``/``hasUrl``."""
     data = docs_resp if isinstance(docs_resp, dict) else {}
     items = data.get("items") or data.get("data") or []
     if isinstance(items, dict):
@@ -260,19 +278,25 @@ def _extract_documents(docs_resp: Dict[str, Any]) -> List[Dict[str, Any]]:
     for item in items or []:
         if not isinstance(item, dict):
             continue
-        doc_id = item.get("nume_doc") or item.get("id") or ""
-        doc_type = item.get("tipo") or item.get("tipo_doc") or ""
-        url = item.get("url") or ""
-        description = item.get("descricao") or item.get("assunto") or ""
-        if doc_id or description:
-            result.append(
-                {
-                    "doc_id": _norm_text(doc_id),
-                    "type": _norm_text(doc_type),
-                    "description": _norm_text(description),
-                    "url": _norm_text(url),
-                }
-            )
+        doc_id = _norm_text(item.get("nume_doc") or item.get("id"))
+        doc_type = _norm_text(item.get("acto_req") or item.get("tipo") or item.get("tipo_doc"))
+        # Cada documento tem página própria no INPI quando hasUrl == "S".
+        url = _norm_text(item.get("url"))
+        if not url and _norm_text(item.get("hasUrl")).upper() == "S" and doc_id:
+            url = f"{INPI_BASE}/pesquisas/Controller?cmd=DetalheDocumento&nume_doc={doc_id}"
+        result.append(
+            {
+                "doc_id": doc_id,
+                "type": doc_type,
+                "description": _norm_text(
+                    item.get("desp") or item.get("acto_exec") or item.get("assunto")
+                ),
+                "requester": _norm_text(item.get("req")),
+                "entry_date": _norm_text(item.get("dt_entrada")),
+                "execution_date": _norm_text(item.get("dt_exec")),
+                "url": url,
+            }
+        )
     return result
 
 
@@ -296,6 +320,18 @@ def build_trademark_from_detail(
     detail = detail_resp if isinstance(detail_resp, dict) else {}
     holder = item.get("titular") or detail.get("nome_titular") or detail.get("titular") or ""
 
+    # O campo ``enti`` do detalhe também identifica o titular.
+    if not holder:
+        for ent in detail.get("enti") or []:
+            if isinstance(ent, dict) and ent.get("nome"):
+                holder = ent["nome"]
+                break
+
+    nice_classes = _extract_nice_classes(nice_resp or {})
+    if not nice_classes and detail.get("nice"):
+        # O detalhe traz as classes como string (ex.: "33" ou "9, 35").
+        nice_classes = [c.strip() for c in detail["nice"].split(",") if c.strip()]
+
     tm = InpiTrademark(
         nord=nord,
         process_number=_norm_text(item.get("nume_proc") or detail.get("nume_proc") or ""),
@@ -307,7 +343,7 @@ def build_trademark_from_detail(
         current_phase=_norm_text(detail.get("fase_actual") or ""),
         phase_start_date=_parse_inpi_date(detail.get("dt_ini_fase_actual")),
         phase_end_date=_parse_inpi_date(detail.get("dt_fim_fase_actual")),
-        nice_classes=_extract_nice_classes(nice_resp or {}),
+        nice_classes=nice_classes,
         raw_detail=detail,
         entities=_extract_entities(entities_resp or {}),
         phases=_extract_phases(phases_resp or {}),
@@ -326,13 +362,20 @@ def search_trademarks_by_entity(
     intervencao: str = "TIT",
     include_detail: bool = False,
     max_results: Optional[int] = None,
+    detail_limit: Optional[int] = None,
 ) -> List[InpiTrademark]:
-    """Pesquisa marcas por entidade e opcionalmente carrega detalhes de cada uma."""
+    """Pesquisa marcas por entidade e opcionalmente carrega detalhes de cada uma.
+
+    ``detail_limit`` limita quantas marcas levam detalhe completo (5 pedidos cada);
+    as restantes são indexadas apenas com os campos da listagem, o que evita
+    centenas de pedidos ao INPI quando o titular tem muitas marcas.
+    """
     results: List[InpiTrademark] = []
     start = 0
     limit = 16
     total = None
     source_query = nome or nif or codigo or ""
+    detalhados = 0
 
     while True:
         if max_results is not None and len(results) >= max_results:
@@ -366,7 +409,10 @@ def search_trademarks_by_entity(
             if max_results is not None and len(results) >= max_results:
                 break
             nord = item.get("nord")
-            if include_detail and nord:
+            wants_detail = include_detail and nord and (
+                detail_limit is None or detalhados < detail_limit
+            )
+            if wants_detail:
                 detail = client.get_detail(nord)
                 nice = client.get_nice(nord)
                 phases = client.get_phases(nord)
@@ -381,6 +427,7 @@ def search_trademarks_by_entity(
                     documents_resp=docs,
                     source_query=source_query,
                 )
+                detalhados += 1
             else:
                 tm = build_trademark_from_detail(item, source_query=source_query)
             results.append(tm)
@@ -390,6 +437,58 @@ def search_trademarks_by_entity(
             break
 
     return results
+
+
+def search_trademarks_with_fallback(
+    nome: str,
+    nif: Optional[str] = None,
+    include_detail: bool = True,
+    max_results: Optional[int] = None,
+    detail_limit: Optional[int] = None,
+    min_interval: float = MIN_REQUEST_INTERVAL,
+) -> Dict[str, Any]:
+    """Tenta vários termos derivados do nome até o INPI devolver resultados.
+
+    A pesquisa por semelhança do INPI falha com pontuação e sufixos societários
+    (ex.: ``"CEGID-PRIMAVERA - ..., SA"`` devolve 0), pelo que se testam
+    variantes como ``"CEGID PRIMAVERA BUSINESS SOFTWARE SOLUTIONS"`` e
+    ``"PRIMAVERA"``.
+    """
+    from collectors.name_utils import name_search_candidates
+
+    client = InpiMarcasClient(min_interval=min_interval)
+    candidates = name_search_candidates(nome) or [nome]
+    tried: List[Dict[str, Any]] = []
+
+    for term in candidates:
+        results = search_trademarks_by_entity(
+            client,
+            nome=term,
+            nif=nif or "",
+            intervencao="TIT",
+            include_detail=include_detail,
+            max_results=max_results,
+            detail_limit=detail_limit,
+        )
+        tried.append({"term": term, "found": len(results)})
+        if results:
+            return {
+                "company_name": nome,
+                "nif": nif,
+                "matched_term": term,
+                "tried": tried,
+                "total": len(results),
+                "trademarks": [tm.to_dict() for tm in results],
+            }
+
+    return {
+        "company_name": nome,
+        "nif": nif,
+        "matched_term": None,
+        "tried": tried,
+        "total": 0,
+        "trademarks": [],
+    }
 
 
 def fetch_trademarks_for_company(
