@@ -233,6 +233,33 @@ Abre http://127.0.0.1:4173 no browser.
 - `POST /rag/chat` — perguntar ao RAG
 - `GET  /rag/health` — verificar estado do índice e modelos
 
+### Autenticação (contas no Elasticsearch)
+
+As contas ficam em `finance_users` e as sessões em `finance_sessions`. O browser
+envia `Authorization: Bearer <token>`; o token é assinado (HMAC-SHA256) e apenas
+transporta o id da sessão, pelo que terminar sessão é imediato.
+
+- `POST   /auth/register` — criar conta (a primeira conta criada fica como **admin**)
+- `POST   /auth/login` — iniciar sessão (`remember: true` dá uma sessão de 30 dias)
+- `POST   /auth/logout` — terminar a sessão atual
+- `GET    /auth/me` — dados da conta autenticada
+- `PATCH  /auth/me` — atualizar perfil e preferências (`default_view`, `dock_position`, `sidebar_hidden`, `reduced_motion`)
+- `POST   /auth/password` — alterar palavra-passe (revoga as outras sessões)
+- `GET    /auth/sessions` — listar sessões ativas
+- `DELETE /auth/sessions/{id}` — terminar uma sessão concreta
+- `DELETE /auth/sessions` — terminar todas as outras sessões
+- `DELETE /auth/me` — apagar a conta (confirmação pela palavra-passe)
+- `GET    /auth/stats` — contadores (apenas administradores)
+
+Variáveis de ambiente:
+
+- `FINANCE_AUTH_SECRET` (opcional) — segredo de assinatura dos tokens. Se não for
+  definido, é gerado e guardado em `data/.auth_secret`.
+
+As palavras-passe usam `hashlib.scrypt` (salt por conta) e nunca são guardadas em
+texto simples. As preferências da conta são aplicadas ao entrar (vista inicial,
+posição do dock, barra lateral, animações reduzidas).
+
 A escolha do modelo é feita no frontend (seletor do chat). Quando se escolhe **BloombergGPT-style (RAG)**, as perguntas do chat principal e da página `/rag` são encaminhadas para o motor RAG, que responde com base nos PDFs indexados e cita as fontes.
 
 ## Modelos
