@@ -216,6 +216,57 @@ Abre http://127.0.0.1:4173 no browser.
 
 > Nota: a API está configurada para `http://127.0.0.1:8003` em `chat-ui/src/api.ts`. Se alterares a porta, atualiza também o frontend e reconstrói o UI.
 
+### Interface
+
+- **Dock estilo macOS** (em baixo, à esquerda ou à direita) com ampliação ao passar o rato, etiquetas,
+  indicadores de aplicações abertas, arrumação por arrastar e painel de preferências.
+- **Barra lateral** em três modos — *expandida*, *só ícones* e *escondida* — com pesquisa rápida
+  (`/` ou `Ctrl+K`), secção de recentes e grupos memorizados. `Ctrl+B` esconde/mostra.
+- **Ecrã inteiro** e **PWA** (instalável, funciona sem ligação): `manifest.webmanifest` + `sw.js`.
+- **Contas** em Elasticsearch (`finance_users` / `finance_sessions`), com login, registo,
+  definições de perfil, sessões ativas e terminação remota.
+
+## CLI
+
+Cliente de linha de comandos (não precisa de servidor Python pesado: só `requests`).
+
+```bash
+cd finance-llm
+
+python -m cli status                                  # estado da API, ES e sessão
+python -m cli auth login nome@empresa.pt              # inicia sessão (token em ~/.finance-llm/config.json)
+python -m cli auth register "Nome" nome@empresa.pt    # cria conta (a 1.ª fica administradora)
+python -m cli auth whoami                             # dados da conta e preferências
+python -m cli auth sessions --revoke-others           # ver/terminar sessões
+
+python -m cli contracts search "reabilitação" --year 2025 --size 5
+python -m cli contracts get 15603558
+python -m cli contracts analytics --top-entities 5
+
+python -m cli companies search "EDP" --role adjudicatario
+python -m cli companies get 503140600                 # ficha + marcas INPI + firmas RNPC
+python -m cli companies trademarks 503140600
+
+python -m cli entities search "Sonae" --only-with-nif
+python -m cli entities stats
+
+python -m cli market tickers "bank"
+python -m cli market quote AAPL
+python -m cli forecast AAPL --days 10 --sentiment
+python -m cli chat "como está o mercado hoje?"
+
+python -m cli users list                              # administração (só admins)
+python -m cli open empresas-iq --print-only
+```
+
+Notas de uso:
+
+- `--json` em qualquer comando devolve a resposta crua (útil em scripts);
+  `--api`/`--token` permitem apontar a outra instância ou usar um token pontual.
+- A configuração fica em `~/.finance-llm/config.json` (ou `$FINANCE_LLM_HOME`), com permissões restritas.
+- No Windows há atalhos: `finance-llm.cmd status` ou `.\finance-llm.ps1 status`.
+- Os valores monetários, datas e tabelas são formatados para leitura; a codificação é adaptada à consola.
+
 ## Endpoints da API
 
 ### Chat

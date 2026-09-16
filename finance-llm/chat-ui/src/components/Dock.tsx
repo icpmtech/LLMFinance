@@ -30,8 +30,7 @@ import {
   type DockApp,
   type DockPosition,
 } from "../dock";
-import { useSidebarHidden } from "../layout";
-import { useFullscreen } from "../fullscreen";
+import { useSidebar } from "../layout";import { useFullscreen } from "../fullscreen";
 import { usePwaInstall } from "../pwa";
 
 interface DockProps {
@@ -68,11 +67,15 @@ export function Dock({ active, onOpen }: DockProps) {
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
   const [finePointer, setFinePointer] = useState(false);
+  const { mode: sidebarMode } = useSidebar();
   const { isFullscreen, supported: fullscreenSupported, toggle: toggleFullscreen } = useFullscreen();
   const { canInstall, standalone, installed: appInstalled, install } = usePwaInstall();
 
   const vertical = prefs.position !== "bottom";
   const editing = settingsOpen;
+
+  /** Largura reservada à barra lateral (o dock não a deve tapar). */
+  const sidebarGutter = sidebarMode === "hidden" ? "" : sidebarMode === "rail" ? "md:pl-[72px]" : "md:pl-[268px]";
 
   /* ------------------------------------------------------------------ refs */
   const shelfRef = useRef<HTMLDivElement | null>(null);
@@ -377,6 +380,8 @@ export function Dock({ active, onOpen }: DockProps) {
   /* ------------------------------------------------------------- geometria */
   const wrapperClass = [
     "fixed z-[60] flex pointer-events-none",
+    // O dock centra-se sobre a área de trabalho: não tapa a barra lateral.
+    sidebarGutter,
     prefs.position === "bottom"
       ? "inset-x-0 bottom-0 justify-center pb-2"
       : prefs.position === "left"
@@ -744,7 +749,7 @@ function DockPreferences({
   pwa,
 }: DockPreferencesProps) {
   const [overflow, setOverflow] = useState(0);
-  const { hidden: sidebarHidden, setHidden: setSidebarHidden } = useSidebarHidden();
+  const { mode: sidebarMode, setMode: setSidebarMode } = useSidebar();
 
   // Aviso quando o dock não cabe no ecrã (típico nas posições laterais).
   useEffect(() => {
@@ -857,11 +862,32 @@ function DockPreferences({
 
         <section className="space-y-3">
           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Interface</p>
-          <ToggleRow
-            label="Ocultar barra lateral (Ctrl+B)"
-            checked={sidebarHidden}
-            onChange={(value) => setSidebarHidden(value)}
-          />
+          <div className="space-y-1.5">
+            <span className="text-xs text-muted-foreground">Barra lateral</span>
+            <div className="flex gap-1 rounded-xl bg-white/5 p-1">
+              {([
+                { value: "expanded", label: "Expandida" },
+                { value: "rail", label: "Só ícones" },
+                { value: "hidden", label: "Escondida" },
+              ] as const).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setSidebarMode(option.value)}
+                  aria-pressed={sidebarMode === option.value}
+                  title={option.value === "hidden" ? "Ctrl+B alterna este modo" : undefined}
+                  className={[
+                    "flex-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60",
+                    sidebarMode === option.value
+                      ? "bg-teal-400/20 text-teal-200"
+                      : "text-muted-foreground hover:bg-white/5",
+                  ].join(" ")}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
           {fullscreen.supported && (
             <ToggleRow label="Ecrã inteiro" checked={fullscreen.isFullscreen} onChange={() => fullscreen.toggle()} />
           )}
