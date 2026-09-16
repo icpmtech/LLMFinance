@@ -703,6 +703,30 @@ class ContractAnalyticsResponse(BaseModel):
     error: Optional[str] = None
 
 
+class ContractRegionalRow(BaseModel):
+    key: str
+    count: int = 0
+    total_value: Optional[float] = None
+
+
+class ContractRegionalResponse(BaseModel):
+    total_contracts: int = 0
+    total_value: Optional[float] = None
+    regions: List[ContractRegionalRow] = []
+    error: Optional[str] = None
+
+
+class ContractGraphResponse(BaseModel):
+    nodes: List[Dict[str, Any]] = []
+    edges: List[Dict[str, Any]] = []
+    error: Optional[str] = None
+
+
+class ContractRelationsResponse(BaseModel):
+    relations: List[Dict[str, Any]] = []
+    error: Optional[str] = None
+
+
 # --- Diretório de empresas (entidades) derivado de contratos ---
 
 class CompanyRoleSummary(BaseModel):

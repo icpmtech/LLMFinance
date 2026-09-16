@@ -20,12 +20,15 @@ from api.models import (
     ContractAutocompleteResponse,
     ContractChatRequest,
     ContractAnalyticsResponse,
+    ContractGraphResponse,
     ContractChatResponse,
     ContractIngestRequest,
     ContractIngestResponse,
     ContractItem,
     ContractSearchRequest,
     ContractSearchResponse,
+    ContractRegionalResponse,
+    ContractRelationsResponse,
     ContractStatusResponse,
     ContractYearsResponse,
     CompanyAnalyticsResponse,
@@ -88,6 +91,10 @@ from api.elasticsearch_client import (
     export_contracts_to_excel,
     export_contracts_to_pdf,
     get_contract_analytics,
+    get_contract_by_id,
+    get_contract_network,
+    get_contract_regional_analytics,
+    get_contract_relationships,
     get_company_by_nif,
     get_company_contracts,
     get_es_client,
@@ -285,13 +292,13 @@ def companies_analytics(
 
 @app.get("/forecast")
 @app.get("/trading")
-@app.get("/tickers")
 @app.get("/ticker-detail")
 @app.get("/rag")
 @app.get("/elastic")
 @app.get("/contracts")
 @app.get("/contracts/dashboard")
 @app.get("/contracts/search")
+@app.get("/empresas-iq")
 @app.get("/search")
 def serve_spa_page():
     return FileResponse(str(UI_BUILD_DIR / "index.html"))
@@ -1041,25 +1048,44 @@ def contracts_analytics(
         top_entities=top_entities, top_cpv=top_cpv,
     )
     if res.get("error"):
-        raise HTTPException(status_code=502, detail=res.get("error"))
+        raise HTTPException(status_code=502, detail=res["error"])
+    return ContractAnalyticsResponse(**res)
 
-    def row(key, count, total_value=None, description=None):
-        return {"key": key, "count": count, "total_value": total_value, "description": description}
 
-    return ContractAnalyticsResponse(
-        total_contracts=res.get("total_contracts", 0),
-        total_value=res.get("total_value"),
-        avg_value=res.get("avg_value"),
-        max_value=res.get("max_value"),
-        by_year=[row(b["key"], b["count"]) for b in res.get("by_year", [])],
-        by_month=[row(b["key"], b["count"]) for b in res.get("by_month", [])],
-        value_distribution=[row(b["key"], b["count"]) for b in res.get("value_distribution", [])],
-        top_entities=[row(b["key"], b["count"], b.get("total_value"), b.get("description")) for b in res.get("top_entities", [])],
-        top_cpv=[row(b["key"], b["count"], b.get("total_value"), b.get("description")) for b in res.get("top_cpv", [])],
-        procedure_types=[row(b["key"], b["count"]) for b in res.get("procedure_types", [])],
-        contract_types=[row(b["key"], b["count"]) for b in res.get("contract_types", [])],
-        year=year,
-    )
+@app.get("/contracts/analytics/regional", response_model=ContractRegionalResponse)
+def contracts_regional_analytics(year: Optional[int] = Query(None), size: int = Query(30, ge=1, le=100)):
+    """Agrega contratos por região NUTS."""
+    result = get_contract_regional_analytics(year=year, size=size)
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=result["error"])
+    return ContractRegionalResponse(**result)
+
+
+@app.get("/contracts/analytics/network", response_model=ContractGraphResponse)
+def contracts_network(limit: int = Query(500, ge=1, le=2000)):
+    """Devolve a rede de entidades ligadas por contratos."""
+    result = get_contract_network(limit=limit)
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=result["error"])
+    return ContractGraphResponse(**result)
+
+
+@app.get("/contracts/analytics/relations", response_model=ContractRelationsResponse)
+def contracts_relations(limit: int = Query(1000, ge=1, le=2000)):
+    """Devolve relações agregadas entre adjudicantes e adjudicatários."""
+    result = get_contract_relationships(limit=limit)
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=result["error"])
+    return ContractRelationsResponse(**result)
+
+
+@app.get("/contracts/{idcontrato}", response_model=ContractItem)
+def contract_detail(idcontrato: str):
+    """Devolve um contrato individual para a ficha EmpresasIQ."""
+    result = get_contract_by_id(idcontrato)
+    if result.get("error"):
+        raise HTTPException(status_code=result.get("status_code", 502), detail=result["error"])
+    return ContractItem(**result)
 
 
 @app.post("/contracts/export/excel")

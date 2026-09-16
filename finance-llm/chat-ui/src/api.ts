@@ -58,6 +58,10 @@ import type {
   UploadPdfResponse,
   ContractAnalyticsResponse,
   ContractAnalyticsFilters,
+  ContractGraphResponse,
+  ContractRegionalResponse,
+  ContractRelationsResponse,
+  ContractItem,
 } from "./types";
 
 export type { ContractAnalyticsResponse, ContractAnalyticsFilters, CompanySearchResponse, CompanyDetail, CompanyContractsResponse, CompanyAnalyticsResponse };
@@ -612,6 +616,32 @@ export async function getContractAnalytics(
   params.append("top_cpv", String(top_cpv));
   const res = await fetch(`${API_BASE}/contracts/analytics?${params}`);
   if (!res.ok) throw new Error(`Erro ao obter analytics de contratos: ${res.status}`);
+  return res.json();
+}
+
+export async function getContract(id: string): Promise<ContractItem> {
+  const res = await fetch(`${API_BASE}/contracts/${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error(`Erro ao obter contrato: ${res.status}`);
+  return res.json();
+}
+
+export async function getContractRegionalAnalytics(year?: number): Promise<ContractRegionalResponse> {
+  const params = new URLSearchParams({ size: "30" });
+  if (year !== undefined) params.set("year", String(year));
+  const res = await fetch(`${API_BASE}/contracts/analytics/regional?${params}`);
+  if (!res.ok) throw new Error(`Erro ao obter mapa regional: ${res.status}`);
+  return res.json();
+}
+
+export async function getContractNetwork(limit = 500): Promise<ContractGraphResponse> {
+  const res = await fetch(`${API_BASE}/contracts/analytics/network?limit=${limit}`);
+  if (!res.ok) throw new Error(`Erro ao obter rede de entidades: ${res.status}`);
+  return res.json();
+}
+
+export async function getContractRelations(limit = 1000): Promise<ContractRelationsResponse> {
+  const res = await fetch(`${API_BASE}/contracts/analytics/relations?limit=${limit}`);
+  if (!res.ok) throw new Error(`Erro ao obter relações: ${res.status}`);
   return res.json();
 }
 

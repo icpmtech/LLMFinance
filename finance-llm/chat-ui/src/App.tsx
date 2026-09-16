@@ -15,10 +15,11 @@ import { ContractsSearchPage } from "./pages/ContractsSearchPage";
 import { CompanyDirectoryPage } from "./pages/CompanyDirectoryPage";
 import CompanyDetailPage from "./pages/CompanyDetailPage";
 import CompanyDashboardPage from "./pages/CompanyDashboardPage";
+import EmpresasIQPage from "./pages/EmpresasIQPage";
 import { sendChat } from "./sendChat";
 import type { Message, ModelBackend } from "./types";
 
-type AppView = AppNavView | "chat" | "ticker-detail";
+type AppView = AppNavView | "chat" | "ticker-detail" | "empresas-iq";
 const COMPANY_DETAIL_KEY = "finance-llm-company-detail";
 const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
 
@@ -83,6 +84,7 @@ export default function App() {
     if (path === "/companies") return "companies-search";
     if (path === "/companies/search") return "companies-search";
     if (path === "/companies/dashboard") return "companies-dashboard";
+      if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) return "empresas-iq";
     if (path.startsWith("/companies/") && !path.startsWith("/companies/search") && !path.startsWith("/companies/dashboard")) {
       const nif = path.replace("/companies/", "").split("/")[0];
       if (nif) setSelectedCompany(nif);
@@ -116,6 +118,7 @@ export default function App() {
       else if (path === "/contracts/dashboard") next = "contracts-dashboard";
       else if (path === "/companies" || path === "/companies/search") next = "companies-search";
       else if (path === "/companies/dashboard") next = "companies-dashboard";
+        else if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) next = "empresas-iq";
       else if (path.startsWith("/companies/")) {
         const nif = path.replace("/companies/", "").split("/")[0];
         if (nif) setSelectedCompany(nif);
@@ -247,6 +250,7 @@ export default function App() {
     else if (next === "contracts-dashboard") path = "/contracts/dashboard";
     else if (next === "companies-search" || next === "companies") path = "/companies/search";
     else if (next === "companies-dashboard") path = "/companies/dashboard";
+    else if (next === "empresas-iq") path = "/empresas-iq";
     else if (next === "company-detail" && selectedCompany) path = `/companies/${selectedCompany}`;
     if (typeof window !== "undefined" && window.location.pathname !== path) {
       window.history.pushState({}, "", path);
@@ -292,6 +296,10 @@ export default function App() {
       setViewAndHistory("companies-dashboard");
       return;
     }
+    if (v === "empresas-iq") {
+      setViewAndHistory("empresas-iq");
+      return;
+    }
     setViewAndHistory(v as AppView);
   };
 
@@ -302,6 +310,7 @@ export default function App() {
 
   const renderContent = () => {
     if (view === "dashboard") return <DashboardPage onSwitchView={handleSwitchView} onSelectTicker={handleSelectTicker} />;
+      if (view === "empresas-iq") return <EmpresasIQPage />;
     if (view === "ticker-detail" && selectedTicker) {
       return (
         <TickerDetailPage

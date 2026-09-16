@@ -733,6 +733,39 @@ export interface ContractAnalyticsResponse {
   error?: string;
 }
 
+export interface ContractRegionalRow {
+  key: string;
+  count: number;
+  total_value?: number;
+}
+
+export interface ContractRegionalResponse {
+  total_contracts: number;
+  total_value?: number;
+  regions: ContractRegionalRow[];
+  error?: string;
+}
+
+export interface ContractGraphResponse {
+  nodes: { id: string; label: string; type: string }[];
+  edges: { source: string; target: string; count: number; value: number }[];
+  error?: string;
+}
+
+export interface ContractRelation {
+  source: string;
+  source_name: string;
+  target: string;
+  target_name: string;
+  count: number;
+  total_value: number;
+}
+
+export interface ContractRelationsResponse {
+  relations: ContractRelation[];
+  error?: string;
+}
+
 export interface CompanyRoleSummary {
   contracts_count: number;
   total_value: number;

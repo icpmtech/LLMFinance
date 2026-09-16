@@ -14,6 +14,7 @@ import {
   X,
   Sparkles,
   BarChart3,
+  Network,
 } from "lucide-react";
 
 export type AppView =
@@ -32,7 +33,8 @@ export type AppView =
   | "companies"
   | "companies-search"
   | "companies-dashboard"
-  | "company-detail";
+  | "company-detail"
+  | "empresas-iq";
 
 interface NavGroup {
   id: string;
@@ -74,6 +76,14 @@ const groups: NavGroup[] = [
     items: [
       { id: "companies-search", label: "Pesquisar Empresas", icon: <Search size={18} />, match: ["companies", "companies-search"] },
       { id: "companies-dashboard", label: "Dashboard Empresas", icon: <BarChart3 size={18} />, match: ["companies-dashboard"] },
+    ],
+  },
+  {
+    id: "empresas-iq",
+    label: "EmpresasIQ",
+    icon: <Network size={18} />,
+    items: [
+      { id: "empresas-iq", label: "Inteligência Contratual", icon: <Network size={18} /> },
     ],
   },
   {

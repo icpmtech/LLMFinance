@@ -1400,6 +1400,7 @@ def get_contract_analytics(
             index=CONTRACTS_INDEX,
             body={
                 "size": 0,
+                "track_total_hits": True,
                 "query": base_query,
                 "aggs": {
                     "total_value": {"sum": {"field": "precoContratual"}},
@@ -2193,3 +2194,119 @@ def list_contract_years(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
         return {"available": available, "indexed": indexed}
     except Exception as e:
         return {"available": available, "indexed": [], "error": str(e)}
+
+
+def get_contract_by_id(idcontrato: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Devolve um contrato pelo identificador publicado no portal."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    try:
+        response = client.search(
+            index=CONTRACTS_INDEX,
+            body={"size": 1, "query": {"term": {"idcontrato": idcontrato}}},
+        )
+        hits = response.get("hits", {}).get("hits", [])
+        if not hits:
+            return {"error": "Contrato não encontrado", "status_code": 404}
+        source = dict(hits[0].get("_source", {}))
+        source["doc_id"] = hits[0].get("_id")
+        return source
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def get_contract_regional_analytics(year: Optional[int] = None, size: int = 30, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Agrega volume e valor contratual por NUTS."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "regions": []}
+    query: Dict[str, Any] = {"match_all": {}}
+    if year:
+        query = {"term": {"Ano": year}}
+    try:
+        response = client.search(
+            index=CONTRACTS_INDEX,
+            body={
+                "size": 0,
+                "query": query,
+                "aggs": {
+                    "regions": {
+                        "terms": {"field": "NUTs", "size": size, "missing": "Não especificado"},
+                        "aggs": {"total_value": {"sum": {"field": "precoContratual"}}},
+                    },
+                    "total_value": {"sum": {"field": "precoContratual"}},
+                },
+            },
+        )
+        aggs = response.get("aggregations", {})
+        return {
+            "total_contracts": response.get("hits", {}).get("total", {}).get("value", 0),
+            "total_value": aggs.get("total_value", {}).get("value"),
+            "regions": [
+                {"key": bucket["key"], "count": bucket["doc_count"], "total_value": bucket.get("total_value", {}).get("value")}
+                for bucket in aggs.get("regions", {}).get("buckets", [])
+            ],
+        }
+    except Exception as exc:
+        return {"error": str(exc), "regions": []}
+
+
+def get_contract_relationships(limit: int = 1000, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Constrói relações adjudicante -> adjudicatário a partir dos contratos recentes."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "relations": []}
+    try:
+        response = client.search(
+            index=CONTRACTS_INDEX,
+            body={
+                "size": limit,
+                "_source": ["adjudicantes.parsed", "adjudicatarios.parsed", "precoContratual", "Ano"],
+                "query": {"match_all": {}},
+                "sort": [{"Ano": {"order": "desc", "unmapped_type": "integer"}}],
+            },
+        )
+        pairs: Dict[str, Dict[str, Any]] = {}
+        for hit in response.get("hits", {}).get("hits", []):
+            source = hit.get("_source", {})
+            buyers = source.get("adjudicantes", {}).get("parsed", [])
+            suppliers = source.get("adjudicatarios", {}).get("parsed", [])
+            value = source.get("precoContratual") or 0
+            for buyer in buyers:
+                for supplier in suppliers:
+                    buyer_id = buyer.get("nif") or buyer.get("nome")
+                    supplier_id = supplier.get("nif") or supplier.get("nome")
+                    if not buyer_id or not supplier_id:
+                        continue
+                    key = f"{buyer_id}|{supplier_id}"
+                    pair = pairs.setdefault(key, {
+                        "source": buyer_id, "source_name": buyer.get("nome") or buyer_id,
+                        "target": supplier_id, "target_name": supplier.get("nome") or supplier_id,
+                        "count": 0, "total_value": 0.0,
+                    })
+                    pair["count"] += 1
+                    pair["total_value"] += value
+        relations = sorted(pairs.values(), key=lambda item: item["total_value"], reverse=True)[:100]
+        for relation in relations:
+            relation["total_value"] = round(relation["total_value"], 2)
+        return {"relations": relations}
+    except Exception as exc:
+        return {"error": str(exc), "relations": []}
+
+
+def get_contract_network(limit: int = 500, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Devolve nós e ligações para uma visualização de rede de entidades."""
+    result = get_contract_relationships(limit=limit, es=es)
+    if result.get("error"):
+        return result
+    nodes: Dict[str, Dict[str, Any]] = {}
+    edges = []
+    for relation in result.get("relations", []):
+        for node_id, name, node_type in (
+            (relation["source"], relation["source_name"], "adjudicante"),
+            (relation["target"], relation["target_name"], "adjudicatario"),
+        ):
+            nodes.setdefault(node_id, {"id": node_id, "label": name, "type": node_type})
+        edges.append({"source": relation["source"], "target": relation["target"], "count": relation["count"], "value": relation["total_value"]})
+    return {"nodes": list(nodes.values()), "edges": edges}

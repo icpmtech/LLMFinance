@@ -673,8 +673,8 @@ export function TickerPage({ onSwitchView }: TickerPageProps) {
 
             {activeTab === "recommendations" && (
               <section className="space-y-4">
-                <RecordCard title="Recomendações" data={recommendations?.recommendations} />
-                <RecordCard title="Resumo de Recomendações" data={recommendations?.recommendations_summary} />
+                <RecommendationsCard title="Recomendações" data={recommendations?.recommendations} />
+                <RecommendationsCard title="Resumo de Recomendações" data={recommendations?.recommendations_summary} />
                 <RecordCard title="Upgrades / Downgrades" data={recommendations?.upgrades_downgrades} />
               </section>
             )}
@@ -1475,6 +1475,71 @@ function RecordCard({ title, data }: { title: string; data?: Record<string, unkn
                 <td className="px-3 py-2 text-slate-400 break-all">{renderValue(v)}</td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function RecommendationsCard({
+  title,
+  data,
+}: {
+  title: string;
+  data?: Record<string, unknown>;
+}) {
+  if (!data) return null;
+
+  const metrics = Object.entries(data).filter(
+    ([, value]) => typeof value === "object" && value !== null && !Array.isArray(value),
+  );
+  const periods = Array.from(
+    new Set(metrics.flatMap(([, value]) => Object.keys(value as Record<string, unknown>))),
+  );
+  if (metrics.length === 0 || periods.length === 0) {
+    return <RecordCard title={title} data={data} />;
+  }
+
+  const metricLabels: Record<string, string> = {
+    strongBuy: "Compra forte",
+    buy: "Compra",
+    hold: "Manter",
+    sell: "Venda",
+    strongSell: "Venda forte",
+  };
+
+  return (
+    <div className="rounded-xl gradient-border glass-card overflow-hidden">
+      <div className="bg-[#1a1d23]/60 px-4 py-2 font-semibold text-sm text-white">{title}</div>
+      <div className="overflow-auto data-grid">
+        <table className="w-full text-sm">
+          <thead className="bg-[#1a1d23]/40 text-slate-400">
+            <tr>
+              <th className="text-left px-3 py-2">Classificação</th>
+              {periods.map((period) => (
+                <th key={period} className="text-right px-3 py-2 whitespace-nowrap">
+                  {period}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {metrics.map(([metric, value]) => {
+              const values = value as Record<string, unknown>;
+              return (
+                <tr key={metric} className="border-t border-slate-800/50 hover:bg-slate-800/40">
+                  <td className="px-3 py-2 font-medium text-white">
+                    {metricLabels[metric] ?? metric}
+                  </td>
+                  {periods.map((period) => (
+                    <td key={period} className="text-right px-3 py-2 tabular-nums text-slate-300">
+                      {renderValue(values[period])}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
