@@ -30,6 +30,7 @@ import { CompanyDirectoryPage } from "./pages/CompanyDirectoryPage";
 import CompanyDetailPage from "./pages/CompanyDetailPage";
 import CompanyDashboardPage from "./pages/CompanyDashboardPage";
 import EmpresasIQPage from "./pages/EmpresasIQPage";
+import OntologyPage from "./pages/OntologyPage";
 import CrmPage, {
   CRM_SECTION_VIEWS,
   CrmAccountWindow,
@@ -57,6 +58,7 @@ type AppView =
   | "ticker-detail"
   | "ticker-chart"
   | "empresas-iq"
+  | "ontology"
   | "crm"
   | "crm-accounts"
   | "crm-contacts"
@@ -123,6 +125,7 @@ function pathForView(view: string, company: string | null, ticker: string | null
   if (view === "admin") return "/admin";
   if (view === "cli") return "/cli";
   if (view === "empresas-iq") return "/empresas-iq";
+  if (view === "ontology") return "/ontology";
   if (view === "crm") return "/crm";
   if (view === "crm-accounts") return "/crm/contas";
   if (view === "crm-contacts") return "/crm/contactos";
@@ -231,6 +234,7 @@ export default function App() {
     if (path === "/cli") return "cli";
     if (path === "/contracts-list" || path.startsWith("/contracts-list/")) return "contracts-list";
     if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) return "empresas-iq";
+    if (path === "/ontology" || path.startsWith("/ontology/")) return "ontology";
     {
       const crmSection = crmSectionFromPath(path);
       if (crmSection) return CRM_SECTION_VIEWS[crmSection] as AppView;
@@ -277,6 +281,7 @@ export default function App() {
       else if (path === "/cli") next = "cli";
       else if (path === "/contracts-list" || path.startsWith("/contracts-list/")) next = "contracts-list";
       else if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) next = "empresas-iq";
+      else if (path === "/ontology" || path.startsWith("/ontology/")) next = "ontology";
       else if (crmSectionFromPath(path)) next = CRM_SECTION_VIEWS[crmSectionFromPath(path) as CrmSection] as AppView;
       else if (path.startsWith("/companies/")) {
         const nif = path.replace("/companies/", "").split("/")[0];
@@ -457,6 +462,10 @@ export default function App() {
       setViewAndHistory("empresas-iq");
       return;
     }
+    if (v === "ontology") {
+      setViewAndHistory("ontology");
+      return;
+    }
     if (v === "import") {
       setViewAndHistory("import");
       return;
@@ -590,6 +599,7 @@ export default function App() {
     }
     if (target === "dashboard") return <DashboardPage onSwitchView={handleSwitchView} onSelectTicker={handleSelectTicker} />;
     if (target === "empresas-iq") return <EmpresasIQPage />;
+    if (target === "ontology") return <OntologyPage />;
     if (crmSectionForView(target)) {
       const section = crmSectionForView(target) as CrmSection;
       return (

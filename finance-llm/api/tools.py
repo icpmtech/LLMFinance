@@ -853,6 +853,69 @@ def _web_search_serpapi(query: str, max_results: int = 5) -> List[Dict]:
         return [{"error": str(e), "source": "serpapi"}]
 
 
+# --------------------------------------------------------------------------
+# Ontologia: as ferramentas são geradas a partir do registo da ontologia, para
+# que o agente pergunte pelos objetos da plataforma (empresas, contratos, CPV,
+# marcas, tickers, notícias, contas do CRM, pessoas) em vez de inventar dados.
+# --------------------------------------------------------------------------
+def ontology_query(
+    type: str,
+    search: Optional[str] = None,
+    filters: Optional[Dict] = None,
+    size: int = 10,
+    sort: Optional[Dict] = None,
+) -> Dict:
+    """Consulta objetos de um tipo da ontologia (ver `TOOLS['ontology_catalog']`)."""
+    from api import ontology_service as ontology
+
+    try:
+        return ontology.query_objects(type, search=search, filters=filters, size=size, sort=sort)
+    except KeyError as exc:
+        return {"error": str(exc), "items": []}
+    except PermissionError as exc:
+        return {"error": str(exc), "items": [], "requires_session": True}
+
+
+def ontology_resolve(text: str, limit: int = 5) -> Dict:
+    """Resolve nomes/NIFs/tickers de um texto em objetos canónicos da ontologia."""
+    from api import ontology_service as ontology
+
+    return ontology.resolve_entities(text, limit=limit)
+
+
+def ontology_links(type: str, id: str, link: Optional[str] = None, size: int = 10) -> Dict:
+    """Navega nas relações de um objeto da ontologia (contratos, marcas, contactos, notícias, …)."""
+    from api import ontology_service as ontology
+
+    try:
+        return ontology.object_links(type, id, link_id=link, size=size)
+    except KeyError as exc:
+        return {"error": str(exc), "links": []}
+
+
+def ontology_catalog() -> Dict:
+    """Catálogo (tipos, ligações e ferramentas) da ontologia, para prompt do agente."""
+    from api import ontology_service as ontology
+
+    doc = ontology._ontology()
+    return {
+        "object_types": [
+            {
+                "id": obj["id"],
+                "label": obj["label"],
+                "domain": obj["domain"],
+                "session_required": ontology._scoped(obj),
+            }
+            for obj in doc["object_types"]
+        ],
+        "link_types": [
+            {"id": link["id"], "label": link["label"], "from": link["from"], "to": link["to"]}
+            for link in doc["link_types"]
+        ],
+        "tools": [tool["name"] for tool in ontology.generated_tools()],
+    }
+
+
 # Registo de ferramentas disponíveis para o agente
 TOOLS = {
     "get_stock_info": get_stock_info,
@@ -874,4 +937,7 @@ TOOLS = {
     "get_earnings_and_calendar": get_earnings_and_calendar,
     "get_macro_snapshot": get_macro_snapshot,
     "web_search": web_search,
+    "ontology_query": ontology_query,
+    "ontology_resolve": ontology_resolve,
+    "ontology_links": ontology_links,
 }

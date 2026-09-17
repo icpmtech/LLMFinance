@@ -1,0 +1,371 @@
+INFO:     Started server process [39248]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
+INFO:     127.0.0.1:60773 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fpushstream.tradingview.com%2Fmessage-pipe-ws%2Fpublic&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+INFO:     127.0.0.1:55898 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51729 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:58768 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fpushstream.tradingview.com%2Fmessage-pipe-ws%2Fpublic&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+Agregação da ontologia falhou (regiao): ApiError(503, 'search_phase_execution_exception', '[dc9cb4552f65][172.23.0.2:9300][indices:data/read/search[phase/query]]')
+Agregação de empresas falhou: ApiError(503, 'search_phase_execution_exception', '[dc9cb4552f65][172.23.0.2:9300][indices:data/read/search[phase/query]]')
+INFO:     127.0.0.1:52887 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:63629 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:61144 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56629 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55837 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fpushstream.tradingview.com%2Fmessage-pipe-ws%2Fpublic&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:49189 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:58023 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:62864 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50872 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55287 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:49668 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57391 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fpushstream.tradingview.com%2Fmessage-pipe-ws%2Fpublic&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55481 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:62751 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:64479 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57144 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57653 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+Agregação de empresas falhou: Connection timed out
+INFO:     127.0.0.1:54147 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:49668 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52799 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fpushstream.tradingview.com%2Fmessage-pipe-ws%2Fpublic&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54655 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:62304 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:61477 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55096 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57407 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:49398 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55499 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:58911 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:63201 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:64605 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54147 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:61486 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:58592 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:59663 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55833 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:61290 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55920 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:53857 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:59586 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:59377 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51612 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54597 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:59627 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57381 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:65254 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56329 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:49302 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:61052 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56218 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:64221 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:60492 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54244 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:64168 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54274 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52553 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56506 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:60707 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:62545 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55738 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:61317 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:49396 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:64547 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fpushstream.tradingview.com%2Fmessage-pipe-ws%2Fpublic&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51255 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:64800 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54147 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52057 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54767 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54147 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:62489 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54787 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51138 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:64604 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52279 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54980 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55142 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:64568 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57347 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57782 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54982 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55389 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54498 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:49165 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54668 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57291 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50461 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55159 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50702 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51491 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:49669 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57251 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:62347 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:61578 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57599 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:65183 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:53857 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57315 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57398 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51153 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56217 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52769 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:49996 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:49363 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:53857 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:60475 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:63957 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57123 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:62245 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:49407 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54692 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:49996 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56903 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55692 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:58049 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56521 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:65162 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:58683 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:61031 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55107 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:59977 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55968 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50853 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:60103 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:59544 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:49996 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:60878 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52840 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51907 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52695 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57043 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51426 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55864 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55867 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%3A44%3A36%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:64953 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55637 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51434 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57671 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:61221 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:60535 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:62078 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:62450 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:63552 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52788 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:64201 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:53857 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55712 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50465 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54534 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57269 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:59975 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:63771 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:61482 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:53857 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+Agregação de empresas falhou: Connection timed out
+INFO:     127.0.0.1:62682 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:63621 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:62333 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:58900 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:60218 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:56458 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:62615 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:60279 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:60670 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:64087 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50465 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51487 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:53857 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:53034 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57925 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:53857 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51780 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:55222 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:59034 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:53861 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51183 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54810 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52958 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fpushstream.tradingview.com%2Fmessage-pipe-ws%2Fpublic&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54147 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata-backup.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FSPCX%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51432 - "WebSocket /proxy/ws?url=wss%3A%2F%2Fwidgetdata.tradingview.com%2Fsocket.io%2Fwebsocket%3Ffrom%3Dproxy%26date%3D2026-09-17T18%253A44%253A36%26page-uri%3Dlocalhost%253A5174%252Ftickers%252FEDP%252Fgrafico%26ancestor-origin%3Dlocalhost%253A5174%26auth%3Dsessionid%26api_key%3Dtradingview&origin=https%3A%2F%2Fwww.tradingview-widget.com" [accepted]
+INFO:     connection open

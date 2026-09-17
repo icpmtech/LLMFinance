@@ -130,6 +130,18 @@ def get_contracts_chat_answer(
     context_lines = [
         "Responde em português com base nos seguintes contratos públicos portugueses."
     ]
+    # Grounding ontológico: as entidades da pergunta são resolvidas para objetos
+    # canónicos antes da recuperação, para o modelo não confundir homónimos.
+    try:
+        from api import ontology_service as ontology
+
+        grounding = ontology.ai_context(question, limit=3, links_per_object=1, link_size=2, link_budget=2)
+        if grounding["objects"]:
+            context_lines.append("Entidades da ontologia (objetos canónicos da plataforma):")
+            context_lines.extend("  " + line for line in grounding["grounding"].splitlines())
+        ontology_context = grounding
+    except Exception as exc:
+        ontology_context = {"objects": [], "relations": [], "grounding": "", "notes": [f"Ontologia indisponível: {exc}"]}
     for item in hits.get("items", []):
         adjudicante = _format_entity(item, "adjudicantes")
         adjudicatario = _format_entity(item, "adjudicatarios")
@@ -182,7 +194,21 @@ def get_contracts_chat_answer(
             )
         if not answer or not answer.strip():
             answer = "Não consegui gerar uma resposta com base nos contratos recuperados."
-        return answer.strip(), sources
+        answer = answer.strip()
+        # Validação anti-alucinação: assinala entidades/valores não fundamentados.
+        try:
+            from api import ontology_service as ontology
+
+            validation = ontology.validate_answer(answer, question=question, context=ontology_context)
+            if not validation["supported"] or validation["score"] < 1.0:
+                warnings = [
+                    f"[aviso] {check['message']}" for check in validation["checks"] if check["status"] != "ok"
+                ]
+                if warnings:
+                    answer = answer + "\n\nValidação da ontologia:\n" + "\n".join(warnings)
+        except Exception:
+            pass
+        return answer, sources
     except Exception as exc:
         return (
             f"Erro ao gerar resposta: {exc}. Recuperei {len(sources)} contratos relevantes.",

@@ -22,6 +22,9 @@ finance-llm/
 │   ├── main.py          # Entrypoint FastAPI
 │   ├── rag_routes.py    # Endpoints RAG
 │   ├── rag_service.py   # Serviço RAG singleton + cache de modelos
+│   ├── ontology_registry.py  # Ontologia (tipos de objeto, ligações, ações)
+│   ├── ontology_service.py   # Motor da ontologia (consulta, ligações, grounding, validação)
+│   ├── ontology_routes.py    # Endpoints /ontology/*
 │   └── agent.py         # Agente financeiro (GPT-2 / Mistral / ARIMA)
 ├── chat-ui/             # Frontend React + Vite + Tailwind CSS v4
 │   ├── src/
@@ -234,6 +237,13 @@ python _serve_spa.py --root chat-ui/dist --port 5174
 
 A instalação da aplicação e o modo offline só funcionam em `localhost` ou HTTPS (contexto seguro).
 
+Endereços da interface (ex.: `/tickers/EDP/grafico`, `/companies/503140600`, `/browser`) podem ser
+abertos diretamente: a API serve o `index.html` para **navegações de browser** (`Accept: text/html`)
+que não correspondam a um endpoint, e continua a devolver JSON/404 para os pedidos de API e para
+caminhos com extensão de ficheiro. Em desenvolvimento com o servidor do Vite, o proxy interno
+encaminha `/tickers`, `/companies`, `/contracts`, … para a API — sem este fallback, recarregar a
+página numa dessas rotas devolvia `{"detail":"Not Found"}`.
+
 > Nota: a API está configurada para `http://127.0.0.1:8003` em `chat-ui/src/api.ts`. Se alterares a porta, atualiza também o frontend e reconstrói o UI.
 
 ### Interface
@@ -376,6 +386,37 @@ ligação direta para a página do ativo na TradingView.
   rodapé sobre dados em tempo real/diferidos conforme a bolsa.
 - O mesmo widget aparece no separador **Gráfico em tempo real** da ficha do ticker
   (Mercados → ticker), com o botão **Abrir em janela** para a aplicação dedicada.
+- **Nota de implementação**: o `embed-widget-advanced-chart.js` exige duas coisas ao contentor que o
+  envolve, e ambas já provocaram erros visíveis na consola:
+  1. o `<script>` tem de ser **filho direto de um elemento com a classe
+     `tradingview-widget-container`** (o widget procura-o por
+     `document.currentScript.parentNode`); sem isso avisa
+     `Cannot listen to the event from the provided iframe, contentWindow is not available`;
+  2. esse elemento tem de estar **ligado ao documento** quando o script executa (o script vem de
+     cache e corre em milissegundos) e **nunca pode ser removido enquanto o script estiver a
+     carregar** — caso contrário o script executa sem pai e rebenta com
+     `Uncaught TypeError: Cannot read properties of null (reading 'querySelector')`.
+
+  Por isso o widget é construído em «gerações»: cada mudança de opção cria um contentor novo (já
+  ligado ao documento) e a geração anterior é **afastada para `#iqos-tv-retired`** — um contentor
+  oculto mas ligado ao documento — sendo apagada logo que o script executa, ou 30 s depois. Isto
+  cobre também o duplo `mount`/`unmount` do `StrictMode` em desenvolvimento.
+- **Snippet oficial, sem proxy**: a árvore é a do snippet publicado pela TradingView
+  (`div.tradingview-widget-container` > `div.tradingview-widget-container__widget` com
+  `calc(100% - 32px)` de altura, `div.tradingview-widget-copyright` com a ligação de atribuição e o
+  `<script src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js">` com
+  a configuração em JSON — `autosize`, `hide_side_toolbar: true`, `support_host`, `studies`,
+  `backgroundColor`/`gridColor` conforme o tema). O script é pedido **diretamente à TradingView**;
+  o `/proxy` do Browser **não** é usado por este widget (servir a página da TradingView fora do
+  domínio dela faz o motor de gráficos arrancar sem dados e rebentar em `widget-sidetoolbar` com
+  `Value is null`).
+- **Reserva quando a incorporação é bloqueada**: o script carrega mas o `iframe` para
+  `www.tradingview-widget.com` pode ser abortado pelo browser (`ERR_ABORTED`, políticas de
+  enquadramento, extensões, redes restritas). Um vigia deteta o quadro vazio em ~5 s e mostra, no
+  lugar dele, o **gráfico nativo do IQ OS** (`NativePriceChart`: velas + volume com cotações da
+  própria API), com uma nota âmbar, o botão **Tentar a TradingView** e a ligação direta para o
+  ativo na TradingView. Os marcadores `hide_side_toolbar`, `hide_top_toolbar`, `estudos` e tema
+  continuam a ser aplicados ao widget quando este carrega.
 
 ### Indicadores do ticker em cartões
 
@@ -466,11 +507,18 @@ CMVM, …) — o browser não pode contornar isso, mas o **servidor** pode ler e
   `Content-Encoding`), reconverte o HTML em UTF-8 e injeta:
   - um `<base href="…">` com o endereço final, para que CSS/JS/imagens continuem a ser pedidos ao
     site original (esses não são bloqueados por políticas de enquadramento);
-  - um script que **reencaminha `fetch`/`XMLHttpRequest`** para o site original através do próprio
-    proxy (contorna o CORS, porque a página passa a ter a nossa origem) e que **interceta cliques e
-    formulários**: pede ao Browser do IQ OS para navegar (barra de endereço, separadores e
-    histórico ficam em sintonia) e faz os POST de formulários dentro do quadro, reescrevendo o
-    documento com a resposta (postbacks ASP.NET).
+  - um script que **reencaminha `fetch`/`XMLHttpRequest` para o site original através do próprio
+    proxy** (endereços absolutos para o nosso servidor — a página tem `<base>` apontado ao site
+    original, pelo que um caminho relativo resolveria para lá e o browser recusava por CORS), que
+    **interceta cliques e formulários**: pede ao Browser do IQ OS para navegar (barra de endereço,
+    separadores e histórico ficam em sintonia) e faz os POST de formulários dentro do quadro,
+    reescrevendo o documento com a resposta (postbacks ASP.NET);
+  - um `WebSocket` reencaminhado para `wss://<este servidor>/proxy/ws?url=<destino>&origin=<site>`
+    (`api/proxy_routes.py`, `websocket_route`): muitos servidores de tempo real validam o `Origin`
+    do *handshake* e recusam o nosso com 403 — o servidor abre então a ligação com o `Origin` do
+    próprio site e copia as mensagens nos dois sentidos.
+- O proxy é **usado apenas pelo Browser** (e pelas leituras que ele faz); o gráfico da TradingView
+  carrega o widget pelo snippet oficial (ver «Gráfico Tempo Real»).
 - No Browser, o rodapé tem **«ler bloqueadas pelo servidor»** (ligado por omissão: os sites da
   lista de bloqueio são lidos pelo proxy em vez de mostrar um aviso) e **«ler tudo pelo servidor»**
   (força o proxy em todos os endereços); o indicador **proxy** na barra de endereço mostra quando
@@ -625,6 +673,46 @@ ou num terminal local.
 - `POST /rag/upload` — fazer upload de um PDF
 - `POST /rag/chat` — perguntar ao RAG
 - `GET  /rag/health` — verificar estado do índice e modelos
+
+### Ontologia (camada semântica)
+
+A ontologia descreve os objetos da plataforma (Empresa, Entidade Pública, Contrato,
+CPV, Região, Marca, Firma, Ticker, Cotação, Notícia, Sentimento, Tópico, Conta,
+Contacto, Oportunidade, Atividade, Pessoa), as suas propriedades, as ligações entre
+eles e as ações disponíveis — tudo ligado aos dados reais do Elasticsearch. É a
+mesma definição que fundamenta e **valida** as respostas da IA.
+
+A semente vive em `api/ontology_registry.py` e é copiada para
+`data/ontology/ontology.json`; quaisquer alterações feitas na plataforma (tipos
+personalizados, propriedades, desativações) ficam guardadas nesse ficheiro.
+
+Leitura:
+
+- `GET  /ontology` — ontologia completa (tipos, ligações, ações)
+- `GET  /ontology/summary` — resumo + grafo de tipos
+- `GET  /ontology/object-types` · `GET /ontology/object-types/{id}`
+- `GET  /ontology/link-types` · `GET /ontology/actions` · `GET /ontology/graph`
+- `GET  /ontology/status` — disponibilidade dos índices e volumetria
+- `POST /ontology/objects/{tipo}/query` — consulta (pesquisa, filtros, ordenação)
+- `GET  /ontology/objects/{tipo}/{id}?with_links=true` — objeto + relações
+- `POST /ontology/objects/{tipo}/{id}/links` — navegação nas relações
+- `POST /ontology/resolve` — resolução de entidades (texto → objetos canónicos)
+
+IA:
+
+- `POST /ontology/ai/context` — contexto ontológico (grounding) de uma pergunta
+- `POST /ontology/ai/answer` — resposta factual construída só com a ontologia
+- `POST /ontology/ai/validate` — validação anti-alucinação de uma resposta
+- `GET  /ontology/ai/tools` — ferramentas geradas a partir da ontologia
+
+Escrita (requer sessão; apagar/repor exige papel `admin`):
+
+- `POST/PATCH/DELETE /ontology/object-types…` e `/ontology/link-types…`
+- `POST /ontology/reset` — repõe a semente
+
+Os tipos ligados ao CRM (`finance_crm`) exigem sessão: cada utilizador só vê os seus
+registos (os administradores veem os da equipa); sem sessão ficam de fora dos
+resultados e do grounding da IA.
 
 ### Autenticação (contas no Elasticsearch)
 

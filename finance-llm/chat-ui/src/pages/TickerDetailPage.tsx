@@ -483,7 +483,7 @@ export function TickerDetailPage({
               </button>
             </div>
             <div className="h-[520px] min-h-[360px]">
-              <TradingViewChart symbol={tradingViewSymbol(ticker, info?.exchange)} />
+              <TradingViewChart symbol={tradingViewSymbol(ticker, info?.exchange)} ticker={ticker} />
             </div>
           </div>
         )}

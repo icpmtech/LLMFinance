@@ -97,6 +97,7 @@ Isto permite que os dados e modelos persistam entre execuções dos containers e
 ## Notas e armadilhas resolvidas
 
 - **Elasticsearch dentro do container**: o cliente lê `ELASTICSEARCH_URL` (não `ES_HOST`). No container tem de apontar para o nome do serviço (`http://elasticsearch:9200`); `127.0.0.1` apontaria para o próprio backend.
+- **Versão do cliente Elasticsearch**: o `requirements.txt` fixa `elasticsearch>=8.11.0,<9.0.0`. Com `>=8.11.0` sem limite, o pip instalava o cliente 9.x, que **não fala com o servidor 8.x** — `es.ping()` devolvia `False` e a API respondia `{"available": false, "message": "Elasticsearch indisponível"}`.
 - **API base da SPA**: `chat-ui/src/api.ts` usa `VITE_API_URL` e cai em `http://127.0.0.1:8002` quando a variável está vazia. Por isso o Dockerfile compila com `VITE_API_URL=/api` — deixar vazio partiria a UI em container.
 - **Uploads**: o nginx tem `client_max_body_size 256m`; sem isto os uploads de PDF devolviam 413.
 - **Chat em streaming**: `/api/` é proxiado com `proxy_buffering off` e `proxy_read_timeout 3600s` para as respostas SSE não ficarem em buffer nem serem cortadas.

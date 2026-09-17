@@ -32,6 +32,7 @@ tamanho, tempo limite e sem repassar cookies ou credenciais.
 """
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import logging
 import re
@@ -40,7 +41,16 @@ from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Request, Response
+import websockets
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from starlette.concurrency import run_in_threadpool
 
 from api import events_service as events
@@ -137,14 +147,26 @@ def _validated_target(url: str) -> str:
 
 
 def _bootstrap(base_url: str) -> str:
-    """Script injetado na página lida: ligações, formulários e pedidos em JS."""
+    """Script injetado na página lida: ligações, formulários e pedidos em JS.
+
+    Todo o tráfego do quadro passa pelo proxy: as chamadas de dados dos widgets
+    (por exemplo `symbol-search.tradingview.com`) são para outros domínios, onde
+    o browser as bloquearia por CORS. Como a página passa a ter a nossa origem, o
+    pedido reencaminhado é same-origin. O que já é nosso (`/proxy`, a API do
+    IQ OS) e os esquemas não-HTTP ficam como estão, para não haver ciclos.
+    """
     return (
         "<script>(function(){"
         'var BASE="' + base_url.replace('"', "%22") + '";'
-        "var origin=new URL(BASE).origin;"
+        "var SELF=location.origin;"
         'function absolute(u){try{return new URL(u,BASE).href;}catch(e){return null;}}'
-        'function proxied(u){return "/proxy?url="+encodeURIComponent(u);}'
-        'function shouldProxy(u){return !!u&&u.indexOf(origin)===0&&/^https?:/.test(u);}'
+        # Os pedidos reencaminhados têm de ser absolutos para nós: a página tem
+        # `<base>` apontado ao site original, e um caminho relativo resolveria
+        # para lá (o browser recusava por CORS).
+        'function proxied(u){return SELF+"/proxy?url="+encodeURIComponent(u);}'
+        "function shouldProxy(u){if(!u||!/^https?:/.test(u))return false;"
+        "if(u.indexOf(SELF)===0)return false;if(u.indexOf(\"/proxy?url=\")===0)return false;"
+        "return true;}"
         "function post(kind,payload){var message={source:\"iq-os-browser\",kind:kind};"
         "for(var key in (payload||{})){message[key]=payload[key];}"
         'try{if(window.parent&&window.parent!==window){window.parent.postMessage(message,"*");}}catch(e){}}'
@@ -156,6 +178,34 @@ def _bootstrap(base_url: str) -> str:
         "XMLHttpRequest.prototype.open=function(){var args=[].slice.call(arguments);try{"
         "var abs=absolute(args[1]);if(shouldProxy(abs)){args[1]=proxied(abs);}}catch(e){}"
         "return nativeOpen.apply(this,args);};"
+        "if(navigator.sendBeacon){var nativeBeacon=navigator.sendBeacon.bind(navigator);"
+        "navigator.sendBeacon=function(url,data){try{var abs=absolute(url);"
+        "if(shouldProxy(abs)){return nativeBeacon(proxied(abs),data);}}catch(e){}"
+        "return nativeBeacon(url,data);};}"
+        # WebSocket: os servidores de tempo real validam o `Origin` do handshake e
+        # recusam o nosso (403). Passa-se por `/proxy/ws`, que abre a ligação do
+        # servidor com o `Origin` do próprio site.
+        "var NativeWS=window.WebSocket;"
+        "if(NativeWS){var ProxiedWS=function(url,protocols){var target=url;"
+        "try{var abs=absolute(url);"
+        "if(abs&&/^wss?:/.test(abs)){var scheme=location.protocol===\"https:\"?\"wss://\":\"ws://\";"
+        "target=scheme+location.host+\"/proxy/ws?url=\"+encodeURIComponent(abs)"
+        "+\"&origin=\"+encodeURIComponent(new URL(BASE).origin);}}catch(e){}"
+        "return protocols===undefined?new NativeWS(target):new NativeWS(target,protocols);};"
+        "ProxiedWS.prototype=NativeWS.prototype;"
+        "ProxiedWS.CONNECTING=NativeWS.CONNECTING;ProxiedWS.OPEN=NativeWS.OPEN;"
+        "ProxiedWS.CLOSING=NativeWS.CLOSING;ProxiedWS.CLOSED=NativeWS.CLOSED;"
+        "window.WebSocket=ProxiedWS;}"
+        # Além do encaminhamento, a página diz à aplicação se o conteúdo chegou a
+        # desenhar. Alguns widgets (TradingView) carregam a interface toda mas
+        # ficam sem gráfico quando o servidor deles recusa os dados, e sem erro
+        # de JavaScript — a aplicação só veria um quadro vazio e nunca saberia.
+        "var chartTries=0;"
+        "function watchChart(){chartTries+=1;var nodes=document.querySelectorAll(\"canvas\");"
+        "var width=0;if(nodes.length){width=nodes[0].width;}"
+        'post("chart",{canvases:nodes.length,width:width,tries:chartTries});'
+        "if(nodes.length||chartTries>=20)return;setTimeout(watchChart,1000);}"
+        "setTimeout(watchChart,1200);"
         'document.addEventListener("click",function(event){'
         'var node=event.target;while(node&&node.tagName!=="A"){node=node.parentElement;}'
         'if(!node||event.defaultPrevented)return;var href=node.getAttribute("href")||"";'
@@ -295,5 +345,101 @@ def proxy_status() -> Dict[str, Any]:
         "enabled": True,
         "max_bytes": MAX_BYTES,
         "timeout_seconds": 25,
+        "websockets": True,
         "note": "Leitura sem sessão: sites com login continuam a abrir numa aba do sistema.",
     }
+
+
+# --------------------------------------------------------------- WebSocket
+
+WS_OPEN_TIMEOUT = 15
+
+
+def _validated_ws_target(url: str) -> str:
+    """Valida um destino `ws`/`wss` com as mesmas regras do proxy HTTP."""
+    parsed = urlparse(url.strip())
+    if parsed.scheme not in ("ws", "wss"):
+        raise HTTPException(status_code=400, detail="Só são aceites endereços ws:// ou wss://.")
+    if not parsed.hostname:
+        raise HTTPException(status_code=400, detail="Endereço sem domínio.")
+    if not _is_public_target(parsed.hostname):
+        raise HTTPException(status_code=400, detail="Este endereço não é público e não pode ser lido pelo proxy.")
+    return parsed.geturl()
+
+
+@router.websocket("/ws")
+async def proxy_websocket(
+    websocket: WebSocket,
+    url: str = Query(..., description="Endereço ws(s) a ligar"),
+    origin: Optional[str] = Query(None, description="Origin a apresentar ao servidor de destino"),
+) -> None:
+    """Liga o browser a um WebSocket externo, apresentando o `Origin` do site.
+
+    Motivo: os servidores de tempo real (por exemplo o stream da TradingView)
+    recusam o handshake quando o `Origin` é o da nossa aplicação (HTTP 403).
+    Aqui a ligação parte do servidor, com o `Origin` do próprio site.
+    """
+    try:
+        target = _validated_ws_target(url)
+    except HTTPException as error:
+        await websocket.close(code=1008, reason=str(error.detail)[:120])
+        return
+
+    requested = websocket.headers.get("sec-websocket-protocol") or ""
+    subprotocols = [item.strip() for item in requested.split(",") if item.strip()] or None
+    upstream_origin = (origin or "").strip()
+    if not upstream_origin.startswith(("http://", "https://")):
+        parsed = urlparse(target)
+        upstream_origin = f"{'https' if parsed.scheme == 'wss' else 'http'}://{parsed.netloc}"
+
+    await websocket.accept(subprotocol=subprotocols[0] if subprotocols else None)
+    headers = {"Origin": upstream_origin, "User-Agent": USER_AGENT}
+
+    try:
+        async with websockets.connect(
+            target,
+            additional_headers=headers,
+            subprotocols=subprotocols,
+            open_timeout=WS_OPEN_TIMEOUT,
+            max_size=None,
+            ping_interval=None,
+        ) as upstream:
+
+            async def client_to_upstream() -> None:
+                while True:
+                    message = await websocket.receive()
+                    kind = message.get("type")
+                    if kind == "websocket.disconnect":
+                        return
+                    if message.get("text") is not None:
+                        await upstream.send(message["text"])
+                    elif message.get("bytes") is not None:
+                        await upstream.send(message["bytes"])
+
+            async def upstream_to_client() -> None:
+                async for message in upstream:
+                    if isinstance(message, bytes):
+                        await websocket.send_bytes(message)
+                    else:
+                        await websocket.send_text(message)
+
+            tasks = [asyncio.create_task(client_to_upstream()), asyncio.create_task(upstream_to_client())]
+            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            for task in pending:
+                task.cancel()
+            for task in done:
+                task.exception()  # consome exceções esperadas (fecho do socket)
+    except WebSocketDisconnect:
+        pass
+    except Exception as error:  # noqa: BLE001
+        events.log_event(
+            "warning",
+            "proxy",
+            f"WebSocket falhou para {target}: {type(error).__name__}",
+            data={"url": target},
+        )
+    finally:
+        try:
+            await websocket.close()
+        except Exception:  # noqa: BLE001
+            pass

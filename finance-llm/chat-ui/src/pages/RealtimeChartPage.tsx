@@ -19,8 +19,10 @@ import {
   Maximize2,
   RefreshCw,
   Search,
+  ShieldAlert,
 } from "lucide-react";
 import { getTickerInfo, searchLocalTickers, searchYahooTickers } from "../api";
+import { NativePriceChart } from "../components/NativePriceChart";
 import type { TickerInfo } from "../types";
 
 /* --------------------------------------------------- símbolo TradingView */
@@ -212,8 +214,60 @@ const DEFAULT_SETTINGS: ChartSettings = {
   style: "1",
   studies: ["STD;Volume"],
   theme: "dark",
-  toolbar: true,
+  // Como no snippet oficial da TradingView: a barra lateral de desenho vem
+  // escondida (`hide_side_toolbar: true`).
+  toolbar: false,
 };
+
+/**
+ * Contentor oculto — sempre ligado ao documento — onde ficam as gerações antigas
+ * do widget da TradingView até o respetivo script ter executado.
+ *
+ * Motivo: o script `embed-widget-advanced-chart.js` encontra o contentor através
+ * do elemento `<script>`:
+ *
+ *   const d = document.currentScript.parentNode;              // tem de ser
+ *   const m = d.classList.contains("tradingview-widget-container");  // a classe!
+ *
+ * Daí as duas regras deste componente:
+ *
+ * 1. o `<script>` é sempre filho direto de um elemento com a classe
+ *    `tradingview-widget-container` (a «geração»), senão o widget não encontra
+ *    o contentor e falha com `Cannot listen to the event from the provided
+ *    iframe, contentWindow is not available`;
+ * 2. enquanto o script está a carregar, essa geração **nunca é removida do
+ *    documento** — é movida para aqui — senão o script executa com `parentNode`
+ *    nulo e rebenta com `Cannot read properties of null (reading 'querySelector')`.
+ */
+function retiredWidgetHost(): HTMLElement {
+  const existing = document.getElementById("iqos-tv-retired");
+  if (existing) return existing;
+  const host = document.createElement("div");
+  host.id = "iqos-tv-retired";
+  host.setAttribute("aria-hidden", "true");
+  host.style.cssText =
+    "position:absolute;left:-99999px;top:0;width:0;height:0;overflow:hidden;pointer-events:none";
+  document.body.appendChild(host);
+  return host;
+}
+
+/** Tempo que uma geração antiga fica viva (e invisível) à espera de executar. */
+const RETIRED_TTL_MS = 30_000;
+
+/**
+ * Afasta uma geração do widget sem a remover do documento.
+ *
+ * Se a geração já estiver fora do documento (o React desmonta a página antes de
+ * o script acabar de carregar), é **religada** ao contentor oculto: é isso que
+ * garante que o script em voo executa com um pai ligado ao documento. Sem isto,
+ * o widget cria o `iframe` fora do documento, onde `contentWindow` é `null`, e a
+ * TradingView avisa «Cannot listen to the event from the provided iframe».
+ */
+function retireWidgetGeneration(generation: HTMLElement) {
+  const host = retiredWidgetHost();
+  host.appendChild(generation);
+  window.setTimeout(() => generation.remove(), RETIRED_TTL_MS);
+}
 
 /**
  * Gráfico interativo da TradingView (Advanced Real-Time Chart).
@@ -221,67 +275,256 @@ const DEFAULT_SETTINGS: ChartSettings = {
  */
 export function TradingViewChart({
   symbol,
+  ticker,
   height = "100%",
   settings = DEFAULT_SETTINGS,
   rounded = true,
 }: {
   symbol: string;
+  /** Ticker da plataforma: usado pelo gráfico de reserva do IQ OS. */
+  ticker?: string;
   height?: number | string;
   settings?: ChartSettings;
   rounded?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [failed, setFailed] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  const [retryToken, setRetryToken] = useState(0);
   const studiesKey = settings.studies.join(",");
+
+  /*
+   * Vigia do widget: o script pode carregar (200) mas a TradingView recusa/
+   * aborta a incorporação do `iframe` — o quadro fica em branco, sem erro de
+   * JavaScript. Aí entra o gráfico nativo do IQ OS (dados da própria API).
+   */
+  useEffect(() => {
+    if (!symbol || !ticker) return;
+    setBlocked(false);
+    let attempts = 0;
+    let timer = 0;
+
+    const frameLoaded = (): boolean | null => {
+      const frame = containerRef.current?.querySelector("iframe");
+      if (!frame) return null;
+      try {
+        // Acesso permitido: o quadro continua no documento vazio (`about:blank`)
+        // ou numa página de erro do browser => não carregou.
+        const doc = frame.contentDocument;
+        if (!doc) return true;
+        const href = doc.location.href;
+        if (href.startsWith("chrome-error://")) return false;
+        if (href === "about:blank" && (!doc.body || doc.body.childElementCount === 0)) return false;
+        return true;
+      } catch {
+        // Sem acesso => conteúdo de outra origem => carregou.
+        return true;
+      }
+    };
+
+    const check = () => {
+      if (frameLoaded() === true) return;
+      attempts += 1;
+      if (attempts >= 12) {
+        setBlocked(true);
+        return;
+      }
+      timer = window.setTimeout(check, 400);
+    };
+    timer = window.setTimeout(check, 600);
+    return () => window.clearTimeout(timer);
+  }, [symbol, ticker, settings.interval, settings.style, settings.theme, studiesKey, retryToken]);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container || !symbol) return;
     setFailed(false);
-    container.innerHTML = "";
 
-    const widget = document.createElement("div");
-    widget.className = "tradingview-widget-container__widget";
-    widget.style.height = "100%";
-    widget.style.width = "100%";
-    container.appendChild(widget);
+    let cancelled = false;
+    let generation: HTMLDivElement | null = null;
+    let observer: MutationObserver | null = null;
+    let frame = 0;
+    let timer = 0;
 
-    const script = document.createElement("script");
-    script.type = "text/javascript";
-    script.async = true;
-    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
-    script.innerHTML = JSON.stringify({
-      autosize: true,
-      symbol,
-      interval: settings.interval,
-      timezone: "Europe/Lisbon",
-      theme: settings.theme,
-      style: settings.style,
-      locale: "pt_PT",
-      withdateranges: true,
-      hide_side_toolbar: !settings.toolbar,
-      allow_symbol_change: true,
-      save_image: true,
-      details: false,
-      calendar: false,
-      hide_top_toolbar: false,
-      studies: settings.studies,
-      support_host: "https://www.tradingview.com",
-    });
-    script.onerror = () => setFailed(true);
-    container.appendChild(script);
+    /*
+     * Constrói uma «geração» nova: um contentor com a classe que o widget da
+     * TradingView procura (pai direto do `<script>`) e, lá dentro, o alvo e o
+     * próprio script.
+     *
+     * O contentor tem de estar **ligado ao documento** antes de o script
+     * executar: se não estiver, a TradingView cria o `iframe` fora do documento,
+     * onde `iframe.contentWindow` é `null`, e avisa «Cannot listen to the event
+     * from the provided iframe». Como o script vem de cache e executa em poucos
+     * milissegundos, não basta a ordem dos `appendChild` — é preciso esperar que
+     * o React ligue o contentor à página.
+     */
+    const build = (): boolean => {
+      if (cancelled || !container.isConnected) return false;
+
+      generation = document.createElement("div");
+      generation.className = "tradingview-widget-container";
+      generation.dataset.tvGeneration = "1";
+      generation.style.height = "100%";
+      generation.style.width = "100%";
+
+      const widget = document.createElement("div");
+      widget.className = "tradingview-widget-container__widget";
+      // Como no snippet oficial: o gráfico ocupa a altura do contentor menos a
+      // faixa de 32 px do aviso de copyright da TradingView.
+      widget.style.height = "calc(100% - 32px)";
+      widget.style.width = "100%";
+      generation.appendChild(widget);
+
+      /*
+       * Aviso de copyright: vem no snippet oficial e é também ele que dá altura
+       * útil ao gráfico (`calc(100% - 32px)` acima).
+       */
+      const copyright = document.createElement("div");
+      copyright.className = "tradingview-widget-copyright";
+      copyright.style.cssText =
+        "height:32px;display:flex;align-items:center;justify-content:center;gap:4px;" +
+        "font-size:11.5px;color:#9aa0a6;background:transparent";
+      const link = document.createElement("a");
+      link.href = `https://www.tradingview.com/symbols/${symbol.replace(":", "-")}/`;
+      link.target = "_blank";
+      link.rel = "noopener nofollow";
+      link.style.color = "#7cc4ff";
+      link.textContent = `${symbol} — gráfico de cotações`;
+      const trademark = document.createElement("span");
+      trademark.textContent = "por TradingView";
+      copyright.append(link, trademark);
+      generation.appendChild(copyright);
+
+      const script = document.createElement("script");
+      script.type = "text/javascript";
+      script.async = true;
+      script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+      // Configuração do widget (as mesmas chaves do snippet oficial).
+      script.innerHTML = JSON.stringify({
+        autosize: true,
+        symbol,
+        interval: settings.interval,
+        timezone: "Europe/Lisbon",
+        theme: settings.theme,
+        style: settings.style,
+        locale: "pt_PT",
+        withdateranges: true,
+        hide_side_toolbar: !settings.toolbar,
+        hide_top_toolbar: false,
+        hide_legend: false,
+        hide_volume: false,
+        allow_symbol_change: true,
+        save_image: true,
+        details: false,
+        calendar: false,
+        hotlist: false,
+        watchlist: [],
+        compareSymbols: [],
+        studies: settings.studies,
+        backgroundColor: settings.theme === "dark" ? "#0f1115" : "#ffffff",
+        gridColor: settings.theme === "dark" ? "rgba(255, 255, 255, 0.06)" : "rgba(46, 46, 46, 0.2)",
+        support_host: "https://www.tradingview.com",
+      });
+      script.onerror = () => setFailed(true);
+      // Depois de executar, a geração já pode ser removida sem risco. Se já
+      // estava estacionada (página desmontada), o widget não serve para nada:
+      // sai logo, em vez de ficar 30 s a consumir recursos.
+      script.onload = () => {
+        if (!generation) return;
+        generation.dataset.tvExecuted = "1";
+        if (generation.parentElement && generation.parentElement.id === "iqos-tv-retired") {
+          generation.remove();
+        }
+      };
+      generation.appendChild(script);
+
+      container.appendChild(generation);
+      return true;
+    };
+
+    if (!build()) {
+      /*
+       * O contentor ainda não está na página (o React pode montar a árvore antes
+       * de a ligar, e a aplicação é montada em vários passos). Espera-se pela
+       * ligação com um observador de mutações e, em paralelo, com uma repetição
+       * limitada — se o contentor for de uma árvore descartada, desiste sem
+       * gastar recursos.
+       */
+      let attempts = 0;
+      const retry = () => {
+        if (build()) return;
+        attempts += 1;
+        if (attempts < 40) timer = window.setTimeout(retry, 250);
+      };
+      observer = new MutationObserver(() => {
+        if (build()) observer?.disconnect();
+      });
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+      frame = window.requestAnimationFrame(() => {
+        if (build()) observer?.disconnect();
+      });
+      timer = window.setTimeout(retry, 50);
+    }
 
     return () => {
-      container.innerHTML = "";
+      cancelled = true;
+      observer?.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+      if (timer) window.clearTimeout(timer);
+      if (!generation) return;
+      if (generation.dataset.tvExecuted === "1") generation.remove();
+      else retireWidgetGeneration(generation);
     };
-  }, [settings.interval, settings.style, settings.theme, settings.toolbar, studiesKey, symbol]);
+  }, [settings.interval, settings.style, settings.theme, settings.toolbar, studiesKey, symbol, retryToken]);
+
+  const tradingViewHref = symbol
+    ? `https://www.tradingview.com/symbols/${symbol.replace(":", "-")}/`
+    : "https://www.tradingview.com/markets/";
+
+  const usarNativo = Boolean(ticker) && (blocked || failed);
+
+  /* A incorporação foi bloqueada neste browser: gráfico nativo do IQ OS. */
+  if (usarNativo && ticker) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-[11.5px] text-amber-100">
+          <ShieldAlert size={13} className="shrink-0" />
+          <span className="min-w-0 flex-1">
+            O gráfico da TradingView não carregou neste browser (a incorporação de <code>tradingview-widget.com</code> foi
+            bloqueada, o que acontece em ambientes restritos). A mostrar o gráfico nativo do IQ OS, com cotações da própria API.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setBlocked(false);
+              setRetryToken((value) => value + 1);
+            }}
+            className="h-7 shrink-0 rounded-lg bg-amber-300/20 px-2.5 font-medium text-amber-50 transition hover:bg-amber-300/30"
+          >
+            Tentar a TradingView
+          </button>
+          <a
+            href={tradingViewHref}
+            target="_blank"
+            rel="noreferrer"
+            className="flex h-7 shrink-0 items-center gap-1 rounded-lg border border-white/15 px-2.5 text-amber-50/90 transition hover:bg-white/10"
+          >
+            <ExternalLink size={11} /> Abrir na TradingView
+          </a>
+        </div>
+        <NativePriceChart ticker={ticker} interval={settings.interval} theme={settings.theme} rounded={rounded} height={height} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {/* A classe `tradingview-widget-container` fica na geração criada no
+          efeito: é o pai do `<script>` e é o que o widget procura. */}
       <div
         ref={containerRef}
         className={[
-          "tradingview-widget-container relative min-h-[320px] w-full flex-1 overflow-hidden border border-white/10 bg-[#0f1115]",
+          "relative min-h-[320px] w-full flex-1 overflow-hidden border border-white/10 bg-[#0f1115]",
           rounded ? "rounded-xl" : "",
         ].join(" ")}
         style={{ height }}
@@ -632,7 +875,7 @@ export default function RealtimeChartPage({ initialTicker }: { initialTicker?: s
             <Loader2 size={14} className="animate-spin" /> A resolver o símbolo…
           </div>
         ) : (
-          <TradingViewChart symbol={symbol} settings={settings} />
+          <TradingViewChart symbol={symbol} ticker={ticker} settings={settings} />
         )}
       </div>
 

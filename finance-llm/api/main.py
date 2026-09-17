@@ -201,6 +201,7 @@ from api.admin_routes import router as admin_router
 from api.providers_routes import router as providers_router
 from api.proxy_routes import router as proxy_router
 from api.crm_routes import router as crm_router
+from api.ontology_routes import router as ontology_router
 from api import auth_service as auth
 from api import events_service as events
 
@@ -220,6 +221,20 @@ async def lifespan(app: FastAPI):
         except Exception:
             pass
     threading.Thread(target=_preload_translation, daemon=True).start()
+
+    # Pré-aquece as consultas da ontologia: a primeira agregação sobre o índice de
+    # contratos obriga o Elasticsearch a carregar os campos aninhados do disco
+    # (chegou a levar ~20 s a frio). Em background, o primeiro pedido do
+    # utilizador já encontra as caches quentes.
+    def _preload_ontology():
+        try:
+            from api import ontology_service as ontology
+            ontology.query_objects("contrato", size=1)
+            ontology.query_objects("empresa", size=1)
+            ontology.query_objects("regiao", size=1)
+        except Exception:
+            pass
+    threading.Thread(target=_preload_ontology, daemon=True).start()
     yield
 
 
@@ -246,6 +261,7 @@ app.include_router(admin_router)
 app.include_router(providers_router)
 app.include_router(proxy_router)
 app.include_router(crm_router)
+app.include_router(ontology_router)
 
 
 # Cache curta de `user_id → email`, para o registo de pedidos identificar quem
@@ -2030,3 +2046,28 @@ def contracts_export_pdf(req: ContractAnalyticsRequest = Body(...)):
 
 
 
+
+# ---------------------------------------------------------------------------
+# Última linha de defesa: navegações do browser (HTML) para rotas da interface
+# devolvem a SPA construída.
+#
+# Porquê: os endereços da interface colidem com prefixos da API (`/tickers/EDP`,
+# `/tickers/EDP/grafico`, `/companies/123`, `/contracts/...`). Ao recarregar a
+# página — ou ao abrir um atalho — o browser pede HTML e, sem isto, recebia um
+# 404 JSON da API (visível também através do proxy do Vite em desenvolvimento).
+#
+# Este handler fica registado DEPOIS de todas as rotas de API, pelo que só é
+# chamado quando nenhuma delas corresponde. Pedidos que não aceitem HTML e
+# caminhos com extensão de ficheiro continuam a devolver 404.
+# ---------------------------------------------------------------------------
+@app.get("/{full_path:path}")
+def serve_spa_deep_link(request: Request, full_path: str):
+    """Devolve o `index.html` para endereços da interface abertos diretamente."""
+    if full_path and "." in Path(full_path).name:
+        raise HTTPException(status_code=404, detail="Not Found")
+    if not _accepts_html(request):
+        raise HTTPException(status_code=404, detail="Not Found")
+    index = UI_BUILD_DIR / "index.html"
+    if not index.is_file():
+        raise HTTPException(status_code=404, detail="Interface não construída.")
+    return FileResponse(str(index))

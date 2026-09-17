@@ -133,7 +133,38 @@ def build_context(question: str) -> Dict:
         "history": None,
         "forecast": None,
         "sentiment": None,
+        "ontology": None,
     }
+    # Camada ontológica: identifica objetos da plataforma (empresas, contratos,
+    # CPV, marcas, tickers, notícias, CRM) antes de qualquer geração. É este
+    # contexto que impede o modelo de inventar entidades e valores.
+    try:
+        from api import ontology_service as ontology
+
+        ground = ontology.ai_context(question, limit=4, links_per_object=2, link_size=2, link_budget=4)
+        context["ontology"] = ground
+        context["tools"].append(
+            ToolCall(
+                tool="ontology_grounding",
+                input={"question": question},
+                output=f"{len(ground['objects'])} objetos, {len(ground['relations'])} relações",
+            )
+        )
+        for entry in ground["objects"][:4]:
+            context["sources"].append(
+                Source(
+                    name=f"Ontologia · {entry['type_label']}: {entry['label']}",
+                    url=None,
+                    value=str(entry["id"]),
+                )
+            )
+    except Exception as exc:  # a ontologia nunca deve quebrar o chat
+        context["ontology"] = {
+            "objects": [],
+            "relations": [],
+            "grounding": "",
+            "notes": [f"Ontologia indisponível: {exc}"],
+        }
     for t in tickers[:1]:  # analisar o primeiro ticker identificado
         info = get_stock_info(t)
         history = get_stock_history(t, period="1y")
@@ -174,6 +205,13 @@ def generate_answer(context: Dict, backend: str = "gpt2") -> str:
     stock = context.get("stock")
 
     if not stock:
+        ontology_context = context.get("ontology") or {}
+        if ontology_context.get("objects"):
+            # Pergunta sobre dados da plataforma (contratos, empresas, marcas, CRM):
+            # responde com os objetos e relações verificados na ontologia.
+            from api import ontology_service as ontology
+
+            return ontology.answer_from_context(ontology_context)
         return (
             "Não identifiquei uma empresa ou ticker na tua pergunta. "
             "Pergunta-me sobre empresas como EDP, GALP, Microsoft ou Apple."

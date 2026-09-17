@@ -13,6 +13,7 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
+  Boxes,
   Briefcase,
   Building2,
   CalendarClock,
@@ -69,6 +70,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: Network,
     gradient: "from-cyan-300 via-sky-500 to-blue-600",
     accent: "14,165,233",
+  },
+  {
+    id: "ontology",
+    label: "Ontologia",
+    hint: "Camada semântica: objetos, ligações e IA",
+    icon: Boxes,
+    gradient: "from-teal-200 via-cyan-500 to-indigo-700",
+    accent: "20,184,166",
   },
   {
     id: "crm",
