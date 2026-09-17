@@ -196,6 +196,7 @@ from sentiment.feature_engineering import generate_sentiment_blended_forecast
 
 from api.rag_routes import router as rag_router
 from api.auth_routes import router as auth_router
+from api.cli_routes import router as cli_router
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -234,6 +235,7 @@ app.add_middleware(
 
 app.include_router(rag_router)
 app.include_router(auth_router)
+app.include_router(cli_router)
 
 
 # Servir a React SPA da chat-ui (build estático)

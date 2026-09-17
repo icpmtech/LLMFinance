@@ -2133,7 +2133,13 @@ def _company_role_filter(role: Optional[str]) -> Optional[List[Dict[str, Any]]]:
 
 
 def _company_name_query(q: Optional[str]) -> Optional[Dict[str, Any]]:
-    """Query de texto para nome ou NIF de empresa em qualquer um dos papéis."""
+    """Query de texto para nome ou NIF de empresa em qualquer um dos papéis.
+
+    O nome em `*.parsed.nome` é um campo `keyword` (só corresponde a nomes
+    exatos), pelo que a pesquisa por nome parcial usa o campo de texto
+    `*.raw` (ex.: ``"503933813 - Infraestruturas de Portugal"``), insensível a
+    maiúsculas e a palavras parciais.
+    """
     if not q:
         return None
     q_clean = q.strip()
@@ -2141,6 +2147,9 @@ def _company_name_query(q: Optional[str]) -> Optional[Dict[str, Any]]:
         return None
     should_clauses: List[Dict[str, Any]] = []
     for role_path in ("adjudicantes", "adjudicatarios"):
+        should_clauses.append(
+            {"match": {f"{role_path}.raw": {"query": q_clean, "operator": "and"}}}
+        )
         should_clauses.append(
             {
                 "nested": {

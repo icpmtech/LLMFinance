@@ -24,6 +24,7 @@ import {
   Search,
   Settings,
   Sparkles,
+  TerminalSquare,
   TrendingUp,
   Upload,
 } from "lucide-react";
@@ -156,6 +157,14 @@ export const DOCK_CATALOG: DockApp[] = [
     gradient: "from-slate-300 via-slate-500 to-slate-700",
     accent: "148,163,184",
   },
+  {
+    id: "cli",
+    label: "Terminal",
+    hint: "CLI da plataforma dentro da app",
+    icon: TerminalSquare,
+    gradient: "from-zinc-800 via-zinc-700 to-slate-900",
+    accent: "113,113,122",
+  },
 ];
 
 /** Ícones visíveis por defeito (a ordem é a ordem no dock). */
@@ -171,6 +180,7 @@ const DEFAULT_ITEMS = [
   "forecast",
   "trading",
   "rag",
+  "cli",
   "settings",
 ];
 

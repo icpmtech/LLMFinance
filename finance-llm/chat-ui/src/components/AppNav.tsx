@@ -23,6 +23,7 @@ import {
   PanelLeftOpen,
   Settings,
   LogOut,
+  TerminalSquare,
   Upload,
 } from "lucide-react";
 import { recordRecentView, useNavGroups, useRecentViews, useSidebar } from "../layout";
@@ -50,6 +51,7 @@ export type AppView =
   | "empresas-iq"
   | "import"
   | "settings"
+  | "cli"
   | "contracts-list";
 
 type NavItem = { id: AppView; label: string; icon: React.ReactNode; match?: AppView[]; keywords?: string };
@@ -159,6 +161,7 @@ const groups: NavGroup[] = [
       { id: "rag", label: "RAG Documentos", icon: <FolderOpen size={18} />, keywords: "pdf indexação" },
       { id: "elastic", label: "Elasticsearch", icon: <Database size={18} />, keywords: "índices pesquisa" },
       { id: "import", label: "Importar Dados", icon: <Upload size={18} />, keywords: "excel csv ingestão" },
+      { id: "cli", label: "Terminal (CLI)", icon: <TerminalSquare size={18} />, keywords: "comandos linha terminal cli" },
       { id: "settings", label: "Definições", icon: <Settings size={18} />, keywords: "conta perfil preferências sessões" },
     ],
   },

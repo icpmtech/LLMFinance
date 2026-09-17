@@ -118,6 +118,61 @@ export function useSidebarShortcut() {
   }, []);
 }
 
+/* ------------------------------------------------------------- modo janelas */
+const WINDOW_MODE_KEY = "finance-llm-window-mode";
+
+function readWindowMode(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const stored = window.localStorage.getItem(WINDOW_MODE_KEY);
+    // Por omissão a plataforma abre em modo janelas (estilo macOS).
+    return stored === null ? true : stored === "1";
+  } catch {
+    return true;
+  }
+}
+
+let windowModeCache = readWindowMode();
+
+/** `true` quando as páginas abrem em janelas flutuantes (estilo macOS). */
+export function getWindowMode() {
+  return windowModeCache;
+}
+
+export function setWindowMode(enabled: boolean) {
+  windowModeCache = enabled;
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(WINDOW_MODE_KEY, enabled ? "1" : "0");
+  } catch {
+    // sem persistência
+  }
+  window.dispatchEvent(new Event(CHANGE_EVENT));
+}
+
+function subscribeWindowMode(onChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  const onStorage = (event: StorageEvent) => {
+    if (event.key && event.key !== WINDOW_MODE_KEY) return;
+    windowModeCache = readWindowMode();
+    onChange();
+  };
+  window.addEventListener(CHANGE_EVENT, onChange);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(CHANGE_EVENT, onChange);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+/** Modo janelas (com persistência). */
+export function useWindowMode() {
+  const enabled = useSyncExternalStore(subscribeWindowMode, getWindowMode, getWindowMode);
+  const toggle = useCallback(() => setWindowMode(!windowModeCache), []);
+  const set = useCallback((value: boolean) => setWindowMode(value), []);
+  return { windowMode: enabled, setWindowMode: set, toggleWindowMode: toggle };
+}
+
 /* --------------------------------------------------------- grupos abertos */
 function readGroups(): Record<string, boolean> {
   if (typeof window === "undefined") return {};

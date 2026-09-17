@@ -39,6 +39,43 @@ interface DockProps {
   onOpen: (id: string) => void;
 }
 
+/** Tamanho mínimo dos ícones (alvo tátil confortável em ecrãs pequenos). */
+const MIN_ICON_SIZE = 42;
+
+/** Mede a janela, para o dock se adaptar a ecrãs pequenos. */
+function useViewport() {
+  const [size, setSize] = useState(() => ({
+    width: typeof window === "undefined" ? 0 : window.innerWidth,
+    height: typeof window === "undefined" ? 0 : window.innerHeight,
+  }));
+  useEffect(() => {
+    const update = () => setSize({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+    };
+  }, []);
+  return size;
+}
+
+/**
+ * Ajusta o tamanho dos ícones ao espaço disponível.
+ *
+ * `scrolling` fica a `true` quando nem no tamanho mínimo o dock cabe: nesse caso
+ * o dock passa a poder ser arrastado lateralmente (e a ampliação é desligada,
+ * porque nenhum ícone pode crescer sem ficar cortado).
+ */
+function fitDock(desired: number, items: number, available: number) {
+  if (!available) return { iconSize: desired, scrolling: false };
+  // size × fator ≈ largura total (ícones + folgas proporcionais + separador + padding)
+  const factor = items + 1.64 + (items + 2) * 0.154 + 0.38 + 0.2;
+  const fits = Math.floor(available / factor);
+  const iconSize = Math.max(MIN_ICON_SIZE, Math.min(desired, fits));
+  return { iconSize, scrolling: iconSize < desired };
+}
+
 /** Vistas que não têm ícone próprio e herdam o realce de outra aplicação. */
 const ALIAS: Record<string, string> = {
   "ticker-detail": "tickers",
@@ -73,6 +110,20 @@ export function Dock({ active, onOpen }: DockProps) {
 
   const vertical = prefs.position !== "bottom";
   const editing = settingsOpen;
+  const viewport = useViewport();
+
+  /** Tamanho efetivo dos ícones (o utilizador define o máximo; o ecrã manda). */
+  const fitted = useMemo(() => {
+    const available = vertical
+      ? Math.max(220, viewport.height - 150)
+      : Math.max(220, viewport.width - 24);
+    return fitDock(prefs.iconSize, visible.length, available);
+  }, [prefs.iconSize, visible.length, vertical, viewport.width, viewport.height]);
+  const iconSize = fitted.iconSize;
+
+  /** Em ecrãs táteis não há rato: sem ampliação e sem esconder ao sair. */
+  const autoHideActive = prefs.autoHide && finePointer;
+  const tooltipsActive = prefs.tooltips && finePointer;
 
   /** Largura reservada à barra lateral (o dock não a deve tapar). */
   const sidebarGutter = sidebarMode === "hidden" ? "" : sidebarMode === "rail" ? "md:pl-[72px]" : "md:pl-[268px]";
@@ -101,9 +152,9 @@ export function Dock({ active, onOpen }: DockProps) {
   }, []);
 
   useEffect(() => {
-    if (prefs.autoHide) setRevealed(false);
+    if (autoHideActive) setRevealed(false);
     else setRevealed(true);
-  }, [prefs.autoHide]);
+  }, [autoHideActive]);
 
   useEffect(() => {
     if (!active) return;
@@ -111,7 +162,7 @@ export function Dock({ active, onOpen }: DockProps) {
   }, [active]);
 
   /* ------------------------------------------------- ampliação (por frame) */
-  const magnifying = prefs.magnification && finePointer && !editing;
+  const magnifying = prefs.magnification && finePointer && !editing && !fitted.scrolling;
 
   /** Coloca o tabuleiro no eixo do dock (`start`/`size` em px). */
   const setTray = useCallback(
@@ -303,7 +354,7 @@ export function Dock({ active, onOpen }: DockProps) {
 
   useLayoutEffect(() => {
     measure();
-  }, [measure, visible.length, prefs.iconSize, prefs.position, editing]);
+  }, [measure, visible.length, iconSize, prefs.position, editing]);
 
   useEffect(() => {
     const onResize = () => measure();
@@ -320,7 +371,7 @@ export function Dock({ active, onOpen }: DockProps) {
     if (!hovered) return;
     const id = window.requestAnimationFrame(() => placeTip());
     return () => window.cancelAnimationFrame(id);
-  }, [hovered, prefs.iconSize, prefs.position, placeTip]);
+  }, [hovered, iconSize, prefs.position, placeTip]);
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     const shelf = shelfRef.current;
@@ -383,7 +434,7 @@ export function Dock({ active, onOpen }: DockProps) {
     // O dock centra-se sobre a área de trabalho: não tapa a barra lateral.
     sidebarGutter,
     prefs.position === "bottom"
-      ? "inset-x-0 bottom-0 justify-center pb-2"
+      ? "dock-safe-bottom inset-x-0 bottom-0 justify-center"
       : prefs.position === "left"
         ? "inset-y-0 left-0 flex-col justify-center pl-2"
         : "inset-y-0 right-0 flex-col justify-center pr-2",
@@ -400,7 +451,7 @@ export function Dock({ active, onOpen }: DockProps) {
 
   return (
     <>
-      {prefs.autoHide && (
+      {autoHideActive && (
         <div
           className={[
             "fixed z-[58]",
@@ -421,12 +472,12 @@ export function Dock({ active, onOpen }: DockProps) {
 
       <div className={wrapperClass}>
         <div
-          className="dock-anchor relative pointer-events-auto"
+          className="dock-anchor pointer-events-auto relative min-w-0 max-w-full max-h-full"
           data-position={prefs.position}
-          data-hidden={prefs.autoHide && !revealed && !settingsOpen ? "true" : "false"}
+          data-hidden={autoHideActive && !revealed && !settingsOpen ? "true" : "false"}
           onMouseEnter={() => setRevealed(true)}
           onMouseLeave={() => {
-            if (prefs.autoHide && !settingsOpen) setRevealed(false);
+            if (autoHideActive && !settingsOpen) setRevealed(false);
           }}
         >
           <div
@@ -435,10 +486,12 @@ export function Dock({ active, onOpen }: DockProps) {
             aria-label="Dock de aplicações"
             data-position={prefs.position}
             data-magnifying="false"
+            data-scroll={fitted.scrolling ? "true" : "false"}
             className={[
               "dock-shelf relative flex items-end",
+              fitted.scrolling ? "dock-scroll" : "",
               vertical ? "flex-col" : "flex-row",
-              prefs.iconSize >= 66 ? "gap-3 p-3.5" : "gap-2 p-2.5",
+              iconSize >= 66 ? "gap-3 p-3.5" : "gap-2 p-2.5",
               "rounded-[26px]",
             ].join(" ")}
             onPointerMove={handlePointerMove}
@@ -478,7 +531,7 @@ export function Dock({ active, onOpen }: DockProps) {
                         "absolute rounded-full bg-teal-400/80",
                         vertical ? "left-1/2 h-full w-0.5 -translate-x-1/2" : "top-1/2 h-full w-0.5 -translate-y-1/2",
                       ].join(" ")}
-                      style={vertical ? undefined : { left: index > dragFrom ? `${prefs.iconSize / 2 + 5}px` : `${-prefs.iconSize / 2 - 5}px` }}
+                      style={vertical ? undefined : { left: index > dragFrom ? `${iconSize / 2 + 5}px` : `${-iconSize / 2 - 5}px` }}
                       aria-hidden="true"
                     />
                   )}
@@ -490,8 +543,8 @@ export function Dock({ active, onOpen }: DockProps) {
                     draggable={false}
                     onClick={() => openApp(app)}
                     onMouseEnter={() => {
-                      setHovered(prefs.tooltips ? app : null);
-                      if (prefs.tooltips) hoverIndexRef.current = index;
+                      setHovered(tooltipsActive ? app : null);
+                      if (tooltipsActive) hoverIndexRef.current = index;
                     }}
                     onMouseLeave={() => setHovered(null)}
                     onContextMenu={(event) => {
@@ -501,12 +554,12 @@ export function Dock({ active, onOpen }: DockProps) {
                     }}
                     aria-label={`${app.label} — ${app.hint}`}
                     aria-current={isActive ? "page" : undefined}
-                    title={prefs.tooltips ? undefined : `${app.label} — ${app.hint}`}
+                    title={tooltipsActive ? undefined : `${app.label} — ${app.hint}`}
                     className={[
                       "dock-tile dock-app group relative grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70",
                       bouncing === app.id ? "is-bouncing" : "",
                     ].join(" ")}
-                    style={{ width: prefs.iconSize, height: prefs.iconSize, borderRadius: prefs.iconSize * 0.28 }}
+                    style={{ width: iconSize, height: iconSize, borderRadius: iconSize * 0.28 }}
                   >
                     <span
                       className={[
@@ -518,7 +571,7 @@ export function Dock({ active, onOpen }: DockProps) {
                       aria-hidden="true"
                     />
                     <span className="dock-icon relative z-[1] grid place-items-center text-white drop-shadow">
-                      <Icon size={Math.round(prefs.iconSize * 0.5)} strokeWidth={1.9} />
+                      <Icon size={Math.round(iconSize * 0.5)} strokeWidth={1.9} />
                     </span>
                     {isActive && (
                       <span
@@ -570,12 +623,12 @@ export function Dock({ active, onOpen }: DockProps) {
               title="Preferências do dock"
               className="dock-tile relative grid shrink-0 place-items-center bg-white/8 text-muted-foreground transition hover:bg-white/14 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70"
               style={{
-                width: prefs.iconSize * 0.82,
-                height: prefs.iconSize * 0.82,
-                borderRadius: prefs.iconSize * 0.24,
+                width: iconSize * 0.82,
+                height: iconSize * 0.82,
+                borderRadius: iconSize * 0.24,
               }}
             >
-              <Settings size={Math.round(prefs.iconSize * 0.4)} />
+              <Settings size={Math.round(iconSize * 0.4)} />
             </button>
 
             {fullscreenSupported && (
@@ -592,20 +645,22 @@ export function Dock({ active, onOpen }: DockProps) {
                     : "bg-white/8 text-muted-foreground hover:bg-white/14 hover:text-foreground",
                 ].join(" ")}
                 style={{
-                  width: prefs.iconSize * 0.82,
-                  height: prefs.iconSize * 0.82,
-                  borderRadius: prefs.iconSize * 0.24,
+                  width: iconSize * 0.82,
+                  height: iconSize * 0.82,
+                  borderRadius: iconSize * 0.24,
                 }}
               >
                 {isFullscreen ? (
-                  <Minimize2 size={Math.round(prefs.iconSize * 0.4)} />
+                  <Minimize2 size={Math.round(iconSize * 0.4)} />
                 ) : (
-                  <Maximize2 size={Math.round(prefs.iconSize * 0.4)} />
+                  <Maximize2 size={Math.round(iconSize * 0.4)} />
                 )}
               </button>
             )}
 
-            {hovered && prefs.tooltips && (
+            {fitted.scrolling && <span className="dock-fade" aria-hidden="true" />}
+
+            {hovered && tooltipsActive && (
               <div ref={tipRef} className="dock-tip pointer-events-none" role="presentation">
                 <span className="font-medium">{hovered.label}</span>
                 <span className="dock-tip-hint">{hovered.hint}</span>
@@ -632,6 +687,7 @@ export function Dock({ active, onOpen }: DockProps) {
                 installed: appInstalled,
                 install: () => void install(),
               }}
+              finePointer={finePointer}
             />
           )}
         </div>
@@ -732,6 +788,7 @@ interface DockPreferencesProps {
   onClose: () => void;
   fullscreen: { isFullscreen: boolean; supported: boolean; toggle: () => void };
   pwa: { canInstall: boolean; standalone: boolean; installed: boolean; install: () => void };
+  finePointer: boolean;
 }
 
 function DockPreferences({
@@ -747,24 +804,19 @@ function DockPreferences({
   onClose,
   fullscreen,
   pwa,
+  finePointer,
 }: DockPreferencesProps) {
-  const [overflow, setOverflow] = useState(0);
   const { mode: sidebarMode, setMode: setSidebarMode } = useSidebar();
+  const viewport = useViewport();
 
-  // Aviso quando o dock não cabe no ecrã (típico nas posições laterais).
-  useEffect(() => {
-    const shelf = document.querySelector<HTMLElement>(".dock-shelf");
-    if (!shelf) return;
+  /* O dock adapta o tamanho ao ecrã: o painel explica o que está a acontecer. */
+  const fitted = useMemo(() => {
     const vertical = prefs.position !== "bottom";
-    const extent = vertical ? shelf.clientHeight : shelf.clientWidth;
-    const viewport = vertical ? window.innerHeight : window.innerWidth;
-    setOverflow(Math.max(0, Math.round(extent - viewport + 16)));
-  }, [prefs.position, prefs.iconSize, visible.length]);
-
-  const fitToScreen = () => {
-    const step = Math.ceil(overflow / Math.max(1, visible.length)) + 1;
-    onChange({ iconSize: Math.max(ICON_SIZE_RANGE.min, prefs.iconSize - step) });
-  };
+    const available = vertical
+      ? Math.max(220, viewport.height - 150)
+      : Math.max(220, viewport.width - 24);
+    return fitDock(prefs.iconSize, visible.length, available);
+  }, [prefs.iconSize, prefs.position, visible.length, viewport.width, viewport.height]);
 
   return (
     <div className={className} style={{ width: 336 }}>
@@ -802,20 +854,19 @@ function DockPreferences({
               </button>
             ))}
           </div>
-          {overflow > 0 && (
+          {fitted.scrolling ? (
             <div className="space-y-1.5 rounded-xl border border-amber-400/25 bg-amber-400/10 p-2.5">
               <p className="text-[11px] leading-snug text-amber-200">
-                O dock não cabe no ecrã (faltam ~{overflow}px). Reduza o tamanho dos ícones ou retire aplicações.
+                Neste ecrã o dock não cabe todo: os ícones ficam no tamanho mínimo ({fitted.iconSize}px) e a barra pode
+                ser deslizada lateralmente. Retire aplicações do dock para que caiba tudo.
               </p>
-              <button
-                type="button"
-                onClick={fitToScreen}
-                className="rounded-lg border border-amber-300/30 px-2 py-1 text-[11px] text-amber-100 transition hover:bg-amber-400/15"
-              >
-                Ajustar ao ecrã
-              </button>
             </div>
-          )}
+          ) : fitted.iconSize < prefs.iconSize ? (
+            <p className="flex items-start gap-2 rounded-xl border border-white/10 bg-white/[0.04] p-2.5 text-[11px] leading-snug text-muted-foreground">
+              <MonitorSmartphone size={13} className="mt-0.5 shrink-0 text-teal-300" />
+              Neste ecrã os ícones são mostrados a {fitted.iconSize}px (definiu {prefs.iconSize}px) para o dock caber.
+            </p>
+          ) : null}
         </section>
 
         <section className="space-y-3">
@@ -829,6 +880,11 @@ function DockPreferences({
             suffix="px"
             onChange={(iconSize) => onChange({ iconSize })}
           />
+          {fitted.iconSize < prefs.iconSize && (
+            <p className="text-[11px] text-muted-foreground">
+              Neste ecrã o valor efetivo é <span className="text-foreground">{fitted.iconSize}px</span>.
+            </p>
+          )}
           <SliderRow
             label="Ampliação máxima"
             value={Number(prefs.magnify.toFixed(2))}
@@ -855,8 +911,18 @@ function DockPreferences({
 
         <section className="space-y-3">
           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Comportamento</p>
-          <ToggleRow label="Ocultar automaticamente" checked={prefs.autoHide} onChange={(autoHide) => onChange({ autoHide })} />
-          <ToggleRow label="Etiquetas ao passar o rato" checked={prefs.tooltips} onChange={(tooltips) => onChange({ tooltips })} />
+          <ToggleRow
+            label="Ocultar automaticamente"
+            hint={finePointer ? undefined : "Não se aplica a ecrãs táteis (não há rato para revelar o dock)."}
+            checked={prefs.autoHide}
+            onChange={(autoHide) => onChange({ autoHide })}
+          />
+          <ToggleRow
+            label="Etiquetas ao passar o rato"
+            hint={finePointer ? undefined : "Em ecrãs táteis aparece o nome ao manter premido."}
+            checked={prefs.tooltips}
+            onChange={(tooltips) => onChange({ tooltips })}
+          />
           <ToggleRow label="Indicadores de apps abertas" checked={prefs.indicators} onChange={(indicators) => onChange({ indicators })} />
         </section>
 
@@ -1069,16 +1135,21 @@ function SliderRow({
 
 function ToggleRow({
   label,
+  hint,
   checked,
   onChange,
 }: {
   label: string;
+  hint?: string;
   checked: boolean;
   onChange: (value: boolean) => void;
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="min-w-0">
+        <span className="block text-xs text-muted-foreground">{label}</span>
+        {hint && <span className="mt-0.5 block text-[10px] leading-snug text-muted-foreground/70">{hint}</span>}
+      </span>
       <button
         type="button"
         role="switch"

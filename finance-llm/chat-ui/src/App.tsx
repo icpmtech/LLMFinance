@@ -7,6 +7,7 @@ import { setSidebarHidden, useSidebarShortcut } from "./layout";
 import { useAuth } from "./auth";
 import LoginPage from "./pages/LoginPage";
 import SettingsPage from "./pages/SettingsPage";
+import CliPage from "./pages/CliPage";
 import { Loader2, Sparkles } from "lucide-react";
 import { DashboardPage } from "./pages/DashboardPage";
 import { TickerDetailPage } from "./pages/TickerDetailPage";
@@ -29,7 +30,7 @@ import { ContractsListPage } from "./pages/ContractsListPage";
 import { sendChat } from "./sendChat";
 import type { Message, ModelBackend } from "./types";
 
-type AppView = AppNavView | "chat" | "ticker-detail" | "empresas-iq" | "contracts-list" | "settings";
+type AppView = AppNavView | "chat" | "ticker-detail" | "empresas-iq" | "contracts-list" | "settings" | "cli";
 const COMPANY_DETAIL_KEY = "finance-llm-company-detail";
 const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
 
@@ -99,6 +100,7 @@ export default function App() {
     if (path === "/companies/dashboard") return "companies-dashboard";
     if (path === "/import") return "import";
     if (path === "/settings") return "settings";
+    if (path === "/cli") return "cli";
     if (path === "/contracts-list" || path.startsWith("/contracts-list/")) return "contracts-list";
     if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) return "empresas-iq";
     if (path.startsWith("/companies/") && !path.startsWith("/companies/search") && !path.startsWith("/companies/dashboard")) {
@@ -137,6 +139,7 @@ export default function App() {
       else if (path === "/companies/dashboard") next = "companies-dashboard";
       else if (path === "/import") next = "import";
       else if (path === "/settings") next = "settings";
+      else if (path === "/cli") next = "cli";
       else if (path === "/contracts-list" || path.startsWith("/contracts-list/")) next = "contracts-list";
       else if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) next = "empresas-iq";
       else if (path.startsWith("/companies/")) {
@@ -273,6 +276,7 @@ export default function App() {
     else if (next === "companies-dashboard") path = "/companies/dashboard";
     else if (next === "import") path = "/import";
     else if (next === "settings") path = "/settings";
+    else if (next === "cli") path = "/cli";
     else if (next === "empresas-iq") path = "/empresas-iq";
     else if (next === "company-detail" && selectedCompany) path = `/companies/${selectedCompany}`;
     if (typeof window !== "undefined" && window.location.pathname !== path) {
@@ -405,6 +409,7 @@ export default function App() {
     if (view === "elastic") return <ElasticPage />;
     if (view === "import") return <ImportPage onSwitchView={() => setViewAndHistory("dashboard")} />;
     if (view === "settings") return <SettingsPage />;
+    if (view === "cli") return <CliPage />;
     if (view === "contracts-list") return <ContractsListPage onSwitchView={() => setViewAndHistory("dashboard")} />;
     if (view === "search") {
       return (

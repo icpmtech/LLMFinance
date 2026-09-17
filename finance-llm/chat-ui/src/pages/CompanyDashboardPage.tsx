@@ -123,6 +123,14 @@ function formatCompactPrice(n?: number | null) {
   return formatPrice(n, 0);
 }
 
+function formatCompactNumber(n?: number | null) {
+  if (n === undefined || n === null || Number.isNaN(n)) return "—";
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return `${(n / 1_000_000).toLocaleString("pt-PT", { maximumFractionDigits: 1 })} M`;
+  if (abs >= 1_000) return `${(n / 1_000).toLocaleString("pt-PT", { maximumFractionDigits: 0 })} mil`;
+  return formatNumber(n);
+}
+
 function maxCount(rows: ContractAnalyticsRow[]) {
   return Math.max(...rows.map((r) => r.count || 0), 1);
 }
@@ -277,7 +285,7 @@ function CompanyRow({
           </div>
           <MiniBar value={company.total_value || 0} max={max} color="bg-amber-400" />
           <div className="flex items-center justify-between gap-2 mt-1">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground truncate">
               {formatNumber(company.contracts_total)} contratos
               {company.nif ? ` · NIF ${company.nif}` : ""}
             </p>
@@ -664,6 +672,7 @@ export default function CompanyDashboardPage({
                     if (e.key === "Enter") applyDraft();
                   }}
                   placeholder="Objeto, entidade, CPV…"
+                  aria-label="Texto livre — objeto, entidade ou CPV"
                   className={inputClass}
                 />
               </FilterField>
@@ -671,6 +680,7 @@ export default function CompanyDashboardPage({
                 <select
                   value={draft.year}
                   onChange={(e) => setDraft((d) => ({ ...d, year: e.target.value === "" ? "" : Number(e.target.value) }))}
+                  aria-label="Ano (filtro)"
                   className={inputClass}
                 >
                   <option value="">Todos os anos</option>
@@ -685,6 +695,7 @@ export default function CompanyDashboardPage({
                 <select
                   value={draft.region}
                   onChange={(e) => setDraft((d) => ({ ...d, region: e.target.value }))}
+                  aria-label="Região NUTS (filtro)"
                   className={inputClass}
                 >
                   <option value="">Todas as regiões</option>
@@ -699,6 +710,7 @@ export default function CompanyDashboardPage({
                 <select
                   value={draft.role}
                   onChange={(e) => setDraft((d) => ({ ...d, role: e.target.value as RoleValue }))}
+                  aria-label="Papel da entidade (filtro)"
                   className={inputClass}
                 >
                   {ROLE_OPTIONS.map((o) => (
@@ -735,6 +747,7 @@ export default function CompanyDashboardPage({
                   value={draft.minContracts}
                   onChange={(e) => setDraft((d) => ({ ...d, minContracts: e.target.value }))}
                   placeholder="ex.: 10"
+                  aria-label="Contratos mínimos por entidade"
                   className={inputClass}
                 />
               </FilterField>
@@ -744,6 +757,7 @@ export default function CompanyDashboardPage({
                   value={draft.cpvCode}
                   onChange={(e) => setDraft((d) => ({ ...d, cpvCode: e.target.value }))}
                   placeholder="ex.: 45233"
+                  aria-label="Código CPV"
                   className={inputClass}
                 />
               </FilterField>
@@ -752,6 +766,7 @@ export default function CompanyDashboardPage({
                   type="date"
                   value={draft.startDate}
                   onChange={(e) => setDraft((d) => ({ ...d, startDate: e.target.value }))}
+                  aria-label="Data de publicação desde"
                   className={inputClass}
                 />
               </FilterField>
@@ -760,6 +775,7 @@ export default function CompanyDashboardPage({
                   type="date"
                   value={draft.endDate}
                   onChange={(e) => setDraft((d) => ({ ...d, endDate: e.target.value }))}
+                  aria-label="Data de publicação até"
                   className={inputClass}
                 />
               </FilterField>
@@ -899,7 +915,7 @@ export default function CompanyDashboardPage({
                 icon={TrendingUp}
                 iconClass="text-blue-400"
                 iconBg="bg-blue-500/15 border border-blue-400/20"
-                title="Entidades com maior valor contratado"
+                title="Entidades com maior valor"
                 hint={`${formatNumber(companiesTotal)} NIF mais relevantes · página ${page + 1} de ${totalPages}`}
                 action={
                   <div className="flex items-center gap-1">
@@ -930,7 +946,8 @@ export default function CompanyDashboardPage({
                   </div>
                 ) : companies.length === 0 ? (
                   <p className="text-muted-foreground py-6">
-                    Nenhuma entidade corresponde aos filtros aplicados.
+                    Nenhuma entidade corresponde aos filtros aplicados. A lista de entidades pesquisa por nome ou NIF
+                    das partes dos contratos.
                   </p>
                 ) : (
                   <div className="space-y-3">
@@ -981,7 +998,7 @@ export default function CompanyDashboardPage({
                 iconClass="text-violet-400"
                 iconBg="bg-violet-500/15 border border-violet-400/20"
                 title="Tipo de procedimento"
-                hint="Distribuição dos contratos filtrados"
+                hint="Contratos por tipo de procedimento"
               >
                 {procedureData.length === 0 ? (
                   <p className="text-muted-foreground">Sem dados para os filtros aplicados.</p>
@@ -1059,7 +1076,7 @@ export default function CompanyDashboardPage({
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="#2e323b" />
                         <XAxis dataKey="short" stroke="#9aa0aa" />
-                        <YAxis stroke="#9aa0aa" tickFormatter={(v) => formatNumber(Number(v))} />
+                        <YAxis stroke="#9aa0aa" width={48} tickFormatter={(v) => formatCompactNumber(Number(v))} />
                         <Tooltip contentStyle={tooltipStyle} formatter={countFormatter} />
                         <Bar dataKey="count" fill="#f43f5e" radius={[4, 4, 0, 0]} />
                       </BarChart>

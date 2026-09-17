@@ -291,6 +291,61 @@ html, body, #root {
 .dock-shelf {
   background: transparent;
 }
+
+/* Reserva a área segura dos telemóveis (barra de gestos / home indicator). */
+.dock-safe-bottom {
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+
+/* Ecrãs estreitos: quando os ícones não cabem no tamanho mínimo, o dock passa
+   a poder ser arrastado. A ampliação é desligada nesse caso (nada cresceria
+   sem ficar cortado). */
+.dock-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.dock-scroll::-webkit-scrollbar {
+  display: none;
+}
+.dock-shelf[data-scroll="true"][data-position="bottom"] {
+  overflow-x: auto;
+  overflow-y: hidden;
+  touch-action: pan-x;
+  justify-content: flex-start;
+}
+.dock-shelf[data-scroll="true"][data-position="left"],
+.dock-shelf[data-scroll="true"][data-position="right"] {
+  overflow-y: auto;
+  overflow-x: hidden;
+  touch-action: pan-y;
+  justify-content: flex-start;
+}
+
+/* Dica visual de que há mais ícones para lá da margem. */
+.dock-fade {
+  position: absolute;
+  pointer-events: none;
+  z-index: 2;
+}
+.dock-anchor[data-position="bottom"] .dock-fade {
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 32px;
+  border-radius: 0 26px 26px 0;
+  background: linear-gradient(90deg, rgba(17, 19, 24, 0), rgba(17, 19, 24, 0.8));
+}
+.dock-anchor[data-position="left"] .dock-fade,
+.dock-anchor[data-position="right"] .dock-fade {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 28px;
+  border-radius: 0 0 26px 26px;
+  background: linear-gradient(180deg, rgba(17, 19, 24, 0), rgba(17, 19, 24, 0.8));
+}
 .dock-tray {
   position: absolute;
   top: 0;

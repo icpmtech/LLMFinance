@@ -2293,7 +2293,8 @@ type PlatformView =
   | "trading"
   | "rag"
   | "elastic"
-  | "settings";
+  | "settings"
+  | "cli";
 
 interface NavGroup {
   id: string;
@@ -5679,6 +5680,7 @@ export default function EmpresasIQPage({
         rag: "/rag",
         elastic: "/elastic",
         settings: "/settings",
+        cli: "/cli",
       };
       window.history.pushState({}, "", map[view]);
       window.dispatchEvent(new PopStateEvent("popstate"));

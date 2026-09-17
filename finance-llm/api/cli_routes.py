@@ -13,12 +13,13 @@ comandos autenticados correm como o utilizador que está a usar o browser.
 from __future__ import annotations
 
 import argparse
+import os
 import shlex
 import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Optional, Set, Tuple
+from typing import Annotated, Any, Dict, List, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -114,13 +115,19 @@ def allowed_commands() -> List[Dict[str, Any]]:
     tree = _cli_tree()
     catalog: List[Dict[str, Any]] = []
     for name in sorted(ALLOWED_COMMANDS & set(tree or {})):
-        subcommands = sorted(
-            sub
-            for sub in (tree.get(name) or {})
-            if (name, sub) not in BLOCKED
-        )
+        # Só desaparece do catálogo o comando bloqueado por inteiro (`config`, `open`);
+        # em `auth` mostra-se apenas o que é permitido (whoami, sessions).
+        if (name,) in BLOCKED:
+            continue
+        subcommands = sorted(sub for sub in (tree.get(name) or {}) if (name, sub) not in BLOCKED)
         catalog.append({"command": name, "subcommands": subcommands})
     return catalog
+
+
+def _command_path(argv: List[str]) -> Tuple[str, ...]:
+    """Caminho do comando (topo + ação), ignorando as opções."""
+    words = [arg for arg in argv if not arg.startswith("-")]
+    return tuple(words[:2]) if len(words) > 1 else tuple(words[:1])
 
 
 def _validate(argv: List[str]) -> None:
@@ -134,6 +141,9 @@ def _validate(argv: List[str]) -> None:
             raise HTTPException(status_code=422, detail="Argumento demasiado longo.")
         if any(char in arg for char in ("\n", "\r", "\x00")):
             raise HTTPException(status_code=422, detail="Argumentos com caracteres inválidos.")
+        flag = arg.split("=", 1)[0]
+        if flag in BLOCKED_FLAGS:
+            raise HTTPException(status_code=403, detail=f"A opção {flag} é definida pelo servidor.")
 
     head = argv[0]
     if head.startswith("-"):
@@ -144,34 +154,28 @@ def _validate(argv: List[str]) -> None:
             detail=f"«{head}» não está disponível no terminal da interface. Use: {', '.join(sorted(ALLOWED_COMMANDS))}.",
         )
 
-    tree = _cli_tree()
-    if tree:
-        if head not in tree:
-            raise HTTPException(status_code=403, detail=f"Comando «{head}» desconhecido.")
-        subcommands = [arg for arg in argv[1:] if not arg.startswith("-")]
-        if tree.get(head):
-            if not subcommands:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Indique a ação de «{head}»: {', '.join(sorted(tree[head]))}.",
-                )
-            action = subcommands[0]
-            if action not in tree[head]:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Ação «{action}» inválida para «{head}». Opções: {', '.join(sorted(tree[head]))}.",
-                )
-            for blocked in BLOCKED:
-                if tuple(argv[1 : 1 + len(blocked)]) == blocked:
-                    raise HTTPException(
-                        status_code=403,
-                        detail="Esta operação tem de ser feita no terminal ou nas Definições da conta.",
-                    )
+    path = _command_path(argv)
+    if any(path[: len(blocked)] == blocked for blocked in BLOCKED):
+        raise HTTPException(
+            status_code=403,
+            detail="Esta operação altera a conta ou a configuração local. Faça-a no terminal ou nas Definições.",
+        )
 
-    for arg in argv:
-        flag = arg.split("=", 1)[0]
-        if flag in BLOCKED_FLAGS:
-            raise HTTPException(status_code=403, detail=f"A opção {flag} é definida pelo servidor.")
+    tree = _cli_tree()
+    if not tree:
+        return
+    if head not in tree:
+        raise HTTPException(status_code=403, detail=f"Comando «{head}» desconhecido.")
+    actions = sorted(tree[head])
+    if not actions:
+        return
+    if len(path) < 2:
+        raise HTTPException(status_code=422, detail=f"Indique a ação de «{head}»: {', '.join(actions)}.")
+    if path[1] not in tree[head]:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Ação «{path[1]}» inválida para «{head}». Opções: {', '.join(actions)}.",
+        )
 
 
 def _timeout_for(argv: List[str]) -> int:
@@ -212,9 +216,10 @@ def cli_run(
     argv = [arg[1:-1] if len(arg) >= 2 and arg[0] == arg[-1] and arg[0] in "\"'" else arg for arg in argv]
     _validate(argv)
 
-    # O token da sessão viaja num ficheiro temporário em memória (env var),
-    # para não aparecer no comando nem no histórico.
-    command = [sys.executable, "-m", "cli", "--no-color", "--token", session.token, *argv]
+    # O token vai por variável de ambiente (nunca em `argv`, que é visível na
+    # lista de processos do sistema).
+    command = [sys.executable, "-m", "cli", "--no-color", *argv]
+    environment = {**os.environ, "FINANCE_LLM_TOKEN": session.token, "PYTHONIOENCODING": "utf-8"}
     display = f"python -m cli {' '.join(shlex.quote(arg) for arg in argv)}"
 
     started = time.perf_counter()
@@ -223,6 +228,7 @@ def cli_run(
         completed = subprocess.run(  # noqa: S603 - sem shell, argumentos validados
             command,
             cwd=str(ROOT),
+            env=environment,
             capture_output=True,
             text=True,
             encoding="utf-8",

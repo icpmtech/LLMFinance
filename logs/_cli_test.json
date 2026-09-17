@@ -1,0 +1,11 @@
+{
+    "command":  "python -m cli status",
+    "argv":  [
+                 "status"
+             ],
+    "exit_code":  0,
+    "stdout":  "FinanceLLM v0.1.0\nAPI              http://127.0.0.1:8002 â?? online\n                 modelos: gpt2, mistral, bloomberg\nElasticsearch    â?? ligado 8.11.0\nContratos        2 250 969 documentos Â· 2012â??2026\nSessÃ£o           â?? term.558848@finance-llm.local (member)\n",
+    "stderr":  "",
+    "duration_ms":  617,
+    "timed_out":  false
+}

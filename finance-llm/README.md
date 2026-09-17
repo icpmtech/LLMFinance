@@ -225,6 +225,8 @@ Abre http://127.0.0.1:4173 no browser.
 - **Ecrã inteiro** e **PWA** (instalável, funciona sem ligação): `manifest.webmanifest` + `sw.js`.
 - **Contas** em Elasticsearch (`finance_users` / `finance_sessions`), com login, registo,
   definições de perfil, sessões ativas e terminação remota.
+- **Terminal** (`/cli`) — o CLI da plataforma dentro da aplicação, com histórico (↑/↓),
+  completamento com Tab, sugestões clicáveis e saída `--json`.
 
 ## CLI
 
@@ -266,6 +268,20 @@ Notas de uso:
 - A configuração fica em `~/.finance-llm/config.json` (ou `$FINANCE_LLM_HOME`), com permissões restritas.
 - No Windows há atalhos: `finance-llm.cmd status` ou `.\finance-llm.ps1 status`.
 - Os valores monetários, datas e tabelas são formatados para leitura; a codificação é adaptada à consola.
+
+### Terminal na interface web
+
+A página **Terminal** (`/cli`) corre o mesmo CLI no servidor e mostra a saída na aplicação:
+
+- `GET  /cli/commands` — comandos permitidos (alimenta a paleta de sugestões)
+- `POST /cli/run` — corpo `{"command": "contracts search \"obras\" --year 2025"}` → stdout/stderr,
+  código de saída, duração e indicação de tempo excedido
+
+Segurança: a rota exige sessão e executa o CLI com `shell=False` e **lista de argumentos validada**
+(a árvore de comandos vem do próprio `argparse` do CLI). O token da sessão é injetado por variável
+de ambiente (nunca aparece no processo) e as operações de conta — login, registo, logout,
+alteração de palavra-passe — estão deliberadamente bloqueadas, para se fazerem nas Definições
+ou num terminal local.
 
 ## Endpoints da API
 
