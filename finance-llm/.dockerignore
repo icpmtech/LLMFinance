@@ -19,3 +19,16 @@ chat-ui/.vite
 *.log
 .DS_Store
 Thumbs.db
+
+# Dados e modelos ficam fora do contexto da build (são montados como volumes):
+# data (~12 GB), model (~3 GB) e training fazem a build subir de minutos para horas.
+data
+model
+training
+kronos_upstream
+logs
+.pytest_cache
+*.pid
+*.err
+_docker_es_*.json
+es_up.txt

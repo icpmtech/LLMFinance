@@ -1,5 +1,5 @@
-version: "3.9"
-
+# IQ OS — solução completa em containers (Elasticsearch + backend FastAPI + frontend nginx)
+# Uso: docker compose up --build -d
 services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
@@ -9,20 +9,22 @@ services:
       - xpack.security.enabled=false
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
-      - "${FINANCE_ES_PORT:-9200}:9200"
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
     volumes:
       - es-data:/usr/share/elasticsearch/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
-      interval: 30s
+      test: ["CMD-SHELL", "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' || exit 1"]
+      interval: 15s
       timeout: 10s
       start_period: 60s
-      retries: 5
+      retries: 10
+    restart: unless-stopped
 
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
+    image: iq-os-backend:latest
     container_name: finance-llm-backend
     ports:
       - "${FINANCE_API_PORT:-8003}:8000"
@@ -30,10 +32,21 @@ services:
       - ./data:/app/data
       - ./model:/app/model
       - ./rag:/app/rag
+      - ./logs:/app/logs
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONPATH=/app
-      - ES_HOST=${ES_HOST:-http://elasticsearch:9200}
+      # Nome do serviço do compose, não 127.0.0.1 (dentro do container o host é outro)
+      - ELASTICSEARCH_URL=${FINANCE_ES_URL:-http://elasticsearch:9200}
+      # Vazio => usa/reutiliza data/.auth_secret (sessões locais continuam válidas)
+      - FINANCE_AUTH_SECRET=${FINANCE_AUTH_SECRET:-}
+      - FRED_API_KEY=${FRED_API_KEY:-}
+      - BRAVE_API_KEY=${BRAVE_API_KEY:-}
+      - SERPAPI_KEY=${SERPAPI_KEY:-}
+      - OLLAMA_URL=${OLLAMA_URL:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-}
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -41,21 +54,31 @@ services:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://127.0.0.1:8000/health', timeout=5)"]
       interval: 30s
       timeout: 10s
-      start_period: 60s
-      retries: 3
+      start_period: 90s
+      retries: 5
+    restart: unless-stopped
 
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      args:
+        # Mesma origem: o nginx faz proxy de /api/ para backend:8000
+        VITE_API_URL: ${VITE_API_URL:-/api}
+    image: iq-os-frontend:latest
     container_name: finance-llm-frontend
     ports:
       - "${FINANCE_UI_PORT:-4180}:80"
     depends_on:
       backend:
         condition: service_healthy
-    environment:
-      - VITE_API_URL=${VITE_API_URL:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
 
 volumes:
   es-data:

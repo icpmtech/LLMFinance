@@ -10,11 +10,14 @@ ENV PYTHONUNBUFFERED=1 \
     FAISS_NO_GPU=1
 
 # Dependências do sistema para compilar alguns pacotes python e suportar PDFs
+# (libgl1-mesa-glx não existe em Debian bookworm; libgl1 + libgomp1 cobrem OpenCV/PyTorch)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    curl \
     git \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar e instalar dependências python

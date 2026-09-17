@@ -1,11 +1,16 @@
-# Frontend React + Vite para FinanceLLM
+# Frontend React + Vite para IQ OS
 FROM node:22-slim AS builder
 
 WORKDIR /app
 
+# Em produção o browser fala com o nginx (mesma origem) através do proxy /api/.
+# Com um valor relativo não há CORS nem dependência do porto do backend no host.
+ARG VITE_API_URL=/api
+ENV VITE_API_URL=$VITE_API_URL
+
 # Copiar dependências primeiro para cache eficiente
-COPY chat-ui/package.json ./
-RUN npm install
+COPY chat-ui/package.json chat-ui/package-lock.json ./
+RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 
 # Copiar restante do frontend e fazer build
 COPY chat-ui/ .
