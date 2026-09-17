@@ -106,7 +106,7 @@ Para parar a solução completa:
 
 ### Docker Compose
 
-Para correr backend + frontend em containers, garante que tens Docker Desktop/Engine instalado e corre:
+Para correr a solução completa (Elasticsearch + backend + frontend) em containers, garante que tens Docker Desktop/Engine instalado e corre:
 
 ```bash
 docker compose up --build -d
@@ -114,6 +114,7 @@ docker compose up --build -d
 
 - Frontend: http://127.0.0.1:4180
 - API docs (Swagger): http://127.0.0.1:8003/docs
+- Elasticsearch: http://127.0.0.1:9200
 
 Para parar:
 
@@ -121,7 +122,7 @@ Para parar:
 docker compose down
 ```
 
-Mais detalhes em [`docs/docker-setup.md`](docs/docker-setup.md).
+Os volumes `./data`, `./model`, `./rag` e `./logs` são montados no backend (os mesmos dados da execução local), e o índice do Elasticsearch persiste no volume `es-data`. Mais detalhes em [`docs/docker-setup.md`](docs/docker-setup.md).
 
 ## Recolha de dados
 
