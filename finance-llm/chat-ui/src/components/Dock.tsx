@@ -14,7 +14,9 @@ import {
   GripVertical,
   Maximize2,
   Minimize2,
+  Minus,
   MonitorSmartphone,
+  PanelLeftOpen,
   Pin,
   Plus,
   RotateCcw,
@@ -30,7 +32,10 @@ import {
   type DockApp,
   type DockPosition,
 } from "../dock";
-import { useSidebar } from "../layout";import { useFullscreen } from "../fullscreen";
+import { useAuth } from "../auth";
+import { useSidebar, useWindowMode } from "../layout";
+import { closeWindow, focusWindow, minimizeWindow, useWindows, windowFor } from "../windows";
+import { useFullscreen } from "../fullscreen";
 import { usePwaInstall } from "../pwa";
 
 interface DockProps {
@@ -105,6 +110,17 @@ export function Dock({ active, onOpen }: DockProps) {
   const [dragOver, setDragOver] = useState<number | null>(null);
   const [finePointer, setFinePointer] = useState(false);
   const { mode: sidebarMode } = useSidebar();
+  const { windowMode, setWindowMode } = useWindowMode();
+  const { user, updateProfile } = useAuth();
+  /** O modo janelas é uma preferência de conta: guardar aqui evita que um
+   *  recarregamento reponha o valor antigo. */
+  const changeWindowMode = (value: boolean) => {
+    setWindowMode(value);
+    if (user) {
+      void updateProfile({ preferences: { window_mode: value } }).catch(() => {});
+    }
+  };
+  const { windows: openWindows, restore: restoreWindowFocus } = useWindows();
   const { isFullscreen, supported: fullscreenSupported, toggle: toggleFullscreen } = useFullscreen();
   const { canInstall, standalone, installed: appInstalled, install } = usePwaInstall();
 
@@ -403,10 +419,25 @@ export function Dock({ active, onOpen }: DockProps) {
     return ALIAS[active] ?? active;
   }, [active, visible]);
 
+  /** Aplicações com janela aberta (indicador do dock). */
+  const openViews = useMemo(() => new Set(openWindows.map((item) => item.view)), [openWindows]);
+  /** Vista com a janela em foco (para realce quando o modo janelas está ativo). */
+  const focusedView = useMemo(
+    () => [...openWindows].filter((item) => !item.minimized).sort((a, b) => b.z - a.z)[0]?.view ?? null,
+    [openWindows],
+  );
+  const highlightedView = windowMode ? focusedView ?? active : activeId;
+
   const openApp = (app: DockApp) => {
     setMenu(null);
     setBouncing(app.id);
     window.setTimeout(() => setBouncing((current) => (current === app.id ? null : current)), 700);
+    // Com a janela já aberta, clicar no ícone foca-a (ou restaura, se minimizada).
+    const existing = windowMode ? windowFor(app.id) : undefined;
+    if (existing) {
+      restoreWindowFocus(app.id);
+      return;
+    }
     onOpen(app.id);
   };
 
@@ -501,8 +532,8 @@ export function Dock({ active, onOpen }: DockProps) {
               setMenu({ app: null, x: event.clientX, y: event.clientY });
             }}
           >            <span ref={trayRef} className="dock-tray" aria-hidden="true" />            {visible.map((app, index) => {
-              const isActive = app.id === activeId;
-              const isRunning = visited.includes(app.id);
+              const isActive = app.id === highlightedView;
+              const isRunning = windowMode ? openViews.has(app.id) : visited.includes(app.id);
               const Icon = app.icon;
               return (
                 <div
@@ -688,6 +719,8 @@ export function Dock({ active, onOpen }: DockProps) {
                 install: () => void install(),
               }}
               finePointer={finePointer}
+              windowMode={windowMode}
+              onWindowModeChange={changeWindowMode}
             />
           )}
         </div>
@@ -731,6 +764,44 @@ export function Dock({ active, onOpen }: DockProps) {
                 >
                   <X size={14} /> Retirar do dock
                 </button>
+                {windowMode && menu.app && windowFor(menu.app.id) && (
+                  <>
+                    <div className="my-1 h-px bg-white/8" />
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        const app = menu.app;
+                        setMenu(null);
+                        if (app) minimizeWindow(app.id);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-white/8"
+                    >
+                      <Minus size={14} /> Minimizar janela
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        const app = menu.app;
+                        setMenu(null);
+                        if (app) focusWindow(app.id);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-white/8"
+                    >
+                      <PanelLeftOpen size={14} /> Trazer para a frente
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        const app = menu.app;
+                        setMenu(null);
+                        if (app) closeWindow(app.id);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-300 transition hover:bg-rose-400/10"
+                    >
+                      <X size={14} /> Fechar janela
+                    </button>
+                  </>
+                )}
               </>
             ) : (
               <>
@@ -789,6 +860,8 @@ interface DockPreferencesProps {
   fullscreen: { isFullscreen: boolean; supported: boolean; toggle: () => void };
   pwa: { canInstall: boolean; standalone: boolean; installed: boolean; install: () => void };
   finePointer: boolean;
+  windowMode: boolean;
+  onWindowModeChange: (value: boolean) => void;
 }
 
 function DockPreferences({
@@ -805,6 +878,8 @@ function DockPreferences({
   fullscreen,
   pwa,
   finePointer,
+  windowMode,
+  onWindowModeChange,
 }: DockPreferencesProps) {
   const { mode: sidebarMode, setMode: setSidebarMode } = useSidebar();
   const viewport = useViewport();
@@ -928,6 +1003,12 @@ function DockPreferences({
 
         <section className="space-y-3">
           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Interface</p>
+          <ToggleRow
+            label="Abrir páginas em janelas"
+            hint="Cada aplicação abre numa janela arrastável, redimensionável e minimizável."
+            checked={windowMode}
+            onChange={onWindowModeChange}
+          />
           <div className="space-y-1.5">
             <span className="text-xs text-muted-foreground">Barra lateral</span>
             <div className="flex gap-1 rounded-xl bg-white/5 p-1">

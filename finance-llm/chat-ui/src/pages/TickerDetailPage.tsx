@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   ArrowUpRight,
   ArrowDownRight,
+  CandlestickChart,
   TrendingUp,
   Newspaper,
   Zap,
@@ -15,6 +16,7 @@ import {
   CheckCircle,
   MessageSquare,
   ChevronRight,
+  Maximize2,
 } from "lucide-react";
 import {
   Area,
@@ -47,8 +49,10 @@ import type {
   TickerHistory,
   TickerInfo,
 } from "../types";
+import { TradingViewChart, tradingViewSymbol } from "./RealtimeChartPage";
+import { TickerKpiCards } from "../components/TickerKpiCards";
 
-type Tab = "overview" | "analysis" | "forecast" | "sentiment";
+type Tab = "overview" | "chart" | "analysis" | "forecast" | "sentiment";
 
 function fmt(n?: number | null) {
   if (n == null || Number.isNaN(n)) return "—";
@@ -402,6 +406,7 @@ export function TickerDetailPage({
         <div className="glass-panel rounded-xl border border-white/10 p-1">
           <div className="flex gap-1 overflow-x-auto">
             <TabButton active={activeTab === "overview"} label="Visão Geral" onClick={() => setActiveTab("overview")} />
+            <TabButton active={activeTab === "chart"} label="Gráfico em tempo real" onClick={() => setActiveTab("chart")} />
             <TabButton active={activeTab === "analysis"} label="Análise Técnica" onClick={() => setActiveTab("analysis")} />
             <TabButton active={activeTab === "forecast"} label="Previsão" onClick={() => setActiveTab("forecast")} />
             <TabButton active={activeTab === "sentiment"} label="Notícias & Sentimento" onClick={() => setActiveTab("sentiment")} />
@@ -409,8 +414,9 @@ export function TickerDetailPage({
         </div>
 
         {activeTab === "overview" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 glass-card gradient-border p-5">
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-6">
+            <div className="@4xl:col-span-2 glass-card gradient-border p-5">
               <h3 className="font-semibold mb-4 flex items-center gap-2 text-white">
                 <BarChart3 size={18} className="text-blue-400" />
                 Visão Geral
@@ -440,6 +446,44 @@ export function TickerDetailPage({
                 <AiInsight icon={<Target size={18} />} label="Bandas de Bollinger" value={technicalExplain?.bb_analysis || "Indisponível"} />
                 <AiInsight icon={<CheckCircle size={18} />} label="Sinal combinado" value={technicalSummary || "Indisponível"} />
               </div>
+            </div>            </div>
+
+            {info?.kpis && Object.keys(info.kpis).length > 0 && (
+              <section className="@container space-y-3">
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <h2 className="text-sm font-semibold text-white">Indicadores</h2>
+                  <span className="text-xs text-slate-500">
+                    múltiplos, margens, resultados, balanço, analistas e mercado
+                  </span>
+                </div>
+                <TickerKpiCards kpis={info.kpis} currency={info.currency} />
+              </section>
+            )}          </div>
+        )}
+
+        {activeTab === "chart" && (
+          <div className="glass-card gradient-border p-5 flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="font-semibold flex items-center gap-2 text-white">
+                  <CandlestickChart size={18} className="text-emerald-400" />
+                  Cotação em tempo real
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Gráfico interativo da TradingView para <span className="font-mono">{tradingViewSymbol(ticker, info?.exchange)}</span>
+                  {" "}— velas, intervalos, indicadores e ferramentas de desenho.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onSwitchView?.("ticker-chart")}
+                className="neumorphic-btn px-3 py-1.5 rounded-xl text-sm flex items-center gap-2 text-white"
+              >
+                <Maximize2 size={15} /> Abrir em janela
+              </button>
+            </div>
+            <div className="h-[520px] min-h-[360px]">
+              <TradingViewChart symbol={tradingViewSymbol(ticker, info?.exchange)} />
             </div>
           </div>
         )}

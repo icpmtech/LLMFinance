@@ -98,7 +98,7 @@ export function LoginPage() {
               <Sparkles size={20} />
             </span>
             <div>
-              <p className="text-lg font-semibold leading-tight">FinanceLLM</p>
+              <p className="text-lg font-semibold leading-tight">IQ OS</p>
               <p className="text-xs text-muted-foreground">Plataforma de inteligência financeira</p>
             </div>
           </div>

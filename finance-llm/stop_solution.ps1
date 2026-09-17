@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Pára a solução FinanceLLM completa.
+    Pára a solução IQ OS completa.
 .DESCRIPTION
     Termina os processos do backend uvicorn e do frontend Vite e remove o ficheiro
     de PIDs guardado por start_solution.ps1.
@@ -43,4 +43,4 @@ Get-WmiObject Win32_Process | Where-Object {
     Stop-Process -Id $_.ProcessId -Force
 }
 
-Write-Ok "Solução FinanceLLM parada"
+Write-Ok "Solução IQ OS parada"

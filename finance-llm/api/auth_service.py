@@ -252,6 +252,8 @@ DEFAULT_PREFERENCES: Dict[str, Any] = {
     "default_view": "dashboard",
     "dock_position": "bottom",
     "sidebar_hidden": False,
+    "sidebar_mode": "expanded",
+    "window_mode": True,
     "reduced_motion": False,
     "email_notifications": False,
 }
@@ -381,8 +383,19 @@ def authenticate(email: str, password: str) -> Dict[str, Any]:
     return user
 
 
-def update_user(user_id: str, patch: Dict[str, Any], *, client: Optional[Elasticsearch] = None) -> Dict[str, Any]:
-    """Aplica alterações ao perfil do utilizador (substitui apenas o que vem no patch)."""
+def update_user(
+    user_id: str,
+    patch: Dict[str, Any],
+    *,
+    client: Optional[Elasticsearch] = None,
+    admin_fields: bool = False,
+) -> Dict[str, Any]:
+    """Aplica alterações ao perfil do utilizador (substitui apenas o que vem no patch).
+
+    Com `admin_fields=True` (só usado pelas rotas de administração) aceita também
+    `role` (`admin`/`member`) e `status` (`active`/`suspended`); o `PATCH /auth/me`
+    mantém-se restrito ao perfil, para ninguém se promover a si próprio.
+    """
     es = client or _client()
     user = get_user_by_id(user_id, es)
     if not user:
@@ -391,6 +404,18 @@ def update_user(user_id: str, patch: Dict[str, Any], *, client: Optional[Elastic
     key = normalize_email(user.get("email") or "")
     allowed = {"name", "title", "organization", "phone", "locale", "timezone"}
     document: Dict[str, Any] = {"updated_at": _now_iso()}
+
+    if admin_fields:
+        role = patch.get("role")
+        if role is not None:
+            if str(role) not in {"admin", "member"}:
+                raise AuthError("Papel inválido (use admin ou member).", status_code=422, code="invalid_input")
+            document["role"] = str(role)
+        account_status = patch.get("status")
+        if account_status is not None:
+            if str(account_status) not in {"active", "suspended"}:
+                raise AuthError("Estado inválido (use active ou suspended).", status_code=422, code="invalid_input")
+            document["status"] = str(account_status)
 
     for field in allowed:
         if field not in patch:
@@ -499,7 +524,7 @@ def list_users(limit: int = 200) -> List[Dict[str, Any]]:
     try:
         resp = es.search(
             index=AUTH_USERS_INDEX,
-            body={"query": {"match_all": {}}, "size": max(1, min(limit, 500)), "sort": [{"created_at": "desc"}]},
+            body={"query": {"match_all": {}}, "size": max(1, min(limit, 1000)), "sort": [{"created_at": "desc"}]},
         )
     except Exception:
         return []

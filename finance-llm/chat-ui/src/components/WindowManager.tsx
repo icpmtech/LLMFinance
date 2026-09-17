@@ -9,14 +9,15 @@
  *   Ctrl/Cmd+Shift+M (maximizar/restaurar).
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ChevronsDownUp, LayoutGrid, Rows3, X } from "lucide-react";
+import { ChevronsDownUp, LayoutGrid, PanelsTopLeft, Rows3, X } from "lucide-react";
 import { Window, type SnapZone } from "./Window";
+import { useDock } from "../dock";
 import {
   cascadeWindows,
   clampWindows,
-  closeAllWindows,
   closeWindow,
   focusWindow,
+  maximizeWindow,
   minimizeWindow,
   openWindow,
   setWindowRect,
@@ -26,7 +27,6 @@ import {
   type WindowRect,
   type WorkspaceSize,
 } from "../windows";
-import { dockApp } from "../dock";
 
 interface WindowManagerProps {
   /** Renderiza o conteúdo de uma vista (a mesma função usada no modo página). */
@@ -39,10 +39,15 @@ interface WindowManagerProps {
 
 export function WindowManager({ renderView, labelFor, onActiveChange }: WindowManagerProps) {
   const { windows, topZ, focus, close, minimize, restore, closeAll } = useWindows();
+  const { prefs: dockPrefs } = useDock();
   const desktopRef = useRef<HTMLDivElement | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceSize>({ width: 0, height: 0 });
   const [snapPreview, setSnapPreview] = useState<SnapZone>(null);
+  const [windowsMenuOpen, setWindowsMenuOpen] = useState(false);
   const [now, setNow] = useState(() => new Date());
+
+  /** Espaço reservado ao dock (as janelas não devem ficar por baixo dele). */
+  const dockInset = dockPrefs.position === "bottom" && !dockPrefs.autoHide ? 104 : 0;
 
   /* Tamanho da área de trabalho (é o "ecrã" das janelas). */
   useLayoutEffect(() => {
@@ -50,7 +55,10 @@ export function WindowManager({ renderView, labelFor, onActiveChange }: WindowMa
     if (!node) return;
     const measure = () => {
       const box = node.getBoundingClientRect();
-      setWorkspace({ width: Math.round(box.width), height: Math.round(box.height) });
+      setWorkspace({
+        width: Math.max(280, Math.round(box.width)),
+        height: Math.max(220, Math.round(box.height) - dockInset),
+      });
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -60,7 +68,7 @@ export function WindowManager({ renderView, labelFor, onActiveChange }: WindowMa
       observer.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, []);
+  }, [dockInset]);
 
   /* Reposiciona janelas que ficaram fora da área de trabalho. */
   useEffect(() => {
@@ -83,16 +91,20 @@ export function WindowManager({ renderView, labelFor, onActiveChange }: WindowMa
 
   const snapTo = useCallback(
     (view: string, zone: Exclude<SnapZone, null>) => {
+      if (zone === "maximize") {
+        maximizeWindow(view, workspace);
+        focusWindow(view);
+        return;
+      }
+      const half = Math.round(workspace.width / 2);
       const rect: WindowRect =
-        zone === "maximize"
-          ? { x: 0, y: 0, width: workspace.width, height: workspace.height }
-          : zone === "left"
-            ? { x: 0, y: 0, width: Math.round(workspace.width / 2), height: workspace.height }
-            : { x: Math.round(workspace.width / 2), y: 0, width: Math.round(workspace.width / 2), height: workspace.height };
+        zone === "left"
+          ? { x: 0, y: 0, width: half, height: workspace.height }
+          : { x: Math.round(workspace.width / 2), y: 0, width: half, height: workspace.height };
       setWindowRect(view, rect);
       focusWindow(view);
     },
-    [workspace.width, workspace.height],
+    [workspace],
   );
 
   /* Atalhos de teclado das janelas. */
@@ -129,9 +141,10 @@ export function WindowManager({ renderView, labelFor, onActiveChange }: WindowMa
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col">
-      {/* Barra de menus */}
-      <div className="flex h-8 shrink-0 items-center gap-3 border-b border-white/8 bg-[#0d0f13]/85 px-3 text-[11px] backdrop-blur">
-        <span className="font-semibold text-foreground">FinanceLLM</span>
+      {/* Barra de menus (z-30: o backdrop-blur cria contexto de empilhamento e os
+          menus suspensos têm de ficar acima da área de trabalho) */}
+      <div className="relative z-30 flex h-8 shrink-0 items-center gap-3 border-b border-white/8 bg-[#0d0f13]/85 px-3 text-[11px] backdrop-blur">
+        <span className="font-semibold text-foreground">IQ OS</span>
         <span className="hidden text-muted-foreground sm:inline">
           {visible.length === 0 ? "sem janelas abertas" : `${visible.length} janela${visible.length === 1 ? "" : "s"}`}
         </span>
@@ -139,6 +152,51 @@ export function WindowManager({ renderView, labelFor, onActiveChange }: WindowMa
           <span className="hidden truncate text-muted-foreground md:inline">· {labelFor(activeView).title}</span>
         )}
         <div className="ml-auto flex items-center gap-1">
+          {/* Menu Janelas: lista todas as janelas (inclui as minimizadas, que não
+              têm ícone próprio no dock — fichas e quick look). */}
+          <div className="relative">
+            <MenuButton
+              icon={<PanelsTopLeft size={12} />}
+              label="Janelas"
+              active={windowsMenuOpen}
+              onClick={() => setWindowsMenuOpen((open) => !open)}
+            />
+            {windowsMenuOpen && (
+              <div
+                role="menu"
+                aria-label="Janelas"
+                className="absolute right-0 top-7 z-50 w-72 overflow-hidden rounded-xl border border-white/10 bg-[#14161b]/97 p-1.5 shadow-2xl backdrop-blur-xl"
+              >
+                {windows.length === 0 ? (
+                  <p className="px-2.5 py-2 text-[12px] text-muted-foreground">Sem janelas abertas.</p>
+                ) : (
+                  [...windows]
+                    .sort((a, b) => b.z - a.z)
+                    .map((item) => {
+                      const info = labelFor(item.view);
+                      return (
+                        <button
+                          key={item.view}
+                          role="menuitem"
+                          onClick={() => {
+                            restore(item.view);
+                            setWindowsMenuOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12.5px] transition hover:bg-white/8"
+                        >
+                          <span className="opacity-80">{info.icon}</span>
+                          <span className="min-w-0 flex-1 truncate">{info.title}</span>
+                          {item.minimized && <span className="text-[10.5px] text-muted-foreground">minimizada</span>}
+                          {item.view === activeView && !item.minimized && (
+                            <span className="text-[10.5px] text-teal-300">ativa</span>
+                          )}
+                        </button>
+                      );
+                    })
+                )}
+              </div>
+            )}
+          </div>
           <MenuButton
             icon={<Rows3 size={12} />}
             label="Cascata"
@@ -248,11 +306,13 @@ function MenuButton({
   label,
   onClick,
   disabled,
+  active,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  active?: boolean;
 }) {
   return (
     <button
@@ -261,7 +321,11 @@ function MenuButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] text-muted-foreground transition hover:bg-white/8 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60 disabled:opacity-35"
+      aria-pressed={active}
+      className={[
+        "flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60 disabled:opacity-35",
+        active ? "bg-white/[0.12] text-foreground" : "text-muted-foreground hover:bg-white/8 hover:text-foreground",
+      ].join(" ")}
     >
       {icon}
       <span className="hidden lg:inline">{label}</span>

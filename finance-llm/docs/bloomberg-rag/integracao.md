@@ -1,8 +1,8 @@
-# Integração do BloombergGPT + RAG no FinanceLLM
+# Integração do BloombergGPT + RAG no IQ OS
 
 ## 1. Onde encaixa
 
-O módulo adiciona uma terceira dimensão ao FinanceLLM, sem alterar as funcionalidades existentes:
+O módulo adiciona uma terceira dimensão ao IQ OS, sem alterar as funcionalidades existentes:
 
 - **Chat financeiro** (GPT-2/Mistral) — mantém-se.
 - **Previsão ARIMA** — mantém-se; agora o modelo BloombergGPT pode explicar/justificar previsões.

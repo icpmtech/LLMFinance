@@ -59,6 +59,18 @@ AUTH_USERS_INDEX = "finance_users"
 # para que o "terminar sessão" seja imediato e auditável.
 AUTH_SESSIONS_INDEX = "finance_sessions"
 
+# Registo de eventos do sistema (autenticação, pedidos à API, tarefas, erros) —
+# alimenta o visualizador de eventos da área de administração.
+EVENTS_INDEX = "finance_events"
+
+# Chaves de API dos fornecedores de IA (uma linha por utilizador; `_id` = user id).
+PROVIDER_KEYS_INDEX = "finance_provider_keys"
+
+# Módulo de CRM: contas, contactos, oportunidades e atividades num único índice.
+# O campo `kind` distingue o tipo de registo e `owner_id` o utilizador dono
+# (os administradores veem todos os registos).
+CRM_INDEX = "finance_crm"
+
 # Definições (settings) específicas de determinados índices — nomeadamente
 # analisadores usados em subcampos de pesquisa por prefixo.
 INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
@@ -447,6 +459,99 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    events_mappings = {
+        "properties": {
+            "timestamp": {"type": "date"},
+            "level": {"type": "keyword"},
+            "source": {"type": "keyword"},
+            "message": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "data": {"type": "object", "enabled": False},
+            "user_id": {"type": "keyword"},
+            "user_email": {"type": "keyword"},
+            "method": {"type": "keyword"},
+            "path": {"type": "keyword"},
+            "status": {"type": "integer"},
+            "duration_ms": {"type": "float"},
+            "ip": {"type": "keyword"},
+            "user_agent": {"type": "keyword", "ignore_above": 512},
+            "host": {"type": "keyword"},
+            "pid": {"type": "integer"},
+        }
+    }
+
+    provider_keys_mappings = {
+        "properties": {
+            "user_id": {"type": "keyword"},
+            "keys": {"type": "object", "enabled": False},
+            "defaults": {
+                "properties": {
+                    "provider": {"type": "keyword"},
+                    "model": {"type": "keyword"},
+                }
+            },
+            "updated_at": {"type": "date"},
+        }
+    }
+
+    # CRM: um único índice para os quatro tipos de registo (`kind`), porque as
+    # suas propriedades não colidem e assim as pesquisas cruzadas (timeline de
+    # uma conta) fazem-se sem consultas a vários índices.
+    crm_mappings = {
+        "properties": {
+            "kind": {"type": "keyword"},
+            "id": {"type": "keyword"},
+            "owner_id": {"type": "keyword"},
+            "owner_email": {"type": "keyword"},
+            # --- conta (empresa) ---
+            "name": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "nif": {"type": "keyword"},
+            "sector": {"type": "keyword"},
+            "status": {"type": "keyword"},
+            "website": {"type": "keyword", "ignore_above": 512},
+            "email": {"type": "keyword"},
+            "phone": {"type": "keyword"},
+            "mobile": {"type": "keyword"},
+            "address": {"type": "text"},
+            "city": {"type": "keyword"},
+            "country": {"type": "keyword"},
+            "postal_code": {"type": "keyword"},
+            "employees": {"type": "integer"},
+            "annual_revenue": {"type": "float"},
+            # --- contacto ---
+            "account_id": {"type": "keyword"},
+            "contact_id": {"type": "keyword"},
+            "deal_id": {"type": "keyword"},
+            "title": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "role": {"type": "keyword"},
+            "linkedin": {"type": "keyword", "ignore_above": 512},
+            "is_primary": {"type": "boolean"},
+            # --- oportunidade ---
+            "amount": {"type": "float"},
+            "weighted_amount": {"type": "float"},
+            "currency": {"type": "keyword"},
+            "stage": {"type": "keyword"},
+            "probability": {"type": "integer"},
+            "expected_close_date": {"type": "date"},
+            "closed_at": {"type": "date"},
+            "loss_reason": {"type": "keyword"},
+            "source": {"type": "keyword"},
+            # --- atividade ---
+            "type": {"type": "keyword"},
+            "subject": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "notes": {"type": "text"},
+            "due_at": {"type": "date"},
+            "done": {"type": "boolean"},
+            "done_at": {"type": "date"},
+            "priority": {"type": "keyword"},
+            # --- comuns ---
+            "tags": {"type": "keyword"},
+            # Dados externos (ex.: snapshot do EmpresasIQ na conta) ficam opacos.
+            "entity": {"type": "object", "enabled": False},
+            "created_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
     for name, mappings in [
         ("finance_prices", prices_mappings),
         ("finance_news", news_mappings),
@@ -460,6 +565,9 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (USER_STATE_INDEX, user_state_mappings),
         (AUTH_USERS_INDEX, auth_users_mappings),
         (AUTH_SESSIONS_INDEX, auth_sessions_mappings),
+        (EVENTS_INDEX, events_mappings),
+        (PROVIDER_KEYS_INDEX, provider_keys_mappings),
+        (CRM_INDEX, crm_mappings),
     ]:
         if not client.indices.exists(index=name):
             settings: Dict[str, Any] = {"number_of_shards": 1, "number_of_replicas": 0}
@@ -1864,10 +1972,13 @@ def get_contract_analytics(
                                     "order": {"total_value": "desc"},
                                 },
                                 "aggs": {
+                                    # `*.parsed.nome` é `keyword` e não pode ser agregado;
+                                    # os `top_hits` trazem o nome legível de cada NIF.
+                                    "name": {"top_hits": {"size": 1, "_source": ["adjudicantes.parsed.nome"]}},
                                     "total_value": {
                                         "reverse_nested": {},
                                         "aggs": {"value": {"sum": {"field": "precoContratual"}}},
-                                    }
+                                    },
                                 },
                             }
                         },
@@ -1882,10 +1993,11 @@ def get_contract_analytics(
                                     "order": {"total_value": "desc"},
                                 },
                                 "aggs": {
+                                    "name": {"top_hits": {"size": 1, "_source": ["adjudicatarios.parsed.nome"]}},
                                     "total_value": {
                                         "reverse_nested": {},
                                         "aggs": {"value": {"sum": {"field": "precoContratual"}}},
-                                    }
+                                    },
                                 },
                             }
                         },
@@ -1900,9 +2012,9 @@ def get_contract_analytics(
                                     "order": {"_count": "desc"},
                                 },
                                 "aggs": {
-                                    "description": {
-                                        "terms": {"field": "cpv.description.keyword", "size": 1}
-                                    },
+                                    # `cpv.description` é `text` (sem `.keyword`): os `top_hits`
+                                    # devolvem a descrição legível de cada documento.
+                                    "description": {"top_hits": {"size": 1, "_source": ["cpv"]}},
                                     "total_value": {
                                         "reverse_nested": {},
                                         "aggs": {"value": {"sum": {"field": "precoContratual"}}},
@@ -1944,22 +2056,20 @@ def get_contract_analytics(
                     "key": key,
                     "count": b["doc_count"],
                     "total_value": fmt_money(value),
-                    "description": "",
+                    "description": _top_hit_name(b.get("name")),
                 })
         entity_rows.sort(key=lambda x: (x.get("total_value") or 0, x.get("count") or 0), reverse=True)
         entity_rows = entity_rows[:top_entities]
 
         cpv_rows = []
         for b in aggs.get("top_cpv", {}).get("codes", {}).get("buckets", []):
-            desc_buckets = b.get("description", {}).get("buckets", [])
-            desc = desc_buckets[0].get("key", "") if desc_buckets else ""
             total_value_obj = b.get("total_value", {})
             value = total_value_obj.get("value", {}).get("value") if isinstance(total_value_obj.get("value"), dict) else total_value_obj.get("value")
             cpv_rows.append({
                 "key": b["key"],
                 "count": b["doc_count"],
                 "total_value": fmt_money(value),
-                "description": desc,
+                "description": _cpv_description_from_hits(b.get("description"), b["key"]),
             })
 
         return {
@@ -2475,6 +2585,62 @@ def get_company_contracts(
         return {"error": str(e), "total": 0, "items": []}
 
 
+def _top_hit_name(agg: Optional[Dict[str, Any]]) -> str:
+    """Nome legível de um bucket a partir de uma agregação `top_hits`.
+
+    `*.parsed.nome` é `keyword` (não agregável), pelo que o nome vem dos
+    documentos; o `_source` pode trazer só o campo pedido ou o objeto completo.
+    """
+    hits = (agg or {}).get("hits", {}).get("hits", []) or []
+    for hit in hits:
+        source = hit.get("_source") if isinstance(hit, dict) else None
+        if not isinstance(source, dict):
+            continue
+        name = source.get("nome")
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+        parsed = source.get("parsed")
+        if isinstance(parsed, dict):
+            nested_name = parsed.get("nome")
+            if isinstance(nested_name, str) and nested_name.strip():
+                return nested_name.strip()
+    return ""
+
+
+def _cpv_description_from_hits(agg: Optional[Dict[str, Any]], code: Any) -> str:
+    """Lê a descrição legível de um CPV a partir de uma agregação `top_hits`.
+
+    `cpv.description` está mapeado como `text` (sem `.keyword`), pelo que não
+    pode ser agregado. Os `top_hits` trazem `_source.cpv` — que pode vir como a
+    lista completa do documento ou já como o próprio objeto do CPV visitado —
+    e aqui escolhe-se a entrada cujo `code` corresponde ao do bucket.
+    """
+    hits = (agg or {}).get("hits", {}).get("hits", []) or []
+    fallback = ""
+    for hit in hits:
+        source = hit.get("_source") if isinstance(hit, dict) else None
+        if not isinstance(source, dict):
+            continue
+        entries = source.get("cpv")
+        if entries is None:
+            entries = source
+        if isinstance(entries, dict):
+            entries = [entries]
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            description = entry.get("description")
+            if not description:
+                continue
+            if code is None or entry.get("code") == code:
+                return description
+            if not fallback:
+                fallback = description
+    return fallback
+
+
 def get_company_analytics(
     nif: Optional[str] = None,
     name: Optional[str] = None,
@@ -2535,6 +2701,7 @@ def get_company_analytics(
             index=CONTRACTS_INDEX,
             body={
                 "size": 0,
+                "track_total_hits": True,
                 "query": query,
                 "aggs": {
                     "total_value": {"sum": {"field": "precoContratual"}},
@@ -2558,7 +2725,10 @@ def get_company_analytics(
                             "codes": {
                                 "terms": {"field": "cpv.code", "size": 10, "order": {"total_value": "desc"}},
                                 "aggs": {
-                                    "description": {"terms": {"field": "cpv.description.keyword", "size": 1}},
+                                    # `cpv.description` é `text` sem subcampo `.keyword`, pelo que
+                                    # uma agregação `terms` devolvia sempre vazio; os `top_hits`
+                                    # trazem a descrição real do documento.
+                                    "description": {"top_hits": {"size": 1, "_source": ["cpv"]}},
                                     "total_value": {
                                         "reverse_nested": {},
                                         "aggs": {"value": {"sum": {"field": "precoContratual"}}},
@@ -2607,12 +2777,11 @@ def get_company_analytics(
 
         cpv_rows = []
         for b in aggs.get("by_cpv", {}).get("codes", {}).get("buckets", []):
-            desc_buckets = b.get("description", {}).get("buckets", [])
             cpv_rows.append({
                 "key": b["key"],
                 "count": b["doc_count"],
                 "total_value": fmt_money(extract_value(b.get("total_value", {}))),
-                "description": desc_buckets[0].get("key", "") if desc_buckets else "",
+                "description": _cpv_description_from_hits(b.get("description"), b["key"]),
             })
 
         partner_rows = []

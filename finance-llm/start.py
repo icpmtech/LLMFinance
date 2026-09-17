@@ -1,4 +1,4 @@
-"""Script único de arranque para o FinanceLLM.
+"""Script único de arranque para o IQ OS.
 
 Inicia o backend FastAPI (porta 8001) e o frontend Vite (porta 5173),
 utilizando o ambiente virtual e o node_modules existentes. Ao terminar

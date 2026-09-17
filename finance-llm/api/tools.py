@@ -1,4 +1,4 @@
-"""Ferramentas financeiras para o agente FinanceLLM."""
+"""Ferramentas financeiras para o agente IQ OS."""
 import json
 import os
 import re

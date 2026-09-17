@@ -3,7 +3,7 @@
 Suporta múltiplos backends via variável de ambiente:
 - Ollama local/cloud: OLLAMA_URL=http://127.0.0.1:11434 (padrão)
 - OpenAI-compatível: OPENAI_API_KEY + OPENAI_BASE_URL
-- Fallback para os modelos locais do FinanceLLM via api.agent
+- Fallback para os modelos locais do IQ OS via api.agent
 """
 import json
 import os
@@ -90,7 +90,7 @@ def _openai_chat(
 
 
 def _local_llm_generate(prompt: str, backend: str = "mistral") -> str:
-    """Fallback: usa os modelos locais do FinanceLLM.
+    """Fallback: usa os modelos locais do IQ OS.
 
     Nota: os modelos locais (gpt2/mistral) foram fine-tuned para séries financeiras
     (preços/data) e não produzem texto jurídico coerente. Usam-se apenas quando

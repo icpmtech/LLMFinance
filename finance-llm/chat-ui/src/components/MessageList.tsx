@@ -27,7 +27,7 @@ export function MessageList({ messages, streaming }: MessageListProps) {
         <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
           <Bot size={32} className="text-primary" />
         </div>
-        <h1 className="text-2xl font-semibold mb-2">FinanceLLM Chat</h1>
+        <h1 className="text-2xl font-semibold mb-2">IQ OS Chat</h1>
         <p className="text-muted-foreground max-w-md">
           Pergunta-me sobre ações, dividendos, indicadores macro ou dados de mercado. Usa ferramentas financeiras em tempo real.
         </p>

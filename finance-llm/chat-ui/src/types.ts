@@ -21,7 +21,12 @@ export interface ToolCall {
   output?: string;
 }
 
-export type ModelBackend = "gpt2" | "mistral" | "bloomberg";
+/**
+ * Backend do chat: modelos locais (`gpt2`, `mistral`, `bloomberg`) ou
+ * fornecedores externos no formato `<fornecedor>:<modelo>`
+ * (ex.: `deepseek:deepseek-chat`, `openai:gpt-4o-mini`, `xai:grok-3-mini`).
+ */
+export type ModelBackend = string;
 
 export interface RagDocument {
   doc_id: string;

@@ -27,7 +27,7 @@ interface WindowProps {
   onToggleMaximize: () => void;
   onSnap: (zone: Exclude<SnapZone, null>) => void;
   onSnapPreview: (zone: SnapZone) => void;
-  onRectChange: (rect: WindowRect) => void;
+  onRectChange: (rect: Partial<WindowRect>) => void;
 }
 
 const RESIZE_EDGES = ["n", "s", "e", "w", "ne", "nw", "se", "sw"] as const;
@@ -182,13 +182,16 @@ export function Window({
     }
     // Consolida a geometria final no estado.
     const rect = live.current;
+    // Num arrasto passamos só a posição: se a janela estava maximizada, o
+    // store repõe o tamanho anterior (como no macOS).
+    const next = active.kind === "move" ? { x: rect.x, y: rect.y } : rect;
     if (
       rect.x !== state.x ||
       rect.y !== state.y ||
       rect.width !== state.width ||
       rect.height !== state.height
     ) {
-      onRectChange(rect);
+      onRectChange(next);
     }
   };
 

@@ -21,7 +21,11 @@ export type WindowState = WindowRect & {
   maximized: boolean;
   /** Geometria antes de maximizar (para restaurar). */
   prev?: WindowRect;
+  /** Título próprio (fichas, quick look) quando não vem do catálogo de apps. */
+  title?: string;
 };
+
+export type WindowOptions = { focus?: boolean; title?: string; rect?: Partial<WindowRect> };
 
 export type WorkspaceSize = { width: number; height: number };
 
@@ -70,6 +74,7 @@ function read(): Store {
               minimized: candidate.minimized === true,
               maximized: candidate.maximized === true,
               prev: candidate.prev as WindowRect | undefined,
+              ...(typeof candidate.title === "string" ? { title: candidate.title } : {}),
             };
           })
           .filter((item): item is WindowState => item !== null)
@@ -115,19 +120,45 @@ function focusIn(list: WindowState[], view: string): WindowState[] {
   );
 }
 
+/**
+ * Estimativa da área de trabalho a partir da janela do browser e da barra
+ * lateral. Usada por quem abre janelas fora do gestor (fichas, quick look).
+ */
+export function estimateWorkspace(): WorkspaceSize {
+  if (typeof window === "undefined") return { width: 1200, height: 800 };
+  const mode = typeof window.localStorage?.getItem === "function" ? window.localStorage.getItem("finance-llm-sidebar-mode") : null;
+  const sidebar = mode === "hidden" ? 0 : mode === "rail" ? 72 : 268;
+  return {
+    width: Math.max(360, window.innerWidth - sidebar),
+    height: Math.max(240, window.innerHeight - 140),
+  };
+}
+
 /** Abre a janela da aplicação (ou foca/restaura a existente). */
-export function openWindow(view: string, workspace: WorkspaceSize, options?: { focus?: boolean }): void {
+export function openWindow(view: string, workspace?: WorkspaceSize, options?: WindowOptions): void {
   const existing = windowFor(view);
   if (existing) {
     if (options?.focus === false) return;
-    commit({ windows: focusIn(cache.windows, view), topZ: cache.topZ });
+    commit({
+      windows: focusIn(
+        cache.windows.map((item) =>
+          item.view === view && options?.title ? { ...item, title: options.title } : item,
+        ),
+        view,
+      ),
+      topZ: cache.topZ,
+    });
     return;
   }
   const top = cache.topZ + 1;
   cache.topZ = top;
-  const rect = defaultRect(cache.windows.length, workspace);
+  const base = defaultRect(cache.windows.length, workspace ?? estimateWorkspace());
+  const rect = { ...base, ...(options?.rect ?? {}) };
   commit({
-    windows: [...cache.windows, { view, ...rect, z: top, minimized: false, maximized: false }],
+    windows: [
+      ...cache.windows,
+      { view, ...rect, z: top, minimized: false, maximized: false, ...(options?.title ? { title: options.title } : {}) },
+    ],
     topZ: top,
   });
 }
@@ -150,8 +181,9 @@ export function focusWindow(view: string) {
 }
 
 export function minimizeWindow(view: string) {
+  // Guarda o estado (incluindo "maximizada") para a janela voltar como estava.
   commit({
-    windows: cache.windows.map((item) => (item.view === view ? { ...item, minimized: true, maximized: false } : item)),
+    windows: cache.windows.map((item) => (item.view === view ? { ...item, minimized: true } : item)),
     topZ: cache.topZ,
   });
 }
@@ -183,23 +215,51 @@ export function toggleMaximizeWindow(view: string, workspace: WorkspaceSize) {
   });
 }
 
-/** Atualiza a geometria de uma janela (arrastar/redimensionar/snap). */
-export function setWindowRect(view: string, rect: Partial<WindowRect>) {
-  const existing = windowFor(view);
-  if (!existing) return;
+/** Maximiza sem alternar (usado no encaixe no topo do ecrã). */
+export function maximizeWindow(view: string, workspace: WorkspaceSize) {
   commit({
     windows: cache.windows.map((item) =>
       item.view === view
         ? {
             ...item,
-            x: rect.x ?? item.x,
-            y: rect.y ?? item.y,
-            width: Math.max(MIN_WINDOW_WIDTH, rect.width ?? item.width),
-            height: Math.max(MIN_WINDOW_HEIGHT, rect.height ?? item.height),
-            maximized: rect.width !== undefined || rect.y !== undefined ? false : item.maximized,
+            prev: item.maximized
+              ? item.prev
+              : { x: item.x, y: item.y, width: item.width, height: item.height },
+            x: 0,
+            y: 0,
+            width: workspace.width,
+            height: workspace.height,
+            maximized: true,
+            minimized: false,
           }
         : item,
     ),
+    topZ: cache.topZ,
+  });
+}
+
+/** Atualiza a geometria de uma janela (arrastar/redimensionar/snap). */
+export function setWindowRect(view: string, rect: Partial<WindowRect> & { maximized?: boolean }) {
+  const existing = windowFor(view);
+  if (!existing) return;
+  commit({
+    windows: cache.windows.map((item) => {
+      if (item.view !== view) return item;
+      // Arrastar uma janela maximizada repõe o tamanho anterior (como no macOS).
+      const isMove = rect.width === undefined && rect.height === undefined;
+      const restore = isMove && item.maximized && item.prev ? item.prev : null;
+      return {
+        ...item,
+        x: rect.x ?? item.x,
+        y: rect.y ?? item.y,
+        width: Math.max(MIN_WINDOW_WIDTH, rect.width ?? restore?.width ?? item.width),
+        height: Math.max(MIN_WINDOW_HEIGHT, rect.height ?? restore?.height ?? item.height),
+        // Uma geometria definida à mão deixa de ser "maximizada",
+        // a menos que o pedido diga o contrário.
+        maximized: rect.maximized ?? false,
+        prev: undefined,
+      };
+    }),
     topZ: cache.topZ,
   });
 }
@@ -208,28 +268,62 @@ export function setWindowRect(view: string, rect: Partial<WindowRect>) {
 export function cascadeWindows(workspace: WorkspaceSize) {
   const visible = cache.windows.filter((item) => !item.minimized);
   if (visible.length === 0) return;
+  // O tamanho nunca excede a área de trabalho (ecrãs pequenos incluídos).
   const size = {
-    width: Math.round(Math.min(1100, Math.max(420, workspace.width * 0.7))),
-    height: Math.round(Math.min(760, Math.max(320, workspace.height * 0.74))),
+    width: Math.round(Math.min(workspace.width, Math.min(1100, Math.max(420, workspace.width * 0.7)))),
+    height: Math.round(Math.min(workspace.height, Math.min(760, Math.max(320, workspace.height * 0.74)))),
   };
   let index = 0;
   const windows = cache.windows.map((item) => {
     if (item.minimized) return item;
     const rect = defaultRect(index, workspace);
     index += 1;
-    return { ...item, ...rect, width: size.width, height: size.height, maximized: false, prev: undefined };
+    // A cascata nunca empurra uma janela para fora da área de trabalho.
+    const x = Math.max(0, Math.min(rect.x, Math.max(0, workspace.width - size.width)));
+    const y = Math.max(0, Math.min(rect.y, Math.max(0, workspace.height - size.height)));
+    return { ...item, x, y, width: size.width, height: size.height, maximized: false, prev: undefined };
   });
   commit({ windows, topZ: cache.topZ });
 }
 
-/** Coloca todas as janelas visíveis lado a lado. */
+/** Reparte `total` por `parts`, sem sobras (a última célula absorve o resto). */
+function splitSpace(total: number, parts: number): number[] {
+  const base = Math.floor(total / parts);
+  const rest = total - base * parts;
+  return Array.from({ length: parts }, (_, index) => base + (index < rest ? 1 : 0));
+}
+
+/**
+ * Grelha para `count` janelas: colunas = ⌈√count⌉ (o formato que os gestores de
+ * janelas usam, que mantém as células parecidas com a área de trabalho e evita
+ * grelhas esburacadas do género 7×1).
+ */
+function gridFor(count: number): { columns: number; rows: number } {
+  const columns = Math.min(count, Math.ceil(Math.sqrt(count)));
+  return { columns, rows: Math.ceil(count / columns) };
+}
+
+/** Coloca todas as janelas visíveis lado a lado, sem sobreposições nem fendas. */
 export function tileWindows(workspace: WorkspaceSize) {
   const visible = cache.windows.filter((item) => !item.minimized).sort((a, b) => a.z - b.z);
   if (visible.length === 0) return;
-  const columns = Math.ceil(Math.sqrt(visible.length));
-  const rows = Math.ceil(visible.length / columns);
-  const width = Math.floor(workspace.width / columns);
-  const height = Math.floor(workspace.height / rows);
+  const { columns, rows } = gridFor(visible.length);
+  // As sobras de píxeis vão para as primeiras células, para a grelha preencher
+  // a área de trabalho exatamente (sem fendas de 1–2 px nas margens).
+  const widths = splitSpace(Math.max(1, Math.round(workspace.width)), columns);
+  const heights = splitSpace(Math.max(1, Math.round(workspace.height)), rows);
+  const xs: number[] = [];
+  const ys: number[] = [];
+  let accX = 0;
+  for (const value of widths) {
+    xs.push(accX);
+    accX += value;
+  }
+  let accY = 0;
+  for (const value of heights) {
+    ys.push(accY);
+    accY += value;
+  }
   let index = 0;
   const windows = cache.windows.map((item) => {
     if (item.minimized) return item;
@@ -238,10 +332,10 @@ export function tileWindows(workspace: WorkspaceSize) {
     index += 1;
     return {
       ...item,
-      x: column * width,
-      y: row * height,
-      width,
-      height,
+      x: xs[column] ?? 0,
+      y: ys[row] ?? 0,
+      width: widths[column] ?? workspace.width,
+      height: heights[row] ?? workspace.height,
       maximized: false,
       prev: undefined,
     };

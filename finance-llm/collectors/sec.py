@@ -7,7 +7,7 @@ RAW_DIR = Path(__file__).resolve().parents[1] / "data" / "raw" / "sec"
 RAW_DIR.mkdir(parents=True, exist_ok=True)
 
 EDGAR_ROOT = "https://www.sec.gov/Archives/edgar/daily-index"
-HEADERS = {"User-Agent": "FinanceLLM contact@example.com"}
+HEADERS = {"User-Agent": "IQ OS contact@example.com"}
 
 
 def fetch_submissions(cik: str) -> dict:

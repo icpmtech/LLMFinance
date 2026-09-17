@@ -1,6 +1,16 @@
-# Finance-LLM
+# IQ OS
 
-Chat financeiro com três modelos de linguagem — GPT-2, Mistral e um **BloombergGPT-style (RAG)** — treinados sobre dados do Yahoo Finance, acessíveis via API FastAPI e interface React semelhante ao ChatGPT. O backend permite escolher o modelo em cada pedido (`gpt2`, `mistral` ou `bloomberg`). O modelo BloombergGPT-style lê documentos PDF convertidos para Markdown e responde com base no conhecimento indexado.
+**IQ OS** é a plataforma de inteligência financeira: contratos públicos, empresas, mercados,
+previsões e chat com três modelos de linguagem — GPT-2, Mistral e um **BloombergGPT-style (RAG)** —
+treinados sobre dados do Yahoo Finance, acessíveis via API FastAPI e interface React com ambiente
+de trabalho em janelas (estilo macOS). O backend permite escolher o modelo em cada pedido (`gpt2`,
+`mistral` ou `bloomberg`). O modelo BloombergGPT-style lê documentos PDF convertidos para Markdown
+e responde com base no conhecimento indexado.
+
+> **Nota sobre nomes:** a marca visível na aplicação é **IQ OS**. Os identificadores técnicos
+> mantêm o nome antigo por compatibilidade — a pasta `finance-llm/`, os comandos `finance-llm.cmd` /
+> `finance-llm.ps1`, os índices do Elasticsearch (`finance_*`), as chaves do `localStorage`
+> (`finance-llm-*`) e o ficheiro de configuração do CLI (`~/.finance-llm/config.json`).
 
 > **Arquitetura completa do RAG:** ver [`docs/bloomberggpt_rag_architecture.md`](docs/bloomberggpt_rag_architecture.md).
 
@@ -214,19 +224,334 @@ npm run preview
 
 Abre http://127.0.0.1:4173 no browser.
 
+Também pode servir o *build* com o servidor estático do repositório (é o que serve a PWA com os
+tipos MIME certos para `manifest.webmanifest`/`sw.js`, em <http://localhost:5174>):
+
+```bash
+python _serve_spa.py --root chat-ui/dist --port 5174
+```
+
+A instalação da aplicação e o modo offline só funcionam em `localhost` ou HTTPS (contexto seguro).
+
 > Nota: a API está configurada para `http://127.0.0.1:8003` em `chat-ui/src/api.ts`. Se alterares a porta, atualiza também o frontend e reconstrói o UI.
 
 ### Interface
 
 - **Dock estilo macOS** (em baixo, à esquerda ou à direita) com ampliação ao passar o rato, etiquetas,
   indicadores de aplicações abertas, arrumação por arrastar e painel de preferências.
-- **Barra lateral** em três modos — *expandida*, *só ícones* e *escondida* — com pesquisa rápida
-  (`/` ou `Ctrl+K`), secção de recentes e grupos memorizados. `Ctrl+B` esconde/mostra.
-- **Ecrã inteiro** e **PWA** (instalável, funciona sem ligação): `manifest.webmanifest` + `sw.js`.
+- **Barra lateral = menu de aplicações** (estilo macOS) em três modos — *expandida*, *só ícones*
+  (rail de 68 px) e *escondida* — com material translúcido («vibrancy»), pesquisa rápida
+  (`/` ou `Ctrl+K`), secção de recentes, secções *Aplicações* / *Ferramentas* com triângulo de
+  divulgação e ponto nas aplicações com janela aberta. Cada linha abre (ou foca) a aplicação;
+  a **largura é redimensionável** arrastando a divisória (`196`–`384` px, duplo clique repõe `268` px).
+  `Ctrl+B` esconde/mostra. As páginas internas de cada aplicação vivem dentro da própria
+  aplicação — por exemplo, o EmpresasIQ usa **separadores (segmented control) no topo**, em vez de
+  uma barra lateral própria, e nenhuma janela duplica a barra da plataforma.
+- **Ecrã inteiro** e **PWA** (instalável, funciona sem ligação): `manifest.webmanifest` + `sw.js`;
+  a instalação (e o pacote de atalhos para Windows) está em **Definições → Aplicação IQ OS**.
 - **Contas** em Elasticsearch (`finance_users` / `finance_sessions`), com login, registo,
   definições de perfil, sessões ativas e terminação remota.
 - **Terminal** (`/cli`) — o CLI da plataforma dentro da aplicação, com histórico (↑/↓),
   completamento com Tab, sugestões clicáveis e saída `--json`.
+- **Finder** (`/finder`) — explorador dos dados no estilo do Finder do macOS (locais, ícones,
+  colunas, lista, galeria, Quick Look, inspetor, etiquetas, barra de caminho e exportação CSV).
+- **Comparação** (`/compare`) — janela própria para pôr lado a lado entidades
+  (adjudicantes/adjudicatários) ou contratos, com valores, analítica por ano e CPV em comum.
+- **Gráfico Tempo Real** (`/chart`, `/tickers/<T>/grafico`) — cotações em tempo real com o
+  *Advanced Real-Time Chart* da TradingView (ver abaixo).
+- **Browser** (`/browser`) — navegador dentro da plataforma: separadores, favoritos, histórico,
+  atalhos para páginas do IQ OS e fontes de mercado e integração com a pesquisa global (ver abaixo).
+- **Administração** (`/admin`) — sistema, utilizadores, eventos e logs; visível apenas a contas
+  com papel `admin` (ver abaixo).
+
+### Administração da solução
+
+Aplicação **Administração** (`/admin`), reservada a contas com papel `admin` (a barra lateral e o
+dock escondem-na aos restantes), com quatro separadores:
+
+- **Visão geral** — versão da API, *host*, plataforma, Python, tempo de atividade, estado do
+  Elasticsearch (versão, *cluster*, saúde, nós), **índices** com nº de documentos e tamanho
+  (`finance_users`, `finance_sessions`, `finance_events`, `contratos`, `finance_entities`, …),
+  contas por papel/estado, sessões ativas e eventos das últimas 24 h por nível, origem e caminho.
+- **Utilizadores** — pesquisa por nome/email, filtros por papel (`admin`/`member`) e estado
+  (`active`/`suspended`), sessões ativas e nº de logins por conta; alterar papel/estado, terminar
+  sessões de um utilizador e apagar contas (as ações ficam registadas como eventos de auditoria).
+- **Eventos** — o *event logger viewer* descrito abaixo.
+- **Ficheiros de log** — lista de `logs/*.log|.err|.out|.jsonl` com tamanho e data, pré-visualização
+  das últimas linhas (100–3000), modo «Direto» (atualiza a cada 5 s) e quebra de linhas.
+
+#### Registo de eventos (event logger)
+
+`api/events_service.py` escreve cada evento em **três destinos** complementares:
+
+1. **Memória** — `deque` circular das últimas 2000 entradas, sempre disponível (é a fonte do modo
+   «tempo real», onde aparecem *todos* os pedidos, incluindo os de nível `debug`/`info`);
+2. **Ficheiro** — `logs/events.jsonl` (uma linha JSON por evento, com rotação a ~5 MB);
+3. **Elasticsearch** — índice `finance_events`, pesquisável e agregável (só recebe
+   autenticação/administração e nível ≥ `warning`, para não duplicar o tráfego).
+
+- Um *middleware* em `api/main.py` regista cada pedido à API (método, caminho, status, duração,
+  utilizador e IP), com o nível derivado do código de resposta (2xx → `debug`, 4xx → `warning`,
+  5xx → `error`); a identidade vem do token (com cache de 5 min para não bater no Elasticsearch).
+- `auth_routes.py` regista ainda os eventos de segurança: registo, início de sessão (sucesso e
+  falha), fim de sessão, alteração de palavra-passe, revogação de sessões e apagamento de conta.
+- O visualizador permite filtrar por **nível** (chips), **origem** (`api`, `auth`, `admin`),
+  **utilizador**, **texto** e **janela temporal**, alternar entre **tempo real (memória)** e
+  **arquivo (Elasticsearch)** (ou fonte automática), ligar o **modo direto**, ver as contagens por
+  nível/origem/caminho e por hora, abrir o JSON completo de cada evento e **registar eventos
+  manuais** para teste (`POST /admin/events`).
+- Para dar acesso a uma conta (a primeira conta do sistema é `admin`):
+  `python scripts/promote_admin.py --email alguem@exemplo.pt` (ou `--list`, `--demote`).
+
+### Janelas (estilo macOS)
+
+Com o **modo janelas** ligado (predefinição em ecrãs ≥ 1024 px), cada página abre numa janela
+flutuante dentro de uma área de trabalho, em vez de ocupar o ecrã inteiro:
+
+- **Arrastar** pela barra de título; **redimensionar** pelas 8 margens.
+- **Encaixe**: arrastar para o topo maximiza; para as margens esquerda/direita ocupa meio ecrã
+  (com pré-visualização antes de largar).
+- **Duplo clique** na barra de título maximiza/reposiciona; arrastar uma janela maximizada
+  repõe o tamanho anterior.
+- **Semáforos** macOS: fechar, minimizar, maximizar. As janelas minimizadas continuam
+  indicadas no dock (ponto) e voltam com um clique no ícone.
+- **Barra de menus** com o número de janelas, o título da janela ativa, o menu **Janelas**
+  (lista todas, incluindo minimizadas, para focar/restaurar) e a disposição
+  (`Cascata`, `Lado a lado`, `Minimizar todas`, `Fechar todas`) e relógio.
+- **Atalhos**: `Ctrl/Cmd + \`` cicla janelas, `Ctrl/Cmd + W` fecha, `Ctrl/Cmd + M` minimiza,
+  `Ctrl/Cmd + Shift + M` maximiza/reposiciona.
+- **Área de trabalho vazia** tem um lançador rápido (EmpresasIQ, Contratos, Dashboard, Terminal).
+- A geometria, o empilhamento e o estado (minimizada/maximizada) ficam guardados em
+  `localStorage` (`finance-llm-windows:v1`) e são repostos ao recarregar.
+- O modo liga-se/desliga nas **Definições → Preferências → Modo janelas** (guardado na conta)
+  ou no painel de preferências do dock. Num telemóvel a plataforma abre em modo página.
+
+**As modais também são janelas.** As fichas de entidade e de contrato (EmpresasIQ) e o
+**Quick Look** do Finder deixam de ser sobreposições modais e passam a abrir como **janelas**
+(uma por item, `company-detail:<NIF>`, `contract-detail:<id>`, `quicklook:<tipo>:<id>`):
+arrastáveis, redimensionáveis, minimizáveis, com título próprio, restauráveis pelo menu
+**Janelas** e repostas ao recarregar. Abrir a ficha de uma entidade a partir de um contrato
+empilha uma segunda janela, como no macOS. Em **modo página** (sem gestor de janelas) mantém-se
+a ficha/quick look sobrepostos, como antes.
+
+### Finder (explorador de dados)
+
+Aplicação **Finder** (`/finder`), no dock e no menu de aplicações: os dados da plataforma
+(entidades, contratos, documentos RAG, tickers e índices do Elasticsearch) são tratados como
+«ficheiros», com a linguagem do Finder do macOS.
+
+- **Locais** (menu *Locais* na barra de ferramentas ou 1.ª coluna da vista de colunas):
+  Recentes, Favoritos (lê e escreve os favoritos reais em Elasticsearch), Entidades, Contratos,
+  Documentos, Mercados e Índices (com contagens reais: 2 250 969 contratos, 214 123 entidades, …).
+- **Quatro vistas**: ícones, colunas (Miller: locais → itens → relacionados), lista com ordenação
+  por coluna (Nome/Tipo/Data/Tamanho) e galeria com película.
+- **Quick Look** (barra de espaço, duplo clique ou Enter): ficha do item. Para **entidades** traz o
+  dossier completo — valores (contratado, médio, maior, como adjudicante e adjudicatário), **análítica**
+  (por ano, top CPV, tipo de procedimento e de contrato, com barras), **contratos associados**
+  (nº clicável abre a ficha do contrato, papel, data e valor) e **concorrentes**
+  (co-ocorrência nos mesmos procedimentos, clicável para abrir a entidade; se o portal não
+  publicar concorrentes nesses contratos, explica-o em vez de ficar vazio).
+- **Obter informação** (⌘/Ctrl+I): inspetor lateral com metadados, etiquetas e ação de favorito.
+- **Menu de contexto** (botão direito): Quick Look, obter informação, favoritos, copiar
+  identificador e abrir na aplicação (deep link para `/companies/<NIF>`, `/tickers/<símbolo>`, …).
+- **Barra de caminho e de estado** com contagem de itens, registos e valor total; **exportar CSV**
+  da lista atual; pesquisa por local (usa a API: contratos, entidades, documentos, tickers).
+- Atalhos: `/` pesquisa, setas navegam, Espaço Quick Look, Esc fecha, Retrocesso volta atrás.
+
+### Gráfico Tempo Real (TradingView)
+
+Aplicação **Gráfico Tempo Real** (`/chart` ou `/tickers/<TICKER>/grafico`), própria e no menu de
+aplicações: embebe o **Advanced Real-Time Chart** da TradingView — velas, intervalos (1 min a
+mensal), estilos (velas, velas ocas, Heikin Ashi, área, linha, barras), indicadores rápidos
+(volume, RSI, MACD, Bollinger, EMA), ferramentas de desenho, tema escuro/claro, ecrã inteiro e
+ligação direta para a página do ativo na TradingView.
+
+- O ticker da plataforma (`EDP`, `AAPL`) é traduzido no **símbolo da TradingView** a partir da
+  bolsa devolvida pela API (`LIS` → `EURONEXT:EDP`, `NMS` → `NASDAQ:AAPL`); também aceita
+  sufixos (`EDP.LS`) e símbolos completos (`BME:SAN`).
+- A resolução pode ser **substituída à mão** («Símbolo manual»), com o valor guardado por ticker
+  em `finance-llm-tv-symbols:v1`; «Repor automático» volta à resolução pela bolsa.
+- Pesquisa de tickers na própria janela (lista local com recurso ao Yahoo Finance) e nota de
+  rodapé sobre dados em tempo real/diferidos conforme a bolsa.
+- O mesmo widget aparece no separador **Gráfico em tempo real** da ficha do ticker
+  (Mercados → ticker), com o botão **Abrir em janela** para a aplicação dedicada.
+
+### Indicadores do ticker em cartões
+
+O `TickerInfo.kpis` (Yahoo Finance) é mostrado em **cartões temáticos** — *Valorização*,
+*Margens & crescimento*, *Resultados (12 meses)*, *Balanço & liquidez*, *Analistas & preços-alvo*
+e *Mercado & capital* (mais *Outros indicadores* para chaves não mapeadas) — tanto na aplicação
+**Mercados** como na aba *Visão Geral* da ficha do ticker.
+
+- Cada indicador tem **formato declarado** (`percent`, `ratio`, `scale`, `currency`,
+  `compactCurrency`, `count`, `compactCount`): a heurística antiga («se for pequeno é
+  percentagem») transformava o nº de analistas `19` em `1900%` e o valor contabilístico `9,66`
+  em `965,60%`.
+- Números em `pt-PT` (vírgula decimal, milhares com espaço) e valores grandes abreviados
+  (`45,34 mM EUR`); as variações levam sinal (`+24,48%`) e cor, margens e rácios não levam `+`.
+- Cada linha tem *tooltip* com a chave original e o valor cru (ex.: `trailingPE = 16.73`), para
+  não haver dúvidas sobre a proveniência do número.
+
+### Contratos de uma entidade (ver todos)
+
+As listas de **Contratos Recentes** da ficha de entidade (EmpresasIQ e página da empresa) e de
+**Contratos associados** do Quick Look têm o botão **Ver todos (N)**, que abre a janela
+`entity-contracts:<NIF>` — **Contratos · <entidade>** — com a lista completa:
+
+- **Pesquisa** no objeto (relevância) e filtros por **ano**; ordenação por data de publicação,
+  data de celebração, **valor**, objeto ou adjudicatário, com sentido ascendente/descendente.
+- Carregamento por páginas de 50 com **scroll infinito** e botão **Carregar mais**, contador
+  «X de N contratos», valor dos contratos carregados e **exportação CSV**.
+- Colunas Nº, Objeto, **Papel** (adjudicante/adjudicatário), Adjudicatários, Data e Valor;
+  clicar numa linha abre a **ficha do contrato** e o botão da última coluna acrescenta o contrato
+  à **comparação**.
+- Em modo página (telemóvel, sem gestor de janelas) a mesma lista abre na modal do EmpresasIQ.
+
+### Comparação (entidades e contratos)
+
+Aplicação **Comparar** (`/compare`), no menu de aplicações: compara até **4 itens** da mesma
+espécie (entidades entre si, contratos entre si) numa **janela** arrastável como as restantes.
+
+- **Entidades**: contratos, valor contratado, valor médio, maior contrato, valor e nº de contratos
+  como adjudicante e como adjudicatário, marcas INPI e firmas RNPC — o **melhor valor de cada
+  linha** fica destacado (verde) com barra proporcional; matriz de **valor contratado por ano**,
+  **CPV em comum** entre as entidades e os **maiores CPV** de cada uma.
+- **Contratos**: valor contratual (comparado), objeto, nº, data, tipo de contrato, procedimento,
+  adjudicantes, adjudicatários, CPV, local de execução, preço base e partes (NIF), com botão
+  **Abrir ficha** por contrato. Linhas sem informação em nenhuma coluna desaparecem.
+- **Como chegar lá**: multi-seleção no **Finder** (Ctrl/⌘+clique em 2–4 linhas → **Comparar (n)**),
+  menu de contexto do Finder (**Comparar com…**), botão **Comparar** nas fichas de entidade e de
+  contrato (passa a **Na comparação**, com **Ver comparação**), Quick Look, ou o seletor
+  **+ Adicionar entidade/contrato** dentro da própria janela (pesquisa por nome/NIF/objeto).
+- A seleção vive em `localStorage` (`finance-llm-compare:v1`), sobrevive ao recarregar e é
+  partilhada por todas as entradas; mudar de espécie substitui a seleção anterior.
+
+### Browser (navegador dentro do IQ OS)
+
+Aplicação **Browser** (`/browser`), no dock e no menu de aplicações: um navegador dentro da
+plataforma, para consultar fontes externas sem sair do IQ OS.
+
+- **Separadores** (até 12) com título, ícone e fecho individual; **barra de endereço** que aceita
+  URL completo, domínio (`edp.pt`), rota interna (`/tickers`) ou texto livre (pesquisa no motor
+  escolhido: DuckDuckGo por omissão, Google, Bing ou Brave, guardado em `finance-llm-browser:v1`).
+- **Voltar/avançar** com pilha própria por separador, **recarregar**, **página inicial**,
+  **favoritos** (estrela; `Ctrl+D`), **histórico** (300 entradas, com remoção e limpeza) e painel
+  lateral com ambos.
+- **Página inicial** com atalhos em três grupos: *Plataforma* (páginas do IQ OS), *Mercados*
+  (TradingView, Yahoo Finance, Google Finance, Euronext, Investing, CoinMarketCap) e *Fontes
+  oficiais* (BASE.gov, CMVM, INE, Banco de Portugal, Eurostat, INPI), mais os favoritos e os
+  endereços visitados recentemente.
+- **Integração com o IQ OS**: rotas internas conhecidas abrem a aplicação correspondente (ex.:
+  `/dashboard`, `/contracts/search`) em vez de serem incorporadas; se um endereço interno for
+  escrito à mão aparece a escolha **Abrir na aplicação** / **Ver aqui dentro** / **Abrir em nova
+  aba** (evita janelas dentro de janelas, mas permite incorporar quando faz sentido). O botão
+  **Procurar no IQ OS** leva a pesquisa para a aplicação *Pesquisa Global*.
+- **Sites que recusam incorporação** (`X-Frame-Options`/CSP) são detetados por lista conhecida e
+  apresentam um aviso com **Abrir em nova aba** e **Tentar mesmo assim**; quando um endereço não
+  responde em 8 s (site offline, rede bloqueada) aparece uma faixa com as mesmas saídas. O botão
+  **Abrir numa aba do sistema** está sempre disponível na barra.
+- Atalhos dentro da janela: `Ctrl+T` (nova aba), `Ctrl+L` (barra de endereço), `Ctrl+D`
+  (favorito), `Ctrl+R` (recarregar), `Alt+←`/`Alt+→` (voltar/avançar). O rodapé permite desligar
+  o restauro de separadores ao abrir e **reiniciar a sessão** (mantém favoritos e histórico).
+
+#### Ler páginas que bloqueiam incorporação (proxy do servidor)
+
+A maioria dos sites envia `X-Frame-Options`/`Content-Security-Policy: frame-ancestors` e recusa
+ser mostrada num `iframe` (base.gov.pt, euronext.com, finance.yahoo.com, Google, DuckDuckGo,
+CMVM, …) — o browser não pode contornar isso, mas o **servidor** pode ler essas páginas.
+
+- `GET|POST /proxy?url=<endereço>` (`api/proxy_routes.py`) busca a página com `httpx`, **remove os
+  cabeçalhos que impedem a incorporação** (`X-Frame-Options`, CSP, COOP/COEP/CORP, `Set-Cookie`,
+  `Content-Encoding`), reconverte o HTML em UTF-8 e injeta:
+  - um `<base href="…">` com o endereço final, para que CSS/JS/imagens continuem a ser pedidos ao
+    site original (esses não são bloqueados por políticas de enquadramento);
+  - um script que **reencaminha `fetch`/`XMLHttpRequest`** para o site original através do próprio
+    proxy (contorna o CORS, porque a página passa a ter a nossa origem) e que **interceta cliques e
+    formulários**: pede ao Browser do IQ OS para navegar (barra de endereço, separadores e
+    histórico ficam em sintonia) e faz os POST de formulários dentro do quadro, reescrevendo o
+    documento com a resposta (postbacks ASP.NET).
+- No Browser, o rodapé tem **«ler bloqueadas pelo servidor»** (ligado por omissão: os sites da
+  lista de bloqueio são lidos pelo proxy em vez de mostrar um aviso) e **«ler tudo pelo servidor»**
+  (força o proxy em todos os endereços); o indicador **proxy** na barra de endereço mostra quando
+  está a ser usado.
+- Pesquisa: o motor predefinido é o `lite.duckduckgo.com/lite/?q=`, HTML simples que funciona bem
+  pelo proxy (os resultados aparecem dentro do IQ OS; o Google/Bing/Brave devolvem apps de
+  JavaScript e ficam incompletos).
+- **Limitações assumidas**: não há sessões (cookies não são reenviados, por isso banca/e-mail/redes
+  sociais continuam a abrir numa aba do sistema), SPAs muito dependentes de JavaScript podem
+  aparecer incompletas e alguns servidores exigem HTTP/2 ou TLS específico.
+- **Segurança**: só `http`/`https`, destinos privados/loopback/metadata recusados (SSRF), limite de
+  12 MB e tempo limite de 25 s, sem reenvio de cookies nem credenciais. As requisições do proxy
+  ficam registadas como eventos de origem `proxy`.
+
+#### Porquê não WASM (e que alternativas existem)
+
+O bloqueio é uma **decisão do servidor** (cabeçalhos HTTP), não uma limitação do motor de
+renderização: qualquer mecanismo que carregue a página como documento embutido é bloqueado, mesmo
+um browser compilado para WASM. O que resolve é mudar **quem pede** a página ou **onde ela é
+renderizada**:
+
+| Abordagem | Custo | Veredicto |
+|---|---|---|
+| Proxy no servidor (implementado) | horas, `httpx` | ✅ resolve sites estáticos/news/gov e pesquisa; sem sessões |
+| Chromium *headless* no servidor (Playwright/CDP + `screencast`) | ~150 MB de binário | ✅ carregaria **qualquer** site (SPAs, login) com input reencaminhado |
+| Webview nativo no pacote desktop (Electron/Tauri `WebContentsView`) | empacotamento da app | ✅ o caminho correto a longo prazo para um browser embutido |
+| Máquina virtual em WASM (v86/CheerpX) com um browser lá dentro | dezenas de MB, arranque lento, rede por WebSocket, sem integração | ❌ desproporcionado e frágil |
+| Motor de render em WASM (Servo, SerenityOS LibWeb) | experimental | ❌ sem paridade de DOM/rede |
+| QuickJS em WASM (executar o JS da página num sandbox nosso) | não traz layout/CSS | ⚠️ complemento futuro, hoje desnecessário (o Chromium já corre o JS da página lida) |
+
+
+### Fornecedores de IA (chat)
+
+O chat aceita, além dos modelos locais, **fornecedores externos** com chave própria ou do
+servidor, configuráveis em **Definições → Fornecedores de IA**.
+
+- **Catálogo** (`api/providers_service.py`): OpenAI, DeepSeek, xAI (Grok), Anthropic (Claude),
+  Google (Gemini), Groq, Mistral AI (cloud), OpenRouter e **Ollama** (local, sem chave), além dos
+  modelos locais da plataforma (GPT-2, Mistral Finance, BloombergGPT-style).
+- **Chaves por utilizador** no índice `finance_provider_keys` (`_id` = id do utilizador), com
+  máscara na interface (`sk-…abcd`, nunca a chave completa); sem chave própria é usada a
+  variável de ambiente do servidor (`OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`,
+  `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY`,
+  `OLLAMA_API_KEY`, `OLLAMA_BASE_URL`). O botão **Testar** faz um pedido real e traduz os erros
+  (401/403/404/429/5xx) numa mensagem em português.
+- **Formato do `backend`** no chat: `<fornecedor>` (modelo predefinido) ou
+  `<fornecedor>:<modelo>` — ex.: `deepseek:deepseek-reasoner`, `openai:gpt-4o-mini`,
+  `google:gemini-2.5-flash`; `gpt2`/`mistral`/`bloomberg` continuam a ser os modelos locais.
+  O seletor do chat mostra os grupos **Modelos locais**, **Fornecedores cloud** e **Local
+  (Ollama)**, com as opções sem chave desativadas («— sem chave»); a escolha fica guardada
+  (`finance-llm-backend`).
+- **Como funciona**: nos fornecedores externos, o contexto financeiro (`build_context`) entra no
+  *system prompt* e a resposta é transmitida **token a token** pela própria API do fornecedor
+  (dialetos OpenAI-compatible, Anthropic `messages` e Google `streamGenerateContent`); nos
+  modelos locais o comportamento anterior mantém-se (streaming simulado). Falhas de chave/quota
+  aparecem na conversa como `⚠️ <mensagem>` e ficam registadas como eventos de origem
+  `providers` (visíveis em Administração → Eventos).
+- **Endpoints**: `GET /providers` (catálogo com estado das chaves), `GET /providers/chat-models`
+  (lista achatada para o seletor), `PUT /providers/keys`, `PUT /providers/defaults`,
+  `POST /providers/test`. Os três *endpoints* de chat continuam a funcionar sem sessão (modelos
+  locais); com sessão, resolvem a chave do utilizador através de `Depends(optional_session)`.
+
+### Instalação da aplicação (PWA e pacote Windows)
+
+O IQ OS é **instalável** como aplicação: manifest (`public/manifest.webmanifest`), ícones
+(192/512/maskable), atalhos, `display: standalone` e `service worker` (`public/sw.js`, cache do
+*shell* + modo offline) fazem-no passar os critérios de instalação do Chromium.
+
+- **Definições → Aplicação IQ OS** mostra o estado real (a correr no browser / pronta a instalar /
+  instalada em modo autónomo), o botão **Instalar aplicação** (usa o `beforeinstallprompt`), as
+  instruções por browser para quando esse evento não existe (Edge, Chrome, Safari macOS/iOS,
+  Firefox), o estado do `service worker` (com **Procurar atualizações**, **Ativar modo offline**
+  para registos inválidos e **Limpar cache offline**) e a identidade da aplicação (nome, versão,
+  origem).
+- Na primeira visita aparece um **convite de instalação** no canto inferior esquerdo, dispensável
+  (guardado em `finance-llm-install-dismissed`); o mesmo botão continua em Definições.
+- **Pacote Windows**: `public/instalar-iq-os.ps1` cria atalhos no Ambiente de Trabalho e no Menu
+  Iniciar que abrem a plataforma numa janela própria do Edge/Chrome (`--app=…`, sem barra do
+  browser). Descarregue em Definições ou corra:
+  `powershell -ExecutionPolicy Bypass -File .\instalar-iq-os.ps1 -Url http://localhost:5174/`
+  (remover com `-Uninstall`; caminho do browser com `-BrowserPath`). A forma preferida continua a
+  ser a instalação pelo próprio browser, que cria uma aplicação a sério com arranque offline.
 
 ## CLI
 
@@ -310,7 +635,7 @@ transporta o id da sessão, pelo que terminar sessão é imediato.
 - `POST   /auth/login` — iniciar sessão (`remember: true` dá uma sessão de 30 dias)
 - `POST   /auth/logout` — terminar a sessão atual
 - `GET    /auth/me` — dados da conta autenticada
-- `PATCH  /auth/me` — atualizar perfil e preferências (`default_view`, `dock_position`, `sidebar_hidden`, `reduced_motion`)
+- `PATCH  /auth/me` — atualizar perfil e preferências (`default_view`, `dock_position`, `sidebar_hidden`, `sidebar_mode`, `window_mode`, `reduced_motion`)
 - `POST   /auth/password` — alterar palavra-passe (revoga as outras sessões)
 - `GET    /auth/sessions` — listar sessões ativas
 - `DELETE /auth/sessions/{id}` — terminar uma sessão concreta
@@ -325,7 +650,7 @@ Variáveis de ambiente:
 
 As palavras-passe usam `hashlib.scrypt` (salt por conta) e nunca são guardadas em
 texto simples. As preferências da conta são aplicadas ao entrar (vista inicial,
-posição do dock, barra lateral, animações reduzidas).
+posição do dock, modo da barra lateral, modo janelas, animações reduzidas).
 
 A escolha do modelo é feita no frontend (seletor do chat). Quando se escolhe **BloombergGPT-style (RAG)**, as perguntas do chat principal e da página `/rag` são encaminhadas para o motor RAG, que responde com base nos PDFs indexados e cita as fontes.
 

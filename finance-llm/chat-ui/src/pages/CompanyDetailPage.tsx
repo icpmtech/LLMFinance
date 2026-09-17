@@ -17,6 +17,7 @@ import {
   Tag,
 } from "lucide-react";
 import { getCompanyDetail, getCompanyContracts, getCompanyAnalytics } from "../api";
+import { SeeAllContractsButton } from "./EntityContractsWindow";
 import type { CompanyDetail, CompanyContractsResponse, CompanyAnalyticsResponse, ContractItem, ContractParty, ContractAnalyticsRow } from "../types";
 
 interface CompanyDetailPageProps {
@@ -403,6 +404,7 @@ export default function CompanyDetailPage({
             </div>
             <h2 className="text-xl font-semibold">Contratos recentes</h2>
             <span className="ml-auto text-sm text-muted-foreground">{allContracts.length} visíveis</span>
+            <SeeAllContractsButton nif={nif} name={company.name} total={company.contracts_total} compact />
           </div>
           {allContracts.length === 0 ? (
             <p className="text-muted-foreground">Sem contratos registados para esta entidade.</p>

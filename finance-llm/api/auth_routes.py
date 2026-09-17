@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from api import auth_service as auth
+from api import events_service as events
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,8 @@ class PreferencesPayload(BaseModel):
     default_view: Optional[str] = None
     dock_position: Optional[str] = None
     sidebar_hidden: Optional[bool] = None
+    sidebar_mode: Optional[str] = None
+    window_mode: Optional[bool] = None
     reduced_motion: Optional[bool] = None
     email_notifications: Optional[bool] = None
 
@@ -163,6 +166,22 @@ def _auth_error(error: auth.AuthError) -> HTTPException:
     return HTTPException(status_code=error.status_code, detail=error.message)
 
 
+def optional_session(
+    authorization: Annotated[Optional[str], Header()] = None,
+) -> Optional[CurrentSession]:
+    """Como `require_session`, mas devolve `None` quando não há sessão válida.
+
+    Usado pelos endpoints de chat (que continuam a funcionar sem autenticação
+    para os modelos locais) e para resolver a chave do fornecedor do utilizador.
+    """
+    if not _bearer_token(authorization):
+        return None
+    try:
+        return require_session(authorization)
+    except HTTPException:
+        return None
+
+
 # -------------------------------------------------------------------- rotas
 @router.post("/register", response_model=AuthResponse, status_code=201)
 def register(payload: RegisterRequest, request: Request):
@@ -178,6 +197,15 @@ def register(payload: RegisterRequest, request: Request):
         auth.record_login(str(user["id"]))
         session = auth.create_session(user, **_client_info(request))
         refreshed = auth.get_user_by_id(str(user["id"])) or user
+        events.log_event(
+            "warning",
+            "auth",
+            f"Nova conta criada: {auth.public_user(refreshed).get('email')}",
+            request=request,
+            user_id=str(user["id"]),
+            user_email=auth.public_user(refreshed).get("email"),
+            data={"role": auth.public_user(refreshed).get("role")},
+        )
         return AuthResponse(
             token=session["token"],
             expires_at=session["expires_at"],
@@ -196,12 +224,28 @@ def login(payload: LoginRequest, request: Request):
         session = auth.create_session(user, ttl=ttl, **_client_info(request))
         auth.record_login(str(user["id"]))
         refreshed = auth.get_user_by_id(str(user["id"])) or user
+        events.log_event(
+            "warning",
+            "auth",
+            f"Início de sessão: {auth.public_user(refreshed).get('email')}",
+            request=request,
+            user_id=str(user["id"]),
+            user_email=auth.public_user(refreshed).get("email"),
+            data={"remember": bool(payload.remember), "session_id": session.get("session_id")},
+        )
         return AuthResponse(
             token=session["token"],
             expires_at=session["expires_at"],
             user=UserResponse(**auth.public_user(refreshed)),
         )
     except auth.AuthError as error:
+        events.log_event(
+            "warning",
+            "auth",
+            f"Início de sessão falhado: {payload.email} ({error.message})",
+            request=request,
+            data={"email": payload.email, "code": getattr(error, "code", None)},
+        )
         raise _auth_error(error) from error
 
 
@@ -209,6 +253,14 @@ def login(payload: LoginRequest, request: Request):
 def logout(session: Annotated[CurrentSession, Depends(require_session)]):
     """Termina a sessão atual."""
     auth.revoke_session(session.session_id)
+    events.log_event(
+        "warning",
+        "auth",
+        f"Fim de sessão: {session.user.email}",
+        user_id=session.user.id,
+        user_email=session.user.email,
+        data={"session_id": session.session_id},
+    )
     return MessageResponse(message="Sessão terminada.")
 
 
@@ -237,6 +289,14 @@ def change_password(payload: ChangePasswordRequest, session: Annotated[CurrentSe
     except auth.AuthError as error:
         raise _auth_error(error) from error
     revoked = auth.revoke_all_sessions(session.user.id, keep=session.session_id)
+    events.log_event(
+        "warning",
+        "auth",
+        f"Palavra-passe alterada: {session.user.email} ({revoked} sessão(ões) terminada(s))",
+        user_id=session.user.id,
+        user_email=session.user.email,
+        data={"revoked_sessions": revoked},
+    )
     return MessageResponse(message=f"Palavra-passe atualizada. {revoked} sessão(ões) terminada(s) por segurança.")
 
 
@@ -263,6 +323,13 @@ def revoke_session(session_id: str, session: Annotated[CurrentSession, Depends(r
 def revoke_other_sessions(session: Annotated[CurrentSession, Depends(require_session)]):
     """Termina todas as sessões da conta exceto a atual."""
     count = auth.revoke_all_sessions(session.user.id, keep=session.session_id)
+    events.log_event(
+        "warning",
+        "auth",
+        f"Outras sessões terminadas: {session.user.email} ({count})",
+        user_id=session.user.id,
+        user_email=session.user.email,
+    )
     return MessageResponse(message=f"{count} sessão(ões) terminada(s).")
 
 
@@ -277,6 +344,13 @@ def delete_me(payload: DeleteAccountRequest, session: Annotated[CurrentSession, 
         auth.delete_account(str(user["id"]))
     except auth.AuthError as error:
         raise _auth_error(error) from error
+    events.log_event(
+        "warning",
+        "auth",
+        f"Conta apagada pelo próprio: {session.user.email}",
+        user_id=session.user.id,
+        user_email=session.user.email,
+    )
     return MessageResponse(message="Conta apagada.")
 
 

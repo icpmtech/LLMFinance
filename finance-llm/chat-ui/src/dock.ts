@@ -1,5 +1,5 @@
 /**
- * Dock estilo macOS da plataforma FinanceLLM.
+ * Dock estilo macOS da plataforma IQ OS.
  *
  * O dock é uma barra de ícones fixa (em baixo, à esquerda ou à direita) com
  * ampliação ao passar o rato, etiquetas, indicadores de aplicações abertas e
@@ -13,20 +13,29 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
+  Briefcase,
   Building2,
+  CalendarClock,
   CandlestickChart,
   Database,
   FileText,
   FolderOpen,
+  FolderSearch,
+  Gauge,
+  GitCompare,
+  Globe2,
   LayoutDashboard,
   MessageSquare,
   Network,
   Search,
   Settings,
+  ShieldCheck,
   Sparkles,
+  Target,
   TerminalSquare,
   TrendingUp,
   Upload,
+  Users,
 } from "lucide-react";
 
 export type DockPosition = "bottom" | "left" | "right";
@@ -62,6 +71,54 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "14,165,233",
   },
   {
+    id: "crm",
+    label: "CRM",
+    hint: "Contas, contactos e pipeline comercial",
+    icon: Target,
+    gradient: "from-rose-300 via-rose-500 to-pink-600",
+    accent: "244,63,94",
+  },
+  {
+    id: "crm-accounts",
+    label: "CRM · Contas",
+    hint: "Contas e empresas do CRM",
+    icon: Briefcase,
+    gradient: "from-amber-200 via-amber-400 to-orange-600",
+    accent: "245,158,11",
+  },
+  {
+    id: "crm-contacts",
+    label: "CRM · Contactos",
+    hint: "Pessoas de contacto do CRM",
+    icon: Users,
+    gradient: "from-sky-200 via-sky-400 to-indigo-600",
+    accent: "56,189,248",
+  },
+  {
+    id: "crm-agenda",
+    label: "CRM · Agenda",
+    hint: "Compromissos e tarefas comerciais",
+    icon: CalendarClock,
+    gradient: "from-teal-200 via-teal-400 to-emerald-600",
+    accent: "16,185,129",
+  },
+  {
+    id: "crm-dashboard",
+    label: "CRM · Relatórios",
+    hint: "Indicadores do trabalho comercial",
+    icon: Gauge,
+    gradient: "from-violet-300 via-purple-500 to-indigo-700",
+    accent: "167,139,250",
+  },
+  {
+    id: "finder",
+    label: "Finder",
+    hint: "Explorar dados como ficheiros",
+    icon: FolderSearch,
+    gradient: "from-cyan-200 via-sky-400 to-blue-600",
+    accent: "56,189,248",
+  },
+  {
     id: "dashboard",
     label: "Dashboard",
     hint: "Visão geral da plataforma",
@@ -76,6 +133,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: Search,
     gradient: "from-slate-200 via-slate-400 to-slate-600",
     accent: "148,163,184",
+  },
+  {
+    id: "browser",
+    label: "Browser",
+    hint: "Navegar na web dentro do IQ OS",
+    icon: Globe2,
+    gradient: "from-sky-200 via-cyan-500 to-blue-700",
+    accent: "56,189,248",
   },
   {
     id: "contracts-search",
@@ -108,6 +173,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: TrendingUp,
     gradient: "from-rose-200 via-rose-400 to-pink-600",
     accent: "244,63,94",
+  },
+  {
+    id: "ticker-chart",
+    label: "Gráfico Tempo Real",
+    hint: "Cotações ao segundo com TradingView",
+    icon: CandlestickChart,
+    gradient: "from-emerald-200 via-teal-500 to-cyan-700",
+    accent: "16,185,129",
   },
   {
     id: "forecast",
@@ -150,12 +223,28 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "161,161,170",
   },
   {
+    id: "compare",
+    label: "Comparar",
+    hint: "Comparar entidades e contratos",
+    icon: GitCompare,
+    gradient: "from-violet-300 via-indigo-500 to-blue-600",
+    accent: "129,140,248",
+  },
+  {
     id: "settings",
     label: "Definições",
     hint: "Conta, perfil e preferências",
     icon: Settings,
     gradient: "from-slate-300 via-slate-500 to-slate-700",
     accent: "148,163,184",
+  },
+  {
+    id: "admin",
+    label: "Administração",
+    hint: "Sistema, utilizadores e eventos",
+    icon: ShieldCheck,
+    gradient: "from-slate-200 via-slate-400 to-slate-600",
+    accent: "203,213,225",
   },
   {
     id: "cli",
@@ -169,6 +258,30 @@ export const DOCK_CATALOG: DockApp[] = [
 
 /** Ícones visíveis por defeito (a ordem é a ordem no dock). */
 const DEFAULT_ITEMS = [
+  "finder",
+  "chat",
+  "browser",
+  "empresas-iq",
+  "crm",
+  "dashboard",
+  "search",
+  "contracts-search",
+  "contracts-dashboard",
+  "entities-search",
+  "tickers",
+  "forecast",
+  "trading",
+  "rag",
+  "cli",
+  "settings",
+];
+
+/**
+ * Ordem antiga (sem o Finder à frente). Serve apenas para saber se o dock de um
+ * utilizador ainda está na ordem de fábrica e, nesse caso, promover o Finder a
+ * primeiro ícone — como no macOS, onde o Finder é o primeiro da doca.
+ */
+const LEGACY_DEFAULT_ITEMS = [
   "chat",
   "empresas-iq",
   "dashboard",
@@ -184,8 +297,11 @@ const DEFAULT_ITEMS = [
   "settings",
 ];
 
+/** Versão da ordem do dock (2 = Finder à frente). */
+const ORDER_VERSION = 2;
+
 /** Ícones fora do dock por defeito (disponíveis para adicionar). */
-const DEFAULT_PARKED = ["elastic", "import"];
+const DEFAULT_PARKED = ["elastic", "import", "compare", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard"];
 
 export type DockPrefs = {
   position: DockPosition;
@@ -205,6 +321,8 @@ export type DockPrefs = {
   items: string[];
   /** Ícones removidos do dock. */
   parked: string[];
+  /** Versão da ordem do dock (migrações de arrumação). */
+  version?: number;
 };
 
 const STORAGE_KEY = "finance-llm-dock:v1";
@@ -226,6 +344,7 @@ export const DEFAULT_DOCK_PREFS: DockPrefs = {
   reflection: true,
   items: DEFAULT_ITEMS,
   parked: DEFAULT_PARKED,
+  version: ORDER_VERSION,
 };
 
 const CATALOG_IDS = DOCK_CATALOG.map((app) => app.id);
@@ -252,13 +371,32 @@ function asIds(value: unknown): string[] {
 }
 
 function sanitize(raw: Partial<DockPrefs> | null): DockPrefs {
-  const items = asIds(raw?.items);
+  let items = asIds(raw?.items);
   const parked = asIds(raw?.parked).filter((id) => !items.includes(id));
 
   // Aplicações novas no catálogo entram automaticamente no dock, no fim,
-  // exceto se o utilizador já as tiver removido.
+  // exceto se o utilizador já as tiver removido; as que nascem «fora do dock»
+  // ficam listadas nas preferências, prontas a adicionar.
   const known = new Set([...items, ...parked]);
-  const newcomers = CATALOG_IDS.filter((id) => !known.has(id) && !DEFAULT_PARKED.includes(id));
+  const newcomers = CATALOG_IDS.filter((id) => !known.has(id));
+  const newVisible = newcomers.filter((id) => !DEFAULT_PARKED.includes(id));
+  const newParked = newcomers.filter((id) => DEFAULT_PARKED.includes(id));
+
+  /* Migração de ordem: o Finder é o primeiro ícone da doca (como no macOS).
+     Só mexe em docks que ainda estejam na ordem de fábrica, para não desfazer
+     arrumações feitas à mão. */
+  const version = typeof raw?.version === "number" ? raw.version : 1;
+  if (version < ORDER_VERSION && items.length > 0) {
+    const rest = items.filter((id) => id !== "finder");
+    const wasFactoryOrder =
+      rest.length <= LEGACY_DEFAULT_ITEMS.length &&
+      rest.every((id, index) => id === LEGACY_DEFAULT_ITEMS[index]);
+    if (!items.includes("finder")) {
+      items = ["finder", ...items];
+    } else if (wasFactoryOrder && items[0] !== "finder") {
+      items = ["finder", ...rest];
+    }
+  }
 
   return {
     position:
@@ -280,8 +418,9 @@ function sanitize(raw: Partial<DockPrefs> | null): DockPrefs {
     tooltips: typeof raw?.tooltips === "boolean" ? raw.tooltips : DEFAULT_DOCK_PREFS.tooltips,
     indicators: typeof raw?.indicators === "boolean" ? raw.indicators : DEFAULT_DOCK_PREFS.indicators,
     reflection: typeof raw?.reflection === "boolean" ? raw.reflection : DEFAULT_DOCK_PREFS.reflection,
-    items: items.length ? [...items, ...newcomers] : DEFAULT_DOCK_PREFS.items,
-    parked,
+    items: items.length ? [...items, ...newVisible] : DEFAULT_DOCK_PREFS.items,
+    parked: [...parked, ...newParked],
+    version: ORDER_VERSION,
   };
 }
 

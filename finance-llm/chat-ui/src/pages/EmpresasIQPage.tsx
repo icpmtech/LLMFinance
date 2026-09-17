@@ -20,6 +20,7 @@ import {
   FolderOpen,
   FolderPlus,
   GitBranch,
+  GitCompare,
   HandCoins,
   Heart,
   History,
@@ -89,7 +90,10 @@ import {
   worldToLon,
 } from "../components/graph/geo";
 import { useFavorites, type FavoriteKind } from "../favorites";
-import { useSidebarHidden } from "../layout";
+import { useCompare, openCompareWindow } from "../compare";
+import { EntityContractsPanel, SeeAllContractsButton } from "./EntityContractsWindow";
+import { useSidebarHidden, useSidebarWidth, useWindowMode } from "../layout";
+import { openWindow } from "../windows";
 import { useAuth } from "../auth";
 import { Avatar } from "./SettingsPage";
 import { companiesIn, useWorkspace, type WorkspaceEntry } from "../workspace";
@@ -165,7 +169,7 @@ function fmtDate(d?: string) {
   return new Date(d).toLocaleDateString("pt-PT");
 }
 
-function partyNames(party?: ContractParty | ContractParty[]) {
+export function partyNames(party?: ContractParty | ContractParty[]) {
   if (!party) return "—";
   const list = Array.isArray(party) ? party : [party];
   const names = list
@@ -175,14 +179,14 @@ function partyNames(party?: ContractParty | ContractParty[]) {
   return names.length ? names.join(", ") : "—";
 }
 
-function nifFromParty(party?: ContractParty | ContractParty[]) {
+export function nifFromParty(party?: ContractParty | ContractParty[]) {
   if (!party) return undefined;
   const list = Array.isArray(party) ? party : [party];
   const first = list.flatMap((p) => p.parsed || [])[0];
   return first?.nif;
 }
 
-function nifsFromParty(party?: ContractParty | ContractParty[]) {
+export function nifsFromParty(party?: ContractParty | ContractParty[]) {
   const list = Array.isArray(party) ? party : party ? [party] : [];
   return list.flatMap((item) => (item.parsed ?? []).map((entry) => entry.nif).filter(Boolean) as string[]);
 }
@@ -197,9 +201,9 @@ function contractPartiesOf(contract: ContractItem) {
   return [...collect(contract.adjudicantes, "Adjudicante"), ...collect(contract.adjudicatarios, "Adjudicatário")];
 }
 
-type ContractCompetitor = { name: string; nif?: string };
+export type ContractCompetitor = { name: string; nif?: string };
 
-function parseCompetitors(value?: string | string[]): ContractCompetitor[] {
+export function parseCompetitors(value?: string | string[]): ContractCompetitor[] {
   const values = Array.isArray(value) ? value : value ? [value] : [];
   return values
     .flatMap((entry) => {
@@ -338,6 +342,43 @@ function FavoriteButton({
       <Heart size={16} className={active ? "scale-110 transition-transform" : "transition-transform"} fill={active ? "currentColor" : "none"} />
       {active ? "Nos favoritos" : "Favorito"}
     </button>
+  );
+}
+
+/**
+ * Botão «Comparar» das fichas: acrescenta ou remove do comparador.
+ * Fica ao lado do favorito, tanto nas fichas de entidade como nas de contrato.
+ */
+function CompareToggleButton({ kind, id, label }: { kind: "entity" | "contract"; id: string; label: string }) {
+  const { has, toggle } = useCompare();
+  const item = { kind, id, name: label };
+  const active = has(item);
+  return (
+    <>
+      <button
+        type="button"
+        aria-pressed={active}
+        onClick={() => toggle(item)}
+        title={active ? "Remover da comparação" : "Adicionar à comparação"}
+        className={[
+          "glass-card rounded-xl px-3 py-1.5 text-sm flex items-center gap-2 transition",
+          active ? "text-teal-300 ring-1 ring-teal-400/40" : "text-muted-foreground hover:text-teal-200",
+        ].join(" ")}
+      >
+        <GitCompare size={16} />
+        {active ? "Na comparação" : "Comparar"}
+      </button>
+      {active && (
+        <button
+          type="button"
+          onClick={() => openCompareWindow()}
+          title="Abrir a janela de comparação"
+          className="glass-card rounded-xl px-3 py-1.5 text-sm flex items-center gap-2 text-muted-foreground transition hover:text-foreground"
+        >
+          Ver comparação
+        </button>
+      )}
+    </>
   );
 }
 
@@ -514,10 +555,75 @@ function MiniBar({
   max: number;
   color?: string;
 }) {
-  const pct = Math.min(100, Math.round((value / Math.max(max, 1)) * 100));
+  const raw = Math.round((value / Math.max(max, 1)) * 100);
+  const pct = value > 0 ? Math.min(100, Math.max(2, raw)) : 0;
   return (
-    <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
       <div className={`h-full ${color} rounded-full`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+/**
+ * Lista de barras horizontal (CPV, entidades, regiões).
+ *
+ * Cada linha tem: código opcional (CPV), rótulo truncado com `title` e valor
+ * alinhado à direita — em cartões estreitos o texto encolhe em vez de empurrar
+ * o valor para fora (era a causa do transbordo em janelas pequenas).
+ */
+type BarRow = { key: string; code?: string; label: string; value: number; display: string };
+
+function BarList({
+  rows,
+  color = "bg-teal-400",
+  onSelect,
+  emptyLabel = "Sem dados para mostrar.",
+}: {
+  rows: BarRow[];
+  color?: string;
+  onSelect?: (row: BarRow) => void;
+  emptyLabel?: string;
+}) {
+  if (rows.length === 0) {
+    return <p className="text-xs text-muted-foreground">{emptyLabel}</p>;
+  }
+  const peak = Math.max(...rows.map((row) => row.value || 0), 1);
+  return (
+    <div className="space-y-3.5">
+      {rows.map((row) => {
+        const body = (
+          <>
+            <div className="flex items-baseline justify-between gap-3 text-sm">
+              <span className="flex min-w-0 items-center gap-2">
+                {row.code && (
+                  <span className="shrink-0 rounded-md border border-white/10 bg-white/[0.05] px-1.5 py-0.5 font-mono text-[10.5px] text-muted-foreground">
+                    {row.code}
+                  </span>
+                )}
+                <span className="min-w-0 truncate transition group-hover:text-teal-300" title={row.label}>
+                  {row.label}
+                </span>
+              </span>
+              <span className="shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">
+                {row.display}
+              </span>
+            </div>
+            <MiniBar value={row.value || 0} max={peak} color={color} />
+          </>
+        );
+        return onSelect ? (
+          <button
+            key={row.key}
+            type="button"
+            onClick={() => onSelect(row)}
+            className="group w-full rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+          >
+            {body}
+          </button>
+        ) : (
+          <div key={row.key}>{body}</div>
+        );
+      })}
     </div>
   );
 }
@@ -2303,7 +2409,75 @@ interface NavGroup {
   items: { id: EmpresasIQSection | PlatformView; label: string; icon: React.ElementType; isPlatform?: boolean }[];
 }
 
-function ModuleSidebar({
+/** Secções do módulo EmpresasIQ (mostradas como separadores na barra de topo). */
+const MODULE_SECTIONS: { id: EmpresasIQSection; label: string; icon: React.ElementType }[] = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "contracts", label: "Contratos Públicos", icon: FileSearch },
+  { id: "entities", label: "Entidades", icon: Building2 },
+  { id: "graph", label: "Grafo de Relações", icon: Network },
+  { id: "studio", label: "Grafos & Visualizações", icon: GitBranch },
+  { id: "analysis", label: "Análise e Relatórios", icon: BarChart3 },
+  { id: "favorites", label: "Favoritos", icon: FolderHeart },
+  { id: "settings", label: "Configurações", icon: Settings },
+];
+
+/**
+ * Separadores do módulo (segmented control do macOS): a navegação interna vive
+ * na barra de ferramentas do topo, para a página não ter uma barra lateral própria.
+ */
+function ModuleTabs({
+  activeSection,
+  onSectionChange,
+}: {
+  activeSection: EmpresasIQSection;
+  onSectionChange: (section: EmpresasIQSection) => void;
+}) {
+  const { favorites } = useFavorites();
+  return (
+    <div className="sticky top-16 z-20 border-b border-white/8 bg-[#07151b]/85 px-4 py-2 backdrop-blur-xl">
+      <div
+        role="tablist"
+        aria-label="Secções do EmpresasIQ"
+        className="dock-scroll flex items-center gap-0.5 overflow-x-auto rounded-[8px] border border-white/8 bg-white/[0.05] p-0.5"
+      >
+        {MODULE_SECTIONS.map((item) => {
+          const Icon = item.icon;
+          const active = item.id === activeSection;
+          const badge = item.id === "favorites" ? favorites.length : 0;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => onSectionChange(item.id)}
+              title={item.label}
+              className={[
+                "flex shrink-0 items-center gap-1.5 rounded-[6px] px-2.5 py-1 text-[12px] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50",
+                active
+                  ? "bg-white/[0.16] font-medium text-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-white/[0.07] hover:text-foreground",
+              ].join(" ")}
+            >
+              <Icon size={13} className={active ? "text-teal-300" : undefined} />
+              <span className="whitespace-nowrap">{item.label}</span>
+              {badge > 0 && (
+                <span className="rounded-full bg-rose-400/20 px-1.5 text-[10px] font-medium text-rose-200">{badge}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Navegação antiga do módulo (barra lateral dentro da página).
+ * @deprecated Substituída por `ModuleTabs` (separadores no topo). Mantida
+ * apenas como referência; já não é renderizada em lado nenhum.
+ */
+export function ModuleSidebar({
   activeSection,
   onSectionChange,
   onNavigate,
@@ -2319,9 +2493,29 @@ function ModuleSidebar({
   });
   const { favorites: sidebarFavorites } = useFavorites();
   const { hidden: sidebarHidden, toggle: toggleSidebar } = useSidebarHidden();
+  const { width: moduleSidebarWidth, setWidth: setModuleSidebarWidth, reset: resetWidth } = useSidebarWidth();
   const { user: sidebarUser, logout } = useAuth();
 
   const navRef = useRef<HTMLDivElement>(null);
+  const asideRef = useRef<HTMLElement | null>(null);
+  const resizeStart = useRef(false);
+
+  /* Divisória arrastável (largura partilhada com a barra lateral principal). */
+  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+    resizeStart.current = true;
+  };
+  const onResizeMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!resizeStart.current) return;
+    const left = asideRef.current?.getBoundingClientRect().left ?? 0;
+    setModuleSidebarWidth(event.clientX - left);
+  };
+  const endResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!resizeStart.current) return;
+    (event.currentTarget as HTMLElement).releasePointerCapture?.(event.pointerId);
+    resizeStart.current = false;
+  };
 
   useEffect(() => {
     if (mobileOpen) {
@@ -2390,50 +2584,46 @@ function ModuleSidebar({
 
   const navContent = (
     <nav className="flex flex-col h-full">
-      <div className="p-4 border-b border-border/60 flex items-center gap-2">
+      <div className="flex h-11 shrink-0 items-center gap-1 px-2.5">
         <button
           onClick={() => onNavigate("chat")}
-          className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5 rounded-xl glass-card hover:bg-white/5 transition text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-[6px] px-1.5 py-1 text-left transition hover:bg-white/6 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
         >
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-teal-500 to-blue-500 flex items-center justify-center text-white shadow-lg shadow-primary/20">
-            <Sparkles size={16} />
-          </div>
-          <div className="leading-tight">
-            <p className="font-semibold text-sm">FinanceLLM</p>
-            <p className="text-[11px] text-muted-foreground">Voltar à plataforma</p>
-          </div>
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] bg-gradient-to-br from-teal-500 to-blue-500 text-white shadow-sm shadow-primary/20">
+            <Sparkles size={13} />
+          </span>
+          <span className="min-w-0 leading-tight">
+            <span className="block truncate text-[13px] font-semibold">IQ OS</span>
+            <span className="block truncate text-[10.5px] text-muted-foreground">Voltar à plataforma</span>
+          </span>
         </button>
         <button
           onClick={toggleSidebar}
           aria-label="Ocultar barra lateral"
           title="Ocultar barra lateral (Ctrl+B)"
-          className="hidden md:grid shrink-0 place-items-center h-9 w-9 rounded-xl text-muted-foreground transition hover:bg-white/5 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+          className="hidden md:grid shrink-0 place-items-center h-6 w-6 rounded-[6px] text-muted-foreground/80 transition hover:bg-white/8 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
         >
-          <PanelLeftClose size={17} />
+          <PanelLeftClose size={15} />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-3 px-3 space-y-1">
+      <div className="flex-1 space-y-1 overflow-y-auto px-2 pb-2">
         {groups.map((group) => {
           const expanded = openGroups[group.id] ?? false;
           return (
-            <div key={group.id} className="mb-1">
+            <section key={group.id} className="mb-1.5">
               <button
                 onClick={() => toggleGroup(group.id)}
                 aria-expanded={expanded}
-                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition text-muted-foreground hover:bg-white/5 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+                className="mac-section-title focus:outline-none"
               >
-                <span className="flex items-center gap-2.5">
-                  <span className="text-muted-foreground"><group.icon size={18} /></span>
-                  {group.label}
+                <span className="mac-section-chevron grid place-items-center">
+                  <ChevronDown size={11} />
                 </span>
-                <ChevronDown
-                  size={16}
-                  className={`transition-transform ${expanded ? "rotate-180" : ""}`}
-                />
+                <span className="truncate">{group.label}</span>
               </button>
               {expanded && (
-                <div className="mt-1 ml-2 pl-3 border-l border-border/60 space-y-0.5">
+                <div className="mt-0.5 space-y-0.5 pl-[19px]">
                   {group.items.map((item) => {
                     const Icon = item.icon;
                     const isActive = !item.isPlatform && activeSection === item.id;
@@ -2442,19 +2632,20 @@ function ModuleSidebar({
                         key={`${group.id}-${item.id}`}
                         onClick={() => handleItem(item)}
                         aria-current={isActive ? "page" : undefined}
-                        className={[
-                          "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40",
-                          isActive
-                            ? "bg-teal-400/15 text-teal-300 font-medium border border-teal-400/20"
-                            : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
-                        ].join(" ")}
+                        data-active={isActive}
+                        className="mac-nav-row focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
                       >
-                        <span className={isActive ? "text-teal-300" : "text-muted-foreground/80"}>
-                          <Icon size={18} />
+                        <span className="mac-nav-icon">
+                          <Icon size={16} />
                         </span>
-                        {item.label}
+                        <span className="truncate">{item.label}</span>
                         {item.id === "favorites" && sidebarFavorites.length > 0 && (
-                          <span className="ml-auto rounded-full bg-rose-400/20 px-1.5 py-0.5 text-[10px] font-medium text-rose-200">
+                          <span
+                            className={[
+                              "ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                              isActive ? "bg-white/25 text-white" : "bg-rose-400/20 text-rose-200",
+                            ].join(" ")}
+                          >
                             {sidebarFavorites.length}
                           </span>
                         )}
@@ -2463,7 +2654,7 @@ function ModuleSidebar({
                   })}
                 </div>
               )}
-            </div>
+            </section>
           );
         })}
       </div>
@@ -2560,15 +2751,30 @@ function ModuleSidebar({
 
       {/* Desktop sidebar */}
       <aside
+        ref={asideRef}
         aria-hidden={sidebarHidden || undefined}
         inert={sidebarHidden || undefined}
-        style={sidebarHidden ? { borderWidth: 0 } : undefined}
+        style={sidebarHidden ? { borderWidth: 0 } : { width: moduleSidebarWidth, maxWidth: "55%" }}
         className={[
-          "hidden md:flex shrink-0 h-screen glass-panel flex-col overflow-hidden transition-[width,opacity] duration-300 ease-out",
-          sidebarHidden ? "w-0 opacity-0 border-0" : "w-[220px] opacity-100 border-r border-border/60",
+          "relative hidden md:flex shrink-0 h-screen mac-sidebar flex-col overflow-hidden transition-[width,opacity] duration-200 ease-out",
+          sidebarHidden ? "w-0 opacity-0" : "opacity-100",
         ].join(" ")}
       >
-        <div className="w-[220px] shrink-0 h-full">{navContent}</div>
+        {!sidebarHidden && (
+          <div
+            className="mac-sidebar-resizer hidden md:block"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Redimensionar barra lateral"
+            title="Arrastar para redimensionar · duplo clique repõe"
+            onPointerDown={startResize}
+            onPointerMove={onResizeMove}
+            onPointerUp={endResize}
+            onPointerCancel={endResize}
+            onDoubleClick={resetWidth}
+          />
+        )}
+        <div className="h-full w-full shrink-0">{navContent}</div>
       </aside>
     </>
   );
@@ -2671,14 +2877,12 @@ function DashboardSection({
     () => [...(analytics?.by_year ?? [])].sort((a, b) => (a.key < b.key ? -1 : 1)),
     [analytics],
   );
-  const maxEntity = Math.max(...topEntities.map((r) => r.total_value || 0), 1);
-  const maxCpv = Math.max(...topCpv.map((r) => r.total_value || 0), 1);
   const byProcedure = analytics?.procedure_types ?? [];
 
   return (
     <div className="space-y-6">
       {/* Hero */}
-      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+      <div className="grid gap-6 @4xl:grid-cols-[1.4fr_1fr]">
         <Card className="relative overflow-hidden min-h-[260px] flex flex-col justify-between">
           <div className="relative z-10">
             <p className="text-xs uppercase tracking-wider text-teal-400 mb-2">
@@ -2734,7 +2938,7 @@ function DashboardSection({
       </div>
 
       {/* KPIs */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 @xl:grid-cols-2 @5xl:grid-cols-4">
         <Kpi
           icon={FileSearch}
           value={compact(total)}
@@ -2765,7 +2969,7 @@ function DashboardSection({
       </div>
 
       {/* Charts + tables */}
-      <div className="grid gap-6 xl:grid-cols-[1fr_0.4fr]">
+      <div className="grid gap-6 @4xl:grid-cols-[1fr_0.4fr]">
         <Card>
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -2774,7 +2978,7 @@ function DashboardSection({
             </div>
             <Badge color="teal">EUR</Badge>
           </div>
-          <div className="h-72">
+          <div className="h-60 overflow-hidden @3xl:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={byYear}>
                 <defs>
@@ -2818,7 +3022,7 @@ function DashboardSection({
               <p className="text-xs text-muted-foreground">Distribuição percentual</p>
             </div>
           </div>
-          <div className="h-64">
+          <div className="h-56 overflow-hidden @3xl:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <RePieChart>
                 <Pie
@@ -2828,6 +3032,7 @@ function DashboardSection({
                   innerRadius={55}
                   outerRadius={80}
                   paddingAngle={3}
+                  labelLine={false}
                   label={percentPieLabel}
                 >
                   {byProcedure.slice(0, 6).map((_, i) => (
@@ -2848,41 +3053,43 @@ function DashboardSection({
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_1fr_0.6fr]">
+      <div className="grid gap-6 @3xl:grid-cols-2 @7xl:grid-cols-[1fr_1fr_0.6fr]">
         <Card>
-          <h3 className="font-semibold mb-4">Entidades com maior volume</h3>
-          <div className="space-y-4">
-            {topEntities.slice(0, 7).map((row) => (
-              <button
-                key={row.key}
-                onClick={() => onEntity(row.key)}
-                className="w-full text-left group focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40 rounded-lg"
-              >
-                <div className="flex justify-between gap-4 text-sm mb-1">
-                  <span className="truncate text-foreground group-hover:text-teal-300 transition">
-                    {row.description || row.key}
-                  </span>
-                  <span className="text-muted-foreground shrink-0">{money(row.total_value)}</span>
-                </div>
-                <MiniBar value={row.total_value || 0} max={maxEntity} />
-              </button>
-            ))}
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold">Entidades com maior volume</h3>
+              <p className="text-xs text-muted-foreground">Valor adjudicado (todas as categorias)</p>
+            </div>
           </div>
+          <BarList
+            rows={topEntities.slice(0, 7).map((row) => ({
+              key: row.key,
+              label: row.description || row.key,
+              value: row.total_value || 0,
+              display: money(row.total_value),
+            }))}
+            onSelect={(row) => onEntity(row.key)}
+          />
         </Card>
 
         <Card>
-          <h3 className="font-semibold mb-4">Top Categorias (CPV)</h3>
-          <div className="space-y-4">
-            {topCpv.slice(0, 7).map((row) => (
-              <div key={row.key}>
-                <div className="flex justify-between gap-4 text-sm mb-1">
-                  <span className="truncate">{row.description || row.key}</span>
-                  <span className="text-muted-foreground shrink-0">{money(row.total_value)}</span>
-                </div>
-                <MiniBar value={row.total_value || 0} max={maxCpv} color="bg-amber-400" />
-              </div>
-            ))}
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold">Top Categorias (CPV)</h3>
+              <p className="text-xs text-muted-foreground">Valor adjudicado por categoria</p>
+            </div>
+            <Badge color="amber">EUR</Badge>
           </div>
+          <BarList
+            color="bg-amber-400"
+            rows={topCpv.slice(0, 7).map((row) => ({
+              key: row.key,
+              code: row.key,
+              label: row.description || "Sem descrição",
+              value: row.total_value || 0,
+              display: money(row.total_value),
+            }))}
+          />
         </Card>
 
         <Card>
@@ -4239,7 +4446,7 @@ function AnalysisSection({
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 @xl:grid-cols-2 @5xl:grid-cols-4">
         <Card glow="teal">
           <p className="text-xs text-muted-foreground uppercase tracking-wider">Valor Total Adjudicado</p>
           <p className="mt-2 text-2xl font-bold stat-value text-glow-teal">{money(analytics?.total_value)}</p>
@@ -4258,10 +4465,10 @@ function AnalysisSection({
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid gap-6 @4xl:grid-cols-2">
         <Card>
           <h3 className="font-semibold mb-4">Evolução do Valor Adjudicado</h3>
-          <div className="h-72">
+          <div className="h-60 overflow-hidden @3xl:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={byYear}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -4317,7 +4524,7 @@ function AnalysisSection({
 
         <Card>
           <h3 className="font-semibold mb-4">Por Tipo de Contrato</h3>
-          <div className="h-72">
+          <div className="h-60 overflow-hidden @3xl:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <RePieChart>
                 <Pie
@@ -4327,6 +4534,7 @@ function AnalysisSection({
                   innerRadius={50}
                   outerRadius={85}
                   paddingAngle={3}
+                  labelLine={false}
                   label={percentPieLabel}
                 >
                   {contractTypes.slice(0, 6).map((_, i) => (
@@ -4347,46 +4555,43 @@ function AnalysisSection({
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_1fr_0.6fr]">
+      <div className="grid gap-6 @3xl:grid-cols-2 @7xl:grid-cols-[1fr_1fr_0.6fr]">
         <Card>
-          <h3 className="font-semibold mb-4">Top 5 Entidades por Valor</h3>
-          <div className="space-y-4">
-            {topEntities.slice(0, 5).map((row) => (
-              <button
-                key={row.key}
-                onClick={() => onEntity(row.key)}
-                className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40 rounded-lg"
-              >
-                <div className="flex items-center justify-between gap-3 mb-1 text-sm">
-                  <span className="truncate hover:text-teal-300 transition">{row.description || row.key}</span>
-                  <span className="text-muted-foreground shrink-0">{money(row.total_value)}</span>
-                </div>
-                <MiniBar
-                  value={row.total_value || 0}
-                  max={Math.max(...topEntities.map((r) => r.total_value || 0), 1)}
-                />
-              </button>
-            ))}
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold">Top 5 Entidades por Valor</h3>
+              <p className="text-xs text-muted-foreground">Clique para abrir a ficha</p>
+            </div>
           </div>
+          <BarList
+            rows={topEntities.slice(0, 5).map((row) => ({
+              key: row.key,
+              label: row.description || row.key,
+              value: row.total_value || 0,
+              display: money(row.total_value),
+            }))}
+            onSelect={(row) => onEntity(row.key)}
+          />
         </Card>
 
         <Card>
-          <h3 className="font-semibold mb-4">CPV Mais Frequentes</h3>
-          <div className="space-y-4">
-            {topCpv.slice(0, 5).map((row) => (
-              <div key={row.key}>
-                <div className="flex items-center justify-between gap-3 mb-1 text-sm">
-                  <span className="truncate">{row.description || row.key}</span>
-                  <span className="text-muted-foreground shrink-0">{full(row.count)}</span>
-                </div>
-                <MiniBar
-                  value={row.count || 0}
-                  max={Math.max(...topCpv.map((r) => r.count || 0), 1)}
-                  color="bg-amber-400"
-                />
-              </div>
-            ))}
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold">CPV Mais Frequentes</h3>
+              <p className="text-xs text-muted-foreground">Nº de contratos por categoria</p>
+            </div>
+            <Badge color="amber">Nº</Badge>
           </div>
+          <BarList
+            color="bg-amber-400"
+            rows={topCpv.slice(0, 5).map((row) => ({
+              key: row.key,
+              code: row.key,
+              label: row.description || "Sem descrição",
+              value: row.count || 0,
+              display: full(row.count),
+            }))}
+          />
         </Card>
 
         <Card>
@@ -4413,14 +4618,16 @@ function AnalysisSection({
 
 // --- ENTITY DETAIL ---
 
-function EntityDetailPanel({
+export function EntityDetailPanel({
   nif,
   onBack,
   onContract,
+  onAllContracts,
 }: {
   nif: string;
   onBack: () => void;
   onContract: (id: string) => void;
+  onAllContracts?: (nif: string, name?: string) => void;
 }) {
   const [company, setCompany] = useState<CompanyDetail | null>(null);
   const [contracts, setContracts] = useState<CompanyContractsResponse | null>(null);
@@ -4500,6 +4707,7 @@ function EntityDetailPanel({
           sublabel={`NIF ${nif}`}
           variant="solid"
         />
+        <CompareToggleButton kind="entity" id={nif} label={company.name} />
         <SaveToFolderButton
           kind="entity"
           id={nif}
@@ -4545,9 +4753,19 @@ function EntityDetailPanel({
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid gap-6 @3xl:grid-cols-2">
         <Card>
-          <h3 className="font-semibold mb-4">Contratos Recentes</h3>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="font-semibold">Contratos Recentes</h3>
+              <p className="text-xs text-muted-foreground">
+                {allContracts.length > 0 ? `${allContracts.length} mais recentes` : "Sem contratos indexados"}
+              </p>
+            </div>
+            {onAllContracts && (
+              <SeeAllContractsButton nif={nif} name={company.name} total={analytics?.total_contracts} compact />
+            )}
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -4595,7 +4813,7 @@ function EntityDetailPanel({
 
 // --- CONTRACT DETAIL ---
 
-function ContractDetailPanel({
+export function ContractDetailPanel({
   id,
   onBack,
   onEntity,
@@ -4678,6 +4896,7 @@ function ContractDetailPanel({
             sublabel={contract.idcontrato || id}
             value={contract.precoContratual ?? contract.PrecoTotalEfetivo ?? null}
           />
+          <CompareToggleButton kind="contract" id={id} label={contract.objectoContrato || `Contrato ${id}`} />
           <SaveToFolderButton
             kind="contract"
             id={id}
@@ -5545,14 +5764,11 @@ function SettingsSection({
 
 // --- Main page ---
 
-export default function EmpresasIQPage({
-  onNavigate,
-}: {
-  onNavigate?: (view: PlatformView) => void;
-}) {
+export default function EmpresasIQPage() {
   const [section, setSection] = useState<EmpresasIQSection>("dashboard");
+  const { windowMode } = useWindowMode();
   const [q, setQ] = useState("");
-  const [detail, setDetail] = useState<{ type: "entity" | "contract"; id: string } | null>(null);
+  const [detail, setDetail] = useState<{ type: "entity" | "contract" | "entity-contracts"; id: string } | null>(null);
   const [detailClosing, setDetailClosing] = useState(false);
   const [analytics, setAnalytics] = useState<ContractAnalyticsResponse | null>(null);
   const [regional, setRegional] = useState<ContractRegionalResponse | null>(null);
@@ -5598,12 +5814,40 @@ export default function EmpresasIQPage({
     // global search could set a shared filter here
   };
 
+  /**
+   * Abre a ficha: em modo janelas abre (ou foca) uma janela de detalhe — como
+   * qualquer aplicação — para as fichas não taparem a área de trabalho.
+   */
   const openEntity = (nif: string) => {
+    if (windowMode) {
+      openWindow(`company-detail:${nif}`, undefined, { title: "Ficha da entidade" });
+      return;
+    }
     setDetail({ type: "entity", id: nif });
   };
 
   const openContract = (id: string) => {
+    if (windowMode) {
+      openWindow(`contract-detail:${id}`, undefined, { title: "Ficha do contrato" });
+      return;
+    }
     setDetail({ type: "contract", id });
+  };
+
+  /**
+   * «Ver todos os contratos» da ficha de entidade: em modo janelas abre a
+   * janela `entity-contracts:<NIF>`; em modo página (telemóvel) abre a mesma
+   * lista dentro da modal, para não depender do gestor de janelas.
+   */
+  const openAllContracts = (nif: string, name?: string) => {
+    if (windowMode) {
+      openWindow(`entity-contracts:${nif}`, undefined, {
+        title: name ? `Contratos · ${name}` : "Contratos da entidade",
+        rect: { width: 1100, height: 720 },
+      });
+      return;
+    }
+    setDetail({ type: "entity-contracts", id: nif });
   };
 
   // Fecha a ficha com o gesto inverso ao de abertura (o ficheiro volta a fechar-se).
@@ -5664,50 +5908,32 @@ export default function EmpresasIQPage({
     }
   }, [analytics, error, loading, regional, section, status]);
 
-  const handleNavigate = (view: PlatformView) => {
-    if (typeof window !== "undefined") {
-      const map: Record<PlatformView, string> = {
-        chat: "/chat",
-        dashboard: "/dashboard",
-        search: "/search",
-        "contracts-search": "/contracts/search",
-        "contracts-dashboard": "/contracts/dashboard",
-        "companies-search": "/companies/search",
-        "companies-dashboard": "/companies/dashboard",
-        tickers: "/tickers",
-        forecast: "/forecast",
-        trading: "/trading",
-        rag: "/rag",
-        elastic: "/elastic",
-        settings: "/settings",
-        cli: "/cli",
-      };
-      window.history.pushState({}, "", map[view]);
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    }
-    onNavigate?.(view);
-  };
-
   return (
     <div className="min-h-screen w-full bg-background text-foreground orbit-bg flex">
-      <ModuleSidebar
-        activeSection={section}
-        onSectionChange={(s) => {
-          setSection(s);
-          closeDetail();
-        }}
-        onNavigate={handleNavigate}
-      />
       <div className="flex-1 min-w-0 overflow-x-hidden">
         <Topbar q={q} setQ={setQ} onSearch={handleSearch} />
-        <main className="p-4 pt-20 md:pt-4 min-w-0">{content}</main>
+        <ModuleTabs
+          activeSection={section}
+          onSectionChange={(s) => {
+            setSection(s);
+            closeDetail();
+          }}
+        />
+        {/* `@container`: as secções respondem à largura da janela, não da viewport. */}
+        <main className="@container min-w-0 p-4">{content}</main>
       </div>
       {detail && (
         <div
           className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-[#03080b]/55 p-3 pt-5 backdrop-blur-sm sm:p-6 sm:pt-8 lg:p-10 lg:pt-12"
           role="dialog"
           aria-modal="true"
-          aria-label={detail.type === "entity" ? "Ficha da entidade" : "Detalhe do contrato"}
+          aria-label={
+            detail.type === "entity"
+              ? "Ficha da entidade"
+              : detail.type === "entity-contracts"
+                ? "Contratos da entidade"
+                : "Detalhe do contrato"
+          }
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) closeDetail();
           }}
@@ -5719,7 +5945,11 @@ export default function EmpresasIQPage({
             <div className="file-tab pl-3 text-[11px] uppercase tracking-wide text-muted-foreground">
               <FileText size={13} className="text-teal-300" />
               <span className="text-foreground">
-                {detail.type === "entity" ? "Ficha da entidade" : "Ficha do contrato"}
+                {detail.type === "entity"
+                  ? "Ficha da entidade"
+                  : detail.type === "entity-contracts"
+                    ? "Contratos da entidade"
+                    : "Ficha do contrato"}
               </span>
               <span className="hidden truncate opacity-70 sm:inline">#{detail.id}</span>
             </div>
@@ -5735,7 +5965,16 @@ export default function EmpresasIQPage({
               </button>
               <div className="file-body max-h-[calc(100vh-3.5rem)] overflow-y-auto p-3 pt-10 sm:max-h-[calc(100vh-5rem)] sm:p-6 sm:pt-12 lg:p-8 lg:pt-12">
                 {detail.type === "entity" ? (
-                  <EntityDetailPanel nif={detail.id} onBack={closeDetail} onContract={openContract} />
+                  <EntityDetailPanel
+                    nif={detail.id}
+                    onBack={closeDetail}
+                    onContract={openContract}
+                    onAllContracts={openAllContracts}
+                  />
+                ) : detail.type === "entity-contracts" ? (
+                  <div className="h-[70vh] min-h-[420px]">
+                    <EntityContractsPanel nif={detail.id} onBack={closeDetail} />
+                  </div>
                 ) : (
                   <ContractDetailPanel id={detail.id} onBack={closeDetail} onEntity={openEntity} />
                 )}

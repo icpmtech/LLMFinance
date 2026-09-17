@@ -44,6 +44,8 @@ export type ProfilePreferences = {
   default_view?: string;
   dock_position?: string;
   sidebar_hidden?: boolean;
+  sidebar_mode?: string;
+  window_mode?: boolean;
   reduced_motion?: boolean;
 };
 

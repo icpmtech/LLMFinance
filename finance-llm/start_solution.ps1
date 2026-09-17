@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Arranca a solução FinanceLLM completa (backend FastAPI + frontend Vite).
+    Arranca a solução IQ OS completa (backend FastAPI + frontend Vite).
 .DESCRIPTION
     Inicia o backend uvicorn na porta FINANCE_API_PORT (padrão 8003) e o frontend
     Vite preview na porta FINANCE_UI_PORT (padrão 4180). Garante que não existem
@@ -31,7 +31,7 @@ Set-Location $root
 
 if ($env:FINANCE_API_PORT) { $ApiPort = [int]$env:FINANCE_API_PORT }
 if ($env:FINANCE_UI_PORT) { $UiPort = [int]$env:FINANCE_UI_PORT }
-Write-Info "A arrancar FinanceLLM (API:$ApiPort, UI:$UiPort)"
+Write-Info "A arrancar IQ OS (API:$ApiPort, UI:$UiPort)"
 
 # 1. Limpar processos antigos
 function Stop-OldProcess($namePattern, $cmdPattern) {
@@ -146,7 +146,7 @@ Write-Ok "Frontend disponível em http://127.0.0.1:$UiPort"
 } | ConvertTo-Json -Depth 2 | Set-Content "$root\logs\solution_pids.json" -Encoding UTF8
 
 Write-Host ""
-Write-Ok "Solução FinanceLLM está no ar!"
+Write-Ok "Solução IQ OS está no ar!"
 Write-Info "Frontend: http://127.0.0.1:$UiPort"
 Write-Info "API:      http://127.0.0.1:$ApiPort"
 Write-Info "Swagger:  http://127.0.0.1:$ApiPort/docs"

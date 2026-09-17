@@ -1,7 +1,8 @@
 {
   "id": "/",
-  "name": "FinanceLLM — Plataforma de Inteligência Financeira",
-  "short_name": "FinanceLLM",
+  "name": "IQ OS — Plataforma de Inteligência Financeira",
+  "short_name": "IQ OS",
+  "version": "1.3.0",
   "description": "Contratos públicos, empresas, mercados, previsões e chat com modelos de linguagem numa única plataforma.",
   "lang": "pt-PT",
   "dir": "ltr",
@@ -9,6 +10,7 @@
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
+  "launch_handler": { "client_mode": "navigate-existing" },
   "orientation": "any",
   "background_color": "#0f1115",
   "theme_color": "#0f1115",
@@ -56,6 +58,12 @@
       "name": "Mercados",
       "short_name": "Mercados",
       "url": "/tickers",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Browser",
+      "short_name": "Browser",
+      "url": "/browser",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]

@@ -1,5 +1,5 @@
 /**
- * Service worker do FinanceLLM (PWA).
+ * Service worker do IQ OS (PWA).
  *
  * Estratégia:
  * - Navegações (o próprio HTML): rede primeiro, com o `index.html` em cache como
@@ -14,9 +14,11 @@
  *
  * Ao alterar este ficheiro, incrementar `VERSION`.
  */
-const VERSION = "v1";
-const SHELL_CACHE = `finance-llm-shell-${VERSION}`;
-const ASSET_CACHE = `finance-llm-assets-${VERSION}`;
+const VERSION = "v3";
+/** Prefixos de cache do IQ OS (e o antigo, para limpar instalações anteriores). */
+const CACHE_PREFIXES = ["iq-os-", "finance-llm-"];
+const SHELL_CACHE = `iq-os-shell-${VERSION}`;
+const ASSET_CACHE = `iq-os-assets-${VERSION}`;
 
 /** Pedidos que nunca devem ser guardados (dados em tempo real). */
 const BYPASS = ["/api/", "/forecast/plot/"];
@@ -52,7 +54,10 @@ self.addEventListener("activate", (event) => {
       const keys = await caches.keys();
       await Promise.all(
         keys
-          .filter((key) => key.startsWith("finance-llm-") && key !== SHELL_CACHE && key !== ASSET_CACHE)
+          .filter(
+            (key) =>
+              CACHE_PREFIXES.some((prefix) => key.startsWith(prefix)) && key !== SHELL_CACHE && key !== ASSET_CACHE,
+          )
           .map((key) => caches.delete(key)),
       );
       await self.clients.claim();

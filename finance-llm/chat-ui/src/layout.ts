@@ -3,8 +3,9 @@
  *
  * - Modo da barra lateral: `expanded` (com rótulos), `rail` (só ícones) ou
  *   `hidden` (escondida, com pega para reabrir).
+ * - Largura redimensionável (arrastar a divisória, duplo clique repõe).
  * - Grupos abertos: memorizados entre sessões.
- * - Vistas recentes: alimentam a secção «Recentes» da barra lateral.
+ * - Recentes: alimentam a secção «Recentes» da barra lateral.
  *
  * Tudo fica no `localStorage` e é partilhado entre separadores, tal como o
  * resto do estado do browser (workspace, dock, favoritos).
@@ -15,11 +16,33 @@ export type SidebarMode = "expanded" | "rail" | "hidden";
 
 const STORAGE_KEY = "finance-llm-sidebar-hidden"; // compatibilidade (API/Definições)
 const MODE_KEY = "finance-llm-sidebar-mode";
+const WIDTH_KEY = "finance-llm-sidebar-width";
 const GROUPS_KEY = "finance-llm-sidebar-groups";
 const RECENT_KEY = "finance-llm-sidebar-recent";
 const CHANGE_EVENT = "finance-llm-sidebar-changed";
+const WIDTH_EVENT = "finance-llm-sidebar-width-changed";
 const RECENT_EVENT = "finance-llm-sidebar-recent-changed";
 const RECENT_LIMIT = 5;
+
+/** Limites da largura da barra lateral (como o arrasto da divisória no macOS). */
+export const SIDEBAR_MIN_WIDTH = 196;
+export const SIDEBAR_MAX_WIDTH = 384;
+export const SIDEBAR_DEFAULT_WIDTH = 268;
+export const SIDEBAR_RAIL_WIDTH = 68;
+
+function clampWidth(value: number) {
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(value)));
+}
+
+function readWidth(): number {
+  if (typeof window === "undefined") return SIDEBAR_DEFAULT_WIDTH;
+  try {
+    const stored = Number(window.localStorage.getItem(WIDTH_KEY));
+    return Number.isFinite(stored) && stored > 0 ? clampWidth(stored) : SIDEBAR_DEFAULT_WIDTH;
+  } catch {
+    return SIDEBAR_DEFAULT_WIDTH;
+  }
+}
 
 function readMode(): SidebarMode {
   if (typeof window === "undefined") return "expanded";
@@ -69,6 +92,31 @@ export function toggleSidebar() {
   setSidebarMode(cache === "hidden" ? "expanded" : "hidden");
 }
 
+let widthCache: number = readWidth();
+
+export function getSidebarWidth(): number {
+  return widthCache;
+}
+
+/** Define a largura da barra lateral (valores fora dos limites são ajustados). */
+export function setSidebarWidth(value: number) {
+  const next = clampWidth(value);
+  if (next === widthCache) return;
+  widthCache = next;
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(WIDTH_KEY, String(next));
+  } catch {
+    // sem persistência
+  }
+  window.dispatchEvent(new Event(WIDTH_EVENT));
+}
+
+/** Repõe a largura predefinida (duplo clique na divisória). */
+export function resetSidebarWidth() {
+  setSidebarWidth(SIDEBAR_DEFAULT_WIDTH);
+}
+
 function subscribe(onChange: () => void) {
   if (typeof window === "undefined") return () => {};
   const onStorage = (event: StorageEvent) => {
@@ -91,6 +139,29 @@ export function useSidebar() {
   const toggleHidden = useCallback(() => toggleSidebar(), []);
   const toggleRail = useCallback(() => setSidebarMode(cache === "rail" ? "expanded" : "rail"), []);
   return { mode, hidden: mode === "hidden", rail: mode === "rail", setMode, toggleHidden, toggleRail };
+}
+
+function subscribeWidth(onChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  const onStorage = (event: StorageEvent) => {
+    if (event.key && event.key !== WIDTH_KEY) return;
+    widthCache = readWidth();
+    onChange();
+  };
+  window.addEventListener(WIDTH_EVENT, onChange);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(WIDTH_EVENT, onChange);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+/** Largura da barra lateral (redimensionável com arrasto da divisória). */
+export function useSidebarWidth() {
+  const width = useSyncExternalStore(subscribeWidth, getSidebarWidth, getSidebarWidth);
+  const setWidth = useCallback((value: number) => setSidebarWidth(value), []);
+  const reset = useCallback(() => resetSidebarWidth(), []);
+  return { width, setWidth, reset };
 }
 
 /** Compatibilidade com quem só precisa de saber se está escondida. */
@@ -122,13 +193,16 @@ export function useSidebarShortcut() {
 const WINDOW_MODE_KEY = "finance-llm-window-mode";
 
 function readWindowMode(): boolean {
+  // Num ecrã pequeno (telemóvel) as janelas flutuantes seriam apertadas:
+  // aí a omissão é o modo página.
+  const fallback = () =>
+    typeof window === "undefined" ? true : window.matchMedia("(min-width: 1024px)").matches;
   if (typeof window === "undefined") return true;
   try {
     const stored = window.localStorage.getItem(WINDOW_MODE_KEY);
-    // Por omissão a plataforma abre em modo janelas (estilo macOS).
-    return stored === null ? true : stored === "1";
+    return stored === null ? fallback() : stored === "1";
   } catch {
-    return true;
+    return fallback();
   }
 }
 

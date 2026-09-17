@@ -1,4 +1,4 @@
-"""Módulo RAG + BloombergGPT para o FinanceLLM."""
+"""Módulo RAG + BloombergGPT para o IQ OS."""
 
 from rag.storage.document_store import DocumentStore
 from rag.storage.vector_store import VectorStore

@@ -1,4 +1,4 @@
-"""CLI do FinanceLLM.
+"""CLI do IQ OS.
 
 Cliente de linha de comandos para a plataforma: autenticação, contratos
 públicos, empresas, mercados, previsões e administração de contas.

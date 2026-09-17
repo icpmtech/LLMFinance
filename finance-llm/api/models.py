@@ -1,4 +1,4 @@
-"""Esquemas Pydantic para a API FinanceLLM Chat."""
+"""Esquemas Pydantic para a API IQ OS Chat."""
 from enum import Enum
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal, Dict, Any

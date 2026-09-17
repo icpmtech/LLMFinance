@@ -2,7 +2,7 @@
 
 ## 1. Visão geral
 
-Este módulo adiciona ao FinanceLLM:
+Este módulo adiciona ao IQ OS:
 
 - Um **modelo estilo BloombergGPT** (decoder-only, domínio financeiro) treinável a partir do corpus existente + documentos markdown provenientes de PDFs.
 - Uma **pipeline de ingestão de PDFs** que converte cada documento para Markdown estruturado (texto + metadados).

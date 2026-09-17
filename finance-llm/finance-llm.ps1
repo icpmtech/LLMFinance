@@ -1,4 +1,4 @@
-# Atalho do CLI do FinanceLLM (PowerShell).
+# Atalho do CLI do IQ OS (PowerShell).
 #
 # Uso:
 #   .\finance-llm.ps1 status

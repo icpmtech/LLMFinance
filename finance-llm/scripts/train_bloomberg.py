@@ -1,4 +1,4 @@
-"""Script de treino para criar o modelo BloombergGPT-style a partir do corpus FinanceLLM.
+"""Script de treino para criar o modelo BloombergGPT-style a partir do corpus do IQ OS.
 
 Uso:
     .venv\Scripts\python.exe scripts/train_bloomberg.py

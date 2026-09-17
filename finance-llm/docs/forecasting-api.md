@@ -1,4 +1,4 @@
-# API de previsão de preços — FinanceLLM
+# API de previsão de preços — IQ OS
 
 A API FastAPI expõe endpoints de chat e, agora, um módulo dedicado de previsão de preços baseado num pipeline ARIMA. Este documento descreve o contrato dos endpoints de previsão, os parâmetros disponíveis e exemplos de utilização.
 

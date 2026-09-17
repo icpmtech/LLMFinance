@@ -1,12 +1,12 @@
-"""Backend FastAPI para a Chat UI do FinanceLLM."""
+"""Backend FastAPI para a Chat UI do IQ OS."""
 import json
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, List, Optional
+from typing import Annotated, Any, List, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, Body, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Body, Request, UploadFile, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse, Response
 
@@ -195,8 +195,14 @@ from sentiment.feature_engineering import generate_sentiment_blended_forecast
 
 
 from api.rag_routes import router as rag_router
-from api.auth_routes import router as auth_router
+from api.auth_routes import router as auth_router, optional_session
 from api.cli_routes import router as cli_router
+from api.admin_routes import router as admin_router
+from api.providers_routes import router as providers_router
+from api.proxy_routes import router as proxy_router
+from api.crm_routes import router as crm_router
+from api import auth_service as auth
+from api import events_service as events
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -218,9 +224,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="FinanceLLM API",
+    title="IQ OS API",
     version="0.4.0",
-    description="API de chat, previsão de séries temporais e RAG FinanceLLM (GPT-2, Mistral e BloombergGPT-style).",
+    description="API de chat, previsão de séries temporais e RAG do IQ OS (GPT-2, Mistral e BloombergGPT-style).",
     lifespan=lifespan,
 )
 
@@ -236,6 +242,69 @@ app.add_middleware(
 app.include_router(rag_router)
 app.include_router(auth_router)
 app.include_router(cli_router)
+app.include_router(admin_router)
+app.include_router(providers_router)
+app.include_router(proxy_router)
+app.include_router(crm_router)
+
+
+# Cache curta de `user_id → email`, para o registo de pedidos identificar quem
+# chamou a API sem consultar o Elasticsearch em cada pedido.
+_USER_EMAIL_CACHE: dict = {}
+_USER_EMAIL_TTL_SECONDS = 300
+
+
+def _resolve_user_identity(request: Request) -> tuple[Optional[str], Optional[str]]:
+    """Devolve (user_id, email) a partir do token Bearer, sem tocar no Elasticsearch em cada pedido."""
+    try:
+        header = request.headers.get("authorization") or ""
+        if not header.lower().startswith("bearer "):
+            return None, None
+        payload = auth.read_token(header[7:].strip())
+        if not payload:
+            return None, None
+        user_id = str(payload.get("sub") or "") or None
+        if not user_id:
+            return None, None
+        cached = _USER_EMAIL_CACHE.get(user_id)
+        now = datetime.utcnow().timestamp()
+        if cached and now - cached[1] < _USER_EMAIL_TTL_SECONDS:
+            return user_id, cached[0]
+        user = auth.get_user_by_id(user_id)
+        email = (user or {}).get("email")
+        if email:
+            _USER_EMAIL_CACHE[user_id] = (email, now)
+        return user_id, email
+    except Exception:
+        return None, None
+
+
+@app.middleware("http")
+async def _event_log_middleware(request: Request, call_next):
+    """Regista os pedidos à API no registo de eventos (memória/ficheiro/Elasticsearch)."""
+    started = datetime.utcnow()
+    try:
+        response = await call_next(request)
+    except Exception as error:
+        duration_ms = (datetime.utcnow() - started).total_seconds() * 1000
+        user_id, email = _resolve_user_identity(request)
+        events.log_event(
+            "error",
+            "api",
+            f"{request.method} {request.url.path} falhou: {error}",
+            data={"error": str(error), "type": type(error).__name__},
+            request=request,
+            status=500,
+            duration_ms=duration_ms,
+            user_id=user_id,
+            user_email=email,
+        )
+        raise
+
+    duration_ms = (datetime.utcnow() - started).total_seconds() * 1000
+    user_id, email = _resolve_user_identity(request)
+    events.log_request(request, status=response.status_code, duration_ms=duration_ms, user_id=user_id, user_email=email)
+    return response
 
 
 # Servir a React SPA da chat-ui (build estático)
@@ -862,6 +931,11 @@ def entities_detail(nif: str):
 @app.get("/contracts/dashboard")
 @app.get("/contracts/search")
 @app.get("/empresas-iq")
+@app.get("/crm")
+@app.get("/crm/contas")
+@app.get("/crm/contactos")
+@app.get("/crm/agenda")
+@app.get("/crm/relatorios")
 @app.get("/search")
 @app.get("/import")
 def serve_spa_page():
@@ -872,7 +946,7 @@ def serve_spa_page():
 def read_root():
     return {
         "status": "ok",
-        "service": "FinanceLLM API",
+        "service": "IQ OS API",
         "models": ["gpt2", "mistral", "bloomberg"],
         "features": ["chat", "forecast", "rag", "elasticsearch"],
         "rag_model": None,
@@ -881,12 +955,23 @@ def read_root():
 
 @app.get("/health")
 def health():
-    return {"status": "healthy", "models": ["gpt2", "mistral", "bloomberg"], "features": ["chat", "forecast", "rag", "elasticsearch"]}
+    from api.providers_service import PROVIDERS
+
+    return {
+        "status": "healthy",
+        "models": ["gpt2", "mistral", "bloomberg", *[spec["id"] for spec in PROVIDERS]],
+        "features": ["chat", "forecast", "rag", "elasticsearch", "providers", "proxy"],
+    }
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest, backend: str = Query("gpt2", pattern="^(gpt2|mistral)$")):
-    result = run_chat(req.messages, backend=backend)
+def chat(req: ChatRequest, backend: str = Query("gpt2"), session: Any = Depends(optional_session)):
+    result = run_chat(
+        req.messages,
+        backend=backend,
+        user_id=getattr(getattr(session, "user", None), "id", None),
+        user_email=getattr(getattr(session, "user", None), "email", None),
+    )
     return ChatResponse(
         message=result["message"],
         sources=result["sources"],
@@ -895,19 +980,33 @@ def chat(req: ChatRequest, backend: str = Query("gpt2", pattern="^(gpt2|mistral)
 
 
 @app.post("/chat/stream")
-def chat_stream_post(req: ChatRequest, backend: str = Query("gpt2", pattern="^(gpt2|mistral)$")):
+def chat_stream_post(req: ChatRequest, backend: str = Query("gpt2"), session: Any = Depends(optional_session)):
     return StreamingResponse(
-        stream_chat(req.messages, backend=backend),
+        stream_chat(
+            req.messages,
+            backend=backend,
+            user_id=getattr(getattr(session, "user", None), "id", None),
+            user_email=getattr(getattr(session, "user", None), "email", None),
+        ),
         media_type="text/event-stream",
     )
 
 
 @app.get("/chat/stream")
-def chat_stream_get(_payload: Annotated[str, Query(...)], backend: str = Query("gpt2", pattern="^(gpt2|mistral)$")):
+def chat_stream_get(
+    _payload: Annotated[str, Query(...)],
+    backend: str = Query("gpt2"),
+    session: Any = Depends(optional_session),
+):
     payload = json.loads(_payload)
     req = ChatRequest(**payload)
     return StreamingResponse(
-        stream_chat(req.messages, backend=backend),
+        stream_chat(
+            req.messages,
+            backend=backend,
+            user_id=getattr(getattr(session, "user", None), "id", None),
+            user_email=getattr(getattr(session, "user", None), "email", None),
+        ),
         media_type="text/event-stream",
     )
 

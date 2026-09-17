@@ -1,7 +1,6 @@
 import { Sidebar } from "./Sidebar";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
-import { AppNav, type AppView } from "./AppNav";
 import type { Message, ModelBackend } from "../types";
 
 interface Conversation {
@@ -21,7 +20,6 @@ interface ChatLayoutProps {
   onDeleteConversation: (id: string) => void;
   onSend: (text: string) => void;
   onBackendChange: (backend: ModelBackend) => void;
-  onNavigate: (view: AppView) => void;
 }
 
 export function ChatLayout({
@@ -36,11 +34,9 @@ export function ChatLayout({
   onDeleteConversation,
   onSend,
   onBackendChange,
-  onNavigate,
 }: ChatLayoutProps) {
   return (
     <div className="min-h-screen w-full bg-background text-foreground flex">
-      <AppNav active="chat" onNavigate={onNavigate} />
       <div className="flex-1 min-w-0 min-h-screen flex flex-col md:flex-row overflow-hidden">
         <Sidebar
           conversations={conversations}

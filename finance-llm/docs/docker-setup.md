@@ -1,6 +1,6 @@
-# Docker Setup — FinanceLLM
+# Docker Setup — IQ OS
 
-Este documento explica como correr toda a solução FinanceLLM (backend FastAPI + frontend React) com Docker Compose.
+Este documento explica como correr toda a solução IQ OS (backend FastAPI + frontend React) com Docker Compose.
 
 ## Ficheiros criados
 

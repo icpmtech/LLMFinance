@@ -65,6 +65,7 @@ import type {
   TickerInfo,
   YahooSearchResult,
 } from "../types";
+import { TickerKpiCards } from "../components/TickerKpiCards";
 
 interface TickerPageProps {
   onSwitchView?: () => void;
@@ -131,7 +132,12 @@ export function TickerPage({ onSwitchView }: TickerPageProps) {
   const [searching, setSearching] = useState(false);
   const [localResults, setLocalResults] = useState<string[]>([]);
   const [yahooResults, setYahooResults] = useState<YahooSearchResult[]>([]);
-  const [selected, setSelected] = useState<string>("");
+  // Mantém o ticker aberto entre recarregamentos/janelas (o App guarda a mesma chave
+  // para a vista de detalhe do ticker).
+  const [selected, setSelected] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem("finance-llm-ticker-detail") || "";
+  });
 
   const [info, setInfo] = useState<TickerInfo | null>(null);
   const [history, setHistory] = useState<TickerHistory | null>(null);
@@ -478,15 +484,16 @@ export function TickerPage({ onSwitchView }: TickerPageProps) {
               </section>
             )}
 
-            {/* KPI badges */}
+            {/* Indicadores em cartões temáticos */}
             {info?.kpis && Object.keys(info.kpis).length > 0 && (
-              <section className="flex flex-wrap gap-2">
-                {Object.entries(info.kpis).map(([k, v]) => (
-                  <div key={k} className="rounded-lg gradient-border glass-card px-3 py-1.5 text-xs">
-                    <span className="text-slate-400">{k.replace(/_/g, " ")}:</span>{" "}
-                    <span className="font-medium stat-value text-white">{fmtPctOrNumber(v)}</span>
-                  </div>
-                ))}
+              <section className="@container space-y-3">
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <h2 className="text-sm font-semibold text-white">Indicadores</h2>
+                  <span className="text-xs text-slate-500">
+                    do Yahoo Finance para {info.ticker} — passe o rato para ver o campo original
+                  </span>
+                </div>
+                <TickerKpiCards kpis={info.kpis} currency={info.currency} />
               </section>
             )}
 
@@ -1565,14 +1572,6 @@ function renderValue(v: unknown): React.ReactNode {
 function fmt(n?: number | null) {
   if (n == null || Number.isNaN(n)) return "—";
   return n.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
-}
-
-function fmtPctOrNumber(n?: number | null) {
-  if (n == null || Number.isNaN(n)) return "—";
-  if (Math.abs(n) < 100 && (n < 0 || n > 1 || n === 0 || n === 1)) {
-    return `${(n * 100).toFixed(2)}%`;
-  }
-  return fmtBigNumber(n);
 }
 
 function fmtBigNumber(n?: number | null) {

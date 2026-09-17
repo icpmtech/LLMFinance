@@ -1,4 +1,4 @@
-"""Gera os ícones do PWA (FinanceLLM) em `public/`.
+"""Gera os ícones do PWA (IQ OS) em `public/`.
 
 Desenha uma marca simples e legível mesmo a 16 px — duas barras ascendentes e
 um "spark" (dados + IA) sobre um gradiente teal → azul, igual ao badge da

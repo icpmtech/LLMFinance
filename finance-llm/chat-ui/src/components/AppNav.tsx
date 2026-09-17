@@ -1,42 +1,47 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  MessageSquare,
-  LayoutDashboard,
-  Search,
-  FileText,
-  Building2,
-  TrendingUp,
-  CandlestickChart,
-  FolderOpen,
-  Database,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
   History,
   Menu,
-  X,
-  Sparkles,
-  BarChart3,
-  Network,
-  PanelLeftClose,
+  PanelLeft,
   PanelLeftOpen,
   Settings,
   LogOut,
-  TerminalSquare,
-  Upload,
+  Search,
+  SlidersHorizontal,
+  Sparkles,
+  X,
 } from "lucide-react";
-import { recordRecentView, useNavGroups, useRecentViews, useSidebar } from "../layout";
+import { DOCK_CATALOG, type DockApp } from "../dock";
+import { useWindows } from "../windows";
+import {
+  SIDEBAR_MIN_WIDTH,
+  SIDEBAR_MAX_WIDTH,
+  SIDEBAR_RAIL_WIDTH,
+  recordRecentView,
+  useNavGroups,
+  useRecentViews,
+  useSidebar,
+  useSidebarWidth,
+  useWindowMode,
+} from "../layout";
 import { useAuth } from "../auth";
 import { Avatar } from "../pages/SettingsPage";
 
 export type AppView =
   | "dashboard"
   | "chat"
+  | "browser"
+  | "finder"
+  | "compare"
   | "forecast"
   | "trading"
   | "tickers"
   | "ticker-detail"
+  | "ticker-chart"
   | "rag"
   | "elastic"
   | "search"
@@ -49,18 +54,26 @@ export type AppView =
   | "company-detail"
   | "entities-search"
   | "empresas-iq"
+  | "crm"
+  | "crm-accounts"
+  | "crm-contacts"
+  | "crm-agenda"
+  | "crm-dashboard"
   | "import"
   | "settings"
+  | "admin"
   | "cli"
   | "contracts-list";
 
-type NavItem = { id: AppView; label: string; icon: React.ReactNode; match?: AppView[]; keywords?: string };
+type NavItem = { id: AppView; label: string; icon: React.ReactNode; match?: AppView[]; keywords?: string; adminOnly?: boolean };
 
 interface NavGroup {
   id: string;
   label: string;
   icon: React.ReactNode;
   items: NavItem[];
+  /** Secções do menu de aplicações ficam abertas por omissão. */
+  defaultOpen?: boolean;
 }
 
 interface AppNavProps {
@@ -69,107 +82,73 @@ interface AppNavProps {
   onBackToChat?: () => void;
 }
 
+/**
+ * Menu de aplicações (como o dock): a barra lateral lista as aplicações da
+ * plataforma, não a árvore de páginas de cada uma. As páginas internas de cada
+ * aplicação vivem dentro da própria aplicação.
+ */
+const TOOL_APP_IDS = ["elastic", "import", "cli", "settings", "admin"];
+
+/** Sub-ecrãs que pertencem a uma aplicação do menu (mantêm-na realçada). */
+const APP_MATCH: Record<string, AppView[]> = {
+  "contracts-search": ["contracts", "contracts-list"],
+  "contracts-dashboard": ["companies-dashboard"],
+  "entities-search": ["companies-search", "company-detail"],
+  tickers: ["ticker-detail", "ticker-chart"],
+  crm: ["crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard"],
+};
+
+function appItem(app: DockApp): NavItem {
+  const Icon = app.icon;
+  return {
+    id: app.id as AppView,
+    label: app.label,
+    icon: <Icon size={16} />,
+    match: APP_MATCH[app.id],
+    keywords: app.hint,
+    // A administração da solução só aparece a contas com papel `admin`.
+    adminOnly: app.id === "admin",
+  };
+}
+
 const groups: NavGroup[] = [
   {
-    id: "home",
-    label: "Central",
-    icon: <LayoutDashboard size={18} />,
-    items: [
-      { id: "chat", label: "Chat IA", icon: <MessageSquare size={18} />, keywords: "conversa modelos gpt mistral" },
-      { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} />, keywords: "mercado sentimento" },
-      { id: "search", label: "Pesquisa Global", icon: <Search size={18} />, keywords: "procurar tudo" },
-    ],
-  },
-  {
-    id: "contracts",
-    label: "Contratos Públicos",
-    icon: <FileText size={18} />,
-    items: [
-      {
-        id: "contracts-search",
-        label: "Pesquisar Contratos",
-        icon: <Search size={18} />,
-        match: ["contracts", "contracts-search"],
-        keywords: "base portal cpv adjudicante",
-      },
-      {
-        id: "contracts-dashboard",
-        label: "Dashboard Contratos",
-        icon: <BarChart3 size={18} />,
-        match: ["contracts-dashboard"],
-        keywords: "indicadores valores",
-      },
-      { id: "contracts-list", label: "Contratos", icon: <FileText size={18} />, match: ["contracts-list"], keywords: "lista fichas" },
-    ],
-  },
-  {
-    id: "companies",
-    label: "Diretório de Empresas",
-    icon: <Building2 size={18} />,
-    items: [
-      { id: "entities-search", label: "Pesquisar Empresas", icon: <Search size={18} />, keywords: "nif cadastro" },
-      {
-        id: "companies-search",
-        label: "Pesquisar Entidades (Contratos)",
-        icon: <Search size={18} />,
-        match: ["companies", "companies-search"],
-        keywords: "adjudicante adjudicatário",
-      },
-      {
-        id: "companies-dashboard",
-        label: "Dashboard Empresas",
-        icon: <BarChart3 size={18} />,
-        match: ["companies-dashboard"],
-        keywords: "ranking top",
-      },
-    ],
-  },
-  {
-    id: "empresas-iq",
-    label: "EmpresasIQ",
-    icon: <Network size={18} />,
-    items: [
-      {
-        id: "empresas-iq",
-        label: "Inteligência Contratual",
-        icon: <Network size={18} />,
-        keywords: "grafos análise dossier",
-      },
-    ],
-  },
-  {
-    id: "markets",
-    label: "Mercados",
-    icon: <TrendingUp size={18} />,
-    items: [
-      {
-        id: "tickers",
-        label: "Tickers & Ações",
-        icon: <TrendingUp size={18} />,
-        match: ["tickers", "ticker-detail"],
-        keywords: "cotações ações",
-      },
-      { id: "forecast", label: "Previsões", icon: <Sparkles size={18} />, keywords: "arima kronos modelo" },
-      { id: "trading", label: "Trading Simulado", icon: <CandlestickChart size={18} />, keywords: "carteira ordens" },
-    ],
+    id: "apps",
+    label: "Aplicações",
+    icon: <Sparkles size={14} />,
+    defaultOpen: true,
+    items: DOCK_CATALOG.filter((app) => !TOOL_APP_IDS.includes(app.id)).map(appItem),
   },
   {
     id: "tools",
     label: "Ferramentas",
-    icon: <Database size={18} />,
-    items: [
-      { id: "rag", label: "RAG Documentos", icon: <FolderOpen size={18} />, keywords: "pdf indexação" },
-      { id: "elastic", label: "Elasticsearch", icon: <Database size={18} />, keywords: "índices pesquisa" },
-      { id: "import", label: "Importar Dados", icon: <Upload size={18} />, keywords: "excel csv ingestão" },
-      { id: "cli", label: "Terminal (CLI)", icon: <TerminalSquare size={18} />, keywords: "comandos linha terminal cli" },
-      { id: "settings", label: "Definições", icon: <Settings size={18} />, keywords: "conta perfil preferências sessões" },
-    ],
+    icon: <SlidersHorizontal size={14} />,
+    defaultOpen: true,
+    items: DOCK_CATALOG.filter((app) => TOOL_APP_IDS.includes(app.id)).map(appItem),
   },
 ];
 
 const ALL_ITEMS: { item: NavItem; group: NavGroup }[] = groups.flatMap((group) =>
   group.items.map((item) => ({ item, group })),
 );
+
+/** Papel `admin` (a área de administração é a única restrita). */
+function isAdminRole(role?: string | null) {
+  return (role ?? "member") === "admin";
+}
+
+/** Itens de navegação permitidos ao papel indicado. */
+function itemsFor(role?: string | null) {
+  return isAdminRole(role) ? ALL_ITEMS : ALL_ITEMS.filter(({ item }) => !item.adminOnly);
+}
+
+/** Grupos de navegação permitidos ao papel indicado (sem grupos vazios). */
+function groupsFor(role?: string | null): NavGroup[] {
+  if (isAdminRole(role)) return groups;
+  return groups
+    .map((group) => ({ ...group, items: group.items.filter((item) => !item.adminOnly) }))
+    .filter((group) => group.items.length > 0);
+}
 
 /** Remove acentos e baixa para minúsculas, para pesquisa tolerante. */
 function normalize(text: string) {
@@ -190,8 +169,8 @@ function isGroupActive(view: AppView, group: NavGroup): boolean {
 }
 
 /** Item de navegação correspondente à vista ativa (resolve sub-vistas). */
-function resolveItem(view: AppView): NavItem | undefined {
-  return ALL_ITEMS.find(({ item }) => isActive(view, item))?.item;
+function resolveItem(view: AppView, items: { item: NavItem; group: NavGroup }[]): NavItem | undefined {
+  return items.find(({ item }) => isActive(view, item))?.item;
 }
 
 export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
@@ -199,34 +178,66 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const { rail, hidden, setMode, toggleHidden, toggleRail } = useSidebar();
-  const { openGroups, toggleGroup, setGroupOpen } = useNavGroups();
+  const { width, setWidth, reset: resetWidth } = useSidebarWidth();
+  const { openGroups, toggleGroup } = useNavGroups();
+  const { windows: openWindows } = useWindows();
+  const { windowMode } = useWindowMode();
+  /** Aplicações com janela aberta (ponto nas linhas do menu). */
+  const runningApps = useMemo(
+    () => new Set(windowMode ? openWindows.map((item) => item.view) : [active]),
+    [windowMode, openWindows, active],
+  );
   const recent = useRecentViews();
   const { user, logout } = useAuth();
   const searchRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const asideRef = useRef<HTMLElement | null>(null);
+  const [resizing, setResizing] = useState(false);
+
+  /* Divisória arrastável: define a largura da barra (duplo clique repõe). */
+  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+    setResizing(true);
+  };
+  const onResizeMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!resizing) return;
+    const left = asideRef.current?.getBoundingClientRect().left ?? 0;
+    setWidth(event.clientX - left);
+  };
+  const endResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!resizing) return;
+    (event.currentTarget as HTMLElement).releasePointerCapture?.(event.pointerId);
+    setResizing(false);
+  };
+
+  const context = useMemo(() => {
+    const allowed = itemsFor(user?.role);
+    return { items: allowed, groups: groupsFor(user?.role) };
+  }, [user?.role]);
 
   /* Histórico de vistas (alimenta a secção «Recentes»). */
   useEffect(() => {
-    const item = resolveItem(active);
+    const item = resolveItem(active, context.items);
     if (item) recordRecentView(item.id);
-  }, [active]);
+  }, [active, context.items]);
 
   const recentItems = useMemo(
     () =>
       recent
-        .map((id) => ALL_ITEMS.find(({ item }) => item.id === id)?.item)
+        .map((id) => context.items.find(({ item }) => item.id === id)?.item)
         .filter((item): item is NavItem => Boolean(item))
         .slice(0, 4),
-    [recent],
+    [recent, context.items],
   );
 
   const results = useMemo(() => {
     const term = normalize(query.trim());
     if (!term) return [];
-    return ALL_ITEMS.filter(({ item, group }) =>
+    return context.items.filter(({ item, group }) =>
       `${normalize(item.label)} ${normalize(group.label)} ${normalize(item.keywords ?? "")}`.includes(term),
     );
-  }, [query]);
+  }, [context.items, query]);
 
   /* Atalhos: «/» ou Ctrl+K focam a pesquisa. */
   useEffect(() => {
@@ -258,12 +269,6 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
   const handleClick = (id: AppView) => {
     onNavigate(id);
     setMobileOpen(false);
-  };
-
-  const openGroupInExpanded = (group: NavGroup) => {
-    setMode("expanded");
-    setGroupOpen(group.id, true);
-    window.setTimeout(() => searchRef.current?.focus(), 60);
   };
 
   const accountMenu = (positionClass: string) => (
@@ -312,59 +317,53 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
 
   /* --------------------------------------------------------------- rail */
   const railContent = (
-    <nav className="flex h-full flex-col items-center gap-1 py-3" aria-label="Navegação principal (compacta)">
+    <nav className="flex h-full flex-col items-center gap-1 px-2 py-2.5" aria-label="Navegação principal (compacta)">
       <button
         onClick={() => (onBackToChat ? onBackToChat() : handleClick("chat"))}
-        title="FinanceLLM"
-        aria-label="FinanceLLM"
-        className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-teal-500 to-blue-500 text-white shadow-lg shadow-primary/20 transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+        title="IQ OS"
+        aria-label="IQ OS"
+        className="grid h-7 w-7 place-items-center rounded-[7px] bg-gradient-to-br from-teal-500 to-blue-500 text-white shadow-md shadow-primary/20 transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
       >
-        <Sparkles size={16} />
+        <Sparkles size={14} />
       </button>
 
       <button
         onClick={() => setMode("expanded")}
         title="Expandir barra lateral"
         aria-label="Expandir barra lateral"
-        className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition hover:bg-white/5 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+        className="grid h-7 w-7 place-items-center rounded-[7px] text-muted-foreground/80 transition hover:bg-white/8 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
       >
-        <PanelLeftOpen size={16} />
+        <PanelLeftOpen size={15} />
       </button>
 
-      <div className="my-1 h-px w-7 bg-white/10" />
+      <div className="my-1 h-px w-6 bg-white/10" />
 
-      <div className="flex w-full flex-1 flex-col items-center gap-1 overflow-y-auto px-2">
-        {groups.map((group) => {
-          const groupActive = isGroupActive(active, group);
-          return (
-            <button
-              key={group.id}
-              onClick={() => openGroupInExpanded(group)}
-              title={group.label}
-              aria-label={group.label}
-              className={[
-                "relative grid h-10 w-10 place-items-center rounded-xl transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60",
-                groupActive
-                  ? "bg-teal-400/15 text-teal-300"
-                  : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
-              ].join(" ")}
-            >
-              {group.icon}
-              {groupActive && (
-                <span
-                  className="absolute -left-2 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-teal-300"
-                  aria-hidden="true"
-                />
-              )}
-            </button>
-          );
-        })}
+      <div className="flex w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto">
+        {context.items.map(({ item }) => (
+          <button
+            key={item.id}
+            onClick={() => handleClick(item.id)}
+            title={item.label}
+            aria-label={item.label}
+            data-active={isActive(active, item)}
+            className="mac-nav-row relative w-9 justify-center px-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+            style={{ height: 30 }}
+          >
+            <span className="mac-nav-icon">{item.icon}</span>
+            {runningApps.has(item.id) && (
+              <span
+                aria-hidden="true"
+                className="absolute bottom-0.5 right-1 h-1 w-1 rounded-full bg-slate-300/80"
+              />
+            )}
+          </button>
+        ))}
 
         {recentItems.length > 0 && (
           <>
-            <div className="my-1 h-px w-7 bg-white/10" />
-            <span className="grid place-items-center py-1 text-muted-foreground/60" title="Recentes" aria-hidden="true">
-              <History size={14} />
+            <div className="my-1 h-px w-6 bg-white/10" />
+            <span className="grid place-items-center py-1 text-muted-foreground/50" title="Recentes" aria-hidden="true">
+              <History size={13} />
             </span>
             {recentItems.map((item) => (
               <button
@@ -372,14 +371,11 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
                 onClick={() => handleClick(item.id)}
                 title={item.label}
                 aria-label={item.label}
-                className={[
-                  "grid h-9 w-9 place-items-center rounded-xl transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60",
-                  isActive(active, item)
-                    ? "bg-teal-400/15 text-teal-200"
-                    : "text-muted-foreground/80 hover:bg-white/5 hover:text-foreground",
-                ].join(" ")}
+                data-active={isActive(active, item)}
+                className="mac-nav-row w-9 justify-center px-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+                style={{ height: 28 }}
               >
-                {item.icon}
+                <span className="mac-nav-icon">{item.icon}</span>
               </button>
             ))}
           </>
@@ -394,49 +390,47 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
         aria-expanded={userMenuOpen}
         className="relative rounded-full transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
       >
-        {user ? <Avatar user={user} size={30} /> : null}
+        {user ? <Avatar user={user} size={26} /> : null}
       </button>
-      {accountMenu("fixed bottom-4 left-[84px] w-64")}
+      {accountMenu("fixed bottom-4 left-[76px] w-64")}
     </nav>
   );
 
   /* ------------------------------------------------- modo expandido/gaveta */
   const navContent = (
     <nav className="flex h-full flex-col" aria-label="Navegação principal">
-      <div className="flex items-center gap-2 border-b border-border/60 p-3.5">
+      {/* Topo da barra lateral (como a barra de ferramentas de uma janela macOS) */}
+      <div className="flex h-11 shrink-0 items-center gap-1 px-2.5">
         <button
           onClick={() => (onBackToChat ? onBackToChat() : handleClick("chat"))}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-xl glass-card px-3 py-2.5 text-left transition hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-[6px] px-1.5 py-1 text-left transition hover:bg-white/6 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
         >
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-teal-500 to-blue-500 flex items-center justify-center text-white shadow-lg shadow-primary/20">
-            <Sparkles size={16} />
-          </div>
-          <div className="leading-tight">
-            <p className="font-semibold text-sm">FinanceLLM</p>
-            <p className="text-[11px] text-muted-foreground">Plataforma inteligente</p>
-          </div>
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] bg-gradient-to-br from-teal-500 to-blue-500 text-white shadow-sm shadow-primary/20">
+            <Sparkles size={13} />
+          </span>
+          <span className="truncate text-[13px] font-semibold">IQ OS</span>
         </button>
         <button
           onClick={toggleRail}
           aria-label="Modo compacto (só ícones)"
           title="Modo compacto (só ícones)"
-          className="hidden md:grid shrink-0 place-items-center h-9 w-9 rounded-xl text-muted-foreground transition hover:bg-white/5 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+          className="hidden md:grid shrink-0 place-items-center h-6 w-6 rounded-[6px] text-muted-foreground/80 transition hover:bg-white/8 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
         >
-          <PanelLeftClose size={17} />
+          <PanelLeft size={15} />
         </button>
         <button
           onClick={toggleHidden}
           aria-label="Ocultar barra lateral"
           title="Ocultar barra lateral (Ctrl+B)"
-          className="hidden md:grid shrink-0 place-items-center h-9 w-9 rounded-xl text-muted-foreground transition hover:bg-white/5 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+          className="hidden md:grid shrink-0 place-items-center h-6 w-6 rounded-[6px] text-muted-foreground/80 transition hover:bg-white/8 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
         >
-          <ChevronLeft size={18} />
+          <ChevronLeft size={16} />
         </button>
       </div>
 
-      <div className="px-3 pt-3" role="search">
+      <div className="shrink-0 px-2.5 pb-2" role="search">
         <div className="relative">
-          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/80" />
           <input
             ref={searchRef}
             value={query}
@@ -451,24 +445,24 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
                 setQuery("");
               }
             }}
-            placeholder="Ir para… ( / )"
+            placeholder="Pesquisar ( / )"
             aria-label="Procurar na navegação"
-            className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 pl-8 pr-7 text-xs outline-none transition placeholder:text-muted-foreground focus:border-teal-300/40 focus:bg-white/[0.06]"
+            className="h-7 w-full rounded-[6px] border border-white/8 bg-white/[0.055] pl-7 pr-6 text-[12.5px] outline-none transition placeholder:text-muted-foreground/80 focus:border-teal-300/40 focus:bg-white/[0.08]"
           />
           {query && (
             <button
               type="button"
               onClick={() => setQuery("")}
               aria-label="Limpar pesquisa"
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground transition hover:text-foreground"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground transition hover:text-foreground"
             >
-              <X size={13} />
+              <X size={12} />
             </button>
           )}
         </div>
       </div>
 
-      <div ref={listRef} className="flex-1 space-y-1 overflow-y-auto px-3 py-3">
+      <div ref={listRef} className="flex-1 space-y-1 overflow-y-auto px-2 pb-2">
         {query.trim() ? (
           <SearchResults
             results={results}
@@ -482,84 +476,65 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
         ) : (
           <>
             {recentItems.length > 0 && (
-              <section className="mb-2">
-                <p className="flex items-center gap-1.5 px-2 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground/80">
-                  <History size={12} /> Recentes
-                </p>
-                <div className="space-y-0.5">
-                  {recentItems.map((item) => (
+              <NavSection label="Recentes" icon={<History size={11} />}>
+                {recentItems.map((item) => (
+                  <NavButton
+                    key={`recent-${item.id}`}
+                    item={item}
+                    active={isActive(active, item)}
+                    onClick={() => handleClick(item.id)}
+                  />
+                ))}
+              </NavSection>
+            )}
+
+            {context.groups.map((group) => {
+              const groupActive = isGroupActive(active, group);
+              const expanded = openGroups[group.id] ?? group.defaultOpen ?? groupActive;
+              return (
+                <NavSection
+                  key={group.id}
+                  label={group.label}
+                  icon={group.icon}
+                  expanded={expanded}
+                  onToggle={() => toggleGroup(group.id, groupActive)}
+                >
+                  {group.items.map((item) => (
                     <NavButton
-                      key={`recent-${item.id}`}
+                      key={item.id}
                       item={item}
                       active={isActive(active, item)}
                       onClick={() => handleClick(item.id)}
                     />
                   ))}
-                </div>
-              </section>
-            )}
-
-            {groups.map((group) => {
-              const groupActive = isGroupActive(active, group);
-              const expanded = openGroups[group.id] ?? groupActive;
-              return (
-                <div key={group.id}>
-                  <button
-                    onClick={() => toggleGroup(group.id, groupActive)}
-                    aria-expanded={expanded}
-                    className={[
-                      "flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60",
-                      groupActive
-                        ? "bg-teal-400/10 text-teal-200"
-                        : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
-                    ].join(" ")}
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <span className={groupActive ? "text-teal-300" : "text-muted-foreground"}>{group.icon}</span>
-                      {group.label}
-                    </span>
-                    <ChevronDown size={15} className={expanded ? "rotate-180 transition-transform" : "transition-transform"} />
-                  </button>
-                  {expanded && (
-                    <div className="ml-2 mt-0.5 space-y-0.5 border-l border-border/60 pl-2.5">
-                      {group.items.map((item) => (
-                        <NavButton
-                          key={item.id}
-                          item={item}
-                          active={isActive(active, item)}
-                          onClick={() => handleClick(item.id)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
+                </NavSection>
               );
             })}
           </>
         )}
       </div>
 
-      <div className="relative border-t border-border/60 p-3.5">
+      <div className="relative shrink-0 px-2 pb-2 pt-1.5">
+        <div className="mb-1.5 h-px bg-white/8" />
         <button
           type="button"
           onClick={() => setUserMenuOpen((open) => !open)}
           aria-haspopup="menu"
           aria-expanded={userMenuOpen}
-          className="flex w-full items-center gap-3 rounded-xl glass-card px-3 py-2.5 text-left transition hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+          className="flex w-full items-center gap-2 rounded-[6px] px-1.5 py-1.5 text-left transition hover:bg-white/6 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
         >
-          {user ? <Avatar user={user} size={32} /> : null}
+          {user ? <Avatar user={user} size={26} /> : null}
           <span className="min-w-0 flex-1 leading-tight">
-            <span className="block truncate text-sm font-medium">{user?.name ?? "Conta"}</span>
-            <span className="block truncate text-[11px] text-muted-foreground">{user?.title || user?.email || ""}</span>
+            <span className="block truncate text-[12.5px] font-medium">{user?.name ?? "Conta"}</span>
+            <span className="block truncate text-[10.5px] text-muted-foreground">{user?.email ?? ""}</span>
           </span>
-          <ChevronUp size={15} className={userMenuOpen ? "text-foreground" : "text-muted-foreground"} />
+          <ChevronUp size={13} className={userMenuOpen ? "text-foreground" : "text-muted-foreground/70"} />
         </button>
-        <p className="mt-2 px-1 text-[10px] leading-relaxed text-muted-foreground/70">
-          <kbd className="rounded border border-white/10 bg-white/5 px-1">Ctrl</kbd> +{" "}
-          <kbd className="rounded border border-white/10 bg-white/5 px-1">B</kbd> oculta ·{" "}
-          <kbd className="rounded border border-white/10 bg-white/5 px-1">/</kbd> pesquisa
+        <p className="mt-1.5 px-1.5 text-[10px] leading-relaxed text-muted-foreground/60">
+          Divisória arrastável · <kbd className="rounded border border-white/10 bg-white/5 px-1">Ctrl</kbd>+
+          <kbd className="rounded border border-white/10 bg-white/5 px-1">B</kbd> oculta
         </p>
-        {accountMenu("absolute bottom-full left-3.5 right-3.5 mb-2")}
+        {accountMenu("absolute bottom-full left-2 right-2 mb-2")}
       </div>
     </nav>
   );
@@ -572,7 +547,7 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
           <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-teal-500 to-blue-500 flex items-center justify-center text-white">
             <Sparkles size={14} />
           </div>
-          <span className="font-semibold text-sm">FinanceLLM</span>
+          <span className="font-semibold text-sm">IQ OS</span>
         </div>
         <div className="flex items-center gap-2">
           {user && (
@@ -622,23 +597,37 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
         </button>
       )}
 
-      {/* Barra lateral (desktop) */}
+      {/* Barra lateral (desktop) — material macOS, arrastável na divisória */}
       <aside
+        ref={asideRef}
         aria-hidden={hidden || undefined}
         inert={hidden || undefined}
-        style={hidden ? { borderWidth: 0 } : undefined}
+        style={hidden ? { borderWidth: 0 } : { width: rail ? SIDEBAR_RAIL_WIDTH : width }}
         className={[
-          "hidden md:flex shrink-0 h-screen glass-panel flex-col overflow-hidden transition-[width,opacity] duration-300 ease-out",
-          hidden
-            ? "w-0 opacity-0 border-0"
-            : rail
-              ? "w-[72px] opacity-100 border-r border-border/60"
-              : "w-[268px] opacity-100 border-r border-border/60",
+          "relative hidden md:flex shrink-0 h-screen mac-sidebar flex-col overflow-hidden",
+          resizing ? "select-none" : "transition-[width,opacity] duration-200 ease-out",
+          hidden ? "w-0 opacity-0" : "opacity-100",
         ].join(" ")}
       >
-        <div className={rail ? "h-full w-[72px] shrink-0" : "h-full w-[268px] shrink-0"}>
-          {rail ? railContent : navContent}
-        </div>
+        {!hidden && (
+          <div
+            className="mac-sidebar-resizer hidden md:block"
+            data-dragging={resizing || undefined}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Redimensionar barra lateral"
+            aria-valuemin={SIDEBAR_MIN_WIDTH}
+            aria-valuemax={SIDEBAR_MAX_WIDTH}
+            aria-valuenow={width}
+            title="Arrastar para redimensionar · duplo clique repõe"
+            onPointerDown={startResize}
+            onPointerMove={onResizeMove}
+            onPointerUp={endResize}
+            onPointerCancel={endResize}
+            onDoubleClick={resetWidth}
+          />
+        )}
+        <div className="h-full w-full shrink-0">{rail ? railContent : navContent}</div>
       </aside>
     </>
   );
@@ -646,25 +635,73 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
 
 /* --------------------------------------------------------------- subpeças */
 
-/** Item de navegação com realce da vista ativa (com barra de destaque à esquerda). */
+/** Item do menu de aplicações (estilo macOS: linha compacta com seleção em pílula). */
 function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {
+  const { windowMode } = useWindowMode();
+  const { windows } = useWindows();
+  // Com janelas abertas, o ponto indica as aplicações em execução (como o dock).
+  const running = windowMode
+    ? windows.some((item2) => item2.view === item.id)
+    : active;
   return (
     <button
       data-nav
+      data-active={active}
       onClick={onClick}
       aria-current={active ? "page" : undefined}
       title={item.label}
-      className={[
-        "relative flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60",
-        active ? "bg-teal-400/15 font-medium text-teal-200" : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
-      ].join(" ")}
+      className="mac-nav-row focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
     >
-      {active && (
-        <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-teal-300" aria-hidden="true" />
-      )}
-      <span className={active ? "text-teal-300" : "text-muted-foreground/80"}>{item.icon}</span>
+      <span className="mac-nav-icon">{item.icon}</span>
       <span className="truncate">{item.label}</span>
+      {running && (
+        <span
+          aria-hidden="true"
+          className={[
+            "ml-auto h-1 w-1 shrink-0 rounded-full",
+            active ? "bg-white/90" : "bg-slate-400/70",
+          ].join(" ")}
+        />
+      )}
     </button>
+  );
+}
+
+/** Secção da barra lateral com título discreto e triângulo de divulgação. */
+function NavSection({
+  label,
+  icon,
+  expanded = true,
+  onToggle,
+  children,
+}: {
+  label: string;
+  icon?: React.ReactNode;
+  expanded?: boolean;
+  onToggle?: () => void;
+  children: React.ReactNode;
+}) {
+  const content = (
+    <>
+      <span className="mac-section-chevron grid place-items-center">
+        {onToggle ? <ChevronDown size={11} /> : null}
+      </span>
+      {icon ? <span className="opacity-70">{icon}</span> : null}
+      <span className="truncate">{label}</span>
+    </>
+  );
+
+  return (
+    <section className="mb-1.5">
+      {onToggle ? (
+        <button type="button" onClick={onToggle} aria-expanded={expanded} className="mac-section-title focus:outline-none">
+          {content}
+        </button>
+      ) : (
+        <p className="mac-section-title">{content}</p>
+      )}
+      {expanded && <div className="mt-0.5 space-y-0.5 pl-[19px]">{children}</div>}
+    </section>
   );
 }
 

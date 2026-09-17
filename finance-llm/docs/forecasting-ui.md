@@ -1,4 +1,4 @@
-# Interface de previsão de preços — FinanceLLM
+# Interface de previsão de preços — IQ OS
 
 O frontend React inclui agora uma página dedicada de previsão de preços. Esta página permite escolher um ticker, configurar o modelo ARIMA e visualizar resultados em gráficos e tabelas.
 

@@ -1,4 +1,4 @@
-"""Interface de linha de comandos do FinanceLLM.
+"""Interface de linha de comandos do IQ OS.
 
 Exemplos:
     python -m cli status
@@ -101,7 +101,7 @@ def cmd_status(args: argparse.Namespace, client: Client) -> int:
     if is_json(args):
         return 0
 
-    print(fmt.title("FinanceLLM"), fmt.dim(f"v{__version__}"))
+    print(fmt.title("IQ OS"), fmt.dim(f"v{__version__}"))
     print(fmt.field("API", f"{client.base_url} {fmt.ok('online')}"))
     detail = info["api"]["detail"]
     if isinstance(detail, dict) and detail.get("models"):
@@ -886,13 +886,13 @@ def add_command(container: Any, name: str, **kwargs: Any) -> argparse.ArgumentPa
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="finance-llm",
-        description="CLI do FinanceLLM: contratos públicos, empresas, mercados, previsões e contas.",
+        prog="iq-os",
+        description="CLI do IQ OS: contratos públicos, empresas, mercados, previsões e contas.",
         epilog="Exemplo: python -m cli contracts search \"obras\" --year 2025 --size 5",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         parents=[GLOBAL_FLAGS],
     )
-    parser.add_argument("--version", action="version", version=f"FinanceLLM CLI {__version__}")
+    parser.add_argument("--version", action="version", version=f"IQ OS CLI {__version__}")
 
     sub = parser.add_subparsers(dest="command", metavar="<comando>")
 

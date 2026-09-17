@@ -1,10 +1,11 @@
-"""Agente FinanceLLM — orquestra ferramentas e gera resposta final."""
+"""Agente IQ OS — orquestra ferramentas e gera resposta final."""
 import asyncio
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
-from typing import AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
+from api import cloud_chat, events_service as events, providers_service as providers
 from api.models import ChatMessage, Source, ToolCall
 from api.tools import (
     TOOLS,
@@ -343,12 +344,137 @@ def _fallback_answer(
         f"Tendência de 1 ano: {trend}."
         f"{forecast_text}"
         f"{sentiment_text}\n\n"
-        f"Esta resposta é baseada nos dados do Yahoo Finance enquanto o modelo Finance-LLM ({backend}) continua a ser treinado."
+        f"Esta resposta é baseada nos dados do Yahoo Finance enquanto o modelo IQ OS ({backend}) continua a ser treinado."
     )
 
 
-def run_chat(messages: List[ChatMessage], backend: str = "gpt2") -> Dict:
+def _context_prompt(context: Dict, question: str) -> str:
+    """Instruções + dados recolhidos, para fornecedores externos responderem com contexto."""
+    blocks: List[str] = [
+        "És o assistente financeiro do IQ OS (plataforma portuguesa de mercados, contratos públicos "
+        "e inteligência financeira). Responde em português de Portugal, de forma objectiva e "
+        "fundamentada, usando os dados fornecidos abaixo quando forem relevantes. Se não houver "
+        "dados suficientes, di-lo com clareza em vez de inventar números.",
+    ]
+    if context.get("sources"):
+        lines = []
+        for source in context["sources"]:
+            label = getattr(source, "title", None) or getattr(source, "name", None) or str(source)
+            lines.append(f"- {label}")
+        blocks.append("Fontes consultadas:\n" + "\n".join(lines))
+    if context.get("tools"):
+        lines = []
+        for tool in context["tools"]:
+            name = getattr(tool, "name", "ferramenta")
+            output = getattr(tool, "output", "") or ""
+            lines.append(f"- {name}: {str(output)[:1200]}")
+        blocks.append("Dados recolhidos pelas ferramentas:\n" + "\n".join(lines))
+    blocks.append(f"Pergunta do utilizador: {question}")
+    return "\n\n".join(blocks)
+
+
+def _cloud_request(
+    messages: List[ChatMessage],
+    backend: str,
+    *,
+    user_id: Optional[str] = None,
+    user_email: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Prepara o pedido a um fornecedor externo (contexto + chave resolvida)."""
+    parsed = providers.parse_backend(backend)
+    provider = parsed.get("provider")
+    model = parsed.get("model") or ""
+    spec = parsed.get("spec") or {}
+    if not provider or not spec:
+        raise cloud_chat.CloudError(parsed.get("error") or "Fornecedor desconhecido.")
+
+    api_key, key_source = providers.resolve_key(user_id, provider)
+    if not api_key and not spec.get("key_optional"):
+        raise cloud_chat.CloudError(
+            f"O fornecedor {spec.get('label') or provider} ainda não tem chave de API. "
+            "Configure-a em Definições → Fornecedores de IA."
+        )
+
+    question = messages[-1].content if messages else ""
+    context = build_context(question)
+
+    # O contexto financeiro vai no `system`; a conversa mantém-se como veio do chat.
+    system = _context_prompt(context, question)
+    conversation: List[Dict[str, str]] = []
+    for message in messages:
+        role = "assistant" if getattr(message, "role", "user") == "assistant" else "user"
+        conversation.append({"role": role, "content": str(message.content)})
+
+    return {
+        "provider": provider,
+        "spec": spec,
+        "model": model,
+        "api_key": api_key or "",
+        "key_source": key_source,
+        "system": system,
+        "conversation": conversation,
+        "context": context,
+        "user_email": user_email,
+    }
+
+
+def run_chat(messages: List[ChatMessage], backend: str = "gpt2", *, user_id: Optional[str] = None, user_email: Optional[str] = None) -> Dict:
     """Executa o agente síncrono e devolve resposta completa."""
+    parsed = providers.parse_backend(backend)
+    if parsed["kind"] == "cloud":
+        try:
+            request = _cloud_request(messages, backend, user_id=user_id, user_email=user_email)
+        except cloud_chat.CloudError as error:
+            events.log_event(
+                "warning",
+                "providers",
+                f"Pedido recusado ({backend}): {error.message}",
+                user_id=user_id,
+                user_email=user_email,
+                data={"backend": backend},
+            )
+            return {
+                "message": ChatMessage(role="assistant", content=f"⚠️ {error.message}"),
+                "sources": [],
+                "tools": [],
+                "model": backend,
+            }
+        try:
+            answer = asyncio.run(
+                cloud_chat.complete_answer(
+                    provider=request["provider"],
+                    spec=request["spec"],
+                    model=request["model"],
+                    messages=[{"role": "system", "content": request["system"]}, *request["conversation"]],
+                    api_key=request["api_key"],
+                    max_tokens=1024,
+                )
+            )
+        except cloud_chat.CloudError as error:
+            events.log_event(
+                "error",
+                "providers",
+                f"Falha no chat com {request['provider']}/{request['model']}: {error.message}",
+                user_id=user_id,
+                user_email=user_email,
+                data={"provider": request["provider"], "model": request["model"], "status": error.status},
+            )
+            answer = f"⚠️ {error.message}"
+        events.log_event(
+            "info",
+            "providers",
+            f"Chat via {request['provider']}/{request['model']} ({len(answer)} caracteres)",
+            user_id=user_id,
+            user_email=user_email,
+            data={"provider": request["provider"], "model": request["model"], "key_source": request["key_source"]},
+        )
+        return {
+            "message": ChatMessage(role="assistant", content=answer),
+            "sources": request["context"]["sources"],
+            "tools": request["context"]["tools"],
+            "model": f"{request['provider']}:{request['model']}",
+        }
+
     question = messages[-1].content if messages else ""
     context = build_context(question)
     answer = generate_answer(context, backend=backend)
@@ -356,18 +482,87 @@ def run_chat(messages: List[ChatMessage], backend: str = "gpt2") -> Dict:
         "message": ChatMessage(role="assistant", content=answer),
         "sources": context["sources"],
         "tools": context["tools"],
+        "model": f"finance-llm-{backend}",
     }
 
 
-async def stream_chat(messages: List[ChatMessage], backend: str = "gpt2") -> AsyncIterator[str]:
-    """Gera a resposta token a token (simulação de streaming).
+async def stream_chat(
+    messages: List[ChatMessage],
+    backend: str = "gpt2",
+    *,
+    user_id: Optional[str] = None,
+    user_email: Optional[str] = None,
+) -> AsyncIterator[str]:
+    """Gera a resposta token a token.
 
-    Envia imediatamente um evento de progresso para manter a ligação SSE viva,
-    depois executa a recolha de dados num thread separado. Assim o browser não
-    aborta o pedido enquanto o yfinance trabalha.
+    Modelos locais: envia um evento de progresso, recolhe os dados num thread
+    separado e simula o streaming. Fornecedores externos: transmite os pedaços
+    reais devolvidos pela API do fornecedor.
     """
+    parsed = providers.parse_backend(backend)
+
     # 1) Ligar a stream imediatamente.
     yield ":keep-alive\n\n"
+
+    if parsed["kind"] == "cloud":
+        yield "event: status\ndata: " + json.dumps({"status": "busy", "detail": "A contactar o fornecedor…"}) + "\n\n"
+        try:
+            request = _cloud_request(messages, backend, user_id=user_id, user_email=user_email)
+        except cloud_chat.CloudError as error:
+            yield "event: error\ndata: " + json.dumps({"message": error.message}) + "\n\n"
+            text = f"⚠️ {error.message}"
+            for token in re.split(r"(\s+)", text):
+                if token:
+                    yield f"data: {json.dumps({'token': token})}\n\n"
+            yield "event: done\ndata: " + json.dumps({"sources": [], "tools": []}) + "\n\n"
+            return
+
+        yield "event: meta\ndata: " + json.dumps(
+            {"model": f"{request['provider']}:{request['model']}", "provider": request["provider"]}
+        ) + "\n\n"
+        yield "event: status\ndata: " + json.dumps({"status": "busy", "detail": "A gerar a resposta…"}) + "\n\n"
+
+        collected: List[str] = []
+        try:
+            async for chunk in cloud_chat.stream_answer(
+                provider=request["provider"],
+                spec=request["spec"],
+                model=request["model"],
+                messages=[{"role": "system", "content": request["system"]}, *request["conversation"]],
+                api_key=request["api_key"],
+                max_tokens=1024,
+            ):
+                collected.append(chunk)
+                yield f"data: {json.dumps({'token': chunk})}\n\n"
+        except cloud_chat.CloudError as error:
+            events.log_event(
+                "error",
+                "providers",
+                f"Falha no streaming com {request['provider']}/{request['model']}: {error.message}",
+                user_id=user_id,
+                user_email=user_email,
+                data={"provider": request["provider"], "model": request["model"], "status": error.status},
+            )
+            fallback = f"⚠️ {error.message}"
+            collected.append(fallback)
+            yield f"data: {json.dumps({'token': fallback})}\n\n"
+
+        events.log_event(
+            "info",
+            "providers",
+            f"Resposta de {request['provider']}/{request['model']} ({sum(len(part) for part in collected)} caracteres)",
+            user_id=user_id,
+            user_email=user_email,
+            data={"provider": request["provider"], "model": request["model"], "key_source": request["key_source"]},
+        )
+        yield "event: done\ndata: " + json.dumps(
+            {
+                "sources": [source.model_dump() for source in request["context"]["sources"]],
+                "tools": [tool.model_dump() for tool in request["context"]["tools"]],
+            }
+        ) + "\n\n"
+        return
+
     yield "event: status\ndata: " + json.dumps({"status": "busy", "detail": "A recolher dados financeiros..."}) + "\n\n"
 
     loop = asyncio.get_running_loop()

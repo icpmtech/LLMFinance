@@ -300,7 +300,7 @@ def train_model(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Treina o modelo Mistral Finance-LLM")
+    parser = argparse.ArgumentParser(description="Treina o modelo Mistral do IQ OS")
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--batch_size", type=int, default=4)
     parser.add_argument("--max_length", type=int, default=128)

@@ -1,6 +1,7 @@
 import { Send, Loader2 } from "lucide-react";
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { ModelBackend } from "../types";
+import { buildChatOptions, useProviders } from "../providers";
 
 interface ChatInputProps {
   onSend: (text: string) => void;
@@ -11,6 +12,30 @@ interface ChatInputProps {
 
 export function ChatInput({ onSend, loading, backend = "gpt2", onBackendChange }: ChatInputProps) {
   const [text, setText] = useState("");
+  const { catalog } = useProviders();
+
+  /* Modelos locais + fornecedores externos, agrupados no selector. */
+  const options = useMemo(() => buildChatOptions(catalog), [catalog]);
+  const groups = useMemo(() => {
+    const map = new Map<string, typeof options>();
+    for (const option of options) {
+      const list = map.get(option.group) ?? [];
+      list.push(option);
+      map.set(option.group, list);
+    }
+    return [...map.entries()];
+  }, [options]);
+
+  const current = options.find((option) => option.id === backend);
+  const currentUsable = current ? current.usable : true;
+
+  useEffect(() => {
+    // Se o backend escolhido deixou de estar utilizável (sem chave), volta ao primeiro que funciona.
+    if (options.length === 0 || currentUsable) return;
+    const fallback = options.find((option) => option.usable);
+    if (fallback) onBackendChange?.(fallback.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUsable, options.length]);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -35,12 +60,21 @@ export function ChatInput({ onSend, loading, backend = "gpt2", onBackendChange }
           value={backend}
           onChange={(e) => onBackendChange?.(e.target.value as ModelBackend)}
           disabled={loading}
-          className="text-xs bg-muted rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-primary/50"
+          className="text-xs bg-muted rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-primary/50 max-w-[360px]"
+          title="Modelos locais da plataforma ou fornecedores externos (chaves em Definições → Fornecedores de IA)"
         >
-          <option value="gpt2">GPT-2 Finance</option>
-          <option value="mistral">Mistral Finance</option>
-          <option value="bloomberg">BloombergGPT-style (RAG)</option>
+          {groups.map(([group, items]) => (
+            <optgroup key={group} label={group}>
+              {items.map((option) => (
+                <option key={option.id} value={option.id} disabled={!option.usable}>
+                  {option.label}
+                  {option.usable ? "" : " — sem chave"}
+                </option>
+              ))}
+            </optgroup>
+          ))}
         </select>
+        {current?.note && <span className="text-[11px] text-muted-foreground truncate">{current.note}</span>}
       </div>
       <div className="max-w-4xl mx-auto relative">
         <textarea
@@ -61,7 +95,7 @@ export function ChatInput({ onSend, loading, backend = "gpt2", onBackendChange }
         </button>
       </div>
       <p className="text-center text-xs text-muted-foreground mt-2">
-        O FinanceLLM pode cometer erros. Verifica dados críticos antes de investir.
+        O IQ OS pode cometer erros. Verifica dados críticos antes de investir.
       </p>
     </form>
   );

@@ -1,0 +1,122 @@
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+INFO:     127.0.0.1:52509 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61408 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61408 - "GET /proxy/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61020 - "GET /proxy?url=https%3A%2F%2Ffinance.yahoo.com%2Fquote%2FEDP.LS%2F HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61020 - "GET /proxy?url=https%3A%2F%2Flite.duckduckgo.com%2Flite%2F%3Fq%3Dedp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61020 - "GET /proxy?url=https%3A%2F%2Fwww.ine.pt%2Fxportal%2Fxmain%3Fxpgid%3Dine_main%26xpid%3DINE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61033 - "GET /proxy?url=https%3A%2F%2Fwww.ine.pt%2Fxportal%2Fxmain%3Fxpgid%3Dine_main%26xpid%3DINE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61036 - "GET /proxy?url=https%3A%2F%2Fwww.ine.pt%2Fxportal%2Fxmain%3Fxpgid%3Dine_main%26xpid%3DINE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61038 - "GET /proxy?url=https%3A%2F%2Fwww.base.gov.pt%2FBase4%2Fpt%2F HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61055 - "GET /proxy?url=http%3A%2F%2F%2Fx HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:61055 - "GET /proxy?url=http%3A%2F%2F127.0.0.1%3A9200%2F_cluster%2Fhealth HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:61055 - "GET /proxy?url=http%3A%2F%2F10.1.2.3%2F HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:61055 - "GET /proxy?url=file%3A%2F%2F%2FC%3A%2FWindows%2Fwin.ini HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:61055 - "GET /proxy?url=http%3A%2F%2F169.254.169.254%2Flatest%2Fmeta-data%2F HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:61055 - "GET /proxy?url=javascript%3Aalert(1) HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:61055 - "GET /proxy?url=http%3A%2F%2F127.0.0.1%3A9200%2F_cluster%2Fhealth HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:57731 - "GET /proxy?url=http%3A%2F%2F127.0.0.1%3A9200%2F_cluster%2Fhealth HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:57733 - "GET /proxy?url=http%3A%2F%2F10.1.2.3%2F HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:57735 - "GET /proxy?url=http%3A%2F%2F169.254.169.254%2Flatest%2Fmeta-data%2F HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:57738 - "GET /proxy?url=file%3A%2F%2F%2FC%3A%2FWindows%2Fwin.ini HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:58180 - "POST /auth/register HTTP/1.1" 201 Created
+INFO:     127.0.0.1:50460 - "OPTIONS /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50460 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54689 - "GET /proxy?url=https%3A%2F%2Fwww.base.gov.pt%2FBase4%2Fpt%2F HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64389 - "GET /proxy?url=https%3A%2F%2Fwww.base.gov.pt%2FBase4%2Fpt%2F HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56578 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59505 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58242 - "OPTIONS /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58242 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54147 - "GET /proxy?url=https%3A%2F%2Fwww.base.gov.pt%2FBase4%2Fpt%2F HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57378 - "GET /proxy?url=https%3A%2F%2Flite.duckduckgo.com%2Flite%2F%3Fq%3Dcontratos%2520publicos%2520edp%25202025 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54529 - "GET /proxy?url=https%3A%2F%2Fduckduckgo.com%2Fl%2F%3Fuddg%3Dhttps%253A%252F%252Fcontratopublico.pt%252F%26rut%3D1d2ae979d37c4b04f2c38f2b367db0dd25b5055c4c68a48d0350aaa4ef36fe9e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59596 - "GET /proxy?url=https%3A%2F%2Fgoogle.com HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53858 - "GET /shared_dict/homepage/fe70360bfcf08da29a713b1f0f2a818d6c1a2d6bbf120be069148820bc48f31b.dict HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52001 - "GET /proxy?url=https%3A%2F%2Fduckduckgo.com%2Fl%2F%3Fuddg%3Dhttps%253A%252F%252Fcontratopublico.pt%252F%26rut%3D1d2ae979d37c4b04f2c38f2b367db0dd25b5055c4c68a48d0350aaa4ef36fe9e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52001 - "GET /proxy?url=https%3A%2F%2Fduckduckgo.com%2Fl%2F%3Fuddg%3Dhttps%253A%252F%252Fcontratopublico.pt%252F%26rut%3D1d2ae979d37c4b04f2c38f2b367db0dd25b5055c4c68a48d0350aaa4ef36fe9e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52001 - "GET /proxy?url=https%3A%2F%2Flite.duckduckgo.com%2Flite%2F%3Fq%3Dcontratos%2520publicos%2520edp%25202025 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52381 - "GET /proxy?url=https%3A%2F%2Fduckduckgo.com%2Fl%2F%3Fuddg%3Dhttps%253A%252F%252Fcontratopublico.pt%252F%26rut%3D1d2ae979d37c4b04f2c38f2b367db0dd25b5055c4c68a48d0350aaa4ef36fe9e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56480 - "GET /proxy?url=https%3A%2F%2Fwww.base.gov.pt%2FBase4%2Fpt%2F HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59052 - "GET /proxy?url=https%3A%2F%2Fgoogle.com HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56918 - "GET /shared_dict/homepage/fe70360bfcf08da29a713b1f0f2a818d6c1a2d6bbf120be069148820bc48f31b.dict HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64992 - "GET /proxy?url=https%3A%2F%2Flite.duckduckgo.com%2Flite%2F%3Fq%3Dcontratos%2520publicos%2520edp%25202025 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63938 - "GET /proxy?url=https%3A%2F%2Fduckduckgo.com%2Fl%2F%3Fuddg%3Dhttps%253A%252F%252Fcontratopublico.pt%252F%26rut%3D1d2ae979d37c4b04f2c38f2b367db0dd25b5055c4c68a48d0350aaa4ef36fe9e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63575 - "GET /proxy?url=https%3A%2F%2Fwww.base.gov.pt%2FBase4%2Fpt%2F HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53858 - "GET /proxy?url=https%3A%2F%2Flite.duckduckgo.com%2Flite%2F%3Fq%3Dgemini HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53858 - "GET /proxy?url=https%3A%2F%2Fwww.base.gov.pt%2FBase4%2Fpt%2F HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=Tk-savu4JL6Di-gP2-XFmQ4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=T0-saufSCtKmi-gP9fi68AM HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=T0-sapucMtKvi-gPz5Db6Ac HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=UE-saqb6HOuri-gPlPzhiAk HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=UU-sauvkCoDoi-gP-aLQ8Qg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=UU-saqSHMJKii-gP_pSzwQo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=Uk-satOeGcC2i-gP5rmnoQo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=U0-saviaDPLsi-gPtozQOQ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=U0-satHUM6e4i-gPg9uQwQM HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=VE-saon-Lc2xi-gP6uyXoAM HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=VU-sarziF9-K9u8PyrnPoQg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=Vk-saoBQxo353w-_8MPwDA HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=Vk-sasaVJdqyi-gP9drk6Ag HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=V0-sau3TCrmIi-gP9O_X6Q0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=V0-sarDAMq65i-gPhKXQqQo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=WE-sasGYHLLM-d8PxOn28Ao HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=WU-sarbWCPChi-gPgb-I0A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=WU-saoSxLYKI-d8PtISIqQY HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=Wk-sapuIFq6Ri-gP8b-02Q0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=Wk-saprrObCai-gP_4bViQ8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=W0-saqClJPHKi-gP15nOoAw HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58899 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=XE-sapSjCrGIi-gP5vOpuAU HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=XU-sap6jE8GK9u8P1NumgAw HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=XU-saoq8MuyF9u8P-Ois6AY HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=Xk-satCkFKyG9u8P66HK4AE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=Xk-saoWxMveK9u8PjIresAQ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=X0-sao6TFMKH9u8Pucbg2QU HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=X0-sauTkM-SM9u8Pv5HogA8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=YE-saqO_FOSM9u8Pv5HogA8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=YE-saoDQNaKo9u8P2_6dwQM HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=YU-saoXmGM787_UP4Yyb4AY HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=YU-saqv3OZWG9u8P6q6j4AI HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=Y0-sauqAIbOH9u8P5sjl0A0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=ZE-sasCoBpzt7_UPzqeCyQE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=ZE-savmlKp_p7_UPxKbXsQw HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=ZU-saoCTDNOai-gPwY7fkA8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=ZU-saojKLNGD9u8P1tHpqQc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=Zk-savKrDtSD9u8P_uLpqQY HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=Zk-sas2XLtLNi-gPidH9gAM HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=Z0-sasOYD8KXi-gP-M2MiQU HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=Z0-sarHSLb2pi-gP0aSGoQ0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=aE-sasb3FouJ9u8P7tHU4AY HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=aE-sariEN9Dh7_UPstaruQU HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=aU-savCeGNi6i-gP4sWAyA0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=aU-satrkOt7t7_UPxoHM2QU HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=ak-saq-hHc2N9u8P1cXiCA HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=ak-sasWvPKGXi-gPvfnAkAM HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=a0-sas6VIdnJi-gPjNyJ2Qw HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=bE-satmmBLPo7_UPq9KwwQ4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=bE-sapCGJ7LKi-gPq8nRmQc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=bU-sapzzDJj-7_UP9OSOoQQ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=bU-sau6tL56B9u8PrIij8Ac HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=bk-sauOeF6n97_UPrIituQI HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=bk-sapzgOPCai-gPjov1sQ0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=b0-saprYGtKN9u8PseTb6AI HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=b0-sav3lO8uri-gP7vTHsAo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=cE-sauS-HOzzi-gPobnIgAI HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=cU-sapcBqI327w-3mdD5Ag HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=cU-saoidIc-K9u8PoM7QuQY HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=ck-sarKKBfmdi-gPtNqcgA0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=ck-sauPhLuzoi-gPx7W90A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=c0-sasGvD92E9u8Ph4e62QQ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=c0-sauO5Lc-59u8P95rkyQM HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=dE-saoHlEObh7_UPprba6Qo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=dE-sauHGL6-P9u8P3MT90AM HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=dU-sauOBFNeBi-gP_sTG4A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /proxy?url=https%3A%2F%2Fwww.google.com%2Fsearch%3Fq%3Dgemini&sei=dU-savm1Nc6Ni-gP862g6A4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56903 - "GET /proxy?url=https%3A%2F%2Fwww.bportugal.pt%2F HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56903 - "GET /node/49321/alert HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56185 - "GET /proxy?url=https%3A%2F%2Fgoogle.com HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55186 - "GET /shared_dict/homepage/fe70360bfcf08da29a713b1f0f2a818d6c1a2d6bbf120be069148820bc48f31b.dict HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50487 - "GET /auth/me HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:54163 - "GET /health HTTP/1.1" 200 OK

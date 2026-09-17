@@ -1,5 +1,5 @@
 /**
- * Terminal: executa o CLI do FinanceLLM a partir da interface.
+ * Terminal: executa o CLI do IQ OS a partir da interface.
  *
  * Envia a linha de comando para `POST /cli/run`, que corre o CLI num
  * subprocesso com a sessão do utilizador autenticado, e mostra o resultado

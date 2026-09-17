@@ -6,8 +6,11 @@
  * `finance_sessions`. Alterar a palavra-passe revoga as outras sessões.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ProvidersSettings } from "../components/ProvidersSettings";
+import { InstallAppSettings } from "../components/InstallAppSettings";
 import {
   AlertCircle,
+  AppWindow,
   Building2,
   CalendarClock,
   Check,
@@ -33,7 +36,7 @@ import {
 import { useAuth } from "../auth";
 import type { AuthSession, AuthUser } from "../authApi";
 import { updateDockPrefs } from "../dock";
-import { setSidebarHidden } from "../layout";
+import { setSidebarHidden, useWindowMode } from "../layout";
 
 const VIEW_OPTIONS: { value: string; label: string }[] = [
   { value: "dashboard", label: "Dashboard" },
@@ -88,6 +91,7 @@ export default function SettingsPage() {
   const [dangerMessage, setDangerMessage] = useState<string | null>(null);
 
   const preferences = (user?.preferences || {}) as Record<string, unknown>;
+  const { windowMode, setWindowMode } = useWindowMode();
 
   useEffect(() => {
     if (!user) return;
@@ -150,6 +154,7 @@ export default function SettingsPage() {
       if ("dock_position" in patch) {
         updateDockPrefs({ position: patch.dock_position as "bottom" | "left" | "right" });
       }
+      if (typeof patch.window_mode === "boolean") setWindowMode(patch.window_mode);
     } catch (error) {
       setProfileMessage({ kind: "error", text: error instanceof Error ? error.message : "Erro ao guardar preferência." });
     }
@@ -256,7 +261,7 @@ export default function SettingsPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <TextInput label="Nome completo" value={profile.name} onChange={(value) => setProfile((p) => ({ ...p, name: value }))} icon={<User size={14} />} />
           <TextInput label="Cargo" value={profile.title} onChange={(value) => setProfile((p) => ({ ...p, title: value }))} icon={<Sparkles size={14} />} placeholder="Ex.: Analista de risco" />
-          <TextInput label="Organização" value={profile.organization} onChange={(value) => setProfile((p) => ({ ...p, organization: value }))} icon={<Building2 size={14} />} placeholder="Ex.: FinanceLLM" />
+          <TextInput label="Organização" value={profile.organization} onChange={(value) => setProfile((p) => ({ ...p, organization: value }))} icon={<Building2 size={14} />} placeholder="Ex.: IQ OS" />
           <TextInput label="Telefone" value={profile.phone} onChange={(value) => setProfile((p) => ({ ...p, phone: value }))} icon={<Phone size={14} />} placeholder="+351 …" />
           <SelectInput
             label="Idioma"
@@ -300,6 +305,13 @@ export default function SettingsPage() {
           />
         </div>
         <div className="mt-4 space-y-3">
+          <ToggleRow
+            label="Modo janelas"
+            hint="Cada página abre numa janela flutuante (mover, redimensionar, minimizar, encaixar) em vez de ocupar todo o ecrã."
+            icon={<AppWindow size={14} />}
+            checked={windowMode}
+            onChange={(value) => void savePreference({ window_mode: value })}
+          />
           <ToggleRow
             label="Esconder a barra lateral"
             hint="Pode alternar a qualquer momento com Ctrl+B ou pela pega lateral."
@@ -414,6 +426,12 @@ export default function SettingsPage() {
         )}
       </Card>
 
+      {/* Fornecedores de IA */}
+      <ProvidersSettings />
+
+      {/* Aplicação (instalação/offline) */}
+      <InstallAppSettings />
+
       {/* Conta */}
       <Card title="Informação da conta" icon={<ShieldCheck size={15} className="text-teal-300" />}>
         <dl className="grid gap-4 text-sm sm:grid-cols-3">
@@ -434,8 +452,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Zona de perigo */}
-      <Card title="Zona de perigo" icon={<ShieldAlert size={15} className="text-rose-300" />} tone="danger">
-        {dangerMessage && <Banner kind="error" text={dangerMessage} />}
+      <Card title="Zona de perigo" icon={<ShieldAlert size={15} className="text-rose-300" />} tone="danger">        {dangerMessage && <Banner kind="error" text={dangerMessage} />}
         <p className="text-xs leading-relaxed text-muted-foreground">
           Apagar a conta remove o utilizador e todas as sessões do Elasticsearch. Esta ação não pode ser revertida.
         </p>
