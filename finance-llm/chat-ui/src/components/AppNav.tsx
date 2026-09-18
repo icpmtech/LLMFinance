@@ -63,6 +63,13 @@ export type AppView =
   | "scraper-execucoes"
   | "scraper-pesquisa"
   | "scraper-agenda"
+  | "search360"
+  | "search360-dossie"
+  | "search360-projetos"
+  | "search360-grafo"
+  | "search360-biblioteca"
+  | "office"
+  | "office-dossies"
   | "import"
   | "settings"
   | "admin"
@@ -101,6 +108,8 @@ const APP_MATCH: Record<string, AppView[]> = {
   tickers: ["ticker-detail", "ticker-chart"],
   crm: ["crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard"],
   scraper: ["scraper-execucoes", "scraper-pesquisa", "scraper-agenda"],
+  search360: ["search360-dossie", "search360-projetos", "search360-grafo", "search360-biblioteca"],
+  office: ["office-dossies"],
 };
 
 function appItem(app: DockApp): NavItem {

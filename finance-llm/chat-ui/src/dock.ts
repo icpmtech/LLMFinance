@@ -13,6 +13,7 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
+  BookOpen,
   Boxes,
   Briefcase,
   Building2,
@@ -34,6 +35,7 @@ import {
   ShieldCheck,
   Sparkles,
   Target,
+  Telescope,
   TerminalSquare,
   TrendingUp,
   Upload,
@@ -79,6 +81,22 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: Boxes,
     gradient: "from-teal-200 via-cyan-500 to-indigo-700",
     accent: "20,184,166",
+  },
+  {
+    id: "search360",
+    label: "Pesquisa 360",
+    hint: "Meta-modelo de pesquisa: plataforma, enciclopédia, dados abertos e IA",
+    icon: Telescope,
+    gradient: "from-sky-200 via-indigo-500 to-violet-700",
+    accent: "99,102,241",
+  },
+  {
+    id: "office",
+    label: "Office",
+    hint: "Ler e escrever conteúdos em Markdown: notas, relatórios e dossiês",
+    icon: BookOpen,
+    gradient: "from-teal-200 via-sky-500 to-indigo-700",
+    accent: "14,165,233",
   },
   {
     id: "crm",
@@ -303,6 +321,8 @@ const DEFAULT_ITEMS = [
   "finder",
   "chat",
   "browser",
+  "search360",
+  "office",
   "empresas-iq",
   "crm",
   "dashboard",

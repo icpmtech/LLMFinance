@@ -270,6 +270,14 @@ página numa dessas rotas devolvia `{"detail":"Not Found"}`.
   (adjudicantes/adjudicatários) ou contratos, com valores, analítica por ano e CPV em comum.
 - **Gráfico Tempo Real** (`/chart`, `/tickers/<T>/grafico`) — cotações em tempo real com o
   *Advanced Real-Time Chart* da TradingView (ver abaixo).
+- **Ontologia** (`/ontology`) — a camada semântica: tipos de objeto, propriedades, ligações,
+  ações, explorador de objetos e o painel de IA que mostra (e valida) o grounding das respostas.
+- **Pesquisa 360** (`/search360`) — meta-modelo de analítica e exploração: federa a plataforma
+  com a Wikipédia, Wikidata, dados abertos, investigação e web, e organiza tudo em busca
+  federada, dossiê com citações, grafo de exploração e biblioteca de pastas/ficheiros (ver abaixo).
+- **Office IQ OS** (`/office`) — leitura e escrita de conteúdos em **Markdown** (notas, relatórios,
+  atas, páginas e os dossiês da Pesquisa 360), com pastas, pesquisa, duplicação, exportação
+  `.md`/`.html` e leitura com tipografia própria (ver abaixo).
 - **Browser** (`/browser`) — navegador dentro da plataforma: separadores, favoritos, histórico,
   atalhos para páginas do IQ OS e fontes de mercado e integração com a pesquisa global (ver abaixo).
 - **Administração** (`/admin`) — sistema, utilizadores, eventos e logs; visível apenas a contas
@@ -368,6 +376,51 @@ Aplicação **Finder** (`/finder`), no dock e no menu de aplicações: os dado
 - **Barra de caminho e de estado** com contagem de itens, registos e valor total; **exportar CSV**
   da lista atual; pesquisa por local (usa a API: contratos, entidades, documentos, tickers).
 - Atalhos: `/` pesquisa, setas navegam, Espaço Quick Look, Esc fecha, Retrocesso volta atrás.
+
+### Office IQ OS (ler e escrever conteúdos)
+
+Aplicação **Office IQ OS** (`/office`): o sítio onde o trabalho fica escrito. Lê e escreve
+**Markdown** — notas, relatórios, atas, páginas e os **dossiês da Pesquisa 360** — numa estante com
+pastas, etiquetas, pesquisa, duplicação e exportação.
+
+- **Escrita**: barra de ferramentas (títulos, negrito, itálico, listas, citação, código, ligação,
+  tabela, separador), Tab para indentar, `Ctrl/Cmd+S` para gravar e **gravação automática** enquanto
+  se escreve; contagem de palavras, caracteres, linhas e tempo de leitura.
+- **Três modos**: *escrever*, *dividido* (escrita e leitura em direto) e *ler*, com índice gerado a
+  partir dos títulos.
+- **Modelos**: nota, relatório (sumário, contexto, análise, dados, riscos, próximos passos), ata
+  (ordem de trabalhos, decisões, ações) e página em branco.
+- **Dossiês 360**: em *Dossiês 360* escolhe-se um dossiê guardado e «trazer para o Office» cria (ou
+  **atualiza**, se já existir) um documento editável com a síntese, os indicadores e as fontes; a
+  origem fica registada no documento (`source.type = "dossier360"`) e «criar cópia» permite comparar
+  versões (a cópia recebe um id próprio, ex.: `qa_dossie_energia_2`, nunca sobrepõe o original).
+- **Exportar**: `.md` com cabeçalho YAML (título, autor, etiquetas) ou `.html` pronto a imprimir.
+
+Sub-rotas: `/office` (documentos) e `/office/dossies` (dossiês 360). A partir da **Pesquisa 360**,
+«Office» no cartão de um dossiê guardado traz o dossiê para o Office e abre a aplicação — em **modo
+janelas** na janela flutuante do Office e em **modo página** navegando para `/office` com o
+documento já aberto (chave `finance-llm-office-doc`).
+
+Endpoints (`api/office_routes.py`; ler é aberto, escrever exige sessão):
+
+- `GET  /office/documents?folder_id=&q=&kind=&tag=` — lista com pastas e panorama
+- `POST /office/documents` · `PATCH /office/documents/{id}` · `DELETE` · `POST …/duplicate`
+- `GET  /office/documents/{id}` · `GET /office/documents/{id}/export?format=md|html`
+- `POST /office/documents/from-dossier/{dossier_id}` — traz um dossiê 360 para edição
+- `GET  /office/dossiers/available` — dossiês guardados, com o documento ligado (se existir)
+- `GET|POST /office/folders…` · `GET /office/stats`
+
+Os documentos são Markdown em `data/office/office.json` (escrita atómica, o ficheiro é a fonte de
+verdade e pode ser versionado). Uma alteração parcial — por exemplo mudar só o título — **não** toca
+no texto: é preciso enviar `markdown` (ou `content`). Um `title` vazio numa alteração parcial também
+nunca apaga o título existente.
+
+### Browser (módulo independente)
+
+O **Browser** (`/browser`) é uma aplicação independente: tem o seu próprio estado (separadores,
+histórico, favoritos, motor de pesquisa) e **nenhuma outra aplicação depende dela** — `browser.ts` só
+e `BrowserPage.tsx` o usam. As ligações nas restantes aplicações abrem no browser do sistema. Para
+navegar dentro do IQ OS, abre-se o Browser pelo dock.
 
 ### Gráfico Tempo Real (TradingView)
 
@@ -713,6 +766,127 @@ Escrita (requer sessão; apagar/repor exige papel `admin`):
 Os tipos ligados ao CRM (`finance_crm`) exigem sessão: cada utilizador só vê os seus
 registos (os administradores veem os da equipa); sem sessão ficam de fora dos
 resultados e do grounding da IA.
+
+#### Construir ontologias, fontes, projetos e fichas
+
+A ontologia deixou de ser uma só: o catálogo vive em `data/ontology/index.json` e
+cada ontologia tem o seu ficheiro (`data/ontology/<id>.json`, sendo a base em
+`ontology.json`). Uma ontologia nova nasce **vazia** (ou como cópia da base) e é
+construída com os dados reais da plataforma. Qualquer pedido `/ontology/*` aceita
+`?ontology=<id>` para trabalhar noutra ontologia (sem o parâmetro, usa-se a base).
+
+Como o metamodelo continua a ser o mesmo, os tipos novos usam os mesmos
+`bindings`, com uma novidade: `binding.source` liga um tipo a uma **fonte de
+dados** registada na ontologia, o que permite trazer um índice novo sem tocar no
+registo base.
+
+Fontes de dados (`api/ontology_sources.py`): `elasticsearch` (índice: documentos,
+*mapping* real e exemplos de valores por campo), `rest` (endpoint JSON: estado,
+forma da resposta, campos), `file` (JSON/CSV local) e `derived`.
+
+- `GET/POST/DELETE /ontology/sources…` — catálogo de fontes da ontologia
+- `POST /ontology/sources/{id}/probe` — diagnóstico real (índice, campos, exemplos)
+- `POST /ontology/sources/{id}/infer` — gera o tipo de objeto a partir dos campos
+  reais (com `apply: true` grava-o já ligado à fonte)
+- `GET/POST /ontology/ontologies…` — catálogo, criação, metadados e remoção
+- `GET/POST/PATCH/DELETE /ontology/projects…` — projetos (áreas de trabalho)
+- `GET/POST/PATCH/DELETE /ontology/dossiers…` — fichas de análise
+- `POST /ontology/dossiers/{id}/facts` — factos verificados do assunto da ficha
+- `POST /ontology/dossiers/{id}/draft` — redige a secção (IA ou resumo factual)
+- `POST /ontology/graph/explore` — grafo de **objetos reais** a partir de um nó
+  (em largura, com orçamento de nós/profundidade), distinto do grafo de tipos
+
+IA para desenhar a ontologia (`api/ontology_ai.py`) — com um fornecedor
+configurado o modelo lê o diagnóstico real das fontes e devolve tipos,
+propriedades e ligações em JSON; sem modelo, a proposta é inferida dos campos
+reais (e é sempre validada campo a campo antes de ser aceite):
+
+- `POST /ontology/ai/design` — tipo/propriedades/ligações a partir de descrição + fontes
+- `POST /ontology/ai/suggest-links` — ligações que faltam (chaves partilhadas `nif`, `ticker`, …)
+- `POST /ontology/ai/extract` — entidades e metadados a partir de texto livre
+- `POST /ontology/ai/dossier` — ficha a partir de um objeto, com os factos da plataforma
+
+### Pesquisa 360 (meta-modelo de analítica)
+
+Aplicação **Pesquisa 360** (`/search360`): um tema, todas as fontes. É o
+meta-modelo de exploração do IQ OS — federa a plataforma (Elasticsearch +
+ontologia), os documentos e ficheiros, a **Wikipédia** (PT/EN), a **Wikidata**, o
+**Banco Mundial**, o **dados.gov.pt**, a **OpenAlex**, a **Crossref** e a web
+aberta, e devolve o mesmo tipo de resultado para todos: título, resumo, tipo,
+fonte, data, ligação, ícone e pontuação.
+
+Quatro formas de olhar para o mesmo assunto:
+
+- **Busca federada** — resultados em paralelo, com o **plano de pesquisa** à vista
+  (que fontes, porquê, que palavras-chave), facetas por família/tipo/fonte/ano e
+  tempo por fonte;
+- **Dossiê 360** — síntese com citações `[n]`, indicadores quantitativos e o que
+  cada fonte deu (incluindo o que falhou, com o motivo);
+- **Grafo de exploração** — o tema no centro e, em anéis, entidades, artigos,
+  conjuntos de dados, indicadores e documentos; clicar num nó abre a sua ficha e
+  permite investigá-lo como novo tema;
+- **Biblioteca** — o mesmo material em pastas por família de fonte e ficheiros
+  por tipo, com ícone próprio (como no Finder);
+- **Projetos e dossiês guardados** — um **projeto** é uma área de trabalho
+  (ex.: «Transição energética») e um **dossiê guardado** é o retrato de um tema
+  num momento: a pesquisa, o grafo, os indicadores e a síntese, com data, autor,
+  etiquetas e notas. Reabre-se meses depois (as fontes externas mudam, o retrato
+  fica), pode ser **repesquisado** (o anterior fica no histórico) e exporta-se em
+  **Markdown** (com as citações e as fontes) ou **JSON**. Projetos e dossiês
+  vivem na mesma base da Ontologia (`data/ontology/<id>.json`), pelo que também
+  aparecem lá — são a mesma área de trabalho.
+
+As ligações de conteúdo (resultados, evidências citadas, indicadores, ficheiros da
+biblioteca e nós do grafo) abrem no **browser do sistema**, num separador novo: o
+Browser do IQ OS é uma **aplicação independente** (`/browser`, com o seu próprio
+estado) e nenhuma outra aplicação depende dela. Para usar o Browser interno do IQ
+OS, abra-o pelo dock e navegue a partir daí.
+
+Endpoints (`api/search360_routes.py`):
+
+- `GET  /search360/meta` — metamodelo: fontes, famílias, capacidades e índices internos
+- `POST /search360/search` — pesquisa federada (`term`, `sources`, `limit`)
+- `POST /search360/topic` — dossiê completo (itens + biblioteca + grafo + indicadores + síntese)
+- `POST /search360/library` · `POST /search360/graph` · `POST /search360/ai/synthesis`
+- `GET  /search360/suggest?q=` — sugestões a partir das entidades da plataforma
+- `GET  /search360/status` · `POST /search360/cache/clear`
+
+Guardar (requer sessão):
+
+- `GET|POST|DELETE /search360/projects…` — projetos (áreas de trabalho)
+- `GET|POST|PATCH|DELETE /search360/dossiers…` — dossiês guardados
+- `POST /search360/dossiers/{id}/refresh` — repesquisa o tema e guarda o retrato novo
+- `GET  /search360/dossiers/{id}/export?format=md|json` — exportar
+
+Um dossiê guarda o **retrato** (itens truncados a 80, evidências a 30, grafo,
+indicadores, síntese, tempos por fonte e avisos) e não a consulta: reabrir não
+volta a gastar fontes externas. `POST /search360/dossiers` sem `snapshot`
+constrói o dossiê na hora (pesquisa + indicadores + síntese) e guarda-o.
+
+Notas de implementação:
+
+- A pesquisa é federada com `asyncio.gather` e **tempo limite por fonte** (30 s):
+  uma fonte lenta ou em baixo não derruba o resultado — sai em `warnings` com o
+  tempo gasto, e o dossiê mostra “falhou” nessa linha;
+- O plano adapta-se ao tema: um **NIF ou ticker** leva a busca de entidade
+  (plataforma, documentos, Wikipédia, Wikidata) e evita indicadores macro; um
+  tema leva todas as fontes;
+- Os **indicadores** usam um mapa curado de temas comuns (`energia`,
+  `renovável`, `pib`, `inflação`, `desemprego`, `clima`, …) para os códigos do
+  Banco Mundial, o que evita a pesquisa difusa da API (que devolvia indicadores
+  sem série); a série é depois obtida para Portugal (2005–2024) e mostrada com
+  variação absoluta e percentual;
+- Verificar em `data/ontology/*.json` e na cache (`GET /search360/meta`) antes de
+  assumir que uma fonte foi consultada; a cache tem TTL de 10 minutos;
+- Na primeira ligação ao Elasticsearch do processo, o arranque a frio cria
+  índices e mapeamentos (~30 s, uma vez): o servidor aquece as fontes internas no
+  *startup* e a página abre com `GET /search360/meta`, pelo que a primeira
+  pesquisa do utilizador já é rápida.
+
+Fontes que só precisam de chave opcional: a web usa DuckDuckGo (lite) por omissão;
+Brave e SerpAPI são usados se `BRAVE_API_KEY`/`SERPAPI_KEY` estiverem no ambiente.
+A síntese usa os fornecedores configurados em **Definições → Fornecedores de IA**
+e, sem modelo, cai num resumo factual (contagens e títulos, sem interpretação).
 
 ### Autenticação (contas no Elasticsearch)
 

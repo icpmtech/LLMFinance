@@ -46,6 +46,16 @@ import ScraperPage, {
   scraperSectionForView,
   type ScraperSection,
 } from "./pages/ScraperPage";
+import Search360Page, {
+  SEARCH360_SECTION_VIEWS,
+  search360SectionForView,
+  type Search360Section,
+} from "./pages/Search360Page";
+import OfficePage, {
+  OFFICE_SECTION_VIEWS,
+  officeSectionForView,
+  type OfficeSection,
+} from "./pages/OfficePage";
 import FinderPage from "./pages/FinderPage";
 import CompareWindow from "./pages/CompareWindow";
 import { ContractDetailWindow, EntityDetailWindow, QuickLookWindow } from "./components/DetailWindow";
@@ -140,6 +150,13 @@ function pathForView(view: string, company: string | null, ticker: string | null
   if (view === "scraper-execucoes") return "/scraper/execucoes";
   if (view === "scraper-pesquisa") return "/scraper/pesquisa";
   if (view === "scraper-agenda") return "/scraper/agenda";
+  if (view === "search360") return "/search360";
+  if (view === "search360-dossie") return "/search360/dossie";
+  if (view === "search360-projetos") return "/search360/projetos";
+  if (view === "search360-grafo") return "/search360/grafo";
+  if (view === "search360-biblioteca") return "/search360/biblioteca";
+  if (view === "office") return "/office";
+  if (view === "office-dossies") return "/office/dossies";
   if (view === "contracts-list") return "/contracts-list";
   if (view === "company-detail" && company) return `/companies/${company}`;
   return "/";
@@ -173,6 +190,23 @@ function scraperSectionFromPath(path: string): ScraperSection | null {
   if (path === "/scraper/execucoes") return "runs";
   if (path === "/scraper/pesquisa") return "search";
   if (path === "/scraper/agenda") return "schedule";
+  return null;
+}
+
+/** Secção da Pesquisa 360 a partir do caminho do URL (ou `null`). */
+function search360SectionFromPath(path: string): Search360Section | null {
+  if (path === "/search360") return "busca";
+  if (path === "/search360/dossie") return "dossie";
+  if (path === "/search360/projetos") return "projetos";
+  if (path === "/search360/grafo") return "grafo";
+  if (path === "/search360/biblioteca") return "biblioteca";
+  return null;
+}
+
+/** Secção do Office a partir do caminho do URL (ou `null`). */
+function officeSectionFromPath(path: string): OfficeSection | null {
+  if (path === "/office" || path === "/office/documentos") return "documentos";
+  if (path === "/office/dossies") return "dossies";
   return null;
 }
 
@@ -260,6 +294,10 @@ export default function App() {
     {
       const scraperSection = scraperSectionFromPath(path);
       if (scraperSection) return SCRAPER_SECTION_VIEWS[scraperSection] as AppView;
+      const search360Section = search360SectionFromPath(path);
+      if (search360Section) return SEARCH360_SECTION_VIEWS[search360Section] as AppView;
+      const officeSection = officeSectionFromPath(path);
+      if (officeSection) return OFFICE_SECTION_VIEWS[officeSection] as AppView;
     }
     if (path.startsWith("/companies/") && !path.startsWith("/companies/search") && !path.startsWith("/companies/dashboard")) {
       const nif = path.replace("/companies/", "").split("/")[0];
@@ -306,6 +344,8 @@ export default function App() {
       else if (path === "/ontology" || path.startsWith("/ontology/")) next = "ontology";
       else if (crmSectionFromPath(path)) next = CRM_SECTION_VIEWS[crmSectionFromPath(path) as CrmSection] as AppView;
       else if (scraperSectionFromPath(path)) next = SCRAPER_SECTION_VIEWS[scraperSectionFromPath(path) as ScraperSection] as AppView;
+      else if (search360SectionFromPath(path)) next = SEARCH360_SECTION_VIEWS[search360SectionFromPath(path) as Search360Section] as AppView;
+      else if (officeSectionFromPath(path)) next = OFFICE_SECTION_VIEWS[officeSectionFromPath(path) as OfficeSection] as AppView;
       else if (path.startsWith("/companies/")) {
         const nif = path.replace("/companies/", "").split("/")[0];
         if (nif) setSelectedCompany(nif);
@@ -662,6 +702,24 @@ export default function App() {
         <ScraperPage
           section={section}
           onSectionChange={windowMode ? (next) => setViewAndHistory(SCRAPER_SECTION_VIEWS[next] as AppView) : undefined}
+        />
+      );
+    }
+    const search360WindowSection = search360SectionForView(target);
+    if (search360WindowSection) {
+      return (
+        <Search360Page
+          section={search360WindowSection}
+          onSectionChange={windowMode ? (next) => setViewAndHistory(SEARCH360_SECTION_VIEWS[next] as AppView) : undefined}
+        />
+      );
+    }
+    const officeWindowSection = officeSectionForView(target);
+    if (officeWindowSection) {
+      return (
+        <OfficePage
+          section={officeWindowSection}
+          onSectionChange={windowMode ? (next) => setViewAndHistory(OFFICE_SECTION_VIEWS[next] as AppView) : undefined}
         />
       );
     }

@@ -204,6 +204,8 @@ from api.crm_routes import router as crm_router
 from api.ontology_routes import router as ontology_router
 from api.ontology_workspace_routes import router as ontology_workspace_router
 from api.scraper_routes import router as scraper_router
+from api.search360_routes import router as search360_router
+from api.office_routes import router as office_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -238,6 +240,15 @@ async def lifespan(app: FastAPI):
         except Exception:
             pass
     threading.Thread(target=_preload_ontology, daemon=True).start()
+
+    # Pré-aquece o metamodelo de pesquisa 360 (índices internos e documentos):
+    # a primeira pesquisa do utilizador já encontra tudo quente.
+    try:
+        from api import search360_service
+
+        search360_service.warmup()
+    except Exception:
+        pass
 
     # Agendador das recolhas (cron): arranca com as definições guardadas.
     try:
@@ -284,6 +295,8 @@ app.include_router(crm_router)
 app.include_router(ontology_router)
 app.include_router(ontology_workspace_router)
 app.include_router(scraper_router)
+app.include_router(search360_router)
+app.include_router(office_router)
 
 
 # Cache curta de `user_id → email`, para o registo de pedidos identificar quem
@@ -986,6 +999,14 @@ def entities_detail(nif: str):
 @app.get("/scraper/execucoes")
 @app.get("/scraper/pesquisa")
 @app.get("/scraper/agenda")
+@app.get("/search360")
+@app.get("/search360/dossie")
+@app.get("/search360/projetos")
+@app.get("/search360/grafo")
+@app.get("/search360/biblioteca")
+@app.get("/office")
+@app.get("/office/documentos")
+@app.get("/office/dossies")
 @app.get("/search")
 @app.get("/import")
 def serve_spa_page():

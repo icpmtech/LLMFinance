@@ -43,7 +43,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -1570,8 +1570,18 @@ def get_workspace_item(kind: str, item_id: str, ontology_id: Optional[str] = Non
     raise KeyError(f"{WORKSPACE_LABELS.get(kind, kind).capitalize()} {item_id} não encontrada.")
 
 
-def upsert_workspace_item(kind: str, payload: Dict[str, Any], ontology_id: Optional[str] = None) -> Dict[str, Any]:
-    """Cria ou altera uma fonte, projeto ou ficha de análise."""
+def upsert_workspace_item(
+    kind: str,
+    payload: Dict[str, Any],
+    ontology_id: Optional[str] = None,
+    clear: Sequence[str] = (),
+) -> Dict[str, Any]:
+    """Cria ou altera uma fonte, projeto ou ficha de análise.
+
+    `clear` permite **remover** campos numa alteração (um valor `None` no corpo é
+    ignorado, para não apagar dados por engano): por exemplo, retirar uma ficha
+    de um projeto é `clear=["project_id"]`.
+    """
     if kind not in WORKSPACE_KINDS:
         raise ValueError(f"Tipo inválido: {kind}")
     target = normalize_ontology_id(ontology_id) or active_ontology_id()
@@ -1603,6 +1613,8 @@ def upsert_workspace_item(kind: str, payload: Dict[str, Any], ontology_id: Optio
             if item.get("id") != item_id:
                 continue
             merged = {**item, **body}
+            for key in clear:
+                merged.pop(key, None)
             merged["created_at"] = item.get("created_at") or merged.get("created_at") or _now()
             merged["updated_at"] = _now()
             items[index] = merged
@@ -1610,6 +1622,8 @@ def upsert_workspace_item(kind: str, payload: Dict[str, Any], ontology_id: Optio
             _write_store(store, target)
             _cache.pop(target, None)
             return copy.deepcopy(merged)
+        for key in clear:
+            body.pop(key, None)
         body.setdefault("created_at", _now())
         body["updated_at"] = _now()
         body.setdefault("ontology_id", target)
@@ -1661,5 +1675,5 @@ def list_dossiers(ontology_id: Optional[str] = None) -> List[Dict[str, Any]]:
     return list_workspace("dossiers", ontology_id)
 
 
-def upsert_dossier(payload: Dict[str, Any], ontology_id: Optional[str] = None) -> Dict[str, Any]:
-    return upsert_workspace_item("dossiers", payload, ontology_id)
+def upsert_dossier(payload: Dict[str, Any], ontology_id: Optional[str] = None, clear: Sequence[str] = ()) -> Dict[str, Any]:
+    return upsert_workspace_item("dossiers", payload, ontology_id, clear)
