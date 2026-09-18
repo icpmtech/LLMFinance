@@ -1,4 +1,13 @@
-import { useEffect, useState } from "react";
+/**
+ * RAG BloombergGPT (documentos, chat e grafo vetorial).
+ *
+ * A página vive **dentro de uma janela** do IQ OS (ou em modo página), pelo que
+ * não usa `min-h-screen`: ocupa exatamente a altura que recebe — cabeçalho fixo
+ * em cima, coluna de upload/ajuda a rolar por dentro e o chat a preencher o
+ * resto. Assim o chat rola sozinho (mensagens com scroll e caixa de envio sempre
+ * visível) em vez de arrastar a página toda dentro da janela.
+ */
+import { useEffect, useMemo, useState } from "react";
 import {
   deleteRagDocument,
   getRagDocumentHistory,
@@ -10,13 +19,15 @@ import type { RagDocument, RagDocumentHistoryItem } from "../types";
 import { PdfUploader } from "../components/PdfUploader";
 import { RagChat } from "../components/RagChat";
 import { Card, CardHeader, CardTitle, Button } from "../components/ui";
-import { FileUp, BookOpen, Sparkles } from "lucide-react";
+import { useWindowMode } from "../layout";
+import { BookOpen, FileUp, Sparkles } from "lucide-react";
 
 interface RagPageProps {
   onSwitchView: () => void;
 }
 
 export function RagPage({ onSwitchView }: RagPageProps) {
+  const { windowMode } = useWindowMode();
   const [documents, setDocuments] = useState<RagDocument[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
 
@@ -35,6 +46,8 @@ export function RagPage({ onSwitchView }: RagPageProps) {
   useEffect(() => {
     refresh();
   }, []);
+
+  const indexed = useMemo(() => documents.filter((doc) => doc.indexed).length, [documents]);
 
   const handleDelete = async (docId: string) => {
     await deleteRagDocument(docId);
@@ -59,69 +72,70 @@ export function RagPage({ onSwitchView }: RagPageProps) {
   };
 
   return (
-    <div className="min-h-screen w-full bg-background text-foreground orbit-bg">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        <section className="mb-8 fade-in">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-2xl gradient-border flex items-center justify-center glow-teal">
-                <BookOpen size={24} className="text-primary" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-glow-teal">
-                    RAG BloombergGPT
-                  </h1>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-teal-500/10 border border-teal-500/20 px-2.5 py-0.5 text-xs font-medium text-teal-400">
-                    <Sparkles size={12} />
-                    Premium
-                  </span>
-                </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Documentos, chat e grafo vetorial.
-                </p>
-              </div>
-            </div>
+    <div className="@container flex h-full min-h-0 w-full flex-col">
+      {/* Cabeçalho compacto (mesmo padrão das outras aplicações do IQ OS) */}
+      <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-white/8 bg-white/[0.02] px-4 py-2.5">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-teal-400/85 to-sky-500/85 text-white shadow-lg shadow-teal-500/20">
+          <BookOpen size={17} />
+        </span>
+        <div className="min-w-0">
+          <h1 className="truncate text-[15px] font-semibold leading-tight">RAG BloombergGPT</h1>
+          <p className="truncate text-[11.5px] text-muted-foreground">
+            Documentos, chat e grafo vetorial ·{" "}
+            {documents.length === 0
+              ? "sem documentos"
+              : `${documents.length} documento${documents.length === 1 ? "" : "s"} · ${indexed} indexado${indexed === 1 ? "" : "s"}`}
+          </p>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="hidden items-center gap-1 rounded-full border border-teal-500/20 bg-teal-500/10 px-2.5 py-0.5 text-[11px] font-medium text-teal-300 sm:inline-flex">
+            <Sparkles size={11} />
+            Premium
+          </span>
+          {!windowMode && (
             <Button variant="secondary" size="sm" onClick={onSwitchView}>
               Voltar ao Chat
             </Button>
-          </div>
-        </section>
+          )}
+        </div>
+      </header>
 
-        <div className="flex flex-col lg:flex-row gap-6 h-full">
-          <div className="lg:w-[360px] xl:w-[420px] shrink-0 flex flex-col gap-6 h-full min-h-0 overflow-y-auto lg:overflow-visible">
-            <div className="glass-card gradient-border rounded-2xl p-1 glow-amber">
-              <PdfUploader onUpload={refresh} />
-            </div>
-
-            <div className="glass-card gradient-border rounded-2xl p-1 glow-blue">
-              <Card padding="md" className="shrink-0 bg-transparent border-0 shadow-none">
-                <CardHeader className="mb-3">
-                  <CardTitle icon={<FileUp size={18} className="text-primary" />}>Como funciona</CardTitle>
-                </CardHeader>
-                <ul className="text-sm text-muted-foreground space-y-2 list-disc pl-4">
-                  <li>O upload converte PDF para Markdown.</li>
-                  <li>O texto é dividido em chunks e indexado vetorialmente (FAISS).</li>
-                  <li>O BloombergGPT-style responde com base nos documentos.</li>
-                  <li>Cada documento tem detalhes, histórico, edição, grafo e reprocessamento.</li>
-                </ul>
-              </Card>
-            </div>
+      {/* Corpo: em janelas/campos largos upload/ajuda à esquerda e chat à direita;
+          em janelas estreitas empilha e é a coluna do corpo que rola. As variantes
+          `@…` medem a **largura da janela** (container query), não o ecrã. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 @4xl:flex-row @4xl:gap-4 @4xl:overflow-hidden @4xl:p-4">
+        <div className="flex max-h-[30%] w-full shrink-0 flex-col gap-3 overflow-y-auto @4xl:h-full @4xl:max-h-none @4xl:min-h-0 @4xl:w-[336px] @5xl:w-[372px]">
+          <div className="glass-card gradient-border rounded-2xl p-1">
+            <PdfUploader onUpload={refresh} />
           </div>
 
-          <div className="flex-1 min-h-0 h-full">
-            <div className="glass-panel gradient-border rounded-2xl p-0 overflow-hidden glow-teal h-full">
-              <RagChat
-                documents={documents}
-                loadingDocs={loadingDocs}
-                onDeleteDocument={handleDelete}
-                onUpdateDocument={handleUpdate}
-                onReprocessDocument={handleReprocess}
-                onLoadHistory={handleLoadHistory}
-                onRefreshDocuments={refresh}
-              />
-            </div>
+          <div className="glass-card gradient-border rounded-2xl p-1">
+            <Card padding="md" className="shrink-0 border-0 bg-transparent shadow-none">
+              <CardHeader className="mb-3">
+                <CardTitle icon={<FileUp size={18} className="text-primary" />}>Como funciona</CardTitle>
+              </CardHeader>
+              <ul className="list-disc space-y-2 pl-4 text-sm text-muted-foreground">
+                <li>O upload converte o PDF para Markdown.</li>
+                <li>O texto é dividido em chunks e indexado vetorialmente (FAISS).</li>
+                <li>O BloombergGPT-style responde com base nos documentos.</li>
+                <li>Cada documento tem detalhes, histórico, edição, grafo e reprocessamento.</li>
+              </ul>
+            </Card>
           </div>
+        </div>
+
+        {/* O chat recebe o resto da altura da janela e rola por dentro (é a
+            área com prioridade, para a caixa de envio ficar sempre à vista). */}
+        <div className="flex min-h-[300px] min-w-0 flex-1 flex-col @4xl:min-h-0">
+          <RagChat
+            documents={documents}
+            loadingDocs={loadingDocs}
+            onDeleteDocument={handleDelete}
+            onUpdateDocument={handleUpdate}
+            onReprocessDocument={handleReprocess}
+            onLoadHistory={handleLoadHistory}
+            onRefreshDocuments={refresh}
+          />
         </div>
       </div>
     </div>

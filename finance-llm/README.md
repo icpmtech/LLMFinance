@@ -249,7 +249,10 @@ página numa dessas rotas devolvia `{"detail":"Not Found"}`.
 ### Interface
 
 - **Dock estilo macOS** (em baixo, à esquerda ou à direita) com ampliação ao passar o rato, etiquetas,
-  indicadores de aplicações abertas, arrumação por arrastar e painel de preferências.
+  indicadores de aplicações abertas, arrumação por arrastar, material de vidro (ver *Material de
+  vidro*) e painel de preferências — incluindo as **miniaturas das janelas minimizadas**. Com o
+  aspeto **Windows 11** o mesmo dock passa a **barra de tarefas** (Mica, botões de 40 px, indicador
+  por baixo do ícone, Iniciar e relógio) — ver *Aspeto das janelas: macOS ou Windows 11*.
 - **Barra lateral = menu de aplicações** (estilo macOS) em três modos — *expandida*, *só ícones*
   (rail de 68 px) e *escondida* — com material translúcido («vibrancy»), pesquisa rápida
   (`/` ou `Ctrl+K`), secção de recentes, secções *Aplicações* / *Ferramentas* com triângulo de
@@ -322,7 +325,79 @@ dock escondem-na aos restantes), com quatro separadores:
 - Para dar acesso a uma conta (a primeira conta do sistema é `admin`):
   `python scripts/promote_admin.py --email alguem@exemplo.pt` (ou `--list`, `--demote`).
 
+### Material de vidro (glass) e animações
+
+O dock, as janelas e os painéis flutuantes partilham **um material de vidro**: fundo translúcido,
+`backdrop-filter` com desfoco e saturação, realce especular no bordo superior e sombra profunda.
+Os valores vivem em **variáveis CSS** (`--glass-blur`, `--glass-saturate`, `--glass-window-alpha`,
+`--glass-body-alpha`, `--glass-dock-alpha`, `--glass-border`, `--glass-highlight`), escritas por
+`applyGlass()` (`chat-ui/src/layout.ts`) a partir das preferências — nenhum componente repete
+`backdrop-filter`.
+
+Em **Preferências do dock → Vidro** (secção própria):
+
+- **Efeito de vidro** (`glass.enabled`, ligado por omissão) — desligado fica tudo opaco e sem
+  desfoco (`html[data-glass="off"]`), para ecrãs ou GPUs fracas.
+- **Intensidade do vidro** (`glass.strength`, 0–100 %): 0 = desfoco alto e superfícies muito
+  transparentes; 100 = desfoco de 38 px e superfícies quase opacas (legibilidade máxima).
+- **Papel de parede do desktop** (`glass.wallpaper`): manchas de cor (teal/azul/violeta/ciano) no
+  «desktop» que deslizam lentamente — é o que o vidro desfoca. A camada anima com `transform`
+  (composto no GPU) e não com `background-position`, para não repintar o ecrã inteiro.
+
+As preferências ficam em `localStorage` (`finance-llm-glass:v1`) e são aplicadas em `<html>`
+(`data-glass`, `data-wallpaper`), pelo que valem para todo o IQ OS. Com
+`prefers-reduced-motion` (ou a preferência de conta «reduzir animações») o papel de parede para e as
+transições das janelas/dock são desligadas.
+
+**Animações do dock e das janelas** (todas curtas, ≤ 320 ms):
+
+| Momento | Animação |
+| --- | --- |
+| Abrir / restaurar janela | `window-appear` (pop com ligeira elasticidade, 320 ms) |
+| Fechar janela | `window-close` (encolhe e desvanece, 200 ms) antes de remover |
+| Minimizar | `window-minimize` (encolhe para o lado do dock, 280 ms) + miniatura `dock-mini-in` |
+| Maximizar / repor / encaixar | geometria com `cubic-bezier(0.22, 1, 0.36, 1)` a 260 ms |
+| Arrastar janela | a sombra cresce (a janela «levanta-se»); geometria sem transição |
+| Arrastar com 3D ligado | a janela inclina-se até `tilt` graus e endireita ao largar |
+| Foco da janela | `box-shadow`/borda/opacidade, 200–220 ms |
+| Passar o rato no dock | ampliação por frame + realce do ícone; pressionar |
+| Papel de parede | `wallpaper-drift`, 64 s em alternativa (só `transform`) |
+
+> Nota de manutenção: **não duplicar `backdrop-filter` com `-webkit-backdrop-filter`**. O
+> compilador de CSS (Lightning CSS, via rolldown-vite) mantinha apenas a versão prefixada e todas as
+> superfícies de vidro ficavam sem desfoco. Basta a propriedade padrão — as prefixações necessárias
+> são acrescentadas no `build`.
+
+### Janelas 3D
+
+Efeito 3D **opcional** para as janelas, em **Preferências do dock → Janelas 3D**
+(`chat-ui/src/layout.ts`, `finance-llm-window3d:v1`):
+
+- **Efeito 3D** (`window3d.enabled`, ligado por omissão) — liga a inclinação e a profundidade.
+- **Inclinação ao arrastar** (`window3d.tilt`, 0–8°, predefinição 5°): ao arrastar, a janela
+  inclina-se na direção do movimento (como um cartão a ser empurrado); a velocidade é suavizada
+  e a janela **endireita** ao largar. Durante o arrasto a inclinação segue o ponteiro (90 ms) e,
+  fora dele, a transição é de 260 ms com `cubic-bezier(0.22, 1, 0.36, 1)`.
+- **Profundidade** (`window3d.depth`, ligada por omissão): a janela em foco fica à frente e as
+  outras recuam (`scale(0.982)`, opacidade 96,5 % e sombra mais curta), dando profundidade.
+
+Como funciona: o `transform` completo é **composto em JS** (`Window.tsx`) —
+`perspective(...) translate3d(...) rotateX(..) rotateY(..) scale(..)`. A perspetiva vai dentro do
+próprio `transform` (função `perspective()`), pelo que o efeito **não** depende de
+`transform-style: preserve-3d` dos antepassados (que o `backdrop-filter` do vidro anularia) e não
+colide com o `translate3d` que o arrasto escreve a cada frame. Os tokens no `<html>` são
+`--win3d-tilt`, `--win3d-perspective` (1000 + tilt×80 px), `--win3d-depth-scale` e
+`--win3d-depth-shadow`; `data-window3d`/`data-window3d-depth` ligam e desligam. Desligado, o
+`transform` fica só com `translate3d` (comportamento anterior).
+
+> Robustez do arrasto: `setPointerCapture` pode lançar (por exemplo se o ponteiro já foi
+> libertado). O gesto passa a começar **antes** da captura e esta é feita dentro de `try/catch` —
+> antes, uma falha na captura deixava o arrasto por fazer.
+
 ### Janelas (estilo macOS)
+
+> O **chrome** das janelas pode ser macOS (por omissão) ou **Windows 11** — ver
+> *Aspeto das janelas: macOS ou Windows 11* no fim desta secção.
 
 Com o **modo janelas** ligado (predefinição em ecrãs ≥ 1024 px), cada página abre numa janela
 flutuante dentro de uma área de trabalho, em vez de ocupar o ecrã inteiro:
@@ -334,16 +409,161 @@ flutuante dentro de uma área de trabalho, em vez de ocupar o ecrã inteiro:
   repõe o tamanho anterior.
 - **Semáforos** macOS: fechar, minimizar, maximizar. As janelas minimizadas continuam
   indicadas no dock (ponto) e voltam com um clique no ícone.
+- **Minimizar para o dock** (como no macOS): o semáforo amarelo encolhe a janela na direção do
+  dock (animação `window-minimize`, 280 ms) e a janela passa a aparecer no dock como
+  **miniatura** — uma pequena janela com os três pontos, o ícone e o gradiente da aplicação,
+  com etiqueta ao passar o rato. Clicar restaura (a janela volta a crescer com a animação
+  `window-appear`) e o botão direito abre *Restaurar janela*, *Maximizar* e *Fechar janela*.
+  A barra de menus mostra `N janelas · M no dock`.
+  As miniaturas podem desligar-se em **Preferências do dock → Janelas minimizadas no dock**
+  (`minimizedShelf`, ligado por omissão); o cálculo do espaço do dock conta com elas.
 - **Barra de menus** com o número de janelas, o título da janela ativa, o menu **Janelas**
   (lista todas, incluindo minimizadas, para focar/restaurar) e a disposição
   (`Cascata`, `Lado a lado`, `Minimizar todas`, `Fechar todas`) e relógio.
 - **Atalhos**: `Ctrl/Cmd + \`` cicla janelas, `Ctrl/Cmd + W` fecha, `Ctrl/Cmd + M` minimiza,
   `Ctrl/Cmd + Shift + M` maximiza/reposiciona.
 - **Área de trabalho vazia** tem um lançador rápido (EmpresasIQ, Contratos, Dashboard, Terminal).
+
+#### Janelas maximizadas, ecrã inteiro e redimensionar
+
+A geometria das janelas é medida a partir da **área de trabalho** (o retângulo abaixo da barra de
+menus, já sem a reserva do dock quando ele está visível) e, sempre que essa área muda de tamanho,
+`clampWindows()` (`chat-ui/src/windows.ts`) volta a ajustar todas as janelas:
+
+- uma janela **maximizada acompanha o ecrã** — ao entrar/sair do **ecrã inteiro**
+  (`chat-ui/src/fullscreen.ts`, `documentElement.requestFullscreen`) ou ao redimensionar a janela
+  do browser, passa a ocupar exatamente a nova área de trabalho (antes ficava com o tamanho antigo
+  e sobrava moldura à volta, ou faltava espaço) e mantém `data-maximized="true"`, para conservar os
+  cantos a 0 px e a ausência de sombra do aspeto Windows 11;
+- as restantes janelas são limitadas à área (mínimo de **96 px** da barra de título sempre à vista)
+  e deixam de estar maximizadas se tiverem de encolher;
+- ao **repor** uma janela maximizada depois de o ecrã ter mudado de tamanho, a geometria anterior é
+  limitada ao ecrã atual, para a janela não reaparecer fora da área de trabalho;
+- a área de trabalho nunca desliza (nem com `scrollIntoView` de um campo dentro de uma janela).
+
+#### Aspeto das janelas: macOS ou Windows 11
+
+Em **Preferências do dock → Janelas → Aspeto do IQ OS (janelas, dock e barra lateral)** escolhe-se
+como o IQ OS se desenha (preferência local `finance-llm-window-style:v1`, aplicada como
+`data-window-style` no `<html>`; `chat-ui/src/layout.ts` → `useWindowStyle()`). A escolha aplica-se
+às **janelas**, ao **dock** e à **barra lateral**; o **comportamento é exatamente o mesmo** —
+arrastar, encaixe, minimizar para o dock, miniaturas, efeito 3D e material — só muda a moldura:
+
+| | macOS (por omissão) | Windows 11 |
+| --- | --- | --- |
+| Barra de título | 36 px, **semáforos à esquerda**, título **centrado** | 32 px, **ícone e título à esquerda**, controlos **à direita** |
+| Controlos | círculos coloridos (fechar/minimizar/maximizar) | 46×32 px encostados ao canto: **–**, **□**/**❐** (restaurar) e **✕**, com `hover` claro e o fechar em `#c42b1c` |
+| Cantos | 16 px | **8 px** (0 px quando maximizada) |
+| Material | vidro (translúcido, muito desfocado, reflexo especular) | **Mica** (mais opaco, desfoco ≤ 18 px) |
+| Sombra | profunda e sempre presente | mais discreta e **desaparece com a janela maximizada** |
+| **Dock** | tabuleiro flutuante com cantos de 26 px, vidro, ampliação à la macOS e **miniaturas** das janelas minimizadas | **barra de tarefas** encostada à margem, plana (Mica), **botões de 40 px que crescem até 72 px quando sobra espaço** (o ícone e a espessura da barra acompanham), **indicador por baixo do ícone** (barra de 16 px com foco, 7 px só aberta), botão **Iniciar** (abre o menu Iniciar) e **bandeja com a hora e a data** |
+| Miniaturas minimizadas | mini-janela com os três pontos, o ícone e o gradiente | **botões da barra** (quadrados, só o ícone); clicar restaura na mesma |
+| **Barra lateral** | vidro tipo «vibrancy» (gradiente translúcido, `blur(30px) saturate(180%)`), topo de 44 px, linhas de 28 px com cantos de 6 px e **seleção em pílula** no verde da marca, ícones brancos | **Mica plano** (`rgba(32,32,32,0.86)` + `blur(30px) saturate(150%)`, sem gradiente), hairline no bordo direito, topo de 48 px, **linhas de 32 px com cantos de 4 px**, seleção discreta com **barra de acento** de 3×16 px à esquerda (``rgb(96 205 255)``, o mesmo acento da barra de tarefas), ícone da aplicação ativa no acento, pesquisa de 32 px com 4 px de canto e **sublinhado de acento** no foco e barras de rolagem de 4 px |
+
+Na barra lateral, o aspeto Windows 11 vive nas mesmas peças: `AppNav.tsx` marca o topo
+(`mac-sidebar-top`), os botões de 32 px (`mac-sidebar-btn`), a pesquisa (`mac-sidebar-search`), as
+linhas do modo compacto (`mac-nav-row-rail`, 40×40 px) e a pega de reabertura
+(`mac-sidebar-handle`); o macOS mantém as métricas base (44/28/24 px e pílula verde). O `rail`
+(só ícones) tem `flex: none` para os botões **não encolherem** quando as aplicações não cabem — a
+coluna passa a deslizar em vez de amontoar ícones.
+
+##### Menu Iniciar (modo Windows)
+
+No modo Windows, o botão **Iniciar** da barra de tarefas abre um **painel flutuante** com a
+disposição do **menu Iniciar do Windows 11** (mesma Mica escura da plataforma): aparece **por cima
+do ambiente de trabalho**, encostado ao canto inferior esquerdo da área de trabalho, e desaparece
+sem mexer na disposição da plataforma — **não** é a barra lateral, que continua a ser a lista de
+aplicações de sempre.
+
+- **Pesquisa** arredondada no topo («Pesquisar aplicações, definições e documentos»), focada ao
+  abrir; `/` ou `Ctrl + K` voltam a focá-la; os resultados listam a aplicação e o grupo.
+- **Afixadas** — grelha de 4 colunas com as aplicações do dock (ícone no gradiente da app e o nome
+  por baixo); mostra 8 e **Ver tudo** abre as restantes.
+- **Recomendadas** — as vistas recentes em linhas (ícone, nome e «Aberto agora»/«Recentemente»),
+  com **Ver tudo** para chegar às 8 mais recentes.
+- **Todas** — com o seletor **Ver: categoria | lista**: em *categoria* mostra cartões (até 4 ícones
+  por grupo, o nome do grupo por baixo); em *lista* mostra as aplicações agrupadas (Aplicações e
+  Ferramentas) com a marca «Aberto agora».
+- **Rodapé** com a conta (avatar e nome) e o botão de **energia** — ambos abrem o menu com
+  *Definições e conta* e *Terminar sessão*.
+- **Fecha** com `Esc`, com um clique fora ou voltando a clicar em **Iniciar** (o botão fica
+  realçado enquanto o painel está aberto). Abrir uma aplicação fecha o painel.
+
+O painel acompanha a posição do dock: com a barra em baixo aparece a 56 px do fundo e alinhado com
+a área de trabalho (à direita da barra lateral); com a barra à esquerda/direita aparece ao lado dela.
+O modo compacto (`rail`) e o aspeto **macOS** (sem menu Iniciar) ficam como estavam.
+
+Implementação: `components/StartMenu.tsx` (painel; reutiliza `itemsFor`/`groupsFor`/`normalize` de
+`AppNav.tsx` e as aplicações afixadas de `useDock()`), o estado abre/fecha em `Dock.tsx`
+(`startOpen`, botão Iniciar com `data-open`) e as classes `.start-panel`/`.start-anchor`/`.start-*`
+em `index.css`.
+
+#### Barras sempre visíveis
+
+A **barra lateral** (menu de aplicações) e a **barra de tarefas** (dock) estão sempre presentes —
+em todas as páginas, incluindo o **Chat**, que passou a viver na mesma moldura das restantes (antes,
+em modo página, o Chat ocupava o ecrã inteiro sem barra lateral nem barra de tarefas). O
+`ChatLayout` preenche agora a altura disponível (`h-full min-h-0` em vez de `min-h-screen`), pelo que
+o campo de mensagem fica visível dentro do espaço reservado — e, em modo janelas, dentro da própria
+janela, por cima da barra de tarefas.
+
+No aspeto Windows a barra de tarefas fica **colada ao fundo** do ecrã (a folga de 8 px ficou
+reservada à área segura dos telemóveis) e o menu Iniciar abre 8 px acima dela. A ligação direta
+`/chat` também foi corrigida: abria o Dashboard por faltar esse caso na leitura do URL inicial.
+
+O que **não** muda com o aspeto: arrastar/redimensionar/encaixar, duplo clique para maximizar,
+minimizar para o dock (com animação na direção da barra), menu de contexto (restaurar/maximizar/
+fechar), efeito 3D, papel de parede, atalhos e posição do dock (baixo/esquerda/direita).
+
+Detalhes de implementação: o chrome vive em `Window.tsx` (componente `WinButton` com glifos SVG de
+1 px, na ordem do Windows: minimizar, maximizar/restaurar, fechar) e o aspeto em `index.css` sob
+`html[data-window-style="windows"]`; a janela expõe `data-maximized` para os cantos e a sombra. A
+barra de tarefas é o **mesmo** componente `Dock` com `data-style="windows"` na prateleira
+(`.dock-shelf`) e indicadores `.dock-win-indicator` em vez do ponto `.dock-dot` do macOS.
+
+Na barra de tarefas os botões são **adaptativos**: com muitas aplicações ficam nos **40 px**
+mínimos (e a barra desliza na horizontal, como já acontecia no dock); com espaço a mais
+**crescem** até 72 px e a barra ganha espessura (altura = botão + 8 px, largura quando a barra
+está numa margem). O crescimento nunca passa de ~25 % acima de «Tamanho dos ícones»
+(Definições do dock → Aparência), que passa a valer **nos dois aspetos** — a barra de tarefas
+desconta primeiro a reserva fixa (Iniciar, bandeja, relógio e folgas) e reparte o resto pelas
+aplicações. O menu Iniciar acompanha a espessura da barra (`--dock-thickness`) e o indicador de
+cada aplicação acompanha o tamanho do botão (`--dock-ind`/`--dock-ind-min`).
 - A geometria, o empilhamento e o estado (minimizada/maximizada) ficam guardados em
   `localStorage` (`finance-llm-windows:v1`) e são repostos ao recarregar.
 - O modo liga-se/desliga nas **Definições → Preferências → Modo janelas** (guardado na conta)
   ou no painel de preferências do dock. Num telemóvel a plataforma abre em modo página.
+
+#### Páginas dentro de janelas (regras)
+
+Uma página que vive numa janela recebe **exatamente a altura da janela** — não deve assumir o ecrã:
+
+- **Não usar `min-h-screen`/`100vh`** dentro de páginas de janela: a página ficava com a altura do
+  ecrã (~874 px) dentro de uma janela de ~540 px, obrigando a janela toda a rolar e impedindo os
+  painéis internos (chat, listas) de rolarem por dentro. O padrão é
+  `flex h-full min-h-0 w-full flex-col` + cabeçalho `shrink-0` + corpo `min-h-0 flex-1`.
+- **Responsividade pela largura da janela, não do ecrã**: as variantes `sm:`/`lg:` respondem ao
+  *viewport*; dentro de uma janela estreita (mínimo 360 px) o layout tem de reagir à **largura da
+  janela**. Usar **container queries** do Tailwind v4: `@container` no elemento raiz da página e
+  variantes `@4xl:` (896 px) / `@5xl:` (1024 px) nos filhos.
+- **Modais**: um `position: fixed` dentro de uma janela fica limitado à janela (e não ao ecrã)
+  porque `.window-scale` tem `will-change: transform` (cria bloco contentor) — o modal de detalhes
+  do RAG, por exemplo, abre dentro da sua janela.
+- **Nunca usar `scrollIntoView` numa página de janela**: rola **todos** os antepassados roláveis —
+  incluindo o «ecrã» das janelas — e a janela aparece deslocada por cima da barra de menus. Para
+  «ir para o fim» de uma lista, rolar só o contentor dessa lista
+  (`lista.scrollTo({ top: lista.scrollHeight })`, ver `RagChat.tsx` e `MessageList.tsx`).
+- **O «ecrã» nunca se desloca** (garantia global, vale para *todas* as janelas): o `WindowManager`
+  repõe `scrollTop/scrollLeft` do `.desktop-bg` a 0 num listener de `scroll`, em `focusin`, a cada
+  render e depois de abrir/fechar janelas; o CSS ainda acrescenta `overscroll-behavior: none`. Sem
+  isto, um único `scrollIntoView` dentro de uma janela deslocava o ecrã inteiro (as janelas ficavam
+  176 px acima, debaixo da barra de menus).
+- **Serviço de ficheiros**: `_serve_spa.py` envia `Cache-Control: no-store` para HTML/`sw.js` e
+  cache longa para `/assets/*` (com hash) — sem isto o browser servia o `index.html` antigo (e o
+  bundle antigo) depois de um `build`, escondendo correções. O `VERSION` do `sw.js` foi para `v4`
+  para limpar caches antigas nas instalações existentes.
+- Aplicado em `RagPage.tsx` + `RagChat.tsx` (a coluna de upload/ajuda à esquerda e o chat com
+  prioridade de altura; empilhado e com painéis roláveis quando a janela é estreita).
 
 **As modais também são janelas.** As fichas de entidade e de contrato (EmpresasIQ) e o
 **Quick Look** do Finder deixam de ser sobreposições modais e passam a abrir como **janelas**

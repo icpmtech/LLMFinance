@@ -189,6 +189,297 @@ export function useSidebarShortcut() {
   }, []);
 }
 
+/* ------------------------------------------------- material de vidro (glass) */
+/**
+ * O «vidro» é um material partilhado pelo dock e pelas janelas: em vez de
+ * repetir `backdrop-filter` por todo o lado, os componentes leem variáveis CSS
+ * (abaixo) e o utilizador ajusta o material num único sítio.
+ *
+ * `strength` vai de 0 (quase transparente, muito desfocado) a 1 (mais opaco).
+ * Com o vidro desligado as variáveis passam a "sem desfoco" e as superfícies
+ * ficam praticamente opacas, para ecrãs ou GPUs mais fracos.
+ */
+export type GlassPrefs = {
+  /** Vidro ativo no dock, nas janelas e nos painéis flutuantes. */
+  enabled: boolean;
+  /** Intensidade do material (0 = mais transparente, 1 = mais opaco). */
+  strength: number;
+  /** Papel de parede do «desktop» (dá cor ao vidro por trás). */
+  wallpaper: boolean;
+};
+
+const GLASS_KEY = "finance-llm-glass:v1";
+const GLASS_EVENT = "finance-llm-glass-changed";
+
+const DEFAULT_GLASS: GlassPrefs = { enabled: true, strength: 0.6, wallpaper: true };
+
+function readGlass(): GlassPrefs {
+  if (typeof window === "undefined") return DEFAULT_GLASS;
+  try {
+    const raw = window.localStorage.getItem(GLASS_KEY);
+    if (!raw) return DEFAULT_GLASS;
+    const parsed = JSON.parse(raw) as Partial<GlassPrefs> | null;
+    return {
+      enabled: typeof parsed?.enabled === "boolean" ? parsed.enabled : DEFAULT_GLASS.enabled,
+      strength:
+        typeof parsed?.strength === "number" && Number.isFinite(parsed.strength)
+          ? Math.min(1, Math.max(0, parsed.strength))
+          : DEFAULT_GLASS.strength,
+      wallpaper: typeof parsed?.wallpaper === "boolean" ? parsed.wallpaper : DEFAULT_GLASS.wallpaper,
+    };
+  } catch {
+    return DEFAULT_GLASS;
+  }
+}
+
+let glassCache: GlassPrefs = readGlass();
+
+/** Escreve os tokens do material no `<html>` (o resto do estilo só lê variáveis). */
+export function applyGlass(prefs: GlassPrefs = glassCache) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const strength = Math.min(1, Math.max(0, prefs.strength));
+  root.dataset.glass = prefs.enabled ? "on" : "off";
+  root.dataset.wallpaper = prefs.wallpaper ? "on" : "off";
+  root.style.setProperty("--glass-blur", prefs.enabled ? `${Math.round(8 + strength * 30)}px` : "0px");
+  root.style.setProperty("--glass-saturate", prefs.enabled ? `${Math.round(130 + strength * 70)}%` : "100%");
+  root.style.setProperty("--glass-window-alpha", (0.56 + strength * 0.3).toFixed(3));
+  root.style.setProperty("--glass-window-alpha-edge", (0.44 + strength * 0.3).toFixed(3));
+  root.style.setProperty("--glass-bar-alpha", (0.1 + strength * 0.16).toFixed(3));
+  root.style.setProperty("--glass-body-alpha", (0.46 + strength * 0.34).toFixed(3));
+  root.style.setProperty("--glass-dock-alpha", (0.38 + strength * 0.36).toFixed(3));
+  root.style.setProperty("--glass-dock-alpha-edge", (0.5 + strength * 0.36).toFixed(3));
+  root.style.setProperty("--glass-border", `rgba(255, 255, 255, ${(0.1 + strength * 0.1).toFixed(3)})`);
+  root.style.setProperty("--glass-highlight", `rgba(255, 255, 255, ${(0.11 + strength * 0.08).toFixed(3)})`);
+}
+
+export function getGlass(): GlassPrefs {
+  return glassCache;
+}
+
+export function setGlass(patch: Partial<GlassPrefs>) {
+  glassCache = { ...glassCache, ...patch };
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(GLASS_KEY, JSON.stringify(glassCache));
+    } catch {
+      // Sem persistência: o material aplica-se apenas nesta sessão.
+    }
+  }
+  applyGlass();
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(GLASS_EVENT));
+}
+
+function subscribeGlass(onChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  const onStorage = (event: StorageEvent) => {
+    if (event.key && event.key !== GLASS_KEY) return;
+    glassCache = readGlass();
+    applyGlass();
+    onChange();
+  };
+  window.addEventListener(GLASS_EVENT, onChange);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(GLASS_EVENT, onChange);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+/** Preferências do material de vidro (dock, janelas e painéis). */
+export function useGlass() {
+  const glass = useSyncExternalStore(subscribeGlass, getGlass, getGlass);
+  const set = useCallback((patch: Partial<GlassPrefs>) => setGlass(patch), []);
+  const toggle = useCallback(() => setGlass({ enabled: !glassCache.enabled }), []);
+  return { glass, setGlass: set, toggleGlass: toggle };
+}
+
+/* Aplica o material assim que o módulo carrega (antes do primeiro paint útil). */
+applyGlass();
+
+/* --------------------------------------------------------------- janelas 3D */
+/**
+ * Efeito 3D opcional para as janelas do IQ OS (estilo "profundidade" do
+ * visionOS/Windows): as janelas sem foco recuam ligeiramente e, ao arrastar, a
+ * janela inclina-se um pouco na direção do movimento (como um cartão a ser
+ * empurrado). A inclinação é composta no `transform` da própria janela (a
+ * perspetiva vive no mesmo elemento, por isso não depende da árvore 3D).
+ *
+ * `tilt` é a inclinação máxima em graus (0–8).
+ */
+export type Window3dPrefs = {
+  /** Efeito 3D ligado (inclinação + profundidade). */
+  enabled: boolean;
+  /** Inclinação máxima ao arrastar, em graus (0–8). */
+  tilt: number;
+  /** Janelas sem foco recuam (dão profundidade à área de trabalho). */
+  depth: boolean;
+};
+
+const WINDOW3D_KEY = "finance-llm-window3d:v1";
+const WINDOW3D_EVENT = "finance-llm-window3d-changed";
+
+const DEFAULT_WINDOW3D: Window3dPrefs = { enabled: true, tilt: 5, depth: true };
+
+function readWindow3d(): Window3dPrefs {
+  if (typeof window === "undefined") return DEFAULT_WINDOW3D;
+  try {
+    const raw = window.localStorage.getItem(WINDOW3D_KEY);
+    if (!raw) return DEFAULT_WINDOW3D;
+    const parsed = JSON.parse(raw) as Partial<Window3dPrefs> | null;
+    return {
+      enabled: typeof parsed?.enabled === "boolean" ? parsed.enabled : DEFAULT_WINDOW3D.enabled,
+      tilt:
+        typeof parsed?.tilt === "number" && Number.isFinite(parsed.tilt)
+          ? Math.min(8, Math.max(0, parsed.tilt))
+          : DEFAULT_WINDOW3D.tilt,
+      depth: typeof parsed?.depth === "boolean" ? parsed.depth : DEFAULT_WINDOW3D.depth,
+    };
+  } catch {
+    return DEFAULT_WINDOW3D;
+  }
+}
+
+let window3dCache: Window3dPrefs = readWindow3d();
+
+/** Distância do observador à janela, em px (quanto mais inclinada, mais próxima). */
+export function window3dPerspective(tilt: number) {
+  return Math.round(1000 + Math.min(8, Math.max(0, tilt)) * 80);
+}
+
+/** Escala de uma janela sem foco, com a profundidade ligada. */
+export const WINDOW3D_DEPTH_SCALE = 0.982;
+
+/** Escreve os tokens do efeito 3D no `<html>` e liga/desliga a perspetiva. */
+export function applyWindow3d(prefs: Window3dPrefs = window3dCache) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const tilt = Math.min(8, Math.max(0, prefs.tilt));
+  root.dataset.window3d = prefs.enabled ? "on" : "off";
+  root.dataset.window3dDepth = prefs.depth ? "on" : "off";
+  root.style.setProperty("--win3d-tilt", `${tilt.toFixed(2)}deg`);
+  root.style.setProperty("--win3d-perspective", `${window3dPerspective(tilt)}px`);
+  root.style.setProperty("--win3d-depth-scale", prefs.depth ? String(WINDOW3D_DEPTH_SCALE) : "1");
+  // Sombra/decalque que a janela sem foco ganha ao recuar.
+  root.style.setProperty("--win3d-depth-shadow", prefs.depth ? "0 14px 38px rgba(0, 0, 0, 0.42)" : "none");
+}
+
+export function getWindow3d(): Window3dPrefs {
+  return window3dCache;
+}
+
+export function setWindow3d(patch: Partial<Window3dPrefs>) {
+  window3dCache = { ...window3dCache, ...patch };
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(WINDOW3D_KEY, JSON.stringify(window3dCache));
+    } catch {
+      // Sem persistência: aplica-se apenas nesta sessão.
+    }
+  }
+  applyWindow3d();
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(WINDOW3D_EVENT));
+}
+
+function subscribeWindow3d(onChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  const onStorage = (event: StorageEvent) => {
+    if (event.key && event.key !== WINDOW3D_KEY) return;
+    window3dCache = readWindow3d();
+    applyWindow3d();
+    onChange();
+  };
+  window.addEventListener(WINDOW3D_EVENT, onChange);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(WINDOW3D_EVENT, onChange);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+/** Preferências do efeito 3D das janelas. */
+export function useWindow3d() {
+  const window3d = useSyncExternalStore(subscribeWindow3d, getWindow3d, getWindow3d);
+  const set = useCallback((patch: Partial<Window3dPrefs>) => setWindow3d(patch), []);
+  const toggle = useCallback(() => setWindow3d({ enabled: !window3dCache.enabled }), []);
+  return { window3d, setWindow3d: set, toggleWindow3d: toggle };
+}
+
+applyWindow3d();
+
+/* --------------------------------------------------------- estilo das janelas */
+/**
+ * Aspeto das janelas: `macos` (semáforos à esquerda, cantos grandes, vidro) ou
+ * `windows` (Windows 11: ícone e título à esquerda, minimizar/maximizar/fechar
+ * à direita, cantos de 8 px e material tipo Mica). Só muda o chrome — o
+ * comportamento (arrastar, encaixe, minimizar para o dock, 3D) é o mesmo.
+ */
+export type WindowStyle = "macos" | "windows";
+
+const WINDOW_STYLE_KEY = "finance-llm-window-style:v1";
+const WINDOW_STYLE_EVENT = "finance-llm-window-style-changed";
+const DEFAULT_WINDOW_STYLE: WindowStyle = "macos";
+
+function readWindowStyle(): WindowStyle {
+  if (typeof window === "undefined") return DEFAULT_WINDOW_STYLE;
+  try {
+    const raw = window.localStorage.getItem(WINDOW_STYLE_KEY);
+    return raw === "windows" || raw === "macos" ? raw : DEFAULT_WINDOW_STYLE;
+  } catch {
+    return DEFAULT_WINDOW_STYLE;
+  }
+}
+
+let windowStyleCache: WindowStyle = readWindowStyle();
+
+/** Escreve o estilo no `<html>` (`data-window-style`): o CSS faz o resto. */
+export function applyWindowStyle(style: WindowStyle = windowStyleCache) {
+  if (typeof document === "undefined") return;
+  document.documentElement.dataset.windowStyle = style;
+}
+
+export function getWindowStyle(): WindowStyle {
+  return windowStyleCache;
+}
+
+export function setWindowStyle(style: WindowStyle) {
+  windowStyleCache = style;
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(WINDOW_STYLE_KEY, style);
+    } catch {
+      // Sem persistência: aplica-se apenas nesta sessão.
+    }
+  }
+  applyWindowStyle();
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(WINDOW_STYLE_EVENT));
+}
+
+function subscribeWindowStyle(onChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  const onStorage = (event: StorageEvent) => {
+    if (event.key && event.key !== WINDOW_STYLE_KEY) return;
+    windowStyleCache = readWindowStyle();
+    applyWindowStyle();
+    onChange();
+  };
+  window.addEventListener(WINDOW_STYLE_EVENT, onChange);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(WINDOW_STYLE_EVENT, onChange);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+/** Estilo das janelas (macOS ou Windows 11). */
+export function useWindowStyle() {
+  const style = useSyncExternalStore(subscribeWindowStyle, getWindowStyle, getWindowStyle);
+  const set = useCallback((next: WindowStyle) => setWindowStyle(next), []);
+  return { windowStyle: style, setWindowStyle: set };
+}
+
+applyWindowStyle();
+
 /* ------------------------------------------------------------- modo janelas */
 const WINDOW_MODE_KEY = "finance-llm-window-mode";
 

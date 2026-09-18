@@ -197,8 +197,14 @@ export function toggleMaximizeWindow(view: string, workspace: WorkspaceSize) {
     windows: cache.windows.map((item) => {
       if (item.view !== view) return item;
       if (item.maximized) {
+        // Repor dentro do ecrã atual: se o ecrã encolheu (saída de ecrã inteiro),
+        // a geometria anterior podia ficar fora da área de trabalho.
         const prev = item.prev ?? defaultRect(0, workspace);
-        return { ...item, ...prev, maximized: false, prev: undefined, z: cache.topZ };
+        const width = Math.min(prev.width, Math.max(MIN_WINDOW_WIDTH, workspace.width));
+        const height = Math.min(prev.height, Math.max(MIN_WINDOW_HEIGHT, workspace.height));
+        const x = Math.min(Math.max(prev.x, 0), Math.max(0, workspace.width - EDGE_KEEP));
+        const y = Math.min(Math.max(prev.y, 0), Math.max(0, workspace.height - 40));
+        return { ...item, x, y, width, height, maximized: false, prev: undefined, z: cache.topZ };
       }
       return {
         ...item,
@@ -347,6 +353,18 @@ export function tileWindows(workspace: WorkspaceSize) {
 export function clampWindows(workspace: WorkspaceSize) {
   let changed = false;
   const windows = cache.windows.map((item) => {
+    // Uma janela maximizada acompanha o ecrã: entrar/sair de ecrã inteiro (ou
+    // redimensionar a janela do browser) volta a maximizá-la no novo espaço, em
+    // vez de a deixar com o tamanho antigo (sobrava moldura à volta).
+    if (item.maximized && !item.minimized) {
+      const width = Math.max(MIN_WINDOW_WIDTH, Math.round(workspace.width));
+      const height = Math.max(MIN_WINDOW_HEIGHT, Math.round(workspace.height));
+      if (item.x !== 0 || item.y !== 0 || item.width !== width || item.height !== height) {
+        changed = true;
+        return { ...item, x: 0, y: 0, width, height };
+      }
+      return item;
+    }
     const width = Math.min(item.width, Math.max(MIN_WINDOW_WIDTH, workspace.width));
     const height = Math.min(item.height, Math.max(MIN_WINDOW_HEIGHT, workspace.height));
     const maxX = Math.max(0, workspace.width - EDGE_KEEP);

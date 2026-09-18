@@ -17,8 +17,12 @@ function formatTime(ts: string) {
 export function MessageList({ messages, streaming }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  /* Rola só a lista (nunca `scrollIntoView`: isso arrastaria também o «ecrã»
+     das janelas e a janela ficaria deslocada, por cima da barra de menus). */
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const lista = bottomRef.current?.parentElement;
+    if (!lista) return;
+    lista.scrollTo({ top: lista.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
   if (messages.length === 0) {

@@ -36,8 +36,8 @@ export function ChatLayout({
   onBackendChange,
 }: ChatLayoutProps) {
   return (
-    <div className="min-h-screen w-full bg-background text-foreground flex">
-      <div className="flex-1 min-w-0 min-h-screen flex flex-col md:flex-row overflow-hidden">
+    <div className="flex h-full min-h-0 w-full bg-background text-foreground">
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col md:flex-row overflow-hidden">
         <Sidebar
           conversations={conversations}
           activeId={activeId}

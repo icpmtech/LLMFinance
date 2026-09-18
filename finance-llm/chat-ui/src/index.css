@@ -29,6 +29,35 @@ html, body, #root {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+/* ------------------------------------------------------- material (vidro)
+   Tokens do material partilhado pelo dock, janelas e painéis flutuantes.
+   Os valores são escritos por `applyGlass()` (chat-ui/src/layout.ts) a partir
+   das preferências; isto é apenas o valor de recurso. */
+:root {
+  --glass-blur: 26px;
+  --glass-saturate: 170%;
+  --glass-window-alpha: 0.74;
+  --glass-window-alpha-edge: 0.62;
+  --glass-bar-alpha: 0.2;
+  --glass-body-alpha: 0.66;
+  --glass-dock-alpha: 0.6;
+  --glass-dock-alpha-edge: 0.72;
+  --glass-border: rgba(255, 255, 255, 0.16);
+  --glass-highlight: rgba(255, 255, 255, 0.16);
+}
+html[data-glass="off"] {
+  --glass-blur: 0px;
+  --glass-saturate: 100%;
+  --glass-window-alpha: 0.985;
+  --glass-window-alpha-edge: 0.97;
+  --glass-bar-alpha: 0.05;
+  --glass-body-alpha: 1;
+  --glass-dock-alpha: 0.97;
+  --glass-dock-alpha-edge: 0.99;
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-highlight: rgba(255, 255, 255, 0.08);
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -77,14 +106,12 @@ html, body, #root {
 .glass-card {
   background: rgba(22, 24, 29, 0.72);
   backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
 }
 .glass-panel {
   background: rgba(17, 19, 24, 0.86);
   backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.07);
 }
 /* Ficha (modal) com efeito vidro: translúcida, com saturação e realce interior.
@@ -92,7 +119,6 @@ html, body, #root {
 .glass-modal {
   background: linear-gradient(160deg, rgba(18, 34, 41, 0.9), rgba(8, 19, 24, 0.86));
   backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
   border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow:
     0 32px 80px rgba(0, 0, 0, 0.55),
@@ -111,7 +137,6 @@ html, body, #root {
   border-radius: 12px 12px 0 0;
   background: linear-gradient(180deg, rgba(26, 48, 57, 0.92), rgba(14, 32, 38, 0.88));
   backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 .file-sheet {
   position: relative;
@@ -324,7 +349,6 @@ html, body, #root {
   background:
     linear-gradient(180deg, rgba(24, 27, 33, 0.86), rgba(15, 17, 21, 0.92));
   backdrop-filter: blur(30px) saturate(180%);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
   box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.06);
 }
 .light .mac-sidebar {
@@ -436,6 +460,405 @@ html, body, #root {
   background: rgba(16, 163, 127, 0.7);
 }
 
+/* Métricas das peças da barra lateral. Repetem as utilitárias do markup para
+   que o aspeto Windows as possa sobrepor (o CSS sem `@layer` ganha às
+   utilitárias do Tailwind, que vivem numa camada). */
+.mac-sidebar-top {
+  height: 44px;
+}
+.mac-sidebar-btn {
+  height: 24px;
+  width: 24px;
+  border-radius: 6px;
+}
+.mac-sidebar-rail-btn {
+  height: 28px;
+  width: 28px;
+  border-radius: 7px;
+}
+.mac-sidebar-search {
+  height: 28px;
+  border-radius: 6px;
+}
+.mac-nav-row-rail {
+  height: 30px;
+  width: 36px;
+  /* A coluna do rail é flex: sem `flex: none` os botões encolhem até à altura
+     do ícone (16 px) quando as aplicações não cabem — em vez de deslizar. */
+  flex: none;
+}
+
+/* -------------------------------------- barra lateral estilo Windows 11
+   O mesmo menu de aplicações, com o material e as métricas do Windows 11:
+   Mica plano (sem gradiente), linhas de 32 px com 4 px de canto, seleção
+   discreta com **barra de acento** (3×16 px) à esquerda e o ícone no acento,
+   pesquisa de 32 px com sublinhado de foco e barras de rolagem finas. O dock,
+   as janelas e a barra lateral ficam assim no mesmo idioma visual. */
+html[data-window-style="windows"] .mac-sidebar {
+  background: rgba(32, 32, 32, 0.86);
+  backdrop-filter: blur(30px) saturate(150%);
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.09);
+}
+html.light[data-window-style="windows"] .mac-sidebar {
+  background: rgba(243, 243, 243, 0.88);
+  box-shadow: inset -1px 0 0 rgba(0, 0, 0, 0.08);
+}
+html[data-window-style="windows"] .mac-sidebar-top {
+  height: 48px;
+}
+html[data-window-style="windows"] .mac-sidebar-btn {
+  height: 32px;
+  width: 32px;
+  border-radius: 4px;
+}
+html[data-window-style="windows"] .mac-sidebar-rail-btn {
+  height: 40px;
+  width: 40px;
+  border-radius: 4px;
+}
+html[data-window-style="windows"] .mac-sidebar-btn:hover,
+html[data-window-style="windows"] .mac-sidebar-rail-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+}
+html[data-window-style="windows"] .mac-sidebar-btn:active,
+html[data-window-style="windows"] .mac-sidebar-rail-btn:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Pesquisa: retângulo de 32 px, raio de 4 px e sublinhado de acento no foco. */
+html[data-window-style="windows"] .mac-sidebar-search {
+  height: 32px;
+  border-radius: 4px;
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+}
+html[data-window-style="windows"] .mac-sidebar-search:hover {
+  background: rgba(255, 255, 255, 0.075);
+}
+html[data-window-style="windows"] .mac-sidebar-search:focus {
+  border-color: rgba(255, 255, 255, 0.17);
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: 0 1px 0 0 rgb(96 205 255);
+}
+
+/* Cabeçalhos de secção: etiqueta discreta, fundo só no `hover`. */
+html[data-window-style="windows"] .mac-section-title {
+  padding: 0.3rem 0.5rem 0.3rem 0.6rem;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.55);
+}
+html[data-window-style="windows"] .mac-section-title:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+}
+
+/* Linhas: 32 px de altura, 4 px de canto e sem pílula — a seleção é o acento. */
+html[data-window-style="windows"] .mac-nav-row {
+  height: 32px;
+  gap: 0.7rem;
+  padding: 0 0.65rem 0 0.85rem;
+  border-radius: 4px;
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.88);
+}
+html[data-window-style="windows"] .mac-nav-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+html[data-window-style="windows"] .mac-nav-row:active {
+  background: rgba(255, 255, 255, 0.045);
+}
+html[data-window-style="windows"] .mac-nav-row[data-active="true"],
+html[data-window-style="windows"] .mac-nav-row[data-active="true"]:hover {
+  background: rgba(255, 255, 255, 0.065);
+  color: #ffffff;
+  font-weight: 500;
+  box-shadow: none;
+}
+html[data-window-style="windows"] .mac-nav-row[data-active="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: rgb(96 205 255);
+  transform: translateY(-50%);
+}
+html[data-window-style="windows"] .mac-nav-row .mac-nav-icon {
+  color: rgba(255, 255, 255, 0.72);
+}
+html[data-window-style="windows"] .mac-nav-row:hover .mac-nav-icon {
+  color: rgba(255, 255, 255, 0.95);
+}
+html[data-window-style="windows"] .mac-nav-row[data-active="true"] .mac-nav-icon {
+  color: rgb(96 205 255);
+}
+
+/* Rail (só ícones): botões de 40 px, como os da barra de tarefas. */
+html[data-window-style="windows"] .mac-nav-row-rail {
+  height: 40px;
+  width: 40px;
+  padding: 0;
+}
+
+/* Conta no pé da barra e divisória. */
+html[data-window-style="windows"] .mac-sidebar-account {
+  border-radius: 4px;
+}
+html[data-window-style="windows"] .mac-sidebar-account:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+html[data-window-style="windows"] .mac-sidebar-resizer:hover::after,
+html[data-window-style="windows"] .mac-sidebar-resizer[data-dragging="true"]::after {
+  background: rgb(96 205 255);
+}
+
+/* Barras de rolagem finas, como as do Windows 11. */
+html[data-window-style="windows"] .mac-sidebar ::-webkit-scrollbar {
+  width: 4px;
+}
+html[data-window-style="windows"] .mac-sidebar ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+}
+html[data-window-style="windows"] .mac-sidebar ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+/* Pega de reabertura com a barra escondida: o mesmo Mica, canto de 4 px. */
+html[data-window-style="windows"] .mac-sidebar-handle {
+  background: rgba(32, 32, 32, 0.88);
+  border-radius: 0 4px 4px 0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+/* ------------------------------------------ menu Iniciar (aspeto Windows 11)
+   Painel **flutuante** por cima do ambiente de trabalho, encostado ao botão
+   Iniciar da barra de tarefas: pesquisa arredondada, grelha de aplicações
+   afixadas, recomendações e cartões de categoria, com o rodapé da conta e o
+   botão de energia. Não é a barra lateral — aparece e desaparece sem mexer na
+   disposição da plataforma. */
+.start-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 61;
+  pointer-events: none;
+}
+.start-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  cursor: default;
+}
+.start-anchor {
+  position: absolute;
+  display: flex;
+  pointer-events: auto;
+  transform-origin: left bottom;
+  animation: start-pop 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.start-anchor[data-position="bottom"] {
+  left: 12px;
+  bottom: calc(var(--dock-thickness, 48px) + 8px);
+}
+.start-anchor[data-position="left"] {
+  left: calc(var(--dock-thickness, 48px) + 8px);
+  bottom: 12px;
+}
+.start-anchor[data-position="right"] {
+  right: calc(var(--dock-thickness, 48px) + 8px);
+  bottom: 12px;
+}
+@media (min-width: 768px) {
+  /* Alinhado com a área de trabalho: não tapa a barra lateral. */
+  .start-anchor[data-position="bottom"] {
+    left: calc(var(--start-gutter, 0px) + 12px);
+  }
+  .start-anchor[data-position="left"] {
+    left: calc(var(--start-gutter, 0px) + var(--dock-thickness, 48px) + 8px);
+  }
+}
+.start-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(460px, 92vw);
+  max-height: min(74vh, 640px);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(32, 32, 32, 0.86);
+  backdrop-filter: blur(30px) saturate(150%);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+@keyframes start-pop {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* Botão Iniciar com o menu aberto (como no Windows). */
+.dock-start[data-open] {
+  background: rgba(255, 255, 255, 0.09);
+  color: #ffffff;
+}
+
+html[data-window-style="windows"] .start-search {
+  height: 36px;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  font-size: 12.5px;
+}
+html[data-window-style="windows"] .start-search:hover {
+  background: rgba(255, 255, 255, 0.075);
+}
+html[data-window-style="windows"] .start-search:focus {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 1px 0 0 rgb(96 205 255);
+}
+html[data-window-style="windows"] .start-heading {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+html[data-window-style="windows"] .start-link {
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.72);
+  transition: background-color 100ms ease, color 100ms ease;
+}
+html[data-window-style="windows"] .start-link:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+}
+html[data-window-style="windows"] .start-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 2px;
+  border-radius: 4px;
+  transition: background-color 100ms ease;
+}
+html[data-window-style="windows"] .start-tile:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+html[data-window-style="windows"] .start-tile:active {
+  background: rgba(255, 255, 255, 0.04);
+}
+html[data-window-style="windows"] .start-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  transition: background-color 100ms ease;
+}
+html[data-window-style="windows"] .start-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+html[data-window-style="windows"] .start-row-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+}
+html[data-window-style="windows"] .start-row-icon svg {
+  width: 15px;
+  height: 15px;
+}
+html[data-window-style="windows"] .start-card {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+html[data-window-style="windows"] .start-card:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.055);
+}
+html[data-window-style="windows"] .start-mini {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.8);
+  transition: background-color 100ms ease, color 100ms ease;
+}
+html[data-window-style="windows"] .start-mini:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+html[data-window-style="windows"] .start-mini svg {
+  width: 15px;
+  height: 15px;
+}
+html[data-window-style="windows"] .start-list-title {
+  padding: 4px 8px 2px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+html[data-window-style="windows"] .start-menu {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(44, 44, 44, 0.96);
+  backdrop-filter: blur(30px) saturate(150%);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+}
+html[data-window-style="windows"] .start-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  text-align: left;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.88);
+}
+html[data-window-style="windows"] .start-menu-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+html[data-window-style="windows"] .start-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+html[data-window-style="windows"] .start-account {
+  border-radius: 4px;
+  transition: background-color 100ms ease;
+}
+html[data-window-style="windows"] .start-account:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+html[data-window-style="windows"] .start-power {
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.85);
+  transition: background-color 100ms ease, color 100ms ease;
+}
+html[data-window-style="windows"] .start-power:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mac-section-chevron,
   .mac-nav-row,
@@ -446,7 +869,8 @@ html, body, #root {
 
 /* ------------------------------------------------- área de trabalho (janelas)
    Fundo do "desktop" onde as janelas flutuam: uma malha discreta sobre o
-   gradiente da plataforma, para dar profundidade sem competir com o conteúdo. */
+   gradiente da plataforma, para dar profundidade sem competir com o conteúdo.
+   Com o papel de parede ligado ganha manchas de cor que o vidro desfoca. */
 .desktop-bg {
   background-color: var(--color-background);
   background-image:
@@ -455,6 +879,39 @@ html, body, #root {
     linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
   background-size: 100% 100%, 100% 100%, 28px 28px, 28px 28px;
+  /* O ecrã é uma superfície fixa: nada pode fazer "overscroll" nem encadear o
+     scroll para o pai (as janelas passariam por cima da barra de menus). */
+  overscroll-behavior: none;
+  scroll-behavior: auto;
+}
+
+html[data-wallpaper="on"] .desktop-bg {
+  background-color: #090c11;
+}
+
+/* As manchas de cor vivem numa camada própria, maior do que a área de trabalho,
+   que desliza devagar: `transform` (composto no GPU) em vez de
+   `background-position` (repinta o ecrã inteiro a cada frame). */
+html[data-wallpaper="on"] .desktop-bg::before {
+  content: "";
+  position: absolute;
+  inset: -22%;
+  pointer-events: none;
+  background-image:
+    radial-gradient(56% 50% at 16% 14%, rgba(16, 163, 127, 0.5), transparent 62%),
+    radial-gradient(48% 44% at 84% 20%, rgba(59, 130, 246, 0.46), transparent 64%),
+    radial-gradient(54% 56% at 72% 86%, rgba(139, 92, 246, 0.42), transparent 64%),
+    radial-gradient(42% 42% at 28% 80%, rgba(14, 165, 233, 0.38), transparent 62%);
+  animation: wallpaper-drift 64s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes wallpaper-drift {
+  from {
+    transform: translate3d(-2.5%, -1.8%, 0) scale(1.04);
+  }
+  to {
+    transform: translate3d(2.5%, 1.8%, 0) scale(1.1);
+  }
 }
 
 /* Ecrãs estreitos: quando os ícones não cabem no tamanho mínimo, o dock passa
@@ -513,18 +970,39 @@ html, body, #root {
   left: 0;
   width: 100%;
   border-radius: 26px;
-  background: rgba(17, 19, 24, 0.68);
-  backdrop-filter: blur(24px) saturate(150%);
-  -webkit-backdrop-filter: blur(24px) saturate(150%);
-  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: linear-gradient(
+    180deg,
+    rgba(26, 30, 38, var(--glass-dock-alpha-edge)),
+    rgba(11, 14, 19, var(--glass-dock-alpha))
+  );
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
   box-shadow:
     0 22px 60px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    inset 0 1px 0 var(--glass-highlight),
     inset 0 -1px 0 rgba(0, 0, 0, 0.25);
   transition:
     left 300ms cubic-bezier(0.22, 1, 0.36, 1),
     width 300ms cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: none;
+}
+/* Reflexo especular no bordo superior: dá ao tabuleiro o aspecto de vidro. */
+.dock-tray::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.09) 0%,
+    rgba(255, 255, 255, 0.015) 32%,
+    rgba(255, 255, 255, 0) 60%
+  );
+  pointer-events: none;
+}
+/* Com o vidro desligado o tabuleiro fica opaco e sem reflexo especular. */
+html[data-glass="off"] .dock-tray::after {
+  opacity: 0;
 }
 .dock-shelf[data-magnifying="true"] .dock-tray {
   transition: none;
@@ -572,6 +1050,16 @@ html, body, #root {
   pointer-events: none;
 }
 
+/* Pressão no ícone (o `transform` do tile é escrito pela ampliação, por isso o
+   efeito de carregar vive no glifo interior). */
+.dock-app:active .dock-icon {
+  transform: scale(0.9);
+  transition: transform 90ms ease;
+}
+.dock-app .dock-icon {
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 /* Salto de lançamento ao abrir uma aplicação. */
 @keyframes dock-bounce-y {
   0%, 100% { transform: translateY(0); }
@@ -600,6 +1088,427 @@ html, body, #root {
   box-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
 }
 
+/* --- Janelas minimizadas no dock (miniaturas, como no macOS) ------------- */
+.dock-mini {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035));
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    0 10px 22px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 var(--glass-highlight);
+  transition:
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+  animation: dock-mini-in 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dock-shelf[data-position="bottom"] .dock-mini:hover {
+  transform: translateY(-3px) scale(1.05);
+}
+.dock-shelf[data-position="left"] .dock-mini:hover {
+  transform: translateX(3px) scale(1.05);
+}
+.dock-shelf[data-position="right"] .dock-mini:hover {
+  transform: translateX(-3px) scale(1.05);
+}
+.dock-mini:hover {
+  border-color: rgba(94, 234, 212, 0.55);
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, 0.5),
+    0 0 18px rgba(52, 211, 153, 0.22);
+}
+/* A janela "caía" no dock: a miniatura aparece a encolher de cima. */
+@keyframes dock-mini-in {
+  from {
+    opacity: 0;
+    transform: scale(1.5) translateY(-18%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.dock-mini-label {
+  position: absolute;
+  display: none;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 9px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(20, 22, 27, 0.95);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+  color: var(--color-foreground);
+  font-size: 11.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+  z-index: 6;
+}
+.dock-mini:hover .dock-mini-label {
+  display: flex;
+}
+.dock-mini-hint {
+  font-size: 10px;
+  color: var(--color-muted-foreground);
+}
+
+/* --- Janelas: encolher para o dock (minimizar) e crescer (restaurar) ----- */
+.window-scale {
+  will-change: transform, opacity;
+}
+.window-scale.is-minimizing {
+  /* Duração sincronizada com MINIMIZE_MS em WindowManager.tsx. */
+  animation: window-minimize 280ms cubic-bezier(0.4, 0, 0.72, 0.24) forwards;
+  pointer-events: none;
+}
+@keyframes window-minimize {
+  to {
+    transform: scale(0.08);
+    opacity: 0;
+  }
+}
+.window-scale.is-entering {
+  animation: window-appear 320ms cubic-bezier(0.34, 1.42, 0.64, 1);
+}
+@keyframes window-appear {
+  from {
+    transform: scale(0.88);
+    opacity: 0.2;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.window-scale.is-closing {
+  /* Duração sincronizada com CLOSE_MS em WindowManager.tsx. */
+  animation: window-close 200ms cubic-bezier(0.4, 0, 0.7, 0.2) forwards;
+  pointer-events: none;
+}
+@keyframes window-close {
+  to {
+    transform: scale(0.93);
+    opacity: 0;
+  }
+}
+
+/* --------------------------------------------------------- material: janelas
+   A janela é uma folha de vidro: fundo translúcido desfocado (o papel de parede
+   passa por trás), barra de título mais clara e corpo ligeiramente mais opaco
+   para o texto ficar nítido. Tudo lê os tokens definidos por `applyGlass()`. */
+.window-shell {
+  background: linear-gradient(
+    165deg,
+    rgba(26, 30, 38, var(--glass-window-alpha)),
+    rgba(11, 14, 19, var(--glass-window-alpha-edge))
+  );
+  border-color: var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 var(--glass-highlight);
+  transition:
+    box-shadow 220ms ease,
+    border-color 220ms ease,
+    opacity 200ms ease;
+}
+.window-shell[data-active="false"] {
+  opacity: 0.97;
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+/* Enquanto se arrasta, a sombra cresce (a janela "levanta-se"). */
+.window-shell[data-interacting="true"] {
+  box-shadow:
+    0 40px 100px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 var(--glass-highlight);
+}
+.window-bar {
+  background: linear-gradient(180deg, rgba(255, 255, 255, var(--glass-bar-alpha)), rgba(255, 255, 255, 0.015));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.window-shell[data-active="false"] .window-bar {
+  background: rgba(255, 255, 255, 0.02);
+}
+.window-body {
+  background: rgba(10, 12, 16, var(--glass-body-alpha));
+}
+/* Com o vidro desligado não há desfoco nem translucidez no corpo. */
+html[data-glass="off"] .window-body {
+  background: #0f1115;
+}
+
+/* ------------------------------------------------------------ janelas 3D
+   A janela é uma folha plana rodada no espaço: a perspetiva vai dentro do
+   próprio `transform` (função `perspective()`), composta em JS (Window.tsx) —
+   não depende de `transform-style: preserve-3d` nem do `backdrop-filter` dos
+   antepassados. Aqui fica só o que o JS não escreve: a sombra/opacidade das
+   janelas sem foco quando a profundidade está ligada. */
+html[data-window3d="on"] .window-shell {
+  will-change: transform;
+}
+html[data-window3d="on"][data-window3d-depth="on"] .window-shell[data-active="false"] {
+  opacity: 0.965;
+  box-shadow: var(--win3d-depth-shadow, 0 14px 38px rgba(0, 0, 0, 0.42));
+}
+
+/* ------------------------------------- barra de tarefas estilo Windows 11
+   O mesmo dock, com o material e as métricas do Windows: barra plana tipo Mica
+   encostada à margem (sem tabuleiro flutuante), botões quadrados de 40 px com
+   realce no `hover`, indicador por baixo do ícone (barra larga quando a janela
+   tem foco, curta quando está só aberta) e bandeja com o relógio. */
+.dock-shelf[data-style="windows"] {
+  background: rgba(32, 32, 32, 0.86);
+  backdrop-filter: blur(30px) saturate(150%);
+  border: 0;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 -8px 24px rgba(0, 0, 0, 0.35);
+}
+/* A barra do Windows encosta mesmo ao bordo (sem a folga dos telemóveis). */
+.dock-anchor[data-style="windows"] {
+  padding-bottom: 0;
+}
+/* No Windows a barra de tarefas fica **colada** ao fundo do ecrã (a folga de
+   8 px é só para a área segura dos telemóveis). */
+html[data-window-style="windows"] .dock-safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.dock-shelf[data-style="windows"][data-position="bottom"] {
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+}
+.dock-shelf[data-style="windows"][data-position="left"] {
+  border-right: 1px solid rgba(255, 255, 255, 0.09);
+}
+.dock-shelf[data-style="windows"][data-position="right"] {
+  border-left: 1px solid rgba(255, 255, 255, 0.09);
+}
+/* O tabuleiro do dock (macOS) desaparece: a barra é o próprio fundo. */
+.dock-shelf[data-style="windows"] .dock-tray {
+  display: none;
+}
+
+.dock-shelf[data-style="windows"] .dock-tile {
+  background: transparent;
+  border: 0;
+}
+.dock-shelf[data-style="windows"] .dock-tile-bg {
+  display: none;
+}
+.dock-shelf[data-style="windows"] .dock-tile:hover .dock-icon {
+  transform: scale(1.06);
+  transition: transform 120ms ease-out;
+}
+.dock-shelf[data-style="windows"] .dock-app::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 5px;
+  background: transparent;
+  transition: background-color 100ms ease;
+  pointer-events: none;
+}
+.dock-shelf[data-style="windows"] .dock-app:hover::after {
+  background: rgba(255, 255, 255, 0.07);
+}
+.dock-shelf[data-style="windows"] .dock-app:active::after {
+  background: rgba(255, 255, 255, 0.12);
+}
+.dock-shelf[data-style="windows"] .dock-app.is-bouncing .dock-icon {
+  animation: none;
+}
+
+/* Indicador do Windows: barra arredondada no lado interior da barra. */
+.dock-win-indicator {
+  position: absolute;
+  background: rgb(96 205 255);
+  border-radius: 2px;
+  pointer-events: none;
+  transition: width 160ms cubic-bezier(0.22, 1, 0.36, 1), height 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease;
+}
+.dock-shelf[data-style="windows"][data-position="bottom"] .dock-win-indicator {
+  bottom: 1px;
+  left: 50%;
+  height: 3px;
+  transform: translateX(-50%);
+}
+.dock-shelf[data-style="windows"][data-position="left"] .dock-win-indicator,
+.dock-shelf[data-style="windows"][data-position="right"] .dock-win-indicator {
+  top: 50%;
+  width: 3px;
+  transform: translateY(-50%);
+}
+.dock-shelf[data-style="windows"][data-position="left"] .dock-win-indicator {
+  left: 1px;
+}
+.dock-shelf[data-style="windows"][data-position="right"] .dock-win-indicator {
+  right: 1px;
+}
+.dock-shelf[data-style="windows"] .dock-win-indicator[data-state="idle"] {
+  opacity: 0;
+}
+/* Focada: barra larga. Aberta sem foco: barra curta. A largura acompanha o
+   tamanho dos botões da barra (`--dock-ind`, definida pelo componente). */
+.dock-shelf[data-style="windows"][data-position="bottom"] .dock-win-indicator[data-state="active"] {
+  width: var(--dock-ind, 16px);
+}
+.dock-shelf[data-style="windows"][data-position="bottom"] .dock-win-indicator[data-state="running"] {
+  width: var(--dock-ind-min, 7px);
+}
+.dock-shelf[data-style="windows"][data-position="left"] .dock-win-indicator[data-state="active"],
+.dock-shelf[data-style="windows"][data-position="right"] .dock-win-indicator[data-state="active"] {
+  height: var(--dock-ind, 16px);
+}
+.dock-shelf[data-style="windows"][data-position="left"] .dock-win-indicator[data-state="running"],
+.dock-shelf[data-style="windows"][data-position="right"] .dock-win-indicator[data-state="running"] {
+  height: var(--dock-ind-min, 7px);
+}
+
+/* Iniciar + bandeja */
+.dock-start {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 4px;
+  color: rgb(96 205 255);
+  transition: background-color 100ms ease, color 100ms ease;
+}
+.dock-start:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+}
+.dock-start:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+.dock-clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  flex: none;
+  margin-left: 4px;
+  padding: 0 8px;
+  border-radius: 4px;
+  line-height: 1.15;
+  color: rgba(255, 255, 255, 0.9);
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+.dock-clock:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+.dock-clock-time {
+  font-size: 11.5px;
+}
+.dock-clock-date {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.72);
+}
+/* As miniaturas passam a botões da barra (só o ícone). */
+.dock-shelf[data-style="windows"] .dock-mini-dots {
+  display: none;
+}
+.dock-shelf[data-style="windows"] .dock-mini {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+.dock-shelf[data-style="windows"] .dock-mini:hover {
+  border-color: transparent;
+  box-shadow: none;
+}
+.dock-shelf[data-style="windows"] .dock-mini::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 5px;
+  background: transparent;
+  transition: background-color 100ms ease;
+  pointer-events: none;
+}
+.dock-shelf[data-style="windows"] .dock-mini:hover::after {
+  background: rgba(255, 255, 255, 0.07);
+}
+.dock-shelf[data-style="windows"] .dock-mini-label {
+  z-index: 7;
+}
+
+/* --------------------------------------------- janelas estilo Windows 11
+   O chrome do Windows 11: cantos de 8 px (0 px com a janela maximizada),
+   material tipo Mica (mais opaco e menos desfocado que o vidro do macOS),
+   barra de 32 px com o ícone e o título à esquerda e os controlos à direita
+   (46×32 px, `hover` claro e fechar vermelho `#c42b1c`). */
+html[data-window-style="windows"] .window-shell {
+  border-radius: 8px;
+  border-color: rgba(255, 255, 255, 0.09);
+  background: linear-gradient(180deg, rgba(32, 32, 32, 0.94), rgba(23, 23, 23, 0.96));
+  backdrop-filter: blur(min(18px, var(--glass-blur, 18px))) saturate(115%);
+  box-shadow:
+    0 22px 48px rgba(0, 0, 0, 0.52),
+    0 2px 8px rgba(0, 0, 0, 0.38);
+}
+html[data-window-style="windows"] .window-shell[data-maximized="true"] {
+  border-radius: 0;
+  border-color: transparent;
+  box-shadow: none;
+}
+html[data-window-style="windows"] .window-bar {
+  height: 32px;
+  gap: 0;
+  padding: 0 0 0 12px;
+  background: rgba(255, 255, 255, 0.035);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+html[data-window-style="windows"] .window-shell[data-active="false"] .window-bar {
+  background: rgba(255, 255, 255, 0.018);
+}
+html[data-window-style="windows"] .window-bar-icon svg {
+  width: 14px;
+  height: 14px;
+}
+html[data-window-style="windows"] .window-body {
+  background: rgba(20, 20, 20, 0.93);
+}
+html[data-glass="off"][data-window-style="windows"] .window-body {
+  background: #141414;
+}
+
+.win-btn {
+  width: 46px;
+  height: 32px;
+  color: rgba(255, 255, 255, 0.86);
+  transition: background-color 90ms ease, color 90ms ease;
+}
+.win-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+.win-btn:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+.win-btn[data-kind="close"]:hover,
+.win-btn[data-kind="close"]:active {
+  background: #c42b1c;
+  color: #ffffff;
+}
+html[data-window-style="windows"] .window-shell[data-active="false"] .win-btn {
+  color: rgba(255, 255, 255, 0.6);
+}
+.dock-shelf[data-position="bottom"] .dock-mini-label {
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+.dock-shelf[data-position="left"] .dock-mini-label {
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+.dock-shelf[data-position="right"] .dock-mini-label {
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
 /* Etiqueta flutuante — o `transform` é posicionado por JS, por isso a animação
    de entrada só mexe na opacidade. */
 .dock-tip {
@@ -613,7 +1522,6 @@ html, body, #root {
   border: 1px solid rgba(255, 255, 255, 0.13);
   background: rgba(20, 22, 27, 0.94);
   backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
   color: var(--color-foreground);
   font-size: 12px;
@@ -633,7 +1541,6 @@ html, body, #root {
 .dock-popover {
   background: linear-gradient(160deg, rgba(24, 28, 35, 0.985), rgba(13, 16, 21, 0.99));
   backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
   box-shadow:
     0 28px 70px rgba(0, 0, 0, 0.6),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
@@ -679,10 +1586,22 @@ html, body, #root {
   .dock-anchor,
   .dock-popover,
   .dock-tip,
+  .dock-mini,
+  .window-scale,
+  .window-shell,
+  .desktop-bg,
   .dock-shelf .dock-icon {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* Dica que só faz sentido no aspeto Windows (a barra de tarefas). */
+.dock-hint-windows {
+  display: none;
+}
+html[data-window-style="windows"] .dock-hint-windows {
+  display: block;
 }
 
 /* Preferência da conta: "Reduzir animações" (Definições → Preferências). */

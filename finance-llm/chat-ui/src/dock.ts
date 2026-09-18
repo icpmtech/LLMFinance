@@ -379,6 +379,8 @@ export type DockPrefs = {
   indicators: boolean;
   /** Reflexo/brilho sob os ícones. */
   reflection: boolean;
+  /** Miniaturas das janelas minimizadas no dock (como no macOS). */
+  minimizedShelf: boolean;
   /** Ícones visíveis, pela ordem apresentada. */
   items: string[];
   /** Ícones removidos do dock. */
@@ -404,6 +406,7 @@ export const DEFAULT_DOCK_PREFS: DockPrefs = {
   tooltips: true,
   indicators: true,
   reflection: true,
+  minimizedShelf: true,
   items: DEFAULT_ITEMS,
   parked: DEFAULT_PARKED,
   version: ORDER_VERSION,
@@ -480,6 +483,7 @@ function sanitize(raw: Partial<DockPrefs> | null): DockPrefs {
     tooltips: typeof raw?.tooltips === "boolean" ? raw.tooltips : DEFAULT_DOCK_PREFS.tooltips,
     indicators: typeof raw?.indicators === "boolean" ? raw.indicators : DEFAULT_DOCK_PREFS.indicators,
     reflection: typeof raw?.reflection === "boolean" ? raw.reflection : DEFAULT_DOCK_PREFS.reflection,
+    minimizedShelf: typeof raw?.minimizedShelf === "boolean" ? raw.minimizedShelf : DEFAULT_DOCK_PREFS.minimizedShelf,
     items: items.length ? [...items, ...newVisible] : DEFAULT_DOCK_PREFS.items,
     parked: [...parked, ...newParked],
     version: ORDER_VERSION,

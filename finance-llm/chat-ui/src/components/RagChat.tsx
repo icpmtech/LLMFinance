@@ -80,8 +80,13 @@ export function RagChat({
 
   const selectedDocObj = documents.find((d) => d.doc_id === selectedDocId) || null;
 
+  /* Rola só a lista de mensagens. `scrollIntoView` arrastaria **todos** os
+     antepassados roláveis — incluindo o «ecrã» das janelas — e as janelas
+     apareciam deslocadas por cima da barra de menus. */
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const lista = bottomRef.current?.parentElement;
+    if (!lista) return;
+    lista.scrollTo({ top: lista.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
   useEffect(() => {
@@ -206,9 +211,9 @@ export function RagChat({
   };
 
   return (
-    <div className="flex h-full min-h-0 gap-4">
-      {/* Documentos */}
-      <aside className="w-72 xl:w-80 bg-card border border-border rounded-2xl flex flex-col h-full min-h-0 overflow-hidden shadow-sm">
+    <div className="flex h-full min-h-0 flex-col gap-3 @4xl:flex-row @4xl:gap-4">
+      {/* Documentos (por cima em janelas estreitas, à esquerda nas largas) */}
+      <aside className="flex h-[30%] max-h-[150px] min-h-[96px] w-full shrink-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] @4xl:h-full @4xl:max-h-none @4xl:min-h-0 @4xl:w-72 @5xl:w-80">
         <CardHeader className="p-4 border-b border-border shrink-0">
           <CardTitle icon={<FileText size={18} className="text-primary" />}>Documentos</CardTitle>
           <Button variant="ghost" size="sm" loading={loadingDocs} onClick={onRefreshDocuments}>
@@ -321,7 +326,7 @@ export function RagChat({
       </aside>
 
       {/* Chat */}
-      <div className="flex-1 min-h-0 flex flex-col bg-card border border-border rounded-2xl h-full overflow-hidden shadow-sm">
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
         <div className="p-4 border-b border-border shrink-0 flex items-start justify-between gap-4">
           <div>
             <h3 className="font-semibold flex items-center gap-2">

@@ -33,8 +33,9 @@ import {
   type DockPosition,
 } from "../dock";
 import { useAuth } from "../auth";
-import { useSidebar, useWindowMode } from "../layout";
-import { closeWindow, focusWindow, minimizeWindow, useWindows, windowFor } from "../windows";
+import { useGlass, useSidebar, useWindow3d, useWindowMode, useWindowStyle } from "../layout";
+import { StartMenu } from "./StartMenu";
+import { closeWindow, estimateWorkspace, focusWindow, minimizeWindow, toggleMaximizeWindow, useWindows, windowFor } from "../windows";
 import { useFullscreen } from "../fullscreen";
 import { usePwaInstall } from "../pwa";
 
@@ -81,6 +82,9 @@ function fitDock(desired: number, items: number, available: number) {
   return { iconSize, scrolling: iconSize < desired };
 }
 
+/** Largura de uma miniatura de janela minimizada, em "ícones". */
+const MINI_WIDTH_UNITS = 1.34;
+
 /** Vistas que não têm ícone próprio e herdam o realce de outra aplicação. */
 const ALIAS: Record<string, string> = {
   "ticker-detail": "tickers",
@@ -103,14 +107,19 @@ export function Dock({ active, onOpen }: DockProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [revealed, setRevealed] = useState(!prefs.autoHide);
   const [visited, setVisited] = useState<string[]>([]);
+  /** Relógio da bandeja (só usado na barra de tarefas do Windows). */
+  const [now, setNow] = useState(() => new Date());
   const [hovered, setHovered] = useState<DockApp | null>(null);
-  const [menu, setMenu] = useState<{ app: DockApp | null; x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ app: DockApp | null; view?: string | null; x: number; y: number } | null>(null);
   const [bouncing, setBouncing] = useState<string | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
   const [finePointer, setFinePointer] = useState(false);
+  /** Menu Iniciar (Windows 11): painel flutuante sobre o ambiente de trabalho. */
+  const [startOpen, setStartOpen] = useState(false);
   const { mode: sidebarMode } = useSidebar();
   const { windowMode, setWindowMode } = useWindowMode();
+  const { windowStyle } = useWindowStyle();
   const { user, updateProfile } = useAuth();
   /** O modo janelas é uma preferência de conta: guardar aqui evita que um
    *  recarregamento reponha o valor antigo. */
@@ -127,19 +136,67 @@ export function Dock({ active, onOpen }: DockProps) {
   const vertical = prefs.position !== "bottom";
   const editing = settingsOpen;
   const viewport = useViewport();
+  /**
+   * Barra de tarefas do Windows 11 (o aspeto escolhido nas preferências).
+   *
+   * É o mesmo dock — mesmas aplicações, mesma ordem, mesmas janelas minimizadas
+   * — mas com o material e as métricas do Windows: barra plana tipo Mica, botões
+   * quadrados de 40 px, indicador por baixo do ícone em vez do ponto do macOS e
+   * sem ampliação nem etiquetas flutuantes.
+   */
+  const windowsTaskbar = windowStyle === "windows";
+
+  /* O menu Iniciar só existe com a barra de tarefas do Windows. */
+  useEffect(() => {
+    if (!windowsTaskbar) setStartOpen(false);
+  }, [windowsTaskbar]);
 
   /** Tamanho efetivo dos ícones (o utilizador define o máximo; o ecrã manda). */
   const fitted = useMemo(() => {
     const available = vertical
       ? Math.max(220, viewport.height - 150)
       : Math.max(220, viewport.width - 24);
-    return fitDock(prefs.iconSize, visible.length, available);
-  }, [prefs.iconSize, visible.length, vertical, viewport.width, viewport.height]);
+    // As janelas minimizadas também ocupam dock: contam para o espaço necessário.
+    const minis = windowMode && prefs.minimizedShelf ? openWindows.filter((item) => item.minimized).length : 0;
+    const units = visible.length + minis * MINI_WIDTH_UNITS + (minis > 0 ? 0.4 : 0);
+    return fitDock(prefs.iconSize, units, available);
+  }, [openWindows, prefs.iconSize, prefs.minimizedShelf, visible.length, vertical, viewport.width, viewport.height, windowMode]);
   const iconSize = fitted.iconSize;
+
+  /**
+   * Tamanho dos botões da **barra de tarefas** (Windows).
+   *
+   * A barra ganha com o espaço livre: com poucas aplicações os botões crescem
+   * (até 72 px, com o ícone maior), com muitas mantêm os 40 px mínimos — e a
+   * barra passa a deslizar. A base é «Tamanho dos ícones» das preferências do
+   * dock (que passa a valer nos dois aspetos) e a reserva fixa (Iniciar,
+   * bandeja, relógio e folgas) é descontada antes de repartir o espaço.
+   */
+  const windowsTile = useMemo(() => {
+    if (!windowsTaskbar) return iconSize;
+    const available = Math.max(220, (vertical ? viewport.height : viewport.width) - 24);
+    const base = Math.min(72, Math.max(40, Math.round(prefs.iconSize * 0.77)));
+    // O tecto segue a preferência (não cresce mais do que ~25% acima dela).
+    const cap = Math.max(base, Math.min(72, Math.round(prefs.iconSize * 1.25)));
+    const tray = 2 * Math.max(28, Math.round(base * 0.8)) + 96 + base + 24;
+    const apps = Math.max(1, visible.length);
+    const perApp = (available - tray - 4 * (apps - 1)) / apps;
+    return Math.max(base, Math.min(cap, Math.round(perApp)));
+  }, [iconSize, prefs.iconSize, vertical, viewport.height, viewport.width, visible.length, windowsTaskbar]);
+
+  /** Métricas da barra de tarefas (Windows) vs ícones do dock (macOS). */
+  const tileSize = windowsTaskbar ? windowsTile : iconSize;
+  const tileRadius = windowsTaskbar ? 4 : Math.round(iconSize * 0.28);
+  const iconPx = windowsTaskbar ? Math.round(windowsTile * 0.55) : Math.round(iconSize * 0.5);
+  /** Espessura da barra (altura em baixo, largura nas laterais): os botões mandam. */
+  const barThickness = tileSize + 8;
+  /** Botões de sistema da bandeja (preferências / ecrã inteiro). */
+  const trayBtn = windowsTaskbar ? Math.max(28, Math.round(tileSize * 0.8)) : Math.round(iconSize * 0.82);
+  const trayIcon = windowsTaskbar ? Math.max(14, Math.round(tileSize * 0.4)) : Math.round(iconSize * 0.4);
 
   /** Em ecrãs táteis não há rato: sem ampliação e sem esconder ao sair. */
   const autoHideActive = prefs.autoHide && finePointer;
-  const tooltipsActive = prefs.tooltips && finePointer;
+  const tooltipsActive = prefs.tooltips && finePointer && !windowsTaskbar;
 
   /** Largura reservada à barra lateral (o dock não a deve tapar). */
   const sidebarGutter = sidebarMode === "hidden" ? "" : sidebarMode === "rail" ? "md:pl-[72px]" : "md:pl-[268px]";
@@ -177,8 +234,13 @@ export function Dock({ active, onOpen }: DockProps) {
     setVisited((prev) => (prev.includes(active) ? prev : [...prev, active]));
   }, [active]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   /* ------------------------------------------------- ampliação (por frame) */
-  const magnifying = prefs.magnification && finePointer && !editing && !fitted.scrolling;
+  const magnifying = prefs.magnification && finePointer && !editing && !fitted.scrolling && !windowsTaskbar;
 
   /** Coloca o tabuleiro no eixo do dock (`start`/`size` em px). */
   const setTray = useCallback(
@@ -428,6 +490,38 @@ export function Dock({ active, onOpen }: DockProps) {
   );
   const highlightedView = windowMode ? focusedView ?? active : activeId;
 
+  /**
+   * Janelas minimizadas, como miniaturas no dock (como no macOS).
+   *
+   * Ficam depois do separador das aplicações; um clique restaura a janela.
+   * Fichas e quick look (vistas sem ícone próprio no dock) usam a informação
+   * da aplicação correspondente quando existe.
+   */
+  const minimizedWindows = useMemo(() => {
+    if (!windowMode || !prefs.minimizedShelf) return [];
+    const catalog = new Map<string, DockApp>();
+    [...visible, ...parked].forEach((app) => catalog.set(app.id, app));
+    return openWindows
+      .filter((item) => item.minimized)
+      .map((item) => {
+        const app = catalog.get(item.view) ?? catalog.get(ALIAS[item.view] ?? "");
+        return {
+          view: item.view,
+          app,
+          title: item.title ?? app?.label ?? item.view,
+          gradient: app?.gradient ?? "from-slate-500/80 to-slate-700/85",
+          accent: app?.accent ?? "148,163,184",
+        };
+      });
+  }, [openWindows, parked, prefs.minimizedShelf, visible, windowMode]);
+
+  /** Restaura (e foca) uma janela a partir da miniatura do dock. */
+  const restoreFromDock = (view: string) => {
+    setMenu(null);
+    setBouncing(null);
+    restoreWindowFocus(view);
+  };
+
   const openApp = (app: DockApp) => {
     setMenu(null);
     setBouncing(app.id);
@@ -439,6 +533,17 @@ export function Dock({ active, onOpen }: DockProps) {
       return;
     }
     onOpen(app.id);
+  };
+
+  /** Abre (ou foca/restaura) uma vista pelo id — usado pelo menu Iniciar. */
+  const openViewById = (id: string) => {
+    setMenu(null);
+    const existing = windowMode ? windowFor(id) : undefined;
+    if (existing) {
+      restoreWindowFocus(id);
+      return;
+    }
+    onOpen(id);
   };
 
   useEffect(() => {
@@ -505,33 +610,83 @@ export function Dock({ active, onOpen }: DockProps) {
         <div
           className="dock-anchor pointer-events-auto relative min-w-0 max-w-full max-h-full"
           data-position={prefs.position}
-          data-hidden={autoHideActive && !revealed && !settingsOpen ? "true" : "false"}
+          data-hidden={autoHideActive && !revealed && !settingsOpen && !startOpen ? "true" : "false"}
           onMouseEnter={() => setRevealed(true)}
           onMouseLeave={() => {
-            if (autoHideActive && !settingsOpen) setRevealed(false);
+            if (autoHideActive && !settingsOpen && !startOpen) setRevealed(false);
           }}
         >
           <div
             ref={shelfRef}
             role="toolbar"
-            aria-label="Dock de aplicações"
+            aria-label={windowsTaskbar ? "Barra de tarefas do IQ OS" : "Dock de aplicações"}
             data-position={prefs.position}
+            data-style={windowsTaskbar ? "windows" : "macos"}
             data-magnifying="false"
             data-scroll={fitted.scrolling ? "true" : "false"}
             className={[
-              "dock-shelf relative flex items-end",
+              "dock-shelf relative flex",
+              windowsTaskbar ? "items-center" : "items-end",
               fitted.scrolling ? "dock-scroll" : "",
               vertical ? "flex-col" : "flex-row",
-              iconSize >= 66 ? "gap-3 p-3.5" : "gap-2 p-2.5",
-              "rounded-[26px]",
+              windowsTaskbar
+                ? vertical
+                  ? "gap-1 py-1"
+                  : "w-full gap-1 px-1.5"
+                : iconSize >= 66
+                  ? "gap-3 p-3.5"
+                  : "gap-2 p-2.5",
+              windowsTaskbar ? "rounded-none" : "rounded-[26px]",
             ].join(" ")}
+            /* A barra ganha espessura com os botões (no Windows). */
+            style={
+              windowsTaskbar
+                ? {
+                    ...(vertical ? { width: barThickness } : { height: barThickness }),
+                    ["--dock-ind" as string]: `${Math.round(tileSize * 0.4)}px`,
+                    ["--dock-ind-min" as string]: `${Math.round(tileSize * 0.175)}px`,
+                  }
+                : undefined
+            }
             onPointerMove={handlePointerMove}
             onPointerLeave={handlePointerLeave}
             onContextMenu={(event) => {
               event.preventDefault();
               setMenu({ app: null, x: event.clientX, y: event.clientY });
             }}
-          >            <span ref={trayRef} className="dock-tray" aria-hidden="true" />            {visible.map((app, index) => {
+          >
+            <span ref={trayRef} className="dock-tray" aria-hidden="true" />
+
+            {/* Windows 11: botão Iniciar (abre o menu Iniciar flutuante) */}
+            {windowsTaskbar && (
+              <button
+                type="button"
+                onClick={() => setStartOpen((open) => !open)}
+                aria-label="Menu Iniciar"
+                aria-haspopup="dialog"
+                aria-expanded={startOpen}
+                data-open={startOpen || undefined}
+                title="Menu Iniciar"
+                className="dock-start grid shrink-0 place-items-center"
+                style={{ width: tileSize, height: tileSize }}
+              >
+                {/* Marca do IQ OS: quatro quadrantes (o "Iniciar" da barra). */}
+                <svg
+                  width={Math.round(tileSize * 0.45)}
+                  height={Math.round(tileSize * 0.45)}
+                  viewBox="0 0 20 20"
+                  aria-hidden="true"
+                  fill="currentColor"
+                >
+                  <rect x="1" y="1" width="8" height="8" rx="1.6" />
+                  <rect x="11" y="1" width="8" height="8" rx="1.6" />
+                  <rect x="1" y="11" width="8" height="8" rx="1.6" />
+                  <rect x="11" y="11" width="8" height="8" rx="1.6" />
+                </svg>
+              </button>
+            )}
+
+            {visible.map((app, index) => {
               const isActive = app.id === highlightedView;
               const isRunning = windowMode ? openViews.has(app.id) : visited.includes(app.id);
               const Icon = app.icon;
@@ -590,30 +745,44 @@ export function Dock({ active, onOpen }: DockProps) {
                       "dock-tile dock-app group relative grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70",
                       bouncing === app.id ? "is-bouncing" : "",
                     ].join(" ")}
-                    style={{ width: iconSize, height: iconSize, borderRadius: iconSize * 0.28 }}
+                    style={{ width: tileSize, height: tileSize, borderRadius: tileRadius }}
                   >
                     <span
                       className={[
-                        "absolute inset-0 overflow-hidden bg-gradient-to-br",
+                        "dock-tile-bg absolute inset-0 overflow-hidden bg-gradient-to-br",
                         app.gradient,
                         prefs.reflection ? "dock-tile-inset" : "",
                       ].join(" ")}
                       style={{ borderRadius: "inherit" }}
                       aria-hidden="true"
                     />
-                    <span className="dock-icon relative z-[1] grid place-items-center text-white drop-shadow">
-                      <Icon size={Math.round(iconSize * 0.5)} strokeWidth={1.9} />
+                    <span
+                      className={[
+                        "dock-icon relative z-[1] grid place-items-center",
+                        windowsTaskbar ? "text-white" : "text-white drop-shadow",
+                      ].join(" ")}
+                    >
+                      <Icon size={iconPx} strokeWidth={1.9} />
                     </span>
-                    {isActive && (
+                    {isActive && !windowsTaskbar && (
                       <span
                         className="pointer-events-none absolute inset-0 ring-2 ring-white/70"
                         style={{ borderRadius: "inherit", boxShadow: `0 0 22px rgba(${app.accent},0.55)` }}
                         aria-hidden="true"
                       />
                     )}
+                    {windowsTaskbar && prefs.indicators && (
+                      /* Windows 11: barra por baixo do ícone (larga com foco, curta se
+                         só estiver aberta, invisível se fechada). */
+                      <span
+                        aria-hidden="true"
+                        className="dock-win-indicator"
+                        data-state={isActive ? "active" : isRunning ? "running" : "idle"}
+                      />
+                    )}
                   </button>
 
-                  {prefs.indicators && (
+                  {!windowsTaskbar && prefs.indicators && (
                     <span
                       aria-hidden="true"
                       className={[
@@ -646,20 +815,105 @@ export function Dock({ active, onOpen }: DockProps) {
               ].join(" ")}
             />
 
+            {/* Janelas minimizadas: miniaturas no macOS, botões da barra no Windows */}
+            {minimizedWindows.length > 0 && (
+              <>
+                <div
+                  role="group"
+                  aria-label="Janelas minimizadas"
+                  className={[
+                    "flex shrink-0 items-center",
+                    windowsTaskbar ? "gap-0.5" : "gap-1.5",
+                    vertical ? "flex-col" : "flex-row",
+                  ].join(" ")}
+                >
+                  {minimizedWindows.map((item) => {
+                    const Icon = item.app?.icon ?? PanelLeftOpen;
+                    const barHeight = Math.max(5, Math.round(iconSize * 0.16));
+                    return (
+                      <button
+                        key={item.view}
+                        type="button"
+                        onClick={() => restoreFromDock(item.view)}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setMenu({ app: null, view: item.view, x: event.clientX, y: event.clientY });
+                        }}
+                        aria-label={`Restaurar janela ${item.title}`}
+                        title={`Restaurar ${item.title}`}
+                        className="dock-mini group relative shrink-0 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70"
+                        style={
+                          windowsTaskbar
+                            ? { width: tileSize, height: tileSize, borderRadius: tileRadius }
+                            : {
+                                width: Math.round(iconSize * 1.34),
+                                height: Math.round(iconSize * 0.92),
+                                borderRadius: Math.max(6, Math.round(iconSize * 0.14)),
+                              }
+                        }
+                      >
+                        <span
+                          className="dock-mini-dots absolute inset-x-0 top-0 flex items-center gap-1 bg-white/10 px-1.5"
+                          style={{ height: barHeight }}
+                          aria-hidden="true"
+                        >
+                          <span className="h-1 w-1 rounded-full bg-[#ff5f57]" />
+                          <span className="h-1 w-1 rounded-full bg-[#febc2e]" />
+                          <span className="h-1 w-1 rounded-full bg-[#28c840]" />
+                        </span>
+                        <span
+                          className={`absolute inset-x-0 bottom-0 grid place-items-center bg-gradient-to-br ${item.gradient}`}
+                          style={{ top: windowsTaskbar ? 0 : barHeight }}
+                          aria-hidden="true"
+                        >
+                          <Icon
+                            size={windowsTaskbar ? iconPx : Math.round(iconSize * 0.34)}
+                            strokeWidth={1.9}
+                            className="text-white drop-shadow"
+                          />
+                        </span>
+                        <span className="dock-mini-label" role="presentation">
+                          <span className="font-medium">{item.title}</span>
+                          <span className="dock-mini-hint">no dock · clique para restaurar</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <span
+                  aria-hidden="true"
+                  className={[
+                    "relative shrink-0 rounded-full bg-white/12",
+                    vertical ? "h-px w-8 self-center" : "h-8 w-px self-center",
+                  ].join(" ")}
+                />
+              </>
+            )}
+
             <button
               type="button"
               onClick={() => setSettingsOpen((open) => !open)}
               aria-label="Preferências do dock"
               aria-expanded={settingsOpen}
               title="Preferências do dock"
-              className="dock-tile relative grid shrink-0 place-items-center bg-white/8 text-muted-foreground transition hover:bg-white/14 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70"
-              style={{
-                width: iconSize * 0.82,
-                height: iconSize * 0.82,
-                borderRadius: iconSize * 0.24,
-              }}
+              className={[
+                "dock-tile relative grid shrink-0 place-items-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70",
+                windowsTaskbar
+                  ? "dock-tray-btn text-muted-foreground hover:text-foreground bg-transparent hover:bg-white/10"
+                  : "bg-white/8 text-muted-foreground hover:bg-white/14 hover:text-foreground",
+              ].join(" ")}
+              style={
+                windowsTaskbar
+                  ? { width: trayBtn, height: trayBtn, borderRadius: 4, marginLeft: vertical ? undefined : "auto" }
+                  : {
+                      width: iconSize * 0.82,
+                      height: iconSize * 0.82,
+                      borderRadius: iconSize * 0.24,
+                    }
+              }
             >
-              <Settings size={Math.round(iconSize * 0.4)} />
+              <Settings size={trayIcon} />
             </button>
 
             {fullscreenSupported && (
@@ -671,25 +925,48 @@ export function Dock({ active, onOpen }: DockProps) {
                 title={isFullscreen ? "Sair do ecrã inteiro" : "Ecrã inteiro"}
                 className={[
                   "dock-tile relative grid shrink-0 place-items-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70",
-                  isFullscreen
-                    ? "bg-teal-400/25 text-teal-100 hover:bg-teal-400/35"
-                    : "bg-white/8 text-muted-foreground hover:bg-white/14 hover:text-foreground",
+                  windowsTaskbar
+                    ? isFullscreen
+                      ? "text-teal-200 bg-white/12"
+                      : "dock-tray-btn text-muted-foreground hover:text-foreground bg-transparent hover:bg-white/10"
+                    : isFullscreen
+                      ? "bg-teal-400/25 text-teal-100 hover:bg-teal-400/35"
+                      : "bg-white/8 text-muted-foreground hover:bg-white/14 hover:text-foreground",
                 ].join(" ")}
-                style={{
-                  width: iconSize * 0.82,
-                  height: iconSize * 0.82,
-                  borderRadius: iconSize * 0.24,
-                }}
+                style={
+                  windowsTaskbar
+                    ? { width: trayBtn, height: trayBtn, borderRadius: 4 }
+                    : {
+                        width: iconSize * 0.82,
+                        height: iconSize * 0.82,
+                        borderRadius: iconSize * 0.24,
+                      }
+                }
               >
                 {isFullscreen ? (
-                  <Minimize2 size={Math.round(iconSize * 0.4)} />
+                  <Minimize2 size={trayIcon} />
                 ) : (
-                  <Maximize2 size={Math.round(iconSize * 0.4)} />
+                  <Maximize2 size={trayIcon} />
                 )}
               </button>
             )}
 
             {fitted.scrolling && <span className="dock-fade" aria-hidden="true" />}
+
+            {/* Windows 11: bandeja do sistema com a hora e a data */}
+            {windowsTaskbar && (
+              <div
+                className="dock-clock"
+                title={now.toLocaleString("pt-PT", { dateStyle: "full", timeStyle: "short" })}
+              >
+                <span className="dock-clock-time">
+                  {now.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}
+                </span>
+                <span className="dock-clock-date">
+                  {now.toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                </span>
+              </div>
+            )}
 
             {hovered && tooltipsActive && (
               <div ref={tipRef} className="dock-tip pointer-events-none" role="presentation">
@@ -720,11 +997,34 @@ export function Dock({ active, onOpen }: DockProps) {
               }}
               finePointer={finePointer}
               windowMode={windowMode}
+              minimizedCount={minimizedWindows.length}
               onWindowModeChange={changeWindowMode}
             />
           )}
         </div>
       </div>
+
+      {/* Menu Iniciar (Windows 11): painel flutuante encostado ao botão Iniciar */}
+      {startOpen && windowsTaskbar && (
+        <div
+          className="start-layer"
+          data-position={prefs.position}
+          style={{
+            ["--start-gutter" as string]: sidebarGutter.includes("268") ? "268px" : sidebarGutter ? "72px" : "0px",
+            ["--dock-thickness" as string]: `${barThickness}px`,
+          }}
+        >
+          <button
+            type="button"
+            className="start-scrim"
+            aria-label="Fechar o menu Iniciar"
+            onMouseDown={() => setStartOpen(false)}
+          />
+          <div className="start-anchor" data-position={prefs.position}>
+            <StartMenu active={active} onClose={() => setStartOpen(false)} onOpenView={openViewById} />
+          </div>
+        </div>
+      )}
 
       {menu && (
         <>
@@ -737,7 +1037,46 @@ export function Dock({ active, onOpen }: DockProps) {
               top: Math.min(menu.y, window.innerHeight - 140),
             }}
           >
-            {menu.app ? (
+            {menu.view ? (
+              <>
+                <p className="truncate px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                  {minimizedWindows.find((item) => item.view === menu.view)?.title ?? menu.view}
+                </p>
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    const view = menu.view;
+                    setMenu(null);
+                    if (view) restoreFromDock(view);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-white/8"
+                >
+                  <PanelLeftOpen size={14} /> Restaurar janela
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    const view = menu.view;
+                    setMenu(null);
+                    if (view) toggleMaximizeWindow(view, estimateWorkspace());
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-white/8"
+                >
+                  <Maximize2 size={14} /> Maximizar
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    const view = menu.view;
+                    setMenu(null);
+                    if (view) closeWindow(view);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-rose-300 transition hover:bg-rose-400/10"
+                >
+                  <X size={14} /> Fechar janela
+                </button>
+              </>
+            ) : menu.app ? (
               <>
                 <p className="px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">
                   {menu.app.label}
@@ -861,6 +1200,8 @@ interface DockPreferencesProps {
   pwa: { canInstall: boolean; standalone: boolean; installed: boolean; install: () => void };
   finePointer: boolean;
   windowMode: boolean;
+  /** Janelas minimizadas mostradas como miniaturas no dock. */
+  minimizedCount: number;
   onWindowModeChange: (value: boolean) => void;
 }
 
@@ -879,10 +1220,14 @@ function DockPreferences({
   pwa,
   finePointer,
   windowMode,
+  minimizedCount,
   onWindowModeChange,
 }: DockPreferencesProps) {
   const { mode: sidebarMode, setMode: setSidebarMode } = useSidebar();
   const viewport = useViewport();
+  const { glass, setGlass } = useGlass();
+  const { window3d, setWindow3d } = useWindow3d();
+  const { windowStyle, setWindowStyle } = useWindowStyle();
 
   /* O dock adapta o tamanho ao ecrã: o painel explica o que está a acontecer. */
   const fitted = useMemo(() => {
@@ -890,8 +1235,9 @@ function DockPreferences({
     const available = vertical
       ? Math.max(220, viewport.height - 150)
       : Math.max(220, viewport.width - 24);
-    return fitDock(prefs.iconSize, visible.length, available);
-  }, [prefs.iconSize, prefs.position, visible.length, viewport.width, viewport.height]);
+    const units = visible.length + minimizedCount * MINI_WIDTH_UNITS + (minimizedCount > 0 ? 0.4 : 0);
+    return fitDock(prefs.iconSize, units, available);
+  }, [minimizedCount, prefs.iconSize, prefs.position, visible.length, viewport.width, viewport.height]);
 
   return (
     <div className={className} style={{ width: 336 }}>
@@ -955,6 +1301,11 @@ function DockPreferences({
             suffix="px"
             onChange={(iconSize) => onChange({ iconSize })}
           />
+          <p className="dock-hint-windows text-[11px] leading-snug text-muted-foreground">
+            Na <span className="text-foreground">barra de tarefas</span> este valor é a base dos botões: com poucas
+            aplicações os botões <span className="text-foreground">crescem</span> (até 72 px, com o ícone maior) e a barra
+            ganha altura; com muitas ficam nos 40 px e a barra passa a deslizar.
+          </p>
           {fitted.iconSize < prefs.iconSize && (
             <p className="text-[11px] text-muted-foreground">
               Neste ecrã o valor efetivo é <span className="text-foreground">{fitted.iconSize}px</span>.
@@ -985,6 +1336,91 @@ function DockPreferences({
         </section>
 
         <section className="space-y-3">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Vidro</p>
+          <ToggleRow
+            label="Efeito de vidro"
+            hint="Translucidez e desfoco no dock, nas janelas e nos painéis. Desligado, as superfícies ficam opacas (mais leve para GPUs fracas)."
+            checked={glass.enabled}
+            onChange={(enabled) => setGlass({ enabled })}
+          />
+          <SliderRow
+            label="Intensidade do vidro"
+            value={Math.round(glass.strength * 100)}
+            min={0}
+            max={100}
+            step={5}
+            suffix="%"
+            disabled={!glass.enabled}
+            onChange={(value) => setGlass({ strength: value / 100 })}
+          />
+          <ToggleRow
+            label="Papel de parede do desktop"
+            hint="Manchas de cor por trás das janelas — é o que o vidro desfoca."
+            checked={glass.wallpaper}
+            onChange={(wallpaper) => setGlass({ wallpaper })}
+          />
+        </section>
+
+        <section className="space-y-3">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Janelas</p>
+          <div className="space-y-1.5">
+            <span className="text-xs text-muted-foreground">Aspeto do IQ OS (janelas, dock e barra lateral)</span>
+            <div className="flex gap-1 rounded-xl bg-white/5 p-1">
+              {([
+                { value: "macos", label: "macOS" },
+                { value: "windows", label: "Windows 11" },
+              ] as const).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setWindowStyle(option.value)}
+                  aria-pressed={windowStyle === option.value}
+                  className={[
+                    "flex-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60",
+                    windowStyle === option.value
+                      ? "bg-teal-400/20 text-teal-200"
+                      : "text-muted-foreground hover:bg-white/5",
+                  ].join(" ")}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] leading-snug text-muted-foreground/70">
+              {windowStyle === "windows"
+                ? "Janelas com barra de 32 px (ícone e título à esquerda, controlos à direita, cantos de 8 px e material Mica), o dock como barra de tarefas (plana, 48 px, botões de 40 px, indicador por baixo do ícone, Iniciar e relógio) — com o botão Iniciar a abrir o menu Iniciar flutuante — e a barra lateral em Mica, com linhas de 32 px, cantos de 4 px e a barra de acento na aplicação ativa."
+                : "Janelas com semáforos à esquerda, título centrado, vidro e cantos grandes; dock flutuante com ampliação e miniaturas das janelas minimizadas; barra lateral translúcida com seleção em pílula."}
+            </p>
+          </div>
+        </section>
+
+        <section className="space-y-3">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Janelas 3D</p>
+          <ToggleRow
+            label="Efeito 3D"
+            hint="As janelas inclinam-se na direção do movimento ao arrastar e as janelas sem foco recuam, dando profundidade à área de trabalho."
+            checked={window3d.enabled}
+            onChange={(enabled) => setWindow3d({ enabled })}
+          />
+          <SliderRow
+            label="Inclinação ao arrastar"
+            value={window3d.tilt}
+            min={0}
+            max={8}
+            step={0.5}
+            suffix="°"
+            disabled={!window3d.enabled}
+            onChange={(tilt) => setWindow3d({ tilt })}
+          />
+          <ToggleRow
+            label="Profundidade (janelas sem foco)"
+            hint="A janela em foco fica à frente e as outras recuam ligeiramente."
+            checked={window3d.depth}
+            onChange={(depth) => setWindow3d({ depth })}
+          />
+        </section>
+
+        <section className="space-y-3">
           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Comportamento</p>
           <ToggleRow
             label="Ocultar automaticamente"
@@ -997,6 +1433,12 @@ function DockPreferences({
             hint={finePointer ? undefined : "Em ecrãs táteis aparece o nome ao manter premido."}
             checked={prefs.tooltips}
             onChange={(tooltips) => onChange({ tooltips })}
+          />
+          <ToggleRow
+            label="Janelas minimizadas no dock"
+            hint="Miniaturas das janelas minimizadas (só no modo janelas); clique restaura a janela."
+            checked={prefs.minimizedShelf}
+            onChange={(minimizedShelf) => onChange({ minimizedShelf })}
           />
           <ToggleRow label="Indicadores de apps abertas" checked={prefs.indicators} onChange={(indicators) => onChange({ indicators })} />
         </section>

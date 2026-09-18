@@ -258,6 +258,7 @@ export default function App() {
   const [view, setView] = useState<AppView>(() => {
     if (typeof window === "undefined") return "dashboard";
     const path = window.location.pathname.replace(/\/$/, "");
+    if (path === "/chat") return "chat";
     if (path === "/rag") return "rag";
     if (path === "/browser") return "browser";
     if (path === "/finder") return "finder";
@@ -875,10 +876,9 @@ export default function App() {
     handleSwitchView(id);
   };
 
-  const renderDock = () =>
-    view === "chat" && !windowMode ? null : (
-      <Dock active={windowMode && focusedWindowView ? focusedWindowView : view} onOpen={(id) => handleDockOpen(id)} />
-    );
+  const renderDock = () => (
+    <Dock active={windowMode && focusedWindowView ? focusedWindowView : view} onOpen={(id) => handleDockOpen(id)} />
+  );
 
   /* ------------------------------------------------- modo janelas (macOS) */
   if (windowMode) {
@@ -915,7 +915,27 @@ export default function App() {
   }
 
   if (view === "chat") {
-    return renderContent();
+    /* O Chat vive dentro da mesma moldura da plataforma: a barra lateral e a
+       barra de tarefas ficam **sempre** visíveis, como em todas as páginas. */
+    return (
+      <div className={["flex h-screen w-full overflow-hidden bg-background text-foreground", dockSpacer.sides].join(" ")}>
+        <AppNav
+          active={view as AppNavView}
+          onNavigate={(next) => setViewAndHistory(next as AppView)}
+          onBackToChat={() => setViewAndHistory("chat")}
+        />
+        <main
+          className={[
+            "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pt-14 md:pt-0",
+            dockSpacer.bottom,
+          ].join(" ")}
+        >
+          {renderContent()}
+        </main>
+        {renderDock()}
+        <InstallBanner />
+      </div>
+    );
   }
 
   if (view === "empresas-iq") {

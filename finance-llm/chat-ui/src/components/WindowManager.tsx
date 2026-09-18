@@ -10,15 +10,13 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronsDownUp, LayoutGrid, PanelsTopLeft, Rows3, X } from "lucide-react";
-import { Window, type SnapZone } from "./Window";
+import { Window, type DockSide, type SnapZone } from "./Window";
 import { useDock } from "../dock";
 import {
   cascadeWindows,
   clampWindows,
-  closeWindow,
   focusWindow,
   maximizeWindow,
-  minimizeWindow,
   openWindow,
   setWindowRect,
   tileWindows,
@@ -37,17 +35,63 @@ interface WindowManagerProps {
   onActiveChange?: (view: string | null) => void;
 }
 
+/** Duração da animação de encolher para o dock (tem de coincidir com o CSS). */
+const MINIMIZE_MS = 280;
+/** Duração da animação de fechar (tem de coincidir com o CSS). */
+const CLOSE_MS = 200;
+
 export function WindowManager({ renderView, labelFor, onActiveChange }: WindowManagerProps) {
-  const { windows, topZ, focus, close, minimize, restore, closeAll } = useWindows();
+  const { windows, topZ, focus, close, minimize, restore } = useWindows();
   const { prefs: dockPrefs } = useDock();
   const desktopRef = useRef<HTMLDivElement | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceSize>({ width: 0, height: 0 });
   const [snapPreview, setSnapPreview] = useState<SnapZone>(null);
   const [windowsMenuOpen, setWindowsMenuOpen] = useState(false);
   const [now, setNow] = useState(() => new Date());
+  /** Janelas a encolher para o dock (a animação corre antes de minimizar). */
+  const [shrinking, setShrinking] = useState<string[]>([]);
+  /** Janelas a fechar (a animação corre antes de remover). */
+  const [closing, setClosing] = useState<string[]>([]);
+  const shrinkTimers = useRef<number[]>([]);
+
+  /** Minimizar estilo macOS: a janela encolhe para o dock e só depois sai. */
+  const minimizeToDock = useCallback(
+    (view: string) => {
+      setShrinking((current) => (current.includes(view) ? current : [...current, view]));
+      const timer = window.setTimeout(() => {
+        minimize(view);
+        setShrinking((current) => current.filter((item) => item !== view));
+      }, MINIMIZE_MS);
+      shrinkTimers.current.push(timer);
+    },
+    [minimize],
+  );
+
+  /** Fechar com animação: encolhe e desvanece antes de a janela desaparecer. */
+  const closeWithAnimation = useCallback(
+    (view: string) => {
+      setClosing((current) => (current.includes(view) ? current : [...current, view]));
+      const timer = window.setTimeout(() => {
+        close(view);
+        setClosing((current) => current.filter((item) => item !== view));
+      }, CLOSE_MS);
+      shrinkTimers.current.push(timer);
+    },
+    [close],
+  );
+
+  useEffect(
+    () => () => {
+      shrinkTimers.current.forEach((timer) => window.clearTimeout(timer));
+      shrinkTimers.current = [];
+    },
+    [],
+  );
 
   /** Espaço reservado ao dock (as janelas não devem ficar por baixo dele). */
   const dockInset = dockPrefs.position === "bottom" && !dockPrefs.autoHide ? 104 : 0;
+  /** Lado do dock: define de onde as janelas encolhem/crescem. */
+  const dockSide: DockSide = dockPrefs.position;
 
   /* Tamanho da área de trabalho (é o "ecrã" das janelas). */
   useLayoutEffect(() => {
@@ -75,14 +119,49 @@ export function WindowManager({ renderView, labelFor, onActiveChange }: WindowMa
     if (workspace.width > 0) clampWindows(workspace);
   }, [workspace.width, workspace.height]);
 
+  /**
+   * O «ecrã» das janelas **nunca** pode ser deslocado.
+   *
+   * Um `scrollIntoView` (ou um foco) dentro de uma janela rola todos os
+   * antepassados roláveis — e o `overflow: hidden` não impede o scroll
+   * programático. Sem este travão, uma janela que peça para "ver o fundo"
+   * deslocava o ecrã inteiro e as janelas apareciam cortadas por cima da barra
+   * de menus (aconteceu com a janela do RAG). Vale para **todas** as janelas.
+   */
+  useEffect(() => {
+    const node = desktopRef.current;
+    if (!node) return;
+    const reset = () => {
+      if (node.scrollTop !== 0) node.scrollTop = 0;
+      if (node.scrollLeft !== 0) node.scrollLeft = 0;
+    };
+    node.addEventListener("scroll", reset, { passive: true });
+    document.addEventListener("focusin", reset);
+    return () => {
+      node.removeEventListener("scroll", reset);
+      document.removeEventListener("focusin", reset);
+    };
+  }, []);
+
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
 
   const visible = windows.filter((item) => !item.minimized);
+  const minimized = windows.filter((item) => item.minimized);
   const topWindow = [...visible].sort((a, b) => b.z - a.z)[0] ?? null;
   const activeView = topWindow?.view ?? null;
+
+  /* Ao abrir/focar/fechar janelas, o ecrã volta sempre a zero. Corre a cada
+     render (é só uma comparação) porque o browser pode rolar o contentor
+     durante o mesmo commit em que a janela abre — antes de qualquer evento. */
+  useEffect(() => {
+    const node = desktopRef.current;
+    if (!node) return;
+    if (node.scrollTop !== 0) node.scrollTop = 0;
+    if (node.scrollLeft !== 0) node.scrollLeft = 0;
+  });
 
   useEffect(() => {
     onActiveChange?.(activeView);
@@ -125,19 +204,19 @@ export function WindowManager({ renderView, labelFor, onActiveChange }: WindowMa
       if (key === "w" && !event.shiftKey) {
         if (!activeView || typing) return;
         event.preventDefault();
-        closeWindow(activeView);
+        closeWithAnimation(activeView);
         return;
       }
       if (key === "m") {
         if (!activeView) return;
         event.preventDefault();
         if (event.shiftKey) toggleMaximizeWindow(activeView, workspace);
-        else minimizeWindow(activeView);
+        else minimizeToDock(activeView);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activeView, workspace, visible]);
+  }, [activeView, closeWithAnimation, minimizeToDock, workspace, visible]);
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col">
@@ -148,6 +227,11 @@ export function WindowManager({ renderView, labelFor, onActiveChange }: WindowMa
         <span className="hidden text-muted-foreground sm:inline">
           {visible.length === 0 ? "sem janelas abertas" : `${visible.length} janela${visible.length === 1 ? "" : "s"}`}
         </span>
+        {minimized.length > 0 && (
+          <span className="hidden text-muted-foreground sm:inline">
+            · {minimized.length} no dock
+          </span>
+        )}
         {activeView && (
           <span className="hidden truncate text-muted-foreground md:inline">· {labelFor(activeView).title}</span>
         )}
@@ -212,13 +296,13 @@ export function WindowManager({ renderView, labelFor, onActiveChange }: WindowMa
           <MenuButton
             icon={<ChevronsDownUp size={12} />}
             label="Minimizar todas"
-            onClick={() => visible.forEach((item) => minimizeWindow(item.view))}
+            onClick={() => visible.forEach((item) => minimizeToDock(item.view))}
             disabled={visible.length === 0}
           />
           <MenuButton
             icon={<X size={12} />}
             label="Fechar todas"
-            onClick={() => closeAll()}
+            onClick={() => visible.forEach((item) => closeWithAnimation(item.view))}
             disabled={visible.length === 0}
           />
           <span className="ml-2 tabular-nums text-muted-foreground">
@@ -284,9 +368,12 @@ export function WindowManager({ renderView, labelFor, onActiveChange }: WindowMa
               title={labelFor(item.view).title}
               icon={labelFor(item.view).icon}
               active={item.z === topZ}
+              minimizing={shrinking.includes(item.view)}
+              closing={closing.includes(item.view)}
+              dockSide={dockSide}
               onFocus={() => focus(item.view)}
-              onClose={() => close(item.view)}
-              onMinimize={() => minimize(item.view)}
+              onClose={() => closeWithAnimation(item.view)}
+              onMinimize={() => minimizeToDock(item.view)}
               onToggleMaximize={() => toggleMaximizeWindow(item.view, workspace)}
               onSnap={(zone) => snapTo(item.view, zone)}
               onSnapPreview={setSnapPreview}

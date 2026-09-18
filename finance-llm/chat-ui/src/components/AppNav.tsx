@@ -86,7 +86,6 @@ interface NavGroup {
   /** Secções do menu de aplicações ficam abertas por omissão. */
   defaultOpen?: boolean;
 }
-
 interface AppNavProps {
   active: AppView;
   onNavigate: (view: AppView) => void;
@@ -151,13 +150,16 @@ function isAdminRole(role?: string | null) {
   return (role ?? "member") === "admin";
 }
 
+/** Item de navegação (peça partilhada com o menu Iniciar). */
+export type { NavItem, NavGroup };
+
 /** Itens de navegação permitidos ao papel indicado. */
-function itemsFor(role?: string | null) {
+export function itemsFor(role?: string | null) {
   return isAdminRole(role) ? ALL_ITEMS : ALL_ITEMS.filter(({ item }) => !item.adminOnly);
 }
 
 /** Grupos de navegação permitidos ao papel indicado (sem grupos vazios). */
-function groupsFor(role?: string | null): NavGroup[] {
+export function groupsFor(role?: string | null): NavGroup[] {
   if (isAdminRole(role)) return groups;
   return groups
     .map((group) => ({ ...group, items: group.items.filter((item) => !item.adminOnly) }))
@@ -165,14 +167,13 @@ function groupsFor(role?: string | null): NavGroup[] {
 }
 
 /** Remove acentos e baixa para minúsculas, para pesquisa tolerante. */
-function normalize(text: string) {
+export function normalize(text: string) {
   return text
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 }
-
-function isActive(view: AppView, item: NavItem): boolean {
+export function isActive(view: AppView, item: NavItem): boolean {
   if (view === item.id) return true;
   if (item.match?.includes(view)) return true;
   return false;
@@ -345,7 +346,7 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
         onClick={() => setMode("expanded")}
         title="Expandir barra lateral"
         aria-label="Expandir barra lateral"
-        className="grid h-7 w-7 place-items-center rounded-[7px] text-muted-foreground/80 transition hover:bg-white/8 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+        className="mac-sidebar-rail-btn grid h-7 w-7 place-items-center rounded-[7px] text-muted-foreground/80 transition hover:bg-white/8 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
       >
         <PanelLeftOpen size={15} />
       </button>
@@ -360,8 +361,7 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
             title={item.label}
             aria-label={item.label}
             data-active={isActive(active, item)}
-            className="mac-nav-row relative w-9 justify-center px-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
-            style={{ height: 30 }}
+            className="mac-nav-row mac-nav-row-rail relative w-9 justify-center px-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
           >
             <span className="mac-nav-icon">{item.icon}</span>
             {runningApps.has(item.id) && (
@@ -386,8 +386,7 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
                 title={item.label}
                 aria-label={item.label}
                 data-active={isActive(active, item)}
-                className="mac-nav-row w-9 justify-center px-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
-                style={{ height: 28 }}
+                className="mac-nav-row mac-nav-row-rail w-9 justify-center px-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
               >
                 <span className="mac-nav-icon">{item.icon}</span>
               </button>
@@ -411,36 +410,40 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
   );
 
   /* ------------------------------------------------- modo expandido/gaveta */
+  const sidebarTop = (
+    <div className="mac-sidebar-top flex h-11 shrink-0 items-center gap-1 px-2.5">
+      <button
+        onClick={() => (onBackToChat ? onBackToChat() : handleClick("chat"))}
+        className="mac-sidebar-brand flex min-w-0 flex-1 items-center gap-2 rounded-[6px] px-1.5 py-1 text-left transition hover:bg-white/6 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+      >
+        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] bg-gradient-to-br from-teal-500 to-blue-500 text-white shadow-sm shadow-primary/20">
+          <Sparkles size={13} />
+        </span>
+        <span className="truncate text-[13px] font-semibold">IQ OS</span>
+      </button>
+      <button
+        onClick={toggleRail}
+        aria-label="Modo compacto (só ícones)"
+        title="Modo compacto (só ícones)"
+        className="mac-sidebar-btn hidden md:grid shrink-0 place-items-center h-6 w-6 rounded-[6px] text-muted-foreground/80 transition hover:bg-white/8 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+      >
+        <PanelLeft size={15} />
+      </button>
+      <button
+        onClick={toggleHidden}
+        aria-label="Ocultar barra lateral"
+        title="Ocultar barra lateral (Ctrl+B)"
+        className="mac-sidebar-btn hidden md:grid shrink-0 place-items-center h-6 w-6 rounded-[6px] text-muted-foreground/80 transition hover:bg-white/8 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+      >
+        <ChevronLeft size={16} />
+      </button>
+    </div>
+  );
+
   const navContent = (
     <nav className="flex h-full flex-col" aria-label="Navegação principal">
       {/* Topo da barra lateral (como a barra de ferramentas de uma janela macOS) */}
-      <div className="flex h-11 shrink-0 items-center gap-1 px-2.5">
-        <button
-          onClick={() => (onBackToChat ? onBackToChat() : handleClick("chat"))}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-[6px] px-1.5 py-1 text-left transition hover:bg-white/6 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
-        >
-          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] bg-gradient-to-br from-teal-500 to-blue-500 text-white shadow-sm shadow-primary/20">
-            <Sparkles size={13} />
-          </span>
-          <span className="truncate text-[13px] font-semibold">IQ OS</span>
-        </button>
-        <button
-          onClick={toggleRail}
-          aria-label="Modo compacto (só ícones)"
-          title="Modo compacto (só ícones)"
-          className="hidden md:grid shrink-0 place-items-center h-6 w-6 rounded-[6px] text-muted-foreground/80 transition hover:bg-white/8 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
-        >
-          <PanelLeft size={15} />
-        </button>
-        <button
-          onClick={toggleHidden}
-          aria-label="Ocultar barra lateral"
-          title="Ocultar barra lateral (Ctrl+B)"
-          className="hidden md:grid shrink-0 place-items-center h-6 w-6 rounded-[6px] text-muted-foreground/80 transition hover:bg-white/8 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
-        >
-          <ChevronLeft size={16} />
-        </button>
-      </div>
+      {sidebarTop}
 
       <div className="shrink-0 px-2.5 pb-2" role="search">
         <div className="relative">
@@ -461,7 +464,7 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
             }}
             placeholder="Pesquisar ( / )"
             aria-label="Procurar na navegação"
-            className="h-7 w-full rounded-[6px] border border-white/8 bg-white/[0.055] pl-7 pr-6 text-[12.5px] outline-none transition placeholder:text-muted-foreground/80 focus:border-teal-300/40 focus:bg-white/[0.08]"
+            className="mac-sidebar-search h-7 w-full rounded-[6px] border border-white/8 bg-white/[0.055] pl-7 pr-6 text-[12.5px] outline-none transition placeholder:text-muted-foreground/80 focus:border-teal-300/40 focus:bg-white/[0.08]"
           />
           {query && (
             <button
@@ -529,13 +532,13 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
       </div>
 
       <div className="relative shrink-0 px-2 pb-2 pt-1.5">
-        <div className="mb-1.5 h-px bg-white/8" />
+        <div className="mac-sidebar-sep mb-1.5 h-px bg-white/8" />
         <button
           type="button"
           onClick={() => setUserMenuOpen((open) => !open)}
           aria-haspopup="menu"
           aria-expanded={userMenuOpen}
-          className="flex w-full items-center gap-2 rounded-[6px] px-1.5 py-1.5 text-left transition hover:bg-white/6 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+          className="mac-sidebar-account flex w-full items-center gap-2 rounded-[6px] px-1.5 py-1.5 text-left transition hover:bg-white/6 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
         >
           {user ? <Avatar user={user} size={26} /> : null}
           <span className="min-w-0 flex-1 leading-tight">
@@ -552,6 +555,7 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
       </div>
     </nav>
   );
+
 
   return (
     <>
@@ -605,7 +609,7 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
           onClick={toggleHidden}
           aria-label="Mostrar barra lateral"
           title="Mostrar barra lateral (Ctrl+B)"
-          className="hidden md:flex fixed left-0 top-1/2 z-40 -translate-y-1/2 items-center rounded-r-2xl border border-l-0 border-white/10 bg-[#111318]/92 py-4 pl-1 pr-1.5 text-muted-foreground shadow-lg backdrop-blur-xl transition hover:pr-4 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+          className="mac-sidebar-handle hidden md:flex fixed left-0 top-1/2 z-40 -translate-y-1/2 items-center rounded-r-2xl border border-l-0 border-white/10 bg-[#111318]/92 py-4 pl-1 pr-1.5 text-muted-foreground shadow-lg backdrop-blur-xl transition hover:pr-4 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
         >
           <ChevronRight size={16} />
         </button>

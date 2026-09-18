@@ -405,11 +405,25 @@ def companies_search(req: CompanySearchRequest):
 # Catch-all da SPA para sub-rotas de /companies devem ser registradas ANTES
 # do endpoint dinâmico GET /companies/{nif}, senão o path "search" é
 # interpretado como NIF.
+def spa_index_response() -> FileResponse:
+    """`index.html` da SPA **sem cache**.
+
+    O HTML referencia ficheiros com hash (`/assets/index-*.js`), por isso um
+    `index.html` em cache fazia o browser continuar a pedir o bundle antigo
+    depois de um novo `build` (a heurística de cache do browser guarda-o durante
+    ~10% da idade do ficheiro) — as correções pareciam não existir.
+    """
+    return FileResponse(
+        str(UI_BUILD_DIR / "index.html"),
+        headers={"Cache-Control": "no-store, must-revalidate"},
+    )
+
+
 @app.get("/companies")
 @app.get("/companies/search")
 @app.get("/companies/dashboard")
 def serve_companies_spa_page():
-    return FileResponse(str(UI_BUILD_DIR / "index.html"))
+    return spa_index_response()
 
 
 def _accepts_html(request: Request) -> bool:
@@ -421,7 +435,7 @@ def _accepts_html(request: Request) -> bool:
 def companies_detail(request: Request, nif: str, year: Optional[int] = Query(None)):
     """Detalhes de uma entidade (por NIF), incluindo resumo de papéis e contratos recentes."""
     if UI_BUILD_DIR.is_dir() and _accepts_html(request):
-        return FileResponse(str(UI_BUILD_DIR / "index.html"))
+        return spa_index_response()
     company = get_company_by_nif(nif)
     if company.get("error"):
         raise HTTPException(status_code=502, detail=company.get("error"))
@@ -1010,7 +1024,7 @@ def entities_detail(nif: str):
 @app.get("/search")
 @app.get("/import")
 def serve_spa_page():
-    return FileResponse(str(UI_BUILD_DIR / "index.html"))
+    return spa_index_response()
 
 
 @app.get("/")
@@ -2125,4 +2139,4 @@ def serve_spa_deep_link(request: Request, full_path: str):
     index = UI_BUILD_DIR / "index.html"
     if not index.is_file():
         raise HTTPException(status_code=404, detail="Interface não construída.")
-    return FileResponse(str(index))
+    return spa_index_response()

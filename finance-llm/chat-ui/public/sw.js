@@ -14,7 +14,7 @@
  *
  * Ao alterar este ficheiro, incrementar `VERSION`.
  */
-const VERSION = "v3";
+const VERSION = "v4";
 /** Prefixos de cache do IQ OS (e o antigo, para limpar instalações anteriores). */
 const CACHE_PREFIXES = ["iq-os-", "finance-llm-"];
 const SHELL_CACHE = `iq-os-shell-${VERSION}`;
