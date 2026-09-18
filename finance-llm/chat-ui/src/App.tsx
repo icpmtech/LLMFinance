@@ -46,6 +46,7 @@ import ScraperPage, {
   scraperSectionForView,
   type ScraperSection,
 } from "./pages/ScraperPage";
+import UnifiedSearchPage from "./pages/UnifiedSearchPage";
 import Search360Page, {
   SEARCH360_SECTION_VIEWS,
   search360SectionForView,
@@ -57,6 +58,7 @@ import OfficePage, {
   type OfficeSection,
 } from "./pages/OfficePage";
 import FinderPage from "./pages/FinderPage";
+import EmailPage from "./pages/EmailPage";
 import CompareWindow from "./pages/CompareWindow";
 import { ContractDetailWindow, EntityDetailWindow, QuickLookWindow } from "./components/DetailWindow";
 import EntityContractsWindow from "./pages/EntityContractsWindow";
@@ -150,6 +152,7 @@ function pathForView(view: string, company: string | null, ticker: string | null
   if (view === "scraper-execucoes") return "/scraper/execucoes";
   if (view === "scraper-pesquisa") return "/scraper/pesquisa";
   if (view === "scraper-agenda") return "/scraper/agenda";
+  if (view === "pesquisa") return "/pesquisa";
   if (view === "search360") return "/search360";
   if (view === "search360-dossie") return "/search360/dossie";
   if (view === "search360-projetos") return "/search360/projetos";
@@ -157,6 +160,7 @@ function pathForView(view: string, company: string | null, ticker: string | null
   if (view === "search360-biblioteca") return "/search360/biblioteca";
   if (view === "office") return "/office";
   if (view === "office-dossies") return "/office/dossies";
+  if (view === "email") return "/email";
   if (view === "contracts-list") return "/contracts-list";
   if (view === "company-detail" && company) return `/companies/${company}`;
   return "/";
@@ -274,6 +278,7 @@ export default function App() {
     }
     if (path === "/elastic") return "elastic";
     if (path === "/search") return "search";
+    if (path === "/pesquisa") return "pesquisa";
     if (path === "/contracts") return "contracts-search";
     if (path === "/contracts/search") return "contracts-search";
     if (path === "/contracts/dashboard") return "contracts-dashboard";
@@ -288,6 +293,7 @@ export default function App() {
     if (path === "/contracts-list" || path.startsWith("/contracts-list/")) return "contracts-list";
     if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) return "empresas-iq";
     if (path === "/ontology" || path.startsWith("/ontology/")) return "ontology";
+    if (path === "/email" || path.startsWith("/email/")) return "email";
     {
       const crmSection = crmSectionFromPath(path);
       if (crmSection) return CRM_SECTION_VIEWS[crmSection] as AppView;
@@ -331,6 +337,7 @@ export default function App() {
         next = section === "grafico" ? "ticker-chart" : "ticker-detail";
       } else if (path === "/rag") next = "rag";      else if (path === "/browser") next = "browser";      else if (path === "/elastic") next = "elastic";
       else if (path === "/search") next = "search";
+      else if (path === "/pesquisa") next = "pesquisa";
       else if (path === "/contracts" || path === "/contracts/search") next = "contracts-search";
       else if (path === "/contracts/dashboard") next = "contracts-dashboard";
       else if (path === "/companies" || path === "/companies/search") next = "companies-search";
@@ -343,6 +350,7 @@ export default function App() {
       else if (path === "/contracts-list" || path.startsWith("/contracts-list/")) next = "contracts-list";
       else if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) next = "empresas-iq";
       else if (path === "/ontology" || path.startsWith("/ontology/")) next = "ontology";
+      else if (path === "/email" || path.startsWith("/email/")) next = "email";
       else if (crmSectionFromPath(path)) next = CRM_SECTION_VIEWS[crmSectionFromPath(path) as CrmSection] as AppView;
       else if (scraperSectionFromPath(path)) next = SCRAPER_SECTION_VIEWS[scraperSectionFromPath(path) as ScraperSection] as AppView;
       else if (search360SectionFromPath(path)) next = SEARCH360_SECTION_VIEWS[search360SectionFromPath(path) as Search360Section] as AppView;
@@ -736,6 +744,7 @@ export default function App() {
     if (target === "forecast") return <ForecastPage />;
     if (target === "ticker-chart") return <RealtimeChartPage initialTicker={selectedTicker ?? undefined} />;
     if (target === "browser") return <BrowserPage onOpenInternal={handleSwitchView} onGlobalSearch={handleGlobalSearch} />;
+    if (target === "email") return <EmailPage />;
     if (target === "trading") return <TradingPage />;
     if (target === "tickers") return <TickerPage onSwitchView={() => setViewAndHistory("dashboard")} />;
     if (target === "rag") return <RagPage onSwitchView={() => setViewAndHistory("dashboard")} />;
@@ -753,6 +762,9 @@ export default function App() {
           onSelectTicker={handleSelectTicker}
         />
       );
+    }
+    if (target === "pesquisa") {
+      return <UnifiedSearchPage initialQuery={searchQuery} onOpenTicker={handleSelectTicker} />;
     }
     if (target === "contracts-dashboard") {
       return (

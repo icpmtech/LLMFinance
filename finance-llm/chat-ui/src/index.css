@@ -1259,6 +1259,15 @@ html[data-window3d="on"][data-window3d-depth="on"] .window-shell[data-active="fa
    realce no `hover`, indicador por baixo do ícone (barra larga quando a janela
    tem foco, curta quando está só aberta) e bandeja com o relógio. */
 .dock-shelf[data-style="windows"] {
+  background: transparent;
+  backdrop-filter: none;
+  border: 0;
+  box-shadow: none;
+}
+/* O material da barra vive no **contentor**: a prateleira termina onde começa a
+   reserva da bandeja, por isso o lado direito (e o fundo, numa barra em margem)
+   ficaria sem o fundo escuro. */
+.dock-anchor[data-style="windows"] {
   background: rgba(32, 32, 32, 0.86);
   backdrop-filter: blur(30px) saturate(150%);
   border: 0;
@@ -1273,13 +1282,13 @@ html[data-window3d="on"][data-window3d-depth="on"] .window-shell[data-active="fa
 html[data-window-style="windows"] .dock-safe-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
-.dock-shelf[data-style="windows"][data-position="bottom"] {
+.dock-anchor[data-style="windows"][data-position="bottom"] {
   border-top: 1px solid rgba(255, 255, 255, 0.09);
 }
-.dock-shelf[data-style="windows"][data-position="left"] {
+.dock-anchor[data-style="windows"][data-position="left"] {
   border-right: 1px solid rgba(255, 255, 255, 0.09);
 }
-.dock-shelf[data-style="windows"][data-position="right"] {
+.dock-anchor[data-style="windows"][data-position="right"] {
   border-left: 1px solid rgba(255, 255, 255, 0.09);
 }
 /* O tabuleiro do dock (macOS) desaparece: a barra é o próprio fundo. */
@@ -1291,7 +1300,104 @@ html[data-window-style="windows"] .dock-safe-bottom {
   background: transparent;
   border: 0;
 }
+/* Cada botão leva o **gradiente da aplicação** (a cor da app), como no dock do
+   macOS e na grelha do menu Iniciar; o ícone fica branco por cima. */
 .dock-shelf[data-style="windows"] .dock-tile-bg {
+  display: block;
+  inset: 4%;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+/* Aplicação com a janela em foco: brilho na cor da aplicação. */
+.dock-shelf[data-style="windows"] .dock-app[aria-current="page"] .dock-tile-bg {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 14px var(--dock-accent, transparent);
+}
+.dock-shelf[data-style="windows"] .dock-app:hover .dock-tile-bg {
+  filter: brightness(1.06);
+}
+/* Os botões das aplicações centram-se na barra (Windows 11), com o Iniciar no
+   início do grupo e a bandeja ancorada à direita. `safe center` garante que,
+   quando o grupo não cabe, ele alinha ao início em vez de ficar cortado. */
+.dock-shelf[data-style="windows"][data-position="bottom"],
+.dock-shelf[data-style="windows"][data-position="left"],
+.dock-shelf[data-style="windows"][data-position="right"] {
+  justify-content: center;
+  justify-content: safe center;
+}
+/* O espaço da bandeja é reservado no **contentor**: o transbordo das aplicações
+   (barra cheia) fica confinado à sua área e nunca desliza por baixo da bandeja. */
+.dock-anchor[data-style="windows"] {
+  --dock-tray-reserve: 168px;
+}
+.dock-anchor[data-style="windows"][data-position="left"],
+.dock-anchor[data-style="windows"][data-position="right"] {
+  --dock-tray-reserve: 120px;
+}
+.dock-anchor[data-style="windows"][data-position="bottom"] {
+  padding-right: var(--dock-tray-reserve);
+}
+.dock-anchor[data-style="windows"][data-position="left"],
+.dock-anchor[data-style="windows"][data-position="right"] {
+  padding-bottom: var(--dock-tray-reserve);
+}
+/* A bandeja é renderizada **fora** da prateleira (ver `Dock.tsx`): fica ancorada
+   ao canto real da barra e não desliza com a área das aplicações. */
+.dock-anchor[data-style="windows"] > .dock-tray-group {
+  position: absolute;
+  display: flex;
+  align-items: center;
+}
+/* Numa margem o dock nunca é mais alto que o ecrã: o conteúdo desliza por dentro
+   (e, no macOS, a bandeja fica presa à margem visível — ver `.dock-tray-group`). */
+.dock-shelf[data-position="left"],
+.dock-shelf[data-position="right"] {
+  max-height: calc(100vh - 16px);
+  max-height: calc(100dvh - 16px);
+}
+
+/* macOS: com o dock cheio (conteúdo maior que o tabuleiro) o dock desliza e a
+   bandeja ficaria no fim do conteúdo, fora do ecrã. Fica «presa» à margem do
+   tabuleiro, para os botões de preferências/ecrã inteiro estarem sempre à mão. */
+.dock-shelf[data-style="macos"][data-scroll="true"][data-position="bottom"] .dock-tray-group {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+}
+.dock-shelf[data-style="macos"][data-scroll="true"][data-position="left"] .dock-tray-group,
+.dock-shelf[data-style="macos"][data-scroll="true"][data-position="right"] .dock-tray-group {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+}
+/* A bandeja presa precisa de fundo, senão os ícones aparecem por trás. */
+.dock-shelf[data-style="macos"][data-scroll="true"] .dock-tray-group {
+  background: linear-gradient(180deg, rgba(24, 27, 33, 0.74), rgba(15, 17, 21, 0.84));
+  backdrop-filter: blur(14px) saturate(140%);
+  border-radius: 16px;
+  padding: 0 2px;
+}
+.dock-anchor[data-style="windows"][data-position="bottom"] > .dock-tray-group {
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.dock-anchor[data-style="windows"][data-position="left"] > .dock-tray-group,
+.dock-anchor[data-style="windows"][data-position="right"] > .dock-tray-group {
+  left: 0;
+  right: 0;
+  bottom: 6px;
+  flex-direction: column;
+  align-items: center;
+}
+/* Numa barra em margem o relógio só mostra a hora (a data não cabe em 48 px). */
+.dock-anchor[data-style="windows"][data-position="left"] .dock-clock,
+.dock-anchor[data-style="windows"][data-position="right"] .dock-clock {
+  align-items: center;
+  max-width: 100%;
+  padding: 0 2px;
+  margin-left: 0;
+}
+.dock-anchor[data-style="windows"][data-position="left"] .dock-clock-date,
+.dock-anchor[data-style="windows"][data-position="right"] .dock-clock-date {
   display: none;
 }
 .dock-shelf[data-style="windows"] .dock-tile:hover .dock-icon {

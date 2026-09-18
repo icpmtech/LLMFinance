@@ -329,7 +329,7 @@ export default function ScraperPage({ section, onSectionChange }: ScraperPagePro
               }
             >
               {status.scrapling ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />}
-              Scrapling {status.scrapling ? "instalado" : "em falta"}
+              Scrapling {status.scrapling ? status.scrapling_version || "instalado" : "em falta"}
             </Pill>
             <Pill
               className={
@@ -378,7 +378,17 @@ export default function ScraperPage({ section, onSectionChange }: ScraperPagePro
       ) : null}
       {status?.scrapling_error ? (
         <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">
-          <strong className="font-medium">Scrapling:</strong> {status.scrapling_error}
+          <p>
+            <strong className="font-medium">Scrapling:</strong> {status.scrapling_error}
+          </p>
+          {status.python ? (
+            <p className="mt-2 text-[11px] text-amber-200/90">
+              A API está a correr com <code className="rounded bg-black/30 px-1">{status.python}</code>
+              {status.python_version ? ` (Python ${status.python_version})` : ""}. Se o projeto usa
+              <code className="mx-1 rounded bg-black/30 px-1">c:\LLMFinance\.venv\Scripts\python.exe</code>, reinicie a API com esse
+              interpretador (é o que os scripts <code>start_solution.ps1</code> e <code>start.py</code> usam).
+            </p>
+          ) : null}
         </div>
       ) : null}
 

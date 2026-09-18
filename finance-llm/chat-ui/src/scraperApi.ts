@@ -116,6 +116,11 @@ export type ScraperMeta = {
 export type ScraperStatus = {
   scrapling: boolean;
   scrapling_error?: string;
+  /** Versão do Scrapling instalada (quando disponível). */
+  scrapling_version?: string | null;
+  /** Interpretador que corre a API — permite detetar o Python errado. */
+  python?: string;
+  python_version?: string;
   fetchers: Record<string, boolean>;
   playwright?: boolean;
   elasticsearch: boolean;

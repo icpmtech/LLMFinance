@@ -34,6 +34,7 @@ import {
 } from "../dock";
 import { useAuth } from "../auth";
 import { useGlass, useSidebar, useWindow3d, useWindowMode, useWindowStyle } from "../layout";
+import { setDockThickness } from "../dockMetrics";
 import { StartMenu } from "./StartMenu";
 import { closeWindow, estimateWorkspace, focusWindow, minimizeWindow, toggleMaximizeWindow, useWindows, windowFor } from "../windows";
 import { useFullscreen } from "../fullscreen";
@@ -79,7 +80,9 @@ function fitDock(desired: number, items: number, available: number) {
   const factor = items + 1.64 + (items + 2) * 0.154 + 0.38 + 0.2;
   const fits = Math.floor(available / factor);
   const iconSize = Math.max(MIN_ICON_SIZE, Math.min(desired, fits));
-  return { iconSize, scrolling: iconSize < desired };
+  // Desliza quando o tamanho **usado** excede o que cabe (o mínimo tátil pode
+  // impedir o encolhimento, e aí o dock tem mesmo de deslizar).
+  return { iconSize, scrolling: iconSize > fits };
 }
 
 /** Largura de uma miniatura de janela minimizada, em "ícones". */
@@ -153,14 +156,16 @@ export function Dock({ active, onOpen }: DockProps) {
 
   /** Tamanho efetivo dos ícones (o utilizador define o máximo; o ecrã manda). */
   const fitted = useMemo(() => {
+    // A barra lateral ocupa espaço: o dock só pode usar o que sobra.
+    const gutter = sidebarMode === "hidden" ? 0 : sidebarMode === "rail" ? 72 : 268;
     const available = vertical
       ? Math.max(220, viewport.height - 150)
-      : Math.max(220, viewport.width - 24);
+      : Math.max(220, viewport.width - 24 - (viewport.width >= 768 ? gutter : 0));
     // As janelas minimizadas também ocupam dock: contam para o espaço necessário.
     const minis = windowMode && prefs.minimizedShelf ? openWindows.filter((item) => item.minimized).length : 0;
     const units = visible.length + minis * MINI_WIDTH_UNITS + (minis > 0 ? 0.4 : 0);
     return fitDock(prefs.iconSize, units, available);
-  }, [openWindows, prefs.iconSize, prefs.minimizedShelf, visible.length, vertical, viewport.width, viewport.height, windowMode]);
+  }, [openWindows, prefs.iconSize, prefs.minimizedShelf, sidebarMode, visible.length, vertical, viewport.width, viewport.height, windowMode]);
   const iconSize = fitted.iconSize;
 
   /**
@@ -172,17 +177,30 @@ export function Dock({ active, onOpen }: DockProps) {
    * dock (que passa a valer nos dois aspetos) e a reserva fixa (Iniciar,
    * bandeja, relógio e folgas) é descontada antes de repartir o espaço.
    */
-  const windowsTile = useMemo(() => {
-    if (!windowsTaskbar) return iconSize;
-    const available = Math.max(220, (vertical ? viewport.height : viewport.width) - 24);
+  const windowsMetrics = useMemo(() => {
+    const gutter =
+      !vertical && viewport.width >= 768
+        ? sidebarMode === "hidden"
+          ? 0
+          : sidebarMode === "rail"
+            ? 72
+            : 268
+        : 0;
+    const available = Math.max(220, (vertical ? viewport.height : viewport.width) - 24 - gutter);
     const base = Math.min(72, Math.max(40, Math.round(prefs.iconSize * 0.77)));
     // O tecto segue a preferência (não cresce mais do que ~25% acima dela).
     const cap = Math.max(base, Math.min(72, Math.round(prefs.iconSize * 1.25)));
     const tray = 2 * Math.max(28, Math.round(base * 0.8)) + 96 + base + 24;
     const apps = Math.max(1, visible.length);
     const perApp = (available - tray - 4 * (apps - 1)) / apps;
-    return Math.max(base, Math.min(cap, Math.round(perApp)));
-  }, [iconSize, prefs.iconSize, vertical, viewport.height, viewport.width, visible.length, windowsTaskbar]);
+    const tile = Math.max(base, Math.min(cap, Math.round(perApp)));
+    return { tile, crowded: perApp < tile };
+  }, [prefs.iconSize, sidebarMode, vertical, viewport.height, viewport.width, visible.length]);
+
+  const windowsTile = windowsMetrics.tile;
+
+  /** A barra (macOS ou Windows) transborda: passa a deslizar na sua área. */
+  const dockScrolling = windowsTaskbar ? windowsMetrics.crowded : fitted.scrolling;
 
   /** Métricas da barra de tarefas (Windows) vs ícones do dock (macOS). */
   const tileSize = windowsTaskbar ? windowsTile : iconSize;
@@ -213,6 +231,25 @@ export function Dock({ active, onOpen }: DockProps) {
   const trayRestRef = useRef({ pad: 10, box: 0, stripStart: 0, stripEnd: 0 });
   const pointerRef = useRef<number | null>(null);
   const hoverIndexRef = useRef<number | null>(null);
+
+  /* O gestor de janelas reserva o espaço da barra: publica-se a espessura real
+     (muda com o aspeto, com o tamanho dos botões e com o autoHide). */
+  useEffect(() => {
+    const anchor = shelfRef.current?.parentElement ?? null;
+    const update = () => {
+      const escondida = autoHideActive && !revealed;
+      const rect = anchor?.getBoundingClientRect();
+      const espessura =
+        !escondida && rect ? Math.round(prefs.position === "bottom" ? rect.height : rect.width) : 0;
+      // No Windows a janela maximizada encosta à barra (0 px); no macOS o dock
+      // flutua, por isso mantém-se a folga de 16 px.
+      setDockThickness(espessura > 0 ? espessura + (windowsTaskbar ? 0 : 16) : 0);
+    };
+    update();
+    const observer = typeof ResizeObserver !== "undefined" && anchor ? new ResizeObserver(update) : null;
+    if (observer && anchor) observer.observe(anchor);
+    return () => observer?.disconnect();
+  }, [autoHideActive, barThickness, iconSize, prefs.position, revealed, tileSize, windowsTaskbar]);
 
   /* ------------------------------------------------------------- ambiente */
   useEffect(() => {
@@ -585,6 +622,94 @@ export function Dock({ active, onOpen }: DockProps) {
         : "right-full bottom-0 mr-3",
   ].join(" ");
 
+  /**
+   * Bandeja do dock: preferências, ecrã inteiro e (no Windows) o relógio.
+   *
+   * No macOS vive dentro da prateleira (alinhada à direita por `margin-left:
+   * auto`); no Windows é renderizada **fora** da prateleira, ancorada ao canto
+   * da barra — a prateleira, por ter `backdrop-filter`, é bloco de posicionamento
+   * e a bandeja deslizaria junto com as aplicações quando a barra está cheia.
+   */
+  const trayGroup = (
+    <div
+      className={[
+        "dock-tray-group flex shrink-0 items-center",
+        windowsTaskbar ? "gap-1" : iconSize >= 66 ? "gap-3" : "gap-2",
+      ].join(" ")}
+      style={{ marginLeft: vertical || windowsTaskbar ? undefined : "auto" }}
+    >
+      <button
+        type="button"
+        onClick={() => setSettingsOpen((open) => !open)}
+        aria-label="Preferências do dock"
+        aria-expanded={settingsOpen}
+        title="Preferências do dock"
+        className={[
+          "dock-tile relative grid shrink-0 place-items-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70",
+          windowsTaskbar
+            ? "dock-tray-btn text-muted-foreground hover:text-foreground bg-transparent hover:bg-white/10"
+            : "bg-white/8 text-muted-foreground hover:bg-white/14 hover:text-foreground",
+        ].join(" ")}
+        style={
+          windowsTaskbar
+            ? { width: trayBtn, height: trayBtn, borderRadius: 4 }
+            : {
+                width: iconSize * 0.82,
+                height: iconSize * 0.82,
+                borderRadius: iconSize * 0.24,
+              }
+        }
+      >
+        <Settings size={trayIcon} />
+      </button>
+
+      {fullscreenSupported && (
+        <button
+          type="button"
+          onClick={() => void toggleFullscreen()}
+          aria-label={isFullscreen ? "Sair do ecrã inteiro" : "Ecrã inteiro"}
+          aria-pressed={isFullscreen}
+          title={isFullscreen ? "Sair do ecrã inteiro" : "Ecrã inteiro"}
+          className={[
+            "dock-tile relative grid shrink-0 place-items-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70",
+            windowsTaskbar
+              ? isFullscreen
+                ? "text-teal-200 bg-white/12"
+                : "dock-tray-btn text-muted-foreground hover:text-foreground bg-transparent hover:bg-white/10"
+              : isFullscreen
+                ? "bg-teal-400/25 text-teal-100 hover:bg-teal-400/35"
+                : "bg-white/8 text-muted-foreground hover:bg-white/14 hover:text-foreground",
+          ].join(" ")}
+          style={
+            windowsTaskbar
+              ? { width: trayBtn, height: trayBtn, borderRadius: 4 }
+              : {
+                  width: iconSize * 0.82,
+                  height: iconSize * 0.82,
+                  borderRadius: iconSize * 0.24,
+                }
+          }
+        >
+          {isFullscreen ? <Minimize2 size={trayIcon} /> : <Maximize2 size={trayIcon} />}
+        </button>
+      )}
+
+      {windowsTaskbar && (
+        <div
+          className="dock-clock"
+          title={now.toLocaleString("pt-PT", { dateStyle: "full", timeStyle: "short" })}
+        >
+          <span className="dock-clock-time">
+            {now.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}
+          </span>
+          <span className="dock-clock-date">
+            {now.toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric" })}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
       {autoHideActive && (
@@ -608,8 +733,14 @@ export function Dock({ active, onOpen }: DockProps) {
 
       <div className={wrapperClass}>
         <div
-          className="dock-anchor pointer-events-auto relative min-w-0 max-w-full max-h-full"
+          className={[
+            "dock-anchor pointer-events-auto relative min-w-0 max-w-full max-h-full",
+            // No Windows a barra ocupa **toda** a extensão da área de trabalho
+            // (como a barra de tarefas), na horizontal ou na vertical.
+            windowsTaskbar ? (vertical ? "h-full" : "w-full") : "",
+          ].join(" ")}
           data-position={prefs.position}
+          data-style={windowsTaskbar ? "windows" : "macos"}
           data-hidden={autoHideActive && !revealed && !settingsOpen && !startOpen ? "true" : "false"}
           onMouseEnter={() => setRevealed(true)}
           onMouseLeave={() => {
@@ -623,15 +754,15 @@ export function Dock({ active, onOpen }: DockProps) {
             data-position={prefs.position}
             data-style={windowsTaskbar ? "windows" : "macos"}
             data-magnifying="false"
-            data-scroll={fitted.scrolling ? "true" : "false"}
+            data-scroll={dockScrolling ? "true" : "false"}
             className={[
               "dock-shelf relative flex",
               windowsTaskbar ? "items-center" : "items-end",
-              fitted.scrolling ? "dock-scroll" : "",
+              dockScrolling ? "dock-scroll" : "",
               vertical ? "flex-col" : "flex-row",
               windowsTaskbar
                 ? vertical
-                  ? "gap-1 py-1"
+                  ? "h-full gap-1 py-1 justify-center"
                   : "w-full gap-1 px-1.5"
                 : iconSize >= 66
                   ? "gap-3 p-3.5"
@@ -745,7 +876,12 @@ export function Dock({ active, onOpen }: DockProps) {
                       "dock-tile dock-app group relative grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70",
                       bouncing === app.id ? "is-bouncing" : "",
                     ].join(" ")}
-                    style={{ width: tileSize, height: tileSize, borderRadius: tileRadius }}
+                    style={{
+                      width: tileSize,
+                      height: tileSize,
+                      borderRadius: tileRadius,
+                      ["--dock-accent" as string]: `rgba(${app.accent}, 0.65)`,
+                    }}
                   >
                     <span
                       className={[
@@ -891,82 +1027,13 @@ export function Dock({ active, onOpen }: DockProps) {
               </>
             )}
 
-            <button
-              type="button"
-              onClick={() => setSettingsOpen((open) => !open)}
-              aria-label="Preferências do dock"
-              aria-expanded={settingsOpen}
-              title="Preferências do dock"
-              className={[
-                "dock-tile relative grid shrink-0 place-items-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70",
-                windowsTaskbar
-                  ? "dock-tray-btn text-muted-foreground hover:text-foreground bg-transparent hover:bg-white/10"
-                  : "bg-white/8 text-muted-foreground hover:bg-white/14 hover:text-foreground",
-              ].join(" ")}
-              style={
-                windowsTaskbar
-                  ? { width: trayBtn, height: trayBtn, borderRadius: 4, marginLeft: vertical ? undefined : "auto" }
-                  : {
-                      width: iconSize * 0.82,
-                      height: iconSize * 0.82,
-                      borderRadius: iconSize * 0.24,
-                    }
-              }
-            >
-              <Settings size={trayIcon} />
-            </button>
+            {/* Bandeja: no macOS fica dentro da prateleira; no Windows é
+                renderizada fora (ver abaixo), para não deslizar com a área das
+                aplicações quando a barra está cheia. */}
+            {windowsTaskbar ? null : trayGroup}
 
-            {fullscreenSupported && (
-              <button
-                type="button"
-                onClick={() => void toggleFullscreen()}
-                aria-label={isFullscreen ? "Sair do ecrã inteiro" : "Ecrã inteiro"}
-                aria-pressed={isFullscreen}
-                title={isFullscreen ? "Sair do ecrã inteiro" : "Ecrã inteiro"}
-                className={[
-                  "dock-tile relative grid shrink-0 place-items-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70",
-                  windowsTaskbar
-                    ? isFullscreen
-                      ? "text-teal-200 bg-white/12"
-                      : "dock-tray-btn text-muted-foreground hover:text-foreground bg-transparent hover:bg-white/10"
-                    : isFullscreen
-                      ? "bg-teal-400/25 text-teal-100 hover:bg-teal-400/35"
-                      : "bg-white/8 text-muted-foreground hover:bg-white/14 hover:text-foreground",
-                ].join(" ")}
-                style={
-                  windowsTaskbar
-                    ? { width: trayBtn, height: trayBtn, borderRadius: 4 }
-                    : {
-                        width: iconSize * 0.82,
-                        height: iconSize * 0.82,
-                        borderRadius: iconSize * 0.24,
-                      }
-                }
-              >
-                {isFullscreen ? (
-                  <Minimize2 size={trayIcon} />
-                ) : (
-                  <Maximize2 size={trayIcon} />
-                )}
-              </button>
-            )}
-
-            {fitted.scrolling && <span className="dock-fade" aria-hidden="true" />}
-
-            {/* Windows 11: bandeja do sistema com a hora e a data */}
-            {windowsTaskbar && (
-              <div
-                className="dock-clock"
-                title={now.toLocaleString("pt-PT", { dateStyle: "full", timeStyle: "short" })}
-              >
-                <span className="dock-clock-time">
-                  {now.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}
-                </span>
-                <span className="dock-clock-date">
-                  {now.toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric" })}
-                </span>
-              </div>
-            )}
+            {fitted.scrolling && !windowsTaskbar && <span className="dock-fade" aria-hidden="true" />}
+            {dockScrolling && windowsTaskbar && <span className="dock-fade" aria-hidden="true" />}
 
             {hovered && tooltipsActive && (
               <div ref={tipRef} className="dock-tip pointer-events-none" role="presentation">
@@ -975,6 +1042,9 @@ export function Dock({ active, onOpen }: DockProps) {
               </div>
             )}
           </div>
+
+          {/* Windows 11: bandeja ancorada ao canto real da barra. */}
+          {windowsTaskbar ? trayGroup : null}
 
           {settingsOpen && (
             <DockPreferences

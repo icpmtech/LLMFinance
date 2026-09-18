@@ -204,8 +204,10 @@ from api.crm_routes import router as crm_router
 from api.ontology_routes import router as ontology_router
 from api.ontology_workspace_routes import router as ontology_workspace_router
 from api.scraper_routes import router as scraper_router
+from api.search_routes import router as search_router
 from api.search360_routes import router as search360_router
 from api.office_routes import router as office_router
+from api.email_routes import router as email_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -269,6 +271,46 @@ async def lifespan(app: FastAPI):
         pass
 
 
+_NOISY_ASSET_MARKERS = ("/assets/_app/", "/_app/immutable/")
+
+
+class _AccessLogFilter(logging.Filter):
+    """Cala os 404 esperados do Browser.
+
+    O Browser do IQ OS embute sites externos através de `/proxy`: os caminhos
+    **absolutos** dos recursos desses sites (por exemplo
+    `/assets/_app/immutable/…`) chegam à nossa origem e não existem aqui. São
+    404 normais (a página já foi servida pelo proxy) e enchem o registo.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = getattr(record, "args", ()) or ()
+        text = " ".join(str(part) for part in args) if args else record.getMessage()
+        return not any(marker in text for marker in _NOISY_ASSET_MARKERS)
+
+
+class _AsyncioLogFilter(logging.Filter):
+    """Ignora o traceback de ligações fechadas pelo cliente.
+
+    No Windows, quando um browser fecha a ligação a meio, o `asyncio` imprime um
+    `Traceback` de `ConnectionResetError` (`WinError 10054`) que **não** é um erro
+    da aplicação — só ruído no registo.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        exc = record.exc_info[1] if record.exc_info else None
+        return not isinstance(exc, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError))
+
+
+def _silence_known_noise() -> None:
+    """Aplica os filtros acima aos registos do `uvicorn` e do `asyncio`."""
+    logging.getLogger("uvicorn.access").addFilter(_AccessLogFilter())
+    logging.getLogger("asyncio").addFilter(_AsyncioLogFilter())
+
+
+_silence_known_noise()
+
+
 app = FastAPI(
     title="IQ OS API",
     version="0.4.0",
@@ -295,8 +337,11 @@ app.include_router(crm_router)
 app.include_router(ontology_router)
 app.include_router(ontology_workspace_router)
 app.include_router(scraper_router)
+app.include_router(search_router)
+app.include_router(search_router)
 app.include_router(search360_router)
 app.include_router(office_router)
+app.include_router(email_router)
 
 
 # Cache curta de `user_id → email`, para o registo de pedidos identificar quem
@@ -1013,6 +1058,7 @@ def entities_detail(nif: str):
 @app.get("/scraper/execucoes")
 @app.get("/scraper/pesquisa")
 @app.get("/scraper/agenda")
+@app.get("/pesquisa")
 @app.get("/search360")
 @app.get("/search360/dossie")
 @app.get("/search360/projetos")

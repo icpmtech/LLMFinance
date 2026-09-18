@@ -281,6 +281,9 @@ página numa dessas rotas devolvia `{"detail":"Not Found"}`.
 - **Office IQ OS** (`/office`) — leitura e escrita de conteúdos em **Markdown** (notas, relatórios,
   atas, páginas e os dossiês da Pesquisa 360), com pastas, pesquisa, duplicação, exportação
   `.md`/`.html` e leitura com tipografia própria (ver abaixo).
+- **Email** (`/email`) — a caixa de correio dentro da plataforma: contas **Gmail**, **Outlook/Microsoft
+  365**, **iCloud**, **Yahoo**, **Zoho**, **SAPO** ou qualquer servidor **IMAP/SMTP**, com pastas,
+  lista de mensagens, leitura, sinalizadores, anexos, envio e resposta (ver abaixo).
 - **Browser** (`/browser`) — navegador dentro da plataforma: separadores, favoritos, histórico,
   atalhos para páginas do IQ OS e fontes de mercado e integração com a pesquisa global (ver abaixo).
 - **Administração** (`/admin`) — sistema, utilizadores, eventos e logs; visível apenas a contas
@@ -324,6 +327,27 @@ dock escondem-na aos restantes), com quatro separadores:
   manuais** para teste (`POST /admin/events`).
 - Para dar acesso a uma conta (a primeira conta do sistema é `admin`):
   `python scripts/promote_admin.py --email alguem@exemplo.pt` (ou `--list`, `--demote`).
+
+#### Registo da API sem ruído
+
+O terminal da API (uvicorn) enchia-se com dois tipos de mensagens que **não** indicam problemas — e
+que escondiam as mensagens úteis. O `api/main.py` aplica agora dois filtros (no arranque do módulo,
+validados com o servidor real):
+
+- **404 esperados da navegação pelo proxy** — quando o Browser lê uma página externa pelo proxy, os
+  recursos com **caminho absoluto** desse site (por exemplo `/assets/_app/immutable/…` de um site
+  SvelteKit) são pedidos à nossa origem e aqui não existem: são 404 normais (a página já foi servida
+  pelo proxy). O filtro `_AccessLogFilter`, ligado ao `uvicorn.access`, cala as linhas cujo caminho
+  contém `/assets/_app/` ou `/_app/immutable/`. Todos os outros pedidos continuam registados.
+- **`ConnectionResetError` (`WinError 10054`)** — quando um browser fecha a ligação a meio, o
+  `asyncio` do Windows imprime um `Traceback` de
+  `_ProactorBasePipeTransport._call_connection_lost` que **não** é um erro da aplicação. O filtro
+  `_AsyncioLogFilter`, ligado ao registo `asyncio`, descarta os registos cujo `exc_info` seja
+  `ConnectionResetError`, `ConnectionAbortedError` ou `BrokenPipeError`; exceções reais continuam a
+  ser impressas.
+
+O nível de registo **não** mudou (continua a ser o do uvicorn/`INFO`) — os dois filtros são
+cirúrgicos, para não esconder erros verdadeiros.
 
 ### Material de vidro (glass) e animações
 
@@ -508,8 +532,15 @@ o campo de mensagem fica visível dentro do espaço reservado — e, em modo jan
 janela, por cima da barra de tarefas.
 
 No aspeto Windows a barra de tarefas fica **colada ao fundo** do ecrã (a folga de 8 px ficou
-reservada à área segura dos telemóveis) e o menu Iniciar abre 8 px acima dela. A ligação direta
-`/chat` também foi corrigida: abria o Dashboard por faltar esse caso na leitura do URL inicial.
+reservada à área segura dos telemóveis), **ocupa toda a largura da área de trabalho** (toda a altura
+quando está numa margem, com os botões centrados) e o menu Iniciar abre 8 px acima dela. A ligação
+direta `/chat` também foi corrigida: abria o Dashboard por faltar esse caso na leitura do URL inicial.
+
+A **distância entre a janela maximizada e a barra é fixa**: o gestor de janelas passou a reservar a
+espessura **real** da barra mais 16 px (`dockMetrics.ts` — o dock publica-a e o `WindowManager` lê-a
+com `useDockThickness()`), em vez dos 104 px fixos que deixavam um vão por baixo da janela quando a
+barra era mais fina. Como a espessura da barra muda (aspeto macOS/Windows, tamanho dos botões,
+escondida/visível), a janela maximizada acompanha.
 
 O que **não** muda com o aspeto: arrastar/redimensionar/encaixar, duplo clique para maximizar,
 minimizar para o dock (com animação na direção da barra), menu de contexto (restaurar/maximizar/
@@ -529,6 +560,29 @@ está numa margem). O crescimento nunca passa de ~25 % acima de «Tamanho dos í
 desconta primeiro a reserva fixa (Iniciar, bandeja, relógio e folgas) e reparte o resto pelas
 aplicações. O menu Iniciar acompanha a espessura da barra (`--dock-thickness`) e o indicador de
 cada aplicação acompanha o tamanho do botão (`--dock-ind`/`--dock-ind-min`).
+
+Cada botão leva o **gradiente da aplicação** (o ícone branco por cima, quadrado a 4 % do botão),
+para a barra ter a cor de cada app; a aplicação com a janela em foco ganha um brilho na cor dela
+(`--dock-accent`). O grupo **Iniciar + aplicações fica centrado** na barra (como no Windows 11),
+com a bandeja ancorada ao canto direito a 6 px e o relógio dentro dela; o espaço da bandeja
+(168 px em baixo, 120 px numa margem) é **reservado no contentor**, para uma barra cheia deslizar
+apenas na sua área e nunca por baixo da bandeja. A bandeja é renderizada **fora da prateleira**
+(que, por ter `backdrop-filter`, é bloco de posicionamento) — assim não desliza junto com as
+aplicações quando a barra está cheia. Numa barra em margem a bandeja ocupa exatamente a largura
+da barra (48 px) e o relógio mostra só a hora (a data não caberia).
+
+O dock sabe quando **transborda**: o sinalizador «desliza» compara o tamanho de ícone **usado** com
+o que caberia (`iconSize > fits`, e não `iconSize < preferência`), pelo que uma barra cheia passa a
+deslizar **dentro da sua área** em vez de continuar a crescer para fora do ecrã. No **macOS** o dock
+também desconta o espaço da barra lateral ao calcular o tamanho dos ícones e, quando o conteúdo não
+cabe, a bandeja (preferências/ecrã inteiro) fica **presa à margem visível** (`position: sticky` com
+fundo próprio). Numa margem o dock nunca é mais alto do que o ecrã
+(`max-height: calc(100dvh - 16px)`), deslizando por dentro.
+
+O material da barra do Windows (Mica, desfoco, hairline e sombra) é pintado no **contentor**
+(`.dock-anchor[data-style="windows"]`), não na prateleira: a prateleira termina onde começa a
+reserva da bandeja, por isso pintá-la só aí deixava o lado direito (onde vive a bandeja e o relógio)
+sem o fundo escuro.
 - A geometria, o empilhamento e o estado (minimizada/maximizada) ficam guardados em
   `localStorage` (`finance-llm-windows:v1`) e são repostos ao recarregar.
 - O modo liga-se/desliga nas **Definições → Preferências → Modo janelas** (guardado na conta)
@@ -634,6 +688,42 @@ Os documentos são Markdown em `data/office/office.json` (escrita atómica, o fi
 verdade e pode ser versionado). Uma alteração parcial — por exemplo mudar só o título — **não** toca
 no texto: é preciso enviar `markdown` (ou `content`). Um `title` vazio numa alteração parcial também
 nunca apaga o título existente.
+
+### Email (caixa de correio)
+
+Aplicação **Email** (`/email`): o correio do utilizador dentro do IQ OS. Três colunas — **pastas**
+(com contagens de não lidas), **lista de mensagens** (pesquisa no assunto e no remetente, filtro de
+não lidas e paginação) e **leitura** (texto ou HTML isolado num `iframe` sem scripts, anexos e ações).
+
+- **Fornecedores** com os servidores já preenchidos: Gmail/Google Workspace, Outlook/Microsoft 365,
+  Hotmail/Live.com, iCloud Mail, Yahoo Mail, Zoho Mail e SAPO Mail — mais a opção *Outro servidor*
+  para qualquer caixa IMAP/SMTP. O assistente explica quando é preciso uma **palavra-passe de
+  aplicação** (contas com verificação em dois passos) e **testa a ligação** antes de guardar.
+- **Ler e organizar**: pastas com não lidas, abertura de mensagem (marca como lida), marcar
+  lida/não lida, destacar, **mover** para outra pasta e apagar.
+- **Escrever**: nova mensagem ou **resposta** encadeada (`In-Reply-To`/`References`, com o texto
+  original citado), destinatários **CC/BCC**, **anexos** (até 12 MB por ficheiro) e assinatura da
+  conta (ativa/desativa por envio).
+- **Identidade**: várias contas por utilizador, conta por omissão, nome a mostrar e assinatura.
+
+Endpoints (`api/email_routes.py`; **tudo exige sessão** — a caixa de correio é pessoal):
+
+- `GET  /email/meta` — fornecedores suportados, ajuda e capacidades
+- `GET  /email/stats` — panorama das contas do utilizador (por fornecedor, último erro)
+- `GET|POST /email/accounts` · `DELETE /email/accounts/{id}` — contas (a palavra-passe nunca é devolvida)
+- `POST /email/accounts/test` · `POST /email/accounts/{id}/test` — testar credenciais (sem guardar / guardadas)
+- `GET  /email/accounts/{id}/folders` — pastas com mensagens e não lidas
+- `GET  /email/accounts/{id}/messages?folder=&limit=&offset=&q=&unread=&flagged=` — lista com pré-visualização
+- `GET  /email/accounts/{id}/messages/{uid}?folder=&mark_read=` — mensagem completa (texto, HTML, anexos)
+- `POST /email/accounts/{id}/messages/{uid}/flags` — `read|unread|flag|unflag`
+- `POST /email/accounts/{id}/messages/{uid}/move` · `DELETE /email/accounts/{id}/messages/{uid}`
+- `POST /email/accounts/{id}/send` — enviar (novo ou resposta), com anexos em base64
+
+O motor (`api/email_service.py`) assenta só na biblioteca padrão: `imaplib` (pastas, cabeçalhos,
+corpo, sinalizadores, com *modified UTF-7* nos nomes de pasta) e `smtplib` (SSL direto ou STARTTLS).
+As contas ficam em `data/email/email.json`, **por utilizador** (`owner` = email da conta na
+plataforma); a palavra-passe é guardada nesse ficheiro (é preciso ativar IMAP no fornecedor) e
+**nunca** sai pela API — as respostas trazem apenas `has_password`.
 
 ### Browser (módulo independente)
 
@@ -805,6 +895,8 @@ CMVM, …) — o browser não pode contornar isso, mas o **servidor** pode ler e
 - **Segurança**: só `http`/`https`, destinos privados/loopback/metadata recusados (SSRF), limite de
   12 MB e tempo limite de 25 s, sem reenvio de cookies nem credenciais. As requisições do proxy
   ficam registadas como eventos de origem `proxy`.
+- **Registo limpo**: os **404 esperados** desta navegação não aparecem no registo da API (veja
+  «Registo da API sem ruído»).
 
 #### Porquê não WASM (e que alternativas existem)
 

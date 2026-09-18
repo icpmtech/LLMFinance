@@ -12,6 +12,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { ChevronsDownUp, LayoutGrid, PanelsTopLeft, Rows3, X } from "lucide-react";
 import { Window, type DockSide, type SnapZone } from "./Window";
 import { useDock } from "../dock";
+import { useDockThickness } from "../dockMetrics";
 import {
   cascadeWindows,
   clampWindows,
@@ -23,8 +24,7 @@ import {
   toggleMaximizeWindow,
   useWindows,
   type WindowRect,
-  type WorkspaceSize,
-} from "../windows";
+  type WorkspaceSize,} from "../windows";
 
 interface WindowManagerProps {
   /** Renderiza o conteúdo de uma vista (a mesma função usada no modo página). */
@@ -89,7 +89,14 @@ export function WindowManager({ renderView, labelFor, onActiveChange }: WindowMa
   );
 
   /** Espaço reservado ao dock (as janelas não devem ficar por baixo dele). */
-  const dockInset = dockPrefs.position === "bottom" && !dockPrefs.autoHide ? 104 : 0;
+  const dockThickness = useDockThickness();
+  const dockOnBottom = dockPrefs.position === "bottom";
+  const dockInset =
+    dockThickness > 0
+      ? dockThickness
+      : dockOnBottom && !dockPrefs.autoHide
+        ? 104
+        : 0;
   /** Lado do dock: define de onde as janelas encolhem/crescem. */
   const dockSide: DockSide = dockPrefs.position;
 
@@ -100,8 +107,8 @@ export function WindowManager({ renderView, labelFor, onActiveChange }: WindowMa
     const measure = () => {
       const box = node.getBoundingClientRect();
       setWorkspace({
-        width: Math.max(280, Math.round(box.width)),
-        height: Math.max(220, Math.round(box.height) - dockInset),
+        width: Math.max(280, Math.round(box.width) - (dockOnBottom ? 0 : dockInset)),
+        height: Math.max(220, Math.round(box.height) - (dockOnBottom ? dockInset : 0)),
       });
     };
     measure();
@@ -112,7 +119,7 @@ export function WindowManager({ renderView, labelFor, onActiveChange }: WindowMa
       observer.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [dockInset]);
+  }, [dockInset, dockOnBottom]);
 
   /* Reposiciona janelas que ficaram fora da área de trabalho. */
   useEffect(() => {

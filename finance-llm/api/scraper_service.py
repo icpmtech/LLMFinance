@@ -28,7 +28,9 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import platform
 import re
+import sys
 import threading
 import time
 import uuid
@@ -80,6 +82,22 @@ DEFAULT_OPTIONS: Dict[str, Dict[str, Any]] = {
 }
 
 DEFAULT_USER_AGENT = "IQOS-Scraper/1.0 (recolha autorizada; contacto: administrador local)"
+
+# Campos que nunca entram no texto automático de um item (não são conteúdo).
+_TEXT_SKIP_FIELDS = {
+    "url",
+    "link",
+    "href",
+    "imagem",
+    "image",
+    "img",
+    "foto",
+    "thumbnail",
+    "data",
+    "date",
+    "atualizado",
+    "publicado",
+}
 
 _DEFAULTS = {
     "fetcher": "http",
@@ -388,7 +406,8 @@ def _load_scrapling() -> Dict[str, Any]:
         )
     except Exception as exc:  # pragma: no cover - depende do ambiente
         raise RuntimeError(
-            "O Scrapling não está instalado. Instale com `pip install \"scrapling[fetchers]\"` "
+            "O Scrapling não está instalado no interpretador que corre a API. "
+            f'Instale com `"{sys.executable}" -m pip install "scrapling[fetchers]"` '
             "e, para browsers, `scrapling install`."
         ) from exc
     return {
@@ -403,7 +422,16 @@ def _load_scrapling() -> Dict[str, Any]:
 
 def availability() -> Dict[str, Any]:
     """Diagnóstico do ambiente de recolha (Scrapling, browsers, Elasticsearch)."""
-    info: Dict[str, Any] = {"scrapling": False, "fetchers": {}, "elasticsearch": False}
+    info: Dict[str, Any] = {
+        "scrapling": False,
+        "fetchers": {},
+        "elasticsearch": False,
+        # O interpretador é a causa mais comum de «Scrapling não instalado»: a
+        # API pode estar a correr com outro Python que não o do projeto (.venv).
+        "python": sys.executable,
+        "python_version": platform.python_version(),
+        "scrapling_version": None,
+    }
     try:
         classes = _load_scrapling()
         info["scrapling"] = True
@@ -412,6 +440,12 @@ def availability() -> Dict[str, Any]:
             "dynamic": "DynamicSession" in classes,
             "stealth": "StealthySession" in classes,
         }
+        try:
+            from importlib.metadata import version
+
+            info["scrapling_version"] = version("scrapling")
+        except Exception:
+            info["scrapling_version"] = None
     except Exception as exc:
         info["scrapling_error"] = str(exc)
         info["fetchers"] = {kind: False for kind in FETCHERS}
@@ -640,6 +674,11 @@ def _item_id(item: Dict[str, Any], source: Dict[str, Any]) -> str:
     return f"{source['id']}:{hashlib.sha1(raw.encode('utf-8')).hexdigest()[:24]}"
 
 
+def _looks_like_url(value: str) -> bool:
+    """Indica se o valor é uma ligação (não é conteúdo textual)."""
+    return bool(re.match(r"^\s*(https?://|/)", value or ""))
+
+
 def _to_document(raw: Dict[str, Any], source: Dict[str, Any], page_url: str) -> Dict[str, Any]:
     """Converte os campos extraídos no documento de recolha (item + índice)."""
     data = {k: v for k, v in raw.items() if v not in (None, "", [])}
@@ -663,18 +702,24 @@ def _to_document(raw: Dict[str, Any], source: Dict[str, Any], page_url: str) -> 
     # campo textual extraído (é o que o utilizador vê como identificador).
     if not title:
         for name in [f["name"] for f in source.get("fields", [])]:
+            if name.lower() in _TEXT_SKIP_FIELDS:
+                continue
             value = data.get(name)
-            if isinstance(value, str) and value.strip() and name != "url":
+            if isinstance(value, str) and value.strip() and not _looks_like_url(value):
                 title = value
                 break
     if not text:
+        # Texto automático: junta apenas os campos de conteúdo (fora links,
+        # imagens e datas), senão o excerto da pesquisa enche-se de URLs.
         parts = []
         for name in [f["name"] for f in source.get("fields", [])]:
+            if name.lower() in _TEXT_SKIP_FIELDS:
+                continue
             value = data.get(name)
             if isinstance(value, (list, tuple)):
                 value = " | ".join(str(v) for v in value)
-            if isinstance(value, str) and value and name not in {"url"}:
-                parts.append(value)
+            if isinstance(value, str) and value.strip() and not _looks_like_url(value):
+                parts.append(value.strip())
         text = " · ".join(parts)
     if isinstance(text, (list, tuple)):
         text = " | ".join(str(v) for v in text)

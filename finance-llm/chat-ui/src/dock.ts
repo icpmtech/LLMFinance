@@ -27,6 +27,7 @@ import {
   GitCompare,
   Globe2,
   LayoutDashboard,
+  Mail,
   MessageSquare,
   Network,
   Play,
@@ -97,6 +98,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: BookOpen,
     gradient: "from-teal-200 via-sky-500 to-indigo-700",
     accent: "14,165,233",
+  },
+  {
+    id: "email",
+    label: "Email",
+    hint: "Caixa de correio: Gmail, Outlook, iCloud ou qualquer IMAP/SMTP",
+    icon: Mail,
+    gradient: "from-sky-200 via-teal-400 to-emerald-600",
+    accent: "20,184,166",
   },
   {
     id: "crm",
@@ -184,6 +193,14 @@ export const DOCK_CATALOG: DockApp[] = [
     hint: "Visão geral da plataforma",
     icon: LayoutDashboard,
     gradient: "from-indigo-300 via-indigo-500 to-violet-600",
+    accent: "99,102,241",
+  },
+  {
+    id: "pesquisa",
+    label: "Pesquisa total",
+    hint: "Estilo Google: recolha, contratos, empresas, marcas, notícias e mercado",
+    icon: Search,
+    gradient: "from-sky-200 via-indigo-500 to-fuchsia-600",
     accent: "99,102,241",
   },
   {
