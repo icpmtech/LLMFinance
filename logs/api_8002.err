@@ -4,3 +4,4 @@ Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
 Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  30%|###       | 77/254 [00:00<00:00, 747.40it/s]Loading weights:  72%|#######2  | 183/254 [00:00<00:00, 920.16it/s]Loading weights: 100%|##########| 254/254 [00:00<00:00, 1102.33it/s]
+Loading weights:   0%|          | 0/75 [00:00<?, ?it/s]Loading weights: 100%|##########| 75/75 [00:00<00:00, 1071.40it/s]

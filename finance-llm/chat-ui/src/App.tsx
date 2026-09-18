@@ -47,6 +47,7 @@ import ScraperPage, {
   type ScraperSection,
 } from "./pages/ScraperPage";
 import UnifiedSearchPage from "./pages/UnifiedSearchPage";
+import SentimentPage from "./pages/SentimentPage";
 import Search360Page, {
   SEARCH360_SECTION_VIEWS,
   search360SectionForView,
@@ -153,6 +154,7 @@ function pathForView(view: string, company: string | null, ticker: string | null
   if (view === "scraper-pesquisa") return "/scraper/pesquisa";
   if (view === "scraper-agenda") return "/scraper/agenda";
   if (view === "pesquisa") return "/pesquisa";
+  if (view === "sentimento") return "/sentimento";
   if (view === "search360") return "/search360";
   if (view === "search360-dossie") return "/search360/dossie";
   if (view === "search360-projetos") return "/search360/projetos";
@@ -279,6 +281,7 @@ export default function App() {
     if (path === "/elastic") return "elastic";
     if (path === "/search") return "search";
     if (path === "/pesquisa") return "pesquisa";
+    if (path === "/sentimento") return "sentimento";
     if (path === "/contracts") return "contracts-search";
     if (path === "/contracts/search") return "contracts-search";
     if (path === "/contracts/dashboard") return "contracts-dashboard";
@@ -338,6 +341,7 @@ export default function App() {
       } else if (path === "/rag") next = "rag";      else if (path === "/browser") next = "browser";      else if (path === "/elastic") next = "elastic";
       else if (path === "/search") next = "search";
       else if (path === "/pesquisa") next = "pesquisa";
+      else if (path === "/sentimento") next = "sentimento";
       else if (path === "/contracts" || path === "/contracts/search") next = "contracts-search";
       else if (path === "/contracts/dashboard") next = "contracts-dashboard";
       else if (path === "/companies" || path === "/companies/search") next = "companies-search";
@@ -765,6 +769,9 @@ export default function App() {
     }
     if (target === "pesquisa") {
       return <UnifiedSearchPage initialQuery={searchQuery} onOpenTicker={handleSelectTicker} />;
+    }
+    if (target === "sentimento") {
+      return <SentimentPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
     }
     if (target === "contracts-dashboard") {
       return (

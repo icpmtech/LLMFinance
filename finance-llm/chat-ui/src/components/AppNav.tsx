@@ -46,6 +46,7 @@ export type AppView =
   | "elastic"
   | "search"
   | "pesquisa"
+  | "sentimento"
   | "contracts"
   | "contracts-search"
   | "contracts-dashboard"

@@ -205,6 +205,7 @@ from api.ontology_routes import router as ontology_router
 from api.ontology_workspace_routes import router as ontology_workspace_router
 from api.scraper_routes import router as scraper_router
 from api.search_routes import router as search_router
+from api.sentiment_routes import router as sentiment_router
 from api.search360_routes import router as search360_router
 from api.office_routes import router as office_router
 from api.email_routes import router as email_router
@@ -338,7 +339,7 @@ app.include_router(ontology_router)
 app.include_router(ontology_workspace_router)
 app.include_router(scraper_router)
 app.include_router(search_router)
-app.include_router(search_router)
+app.include_router(sentiment_router)
 app.include_router(search360_router)
 app.include_router(office_router)
 app.include_router(email_router)
@@ -1059,6 +1060,7 @@ def entities_detail(nif: str):
 @app.get("/scraper/pesquisa")
 @app.get("/scraper/agenda")
 @app.get("/pesquisa")
+@app.get("/sentimento")
 @app.get("/search360")
 @app.get("/search360/dossie")
 @app.get("/search360/projetos")

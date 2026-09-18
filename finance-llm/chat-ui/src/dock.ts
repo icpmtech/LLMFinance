@@ -84,6 +84,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "20,184,166",
   },
   {
+    id: "sentimento",
+    label: "Sentimento",
+    hint: "Análise de sentimento da recolha, notícias, dossiês e documentos",
+    icon: BarChart3,
+    gradient: "from-fuchsia-300 via-violet-500 to-indigo-600",
+    accent: "139,92,246",
+  },
+  {
     id: "search360",
     label: "Pesquisa 360",
     hint: "Meta-modelo de pesquisa: plataforma, enciclopédia, dados abertos e IA",

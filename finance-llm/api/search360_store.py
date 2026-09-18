@@ -74,6 +74,12 @@ def _summary(dossier: Dict[str, Any]) -> Dict[str, Any]:
         "evidence": len(synthesis.get("evidence") or []),
         "synthesis_mode": synthesis.get("mode"),
         "generated_at": snapshot.get("generated_at"),
+        # Análise de sentimento anexada ao dossiê (opcional).
+        "has_sentiment": bool(dossier.get("sentiment")),
+        "sentiment_label": (dossier.get("sentiment") or {}).get("label"),
+        "sentiment_mean": (dossier.get("sentiment") or {}).get("mean_polarity"),
+        "sentiment_at": (dossier.get("sentiment") or {}).get("generated_at"),
+        "sentiment_runs": len(dossier.get("sentiment_history") or []),
     }
 
 
@@ -203,6 +209,69 @@ def save_dossier(
     return {"saved": True, "dossier": item, "summary": _summary(item)}
 
 
+def save_sentiment(
+    dossier_id: str,
+    analysis: Dict[str, Any],
+    *,
+    markdown: Optional[str] = None,
+    ontology_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Anexa a análise de sentimento a um dossiê guardado (guarda histórico).
+
+    O bloco fica em `dossier.sentiment` — é o que o Office recebe quando traz o
+    dossiê para o editor, pelo que o relatório completo também é guardado em
+    `markdown`.
+    """
+    target = _ontology(ontology_id)
+    current = registry.get_workspace_item("dossiers", dossier_id, target)
+    summary = analysis.get("summary") or {}
+    block: Dict[str, Any] = {
+        "engine": summary.get("engine") or "lexicon",
+        "model": summary.get("model"),
+        "generated_at": summary.get("generated_at") or registry._now(),
+        "documents": int(summary.get("documents") or 0),
+        "mean_polarity": summary.get("mean_polarity", 0.0),
+        "median_polarity": summary.get("median_polarity"),
+        "std_polarity": summary.get("std_polarity"),
+        "ci95": summary.get("ci95"),
+        "label": summary.get("label") or "neutro",
+        "distribution": analysis.get("distribution") or [],
+        "by_source": (analysis.get("by_source") or [])[:20],
+        "by_day": (analysis.get("by_day") or [])[:90],
+        "terms": (analysis.get("terms") or [])[:20],
+        "keywords": (analysis.get("keywords") or [])[:20],
+        "rows": [
+            {
+                "id": row.get("id"),
+                "title": row.get("title"),
+                "source": row.get("source"),
+                "date": row.get("date"),
+                "polarity": row.get("polarity"),
+                "label": row.get("label"),
+            }
+            for row in (analysis.get("rows") or [])[:40]
+        ],
+        "markdown": markdown or "",
+    }
+    history = list(current.get("sentiment_history") or [])
+    previous = current.get("sentiment") or {}
+    if previous:
+        history.append(
+            {
+                "generated_at": previous.get("generated_at"),
+                "label": previous.get("label"),
+                "mean_polarity": previous.get("mean_polarity"),
+                "documents": previous.get("documents"),
+            }
+        )
+    body = dict(current)
+    body["sentiment"] = block
+    body["sentiment_history"] = history[-10:]
+    body["saved_at"] = registry._now()
+    item = registry.upsert_dossier(body, target)
+    return {"saved": True, "dossier": item, "summary": _summary(item), "sentiment": block}
+
+
 def rename_dossier(dossier_id: str, payload: Dict[str, Any], ontology_id: Optional[str] = None) -> Dict[str, Any]:
     target = _ontology(ontology_id)
     current = registry.get_workspace_item("dossiers", dossier_id, target)
@@ -303,6 +372,43 @@ def dossier_markdown(dossier: Dict[str, Any]) -> str:
                 f"{last.get('value')} ({last.get('year')}) | {change} |"
             )
         lines.append("")
+    sentiment = dossier.get("sentiment") or {}
+    if sentiment:
+        lines.append("## Análise de sentimento")
+        lines.append("")
+        engine = "modelo neuronal " + str(sentiment.get("model")) if sentiment.get("engine") == "neural" else "léxico PT + estatística (pandas/scikit-learn)"
+        lines.append(f"- **Motor:** {engine}")
+        lines.append(f"- **Documentos:** {sentiment.get('documents', 0)}")
+        mean = sentiment.get("mean_polarity")
+        lines.append(f"- **Polaridade média:** {mean:+.3f} ({sentiment.get('label')})" if isinstance(mean, (int, float)) else "- **Polaridade média:** —")
+        ci = sentiment.get("ci95") or []
+        if len(ci) == 2:
+            lines.append(f"- **IC 95 %:** [{ci[0]:+.3f}, {ci[1]:+.3f}]")
+        lines.append(f"- **Análise em:** {sentiment.get('generated_at') or '—'}")
+        lines.append("")
+        distribution = sentiment.get("distribution") or []
+        if distribution:
+            lines.append("| Leitura | Documentos |")
+            lines.append("| --- | --- |")
+            for entry in distribution:
+                lines.append(f"| {entry.get('label')} | {entry.get('count')} |")
+            lines.append("")
+        by_source = sentiment.get("by_source") or []
+        if by_source:
+            lines.append("| Fonte | Documentos | Polaridade | Leitura |")
+            lines.append("| --- | --- | --- | --- |")
+            for row in by_source:
+                lines.append(f"| {row.get('source')} | {row.get('documents')} | {row.get('polarity')} | {row.get('label')} |")
+            lines.append("")
+        terms = sentiment.get("terms") or []
+        positives = [t for t in terms if (t.get("weight") or 0) > 0][:8]
+        negatives = [t for t in terms if (t.get("weight") or 0) < 0][:8]
+        if positives:
+            lines.append("**Termos positivos:** " + ", ".join(str(t.get("term")) for t in positives))
+            lines.append("")
+        if negatives:
+            lines.append("**Termos negativos:** " + ", ".join(str(t.get("term")) for t in negatives))
+            lines.append("")
     lines.append("## O que cada fonte deu")
     lines.append("")
     lines.append("| Fonte | Itens | Tempo (ms) | Estado |")
