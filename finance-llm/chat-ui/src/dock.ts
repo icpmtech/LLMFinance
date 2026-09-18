@@ -28,6 +28,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   Network,
+  Play,
   Search,
   Settings,
   ShieldCheck,
@@ -118,6 +119,38 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: Gauge,
     gradient: "from-violet-300 via-purple-500 to-indigo-700",
     accent: "167,139,250",
+  },
+  {
+    id: "scraper",
+    label: "Recolha",
+    hint: "Recolher dados de sites (scraping) e agendar com cron",
+    icon: Globe2,
+    gradient: "from-amber-200 via-orange-500 to-rose-600",
+    accent: "249,115,22",
+  },
+  {
+    id: "scraper-execucoes",
+    label: "Recolha · Execuções",
+    hint: "Histórico de recolhas e itens gravados",
+    icon: Play,
+    gradient: "from-emerald-200 via-emerald-500 to-teal-600",
+    accent: "16,185,129",
+  },
+  {
+    id: "scraper-pesquisa",
+    label: "Recolha · Pesquisa",
+    hint: "Pesquisar nos itens recolhidos",
+    icon: Search,
+    gradient: "from-sky-200 via-sky-500 to-blue-700",
+    accent: "14,165,233",
+  },
+  {
+    id: "scraper-agenda",
+    label: "Recolha · Agenda",
+    hint: "Jobs de cron e próximas recolhas",
+    icon: CalendarClock,
+    gradient: "from-violet-200 via-violet-500 to-indigo-700",
+    accent: "139,92,246",
   },
   {
     id: "finder",
@@ -310,7 +343,7 @@ const LEGACY_DEFAULT_ITEMS = [
 const ORDER_VERSION = 2;
 
 /** Ícones fora do dock por defeito (disponíveis para adicionar). */
-const DEFAULT_PARKED = ["elastic", "import", "compare", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard"];
+const DEFAULT_PARKED = ["elastic", "import", "compare", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda"];
 
 export type DockPrefs = {
   position: DockPosition;

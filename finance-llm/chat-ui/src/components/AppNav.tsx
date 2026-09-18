@@ -59,6 +59,10 @@ export type AppView =
   | "crm-contacts"
   | "crm-agenda"
   | "crm-dashboard"
+  | "scraper"
+  | "scraper-execucoes"
+  | "scraper-pesquisa"
+  | "scraper-agenda"
   | "import"
   | "settings"
   | "admin"
@@ -96,6 +100,7 @@ const APP_MATCH: Record<string, AppView[]> = {
   "entities-search": ["companies-search", "company-detail"],
   tickers: ["ticker-detail", "ticker-chart"],
   crm: ["crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard"],
+  scraper: ["scraper-execucoes", "scraper-pesquisa", "scraper-agenda"],
 };
 
 function appItem(app: DockApp): NavItem {

@@ -202,8 +202,11 @@ from api.providers_routes import router as providers_router
 from api.proxy_routes import router as proxy_router
 from api.crm_routes import router as crm_router
 from api.ontology_routes import router as ontology_router
+from api.ontology_workspace_routes import router as ontology_workspace_router
+from api.scraper_routes import router as scraper_router
 from api import auth_service as auth
 from api import events_service as events
+from api import ontology_registry as ontology_registry
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -235,7 +238,24 @@ async def lifespan(app: FastAPI):
         except Exception:
             pass
     threading.Thread(target=_preload_ontology, daemon=True).start()
+
+    # Agendador das recolhas (cron): arranca com as definições guardadas.
+    try:
+        from api import scraper_scheduler
+
+        scraper_scheduler.start()
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Agendador de recolha não arrancou: %s", exc)
+
     yield
+
+    # Encerramento: para o agendador (jobs em curso terminam sozinhos).
+    try:
+        from api import scraper_scheduler
+
+        scraper_scheduler.shutdown()
+    except Exception:
+        pass
 
 
 app = FastAPI(
@@ -262,6 +282,8 @@ app.include_router(providers_router)
 app.include_router(proxy_router)
 app.include_router(crm_router)
 app.include_router(ontology_router)
+app.include_router(ontology_workspace_router)
+app.include_router(scraper_router)
 
 
 # Cache curta de `user_id → email`, para o registo de pedidos identificar quem
@@ -297,25 +319,32 @@ def _resolve_user_identity(request: Request) -> tuple[Optional[str], Optional[st
 
 @app.middleware("http")
 async def _event_log_middleware(request: Request, call_next):
-    """Regista os pedidos à API no registo de eventos (memória/ficheiro/Elasticsearch)."""
+    """Regista os pedidos à API no registo de eventos (memória/ficheiro/Elasticsearch).
+
+    Aproveita também para fixar a **ontologia ativa** do pedido: `?ontology=<id>`
+    em qualquer rota `/ontology/*` faz com que tipos, fontes, projetos e fichas
+    dessa ontologia sejam os usados por todas as funções de serviço.
+    """
     started = datetime.utcnow()
-    try:
-        response = await call_next(request)
-    except Exception as error:
-        duration_ms = (datetime.utcnow() - started).total_seconds() * 1000
-        user_id, email = _resolve_user_identity(request)
-        events.log_event(
-            "error",
-            "api",
-            f"{request.method} {request.url.path} falhou: {error}",
-            data={"error": str(error), "type": type(error).__name__},
-            request=request,
-            status=500,
-            duration_ms=duration_ms,
-            user_id=user_id,
-            user_email=email,
-        )
-        raise
+    ontology_id = request.query_params.get("ontology") if request.url.path.startswith("/ontology") else None
+    with ontology_registry.use_ontology(ontology_id):
+        try:
+            response = await call_next(request)
+        except Exception as error:
+            duration_ms = (datetime.utcnow() - started).total_seconds() * 1000
+            user_id, email = _resolve_user_identity(request)
+            events.log_event(
+                "error",
+                "api",
+                f"{request.method} {request.url.path} falhou: {error}",
+                data={"error": str(error), "type": type(error).__name__},
+                request=request,
+                status=500,
+                duration_ms=duration_ms,
+                user_id=user_id,
+                user_email=email,
+            )
+            raise
 
     duration_ms = (datetime.utcnow() - started).total_seconds() * 1000
     user_id, email = _resolve_user_identity(request)
@@ -952,6 +981,11 @@ def entities_detail(nif: str):
 @app.get("/crm/contactos")
 @app.get("/crm/agenda")
 @app.get("/crm/relatorios")
+@app.get("/scraper")
+@app.get("/scraper/fontes")
+@app.get("/scraper/execucoes")
+@app.get("/scraper/pesquisa")
+@app.get("/scraper/agenda")
 @app.get("/search")
 @app.get("/import")
 def serve_spa_page():

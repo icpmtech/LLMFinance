@@ -224,6 +224,37 @@ def actions() -> List[Dict[str, Any]]:
     return _ontology()["actions"]
 
 
+def sources() -> List[Dict[str, Any]]:
+    """Fontes de dados registadas na ontologia ativa."""
+    return _ontology().get("sources") or []
+
+
+def get_source(source_id: str) -> Optional[Dict[str, Any]]:
+    for source in sources():
+        if source.get("id") == source_id:
+            return source
+    return None
+
+
+def _binding_index(obj_type: Dict[str, Any]) -> Optional[str]:
+    """Tipo de objeto → índice do Elasticsearch.
+
+    O índice pode vir direto do `binding` (tipos da semente) ou ser resolvido
+    pela **fonte de dados** registada na ontologia (`binding.source`), o que
+    permite ligar um tipo a uma fonte nova sem tocar no registo base.
+    """
+    binding = obj_type.get("binding") or {}
+    index = binding.get("index")
+    source_id = str(binding.get("source") or "").strip()
+    if not source_id:
+        return index
+    source = get_source(source_id)
+    if not source:
+        return index
+    config = source.get("config") if isinstance(source.get("config"), dict) else {}
+    return str(source.get("index") or config.get("index") or index or "").strip() or index
+
+
 def get_object_type(type_id: str) -> Dict[str, Any]:
     obj = next((item for item in object_types() if item["id"] == type_id), None)
     if not obj:
@@ -743,7 +774,7 @@ def _query_es(
     scope: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
     binding = obj_type["binding"]
-    index = binding["index"]
+    index = _binding_index(obj_type)
     client = payload.get("es") or get_es_client()
     if not client:
         return {"total": 0, "items": [], "notes": ["Elasticsearch indisponível."], "error": "Elasticsearch indisponível"}
@@ -849,7 +880,7 @@ def _query_aggregation(
         return {"total": 0, "items": [], "notes": ["Elasticsearch indisponível."], "error": "Elasticsearch indisponível"}
     body = _aggregation_terms_body(obj_type, binding, payload.get("search"), payload.get("size") or 0)
     try:
-        resp = client.search(index=binding["index"], body=body, request_timeout=_AGG_TIMEOUT_SECONDS)
+        resp = client.search(index=_binding_index(obj_type), body=body, request_timeout=_AGG_TIMEOUT_SECONDS)
     except Exception as exc:
         logger.warning("Agregação da ontologia falhou (%s): %s", obj_type["id"], exc)
         return {"total": 0, "items": [], "notes": [], "error": str(exc)}
@@ -959,6 +990,9 @@ def _query_aggregation(
 def _cache_key(type_id: str, payload: Dict[str, Any], scope: Optional[Dict[str, Any]]) -> str:
     return "|".join(
         [
+            # A ontologia ativa faz parte da chave: os tipos de cada ontologia
+            # podem ter o mesmo id com ligações a dados diferentes.
+            registry.active_ontology_id(),
             type_id,
             str(payload.get("search") or ""),
             repr(sorted((payload.get("filters") or {}).items())) if isinstance(payload.get("filters"), dict) else str(payload.get("filters")),
@@ -1068,10 +1102,11 @@ def _fetch_raw(type_id: str, object_id: str, scope: Optional[Dict[str, Any]], es
     if not client:
         return obj_type, None
     id_field = binding.get("id_field") or _pk_prop(obj_type)["id"]
+    index = _binding_index(obj_type)
     source: Optional[Dict[str, Any]] = None
     if id_field == "_id":
         try:
-            source = client.get(index=binding["index"], id=object_id).get("_source")
+            source = client.get(index=index, id=object_id).get("_source")
         except Exception:
             source = None
     if source is None:
@@ -1081,7 +1116,7 @@ def _fetch_raw(type_id: str, object_id: str, scope: Optional[Dict[str, Any]], es
             clauses.append(binding["filter"])
         try:
             resp: Dict[str, Any] = client.search(
-                index=binding["index"], body={"query": {"bool": {"filter": clauses}}, "size": 1}
+                index=index, body={"query": {"bool": {"filter": clauses}}, "size": 1}
             )
             hits = resp["hits"]["hits"]
             source = hits[0].get("_source") if hits else None
@@ -1284,7 +1319,8 @@ def _resolve_link_binding(
     # Ligações que consultam um índice alvo (term / nested_terms / term_value).
     if not client:
         return [], ["Elasticsearch indisponível."]
-    index = binding.get("index")
+    # O índice pode vir da ligação ou da fonte de dados do tipo alvo.
+    index = binding.get("index") or _binding_index(target_type)
     field = binding.get("field")
     clauses: List[Dict[str, Any]] = []
     if binding.get("nested"):
@@ -1375,6 +1411,149 @@ def object_links(
         entry["notes"] = notes
         results.append(entry)
     return {"type": type_id, "id": object_id, "found": True, "label": obj_type["label"], "links": results}
+
+
+# --------------------------------------------------------------------------
+# Grafo de exploração
+# --------------------------------------------------------------------------
+def _graph_node(obj_type: Dict[str, Any], object_id: str, label: str, depth: int) -> Dict[str, Any]:
+    return {
+        "id": f"{obj_type['id']}:{object_id}",
+        "object_id": object_id,
+        "type_id": obj_type["id"],
+        "type_label": obj_type["label"],
+        "domain": obj_type.get("domain"),
+        "icon": obj_type.get("icon"),
+        "label": label or object_id,
+        "depth": depth,
+        "session_required": requires_session(obj_type),
+    }
+
+
+def explore_graph(
+    type_id: str,
+    object_id: str,
+    *,
+    depth: int = 2,
+    node_limit: int = 60,
+    links_per_object: int = 5,
+    link_ids: Optional[List[str]] = None,
+    scope: Optional[Dict[str, Any]] = None,
+    es: Any = None,
+) -> Dict[str, Any]:
+    """Grafo de exploração: parte de um objeto e expande as suas relações reais.
+
+    Ao contrário de `/ontology/graph` (que desenha o *modelo* — tipos e ligações),
+    este grafo mostra **dados**: cada nó é um objeto concreto e cada aresta é uma
+    relação resolvida nos índices. A expansão é feita em largura, com orçamento
+    (`node_limit`, `depth`, `links_per_object`) para nunca bloquear o servidor.
+    """
+    depth = max(1, min(int(depth or 1), 3))
+    node_limit = max(4, min(int(node_limit or 60), 120))
+    links_per_object = max(1, min(int(links_per_object or 5), 20))
+    doc = _ontology()
+    known_types = {item["id"]: item for item in doc["object_types"]}
+    if type_id not in known_types:
+        raise KeyError(f"Tipo de objeto desconhecido: {type_id}")
+
+    warnings: List[str] = []
+    truncated = False
+    visited: set = set()
+    edge_keys: set = set()
+    edges: List[Dict[str, Any]] = []
+
+    root_type = known_types[type_id]
+    root_label = object_id
+    try:
+        detail = get_object(type_id, object_id, scope=scope, es=es)
+        item = detail.get("object") or {}
+        root_label = str(item.get("_label") or item.get(_title_field(root_type)) or object_id)
+    except PermissionError as exc:
+        raise
+    except Exception as exc:  # tipo derivado/agregado sem leitura direta
+        warnings.append(f"Rótulo do objeto raiz não lido: {exc}")
+
+    nodes: Dict[str, Dict[str, Any]] = {f"{type_id}:{object_id}": _graph_node(root_type, object_id, root_label, 0)}
+    queue: List[Tuple[str, str, int]] = [(type_id, object_id, 0)]
+    depth_reached = 0
+
+    while queue:
+        current_type, current_id, level = queue.pop(0)
+        key = f"{current_type}:{current_id}"
+        if key in visited:
+            continue
+        visited.add(key)
+        if level >= depth:
+            continue
+        try:
+            result = object_links(current_type, current_id, size=links_per_object, scope=scope, es=es)
+        except PermissionError as exc:
+            warnings.append(str(exc))
+            continue
+        except Exception as exc:
+            warnings.append(f"Relações de {key} não lidas: {exc}")
+            continue
+        if not result.get("found"):
+            continue
+        for group in result.get("links") or []:
+            if link_ids and group.get("id") not in link_ids:
+                continue
+            other_type_id = group.get("other_type")
+            other_type = known_types.get(str(other_type_id))
+            if not other_type:
+                continue
+            for related in group.get("items") or []:
+                related_id = str(related.get("_id") or "").strip()
+                if not related_id:
+                    continue
+                target_key = f"{other_type_id}:{related_id}"
+                edge_key = (key, target_key, group.get("id"))
+                if edge_key not in edge_keys:
+                    edge_keys.add(edge_key)
+                    edges.append(
+                        {
+                            "id": f"{key}->{target_key}#{group.get('id')}",
+                            "source": key,
+                            "target": target_key,
+                            "link_id": group.get("id"),
+                            "label": group.get("label"),
+                            "direction": group.get("direction"),
+                            "count": group.get("count"),
+                        }
+                    )
+                if target_key not in nodes:
+                    if len(nodes) >= node_limit:
+                        truncated = True
+                        continue
+                    nodes[target_key] = _graph_node(
+                        other_type,
+                        related_id,
+                        str(related.get("_label") or related_id),
+                        level + 1,
+                    )
+                queue.append((str(other_type_id), related_id, level + 1))
+                depth_reached = max(depth_reached, level + 1)
+
+    last_domain = None
+    for node in nodes.values():
+        last_domain = last_domain or node.get("domain")
+    return {
+        "root": {"type_id": type_id, "object_id": object_id, "label": root_label},
+        "nodes": list(nodes.values()),
+        "edges": edges,
+        "stats": {
+            "nodes": len(nodes),
+            "edges": len(edges),
+            "expanded": len(visited),
+            "depth_reached": depth_reached,
+            "depth_requested": depth,
+            "node_limit": node_limit,
+        },
+        "truncated": truncated,
+        "warnings": warnings + (
+            ["Limite de nós atingido: aumente o limite ou reduza a profundidade para ver mais."] if truncated else []
+        ),
+    }
 
 
 # --------------------------------------------------------------------------

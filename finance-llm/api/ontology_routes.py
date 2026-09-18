@@ -162,6 +162,7 @@ def get_summary() -> Dict[str, Any]:
         counts[obj["domain"]] = counts.get(obj["domain"], 0) + 1
     return {
         "version": doc["version"],
+        "ontology": doc.get("ontology") or {"id": registry.DEFAULT_ONTOLOGY_ID, "name": registry.DEFAULT_ONTOLOGY_NAME},
         "updated_at": doc["updated_at"],
         "domains": [
             {**domain, "object_types": counts.get(domain["id"], 0)}
@@ -173,6 +174,10 @@ def get_summary() -> Dict[str, Any]:
             "actions": len(doc["actions"]),
             "custom": len([obj for obj in doc["object_types"] if not obj.get("builtin")]),
             "session_required": len([obj for obj in doc["object_types"] if ontology.requires_session(obj)]),
+            "sources": len(doc.get("sources") or []),
+            "projects": len(doc.get("projects") or []),
+            "dossiers": len(doc.get("dossiers") or []),
+            "links_to_data": len([obj for obj in doc["object_types"] if (obj.get("binding") or {}).get("source")]),
         },
         "graph": _graph(doc),
         "limits": doc["limits"],

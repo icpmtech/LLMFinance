@@ -36,18 +36,79 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import re
 import threading
+import unicodedata
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[1]
-ONTOLOGY_PATH = ROOT / "data" / "ontology" / "ontology.json"
+ONTOLOGY_DIR = ROOT / "data" / "ontology"
+ONTOLOGY_PATH = ONTOLOGY_DIR / "ontology.json"
+# Catálogo das ontologias existentes (uma linha por ontologia).
+ONTOLOGY_INDEX_PATH = ONTOLOGY_DIR / "index.json"
+
+# Ontologia por omissão: a semente do IQ OS (Empresas, Mercados, CRM, Pessoas).
+DEFAULT_ONTOLOGY_ID = "iqos"
+DEFAULT_ONTOLOGY_NAME = "IQ OS"
+DEFAULT_ONTOLOGY_DESCRIPTION = (
+    "Ontologia base da plataforma: contratação pública, mercados financeiros, CRM e pessoas."
+)
 
 # Sobe quando as definições base mudarem de forma incompatível com o ficheiro.
 ONTOLOGY_VERSION = 1
+
+# Ontologia ativa do pedido em curso. O serviço (`ontology_service`) lê a
+# ontologia através de `load_ontology()`, pelo que definir isto no início de um
+# pedido é suficiente para que todas as consultas usem a ontologia escolhida.
+_active_ontology: ContextVar[str] = ContextVar("iqos_active_ontology", default=DEFAULT_ONTOLOGY_ID)
+
+
+def active_ontology_id() -> str:
+    """Id da ontologia do pedido em curso."""
+    return _active_ontology.get() or DEFAULT_ONTOLOGY_ID
+
+
+@contextmanager
+def use_ontology(ontology_id: Optional[str]) -> Iterator[str]:
+    """Usa temporariamente outra ontologia neste pedido."""
+    target = normalize_ontology_id(ontology_id) or DEFAULT_ONTOLOGY_ID
+    token = _active_ontology.set(target)
+    try:
+        yield target
+    finally:
+        _active_ontology.reset(token)
+
+
+def normalize_ontology_id(value: Optional[str]) -> Optional[str]:
+    """Aceita `id`, nome ou vazio e devolve um id existente (ou `None`)."""
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    if raw in {entry["id"] for entry in _read_index()["ontologies"]}:
+        return raw
+    lowered = raw.lower()
+    for entry in _read_index()["ontologies"]:
+        if lowered in {entry["id"].lower(), (entry.get("name") or "").lower()}:
+            return entry["id"]
+    return None
+
+
+def slugify(value: str, fallback: str = "ontologia") -> str:
+    """Converte um nome num id utilizável (`Mercado Energético` → `mercado_energetico`).
+
+    Usa `snake_case` como o resto da ontologia (`entidade_publica`, `contrato`),
+    pelo que um id já em snake_case fica intacto.
+    """
+    text = unicodedata.normalize("NFKD", value or "").encode("ascii", "ignore").decode("ascii")
+    text = re.sub(r"[^a-zA-Z0-9]+", "_", text).strip("_").lower()
+    text = re.sub(r"_+", "_", text)
+    return text[:64] or fallback
 
 
 def _p(
@@ -998,7 +1059,183 @@ SEED_ACTIONS: List[Dict[str, Any]] = [
 # Persistência
 # --------------------------------------------------------------------------
 _lock = threading.Lock()
-_cache: Optional[Dict[str, Any]] = None
+_cache: Dict[str, Dict[str, Any]] = {}
+
+
+# --------------------------------------------------------------------------
+# Catálogo de ontologias
+# --------------------------------------------------------------------------
+def _default_index_document() -> Dict[str, Any]:
+    return {
+        "version": ONTOLOGY_VERSION,
+        "updated_at": _now(),
+        "ontologies": [
+            {
+                "id": DEFAULT_ONTOLOGY_ID,
+                "name": DEFAULT_ONTOLOGY_NAME,
+                "description": DEFAULT_ONTOLOGY_DESCRIPTION,
+                "accent": "56,189,248",
+                "seed": True,
+                "created_at": _now(),
+                "updated_at": _now(),
+            }
+        ],
+    }
+
+
+def _read_index() -> Dict[str, Any]:
+    if not ONTOLOGY_INDEX_PATH.exists():
+        return _default_index_document()
+    try:
+        raw = json.loads(ONTOLOGY_INDEX_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("Catálogo de ontologias ilegível (%s); a recomeçar.", exc)
+        return _default_index_document()
+    if not isinstance(raw, dict) or not isinstance(raw.get("ontologies"), list):
+        return _default_index_document()
+    entries = [entry for entry in raw["ontologies"] if isinstance(entry, dict) and entry.get("id")]
+    if not entries:
+        return _default_index_document()
+    return {"version": ONTOLOGY_VERSION, "updated_at": raw.get("updated_at") or _now(), "ontologies": entries}
+
+
+def _write_index(document: Dict[str, Any]) -> None:
+    document["version"] = ONTOLOGY_VERSION
+    document["updated_at"] = _now()
+    ONTOLOGY_INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = ONTOLOGY_INDEX_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(ONTOLOGY_INDEX_PATH)
+
+
+def list_ontologies() -> List[Dict[str, Any]]:
+    """Ontologias disponíveis, com contagens de tipos/fontes/projetos/fichas."""
+    items: List[Dict[str, Any]] = []
+    for entry in _read_index()["ontologies"]:
+        store = _read_store(entry["id"])
+        items.append(
+            {
+                **entry,
+                "builtin": entry["id"] == DEFAULT_ONTOLOGY_ID,
+                "object_types": len(store.get("custom_object_types") or []) + len(store["patches"].get("object_types") or {}),
+                "custom_object_types": len(store.get("custom_object_types") or []),
+                "link_types": len(store.get("custom_link_types") or []),
+                "sources": len(store.get("sources") or []),
+                "projects": len(store.get("projects") or []),
+                "dossiers": len(store.get("dossiers") or []),
+                "disabled": sum(len(store["disabled"].get(kind) or []) for kind in ("object_types", "link_types")),
+            }
+        )
+    return items
+
+
+def get_ontology_entry(ontology_id: str) -> Dict[str, Any]:
+    target = normalize_ontology_id(ontology_id)
+    if not target:
+        raise ValueError(f"Ontologia desconhecida: {ontology_id}")
+    return next(entry for entry in _read_index()["ontologies"] if entry["id"] == target)
+
+
+def create_ontology(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Cria uma ontologia nova (por omissão vazia, pronta a receber dados e tipos).
+
+    `template` pode ser `blank` (sem nada), `base` (copia os tipos da ontologia
+    por omissão) ou o id de uma ontologia existente (copia-a).
+    """
+    name = str(payload.get("name") or "").strip()
+    if not name:
+        raise ValueError("O nome da ontologia é obrigatório.")
+    template = str(payload.get("template") or "blank").strip() or "blank"
+    requested_id = str(payload.get("id") or "").strip()
+    ontology_id = slugify(requested_id or name)
+
+    with _lock:
+        document = _read_index()
+        known = {entry["id"] for entry in document["ontologies"]}
+        if ontology_id in known:
+            suffix = 2
+            while f"{ontology_id}-{suffix}" in known:
+                suffix += 1
+            ontology_id = f"{ontology_id}-{suffix}"
+        entry = {
+            "id": ontology_id,
+            "name": name,
+            "description": str(payload.get("description") or "").strip(),
+            "accent": str(payload.get("accent") or "129,140,248"),
+            "seed": False,
+            "template": template,
+            "created_at": _now(),
+            "updated_at": _now(),
+            "created_by": payload.get("created_by"),
+            "tags": [str(tag) for tag in (payload.get("tags") or []) if str(tag).strip()],
+        }
+        document["ontologies"].append(entry)
+        _write_index(document)
+
+        store = _empty_store()
+        if template != "blank":
+            source_id = DEFAULT_ONTOLOGY_ID if template == "base" else normalize_ontology_id(template)
+            if source_id:
+                origin = _read_store(source_id)
+                store["patches"] = copy.deepcopy(origin.get("patches") or store["patches"])
+                store["custom_object_types"] = copy.deepcopy(origin.get("custom_object_types") or [])
+                store["custom_link_types"] = copy.deepcopy(origin.get("custom_link_types") or [])
+                store["disabled"] = copy.deepcopy(origin.get("disabled") or store["disabled"])
+                store["domains"] = copy.deepcopy(origin.get("domains") or [])
+                store["metadata"] = {**(origin.get("metadata") or {}), "copiado_de": source_id}
+        _write_store(store, ontology_id)
+        logger.info("Ontologia '%s' criada (modelo: %s).", ontology_id, template)
+    return next(item for item in list_ontologies() if item["id"] == ontology_id)
+
+
+def update_ontology(ontology_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Altera os metadados de uma ontologia (nome, descrição, cor, etiquetas)."""
+    target = normalize_ontology_id(ontology_id)
+    if not target:
+        raise ValueError(f"Ontologia desconhecida: {ontology_id}")
+    with _lock:
+        document = _read_index()
+        for entry in document["ontologies"]:
+            if entry["id"] != target:
+                continue
+            for key in ("name", "description", "accent"):
+                if key in payload and payload[key] is not None:
+                    entry[key] = str(payload[key])
+            if payload.get("tags") is not None:
+                entry["tags"] = [str(tag) for tag in payload["tags"] if str(tag).strip()]
+            entry["updated_at"] = _now()
+        _write_index(document)
+        # Metadados próprios (chave/valor) vivem no ficheiro da ontologia.
+        if isinstance(payload.get("metadata"), dict):
+            store = _read_store(target)
+            store["metadata"] = {**(store.get("metadata") or {}), **{str(k): v for k, v in payload["metadata"].items()}}
+            _write_store(store, target)
+        _cache.pop(target, None)
+    return next(item for item in list_ontologies() if item["id"] == target)
+
+
+def delete_ontology(ontology_id: str) -> bool:
+    """Remove uma ontologia (a base do IQ OS não pode ser removida)."""
+    target = normalize_ontology_id(ontology_id)
+    if not target:
+        raise ValueError(f"Ontologia desconhecida: {ontology_id}")
+    if target == DEFAULT_ONTOLOGY_ID:
+        raise ValueError("A ontologia base do IQ OS não pode ser removida.")
+    with _lock:
+        document = _read_index()
+        kept = [entry for entry in document["ontologies"] if entry["id"] != target]
+        if len(kept) == len(document["ontologies"]):
+            return False
+        document["ontologies"] = kept
+        _write_index(document)
+        path = _store_path(target)
+        if path.exists():
+            try:
+                path.unlink()
+            except OSError as exc:
+                logger.warning("Não foi possível apagar %s: %s", path, exc)
+        _cache.pop(target, None)
+    return True
 
 
 def _seed_document() -> Dict[str, Any]:
@@ -1019,17 +1256,33 @@ def _empty_store() -> Dict[str, Any]:
         "version": ONTOLOGY_VERSION,
         "custom_object_types": [],
         "custom_link_types": [],
+        "domains": [],
         "patches": {"object_types": {}, "link_types": {}, "actions": {}},
         "disabled": {"object_types": [], "link_types": [], "actions": []},
+        # Área de trabalho: fontes de dados, projetos e fichas de análise.
+        "sources": [],
+        "projects": [],
+        "dossiers": [],
+        "metadata": {},
         "updated_at": _now(),
     }
 
 
-def _read_store() -> Dict[str, Any]:
-    if not ONTOLOGY_PATH.exists():
+def _store_path(ontology_id: Optional[str] = None) -> Path:
+    target = normalize_ontology_id(ontology_id) if ontology_id else None
+    target = target or (ontology_id or "").strip() or active_ontology_id()
+    # A ontologia base mantém o ficheiro histórico `ontology.json`.
+    if target == DEFAULT_ONTOLOGY_ID:
+        return ONTOLOGY_PATH
+    return ONTOLOGY_DIR / f"{slugify(target)}.json"
+
+
+def _read_store(ontology_id: Optional[str] = None) -> Dict[str, Any]:
+    path = _store_path(ontology_id)
+    if not path.exists():
         return _empty_store()
     try:
-        raw = json.loads(ONTOLOGY_PATH.read_text(encoding="utf-8"))
+        raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:  # ficheiro corrompido: recomeça
         logger.warning("Ontologia ilegível (%s); a recomeçar a partir da semente.", exc)
         return _empty_store()
@@ -1052,13 +1305,14 @@ def _read_store() -> Dict[str, Any]:
     return store
 
 
-def _write_store(store: Dict[str, Any]) -> None:
+def _write_store(store: Dict[str, Any], ontology_id: Optional[str] = None) -> None:
+    path = _store_path(ontology_id)
     store["version"] = ONTOLOGY_VERSION
     store["updated_at"] = _now()
-    ONTOLOGY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = ONTOLOGY_PATH.with_suffix(".json.tmp")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.replace(ONTOLOGY_PATH)
+    tmp.replace(path)
 
 
 def _merge_patch(base: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, Any]:
@@ -1085,10 +1339,15 @@ def _is_disabled(store: Dict[str, Any], kind: str, item_id: str) -> bool:
     return item_id in (store["disabled"].get(kind) or [])
 
 
-def build_ontology(store: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def build_ontology(store: Optional[Dict[str, Any]] = None, ontology_id: Optional[str] = None) -> Dict[str, Any]:
     """Junta a semente, as alterações e os elementos personalizados num documento único."""
-    store = store if store is not None else _read_store()
-    source = _seed_document()
+    target = normalize_ontology_id(ontology_id) or active_ontology_id()
+    entry = next((item for item in _read_index()["ontologies"] if item["id"] == target), None)
+    if entry is None:
+        raise ValueError(f"Ontologia desconhecida: {target}")
+    store = store if store is not None else _read_store(target)
+    seeded = bool(entry.get("seed")) or target == DEFAULT_ONTOLOGY_ID
+    source = _seed_document() if seeded else {"object_types": [], "link_types": [], "actions": []}
 
     def collect(kind: str) -> List[Dict[str, Any]]:
         patches = store["patches"].get(kind) or {}
@@ -1110,17 +1369,47 @@ def build_ontology(store: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
             items.append(custom)
         return items
 
+    domains = copy.deepcopy(DOMAINS) if seeded else []
+    known_domains = {domain["id"] for domain in domains}
+    for domain in store.get("domains") or []:
+        if not isinstance(domain, dict) or not domain.get("id"):
+            continue
+        if domain["id"] in known_domains:
+            continue
+        domains.append(
+            {
+                "id": domain["id"],
+                "label": domain.get("label") or domain["id"],
+                "description": domain.get("description") or "",
+                "accent": domain.get("accent") or "148,163,184",
+            }
+        )
+        known_domains.add(domain["id"])
+
     ontology = {
         "version": ONTOLOGY_VERSION,
+        "ontology": {
+            "id": target,
+            "name": entry.get("name") or target,
+            "description": entry.get("description") or "",
+            "accent": entry.get("accent"),
+            "seeded": seeded,
+            "created_at": entry.get("created_at"),
+            "tags": entry.get("tags") or [],
+        },
         "updated_at": store.get("updated_at") or _now(),
-        "domains": copy.deepcopy(DOMAINS),
+        "domains": domains,
         "object_types": collect("object_types"),
         "link_types": collect("link_types"),
         "actions": [
             copy.deepcopy(action)
-            for action in SEED_ACTIONS
+            for action in (SEED_ACTIONS if seeded else [])
             if not _is_disabled(store, "actions", action["id"])
         ],
+        "sources": copy.deepcopy(store.get("sources") or []),
+        "projects": copy.deepcopy(store.get("projects") or []),
+        "dossiers": copy.deepcopy(store.get("dossiers") or []),
+        "metadata": copy.deepcopy(store.get("metadata") or {}),
         "limits": {
             "max_query_size": 200,
             "max_links_per_object": 50,
@@ -1145,36 +1434,48 @@ def build_ontology(store: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     return ontology
 
 
-def load_ontology(force: bool = False) -> Dict[str, Any]:
-    """Devolve a ontologia efetiva (com cache em memória)."""
-    global _cache
+def load_ontology(force: bool = False, ontology_id: Optional[str] = None) -> Dict[str, Any]:
+    """Devolve a ontologia efetiva (com cache em memória, uma por ontologia)."""
+    target = normalize_ontology_id(ontology_id) or (ontology_id or "").strip() or active_ontology_id()
+    path = _store_path(target)
     with _lock:
-        if not ONTOLOGY_PATH.exists():
+        if not path.exists():
             # Materializa o ficheiro na primeira utilização, para poder ser editado/versionado.
-            _write_store(_empty_store())
-        if _cache is None or force:
-            _cache = build_ontology()
-        return copy.deepcopy(_cache)
+            _write_store(_empty_store(), target)
+        if force or target not in _cache:
+            _cache[target] = build_ontology(ontology_id=target)
+        return copy.deepcopy(_cache[target])
 
 
-def _store_and_refresh(store: Dict[str, Any]) -> Dict[str, Any]:
-    _write_store(store)
-    return load_ontology(force=True)
+def _store_and_refresh(store: Dict[str, Any], ontology_id: Optional[str] = None) -> Dict[str, Any]:
+    _write_store(store, ontology_id)
+    return load_ontology(force=True, ontology_id=ontology_id)
 
 
-def reset_ontology() -> Dict[str, Any]:
-    """Repõe a semente (remove tipos personalizados, alterações e desativações)."""
-    return _store_and_refresh(_empty_store())
+def reset_ontology(ontology_id: Optional[str] = None) -> Dict[str, Any]:
+    """Repõe a semente (remove tipos personalizados, alterações e desativações).
+
+    Numa ontologia criada pelo utilizador (sem semente) as fontes, projetos e
+    fichas são preservados: só os tipos e ligações voltam ao ponto de partida.
+    """
+    target = normalize_ontology_id(ontology_id) or active_ontology_id()
+    store = _read_store(target)
+    fresh = _empty_store()
+    for key in ("sources", "projects", "dossiers", "metadata", "domains"):
+        fresh[key] = copy.deepcopy(store.get(key) or fresh[key])
+    return _store_and_refresh(fresh, target)
 
 
-def _upsert(kind: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+def _upsert(kind: str, payload: Dict[str, Any], ontology_id: Optional[str] = None) -> Dict[str, Any]:
     if kind not in ("object_types", "link_types"):
         raise ValueError("Só é possível criar/alterar tipos de objeto e tipos de ligação.")
+    target = normalize_ontology_id(ontology_id) or active_ontology_id()
     item_id = str(payload.get("id") or "").strip()
     if not item_id:
         raise ValueError("O campo 'id' é obrigatório.")
-    store = _read_store()
-    seed_ids = {item["id"] for item in _seed_document()[kind]}
+    store = _read_store(target)
+    seed_kinds = _seed_document() if _is_seeded(target) else {"object_types": [], "link_types": [], "actions": []}
+    seed_ids = {item["id"] for item in seed_kinds[kind]}
     disabled = store["disabled"].setdefault(kind, [])
     if item_id in disabled:
         disabled.remove(item_id)
@@ -1194,28 +1495,38 @@ def _upsert(kind: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         else:
             items.append(body)
         store[custom_key] = items
-    _store_and_refresh(store)
-    return next(item for item in load_ontology_item(kind) if item["id"] == item_id)
+    _store_and_refresh(store, target)
+    return next(item for item in load_ontology_item(kind, target) if item["id"] == item_id)
 
 
-def load_ontology_item(kind: str) -> List[Dict[str, Any]]:
+def _is_seeded(ontology_id: Optional[str] = None) -> bool:
+    """A ontologia usa a semente do IQ OS (tipos base)?"""
+    target = normalize_ontology_id(ontology_id) or active_ontology_id()
+    if target == DEFAULT_ONTOLOGY_ID:
+        return True
+    entry = next((item for item in _read_index()["ontologies"] if item["id"] == target), None)
+    return bool(entry and entry.get("seed"))
+
+
+def load_ontology_item(kind: str, ontology_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """Lista os elementos de um tipo (`object_types`|`link_types`|`actions`)."""
-    return load_ontology()[kind]
+    return load_ontology(ontology_id=ontology_id)[kind]
 
 
-def upsert_object_type(payload: Dict[str, Any]) -> Dict[str, Any]:
-    return _upsert("object_types", payload)
+def upsert_object_type(payload: Dict[str, Any], ontology_id: Optional[str] = None) -> Dict[str, Any]:
+    return _upsert("object_types", payload, ontology_id)
 
 
-def upsert_link_type(payload: Dict[str, Any]) -> Dict[str, Any]:
-    return _upsert("link_types", payload)
+def upsert_link_type(payload: Dict[str, Any], ontology_id: Optional[str] = None) -> Dict[str, Any]:
+    return _upsert("link_types", payload, ontology_id)
 
 
-def delete(kind: str, item_id: str) -> bool:
+def delete(kind: str, item_id: str, ontology_id: Optional[str] = None) -> bool:
     """Remove um elemento (personalizado) ou desativa-o (base)."""
     if kind not in ("object_types", "link_types", "actions"):
         raise ValueError("Tipo de elemento inválido.")
-    store = _read_store()
+    target = normalize_ontology_id(ontology_id) or active_ontology_id()
+    store = _read_store(target)
     custom_key = "custom_object_types" if kind == "object_types" else "custom_link_types"
     removed = False
     if kind != "actions":
@@ -1229,9 +1540,126 @@ def delete(kind: str, item_id: str) -> bool:
             disabled.append(item_id)
             removed = True
         store["patches"][kind].pop(item_id, None)
-    _store_and_refresh(store)
+    _store_and_refresh(store, target)
     return removed
 
 
-def object_type_ids() -> List[str]:
-    return [item["id"] for item in load_ontology()["object_types"]]
+def object_type_ids(ontology_id: Optional[str] = None) -> List[str]:
+    return [item["id"] for item in load_ontology(ontology_id=ontology_id)["object_types"]]
+
+
+# --------------------------------------------------------------------------
+# Área de trabalho da ontologia: fontes de dados, projetos e fichas
+# --------------------------------------------------------------------------
+WORKSPACE_KINDS = ("sources", "projects", "dossiers")
+WORKSPACE_LABELS = {"sources": "fonte de dados", "projects": "projeto", "dossiers": "ficha de análise"}
+
+
+def list_workspace(kind: str, ontology_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Lista os elementos da área de trabalho (`sources`|`projects`|`dossiers`)."""
+    if kind not in WORKSPACE_KINDS:
+        raise ValueError(f"Tipo inválido: {kind}")
+    target = normalize_ontology_id(ontology_id) or active_ontology_id()
+    return [copy.deepcopy(item) for item in (_read_store(target).get(kind) or []) if isinstance(item, dict)]
+
+
+def get_workspace_item(kind: str, item_id: str, ontology_id: Optional[str] = None) -> Dict[str, Any]:
+    for item in list_workspace(kind, ontology_id):
+        if item.get("id") == item_id:
+            return item
+    raise KeyError(f"{WORKSPACE_LABELS.get(kind, kind).capitalize()} {item_id} não encontrada.")
+
+
+def upsert_workspace_item(kind: str, payload: Dict[str, Any], ontology_id: Optional[str] = None) -> Dict[str, Any]:
+    """Cria ou altera uma fonte, projeto ou ficha de análise."""
+    if kind not in WORKSPACE_KINDS:
+        raise ValueError(f"Tipo inválido: {kind}")
+    target = normalize_ontology_id(ontology_id) or active_ontology_id()
+    label = WORKSPACE_LABELS[kind]
+    body = {key: value for key, value in payload.items() if value is not None}
+    item_id = str(body.get("id") or "").strip()
+    if not item_id:
+        base = body.get("name") or body.get("title") or body.get("index") or body.get("url") or label
+        item_id = slugify(str(base), fallback=kind[:-1] or "item")
+    body["id"] = item_id
+    if kind == "sources":
+        if not str(body.get("kind") or "").strip():
+            raise ValueError("Uma fonte precisa de um tipo (`elasticsearch`, `rest`, `file` ou `derived`).")
+        body["label"] = body.get("label") or body.get("name") or item_id
+    if kind == "projects":
+        if not str(body.get("name") or "").strip():
+            raise ValueError("Um projeto precisa de um nome.")
+        if not body.get("ontology_id"):
+            body["ontology_id"] = target
+    if kind == "dossiers":
+        if not str(body.get("title") or "").strip():
+            raise ValueError("Uma ficha precisa de um título.")
+        if not body.get("project_id") and body.get("project"):
+            body["project_id"] = body["project"]
+    with _lock:
+        store = _read_store(target)
+        items = store.get(kind) or []
+        for index, item in enumerate(items):
+            if item.get("id") != item_id:
+                continue
+            merged = {**item, **body}
+            merged["created_at"] = item.get("created_at") or merged.get("created_at") or _now()
+            merged["updated_at"] = _now()
+            items[index] = merged
+            store[kind] = items
+            _write_store(store, target)
+            _cache.pop(target, None)
+            return copy.deepcopy(merged)
+        body.setdefault("created_at", _now())
+        body["updated_at"] = _now()
+        body.setdefault("ontology_id", target)
+        items.append(body)
+        store[kind] = items
+        _write_store(store, target)
+        _cache.pop(target, None)
+    return copy.deepcopy(body)
+
+
+def delete_workspace_item(kind: str, item_id: str, ontology_id: Optional[str] = None) -> bool:
+    if kind not in WORKSPACE_KINDS:
+        raise ValueError(f"Tipo inválido: {kind}")
+    target = normalize_ontology_id(ontology_id) or active_ontology_id()
+    with _lock:
+        store = _read_store(target)
+        items = store.get(kind) or []
+        kept = [item for item in items if item.get("id") != item_id]
+        if len(kept) == len(items):
+            return False
+        store[kind] = kept
+        if kind == "projects":
+            # As fichas do projeto removido ficam sem projeto (não são apagadas).
+            for dossier in store.get("dossiers") or []:
+                if dossier.get("project_id") == item_id:
+                    dossier["project_id"] = None
+        _write_store(store, target)
+        _cache.pop(target, None)
+    return True
+
+
+def list_sources(ontology_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    return list_workspace("sources", ontology_id)
+
+
+def upsert_source(payload: Dict[str, Any], ontology_id: Optional[str] = None) -> Dict[str, Any]:
+    return upsert_workspace_item("sources", payload, ontology_id)
+
+
+def list_projects(ontology_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    return list_workspace("projects", ontology_id)
+
+
+def upsert_project(payload: Dict[str, Any], ontology_id: Optional[str] = None) -> Dict[str, Any]:
+    return upsert_workspace_item("projects", payload, ontology_id)
+
+
+def list_dossiers(ontology_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    return list_workspace("dossiers", ontology_id)
+
+
+def upsert_dossier(payload: Dict[str, Any], ontology_id: Optional[str] = None) -> Dict[str, Any]:
+    return upsert_workspace_item("dossiers", payload, ontology_id)

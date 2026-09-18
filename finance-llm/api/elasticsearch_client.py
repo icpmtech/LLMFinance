@@ -71,6 +71,12 @@ PROVIDER_KEYS_INDEX = "finance_provider_keys"
 # (os administradores veem todos os registos).
 CRM_INDEX = "finance_crm"
 
+# Módulo de recolha (scraping): itens extraídos de sites pelas "fontes"
+# (definições) do `scraper_service`. Os campos de cada fonte variam, por isso o
+# conteúdo extraído vive em `data` (tipo `flattened`), pesquisável e agregável
+# sem precisar de um mapping diferente por site.
+SCRAPED_INDEX = "finance_scraped"
+
 # Definições (settings) específicas de determinados índices — nomeadamente
 # analisadores usados em subcampos de pesquisa por prefixo.
 INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
@@ -552,6 +558,28 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    # Recolha (scraping): cada documento é um item extraído por uma "fonte".
+    # Os campos variam de site para site e ficam em `data` (`flattened`), o que
+    # permite pesquisar e agregar por qualquer campo declarado na definição da
+    # fonte sem alterar o mapping índice a índice.
+    scraped_mappings = {
+        "properties": {
+            "source_id": {"type": "keyword"},
+            "source_name": {"type": "keyword"},
+            "run_id": {"type": "keyword"},
+            "item_id": {"type": "keyword"},
+            "url": {"type": "keyword", "ignore_above": 1024},
+            "title": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "summary": {"type": "text"},
+            "text": {"type": "text"},
+            "tags": {"type": "keyword"},
+            # Conteúdo específico da fonte (todos os campos extraídos).
+            "data": {"type": "flattened"},
+            "scraped_at": {"type": "date"},
+            "trigger": {"type": "keyword"},
+        }
+    }
+
     for name, mappings in [
         ("finance_prices", prices_mappings),
         ("finance_news", news_mappings),
@@ -568,6 +596,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (EVENTS_INDEX, events_mappings),
         (PROVIDER_KEYS_INDEX, provider_keys_mappings),
         (CRM_INDEX, crm_mappings),
+        (SCRAPED_INDEX, scraped_mappings),
     ]:
         if not client.indices.exists(index=name):
             settings: Dict[str, Any] = {"number_of_shards": 1, "number_of_replicas": 0}
@@ -4962,3 +4991,257 @@ def save_history(items: List[Dict[str, Any]], es: Optional[Elasticsearch] = None
         return {"ok": True, "count": len(items)}
     except Exception as exc:
         return {"error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Recolha de sites (scraping) — índice `finance_scraped`
+# ---------------------------------------------------------------------------
+
+def _clean_flattened(value: Any) -> Any:
+    """Prepara um valor para o campo `flattened` (apenas str/número/bool/listas)."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value[:20000]
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value
+    if isinstance(value, (list, tuple, set)):
+        cleaned = [_clean_flattened(v) for v in value]
+        return [v for v in cleaned if v is not None]
+    if isinstance(value, dict):
+        cleaned = {str(k): _clean_flattened(v) for k, v in value.items()}
+        return {k: v for k, v in cleaned.items() if v is not None}
+    return str(value)[:20000]
+
+
+def index_scraped_items(
+    source_id: str,
+    source_name: str,
+    run_id: str,
+    items: List[Dict[str, Any]],
+    trigger: str = "manual",
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa itens recolhidos em `finance_scraped`.
+
+    O `_id` do documento é o `item_id` calculado pelo `scraper_service`, pelo que
+    re-executar uma fonte **atualiza** os itens já conhecidos em vez de os
+    duplicar (a identidade do item é definida na definição da fonte).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed_count": 0, "error_count": 0}
+
+    ensure_indices(client)
+    now = _today()
+    actions: List[Dict[str, Any]] = []
+    for item in items or []:
+        item_id = str(item.get("item_id") or "").strip()
+        if not item_id:
+            continue
+        tags = item.get("tags")
+        if isinstance(tags, str):
+            tags = [tags]
+        doc = {
+            "source_id": source_id,
+            "source_name": source_name or source_id,
+            "run_id": run_id,
+            "item_id": item_id,
+            "url": str(item.get("url") or "")[:1024],
+            "title": str(item.get("title") or "")[:1024],
+            "summary": str(item.get("summary") or "")[:20000],
+            "text": str(item.get("text") or "")[:100000],
+            "tags": [str(t) for t in (tags or []) if t not in (None, "")][:64],
+            "data": _clean_flattened(item.get("data") or {}) or {},
+            "scraped_at": str(item.get("scraped_at") or now),
+            "trigger": trigger or "manual",
+        }
+        actions.append({"_index": SCRAPED_INDEX, "_id": item_id, "_source": doc})
+
+    if not actions:
+        return {"indexed_count": 0, "error_count": 0}
+
+    try:
+        success, errors = bulk(client, actions, raise_on_error=False, stats_only=False, refresh=True)
+        error_list = errors if isinstance(errors, list) else []
+        if error_list:
+            logger.warning("Recolha: %s de %s itens falharam na indexação", len(error_list), len(actions))
+        return {
+            "indexed_count": int(success),
+            "error_count": len(error_list),
+            "errors": [str(e.get("index", {}).get("error", e))[:300] for e in error_list[:5]],
+        }
+    except Exception as exc:
+        return {"error": str(exc), "indexed_count": 0, "error_count": len(actions)}
+
+
+def _scraped_query(
+    q: Optional[str] = None,
+    source_id: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Constrói a query de pesquisa de itens recolhidos."""
+    must: List[Dict[str, Any]] = []
+    if q:
+        # `data.*` cobre todos os campos extraídos (índice `flattened`).
+        must.append(
+            {
+                "query_string": {
+                    "query": q,
+                    "fields": ["title^3", "summary^2", "text", "url", "data.*"],
+                    "default_operator": "and",
+                    "lenient": True,
+                    "analyze_wildcard": True,
+                }
+            }
+        )
+    filters: List[Dict[str, Any]] = []
+    if source_id:
+        filters.append({"term": {"source_id": source_id}})
+    if tags:
+        filters.append({"terms": {"tags": tags}})
+    if date_from or date_to:
+        rng: Dict[str, Any] = {}
+        if date_from:
+            rng["gte"] = date_from
+        if date_to:
+            rng["lte"] = date_to
+        filters.append({"range": {"scraped_at": rng}})
+
+    bool_query: Dict[str, Any] = {"must": must or [{"match_all": {}}]}
+    if filters:
+        bool_query["filter"] = filters
+    return {"bool": bool_query}
+
+
+def search_scraped(
+    q: Optional[str] = None,
+    source_id: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    size: int = 20,
+    from_: int = 0,
+    sort: str = "recent",
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa itens recolhidos, com facetas por fonte, tag e dia."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "total": 0, "items": [], "facets": {}}
+
+    ensure_indices(client)
+
+    sort_spec: List[Any]
+    if sort == "oldest":
+        sort_spec = [{"scraped_at": {"order": "asc"}}]
+    elif sort == "relevance" and q:
+        sort_spec = [{"_score": {"order": "desc"}}, {"scraped_at": {"order": "desc"}}]
+    else:
+        sort_spec = [{"scraped_at": {"order": "desc"}}]
+
+    body: Dict[str, Any] = {
+        "size": max(0, min(int(size), 200)),
+        "from": max(0, int(from_)),
+        "query": _scraped_query(q, source_id, tags, date_from, date_to),
+        "sort": sort_spec,
+        "track_total_hits": True,
+        "aggs": {
+            "sources": {"terms": {"field": "source_id", "size": 50}},
+            "tags": {"terms": {"field": "tags", "size": 50}},
+            "days": {"date_histogram": {"field": "scraped_at", "calendar_interval": "day", "min_doc_count": 0}},
+        },
+    }
+
+    try:
+        resp = client.search(index=SCRAPED_INDEX, body=body)
+    except Exception as exc:
+        # Alguns campos de texto podem não existir (índice criado por versão
+        # anterior): repete a pesquisa apenas sobre os campos garantidos.
+        logger.debug("Pesquisa de recolha falhou (%s); a repetir sem `data.*`: %s", q, exc)
+        if not q:
+            return {"error": str(exc), "total": 0, "items": [], "facets": {}}
+        fallback = dict(body)
+        fallback["query"] = _scraped_query(None, source_id, tags, date_from, date_to)
+        fallback["query"] = {
+            "bool": {
+                "must": [{"multi_match": {"query": q, "fields": ["title", "summary", "text"], "lenient": True}}],
+                "filter": fallback["query"]["bool"].get("filter", []),
+            }
+        }
+        try:
+            resp = client.search(index=SCRAPED_INDEX, body=fallback)
+        except Exception as inner:
+            return {"error": str(inner), "total": 0, "items": [], "facets": {}}
+
+    aggs = resp.get("aggregations", {}) or {}
+    total = resp.get("hits", {}).get("total", 0)
+    total_value = total.get("value", 0) if isinstance(total, dict) else total
+    return {
+        "total": int(total_value or 0),
+        "items": [hit.get("_source") or {} for hit in resp.get("hits", {}).get("hits", [])],
+        "facets": {
+            "sources": [
+                {"key": b["key"], "count": b["doc_count"]} for b in aggs.get("sources", {}).get("buckets", [])
+            ],
+            "tags": [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("tags", {}).get("buckets", [])],
+            "days": [
+                {"key": b.get("key_as_string"), "count": b["doc_count"]}
+                for b in aggs.get("days", {}).get("buckets", [])
+                if b.get("doc_count")
+            ],
+        },
+    }
+
+
+def scraped_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Volumetria do índice de recolha (total e por fonte)."""
+    client = es or get_es_client()
+    if not client:
+        return {"available": False, "total": 0, "sources": []}
+
+    ensure_indices(client)
+    try:
+        resp = client.search(
+            index=SCRAPED_INDEX,
+            body={
+                "size": 0,
+                "track_total_hits": True,
+                "aggs": {"sources": {"terms": {"field": "source_id", "size": 50}}},
+            },
+        )
+        total = resp.get("hits", {}).get("total", 0)
+        total_value = total.get("value", 0) if isinstance(total, dict) else total
+        return {
+            "available": True,
+            "total": int(total_value or 0),
+            "sources": [
+                {"key": b["key"], "count": b["doc_count"]}
+                for b in resp.get("aggregations", {}).get("sources", {}).get("buckets", [])
+            ],
+        }
+    except Exception as exc:
+        return {"available": False, "total": 0, "sources": [], "error": str(exc)}
+
+
+def delete_scraped_source(source_id: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Remove do índice todos os itens de uma fonte."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    ensure_indices(client)
+    try:
+        resp = client.delete_by_query(
+            index=SCRAPED_INDEX,
+            body={"query": {"term": {"source_id": source_id}}},
+            refresh=True,
+            conflicts="proceed",
+        )
+        return {"ok": True, "deleted": resp.get("deleted", 0)}
+    except Exception as exc:
+        return {"error": str(exc)}
+

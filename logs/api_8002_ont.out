@@ -1,0 +1,24 @@
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+INFO:     127.0.0.1:65048 - "POST /auth/register HTTP/1.1" 201 Created
+INFO:     127.0.0.1:65048 - "GET /ontology/ontologies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65048 - "POST /ontology/ontologies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65048 - "POST /ontology/sources?ontology=energia_102842 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65048 - "POST /ontology/sources/contratos/probe?ontology=energia_102842 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65048 - "POST /ontology/sources/contratos/infer?ontology=energia_102842 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65048 - "POST /ontology/objects/contrato_energia/query?ontology=energia_102842 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65048 - "POST /ontology/ai/design?ontology=energia_102842 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65048 - "POST /ontology/ai/suggest-links HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65048 - "POST /ontology/projects?ontology=energia_102842 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65048 - "POST /ontology/dossiers?ontology=energia_102842 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65048 - "POST /ontology/dossiers/ficha_de_contrato_de_energia/facts?ontology=energia_102842 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65048 - "POST /ontology/dossiers/ficha_de_contrato_de_energia/draft?ontology=energia_102842 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65048 - "POST /ontology/graph/explore HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65048 - "GET /ontology/sources?ontology=energia_102842 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65048 - "GET /ontology/projects?ontology=energia_102842 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65048 - "GET /ontology/summary?ontology=energia_102842 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62692 - "GET /scraper/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64917 - "GET /scraper/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50703 - "GET /scraper/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58629 - "GET /scraper/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58629 - "OPTIONS /scraper/search?size=30&offset=0&sort=recent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50703 - "GET /scraper/search?size=30&offset=0&sort=recent HTTP/1.1" 200 OK

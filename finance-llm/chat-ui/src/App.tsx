@@ -41,6 +41,11 @@ import CrmPage, {
   type CrmSection,
 } from "./pages/CrmPage";
 import type { CrmKind, CrmRecord } from "./crmApi";
+import ScraperPage, {
+  SCRAPER_SECTION_VIEWS,
+  scraperSectionForView,
+  type ScraperSection,
+} from "./pages/ScraperPage";
 import FinderPage from "./pages/FinderPage";
 import CompareWindow from "./pages/CompareWindow";
 import { ContractDetailWindow, EntityDetailWindow, QuickLookWindow } from "./components/DetailWindow";
@@ -131,6 +136,10 @@ function pathForView(view: string, company: string | null, ticker: string | null
   if (view === "crm-contacts") return "/crm/contactos";
   if (view === "crm-agenda") return "/crm/agenda";
   if (view === "crm-dashboard") return "/crm/relatorios";
+  if (view === "scraper") return "/scraper";
+  if (view === "scraper-execucoes") return "/scraper/execucoes";
+  if (view === "scraper-pesquisa") return "/scraper/pesquisa";
+  if (view === "scraper-agenda") return "/scraper/agenda";
   if (view === "contracts-list") return "/contracts-list";
   if (view === "company-detail" && company) return `/companies/${company}`;
   return "/";
@@ -155,6 +164,15 @@ function crmSectionFromPath(path: string): CrmSection | null {
   if (path === "/crm/contactos") return "contacts";
   if (path === "/crm/agenda") return "agenda";
   if (path === "/crm/relatorios") return "dashboard";
+  return null;
+}
+
+/** Secção da recolha (scraping) a partir do caminho do URL (ou `null`). */
+function scraperSectionFromPath(path: string): ScraperSection | null {
+  if (path === "/scraper" || path === "/scraper/fontes") return "sources";
+  if (path === "/scraper/execucoes") return "runs";
+  if (path === "/scraper/pesquisa") return "search";
+  if (path === "/scraper/agenda") return "schedule";
   return null;
 }
 
@@ -239,6 +257,10 @@ export default function App() {
       const crmSection = crmSectionFromPath(path);
       if (crmSection) return CRM_SECTION_VIEWS[crmSection] as AppView;
     }
+    {
+      const scraperSection = scraperSectionFromPath(path);
+      if (scraperSection) return SCRAPER_SECTION_VIEWS[scraperSection] as AppView;
+    }
     if (path.startsWith("/companies/") && !path.startsWith("/companies/search") && !path.startsWith("/companies/dashboard")) {
       const nif = path.replace("/companies/", "").split("/")[0];
       if (nif) setSelectedCompany(nif);
@@ -283,6 +305,7 @@ export default function App() {
       else if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) next = "empresas-iq";
       else if (path === "/ontology" || path.startsWith("/ontology/")) next = "ontology";
       else if (crmSectionFromPath(path)) next = CRM_SECTION_VIEWS[crmSectionFromPath(path) as CrmSection] as AppView;
+      else if (scraperSectionFromPath(path)) next = SCRAPER_SECTION_VIEWS[scraperSectionFromPath(path) as ScraperSection] as AppView;
       else if (path.startsWith("/companies/")) {
         const nif = path.replace("/companies/", "").split("/")[0];
         if (nif) setSelectedCompany(nif);
@@ -630,6 +653,15 @@ export default function App() {
           defaults={stage ? { stage } : undefined}
           onClose={() => closeWindow(target)}
           onSaved={() => closeWindow(target)}
+        />
+      );
+    }
+    if (scraperSectionForView(target)) {
+      const section = scraperSectionForView(target) as ScraperSection;
+      return (
+        <ScraperPage
+          section={section}
+          onSectionChange={windowMode ? (next) => setViewAndHistory(SCRAPER_SECTION_VIEWS[next] as AppView) : undefined}
         />
       );
     }
