@@ -28,6 +28,8 @@ router = APIRouter(prefix="/providers", tags=["providers"])
 class KeyPayload(BaseModel):
     provider: str
     api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    default_model: Optional[str] = None
 
 
 class DefaultsPayload(BaseModel):
@@ -39,12 +41,25 @@ class TestPayload(BaseModel):
     provider: str
     model: Optional[str] = None
     api_key: Optional[str] = None
+    base_url: Optional[str] = None
 
 
 @router.get("")
 def list_providers(session: Annotated[CurrentSession, Depends(require_session)]) -> Dict[str, Any]:
     """Catálogo de fornecedores com o estado das chaves do utilizador."""
     return providers.provider_catalog(session.user.id)
+
+
+@router.get("/ollama-cloud/models")
+async def ollama_cloud_models(
+    url: str,
+    session: Annotated[CurrentSession, Depends(require_session)],
+    api_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Lista modelos disponíveis na instância Ollama Cloud indicada."""
+    key = (api_key or "").strip() or providers.resolve_key(session.user.id, "ollama-cloud")[0] or None
+    models = await cloud_chat.list_ollama_models(url, key)
+    return {"url": url, "models": models}
 
 
 @router.get("/chat-models")
@@ -56,9 +71,19 @@ def chat_models(session: Annotated[CurrentSession, Depends(require_session)]) ->
         if entry["kind"] == "local":
             options.append({"id": entry["id"], "label": entry["label"], "group": "Locais", "model": entry["default_model"], "usable": True})
             continue
-        group = "Cloud" if entry["id"] != "ollama" else "Local (Ollama)"
+        if entry["id"] == "ollama":
+            group = "Local (Ollama)"
+        elif entry["id"] == "ollama-cloud":
+            group = "Ollama Cloud"
+        else:
+            group = "Cloud"
         usable = entry["configured"]
         for index, model in enumerate(entry["models"]):
+            note = None
+            if not usable:
+                note = "sem URL configurada" if entry["id"] == "ollama-cloud" else "sem chave configurada"
+            elif entry["id"] == "ollama-cloud" and entry.get("base_url"):
+                note = f"URL {entry['base_url']}"
             options.append(
                 {
                     "id": f"{entry['id']}:{model}",
@@ -67,7 +92,7 @@ def chat_models(session: Annotated[CurrentSession, Depends(require_session)]) ->
                     "model": model,
                     "provider": entry["id"],
                     "usable": usable,
-                    "note": None if usable else "sem chave configurada",
+                    "note": note,
                     "default": index == 0,
                 }
             )
@@ -76,11 +101,17 @@ def chat_models(session: Annotated[CurrentSession, Depends(require_session)]) ->
 
 @router.put("/keys")
 def save_key(payload: KeyPayload, session: Annotated[CurrentSession, Depends(require_session)]) -> Dict[str, Any]:
-    """Guarda (ou apaga, com `api_key` vazio) a chave de um fornecedor."""
+    """Guarda (ou apaga, com campos vazios) a chave/url/modelo de um fornecedor."""
     if payload.provider not in providers.PROVIDERS_BY_ID:
         raise HTTPException(status_code=404, detail="Fornecedor desconhecido.")
     try:
-        providers.save_api_key(session.user.id, payload.provider, payload.api_key)
+        providers.save_api_key(
+            session.user.id,
+            payload.provider,
+            payload.api_key,
+            base_url=payload.base_url,
+            default_model=payload.default_model,
+        )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -118,6 +149,13 @@ async def test_provider(payload: TestPayload, session: Annotated[CurrentSession,
         raise HTTPException(status_code=422, detail="Sem chave de API para este fornecedor.")
 
     model = (payload.model or spec.get("default_model") or "").strip()
+    if payload.provider == "ollama-cloud":
+        custom_url = (payload.base_url or "").strip().rstrip("/")
+        if not custom_url:
+            custom_url = providers.resolve_provider_url(session.user.id, payload.provider)
+        spec = dict(spec)
+        if custom_url:
+            spec["base_url"] = custom_url
     try:
         result = await cloud_chat.test_provider(provider=payload.provider, spec=spec, model=model, api_key=api_key)
     except cloud_chat.CloudError as error:

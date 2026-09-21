@@ -29,11 +29,29 @@ class ToolCall(BaseModel):
     output: Optional[str] = None
 
 
+class SkillRef(BaseModel):
+    """Skill (método) aplicada a uma resposta pelos assistentes do IQ OS."""
+
+    id: Optional[str] = None
+    name: Optional[str] = None
+    when: Optional[str] = None
+    steps: List[str] = []
+    checks: List[str] = []
+    tools: List[str] = []
+    uses: int = 0
+    quality: Optional[str] = None
+    enabled: bool = True
+    created: bool = False
+    merged: bool = False
+    mode: Optional[str] = None
+
+
 class ChatResponse(BaseModel):
     message: ChatMessage
     sources: List[Source] = []
     tools: List[ToolCall] = []
     chart: Optional[dict] = None
+    skill: Optional[SkillRef] = None
 
 
 class ForecastRequest(BaseModel):
@@ -318,12 +336,17 @@ class RagChatRequest(BaseModel):
     temperature: float = 0.1
     doc_id: Optional[str] = None
     stream: bool = False
+    # Fornecedor de IA para redigir a resposta ("provider:modelo"). Vazio = modelo
+    # local do RAG (BloombergGPT-style), que é o comportamento de sempre.
+    backend: Optional[str] = None
 
 
 class RagChatResponse(BaseModel):
     answer: str
     sources: List[RagSource] = []
     model_used: Optional[str] = None
+    elapsed_seconds: Optional[float] = None
+    skill: Optional[SkillRef] = None
 
 
 class RagDocument(BaseModel):
@@ -448,6 +471,20 @@ class ElasticNewsGraphResponse(BaseModel):
 
 class ElasticTickerListResponse(BaseModel):
     tickers: List[str] = []
+
+
+class ElasticIndexItem(BaseModel):
+    index: str
+    label: str
+    docs: Optional[int] = None
+    size: Optional[str] = None
+    health: Optional[str] = None
+    status: Optional[str] = None
+
+
+class ElasticIndicesListResponse(BaseModel):
+    indices: List[ElasticIndexItem] = []
+    error: Optional[str] = None
 
 
 class ElasticDeleteResponse(BaseModel):

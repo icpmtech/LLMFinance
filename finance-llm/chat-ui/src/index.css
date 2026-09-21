@@ -248,6 +248,7 @@ html[data-glass="off"] {
 }
 .gradient-border {
   position: relative;
+  isolation: isolate;
 }
 .gradient-border::before {
   content: "";
@@ -260,6 +261,7 @@ html[data-glass="off"] {
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
+  z-index: -1;
 }
 .orbit-bg {
   background:

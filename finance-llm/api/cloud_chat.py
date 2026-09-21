@@ -99,6 +99,36 @@ def _build_openai_body(model: str, system: str, conversation: List[Dict[str, str
     return body
 
 
+def _ollama_body(
+    model: str,
+    system: str,
+    conversation: List[Dict[str, str]],
+    temperature: float,
+    max_tokens: int,
+    stream: bool,
+) -> Dict[str, Any]:
+    """Body nativo do Ollama (/api/chat)."""
+    messages: List[Dict[str, str]] = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.extend(conversation)
+    body: Dict[str, Any] = {"model": model, "messages": messages, "stream": stream}
+    options: Dict[str, Any] = {}
+    if temperature is not None:
+        options["temperature"] = float(temperature)
+    if max_tokens:
+        options["num_predict"] = int(max_tokens)
+    if options:
+        body["options"] = options
+    return body
+
+
+def _ollama_delta(payload: Dict[str, Any]) -> str:
+    """Extrai texto dos chunks NDJSON do Ollama."""
+    message = payload.get("message") or {}
+    return str(message.get("content") or "")
+
+
 def _anthropic_body(model: str, system: str, conversation: List[Dict[str, str]], temperature: float, max_tokens: int, stream: bool) -> Dict[str, Any]:
     body: Dict[str, Any] = {
         "model": model,
@@ -183,6 +213,10 @@ async def stream_answer(
         url = f"{base_url}/models/{model}:streamGenerateContent?alt=sse"
         body = _google_body(system, conversation, temperature, max_tokens)
         extract = _google_delta
+    elif kind == "ollama":
+        url = f"{base_url}/api/chat"
+        body = _ollama_body(model, system, conversation, temperature, max_tokens, True)
+        extract = _ollama_delta
     else:
         url = f"{base_url}/chat/completions"
         body = _build_openai_body(model, system, conversation, temperature, max_tokens, True)
@@ -194,6 +228,9 @@ async def stream_answer(
         separator = "&" if "?" in url else "?"
         url = f"{url}{separator}key={api_key or ''}"
         headers = {"content-type": "application/json"}
+    elif kind == "ollama" and api_key:
+        # Ollama Cloud pode exigir Bearer token se configurado.
+        headers = {"content-type": "application/json", "authorization": f"Bearer {api_key}"}
 
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
         try:
@@ -206,15 +243,29 @@ async def stream_answer(
                         provider=provider,
                     )
                 async for line in response.aiter_lines():
-                    if not line or not line.startswith("data:"):
+                    if not line or not line:
                         continue
-                    data = line[5:].strip()
-                    if not data or data == "[DONE]":
+                    data = line.strip()
+                    if data == "[DONE]" or not data:
                         continue
-                    try:
-                        payload = json.loads(data)
-                    except json.JSONDecodeError:
-                        continue
+                    # Ollama devolve NDJSON (linhas JSON, não SSE data:).
+                    if kind == "ollama":
+                        try:
+                            payload = json.loads(data)
+                        except json.JSONDecodeError:
+                            continue
+                        if payload.get("done"):
+                            continue
+                    else:
+                        if not line.startswith("data:"):
+                            continue
+                        data = line[5:].strip()
+                        if not data or data == "[DONE]":
+                            continue
+                        try:
+                            payload = json.loads(data)
+                        except json.JSONDecodeError:
+                            continue
                     if isinstance(payload, dict) and payload.get("error"):
                         error = payload["error"]
                         message = error.get("message") if isinstance(error, dict) else str(error)
@@ -251,6 +302,31 @@ async def complete_answer(
     ):
         parts.append(chunk)
     return "".join(parts).strip()
+
+
+async def list_ollama_models(base_url: str, api_key: Optional[str] = None) -> List[str]:
+    """Devolve os modelos disponíveis numa instância Ollama via /api/tags."""
+    url = f"{base_url.rstrip('/')}/api/tags"
+    headers: Dict[str, str] = {"content-type": "application/json"}
+    if api_key:
+        headers["authorization"] = f"Bearer {api_key}"
+    async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)) as client:
+        try:
+            response = await client.get(url, headers=headers)
+            if response.status_code >= 400:
+                body = response.text[:300]
+                raise CloudError(
+                    _friendly_status(response.status_code, "Ollama (cloud)", body),
+                    status=response.status_code,
+                    provider="ollama-cloud",
+                )
+            payload = response.json()
+            models = [str(m.get("name") or m.get("model")) for m in payload.get("models", []) if m]
+            return sorted({m for m in models if m})
+        except httpx.TimeoutException as error:
+            raise CloudError("Ollama (cloud) não respondeu a tempo ao listar modelos.", provider="ollama-cloud") from error
+        except httpx.HTTPError as error:
+            raise CloudError(f"Falha de rede a contactar Ollama (cloud): {error}", provider="ollama-cloud") from error
 
 
 async def test_provider(*, provider: str, spec: Dict[str, Any], model: str, api_key: Optional[str]) -> Dict[str, Any]:

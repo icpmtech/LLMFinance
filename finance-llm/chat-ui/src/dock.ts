@@ -19,6 +19,7 @@ import {
   Building2,
   CalendarClock,
   CandlestickChart,
+  Compass,
   Database,
   FileText,
   FolderOpen,
@@ -26,6 +27,7 @@ import {
   Gauge,
   GitCompare,
   Globe2,
+  Landmark,
   LayoutDashboard,
   Mail,
   MessageSquare,
@@ -41,6 +43,7 @@ import {
   TrendingUp,
   Upload,
   Users,
+  Microscope,
 } from "lucide-react";
 
 export type DockPosition = "bottom" | "left" | "right";
@@ -84,6 +87,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "20,184,166",
   },
   {
+    id: "visualizador",
+    label: "Visualizador",
+    hint: "BI: analisar dados, criar métricas e dashboards",
+    icon: BarChart3,
+    gradient: "from-teal-200 via-cyan-500 to-indigo-600",
+    accent: "20,184,166",
+  },
+  {
     id: "sentimento",
     label: "Sentimento",
     hint: "Análise de sentimento da recolha, notícias, dossiês e documentos",
@@ -98,6 +109,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: Telescope,
     gradient: "from-sky-200 via-indigo-500 to-violet-700",
     accent: "99,102,241",
+  },
+  {
+    id: "hermes",
+    label: "Hermes",
+    hint: "Assistente de investigação: perguntas com evidências citadas",
+    icon: Compass,
+    gradient: "from-violet-300 via-purple-500 to-fuchsia-600",
+    accent: "168,85,247",
   },
   {
     id: "office",
@@ -244,6 +263,22 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "249,115,22",
   },
   {
+    id: "contratos-es",
+    label: "Contratos Espanha",
+    hint: "Pesquisar contratos públicos de Espanha (PLACSP)",
+    icon: Landmark,
+    gradient: "from-yellow-200 via-amber-400 to-red-500",
+    accent: "251,191,36",
+  },
+  {
+    id: "contratos-es-dashboard",
+    label: "Análise Espanha",
+    hint: "Dashboard analítica dos contratos públicos de Espanha",
+    icon: BarChart3,
+    gradient: "from-orange-200 via-amber-400 to-rose-500",
+    accent: "251,191,36",
+  },
+  {
     id: "entities-search",
     label: "Empresas",
     hint: "Diretório e fichas de empresas",
@@ -282,6 +317,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: CandlestickChart,
     gradient: "from-lime-200 via-green-500 to-emerald-700",
     accent: "34,197,94",
+  },
+  {
+    id: "researcher",
+    label: "Investigador",
+    hint: "Investigador de contratos públicos",
+    icon: Microscope,
+    gradient: "from-rose-200 via-pink-500 to-purple-700",
+    accent: "236,72,153",
   },
   {
     id: "rag",
@@ -388,7 +431,7 @@ const LEGACY_DEFAULT_ITEMS = [
 const ORDER_VERSION = 2;
 
 /** Ícones fora do dock por defeito (disponíveis para adicionar). */
-const DEFAULT_PARKED = ["elastic", "import", "compare", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda"];
+const DEFAULT_PARKED = ["elastic", "import", "compare", "contratos-es", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda"];
 
 export type DockPrefs = {
   position: DockPosition;

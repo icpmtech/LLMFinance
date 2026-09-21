@@ -1,10 +1,10 @@
-import type { Message } from "./types";
+import type { Message, SkillRef } from "./types";
 
 
 export function parseSSELine(
     line: string,
     onToken: (token: string) => void,
-    onDone: (sources: Message["sources"], tools: Message["tools"]) => void,
+    onDone: (sources: Message["sources"], tools: Message["tools"], skill?: SkillRef | null) => void,
     _onError: (err: Error) => void,
     close: () => void
 ) {
@@ -25,8 +25,8 @@ export function parseSSELine(
         if (data.token) {
             onToken(data.token);
         }
-        if (data.sources || data.tools) {
-            onDone(data.sources || [], data.tools || []);
+        if (data.sources || data.tools || data.skill) {
+            onDone(data.sources || [], data.tools || [], data.skill ?? null);
             close();
         }
     } catch {

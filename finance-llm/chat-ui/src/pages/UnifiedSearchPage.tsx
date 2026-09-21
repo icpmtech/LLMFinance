@@ -367,7 +367,7 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker }: U
   const allEmpty = !loading && result && result.total === 0;
 
   return (
-    <div className="mx-auto w-full max-w-[1300px] px-4 pb-32 pt-4 sm:px-6">
+    <div className="mx-auto w-full max-w-[1300px] overflow-x-hidden px-4 pb-32 pt-4 sm:px-6">
       <div className="sticky top-0 z-40 -mx-4 flex flex-col gap-3 border-b border-white/5 bg-background/80 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
         <div className="flex items-center gap-3">
           <span className="hidden h-9 w-9 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-sky-300 via-indigo-500 to-fuchsia-600 text-white sm:grid">
@@ -415,7 +415,7 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker }: U
       ) : null}
 
       <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_290px]">
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
           {allEmpty ? (
             <div className="glass-card rounded-2xl px-6 py-12 text-center">
               <Search size={26} className="mx-auto text-muted-foreground" />
@@ -567,13 +567,13 @@ function ScopeResults({
           const label = openLabel(item);
           const money = typeof item.extra?.preco === "number" ? moneyFormat.format(item.extra.preco as number) : null;
           return (
-            <li key={`${item.scope}:${item.id}`} className="glass-card rounded-2xl p-4">
+            <li key={`${item.scope}:${item.id}`} className="glass-card overflow-hidden rounded-2xl p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <button
                     type="button"
                     onClick={() => onOpenItem(item)}
-                    className="block max-w-full truncate text-left text-sm font-medium hover:underline"
+                    className="block w-full truncate text-left text-sm font-medium hover:underline"
                     title={item.title}
                   >
                     {item.title}

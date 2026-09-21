@@ -1,4 +1,5 @@
 """Backend FastAPI para a Chat UI do IQ OS."""
+import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
@@ -61,6 +62,7 @@ from api.models import (
     ElasticAnalyzeNewsResponse,
     ElasticAutocompleteResponse,
     ElasticDeleteResponse,
+    ElasticIndicesListResponse,
     ElasticIngestNewsResponse,
     ElasticIngestPricesResponse,
     ElasticIngestRequest,
@@ -100,6 +102,7 @@ from api.models import (
     SecFiling,
     SecFilingsResponse,
     SentimentBlendedResponse,
+    SkillRef,
     SustainabilityResponse,
     TechnicalExplanation,
     TechnicalPoint,
@@ -152,6 +155,7 @@ from api.elasticsearch_client import (
     index_company_trademarks,
     list_contract_years,
     list_entity_countries,
+    list_elastic_indices,
     list_favorites,
     save_favorite,
     save_folder,
@@ -201,14 +205,20 @@ from api.admin_routes import router as admin_router
 from api.providers_routes import router as providers_router
 from api.proxy_routes import router as proxy_router
 from api.crm_routes import router as crm_router
+from api.contratos_es_routes import router as contratos_es_router
 from api.ontology_routes import router as ontology_router
 from api.ontology_workspace_routes import router as ontology_workspace_router
 from api.scraper_routes import router as scraper_router
 from api.search_routes import router as search_router
 from api.sentiment_routes import router as sentiment_router
 from api.search360_routes import router as search360_router
+from api.hermes_routes import router as hermes_router
+from api.skills_routes import router as skills_router
 from api.office_routes import router as office_router
 from api.email_routes import router as email_router
+from api.visualizador_routes import router as visualizador_router
+from api.researcher_routes import router as researcher_router
+from api.vector_routes import router as vector_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -335,14 +345,20 @@ app.include_router(admin_router)
 app.include_router(providers_router)
 app.include_router(proxy_router)
 app.include_router(crm_router)
+app.include_router(contratos_es_router)
 app.include_router(ontology_router)
 app.include_router(ontology_workspace_router)
 app.include_router(scraper_router)
 app.include_router(search_router)
 app.include_router(sentiment_router)
 app.include_router(search360_router)
+app.include_router(hermes_router)
+app.include_router(skills_router)
 app.include_router(office_router)
 app.include_router(email_router)
+app.include_router(visualizador_router)
+app.include_router(researcher_router)
+app.include_router(vector_router)
 
 
 # Cache curta de `user_id → email`, para o registo de pedidos identificar quem
@@ -416,7 +432,18 @@ from fastapi.staticfiles import StaticFiles
 
 UI_BUILD_DIR = ROOT / "chat-ui" / "dist"
 if UI_BUILD_DIR.is_dir():
-    app.mount("/assets", StaticFiles(directory=UI_BUILD_DIR / "assets"), name="assets")
+    class _StaticFiles(StaticFiles):
+        def file_response(self, *args, **kwargs):
+            response = super().file_response(*args, **kwargs)
+            # assets hashed by Vite are immutable; all other static files get no-cache
+            path = getattr(self, "_last_path", "")
+            if isinstance(path, str) and "/assets/" in path:
+                response.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
+            else:
+                response.headers.setdefault("Cache-Control", "no-store, must-revalidate")
+            return response
+
+    app.mount("/assets", _StaticFiles(directory=UI_BUILD_DIR / "assets"), name="assets")
 
 
 # --- Diretório de empresas (entidades) derivado de contratos ---
@@ -1066,6 +1093,7 @@ def entities_detail(nif: str):
 @app.get("/search360/projetos")
 @app.get("/search360/grafo")
 @app.get("/search360/biblioteca")
+@app.get("/hermes")
 @app.get("/office")
 @app.get("/office/documentos")
 @app.get("/office/dossies")
@@ -1097,48 +1125,79 @@ def health():
     }
 
 
+async def _chat_skill(req: ChatRequest, backend: str, session: Any) -> dict:
+    """Skill (método) do pedido de chat: escolhida na biblioteca ou criada agora."""
+    from api import skills_service as skills
+
+    question = req.messages[-1].content if req.messages else ""
+    return await skills.for_request(question, session=session, backend=backend)
+
+
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest, backend: str = Query("gpt2"), session: Any = Depends(optional_session)):
-    result = run_chat(
+async def chat(req: ChatRequest, backend: str = Query("gpt2"), session: Any = Depends(optional_session)):
+    """Responde no chat seguindo a **skill** do pedido (escolhida ou criada agora)."""
+    from api import skills_service as skills
+
+    question = req.messages[-1].content if req.messages else ""
+    user_id = getattr(getattr(session, "user", None), "id", None)
+    user_email = getattr(getattr(session, "user", None), "email", None)
+    skill = await skills.for_request(question, session=session, backend=backend)
+    result = await asyncio.to_thread(
+        run_chat,
         req.messages,
         backend=backend,
-        user_id=getattr(getattr(session, "user", None), "id", None),
-        user_email=getattr(getattr(session, "user", None), "email", None),
+        user_id=user_id,
+        user_email=user_email,
+        skill_block=skill["block"],
     )
+    skills.finish(skill["id"], question=question, tools=[tool.tool for tool in result.get("tools") or []])
     return ChatResponse(
         message=result["message"],
         sources=result["sources"],
         tools=result["tools"],
+        skill=SkillRef(**skill["public"]) if skill["public"] else None,
     )
 
 
 @app.post("/chat/stream")
-def chat_stream_post(req: ChatRequest, backend: str = Query("gpt2"), session: Any = Depends(optional_session)):
+async def chat_stream_post(req: ChatRequest, backend: str = Query("gpt2"), session: Any = Depends(optional_session)):
+    from api import skills_service as skills
+
+    skill = await _chat_skill(req, backend, session)
+    skills.finish(skill["id"], question=req.messages[-1].content if req.messages else "", mode="stream")
     return StreamingResponse(
         stream_chat(
             req.messages,
             backend=backend,
             user_id=getattr(getattr(session, "user", None), "id", None),
             user_email=getattr(getattr(session, "user", None), "email", None),
+            skill_block=skill["block"],
+            skill=skill["public"],
         ),
         media_type="text/event-stream",
     )
 
 
 @app.get("/chat/stream")
-def chat_stream_get(
+async def chat_stream_get(
     _payload: Annotated[str, Query(...)],
     backend: str = Query("gpt2"),
     session: Any = Depends(optional_session),
 ):
+    from api import skills_service as skills
+
     payload = json.loads(_payload)
     req = ChatRequest(**payload)
+    skill = await _chat_skill(req, backend, session)
+    skills.finish(skill["id"], question=req.messages[-1].content if req.messages else "", mode="stream")
     return StreamingResponse(
         stream_chat(
             req.messages,
             backend=backend,
             user_id=getattr(getattr(session, "user", None), "id", None),
             user_email=getattr(getattr(session, "user", None), "email", None),
+            skill_block=skill["block"],
+            skill=skill["public"],
         ),
         media_type="text/event-stream",
     )
@@ -1605,6 +1664,16 @@ def elastic_list_tickers():
     """Lista os tickers com dados de preços indexados no Elasticsearch."""
     from api.elasticsearch_client import list_indexed_tickers
     return ElasticTickerListResponse(tickers=list_indexed_tickers())
+
+
+@app.get("/elastic/indices", response_model=ElasticIndicesListResponse)
+def elastic_list_indices():
+    """Lista todos os índices Elasticsearch da plataforma com contagem de documentos."""
+    try:
+        return ElasticIndicesListResponse(indices=list_elastic_indices())
+    except Exception as exc:
+        logger.error("Erro ao listar índices ES: %s", exc)
+        return ElasticIndicesListResponse(indices=[], error=str(exc))
 
 
 @app.delete("/elastic/tickers/{ticker}", response_model=ElasticDeleteResponse)

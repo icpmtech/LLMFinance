@@ -116,7 +116,25 @@ def plan(term: str, requested: Optional[Sequence[str]] = None) -> Dict[str, Any]
     meaningful = [word for word in words if word.lower() not in STOPWORDS]
     chosen = [source_id for source_id in (requested or []) if source_id in sources.CATALOG_BY_ID]
     auto = not chosen
-    tickers = [match.group(1) for match in TICKER_RE.finditer(clean)]
+    # Deteção de tickers: a regex é case-sensitive. Mapeia palavras conhecidas
+    # (edp, galp, bcp, etc.) antes de correr a regex para capturar variantes
+    # em minúsculas.
+    ticker_aliases = {
+        "edp": "EDP",
+        "galp": "GALP",
+        "bcp": "BCP",
+        "bpi": "BPI",
+        "nos": "NOS",
+        "sonae": "SONAE",
+        "altri": "ALTR",
+        "jmt": "JMT",
+        "ren": "REN",
+        "mota-engil": "MOTA",
+    }
+    clean_for_tickers = clean
+    for alias, symbol in ticker_aliases.items():
+        clean_for_tickers = re.sub(rf"\b{re.escape(alias)}\b", symbol, clean_for_tickers, flags=re.IGNORECASE)
+    tickers = [match.group(1) for match in TICKER_RE.finditer(clean_for_tickers)]
     nifs = [match.group(1) for match in NIF_RE.finditer(clean)]
     looks_macro = any(word.lower() in {"energia", "inflação", "pib", "clima", "população", "desemprego", "economia", "mercado"} for word in meaningful)
     strategy = "entidade" if (nifs or tickers) else ("tema" if len(meaningful) <= 4 else "investigação")

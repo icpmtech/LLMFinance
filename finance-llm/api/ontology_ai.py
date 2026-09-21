@@ -113,11 +113,21 @@ def available_backend(session: Any, backend: Optional[str] = None) -> Dict[str, 
             "backend": parsed.get("backend"),
             "note": f"Sem chave de API para {parsed['provider']} (origem: {origin}).",
         }
+    spec = dict(parsed.get("spec") or {})
+    if parsed["provider"] == "ollama-cloud":
+        custom_url = providers_service.resolve_provider_url(user_id, parsed["provider"])
+        custom_model = providers_service.resolve_provider_model(user_id, parsed["provider"])
+        if custom_url:
+            spec["base_url"] = custom_url
+        if parsed.get("model"):
+            spec = {**spec, "models": list(dict.fromkeys([parsed["model"], *(spec.get("models") or [])]))}
+        if custom_model and not parsed.get("model"):
+            parsed["model"] = custom_model
     return {
         "kind": "cloud",
         "provider": parsed["provider"],
-        "model": parsed.get("model"),
-        "spec": parsed.get("spec"),
+        "model": parsed.get("model") or providers_service.resolve_provider_model(user_id, parsed["provider"]),
+        "spec": spec,
         "api_key": api_key,
         "backend": parsed.get("backend"),
     }

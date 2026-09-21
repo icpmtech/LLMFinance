@@ -278,6 +278,9 @@ página numa dessas rotas devolvia `{"detail":"Not Found"}`.
 - **Pesquisa 360** (`/search360`) — meta-modelo de analítica e exploração: federa a plataforma
   com a Wikipédia, Wikidata, dados abertos, investigação e web, e organiza tudo em busca
   federada, dossiê com citações, grafo de exploração e biblioteca de pastas/ficheiros (ver abaixo).
+- **Hermes** (`/hermes`) — o assistente de investigação: uma pergunta em linguagem natural, o plano
+  (tema, entidades, tickers, NIF), as evidências citadas `[n]` da plataforma e das fontes abertas, e
+  uma resposta com dados, indicadores, lacunas e próximos passos (ver abaixo).
 - **Office IQ OS** (`/office`) — leitura e escrita de conteúdos em **Markdown** (notas, relatórios,
   atas, páginas e os dossiês da Pesquisa 360), com pastas, pesquisa, duplicação, exportação
   `.md`/`.html` e leitura com tipografia própria (ver abaixo).
@@ -812,6 +815,25 @@ As listas de **Contratos Recentes** da ficha de entidade (EmpresasIQ e página d
   à **comparação**.
 - Em modo página (telemóvel, sem gestor de janelas) a mesma lista abre na modal do EmpresasIQ.
 
+### Contratos de Espanha (PLACSP)
+
+Aplicação **Contratos Espanha** (`/contratos-es`), no menu de aplicações: pesquisa nos contratos
+públicos espanhóis da *Plataforma de Contratación del Sector Público* (licitações e contratos
+menores), num índice próprio (`contratos_es`) para não se misturar com os contratos portugueses.
+
+- **Pesquisa** por objeto, órgão adjudicante, adjudicatário, expediente ou CPV, com autocomplete.
+- **Facetas** clicáveis: fonte (licitações/contratos menores), ano, tipo de contrato, estado,
+  procedimento, localidade, NUTS, CPV, órgão e adjudicatário — com contagens e somas de valor.
+- **Filtros avançados**: NIF do adjudicatário, código DIR3 do órgão, intervalo de valor, datas
+  (publicação/adjudicação/atualização) e ordenação por data, valor ou nº de ofertas.
+- **Importação** de um ano a partir dos ZIP/ATOM locais, em segundo plano, com progresso por
+  ficheiro e indexação no Elasticsearch. Também pela linha de comandos
+  (`python -m collectors.contratos_es --years 2023 --index`).
+- Rótulos oficiais CODICE (tipo de contrato, estado, resultado, procedimento) e descrições de CPV
+  lidos das listas de códigos do portal, guardadas com o projeto.
+
+Detalhes, volumes e limitações em [`docs/contratos-espanha.md`](docs/contratos-espanha.md).
+
 ### Comparação (entidades e contratos)
 
 Aplicação **Comparar** (`/compare`), no menu de aplicações: compara até **4 itens** da mesma
@@ -1036,8 +1058,23 @@ ou num terminal local.
 
 - `GET  /rag/documents` — listar documentos carregados
 - `POST /rag/upload` — fazer upload de um PDF
-- `POST /rag/chat` — perguntar ao RAG
+- `POST /rag/chat` · `POST /rag/chat/stream` — perguntar ao RAG
 - `GET  /rag/health` — verificar estado do índice e modelos
+
+A recuperação é sempre a mesma (FAISS sobre os chunks dos PDFs, com título e página); o que muda é
+**quem escreve a resposta**:
+
+- **modelo local do RAG** (por omissão) — o BloombergGPT-style local, com o *fallback* de extração do
+  contexto quando a geração sai truncada;
+- **fornecedor de IA** — passando `backend` (`"deepseek:deepseek-chat"`, `"openai:gpt-4o-mini"`, …)
+  no corpo do pedido, os mesmos trechos numerados alimentam o modelo cloud, que responde citando
+  `[n]` e diz explicitamente quando a resposta não está nos documentos. A resposta devolve
+  `model_used` (`provider:modelo`) e `elapsed_seconds`.
+
+No RAG IQ OS (`/rag`) o seletor **Modelo** no cabeçalho do chat (a par do botão *LLM* de streaming)
+escolhe entre o modelo local e os fornecedores configurados em **Definições → Fornecedores de IA**;
+a escolha fica guardada neste browser (`finance-llm-rag-model`). O botão *Explicar resposta* só
+aparece com o modelo local (explica a geração local, não uma resposta de um fornecedor cloud).
 
 ### Ontologia (camada semântica)
 
@@ -1199,6 +1236,126 @@ Fontes que só precisam de chave opcional: a web usa DuckDuckGo (lite) por omiss
 Brave e SerpAPI são usados se `BRAVE_API_KEY`/`SERPAPI_KEY` estiverem no ambiente.
 A síntese usa os fornecedores configurados em **Definições → Fornecedores de IA**
 e, sem modelo, cai num resumo factual (contagens e títulos, sem interpretação).
+
+### Hermes (assistente de investigação)
+
+Aplicação **Hermes** (`/hermes`): escreve-se uma pergunta em linguagem natural e o Hermes
+**planeia-a, recolhe evidências e responde com citações**. É a camada de resposta por cima do
+meta-modelo da [Pesquisa 360](#pesquisa-360-meta-modelo-de-análise): em vez de obrigar a escolher
+fontes e a ler a lista de resultados, o Hermes transforma a pergunta numa investigação e devolve
+uma resposta que pode ser confirmada item a item.
+
+Como funciona, passo a passo:
+
+1. **Plano** — o tema é extraído da pergunta (sem palavras vazias) e classificada a estratégia
+   (`entidade`, `tema` ou `investigação`), com **tickers** e **NIF** detetados no pedido;
+2. **Factos calculados na plataforma** (em paralelo com a recolha) — as capacidades
+   **estruturadas** do IQ OS, que é onde estão os números:
+   - **contratos públicos**: agregações do índice (total de contratos, valor total, média, maior
+     contrato, evolução por ano, CPV e tipos de procedimento), com filtro pelas palavras
+     distintivas da pergunta ou pelo NIF do pedido; quando a pergunta pede os **maiores** contratos,
+     os primeiros por valor são nomeados (objeto, montante, adjudicante → adjudicatário, data e id);
+   - **empresas** (diretório de empresas): ranking das entidades com mais valor contratado e com
+     mais contratos, com **nome**, NIF, número de contratos e valor; num NIF concreto devolve a
+     **ficha** com o papel de cada lado (adjudicante/adjudicatário, contratos e anos);
+   - **mercado**: para tickers (detetados na pergunta e resolvidos para o símbolo dos índices,
+     ex. EDP → EDP.LS) lê o histórico recente (último fecho, variação a 1 ano, mínimo/máximo) e as
+     **notícias indexadas** do ticker;
+   - **plataforma**: perguntas sobre o próprio IQ OS (ontologia, módulos, índices, ficheiros)
+     respondem com os 17 tipos de objeto da ontologia, os índices internos com volumetria e os
+     documentos indexados no RAG;
+   - **ontologia**: objetos canónicos identificados na pergunta, com as suas propriedades;
+   - **documentos**: trechos mais próximos dos PDFs indexados no RAG, com título e página —
+     pesquisa **vetorial + lexical** (os trechos que contêm as palavras distintivas entram primeiro,
+     para não se perderem secções como «6.2 Sufixos por Entidade» de um manual de 51 páginas);
+3. **Recolha** — pesquisa federada nas fontes escolhidas (a plataforma, os documentos, a Wikipédia,
+   a Wikidata, o Banco Mundial, o dados.gov.pt, a OpenAlex e a web);
+4. **Resposta** — o modelo configurado em **Definições → Fornecedores de IA** redige a resposta com
+   as evidências numeradas (os factos da plataforma primeiro, com pontuação mais alta, para serem
+   citados como as fontes de referência); sem modelo (ou sem chave) o Hermes responde
+   **factualmente**: factos, contagens, títulos, ligações e indicadores, sem interpretação;
+5. **Confirmação** — cada evidência fica listada com fonte, tipo, data, trecho e ligação, para se
+   verificar de onde veio cada afirmação. Os itens dos factos ligam ao **dashboard de contratos**,
+   à **ficha da empresa** (`/companies/<NIF>`), à **ontologia** e ao **RAG**.
+
+Dois modos de investigação:
+
+- **Resposta rápida** (`rapida`, por omissão) — uma recolha e uma resposta curta;
+- **Investigação profunda** (`profunda`) — decompõe a pergunta em **sub-perguntas** (contexto, dados
+  da plataforma, indicadores e evidência externa), corre-as em paralelo, alarga as fontes ao Banco
+  Mundial, dados.gov.pt e OpenAlex, e junta os **indicadores** (séries 2005–2024) à resposta.
+
+A janela tem o modo de investigação e as **fontes** à escolha (predefinidas por modo), o
+**histórico** das últimas 30 investigações (guardado neste browser, em `finance-llm-hermes:v1`) e a
+conversa com as respostas: citações, sub-perguntas, indicadores, evidências, sugestões de
+seguimento, cópia da resposta e **«Office»** — que guarda a investigação como documento Markdown
+(citações, tabela de indicadores e fontes) e abre a aplicação Office (em **modo janelas** na janela
+flutuante; em **modo página** navegando para `/office` com o documento já aberto).
+
+Endpoints (`api/hermes_routes.py`):
+
+- `GET  /hermes/meta` — capacidades, modos, fontes disponíveis, índices internos e modelo de IA
+- `POST /hermes/ask` — investiga uma pergunta: resposta + evidências + sub-perguntas + indicadores
+
+`POST /hermes/ask` aceita `question`, `depth` (`rapida`/`profunda`), `sources` (lista ou texto
+separado por vírgulas, validada contra o catálogo da Pesquisa 360), `backend`
+(`provider:modelo`), `history` (turnos anteriores, para perguntas de seguimento) e `country`
+(país dos indicadores, por omissão `PRT`). Sem `backend`, usa a predefinição da conta.
+
+Notas de implementação (`api/hermes_service.py`):
+
+- O Hermes **não inventa fontes**: os factos são agregações e objetos da própria plataforma, e a
+  recolha federada é a mesma da Pesquisa 360 (com cache de 10 minutos e *timeout* por fonte) — o
+  texto é sempre acompanhado das evidências numeradas;
+- Os factos correm em paralelo entre si e com a recolha, cada um com o seu *timeout* (30 s) e com
+  falhas isoladas: um índice em baixo gera um `warning` e a investigação segue sem esse bloco;
+  à primeira chamada o bloco de contratos depende das agregações do Elasticsearch (segundos) e os
+  documentos carregam o índice vetorial — depois disso é rápido;
+- A decomposição em sub-perguntas é **determinística** (sem modelo), pelo que o modo profundo
+  funciona mesmo sem fornecedor de IA configurado;
+- A resposta é truncada a 18 evidências (`MAX_EVIDENCE`), ordenadas por pontuação e sem repetições
+  de título/ligação;
+- Uma investigação devolve sempre `mode` (`ai`, `factual` ou `empty`), os `facts` calculados, as
+  `notes`/`warnings` (ex.: “IA indisponível, resposta factual”) e `stats` (itens, evidências,
+  factos, fontes com resultados, ms).
+
+Sem modelo configurado a resposta é factual — configure um fornecedor em **Definições →
+Fornecedores de IA** para ter a resposta redigida com citações.
+
+### Skills (o método dos assistentes)
+
+Antes de responder, o **Hermes**, o **Chat IA** e o **RAG** passam pelo mesmo passo: escolher — ou
+**criar** — uma **skill** para o pedido, e seguir o seu método. Uma skill é um procedimento curto e
+verificável: nome, quando aplicar, passos, verificações e as ferramentas da plataforma a usar.
+
+Como nascem e como são usadas:
+
+- as skills são criadas **automaticamente a partir da pergunta** (não há biblioteca pré-escrita):
+  o modelo de IA configurado escreve-as em JSON (`name`, `when`, `steps`, `checks`, `keywords`,
+  `tools`); sem modelo, ou se o JSON não servir, a skill é montada de forma determinística a partir
+  das capacidades reais da plataforma;
+- se já existir uma skill suficientemente parecida (semelhança por palavras distintivas, com um
+  mínimo de duas palavras em comum) é **essa** que é usada e ganha um uso; se a nova proposta for
+  quase igual a uma existente, é **fundida** nela em vez de duplicar;
+- o método entra no prompt do assistente («Skill aplicada… Método: 1. … Verificações…») e cada uso
+  atualiza `uses`, `last_used_at` e os últimos exemplos;
+- perguntas curtas ou sem palavras distintivas **não** criam skills (evita lixo na biblioteca);
+- cada resposta devolve a skill aplicada (`skill` no JSON), com o painel a mostrar «criada agora»,
+  «fundida» ou o número de usos: no Hermes aparece um badge expansível com os passos, no RAG um
+  chip por resposta e no chat um chip ao lado das ferramentas.
+
+A biblioteca vive em `data/skills/skills.json` (escrita atómica, 400 skills no máximo) e é gerida no
+**painel Skills** da janela do Hermes: estado (ativas/total/usos), lista por usos, passos
+expansíveis, ativar/desativar (deixa de ser escolhida), apagar e «atualizar».
+
+Endpoints (`api/skills_routes.py`):
+
+- `GET  /skills` — biblioteca + estado
+- `GET  /skills/{id}` · `POST /skills/match` — que skill serviria esta pergunta (sem criar)
+- `POST /skills/ensure` — escolhe **ou cria** (sem responder) a skill de um pedido
+- `POST /skills` · `PATCH /skills/{id}` · `DELETE /skills/{id}` · `DELETE /skills` — gerir (requer sessão)
+
+O registo de uso é tolerante a falhas: uma biblioteca indisponível nunca impede uma resposta.
 
 ### Autenticação (contas no Elasticsearch)
 

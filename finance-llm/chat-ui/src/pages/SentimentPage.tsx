@@ -35,12 +35,14 @@ import {
   analyzeSentimentText,
   downloadText,
   getSentimentMeta,
+  listSentimentSources,
   saveSentimentToDossier,
   saveSentimentToOffice,
   type SentimentAnalysis,
   type SentimentEngineId,
   type SentimentMeta,
   type SentimentOrigin,
+  type SentimentSource,
 } from "../sentimentApi";
 
 const numberFormat = new Intl.NumberFormat("pt-PT", { maximumFractionDigits: 2 });
@@ -52,6 +54,12 @@ const ORIGINS: { id: SentimentOrigin; label: string; hint: string; icon: React.R
   { id: "office", label: "Documento", hint: "Documento do editor Office", icon: <FileText size={14} /> },
   { id: "text", label: "Texto", hint: "Texto colado à mão", icon: <Wand2 size={14} /> },
 ];
+
+function formatCount(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(".", ",")} M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(0)} mil`;
+  return String(value);
+}
 
 function tone(polarity: number): string {
   if (polarity >= 0.15) return "text-emerald-300";
@@ -107,6 +115,9 @@ export default function SentimentPage({ onNavigate }: SentimentPageProps) {
   const [text, setText] = useState("");
   const [dossiers, setDossiers] = useState<{ id: string; title: string; term?: string; has_sentiment?: boolean }[]>([]);
   const [documents, setDocuments] = useState<{ id: string; title: string; kind: string }[]>([]);
+  const [sources, setSources] = useState<SentimentSource[]>([]);
+  const [accounts, setAccounts] = useState<{ id: string; label?: string; address?: string }[]>([]);
+  const [accountId, setAccountId] = useState("");
   const [dossierId, setDossierId] = useState("");
   const [documentId, setDocumentId] = useState("");
   const [targetDossierId, setTargetDossierId] = useState("");
@@ -128,6 +139,12 @@ export default function SentimentPage({ onNavigate }: SentimentPageProps) {
     listOfficeDocuments({})
       .then((payload) => setDocuments((payload.items ?? []) as never))
       .catch(() => setDocuments([]));
+    listSentimentSources()
+      .then((payload) => {
+        setSources(payload.items ?? []);
+        setAccounts(payload.accounts ?? []);
+      })
+      .catch(() => setSources([]));
   }, []);
 
   useEffect(() => {
@@ -144,9 +161,13 @@ export default function SentimentPage({ onNavigate }: SentimentPageProps) {
       engine,
       dossierId: origin === "dossier" ? dossierId : undefined,
       documentId: origin === "office" ? documentId : undefined,
+      accountId: origin === "email" ? accountId : undefined,
     }),
-    [origin, query, limit, engine, dossierId, documentId],
+    [origin, query, limit, engine, dossierId, documentId, accountId],
   );
+
+  const sourceGroups = useMemo(() => [...new Set(sources.map((entry) => entry.group))], [sources]);
+  const selectedSource = sources.find((entry) => entry.id === origin);
 
   const run = async () => {
     setLoading(true);
@@ -190,7 +211,7 @@ export default function SentimentPage({ onNavigate }: SentimentPageProps) {
     setSavingOffice(true);
     setError(null);
     try {
-      const title = `Sentimento — ${originLabel(origin)}${query ? ` · ${query}` : ""}`;
+      const title = `Sentimento — ${originLabel(origin, sources)}${query ? ` · ${query}` : ""}`;
       const result = await saveSentimentToOffice({
         title,
         analysis,
@@ -260,8 +281,8 @@ export default function SentimentPage({ onNavigate }: SentimentPageProps) {
             <option value="auto">Automático (neuronal se disponível)</option>
           </select>
           <button
-            type="button"
-            onClick={() => void run()}
+            type="submit"
+            form="sentimento-form"
             disabled={loading || (origin === "text" ? !text.trim() : false)}
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-fuchsia-400 to-indigo-600 px-3 py-2 text-xs font-medium text-white disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
           >
@@ -295,38 +316,44 @@ export default function SentimentPage({ onNavigate }: SentimentPageProps) {
       ) : null}
 
       {/* ------------------------------------------------ origem dos dados */}
-      <section className="glass-card mt-5 rounded-2xl p-4">
-        <nav className="flex flex-wrap gap-1" aria-label="Origem dos dados">
-          {ORIGINS.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              onClick={() => setOrigin(entry.id)}
-              aria-current={origin === entry.id ? "true" : undefined}
-              title={entry.hint}
-              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${
-                origin === entry.id ? "bg-white/10 font-medium" : "text-muted-foreground hover:bg-white/5"
-              }`}
+      <form
+        id="sentimento-form"
+        className="glass-card mt-5 rounded-2xl p-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void run();
+        }}
+      >
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_140px]">
+          <label className="block">
+            <span className="text-[11px] text-muted-foreground">Fonte do sistema</span>
+            <select
+              value={origin}
+              onChange={(event) => setOrigin(event.target.value)}
+              className={`${inputClass} mt-1`}
+              title={selectedSource?.hint}
+              aria-label="Fonte do sistema a analisar"
             >
-              {entry.icon}
-              {entry.label}
-            </button>
-          ))}
-        </nav>
+              {sourceGroups.map((group) => (
+                <optgroup key={group} label={group}>
+                  {sources
+                    .filter((entry) => entry.group === group)
+                    .map((entry) => (
+                      <option key={entry.id} value={entry.id} disabled={entry.blocked}>
+                        {entry.label} · {formatCount(entry.available)}
+                        {entry.blocked ? " (exige sessão)" : ""}
+                      </option>
+                    ))}
+                </optgroup>
+              ))}
+            </select>
+            <span className="mt-1 block text-[10px] text-muted-foreground">
+              {selectedSource?.hint}
+              {selectedSource?.blocked ? ` — ${selectedSource.blocked_reason}` : ""}
+            </span>
+          </label>
 
-        <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_150px]">
-          {origin === "text" ? (
-            <label className="block">
-              <span className="text-[11px] text-muted-foreground">Texto a analisar</span>
-              <textarea
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                rows={5}
-                placeholder="Cole aqui uma notícia, um comunicado, um relatório…"
-                className={`${inputClass} mt-1 h-auto py-2 leading-relaxed`}
-              />
-            </label>
-          ) : origin === "dossier" ? (
+          {origin === "dossier" ? (
             <label className="block">
               <span className="text-[11px] text-muted-foreground">Dossiê de análise</span>
               <select value={dossierId} onChange={(event) => setDossierId(event.target.value)} className={`${inputClass} mt-1`}>
@@ -351,19 +378,41 @@ export default function SentimentPage({ onNavigate }: SentimentPageProps) {
                 ))}
               </select>
             </label>
+          ) : origin === "email" ? (
+            <label className="block">
+              <span className="text-[11px] text-muted-foreground">Caixa de correio</span>
+              <select value={accountId} onChange={(event) => setAccountId(event.target.value)} className={`${inputClass} mt-1`}>
+                <option value="">(escolher conta)</option>
+                {accounts.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label || item.address || item.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : origin === "text" ? (
+            <label className="block">
+              <span className="text-[11px] text-muted-foreground">Título (opcional)</span>
+              <input value={query} onChange={(event) => setQuery(event.target.value)} className={`${inputClass} mt-1`} placeholder="ex.: Comunicado de resultados" />
+            </label>
           ) : (
             <label className="block">
               <span className="text-[11px] text-muted-foreground">
-                {origin === "scraped" ? "Termo na recolha (opcional)" : "Termo nas notícias (ticker, tema)"}
+                {origin === "news"
+                  ? "Termo nas notícias (ticker ou tema)"
+                  : origin === "contracts"
+                    ? "Termo nos contratos (objeto, entidade)"
+                    : "Termo a pesquisar (opcional)"}
               </span>
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder={origin === "scraped" ? "ex.: combustíveis" : "ex.: EDP ou AAPL"}
+                placeholder={origin === "news" ? "ex.: EDP ou AAPL" : origin === "contracts" ? "ex.: energia, limpeza" : "ex.: combustíveis"}
                 className={`${inputClass} mt-1`}
               />
             </label>
           )}
+
           <label className="block">
             <span className="text-[11px] text-muted-foreground">Documentos (máx.)</span>
             <input
@@ -376,7 +425,24 @@ export default function SentimentPage({ onNavigate }: SentimentPageProps) {
             />
           </label>
         </div>
-      </section>
+
+        {origin === "text" ? (
+          <label className="mt-3 block">
+            <span className="text-[11px] text-muted-foreground">Texto a analisar</span>
+            <textarea
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              rows={5}
+              placeholder="Cole aqui uma notícia, um comunicado, um relatório…"
+              className={`${inputClass} mt-1 h-auto py-2 leading-relaxed`}
+            />
+          </label>
+        ) : null}
+        <p className="mt-2 text-[10px] text-muted-foreground">
+          Enter para analisar · as fontes com sessão (CRM, email) só ficam disponíveis depois de iniciar sessão ·
+          os resultados podem ser guardados no dossiê e abertos no Office
+        </p>
+      </form>
 
       {/* ------------------------------------------------------- resultados */}
       {analysis ? (
@@ -398,6 +464,11 @@ export default function SentimentPage({ onNavigate }: SentimentPageProps) {
               hint="intervalo de confiança da média"
             />
             <Kpi label="Documentos" value={numberFormat.format(totalDocs)} hint={`motor: ${analysis.summary.engine}`} />
+            <Kpi
+              label="Cobertura"
+              value={`${((analysis.summary.coverage ?? 0) * 100).toFixed(0)}%`}
+              hint={`${analysis.summary.documents_with_signal ?? 0} com termos de sentimento · ${analysis.summary.documents_without_signal ?? 0} sem`}
+            />
             <Kpi
               label="Positivos"
               value={numberFormat.format(analysis.summary.positive)}
@@ -500,6 +571,28 @@ export default function SentimentPage({ onNavigate }: SentimentPageProps) {
 
             {/* lateral: métodos + integrações */}
             <aside className="space-y-3">
+              {analysis.by_tag.length ? (
+                <section className="glass-card rounded-2xl p-4">
+                  <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Tag size={12} /> Aspetos (por etiqueta/secção)
+                  </h2>
+                  <ul className="mt-2 space-y-1">
+                    {analysis.by_tag.slice(0, 10).map((row) => (
+                      <li key={row.tag} className="flex items-center gap-2 text-[11px]">
+                        <span className="min-w-0 flex-1 truncate" title={row.tag}>
+                          {row.tag}
+                        </span>
+                        <span className="text-muted-foreground">{row.documents}</span>
+                        <span className={`tabular-nums ${tone(row.polarity)}`}>
+                          {row.polarity >= 0 ? "+" : ""}
+                          {row.polarity.toFixed(2)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+
               {analysis.by_source.length ? (
                 <section className="glass-card rounded-2xl p-4">
                   <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -650,8 +743,8 @@ export default function SentimentPage({ onNavigate }: SentimentPageProps) {
   );
 }
 
-function originLabel(origin: SentimentOrigin): string {
-  return ORIGINS.find((entry) => entry.id === origin)?.label ?? origin;
+function originLabel(origin: SentimentOrigin, sources: SentimentSource[] = []): string {
+  return sources.find((entry) => entry.id === origin)?.label ?? ORIGINS.find((entry) => entry.id === origin)?.label ?? origin;
 }
 
 const inputClass =

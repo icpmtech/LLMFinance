@@ -32,6 +32,7 @@ import type {
   ElasticSearchPricesResponse,
   ElasticStatus,
   ElasticTickerListResponse,
+  ElasticIndicesListResponse,
   CompanyEnrichmentResponse,
   EntityDetail,
   EntityIngestRequest,
@@ -40,6 +41,7 @@ import type {
   EntitySearchResponse,
   EntityStats,
   Financials,
+  FirmaSearchResponse,
   Holders,
   News,
   Options,
@@ -51,6 +53,7 @@ import type {
   TickerHistory,
   TickerInfo,
   TickerSearchResponse,
+  TrademarkSearchResponse,
   ForecastRequest,
   ForecastResponse,
   SentimentBlendedResponse,
@@ -62,6 +65,7 @@ import type {
   RagDocumentUpdate,
   RagExplainResponse,
   RagSource,
+  SkillRef,
   UploadPdfResponse,
   ContractAnalyticsResponse,
   ContractAnalyticsFilters,
@@ -280,6 +284,90 @@ export async function searchElasticGlobal(
   return res.json();
 }
 
+export async function searchTrademarks(
+  q: string = "",
+  options: { holder_name?: string; nice_class?: string; mark_type?: string; current_phase?: string; size?: number; from?: number } = {},
+): Promise<TrademarkSearchResponse> {
+  const params = new URLSearchParams();
+  if (q.trim()) params.append("q", q.trim());
+  if (options.holder_name) params.append("holder_name", options.holder_name);
+  if (options.nice_class) params.append("nice_class", options.nice_class);
+  if (options.mark_type) params.append("mark_type", options.mark_type);
+  if (options.current_phase) params.append("current_phase", options.current_phase);
+  params.append("size", String(options.size ?? 50));
+  if (options.from !== undefined) params.append("from", String(options.from));
+  const res = await fetch(`${API_BASE}/trademarks/search?${params}`);
+  if (!res.ok) throw new Error(`Erro ao pesquisar marcas: ${res.status}`);
+  return res.json();
+}
+
+export async function searchFirmas(
+  q: string = "",
+  options: { concelho?: string; cae?: string; situacao?: string; size?: number; from?: number } = {},
+): Promise<FirmaSearchResponse> {
+  const params = new URLSearchParams();
+  if (q.trim()) params.append("q", q.trim());
+  if (options.concelho) params.append("concelho", options.concelho);
+  if (options.cae) params.append("cae", options.cae);
+  if (options.situacao) params.append("situacao", options.situacao);
+  params.append("size", String(options.size ?? 50));
+  if (options.from !== undefined) params.append("from", String(options.from));
+  const res = await fetch(`${API_BASE}/firmas/search?${params}`);
+  if (!res.ok) throw new Error(`Erro ao pesquisar firmas: ${res.status}`);
+  return res.json();
+}
+
+export async function searchScrapedItems(
+  q: string = "",
+  options: { source_id?: string; size?: number; offset?: number; sort?: "recent" | "oldest" | "relevance" } = {},
+): Promise<{ total: number; items: any[]; query?: string; error?: string }> {
+  const params = new URLSearchParams();
+  if (q.trim()) params.append("q", q.trim());
+  if (options.source_id) params.append("source_id", options.source_id);
+  params.append("size", String(options.size ?? 30));
+  params.append("offset", String(options.offset ?? 0));
+  params.append("sort", options.sort ?? (q.trim() ? "relevance" : "recent"));
+  const res = await fetch(`${API_BASE}/scraper/search?${params}`);
+  if (!res.ok) throw new Error(`Erro ao pesquisar recolhas: ${res.status}`);
+  return res.json();
+}
+
+type CrmRecord = {
+  id: string;
+  kind: string;
+  name?: string;
+  company_name?: string;
+  title?: string;
+  stage?: string;
+  value?: number;
+  updated_at?: string;
+  created_at?: string;
+  [key: string]: unknown;
+};
+
+export async function searchCrmRecords(
+  kind: "accounts" | "contacts" | "deals" | "activities",
+  q: string = "",
+  options: { size?: number; from?: number } = {},
+): Promise<{ total: number; items: CrmRecord[]; query?: string; error?: string }> {
+  const params = new URLSearchParams();
+  if (q.trim()) params.append("q", q.trim());
+  params.append("size", String(options.size ?? 50));
+  if (options.from !== undefined) params.append("from", String(options.from));
+  const res = await fetch(`${API_BASE}/crm/${kind}?${params}`, { credentials: "include" });
+  if (!res.ok) {
+    if (res.status === 401) return { total: 0, items: [], error: "Sessão necessária" };
+    throw new Error(`Erro ao listar CRM ${kind}: ${res.status}`);
+  }
+  const data = await res.json();
+  return {
+    total: data.total ?? 0,
+    items: (data.items ?? data.records ?? []) as CrmRecord[],
+    query: data.query,
+    error: data.error,
+  };
+}
+
 export async function autocompleteElastic(
   q: string,
   size = 12,
@@ -293,6 +381,12 @@ export async function autocompleteElastic(
 export async function listElasticTickers(): Promise<ElasticTickerListResponse> {
   const res = await fetch(`${API_BASE}/elastic/tickers`);
   if (!res.ok) throw new Error(`Erro ao listar tickers indexados: ${res.status}`);
+  return res.json();
+}
+
+export async function listElasticIndices(): Promise<ElasticIndicesListResponse> {
+  const res = await fetch(`${API_BASE}/elastic/indices`);
+  if (!res.ok) throw new Error(`Erro ao listar índices ES: ${res.status}`);
   return res.json();
 }
 
@@ -553,6 +647,7 @@ export async function streamRagAnswer(
   request: RagChatRequest,
   onToken: (token: string) => void,
   onSources: (sources: RagSource[]) => void,
+  onSkill?: (skill: SkillRef) => void,
 ): Promise<void> {
   const res = await fetch(`${API_BASE}/rag/chat/stream`, {
     method: "POST",
@@ -582,6 +677,7 @@ export async function streamRagAnswer(
       const [, event, data] = match;
       const parsed = JSON.parse(data);
       if (event === "sources") onSources(parsed);
+      else if (event === "skill") onSkill?.(parsed as SkillRef);
       else if (event === "done") return;
       else if (parsed.token) onToken(parsed.token);
     }

@@ -16,10 +16,14 @@ import {
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
-import type { RagChatResponse, RagDocument, RagDocumentHistoryItem, RagSource } from "../types";
+import type { RagChatResponse, RagDocument, RagDocumentHistoryItem, RagSource, SkillRef } from "../types";
 import { askRag, explainRagAnswer, streamRagAnswer } from "../api";
+import { buildChatOptions, useProviders } from "../providers";
 import { Button, Card, CardHeader, CardTitle, Badge } from "./ui";
 import { DocumentGraph } from "./DocumentGraph";
+
+/** Chave onde fica o modelo escolhido para responder no RAG. */
+const RAG_MODEL_KEY = "finance-llm-rag-model";
 
 interface RagChatProps {
   documents: RagDocument[];
@@ -48,6 +52,31 @@ interface ChatMessage {
   explanation?: string;
   model?: string;
   elapsed?: number;
+  skill?: SkillRef | null;
+}
+
+/** Chip com a skill (método) que o assistente seguiu. */
+function SkillChip({ skill }: { skill?: SkillRef | null }) {
+  if (!skill?.name) return null;
+  const detail = [
+    `Skill: ${skill.name}`,
+    skill.when ? `Quando: ${skill.when}` : "",
+    ...(skill.steps ?? []).map((step, index) => `${index + 1}. ${step}`),
+    skill.checks?.length ? "Verificações: " + skill.checks.join(" · ") : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-2" title={detail}>
+      <span className="inline-flex items-center gap-1 rounded-full border border-teal-400/25 bg-teal-400/10 px-2 py-0.5 text-[11px] text-teal-200">
+        🧭 {skill.name}
+        {skill.created ? " · criada agora" : skill.merged ? " · fundida" : ""}
+      </span>
+      {skill.steps?.length ? (
+        <span className="text-[10.5px] text-muted-foreground">{skill.steps.length} passos</span>
+      ) : null}
+    </div>
+  );
 }
 
 export function RagChat({
@@ -63,6 +92,13 @@ export function RagChat({
   const [loading, setLoading] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [llmMode, setLlmMode] = useState(false);
+  // Modelo que redige a resposta: "" = modelo local do RAG; "provider:modelo" = fornecedor de IA.
+  const [model, setModel] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem(RAG_MODEL_KEY) ?? "";
+  });
+  const { catalog } = useProviders();
+  const modelOptions = buildChatOptions(catalog).filter((option) => option.provider);
   const [selectedDocId, setSelectedDocId] = useState<string | "">("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +156,7 @@ export function RagChat({
     try {
       if (llmMode) {
         await streamRagAnswer(
-          { question: q, top_k: 5, temperature: 0.1, max_new_tokens: 128, doc_id: selectedDocId || undefined, stream: true },
+          { question: q, top_k: 5, temperature: 0.1, max_new_tokens: 128, doc_id: selectedDocId || undefined, stream: true, backend: model || undefined },
           (token) => {
             setStreaming(true);
             setMessages((prev) => {
@@ -136,6 +172,9 @@ export function RagChat({
               return [...prev.slice(0, -1), { ...last, sources }];
             });
           },
+          (skill) => {
+            setMessages((prev) => prev.map((message) => (message.id === loadingId ? { ...message, skill } : message)));
+          },
         );
       } else {
         const res: RagChatResponse = await askRag({
@@ -144,9 +183,10 @@ export function RagChat({
           temperature: 0.1,
           max_new_tokens: 128,
           doc_id: selectedDocId || undefined,
+          backend: model || undefined,
         });
         setMessages((prev) =>
-          prev.map((m) => (m.id === loadingId ? { id: generateId(), role: "assistant", content: res.answer, sources: res.sources, model: res.model_used, elapsed: res.elapsed_seconds } : m)),
+          prev.map((m) => (m.id === loadingId ? { id: generateId(), role: "assistant", content: res.answer, sources: res.sources, model: res.model_used, elapsed: res.elapsed_seconds, skill: res.skill ?? null } : m)),
         );
       }
     } catch (err) {
@@ -156,7 +196,7 @@ export function RagChat({
       setLoading(false);
       setStreaming(false);
     }
-  }, [question, loading, llmMode, selectedDocId]);
+  }, [question, loading, llmMode, selectedDocId, model]);
 
   const handleExplain = async (msgId: string) => {
     const msg = messages.find((m) => m.id === msgId);
@@ -334,11 +374,39 @@ export function RagChat({
               Chat RAG BloombergGPT
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Respostas baseadas apenas nos documentos carregados.
+              {model
+                ? `Respostas baseadas apenas nos documentos carregados, redigidas por ${model.replace(":", " · ")}.`
+                : "Respostas baseadas apenas nos documentos carregados (modelo local do RAG)."}
             </p>
           </div>
           <div className="flex items-center gap-2">
             {selectedDocObj && <Badge variant="info">{selectedDocObj.title}</Badge>}
+            <label className="sr-only" htmlFor="rag-model">
+              Modelo que redige a resposta
+            </label>
+            <select
+              id="rag-model"
+              value={model}
+              onChange={(event) => {
+                const next = event.target.value;
+                setModel(next);
+                try {
+                  window.localStorage.setItem(RAG_MODEL_KEY, next);
+                } catch {
+                  /* preferência local apenas */
+                }
+              }}
+              title="O contexto vem sempre dos documentos; isto escolhe quem escreve a resposta"
+              className="max-w-[220px] rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5 text-xs text-foreground focus:border-teal-400/50 focus:outline-none focus:ring-2 focus:ring-teal-400/20"
+            >
+              <option value="">Modelo local (BloombergGPT)</option>
+              {modelOptions.map((option) => (
+                <option key={option.id} value={option.id} disabled={!option.usable}>
+                  {option.label}
+                  {option.usable ? "" : " — requer chave"}
+                </option>
+              ))}
+            </select>
             <Button
               variant={llmMode ? "primary" : "outline"}
               size="sm"
@@ -366,6 +434,7 @@ export function RagChat({
                   <span className="capitalize">{msg.role === "user" ? "Tu" : "BloombergGPT"}</span>
                   {msg.model && <span className="ml-auto">{msg.model}</span>}
                 </div>
+                {msg.role === "assistant" && <SkillChip skill={msg.skill} />}
                 <div className="whitespace-pre-wrap">{msg.content}</div>
                 {msg.sources && msg.sources.length > 0 && (
                   <div className="mt-3 pt-3 border-t border-border/50">
@@ -393,7 +462,7 @@ export function RagChat({
                     <strong>Porque esta resposta?</strong> <br />{msg.explanation}
                   </div>
                 )}
-                {msg.role === "assistant" && !msg.explanation && (
+                {msg.role === "assistant" && !msg.explanation && !model && (
                   <Button
                     variant="ghost"
                     size="sm"

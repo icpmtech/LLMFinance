@@ -26,11 +26,17 @@ import { GlobalSearchPage } from "./pages/GlobalSearchPage";
 // import { ContractsPage } from "./pages/ContractsPage"; // página legada, mantida no código mas não usada
 import { ContractsDashboardPage } from "./pages/ContractsDashboardPage";
 import { ContractsSearchPage } from "./pages/ContractsSearchPage";
+import { ContractsEsSearchPage } from "./pages/ContractsEsSearchPage";
+import { ContractsEsDashboardPage } from "./pages/ContractsEsDashboardPage";
 import { CompanyDirectoryPage } from "./pages/CompanyDirectoryPage";
 import CompanyDetailPage from "./pages/CompanyDetailPage";
 import CompanyDashboardPage from "./pages/CompanyDashboardPage";
 import EmpresasIQPage from "./pages/EmpresasIQPage";
 import OntologyPage from "./pages/OntologyPage";
+import VisualizadorPage from "./pages/VisualizadorPage";
+import VisualizadorDashboardsPage from "./pages/VisualizadorDashboardsPage";
+import HermesPage from "./pages/HermesPage";
+import ResearcherPage from "./pages/ResearcherPage";
 import CrmPage, {
   CRM_SECTION_VIEWS,
   CrmAccountWindow,
@@ -83,6 +89,8 @@ type AppView =
   | "crm-agenda"
   | "crm-dashboard"
   | "contracts-list"
+  | "contratos-es"
+  | "contratos-es-dashboard"
   | "settings"
   | "cli"
   | "browser"
@@ -134,6 +142,8 @@ function pathForView(view: string, company: string | null, ticker: string | null
   if (view === "elastic") return "/elastic";
   if (view === "search") return "/search";
   if (view === "contracts-search" || view === "contracts") return "/contracts/search";
+  if (view === "contratos-es") return "/contratos-es";
+  if (view === "contratos-es-dashboard") return "/contratos-es/dashboard";
   if (view === "contracts-dashboard") return "/contracts/dashboard";
   if (view === "companies-search" || view === "companies") return "/companies/search";
   if (view === "entities-search") return "/entities/search";
@@ -144,6 +154,10 @@ function pathForView(view: string, company: string | null, ticker: string | null
   if (view === "cli") return "/cli";
   if (view === "empresas-iq") return "/empresas-iq";
   if (view === "ontology") return "/ontology";
+  if (view === "hermes") return "/hermes";
+  if (view === "researcher") return "/researcher";
+  if (view === "visualizador") return "/visualizador";
+  if (view === "visualizador-dashboards") return "/visualizador/dashboards";
   if (view === "crm") return "/crm";
   if (view === "crm-accounts") return "/crm/contas";
   if (view === "crm-contacts") return "/crm/contactos";
@@ -284,6 +298,8 @@ export default function App() {
     if (path === "/sentimento") return "sentimento";
     if (path === "/contracts") return "contracts-search";
     if (path === "/contracts/search") return "contracts-search";
+    if (path === "/contratos-es") return "contratos-es";
+    if (path === "/contratos-es/dashboard") return "contratos-es-dashboard";
     if (path === "/contracts/dashboard") return "contracts-dashboard";
     if (path === "/companies") return "companies-search";
     if (path === "/companies/search") return "companies-search";
@@ -296,6 +312,10 @@ export default function App() {
     if (path === "/contracts-list" || path.startsWith("/contracts-list/")) return "contracts-list";
     if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) return "empresas-iq";
     if (path === "/ontology" || path.startsWith("/ontology/")) return "ontology";
+    if (path === "/hermes" || path.startsWith("/hermes/")) return "hermes";
+    if (path === "/researcher" || path.startsWith("/researcher/")) return "researcher";
+    if (path === "/visualizador") return "visualizador";
+    if (path.startsWith("/visualizador/")) return "visualizador-dashboards";
     if (path === "/email" || path.startsWith("/email/")) return "email";
     {
       const crmSection = crmSectionFromPath(path);
@@ -343,6 +363,8 @@ export default function App() {
       else if (path === "/pesquisa") next = "pesquisa";
       else if (path === "/sentimento") next = "sentimento";
       else if (path === "/contracts" || path === "/contracts/search") next = "contracts-search";
+      else if (path === "/contratos-es") next = "contratos-es";
+      else if (path === "/contratos-es/dashboard") next = "contratos-es-dashboard";
       else if (path === "/contracts/dashboard") next = "contracts-dashboard";
       else if (path === "/companies" || path === "/companies/search") next = "companies-search";
       else if (path === "/entities" || path === "/entities/search" || path === "/empresas") next = "entities-search";
@@ -354,6 +376,10 @@ export default function App() {
       else if (path === "/contracts-list" || path.startsWith("/contracts-list/")) next = "contracts-list";
       else if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) next = "empresas-iq";
       else if (path === "/ontology" || path.startsWith("/ontology/")) next = "ontology";
+      else if (path === "/hermes" || path.startsWith("/hermes/")) next = "hermes";
+      else if (path === "/researcher" || path.startsWith("/researcher/")) next = "researcher";
+      else if (path === "/visualizador") next = "visualizador";
+      else if (path.startsWith("/visualizador/")) next = "visualizador-dashboards";
       else if (path === "/email" || path.startsWith("/email/")) next = "email";
       else if (crmSectionFromPath(path)) next = CRM_SECTION_VIEWS[crmSectionFromPath(path) as CrmSection] as AppView;
       else if (scraperSectionFromPath(path)) next = SCRAPER_SECTION_VIEWS[scraperSectionFromPath(path) as ScraperSection] as AppView;
@@ -431,6 +457,7 @@ export default function App() {
           content: result.message.content,
           sources: result.sources,
           tools: result.tools,
+          skill: result.skill ?? null,
         };
         setMessages((prev) => {
           const last = prev[prev.length - 1];
@@ -520,6 +547,10 @@ export default function App() {
     }
     if (v === "contracts-dashboard") {
       setViewAndHistory("contracts-dashboard");
+      return;
+    }
+    if (v === "contratos-es") {
+      setViewAndHistory("contratos-es");
       return;
     }
     if (v === "companies" || v === "companies-search") {
@@ -676,6 +707,10 @@ export default function App() {
     if (target === "dashboard") return <DashboardPage onSwitchView={handleSwitchView} onSelectTicker={handleSelectTicker} />;
     if (target === "empresas-iq") return <EmpresasIQPage />;
     if (target === "ontology") return <OntologyPage />;
+    if (target === "hermes") return <HermesPage />;
+    if (target === "researcher") return <ResearcherPage />;
+    if (target === "visualizador") return <VisualizadorPage onOpenDashboards={() => setViewAndHistory("visualizador-dashboards")} />;
+    if (target === "visualizador-dashboards") return <VisualizadorDashboardsPage onOpenEditor={() => setViewAndHistory("visualizador")} />;
     if (crmSectionForView(target)) {
       const section = crmSectionForView(target) as CrmSection;
       return (
@@ -786,6 +821,22 @@ export default function App() {
         <ContractsSearchPage
           onSwitchView={() => setViewAndHistory("dashboard")}
           onSwitchDashboard={() => setViewAndHistory("contracts-dashboard")}
+        />
+      );
+    }
+    if (target === "contratos-es") {
+      return (
+        <ContractsEsSearchPage
+          onSwitchView={() => setViewAndHistory("dashboard")}
+          onSwitchDashboard={() => setViewAndHistory("contratos-es-dashboard")}
+        />
+      );
+    }
+    if (target === "contratos-es-dashboard") {
+      return (
+        <ContractsEsDashboardPage
+          onSwitchView={() => setViewAndHistory("dashboard")}
+          onSwitchSearch={() => setViewAndHistory("contratos-es")}
         />
       );
     }
@@ -936,6 +987,30 @@ export default function App() {
   if (view === "chat") {
     /* O Chat vive dentro da mesma moldura da plataforma: a barra lateral e a
        barra de tarefas ficam **sempre** visíveis, como em todas as páginas. */
+    return (
+      <div className={["flex h-screen w-full overflow-hidden bg-background text-foreground", dockSpacer.sides].join(" ")}>
+        <AppNav
+          active={view as AppNavView}
+          onNavigate={(next) => setViewAndHistory(next as AppView)}
+          onBackToChat={() => setViewAndHistory("chat")}
+        />
+        <main
+          className={[
+            "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pt-14 md:pt-0",
+            dockSpacer.bottom,
+          ].join(" ")}
+        >
+          {renderContent()}
+        </main>
+        {renderDock()}
+        <InstallBanner />
+      </div>
+    );
+  }
+
+  if (view === "hermes") {
+    /* O Hermes é uma conversa: ocupa a altura do ecrã, a lista de respostas rola
+       por dentro e a caixa de pergunta fica sempre à vista (como no Chat). */
     return (
       <div className={["flex h-screen w-full overflow-hidden bg-background text-foreground", dockSpacer.sides].join(" ")}>
         <AppNav

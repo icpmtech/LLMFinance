@@ -20,6 +20,7 @@ guardar no dossiê → abrir/atualizar no Office.
 from __future__ import annotations
 
 import io
+import json
 import logging
 import math
 import os
@@ -30,6 +31,23 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+
+def _as_text(value: Any, fallback: str = "") -> str:
+    """Achata um valor (lista/dicionário) numa string curta, para rótulos e badges.
+
+    Vários campos do sistema são listas (`tipoContrato`, `NUTs`, tags) e sem isto
+    viravam «fontes» com o valor `['Aquisição de serviços']` no relatório.
+    """
+    if value in (None, "", []):
+        return fallback
+    if isinstance(value, (list, tuple, set)):
+        parts = [str(item).strip() for item in value if str(item).strip()]
+        return ", ".join(parts[:2]) or fallback
+    if isinstance(value, dict):
+        return fallback
+    return str(value)
+
 
 # --------------------------------------------------------------------- léxico
 # Peso de -2 (muito negativo) a +2 (muito positivo). Português de Portugal, com
@@ -52,6 +70,9 @@ LEXICON: Dict[str, float] = {
     "valorização": 1.3, "valoriza": 1.2, "vitoria": 1.4, "vitória": 1.4, "aprova": 1.1, "aprovado": 1.1,
     "aprovação": 1.1, "aprovacao": 1.1, "apoio": 0.9, "beneficia": 1.0, "beneficiado": 1.0,
     "eficaz": 1.0, "eficiencia": 0.9, "eficiência": 0.9, "suficiente": 0.5, "adequado": 0.7,
+    "subiram": 0.9, "sobem": 0.9, "desceram": -0.9, "descem": -0.9, "cairam": -1.1, "caíram": -1.1,
+    "melhoraram": 1.2, "pioraram": -1.3, "recuperaram": 1.2, "superaram": 1.2,
+    "excelentes": 2.0, "excelente": 2.0, "fraquissima": -1.3, "fraquíssima": -1.3,
     # negativo
     "abrandamento": -1.1, "acusacao": -1.4, "acusação": -1.4, "acusa": -1.2, "acordo-ruim": -1.0,
     "ameaca": -1.4, "ameaça": -1.4, "atraso": -1.1, "atrasos": -1.1, "atrasado": -1.0, "baixa": -0.9,
@@ -95,6 +116,22 @@ STOPWORDS = {
     "which", "after", "over", "more", "than", "into", "about", "also", "when", "what", "your", "its",
 }
 
+# Expressões que mudam o sentido de um termo do léxico neste domínio (usadas
+# antes da pontuação por palavra). «Acordo quadro» é um instrumento de
+# contratação pública, não um acordo positivo; em contratos, a palavra aparece
+# quase sempre assim.
+PHRASE_RULES: List[Tuple[str, float, float]] = [
+    ("acordo quadro", 0.0, 1.0),      # termo a neutralizar
+    ("acordo-quadro", 0.0, 1.0),
+    ("acordos quadro", 0.0, 1.0),
+    ("boa prática", 0.6, 1.0),
+    ("boas práticas", 0.6, 1.0),
+]
+
+# Termos ambíguos: o peso do léxico é reduzido porque, na maioria dos contextos
+# do sistema (contratos, atas, comunicados), não exprimem juízo de valor.
+AMBIGUOUS_TERMS = {"acordo": 0.3, "alto": 0.4, "redução": 0.4, "reduzir": 0.3, "aumento": 0.2, "aumenta": 0.2}
+
 _TOKEN_RE = re.compile(r"[A-Za-zÀ-ÿ]{3,}")
 _SENTENCE_RE = re.compile(r"[^.!?…\n]+[.!?…]?")
 # URL e «lixo» de parâmetros (miniaturas, trackers) que não é conteúdo.
@@ -125,6 +162,10 @@ def _now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+# Índice sem acentos do léxico (evita percorrer o dicionário por cada token).
+_FOLDED_LEXICON: Dict[str, float] = {_fold(term): value for term, value in LEXICON.items()}
+
+
 def clean_text(value: Any) -> str:
     """Remove ligações e parâmetros de imagem/rastreio do texto a analisar.
 
@@ -144,12 +185,35 @@ def label_for(polarity: float) -> str:
     return "neutro"
 
 
+def _phrase_spans(sentence: str) -> List[Tuple[int, int, float, str]]:
+    """Posições dos termos compostos conhecidos (ex.: «acordo quadro»)."""
+    folded = _fold(sentence)
+    spans: List[Tuple[int, int, float, str]] = []
+    for phrase, weight, _confidence in PHRASE_RULES:
+        start = folded.find(phrase)
+        while start >= 0:
+            spans.append((start, start + len(phrase), weight, phrase))
+            start = folded.find(phrase, start + 1)
+    return spans
+
+
 def _lexicon_lookup(token: str) -> Optional[float]:
-    """Peso de um token (aceita a forma exata e a forma sem acentos)."""
+    """Peso de um token (aceita a forma exata, sem acentos e o plural simples)."""
     if token in LEXICON:
         return LEXICON[token]
     folded = _fold(token)
-    return LEXICON.get(folded) or LEXICON.get(token.replace("ç", "c"))
+    hit = _FOLDED_LEXICON.get(folded)
+    if hit is not None:
+        return hit
+    # Plurais: «excelentes» → «excelente», «ganhos» → «ganho», «inflações» → «inflação».
+    for suffix, replacement in (("oes", "ao"), ("aes", "al"), ("es", ""), ("s", "")):
+        if not folded.endswith(suffix) or len(folded) - len(suffix) < 3:
+            continue
+        stem = folded[: -len(suffix)] + replacement
+        candidate = _FOLDED_LEXICON.get(stem)
+        if candidate is not None:
+            return candidate
+    return None
 
 
 # --------------------------------------------------------------- análise base
@@ -162,18 +226,47 @@ def analyze_text(text: str, *, max_length: int = 200_000) -> Dict[str, Any]:
     tokens: List[str] = []
     matched: List[Dict[str, Any]] = []
     sentence_rows: List[Dict[str, Any]] = []
+    neutralised: List[str] = []
     positive_terms = negative_terms = 0
     total_weight = 0.0
 
     for sentence in sentences:
-        sentence_tokens = [match.group(0).lower() for match in _TOKEN_RE.finditer(sentence)]
+        matches = list(_TOKEN_RE.finditer(sentence))
+        sentence_tokens = [match.group(0).lower() for match in matches]
+        spans = [(match.start(), match.end()) for match in matches]
         tokens.extend(sentence_tokens)
+        phrases = _phrase_spans(sentence)
         score = 0.0
         hits = 0
         for index, token in enumerate(sentence_tokens):
-            weight = _lexicon_lookup(token)
+            # Palavras funcionais nunca contam: sem isto, a conjunção «mas»
+            # apanhava o peso de «más» e estragava a leitura da frase.
+            if token in STOPWORDS or _fold(token) in STOPWORDS:
+                continue
+            start, end = spans[index]
+            # Termos compostos do domínio («acordo quadro», «boas práticas»):
+            # substituem o sentido que a palavra isolada teria.
+            phrase_weight: Optional[float] = None
+            phrase_name = ""
+            for phrase_start, phrase_end, candidate_weight, name in phrases:
+                if phrase_start <= start and end <= phrase_end:
+                    phrase_weight = candidate_weight
+                    phrase_name = name
+                    break
+            if phrase_weight is not None and phrase_weight == 0.0:
+                if phrase_name not in neutralised:
+                    neutralised.append(phrase_name)
+                continue
+            if phrase_weight is not None:
+                weight = phrase_weight
+            else:
+                weight = _lexicon_lookup(token)
             if weight is None:
                 continue
+            ambiguous = AMBIGUOUS_TERMS.get(_fold(token))
+            if ambiguous is not None and phrase_weight is None:
+                # Termos frequentes em contexto neutro (contratos, atas) pesam menos.
+                weight *= ambiguous
             multiplier = 1.0
             # Intensificador imediatamente antes («muito bom»).
             if index:
@@ -184,9 +277,18 @@ def analyze_text(text: str, *, max_length: int = 200_000) -> Dict[str, Any]:
             if any(word in NEGATIONS for word in window):
                 multiplier *= -1.0
             value = weight * multiplier
+            if not value:
+                continue
             score += value
             hits += 1
-            matched.append({"term": token, "weight": round(weight, 2), "value": round(value, 2)})
+            matched.append(
+                {
+                    "term": phrase_name or token,
+                    "weight": round(weight, 2),
+                    "value": round(value, 2),
+                    "ambiguous": ambiguous is not None,
+                }
+            )
             if value > 0:
                 positive_terms += 1
             elif value < 0:
@@ -211,6 +313,7 @@ def analyze_text(text: str, *, max_length: int = 200_000) -> Dict[str, Any]:
         "negative_terms": negative_terms,
         "sentences": sentence_rows[:200],
         "matched": matched[:400],
+        "neutralised": neutralised[:20],
         "words": len(tokens),
     }
 
@@ -296,6 +399,7 @@ def analyze_documents(
                 "hits": base["hits"],
                 "words": base["words"],
                 "engine": "neural" if neural and index < len(neural) else "lexicon",
+                "tags": [text for text in (_as_text(tag) for tag in (doc.get("tags") or [])) if text][:6],
                 "matched": base["matched"][:40],
                 "sentences": base["sentences"][:20],
                 "excerpt": re.sub(r"\s+", " ", text)[:300],
@@ -321,13 +425,33 @@ def analyze_documents(
     margin = 1.96 * std / math.sqrt(count) if count > 1 else 0.0
     labels = frame["label"].value_counts().to_dict()
 
+    # Cobertura: documentos em que o léxico encontrou pelo menos um termo. Sem
+    # isto, um corpus em que 80 % dos textos não têm vocabulário conhecido
+    # aparecia como «neutro» só porque os zeros diluíam a média.
+    signal_frame = frame[frame["hits"] > 0]
+    signal_count = int(len(signal_frame))
+    # Média ponderada pela evidência: um documento com um único termo num título
+    # de 4 palavras não deve pesar o mesmo que um texto com vários termos. O peso
+    # satura em 3 termos.
+    weights = signal_frame["hits"].clip(upper=3) / 3 if signal_count else None
+    signal_mean = float((signal_frame["polarity"] * weights).sum() / weights.sum()) if signal_count else 0.0
+    coverage = round(signal_count / count, 3) if count else 0.0
+    # A leitura do corpus usa a média dos documentos com sinal (é a única com
+    # informação); a média de todos fica exposta para quem quer o retrato bruto.
+    reported_mean = round(signal_mean, 3) if signal_count else 0.0
+
     summary.update(
         {
             "mean_polarity": round(mean, 3),
+            "mean_polarity_signal": round(signal_mean, 3),
+            "reported_mean": reported_mean,
+            "documents_with_signal": signal_count,
+            "documents_without_signal": count - signal_count,
+            "coverage": coverage,
             "median_polarity": round(float(polarity.median()), 3),
             "std_polarity": round(std, 3),
             "ci95": [round(mean - margin, 3), round(mean + margin, 3)],
-            "label": label_for(mean),
+            "label": label_for(reported_mean),
             "positive": int(labels.get("positivo", 0)),
             "negative": int(labels.get("negativo", 0)),
             "neutral": int(labels.get("neutro", 0)),
@@ -380,12 +504,36 @@ def analyze_documents(
             entry = term_counts.setdefault(hit["term"], {"term": hit["term"], "count": 0, "weight": 0.0})
             entry["count"] += 1
             entry["weight"] += hit["value"]
+    # Aspetos: sentimento por etiqueta/secção (ex.: economia, nacional, um tema).
+    by_tag: List[Dict[str, Any]] = []
+    tagged = [row for row in rows if row.get("tags")]
+    if tagged:
+        exploded = pd.DataFrame(
+            [{"tag": tag, "polarity": row["polarity"], "hits": row["hits"]} for row in tagged for tag in row["tags"]]
+        )
+        if not exploded.empty:
+            grouped_tag = (
+                exploded.groupby("tag")
+                .agg(documents=("polarity", "size"), polarity=("polarity", "mean"), hits=("hits", "sum"))
+                .reset_index()
+                .sort_values("polarity", ascending=False)
+            )
+            by_tag = [
+                {
+                    "tag": str(row["tag"]),
+                    "documents": int(row["documents"]),
+                    "polarity": round(float(row["polarity"]), 3),
+                    "label": label_for(float(row["polarity"])),
+                }
+                for _, row in grouped_tag.iterrows()
+            ][:20]
+
     terms = sorted(term_counts.values(), key=lambda item: abs(item["weight"]), reverse=True)
     for entry in terms:
         entry["weight"] = round(entry["weight"], 2)
         entry["polarity"] = "positivo" if entry["weight"] > 0 else "negativo"
 
-        texts = [clean_text(doc.get(text_field)) for doc in documents if clean_text(doc.get(text_field)).strip()]
+    texts = [clean_text(doc.get(text_field)) for doc in documents if clean_text(doc.get(text_field)).strip()]
     keywords = _keywords(texts, top=20)
 
     return {
@@ -393,6 +541,7 @@ def analyze_documents(
         "rows": rows,
         "by_source": by_source,
         "by_day": by_day,
+        "by_tag": by_tag,
         "terms": terms[:40],
         "keywords": keywords,
         "distribution": [
@@ -444,6 +593,7 @@ def corpus_from_scraped(q: Optional[str] = None, source_id: Optional[str] = None
                 "source": hit.get("source_name") or hit.get("source_id") or "Recolha",
                 "date": hit.get("scraped_at"),
                 "url": hit.get("url") or "",
+                "tags": (hit.get("tags") or [])[:6],
                 "text": clean_text(" ".join([str(hit.get("title") or ""), str(hit.get("summary") or ""), str(hit.get("text") or "")])),
             }
         )
@@ -559,6 +709,288 @@ def corpus_from_office(document_id: str) -> List[Dict[str, Any]]:
     ]
 
 
+def corpus_from_contracts(q: Optional[str] = None, limit: int = 60) -> List[Dict[str, Any]]:
+    """Corpus a partir dos contratos públicos (objeto e descrição)."""
+    from api.elasticsearch_client import search_contracts
+
+    result = search_contracts(q=q or None, size=max(1, min(limit, 200)))
+    documents: List[Dict[str, Any]] = []
+    for row in result.get("items") or []:
+        text = " ".join(
+            str(part) for part in (row.get("objectoContrato"), row.get("descContrato"), row.get("fundamentacao")) if part
+        )
+        if not text.strip():
+            continue
+        documents.append(
+            {
+                "id": str(row.get("idcontrato") or ""),
+                "title": row.get("objectoContrato") or row.get("descContrato") or "Contrato",
+                "source": _as_text(row.get("tipoContrato"), "Contratos"),
+                "date": row.get("dataPublicacao") or row.get("dataCelebracaoContrato"),
+                "url": "",
+                "text": clean_text(text),
+                "tags": [_as_text(row.get("NUTs")) or None, _as_text(row.get("tipoContrato")) or None],
+            }
+        )
+    return documents
+
+
+def corpus_from_firmas(q: Optional[str] = None, limit: int = 60) -> List[Dict[str, Any]]:
+    """Corpus a partir das firmas/denominações do RNPC."""
+    from api.elasticsearch_client import search_firmas
+
+    result = search_firmas(q=q or None, size=max(1, min(limit, 200)))
+    documents: List[Dict[str, Any]] = []
+    for row in result.get("items") or []:
+        text = " ".join(str(part) for part in (row.get("nome"), row.get("situacao_detalhe"), row.get("situacao")) if part)
+        documents.append(
+            {
+                "id": str(row.get("numero_certificado") or row.get("nipc") or row.get("nome") or ""),
+                "title": row.get("nome") or "(firma)",
+                "source": "Firmas (RNPC)",
+                "date": row.get("ingested_at"),
+                "url": "",
+                "text": clean_text(text),
+                "tags": [_as_text(row.get("concelho")) or None, _as_text(row.get("situacao")) or None],
+            }
+        )
+    return documents
+
+
+def corpus_from_trademarks(q: Optional[str] = None, limit: int = 60) -> List[Dict[str, Any]]:
+    """Corpus a partir das marcas registadas (INPI)."""
+    from api.elasticsearch_client import search_trademarks
+
+    result = search_trademarks(q=q or None, size=max(1, min(limit, 200)))
+    documents: List[Dict[str, Any]] = []
+    for row in result.get("items") or []:
+        text = " ".join(
+            str(part)
+            for part in (row.get("mark_name"), row.get("holder_name"), row.get("mark_type"), row.get("modality"), row.get("current_phase"))
+            if part
+        )
+        documents.append(
+            {
+                "id": str(row.get("process_number") or row.get("mark_name") or ""),
+                "title": row.get("mark_name") or "(marca)",
+                "source": "Marcas (INPI)",
+                "date": row.get("application_date"),
+                "url": "",
+                "text": clean_text(text),
+                "tags": [_as_text(row.get("current_phase")) or None, _as_text(row.get("modality")) or None],
+            }
+        )
+    return documents
+
+
+def corpus_from_rag(limit: int = 40) -> List[Dict[str, Any]]:
+    """Corpus a partir dos documentos do RAG (Markdown extraído dos PDFs)."""
+    from api.elasticsearch_client import ROOT
+
+    index_path = ROOT / "data" / "documents" / "index.json"
+    if not index_path.exists():
+        return []
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("Índice do RAG ilegível: %s", exc)
+        return []
+    documents: List[Dict[str, Any]] = []
+    for doc_id, meta in list(index.items())[: max(1, min(limit, 200))]:
+        path = meta.get("md_path")
+        text = ""
+        if path:
+            try:
+                from pathlib import Path
+
+                candidate = Path(str(path))
+                if candidate.exists():
+                    text = candidate.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                text = ""
+        documents.append(
+            {
+                "id": str(doc_id),
+                "title": meta.get("title") or meta.get("filename") or str(doc_id),
+                "source": "Documentos (RAG)",
+                "date": None,
+                "url": "",
+                "text": clean_text(text)[:120_000],
+                "tags": [_as_text(meta.get("filename")) or None],
+            }
+        )
+    return documents
+
+
+def corpus_from_crm(scope: Dict[str, Any], q: Optional[str] = None, limit: int = 60) -> List[Dict[str, Any]]:
+    """Corpus a partir do CRM do utilizador (contas, contactos, oportunidades, atividades)."""
+    from api.elasticsearch_client import CRM_INDEX, ensure_indices, get_es_client
+
+    client = get_es_client()
+    if not client:
+        return []
+    ensure_indices(client)
+    must: List[Dict[str, Any]] = []
+    if q:
+        must.append(
+            {
+                "multi_match": {
+                    "query": q,
+                    "fields": ["name^3", "title^3", "subject^2", "notes", "role", "sector"],
+                    "lenient": True,
+                }
+            }
+        )
+    query: Dict[str, Any] = {"bool": {"must": must or [{"match_all": {}}]}}
+    if not scope.get("see_all"):
+        query["bool"]["filter"] = [{"term": {"owner_id": scope.get("user_id")}}]
+    try:
+        resp = client.search(index=CRM_INDEX, body={"size": max(1, min(limit, 200)), "query": query, "sort": ["_score"]})
+    except Exception as exc:
+        logger.warning("Corpus do CRM falhou: %s", exc)
+        return []
+    kind_label = {"account": "Conta", "contact": "Contacto", "deal": "Oportunidade", "activity": "Atividade"}
+    documents: List[Dict[str, Any]] = []
+    for hit in resp.get("hits", {}).get("hits", []):
+        row = hit.get("_source") or {}
+        kind = str(row.get("kind") or "account")
+        text = " ".join(
+            str(part) for part in (row.get("name"), row.get("title"), row.get("subject"), row.get("notes"), row.get("sector"), row.get("role")) if part
+        )
+        documents.append(
+            {
+                "id": f"{kind}:{row.get('id') or ''}",
+                "title": row.get("name") or row.get("title") or row.get("subject") or "(registro)",
+                "source": kind_label.get(kind, kind),
+                "date": row.get("updated_at") or row.get("created_at"),
+                "url": "",
+                "text": clean_text(text),
+                "tags": [_as_text(row.get("stage")) or None, _as_text(row.get("status")) or None],
+            }
+        )
+    return documents
+
+
+def corpus_from_email(owner: str, account_id: str, *, folder: str = "INBOX", limit: int = 40) -> List[Dict[str, Any]]:
+    """Corpus a partir de uma caixa de correio (assunto + pré-visualização das mensagens)."""
+    from api import email_service
+
+    account = email_service.get_account(owner, account_id)
+    result = email_service.list_messages(account, folder=folder, limit=max(1, min(limit, 200)))
+    documents: List[Dict[str, Any]] = []
+    for message in result.get("items") or []:
+        text = " ".join(str(part) for part in (message.get("subject"), message.get("snippet")) if part)
+        documents.append(
+            {
+                "id": str(message.get("uid") or message.get("message_id") or ""),
+                "title": message.get("subject") or "(sem assunto)",
+                "source": f"Email · {account.get('label') or account.get('address') or account_id}",
+                "date": message.get("date"),
+                "url": "",
+                "text": clean_text(text),
+                "tags": ["não lida"] if message.get("unread") else [],
+            }
+        )
+    return documents
+
+
+# -------------------------------------------------------------------- fontes
+# Catálogo das fontes do sistema que podem ser analisadas. `count` em
+# `available_sources()` diz quantos documentos cada uma tem disponíveis.
+ORIGINS: List[Dict[str, Any]] = [
+    {"id": "scraped", "label": "Recolha (sites)", "group": "Recolha e fontes externas", "hint": "Itens recolhidos de sites", "index": "finance_scraped"},
+    {"id": "news", "label": "Notícias de mercado", "group": "Recolha e fontes externas", "hint": "Notícias indexadas por ticker", "index": "finance_news"},
+    {"id": "contracts", "label": "Contratos públicos", "group": "Dados da plataforma", "hint": "Objeto e descrição dos contratos", "index": "contratos"},
+    {"id": "firmas", "label": "Firmas (RNPC)", "group": "Dados da plataforma", "hint": "Firmas e denominações", "index": "finance_firmas"},
+    {"id": "trademarks", "label": "Marcas (INPI)", "group": "Dados da plataforma", "hint": "Marcas registadas", "index": "finance_trademarks"},
+    {"id": "rag", "label": "Documentos (RAG)", "group": "Dados da plataforma", "hint": "PDFs carregados e convertidos em Markdown"},
+    {"id": "dossier", "label": "Dossiê 360", "group": "Trabalho do utilizador", "hint": "Evidência de um dossiê guardado", "needs": "dossier_id"},
+    {"id": "office", "label": "Documento Office", "group": "Trabalho do utilizador", "hint": "Documento do editor", "needs": "document_id"},
+    {"id": "crm", "label": "CRM", "group": "Trabalho do utilizador", "hint": "Contas, contactos e oportunidades (só as suas)", "session": True},
+    {"id": "email", "label": "Email", "group": "Trabalho do utilizador", "hint": "Assunto e pré-visualização da caixa de correio", "session": True, "needs": "account_id"},
+    {"id": "text", "label": "Texto colado", "group": "Manual", "hint": "Cole um texto para analisar"},
+]
+ORIGIN_IDS = [entry["id"] for entry in ORIGINS]
+
+
+def origins_catalog() -> List[Dict[str, Any]]:
+    """Catálogo de fontes (para a UI)."""
+    return ORIGINS
+
+
+def available_sources(scope: Optional[Dict[str, Any]] = None, owner: Optional[str] = None) -> Dict[str, Any]:
+    """Quantos documentos cada fonte tem disponíveis para análise."""
+    from api.elasticsearch_client import get_es_client
+
+    client = get_es_client()
+    counts: Dict[str, int] = {}
+
+    def es_count(index: str, query: Optional[Dict[str, Any]] = None) -> int:
+        if not client:
+            return 0
+        try:
+            kwargs: Dict[str, Any] = {"index": index}
+            if query:
+                kwargs["query"] = query
+            return int(client.count(**kwargs).get("count") or 0)
+        except Exception as exc:
+            logger.debug("Contagem de %s falhou: %s", index, exc)
+            return 0
+
+    for entry in ORIGINS:
+        index = entry.get("index")
+        if index:
+            counts[entry["id"]] = es_count(index)
+    if scope:
+        query = None if scope.get("see_all") else {"term": {"owner_id": scope.get("user_id")}}
+        counts["crm"] = es_count("finance_crm", query)
+    else:
+        counts["crm"] = 0
+
+    try:
+        from api.elasticsearch_client import ROOT
+
+        index_path = ROOT / "data" / "documents" / "index.json"
+        counts["rag"] = len(json.loads(index_path.read_text(encoding="utf-8"))) if index_path.exists() else 0
+    except Exception:
+        counts["rag"] = 0
+    try:
+        from api import search360_store
+
+        counts["dossier"] = int(search360_store.list_dossiers(limit=500).get("total") or 0)
+    except Exception:
+        counts["dossier"] = 0
+    try:
+        from api import office_store
+
+        counts["office"] = int(office_store.list_documents(limit=500).get("total") or 0)
+    except Exception:
+        counts["office"] = 0
+    accounts: List[Dict[str, Any]] = []
+    if owner:
+        try:
+            from api import email_service
+
+            accounts = (email_service.list_accounts(owner) or {}).get("items") or []
+        except Exception:
+            accounts = []
+    counts["email"] = len(accounts)
+    counts["text"] = 1
+
+    items = []
+    for entry in ORIGINS:
+        blocked = bool(entry.get("session")) and not scope
+        items.append(
+            {
+                **entry,
+                "available": counts.get(entry["id"], 0),
+                "blocked": blocked,
+                "blocked_reason": "Requer sessão iniciada" if blocked else None,
+            }
+        )
+    return {"total": len(items), "items": items, "accounts": accounts}
+
+
 # ------------------------------------------------------------------- relatórios
 def build_markdown(analysis: Dict[str, Any], *, title: str = "Análise de sentimento", term: str = "") -> str:
     """Relatório em Markdown, pronto para o dossiê e para o editor Office."""
@@ -570,17 +1002,25 @@ def build_markdown(analysis: Dict[str, Any], *, title: str = "Análise de sentim
         f"**Gerado em:** {summary.get('generated_at') or _now()}",
         f"**Motor:** {'modelo neuronal ' + str(summary.get('model')) if summary.get('engine') == 'neural' else 'léxico PT + estatística (scikit-learn/pandas)'}",
         f"**Documentos analisados:** {summary.get('documents', 0)}",
-        f"**Sentimento médio:** {summary.get('mean_polarity', 0):+.3f} ({summary.get('label', 'neutro')})",
+        f"**Sentimento médio:** {summary.get('reported_mean', summary.get('mean_polarity', 0)):+.3f} ({summary.get('label', 'neutro')})",
+        f"**Cobertura:** {summary.get('documents_with_signal', 0)} de {summary.get('documents', 0)} documentos com termos de sentimento "
+        f"({(summary.get('coverage') or 0):.0%}); média bruta (inclui os sem sinal) {summary.get('mean_polarity', 0):+.3f}",
         f"**Intervalo de confiança (95 %):** [{summary.get('ci95', [0, 0])[0]:+.3f}, {summary.get('ci95', [0, 0])[1]:+.3f}]",
         f"**Distribuição:** {summary.get('positive', 0)} positivos · {summary.get('neutral', 0)} neutros · {summary.get('negative', 0)} negativos",
+        "",
+        "> A média apresentada é calculada sobre os documentos em que o léxico encontrou termos de sentimento\n"
+        "> (a média bruta, que inclui os documentos sem sinal, aparece ao lado). Uma cobertura baixa significa\n"
+        "> que o vocabulário do corpus não está no léxico — o resultado deve ser lido com essa reserva.",
         "",
         "## Indicadores",
         "",
         "| Indicador | Valor |",
         "| --- | --- |",
-        f"| Polaridade média | {summary.get('mean_polarity', 0):+.3f} |",
+        f"| Polaridade média (com sinal) | {summary.get('reported_mean', 0):+.3f} |",
+        f"| Polaridade média (bruta) | {summary.get('mean_polarity', 0):+.3f} |",
         f"| Mediana | {summary.get('median_polarity', 0):+.3f} |",
         f"| Desvio-padrão | {summary.get('std_polarity', 0):.3f} |",
+        f"| Cobertura | {(summary.get('coverage') or 0):.1%} |",
         f"| Positivos | {summary.get('positive', 0)} ({summary.get('positive_share', 0):.0%}) |",
         f"| Negativos | {summary.get('negative', 0)} ({summary.get('negative_share', 0):.0%}) |",
         "",
@@ -591,6 +1031,13 @@ def build_markdown(analysis: Dict[str, Any], *, title: str = "Análise de sentim
         lines += ["## Sentimento por fonte", "", "| Fonte | Documentos | Polaridade | Leitura |", "| --- | --- | --- | --- |"]
         for row in by_source:
             lines.append(f"| {row['source']} | {row['documents']} | {row['polarity']:+.3f} | {row['label']} |")
+        lines.append("")
+
+    by_tag = analysis.get("by_tag") or []
+    if by_tag:
+        lines += ["## Aspetos (por etiqueta/secção)", "", "| Etiqueta | Documentos | Polaridade | Leitura |", "| --- | --- | --- | --- |"]
+        for row in by_tag:
+            lines.append(f"| {row['tag']} | {row['documents']} | {row['polarity']:+.3f} | {row['label']} |")
         lines.append("")
 
     by_day = analysis.get("by_day") or []
@@ -656,13 +1103,15 @@ def meta() -> Dict[str, Any]:
         neural_available = False
     return {
         "engines": [
-            {"id": "lexicon", "label": "Léxico PT + estatística", "detail": f"{len(LEXICON)} termos, negação e intensificadores, pandas + scikit-learn", "offline": True},
+            {"id": "lexicon", "label": "Léxico PT + estatística", "detail": f"{len(_FOLDED_LEXICON)} formas, negação e intensificadores, pandas + scikit-learn", "offline": True},
             {"id": "neural", "label": "Modelo neuronal (transformers)", "detail": DEFAULT_TRANSFORMER_MODEL, "offline": False, "available": neural_available},
         ],
-        "lexicon_size": len(LEXICON),
+        "lexicon_size": len(_FOLDED_LEXICON),
+        "lexicon_entries": len(LEXICON),
         "thresholds": {"positive": _POSITIVE_THRESHOLD, "negative": _NEGATIVE_THRESHOLD},
         "keywords": "TF-IDF (scikit-learn, 1–2 gramas)",
-        "aggregation": "pandas (média, mediana, desvio, IC 95 %, por fonte e por dia)",
+        "aggregation": "pandas (média, mediana, desvio, IC 95 %, cobertura, por fonte, por etiqueta e por dia)",
+        "sources": ORIGINS,
         "dossiers": True,
         "office": True,
     }

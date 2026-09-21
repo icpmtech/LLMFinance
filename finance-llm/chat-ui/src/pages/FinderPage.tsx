@@ -16,20 +16,16 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
-  Building2,
   ChevronRight,
   Columns3,
   Copy,
-  Database,
   Download,
   ExternalLink,
   Eye,
-  FileText,
   FolderSearch,
   GalleryVerticalEnd,
   GitCompare,
   Info,
-  Landmark,
   LayoutGrid,
   List,
   Loader2,
@@ -37,20 +33,31 @@ import {
   Search,
   Star,
   StarOff,
-  TrendingUp,
   X,
 } from "lucide-react";
+
 import {
   getCompanyContracts,
-  getContractStatus,
   getEntityDetail,
-  getEntityStats,
+  listElasticIndices,
   listElasticTickers,
   listRagDocuments,
   searchContracts,
+  searchCrmRecords,
+  searchElasticGlobal,
   searchEntities,
+  searchFirmas,
+  searchScrapedItems,
+  searchTrademarks,
 } from "../api";
-import type { ContractItem, EntityDetail, EntityItem, RagDocument } from "../types";
+import type {
+  ContractItem,
+  EntityDetail,
+  EntityItem,
+  FirmaItem,
+  RagDocument,
+  TrademarkItem,
+} from "../types";
 import { useDock } from "../dock";
 import { useWindowMode } from "../layout";
 import { useFavorites, type Favorite } from "../favorites";
@@ -58,6 +65,8 @@ import { openWindow } from "../windows";
 import { openCompareWindow, useCompare, MAX_COMPARE } from "../compare";
 import {
   FINDER_LOCATIONS,
+  KIND_GRADIENT,
+  KIND_ICON,
   KIND_LABEL,
   appHref,
   formatFinderDate,
@@ -69,7 +78,6 @@ import {
   tagColor,
   useFinder,
   type FinderItem,
-  type FinderKind,
   type FinderLocation,
   type FinderLocationId,
   type FinderSort,
@@ -94,15 +102,7 @@ const SORTS: { id: FinderSort; label: string }[] = [
   { id: "size", label: "Tamanho" },
 ];
 
-/** Índices do Elasticsearch criados pela plataforma. */
-const KNOWN_INDICES: { id: string; label: string; hint: string }[] = [
-  { id: "finance_contracts", label: "finance_contracts", hint: "Contratos públicos" },
-  { id: "finance_entities", label: "finance_entities", hint: "Diretório de entidades" },
-  { id: "finance_documents", label: "finance_documents", hint: "Documentos RAG" },
-  { id: "finance_users", label: "finance_users", hint: "Contas de utilizador" },
-  { id: "finance_sessions", label: "finance_sessions", hint: "Sessões ativas" },
-  { id: "finance_user_state", label: "finance_user_state", hint: "Favoritos e estado do utilizador" },
-];
+
 
 /* --------------------------------------------------------------- helpers */
 
@@ -172,21 +172,76 @@ function favoriteToItem(favorite: Favorite): FinderItem {
   };
 }
 
-const KIND_ICON: Record<FinderKind, React.ElementType> = {
-  entity: Building2,
-  contract: FileText,
-  document: Landmark,
-  ticker: TrendingUp,
-  index: Database,
-};
+function trademarkToItem(trademark: TrademarkItem): FinderItem {
+  return {
+    id: trademark.doc_id ?? trademark.process_number ?? String(trademark.nord ?? Math.random()),
+    kind: "trademark",
+    name: trademark.mark_name?.trim() || trademark.process_number || "Marca sem nome",
+    subtitle: [trademark.holder_name, trademark.current_phase].filter(Boolean).join(" · "),
+    date: trademark.application_date,
+    raw: trademark,
+  };
+}
 
-const KIND_GRADIENT: Record<FinderKind, string> = {
-  entity: "from-emerald-300 via-emerald-500 to-teal-600",
-  contract: "from-amber-200 via-amber-400 to-orange-500",
-  document: "from-sky-200 via-cyan-400 to-teal-500",
-  ticker: "from-rose-200 via-rose-400 to-pink-600",
-  index: "from-slate-300 via-slate-500 to-slate-700",
-};
+function firmaToItem(firma: FirmaItem): FinderItem {
+  return {
+    id: firma.doc_id ?? firma.nipc ?? firma.nome ?? String(Math.random()),
+    kind: "firma",
+    name: firma.nome?.trim() || "Firma sem nome",
+    subtitle: [firma.nipc, firma.situacao, firma.concelho].filter(Boolean).join(" · "),
+    date: firma.ingested_at,
+    raw: firma,
+  };
+}
+
+function scrapedToItem(item: any): FinderItem {
+  const sourceId = item.source_id ?? item.source ?? "";
+  const name = item.title?.trim() || item.url?.split("/").pop() || "Recolha";
+  return {
+    id: item.item_id ?? item.doc_id ?? item.id ?? item.url ?? name,
+    kind: "scraped",
+    name,
+    subtitle: sourceId ? `${sourceId}${item.url ? " · " + item.url : ""}` : item.url ?? "",
+    date: item.scraped_at ?? item.published ?? item.ingested_at,
+    size: item.word_count ?? (item.text ? item.text.split(/\s+/).length : undefined),
+    raw: item,
+  };
+}
+
+function newsToItem(item: any): FinderItem {
+  return {
+    id: `${item.ticker ?? "news"}-${item.published ?? Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    kind: "news",
+    name: item.title?.trim() || "Notícia",
+    subtitle: [item.publisher, item.ticker].filter(Boolean).join(" · "),
+    date: item.published ?? item.ingested_at,
+    raw: item,
+  };
+}
+
+function priceToItem(ticker: string): FinderItem {
+  return {
+    id: ticker,
+    kind: "price",
+    name: ticker,
+    subtitle: "Série histórica de preços",
+    raw: ticker,
+  };
+}
+
+function crmToItem(record: any, kind: string): FinderItem {
+  return {
+    id: record.id ?? String(Math.random()),
+    kind: "crm",
+    name: record.name ?? record.company_name ?? record.title ?? `Registo ${kind}`,
+    subtitle: [kind, record.stage, record.updated_at?.slice(0, 10)].filter(Boolean).join(" · "),
+    date: record.updated_at ?? record.created_at,
+    value: typeof record.value === "number" ? record.value : undefined,
+    raw: record,
+  };
+}
+
+
 
 /* ----------------------------------------------------------------- página */
 
@@ -260,24 +315,43 @@ export default function FinderPage() {
           next = response.tickers
             .filter((ticker) => !q || ticker.toLowerCase().includes(q.toLowerCase()))
             .map((ticker) => ({ id: ticker, kind: "ticker" as const, name: ticker, subtitle: "Série de preços indexada" }));
+        } else if (target === "trademarks") {
+          const response = await searchTrademarks(q, { size: 80 });
+          next = response.items.map(trademarkToItem);
+        } else if (target === "firmas") {
+          const response = await searchFirmas(q, { size: 80 });
+          next = response.items.map(firmaToItem);
+        } else if (target === "scraped") {
+          const response = await searchScrapedItems(q, { size: 80 });
+          next = response.items.map(scrapedToItem);
+        } else if (target === "news") {
+          const response = await searchElasticGlobal(q || "a", { size: 80 });
+          next = response.items.map(newsToItem);
+        } else if (target === "prices") {
+          const response = await listElasticTickers();
+          next = response.tickers
+            .filter((ticker) => !q || ticker.toLowerCase().includes(q.toLowerCase()))
+            .map(priceToItem);
+        } else if (target === "crm") {
+          const kinds: Array<"accounts" | "contacts" | "deals" | "activities"> = [
+            "accounts",
+            "contacts",
+            "deals",
+            "activities",
+          ];
+          const results = await Promise.all(kinds.map((kind) => searchCrmRecords(kind, q, { size: 50 })));
+          next = results.flatMap((result, index) => result.items.map((record) => crmToItem(record, kinds[index])));
         } else {
-          const [contracts, entities, documents] = await Promise.all([
-            getContractStatus().catch(() => null),
-            getEntityStats().catch(() => null),
-            listRagDocuments().catch(() => []),
-          ]);
-          const counts: Record<string, number | undefined> = {
-            finance_contracts: contracts?.total,
-            finance_entities: entities?.total,
-            finance_documents: documents.length,
-          };
-          next = KNOWN_INDICES.filter((index) => !q || index.label.includes(q)).map((index) => ({
-            id: index.id,
-            kind: "index" as const,
-            name: index.label,
-            subtitle: index.hint,
-            size: counts[index.id],
-          }));
+          const indices = await listElasticIndices().catch(() => ({ indices: [] }));
+          next = indices.indices
+            .filter((index) => !q || index.name.includes(q) || (index.alias ?? "").includes(q))
+            .map((index) => ({
+              id: index.name,
+              kind: "index" as const,
+              name: index.alias && index.alias !== index.name ? index.alias : index.name,
+              subtitle: `Docs: ${typeof index.docs === "number" ? index.docs.toLocaleString("pt-PT") : "—"}`,
+              size: typeof index.docs === "number" ? index.docs : undefined,
+            }));
         }
         setItems(next);
       } catch (caught) {

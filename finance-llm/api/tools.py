@@ -118,6 +118,10 @@ def extract_tickers(text: str) -> List[str]:
         "DO", "THAT", "THIS", "WITH", "FROM", "BY", "ARE", "WAS", "WERE", "BE", "BEEN", "HAVE",
         "HAS", "HAD", "WILL", "WOULD", "COULD", "SHOULD", "CAN", "MAY", "MIGHT", "SO", "IF", "BUT",
         "NOT", "YES", "PREVISÃO", "PRECO", "PREÇO", "AÇÃO", "ACAO", "MERcADO", "FUTURO", "DIAS",
+        # Siglas da plataforma e do domínio: sem isto, «IQ OS» virava o ticker IQ (iQIYI) e a
+        # resposta do chat falava de uma empresa chinesa em vez do IQ OS.
+        "IQ", "IA", "OS", "API", "PDF", "URL", "UI", "UX", "NIF", "NIPC", "CPV", "PIB",
+        "RAG", "CRM", "KPI", "ID", "CEO", "FAQ", "SQL", "HTTP", "JSON", "CSV",
     }
     candidates = [c for c in raw if c not in stopwords_upper]
 

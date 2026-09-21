@@ -7,6 +7,23 @@ export interface Message {
   timestamp: string;
   sources?: Source[];
   tools?: ToolCall[];
+  skill?: SkillRef | null;
+}
+
+/** Skill (método) que o assistente seguiu para responder. */
+export interface SkillRef {
+  id?: string | null;
+  name?: string | null;
+  when?: string | null;
+  steps: string[];
+  checks: string[];
+  tools: string[];
+  uses: number;
+  quality?: string | null;
+  enabled: boolean;
+  created?: boolean;
+  merged?: boolean;
+  mode?: string | null;
 }
 
 export interface Source {
@@ -71,6 +88,8 @@ export interface RagChatRequest {
   temperature?: number;
   doc_id?: string;
   stream?: boolean;
+  /** Fornecedor de IA ("provider:modelo"); vazio = modelo local do RAG. */
+  backend?: string;
 }
 
 export interface RagChatResponse {
@@ -78,6 +97,7 @@ export interface RagChatResponse {
   sources: RagSource[];
   model_used?: string;
   elapsed_seconds?: number;
+  skill?: SkillRef | null;
 }
 
 export interface RagExplainResponse {
@@ -136,6 +156,7 @@ export interface ChatResponse {
   };
   sources: Source[];
   tools: ToolCall[];
+  skill?: SkillRef | null;
 }
 
 export interface YahooSearchResult {
@@ -300,6 +321,38 @@ export interface ElasticSearchPricesResponse {
   points: ElasticSearchPoint[];
   start_date?: string;
   end_date?: string;
+  error?: string;
+}
+
+export interface ElasticIndexItem {
+  name: string;
+  alias?: string;
+  docs?: number;
+  size?: string;
+  health?: string;
+  status?: string;
+}
+
+export interface ElasticIndicesListResponse {
+  indices: ElasticIndexItem[];
+  error?: string;
+}
+
+export interface FirmaSearchResponse {
+  total: number;
+  items: FirmaItem[];
+  query?: string;
+  from_?: number;
+  size?: number;
+  error?: string;
+}
+
+export interface TrademarkSearchResponse {
+  total: number;
+  items: TrademarkItem[];
+  query?: string;
+  from_?: number;
+  size?: number;
   error?: string;
 }
 

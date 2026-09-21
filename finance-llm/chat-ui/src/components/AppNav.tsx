@@ -70,14 +70,19 @@ export type AppView =
   | "search360-projetos"
   | "search360-grafo"
   | "search360-biblioteca"
+  | "hermes"
   | "office"
   | "office-dossies"
   | "email"
+  | "visualizador"
+  | "visualizador-dashboards"
   | "import"
   | "settings"
   | "admin"
   | "cli"
-  | "contracts-list";
+  | "contracts-list"
+  | "contratos-es"
+  | "researcher";
 
 type NavItem = { id: AppView; label: string; icon: React.ReactNode; match?: AppView[]; keywords?: string; adminOnly?: boolean };
 
@@ -112,6 +117,7 @@ const APP_MATCH: Record<string, AppView[]> = {
   scraper: ["scraper-execucoes", "scraper-pesquisa", "scraper-agenda"],
   search360: ["search360-dossie", "search360-projetos", "search360-grafo", "search360-biblioteca"],
   office: ["office-dossies"],
+  visualizador: ["visualizador-dashboards"],
 };
 
 function appItem(app: DockApp): NavItem {

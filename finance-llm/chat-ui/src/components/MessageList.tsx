@@ -88,8 +88,23 @@ function MessageItem({ message }: { message: Message }) {
           )}
         </div>
 
-        {!isUser && (message.sources?.length || message.tools?.length) && (
+        {!isUser && (message.sources?.length || message.tools?.length || message.skill?.name) && (
           <div className="mt-1 flex flex-wrap gap-2">
+            {message.skill?.name && (
+              <span
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-accent text-accent-foreground text-xs border border-border"
+                title={[
+                  `Skill: ${message.skill.name}`,
+                  message.skill.when ? `Quando: ${message.skill.when}` : "",
+                  ...(message.skill.steps ?? []).map((step, index) => `${index + 1}. ${step}`),
+                ]
+                  .filter(Boolean)
+                  .join("\n")}
+              >
+                🧭 {message.skill.name}
+                {message.skill.created ? " · nova" : ""}
+              </span>
+            )}
             {message.tools?.map((tool, i) => (
               <span
                 key={i}

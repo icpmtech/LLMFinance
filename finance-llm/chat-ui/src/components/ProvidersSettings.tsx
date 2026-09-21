@@ -7,8 +7,8 @@
  * Elasticsearch (`finance_provider_keys`) e nunca são devolvidas em claro — a
  * interface só mostra a pista mascarada (`sk-…abcd`).
  */
-import { useState } from "react";
-import { AlertCircle, CheckCircle2, Cpu, ExternalLink, KeyRound, Loader2, PlugZap, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertCircle, CheckCircle2, Cpu, ExternalLink, KeyRound, Loader2, PlugZap, RefreshCw, Server, Trash2 } from "lucide-react";
 import { useProviders, type ProviderInfo } from "../providers";
 
 type Message = { kind: "ok" | "error"; text: string } | null;
@@ -24,11 +24,60 @@ function Badge({ tone, children }: { tone: "ok" | "warn" | "muted" | "info"; chi
 }
 
 function ProviderRow({ provider, onChanged }: { provider: ProviderInfo; onChanged: () => Promise<void> }) {
-  const { saveKey, testProvider, saveDefaults } = useProviders();
+  const { saveKey, testProvider, saveDefaults, listOllamaCloudModels } = useProviders();
   const [key, setKey] = useState("");
   const [model, setModel] = useState(provider.default_model);
-  const [busy, setBusy] = useState<"save" | "test" | "clear" | null>(null);
+  const [url, setUrl] = useState(provider.base_url || "");
+  const [busy, setBusy] = useState<"save" | "test" | "clear" | "list" | null>(null);
   const [message, setMessage] = useState<Message>(null);
+  const ollamaCacheKey = `ollama-cloud-models::${provider.id}`;
+
+  const [ollamaModels, setOllamaModels] = useState<string[]>(() => {
+    try {
+      const cached = localStorage.getItem(ollamaCacheKey);
+      const parsed = cached ? (JSON.parse(cached) as string[]) : [];
+      return parsed.length > 0 ? parsed : provider.models;
+    } catch {
+      return provider.models;
+    }
+  });
+
+  const isOllamaCloud = provider.id === "ollama-cloud";
+
+  useEffect(() => {
+    if (!isOllamaCloud) return;
+    // Só repõe os modelos estáticos se ainda não tivermos uma lista dinâmica em cache.
+    if (ollamaModels.length === 0) {
+      setOllamaModels(provider.models);
+    }
+  }, [isOllamaCloud, provider.models]);
+
+  useEffect(() => {
+    if (!isOllamaCloud) return;
+    try {
+      localStorage.setItem(ollamaCacheKey, JSON.stringify(ollamaModels));
+    } catch {
+      // ignorar falhas de quota do localStorage
+    }
+  }, [isOllamaCloud, ollamaModels]);
+
+  const refreshOllamaModels = async (currentUrl: string, currentKey?: string) => {
+    if (!isOllamaCloud || !currentUrl.trim()) return;
+    setBusy("list");
+    setMessage(null);
+    try {
+      const result = await listOllamaCloudModels(currentUrl.trim(), currentKey?.trim() || undefined);
+      setOllamaModels(result.models);
+      if (result.models.length > 0 && !result.models.includes(model)) {
+        setModel(result.models[0]);
+      }
+      setMessage({ kind: "ok", text: `${result.models.length} modelo(s) encontrado(s) na instância.` });
+    } catch (error) {
+      setMessage({ kind: "error", text: error instanceof Error ? error.message : "Erro ao listar modelos." });
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const run = async (action: "save" | "test" | "clear", fn: () => Promise<unknown>) => {
     setBusy(action);
@@ -45,6 +94,16 @@ function ProviderRow({ provider, onChanged }: { provider: ProviderInfo; onChange
     }
   };
 
+  const canSave = isOllamaCloud
+    ? url.trim().length > 0 || key.trim().length > 0 || model.trim().length > 0
+    : !(busy !== null || (!key.trim() && provider.requires_key && provider.key_source !== "user"));
+
+  const canTest = isOllamaCloud
+    ? url.trim().length > 0 || provider.has_custom_url || provider.configured
+    : !(busy !== null || (!provider.configured && !key.trim()));
+
+  const canList = isOllamaCloud && url.trim().length > 0;
+
   return (
     <li className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -52,7 +111,9 @@ function ProviderRow({ provider, onChanged }: { provider: ProviderInfo; onChange
         {provider.key_source === "user" && <Badge tone="ok">chave própria {provider.key_hint}</Badge>}
         {provider.key_source === "env" && <Badge tone="info">chave do servidor ({provider.env})</Badge>}
         {provider.key_source === "none" && provider.configured && <Badge tone="muted">sem chave necessária</Badge>}
-        {provider.key_source === "none" && !provider.configured && <Badge tone="warn">sem chave</Badge>}
+        {isOllamaCloud && provider.has_custom_url && <Badge tone="info">URL {provider.base_url}</Badge>}
+        {isOllamaCloud && !provider.has_custom_url && <Badge tone="warn">URL por definir</Badge>}
+        {provider.key_source === "none" && !provider.configured && !isOllamaCloud && <Badge tone="warn">sem chave</Badge>}
         {provider.docs_url && (
           <a
             href={provider.docs_url}
@@ -68,13 +129,34 @@ function ProviderRow({ provider, onChanged }: { provider: ProviderInfo; onChange
       {provider.notes && <p className="mt-1 text-[11px] text-muted-foreground">{provider.notes}</p>}
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {isOllamaCloud && (
+          <label className="relative flex min-w-[260px] flex-1 items-center">
+            <Server size={12} className="pointer-events-none absolute left-2 text-muted-foreground" />
+            <input
+              type="url"
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              placeholder="https://ollama.exemplo.com/api (URL da instância)"
+              autoComplete="off"
+              className="w-full rounded-lg border border-white/10 bg-white/[0.04] py-1.5 pl-7 pr-2 text-[11.5px] outline-none transition focus:border-teal-300/40"
+            />
+          </label>
+        )}
         <label className="relative flex min-w-[220px] flex-1 items-center">
           <KeyRound size={12} className="pointer-events-none absolute left-2 text-muted-foreground" />
           <input
             type="password"
             value={key}
             onChange={(event) => setKey(event.target.value)}
-            placeholder={provider.has_user_key ? "substituir chave guardada…" : provider.requires_key ? "cola a chave de API…" : "opcional (Ollama local)"}
+            placeholder={
+              provider.has_user_key
+                ? "substituir chave guardada…"
+                : provider.requires_key
+                  ? "cola a chave de API…"
+                  : isOllamaCloud
+                    ? "chave opcional do Ollama Cloud…"
+                    : "opcional (Ollama local)"
+            }
             autoComplete="off"
             className="w-full rounded-lg border border-white/10 bg-white/[0.04] py-1.5 pl-7 pr-2 text-[11.5px] outline-none transition focus:border-teal-300/40"
           />
@@ -85,24 +167,46 @@ function ProviderRow({ provider, onChanged }: { provider: ProviderInfo; onChange
           className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5 text-[11.5px]"
           title="Modelo deste fornecedor"
         >
-          {provider.models.map((value) => (
+          {(isOllamaCloud ? ollamaModels : provider.models).map((value) => (
             <option key={value} value={value}>
               {value}
             </option>
           ))}
         </select>
+        {isOllamaCloud && (
+          <button
+            type="button"
+            onClick={(event) => {
+              const container = (event.currentTarget as HTMLElement).closest("li");
+              const urlInput = container?.querySelector('input[type="url"]') as HTMLInputElement | null;
+              const keyInput = container?.querySelector('input[type="password"]') as HTMLInputElement | null;
+              void refreshOllamaModels(urlInput?.value || url, keyInput?.value || key);
+            }}
+            disabled={busy !== null || !canList}
+            title="Listar modelos disponíveis na instância Ollama"
+            className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.05] px-2 py-1.5 text-[11.5px] transition hover:bg-white/[0.1] disabled:opacity-40"
+          >
+            {busy === "list" ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Listar
+          </button>
+        )}
         <button
           type="button"
-          onClick={() => void run("save", () => saveKey(provider.id, key))}
-          disabled={busy !== null || (!key.trim() && provider.requires_key && provider.key_source !== "user")}
+          onClick={() =>
+            void run("save", () =>
+              saveKey(provider.id, key, { base_url: url || undefined, default_model: model || undefined }),
+            )
+          }
+          disabled={busy !== null || !canSave}
           className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-1.5 text-[11.5px] transition hover:bg-white/[0.1] disabled:opacity-40"
         >
           {busy === "save" ? <Loader2 size={12} className="animate-spin" /> : <KeyRound size={12} />} Guardar
         </button>
         <button
           type="button"
-          onClick={() => void run("test", () => testProvider(provider.id, model, key.trim() || undefined))}
-          disabled={busy !== null || (!provider.configured && !key.trim())}
+          onClick={() =>
+            void run("test", () => testProvider(provider.id, model, key.trim() || undefined, { base_url: url || undefined }))
+          }
+          disabled={busy !== null || !canTest}
           className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-1.5 text-[11.5px] transition hover:bg-white/[0.1] disabled:opacity-40"
         >
           {busy === "test" ? <Loader2 size={12} className="animate-spin" /> : <PlugZap size={12} />} Testar

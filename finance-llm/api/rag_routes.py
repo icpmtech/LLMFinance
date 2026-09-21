@@ -1,13 +1,15 @@
 """Endpoints FastAPI para RAG: upload de PDFs, chat, documentos e explicação."""
 import asyncio
 import json
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import List
+from typing import Annotated, Any, Dict, List, Optional, Sequence
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
+from api.auth_routes import CurrentSession, optional_session
 from api.models import (
     RagChatRequest,
     RagChatResponse,
@@ -19,6 +21,7 @@ from api.models import (
     RagDocumentsResponse,
     RagExplainResponse,
     RagSource,
+    SkillRef,
     UploadPdfResponse,
 )
 from api.rag_service import get_rag_engine, reset_rag_engine
@@ -30,11 +33,65 @@ from rag.storage.document_store import DocumentEntry
 
 router = APIRouter(prefix="/rag", tags=["rag"])
 
+Session = Annotated[Optional[CurrentSession], Depends(optional_session)]
+
+# System prompt do RAG: a resposta é escrita **só** com o contexto recuperado dos
+# documentos (quando o pedido escolhe um fornecedor de IA cloud).
+RAG_SYSTEM = (
+    "És o assistente do RAG do IQ OS. Respondes em português de Portugal usando **apenas** o contexto "
+    "fornecido (trechos de documentos, com título e página) e citas a fonte no formato [n]. "
+    "Se a resposta não estiver no contexto, dizes que não está nos documentos carregados. Não inventas."
+)
+RAG_CLOUD_MAX_TOKENS = 1024
+
 # Executor para operações de ingestão pesadas (PDF → Markdown, chunks, embeddings, grafo)
 _ingest_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="rag_ingest_")
 
 # Cache simples para grafos: (doc_id, updated_at, top_k) -> dict
 _graph_cache: dict[str, tuple[float, int, dict]] = {}
+
+
+def _to_sources(chunks: Sequence[Dict[str, Any]]) -> List[RagSource]:
+    """Converte chunks do vector store em fontes da resposta."""
+    return [
+        RagSource(
+            chunk_id=str(chunk.get("chunk_id", "")),
+            doc_id=str(chunk.get("doc_id", "")),
+            doc_title=str(chunk.get("doc_title", "")),
+            page=chunk.get("page"),
+            text=str(chunk.get("text", "")),
+            score=chunk.get("score"),
+        )
+        for chunk in chunks
+    ]
+
+
+def _context_prompt(question: str, chunks: Sequence[Dict[str, Any]]) -> str:
+    """Contexto numerado + pergunta (mesmo formato das citações [n])."""
+    context = "\n\n---\n\n".join(
+        f"[{index}] {chunk.get('doc_title', 'Documento')} (página {chunk.get('page', '?')})\n{chunk.get('text', '')}"
+        for index, chunk in enumerate(chunks, start=1)
+    )
+    return f"Contexto:\n{context}\n\nPergunta: {question}"
+
+
+def _cloud_backend(session: Optional[CurrentSession], backend: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Resolve o fornecedor de IA pedido (`None` = responder com o modelo local)."""
+    if not backend:
+        return None
+    from api import ontology_ai as ai  # noqa: PLC0415
+
+    chosen = ai.available_backend(session, backend)
+    if chosen.get("kind") == "cloud":
+        return chosen
+    if chosen.get("kind") == "unavailable":
+        raise HTTPException(
+            status_code=400,
+            detail=str(chosen.get("note") or f"Fornecedor «{backend}» indisponível.")
+            + " Configure em Definições → Fornecedores de IA.",
+        )
+    # Modelo local pedido explicitamente: segue o caminho do motor RAG.
+    return None
 
 
 @router.post("/upload", response_model=UploadPdfResponse)
@@ -265,41 +322,91 @@ def delete_document(doc_id: str):
 
 
 @router.post("/chat", response_model=RagChatResponse)
-async def rag_chat(req: RagChatRequest):
-    """Responde a uma pergunta usando o RAG com contexto dos documentos."""
+async def rag_chat(req: RagChatRequest, session: Session = None):
+    """Responde a uma pergunta usando o RAG com contexto dos documentos.
+
+    Sem `backend`, responde com o modelo local do RAG (BloombergGPT-style), como
+    sempre. Com um fornecedor de IA (`deepseek:deepseek-chat`, `openai:gpt-4o-mini`,
+    …), a mesma recuperação alimenta o modelo cloud, que responde citando `[n]`.
+    """
     engine = get_rag_engine()
-    loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(
-        None,
-        engine.answer,
-        req.question,
-        req.top_k,
-        req.max_new_tokens,
-        req.temperature,
-        True,
-        req.doc_id,
+    started = time.perf_counter()
+    from api import skills_service as skills  # noqa: PLC0415
+
+    skill = await skills.for_request(req.question, session=session, backend=req.backend)
+    chosen = _cloud_backend(session, req.backend)
+    if chosen is None:
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None,
+            engine.answer,
+            req.question,
+            req.top_k,
+            req.max_new_tokens,
+            req.temperature,
+            True,
+            req.doc_id,
+        )
+        skills.finish(skill["id"], question=req.question, tools=["documentos"], mode="rag-local")
+        return RagChatResponse(
+            answer=result["answer"],
+            model_used=result.get("model_used"),
+            elapsed_seconds=result.get("elapsed_seconds") or round(time.perf_counter() - started, 2),
+            skill=SkillRef(**skill["public"]) if skill["public"] else None,
+            sources=[
+                RagSource(
+                    chunk_id=s.get("chunk_id", ""),
+                    doc_id=s.get("doc_id", ""),
+                    doc_title=s.get("doc_title", ""),
+                    page=s.get("page"),
+                    text=s.get("text", ""),
+                    score=s.get("score"),
+                )
+                for s in result["sources"]
+            ],
+        )
+
+    from api import ontology_ai as ai  # noqa: PLC0415
+
+    chunks = await asyncio.to_thread(engine.retrieve, req.question, req.top_k, 0.0, req.doc_id)
+    model_label = f"{chosen['provider']}:{chosen.get('model') or ''}".rstrip(":")
+    skills.finish(skill["id"], question=req.question, tools=["documentos"], mode="rag-cloud")
+    if not chunks:
+        return RagChatResponse(
+            answer="Não encontrei documentos relevantes para a pergunta.",
+            sources=[],
+            model_used=model_label,
+            elapsed_seconds=round(time.perf_counter() - started, 2),
+            skill=SkillRef(**skill["public"]) if skill["public"] else None,
+        )
+    prompt = _context_prompt(req.question, chunks)
+    if skill["block"]:
+        prompt = f"{skill['block']}\n\n{prompt}"
+    answer = await ai.ask_model(
+        chosen,
+        system=RAG_SYSTEM,
+        prompt=prompt,
+        max_tokens=RAG_CLOUD_MAX_TOKENS,
+        temperature=req.temperature,
     )
     return RagChatResponse(
-        answer=result["answer"],
-        model_used=result.get("model_used"),
-        sources=[
-            RagSource(
-                chunk_id=s.get("chunk_id", ""),
-                doc_id=s.get("doc_id", ""),
-                doc_title=s.get("doc_title", ""),
-                page=s.get("page"),
-                text=s.get("text", ""),
-                score=s.get("score"),
-            )
-            for s in result["sources"]
-        ],
+        answer=answer,
+        sources=_to_sources(chunks),
+        model_used=model_label,
+        elapsed_seconds=round(time.perf_counter() - started, 2),
+        skill=SkillRef(**skill["public"]) if skill["public"] else None,
     )
 
 
 @router.post("/chat/stream")
-async def rag_chat_stream(req: RagChatRequest):
-    """Responde via SSE com as sources primeiro e depois os tokens gerados."""
+async def rag_chat_stream(req: RagChatRequest, session: Session = None):
+    """Responde via SSE: skill aplicada, sources e depois os tokens gerados."""
     engine = get_rag_engine()
+    from api import skills_service as skills  # noqa: PLC0415
+
+    skill = await skills.for_request(req.question, session=session, backend=req.backend)
+    skills.finish(skill["id"], question=req.question, tools=["documentos"], mode="rag-stream")
+    chosen = _cloud_backend(session, req.backend)
 
     def event_stream():
         sources_sent = False
@@ -320,10 +427,52 @@ async def rag_chat_stream(req: RagChatRequest):
                 yield f"data: {json.dumps({'token': event['token']}, ensure_ascii=False)}\n\n"
         yield "event: done\ndata: {}\n\n"
 
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-    )
+    if chosen is None:
+        def local_stream():
+            if skill["public"]:
+                yield f"event: skill\ndata: {json.dumps(skill['public'], ensure_ascii=False)}\n\n"
+            yield from event_stream()
+
+        return StreamingResponse(
+            local_stream(),
+            media_type="text/event-stream",
+        )
+
+    from api import cloud_chat  # noqa: PLC0415
+
+    chunks = await asyncio.to_thread(engine.retrieve, req.question, req.top_k, 0.0, req.doc_id)
+    sources_payload = json.dumps([s.model_dump() for s in _to_sources(chunks)], ensure_ascii=False)
+    skill_payload = json.dumps(skill["public"], ensure_ascii=False) if skill["public"] else ""
+
+    async def cloud_stream():
+        if skill_payload:
+            yield f"event: skill\ndata: {skill_payload}\n\n"
+        yield f"event: sources\ndata: {sources_payload}\n\n"
+        if not chunks:
+            yield f"data: {json.dumps({'token': 'Não encontrei documentos relevantes para a pergunta.'}, ensure_ascii=False)}\n\n"
+            yield "event: done\ndata: {}\n\n"
+            return
+        method = f"{skill['block']}\n\n" if skill["block"] else ""
+        messages = [
+            {"role": "system", "content": RAG_SYSTEM},
+            {"role": "user", "content": method + _context_prompt(req.question, chunks)},
+        ]
+        try:
+            async for token in cloud_chat.stream_answer(
+                provider=chosen["provider"],
+                spec=chosen.get("spec") or {},
+                model=chosen.get("model") or "",
+                messages=messages,
+                api_key=chosen.get("api_key"),
+                temperature=req.temperature,
+                max_tokens=RAG_CLOUD_MAX_TOKENS,
+            ):
+                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+        except Exception as exc:  # um erro do fornecedor não pode deixar o SSE em branco
+            yield f"data: {json.dumps({'token': f'[erro do fornecedor: {exc}]'}, ensure_ascii=False)}\n\n"
+        yield "event: done\ndata: {}\n\n"
+
+    return StreamingResponse(cloud_stream(), media_type="text/event-stream")
 
 
 @router.post("/explain", response_model=RagExplainResponse)

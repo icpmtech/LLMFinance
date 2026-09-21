@@ -130,6 +130,19 @@ PROVIDERS: List[Dict[str, Any]] = [
         "notes": "Corre no seu computador — não precisa de chave (a chave é ignorada).",
         "key_optional": True,
     },
+    {
+        "id": "ollama-cloud",
+        "label": "Ollama (cloud)",
+        "kind": "ollama",
+        "base_url": "https://ollama.com",
+        "env": "OLLAMA_CLOUD_API_KEY",
+        "docs_url": "https://ollama.com/",
+        "models": ["qwen2.5:3b", "gemma4:9b", "llama3.2"],
+        "default_model": "qwen2.5:3b",
+        "notes": "Instância Ollama remota por utilizador: URL, modelo e chave opcional.",
+        "key_optional": True,
+        "per_user_url": True,
+    },
 ]
 
 # Modelos locais da plataforma (o backend é o próprio nome).
@@ -189,20 +202,59 @@ def _save_user_config(user_id: str, config: Dict[str, Any]) -> None:
         logger.warning("Não foi possível guardar as chaves do utilizador %s: %s", user_id, error)
 
 
-def save_api_key(user_id: str, provider: str, api_key: Optional[str]) -> Dict[str, Any]:
-    """Guarda (ou remove, com `api_key` vazio) a chave de um fornecedor."""
+def save_api_key(
+    user_id: str,
+    provider: str,
+    api_key: Optional[str] = None,
+    *,
+    base_url: Optional[str] = None,
+    default_model: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Guarda (ou remove) a chave e extras por utilizador de um fornecedor."""
     if provider not in PROVIDERS_BY_ID:
         raise ValueError("Fornecedor desconhecido.")
+    spec = PROVIDERS_BY_ID[provider]
     config = load_user_config(user_id)
     keys = dict(config.get("keys") or {})
+    entry: Dict[str, Any] = dict(keys.get(provider) or {})
+
     value = (api_key or "").strip()
     if value:
-        keys[provider] = {"value": value, "updated_at": _now()}
+        entry["value"] = value
+    elif api_key is not None:
+        entry.pop("value", None)
+
+    url = (base_url or "").strip().rstrip("/")
+    if spec.get("per_user_url"):
+        if url:
+            entry["base_url"] = url
+        elif base_url is not None:
+            entry.pop("base_url", None)
+
+    model = (default_model or "").strip()
+    if model:
+        entry["default_model"] = model
+    elif default_model is not None:
+        entry.pop("default_model", None)
+
+    if entry:
+        entry["updated_at"] = _now()
+        keys[provider] = entry
     else:
         keys.pop(provider, None)
+
     config["keys"] = keys
     _save_user_config(user_id, config)
     return config
+
+
+def _user_provider_state(user_id: Optional[str], provider: str) -> Dict[str, Any]:
+    """Devolve a configuração por utilizador para um fornecedor."""
+    if not user_id:
+        return {}
+    config = load_user_config(user_id)
+    entry = (config.get("keys") or {}).get(provider) or {}
+    return entry if isinstance(entry, dict) else {}
 
 
 def save_defaults(user_id: str, defaults: Dict[str, Any]) -> Dict[str, Any]:
@@ -240,6 +292,26 @@ def resolve_key(user_id: Optional[str], provider: str) -> tuple[Optional[str], s
     return None, "none"
 
 
+def resolve_provider_url(user_id: Optional[str], provider: str) -> Optional[str]:
+    """URL personalizada do fornecedor (para fornecedores per_user_url)."""
+    spec = PROVIDERS_BY_ID.get(provider)
+    if not spec:
+        return None
+    state = _user_provider_state(user_id, provider)
+    url = (state.get("base_url") or "").strip().rstrip("/")
+    return url or spec.get("base_url")
+
+
+def resolve_provider_model(user_id: Optional[str], provider: str) -> Optional[str]:
+    """Modelo predefinido personalizado do fornecedor."""
+    spec = PROVIDERS_BY_ID.get(provider)
+    if not spec:
+        return None
+    state = _user_provider_state(user_id, provider)
+    model = (state.get("default_model") or "").strip()
+    return model or spec.get("default_model")
+
+
 def mask_key(value: Optional[str]) -> str:
     """Pista de uma chave (nunca a chave completa)."""
     if not value:
@@ -272,16 +344,30 @@ def provider_catalog(user_id: Optional[str] = None) -> Dict[str, Any]:
     for spec in PROVIDERS:
         value, source = resolve_key(user_id, spec["id"])
         requires_key = not spec.get("key_optional")
+        user_state = _user_provider_state(user_id, spec["id"])
+        custom_url = (user_state.get("base_url") or "").strip().rstrip("/")
+        custom_model = user_state.get("default_model")
+        default_model = (custom_model or spec.get("default_model") or "").strip()
+        configured = bool(value) or not requires_key
+        if spec.get("per_user_url"):
+            # URL é obrigatória e personalizada; sem URL personalizada não está configurado.
+            configured = configured and bool(custom_url)
+            public_url = custom_url or None
+        else:
+            public_url = (custom_url or spec.get("base_url") or "").rstrip("/")
         items.append(
             {
                 **{key: value for key, value in spec.items() if key != "models"},
                 "models": list(spec["models"]),
-                "default_model": spec["default_model"],
+                "default_model": default_model,
+                "base_url": public_url,
                 "requires_key": requires_key,
-                "configured": bool(value) or not requires_key,
+                "configured": configured,
                 "key_source": source,
                 "key_hint": mask_key(value) if source == "user" else "",
-                "has_user_key": bool(((saved_keys.get(spec["id"]) or {}) if isinstance(saved_keys.get(spec["id"]), dict) else {}).get("value")),
+                "has_user_key": bool(user_state.get("value")),
+                "has_custom_url": bool(custom_url),
+                "has_custom_model": bool(custom_model),
                 "id_prefix": f"{spec['id']}:",
             }
         )
@@ -312,10 +398,18 @@ def parse_backend(backend: str) -> Dict[str, Any]:
     spec = PROVIDERS_BY_ID.get(provider_id)
     if not spec:
         return {"kind": "local", "backend": value, "provider": None, "model": None, "error": f"Fornecedor desconhecido: {provider_id}"}
+
+    # Modelos Ollama podem conter ':' (ex: qwen2.5:3b). Separa apenas no primeiro ':'.
+    raw_model = (model or spec.get("default_model") or "").strip()
+    if provider_id == "ollama-cloud" and ":" in raw_model:
+        # Se o backend já veio como 'ollama-cloud:qwen2.5:3b', o model contém ':' extra.
+        # O split no primeiro ':' deu provider='ollama-cloud', model='qwen2.5:3b'.
+        pass
+    resolved_model = raw_model
     return {
         "kind": "cloud",
         "backend": value,
         "provider": provider_id,
-        "model": (model or spec.get("default_model") or "").strip(),
+        "model": resolved_model,
         "spec": spec,
     }

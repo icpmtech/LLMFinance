@@ -9,7 +9,20 @@ import { API_BASE } from "./api";
 
 export type SentimentEngineId = "lexicon" | "neural" | "auto";
 
-export type SentimentOrigin = "scraped" | "news" | "dossier" | "office" | "text";
+export type SentimentOrigin = string;
+
+/** Fonte do sistema analisável (com quantos documentos tem disponíveis). */
+export type SentimentSource = {
+  id: string;
+  label: string;
+  group: string;
+  hint?: string;
+  session?: boolean;
+  needs?: string;
+  available: number;
+  blocked: boolean;
+  blocked_reason?: string | null;
+};
 
 export type SentimentRow = {
   id: string;
@@ -34,6 +47,12 @@ export type SentimentSummary = {
   model: string | null;
   generated_at: string;
   mean_polarity: number;
+  /** Média ponderada apenas dos documentos com termos de sentimento. */
+  mean_polarity_signal?: number;
+  reported_mean?: number;
+  documents_with_signal?: number;
+  documents_without_signal?: number;
+  coverage?: number;
   median_polarity?: number;
   std_polarity?: number;
   ci95?: [number, number];
@@ -52,6 +71,7 @@ export type SentimentAnalysis = {
   rows: SentimentRow[];
   by_source: { source: string; documents: number; polarity: number; label: string; std: number }[];
   by_day: { day: string; documents: number; polarity: number }[];
+  by_tag: { tag: string; documents: number; polarity: number; label: string }[];
   terms: { term: string; count: number; weight: number; polarity: string }[];
   keywords: { term: string; score: number }[];
   distribution: { label: string; count: number }[];
@@ -77,6 +97,8 @@ export type CorpusRequest = {
   sourceId?: string;
   dossierId?: string;
   documentId?: string;
+  accountId?: string;
+  folder?: string;
   limit?: number;
   engine?: SentimentEngineId;
   title?: string;
@@ -109,6 +131,8 @@ function corpusBody(request_: CorpusRequest) {
     source_id: request_.sourceId || undefined,
     dossier_id: request_.dossierId || undefined,
     document_id: request_.documentId || undefined,
+    account_id: request_.accountId || undefined,
+    folder: request_.folder || undefined,
     limit: request_.limit ?? 60,
     engine: request_.engine ?? "lexicon",
     title: request_.title || undefined,
@@ -118,6 +142,13 @@ function corpusBody(request_: CorpusRequest) {
 
 export function getSentimentMeta() {
   return request<SentimentMeta>("/sentiment/meta");
+}
+
+/** Fontes do sistema disponíveis para análise (com contagem de documentos). */
+export function listSentimentSources() {
+  return request<{ total: number; items: SentimentSource[]; accounts: { id: string; label?: string; address?: string }[] }>(
+    "/sentiment/sources",
+  );
 }
 
 export function analyzeSentimentText(payload: { text: string; title?: string; engine?: SentimentEngineId }) {

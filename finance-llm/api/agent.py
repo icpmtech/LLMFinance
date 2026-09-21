@@ -3,6 +3,7 @@ import asyncio
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from api import cloud_chat, events_service as events, providers_service as providers
@@ -386,7 +387,7 @@ def _fallback_answer(
     )
 
 
-def _context_prompt(context: Dict, question: str) -> str:
+def _context_prompt(context: Dict, question: str, skill_block: str = "") -> str:
     """Instruções + dados recolhidos, para fornecedores externos responderem com contexto."""
     blocks: List[str] = [
         "És o assistente financeiro do IQ OS (plataforma portuguesa de mercados, contratos públicos "
@@ -394,6 +395,8 @@ def _context_prompt(context: Dict, question: str) -> str:
         "fundamentada, usando os dados fornecidos abaixo quando forem relevantes. Se não houver "
         "dados suficientes, di-lo com clareza em vez de inventar números.",
     ]
+    if skill_block:
+        blocks.append(skill_block)
     if context.get("sources"):
         lines = []
         for source in context["sources"]:
@@ -417,6 +420,7 @@ def _cloud_request(
     *,
     user_id: Optional[str] = None,
     user_email: Optional[str] = None,
+    skill_block: str = "",
 ) -> Dict[str, Any]:
     """Prepara o pedido a um fornecedor externo (contexto + chave resolvida)."""
     parsed = providers.parse_backend(backend)
@@ -437,7 +441,7 @@ def _cloud_request(
     context = build_context(question)
 
     # O contexto financeiro vai no `system`; a conversa mantém-se como veio do chat.
-    system = _context_prompt(context, question)
+    system = _context_prompt(context, question, skill_block)
     conversation: List[Dict[str, str]] = []
     for message in messages:
         role = "assistant" if getattr(message, "role", "user") == "assistant" else "user"
@@ -456,12 +460,21 @@ def _cloud_request(
     }
 
 
-def run_chat(messages: List[ChatMessage], backend: str = "gpt2", *, user_id: Optional[str] = None, user_email: Optional[str] = None) -> Dict:
+def run_chat(
+    messages: List[ChatMessage],
+    backend: str = "gpt2",
+    *,
+    user_id: Optional[str] = None,
+    user_email: Optional[str] = None,
+    skill_block: str = "",
+) -> Dict:
     """Executa o agente síncrono e devolve resposta completa."""
     parsed = providers.parse_backend(backend)
     if parsed["kind"] == "cloud":
         try:
-            request = _cloud_request(messages, backend, user_id=user_id, user_email=user_email)
+            request = _cloud_request(
+                messages, backend, user_id=user_id, user_email=user_email, skill_block=skill_block
+            )
         except cloud_chat.CloudError as error:
             events.log_event(
                 "warning",
@@ -530,6 +543,8 @@ async def stream_chat(
     *,
     user_id: Optional[str] = None,
     user_email: Optional[str] = None,
+    skill_block: str = "",
+    skill: Optional[Dict[str, Any]] = None,
 ) -> AsyncIterator[str]:
     """Gera a resposta token a token.
 
@@ -545,7 +560,9 @@ async def stream_chat(
     if parsed["kind"] == "cloud":
         yield "event: status\ndata: " + json.dumps({"status": "busy", "detail": "A contactar o fornecedor…"}) + "\n\n"
         try:
-            request = _cloud_request(messages, backend, user_id=user_id, user_email=user_email)
+            request = _cloud_request(
+                messages, backend, user_id=user_id, user_email=user_email, skill_block=skill_block
+            )
         except cloud_chat.CloudError as error:
             yield "event: error\ndata: " + json.dumps({"message": error.message}) + "\n\n"
             text = f"⚠️ {error.message}"
@@ -597,6 +614,7 @@ async def stream_chat(
             {
                 "sources": [source.model_dump() for source in request["context"]["sources"]],
                 "tools": [tool.model_dump() for tool in request["context"]["tools"]],
+                "skill": skill,
             }
         ) + "\n\n"
         return
@@ -604,7 +622,7 @@ async def stream_chat(
     yield "event: status\ndata: " + json.dumps({"status": "busy", "detail": "A recolher dados financeiros..."}) + "\n\n"
 
     loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(_executor, run_chat, messages, backend)
+    result = await loop.run_in_executor(_executor, partial(run_chat, messages, backend, skill_block=skill_block))
     text = result["message"].content
 
     yield "event: meta\ndata: " + json.dumps({"model": f"finance-llm-{backend}", "tickers": text}) + "\n\n"
@@ -614,4 +632,4 @@ async def stream_chat(
             yield f"data: {json.dumps({'token': token})}\n\n"
         await asyncio.sleep(0.005)
 
-    yield "event: done\ndata: " + json.dumps({"sources": [s.model_dump() for s in result["sources"]], "tools": [t.model_dump() for t in result["tools"]]}) + "\n\n"
+    yield "event: done\ndata: " + json.dumps({"sources": [s.model_dump() for s in result["sources"]], "tools": [t.model_dump() for t in result["tools"]], "skill": skill}) + "\n\n"

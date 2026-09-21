@@ -12,14 +12,50 @@
 import { useCallback, useSyncExternalStore } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
+  BadgeCheck,
+  Briefcase,
   Building2,
   Clock,
   Database,
   FileText,
   FolderHeart,
+  Globe,
   Landmark,
+  LayoutList,
+  Newspaper,
+  Tag,
   TrendingUp,
 } from "lucide-react";
+
+/** Ícones por tipo de «ficheiro» do Finder. */
+export const KIND_ICON: Record<FinderKind, LucideIcon> = {
+  entity: Building2,
+  contract: FileText,
+  document: Landmark,
+  scraped: Globe,
+  ticker: TrendingUp,
+  index: LayoutList,
+  news: Newspaper,
+  price: Database,
+  trademark: BadgeCheck,
+  firma: Tag,
+  crm: Briefcase,
+};
+
+/** Gradientes por tipo (mesmas famílias das localizações). */
+export const KIND_GRADIENT: Record<FinderKind, string> = {
+  entity: "from-emerald-300 via-emerald-500 to-teal-600",
+  contract: "from-amber-200 via-amber-400 to-orange-500",
+  document: "from-sky-200 via-cyan-400 to-teal-500",
+  scraped: "from-lime-200 via-lime-400 to-green-600",
+  ticker: "from-rose-200 via-rose-400 to-pink-600",
+  index: "from-slate-300 via-slate-500 to-slate-700",
+  news: "from-orange-200 via-orange-400 to-amber-500",
+  price: "from-violet-200 via-violet-400 to-purple-600",
+  trademark: "from-pink-200 via-pink-400 to-fuchsia-600",
+  firma: "from-cyan-200 via-cyan-400 to-blue-500",
+  crm: "from-indigo-200 via-indigo-400 to-indigo-600",
+};
 
 export type FinderView = "icons" | "list" | "columns" | "gallery";
 export type FinderSort = "name" | "kind" | "date" | "size";
@@ -30,8 +66,14 @@ export type FinderLocationId =
   | "entities"
   | "contracts"
   | "documents"
+  | "scraped"
   | "tickers"
-  | "indices";
+  | "indices"
+  | "trademarks"
+  | "firmas"
+  | "news"
+  | "prices"
+  | "crm";
 
 export type FinderLocation = {
   id: FinderLocationId;
@@ -48,8 +90,14 @@ export const FINDER_LOCATIONS: FinderLocation[] = [
   { id: "entities", label: "Entidades", hint: "Diretório de empresas", icon: Building2, gradient: "from-emerald-300 via-emerald-500 to-teal-600" },
   { id: "contracts", label: "Contratos", hint: "Contratação pública", icon: FileText, gradient: "from-amber-200 via-amber-400 to-orange-500" },
   { id: "documents", label: "Documentos", hint: "PDF indexados no RAG", icon: Landmark, gradient: "from-sky-200 via-cyan-400 to-teal-500" },
+  { id: "scraped", label: "Objectos da recolha", hint: "Itens recolhidos pelo scraper", icon: Globe, gradient: "from-lime-200 via-lime-400 to-green-600" },
   { id: "tickers", label: "Mercados", hint: "Tickers indexados", icon: TrendingUp, gradient: "from-rose-200 via-rose-400 to-pink-600" },
-  { id: "indices", label: "Índices", hint: "Índices do Elasticsearch", icon: Database, gradient: "from-slate-300 via-slate-500 to-slate-700" },
+  { id: "news", label: "Notícias", hint: "Notícias por ticker", icon: Newspaper, gradient: "from-orange-200 via-orange-400 to-amber-500" },
+  { id: "prices", label: "Preços", hint: "Séries de preços indexadas", icon: Database, gradient: "from-violet-200 via-violet-400 to-purple-600" },
+  { id: "trademarks", label: "Marcas", hint: "Marcas do INPI", icon: BadgeCheck, gradient: "from-pink-200 via-pink-400 to-fuchsia-600" },
+  { id: "firmas", label: "Firmas", hint: "Nomes comerciais do RNPC", icon: Tag, gradient: "from-cyan-200 via-cyan-400 to-blue-500" },
+  { id: "crm", label: "CRM", hint: "Contas, contactos, oportunidades e atividades", icon: Briefcase, gradient: "from-indigo-200 via-indigo-400 to-indigo-600" },
+  { id: "indices", label: "Índices", hint: "Índices do Elasticsearch", icon: LayoutList, gradient: "from-slate-300 via-slate-500 to-slate-700" },
 ];
 
 export function finderLocation(id: FinderLocationId): FinderLocation {
@@ -57,14 +105,31 @@ export function finderLocation(id: FinderLocationId): FinderLocation {
 }
 
 /** Tipo de «ficheiro» do Finder. */
-export type FinderKind = "entity" | "contract" | "document" | "ticker" | "index";
+export type FinderKind =
+  | "entity"
+  | "contract"
+  | "document"
+  | "scraped"
+  | "ticker"
+  | "index"
+  | "news"
+  | "price"
+  | "trademark"
+  | "firma"
+  | "crm";
 
 export const KIND_LABEL: Record<FinderKind, string> = {
   entity: "Entidade",
   contract: "Contrato",
   document: "Documento",
+  scraped: "Recolha",
   ticker: "Ticker",
   index: "Índice",
+  news: "Notícia",
+  price: "Preço",
+  trademark: "Marca",
+  firma: "Firma",
+  crm: "CRM",
 };
 
 export type FinderItem = {
@@ -234,7 +299,12 @@ export function appHref(item: FinderItem): string {
   if (item.kind === "entity") return `/companies/${encodeURIComponent(item.id)}`;
   if (item.kind === "contract") return "/empresas-iq";
   if (item.kind === "document") return "/rag";
+  if (item.kind === "scraped") return `/scraper?source=${encodeURIComponent(item.id)}`;
   if (item.kind === "ticker") return `/tickers/${encodeURIComponent(item.id)}`;
+  if (item.kind === "news") return `/tickers/${encodeURIComponent(item.id)}`;
+  if (item.kind === "price") return `/tickers/${encodeURIComponent(item.id)}`;
+  if (item.kind === "trademark" || item.kind === "firma") return `/companies/${encodeURIComponent(item.id)}`;
+  if (item.kind === "crm") return `/crm`;
   return "/elastic";
 }
 

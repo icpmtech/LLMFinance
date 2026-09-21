@@ -8,10 +8,16 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { API_BASE } from "./api";
 
+export type OllamaModelInfo = {
+  name: string;
+  size?: number;
+  digest?: string;
+};
+
 export type ProviderInfo = {
   id: string;
   label: string;
-  kind: "local" | "openai" | "anthropic" | "google";
+  kind: "local" | "openai" | "anthropic" | "google" | "ollama";
   base_url?: string;
   env?: string;
   docs_url?: string;
@@ -23,7 +29,10 @@ export type ProviderInfo = {
   key_source: "user" | "env" | "local" | "none";
   key_hint: string;
   has_user_key?: boolean;
+  has_custom_url?: boolean;
+  has_custom_model?: boolean;
   key_optional?: boolean;
+  per_user_url?: boolean;
   id_prefix: string;
 };
 
@@ -101,15 +110,23 @@ export function useProviders() {
     if (!loaded) void refreshProviders().catch(() => undefined);
   }, []);
 
-  const saveKey = useCallback(async (provider: string, apiKey: string) => {
-    const next = await request<ProvidersCatalog>("/providers/keys", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider, api_key: apiKey }),
-    });
-    commit(next);
-    return next;
-  }, []);
+  const saveKey = useCallback(
+    async (provider: string, apiKey: string, options?: { base_url?: string; default_model?: string }) => {
+      const next = await request<ProvidersCatalog>("/providers/keys", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider,
+          api_key: apiKey,
+          base_url: options?.base_url,
+          default_model: options?.default_model,
+        }),
+      });
+      commit(next);
+      return next;
+    },
+    [],
+  );
 
   const saveDefaults = useCallback(async (defaults: { provider?: string; model?: string }) => {
     await request("/providers/defaults", {
@@ -120,17 +137,43 @@ export function useProviders() {
     await refreshProviders();
   }, []);
 
-  const testProvider = useCallback(async (provider: string, model?: string, apiKey?: string) => {
-    return request<{ ok: boolean; message: string; provider: string; model: string }>("/providers/test", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider, model, api_key: apiKey || undefined }),
-    });
-  }, []);
+  const testProvider = useCallback(
+    async (provider: string, model?: string, apiKey?: string, options?: { base_url?: string }) => {
+      return request<{ ok: boolean; message: string; provider: string; model: string }>("/providers/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider,
+          model,
+          api_key: apiKey || undefined,
+          base_url: options?.base_url,
+        }),
+      });
+    },
+    [],
+  );
 
   const chatModels = useCallback(async () => request<{ options: ChatModelOption[]; defaults: { provider?: string; model?: string } }>("/providers/chat-models"), []);
 
-  return { catalog, providers: catalog.providers, defaults: catalog.defaults, loading, refresh: refreshProviders, saveKey, saveDefaults, testProvider, chatModels };
+  const listOllamaCloudModels = useCallback(async (url: string, apiKey?: string) => {
+    const params = new URLSearchParams();
+    params.set("url", url);
+    if (apiKey) params.set("api_key", apiKey);
+    return request<{ url: string; models: string[] }>(`/providers/ollama-cloud/models?${params.toString()}`);
+  }, []);
+
+  return {
+    catalog,
+    providers: catalog.providers,
+    defaults: catalog.defaults,
+    loading,
+    refresh: refreshProviders,
+    saveKey,
+    saveDefaults,
+    testProvider,
+    chatModels,
+    listOllamaCloudModels,
+  };
 }
 
 /** Opções do selector do chat, agrupadas (locais + cloud). */
@@ -148,7 +191,7 @@ export function buildChatOptions(catalog: ProvidersCatalog): ChatModelOption[] {
       });
       continue;
     }
-    const group = provider.id === "ollama" ? "Local (Ollama)" : "Fornecedores cloud";
+    const group = provider.id === "ollama" ? "Local (Ollama)" : provider.id === "ollama-cloud" ? "Ollama Cloud" : "Fornecedores cloud";
     for (const model of provider.models) {
       options.push({
         id: `${provider.id}:${model}`,
@@ -162,8 +205,12 @@ export function buildChatOptions(catalog: ProvidersCatalog): ChatModelOption[] {
             ? "chave do servidor"
             : provider.key_source === "user"
               ? `chave ${provider.key_hint}`
-              : undefined
-          : "configure em Definições → Fornecedores de IA",
+              : provider.id === "ollama-cloud"
+                ? `URL ${provider.base_url}`
+                : undefined
+          : provider.id === "ollama-cloud"
+            ? "configure URL e modelo em Definições → Fornecedores de IA"
+            : "configure em Definições → Fornecedores de IA",
       });
     }
   }

@@ -1,13 +1,13 @@
 import { API_BASE } from "./api";
 import { parseSSELine } from "./parseSSELine";
-import type { Message, ModelBackend, ChatRequest } from "./types";
+import type { Message, ModelBackend, ChatRequest, SkillRef } from "./types";
 
 
 export function streamChat(
     messages: Message[],
     backend: ModelBackend,
     onToken: (token: string) => void,
-    onDone: (sources: Message["sources"], tools: Message["tools"]) => void,
+    onDone: (sources: Message["sources"], tools: Message["tools"], skill?: SkillRef | null) => void,
     onError: (err: Error) => void
 ) {
     const body: ChatRequest = {
