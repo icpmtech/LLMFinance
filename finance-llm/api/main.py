@@ -79,6 +79,8 @@ from api.models import (
     EntityIngestRequest,
     EntityIngestResponse,
     EntityItem,
+    EntityRoleSummaryRequest,
+    EntityRoleSummaryResponse,
     EntitySearchRequest,
     EntitySearchResponse,
     EntityStatsResponse,
@@ -163,6 +165,7 @@ from api.elasticsearch_client import (
     search_all_tickers,
     search_companies,
     get_company_analytics,
+    get_entity_role_summary,
     search_contracts,
     search_entities,
     search_firmas,
@@ -219,6 +222,7 @@ from api.email_routes import router as email_router
 from api.visualizador_routes import router as visualizador_router
 from api.researcher_routes import router as researcher_router
 from api.vector_routes import router as vector_router
+from api.agent_routes import router as agent_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -359,6 +363,7 @@ app.include_router(email_router)
 app.include_router(visualizador_router)
 app.include_router(researcher_router)
 app.include_router(vector_router)
+app.include_router(agent_router)
 
 
 # Cache curta de `user_id → email`, para o registo de pedidos identificar quem
@@ -473,6 +478,30 @@ def companies_search(req: CompanySearchRequest):
         unique_adjudicantes=res.get("unique_adjudicantes", 0),
         unique_adjudicatarios=res.get("unique_adjudicatarios", 0),
     )
+
+
+@app.post("/companies/role-summary", response_model=EntityRoleSummaryResponse)
+def companies_role_summary(req: EntityRoleSummaryRequest):
+    """Dashboard agregado por papel: adjudicantes, adjudicatários ou ambos.
+
+    Devolve, numa única chamada, os indicadores de volume/valor, a distribuição
+    por ano, NUTS, CPV, procedimento e tipo de contrato, as contrapartes mais
+    frequentes, o ranking de entidades e a concentração de mercado — tudo o que
+    as páginas de dashboard e de comparação de entidades consomem.
+    """
+    res = get_entity_role_summary(
+        role=req.role,
+        q=req.q,
+        year=req.year,
+        region=req.region,
+        min_value=req.min_value,
+        max_value=req.max_value,
+        min_contracts=req.min_contracts,
+        top_n=req.top_n,
+    )
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res.get("error"))
+    return EntityRoleSummaryResponse(**res)
 
 
 # Catch-all da SPA para sub-rotas de /companies devem ser registradas ANTES

@@ -221,15 +221,16 @@ def login(payload: LoginRequest, request: Request):
     try:
         user = auth.authenticate(payload.email, payload.password)
         ttl = auth.SESSION_TTL_REMEMBER if payload.remember else auth.SESSION_TTL_DEFAULT
+        user_id = str(user.get("id") or user.get("email") or "")
         session = auth.create_session(user, ttl=ttl, **_client_info(request))
-        auth.record_login(str(user["id"]))
-        refreshed = auth.get_user_by_id(str(user["id"])) or user
+        auth.record_login(user_id)
+        refreshed = auth.get_user_by_id(user_id) or user
         events.log_event(
             "warning",
             "auth",
             f"Início de sessão: {auth.public_user(refreshed).get('email')}",
             request=request,
-            user_id=str(user["id"]),
+            user_id=user_id,
             user_email=auth.public_user(refreshed).get("email"),
             data={"remember": bool(payload.remember), "session_id": session.get("session_id")},
         )

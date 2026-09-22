@@ -14,6 +14,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   BookOpen,
+  Bot,
   Boxes,
   Briefcase,
   Building2,
@@ -33,6 +34,7 @@ import {
   MessageSquare,
   Network,
   Play,
+  Plus,
   Search,
   Settings,
   ShieldCheck,
@@ -45,6 +47,7 @@ import {
   Users,
   Microscope,
 } from "lucide-react";
+import { iframeDockApps, subscribeIframePages } from "./iframePages";
 
 export type DockPosition = "bottom" | "left" | "right";
 
@@ -287,6 +290,38 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "16,185,129",
   },
   {
+    id: "entities-dashboard",
+    label: "Empresas · Dashboard",
+    hint: "Indicadores de empresas que contratam e são contratadas",
+    icon: Building2,
+    gradient: "from-emerald-200 via-teal-400 to-cyan-600",
+    accent: "16,185,129",
+  },
+  {
+    id: "entities-adjudicantes",
+    label: "Adjudicantes",
+    hint: "Dashboard das entidades que adjudicam contratos",
+    icon: Landmark,
+    gradient: "from-sky-200 via-blue-500 to-indigo-600",
+    accent: "59,130,246",
+  },
+  {
+    id: "entities-adjudicatarios",
+    label: "Adjudicatários",
+    hint: "Dashboard das entidades fornecedoras e adjudicatárias",
+    icon: Briefcase,
+    gradient: "from-amber-200 via-orange-400 to-rose-500",
+    accent: "245,158,11",
+  },
+  {
+    id: "entities-compare",
+    label: "Comparar entidades",
+    hint: "Comparar empresas, adjudicantes e adjudicatários lado a lado",
+    icon: GitCompare,
+    gradient: "from-violet-300 via-indigo-500 to-blue-600",
+    accent: "129,140,248",
+  },
+  {
     id: "tickers",
     label: "Mercados",
     hint: "Tickers e ações",
@@ -325,6 +360,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: Microscope,
     gradient: "from-rose-200 via-pink-500 to-purple-700",
     accent: "236,72,153",
+  },
+  {
+    id: "agents",
+    label: "Agentes",
+    hint: "Criar e executar agentes dinâmicos com LangGraph",
+    icon: Bot,
+    gradient: "from-violet-200 via-fuchsia-500 to-pink-600",
+    accent: "217,70,239",
   },
   {
     id: "rag",
@@ -480,15 +523,40 @@ export const DEFAULT_DOCK_PREFS: DockPrefs = {
   version: ORDER_VERSION,
 };
 
-const CATALOG_IDS = DOCK_CATALOG.map((app) => app.id);
+/**
+ * Configuração virtual do catálogo do dock: aplicações do sistema + páginas
+ * iframe configuradas pelo utilizador. Não é uma constante exportada para evitar
+ * que entradas dinâmicas fiquem desligadas após a validação do sanitize().
+ */
+function allDockApps(): DockApp[] {
+  return [...DOCK_CATALOG, ...iframeDockApps()];
+}
 
+function allCatalogIds(): string[] {
+  return allDockApps().map((app) => app.id);
+}
+
+/** Limita um número ao intervalo indicado. */
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+/** Lê um número das preferências do dock, com valor por omissão e limites. */
 function asNumber(value: unknown, fallback: number, min: number, max: number) {
   return typeof value === "number" && Number.isFinite(value) ? clamp(value, min, max) : fallback;
 }
+
+const CATALOG_IDS = allCatalogIds();
+
+/** Aplicação para abrir a página de configuração de iframes. */
+export const IFRAME_PAGES_APP: DockApp = {
+  id: "iframe-pages",
+  label: "Páginas iframe",
+  hint: "Adicionar e configurar páginas externas",
+  icon: Plus,
+  gradient: "from-violet-300 via-purple-500 to-indigo-600",
+  accent: "139,92,246",
+};
 
 function asIds(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -496,7 +564,7 @@ function asIds(value: unknown): string[] {
   const ids: string[] = [];
   for (const entry of value) {
     if (typeof entry !== "string") continue;
-    if (!CATALOG_IDS.includes(entry) || seen.has(entry)) continue;
+    if (!allCatalogIds().includes(entry) || seen.has(entry)) continue;
     seen.add(entry);
     ids.push(entry);
   }
@@ -648,14 +716,16 @@ export function useDock() {
   const prefs = useSyncExternalStore(subscribe, getDockPrefs, getDockPrefs);
 
   const visible = useMemo(
-    () => prefs.items.map((id) => DOCK_CATALOG.find((app) => app.id === id)).filter((app): app is DockApp => Boolean(app)),
+    () => prefs.items.map((id) => allDockApps().find((app) => app.id === id)).filter((app): app is DockApp => Boolean(app)),
     [prefs.items]
   );
 
   const parked = useMemo(
-    () => prefs.parked.map((id) => DOCK_CATALOG.find((app) => app.id === id)).filter((app): app is DockApp => Boolean(app)),
+    () => prefs.parked.map((id) => allDockApps().find((app) => app.id === id)).filter((app): app is DockApp => Boolean(app)),
     [prefs.parked]
   );
+
+  const iframe = useMemo(() => iframeDockApps(), []);
 
   const set = useCallback((patch: Partial<DockPrefs>) => updateDockPrefs(patch), []);
 
@@ -664,11 +734,19 @@ export function useDock() {
   const unpark = useCallback((id: string, index?: number) => unparkDockItem(id, index), []);
   const reset = useCallback(() => resetDockPrefs(), []);
 
-  return { prefs, visible, parked, set, move, park, unpark, reset };
+  return { prefs, visible, parked, iframe, set, move, park, unpark, reset };
 }
 
 export function dockApp(id: string): DockApp | undefined {
-  return DOCK_CATALOG.find((app) => app.id === id);
+  if (id === "iframe-pages") return IFRAME_PAGES_APP;
+  return allDockApps().find((app) => app.id === id);
+}
+
+/** Subscreve tanto às preferências do dock como às páginas iframe dinâmicas. */
+export function useDockWithIframes() {
+  const dock = useDock();
+  useSyncExternalStore(subscribeIframePages, () => true, () => true);
+  return dock;
 }
 
 /**

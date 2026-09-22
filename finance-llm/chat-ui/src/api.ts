@@ -39,6 +39,8 @@ import type {
   EntityIngestResponse,
   EntitySearchRequest,
   EntitySearchResponse,
+  EntityRoleSummaryRequest,
+  EntityRoleSummaryResponse,
   EntityStats,
   Financials,
   FirmaSearchResponse,
@@ -1041,6 +1043,33 @@ export async function getCompanyAnalytics(
   if (year !== undefined) params.append("year", String(year));
   const res = await fetch(`${API_BASE}/companies/${encodeURIComponent(nif)}/analytics?${params}`);
   if (!res.ok) throw new Error(`Erro ao obter analytics da empresa: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Dashboard agregado por papel (adjudicantes, adjudicatários ou empresas).
+ *
+ * Devolve indicadores de volume/valor, distribuições (ano, NUTS, CPV,
+ * procedimento, tipo de contrato), contrapartes, ranking e concentração.
+ */
+export async function getEntityRoleSummary(
+  request: EntityRoleSummaryRequest = {},
+): Promise<EntityRoleSummaryResponse> {
+  const payload = {
+    role: "all",
+    top_n: 25,
+    min_contracts: 1,
+    ...request,
+  };
+  const res = await fetch(`${API_BASE}/companies/role-summary`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter o resumo por papel: ${res.status} - ${text}`);
+  }
   return res.json();
 }
 

@@ -67,6 +67,9 @@ def get_rag_engine() -> RagEngine:
             vector_store=get_vector_store(),
             document_store=get_document_store(),
             model=get_bloomberg_model(),
+            hybrid=True,
+            rerank=False,
+            crag=False,
         )
     return _rag_engine
 

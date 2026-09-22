@@ -1,7 +1,8 @@
 """Esquemas Pydantic para a API IQ OS Chat."""
+from __future__ import annotations
 from enum import Enum
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal, Dict, Any
+from typing import List, Optional, Literal, Dict, Any, TYPE_CHECKING
 
 
 class ChatMessage(BaseModel):
@@ -38,6 +39,115 @@ class SkillRef(BaseModel):
     steps: List[str] = []
     checks: List[str] = []
     tools: List[str] = []
+
+
+class AgentGraphNode(BaseModel):
+    """Nó de um grafo de agente dinâmico."""
+
+    id: str
+    label: Optional[str] = None
+    kind: Literal["prompt", "tool", "rag", "conditional", "supervisor", "output"] = "prompt"
+    prompt: Optional[str] = None
+    tools: List[str] = []
+    output_key: Optional[str] = None
+    next: Optional[str] = None
+    condition: Optional[Dict[str, Any]] = None
+
+
+class AgentGraphEdge(BaseModel):
+    """Ligação entre nós de um grafo de agente dinâmico."""
+
+    source: str
+    target: str
+    condition: Optional[Dict[str, Any]] = None
+
+
+class AgentGraphDefinition(BaseModel):
+    """Definição de grafo (nodes + edges). Se vazio, o motor usa um agente ReAct simples."""
+
+    nodes: List[AgentGraphNode] = []
+    edges: List[AgentGraphEdge] = []
+
+
+class AgentToolRef(BaseModel):
+    """Referência a uma ferramenta disponível no IQ OS."""
+
+    tool_id: str
+    provider: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    params: Optional[Dict[str, Any]] = None
+    enabled: bool = True
+
+
+class AgentConfig(BaseModel):
+    """Configuração persistente de um agente dinâmico LangGraph."""
+
+    agent_id: Optional[str] = None
+    owner_id: Optional[str] = None
+    name: str = Field(..., min_length=1, max_length=120)
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    tags: List[str] = []
+    backend: Optional[str] = None
+    model: Optional[str] = None
+    temperature: float = Field(default=0.1, ge=0.0, le=2.0)
+    max_tokens: int = Field(default=1024, ge=1, le=8192)
+    system_prompt: Optional[str] = None
+    graph: AgentGraphDefinition = Field(default_factory=AgentGraphDefinition)
+    tools: List[AgentToolRef] = []
+    rag_index: Optional[str] = None
+    rag_mode: Optional[str] = Field(default=None, pattern="^(dense|hybrid|hybrid_rerank|crag|crag_rerank)$")
+    enabled: bool = True
+    is_public: bool = False
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class AgentConfigListResponse(BaseModel):
+    """Lista de configurações de agentes dinâmicos."""
+
+    agents: List[AgentConfig] = []
+    total: int = 0
+
+
+class AgentRunRequest(BaseModel):
+    """Pedido de execução de um agente dinâmico."""
+
+    agent_id: str
+    message: str
+    context: Optional[Dict[str, Any]] = None
+    stream: bool = False
+    thread_id: Optional[str] = None
+
+
+class AgentRunMessage(BaseModel):
+    """Mensagem no histórico de execução de um agente."""
+
+    role: Literal["user", "assistant", "tool", "system"]
+    content: str
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+
+
+class AgentRunStep(BaseModel):
+    """Passo intermédio de execução (tool call / nó / fontes)."""
+
+    kind: Literal["node", "tool", "tool_result", "rag", "thought", "error"]
+    name: Optional[str] = None
+    content: Optional[str] = None
+    payload: Optional[Dict[str, Any]] = None
+
+
+class AgentRunResponse(BaseModel):
+    """Resposta de execução de um agente dinâmico."""
+
+    agent_id: str
+    thread_id: str
+    message: AgentRunMessage
+    steps: List[AgentRunStep] = []
+    sources: List["RagSource"] = []
+    elapsed_seconds: Optional[float] = None
+    error: Optional[str] = None
     uses: int = 0
     quality: Optional[str] = None
     enabled: bool = True
@@ -327,6 +437,10 @@ class RagSource(BaseModel):
     page: Optional[int] = None
     text: str
     score: Optional[float] = None
+    vector_rank: Optional[int] = None
+    keyword_rank: Optional[int] = None
+    rrf_score: Optional[float] = None
+    rerank_score: Optional[float] = None
 
 
 class RagChatRequest(BaseModel):
@@ -339,6 +453,8 @@ class RagChatRequest(BaseModel):
     # Fornecedor de IA para redigir a resposta ("provider:modelo"). Vazio = modelo
     # local do RAG (BloombergGPT-style), que é o comportamento de sempre.
     backend: Optional[str] = None
+    # Estratégia de recuperação.
+    mode: Optional[str] = Field(default="hybrid", pattern="^(dense|hybrid|hybrid_rerank|crag|crag_rerank)$")
 
 
 class RagChatResponse(BaseModel):
@@ -347,6 +463,7 @@ class RagChatResponse(BaseModel):
     model_used: Optional[str] = None
     elapsed_seconds: Optional[float] = None
     skill: Optional[SkillRef] = None
+    mode: Optional[str] = None
 
 
 class RagDocument(BaseModel):
@@ -540,6 +657,7 @@ class RagExplainResponse(BaseModel):
     pages_used: List[int] = []
     retrieval_scores: List[float] = []
     analysis: str
+    mode: Optional[str] = None
 
 
 class RagDocumentGraphNode(BaseModel):
@@ -995,6 +1113,53 @@ class CompanyAnalyticsRow(BaseModel):
     count: int
     total_value: Optional[float] = None
     description: Optional[str] = None
+
+
+class EntityRoleSummaryCounterparty(BaseModel):
+    key: str
+    count: int = 0
+    total_value: Optional[float] = None
+    description: Optional[str] = None
+
+
+class EntityConcentration(BaseModel):
+    top1: Optional[float] = None
+    top5: Optional[float] = None
+    top10: Optional[float] = None
+    top25: Optional[float] = None
+    covered_entities: int = 0
+
+
+class EntityRoleSummaryRequest(CompanySearchRequest):
+    """Filtros do dashboard de entidades (papel + janela temporal/geográfica)."""
+
+    min_contracts: int = 1
+    top_n: int = 25
+
+
+class EntityRoleSummaryResponse(BaseModel):
+    role: str = "all"
+    query: Optional[str] = None
+    year: Optional[int] = None
+    region: Optional[str] = None
+    total_contracts: int = 0
+    total_value: float = 0.0
+    avg_value: Optional[float] = None
+    max_value: Optional[float] = None
+    unique_entities: Optional[int] = None
+    unique_adjudicantes: int = 0
+    unique_adjudicatarios: int = 0
+    avg_value_per_entity: Optional[float] = None
+    top_entities: List[CompanySummary] = []
+    counterparties: List[EntityRoleSummaryCounterparty] = []
+    by_year: List[CompanyAnalyticsRow] = []
+    by_region: List[CompanyAnalyticsRow] = []
+    by_cpv: List[CompanyAnalyticsRow] = []
+    by_procedure_type: List[CompanyAnalyticsRow] = []
+    by_contract_type: List[CompanyAnalyticsRow] = []
+    by_value_range: List[CompanyAnalyticsRow] = []
+    concentration: Optional[EntityConcentration] = None
+    error: Optional[str] = None
 
 
 class CompanyAnalyticsResponse(BaseModel):

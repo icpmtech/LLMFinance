@@ -87,9 +87,24 @@ CRM_INDEX = "finance_crm"
 # sem precisar de um mapping diferente por site.
 SCRAPED_INDEX = "finance_scraped"
 
+# Configurações de agentes dinâmicos do IQ OS (LangGraph + ferramentas).
+# Guarda grafos de agentes, nós, ferramentas, prompts e chaves por utilizador.
+AGENT_CONFIGS_INDEX = "iq_os_agent_configs"
+
 # Definições (settings) específicas de determinados índices — nomeadamente
 # analisadores usados em subcampos de pesquisa por prefixo.
 INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
+    AGENT_CONFIGS_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "agent_name_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
     CONTRATOS_ES_INDEX: {
         # Os textos de origem vêm em espanhol (acentos e «ñ»). `asciifolding` deixa
         # que uma pesquisa sem acentos («adjudicacion») encontre «adjudicación».
@@ -135,10 +150,10 @@ def _get_es_url() -> str:
     return os.getenv("ELASTICSEARCH_URL", "http://127.0.0.1:9200")
 
 
-def get_es_client() -> Optional[Elasticsearch]:
+def get_es_client(request_timeout: int = 30) -> Optional[Elasticsearch]:
     """Devolve cliente Elasticsearch ou None se não estiver disponível."""
     try:
-        es = Elasticsearch([_get_es_url()], request_timeout=30)
+        es = Elasticsearch([_get_es_url()], request_timeout=request_timeout)
         if not es.ping():
             return None
         return es
@@ -685,6 +700,68 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    # Agentes dinâmicos do IQ OS: configuração de grafos/nós/ferramentas/prompts.
+    agent_configs_mappings = {
+        "properties": {
+            "agent_id": {"type": "keyword"},
+            "owner_id": {"type": "keyword"},
+            "name": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "description": {"type": "text"},
+            "icon": {"type": "keyword"},
+            "tags": {"type": "keyword"},
+            "backend": {"type": "keyword"},
+            "model": {"type": "keyword"},
+            "temperature": {"type": "float"},
+            "max_tokens": {"type": "integer"},
+            "system_prompt": {"type": "text"},
+            # Grafo: nós (steps) e ligações opcionais. Um grafo simples pode ter só nós em sequência.
+            "graph": {
+                "type": "object",
+                "properties": {
+                    "nodes": {
+                        "type": "nested",
+                        "properties": {
+                            "id": {"type": "keyword"},
+                            "label": {"type": "text"},
+                            "kind": {"type": "keyword"},
+                            "prompt": {"type": "text"},
+                            "tools": {"type": "keyword"},
+                            "output_key": {"type": "keyword"},
+                            "next": {"type": "keyword"},
+                            "condition": {"type": "object", "enabled": False},
+                        },
+                    },
+                    "edges": {
+                        "type": "nested",
+                        "properties": {
+                            "source": {"type": "keyword"},
+                            "target": {"type": "keyword"},
+                            "condition": {"type": "object", "enabled": False},
+                        },
+                    },
+                },
+            },
+            # Ferramentas declaradas (tool_refs) e parâmetros fixos/injetáveis.
+            "tools": {
+                "type": "nested",
+                "properties": {
+                    "tool_id": {"type": "keyword"},
+                    "provider": {"type": "keyword"},
+                    "name": {"type": "keyword"},
+                    "description": {"type": "text"},
+                    "params": {"type": "object", "enabled": False},
+                    "enabled": {"type": "boolean"},
+                },
+            },
+            "rag_index": {"type": "keyword"},
+            "rag_mode": {"type": "keyword"},
+            "enabled": {"type": "boolean"},
+            "is_public": {"type": "boolean"},
+            "created_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
     for name, mappings in [
         ("finance_prices", prices_mappings),
         ("finance_news", news_mappings),
@@ -703,6 +780,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (PROVIDER_KEYS_INDEX, provider_keys_mappings),
         (CRM_INDEX, crm_mappings),
         (SCRAPED_INDEX, scraped_mappings),
+        (AGENT_CONFIGS_INDEX, agent_configs_mappings),
     ]:
         if not client.indices.exists(index=name):
             settings: Dict[str, Any] = {"number_of_shards": 1, "number_of_replicas": 0}
@@ -2669,6 +2747,348 @@ def search_companies(
         }
     except Exception as e:
         return {"query": q, "total": 0, "items": [], "error": str(e)}
+
+
+def get_entity_role_summary(
+    role: Optional[str] = "all",
+    q: Optional[str] = None,
+    year: Optional[int] = None,
+    region: Optional[str] = None,
+    min_value: Optional[float] = None,
+    max_value: Optional[float] = None,
+    min_contracts: int = 1,
+    top_n: int = 25,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Resumo agregado do universo de entidades por papel (adjudicante/adjudicatário).
+
+    Numa única pesquisa devolve tudo o que um dashboard de entidades precisa:
+    volume e valor contratual, médias, entidades distintas, distribuição por
+    ano/NUTS/CPV/procedimento/tipo de contrato, contrapartes mais frequentes,
+    ranking das maiores entidades e a concentração do mercado.
+
+    O parâmetro `role` aceita ``"adjudicante"``, ``"adjudicatario"`` ou
+    ``"all"`` (empresas nos dois papéis, com a decomposição por papel).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "role": role, "top_entities": []}
+
+    ensure_indices(client)
+
+    filters: List[Dict[str, Any]] = []
+    if year:
+        filters.append({"term": {"Ano": year}})
+    if region:
+        filters.append(_region_filter(region))
+    role_filter = _company_role_filter(role)
+    if role_filter:
+        filters.extend(role_filter)
+    if min_value is not None:
+        filters.append({"range": {"precoContratual": {"gte": min_value}}})
+    if max_value is not None:
+        filters.append({"range": {"precoContratual": {"lte": max_value}}})
+
+    name_query = _company_name_query(q)
+
+    base_query: Dict[str, Any] = {"bool": {}}
+    if filters:
+        base_query["bool"]["filter"] = filters
+    if name_query:
+        base_query["bool"]["must"] = name_query
+    if not base_query["bool"]:
+        base_query = {"match_all": {}}
+
+    procedure_agg = _resolve_agg_target(client, "tipoprocedimento")
+    contract_agg = _resolve_agg_target(client, "tipoContrato")
+    runtime_mappings: Dict[str, Any] = {}
+    for resolved in (procedure_agg, contract_agg):
+        if resolved.get("runtime"):
+            runtime_mappings.update(resolved["runtime"])
+
+    def _role_agg(path: str) -> Dict[str, Any]:
+        """Agg nested com o ranking de NIF daquele papel e a contagem distinta."""
+        return {
+            "nested": {"path": f"{path}.parsed"},
+            "aggs": {
+                "by_nif": {
+                    "terms": {
+                        "field": f"{path}.parsed.nif",
+                        "size": max(top_n, 10),
+                        "order": {"total_value": "desc"},
+                    },
+                    "aggs": {
+                        "name": {"top_hits": {"size": 1, "_source": [f"{path}.parsed.nome"]}},
+                        "total_value": {
+                            "reverse_nested": {},
+                            "aggs": {"value": {"sum": {"field": "precoContratual"}}},
+                        },
+                        "years": {
+                            "reverse_nested": {},
+                            "aggs": {"stats": {"stats": {"field": "Ano"}}},
+                        },
+                    },
+                },
+                "nifs": {
+                    "cardinality": {
+                        "field": f"{path}.parsed.nif",
+                        "precision_threshold": 40000,
+                    }
+                },
+            },
+        }
+
+    # Contrapartes: quem contrata com as entidades do papel pedido.
+    counterpart_path = "adjudicatarios" if role == "adjudicante" else "adjudicantes"
+
+    body: Dict[str, Any] = {
+        "size": 0,
+        "track_total_hits": True,
+        "query": base_query,
+        "aggs": {
+            "total_value": {"sum": {"field": "precoContratual"}},
+            "avg_value": {"avg": {"field": "precoContratual"}},
+            "max_value": {"max": {"field": "precoContratual"}},
+            "by_year": {
+                "terms": {"field": "Ano", "size": 50, "order": {"_key": "desc"}},
+                "aggs": {"total_value": {"sum": {"field": "precoContratual"}}},
+            },
+            "by_region": {
+                "terms": {"field": "NUTs", "size": 20, "missing": "Não especificado"},
+                "aggs": {"total_value": {"sum": {"field": "precoContratual"}}},
+            },
+            "by_cpv": {
+                "nested": {"path": "cpv"},
+                "aggs": {
+                    "codes": {
+                        "terms": {"field": "cpv.code", "size": 15, "order": {"total_value": "desc"}},
+                        "aggs": {
+                            "description": {"top_hits": {"size": 1, "_source": ["cpv"]}},
+                            "total_value": {
+                                "reverse_nested": {},
+                                "aggs": {"value": {"sum": {"field": "precoContratual"}}},
+                            },
+                        },
+                    }
+                },
+            },
+            "by_procedure_type": {
+                "terms": {"field": procedure_agg["field"], "size": 15, "missing": "Não especificado"},
+                "aggs": {"total_value": {"sum": {"field": "precoContratual"}}},
+            },
+            "by_contract_type": {
+                "terms": {"field": contract_agg["field"], "size": 15, "missing": "Não especificado"},
+                "aggs": {"total_value": {"sum": {"field": "precoContratual"}}},
+            },
+            "by_value_range": {
+                "histogram": {"field": "precoContratual", "interval": 100000, "min_doc_count": 1}
+            },
+            "counterparties": {
+                "nested": {"path": f"{counterpart_path}.parsed"},
+                "aggs": {
+                    "by_nif": {
+                        "terms": {
+                            "field": f"{counterpart_path}.parsed.nif",
+                            "size": 20,
+                            "order": {"total_value": "desc"},
+                        },
+                        "aggs": {
+                            "name": {"top_hits": {"size": 1, "_source": [f"{counterpart_path}.parsed.nome"]}},
+                            "total_value": {
+                                "reverse_nested": {},
+                                "aggs": {"value": {"sum": {"field": "precoContratual"}}},
+                            },
+                        },
+                    }
+                },
+            },
+            "adjudicantes": _role_agg("adjudicantes"),
+            "adjudicatarios": _role_agg("adjudicatarios"),
+        },
+    }
+    if runtime_mappings:
+        body["runtime_mappings"] = runtime_mappings
+
+    def _fmt_money(value: Any) -> Optional[float]:
+        return round(value, 2) if isinstance(value, (int, float)) else None
+
+    def _agg_value(bucket: Dict[str, Any]) -> float:
+        """Lê o valor de um sub-aggregation `total_value` (sum ou reverse_nested/sum)."""
+        raw = bucket.get("total_value", {})
+        if isinstance(raw.get("value"), dict):
+            return float(raw["value"].get("value") or 0.0)
+        return float(raw.get("value") or 0.0)
+
+    try:
+        resp = client.search(index=CONTRACTS_INDEX, body=body)
+        aggs = resp.get("aggregations", {})
+
+        total_contracts = (
+            resp.get("hits", {}).get("total", {}).get("value", 0)
+            if isinstance(resp.get("hits", {}).get("total"), dict)
+            else resp.get("hits", {}).get("total", 0)
+        ) or 0
+        total_value = float(aggs.get("total_value", {}).get("value") or 0.0)
+        avg_value = float(aggs.get("avg_value", {}).get("value") or 0.0)
+        max_value = float(aggs.get("max_value", {}).get("value") or 0.0)
+
+        def _rows(agg_name: str) -> List[Dict[str, Any]]:
+            return [
+                {
+                    "key": str(b["key"]),
+                    "count": b["doc_count"],
+                    "total_value": _fmt_money(_agg_value(b)) or 0.0,
+                }
+                for b in aggs.get(agg_name, {}).get("buckets", [])
+            ]
+
+        by_year = _rows("by_year")
+        by_region = _rows("by_region")
+        by_procedure_type = _rows("by_procedure_type")
+        by_contract_type = _rows("by_contract_type")
+
+        # O histograma devolve chaves numéricas: publica-se o limite inferior
+        # (em euros) e uma etiqueta legível para o intervalo.
+        by_value_range: List[Dict[str, Any]] = []
+        for b in aggs.get("by_value_range", {}).get("buckets", []):
+            start = int(b["key"])
+            by_value_range.append({
+                "key": str(start),
+                "count": b["doc_count"],
+                "total_value": _fmt_money(_agg_value(b)) or 0.0,
+                "description": f"{start:,} – {start + 100000:,} €".replace(",", " "),
+            })
+
+        by_cpv: List[Dict[str, Any]] = []
+        for b in aggs.get("by_cpv", {}).get("codes", {}).get("buckets", []):
+            by_cpv.append({
+                "key": str(b["key"]),
+                "count": b["doc_count"],
+                "total_value": _fmt_money(_agg_value(b)) or 0.0,
+                "description": _cpv_description_from_hits(b.get("description"), b["key"]),
+            })
+
+        counterparties: List[Dict[str, Any]] = []
+        for b in aggs.get("counterparties", {}).get("by_nif", {}).get("buckets", []):
+            name_hits = b.get("name", {}).get("hits", {}).get("hits", [])
+            label = b["key"]
+            if name_hits:
+                src = name_hits[0].get("_source", {})
+                if isinstance(src, dict):
+                    label = src.get("nome") or label
+            counterparties.append({
+                "key": str(b["key"]),
+                "count": b["doc_count"],
+                "total_value": _fmt_money(_agg_value(b)) or 0.0,
+                "description": label,
+            })
+        # --- Ranking de entidades (união dos dois papéis quando role == "all") ---
+        entities: Dict[str, Dict[str, Any]] = {}
+        role_paths = (
+            ("adjudicantes", "adjudicante"),
+            ("adjudicatarios", "adjudicatario"),
+        ) if role in (None, "all") else (
+            (("adjudicantes", "adjudicante"),) if role == "adjudicante" else (("adjudicatarios", "adjudicatario"),)
+        )
+
+        for agg_key, role_name in role_paths:
+            for b in aggs.get(agg_key, {}).get("by_nif", {}).get("buckets", []):
+                nif = b.get("key")
+                if not nif:
+                    continue
+                name = nif
+                name_hits = b.get("name", {}).get("hits", {}).get("hits", [])
+                if name_hits:
+                    src = name_hits[0].get("_source", {})
+                    if isinstance(src, dict):
+                        name = src.get("nome") or name
+                count = b["doc_count"]
+                value = _agg_value(b)
+                years_stats = b.get("years", {}).get("stats", {})
+                first_year = years_stats.get("min")
+                last_year = years_stats.get("max")
+
+                entry = entities.setdefault(nif, {
+                    "nif": nif,
+                    "name": name,
+                    "normalized_name": name,
+                    "contracts_total": 0,
+                    "total_value": 0.0,
+                    "adjudicante": None,
+                    "adjudicatario": None,
+                })
+                entry[role_name] = {
+                    "contracts_count": count,
+                    "total_value": _fmt_money(value) or 0.0,
+                    "avg_value": _fmt_money(value / count) if count else None,
+                    "first_year": int(first_year) if first_year is not None else None,
+                    "last_year": int(last_year) if last_year is not None else None,
+                }
+                entry["contracts_total"] += count
+                entry["total_value"] += value
+
+        ranked = [e for e in entities.values() if e["contracts_total"] >= max(min_contracts, 1)]
+        ranked.sort(key=lambda x: (x.get("total_value") or 0.0, x.get("contracts_total") or 0), reverse=True)
+        top_entities = ranked[:top_n]
+        for entry in top_entities:
+            entry["total_value"] = _fmt_money(entry["total_value"]) or 0.0
+
+        # Concentração: peso das maiores entidades no valor total (só é
+        # significativa quando o ranking cobre todo o universo — sem filtros de
+        # texto — pelo que é devolvida como indicador aproximado).
+        def _share(n: int) -> Optional[float]:
+            if total_value <= 0 or not ranked:
+                return None
+            top = sum(e.get("total_value") or 0.0 for e in ranked[:n])
+            return round(min(1.0, top / total_value), 4)
+
+        unique_adjudicantes = int(aggs.get("adjudicantes", {}).get("nifs", {}).get("value") or 0)
+        unique_adjudicatarios = int(aggs.get("adjudicatarios", {}).get("nifs", {}).get("value") or 0)
+        if role == "adjudicante":
+            unique_entities: Optional[int] = unique_adjudicantes
+        elif role == "adjudicatario":
+            unique_entities = unique_adjudicatarios
+        else:
+            # A união exata dos dois papéis exigiria interseção de conjuntos; o
+            # maior dos dois é um limite inferior do número de empresas únicas.
+            unique_entities = max(unique_adjudicantes, unique_adjudicatarios)
+
+        avg_per_entity = (
+            round(total_value / unique_entities, 2) if unique_entities and total_value else None
+        )
+
+        return {
+            "role": role or "all",
+            "query": q,
+            "year": year,
+            "region": region,
+            "total_contracts": int(total_contracts),
+            "total_value": _fmt_money(total_value) or 0.0,
+            "avg_value": _fmt_money(avg_value),
+            "max_value": _fmt_money(max_value),
+            "unique_entities": unique_entities,
+            "unique_adjudicantes": unique_adjudicantes,
+            "unique_adjudicatarios": unique_adjudicatarios,
+            "avg_value_per_entity": avg_per_entity,
+            "top_entities": top_entities,
+            "counterparties": counterparties,
+            "by_year": by_year,
+            "by_region": by_region,
+            "by_cpv": by_cpv,
+            "by_procedure_type": by_procedure_type,
+            "by_contract_type": by_contract_type,
+            "by_value_range": by_value_range,
+            "concentration": {
+                "top1": _share(1),
+                "top5": _share(5),
+                "top10": _share(10),
+                "top25": _share(25),
+                "covered_entities": len(ranked),
+            },
+            "error": None,
+        }
+    except Exception as exc:  # pragma: no cover - dependente do cluster
+        return {"error": str(exc), "role": role, "top_entities": []}
 
 
 def get_company_contracts(
@@ -5987,7 +6407,7 @@ def get_contratos_es_analytics(
     es: Optional[Elasticsearch] = None,
 ) -> Dict[str, Any]:
     """Devolve agregações analíticas para o dashboard de contratos de Espanha."""
-    client = es or get_es_client()
+    client = es or get_es_client(request_timeout=90)
     if not client:
         return {"error": "Elasticsearch indisponível"}
 
@@ -6035,7 +6455,7 @@ def get_contratos_es_analytics(
                     "calendar_interval": "month",
                     "format": "yyyy-MM",
                     "min_doc_count": 1,
-                    "missing": "2000-01-01",
+                    "missing": "2000-01",
                 }
             },
             "value_distribution": {

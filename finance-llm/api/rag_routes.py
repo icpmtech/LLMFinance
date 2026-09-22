@@ -61,9 +61,25 @@ def _to_sources(chunks: Sequence[Dict[str, Any]]) -> List[RagSource]:
             page=chunk.get("page"),
             text=str(chunk.get("text", "")),
             score=chunk.get("score"),
+            vector_rank=chunk.get("vector_rank"),
+            keyword_rank=chunk.get("keyword_rank"),
+            rrf_score=chunk.get("rrf_score"),
+            rerank_score=chunk.get("rerank_score"),
         )
         for chunk in chunks
     ]
+
+
+def _parse_mode(mode: Optional[str]) -> dict:
+    """Converte modo textual em flags para o RagEngine."""
+    flags = {
+        "dense": {"use_hybrid": False, "use_rerank": False, "use_crag": False},
+        "hybrid": {"use_hybrid": True, "use_rerank": False, "use_crag": False},
+        "hybrid_rerank": {"use_hybrid": True, "use_rerank": True, "use_crag": False},
+        "crag": {"use_hybrid": True, "use_rerank": False, "use_crag": True},
+        "crag_rerank": {"use_hybrid": True, "use_rerank": True, "use_crag": True},
+    }
+    return flags.get((mode or "hybrid").lower(), flags["hybrid"])
 
 
 def _context_prompt(question: str, chunks: Sequence[Dict[str, Any]]) -> str:
@@ -328,13 +344,36 @@ async def rag_chat(req: RagChatRequest, session: Session = None):
     Sem `backend`, responde com o modelo local do RAG (BloombergGPT-style), como
     sempre. Com um fornecedor de IA (`deepseek:deepseek-chat`, `openai:gpt-4o-mini`,
     …), a mesma recuperação alimenta o modelo cloud, que responde citando `[n]`.
+
+    `req.mode` controla a estratégia: `dense`, `hybrid`, `hybrid_rerank`,
+    `crag`, `crag_rerank`. Por defeito é `hybrid`.
     """
     engine = get_rag_engine()
     started = time.perf_counter()
     from api import skills_service as skills  # noqa: PLC0415
 
+    mode_flags = _parse_mode(req.mode)
     skill = await skills.for_request(req.question, session=session, backend=req.backend)
     chosen = _cloud_backend(session, req.backend)
+    # Se existir um agente dinâmico chamado "RAG", dá-lhe prioridade.
+    user_id = getattr(getattr(session, "user", None), "id", None) if session else None
+    try:
+        from api import agent_integration as agenti
+
+        agent_result = await agenti.ask_rag_agent(req.question, user_id=user_id)
+        if agent_result:
+            skills.finish(skill["id"], question=req.question, tools=["agent-rag"], mode=f"agent-rag-{req.mode or 'hybrid'}")
+            return RagChatResponse(
+                answer=agenti.agent_result_to_rag_answer(agent_result),
+                model_used="agent:RAG",
+                elapsed_seconds=round(time.perf_counter() - started, 2),
+                skill=SkillRef(**agenti.format_agent_as_skill("RAG", agent_result)),
+                sources=agenti.agent_result_to_sources(agent_result),
+                mode=req.mode or "hybrid",
+            )
+    except Exception as exc:
+        logger.warning("Falha ao executar agente RAG dinâmico: %s", exc)
+
     if chosen is None:
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
@@ -346,8 +385,14 @@ async def rag_chat(req: RagChatRequest, session: Session = None):
             req.temperature,
             True,
             req.doc_id,
+            None,
+            None,
+            None,
+            mode_flags["use_hybrid"],
+            mode_flags["use_rerank"],
+            mode_flags["use_crag"],
         )
-        skills.finish(skill["id"], question=req.question, tools=["documentos"], mode="rag-local")
+        skills.finish(skill["id"], question=req.question, tools=["documentos"], mode=f"rag-local-{req.mode or 'hybrid'}")
         return RagChatResponse(
             answer=result["answer"],
             model_used=result.get("model_used"),
@@ -361,16 +406,30 @@ async def rag_chat(req: RagChatRequest, session: Session = None):
                     page=s.get("page"),
                     text=s.get("text", ""),
                     score=s.get("score"),
+                    vector_rank=s.get("vector_rank"),
+                    keyword_rank=s.get("keyword_rank"),
+                    rrf_score=s.get("rrf_score"),
+                    rerank_score=s.get("rerank_score"),
                 )
                 for s in result["sources"]
             ],
+            mode=req.mode or "hybrid",
         )
 
     from api import ontology_ai as ai  # noqa: PLC0415
 
-    chunks = await asyncio.to_thread(engine.retrieve, req.question, req.top_k, 0.0, req.doc_id)
+    chunks = await asyncio.to_thread(
+        engine.retrieve,
+        req.question,
+        req.top_k,
+        0.0,
+        req.doc_id,
+        mode_flags["use_hybrid"],
+        mode_flags["use_rerank"],
+        mode_flags["use_crag"],
+    )
     model_label = f"{chosen['provider']}:{chosen.get('model') or ''}".rstrip(":")
-    skills.finish(skill["id"], question=req.question, tools=["documentos"], mode="rag-cloud")
+    skills.finish(skill["id"], question=req.question, tools=["documentos"], mode=f"rag-cloud-{req.mode or 'hybrid'}")
     if not chunks:
         return RagChatResponse(
             answer="Não encontrei documentos relevantes para a pergunta.",
@@ -378,6 +437,7 @@ async def rag_chat(req: RagChatRequest, session: Session = None):
             model_used=model_label,
             elapsed_seconds=round(time.perf_counter() - started, 2),
             skill=SkillRef(**skill["public"]) if skill["public"] else None,
+            mode=req.mode or "hybrid",
         )
     prompt = _context_prompt(req.question, chunks)
     if skill["block"]:
@@ -395,6 +455,7 @@ async def rag_chat(req: RagChatRequest, session: Session = None):
         model_used=model_label,
         elapsed_seconds=round(time.perf_counter() - started, 2),
         skill=SkillRef(**skill["public"]) if skill["public"] else None,
+        mode=req.mode or "hybrid",
     )
 
 
@@ -404,8 +465,9 @@ async def rag_chat_stream(req: RagChatRequest, session: Session = None):
     engine = get_rag_engine()
     from api import skills_service as skills  # noqa: PLC0415
 
+    mode_flags = _parse_mode(req.mode)
     skill = await skills.for_request(req.question, session=session, backend=req.backend)
-    skills.finish(skill["id"], question=req.question, tools=["documentos"], mode="rag-stream")
+    skills.finish(skill["id"], question=req.question, tools=["documentos"], mode=f"rag-stream-{req.mode or 'hybrid'}")
     chosen = _cloud_backend(session, req.backend)
 
     def event_stream():
@@ -416,6 +478,9 @@ async def rag_chat_stream(req: RagChatRequest, session: Session = None):
             max_new_tokens=req.max_new_tokens,
             temperature=req.temperature,
             doc_id=req.doc_id,
+            use_hybrid=mode_flags["use_hybrid"],
+            use_rerank=mode_flags["use_rerank"],
+            use_crag=mode_flags["use_crag"],
         ):
             if event["type"] == "sources":
                 sources_sent = True
@@ -440,7 +505,16 @@ async def rag_chat_stream(req: RagChatRequest, session: Session = None):
 
     from api import cloud_chat  # noqa: PLC0415
 
-    chunks = await asyncio.to_thread(engine.retrieve, req.question, req.top_k, 0.0, req.doc_id)
+    chunks = await asyncio.to_thread(
+        engine.retrieve,
+        req.question,
+        req.top_k,
+        0.0,
+        req.doc_id,
+        mode_flags["use_hybrid"],
+        mode_flags["use_rerank"],
+        mode_flags["use_crag"],
+    )
     sources_payload = json.dumps([s.model_dump() for s in _to_sources(chunks)], ensure_ascii=False)
     skill_payload = json.dumps(skill["public"], ensure_ascii=False) if skill["public"] else ""
 
@@ -479,6 +553,7 @@ async def rag_chat_stream(req: RagChatRequest, session: Session = None):
 async def explain_rag_answer(req: RagChatRequest):
     """Explica como a resposta RAG foi construída."""
     engine = get_rag_engine()
+    mode_flags = _parse_mode(req.mode)
     loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(
         None,
@@ -489,6 +564,10 @@ async def explain_rag_answer(req: RagChatRequest):
         req.temperature,
         True,
         req.doc_id,
+        0.0,
+        mode_flags["use_hybrid"],
+        mode_flags["use_rerank"],
+        mode_flags["use_crag"],
     )
     explanation = explain_prediction(
         req.question,
@@ -496,7 +575,7 @@ async def explain_rag_answer(req: RagChatRequest):
         result["sources"],
         model_name=result.get("model_used"),
     )
-    return RagExplainResponse(**explanation)
+    return RagExplainResponse(**explanation, mode=req.mode or "hybrid")
 
 
 def _build_document_graph(doc_id: str, top_k: int = 5):

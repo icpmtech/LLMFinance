@@ -1016,6 +1016,64 @@ export interface CompanyAnalyticsResponse {
   error?: string;
 }
 
+// --- Dashboards por papel: adjudicantes, adjudicatários e empresas ---
+
+/** Papel da entidade usado pelos dashboards de entidades. */
+export type EntityRole = "all" | "adjudicante" | "adjudicatario";
+
+export interface EntityRoleSummaryRequest {
+  q?: string;
+  role?: EntityRole;
+  region?: string;
+  year?: number;
+  min_value?: number;
+  max_value?: number;
+  min_contracts?: number;
+  top_n?: number;
+}
+
+export interface EntityConcentration {
+  /** Peso da maior entidade no valor total (0–1). */
+  top1?: number | null;
+  top5?: number | null;
+  top10?: number | null;
+  top25?: number | null;
+  /** Entidades consideradas no ranking devolvido. */
+  covered_entities: number;
+}
+
+export interface EntityRoleSummaryCounterparty {
+  key: string;
+  count: number;
+  total_value?: number;
+  description?: string;
+}
+
+export interface EntityRoleSummaryResponse {
+  role: EntityRole;
+  query?: string | null;
+  year?: number | null;
+  region?: string | null;
+  total_contracts: number;
+  total_value: number;
+  avg_value?: number | null;
+  max_value?: number | null;
+  unique_entities?: number | null;
+  unique_adjudicantes: number;
+  unique_adjudicatarios: number;
+  avg_value_per_entity?: number | null;
+  top_entities: CompanySummary[];
+  counterparties: EntityRoleSummaryCounterparty[];
+  by_year: ContractAnalyticsRow[];
+  by_region: ContractAnalyticsRow[];
+  by_cpv: ContractAnalyticsRow[];
+  by_procedure_type: ContractAnalyticsRow[];
+  by_contract_type: ContractAnalyticsRow[];
+  by_value_range: ContractAnalyticsRow[];
+  concentration?: EntityConcentration | null;
+  error?: string | null;
+}
+
 // --- Importação de entidades e contratos ---
 
 export type ImportFileType = "zip" | "xlsx" | "json";

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   ChevronDown,
   ChevronLeft,
@@ -14,8 +14,9 @@ import {
   SlidersHorizontal,
   Sparkles,
   X,
+  Plus,
 } from "lucide-react";
-import { DOCK_CATALOG, type DockApp } from "../dock";
+import { DOCK_CATALOG, IFRAME_PAGES_APP, type DockApp } from "../dock";
 import { useWindows } from "../windows";
 import {
   SIDEBAR_MIN_WIDTH,
@@ -30,6 +31,7 @@ import {
 } from "../layout";
 import { useAuth } from "../auth";
 import { Avatar } from "../pages/SettingsPage";
+import { iframeDockApps, subscribeIframePages } from "../iframePages";
 
 export type AppView =
   | "dashboard"
@@ -55,6 +57,10 @@ export type AppView =
   | "companies-dashboard"
   | "company-detail"
   | "entities-search"
+  | "entities-dashboard"
+  | "entities-adjudicantes"
+  | "entities-adjudicatarios"
+  | "entities-compare"
   | "empresas-iq"
   | "crm"
   | "crm-accounts"
@@ -105,19 +111,21 @@ interface AppNavProps {
  * plataforma, não a árvore de páginas de cada uma. As páginas internas de cada
  * aplicação vivem dentro da própria aplicação.
  */
-const TOOL_APP_IDS = ["elastic", "import", "cli", "settings", "admin"];
+const TOOL_APP_IDS = ["elastic", "import", "cli", "settings", "admin", "iframe-pages"];
 
 /** Sub-ecrãs que pertencem a uma aplicação do menu (mantêm-na realçada). */
 const APP_MATCH: Record<string, AppView[]> = {
   "contracts-search": ["contracts", "contracts-list"],
   "contracts-dashboard": ["companies-dashboard"],
   "entities-search": ["companies-search", "company-detail"],
+  compare: ["entities-compare"],
   tickers: ["ticker-detail", "ticker-chart"],
   crm: ["crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard"],
   scraper: ["scraper-execucoes", "scraper-pesquisa", "scraper-agenda"],
   search360: ["search360-dossie", "search360-projetos", "search360-grafo", "search360-biblioteca"],
   office: ["office-dossies"],
   visualizador: ["visualizador-dashboards"],
+  "iframe-pages": [],
 };
 
 function appItem(app: DockApp): NavItem {
@@ -146,7 +154,17 @@ const groups: NavGroup[] = [
     label: "Ferramentas",
     icon: <SlidersHorizontal size={14} />,
     defaultOpen: true,
-    items: DOCK_CATALOG.filter((app) => TOOL_APP_IDS.includes(app.id)).map(appItem),
+    items: [
+      ...DOCK_CATALOG.filter((app) => TOOL_APP_IDS.includes(app.id) && app.id !== "iframe-pages").map(appItem),
+      appItem(IFRAME_PAGES_APP),
+    ],
+  },
+  {
+    id: "iframes",
+    label: "Páginas iframe",
+    icon: <Plus size={14} />,
+    defaultOpen: true,
+    items: iframeDockApps().map(appItem),
   },
 ];
 
@@ -198,6 +216,7 @@ function resolveItem(view: AppView, items: { item: NavItem; group: NavGroup }[])
 }
 
 export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
+  useSyncExternalStore(subscribeIframePages, () => true, () => true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [query, setQuery] = useState("");

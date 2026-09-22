@@ -31,12 +31,15 @@ import { ContractsEsDashboardPage } from "./pages/ContractsEsDashboardPage";
 import { CompanyDirectoryPage } from "./pages/CompanyDirectoryPage";
 import CompanyDetailPage from "./pages/CompanyDetailPage";
 import CompanyDashboardPage from "./pages/CompanyDashboardPage";
+import EntityDashboardPage from "./pages/EntityDashboardPage";
+import EntityComparePage from "./pages/EntityComparePage";
 import EmpresasIQPage from "./pages/EmpresasIQPage";
 import OntologyPage from "./pages/OntologyPage";
 import VisualizadorPage from "./pages/VisualizadorPage";
 import VisualizadorDashboardsPage from "./pages/VisualizadorDashboardsPage";
 import HermesPage from "./pages/HermesPage";
 import ResearcherPage from "./pages/ResearcherPage";
+import DynamicAgentsPage from "./pages/DynamicAgentsPage";
 import CrmPage, {
   CRM_SECTION_VIEWS,
   CrmAccountWindow,
@@ -73,8 +76,18 @@ import type { FinderKind } from "./finder";
 import { EntitiesSearchPage } from "./pages/EntitiesSearchPage";
 import { ImportPage } from "./pages/ImportPage";
 import { ContractsListPage } from "./pages/ContractsListPage";
+import IframePage from "./pages/IframePage";
+import IframePagesPage from "./pages/IframePagesPage";
+import {
+  iframeDockApps,
+  iframeIdFromView,
+  iframePathFor,
+  iframeViewFor,
+  iframeViewFromPath,
+  isIframeView,
+} from "./iframePages";
 import { sendChat } from "./sendChat";
-import type { Message, ModelBackend } from "./types";
+import type { EntityRole, Message, ModelBackend } from "./types";
 
 type AppView =
   | AppNavView
@@ -96,7 +109,9 @@ type AppView =
   | "browser"
   | "finder"
   | "compare"
-  | "admin";
+  | "admin"
+  | "agents"
+  | "iframe-pages";
 const COMPANY_DETAIL_KEY = "finance-llm-company-detail";
 const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
 /** Último modelo/fornecedor escolhido no chat. */
@@ -147,6 +162,10 @@ function pathForView(view: string, company: string | null, ticker: string | null
   if (view === "contracts-dashboard") return "/contracts/dashboard";
   if (view === "companies-search" || view === "companies") return "/companies/search";
   if (view === "entities-search") return "/entities/search";
+  if (view === "entities-dashboard") return "/entities/dashboard";
+  if (view === "entities-adjudicantes") return "/adjudicantes";
+  if (view === "entities-adjudicatarios") return "/adjudicatarios";
+  if (view === "entities-compare") return "/entities/compare";
   if (view === "companies-dashboard") return "/companies/dashboard";
   if (view === "import") return "/import";
   if (view === "settings") return "/settings";
@@ -158,6 +177,9 @@ function pathForView(view: string, company: string | null, ticker: string | null
   if (view === "researcher") return "/researcher";
   if (view === "visualizador") return "/visualizador";
   if (view === "visualizador-dashboards") return "/visualizador/dashboards";
+  if (view === "iframe-pages") return "/iframe-pages";
+  const iframePath = iframePathFor(view);
+  if (iframePath) return iframePath;
   if (view === "crm") return "/crm";
   if (view === "crm-accounts") return "/crm/contas";
   if (view === "crm-contacts") return "/crm/contactos";
@@ -304,6 +326,10 @@ export default function App() {
     if (path === "/companies") return "companies-search";
     if (path === "/companies/search") return "companies-search";
     if (path === "/entities" || path === "/entities/search" || path === "/empresas") return "entities-search";
+    if (path === "/entities/dashboard" || path === "/empresas/dashboard") return "entities-dashboard";
+    if (path === "/adjudicantes" || path === "/entidades/adjudicantes") return "entities-adjudicantes";
+    if (path === "/adjudicatarios" || path === "/entidades/adjudicatarios") return "entities-adjudicatarios";
+    if (path === "/entities/compare" || path === "/empresas/comparar") return "entities-compare";
     if (path === "/companies/dashboard") return "companies-dashboard";
     if (path === "/import") return "import";
     if (path === "/settings") return "settings";
@@ -317,6 +343,9 @@ export default function App() {
     if (path === "/visualizador") return "visualizador";
     if (path.startsWith("/visualizador/")) return "visualizador-dashboards";
     if (path === "/email" || path.startsWith("/email/")) return "email";
+    if (path === "/iframe-pages") return "iframe-pages";
+    const iframeView = iframeViewFromPath(path);
+    if (iframeView) return iframeView as AppView;
     {
       const crmSection = crmSectionFromPath(path);
       if (crmSection) return CRM_SECTION_VIEWS[crmSection] as AppView;
@@ -368,6 +397,10 @@ export default function App() {
       else if (path === "/contracts/dashboard") next = "contracts-dashboard";
       else if (path === "/companies" || path === "/companies/search") next = "companies-search";
       else if (path === "/entities" || path === "/entities/search" || path === "/empresas") next = "entities-search";
+      else if (path === "/entities/dashboard" || path === "/empresas/dashboard") next = "entities-dashboard";
+      else if (path === "/adjudicantes" || path === "/entidades/adjudicantes") next = "entities-adjudicantes";
+      else if (path === "/adjudicatarios" || path === "/entidades/adjudicatarios") next = "entities-adjudicatarios";
+      else if (path === "/entities/compare" || path === "/empresas/comparar") next = "entities-compare";
       else if (path === "/companies/dashboard") next = "companies-dashboard";
       else if (path === "/import") next = "import";
       else if (path === "/settings") next = "settings";
@@ -381,6 +414,8 @@ export default function App() {
       else if (path === "/visualizador") next = "visualizador";
       else if (path.startsWith("/visualizador/")) next = "visualizador-dashboards";
       else if (path === "/email" || path.startsWith("/email/")) next = "email";
+      else if (path === "/iframe-pages") next = "iframe-pages";
+      else if (iframeViewFromPath(path)) next = iframeViewFromPath(path) as AppView;
       else if (crmSectionFromPath(path)) next = CRM_SECTION_VIEWS[crmSectionFromPath(path) as CrmSection] as AppView;
       else if (scraperSectionFromPath(path)) next = SCRAPER_SECTION_VIEWS[scraperSectionFromPath(path) as ScraperSection] as AppView;
       else if (search360SectionFromPath(path)) next = SEARCH360_SECTION_VIEWS[search360SectionFromPath(path) as Search360Section] as AppView;
@@ -575,6 +610,17 @@ export default function App() {
     }
     if (v === "import") {
       setViewAndHistory("import");
+      return;
+    }
+    if (v === "iframe-pages") {
+      setViewAndHistory("iframe-pages");
+      return;
+    }
+    if (isIframeView(v)) {
+      const id = iframeIdFromView(v);
+      if (id && iframeDockApps().some((app) => app.id === v)) {
+        setViewAndHistory(v as AppView);
+      }
       return;
     }
     setViewAndHistory(v as AppView);
@@ -787,12 +833,19 @@ export default function App() {
     if (target === "trading") return <TradingPage />;
     if (target === "tickers") return <TickerPage onSwitchView={() => setViewAndHistory("dashboard")} />;
     if (target === "rag") return <RagPage onSwitchView={() => setViewAndHistory("dashboard")} />;
+    if (target === "agents") return <DynamicAgentsPage onSwitchView={() => setViewAndHistory("dashboard")} />;
     if (target === "elastic") return <ElasticPage />;
     if (target === "import") return <ImportPage onSwitchView={() => setViewAndHistory("dashboard")} />;
     if (target === "settings") return <SettingsPage />;
     if (target === "admin") return <AdminPage />;
     if (target === "cli") return <CliPage />;
     if (target === "contracts-list") return <ContractsListPage onSwitchView={() => setViewAndHistory("dashboard")} />;
+    if (target === "iframe-pages") {
+      return <IframePagesPage onOpenIframe={(id) => setViewAndHistory(iframeViewFor(id) as AppView)} />;
+    }
+    if (isIframeView(target)) {
+      return <IframePage view={target} onConfigure={() => setViewAndHistory("iframe-pages")} />;
+    }
     if (target === "search") {
       return (
         <GlobalSearchPage
@@ -881,6 +934,58 @@ export default function App() {
         />
       );
     }
+    if (
+      target === "entities-dashboard" ||
+      target === "entities-adjudicantes" ||
+      target === "entities-adjudicatarios"
+    ) {
+      const role =
+        target === "entities-adjudicantes" ? "adjudicante" : target === "entities-adjudicatarios" ? "adjudicatario" : "all";
+      const openEntity = (nif: string) => {
+        if (!nif) return;
+        setSelectedCompany(nif);
+        setViewAndHistory("company-detail");
+      };
+      const switchRole = (next: EntityRole) => {
+        const viewForRole: Record<EntityRole, AppView> = {
+          all: "entities-dashboard",
+          adjudicante: "entities-adjudicantes",
+          adjudicatario: "entities-adjudicatarios",
+        };
+        setViewAndHistory(viewForRole[next]);
+      };
+      return (
+        <EntityDashboardPage
+          key={target}
+          role={role}
+          onSwitchView={() => setViewAndHistory("dashboard")}
+          onSwitchRole={switchRole}
+          onSelectEntity={openEntity}
+          onOpenCompare={() => setViewAndHistory("entities-compare")}
+        />
+      );
+    }
+    if (target === "entities-compare") {
+      return (
+        <EntityComparePage
+          onOpenEntity={(nif) => {
+            if (!nif) return;
+            setSelectedCompany(nif);
+            setViewAndHistory("company-detail");
+          }}
+          onOpenDashboard={(role) =>
+            setViewAndHistory(
+              role === "adjudicante"
+                ? "entities-adjudicantes"
+                : role === "adjudicatario"
+                  ? "entities-adjudicatarios"
+                  : "entities-dashboard",
+            )
+          }
+          onBack={() => setViewAndHistory("entities-dashboard")}
+        />
+      );
+    }
     if (target === "company-detail" && selectedCompany) {
       return (
         <CompanyDetailPage
@@ -918,6 +1023,15 @@ export default function App() {
     const custom = windowFor(target)?.title;
     if (custom) {
       return { title: custom, icon: <FileText size={13} /> };
+    }
+    if (isIframeView(target)) {
+      const id = iframeIdFromView(target);
+      const page = iframeDockApps().find((app) => app.id === target);
+      if (page) {
+        const Icon = page.icon;
+        return { title: page.label, icon: <Icon size={13} /> };
+      }
+      return { title: id ? `iframe · ${id}` : "Página iframe", icon: <FileText size={13} /> };
     }
     const app = dockApp(target);
     if (app) {

@@ -1511,6 +1511,25 @@ async def ask(
     if not clean:
         raise ValueError("Escreva a pergunta que quer investigar.")
 
+    # Se existir um agente dinâmico chamado "Hermes", dá-lhe prioridade.
+    user_id = getattr(getattr(session, "user", None), "id", None) if session else None
+    try:
+        from api import agent_integration as agenti
+
+        agent_result = await agenti.ask_hermes_agent(clean, user_id=user_id)
+        if agent_result:
+            return {
+                "answer": agenti.agent_result_to_rag_answer(agent_result),
+                "sources": agenti.agent_result_to_sources(agent_result),
+                "subquestions": [],
+                "skill": agenti.format_agent_as_skill("Hermes", agent_result),
+                "elapsed_seconds": agent_result.get("elapsed_seconds", 0),
+                "agent_id": agent_result.get("agent_id"),
+                "thread_id": agent_result.get("thread_id"),
+            }
+    except Exception as exc:
+        logger.warning("Falha ao executar agente Hermes dinâmico: %s", exc)
+
     started = time.perf_counter()
     spec = DEPTH_BY_ID.get(str(depth or DEFAULT_DEPTH)) or DEPTH_BY_ID[DEFAULT_DEPTH]
     selected = [

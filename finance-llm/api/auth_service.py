@@ -266,8 +266,11 @@ def public_user(source: Dict[str, Any]) -> Dict[str, Any]:
     preferences = {**DEFAULT_PREFERENCES, **(source.get("preferences") or {})}
     email = source.get("email") or ""
     name = source.get("name") or ""
+    user_id = source.get("id")
+    if not user_id:
+        user_id = source.get("email") or ""
     return {
-        "id": source.get("id"),
+        "id": str(user_id),
         "email": email,
         "name": name,
         "initials": _initials(name, email),
@@ -542,10 +545,11 @@ def create_session(
     """Abre uma sessão e devolve o token assinado + os dados da sessão."""
     es = _client()
     session_id = secrets.token_hex(24)
-    token, expires_at = issue_token(session_id, str(user.get("id")), ttl)
+    user_id = str(user.get("id") or user.get("email") or "")
+    token, expires_at = issue_token(session_id, user_id, ttl)
     document = {
         "session_id": session_id,
-        "user_id": user.get("id"),
+        "user_id": user_id,
         "email": user.get("email"),
         "created_at": _now_iso(),
         "last_seen_at": _now_iso(),

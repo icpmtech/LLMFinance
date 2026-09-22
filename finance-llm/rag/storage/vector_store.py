@@ -105,6 +105,10 @@ class VectorStore:
         if not self._chunks:
             return []
 
+        query_embedding = self.model.encode(
+            [query], convert_to_numpy=True, normalize_embeddings=True
+        )
+
         # Se for pedido filtro por documento, restringe o índice a esse subconjunto.
         if doc_id:
             candidate_indices = [
@@ -113,9 +117,6 @@ class VectorStore:
             if not candidate_indices:
                 return []
             candidate_chunks = [self._chunks[i] for i in candidate_indices]
-            query_embedding = self.model.encode(
-                [query], convert_to_numpy=True, normalize_embeddings=True
-            )
             sub_index = faiss.IndexFlatIP(self.dim)
             sub_embeddings = self.model.encode(
                 [c["text"] for c in candidate_chunks],
@@ -124,26 +125,18 @@ class VectorStore:
             )
             sub_index.add(sub_embeddings)
             scores, positions = sub_index.search(query_embedding, min(top_k, len(candidate_chunks)))
-            results = []
-            for score, pos in zip(scores[0], positions[0]):
-                if pos < 0 or pos >= len(candidate_chunks):
-                    continue
-                chunk = candidate_chunks[pos].copy()
-                chunk["score"] = float(score)
-                if score >= min_score:
-                    results.append(chunk)
-            return results
+            source_chunks = candidate_chunks
+        else:
+            scores, positions = self.index.search(query_embedding, min(top_k, len(self._chunks)))
+            source_chunks = self._chunks
 
-        query_embedding = self.model.encode(
-            [query], convert_to_numpy=True, normalize_embeddings=True
-        )
-        scores, indices = self.index.search(query_embedding, min(top_k, len(self._chunks)))
         results = []
-        for score, idx in zip(scores[0], indices[0]):
-            if idx < 0 or idx >= len(self._chunks):
+        for rank, (score, pos) in enumerate(zip(scores[0], positions[0]), start=1):
+            if pos < 0 or pos >= len(source_chunks):
                 continue
-            chunk = self._chunks[idx].copy()
+            chunk = source_chunks[pos].copy()
             chunk["score"] = float(score)
+            chunk["rank"] = rank
             if score >= min_score:
                 results.append(chunk)
         return results
