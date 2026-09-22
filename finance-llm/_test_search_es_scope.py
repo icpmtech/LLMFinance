@@ -26,17 +26,24 @@ def main() -> None:
         print(f"  [{flag}] {group['scope']:<12} total={group['total']:<8} itens={len(group['items'])}")
         if group.get("error"):
             print(f"        {group['error']}")
-        if group["scope"] == "contracts_es":
+        if group["scope"] in ("contracts_es", "entities_es"):
             for item in group["items"][:3]:
                 extra = item.get("extra") or {}
                 print(f"        · {item['title'][:70]}")
                 print(f"          {item['subtitle'][:80]}")
-                print(f"          valor={extra.get('valor')} ({extra.get('valor_tipo')}) ano={extra.get('ano')} fonte={extra.get('fonte')}")
+                print(f"          valor={extra.get('valor')} contratos={extra.get('contratos')} ano={extra.get('ano')}")
                 print(f"          badges={item['badges']} open={item['open']}")
                 print(f"          url={(item['url'] or '')[:90]}")
 
     only = get(f"/search/unified?q={urllib.parse.quote(TERM)}&scope=contracts_es&size=3")
     print(f"== só contracts_es -> {only.get('total')} em {only.get('took_ms')} ms")
+
+    ent = get(f"/search/unified?q={urllib.parse.quote(TERM)}&scope=entities_es&size=6")
+    group = (ent.get("groups") or [{}])[0]
+    print(f"== só entities_es -> {group.get('total')} entidades em {ent.get('took_ms')} ms")
+    for item in group.get("items", []):
+        print(f"  {item['badges'][0] if item['badges'] else '?':<24} {item['title'][:56]:<58} {item['snippet'][:46]}")
+        print(f"      open={item['open']}")
 
     suggest = get("/search/suggest?q=Ren")
     print(f"== /search/suggest q=Ren -> {len(suggest.get('items', []))} sugestões")

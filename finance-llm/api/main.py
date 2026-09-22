@@ -144,6 +144,8 @@ from api.elasticsearch_client import (
     get_contract_by_id,
     get_contract_network,
     get_contract_regional_analytics,
+    get_contract_region_detail,
+    get_contracts_iberia_map,
     get_contract_relationships,
     get_company_by_nif,
     get_company_contracts,
@@ -177,6 +179,15 @@ from api.elasticsearch_client import (
 )
 from api.rag_service import get_contracts_chat_answer
 from api.contract_agent import analyze_contract
+from api.openapi_meta import (
+    DESCRIPTION as API_DESCRIPTION,
+    CONTACT as API_CONTACT,
+    LICENSE_INFO as API_LICENSE,
+    SERVERS as API_SERVERS,
+    TAGS_METADATA as API_TAGS,
+    custom_openapi,
+    describe as describe_openapi,
+)
 from api.import_service import ingest_rows, parse_file
 from api.tools import (
     _normalize_ticker,
@@ -223,6 +234,7 @@ from api.visualizador_routes import router as visualizador_router
 from api.researcher_routes import router as researcher_router
 from api.vector_routes import router as vector_router
 from api.agent_routes import router as agent_router
+from api.companies_global_routes import router as companies_global_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -329,9 +341,20 @@ _silence_known_noise()
 app = FastAPI(
     title="IQ OS API",
     version="0.4.0",
-    description="API de chat, previsão de séries temporais e RAG do IQ OS (GPT-2, Mistral e BloombergGPT-style).",
+    description=API_DESCRIPTION,
     lifespan=lifespan,
+    contact=API_CONTACT,
+    license_info=API_LICENSE,
+    servers=API_SERVERS,
+    openapi_tags=API_TAGS,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
+
+# Catálogo de grupos, esquema `bearerAuth` e atribuição de grupos às rotas
+# inline (mercado, Elasticsearch, contratos, empresas, dossier, import, SPA).
+app.openapi = lambda: custom_openapi(app)  # type: ignore[method-assign]
 
 app.add_middleware(
     CORSMiddleware,
@@ -341,6 +364,20 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+# A especificação e as páginas de documentação mudam com o código: sem
+# `Cache-Control` o browser aplica a heurística de frescura e o Swagger fica a
+# mostrar grupos antigos (o `index.html` da SPA já é servido com `no-store`).
+_DOCS_NO_STORE_PREFIXES = ("/docs", "/redoc", "/openapi")
+
+
+@app.middleware("http")
+async def _no_store_for_docs(request: Request, call_next):
+    """Impede o cache do `/docs`, `/redoc`, `/openapi.json` e `/openapi/*`."""
+    response = await call_next(request)
+    if request.url.path.startswith(_DOCS_NO_STORE_PREFIXES):
+        response.headers["Cache-Control"] = "no-store, must-revalidate"
+    return response
 
 app.include_router(rag_router)
 app.include_router(auth_router)
@@ -364,6 +401,7 @@ app.include_router(visualizador_router)
 app.include_router(researcher_router)
 app.include_router(vector_router)
 app.include_router(agent_router)
+app.include_router(companies_global_router)
 
 
 # Cache curta de `user_id → email`, para o registo de pedidos identificar quem
@@ -1118,6 +1156,7 @@ def entities_detail(nif: str):
 @app.get("/contracts")
 @app.get("/contracts/dashboard")
 @app.get("/contracts/search")
+@app.get("/contracts/map")
 @app.get("/empresas-iq")
 @app.get("/crm")
 @app.get("/crm/contas")
@@ -1131,6 +1170,7 @@ def entities_detail(nif: str):
 @app.get("/scraper/agenda")
 @app.get("/pesquisa")
 @app.get("/sentimento")
+@app.get("/empresas-global")
 @app.get("/search360")
 @app.get("/search360/dossie")
 @app.get("/search360/projetos")
@@ -1159,6 +1199,7 @@ def read_root():
 
 @app.get("/health")
 def health():
+    """Estado do serviço: modelos e *features* carregados."""
     from api.providers_service import PROVIDERS
 
     return {
@@ -1166,6 +1207,28 @@ def health():
         "models": ["gpt2", "mistral", "bloomberg", *[spec["id"] for spec in PROVIDERS]],
         "features": ["chat", "forecast", "rag", "elasticsearch", "providers", "proxy"],
     }
+
+
+@app.get("/openapi/summary", tags=["core"])
+def openapi_summary():
+    """Resumo do catálogo OpenAPI: grupos, segurança, servidores e ligações úteis."""
+    return describe_openapi()
+
+
+@app.get("/openapi/export", tags=["core"])
+def openapi_export():
+    """Descarrega a especificação OpenAPI completa como ficheiro `JSON`.
+
+    Útil para gerar clientes, importar no Postman/Insomnia ou alimentar o
+    servidor MCP.
+    """
+    import json as _json
+
+    return Response(
+        content=_json.dumps(app.openapi(), ensure_ascii=False, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": 'attachment; filename="iq-os-openapi.json"'},
+    )
 
 
 async def _chat_skill(req: ChatRequest, backend: str, session: Any) -> dict:
@@ -1972,6 +2035,55 @@ def contracts_regional_analytics(year: Optional[int] = Query(None), size: int = 
     if result.get("error"):
         raise HTTPException(status_code=502, detail=result["error"])
     return ContractRegionalResponse(**result)
+
+
+@app.get("/contracts/analytics/iberia-map")
+def contracts_iberia_map(
+    ano: Optional[int] = Query(None, description="Ano (Portugal usa `Ano`, Espanha usa `ano`)"),
+    pais: str = Query("all", description="all | pt | es"),
+    q: Optional[str] = Query(None, description="Texto livre (objeto, entidades, descrição)"),
+    entidade: Optional[str] = Query(None, description="Nome de entidade (adjudicante ou adjudicatária)"),
+    cpv: Optional[str] = Query(None, description="Código CPV (prefixo ou código completo)"),
+):
+    """Volume e valor de contratos por região, para o mapa de Portugal e Espanha.
+
+    Portugal agrega por **distrito de execução** (`localExecucao`), Espanha por
+    **província/NUTS** (`nuts`). As coordenadas são resolvidas no frontend: os
+    contratos não trazem geografia própria, só a divisão administrativa.
+
+    Aceita os filtros da pesquisa (`q`, `entidade`, `cpv`, `ano`), pelo que o mapa
+    responde a «onde é que estes contratos foram executados?».
+    """
+    res = get_contracts_iberia_map(ano=ano, pais=pais, q=q, entidade=entidade, cpv=cpv)
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res["error"])
+    return res
+
+
+@app.get("/contracts/region-detail")
+def contracts_region_detail(
+    code: str = Query(..., description="Distrito PT («Bragança») ou código NUTS ES («ES300»)"),
+    pais: str = Query("PT", description="PT | ES"),
+    ano: Optional[int] = Query(None, description="Ano (opcional)"),
+    top_n: int = Query(12, ge=1, le=50, description="Entidades a listar por papel"),
+    contracts_size: int = Query(20, ge=1, le=100, description="Contratos a listar"),
+):
+    """Contratos, entidades (adjudicantes e adjudicatárias) e métricas de uma região.
+
+    Alimenta a janela aberta pelo menu de contexto do mapa (`/contracts/map`):
+    volume e valor, distribuição por ano/CPV/procedimento/tipo/escalão, quem
+    adjudica, quem executa e os maiores contratos da região.
+    """
+    res = get_contract_region_detail(
+        pais=pais,
+        code=code,
+        ano=ano,
+        top_n=top_n,
+        contracts_size=contracts_size,
+    )
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res["error"])
+    return res
 
 
 @app.get("/contracts/analytics/network", response_model=ContractGraphResponse)

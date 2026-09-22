@@ -20,6 +20,7 @@ import {
   FileText,
   FolderHeart,
   Globe,
+  Handshake,
   Landmark,
   LayoutList,
   Newspaper,
@@ -40,6 +41,8 @@ export const KIND_ICON: Record<FinderKind, LucideIcon> = {
   trademark: BadgeCheck,
   firma: Tag,
   crm: Briefcase,
+  organo_es: Landmark,
+  adjudicataria_es: Handshake,
 };
 
 /** Gradientes por tipo (mesmas famílias das localizações). */
@@ -55,6 +58,8 @@ export const KIND_GRADIENT: Record<FinderKind, string> = {
   trademark: "from-pink-200 via-pink-400 to-fuchsia-600",
   firma: "from-cyan-200 via-cyan-400 to-blue-500",
   crm: "from-indigo-200 via-indigo-400 to-indigo-600",
+  organo_es: "from-amber-200 via-amber-400 to-red-500",
+  adjudicataria_es: "from-yellow-200 via-orange-400 to-rose-500",
 };
 
 export type FinderView = "icons" | "list" | "columns" | "gallery";
@@ -65,6 +70,8 @@ export type FinderLocationId =
   | "favorites"
   | "entities"
   | "contracts"
+  | "es-organos"
+  | "es-empresas"
   | "documents"
   | "scraped"
   | "tickers"
@@ -89,6 +96,8 @@ export const FINDER_LOCATIONS: FinderLocation[] = [
   { id: "favorites", label: "Favoritos", hint: "Entidades e contratos guardados", icon: FolderHeart, gradient: "from-rose-300 via-pink-500 to-rose-600" },
   { id: "entities", label: "Entidades", hint: "Diretório de empresas", icon: Building2, gradient: "from-emerald-300 via-emerald-500 to-teal-600" },
   { id: "contracts", label: "Contratos", hint: "Contratação pública", icon: FileText, gradient: "from-amber-200 via-amber-400 to-orange-500" },
+  { id: "es-organos", label: "Entidades ES", hint: "Órgãos adjudicantes de Espanha (PLACSP)", icon: Landmark, gradient: "from-amber-200 via-amber-400 to-red-500" },
+  { id: "es-empresas", label: "Empresas ES", hint: "Empresas adjudicatárias de Espanha (PLACSP)", icon: Handshake, gradient: "from-yellow-200 via-orange-400 to-rose-500" },
   { id: "documents", label: "Documentos", hint: "PDF indexados no RAG", icon: Landmark, gradient: "from-sky-200 via-cyan-400 to-teal-500" },
   { id: "scraped", label: "Objectos da recolha", hint: "Itens recolhidos pelo scraper", icon: Globe, gradient: "from-lime-200 via-lime-400 to-green-600" },
   { id: "tickers", label: "Mercados", hint: "Tickers indexados", icon: TrendingUp, gradient: "from-rose-200 via-rose-400 to-pink-600" },
@@ -116,7 +125,9 @@ export type FinderKind =
   | "price"
   | "trademark"
   | "firma"
-  | "crm";
+  | "crm"
+  | "organo_es"
+  | "adjudicataria_es";
 
 export const KIND_LABEL: Record<FinderKind, string> = {
   entity: "Entidade",
@@ -130,6 +141,8 @@ export const KIND_LABEL: Record<FinderKind, string> = {
   trademark: "Marca",
   firma: "Firma",
   crm: "CRM",
+  organo_es: "Entidade ES",
+  adjudicataria_es: "Empresa ES",
 };
 
 export type FinderItem = {
@@ -304,6 +317,7 @@ export function appHref(item: FinderItem): string {
   if (item.kind === "news") return `/tickers/${encodeURIComponent(item.id)}`;
   if (item.kind === "price") return `/tickers/${encodeURIComponent(item.id)}`;
   if (item.kind === "trademark" || item.kind === "firma") return `/companies/${encodeURIComponent(item.id)}`;
+  if (item.kind === "organo_es" || item.kind === "adjudicataria_es") return "/contratos-es";
   if (item.kind === "crm") return `/crm`;
   return "/elastic";
 }

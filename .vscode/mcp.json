@@ -1,0 +1,18 @@
+{
+  "servers": {
+    "iqos": {
+      "type": "stdio",
+      "command": "c:/LLMFinance/.venv/Scripts/python.exe",
+      "args": ["-m", "mcp_server"],
+      "cwd": "c:/LLMFinance/finance-llm",
+      "env": {
+        "IQOS_API_URL": "http://127.0.0.1:8002",
+        "PYTHONUNBUFFERED": "1"
+      }
+    },
+    "iqos-http": {
+      "type": "http",
+      "url": "http://127.0.0.1:8765/mcp"
+    }
+  }
+}

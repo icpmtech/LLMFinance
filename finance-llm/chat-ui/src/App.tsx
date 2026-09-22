@@ -25,6 +25,7 @@ import { ElasticPage } from "./pages/ElasticPage";
 import { GlobalSearchPage } from "./pages/GlobalSearchPage";
 // import { ContractsPage } from "./pages/ContractsPage"; // página legada, mantida no código mas não usada
 import { ContractsDashboardPage } from "./pages/ContractsDashboardPage";
+import { ContractsMapPage } from "./pages/ContractsMapPage";
 import { ContractsSearchPage } from "./pages/ContractsSearchPage";
 import { ContractsEsSearchPage } from "./pages/ContractsEsSearchPage";
 import { ContractsEsDashboardPage } from "./pages/ContractsEsDashboardPage";
@@ -34,6 +35,7 @@ import CompanyDashboardPage from "./pages/CompanyDashboardPage";
 import EntityDashboardPage from "./pages/EntityDashboardPage";
 import EntityComparePage from "./pages/EntityComparePage";
 import EmpresasIQPage from "./pages/EmpresasIQPage";
+import CompaniesGlobalPage from "./pages/CompaniesGlobalPage";
 import OntologyPage from "./pages/OntologyPage";
 import VisualizadorPage from "./pages/VisualizadorPage";
 import VisualizadorDashboardsPage from "./pages/VisualizadorDashboardsPage";
@@ -76,6 +78,7 @@ import type { FinderKind } from "./finder";
 import { EntitiesSearchPage } from "./pages/EntitiesSearchPage";
 import { ImportPage } from "./pages/ImportPage";
 import { ContractsListPage } from "./pages/ContractsListPage";
+import { RegionDetailWindow } from "./pages/RegionDetailWindow";
 import IframePage from "./pages/IframePage";
 import IframePagesPage from "./pages/IframePagesPage";
 import {
@@ -104,8 +107,11 @@ type AppView =
   | "crm-agenda"
   | "crm-dashboard"
   | "contracts-list"
+  | "contracts-map"
+  | "region-detail"
   | "contratos-es"
   | "contratos-es-dashboard"
+  | "companies-global"
   | "settings"
   | "cli"
   | "browser"
@@ -116,6 +122,24 @@ type AppView =
   | "iframe-pages";
 const COMPANY_DETAIL_KEY = "finance-llm-company-detail";
 const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
+/** Região de contratos aberta a partir do mapa (janela `region-detail`). */
+const REGION_DETAIL_KEY = "finance-llm-region-detail";
+
+type RegionDetailTarget = { pais: "PT" | "ES"; code: string; label?: string; ano?: number | null };
+
+/** Lê a região guardada (deep link `/contracts/region/...` ou última aberta). */
+function readRegionDetailTarget(): RegionDetailTarget | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(REGION_DETAIL_KEY) || "null") as RegionDetailTarget | null;
+    if (parsed && (parsed.pais === "PT" || parsed.pais === "ES") && typeof parsed.code === "string") {
+      return parsed;
+    }
+  } catch {
+    /* sem região guardada */
+  }
+  return null;
+}
 /** Último modelo/fornecedor escolhido no chat. */
 const BACKEND_KEY = "finance-llm-backend";
 
@@ -145,7 +169,12 @@ function titleFromText(text: string) {
 }
 
 /** URL correspondente a uma vista (usado na navegação e nas janelas). */
-function pathForView(view: string, company: string | null, ticker: string | null): string {
+function pathForView(
+  view: string,
+  company: string | null,
+  ticker: string | null,
+  region: RegionDetailTarget | null = null,
+): string {
   if (view === "chat") return "/chat";
   if (view === "browser") return "/browser";
   if (view === "dashboard") return "/dashboard";
@@ -161,7 +190,12 @@ function pathForView(view: string, company: string | null, ticker: string | null
   if (view === "contracts-search" || view === "contracts") return "/contracts/search";
   if (view === "contratos-es") return "/contratos-es";
   if (view === "contratos-es-dashboard") return "/contratos-es/dashboard";
+  if (view === "companies-global") return "/empresas-global";
   if (view === "contracts-dashboard") return "/contracts/dashboard";
+  if (view === "contracts-map") return "/contracts/map";
+  if (view === "region-detail") {
+    return region ? `/contracts/region/${region.pais}/${encodeURIComponent(region.code)}` : "/contracts/map";
+  }
   if (view === "companies-search" || view === "companies") return "/companies/search";
   if (view === "entities-search") return "/entities/search";
   if (view === "entities-dashboard") return "/entities/dashboard";
@@ -206,13 +240,14 @@ function pathForView(view: string, company: string | null, ticker: string | null
   return "/";
 }
 
-/** Janelas auxiliares (fichas, quick look, contratos da entidade): identificadas por prefixo. */
+/** Janelas auxiliares (fichas, quick look, contratos da entidade, regiões): identificadas por prefixo. */
 function isDetailView(view: string): boolean {
   return (
     view.startsWith("company-detail:") ||
     view.startsWith("contract-detail:") ||
     view.startsWith("quicklook:") ||
     view.startsWith("entity-contracts:") ||
+    view.startsWith("region-detail:") ||
     view.startsWith("crm-account:") ||
     view.startsWith("crm-edit:")
   );
@@ -301,6 +336,15 @@ export default function App() {
     if (typeof window === "undefined") return null;
     return localStorage.getItem(TICKER_DETAIL_KEY);
   });
+  /** Região cuja ficha está aberta (`/contracts/region/<pais>/<código>`). */
+  const [regionDetail, setRegionDetail] = useState<RegionDetailTarget | null>(() => readRegionDetailTarget());
+
+  const rememberRegionDetail = useCallback((target: RegionDetailTarget | null) => {
+    setRegionDetail(target);
+    if (typeof window === "undefined") return;
+    if (target) window.localStorage.setItem(REGION_DETAIL_KEY, JSON.stringify(target));
+    else window.localStorage.removeItem(REGION_DETAIL_KEY);
+  }, []);
 
   const [view, setView] = useState<AppView>(() => {
     if (typeof window === "undefined") return "dashboard";
@@ -328,6 +372,15 @@ export default function App() {
     if (path === "/contratos-es") return "contratos-es";
     if (path === "/contratos-es/dashboard") return "contratos-es-dashboard";
     if (path === "/contracts/dashboard") return "contracts-dashboard";
+    if (path === "/contracts/map") return "contracts-map";
+    if (path.startsWith("/contracts/region/")) {
+      const [, , , pais, ...rest] = path.split("/");
+      const code = decodeURIComponent(rest.join("/"));
+      if ((pais === "PT" || pais === "ES") && code) {
+        setRegionDetail((prev) => ({ pais, code, label: prev?.label }));
+        return "region-detail";
+      }
+    }
     if (path === "/companies") return "companies-search";
     if (path === "/companies/search") return "companies-search";
     if (path === "/entities" || path === "/entities/search" || path === "/empresas") return "entities-search";
@@ -342,6 +395,7 @@ export default function App() {
     if (path === "/cli") return "cli";
     if (path === "/contracts-list" || path.startsWith("/contracts-list/")) return "contracts-list";
     if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) return "empresas-iq";
+    if (path === "/empresas-global") return "companies-global";
     if (path === "/ontology" || path.startsWith("/ontology/")) return "ontology";
     if (path === "/hermes" || path.startsWith("/hermes/")) return "hermes";
     if (path === "/researcher" || path.startsWith("/researcher/")) return "researcher";
@@ -400,6 +454,7 @@ export default function App() {
       else if (path === "/contratos-es") next = "contratos-es";
       else if (path === "/contratos-es/dashboard") next = "contratos-es-dashboard";
       else if (path === "/contracts/dashboard") next = "contracts-dashboard";
+      else if (path === "/contracts/map") next = "contracts-map";
       else if (path === "/companies" || path === "/companies/search") next = "companies-search";
       else if (path === "/entities" || path === "/entities/search" || path === "/empresas") next = "entities-search";
       else if (path === "/entities/dashboard" || path === "/empresas/dashboard") next = "entities-dashboard";
@@ -413,6 +468,7 @@ export default function App() {
       else if (path === "/cli") next = "cli";
       else if (path === "/contracts-list" || path.startsWith("/contracts-list/")) next = "contracts-list";
       else if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) next = "empresas-iq";
+      else if (path === "/empresas-global") next = "companies-global";
       else if (path === "/ontology" || path.startsWith("/ontology/")) next = "ontology";
       else if (path === "/hermes" || path.startsWith("/hermes/")) next = "hermes";
       else if (path === "/researcher" || path.startsWith("/researcher/")) next = "researcher";
@@ -550,12 +606,12 @@ export default function App() {
         if (windowFor(next)) restoreWindow(next);
         else openWindow(next, workspaceEstimate());
       }
-      const path = pathForView(next, selectedCompany, selectedTicker);
+      const path = pathForView(next, selectedCompany, selectedTicker, regionDetail);
       if (typeof window !== "undefined" && window.location.pathname !== path) {
         window.history.pushState({}, "", path);
       }
     },
-    [selectedCompany, selectedTicker, windowMode],
+    [regionDetail, selectedCompany, selectedTicker, windowMode],
   );
 
   const handleSwitchView = (v: string) => {
@@ -587,6 +643,10 @@ export default function App() {
     }
     if (v === "contracts-dashboard") {
       setViewAndHistory("contracts-dashboard");
+      return;
+    }
+    if (v === "contracts-map") {
+      setViewAndHistory("contracts-map");
       return;
     }
     if (v === "contratos-es") {
@@ -650,6 +710,28 @@ export default function App() {
     setSelectedCompany(nif);
     setViewAndHistory("company-detail");
   };
+
+  /** Abre a ficha de uma região (menu de contexto do mapa): janela ou página. */
+  const openRegionDetail = useCallback(
+    (pais: "PT" | "ES", code: string, label: string, ano: number | null) => {
+      const view = `region-detail:${pais}:${code}`;
+      rememberRegionDetail({ pais, code, label, ano });
+      if (windowMode && typeof window !== "undefined") {
+        openWindow(view, workspaceEstimate(), {
+          title: `${label} · contratos`,
+          rect: { width: 1180, height: 840 },
+        });
+        return;
+      }
+      setViewAndHistory("region-detail" as AppView);
+      // O caminho é escrito aqui: `setViewAndHistory` usa o estado anterior desta
+      // região (ainda vazio na primeira abertura) e apontaria para o mapa.
+      if (typeof window !== "undefined") {
+        window.history.pushState({}, "", `/contracts/region/${pais}/${encodeURIComponent(code)}`);
+      }
+    },
+    [rememberRegionDetail, setViewAndHistory, windowMode],
+  );
 
   /**
    * Abre uma vista ou ficha a partir de um resultado da Pesquisa total.
@@ -777,8 +859,35 @@ export default function App() {
     if (target.startsWith("entity-contracts:")) {
       return <EntityContractsWindow nif={target.slice("entity-contracts:".length)} />;
     }
+    if (target.startsWith("region-detail:")) {
+      const [, pais, ...rest] = target.split(":");
+      const code = rest.join(":");
+      return (
+        <RegionDetailWindow
+          pais={pais === "ES" ? "ES" : "PT"}
+          code={code}
+          ano={regionDetail?.ano ?? null}
+        />
+      );
+    }
+    if (target === "region-detail") {
+      return regionDetail ? (
+        <RegionDetailWindow
+          pais={regionDetail.pais}
+          code={regionDetail.code}
+          ano={regionDetail.ano ?? null}
+          onClose={() => {
+            rememberRegionDetail(null);
+            setViewAndHistory("contracts-map");
+          }}
+        />
+      ) : (
+        <ContractsMapPage onSwitchView={() => setViewAndHistory("contracts-search")} />
+      );
+    }
     if (target === "dashboard") return <DashboardPage onSwitchView={handleSwitchView} onSelectTicker={handleSelectTicker} />;
     if (target === "empresas-iq") return <EmpresasIQPage />;
+    if (target === "companies-global") return <CompaniesGlobalPage onOpenView={handleOpenSearchView} />;
     if (target === "ontology") return <OntologyPage />;
     if (target === "hermes") return <HermesPage />;
     if (target === "researcher") return <ResearcherPage />;
@@ -893,6 +1002,14 @@ export default function App() {
         <ContractsDashboardPage
           onSwitchView={() => setViewAndHistory("dashboard")}
           onSwitchSearch={() => setViewAndHistory("contracts-search")}
+        />
+      );
+    }
+    if (target === "contracts-map") {
+      return (
+        <ContractsMapPage
+          onSwitchView={() => setViewAndHistory("contracts-search")}
+          onOpenRegionDetail={openRegionDetail}
         />
       );
     }
@@ -1149,9 +1266,10 @@ export default function App() {
     );
   }
 
-  if (view === "hermes") {
-    /* O Hermes é uma conversa: ocupa a altura do ecrã, a lista de respostas rola
-       por dentro e a caixa de pergunta fica sempre à vista (como no Chat). */
+  if (view === "hermes" || view === "contracts-map") {
+    /* Hermes é uma conversa e o mapa de contratos é um mapa: ambos ocupam a altura
+       do ecrã (a lista/o painel rolam por dentro) em vez de fazer crescer a página
+       — no mapa, o enquadramento da Península não deve empurrar o painel para baixo. */
     return (
       <div className={["flex h-screen w-full overflow-hidden bg-background text-foreground", dockSpacer.sides].join(" ")}>
         <AppNav

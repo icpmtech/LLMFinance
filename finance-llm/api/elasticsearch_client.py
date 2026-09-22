@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import time
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
@@ -1601,7 +1602,20 @@ def export_contracts_to_excel(
     if not client:
         raise RuntimeError("Elasticsearch indisponível")
 
-    query = _build_contract_query(q, year, entity, nif, cpv_code, min_price, max_price, start_date, end_date)
+    # Argumentos por nome: a ordem de `_build_contract_query` inclui `counterparty_nif`
+    # e `region` antes do CPV, e a chamada posicional antiga deslocava os filtros
+    # (o CPV era aplicado como região, o preço mínimo como CPV…).
+    query = _build_contract_query(
+        q=q,
+        year=year,
+        entity=entity,
+        nif=nif,
+        cpv_code=cpv_code,
+        min_price=min_price,
+        max_price=max_price,
+        start_date=start_date,
+        end_date=end_date,
+    )
     resp = client.search(
         index=CONTRACTS_INDEX,
         body={
@@ -1677,7 +1691,19 @@ def export_contracts_to_pdf(
     if not client:
         raise RuntimeError("Elasticsearch indisponível")
 
-    query = _build_contract_query(q, year, entity, nif, cpv_code, min_price, max_price, start_date, end_date)
+    # Argumentos por nome: ver a nota em `export_contracts_to_excel` (a chamada
+    # posicional antiga deslocava CPV/valores/datas para os filtros errados).
+    query = _build_contract_query(
+        q=q,
+        year=year,
+        entity=entity,
+        nif=nif,
+        cpv_code=cpv_code,
+        min_price=min_price,
+        max_price=max_price,
+        start_date=start_date,
+        end_date=end_date,
+    )
     resp = client.search(
         index=CONTRACTS_INDEX,
         body={
@@ -3504,8 +3530,103 @@ def get_contract_regional_analytics(year: Optional[int] = None, size: int = 30, 
         return {"error": str(exc), "regions": []}
 
 
+# Distritos e regiões autónomas de Portugal, escritos como aparecem no segundo
+# segmento de `localExecucao` («Portugal, <Distrito>[, <Município>]»).
+#
+# Esta é a geografia com cobertura real nos contratos portugueses: o campo `NUTs`
+# só existe em ~14% dos documentos (309 mil de 2,25 M), enquanto `localExecucao`
+# traz distrito em ~91% (2,05 M). O `_region_filter` aceita por isso tanto um
+# código/string NUTS como o nome de um distrito.
+PT_DISTRICTS: tuple = (
+    "Aveiro",
+    "Beja",
+    "Braga",
+    "Bragança",
+    "Castelo Branco",
+    "Coimbra",
+    "Évora",
+    "Faro",
+    "Guarda",
+    "Leiria",
+    "Lisboa",
+    "Portalegre",
+    "Porto",
+    "Santarém",
+    "Setúbal",
+    "Viana do Castelo",
+    "Vila Real",
+    "Viseu",
+    "Região Autónoma da Madeira",
+    "Região Autónoma dos Açores",
+)
+
+
+def _fold_text(value: Optional[str]) -> str:
+    """Minúsculas sem acentos (comparação tolerante de nomes de distrito)."""
+    text = (value or "").strip().lower()
+    for source, target in (("ã", "a"), ("á", "a"), ("â", "a"), ("à", "a"), ("é", "e"), ("ê", "e"),
+                           ("í", "i"), ("ó", "o"), ("ô", "o"), ("õ", "o"), ("ú", "u"), ("ç", "c")):
+        text = text.replace(source, target)
+    return text
+
+
+def _strip_accents(value: str) -> str:
+    """Remove acentos mantendo a caixa («Bragança» → «Braganca»).
+
+    O portal base escreve o mesmo distrito das duas formas («Bragança» nos ZIPs
+    antigos, «Braganca» em Ficheiros mais recentes), por isso o filtro tem de
+    aceitar ambas.
+    """
+    return "".join(
+        char for char in unicodedata.normalize("NFD", value or "") if unicodedata.category(char) != "Mn"
+    )
+
+
+# Nome canónico a partir da chave comparável («setubal» → «Setúbal»), para que o
+# filtro use a grafia que existe nos dados mesmo que o pedido venha sem acentos.
+_PT_DISTRICT_BY_KEY = {_fold_text(name): name for name in PT_DISTRICTS}
+
+
+
+def _pt_district_from_local(local: Any) -> Optional[str]:
+    """Extrai o distrito de `localExecucao` («Portugal, Lisboa, Cascais» → «Lisboa»)."""
+    text = str(local or "").strip()
+    if not text.startswith("Portugal"):
+        return None
+    parts = [part.strip() for part in text.split(",")]
+    if len(parts) < 2:
+        return None
+    return parts[1] or None
+
+def _district_filter(distrito: str, unspecified: bool = False) -> Dict[str, Any]:
+    """Filtro por distrito de execução (Portugal).
+
+    O distrito aparece como segundo segmento de `localExecucao`, com ou sem
+    município («Portugal, Braga» e «Portugal, Braga, Guimarães»). O termo exato
+    + prefixo com vírgula evita colisões de nomes (Braga vs. Bragança).
+
+    Aceita as duas grafias usadas nos dados («Bragança» e «Braganca»), senão o
+    mapa agrega contratos que a pesquisa depois não encontra.
+    """
+    if unspecified:
+        return {
+            "bool": {
+                "must_not": {"wildcard": {"localExecucao": {"value": "Portugal, *"}}},
+            }
+        }
+    variants: List[str] = []
+    for name in (distrito, _strip_accents(distrito)):
+        if name and name not in variants:
+            variants.append(name)
+    should: List[Dict[str, Any]] = []
+    for name in variants:
+        should.append({"term": {"localExecucao": f"Portugal, {name}"}})
+        should.append({"prefix": {"localExecucao": f"Portugal, {name}, "}})
+    return {"bool": {"should": should, "minimum_should_match": 1}}
+
+
 def _region_filter(region: Optional[str] = None) -> Dict[str, Any]:
-    """Filtro de região. Aceita código curto (ex: PT11A) ou string completa NUTS.
+    """Filtro de região. Aceita NUTS (código ou string completa) ou distrito PT.
 
     ES armazena NUTs como strings completas (ex: "PT11A - Área Metropolitana do Porto"),
     por isso usamos wildcard/prefixo quando a região fornecida não contém o separador.
@@ -3525,7 +3646,587 @@ def _region_filter(region: Optional[str] = None) -> Dict[str, Any]:
         }
     if " - " in region:
         return {"term": {"NUTs": region}}
+    distrito = _PT_DISTRICT_BY_KEY.get(_fold_text(region))
+    if distrito:
+        # Nome de distrito português: a geografia fiável é `localExecucao`, não a NUTS.
+        return _district_filter(distrito)
     return {"wildcard": {"NUTs": f"{region}*"}}
+
+
+# ---------------------------------------------------------------------------
+# Mapa ibérico de contratos públicos (Portugal + Espanha)
+# ---------------------------------------------------------------------------
+#
+# Os contratos não têm coordenadas: a geografia disponível é administrativa
+# (distrito português, província/NUTS espanhola). Este agregado devolve volume e
+# valor por região para cada país; a conversão em pontos no mapa (centroide da
+# capital) é feita no frontend, onde também se marca o que é aproximado.
+
+
+def _sum_agg_value(agg: Optional[Dict[str, Any]]) -> float:
+    """Valor de uma agregação `sum` (0.0 quando ausente/nula)."""
+    value = (agg or {}).get("value")
+    return float(value) if value is not None else 0.0
+
+
+# Campos de texto para a pesquisa do mapa. Os nomes das partes entram por
+# `adjudicantes.raw`/`adjudicatarios.raw` (texto) e não por `parsed.nome`, que é
+# `keyword`: nesse campo só casaria o nome completo exato («METROPOLITANO DE
+# LISBOA, S.A.»), nunca «Metropolitano de Lisboa».
+_IBERIA_TEXT_FIELDS_PT = [
+    "objectoContrato^3",
+    "descContrato^2",
+    "search_text",
+    "adjudicantes.raw",
+    "adjudicatarios.raw",
+    "cpv.description",
+]
+_IBERIA_TEXT_FIELDS_ES = [
+    "objeto^3",
+    "adjudicatario_nombre^2",
+    "organo_nombre^2",
+    "descripcion",
+    "search_text",
+]
+
+
+def _iberia_text_query(text: str, fields: List[str]) -> Dict[str, Any]:
+    """`multi_match` que exige **todos** os termos (`operator: and`).
+
+    A pesquisa livre dos contratos (páginas de pesquisa) usa `best_fields` sem
+    mínimo de termos: «Hospital de Cascais» devolve 2,1 M contratos (basta o
+    «de»). Num mapa isso acenderia o país inteiro, por isso a pesquisa do mapa
+    exige todos os termos.
+    """
+    return {
+        "multi_match": {
+            "query": text,
+            "fields": fields,
+            "type": "best_fields",
+            "operator": "and",
+        }
+    }
+
+
+def _with_required(query: Dict[str, Any], extra: Dict[str, Any]) -> Dict[str, Any]:
+    """Acrescenta uma condição obrigatória a uma query já construída."""
+    if not extra:
+        return query
+    if query == {"match_all": {}}:
+        return extra
+    combined = dict(query)
+    bool_query = dict(combined.get("bool", {}))
+    bool_query["must"] = list(bool_query.get("must", [])) + [extra]
+    combined["bool"] = bool_query
+    return combined
+
+
+def _es_code_level(code: str) -> str:
+    """Nível NUTS de um código espanhol: `ES300` (3), `ES30` (2), `ES3` (1) ou país."""
+    body = code[2:]
+    if body.isdigit():
+        return {1: "nuts1", 2: "nuts2", 3: "nuts3"}.get(len(body), "pais")
+    return "pais"
+
+
+def _iberia_map_portugal(
+    client: Elasticsearch,
+    ano: Optional[int],
+    q: Optional[str] = None,
+    entidade: Optional[str] = None,
+    cpv: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Contratos portugueses por distrito de execução (`localExecucao`).
+
+    Os filtros de país (`cpv`, `ano`) vêm da pesquisa de contratos; o texto
+    (objeto, entidades) usa uma pesquisa que exige todos os termos, para o mapa
+    não mostrar o país inteiro com uma pesquisa de duas palavras.
+    """
+    texto = " ".join(part.strip() for part in (q, entidade) if part and part.strip())
+    query = _build_contract_query(year=ano, cpv_code=cpv)
+    if texto:
+        query = _with_required(query, _iberia_text_query(texto, _IBERIA_TEXT_FIELDS_PT))
+    resp = client.search(
+        index=CONTRACTS_INDEX,
+        body={
+            "size": 0,
+            "track_total_hits": True,
+            "query": query,
+            "aggs": {
+                "total_value": {"sum": {"field": "precoContratual"}},
+                "locais": {
+                    "terms": {"field": "localExecucao", "size": 2000},
+                    "aggs": {"total_value": {"sum": {"field": "precoContratual"}}},
+                },
+                "com_distrito": {
+                    "filter": {"wildcard": {"localExecucao": {"value": "Portugal, *"}}},
+                    "aggs": {"total_value": {"sum": {"field": "precoContratual"}}},
+                },
+            },
+        },
+    )
+    aggs = resp.get("aggregations", {}) or {}
+    districts: Dict[str, Dict[str, float]] = {}
+    for bucket in aggs.get("locais", {}).get("buckets", []):
+        raw = _pt_district_from_local(bucket.get("key"))
+        if not raw:
+            continue
+        # O portal escreve o mesmo distrito com variantes (ex.: «Braganca» sem
+        # cedilha): normalizamos para o nome canónico para não partir a região.
+        # Valores que não são distritos («Portugal Continental», «Distrito não
+        # determinado») ficam como região própria e o frontend lista-os à parte.
+        distrito = _PT_DISTRICT_BY_KEY.get(_fold_text(raw), raw)
+        entry = districts.setdefault(distrito, {"count": 0.0, "total_value": 0.0})
+        entry["count"] += bucket.get("doc_count", 0)
+        entry["total_value"] += _sum_agg_value(bucket.get("total_value"))
+
+    total = resp.get("hits", {}).get("total", {}).get("value", 0)
+    total_value = _sum_agg_value(aggs.get("total_value"))
+    with_district = (aggs.get("com_distrito", {}) or {}).get("doc_count", 0)
+    with_district_value = _sum_agg_value((aggs.get("com_distrito", {}) or {}).get("total_value"))
+
+    regions = [
+        {
+            "pais": "PT",
+            "code": name,
+            "label": name,
+            "level": "distrito",
+            "count": int(values["count"]),
+            "total_value": round(values["total_value"], 2),
+        }
+        for name, values in sorted(districts.items(), key=lambda item: item[1]["total_value"], reverse=True)
+    ]
+    return {
+        "total_contracts": int(total),
+        "total_value": round(total_value, 2),
+        "regions": regions,
+        "unspecified": {
+            "count": max(int(total) - int(with_district), 0),
+            "total_value": round(max(total_value - with_district_value, 0.0), 2),
+        },
+        "other_locations": {"count": 0, "total_value": 0.0},
+    }
+
+
+def _iberia_map_espanha(
+    client: Elasticsearch,
+    ano: Optional[int],
+    q: Optional[str] = None,
+    entidade: Optional[str] = None,
+    cpv: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Contratos de Espanha por província/NUTS (`nuts`).
+
+    A `entidade` entra no texto livre: no PLACSP o nome do órgão e da
+    adjudicatária são campos pesquisáveis do mesmo `multi_match`.
+    """
+    value_source = _contratos_es_value_source("valor_adjudicado")
+    texto = " ".join(part.strip() for part in (q, entidade) if part and part.strip())
+    query = _build_contratos_es_query(ano=ano, cpv_code=cpv)
+    if texto:
+        query = _with_required(query, _iberia_text_query(texto, _IBERIA_TEXT_FIELDS_ES))
+    resp = client.search(
+        index=CONTRATOS_ES_INDEX,
+        body={
+            "size": 0,
+            "track_total_hits": True,
+            "query": query,
+            "aggs": {
+                "total_value": {"sum": value_source},
+                "codigos": {
+                    "terms": {"field": "nuts", "size": 600},
+                    "aggs": {"total_value": {"sum": value_source}},
+                },
+                "com_nuts": {
+                    "filter": {"prefix": {"nuts": "ES"}},
+                    "aggs": {"total_value": {"sum": value_source}},
+                },
+            },
+        },
+    )
+    aggs = resp.get("aggregations", {}) or {}
+    regions: List[Dict[str, Any]] = []
+    other_count = 0
+    other_value = 0.0
+    for bucket in aggs.get("codigos", {}).get("buckets", []):
+        code = str(bucket.get("key") or "").strip()
+        if not code:
+            continue
+        value = _sum_agg_value(bucket.get("total_value"))
+        if not code.startswith("ES"):
+            # Local de execução fora de Espanha (o adjudicatário pode ser estrangeiro).
+            other_count += bucket.get("doc_count", 0)
+            other_value += value
+            continue
+        regions.append({
+            "pais": "ES",
+            "code": code,
+            "label": code,
+            "level": _es_code_level(code),
+            "count": int(bucket.get("doc_count", 0)),
+            "total_value": round(value, 2),
+        })
+
+    total = resp.get("hits", {}).get("total", {}).get("value", 0)
+    total_value = _sum_agg_value(aggs.get("total_value"))
+    with_nuts = (aggs.get("com_nuts", {}) or {}).get("doc_count", 0)
+    with_nuts_value = _sum_agg_value((aggs.get("com_nuts", {}) or {}).get("total_value"))
+
+    regions.sort(key=lambda row: row["total_value"], reverse=True)
+    return {
+        "total_contracts": int(total),
+        "total_value": round(total_value, 2),
+        "regions": regions,
+        "unspecified": {
+            "count": max(int(total) - int(with_nuts), 0),
+            "total_value": round(max(total_value - with_nuts_value, 0.0), 2),
+        },
+        "other_locations": {
+            "count": int(other_count),
+            "total_value": round(other_value, 2),
+        },
+    }
+
+
+def get_contracts_iberia_map(
+    ano: Optional[int] = None,
+    pais: str = "all",
+    q: Optional[str] = None,
+    entidade: Optional[str] = None,
+    cpv: Optional[str] = None,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Volume e valor de contratos por região, para o mapa de Portugal e Espanha.
+
+    Uma só chamada devolve as duas geografias (distrito em Portugal, província em
+    Espanha) e o que não é localizável, para o mapa não inventar posições. Aceita
+    os mesmos filtros de pesquisa dos dois países (`q`, `entidade`, `cpv`, `ano`).
+    """
+    client = es or get_es_client(request_timeout=120)
+    if not client:
+        return {"error": "Elasticsearch indisponível", "regions": []}
+
+    ensure_indices(client)
+
+    selecao = (pais or "all").strip().lower()
+    if selecao in ("pt", "portugal"):
+        selecao = "pt"
+    elif selecao in ("es", "espanha", "spain"):
+        selecao = "es"
+    else:
+        selecao = "all"
+
+    result: Dict[str, Any] = {
+        "ano": ano,
+        "pais": selecao,
+        "filters": {"q": q or None, "entidade": entidade or None, "cpv": cpv or None},
+        "countries": [],
+        "regions": [],
+        "unspecified": {},
+        "other_locations": {"count": 0, "total_value": 0.0},
+    }
+    warnings: List[str] = []
+
+    parts = []
+    if selecao in ("all", "pt"):
+        try:
+            parts.append(("PT", _iberia_map_portugal(client, ano, q=q, entidade=entidade, cpv=cpv)))
+        except Exception as exc:  # noqa: BLE001 — um país indisponível não deve derrubar o mapa
+            warnings.append(f"Portugal: {exc}")
+    if selecao in ("all", "es"):
+        try:
+            parts.append(("ES", _iberia_map_espanha(client, ano, q=q, entidade=entidade, cpv=cpv)))
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(f"Espanha: {exc}")
+
+    for code, part in parts:
+        result["countries"].append({
+            "code": code,
+            "label": "Portugal" if code == "PT" else "Espanha",
+            "total_contracts": part["total_contracts"],
+            "total_value": part["total_value"],
+        })
+        result["regions"].extend(part["regions"])
+        result["unspecified"][code] = part["unspecified"]
+        result["other_locations"]["count"] += part["other_locations"]["count"]
+        result["other_locations"]["total_value"] += part["other_locations"]["total_value"]
+
+    result["other_locations"]["total_value"] = round(result["other_locations"]["total_value"], 2)
+    if warnings:
+        result["warnings"] = warnings
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Ficha de uma região (aberta a partir do mapa)
+# ---------------------------------------------------------------------------
+
+
+def _pt_region_detail(code: str, ano: Optional[int], top_n: int, contracts_size: int) -> Dict[str, Any]:
+    """Ficha de um distrito português: entidades, empresas, analíticas e contratos."""
+    resumo = get_entity_role_summary(role="all", region=code, year=ano, top_n=max(top_n * 3, 30))
+    if resumo.get("error"):
+        return {"error": resumo["error"]}
+
+    def role_row(entity: Dict[str, Any], role: str) -> Optional[Dict[str, Any]]:
+        role_data = entity.get(role)
+        if not role_data:
+            return None
+        return {
+            "nif": entity.get("nif"),
+            "name": entity.get("name") or entity.get("nif"),
+            "count": role_data.get("contracts_count") or 0,
+            "total_value": role_data.get("total_value") or 0.0,
+            "avg_value": role_data.get("avg_value"),
+            "first_year": role_data.get("first_year"),
+            "last_year": role_data.get("last_year"),
+        }
+
+    entities = resumo.get("top_entities", [])
+    awarders = [row for row in (role_row(e, "adjudicante") for e in entities) if row]
+    suppliers = [row for row in (role_row(e, "adjudicatario") for e in entities) if row]
+    awarders.sort(key=lambda r: r["total_value"], reverse=True)
+    suppliers.sort(key=lambda r: r["total_value"], reverse=True)
+
+    contratos = search_contracts(
+        region=code,
+        year=ano,
+        size=contracts_size,
+        sort_by="precoContratual",
+        sort_order="desc",
+    )
+    rows = []
+    for item in contratos.get("items", []):
+        rows.append({
+            "doc_id": item.get("doc_id") or item.get("idcontrato"),
+            "title": item.get("objectoContrato") or "",
+            "awarder": _party_names(item.get("adjudicantes")),
+            "supplier": _party_names(item.get("adjudicatarios")),
+            "value": item.get("precoContratual"),
+            "ano": item.get("Ano"),
+            "date": item.get("dataCelebracaoContrato") or item.get("dataPublicacao"),
+        })
+
+    return {
+        "pais": "PT",
+        "code": code,
+        "ano": ano,
+        "totals": {
+            "contracts": resumo.get("total_contracts") or 0,
+            "value": resumo.get("total_value") or 0.0,
+            "avg": resumo.get("avg_value"),
+            "max": resumo.get("max_value"),
+            "awarders": resumo.get("unique_adjudicantes"),
+            "suppliers": resumo.get("unique_adjudicatarios"),
+        },
+        "by_year": resumo.get("by_year", []),
+        "by_cpv": resumo.get("by_cpv", []),
+        "by_procedure": resumo.get("by_procedure_type", []),
+        "by_contract_type": resumo.get("by_contract_type", []),
+        "by_value_range": resumo.get("by_value_range", []),
+        "awarders": awarders[:top_n],
+        "suppliers": suppliers[:top_n],
+        "contracts": rows,
+        "error": None,
+    }
+
+
+def _party_names(parties: Any) -> str:
+    """Nomes das partes de um contrato português (`adjudicantes`/`adjudicatarios`)."""
+    entries = parties if isinstance(parties, list) else [parties] if parties else []
+    names: List[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        for parsed in entry.get("parsed") or []:
+            if isinstance(parsed, dict) and parsed.get("nome"):
+                names.append(str(parsed["nome"]))
+    return ", ".join(names[:3])
+
+
+def _es_region_detail(
+    client: Elasticsearch,
+    code: str,
+    ano: Optional[int],
+    top_n: int,
+    contracts_size: int,
+) -> Dict[str, Any]:
+    """Ficha de uma província/NUTS espanhola: órgãos, empresas, analíticas e contratos."""
+    value_source = _contratos_es_value_source("valor_adjudicado")
+    query = _build_contratos_es_query(nuts=code, ano=ano)
+
+    def with_value(agg: Dict[str, Any]) -> Dict[str, Any]:
+        return {**agg, "aggs": {"total_value": {"sum": value_source}}}
+
+    body: Dict[str, Any] = {
+        "size": 0,
+        "track_total_hits": True,
+        "query": query,
+        "aggs": {
+            "total_value": {"sum": value_source},
+            "avg_value": {"avg": value_source},
+            "max_value": {"max": value_source},
+            "by_year": {
+                "terms": {"field": "ano", "size": 50, "order": {"_key": "desc"}},
+                "aggs": {"total_value": {"sum": value_source}},
+            },
+            "top_organos": with_value({
+                "terms": {"field": "organo_nombre.keyword", "size": top_n, "order": {"total_value": "desc"}},
+            }),
+            "top_adjudicatarios": with_value({
+                "terms": {"field": "adjudicatario_nombre.keyword", "size": top_n, "order": {"total_value": "desc"}},
+            }),
+            "top_cpv": {
+                "nested": {"path": "cpv"},
+                "aggs": {
+                    "codes": {
+                        "terms": {"field": "cpv.code", "size": top_n, "order": {"total_value": "desc"}},
+                        "aggs": {
+                            "nombre": {"top_hits": {"size": 1, "_source": ["cpv.code", "cpv.nombre"]}},
+                            "total_value": {"reverse_nested": {}, "aggs": {"value": {"sum": value_source}}},
+                        },
+                    }
+                },
+            },
+            "procedure_types": with_value({
+                "terms": {"field": "procedimiento_label", "size": 10, "missing": "N/A"},
+            }),
+            "contract_types": with_value({
+                "terms": {"field": "tipo_contrato_label", "size": 10, "missing": "N/A"},
+            }),
+            "by_value_range": {
+                "histogram": {"script": value_source["script"], "interval": 1000000, "min_doc_count": 1}
+            },
+            "organos": {"cardinality": {"field": "organo_id", "precision_threshold": 4000}},
+            "adjudicatarios": {"cardinality": {"field": "adjudicatario_nif", "precision_threshold": 40000}},
+        },
+    }
+
+    resp = client.search(index=CONTRATOS_ES_INDEX, body=body)
+    aggs = resp.get("aggregations", {}) or {}
+
+    def agg_value(bucket: Dict[str, Any]) -> float:
+        raw = (bucket or {}).get("total_value", {})
+        value = raw.get("value") if isinstance(raw, dict) else None
+        if isinstance(value, dict):  # reverse_nested/sum encaixado
+            value = value.get("value")
+        return round(float(value or 0.0), 2)
+
+    def rows(agg_name: str, label_field: Optional[str] = None) -> List[Dict[str, Any]]:
+        out = []
+        for bucket in (aggs.get(agg_name, {}) or {}).get("buckets", []):
+            row = {"key": str(bucket.get("key")), "count": bucket.get("doc_count", 0), "total_value": agg_value(bucket)}
+            if label_field:
+                row["description"] = row["key"]
+            out.append(row)
+        return out
+
+    cpv_rows = []
+    for bucket in (aggs.get("top_cpv", {}) or {}).get("codes", {}).get("buckets", []):
+        cpv_rows.append({
+            "key": str(bucket.get("key")),
+            "count": bucket.get("doc_count", 0),
+            "total_value": agg_value(bucket),
+            "description": _top_hit_cpv_es_name(bucket.get("nombre"), bucket.get("key")),
+        })
+
+    value_ranges = []
+    for bucket in (aggs.get("by_value_range", {}) or {}).get("buckets", []):
+        start = bucket.get("key")
+        if start is None or start < 0 or len(value_ranges) >= 12:
+            continue
+        value_ranges.append({
+            "key": str(int(start)),
+            "count": bucket.get("doc_count", 0),
+            "total_value": agg_value(bucket),
+            "description": f"{int(start):,} – {int(start) + 1000000:,} €".replace(",", " "),
+        })
+
+    top_value = float(aggs.get("total_value", {}).get("value") or 0.0)
+
+    def entity_rows(agg_name: str) -> List[Dict[str, Any]]:
+        out = []
+        for bucket in (aggs.get(agg_name, {}) or {}).get("buckets", []):
+            value = agg_value(bucket)
+            count = bucket.get("doc_count", 0)
+            out.append({
+                "nif": None,
+                "name": str(bucket.get("key")),
+                "count": count,
+                "total_value": value,
+                "avg_value": round(value / count, 2) if count else None,
+                "share": round(value / top_value, 4) if top_value > 0 else None,
+            })
+        return out
+
+    contratos = search_contratos_es(
+        nuts=code,
+        ano=ano,
+        size=contracts_size,
+        sort_by="valor_adjudicado",
+        sort_order="desc",
+    )
+    contract_rows = []
+    for item in contratos.get("items", []):
+        contract_rows.append({
+            "doc_id": item.get("doc_id"),
+            "title": item.get("objeto") or item.get("descripcion") or "",
+            "awarder": item.get("organo_nombre") or "",
+            "supplier": item.get("adjudicatario_nombre") or "",
+            "value": item.get("valor_adjudicado") if item.get("valor_adjudicado") is not None else item.get("valor_base"),
+            "ano": item.get("ano"),
+            "date": item.get("fecha_adjudicacion") or item.get("fecha_publicacion"),
+        })
+
+    return {
+        "pais": "ES",
+        "code": code,
+        "ano": ano,
+        "totals": {
+            "contracts": resp.get("hits", {}).get("total", {}).get("value", 0),
+            "value": round(top_value, 2),
+            "avg": round(float(aggs.get("avg_value", {}).get("value") or 0.0), 2) or None,
+            "max": round(float(aggs.get("max_value", {}).get("value") or 0.0), 2) or None,
+            "awarders": int((aggs.get("organos", {}) or {}).get("value") or 0),
+            "suppliers": int((aggs.get("adjudicatarios", {}) or {}).get("value") or 0),
+        },
+        "by_year": rows("by_year"),
+        "by_cpv": cpv_rows,
+        "by_procedure": rows("procedure_types", label_field="key"),
+        "by_contract_type": rows("contract_types", label_field="key"),
+        "by_value_range": value_ranges,
+        "awarders": entity_rows("top_organos"),
+        "suppliers": entity_rows("top_adjudicatarios"),
+        "contracts": contract_rows,
+        "error": None,
+    }
+
+
+def get_contract_region_detail(
+    pais: str,
+    code: str,
+    ano: Optional[int] = None,
+    top_n: int = 12,
+    contracts_size: int = 20,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Contratos, entidades (adjudicantes e adjudicatárias) e métricas de uma região.
+
+    `pais="PT"` espera o **distrito** de execução («Bragança»); `pais="ES"` espera o
+    **código NUTS** («ES300»). Alimenta a janela aberta no menu de contexto do mapa.
+    """
+    client = es or get_es_client(request_timeout=120)
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    ensure_indices(client)
+
+    try:
+        if (pais or "").strip().upper() == "ES":
+            return _es_region_detail(client, code, ano, top_n, contracts_size)
+        return _pt_region_detail(code, ano, top_n, contracts_size)
+    except Exception as exc:  # pragma: no cover - dependente do cluster
+        return {"error": str(exc)}
 
 
 def _match_pair_query(nif: Optional[str] = None, counterparty_nif: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -6411,8 +7112,8 @@ def search_contratos_es_entities(
                 "entities": {
                     "terms": {"field": field, "size": bucket_size, "order": {"_count": "desc"}},
                     "aggs": {
-                        "valor": {"sum": {"field": "valor_adjudicado"}},
-                        "valor_base": {"sum": {"field": "valor_base"}},
+                        # Mesma soma robusta da analítica: `max(valor_adjudicado, valor_base)`.
+                        "valor": {"sum": _contratos_es_value_source()},
                         "ultimo_ano": {"max": {"field": "ano"}},
                         "sample": {"top_hits": {"size": 1, "_source": CONTRATOS_ES_ENTITY_SAMPLE_FIELDS}},
                     },
@@ -6444,20 +7145,27 @@ def search_contratos_es_entities(
             if bucket["doc_count"] < floor:
                 continue
             sample = ((bucket.get("sample", {}).get("hits", {}).get("hits") or [{}])[0].get("_source")) or {}
+            is_organo = name == "organo"
             entries.append(
                 {
                     "kind": name,
                     "kind_label": info["label"],
                     "name": bucket["key"],
                     "count": bucket["doc_count"],
+                    # A cidade e o NUTS do documento são os do **órgão**; para a
+                    # adjudicatária só o NUTS da empresa faz sentido.
+                    "city": (sample.get("organo_ciudad") or "") if is_organo else "",
+                    "nuts": ((sample.get("nuts") if is_organo else sample.get("adjudicatario_nuts")) or ""),
+                    "nif": (sample.get("adjudicatario_nif") or "") if not is_organo else "",
+                    "organo_id": (sample.get("organo_id") or "") if is_organo else "",
+                    "organo_tipo": (sample.get("organo_tipo") or "") if is_organo else "",
                     "total_value": bucket.get("valor", {}).get("value"),
-                    "total_value_base": bucket.get("valor_base", {}).get("value"),
-                    "city": sample.get("organo_ciudad") or "",
-                    "nuts": sample.get("nuts") or sample.get("adjudicatario_nuts") or "",
-                    "nif": sample.get("adjudicatario_nif") or "",
-                    "organo_id": sample.get("organo_id") or "",
-                    "organo_tipo": sample.get("organo_tipo") or "",
-                    "last_year": bucket.get("ultimo_ano", {}).get("value"),
+                    # O `max` do ano chega como float (`2024.0`): arredonda para o badge.
+                    "last_year": (
+                        int(bucket["ultimo_ano"]["value"])
+                        if isinstance(bucket.get("ultimo_ano", {}).get("value"), (int, float))
+                        else None
+                    ),
                 }
             )
         counts[name] = len(entries)

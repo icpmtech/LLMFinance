@@ -31,6 +31,7 @@ import {
   Landmark,
   LayoutDashboard,
   Mail,
+  Map as MapIcon,
   MessageSquare,
   Network,
   Play,
@@ -80,6 +81,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: Network,
     gradient: "from-cyan-300 via-sky-500 to-blue-600",
     accent: "14,165,233",
+  },
+  {
+    id: "companies-global",
+    label: "Empresas Global",
+    hint: "Entidades e empresas de todo o sistema (PT + Espanha + CRM)",
+    icon: Briefcase,
+    gradient: "from-emerald-200 via-emerald-400 to-teal-600",
+    accent: "16,185,129",
   },
   {
     id: "ontology",
@@ -264,6 +273,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: BarChart3,
     gradient: "from-orange-200 via-orange-400 to-rose-500",
     accent: "249,115,22",
+  },
+  {
+    id: "contracts-map",
+    label: "Mapa de Contratos",
+    hint: "Contratos públicos de Portugal e Espanha no mapa",
+    icon: MapIcon,
+    gradient: "from-emerald-200 via-teal-400 to-sky-600",
+    accent: "16,163,127",
   },
   {
     id: "contratos-es",

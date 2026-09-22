@@ -3,11 +3,12 @@
  *
  * Uma caixa, tudo o que a plataforma sabe: **Recolha** (dados recolhidos de
  * sites), **Contratos** públicos, **Contratos ES** (contratação pública de
- * Espanha, PLACSP), **Empresas**, **Marcas**, **Firmas**, **Notícias**,
- * **Mercado** e **CRM** (privado, só com sessão). Os resultados chegam
- * agrupados por área, com contagem por âmbito, sugestões enquanto se escreve e
- * abertura direta das fichas internas (empresa, contrato, contrato espanhol,
- * ticker).
+ * Espanha, PLACSP), **Entidades ES** (órgãos adjudicantes e empresas
+ * adjudicatárias de Espanha), **Empresas**, **Marcas**, **Firmas**,
+ * **Notícias**, **Mercado** e **CRM** (privado, só com sessão). Os resultados
+ * chegam agrupados por área, com contagem por âmbito, sugestões enquanto se
+ * escreve e abertura direta das fichas internas (empresa, contrato, contrato
+ * espanhol, ticker).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -18,6 +19,7 @@ import {
   ExternalLink,
   FileSignature,
   Globe2,
+  Handshake,
   Landmark,
   LineChart,
   Loader2,
@@ -28,8 +30,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { CONTRATOS_ES_OPEN_KEY } from "../contratosEsApi";
-import { openWindow } from "../windows";
+import { CONTRATOS_ES_VIEW, openResult } from "../openResult";
 import {
   externalSearchUrl,
   searchScopes,
@@ -45,8 +46,12 @@ import {
 
 /* ------------------------------------------------------------------ apoio */
 
-/** Vista interna da app de contratos públicos de Espanha. */
-const CONTRATOS_ES_VIEW = "contratos-es";
+/** Âmbitos que uma sugestão pode abrir diretamente (o resto cai na recolha). */
+const SUGGESTION_SCOPES: SearchScopeId[] = ["entities", "entities_es", "contracts_es", "market"];
+
+function scopeForSuggestion(scope: SearchScopeId): SearchScopeId {
+  return SUGGESTION_SCOPES.includes(scope) ? scope : "scraped";
+}
 
 const dateFormat = new Intl.DateTimeFormat("pt-PT", { dateStyle: "short" });
 const numberFormat = new Intl.NumberFormat("pt-PT");
@@ -56,6 +61,7 @@ const SCOPE_ICON: Record<string, React.ReactNode> = {
   scraped: <Globe2 size={14} />,
   contracts: <FileSignature size={14} />,
   contracts_es: <ScrollText size={14} />,
+  entities_es: <Handshake size={14} />,
   entities: <Building2 size={14} />,
   trademarks: <Tag size={14} />,
   firmas: <Landmark size={14} />,
@@ -85,7 +91,9 @@ function openLabel(item: SearchItem): string | null {
   if (!item.open) return null;
   if (item.open.view === "company-detail") return "Abrir ficha da empresa";
   if (item.open.view === "contract-detail") return "Abrir ficha do contrato";
-  if (item.open.view === CONTRATOS_ES_VIEW) return "Abrir em Contratos Espanha";
+  if (item.open.view === CONTRATOS_ES_VIEW) {
+    return item.open.mode ? "Ver contratos desta entidade" : "Abrir em Contratos Espanha";
+  }
   if (item.open.view.startsWith("crm-")) return "Abrir no CRM";
   return "Abrir no IQ OS";
 }
@@ -204,8 +212,7 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
       const picked = highlight >= 0 ? suggestions[highlight] : null;
       if (picked) {
         setShowSuggestions(false);
-        const nextScope = picked.scope === "entities" ? "entities" : picked.scope === "market" ? "market" : "scraped";
-        submit(picked.text, nextScope);
+        submit(picked.text, scopeForSuggestion(picked.scope));
         return;
       }
       submit();
@@ -219,29 +226,16 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
       return;
     }
     const title = item.title.slice(0, 60);
+    // O ticker é uma vista da plataforma sem identificador no nome.
     if (target.view === "ticker-detail") {
       if (onOpenTicker) {
         onOpenTicker(target.arg);
         return;
       }
-      if (onOpenView) onOpenView("ticker-detail", `Ticker · ${target.arg}`);
-      else openWindow("ticker-detail", undefined, { title: `Ticker · ${target.arg}` });
+      openResult({ view: "ticker-detail", arg: "" }, `Ticker · ${target.arg}`, onOpenView);
       return;
     }
-    // Contratos de Espanha: a app abre o detalhe do `doc_id` indicado.
-    if (target.view === CONTRATOS_ES_VIEW) {
-      if (target.arg && typeof window !== "undefined") {
-        window.localStorage.setItem(CONTRATOS_ES_OPEN_KEY, target.arg);
-      }
-      if (onOpenView) onOpenView(CONTRATOS_ES_VIEW, title);
-      else openWindow(CONTRATOS_ES_VIEW, undefined, { title });
-      return;
-    }
-    // Fichas e registos internos levam o identificador no nome da vista
-    // (`contract-detail:<id>`, `company-detail:<nif>`); no CRM já vem incluído.
-    const view = target.arg && !target.view.includes(":") ? `${target.view}:${target.arg}` : target.view;
-    if (onOpenView) onOpenView(view, title);
-    else openWindow(view, undefined, { title });
+    openResult(target, title, onOpenView);
   };
 
   const visibleGroups = useMemo(() => {
@@ -315,7 +309,7 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
               <button
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={() => submit(entry.text, entry.scope === "market" ? "market" : entry.scope === "entities" ? "entities" : "scraped")}
+                onClick={() => submit(entry.text, scopeForSuggestion(entry.scope))}
                 className={`flex w-full items-center gap-3 px-4 py-2 text-left text-xs ${
                   highlight === index ? "bg-white/10" : "hover:bg-white/5"
                 }`}
@@ -344,7 +338,8 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
         </h1>
         <p className="mt-2 max-w-xl text-center text-sm text-muted-foreground">
           Uma caixa para tudo o que o IQ OS sabe: <strong className="font-medium text-foreground">recolha</strong> de sites,{" "}
-          contratos públicos (Portugal e Espanha), empresas, marcas, firmas, notícias, mercado e CRM.
+          contratos públicos (Portugal e Espanha), entidades contratantes e empresas adjudicatárias de Espanha, empresas,
+          marcas, firmas, notícias, mercado e CRM.
         </p>
 
         <div className="mt-7 w-full">{searchBox(false)}</div>
@@ -540,8 +535,9 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
           ) : null}
 
           <p className="px-1 text-[10px] leading-relaxed text-muted-foreground">
-            A pesquisa cobre a recolha, os contratos públicos (Portugal e Espanha/PLACSP), o cadastro de entidades, INPI,
-            RNPC, notícias e mercado. O CRM só é incluído quando há sessão, porque é privado por utilizador.
+            A pesquisa cobre a recolha, os contratos públicos (Portugal e Espanha/PLACSP), as entidades de Espanha (quem
+            contrata e quem ganha), o cadastro de entidades, INPI, RNPC, notícias e mercado. O CRM só é incluído quando há
+            sessão, porque é privado por utilizador.
           </p>
         </aside>
       </div>

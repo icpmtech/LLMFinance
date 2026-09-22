@@ -59,6 +59,8 @@ import type {
   TrademarkItem,
 } from "../types";
 import { useDock } from "../dock";
+import { type ContratosEsEntry, writeContratosEsEntry } from "../contratosEsApi";
+import { searchEsEntities, type CompaniesGlobalRow } from "../companiesGlobalApi";
 import { useWindowMode } from "../layout";
 import { useFavorites, type Favorite } from "../favorites";
 import { openWindow } from "../windows";
@@ -194,6 +196,24 @@ function firmaToItem(firma: FirmaItem): FinderItem {
   };
 }
 
+/**
+ * Entidade de Espanha (órgão adjudicante ou empresa adjudicatária) tratada como
+ * «ficheiro»: o PLACSP não tem ficha própria, pelo que a linha vem da agregação
+ * de contratos (nome + nº de contratos + valor adjudicado).
+ */
+function esEntityToItem(row: CompaniesGlobalRow): FinderItem {
+  const dir3 = row.extra?.dir3 ? `DIR3 ${String(row.extra.dir3)}` : "";
+  return {
+    id: row.name,
+    kind: row.source === "organo_es" ? "organo_es" : "adjudicataria_es",
+    name: row.name,
+    subtitle: [row.nif ? `NIF ${row.nif}` : dir3, row.region, "Espanha (PLACSP)"].filter(Boolean).join(" · "),
+    size: row.contracts_count ?? undefined,
+    value: row.total_value ?? undefined,
+    raw: row,
+  };
+}
+
 function scrapedToItem(item: any): FinderItem {
   const sourceId = item.source_id ?? item.source ?? "";
   const name = item.title?.trim() || item.url?.split("/").pop() || "Recolha";
@@ -321,6 +341,28 @@ export default function FinderPage() {
         } else if (target === "firmas") {
           const response = await searchFirmas(q, { size: 80 });
           next = response.items.map(firmaToItem);
+        } else if (target === "es-organos" || target === "es-empresas") {
+          // Entidades de Espanha: órgãos adjudicantes ou empresas adjudicatárias
+          // (agregadas dos contratos do PLACSP pelo nome).
+          const kind = target === "es-organos" ? "organo" : "adjudicatario";
+          const response = await searchEsEntities({ q, kind, size: 80 });
+          next = (response.items ?? []).map((row) =>
+            esEntityToItem({
+              source: row.kind === "organo" ? "organo_es" : "adjudicataria_es",
+              source_label: row.kind_label,
+              country: "ES",
+              id: row.name,
+              name: row.name,
+              detail: [row.city, row.nuts].filter(Boolean).join(" · "),
+              nif: row.nif,
+              region: row.city || row.nuts,
+              date: null,
+              contracts_count: row.count,
+              total_value: row.total_value,
+              extra: { dir3: row.organo_id, last_year: row.last_year },
+              open: { view: "contratos-es", arg: row.name, mode: row.kind },
+            }),
+          );
         } else if (target === "scraped") {
           const response = await searchScrapedItems(q, { size: 80 });
           next = response.items.map(scrapedToItem);
@@ -472,10 +514,33 @@ export default function FinderPage() {
     pushFinderRecent(item);
   }, []);
 
+  /** Abre uma entidade de Espanha na app de contratos do PLACSP, já filtrada. */
+  const openEsEntity = useCallback(
+    (item: FinderItem) => {
+      const entry: ContratosEsEntry =
+        item.kind === "organo_es" ? { organo: item.name } : { adjudicatario: item.name };
+      writeContratosEsEntry(entry);
+      if (windowMode) {
+        openWindow("contratos-es", undefined, { title: item.name.slice(0, 60) });
+        return;
+      }
+      if (typeof window !== "undefined") {
+        window.history.pushState({}, "", "/contratos-es");
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      }
+    },
+    [windowMode],
+  );
+
   const open = useCallback(
     (item: FinderItem) => {
       setSelected(item);
       pushRecent(item);
+      // As entidades de Espanha não têm ficha própria: abrem os contratos delas.
+      if (item.kind === "organo_es" || item.kind === "adjudicataria_es") {
+        openEsEntity(item);
+        return;
+      }
       // Em modo janelas, o Quick Look é uma janela própria (em vez de modal).
       if (windowMode) {
         // As entidades trazem valores, analítica, contratos e concorrentes: janela maior.
@@ -485,7 +550,7 @@ export default function FinderPage() {
       }
       setQuickLook(item);
     },
-    [pushRecent, windowMode],
+    [openEsEntity, pushRecent, windowMode],
   );
 
   /**
@@ -896,6 +961,7 @@ export default function FinderPage() {
           related={related}
           onClose={() => setQuickLook(null)}
           onToggleFavorite={toggleFavorite}
+          onOpenInApp={open}
         />
       )}
 
@@ -1357,12 +1423,14 @@ function QuickLook({
   related,
   onClose,
   onToggleFavorite,
+  onOpenInApp,
 }: {
   item: FinderItem;
   detail: EntityDetail | null;
   related: FinderItem[];
   onClose: () => void;
   onToggleFavorite: (entry: Omit<Favorite, "addedAt">) => void;
+  onOpenInApp: (item: FinderItem) => void;
 }) {
   const isFavorite = item.tags?.includes("Favorito") ?? false;
   const rows: [string, string][] = [
@@ -1383,6 +1451,15 @@ function QuickLook({
     const document = item.raw as RagDocument;
     rows.push(["Ficheiro", document.filename]);
     rows.push(["Indexado", document.indexed ? "Sim" : "Não"]);
+  }
+  if (item.kind === "organo_es" || item.kind === "adjudicataria_es") {
+    const raw = (item.raw ?? {}) as Record<string, unknown>;
+    rows.push(["País", "Espanha (PLACSP)"]);
+    rows.push(["Contratos", item.size ? item.size.toLocaleString("pt-PT") : "—"]);
+    rows.push(["Valor adjudicado", formatFinderValue(item.value)]);
+    if (raw.nif) rows.push(["NIF", String(raw.nif)]);
+    if (raw.dir3) rows.push(["DIR3", String(raw.dir3)]);
+    if (raw.last_year) rows.push(["Último contrato", String(raw.last_year)]);
   }
 
   return (
@@ -1441,6 +1518,15 @@ function QuickLook({
         )}
 
         <div className="mt-5 flex flex-wrap items-center gap-2">
+          {(item.kind === "organo_es" || item.kind === "adjudicataria_es") && (
+            <button
+              type="button"
+              onClick={() => onOpenInApp(item)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-[12px] text-amber-100 transition hover:bg-amber-400/20"
+            >
+              <ExternalLink size={13} /> Ver contratos em Contratos Espanha
+            </button>
+          )}
           {(item.kind === "entity" || item.kind === "contract") && (
             <button
               type="button"

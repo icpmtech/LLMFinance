@@ -23,13 +23,13 @@ import {
 } from "lucide-react";
 import {
   autocompleteContratosEs,
-  CONTRATOS_ES_OPEN_KEY,
   getContratoEs,
   getContratosEsImports,
   getContratosEsMeta,
   getContratosEsStatus,
   importContratosEs,
   searchContratosEs,
+  takeContratosEsEntry,
 } from "../contratosEsApi";
 import type {
   ContratoEsFacets,
@@ -90,9 +90,12 @@ const FONTE_LABELS: Record<string, string> = {
 const PAGE_SIZE = 20;
 
 export function ContractsEsSearchPage({ onSwitchView, onSwitchDashboard }: ContractsEsSearchPageProps) {
+  // Pedido vindo de outra app (ex.: Pesquisa total): contrato concreto ou uma
+  // pesquisa focada num órgão adjudicante / empresa adjudicatária.
+  const [entryRequest] = useState(() => takeContratosEsEntry());
   const [status, setStatus] = useState<ContratoEsStatus | null>(null);
   const [meta, setMeta] = useState<ContratoEsMeta | null>(null);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(entryRequest?.q ?? "");
   const [ano, setAno] = useState<number | "">("");
   const [fonte, setFonte] = useState("");
   const [tipo, setTipo] = useState("");
@@ -100,8 +103,8 @@ export function ContractsEsSearchPage({ onSwitchView, onSwitchDashboard }: Contr
   const [procedimiento, setProcedimiento] = useState("");
   const [localidad, setLocalidad] = useState("");
   const [nuts, setNuts] = useState("");
-  const [organo, setOrgano] = useState("");
-  const [adjudicatario, setAdjudicatario] = useState("");
+  const [organo, setOrgano] = useState(entryRequest?.organo ?? "");
+  const [adjudicatario, setAdjudicatario] = useState(entryRequest?.adjudicatario ?? "");
   const [adjudicatarioNif, setAdjudicatarioNif] = useState("");
   const [organismoId, setOrganismoId] = useState("");
   const [cpv, setCpv] = useState("");
@@ -239,10 +242,8 @@ export function ContractsEsSearchPage({ onSwitchView, onSwitchDashboard }: Contr
 
   // Contrato pedido por outra aplicação (ex.: Pesquisa total): abre o detalhe fixado.
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const docId = window.localStorage.getItem(CONTRATOS_ES_OPEN_KEY);
+    const docId = entryRequest?.doc;
     if (!docId) return;
-    window.localStorage.removeItem(CONTRATOS_ES_OPEN_KEY);
     void (async () => {
       try {
         const doc = (await getContratoEs(docId)) as ContratoEsItem & { error?: string };
@@ -253,7 +254,7 @@ export function ContractsEsSearchPage({ onSwitchView, onSwitchDashboard }: Contr
         /* contrato indisponível: a pesquisa normal continua a funcionar */
       }
     })();
-  }, []);
+  }, [entryRequest]);
 
   // Autocomplete (órgãos, adjudicatários e CPV) com atraso curto.
   useEffect(() => {

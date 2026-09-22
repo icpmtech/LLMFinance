@@ -1,10 +1,10 @@
 """Pesquisa unificada («estilo Google») sobre tudo o que o IQ OS tem.
 
 Uma pergunta, um resultado por área. O `unified_search` dispara em paralelo uma
-consulta por **âmbito** (recolha, contratos, contratos de Espanha, empresas,
-marcas, firmas, notícias, mercado e CRM) e devolve grupos normalizados — cada item
-com título, subtítulo, excerto, data, etiquetas e (quando faz sentido) a vista
-interna que o abre.
+consulta por **âmbito** (recolha, contratos, contratos de Espanha, entidades de
+Espanha, empresas, marcas, firmas, notícias, mercado e CRM) e devolve grupos
+normalizados — cada item com título, subtítulo, excerto, data, etiquetas e
+(quando faz sentido) a vista interna que o abre.
 
 Decisões importantes:
 
@@ -18,7 +18,9 @@ Decisões importantes:
   Elasticsearch nem a API com uma pesquisa por clique.
 - **Espanha é um âmbito próprio** (`contratos_es`, PLACSP): são 4 milhões de
   documentos noutro esquema de campos (castelhano), por isso não se misturam com
-  os contratos portugueses.
+  os contratos portugueses. `entities_es` responde ao mesmo problema pelo lado
+  oposto: como cada documento é um contrato, os **nomes** dos órgãos adjudicantes
+  e das empresas adjudicatárias são obtidos por agregação.
 """
 from __future__ import annotations
 
@@ -38,6 +40,7 @@ from api.elasticsearch_client import (
     ensure_indices,
     get_es_client,
     search_contratos_es,
+    search_contratos_es_entities,
     search_contracts,
     search_entities,
     search_firmas,
@@ -55,6 +58,7 @@ SCOPES: List[Dict[str, Any]] = [
     {"id": "scraped", "label": "Recolha", "hint": "Dados recolhidos de sites (scraping)"},
     {"id": "contracts", "label": "Contratos", "hint": "Contratação pública (portal base)"},
     {"id": "contracts_es", "label": "Contratos ES", "hint": "Contratação pública de Espanha (PLACSP)"},
+    {"id": "entities_es", "label": "Entidades ES", "hint": "Órgãos adjudicantes e empresas adjudicatárias de Espanha"},
     {"id": "entities", "label": "Empresas", "hint": "Cadastro de entidades"},
     {"id": "trademarks", "label": "Marcas", "hint": "Marcas registadas (INPI)"},
     {"id": "firmas", "label": "Firmas", "hint": "Firmas e denominações (RNPC)"},
@@ -322,6 +326,49 @@ def _search_contratos_es_group(q: str, size: int, offset: int) -> Dict[str, Any]
     return _group("contracts_es", _label_for("contracts_es"), items, result.get("total", 0), 0)
 
 
+def _search_entities_es_group(q: str, size: int, offset: int) -> Dict[str, Any]:
+    """Quem contrata e quem ganha em Espanha (PLACSP).
+
+    No índice espanhol cada documento é **um contrato**, por isso as entidades
+    são nomes agregados: o grupo devolve os órgãos adjudicantes e as empresas
+    adjudicatárias que casam com o termo, com o número de contratos e o valor
+    adjudicado somado. Entrelaça os dois tipos para a página mostrar sempre
+    entidades contratantes **e** empresas adjudicatárias.
+    """
+    result = search_contratos_es_entities(q=q or None, size=size, from_=offset)
+    if result.get("error"):
+        return _error_group("entities_es", _label_for("entities_es"), str(result["error"]))
+    items = []
+    for row in result.get("items", []):
+        value = row.get("total_value")
+        count = int(row.get("count") or 0)
+        money = f"{value:,.0f} €".replace(",", " ") if isinstance(value, (int, float)) else "—"
+        nif = row.get("nif")
+        dir3 = row.get("organo_id")
+        items.append(
+            _item(
+                "entities_es",
+                f"{row.get('kind')}:{row.get('name')}",
+                row.get("name") or "(sem nome)",
+                subtitle=" · ".join(filter(None, [row.get("kind_label"), row.get("city"), row.get("nuts")])),
+                snippet=f"{count:,} contratos · {money} adjudicado".replace(",", " "),
+                badges=[
+                    row.get("kind_label"),
+                    f"NIF {nif}" if nif else (f"DIR3 {dir3}" if dir3 else None),
+                    row.get("last_year"),
+                ],
+                extra={
+                    "contratos": count,
+                    "valor": value if isinstance(value, (int, float)) else None,
+                    "kind": row.get("kind"),
+                    "pais": "ES",
+                },
+                open_view={"view": CONTRATOS_ES_VIEW, "arg": str(row.get("name") or ""), "mode": str(row.get("kind") or "")},
+            )
+        )
+    return _group("entities_es", _label_for("entities_es"), items, result.get("total", 0), 0)
+
+
 def _search_entities_group(q: str, size: int, offset: int) -> Dict[str, Any]:
     result = search_entities(q=q or None, size=size, from_=offset)
     if result.get("error"):
@@ -565,6 +612,7 @@ def unified_search(
         "scraped": lambda: _search_scraped_group(query, size, offset),
         "contracts": lambda: _search_contracts_group(query, size, offset),
         "contracts_es": lambda: _search_contratos_es_group(query, size, offset),
+        "entities_es": lambda: _search_entities_es_group(query, size, offset),
         "entities": lambda: _search_entities_group(query, size, offset),
         "trademarks": lambda: _search_trademarks_group(query, size, offset),
         "firmas": lambda: _search_firmas_group(query, size, offset),
@@ -637,13 +685,13 @@ def suggest(q: str, *, limit: int = 8, session_scope: Optional[Dict[str, Any]] =
         ]
 
     def contratos_es() -> List[Dict[str, Any]]:
-        """Órgãos, adjudicatários e CPV do PLACSP."""
-        label = {"organo": "Órgão (ES)", "adjudicatario": "Adjudicatário (ES)", "cpv": "CPV (ES)"}
+        """Órgãos, adjudicatários e CPV do PLACSP (abre no âmbito de entidades)."""
+        label = {"organo": "Órgão (ES)", "adjudicatario": "Adjudicatária (ES)", "cpv": "CPV (ES)"}
         result = contratos_es_autocomplete(q=query, size=limit)
         return [
             {
                 "text": entry.get("text") or "",
-                "scope": "contracts_es",
+                "scope": "entities_es",
                 "hint": f"{label.get(entry.get('type') or '', 'Espanha')} · {entry.get('count') or 0}",
                 "arg": entry.get("text") or "",
             }

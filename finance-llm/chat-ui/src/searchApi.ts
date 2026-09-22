@@ -2,7 +2,8 @@
  * Cliente da pesquisa unificada (`/search/*`) — a pesquisa «estilo Google» do IQ OS.
  *
  * Uma pergunta, resultados de todas as áreas: dados recolhidos (scraping),
- * contratos públicos (Portugal e Espanha), empresas, marcas, firmas, notícias de
+ * contratos públicos (Portugal e Espanha), entidades de Espanha (órgãos
+ * adjudicantes e empresas adjudicatárias), empresas, marcas, firmas, notícias de
  * mercado, tickers e CRM (este último só com sessão, porque é privado por
  * utilizador).
  */
@@ -13,6 +14,7 @@ export type SearchScopeId =
   | "scraped"
   | "contracts"
   | "contracts_es"
+  | "entities_es"
   | "entities"
   | "trademarks"
   | "firmas"
@@ -32,8 +34,12 @@ export type SearchItem = {
   date: string | null;
   badges: string[];
   extra: Record<string, unknown>;
-  /** Vista interna que abre este resultado (ex.: `company-detail:<nif>`). */
-  open: { view: string; arg: string } | null;
+  /**
+   * Vista interna que abre este resultado. `mode` distingue o que se leva à
+   * app de destino (ex.: `organo`/`adjudicatario` nos contratos de Espanha,
+   * onde o argumento é o **nome** da entidade e não o id de um documento).
+   */
+  open: { view: string; arg: string; mode?: string } | null;
   score?: number | null;
 };
 

@@ -7,12 +7,37 @@
 import { API_BASE } from "./api";
 
 /**
- * Chave de `localStorage` para abrir um contrato concreto na app «Contratos
- * Espanha» a partir de outra aplicação do IQ OS (ex.: a Pesquisa total).
- * Quem abre escreve o `doc_id`; a página lê-o, fixa o contrato no topo da lista
- * com o detalhe aberto e limpa a chave.
+ * Pedido que outra aplicação do IQ OS (ex.: a Pesquisa total) deixa à app
+ * «Contratos Espanha»: um contrato concreto (`doc`) ou uma pesquisa já focada
+ * numa entidade — órgão adjudicante (`organo`), empresa adjudicatária
+ * (`adjudicatario`) ou texto livre (`q`).
  */
-export const CONTRATOS_ES_OPEN_KEY = "finance-llm-contratos-es-doc";
+export type ContratosEsEntry = { doc?: string; organo?: string; adjudicatario?: string; q?: string };
+
+/** Chave de `localStorage` onde fica o pedido pendente. */
+export const CONTRATOS_ES_OPEN_KEY = "finance-llm-contratos-es-entry";
+
+/** Deixa um pedido para a app de contratos de Espanha (lido no arranque). */
+export function writeContratosEsEntry(entry: ContratosEsEntry): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(CONTRATOS_ES_OPEN_KEY, JSON.stringify(entry));
+}
+
+/** Lê e limpa o pedido pendente (para não se repetir ao voltar à app). */
+export function takeContratosEsEntry(): ContratosEsEntry | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem(CONTRATOS_ES_OPEN_KEY);
+  if (!raw) return null;
+  window.localStorage.removeItem(CONTRATOS_ES_OPEN_KEY);
+  try {
+    const parsed = JSON.parse(raw) as ContratosEsEntry;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    // Formato antigo: a chave guardava apenas o `_id` do contrato.
+    return { doc: raw };
+  }
+}
+
 
 /** Valor de uma faceta (código ou rótulo, contagem e, no caso dos CPV, descrição). */
 export type ContratoEsFacet = { value: string | number; count: number; label?: string };

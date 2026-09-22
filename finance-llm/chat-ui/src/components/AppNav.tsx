@@ -62,6 +62,7 @@ export type AppView =
   | "entities-adjudicatarios"
   | "entities-compare"
   | "empresas-iq"
+  | "companies-global"
   | "crm"
   | "crm-accounts"
   | "crm-contacts"

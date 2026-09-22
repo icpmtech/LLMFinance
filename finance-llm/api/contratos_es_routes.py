@@ -8,6 +8,7 @@ a partir dos ZIPs/ATOM de `data/contratos-espanha`.
 - `GET  /contracts-es/meta`               — ZIPs disponíveis, JSONL locais e listas de códigos CODICE
 - `POST /contracts-es/search`             — pesquisa com filtros e facetas
 - `GET  /contracts-es/autocomplete?q=`    — sugestões (órgãos, adjudicatários, CPV)
+- `GET  /contracts-es/entities?q=&kind=`  — entidades (órgãos adjudicantes e empresas adjudicatárias)
 - `GET  /contracts-es/{doc_id}`           — detalhe de um contrato
 - `POST /contracts-es/import`             — importar um ano (normaliza e indexa)   (sessão)
 - `GET  /contracts-es/imports`            — importações em curso/recentes
@@ -34,6 +35,7 @@ from api.elasticsearch_client import (
     get_contrato_es,
     get_contratos_es_analytics,
     search_contratos_es,
+    search_contratos_es_entities,
 )
 
 router = APIRouter(prefix="/contracts-es", tags=["contratos-es"])
@@ -278,6 +280,27 @@ def contratos_es_autocomplete_endpoint(
 ) -> Dict[str, Any]:
     """Sugestões de órgãos, adjudicatários e CPV."""
     res = contratos_es_autocomplete(q=q, size=size)
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res.get("error"))
+    return res
+
+
+@router.get("/entities")
+def contratos_es_entities_endpoint(
+    q: str = Query("", description="Nome (total ou parcial) do órgão ou da empresa."),
+    kind: str = Query("all", description="organo | adjudicatario | all"),
+    ano: Optional[int] = Query(None, description="Ano dos contratos a considerar."),
+    size: int = Query(20, ge=1, le=100),
+    from_: int = Query(0, ge=0, alias="from"),
+) -> Dict[str, Any]:
+    """Entidades de Espanha (órgãos adjudicantes e empresas adjudicatárias).
+
+    No PLACSP cada documento é um contrato, pelo que os nomes das entidades são
+    obtidos por agregação: cada item traz o número de contratos e o valor
+    adjudicado somado.
+    """
+    only = kind if kind in ("organo", "adjudicatario") else None
+    res = search_contratos_es_entities(q=q or None, kind=only, ano=ano, size=size, from_=from_)
     if res.get("error"):
         raise HTTPException(status_code=502, detail=res.get("error"))
     return res
