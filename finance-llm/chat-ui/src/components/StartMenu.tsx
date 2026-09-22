@@ -10,13 +10,14 @@
  *
  * Fecha com `Esc`, com um clique fora ou com o próprio botão Iniciar.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronDown, Power, Search, X } from "lucide-react";
 import { useDock } from "../dock";
 import { useAuth } from "../auth";
 import { recordRecentView, useRecentViews } from "../layout";
 import { Avatar } from "../pages/SettingsPage";
 import { groupsFor, isActive, itemsFor, normalize, type AppView, type NavItem } from "./AppNav";
+import { getIframeRevision, subscribeIframePages } from "../iframePages";
 
 interface StartMenuProps {
   /** Vista ativa (para marcar o item «Aberto agora»). */
@@ -39,9 +40,17 @@ export function StartMenu({ active, onClose, onOpenView }: StartMenuProps) {
   const [recentAll, setRecentAll] = useState(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
+  /* Páginas iframe configuráveis: o menu volta a construir-se quando mudam. */
+  const iframeRevision = useSyncExternalStore(subscribeIframePages, getIframeRevision, getIframeRevision);
+
   const context = useMemo(
-    () => ({ items: itemsFor(user?.role), groups: groupsFor(user?.role) }),
-    [user?.role],
+    () => {
+      // `iframeRevision` no corpo força a reconstrução do menu quando as páginas
+      // iframe configuradas mudam.
+      void iframeRevision;
+      return { items: itemsFor(user?.role), groups: groupsFor(user?.role) };
+    },
+    [user?.role, iframeRevision],
   );
 
   /** Afixadas: as aplicações do dock, na ordem do dock. */

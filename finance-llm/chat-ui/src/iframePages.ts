@@ -172,8 +172,15 @@ function readRaw(): IframePageConfig[] {
 
 let cache: IframePageConfig[] = readRaw();
 
+/**
+ * Contador de alterações. Serve de *snapshot* estável para
+ * `useSyncExternalStore` (uma identidade nova a cada alteração).
+ */
+let revision = 0;
+
 function commit(next: IframePageConfig[]) {
   cache = next;
+  revision += 1;
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
@@ -185,6 +192,11 @@ function commit(next: IframePageConfig[]) {
 
 export function getIframePages(): IframePageConfig[] {
   return cache;
+}
+
+/** Versão atual da lista de páginas iframe (para subscrições React). */
+export function getIframeRevision(): number {
+  return revision;
 }
 
 export function saveIframePage(page: Omit<IframePageConfig, "createdAt"> & { createdAt?: string }): IframePageConfig | null {
@@ -220,6 +232,7 @@ export function subscribeIframePages(onChange: () => void): () => void {
   if (typeof window === "undefined") return () => {};
   const handler = () => {
     cache = readRaw();
+    revision += 1;
     onChange();
   };
   window.addEventListener(CHANGE_EVENT, handler);

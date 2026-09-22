@@ -32,7 +32,8 @@ import {
 } from "../iframePages";
 
 interface IframePagesPageProps {
-  onOpenIframe?: (view: string) => void;
+  /** Abre a página iframe com o id indicado (a vista é `iframe:<id>`). */
+  onOpenIframe?: (id: string) => void;
 }
 
 function makeId(title: string): string {
@@ -139,7 +140,7 @@ export default function IframePagesPage({ onOpenIframe }: IframePagesPageProps) 
     setError(null);
     setTimeout(() => setSaved(false), 1500);
     setBusy(false);
-    if (onOpenIframe && next.enabled) onOpenIframe(`iframe:${next.id}`);
+    if (onOpenIframe && next.enabled) onOpenIframe(next.id);
   }, [form, idForSave, onOpenIframe]);
 
   const handleDelete = useCallback((id: string) => {

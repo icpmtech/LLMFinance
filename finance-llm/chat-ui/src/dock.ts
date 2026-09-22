@@ -47,7 +47,7 @@ import {
   Users,
   Microscope,
 } from "lucide-react";
-import { iframeDockApps, subscribeIframePages } from "./iframePages";
+import { getIframePages, iframeDockApps, iframeToDockApp, subscribeIframePages } from "./iframePages";
 
 export type DockPosition = "bottom" | "left" | "right";
 
@@ -474,7 +474,7 @@ const LEGACY_DEFAULT_ITEMS = [
 const ORDER_VERSION = 2;
 
 /** Ícones fora do dock por defeito (disponíveis para adicionar). */
-const DEFAULT_PARKED = ["elastic", "import", "compare", "contratos-es", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda"];
+const DEFAULT_PARKED = ["iframe-pages", "elastic", "import", "compare", "contratos-es", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda"];
 
 export type DockPrefs = {
   position: DockPosition;
@@ -523,13 +523,23 @@ export const DEFAULT_DOCK_PREFS: DockPrefs = {
   version: ORDER_VERSION,
 };
 
+/** Aplicação para abrir a página de configuração de iframes. */
+export const IFRAME_PAGES_APP: DockApp = {
+  id: "iframe-pages",
+  label: "Páginas iframe",
+  hint: "Adicionar e configurar páginas externas",
+  icon: Plus,
+  gradient: "from-violet-300 via-purple-500 to-indigo-600",
+  accent: "139,92,246",
+};
+
 /**
  * Configuração virtual do catálogo do dock: aplicações do sistema + páginas
  * iframe configuradas pelo utilizador. Não é uma constante exportada para evitar
  * que entradas dinâmicas fiquem desligadas após a validação do sanitize().
  */
 function allDockApps(): DockApp[] {
-  return [...DOCK_CATALOG, ...iframeDockApps()];
+  return [...DOCK_CATALOG, IFRAME_PAGES_APP, ...iframeDockApps()];
 }
 
 function allCatalogIds(): string[] {
@@ -547,16 +557,6 @@ function asNumber(value: unknown, fallback: number, min: number, max: number) {
 }
 
 const CATALOG_IDS = allCatalogIds();
-
-/** Aplicação para abrir a página de configuração de iframes. */
-export const IFRAME_PAGES_APP: DockApp = {
-  id: "iframe-pages",
-  label: "Páginas iframe",
-  hint: "Adicionar e configurar páginas externas",
-  icon: Plus,
-  gradient: "from-violet-300 via-purple-500 to-indigo-600",
-  accent: "139,92,246",
-};
 
 function asIds(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -714,18 +714,26 @@ function subscribe(onChange: () => void) {
 /** Configuração do dock e operações, com persistência automática. */
 export function useDock() {
   const prefs = useSyncExternalStore(subscribe, getDockPrefs, getDockPrefs);
+  /* As páginas iframe entram no catálogo: o dock volta a resolver os ícones
+     sempre que a lista de páginas configuradas muda. */
+  const iframePages = useSyncExternalStore(subscribeIframePages, getIframePages, getIframePages);
+
+  const apps = useMemo(
+    () => [...DOCK_CATALOG, IFRAME_PAGES_APP, ...iframePages.filter((page) => page.enabled).map(iframeToDockApp)],
+    [iframePages]
+  );
 
   const visible = useMemo(
-    () => prefs.items.map((id) => allDockApps().find((app) => app.id === id)).filter((app): app is DockApp => Boolean(app)),
-    [prefs.items]
+    () => prefs.items.map((id) => apps.find((app) => app.id === id)).filter((app): app is DockApp => Boolean(app)),
+    [prefs.items, apps]
   );
 
   const parked = useMemo(
-    () => prefs.parked.map((id) => allDockApps().find((app) => app.id === id)).filter((app): app is DockApp => Boolean(app)),
-    [prefs.parked]
+    () => prefs.parked.map((id) => apps.find((app) => app.id === id)).filter((app): app is DockApp => Boolean(app)),
+    [prefs.parked, apps]
   );
 
-  const iframe = useMemo(() => iframeDockApps(), []);
+  const iframe = useMemo(() => iframePages.filter((page) => page.enabled).map(iframeToDockApp), [iframePages]);
 
   const set = useCallback((patch: Partial<DockPrefs>) => updateDockPrefs(patch), []);
 
@@ -744,9 +752,7 @@ export function dockApp(id: string): DockApp | undefined {
 
 /** Subscreve tanto às preferências do dock como às páginas iframe dinâmicas. */
 export function useDockWithIframes() {
-  const dock = useDock();
-  useSyncExternalStore(subscribeIframePages, () => true, () => true);
-  return dock;
+  return useDock();
 }
 
 /**

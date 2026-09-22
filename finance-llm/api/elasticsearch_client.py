@@ -2948,10 +2948,15 @@ def get_entity_role_summary(
         by_contract_type = _rows("by_contract_type")
 
         # O histograma devolve chaves numéricas: publica-se o limite inferior
-        # (em euros) e uma etiqueta legível para o intervalo.
+        # (em euros) e uma etiqueta legível para o intervalo. Os escalões
+        # negativos (valores anómalos nos dados de origem) são ignorados.
         by_value_range: List[Dict[str, Any]] = []
         for b in aggs.get("by_value_range", {}).get("buckets", []):
             start = int(b["key"])
+            if start < 0:
+                continue
+            if len(by_value_range) >= 12:
+                break
             by_value_range.append({
                 "key": str(start),
                 "count": b["doc_count"],

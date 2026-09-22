@@ -757,9 +757,13 @@ export default function EntityDashboardPage({
           />
           <StatCard
             icon={role === "adjudicante" ? Landmark : role === "adjudicatario" ? Briefcase : Layers}
-            label={role === "all" ? "Entidades (papel dominante)" : `Nº de ${copy.plural}`}
+            label={role === "all" ? "Empresas distintas (mín.)" : `Nº de ${copy.plural}`}
             value={loading && !summary ? "…" : formatNumber(entityKpi)}
-            sub={`NIF distintos${role === "all" ? " · adjudicantes e adjudicatários" : ""}`}
+            sub={
+              role === "all"
+                ? `adjudicantes: ${formatNumber(summary?.unique_adjudicantes)} · adjudicatários: ${formatNumber(summary?.unique_adjudicatarios)}`
+                : "NIF distintos nos contratos filtrados"
+            }
             color="text-blue-400"
             glow="glow-blue"
           />
@@ -773,9 +777,9 @@ export default function EntityDashboardPage({
           />
           <StatCard
             icon={Percent}
-            label="Concentração (top 10)"
+            label="Concentração (10 maiores)"
             value={loading && !summary ? "…" : formatPercent(summary?.concentration?.top10)}
-            sub={`Top 1: ${formatPercent(summary?.concentration?.top1)} · Top 5: ${formatPercent(summary?.concentration?.top5)}`}
+            sub={`peso no valor total · Top 1: ${formatPercent(summary?.concentration?.top1)} · Top 5: ${formatPercent(summary?.concentration?.top5)}`}
             color="text-emerald-400"
             glow="glow-teal"
           />

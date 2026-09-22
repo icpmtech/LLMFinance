@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { ChatLayout } from "./components/ChatLayout";
 import { AppNav, type AppView as AppNavView } from "./components/AppNav";
 import { Dock } from "./components/Dock";
@@ -79,12 +79,14 @@ import { ContractsListPage } from "./pages/ContractsListPage";
 import IframePage from "./pages/IframePage";
 import IframePagesPage from "./pages/IframePagesPage";
 import {
+  getIframeRevision,
   iframeDockApps,
   iframeIdFromView,
   iframePathFor,
   iframeViewFor,
   iframeViewFromPath,
   isIframeView,
+  subscribeIframePages,
 } from "./iframePages";
 import { sendChat } from "./sendChat";
 import type { EntityRole, Message, ModelBackend } from "./types";
@@ -266,6 +268,9 @@ function workspaceEstimate(): { width: number; height: number } {
 export default function App() {
   const { status: authStatus, user } = useAuth();
   const { windowMode } = useWindowMode();
+  /* Re-renderiza quando as páginas iframe configuradas mudam (etiquetas,
+     ícones e janelas dependem do catálogo dinâmico). */
+  useSyncExternalStore(subscribeIframePages, getIframeRevision, getIframeRevision);
   const [focusedWindowView, setFocusedWindowView] = useState<string | null>(null);
   const prefAppliedRef = useRef(false);
   const [conversations, setConversations] = useState<Conversation[]>(() => {

@@ -31,7 +31,7 @@ import {
 } from "../layout";
 import { useAuth } from "../auth";
 import { Avatar } from "../pages/SettingsPage";
-import { iframeDockApps, subscribeIframePages } from "../iframePages";
+import { getIframeRevision, iframeDockApps, subscribeIframePages } from "../iframePages";
 
 export type AppView =
   | "dashboard"
@@ -141,7 +141,11 @@ function appItem(app: DockApp): NavItem {
   };
 }
 
-const groups: NavGroup[] = [
+/**
+ * Grupos fixos do menu (Aplicações e Ferramentas). O grupo das páginas iframe
+ * é acrescentado em `buildGroups()`, porque depende do que o utilizador criou.
+ */
+const BASE_GROUPS: NavGroup[] = [
   {
     id: "apps",
     label: "Aplicações",
@@ -159,18 +163,29 @@ const groups: NavGroup[] = [
       appItem(IFRAME_PAGES_APP),
     ],
   },
-  {
-    id: "iframes",
-    label: "Páginas iframe",
-    icon: <Plus size={14} />,
-    defaultOpen: true,
-    items: iframeDockApps().map(appItem),
-  },
 ];
 
-const ALL_ITEMS: { item: NavItem; group: NavGroup }[] = groups.flatMap((group) =>
-  group.items.map((item) => ({ item, group })),
-);
+/** Grupos do menu já com as páginas iframe configuradas pelo utilizador. */
+export function buildGroups(): NavGroup[] {
+  const iframes = iframeDockApps();
+  if (iframes.length === 0) return BASE_GROUPS;
+  return [
+    ...BASE_GROUPS,
+    {
+      id: "iframes",
+      label: "Páginas iframe",
+      icon: <Plus size={14} />,
+      defaultOpen: true,
+      items: iframes.map(appItem),
+    },
+  ];
+}
+
+/** Todos os itens de navegação, associados ao respetivo grupo. */
+function allItems(role?: string | null) {
+  const items = buildGroups().flatMap((group) => group.items.map((item) => ({ item, group })));
+  return isAdminRole(role) ? items : items.filter(({ item }) => !item.adminOnly);
+}
 
 /** Papel `admin` (a área de administração é a única restrita). */
 function isAdminRole(role?: string | null) {
@@ -182,11 +197,12 @@ export type { NavItem, NavGroup };
 
 /** Itens de navegação permitidos ao papel indicado. */
 export function itemsFor(role?: string | null) {
-  return isAdminRole(role) ? ALL_ITEMS : ALL_ITEMS.filter(({ item }) => !item.adminOnly);
+  return allItems(role);
 }
 
 /** Grupos de navegação permitidos ao papel indicado (sem grupos vazios). */
 export function groupsFor(role?: string | null): NavGroup[] {
+  const groups = buildGroups();
   if (isAdminRole(role)) return groups;
   return groups
     .map((group) => ({ ...group, items: group.items.filter((item) => !item.adminOnly) }))
@@ -216,7 +232,9 @@ function resolveItem(view: AppView, items: { item: NavItem; group: NavGroup }[])
 }
 
 export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
-  useSyncExternalStore(subscribeIframePages, () => true, () => true);
+  /* As páginas iframe são configuráveis: a barra lateral volta a construir os
+     grupos sempre que a lista muda. */
+  const iframeRevision = useSyncExternalStore(subscribeIframePages, getIframeRevision, getIframeRevision);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -255,9 +273,12 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
   };
 
   const context = useMemo(() => {
+    // `iframeRevision` é lido no corpo para que o menu seja recalculado quando
+    // as páginas iframe configuradas mudam (o oxlint não o vê como dependência).
+    void iframeRevision;
     const allowed = itemsFor(user?.role);
     return { items: allowed, groups: groupsFor(user?.role) };
-  }, [user?.role]);
+  }, [user?.role, iframeRevision]);
 
   /* Histórico de vistas (alimenta a secção «Recentes»). */
   useEffect(() => {

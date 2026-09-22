@@ -528,6 +528,20 @@ def serve_companies_spa_page():
     return spa_index_response()
 
 
+# Os dashboards e o comparador de entidades vivem em `/entities/...`, mas
+# `/entities/{nif}` (ficha do cadastro) capturaria "dashboard" e "compare" como
+# NIF. Estas rotas ficam registadas antes dessa, para que um recarregamento da
+# página devolva a SPA em vez de um 404 JSON.
+@app.get("/entities/dashboard")
+@app.get("/entities/adjudicantes")
+@app.get("/entities/adjudicatarios")
+@app.get("/entities/compare")
+@app.get("/adjudicantes")
+@app.get("/adjudicatarios")
+def serve_entities_spa_page():
+    return spa_index_response()
+
+
 def _accepts_html(request: Request) -> bool:
     accept = request.headers.get("accept", "")
     return "text/html" in accept
