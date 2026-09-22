@@ -1,7 +1,8 @@
 /**
  * Cliente do módulo de recolha (`/scraper/*`) — o «web scraping» do IQ OS.
  *
- * Permite definir **fontes** (URL + *fetcher* + seletores + campos + cron),
+ * Permite partir de **templates de sites** (Jornal Económico, ECO, Público,
+ * Expansión…), definir **fontes** (URL + *fetcher* + seletores + campos + cron),
  * executá-las manualmente ou por agendamento, e pesquisar os itens recolhidos
  * (gravados em JSONL e indexados no Elasticsearch em `finance_scraped`).
  *
@@ -20,6 +21,11 @@ export type ScraperField = {
   name: string;
   label?: string;
   selector: string;
+  /**
+   * Seletores alternativos: usa-se o primeiro que devolver valor. Serve os
+   * sites que desenham o mesmo dado em cartões diferentes (destaque e lista).
+   */
+  selectors?: string[];
   type: ScraperSelectorKind;
   attr?: string | null;
   /** Recolher todas as ocorrências (lista) em vez da primeira. */
@@ -32,6 +38,43 @@ export type ScraperField = {
 export type ScraperSelector = { selector: string; type: ScraperSelectorKind };
 
 export type ScraperPagination = ScraperSelector & { attr: string; max_pages: number };
+
+/**
+ * Recolha do corpo do artigo (página de detalhe de cada item).
+ *
+ * `selector` aponta para o contentor do texto; é escolhido o maior dos nós que
+ * casam com o seletor, para não apanhar painéis de data com as mesmas classes.
+ */
+export type ScraperDetail = {
+  enabled: boolean;
+  selector: string;
+  /** Itens por execução com texto integral (0 = desligado). */
+  max_items: number;
+  /** Pausa entre páginas de detalhe, em segundos. */
+  delay: number;
+  max_chars: number;
+};
+
+/** Template de site (definição pronta a usar). */
+export type ScraperTemplate = {
+  id: string;
+  name: string;
+  site: string;
+  category: string;
+  description: string;
+  tags: string[];
+  requires: ScraperFetcher | string;
+  requires_browser: boolean;
+  notes: string;
+  url: string;
+  fetcher: ScraperFetcher;
+  cron: string;
+  fields: string[];
+  detail: boolean;
+  detail_selector: string;
+  /** Definição completa (só no detalhe de um template). */
+  source?: Partial<ScraperSource>;
+};
 
 export type ScraperRun = {
   run_id: string;
@@ -46,6 +89,11 @@ export type ScraperRun = {
   indexed_count: number;
   error_count: number;
   pages: number;
+  /** Itens que trouxeram o corpo do artigo (bloco `detail` da fonte). */
+  detail_count?: number;
+  detail_errors?: number;
+  /** Itens repetidos que a recolha ignorou (mesmo URL ou mesmo título). */
+  duplicates?: number;
   errors?: string[];
   running?: boolean;
 };
@@ -65,6 +113,8 @@ export type ScraperSource = {
   respect_robots: boolean;
   tags: string[];
   id_fields: string[];
+  detail?: ScraperDetail;
+  template_id?: string;
   title_field?: string;
   summary_field?: string;
   text_field?: string;
@@ -111,6 +161,7 @@ export type ScraperMeta = {
   cron_presets: { cron: string; label: string }[];
   default_timezone: string;
   index: string;
+  template_categories?: string[];
 };
 
 export type ScraperStatus = {
@@ -123,6 +174,9 @@ export type ScraperStatus = {
   python_version?: string;
   fetchers: Record<string, boolean>;
   playwright?: boolean;
+  /** Browsers (Chromium) descarregados — sem eles não há `dynamic`/`stealth`. */
+  browsers?: boolean;
+  browsers_hint?: string;
   elasticsearch: boolean;
   indexed_items?: number;
   indexed_sources?: { key: string; count: number }[];
@@ -136,6 +190,8 @@ export type ScraperStats = {
   runs_completed: number;
   items_scraped: number;
   items_indexed: number;
+  /** Itens que trouxeram também o texto integral do artigo. */
+  items_with_text?: number;
   items_by_source: Record<string, number>;
   last_run?: ScraperRun | null;
   active_runs: Record<string, string>;
@@ -148,6 +204,11 @@ export type ScraperPreview = {
   total: number;
   items: ScraperItem[];
   fields?: string[];
+  /** Itens da amostra que trouxeram texto integral. */
+  detail_count?: number;
+  detail_errors?: number;
+  /** Itens repetidos ignorados (mesmo URL ou mesmo título). */
+  duplicates?: number;
 };
 
 /** Candidato a contentor de item, medido pela análise da página. */
@@ -330,4 +391,54 @@ export function getScraperJobs() {
 
 export function reloadScraperJobs() {
   return request<ScraperStatus["scheduler"]>("/scraper/jobs/reload", withBody("POST"));
+}
+
+/* ----------------------------------------------------------------- templates */
+
+/** Galeria de definições prontas (Jornal Económico, ECO, Público, Expansión…). */
+export function listScraperTemplates(category?: string) {
+  const query = new URLSearchParams();
+  if (category) query.set("category", category);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<{ total: number; categories: string[]; items: ScraperTemplate[] }>(`/scraper/templates${suffix}`);
+}
+
+export function getScraperTemplate(templateId: string) {
+  return request<{ item: ScraperTemplate }>(`/scraper/templates/${encodeURIComponent(templateId)}`);
+}
+
+/** Testa um template contra o site, sem guardar nada nem indexar. */
+export function previewScraperTemplate(templateId: string, limit = 3, maxPages = 1) {
+  const query = new URLSearchParams({ limit: String(limit), max_pages: String(maxPages) });
+  return request<ScraperPreview>(`/scraper/templates/${encodeURIComponent(templateId)}/preview?${query.toString()}`, withBody("POST"));
+}
+
+/** Cria a fonte a partir do template (com os ajustes indicados). */
+export function createScraperSourceFromTemplate(
+  templateId: string,
+  payload: { name?: string; enabled?: boolean; cron?: string; maxPages?: number; detailMaxItems?: number; tags?: string[] } = {},
+) {
+  return request<{ item: ScraperSource; template: ScraperTemplate | null }>(
+    `/scraper/templates/${encodeURIComponent(templateId)}/source`,
+    withBody("POST", {
+      name: payload.name,
+      enabled: payload.enabled ?? false,
+      cron: payload.cron,
+      max_pages: payload.maxPages,
+      detail_max_items: payload.detailMaxItems,
+      tags: payload.tags,
+    }),
+  );
+}
+
+/**
+ * Reaplica a definição do template à fonte: útil quando o site muda de marcação
+ * e o template é corrigido. Mantém nome, agenda, interruptor e etiquetas.
+ */
+export function applyScraperTemplate(sourceId: string, templateId?: string) {
+  const suffix = templateId ? `?template_id=${encodeURIComponent(templateId)}` : "";
+  return request<{ item: ScraperSource; template: ScraperTemplate | null }>(
+    `/scraper/sources/${encodeURIComponent(sourceId)}/apply-template${suffix}`,
+    withBody("POST"),
+  );
 }

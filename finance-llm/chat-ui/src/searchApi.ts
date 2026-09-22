@@ -31,6 +31,8 @@ export type SearchItem = {
   subtitle: string;
   snippet: string;
   url: string;
+  /** Imagem do item (itens recolhidos trazem a que a fonte extraiu). */
+  image?: string;
   date: string | null;
   badges: string[];
   extra: Record<string, unknown>;

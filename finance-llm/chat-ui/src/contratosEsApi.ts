@@ -12,15 +12,29 @@ import { API_BASE } from "./api";
  * numa entidade — órgão adjudicante (`organo`), empresa adjudicatária
  * (`adjudicatario`) ou texto livre (`q`).
  */
-export type ContratosEsEntry = { doc?: string; organo?: string; adjudicatario?: string; q?: string };
+export type ContratosEsEntry = {
+  doc?: string;
+  organo?: string;
+  adjudicatario?: string;
+  q?: string;
+  /** Código NUTS (ex.: «ES300»), usado pelo mapa de contratos. */
+  nuts?: string;
+};
 
 /** Chave de `localStorage` onde fica o pedido pendente. */
 export const CONTRATOS_ES_OPEN_KEY = "finance-llm-contratos-es-entry";
+
+/**
+ * Evento disparado ao deixar um pedido, para a app o aplicar **sem remontar**
+ * (caso já esteja aberta numa janela: a entrada é lida no arranque da página).
+ */
+export const CONTRATOS_ES_ENTRY_EVENT = "finance-llm-contratos-es-entry";
 
 /** Deixa um pedido para a app de contratos de Espanha (lido no arranque). */
 export function writeContratosEsEntry(entry: ContratosEsEntry): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(CONTRATOS_ES_OPEN_KEY, JSON.stringify(entry));
+  window.dispatchEvent(new Event(CONTRATOS_ES_ENTRY_EVENT));
 }
 
 /** Lê e limpa o pedido pendente (para não se repetir ao voltar à app). */

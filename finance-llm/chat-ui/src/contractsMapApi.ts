@@ -112,6 +112,8 @@ export type RegionDetailResponse = {
   pais: IberiaMapCountry;
   code: string;
   ano?: number | null;
+  /** Pesquisa aplicada ao conjunto (texto e/ou CPV). */
+  filters?: { q?: string | null; cpv?: string | null };
   totals: {
     contracts: number;
     value: number;
@@ -135,15 +137,20 @@ export type RegionDetailResponse = {
 
 /**
  * Contratos, entidades e métricas de uma região (distrito PT ou província/NUTS ES).
- * Alimenta a janela aberta no menu de contexto do mapa.
+ * `q` (texto) e `cpv` filtram métricas, entidades e contratos ao mesmo tempo —
+ * é a pesquisa da janela aberta no menu de contexto do mapa.
  */
 export async function getContractRegionDetail(params: {
   pais: IberiaMapCountry;
   code: string;
   ano?: number | null;
+  q?: string;
+  cpv?: string;
 }): Promise<RegionDetailResponse> {
   const search = new URLSearchParams({ pais: params.pais, code: params.code });
   if (params.ano) search.set("ano", String(params.ano));
+  if (params.q) search.set("q", params.q);
+  if (params.cpv) search.set("cpv", params.cpv);
   const res = await fetch(`${API_BASE}/contracts/region-detail?${search.toString()}`);
   if (!res.ok) {
     throw new Error(`Não foi possível carregar a região (HTTP ${res.status})`);

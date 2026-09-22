@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  CONTRATOS_ES_ENTRY_EVENT,
   autocompleteContratosEs,
   getContratoEs,
   getContratosEsImports,
@@ -92,7 +93,7 @@ const PAGE_SIZE = 20;
 export function ContractsEsSearchPage({ onSwitchView, onSwitchDashboard }: ContractsEsSearchPageProps) {
   // Pedido vindo de outra app (ex.: Pesquisa total): contrato concreto ou uma
   // pesquisa focada num órgão adjudicante / empresa adjudicatária.
-  const [entryRequest] = useState(() => takeContratosEsEntry());
+  const [entryRequest, setEntryRequest] = useState(() => takeContratosEsEntry());
   const [status, setStatus] = useState<ContratoEsStatus | null>(null);
   const [meta, setMeta] = useState<ContratoEsMeta | null>(null);
   const [query, setQuery] = useState(entryRequest?.q ?? "");
@@ -255,6 +256,48 @@ export function ContractsEsSearchPage({ onSwitchView, onSwitchDashboard }: Contr
       }
     })();
   }, [entryRequest]);
+
+  // Pedido de outra aplicação com a página **já montada** (janela aberta): aplica
+  // os filtros e pesquisa, em vez de ficar à espera de um novo arranque.
+  useEffect(() => {
+    const onEntry = () => {
+      const entry = takeContratosEsEntry();
+      if (!entry) return;
+      setEntryRequest(entry);
+      // Um pedido novo começa do zero: limpa os filtros anteriores da página.
+      setAno("");
+      setFonte("");
+      setTipo("");
+      setEstado("");
+      setProcedimiento("");
+      setLocalidad("");
+      setCpv("");
+      setNuts(entry.nuts ?? "");
+      setAdjudicatarioNif("");
+      setOrganismoId("");
+      setMinValue("");
+      setMaxValue("");
+      setStartDate("");
+      setEndDate("");
+      setQuery(entry.q ?? "");
+      setOrgano(entry.organo ?? "");
+      setAdjudicatario(entry.adjudicatario ?? "");
+      if (!entry.doc) {
+        void doSearch(true, {
+          q: entry.q || undefined,
+          organo: entry.organo || undefined,
+          adjudicatario: entry.adjudicatario || undefined,
+          nuts: entry.nuts || undefined,
+          date_field: "fecha_publicacion",
+          sort_by: "relevancia",
+          size: PAGE_SIZE,
+          from: 0,
+        });
+      }
+    };
+    window.addEventListener(CONTRATOS_ES_ENTRY_EVENT, onEntry);
+    return () => window.removeEventListener(CONTRATOS_ES_ENTRY_EVENT, onEntry);
+  }, [doSearch]);
 
   // Autocomplete (órgãos, adjudicatários e CPV) com atraso curto.
   useEffect(() => {

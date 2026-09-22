@@ -235,6 +235,7 @@ from api.researcher_routes import router as researcher_router
 from api.vector_routes import router as vector_router
 from api.agent_routes import router as agent_router
 from api.companies_global_routes import router as companies_global_router
+from api.societario_routes import router as societario_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -402,6 +403,7 @@ app.include_router(researcher_router)
 app.include_router(vector_router)
 app.include_router(agent_router)
 app.include_router(companies_global_router)
+app.include_router(societario_router)
 
 
 # Cache curta de `user_id → email`, para o registo de pedidos identificar quem
@@ -1165,6 +1167,7 @@ def entities_detail(nif: str):
 @app.get("/crm/relatorios")
 @app.get("/scraper")
 @app.get("/scraper/fontes")
+@app.get("/scraper/modelos")
 @app.get("/scraper/execucoes")
 @app.get("/scraper/pesquisa")
 @app.get("/scraper/agenda")
@@ -2065,6 +2068,8 @@ def contracts_region_detail(
     code: str = Query(..., description="Distrito PT («Bragança») ou código NUTS ES («ES300»)"),
     pais: str = Query("PT", description="PT | ES"),
     ano: Optional[int] = Query(None, description="Ano (opcional)"),
+    q: Optional[str] = Query(None, description="Pesquisa de texto na região (objeto, entidades)"),
+    cpv: Optional[str] = Query(None, description="Código CPV (prefixo ou código completo)"),
     top_n: int = Query(12, ge=1, le=50, description="Entidades a listar por papel"),
     contracts_size: int = Query(20, ge=1, le=100, description="Contratos a listar"),
 ):
@@ -2072,12 +2077,15 @@ def contracts_region_detail(
 
     Alimenta a janela aberta pelo menu de contexto do mapa (`/contracts/map`):
     volume e valor, distribuição por ano/CPV/procedimento/tipo/escalão, quem
-    adjudica, quem executa e os maiores contratos da região.
+    adjudica, quem executa e os maiores contratos da região — com a mesma
+    pesquisa (`q`, `cpv`) aplicada a tudo.
     """
     res = get_contract_region_detail(
         pais=pais,
         code=code,
         ano=ano,
+        q=q,
+        cpv=cpv,
         top_n=top_n,
         contracts_size=contracts_size,
     )

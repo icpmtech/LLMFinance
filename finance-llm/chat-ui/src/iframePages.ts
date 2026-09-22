@@ -2,8 +2,9 @@
  * Páginas iframe configuráveis pelo utilizador.
  *
  * Permite adicionar, editar e remover aplicações externas que são incorporadas
- * na plataforma através de um `iframe`. Cada entrada vive no `localStorage`
- * e é registada dinamicamente no catálogo do dock e na navegação lateral.
+ * na plataforma através de um `iframe`. O estado de verdade vive nas
+ * preferências do utilizador (`user.preferences.iframe_pages`) no
+ * Elasticsearch; o `localStorage` serve apenas de cache local/offline.
  */
 import type { LucideIcon } from "lucide-react";
 import {
@@ -42,6 +43,7 @@ import {
   Upload,
   Users,
 } from "lucide-react";
+import { authApi, type IframePagePreference } from "./authApi";
 import type { DockApp } from "./dock";
 
 export type IframePageConfig = {
@@ -57,6 +59,7 @@ export type IframePageConfig = {
 
 const STORAGE_KEY = "finance-llm-iframe-pages:v1";
 const CHANGE_EVENT = "finance-llm-iframe-pages-changed";
+const SAVE_DEBOUNCE_MS = 600;
 
 export const IFRAME_VIEW_PREFIX = "iframe:";
 
@@ -177,17 +180,62 @@ let cache: IframePageConfig[] = readRaw();
  * `useSyncExternalStore` (uma identidade nova a cada alteração).
  */
 let revision = 0;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingSave: IframePageConfig[] | null = null;
+let saving = false;
 
-function commit(next: IframePageConfig[]) {
-  cache = next;
-  revision += 1;
+function persistLocal(next: IframePageConfig[]) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   } catch {
     // Sem persistência: mantém-se em memória.
   }
+}
+
+function toPreference(page: IframePageConfig): IframePagePreference {
+  return { ...page };
+}
+
+async function flushServerSave() {
+  if (saving || !pendingSave) return;
+  const payload = pendingSave;
+  pendingSave = null;
+  saving = true;
+  try {
+    await authApi.updateProfile({ iframe_pages: payload.map(toPreference) });
+  } catch (error) {
+    // Falha silenciosa: o localStorage já tem a versão mais recente; na próxima
+    // abertura o servidor é sincronizado novamente.
+    if (typeof console !== "undefined") {
+      console.warn("Falha ao guardar páginas iframe no servidor:", error);
+    }
+  } finally {
+    saving = false;
+    if (pendingSave) {
+      // Houve alterações enquanto salvava: agenda novo flush.
+      scheduleServerSave();
+    }
+  }
+}
+
+function scheduleServerSave() {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    void flushServerSave();
+  }, SAVE_DEBOUNCE_MS);
+}
+
+function commit(next: IframePageConfig[], { skipServer = false } = {}) {
+  cache = next;
+  revision += 1;
+  persistLocal(next);
   window.dispatchEvent(new Event(CHANGE_EVENT));
+  if (!skipServer) {
+    pendingSave = next;
+    scheduleServerSave();
+  }
 }
 
 export function getIframePages(): IframePageConfig[] {
@@ -243,55 +291,64 @@ export function subscribeIframePages(onChange: () => void): () => void {
   };
 }
 
-export function iframePageById(id: string): IframePageConfig | undefined {
-  return cache.find((p) => p.id === id);
+/** Converte uma vista `iframe:<id>` no id correspondente. */
+export function iframeIdFromView(view: string): string | null {
+  return view.startsWith(IFRAME_VIEW_PREFIX) ? view.slice(IFRAME_VIEW_PREFIX.length) : null;
 }
 
-/** Vista (`AppView`) de uma página iframe a partir do id. */
+/** Constrói a vista `iframe:<id>`. */
 export function iframeViewFor(id: string): string {
   return `${IFRAME_VIEW_PREFIX}${id}`;
 }
 
-/** Id da página iframe a partir da vista. */
-export function iframeIdFromView(view: string): string | null {
-  if (!view.startsWith(IFRAME_VIEW_PREFIX)) return null;
-  return view.slice(IFRAME_VIEW_PREFIX.length);
+/** Constrói o caminho da SPA para uma página iframe. */
+export function iframePathFor(id: string): string {
+  return `/iframe/${id}`;
+}
+
+/** Extrai o id de um caminho `/iframe/<id>`. */
+export function iframeViewFromPath(path: string): string | null {
+  const match = path.match(/^\/iframe\/([^/?#]+)$/);
+  return match ? iframeViewFor(match[1]) : null;
 }
 
 export function isIframeView(view: string): boolean {
   return view.startsWith(IFRAME_VIEW_PREFIX);
 }
 
-/** Converte uma configuração numa entrada do catálogo do dock. */
+/** Transforma uma página iframe numa aplicação do dock. */
 export function iframeToDockApp(page: IframePageConfig): DockApp {
-  const Icon = IFRAME_ICONS[page.icon] ?? Globe2;
   return {
     id: iframeViewFor(page.id),
     label: page.title,
-    hint: page.url,
-    icon: Icon,
+    icon: page.icon,
     gradient: page.gradient,
     accent: page.accent,
+    view: iframeViewFor(page.id),
+    category: "Aplicações",
+    singleton: true,
   };
 }
 
-/** Lista de entradas do dock para as páginas iframe ativas. */
+/** Aplicações do dock geradas a partir das páginas ativas. */
 export function iframeDockApps(): DockApp[] {
-  return cache.filter((p) => p.enabled).map(iframeToDockApp);
+  return cache
+    .filter((p) => p.enabled)
+    .sort((a, b) => {
+      const ai = cache.findIndex((p) => p.id === a.id);
+      const bi = cache.findIndex((p) => p.id === b.id);
+      return ai - bi;
+    })
+    .map(iframeToDockApp);
 }
 
-/** Caminho URL de uma vista iframe. */
-export function iframePathFor(view: string): string | null {
-  const id = iframeIdFromView(view);
-  if (!id) return null;
-  const page = iframePageById(id);
-  if (!page) return null;
-  return `/iframe/${id}`;
-}
-
-/** Vista iframe a partir de um caminho URL. */
-export function iframeViewFromPath(path: string): string | null {
-  const match = path.match(/^\/iframe\/([^/]+)$/);
-  if (!match) return null;
-  return iframeViewFor(match[1]);
+/**
+ * Sincroniza as páginas iframe vindas do servidor (preferências do utilizador)
+ * com o cache local. Chamado pelo `AuthProvider` quando o perfil é carregado.
+ */
+export function syncIframePagesFromUser(pages: unknown[]): void {
+  const sanitized = (Array.isArray(pages) ? pages : []).map(sanitizePage).filter((p): p is IframePageConfig => p !== null);
+  const local = readRaw();
+  if (JSON.stringify(local) === JSON.stringify(sanitized)) return;
+  commit(sanitized, { skipServer: true });
 }

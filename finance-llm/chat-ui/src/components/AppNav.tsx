@@ -69,6 +69,7 @@ export type AppView =
   | "crm-agenda"
   | "crm-dashboard"
   | "scraper"
+  | "scraper-templates"
   | "scraper-execucoes"
   | "scraper-pesquisa"
   | "scraper-agenda"
@@ -122,7 +123,7 @@ const APP_MATCH: Record<string, AppView[]> = {
   compare: ["entities-compare"],
   tickers: ["ticker-detail", "ticker-chart"],
   crm: ["crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard"],
-  scraper: ["scraper-execucoes", "scraper-pesquisa", "scraper-agenda"],
+  scraper: ["scraper-templates", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda"],
   search360: ["search360-dossie", "search360-projetos", "search360-grafo", "search360-biblioteca"],
   office: ["office-dossies"],
   visualizador: ["visualizador-dashboards"],

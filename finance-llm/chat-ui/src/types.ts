@@ -1226,6 +1226,44 @@ export interface CompanyEnrichmentResponse {
   error?: string;
 }
 
+// --- Publicações de atos societários (Ministério da Justiça) ---
+
+export interface SocietarioPublicacao {
+  pub_id: string;
+  data_publicacao?: string;
+  nif?: string;
+  entidade?: string;
+  concelho?: string;
+  acto?: string;
+  tipo?: string;
+  tipo_label?: string;
+  firma?: string;
+  natureza_juridica?: string;
+  sede?: string;
+  distrito?: string;
+  freguesia?: string;
+  codigo_postal?: string;
+  conservatoria?: string;
+  matricula_nipc?: string;
+  pedido?: string;
+  requerente?: string;
+  ano_contas?: string;
+  texto?: string;
+  has_documento?: boolean;
+  documento_url?: string;
+  source?: string;
+  detail_fetched?: boolean;
+}
+
+export interface CompanySocietarioResponse {
+  nif: string;
+  total: number;
+  items: SocietarioPublicacao[];
+  from?: number;
+  size?: number;
+  error?: string;
+}
+
 // --- Cadastro de entidades do portal base (pesquisa de empresas) ---
 
 export interface EntityItem {

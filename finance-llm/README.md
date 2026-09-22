@@ -555,8 +555,9 @@ Detalhes de implementação: o chrome vive em `Window.tsx` (componente `WinButto
 barra de tarefas é o **mesmo** componente `Dock` com `data-style="windows"` na prateleira
 (`.dock-shelf`) e indicadores `.dock-win-indicator` em vez do ponto `.dock-dot` do macOS.
 
-Na barra de tarefas os botões são **adaptativos**: com muitas aplicações ficam nos **40 px**
-mínimos (e a barra desliza na horizontal, como já acontecia no dock); com espaço a mais
+Na barra de tarefas os botões são **adaptativos**: com demasiadas aplicações para o ecrã o excesso vai
+para a **pasta «Mais»** (ver abaixo) e, com a pasta desligada, os botões ficam nos **40 px** mínimos
+e a barra desliza na horizontal, como já acontecia no dock; com espaço a mais
 **crescem** até 72 px e a barra ganha espessura (altura = botão + 8 px, largura quando a barra
 está numa margem). O crescimento nunca passa de ~25 % acima de «Tamanho dos ícones»
 (Definições do dock → Aparência), que passa a valer **nos dois aspetos** — a barra de tarefas
@@ -586,6 +587,32 @@ O material da barra do Windows (Mica, desfoco, hairline e sombra) é pintado no 
 (`.dock-anchor[data-style="windows"]`), não na prateleira: a prateleira termina onde começa a
 reserva da bandeja, por isso pintá-la só aí deixava o lado direito (onde vive a bandeja e o relógio)
 sem o fundo escuro.
+
+#### Pasta «Mais»: quando os botões não cabem
+
+O dock tem um catálogo de **mais de 45 aplicações** e, num ecrã normal, não cabem todas. Em vez de
+encolher os ícones até ao mínimo tátil e pôr a barra a deslizar, o dock **agrupa o que não cabe
+numa pasta «Mais»**: um só botão no fim do dock (quatro miniaturas das aplicações lá dentro e um
+selo `+N`) que abre um painel em grelha de 4 colunas — clicar num ícone abre a aplicação; o botão
+direito abre o mesmo menu de contexto do ícone no dock.
+
+- **Só agrupa quando é preciso**: se as aplicações todas caberem (mesmo a um tamanho menor), o dock
+  fica exatamente como estava — a pasta aparece apenas quando nem no tamanho mínimo cabe tudo. Os
+  ícones ficam no maior tamanho a que o conjunto **inteiro** caberia, com o mínimo tátil de 42 px.
+- **Um só lugar** para a conta: o plano é calculado em `planDock()` (`Dock.tsx`) para o dock do
+  macOS e em `windowsMetrics` para a barra de tarefas (que ocupa o lugar de um botão e procura o
+  maior número de botões que volte a deixar tudo folgado). Conta também com as miniaturas das
+  janelas minimizadas (`MINI_WIDTH_UNITS`).
+- **Interruptor**: Definições do dock → Comportamento → **«Pasta «Mais» quando o dock enche»**
+  (`overflow`, ligado por omissão; `finance-llm-dock:v1`). Desligado, o comportamento antigo volta
+  (ícones no mínimo e barra deslizável), e o painel de preferências avisa em cada caso — quantas
+  aplicações ficam na pasta ou que a barra vai deslizar.
+- **Aspeto**: a pasta segue o material do dock (`macOS`) ou da barra de tarefas (`Windows`, botão
+  quadrado sem sombra) e o painel é o mesmo `.dock-popover` (vidro; Mica com cantos de 8 px no
+  aspeto Windows). O painel abre 12 px acima (ou ao lado) da pasta, é mantido dentro do ecrã e
+  fecha com `Esc`, com um clique fora ou com novo clique na pasta.
+- **Reordenar/retirar** continua a fazer-se no painel de preferências (a lista «No dock» tem as
+  aplicações todas, incluindo as que estão dentro da pasta), por isso nunca ficam inacessíveis.
 - A geometria, o empilhamento e o estado (minimizada/maximizada) ficam guardados em
   `localStorage` (`finance-llm-windows:v1`) e são repostos ao recarregar.
 - O modo liga-se/desliga nas **Definições → Preferências → Modo janelas** (guardado na conta)

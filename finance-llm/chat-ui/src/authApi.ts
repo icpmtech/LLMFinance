@@ -8,6 +8,17 @@
  */
 import { API_BASE } from "./api";
 
+export type IframePagePreference = {
+  id: string;
+  title: string;
+  url: string;
+  icon: string;
+  accent: string;
+  gradient: string;
+  enabled: boolean;
+  createdAt: string;
+};
+
 const TOKEN_KEY = "finance-llm-token";
 
 export type AuthUser = {
@@ -47,6 +58,7 @@ export type ProfilePreferences = {
   sidebar_mode?: string;
   window_mode?: boolean;
   reduced_motion?: boolean;
+  iframe_pages?: IframePagePreference[];
 };
 
 export type ProfilePatch = {
@@ -56,6 +68,7 @@ export type ProfilePatch = {
   phone?: string;
   locale?: string;
   timezone?: string;
+  iframe_pages?: IframePagePreference[];
   preferences?: ProfilePreferences;
 };
 

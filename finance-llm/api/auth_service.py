@@ -256,6 +256,7 @@ DEFAULT_PREFERENCES: Dict[str, Any] = {
     "window_mode": True,
     "reduced_motion": False,
     "email_notifications": False,
+    "iframe_pages": [],
 }
 
 ALLOWED_PREFERENCES = set(DEFAULT_PREFERENCES)

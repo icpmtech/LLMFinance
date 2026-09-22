@@ -1,11 +1,13 @@
 /**
  * Recolha de dados de sites («Scraping») — o módulo de recolha do IQ OS.
  *
- * Quatro áreas, no mesmo desenho dos outros módulos:
+ * Cinco áreas, no mesmo desenho dos outros módulos:
  *
+ * - **Templates**: definições prontas para sites concretos (Jornal Económico,
+ *   ECO, Público, Observador, Expansión, …). Escolhe-se o site, testa-se contra
+ *   a página real e a fonte fica criada — sem escrever seletores à mão.
  * - **Fontes**: as definições declarativas (URL, *fetcher*, seletores, campos,
- *   paginação, cron). Cada fonte pode ser testada antes de guardar, executada
- *   manualmente ou ligada/desligada para o agendamento.
+ *   paginação, cron e, se for caso disso, o texto integral do artigo).
  * - **Execuções**: histórico (estado, itens, indexados, páginas, erros) e os
  *   itens gravados em JSONL por execução.
  * - **Pesquisa**: pesquisa livre sobre os itens recolhidos no Elasticsearch,
@@ -39,22 +41,28 @@ import {
   XCircle,
 } from "lucide-react";
 import {
+  applyScraperTemplate,
   createScraperSource,
+  createScraperSourceFromTemplate,
   deleteScraperSource,
   getScraperJobs,
   getScraperMeta,
   getScraperRunItems,
   getScraperStats,
   getScraperStatus,
+  getScraperTemplate,
   listScraperRuns,
   listScraperSources,
+  listScraperTemplates,
   previewScraperSource,
+  previewScraperTemplate,
   reloadScraperJobs,
   runScraperSource,
   searchScraperItems,
   suggestScraperSource,
   updateScraperSource,
   type ScraperField,
+  type ScraperDetail,
   type ScraperItem,
   type ScraperMeta,
   type ScraperPreview,
@@ -64,14 +72,22 @@ import {
   type ScraperStats,
   type ScraperStatus,
   type ScraperSuggestion,
+  type ScraperTemplate,
 } from "../scraperApi";
+import {
+  ItemsCollection,
+  ItemsViewToggle,
+  type DisplayItem,
+  type ItemsView,
+} from "../components/ItemsView";
 import { useAuth } from "../auth";
 
 /* ------------------------------------------------------------- navegação */
 
-export type ScraperSection = "sources" | "runs" | "search" | "schedule";
+export type ScraperSection = "templates" | "sources" | "runs" | "search" | "schedule";
 
 export const SCRAPER_SECTIONS: { id: ScraperSection; label: string; icon: React.ReactNode }[] = [
+  { id: "templates", label: "Templates", icon: <Layers size={14} /> },
   { id: "sources", label: "Fontes", icon: <Globe2 size={14} /> },
   { id: "runs", label: "Execuções", icon: <Play size={14} /> },
   { id: "search", label: "Pesquisa", icon: <Search size={14} /> },
@@ -80,6 +96,7 @@ export const SCRAPER_SECTIONS: { id: ScraperSection; label: string; icon: React.
 
 /** Vista da plataforma correspondente a cada secção (usada pelo App/dock). */
 export const SCRAPER_SECTION_VIEWS: Record<ScraperSection, string> = {
+  templates: "scraper-templates",
   sources: "scraper",
   runs: "scraper-execucoes",
   search: "scraper-pesquisa",
@@ -177,6 +194,7 @@ function emptySource(): Partial<ScraperSource> {
     respect_robots: true,
     tags: [],
     id_fields: [],
+    detail: { enabled: false, selector: "", max_items: 0, delay: 0.5, max_chars: 20000 },
   };
 }
 
@@ -193,6 +211,7 @@ export default function ScraperPage({ section, onSectionChange }: ScraperPagePro
   const [status, setStatus] = useState<ScraperStatus | null>(null);
   const [stats, setStats] = useState<ScraperStats | null>(null);
   const [sources, setSources] = useState<ScraperSource[]>([]);
+  const [templates, setTemplates] = useState<ScraperTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -201,16 +220,19 @@ export default function ScraperPage({ section, onSectionChange }: ScraperPagePro
 
   const refresh = useCallback(async () => {
     try {
-      const [nextMeta, nextStatus, nextStats, nextSources] = await Promise.all([
+      const [nextMeta, nextStatus, nextStats, nextSources, nextTemplates] = await Promise.all([
         getScraperMeta(),
         getScraperStatus(),
         getScraperStats(),
         listScraperSources(),
+        // A galeria é estática no servidor; se falhar, a página continua a servir.
+        listScraperTemplates().catch(() => ({ total: 0, categories: [], items: [] })),
       ]);
       setMeta(nextMeta);
       setStatus(nextStatus);
       setStats(nextStats);
       setSources(nextSources.items);
+      setTemplates(nextTemplates.items);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao carregar o módulo de recolha.");
@@ -285,6 +307,57 @@ export default function ScraperPage({ section, onSectionChange }: ScraperPagePro
     setEditing(draft);
   };
 
+  /** Volta a aplicar o template à fonte (o site mudou de marcação). */
+  const applyTemplate = async (source: ScraperSource) => {
+    const templateName = templates.find((entry) => entry.id === source.template_id)?.name ?? source.template_id;
+    if (
+      !window.confirm(
+        `Reaplicar a definição do template «${templateName}» à fonte «${source.name}»?\n\n` +
+          "Os seletores, os campos e o texto integral voltam aos do template. Nome, agenda, interruptor e etiquetas mantêm-se.",
+      )
+    )
+      return;
+    setBusy(source.id);
+    try {
+      await applyScraperTemplate(source.id);
+      setNotice(`Fonte «${source.name}» sincronizada com o template ${templateName}.`);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível aplicar o template.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** Abre o editor com a definição do template, para revisão antes de guardar. */
+  const useTemplate = async (template: ScraperTemplate) => {
+    setBusy(`template:${template.id}`);
+    try {
+      const { item } = await getScraperTemplate(template.id);
+      const draft = item.source ?? { name: template.name, url: template.url };
+      setEditing({ ...draft, name: draft.name || template.name });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível abrir o template.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** Cria a fonte a partir do template, tal como está (agendamento desligado). */
+  const createFromTemplate = async (template: ScraperTemplate) => {
+    setBusy(`template:${template.id}`);
+    try {
+      const { item } = await createScraperSourceFromTemplate(template.id, { name: template.name });
+      setNotice(`Fonte «${item.name}» criada a partir do template ${template.name}.`);
+      await refresh();
+      onSectionChange?.("sources");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível criar a fonte a partir do template.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div className="mx-auto w-full max-w-[1400px] px-4 pb-32 pt-6 sm:px-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -349,7 +422,7 @@ export default function ScraperPage({ section, onSectionChange }: ScraperPagePro
             >
               <CalendarClock size={10} /> Cron {status.scheduler?.available ? `${status.scheduler.jobs_total} jobs` : "inativo"}
             </Pill>
-            {status.playwright ? (
+            {status.browsers ? (
               <Pill className="border-violet-400/30 bg-violet-400/10 text-violet-200">
                 <Sparkles size={10} /> Browsers disponíveis
               </Pill>
@@ -361,6 +434,10 @@ export default function ScraperPage({ section, onSectionChange }: ScraperPagePro
           </>
         ) : null}
       </div>
+
+      {status && status.browsers === false && status.browsers_hint ? (
+        <p className="mt-2 text-[11px] text-muted-foreground">{status.browsers_hint}</p>
+      ) : null}
 
       {error ? (
         <div className="mt-4 flex items-start gap-2 rounded-2xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-xs text-rose-100">
@@ -398,7 +475,11 @@ export default function ScraperPage({ section, onSectionChange }: ScraperPagePro
           <Kpi label="Fontes" value={stats.sources_total} hint={`${stats.sources_enabled} com agendamento`} />
           <Kpi label="Execuções" value={stats.runs_total} hint={`${stats.runs_completed} concluídas`} />
           <Kpi label="Itens recolhidos" value={numberFormat.format(stats.items_scraped)} hint="gravados em JSONL" />
-          <Kpi label="Itens indexados" value={numberFormat.format(stats.items_indexed)} hint="pesquisáveis no Elasticsearch" />
+          <Kpi
+            label="Itens indexados"
+            value={numberFormat.format(stats.items_indexed)}
+            hint={stats.items_with_text ? `${numberFormat.format(stats.items_with_text)} com texto integral` : "pesquisáveis no Elasticsearch"}
+          />
           <Kpi label="Última recolha" value={formatDate(stats.last_run?.finished_at ?? stats.last_run?.started_at)} hint={stats.last_run?.source_name ?? "—"} />
         </div>
       ) : null}
@@ -429,14 +510,28 @@ export default function ScraperPage({ section, onSectionChange }: ScraperPagePro
           <div className="flex items-center gap-2 py-16 text-sm text-muted-foreground">
             <Loader2 size={16} className="animate-spin" /> A carregar o módulo de recolha…
           </div>
+        ) : section === "templates" ? (
+          <TemplatesSection
+            templates={templates}
+            categories={meta?.template_categories ?? []}
+            sources={sources}
+            busy={busy}
+            canWrite={Boolean(user)}
+            onUse={(template) => void useTemplate(template)}
+            onCreate={(template) => void createFromTemplate(template)}
+            onOpenSource={(source) => setEditing(source)}
+            onError={setError}
+          />
         ) : section === "sources" ? (
           <SourcesSection
             sources={sources}
+            templates={templates}
             busy={busy}
             onRun={runSource}
             onToggle={toggleSource}
             onEdit={(source) => setEditing(source)}
             onDelete={removeSource}
+            onApplyTemplate={(source) => void applyTemplate(source)}
             onNew={openNewSource}
           />
         ) : section === "runs" ? (
@@ -466,23 +561,287 @@ export default function ScraperPage({ section, onSectionChange }: ScraperPagePro
   );
 }
 
+/* ----------------------------------------------------------- templates */
+
+/**
+ * Galeria de definições prontas: escolhe-se o site, testa-se contra a página
+ * real e cria-se a fonte. Resolve o problema de ter de escrever seletores à mão
+ * para cada jornal.
+ */
+function TemplatesSection({
+  templates,
+  categories,
+  sources,
+  busy,
+  canWrite,
+  onUse,
+  onCreate,
+  onOpenSource,
+  onError,
+}: {
+  templates: ScraperTemplate[];
+  categories: string[];
+  sources: ScraperSource[];
+  busy: string | null;
+  canWrite: boolean;
+  onUse: (template: ScraperTemplate) => void;
+  onCreate: (template: ScraperTemplate) => void;
+  onOpenSource: (source: ScraperSource) => void;
+  onError: (message: string) => void;
+}) {
+  const [category, setCategory] = useState("");
+  const [query, setQuery] = useState("");
+  const [tests, setTests] = useState<Record<string, ScraperPreview>>({});
+  const [testing, setTesting] = useState<string | null>(null);
+
+  const sourceFor = (template: ScraperTemplate) =>
+    sources.find(
+      (source) =>
+        source.template_id === template.id || source.url.replace(/\/+$/, "") === template.url.replace(/\/+$/, ""),
+    );
+
+  const test = async (template: ScraperTemplate) => {
+    setTesting(template.id);
+    try {
+      const result = await previewScraperTemplate(template.id, 3, 1);
+      setTests((previous) => ({ ...previous, [template.id]: result }));
+      if (!result.ok && result.error) onError(`Template ${template.name}: ${result.error}`);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Falha ao testar o template.");
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  const needle = query.trim().toLowerCase();
+  const visible = templates.filter((template) => {
+    if (category && template.category !== category) return false;
+    if (!needle) return true;
+    return (
+      template.name.toLowerCase().includes(needle) ||
+      template.site.toLowerCase().includes(needle) ||
+      template.description.toLowerCase().includes(needle) ||
+      template.tags.some((tag) => tag.toLowerCase().includes(needle))
+    );
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="glass-card rounded-2xl p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-amber-300 to-orange-600 text-white">
+              <Layers size={18} />
+            </span>
+            <div>
+              <h2 className="text-base font-semibold">Templates de sites</h2>
+              <p className="mt-0.5 max-w-3xl text-xs text-muted-foreground">
+                Definições prontas para sites concretos: URL da lista, seletores dos campos, agendamento sugerido e —
+                nos jornais — o seletor do corpo do artigo, para que a recolha traga também o texto integral. Teste um
+                template, ajuste-o se quiser e crie a fonte.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Procurar site…"
+              className="w-44 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
+              aria-label="Procurar template"
+            />
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-1">
+          <button
+            type="button"
+            onClick={() => setCategory("")}
+            className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
+              category === "" ? "border-orange-400/40 bg-orange-400/15 text-orange-100" : "border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10"
+            }`}
+          >
+            Todas ({templates.length})
+          </button>
+          {categories.map((entry) => {
+            const count = templates.filter((template) => template.category === entry).length;
+            if (!count) return null;
+            return (
+              <button
+                key={entry}
+                type="button"
+                onClick={() => setCategory(entry)}
+                className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
+                  category === entry ? "border-orange-400/40 bg-orange-400/15 text-orange-100" : "border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10"
+                }`}
+              >
+                {entry} ({count})
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {!visible.length ? (
+        <div className="glass-card rounded-2xl px-6 py-10 text-center text-sm text-muted-foreground">
+          Sem templates para este filtro.
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+        {visible.map((template) => {
+          const existing = sourceFor(template);
+          const result = tests[template.id];
+          const isBusy = busy === `template:${template.id}`;
+          return (
+            <article key={template.id} className="glass-card flex flex-col rounded-2xl p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold">{template.name}</h3>
+                  <a
+                    href={template.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-muted-foreground hover:text-foreground"
+                  >
+                    {template.site}
+                  </a>
+                </div>
+                <Pill className={FETCHER_TONE[template.fetcher] ?? "border-white/10 bg-white/5 text-muted-foreground"}>
+                  {FETCHER_LABEL[template.fetcher] ?? template.fetcher}
+                </Pill>
+              </div>
+
+              <p className="mt-2 flex-1 text-xs text-muted-foreground">{template.description}</p>
+
+              <div className="mt-2 flex flex-wrap gap-1">
+                {template.detail ? (
+                  <Pill className="border-emerald-400/30 bg-emerald-400/10 text-emerald-200">
+                    <FileJson size={10} /> texto integral
+                  </Pill>
+                ) : null}
+                {template.requires_browser ? (
+                  <Pill className="border-violet-400/30 bg-violet-400/10 text-violet-200">
+                    <Sparkles size={10} /> precisa de browser
+                  </Pill>
+                ) : null}
+                <Pill className="border-white/10 bg-white/5 text-muted-foreground">
+                  <Clock size={10} /> {template.cron || "manual"}
+                </Pill>
+                <Pill className="border-white/10 bg-white/5 text-muted-foreground">
+                  {template.fields.length} campos
+                </Pill>
+                {existing ? (
+                  <Pill className="border-sky-400/30 bg-sky-400/10 text-sky-200">
+                    <CheckCircle2 size={10} /> já configurada
+                  </Pill>
+                ) : null}
+              </div>
+
+              {template.notes ? (
+                <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground/80">{template.notes}</p>
+              ) : null}
+
+              {result ? (
+                <div
+                  className={`mt-3 rounded-xl border px-3 py-2 text-[11px] ${
+                    result.ok && result.total
+                      ? "border-emerald-400/25 bg-emerald-400/5 text-emerald-100"
+                      : "border-rose-400/25 bg-rose-400/5 text-rose-100"
+                  }`}
+                >
+                  {result.ok && result.total ? (
+                    <>
+                      <p>
+                        {result.total} itens na lista
+                        {result.detail_count ? ` · ${result.detail_count} com texto integral` : ""}
+                        {result.duplicates ? ` · ${result.duplicates} repetidos ignorados` : ""}
+                      </p>
+                      {result.items?.[0]?.title ? (
+                        <p className="mt-1 truncate text-muted-foreground">Exemplo: {result.items[0].title}</p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p>{result.error ?? "O site não devolveu itens. Os seletores podem ter mudado."}</p>
+                  )}
+                </div>
+              ) : null}
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void test(template)}
+                  disabled={testing === template.id || isBusy || !canWrite}
+                  title={canWrite ? "Recolher 3 itens da página (não guarda nem indexa)" : "É precisa uma sessão para testar"}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] hover:bg-white/10 disabled:opacity-50"
+                >
+                  {testing === template.id ? <Loader2 size={12} className="animate-spin" /> : <Eye size={12} />} Testar
+                </button>
+                {existing ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenSource(existing)}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-sky-400/30 bg-sky-400/10 px-2.5 py-1.5 text-[11px] text-sky-100 hover:bg-sky-400/20"
+                  >
+                    <Pencil size={12} /> Abrir fonte
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onUse(template)}
+                      disabled={isBusy || !canWrite}
+                      title={canWrite ? "Abrir o editor com esta definição" : "É precisa uma sessão"}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] hover:bg-white/10 disabled:opacity-50"
+                    >
+                      {isBusy ? <Loader2 size={12} className="animate-spin" /> : <Settings2 size={12} />} Ajustar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onCreate(template)}
+                      disabled={isBusy || !canWrite}
+                      title={canWrite ? "Criar a fonte já (agendamento desligado)" : "É precisa uma sessão"}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-orange-600 px-2.5 py-1.5 text-[11px] font-medium text-white disabled:opacity-50"
+                    >
+                      {isBusy ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Criar fonte
+                    </button>
+                  </>
+                )}
+                {template.tags.length ? (
+                  <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <Tag size={10} /> {template.tags.slice(0, 2).join(", ")}
+                  </span>
+                ) : null}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* -------------------------------------------------------------- fontes */
 
 function SourcesSection({
   sources,
+  templates,
   busy,
   onRun,
   onToggle,
   onEdit,
   onDelete,
+  onApplyTemplate,
   onNew,
 }: {
   sources: ScraperSource[];
+  templates: ScraperTemplate[];
   busy: string | null;
   onRun: (source: ScraperSource) => void;
   onToggle: (source: ScraperSource) => void;
   onEdit: (source: ScraperSource) => void;
   onDelete: (source: ScraperSource) => void;
+  onApplyTemplate: (source: ScraperSource) => void;
   onNew: () => void;
 }) {
   if (!sources.length) {
@@ -525,6 +884,11 @@ function SourcesSection({
                   ) : (
                     <Pill className="border-white/10 bg-white/5 text-muted-foreground">desligada</Pill>
                   )}
+                  {source.template_id ? (
+                    <Pill className="border-amber-400/30 bg-amber-400/10 text-amber-200">
+                      <Layers size={10} /> {templates.find((entry) => entry.id === source.template_id)?.name ?? source.template_id}
+                    </Pill>
+                  ) : null}
                   {running ? <StatusPill status="running" /> : null}
                 </div>
                 <a
@@ -590,6 +954,20 @@ function SourcesSection({
                   <span>{numberFormat.format(lastRun.indexed_count)} indexados</span>
                   <span className="text-muted-foreground">·</span>
                   <span>{lastRun.pages} pág.</span>
+                  {lastRun.detail_count ? (
+                    <>
+                      <span className="text-muted-foreground">·</span>
+                      <span>{numberFormat.format(lastRun.detail_count)} com texto integral</span>
+                    </>
+                  ) : null}
+                  {lastRun.duplicates ? (
+                    <>
+                      <span className="text-muted-foreground">·</span>
+                      <span title="Cartões repetidos na página (mesmo URL ou mesmo título)">
+                        {numberFormat.format(lastRun.duplicates)} repetidos ignorados
+                      </span>
+                    </>
+                  ) : null}
                   <span className="text-muted-foreground">·</span>
                   <span>{formatDuration(lastRun.duration_ms)}</span>
                 </div>
@@ -618,6 +996,17 @@ function SourcesSection({
               >
                 <Pencil size={13} /> Editar
               </button>
+              {source.template_id ? (
+                <button
+                  type="button"
+                  onClick={() => onApplyTemplate(source)}
+                  disabled={busy === source.id}
+                  title="Reaplicar os seletores do template (mantém nome, agenda e interruptor)"
+                  className="inline-flex items-center gap-2 rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-100 hover:bg-amber-400/20 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                >
+                  {busy === source.id ? <Loader2 size={13} className="animate-spin" /> : <Layers size={13} />} Template
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => onDelete(source)}
@@ -668,7 +1057,7 @@ function RunsSection({ sources }: { sources: ScraperSource[] }) {
   }, [runs, load]);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,440px)]">
       <div className="glass-card rounded-2xl p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
@@ -753,12 +1142,15 @@ function RunItemsPanel({ run, onClose }: { run: ScraperRun | null; onClose: () =
   const [items, setItems] = useState<ScraperItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [view, setView] = useState<ItemsView>("cards");
+  const PAGE = 50;
 
   useEffect(() => {
     if (!run) return;
     let cancelled = false;
     setLoading(true);
-    getScraperRunItems(run.run_id, run.source_id, 50, 0)
+    getScraperRunItems(run.run_id, run.source_id, PAGE, 0)
       .then((result) => {
         if (cancelled) return;
         setItems(result.items);
@@ -776,6 +1168,18 @@ function RunItemsPanel({ run, onClose }: { run: ScraperRun | null; onClose: () =
       cancelled = true;
     };
   }, [run]);
+
+  const loadMore = async () => {
+    if (!run) return;
+    setLoadingMore(true);
+    try {
+      const result = await getScraperRunItems(run.run_id, run.source_id, PAGE, items.length);
+      setItems((previous) => [...previous, ...result.items]);
+      setTotal(result.total);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   if (!run) {
     return (
@@ -798,7 +1202,7 @@ function RunItemsPanel({ run, onClose }: { run: ScraperRun | null; onClose: () =
             <FileJson size={15} /> {run.source_name ?? run.source_id}
           </h3>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            {run.run_id} · {numberFormat.format(total)} itens
+            {run.run_id} · {numberFormat.format(items.length)} de {numberFormat.format(total)} itens
           </p>
         </div>
         <button
@@ -809,6 +1213,15 @@ function RunItemsPanel({ run, onClose }: { run: ScraperRun | null; onClose: () =
         >
           <X size={13} />
         </button>
+      </div>
+
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <ItemsViewToggle value={view} onChange={setView} />
+        {loading ? (
+          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Loader2 size={11} className="animate-spin" /> a ler…
+          </span>
+        ) : null}
       </div>
 
       {run.errors?.length ? (
@@ -826,37 +1239,46 @@ function RunItemsPanel({ run, onClose }: { run: ScraperRun | null; onClose: () =
       ) : !items.length ? (
         <p className="py-8 text-center text-xs text-muted-foreground">Sem itens nesta execução.</p>
       ) : (
-        <ul className="mt-3 max-h-[560px] space-y-2 overflow-auto pr-1">
-          {items.map((item, index) => (
-            <li key={item.item_id ?? index} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-              <p className="text-xs font-medium">{item.title || item.item_id}</p>
-              {item.url ? (
-                <a href={item.url} target="_blank" rel="noreferrer" className="block truncate text-[10px] text-sky-300 hover:underline">
-                  {item.url}
-                </a>
-              ) : null}
-              <ItemDataPreview item={item} />
-            </li>
-          ))}
-        </ul>
+        <div className="mt-3 max-h-[62vh] overflow-auto pr-1">
+          <ItemsCollection items={items.map((item) => toDisplayItem(item))} view={view} />
+          {items.length < total ? (
+            <button
+              type="button"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
+              className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] hover:bg-white/10 disabled:opacity-50"
+            >
+              {loadingMore ? "A carregar…" : `Carregar mais (${numberFormat.format(total - items.length)})`}
+            </button>
+          ) : null}
+        </div>
       )}
     </aside>
   );
 }
 
-function ItemDataPreview({ item }: { item: ScraperItem }) {
-  const entries = Object.entries(item.data ?? {}).filter(([key]) => key !== "url");
-  if (!entries.length) return null;
-  return (
-    <dl className="mt-1.5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-[10px]">
-      {entries.slice(0, 8).map(([key, value]) => (
-        <div key={key} className="contents">
-          <dt className="text-muted-foreground">{key}</dt>
-          <dd className="truncate">{Array.isArray(value) ? value.join(", ") : String(value ?? "—")}</dd>
-        </div>
-      ))}
-    </dl>
+/* ------------------------------------------------ itens recolhidos (vistas)
+   Os itens vêm do JSONL/índice com o título, a ligação, os campos extraídos
+   (`data`) e a imagem; a apresentação (cartões, lista ou imagens) é a partilhada
+   de `components/ItemsView`. */
+
+/** Converte um item recolhido no formato comum das vistas. */
+function toDisplayItem(item: ScraperItem, options: { source?: boolean } = {}): DisplayItem {
+  const data = item.data ?? {};
+  const imageEntry = Object.entries(data).find(
+    ([key, value]) => /^(imagem|image|img|thumbnail|foto|cover)$/i.test(key) && typeof value === "string",
   );
+  return {
+    id: item.item_id ?? item.url ?? item.title ?? Math.random().toString(36),
+    title: item.title || item.item_id || "(sem título)",
+    subtitle: options.source ? item.source_name ?? item.source_id : undefined,
+    summary: item.summary || item.text,
+    url: item.url,
+    image: imageEntry ? String(imageEntry[1]) : null,
+    date: item.scraped_at,
+    tags: item.tags,
+    values: data,
+  };
 }
 
 /* ------------------------------------------------------------ pesquisa */
@@ -865,6 +1287,7 @@ function SearchSection({ sources }: { sources: ScraperSource[] }) {
   const [query, setQuery] = useState("");
   const [sourceId, setSourceId] = useState("");
   const [sort, setSort] = useState<"recent" | "oldest" | "relevance">("recent");
+  const [view, setView] = useState<ItemsView>("cards");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [result, setResult] = useState<{ total: number; items: ScraperItem[]; facets: { sources: { key: string; count: number }[]; tags: { key: string; count: number }[] } } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -961,51 +1384,28 @@ function SearchSection({ sources }: { sources: ScraperSource[] }) {
         {error ? <p className="rounded-2xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-xs text-rose-100">{error}</p> : null}
 
         <div className="glass-card rounded-2xl p-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
               <Database size={15} /> Itens recolhidos
             </h2>
-            <span className="text-[11px] text-muted-foreground">
-              {loading ? "a pesquisar…" : `${numberFormat.format(result?.total ?? 0)} resultados`}
-            </span>
+            <div className="flex items-center gap-2">
+              <ItemsViewToggle value={view} onChange={setView} />
+              <span className="text-[11px] text-muted-foreground">
+                {loading ? "a pesquisar…" : `${numberFormat.format(result?.total ?? 0)} resultados`}
+              </span>
+            </div>
           </div>
           {!loading && result && !result.items.length ? (
             <p className="py-10 text-center text-xs text-muted-foreground">
               Sem resultados. {sources.length ? "Execute uma fonte para recolher dados." : "Crie uma fonte primeiro."}
             </p>
           ) : (
-            <ul className="mt-3 space-y-2">
-              {(result?.items ?? []).map((item, index) => (
-                <li key={item.item_id ?? index} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="min-w-0 flex-1 truncate text-xs font-medium">{item.title || item.item_id}</p>
-                    <Pill className="border-white/10 bg-white/5 text-muted-foreground">{item.source_name ?? item.source_id}</Pill>
-                    <span className="text-[10px] text-muted-foreground">{formatDate(item.scraped_at)}</span>
-                  </div>
-                  {item.text ? <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{item.text}</p> : null}
-                  {item.url ? (
-                    <a href={item.url} target="_blank" rel="noreferrer" className="mt-1 block truncate text-[10px] text-sky-300 hover:underline">
-                      {item.url}
-                    </a>
-                  ) : null}
-                  <ItemDataPreview item={item} />
-                  {item.tags?.length ? (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      {item.tags.slice(0, 8).map((tag) => (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => toggleTag(tag)}
-                          className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-white/10"
-                        >
-                          #{tag}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+            <ItemsCollection
+              items={(result?.items ?? []).map((item) => toDisplayItem(item, { source: true }))}
+              view={view}
+              onTagClick={toggleTag}
+              className="mt-3"
+            />
           )}
         </div>
       </div>
@@ -1290,12 +1690,19 @@ function SourceEditor({
       .filter(Boolean),
     fields: (draft.fields ?? [])
       .filter((field) => field.name && field.selector)
-      .map((field) => ({
-        ...field,
-        label: field.label || field.name,
-        type: field.type || "css",
-        cast: field.cast || "text",
-      })),
+      .map((field) => {
+        // Se o seletor foi reescrito à mão, os alternativos do template deixam de
+        // fazer sentido (o primeiro já não é o que veio de origem).
+        const alternativos = field.selectors ?? [];
+        const mantemAlternativos = alternativos.length > 1 && alternativos[0] === field.selector;
+        return {
+          ...field,
+          label: field.label || field.name,
+          type: field.type || "css",
+          cast: field.cast || "text",
+          selectors: mantemAlternativos ? alternativos : undefined,
+        };
+      }),
     id_fields: draft.id_fields ?? [],
   });
 
@@ -1564,6 +1971,67 @@ function SourceEditor({
           </div>
         </div>
 
+        {/* texto integral (página de detalhe de cada item) */}
+        <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Texto integral</h3>
+            <label className="inline-flex items-center gap-2 text-[11px] text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={Boolean(draft.detail?.enabled)}
+                onChange={(event) =>
+                  patch({
+                    detail: {
+                      ...(draft.detail ?? { selector: "", max_items: 0, delay: 0.5, max_chars: 20000 }),
+                      enabled: event.target.checked,
+                      max_items: event.target.checked ? draft.detail?.max_items || 15 : 0,
+                    },
+                  })
+                }
+                className="h-3.5 w-3.5 rounded border-white/20 bg-white/5"
+              />
+              Abrir a página de cada item e guardar o corpo do artigo
+            </label>
+          </div>
+          {draft.detail?.enabled ? (
+            <div className="mt-2 grid gap-3 sm:grid-cols-[2fr_1fr_1fr]">
+              <Field label="Seletor do corpo do artigo" hint="É escolhido o maior dos nós que casam com o seletor.">
+                <input
+                  value={draft.detail?.selector ?? ""}
+                  onChange={(event) => patch({ detail: { ...(draft.detail as ScraperDetail), selector: event.target.value } })}
+                  className={inputClass}
+                  placeholder="div.article-body"
+                />
+              </Field>
+              <Field label="Itens por execução" hint="Cada item é um pedido extra ao site.">
+                <input
+                  type="number"
+                  min={0}
+                  max={200}
+                  value={draft.detail?.max_items ?? 0}
+                  onChange={(event) => patch({ detail: { ...(draft.detail as ScraperDetail), max_items: Number(event.target.value) || 0 } })}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Pausa (segundos)" hint="Intervalo entre páginas, para não sobrecarregar o site.">
+                <input
+                  type="number"
+                  min={0}
+                  max={10}
+                  step={0.1}
+                  value={draft.detail?.delay ?? 0.5}
+                  onChange={(event) => patch({ detail: { ...(draft.detail as ScraperDetail), delay: Number(event.target.value) || 0 } })}
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+          ) : (
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Desligado: os itens ficam com o título, o resumo e os restantes campos da lista (mais rápido e mais leve).
+            </p>
+          )}
+        </div>
+
         {/* campos */}
         <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3">
           <div className="flex items-center justify-between">
@@ -1574,32 +2042,39 @@ function SourceEditor({
           </div>
           <div className="mt-2 space-y-2">
             {(draft.fields ?? []).map((field, index) => (
-              <div key={index} className="grid gap-2 rounded-xl border border-white/10 bg-black/20 p-2 sm:grid-cols-[1fr_1fr_1.4fr_auto_auto_auto]">
-                <input value={field.name} onChange={(event) => updateField(index, { name: event.target.value })} className={inputClass} placeholder="nome" aria-label={`Nome do campo ${index + 1}`} />
-                <input value={field.label ?? ""} onChange={(event) => updateField(index, { label: event.target.value })} className={inputClass} placeholder="etiqueta" aria-label={`Etiqueta do campo ${index + 1}`} />
-                <input value={field.selector} onChange={(event) => updateField(index, { selector: event.target.value })} className={inputClass} placeholder=".preco::text" aria-label={`Seletor do campo ${index + 1}`} />
-                <SelectorKindSelect value={field.type} onChange={(kind) => updateField(index, { type: kind })} kinds={meta?.selector_kinds} compact />
-                <select
-                  value={field.cast ?? "text"}
-                  onChange={(event) => updateField(index, { cast: event.target.value as ScraperField["cast"] })}
-                  className={inputClass}
-                  aria-label={`Conversão do campo ${index + 1}`}
-                >
-                  {(meta?.casts ?? ["text"]).map((cast) => (
-                    <option key={cast} value={cast}>
-                      {cast}
-                    </option>
-                  ))}
-                </select>
-                <div className="flex items-center gap-1">
-                  <label className="inline-flex items-center gap-1 text-[10px] text-muted-foreground" title="Recolher todas as ocorrências (lista)">
-                    <input type="checkbox" checked={Boolean(field.all)} onChange={(event) => updateField(index, { all: event.target.checked })} className="h-3.5 w-3.5 rounded border-white/20 bg-white/5" />
-                    todos
-                  </label>
-                  <button type="button" onClick={() => removeField(index)} aria-label={`Remover campo ${index + 1}`} className="rounded-lg border border-rose-400/20 bg-rose-400/10 p-1.5 text-rose-200 hover:bg-rose-400/20">
-                    <Trash2 size={12} />
-                  </button>
+              <div key={index} className="rounded-xl border border-white/10 bg-black/20 p-2">
+                <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1.4fr_auto_auto_auto]">
+                  <input value={field.name} onChange={(event) => updateField(index, { name: event.target.value })} className={inputClass} placeholder="nome" aria-label={`Nome do campo ${index + 1}`} />
+                  <input value={field.label ?? ""} onChange={(event) => updateField(index, { label: event.target.value })} className={inputClass} placeholder="etiqueta" aria-label={`Etiqueta do campo ${index + 1}`} />
+                  <input value={field.selector} onChange={(event) => updateField(index, { selector: event.target.value })} className={inputClass} placeholder=".preco::text" aria-label={`Seletor do campo ${index + 1}`} />
+                  <SelectorKindSelect value={field.type} onChange={(kind) => updateField(index, { type: kind })} kinds={meta?.selector_kinds} compact />
+                  <select
+                    value={field.cast ?? "text"}
+                    onChange={(event) => updateField(index, { cast: event.target.value as ScraperField["cast"] })}
+                    className={inputClass}
+                    aria-label={`Conversão do campo ${index + 1}`}
+                  >
+                    {(meta?.casts ?? ["text"]).map((cast) => (
+                      <option key={cast} value={cast}>
+                        {cast}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex items-center gap-1">
+                    <label className="inline-flex items-center gap-1 text-[10px] text-muted-foreground" title="Recolher todas as ocorrências (lista)">
+                      <input type="checkbox" checked={Boolean(field.all)} onChange={(event) => updateField(index, { all: event.target.checked })} className="h-3.5 w-3.5 rounded border-white/20 bg-white/5" />
+                      todos
+                    </label>
+                    <button type="button" onClick={() => removeField(index)} aria-label={`Remover campo ${index + 1}`} className="rounded-lg border border-rose-400/20 bg-rose-400/10 p-1.5 text-rose-200 hover:bg-rose-400/20">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
                 </div>
+                {field.selectors && field.selectors.length > 1 ? (
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Alternativos (usados se o primeiro não devolver nada): {field.selectors.slice(1).join(" · ")}
+                  </p>
+                ) : null}
               </div>
             ))}
           </div>
@@ -1783,14 +2258,9 @@ function SourceEditor({
             </div>
             {preview.error ? <p className="mt-2 text-[11px] text-rose-200">{preview.error}</p> : null}
             {preview.items.length ? (
-              <ul className="mt-2 max-h-64 space-y-2 overflow-auto">
-                {preview.items.map((item, index) => (
-                  <li key={item.item_id ?? index} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-                    <p className="text-[11px] font-medium">{item.title || "(sem título)"}</p>
-                    <ItemDataPreview item={item} />
-                  </li>
-                ))}
-              </ul>
+              <div className="mt-2 max-h-80 overflow-auto pr-1">
+                <ItemsCollection items={preview.items.map((item) => toDisplayItem(item))} view="cards" />
+              </div>
             ) : preview.ok ? (
               <p className="mt-2 text-[11px] text-amber-200">Nenhum item encontrado — confirme o seletor da lista e dos campos.</p>
             ) : null}

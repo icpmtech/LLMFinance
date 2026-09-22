@@ -11,6 +11,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   Check,
   EyeOff,
+  FolderOpen,
   GripVertical,
   Maximize2,
   Minimize2,
@@ -67,26 +68,59 @@ function useViewport() {
   return size;
 }
 
-/**
- * Ajusta o tamanho dos ícones ao espaço disponível.
- *
- * `scrolling` fica a `true` quando nem no tamanho mínimo o dock cabe: nesse caso
- * o dock passa a poder ser arrastado lateralmente (e a ampliação é desligada,
- * porque nenhum ícone pode crescer sem ficar cortado).
- */
-function fitDock(desired: number, items: number, available: number) {
-  if (!available) return { iconSize: desired, scrolling: false };
-  // size × fator ≈ largura total (ícones + folgas proporcionais + separador + padding)
-  const factor = items + 1.64 + (items + 2) * 0.154 + 0.38 + 0.2;
-  const fits = Math.floor(available / factor);
-  const iconSize = Math.max(MIN_ICON_SIZE, Math.min(desired, fits));
-  // Desliza quando o tamanho **usado** excede o que cabe (o mínimo tátil pode
-  // impedir o encolhimento, e aí o dock tem mesmo de deslizar).
-  return { iconSize, scrolling: iconSize > fits };
-}
-
 /** Largura de uma miniatura de janela minimizada, em "ícones". */
 const MINI_WIDTH_UNITS = 1.34;
+
+/** Largura do painel da pasta «Mais» (grelha de ícones das aplicações), em px. */
+const MORE_PANEL_WIDTH = 316;
+
+/**
+ * Largura do dock em "ícones" (o fator que multiplica o lado do ícone).
+ *
+ * `items` são ícones/pastas e `extras` unidades soltas (as miniaturas das
+ * janelas minimizadas). As parcelas fixas são a bandeja (dois botões de 0.82),
+ * o separador, as folgas de cada ícone e o padding da prateleira.
+ */
+function dockUnits(items: number, extras = 0) {
+  const total = items + extras;
+  return total + 1.64 + (total + 2) * 0.154 + 0.38 + 0.2;
+}
+
+/**
+ * Plano do dock: que tamanho dão os ícones e quantos cabem.
+ *
+ * `shown` é o número de aplicações mostradas como ícone; a diferença para o
+ * total é guardada na pasta «Mais» (que ocupa o lugar de um ícone e abre o
+ * painel com as restantes). Sem pasta (`group` a falso), o dock encolhe até ao
+ * mínimo tátil e, se ainda assim não couber, passa a `scrolling` — aí pode ser
+ * arrastado lateralmente (e a ampliação é desligada, porque nenhum ícone pode
+ * crescer sem ficar cortado).
+ */
+function planDock(desired: number, items: number, extras: number, available: number, group: boolean) {
+  if (!available || items <= 0) {
+    return { iconSize: desired, scrolling: false, shown: Math.max(0, items), overflow: 0 };
+  }
+  // O maior tamanho a que o dock **inteiro** cabe (é o tamanho que o
+  // utilizador teria sem pasta; nunca abaixo do mínimo tátil).
+  const whole = Math.floor(available / dockUnits(items, extras));
+  const target = Math.max(MIN_ICON_SIZE, Math.min(desired, whole));
+  if (whole >= MIN_ICON_SIZE) {
+    return { iconSize: target, scrolling: false, shown: items, overflow: 0 };
+  }
+  if (!group || items < 2) {
+    return { iconSize: target, scrolling: target * dockUnits(items, extras) > available, shown: items, overflow: 0 };
+  }
+  // Com pasta: mostra-se o que couber ao tamanho pedido e o resto vai lá para dentro.
+  let shown = items - 1;
+  while (shown > 1 && target * dockUnits(shown + 1, extras) > available) shown -= 1;
+  let iconSize = target;
+  if (target * dockUnits(2, extras) > available) {
+    // Nem um ícone mais a pasta cabe: encolhe até ao mínimo tátil.
+    iconSize = Math.max(MIN_ICON_SIZE, Math.floor(available / dockUnits(2, extras)));
+  }
+  const scrolling = iconSize * dockUnits(shown + 1, extras) > available;
+  return { iconSize, scrolling, shown, overflow: items - shown };
+}
 
 /** Vistas que não têm ícone próprio e herdam o realce de outra aplicação. */
 const ALIAS: Record<string, string> = {
@@ -163,9 +197,9 @@ export function Dock({ active, onOpen }: DockProps) {
       : Math.max(220, viewport.width - 24 - (viewport.width >= 768 ? gutter : 0));
     // As janelas minimizadas também ocupam dock: contam para o espaço necessário.
     const minis = windowMode && prefs.minimizedShelf ? openWindows.filter((item) => item.minimized).length : 0;
-    const units = visible.length + minis * MINI_WIDTH_UNITS + (minis > 0 ? 0.4 : 0);
-    return fitDock(prefs.iconSize, units, available);
-  }, [openWindows, prefs.iconSize, prefs.minimizedShelf, sidebarMode, visible.length, vertical, viewport.width, viewport.height, windowMode]);
+    const extras = minis * MINI_WIDTH_UNITS + (minis > 0 ? 0.4 : 0);
+    return planDock(prefs.iconSize, visible.length, extras, available, prefs.overflow);
+  }, [openWindows, prefs.iconSize, prefs.minimizedShelf, prefs.overflow, sidebarMode, visible.length, vertical, viewport.width, viewport.height, windowMode]);
   const iconSize = fitted.iconSize;
 
   /**
@@ -191,13 +225,45 @@ export function Dock({ active, onOpen }: DockProps) {
     // O tecto segue a preferência (não cresce mais do que ~25% acima dela).
     const cap = Math.max(base, Math.min(72, Math.round(prefs.iconSize * 1.25)));
     const tray = 2 * Math.max(28, Math.round(base * 0.8)) + 96 + base + 24;
+    const metricsFor = (count: number) => {
+      const perApp = (available - tray - 4 * Math.max(0, count - 1)) / Math.max(1, count);
+      return { perApp, tile: Math.max(base, Math.min(cap, Math.round(perApp))) };
+    };
     const apps = Math.max(1, visible.length);
-    const perApp = (available - tray - 4 * (apps - 1)) / apps;
-    const tile = Math.max(base, Math.min(cap, Math.round(perApp)));
-    return { tile, crowded: perApp < tile };
-  }, [prefs.iconSize, sidebarMode, vertical, viewport.height, viewport.width, visible.length]);
+    const full = metricsFor(apps);
+    if (full.perApp >= full.tile || !prefs.overflow || apps < 2) {
+      return { tile: full.tile, crowded: full.perApp < full.tile, shown: apps };
+    }
+    // Barra apinhada: a pasta «Mais» ocupa o lugar de um botão e procura-se o
+    // maior número de botões que volte a deixar tudo folgado (botões maiores).
+    for (let count = apps - 1; count >= 2; count -= 1) {
+      const candidate = metricsFor(count);
+      if (candidate.perApp >= candidate.tile) {
+        return { tile: candidate.tile, crowded: false, shown: count - 1 };
+      }
+    }
+    const smallest = metricsFor(2);
+    return { tile: smallest.tile, crowded: smallest.perApp < smallest.tile, shown: 1 };
+  }, [prefs.iconSize, prefs.overflow, sidebarMode, vertical, viewport.height, viewport.width, visible.length]);
 
   const windowsTile = windowsMetrics.tile;
+
+  /**
+   * Ícones realmente desenhados no dock e os que ficam na pasta «Mais».
+   *
+   * A pasta só existe quando o dock não cabe (e a preferência está ligada): em
+   * macOS decide-se pelo plano dos ícones, no Windows pelas métricas da barra.
+   */
+  const shownApps = useMemo(
+    () => visible.slice(0, Math.min(visible.length, windowsTaskbar ? windowsMetrics.shown : fitted.shown)),
+    [fitted.shown, visible, windowsMetrics.shown, windowsTaskbar],
+  );
+  const overflowApps = useMemo(() => visible.slice(shownApps.length), [shownApps.length, visible]);
+  /** Com a pasta aberta ou à espera de abrir, o dock fica desenhado como está. */
+  const [moreOpen, setMoreOpen] = useState(false);
+  useLayoutEffect(() => {
+    if (overflowApps.length === 0 && moreOpen) setMoreOpen(false);
+  }, [moreOpen, overflowApps.length]);
 
   /** A barra (macOS ou Windows) transborda: passa a deslizar na sua área. */
   const dockScrolling = windowsTaskbar ? windowsMetrics.crowded : fitted.scrolling;
@@ -211,6 +277,62 @@ export function Dock({ active, onOpen }: DockProps) {
   /** Botões de sistema da bandeja (preferências / ecrã inteiro). */
   const trayBtn = windowsTaskbar ? Math.max(28, Math.round(tileSize * 0.8)) : Math.round(iconSize * 0.82);
   const trayIcon = windowsTaskbar ? Math.max(14, Math.round(tileSize * 0.4)) : Math.round(iconSize * 0.4);
+
+  /* ------------------------------------------- pasta «Mais» (posição do painel) */
+  const moreRef = useRef<HTMLButtonElement | null>(null);
+  const morePanelRef = useRef<HTMLDivElement | null>(null);
+  const [moreStyle, setMoreStyle] = useState<React.CSSProperties | null>(null);
+  const [morePanelHeight, setMorePanelHeight] = useState(0);
+
+  useLayoutEffect(() => {
+    if (!moreOpen) {
+      setMoreStyle(null);
+      return;
+    }
+    const el = moreRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const gap = 12;
+    /** Meia altura do painel: usada para o manter dentro do ecrã nas margens. */
+    const half = (morePanelHeight || 220) / 2;
+    const halfWidth = MORE_PANEL_WIDTH / 2 + 12;
+    if (prefs.position === "bottom") {
+      setMoreStyle({
+        left: Math.min(
+          Math.max(rect.left + rect.width / 2, halfWidth),
+          Math.max(halfWidth, window.innerWidth - halfWidth),
+        ),
+        bottom: Math.max(8, window.innerHeight - rect.top + gap),
+        transform: "translateX(-50%)",
+      });
+    } else if (prefs.position === "left") {
+      setMoreStyle({
+        left: rect.right + gap,
+        top: Math.min(
+          Math.max(rect.top + rect.height / 2, half + 8),
+          Math.max(half + 8, window.innerHeight - half - 8),
+        ),
+        transform: "translateY(-50%)",
+      });
+    } else {
+      setMoreStyle({
+        right: Math.max(8, window.innerWidth - rect.left + gap),
+        top: Math.min(
+          Math.max(rect.top + rect.height / 2, half + 8),
+          Math.max(half + 8, window.innerHeight - half - 8),
+        ),
+        transform: "translateY(-50%)",
+      });
+    }
+  }, [iconSize, moreOpen, morePanelHeight, overflowApps.length, prefs.position, tileSize]);
+
+  /* O painel não pode sair do ecrã: fecha-se se a janela mudar de tamanho. */
+  useEffect(() => {
+    if (!moreOpen) return;
+    const close = () => setMoreOpen(false);
+    window.addEventListener("resize", close);
+    return () => window.removeEventListener("resize", close);
+  }, [moreOpen]);
 
   /** Em ecrãs táteis não há rato: sem ampliação e sem esconder ao sair. */
   const autoHideActive = prefs.autoHide && finePointer;
@@ -469,7 +591,7 @@ export function Dock({ active, onOpen }: DockProps) {
 
   useLayoutEffect(() => {
     measure();
-  }, [measure, visible.length, iconSize, prefs.position, editing]);
+  }, [measure, visible.length, shownApps.length, iconSize, prefs.position, editing]);
 
   useEffect(() => {
     const onResize = () => measure();
@@ -584,15 +706,16 @@ export function Dock({ active, onOpen }: DockProps) {
   };
 
   useEffect(() => {
-    if (!menu && !settingsOpen) return;
+    if (!menu && !settingsOpen && !moreOpen) return;
     const close = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       setMenu(null);
       setSettingsOpen(false);
+      setMoreOpen(false);
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
-  }, [menu, settingsOpen]);
+  }, [menu, moreOpen, settingsOpen]);
 
   /* ------------------------------------------------------------- arrumação */
   const commitDrop = (target: number) => {
@@ -817,7 +940,7 @@ export function Dock({ active, onOpen }: DockProps) {
               </button>
             )}
 
-            {visible.map((app, index) => {
+            {shownApps.map((app, index) => {
               const isActive = app.id === highlightedView;
               const isRunning = windowMode ? openViews.has(app.id) : visited.includes(app.id);
               const Icon = app.icon;
@@ -942,6 +1065,62 @@ export function Dock({ active, onOpen }: DockProps) {
                 </div>
               );
             })}
+
+            {/* Pasta «Mais»: as aplicações que já não cabem no dock.
+                Um só botão no lugar de um ícone; abre o painel com os restantes. */}
+            {overflowApps.length > 0 && (
+              <button
+                ref={(el) => {
+                  tileRefs.current[shownApps.length] = el;
+                  moreRef.current = el;
+                }}
+                type="button"
+                onClick={() => setMoreOpen((open) => !open)}
+                onMouseEnter={() => setHovered(null)}
+                onMouseLeave={() => setHovered(null)}
+                aria-label={`Mais aplicações (${overflowApps.length})`}
+                aria-haspopup="menu"
+                aria-expanded={moreOpen}
+                data-open={moreOpen || undefined}
+                title={`Mais aplicações (${overflowApps.length})`}
+                className="dock-tile dock-app dock-folder group relative grid place-items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70"
+                style={
+                  {
+                    width: tileSize,
+                    height: tileSize,
+                    borderRadius: tileRadius,
+                    ["--dock-accent" as string]: "rgba(148, 163, 184, 0.6)",
+                  } as React.CSSProperties
+                }
+              >
+                <span
+                  className="dock-tile-bg absolute inset-0 overflow-hidden bg-gradient-to-br from-slate-400/45 via-slate-600/55 to-slate-800/70"
+                  style={{ borderRadius: "inherit" }}
+                  aria-hidden="true"
+                />
+                {/* Quatro miniaturas, como uma pasta: mostra o que lá está dentro. */}
+                <span
+                  className="dock-folder-grid relative z-[1] grid grid-cols-2"
+                  style={{ width: Math.round(tileSize * 0.58), gap: Math.max(2, Math.round(tileSize * 0.05)) }}
+                  aria-hidden="true"
+                >
+                  {overflowApps.slice(0, 4).map((app) => {
+                    const MiniIcon = app.icon;
+                    return (
+                      <span
+                        key={app.id}
+                        className={`grid aspect-square place-items-center rounded-[3px] bg-gradient-to-br ${app.gradient}`}
+                      >
+                        <MiniIcon size={Math.max(7, Math.round(tileSize * 0.17))} strokeWidth={2.1} className="text-white" />
+                      </span>
+                    );
+                  })}
+                </span>
+                <span className="dock-folder-badge" aria-hidden="true">
+                  +{overflowApps.length}
+                </span>
+              </button>
+            )}
 
             <span
               aria-hidden="true"
@@ -1094,6 +1273,60 @@ export function Dock({ active, onOpen }: DockProps) {
             <StartMenu active={active} onClose={() => setStartOpen(false)} onOpenView={openViewById} />
           </div>
         </div>
+      )}
+
+      {/* Painel da pasta «Mais»: grelha com as aplicações que não cabem */}
+      {moreOpen && overflowApps.length > 0 && (
+        <>
+          <div className="fixed inset-0 z-[78]" onMouseDown={() => setMoreOpen(false)} aria-hidden="true" />
+          <div
+            ref={(el) => {
+              morePanelRef.current = el;
+              if (!el) return;
+              const height = el.offsetHeight;
+              setMorePanelHeight((current) => (current === height ? current : height));
+            }}
+            role="menu"
+            aria-label={`Mais aplicações (${overflowApps.length})`}
+            data-style={windowsTaskbar ? "windows" : "macos"}
+            className="dock-popover dock-more fixed z-[79]"
+            style={{ ...(moreStyle ?? { visibility: "hidden", left: 0, top: 0 }), width: MORE_PANEL_WIDTH }}
+          >
+            <header className="dock-more-head">
+              <span className="dock-more-title">Mais aplicações</span>
+              <span className="dock-more-count">{overflowApps.length}</span>
+            </header>
+            <div className="dock-more-grid">
+              {overflowApps.map((app) => {
+                const Icon = app.icon;
+                return (
+                  <button
+                    key={app.id}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMoreOpen(false);
+                      openApp(app);
+                    }}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setMoreOpen(false);
+                      setMenu({ app, x: event.clientX, y: event.clientY });
+                    }}
+                    title={`${app.label} — ${app.hint}`}
+                    className="dock-more-item focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70"
+                  >
+                    <span className={`dock-more-tile bg-gradient-to-br ${app.gradient}`} aria-hidden="true">
+                      <Icon size={Math.max(15, Math.round(tileSize * 0.3))} strokeWidth={1.9} className="text-white" />
+                    </span>
+                    <span className="dock-more-label">{app.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
       )}
 
       {menu && (
@@ -1300,14 +1533,21 @@ function DockPreferences({
   const { windowStyle, setWindowStyle } = useWindowStyle();
 
   /* O dock adapta o tamanho ao ecrã: o painel explica o que está a acontecer. */
-  const fitted = useMemo(() => {
+  const plan = useMemo(() => {
     const vertical = prefs.position !== "bottom";
+    const gutter = !vertical && viewport.width >= 768
+      ? sidebarMode === "hidden"
+        ? 0
+        : sidebarMode === "rail"
+          ? 72
+          : 268
+      : 0;
     const available = vertical
       ? Math.max(220, viewport.height - 150)
-      : Math.max(220, viewport.width - 24);
-    const units = visible.length + minimizedCount * MINI_WIDTH_UNITS + (minimizedCount > 0 ? 0.4 : 0);
-    return fitDock(prefs.iconSize, units, available);
-  }, [minimizedCount, prefs.iconSize, prefs.position, visible.length, viewport.width, viewport.height]);
+      : Math.max(220, viewport.width - 24 - gutter);
+    const extras = minimizedCount * MINI_WIDTH_UNITS + (minimizedCount > 0 ? 0.4 : 0);
+    return planDock(prefs.iconSize, visible.length, extras, available, prefs.overflow);
+  }, [minimizedCount, prefs.iconSize, prefs.overflow, prefs.position, sidebarMode, visible.length, viewport.width, viewport.height]);
 
   return (
     <div className={className} style={{ width: 336 }}>
@@ -1345,17 +1585,26 @@ function DockPreferences({
               </button>
             ))}
           </div>
-          {fitted.scrolling ? (
+          {plan.overflow > 0 ? (
+            <p className="flex items-start gap-2 rounded-xl border border-teal-300/20 bg-teal-400/8 p-2.5 text-[11px] leading-snug text-teal-100">
+              <FolderOpen size={13} className="mt-0.5 shrink-0 text-teal-300" />
+              <span>
+                Neste ecrã cabem {plan.shown} de {visible.length} aplicações: as outras {plan.overflow} ficam na pasta
+                <span className="text-foreground"> «Mais»</span>, no fim do dock. Retire da pasta («Fora do dock»)
+                ou do dock para que caibam todas.
+              </span>
+            </p>
+          ) : plan.scrolling ? (
             <div className="space-y-1.5 rounded-xl border border-amber-400/25 bg-amber-400/10 p-2.5">
               <p className="text-[11px] leading-snug text-amber-200">
-                Neste ecrã o dock não cabe todo: os ícones ficam no tamanho mínimo ({fitted.iconSize}px) e a barra pode
-                ser deslizada lateralmente. Retire aplicações do dock para que caiba tudo.
+                Neste ecrã o dock não cabe todo: os ícones ficam no tamanho mínimo ({plan.iconSize}px) e a barra pode
+                ser deslizada lateralmente. Retire aplicações do dock — ou ligue a pasta «Mais» — para que caiba tudo.
               </p>
             </div>
-          ) : fitted.iconSize < prefs.iconSize ? (
+          ) : plan.iconSize < prefs.iconSize ? (
             <p className="flex items-start gap-2 rounded-xl border border-white/10 bg-white/[0.04] p-2.5 text-[11px] leading-snug text-muted-foreground">
               <MonitorSmartphone size={13} className="mt-0.5 shrink-0 text-teal-300" />
-              Neste ecrã os ícones são mostrados a {fitted.iconSize}px (definiu {prefs.iconSize}px) para o dock caber.
+              Neste ecrã os ícones são mostrados a {plan.iconSize}px (definiu {prefs.iconSize}px) para o dock caber.
             </p>
           ) : null}
         </section>
@@ -1374,11 +1623,12 @@ function DockPreferences({
           <p className="dock-hint-windows text-[11px] leading-snug text-muted-foreground">
             Na <span className="text-foreground">barra de tarefas</span> este valor é a base dos botões: com poucas
             aplicações os botões <span className="text-foreground">crescem</span> (até 72 px, com o ícone maior) e a barra
-            ganha altura; com muitas ficam nos 40 px e a barra passa a deslizar.
+            ganha altura; com muitas ficam nos 40 px e o excesso vai para a pasta «Mais» (com a pasta desligada, a barra
+            passa a deslizar).
           </p>
-          {fitted.iconSize < prefs.iconSize && (
+          {plan.iconSize < prefs.iconSize && (
             <p className="text-[11px] text-muted-foreground">
-              Neste ecrã o valor efetivo é <span className="text-foreground">{fitted.iconSize}px</span>.
+              Neste ecrã o valor efetivo é <span className="text-foreground">{plan.iconSize}px</span>.
             </p>
           )}
           <SliderRow
@@ -1509,6 +1759,12 @@ function DockPreferences({
             hint="Miniaturas das janelas minimizadas (só no modo janelas); clique restaura a janela."
             checked={prefs.minimizedShelf}
             onChange={(minimizedShelf) => onChange({ minimizedShelf })}
+          />
+          <ToggleRow
+            label="Pasta «Mais» quando o dock enche"
+            hint="Com demasiados ícones para o ecrã, as aplicações que não cabem ficam numa pasta no fim do dock (um só botão que abre a grelha), em vez de a barra deslizar."
+            checked={prefs.overflow}
+            onChange={(overflow) => onChange({ overflow })}
           />
           <ToggleRow label="Indicadores de apps abertas" checked={prefs.indicators} onChange={(indicators) => onChange({ indicators })} />
         </section>

@@ -30,6 +30,7 @@ import {
   Globe2,
   Landmark,
   LayoutDashboard,
+  Layers,
   Mail,
   Map as MapIcon,
   MessageSquare,
@@ -193,6 +194,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: Globe2,
     gradient: "from-amber-200 via-orange-500 to-rose-600",
     accent: "249,115,22",
+  },
+  {
+    id: "scraper-templates",
+    label: "Recolha · Templates",
+    hint: "Definições prontas para jornais e sites de dados",
+    icon: Layers,
+    gradient: "from-orange-200 via-amber-500 to-yellow-600",
+    accent: "245,158,11",
   },
   {
     id: "scraper-execucoes",
@@ -491,7 +500,7 @@ const LEGACY_DEFAULT_ITEMS = [
 const ORDER_VERSION = 2;
 
 /** Ícones fora do dock por defeito (disponíveis para adicionar). */
-const DEFAULT_PARKED = ["iframe-pages", "elastic", "import", "compare", "contratos-es", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda"];
+const DEFAULT_PARKED = ["iframe-pages", "elastic", "import", "compare", "contratos-es", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard", "scraper-templates", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda"];
 
 export type DockPrefs = {
   position: DockPosition;
@@ -509,6 +518,13 @@ export type DockPrefs = {
   reflection: boolean;
   /** Miniaturas das janelas minimizadas no dock (como no macOS). */
   minimizedShelf: boolean;
+  /**
+   * Agrupar as aplicações que já não cabem no dock numa pasta «Mais».
+   *
+   * Quando o dock está cheio, em vez de deslizar, mostra os ícones que cabem
+   * ao tamanho pedido e guarda o resto numa pasta que abre num painel.
+   */
+  overflow: boolean;
   /** Ícones visíveis, pela ordem apresentada. */
   items: string[];
   /** Ícones removidos do dock. */
@@ -535,6 +551,7 @@ export const DEFAULT_DOCK_PREFS: DockPrefs = {
   indicators: true,
   reflection: true,
   minimizedShelf: true,
+  overflow: true,
   items: DEFAULT_ITEMS,
   parked: DEFAULT_PARKED,
   version: ORDER_VERSION,
@@ -637,6 +654,7 @@ function sanitize(raw: Partial<DockPrefs> | null): DockPrefs {
     indicators: typeof raw?.indicators === "boolean" ? raw.indicators : DEFAULT_DOCK_PREFS.indicators,
     reflection: typeof raw?.reflection === "boolean" ? raw.reflection : DEFAULT_DOCK_PREFS.reflection,
     minimizedShelf: typeof raw?.minimizedShelf === "boolean" ? raw.minimizedShelf : DEFAULT_DOCK_PREFS.minimizedShelf,
+    overflow: typeof raw?.overflow === "boolean" ? raw.overflow : DEFAULT_DOCK_PREFS.overflow,
     items: items.length ? [...items, ...newVisible] : DEFAULT_DOCK_PREFS.items,
     parked: [...parked, ...newParked],
     version: ORDER_VERSION,

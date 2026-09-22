@@ -222,6 +222,7 @@ function pathForView(
   if (view === "crm-agenda") return "/crm/agenda";
   if (view === "crm-dashboard") return "/crm/relatorios";
   if (view === "scraper") return "/scraper";
+  if (view === "scraper-templates") return "/scraper/modelos";
   if (view === "scraper-execucoes") return "/scraper/execucoes";
   if (view === "scraper-pesquisa") return "/scraper/pesquisa";
   if (view === "scraper-agenda") return "/scraper/agenda";
@@ -266,6 +267,8 @@ function crmSectionFromPath(path: string): CrmSection | null {
 /** Secção da recolha (scraping) a partir do caminho do URL (ou `null`). */
 function scraperSectionFromPath(path: string): ScraperSection | null {
   if (path === "/scraper" || path === "/scraper/fontes") return "sources";
+  // `/scraper/templates` é a rota de dados (JSON); a página é `/scraper/modelos`.
+  if (path === "/scraper/modelos") return "templates";
   if (path === "/scraper/execucoes") return "runs";
   if (path === "/scraper/pesquisa") return "search";
   if (path === "/scraper/agenda") return "schedule";
@@ -867,6 +870,7 @@ export default function App() {
           pais={pais === "ES" ? "ES" : "PT"}
           code={code}
           ano={regionDetail?.ano ?? null}
+          onOpenView={handleOpenSearchView}
         />
       );
     }
@@ -876,6 +880,7 @@ export default function App() {
           pais={regionDetail.pais}
           code={regionDetail.code}
           ano={regionDetail.ano ?? null}
+          onOpenView={handleOpenSearchView}
           onClose={() => {
             rememberRegionDetail(null);
             setViewAndHistory("contracts-map");

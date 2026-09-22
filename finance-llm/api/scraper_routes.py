@@ -27,6 +27,13 @@ Pesquisa e agendamento
 - `GET    /scraper/search`                    — pesquisar itens recolhidos (Elasticsearch)
 - `GET    /scraper/jobs`                      — jobs de cron e próximas execuções      (sessão)
 - `POST   /scraper/jobs/reload`               — reaplicar as definições ao agendador    (sessão)
+
+Templates de sites
+- `GET    /scraper/templates`                 — galeria de definições prontas (site → fonte)
+- `GET    /scraper/templates/{template_id}`   — um template (com a definição que cria)
+- `POST   /scraper/templates/{id}/preview`    — testar o template sem guardar           (sessão)
+- `POST   /scraper/templates/{id}/source`     — criar a fonte a partir do template       (sessão)
+- `POST   /scraper/sources/{id}/apply-template` — reaplicar o template à fonte          (sessão)
 """
 from __future__ import annotations
 
@@ -39,7 +46,9 @@ from pydantic import BaseModel, Field
 
 from api import scraper_ai
 from api import scraper_scheduler as scheduler
+from api import scraper_sentiment
 from api import scraper_service as scraper
+from api import scraper_templates as templates
 from api.auth_routes import CurrentSession, require_session
 
 logger = logging.getLogger(__name__)
@@ -71,6 +80,12 @@ class SourcePayload(BaseModel):
     summary_field: Optional[str] = None
     text_field: Optional[str] = None
     tags_field: Optional[str] = None
+    detail: Optional[Dict[str, Any]] = Field(
+        None, description="Texto integral: {enabled, selector, max_items, delay, max_chars}"
+    )
+    sentiment: Optional[Dict[str, Any]] = Field(
+        None, description="Sentimento por item: {enabled, engine, provider, model, max_items, field}"
+    )
 
     model_config = {"extra": "allow"}
 
@@ -95,6 +110,35 @@ class SuggestPayload(BaseModel):
     use_ai: bool = Field(True, description="Falso para devolver apenas a análise determinística.")
 
 
+class SentimentPayload(BaseModel):
+    """Análise de sentimento dos itens já recolhidos."""
+
+    source_id: Optional[str] = Field(None, description="Limitar a uma fonte.")
+    q: Optional[str] = Field(None, description="Limitar a uma pesquisa de texto.")
+    tags: Optional[List[str]] = Field(None, description="Limitar a etiquetas.")
+    limit: int = Field(50, ge=1, le=200, description="Itens a analisar (mais itens = mais chamadas ao modelo).")
+    engine: str = Field("auto", description="auto | ai | lexicon")
+    provider: Optional[str] = Field(None, description="Fornecedor de IA (por omissão: o do utilizador).")
+    model: Optional[str] = None
+    reanalyze: bool = Field(False, description="Analisar também os itens que já têm sentimento.")
+
+
+class TemplateSourcePayload(BaseModel):
+    """Ajustes ao criar a fonte a partir de um template (todos opcionais)."""
+
+    id: Optional[str] = Field(None, description="Identificador da fonte (por omissão: derivado do nome).")
+    name: Optional[str] = None
+    description: Optional[str] = None
+    enabled: Optional[bool] = Field(None, description="Ligar já o agendamento cron do template.")
+    cron: Optional[str] = Field(None, description="Substituir a periodicidade sugerida pelo template.")
+    max_pages: Optional[int] = Field(None, ge=1, le=500, description="Páginas da lista a percorrer.")
+    detail_max_items: Optional[int] = Field(
+        None, ge=0, le=200, description="Itens por execução com texto integral (0 desliga)."
+    )
+    respect_robots: Optional[bool] = None
+    tags: Optional[List[str]] = None
+
+
 # ------------------------------------------------------------------ metadados
 @router.get("/meta")
 def scraper_meta() -> Dict[str, Any]:
@@ -109,6 +153,14 @@ def scraper_meta() -> Dict[str, Any]:
         "cron_presets": scraper.CRON_PRESETS,
         "default_timezone": "Europe/Lisbon",
         "index": "finance_scraped",
+        "template_categories": templates.CATEGORIES,
+        "sentiment_engines": [
+            {"id": engine, "label": scraper_sentiment.ENGINE_LABELS[engine]} for engine in scraper_sentiment.ENGINES
+        ],
+        "sentiment_fields": [
+            {"id": field, "label": scraper_sentiment.FIELD_LABELS[field]} for field in scraper_sentiment.FIELDS
+        ],
+        "sentiment_labels": list(scraper_sentiment.LABELS),
     }
 
 
@@ -180,10 +232,11 @@ def delete_source(
 
 # ------------------------------------------------------------------ execução
 @router.post("/sources/{source_id}/run")
-def run_source(source_id: str, _session: Session) -> Dict[str, Any]:
+def run_source(source_id: str, session: Session) -> Dict[str, Any]:
     """Arranca uma recolha imediata (em segundo plano) e devolve o `run_id`."""
     try:
-        result = scraper.start_run(source_id, trigger="manual")
+        # O utilizador da sessão serve para o sentimento usar a chave de IA dele.
+        result = scraper.start_run(source_id, trigger="manual", user_id=session.user.id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Fonte não encontrada.") from exc
     if result.get("already_running"):
@@ -262,6 +315,7 @@ def search_scraped_items(
     q: Optional[str] = Query(None, description="Texto livre (título, resumo, texto e todos os campos)."),
     source_id: Optional[str] = None,
     tag: Optional[List[str]] = Query(None, description="Etiquetas (pode repetir)."),
+    sentiment: Optional[List[str]] = Query(None, description="Filtrar por sentimento (positivo/neutro/negativo)."),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     size: int = Query(20, ge=1, le=200),
@@ -272,11 +326,34 @@ def search_scraped_items(
         q=q,
         source_id=source_id,
         tags=tag,
+        sentiments=sentiment,
         date_from=date_from,
         date_to=date_to,
         size=size,
         from_=offset,
         sort=sort,
+    )
+
+
+@router.post("/sentiment")
+def analyze_sentiment(payload: SentimentPayload, session: Session) -> Dict[str, Any]:
+    """Dá sentimento aos itens já recolhidos (modelo de IA; léxico como reserva).
+
+    É o que permite ter sentimento em recolhas antigas sem repetir a recolha — e,
+    a partir daí, filtrar e resumir a pesquisa por sentimento.
+    """
+    if payload.engine not in scraper_sentiment.ENGINES:
+        raise HTTPException(status_code=422, detail="Motor de sentimento inválido (auto, ai ou lexicon).")
+    return scraper.sentiment_backfill(
+        source_id=payload.source_id,
+        q=payload.q,
+        tags=payload.tags,
+        limit=payload.limit,
+        engine=payload.engine,
+        provider=payload.provider or "",
+        model=payload.model or "",
+        user_id=session.user.id,
+        reanalyze=payload.reanalyze,
     )
 
 
@@ -308,3 +385,124 @@ def list_jobs(_session: Session) -> Dict[str, Any]:
 @router.post("/jobs/reload")
 def reload_jobs(_session: Session) -> Dict[str, Any]:
     return scheduler.reload_jobs()
+
+
+# ------------------------------------------------------------------ templates
+@router.get("/templates")
+def list_templates(category: Optional[str] = Query(None, description="Filtrar por categoria.")) -> Dict[str, Any]:
+    """Galeria de definições prontas (Jornal Económico, ECO, Público, Expansión…)."""
+    items = templates.list_templates(category)
+    return {"total": len(items), "categories": templates.CATEGORIES, "items": items}
+
+
+@router.get("/templates/{template_id}")
+def get_template(template_id: str) -> Dict[str, Any]:
+    """Um template e a definição de fonte que ele cria."""
+    item = templates.get_template(template_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Template não encontrado.")
+    try:
+        item = {**item, "source": templates.build_source(template_id)}
+    except (KeyError, ValueError) as exc:
+        logger.warning("Template %s inválido: %s", template_id, exc)
+    return {"item": item}
+
+
+@router.post("/templates/{template_id}/preview")
+def preview_template(
+    template_id: str,
+    _session: Session,
+    limit: int = Query(3, ge=1, le=25),
+    max_pages: int = Query(1, ge=1, le=10),
+) -> Dict[str, Any]:
+    """Testa o template contra o site (não guarda nada e não indexa)."""
+    try:
+        source = templates.build_source(template_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Template não encontrado.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        return scraper.preview_source(source, limit=limit, max_pages=max_pages)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/templates/{template_id}/source")
+def create_source_from_template(
+    template_id: str, payload: TemplateSourcePayload, _session: Session
+) -> Dict[str, Any]:
+    """Cria uma fonte a partir do template, com os ajustes indicados."""
+    overrides: Dict[str, Any] = {}
+    changes = payload.model_dump(exclude_unset=True)
+    if payload.id:
+        overrides["id"] = payload.id
+    for key in ("name", "description", "respect_robots"):
+        if changes.get(key) is not None:
+            overrides[key] = changes[key]
+    if payload.enabled is not None:
+        overrides["enabled"] = payload.enabled
+    if payload.cron:
+        overrides["schedule"] = {"cron": payload.cron}
+    if payload.max_pages:
+        overrides["pagination"] = {"max_pages": payload.max_pages}
+    if payload.detail_max_items is not None:
+        overrides["detail"] = {"max_items": payload.detail_max_items}
+    if payload.tags:
+        overrides["tags"] = payload.tags
+    try:
+        source = templates.build_source(template_id, overrides)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Template não encontrado.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if source.get("enabled") and not (source.get("schedule") or {}).get("cron"):
+        raise HTTPException(
+            status_code=422,
+            detail="Para ligar a fonte é preciso uma expressão cron (o template sugere uma).",
+        )
+    try:
+        created = scraper.upsert_source(source)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    scheduler.reload_jobs()
+    return {"item": created, "template": templates.get_template(template_id)}
+
+
+@router.post("/sources/{source_id}/apply-template")
+def apply_template_to_source(
+    source_id: str,
+    _session: Session,
+    template_id: Optional[str] = Query(None, description="Template a aplicar (por omissão: o da fonte)."),
+) -> Dict[str, Any]:
+    """Reaplica a definição do template a uma fonte existente.
+
+    Serve para quando o site muda de `class` e o template é corrigido aqui: a
+    fonte guardada continua com os seletores antigos até ser reaplicada. Mantêm-se
+    o identificador, o nome, o interruptor, a agenda e as etiquetas.
+    """
+    source = scraper.get_source(source_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Fonte não encontrada.")
+    # Chamada direta (testes) traz o valor por omissão do FastAPI em vez de None.
+    explicit = template_id if isinstance(template_id, str) and template_id.strip() else None
+    if not explicit and not source.get("template_id"):
+        raise HTTPException(
+            status_code=422,
+            detail="Esta fonte não veio de um template; indique `template_id` para a substituir.",
+        )
+    try:
+        refreshed = templates.refresh_source(source, explicit)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Template não encontrado.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        saved = scraper.upsert_source({**refreshed, "_must_exist": True})
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Fonte não encontrada.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    scheduler.reload_jobs()
+    return {"item": saved, "template": templates.get_template(saved.get("template_id") or explicit or "")}

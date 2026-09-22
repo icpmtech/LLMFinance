@@ -15,6 +15,8 @@ from __future__ import annotations
 import logging
 from typing import Annotated, Any, Dict, List, Optional
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
@@ -43,6 +45,17 @@ class LoginRequest(BaseModel):
     remember: bool = False
 
 
+class IframePagePreference(BaseModel):
+    id: str
+    title: str
+    url: str
+    icon: str = "Globe2"
+    accent: str = "56,189,248"
+    gradient: str = "from-sky-300 via-sky-500 to-sky-700"
+    enabled: bool = True
+    createdAt: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
 class PreferencesPayload(BaseModel):
     theme: Optional[str] = None
     default_view: Optional[str] = None
@@ -52,6 +65,7 @@ class PreferencesPayload(BaseModel):
     window_mode: Optional[bool] = None
     reduced_motion: Optional[bool] = None
     email_notifications: Optional[bool] = None
+    iframe_pages: Optional[List[IframePagePreference]] = None
 
 
 class UpdateProfileRequest(BaseModel):

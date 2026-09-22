@@ -107,7 +107,7 @@ export default function IframePagesPage({ onOpenIframe }: IframePagesPageProps) 
   }, [form]);
 
   const idForSave = useMemo(() => {
-    if (editing) return editing.id;
+    if (editing?.id) return editing.id;
     const base = makeId(form.title);
     if (!base) return "";
     let candidate = base;
@@ -128,8 +128,9 @@ export default function IframePagesPage({ onOpenIframe }: IframePagesPageProps) 
       setError("Introduza um URL válido (http:// ou https://).");
       return;
     }
+    const finalId = idForSave || makeId(form.title) || `iframe-${Date.now()}`;
     setBusy(true);
-    const next = saveIframePage({ ...form, id: idForSave, accent: parseAccent(form.accent) });
+    const next = saveIframePage({ ...form, id: finalId, accent: parseAccent(form.accent) });
     if (!next) {
       setError("Não foi possível guardar a página. Verifique os dados.");
       setBusy(false);

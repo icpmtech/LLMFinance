@@ -12,10 +12,11 @@
  * `onClose` para voltar).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Building2, Euro, FileText, Landmark, Loader2, RefreshCw, TrendingUp } from "lucide-react";
+import { ArrowLeft, Building2, Euro, ExternalLink, FileText, Landmark, Loader2, RefreshCw, Search, TrendingUp, X } from "lucide-react";
 import { getContractRegionDetail, type RegionDetailEntity, type RegionDetailResponse, type RegionDetailRow } from "../contractsMapApi";
 import { getContractYears } from "../api";
 import { getContratosEsStatus } from "../contratosEsApi";
+import { CONTRATOS_ES_VIEW, openResult } from "../openResult";
 import { LEVEL_LABELS, resolveIberiaRegion } from "../components/geo/iberia";
 
 interface RegionDetailWindowProps {
@@ -25,6 +26,11 @@ interface RegionDetailWindowProps {
   ano?: number | null;
   /** Presente no modo página (botão «Voltar»). */
   onClose?: () => void;
+  /**
+   * Abre outra vista (ficha da entidade, contratos da entidade, Contratos Espanha).
+   * O `App` decide se abre janela ou navega; sem callback abre-se a janela direta.
+   */
+  onOpenView?: (view: string, title?: string) => void;
 }
 
 const COUNTRY_LABELS: Record<"PT" | "ES", string> = { PT: "Portugal", ES: "Espanha" };
@@ -63,38 +69,72 @@ function Kpi({ label, value, hint, icon }: { label: string; value: string; hint?
   );
 }
 
-/** Lista de entidades com barra proporcional ao valor. */
+/** Lista de entidades com barra proporcional ao valor e abertura da ficha. */
 function EntityList({
   title,
   hint,
   rows,
   color,
   emptyLabel,
+  onOpen,
+  onOpenContracts,
+  openLabel,
+  contractsLabel,
 }: {
   title: string;
   hint: string;
   rows: RegionDetailEntity[];
   color: string;
   emptyLabel: string;
+  onOpen?: (row: RegionDetailEntity) => void;
+  onOpenContracts?: (row: RegionDetailEntity) => void;
+  openLabel?: (row: RegionDetailEntity) => string;
+  contractsLabel?: (row: RegionDetailEntity) => string;
 }) {
   const max = rows.reduce((acc, row) => Math.max(acc, row.total_value || 0), 0);
   return (
     <div className="rounded-2xl glass-card p-3">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h2>
       <p className="mt-0.5 text-[10px] text-muted-foreground">{hint}</p>
-      <div className="mt-2 space-y-1.5">
+      <div className="mt-2 space-y-1">
         {rows.slice(0, 12).map((row) => (
-          <div key={`${row.nif ?? row.name}-${row.count}`} className="rounded-xl px-1 py-1">
-            <div className="flex items-baseline gap-2">
-              <span className="truncate text-xs" title={row.name}>
-                {row.name}
-              </span>
+          <div
+            key={`${row.nif ?? row.name}-${row.count}`}
+            className="group rounded-xl px-1 py-1 transition hover:bg-white/5"
+          >
+            <div className="flex items-baseline gap-1.5">
+              <button
+                type="button"
+                onClick={() => onOpen?.(row)}
+                disabled={!onOpen}
+                title={onOpen ? (openLabel ? openLabel(row) : `Abrir ficha de ${row.name}`) : row.name}
+                className="flex min-w-0 items-center gap-1 text-left text-xs transition hover:text-primary disabled:cursor-default disabled:hover:text-inherit"
+              >
+                <span className="truncate">{row.name}</span>
+                {onOpen && (
+                  <ExternalLink size={11} className="shrink-0 opacity-0 transition group-hover:opacity-60" />
+                )}
+              </button>
+              {onOpenContracts && (
+                <button
+                  type="button"
+                  onClick={() => onOpenContracts(row)}
+                  title={contractsLabel ? contractsLabel(row) : "Ver contratos"}
+                  aria-label={contractsLabel ? contractsLabel(row) : "Ver contratos"}
+                  className="shrink-0 rounded-md p-0.5 text-muted-foreground opacity-0 transition hover:bg-white/10 hover:text-foreground group-hover:opacity-100"
+                >
+                  <FileText size={11} />
+                </button>
+              )}
               <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
                 {formatNumber(row.count)} · {formatCompactEuro(row.total_value)}
               </span>
             </div>
             <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full rounded-full" style={{ width: `${max > 0 ? ((row.total_value || 0) / max) * 100 : 0}%`, background: color }} />
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${max > 0 ? ((row.total_value || 0) / max) * 100 : 0}%`, background: color }}
+              />
             </div>
           </div>
         ))}
@@ -142,13 +182,16 @@ function MetricList({
   );
 }
 
-export function RegionDetailWindow({ pais, code, ano, onClose }: RegionDetailWindowProps) {
+export function RegionDetailWindow({ pais, code, ano, onClose, onOpenView }: RegionDetailWindowProps) {
   const [data, setData] = useState<RegionDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /** Ano escolhido dentro da janela (começa no ano do mapa). */
   const [anoLocal, setAnoLocal] = useState<number | "">(ano ?? "");
   const [years, setYears] = useState<number[]>([]);
+  /** Pesquisa aplicada à região (texto ou CPV) e o que está escrito na caixa. */
+  const [searchText, setSearchText] = useState("");
+  const [search, setSearch] = useState<{ q?: string; cpv?: string }>({});
 
   const region = useMemo(() => resolveIberiaRegion(pais, code), [pais, code]);
   const title = region?.name ?? data?.code ?? code;
@@ -180,6 +223,8 @@ export function RegionDetailWindow({ pais, code, ano, onClose }: RegionDetailWin
         pais,
         code,
         ano: anoLocal === "" ? null : Number(anoLocal),
+        q: search.q,
+        cpv: search.cpv,
       });
       if (response.error) throw new Error(response.error);
       setData(response);
@@ -189,17 +234,67 @@ export function RegionDetailWindow({ pais, code, ano, onClose }: RegionDetailWin
     } finally {
       setLoading(false);
     }
-  }, [anoLocal, code, pais]);
+  }, [anoLocal, code, pais, search.cpv, search.q]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  /**
+   * Aplica a pesquisa: um código só com dígitos (4 a 8) é um CPV; o resto é texto
+   * (objeto, entidades), com a mesma semântica do mapa — todos os termos exigidos.
+   */
+  const applySearch = (text: string) => {
+    const value = text.trim();
+    if (!value) {
+      setSearch({});
+      return;
+    }
+    if (/^\d{4,8}$/.test(value)) setSearch({ cpv: value });
+    else setSearch({ q: value });
+  };
+
+  const clearSearch = () => {
+    setSearchText("");
+    setSearch({});
+  };
+
+  /**
+   * Abre a ficha de uma entidade da região.
+   *
+   * Em Portugal há dossiê (`company-detail:<NIF>`); as entidades de Espanha não
+   * têm ficha própria no IQ OS — abrem na app **Contratos Espanha** filtrada pelo
+   * órgão adjudicante ou pela empresa adjudicatária (é o mesmo caminho que a
+   * pesquisa e a Empresas Global usam).
+   */
+  const openEntity = (row: RegionDetailEntity, role: "adjudicante" | "adjudicatario") => {
+    if (pais === "ES") {
+      openResult(
+        { view: CONTRATOS_ES_VIEW, arg: row.name, mode: role === "adjudicante" ? "organo" : "adjudicatario" },
+        `${row.name} · contratos`,
+        onOpenView,
+      );
+      return;
+    }
+    if (!row.nif) return;
+    openResult({ view: "company-detail", arg: row.nif }, row.name, onOpenView);
+  };
+
+  /** Lista completa de contratos da entidade (só em Portugal há janela própria). */
+  const openEntityContracts = (row: RegionDetailEntity, role: "adjudicante" | "adjudicatario") => {
+    if (pais === "ES") {
+      openEntity(row, role);
+      return;
+    }
+    if (!row.nif) return;
+    openResult({ view: "entity-contracts", arg: row.nif }, `${row.name} · contratos`, onOpenView);
+  };
+
   const totals = data?.totals;
   const byYear = useMemo(() => [...(data?.by_year ?? [])].sort((a, b) => Number(b.key) - Number(a.key)), [data?.by_year]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
+    <div className="@container flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
       <header className="flex flex-wrap items-center gap-2 border-b border-white/10 px-3 py-2">
         {onClose && (
           <button
@@ -245,6 +340,64 @@ export function RegionDetailWindow({ pais, code, ano, onClose }: RegionDetailWin
         </button>
       </header>
 
+      {/* Pesquisa dentro da região: filtra métricas, entidades e contratos */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-white/10 px-3 py-1.5">
+        <div className="flex min-w-[220px] flex-1 items-center gap-2 rounded-2xl glass-card px-3 py-1.5">
+          <Search size={14} className="shrink-0 text-muted-foreground" />
+          <input
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                applySearch(searchText);
+              } else if (event.key === "Escape") {
+                clearSearch();
+                (event.target as HTMLInputElement).blur();
+              }
+            }}
+            placeholder={`Pesquisar em ${title}: objeto, entidade ou CPV…`}
+            aria-label={`Pesquisar contratos em ${title}`}
+            className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+          />
+          {searchText && (
+            <button
+              type="button"
+              onClick={() => setSearchText("")}
+              aria-label="Limpar o texto de pesquisa"
+              className="shrink-0 rounded-full p-0.5 text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => applySearch(searchText)}
+          className="flex items-center gap-1.5 rounded-2xl glass-card bg-primary/10 px-3 py-1.5 text-xs text-primary transition hover:bg-primary/15"
+        >
+          <Search size={13} />
+          Pesquisar
+        </button>
+        {(search.q || search.cpv) && (
+          <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-[11px] text-primary">
+            {search.cpv ? `CPV ${search.cpv}` : `pesquisa: «${search.q}»`}
+            {data ? ` · ${formatNumber(data.totals?.contracts ?? 0)} contratos` : ""}
+            <button
+              type="button"
+              onClick={clearSearch}
+              aria-label="Remover a pesquisa"
+              className="rounded-full p-0.5 transition hover:bg-primary/20"
+            >
+              <X size={11} />
+            </button>
+          </span>
+        )}
+        <span className="text-[10px] text-muted-foreground">
+          A pesquisa exige todos os termos e filtra também as métricas e as entidades.
+        </span>
+      </div>
+
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {error && (
           <div className="mb-3 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{error}</div>
@@ -259,7 +412,7 @@ export function RegionDetailWindow({ pais, code, ano, onClose }: RegionDetailWin
 
         {totals && (
           <>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-2 @lg:grid-cols-3 @5xl:grid-cols-6">
               <Kpi label="Contratos" value={formatNumber(totals.contracts)} icon={<FileText size={11} />} />
               <Kpi label="Valor contratual" value={formatCompactEuro(totals.value)} icon={<Euro size={11} />} />
               <Kpi
@@ -291,20 +444,36 @@ export function RegionDetailWindow({ pais, code, ano, onClose }: RegionDetailWin
               />
             </div>
 
-            <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-3">
+            <div className="mt-3 grid grid-cols-1 gap-3 @4xl:grid-cols-3">
               <EntityList
                 title={pais === "PT" ? "Quem adjudica (entidades)" : "Quem adjudica (órgãos)"}
-                hint="maiores por valor contratado na região"
+                hint={
+                  pais === "PT"
+                    ? "maiores por valor contratado · clique abre a ficha da entidade"
+                    : "maiores por valor contratado · clique abre os contratos do órgão"
+                }
                 rows={data?.awarders ?? []}
                 color={COUNTRY_COLORS[pais]}
                 emptyLabel="Sem entidades identificadas."
+                onOpen={(row) => openEntity(row, "adjudicante")}
+                onOpenContracts={pais === "PT" ? (row) => openEntityContracts(row, "adjudicante") : undefined}
+                openLabel={(row) => (pais === "PT" ? `Abrir ficha de ${row.name}` : `Ver contratos de ${row.name}`)}
+                contractsLabel={(row) => `Ver todos os contratos de ${row.name}`}
               />
               <EntityList
                 title="Empresas adjudicatárias"
-                hint="maiores por valor executado na região"
+                hint={
+                  pais === "PT"
+                    ? "maiores por valor executado · clique abre a ficha da empresa"
+                    : "maiores por valor executado · clique abre os contratos da empresa"
+                }
                 rows={data?.suppliers ?? []}
                 color="#3b82f6"
                 emptyLabel="Sem empresas identificadas."
+                onOpen={(row) => openEntity(row, "adjudicatario")}
+                onOpenContracts={pais === "PT" ? (row) => openEntityContracts(row, "adjudicatario") : undefined}
+                openLabel={(row) => (pais === "PT" ? `Abrir ficha de ${row.name}` : `Ver contratos de ${row.name}`)}
+                contractsLabel={(row) => `Ver todos os contratos de ${row.name}`}
               />
               <MetricList
                 title="Por ano"
@@ -314,7 +483,7 @@ export function RegionDetailWindow({ pais, code, ano, onClose }: RegionDetailWin
               />
             </div>
 
-            <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-3">
+            <div className="mt-3 grid grid-cols-1 gap-3 @4xl:grid-cols-3">
               <MetricList
                 title="Top CPV"
                 rows={data?.by_cpv ?? []}
@@ -332,13 +501,13 @@ export function RegionDetailWindow({ pais, code, ano, onClose }: RegionDetailWin
               />
             </div>
 
-            <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-3">
+            <div className="mt-3 grid grid-cols-1 gap-3 @4xl:grid-cols-3">
               <MetricList
                 title="Escalões de valor"
                 rows={data?.by_value_range ?? []}
                 labelOf={(row) => row.description || row.key}
               />
-              <div className="rounded-2xl glass-card p-3 xl:col-span-2">
+              <div className="rounded-2xl glass-card p-3 @4xl:col-span-2">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Maiores contratos {anoLocal ? `de ${anoLocal}` : "de todo o período"}
                 </h2>

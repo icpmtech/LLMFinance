@@ -78,6 +78,7 @@ import type {
   ContractGraphResponse,
   ContractRegionalResponse,
   ContractRelationsResponse,
+  CompanySocietarioResponse,
   ContractItem,
   GraphDimensionsResponse,
   ImportFileType,
@@ -1155,6 +1156,26 @@ export async function enrichCompany(
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Erro ao enriquecer empresa: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Publicações de atos societários de uma entidade (Ministério da Justiça). */
+export async function getCompanySocietarioPublicacoes(
+  nif: string,
+  from = 0,
+  size = 100,
+): Promise<CompanySocietarioResponse> {
+  const params = new URLSearchParams({
+    from: String(from),
+    size: String(size),
+  });
+  const res = await fetch(
+    `${API_BASE}/societario/companies/${encodeURIComponent(nif)}?${params}`,
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter publicações societárias: ${res.status} - ${text}`);
   }
   return res.json();
 }

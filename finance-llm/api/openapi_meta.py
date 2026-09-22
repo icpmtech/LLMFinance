@@ -172,6 +172,14 @@ TAGS_METADATA: List[Dict[str, str]] = [
         ),
     },
     {
+        "name": "societario",
+        "description": (
+            "Publicações de atos societários (publicacoes.mj.pt): recolha assistida "
+            "por entidade (a pesquisa do portal exige reCAPTCHA), pesquisa das "
+            "publicações indexadas, alvos com contratos no Portal BASE e ficha por NIF."
+        ),
+    },
+    {
         "name": "search",
         "description": (
             "Pesquisa unificada da plataforma: âmbitos disponíveis, pesquisa em "
@@ -259,9 +267,10 @@ TAGS_METADATA: List[Dict[str, str]] = [
     {
         "name": "scraper",
         "description": (
-            "Recolha de dados (scraping): definições de fontes, pré-visualização, "
-            "sugestão assistida por IA, execuções e itens recolhidos, pesquisa no "
-            "corpus recolhido e agendamentos (cron)."
+            "Recolha de dados (scraping): templates de sites prontos a usar, "
+            "definições de fontes, pré-visualização, sugestão assistida por IA, "
+            "execuções e itens recolhidos (incluindo o texto integral dos artigos), "
+            "pesquisa no corpus recolhido e agendamentos (cron)."
         ),
     },
     {
@@ -354,6 +363,7 @@ SPA_PATHS: Tuple[str, ...] = (
     "/scraper/fontes",
     "/scraper/execucoes",
     "/scraper/pesquisa",
+    "/scraper/modelos",
     "/crm",
     "/crm/agenda",
     "/crm/contactos",
@@ -389,6 +399,7 @@ PATH_TAG_RULES: Sequence[Tuple[str, str]] = (
     ("/contracts/map", "spa"),
     ("/contracts", "contratos"),
     ("/companies-global", "companies-global"),
+    ("/societario", "societario"),
     ("/companies/role-summary", "empresas"),
     ("/companies", "empresas"),
     ("/entities/ingest", "empresas"),

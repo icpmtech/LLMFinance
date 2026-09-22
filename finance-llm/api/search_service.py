@@ -123,6 +123,8 @@ def _item(
     date: Any = None,
     badges: Optional[Iterable[Any]] = None,
     extra: Optional[Dict[str, Any]] = None,
+    image: str = "",
+    sentiment: Optional[Dict[str, Any]] = None,
     open_view: Optional[Dict[str, str]] = None,
     score: Optional[float] = None,
 ) -> Dict[str, Any]:
@@ -133,9 +135,11 @@ def _item(
         "subtitle": _clip(subtitle, 200),
         "snippet": _clip(snippet, 320),
         "url": str(url or ""),
+        "image": str(image or ""),
         "date": _iso(date),
         "badges": [str(b) for b in (badges or []) if b not in (None, "")][:6],
         "extra": extra or {},
+        "sentiment": sentiment or {},
         "open": open_view,
         "score": score,
     }
@@ -218,12 +222,53 @@ def _label_for(scope_id: str) -> str:
 
 
 # ------------------------------------------------------------------- âmbitos
+#: Campos de um item recolhido que guardam a sua imagem (por ordem de preferência).
+_SCRAPED_IMAGE_KEYS = ("imagem", "image", "img", "thumbnail", "foto", "cover", "imagem_url", "image_url")
+#: Tamanho máximo de um valor extraído mostrado na interface (o texto integral não conta).
+_SCRAPED_VALUE_LIMIT = 300
+_SCRAPED_VALUES_MAX = 12
+
+
+def _scraped_image(data: Dict[str, Any]) -> str:
+    """Imagem do item recolhido (o `src` real, já sem marcadores de 1×1 pixel)."""
+    for key in _SCRAPED_IMAGE_KEYS:
+        for name, value in data.items():
+            if name.lower() == key and isinstance(value, str) and value.startswith("http"):
+                return value
+    for name, value in data.items():
+        if re.search(r"(img|image|imagem|foto|thumb|cover|logo)", name, re.I) and isinstance(value, str) and value.startswith("http"):
+            return value
+    return ""
+
+
+def _scraped_values(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Valores extraídos que a interface mostra ao lado de cada item.
+
+    O texto integral do artigo é muito grande para uma lista de valores, pelo que
+    os valores longos ficam de fora (continuam pesquisáveis no índice).
+    """
+    valores: Dict[str, Any] = {}
+    for name, value in data.items():
+        if name.lower() in {"url", "texto", "text", "conteudo", "body"}:
+            continue
+        if isinstance(value, str):
+            if len(value) > _SCRAPED_VALUE_LIMIT:
+                continue
+            if value.startswith("http") and name.lower() in _SCRAPED_IMAGE_KEYS:
+                continue
+        valores[name] = value
+        if len(valores) >= _SCRAPED_VALUES_MAX:
+            break
+    return valores
+
+
 def _search_scraped_group(q: str, size: int, offset: int) -> Dict[str, Any]:
     result = search_scraped(q=q or None, size=size, from_=offset, sort="relevance" if q else "recent")
     if result.get("error"):
         return _error_group("scraped", _label_for("scraped"), str(result["error"]))
     items = []
     for hit in result.get("items", []):
+        data = hit.get("data") or {}
         items.append(
             _item(
                 "scraped",
@@ -234,10 +279,24 @@ def _search_scraped_group(q: str, size: int, offset: int) -> Dict[str, Any]:
                 url=hit.get("url") or "",
                 date=hit.get("scraped_at"),
                 badges=[*(hit.get("tags") or [])[:5]],
+                image=_scraped_image(data),
+                sentiment={
+                    "label": hit.get("sentiment") or "",
+                    "polarity": hit.get("sentiment_score"),
+                    "engine": hit.get("sentiment_engine") or "",
+                }
+                if hit.get("sentiment")
+                else None,
+                extra={"valores": _scraped_values(data)},
             )
         )
     total = int(result.get("total") or 0)
-    return {**_group("scraped", _label_for("scraped"), items, total, 0), "facets": result.get("facets") or {}}
+    grupo = {**_group("scraped", _label_for("scraped"), items, total, 0), "facets": result.get("facets") or {}}
+    # Sentimento do conjunto de resultados (não só da página): é o que permite
+    # dizer o tom da pesquisa, e não apenas o de cada notícia.
+    if result.get("sentiment"):
+        grupo["sentiment"] = result["sentiment"]
+    return grupo
 
 
 def _search_contracts_group(q: str, size: int, offset: int) -> Dict[str, Any]:

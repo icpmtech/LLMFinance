@@ -19,6 +19,7 @@ import {
   type AuthUser,
   type ProfilePatch,
 } from "./authApi";
+import { syncIframePagesFromUser } from "./iframePages";
 
 installAuthFetch();
 
@@ -47,8 +48,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const applyPreferences = useCallback((next: AuthUser | null) => {
     if (typeof document === "undefined" || !next) return;
-    const reduced = Boolean((next.preferences || {}).reduced_motion);
+    const prefs = next.preferences || {};
+    const reduced = Boolean(prefs.reduced_motion);
     document.documentElement.classList.toggle("reduce-motion", reduced);
+    syncIframePagesFromUser((prefs as { iframe_pages?: unknown[] }).iframe_pages || []);
   }, []);
 
   const refresh = useCallback(async () => {

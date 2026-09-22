@@ -31,6 +31,7 @@ import {
   X,
 } from "lucide-react";
 import { CONTRATOS_ES_VIEW, openResult } from "../openResult";
+import { ItemsCollection, ItemsViewToggle, type DisplayItem, type ItemsView } from "../components/ItemsView";
 import {
   externalSearchUrl,
   searchScopes,
@@ -53,7 +54,6 @@ function scopeForSuggestion(scope: SearchScopeId): SearchScopeId {
   return SUGGESTION_SCOPES.includes(scope) ? scope : "scraped";
 }
 
-const dateFormat = new Intl.DateTimeFormat("pt-PT", { dateStyle: "short" });
 const numberFormat = new Intl.NumberFormat("pt-PT");
 const moneyFormat = new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 
@@ -71,21 +71,6 @@ const SCOPE_ICON: Record<string, React.ReactNode> = {
 };
 
 const EXAMPLES = ["EDP", "combustíveis", "Sonae", "AAPL", "Renfe"];
-
-function formatDate(value?: string | null): string {
-  if (!value) return "";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value).slice(0, 10) : dateFormat.format(date);
-}
-
-function prettyUrl(url: string): string {
-  try {
-    const parsed = new URL(url);
-    return `${parsed.host.replace(/^www\./, "")}${parsed.pathname.replace(/\/$/, "")}`.slice(0, 82);
-  } catch {
-    return url.slice(0, 82);
-  }
-}
 
 function openLabel(item: SearchItem): string | null {
   if (!item.open) return null;
@@ -127,6 +112,8 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [highlight, setHighlight] = useState(-1);
+  /** Como se apresentam os itens: cartões, lista ou imagens. */
+  const [view, setView] = useState<ItemsView>("cards");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -418,7 +405,7 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
         </div>
       </div>
 
-      <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
         {loading ? (
           <>
             <Loader2 size={12} className="animate-spin" /> A pesquisar «{submitted}»…
@@ -427,6 +414,11 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
           <>
             {numberFormat.format(result.total)} resultados em {result.took_ms} ms para «{result.query}»
           </>
+        ) : null}
+        {result?.groups?.length ? (
+          <div className="ml-auto">
+            <ItemsViewToggle value={view} onChange={setView} />
+          </div>
         ) : null}
       </div>
 
@@ -460,6 +452,7 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
             <ScopeResults
               key={group.scope}
               group={group}
+              view={view}
               showHeader={scope === "all"}
               onSeeAll={() => setScope(group.scope)}
               onOpenItem={openItem}
@@ -547,13 +540,60 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
 
 /* -------------------------------------------------------- grupo de resultados */
 
+/**
+ * Converte um resultado da pesquisa no item das vistas partilhadas: o que já
+ * existia (título, subtítulo, ligação, etiquetas, valores de `extra`) passa a
+ * poder ver-se em cartões, lista ou imagens — com a imagem e os valores à vista.
+ */
+function toDisplayItem(item: SearchItem, onOpenItem: (item: SearchItem) => void): DisplayItem {
+  const label = openLabel(item);
+  const rawMoney = item.extra?.preco ?? item.extra?.valor;
+  const money = typeof rawMoney === "number" ? moneyFormat.format(rawMoney) : null;
+  return {
+    id: `${item.scope}:${item.id}`,
+    title: item.title,
+    subtitle: item.subtitle,
+    summary: item.snippet,
+    url: item.url,
+    image: item.image ?? null,
+    date: item.date,
+    badges: item.badges,
+    values: (item.extra ?? {}) as Record<string, unknown>,
+    actions: (
+      <>
+        {money ? <Badge tone="money">{money}</Badge> : null}
+        {label ? (
+          <button
+            type="button"
+            onClick={() => onOpenItem(item)}
+            className="inline-flex items-center gap-1 rounded-full border border-sky-400/25 bg-sky-400/10 px-2 py-0.5 text-[10px] text-sky-200 hover:bg-sky-400/20"
+          >
+            {label} <ArrowRight size={10} />
+          </button>
+        ) : item.url ? (
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-white/10"
+          >
+            Abrir site <ExternalLink size={10} />
+          </a>
+        ) : null}
+      </>
+    ),
+  };
+}
+
 function ScopeResults({
   group,
+  view,
   showHeader,
   onSeeAll,
   onOpenItem,
 }: {
   group: SearchGroup;
+  view: ItemsView;
   showHeader: boolean;
   onSeeAll: () => void;
   onOpenItem: (item: SearchItem) => void;
@@ -585,78 +625,10 @@ function ScopeResults({
         </p>
       ) : null}
 
-      <ul className="space-y-2">
-        {group.items.map((item) => {
-          const label = openLabel(item);
-          const rawMoney = item.extra?.preco ?? item.extra?.valor;
-          const money = typeof rawMoney === "number" ? moneyFormat.format(rawMoney) : null;
-          return (
-            <li key={`${item.scope}:${item.id}`} className="glass-card overflow-hidden rounded-2xl p-4">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <button
-                    type="button"
-                    onClick={() => onOpenItem(item)}
-                    className="block w-full truncate text-left text-sm font-medium hover:underline"
-                    title={item.title}
-                  >
-                    {item.title}
-                  </button>
-                  {item.subtitle ? <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{item.subtitle}</p> : null}
-                  {item.url ? (
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-0.5 block truncate text-[11px] text-emerald-300/80 hover:underline"
-                      title={item.url}
-                    >
-                      {prettyUrl(item.url)}
-                    </a>
-                  ) : null}
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {money ? <Badge tone="money">{money}</Badge> : null}
-                  {item.date ? <span className="text-[10px] text-muted-foreground">{formatDate(item.date)}</span> : null}
-                </div>
-              </div>
-
-              {item.snippet ? (
-                <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">{item.snippet}</p>
-              ) : null}
-
-              {item.badges.length || label ? (
-                <div className="mt-2 flex flex-wrap items-center gap-1">
-                  {item.badges.slice(0, 5).map((badge, index) => (
-                    <Badge key={`${badge}-${index}`} tone={index === 0 ? "accent" : "muted"}>
-                      {badge}
-                    </Badge>
-                  ))}
-                  {label ? (
-                    <button
-                      type="button"
-                      onClick={() => onOpenItem(item)}
-                      className="ml-auto inline-flex items-center gap-1 rounded-full border border-sky-400/25 bg-sky-400/10 px-2 py-0.5 text-[10px] text-sky-200 hover:bg-sky-400/20"
-                    >
-                      {label} <ArrowRight size={10} />
-                    </button>
-                  ) : null}
-                  {!label && item.url ? (
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="ml-auto inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-white/10"
-                    >
-                      Abrir site <ExternalLink size={10} />
-                    </a>
-                  ) : null}
-                </div>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
+      <ItemsCollection
+        items={group.items.map((item) => toDisplayItem(item, onOpenItem))}
+        view={view}
+      />
     </section>
   );
 }

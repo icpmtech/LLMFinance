@@ -77,6 +77,7 @@ import {
   getCompanyDetail,
   getCompanyContracts,
   getCompanyAnalytics,
+  getCompanySocietarioPublicacoes,
   analyzeContract,
 } from "../api";
 import {
@@ -103,6 +104,7 @@ import type {
   CompanyAnalyticsResponse,
   CompanyContractsResponse,
   CompanyDetail,
+  CompanySocietarioResponse,
   CompanySearchResponse,
   ContractAnalyticsResponse,
   ContractAnalyzeRequest,
@@ -4632,6 +4634,8 @@ export function EntityDetailPanel({
   const [company, setCompany] = useState<CompanyDetail | null>(null);
   const [contracts, setContracts] = useState<CompanyContractsResponse | null>(null);
   const [analytics, setAnalytics] = useState<CompanyAnalyticsResponse | null>(null);
+  const [societario, setSocietario] = useState<CompanySocietarioResponse | null>(null);
+  const [societarioLoading, setSocietarioLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { recordVisit } = useWorkspace();
@@ -4657,6 +4661,28 @@ export function EntityDetailPanel({
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [nif]);
+
+  // Carrega publicações societárias do MJ em segundo plano.
+  useEffect(() => {
+    let cancelled = false;
+    setSocietarioLoading(true);
+    getCompanySocietarioPublicacoes(nif)
+      .then((s) => {
+        if (cancelled) return;
+        setSocietario(s);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        // eslint-disable-next-line no-console
+        console.warn("Falha a carregar publicações societárias para", nif, err);
+      })
+      .finally(() => {
+        if (!cancelled) setSocietarioLoading(false);
       });
     return () => {
       cancelled = true;
@@ -4807,6 +4833,68 @@ export function EntityDetailPanel({
           </div>
         </Card>
       </div>
+
+      {/* --- DADOS SOCIETÁRIOS (MJ) --- */}
+      <Card>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="font-semibold">Dados Societários</h3>
+            <p className="text-xs text-muted-foreground">
+              {societarioLoading
+                ? "A carregar publicações do Ministério da Justiça..."
+                : societario && societario.total > 0
+                  ? `${societario.total} publicações de atos societários indexadas`
+                  : "Sem publicações societárias indexadas"}
+            </p>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-left text-muted-foreground text-xs uppercase tracking-wider">
+                <th className="py-2 pr-3">Data</th>
+                <th className="py-2 pr-3">Acto</th>
+                <th className="py-2 pr-3">Tipo</th>
+                <th className="py-2 pr-3">Entidade / Firma</th>
+                <th className="py-2 pr-3">Documento</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(societario?.items ?? []).slice(0, 8).map((pub, idx) => (
+                <tr key={pub.pub_id || idx} className="border-b border-white/5">
+                  <td className="py-2 pr-3 whitespace-nowrap">{pub.data_publicacao || "—"}</td>
+                  <td className="py-2 pr-3 max-w-xs truncate" title={pub.acto}>{pub.acto || "—"}</td>
+                  <td className="py-2 pr-3">{pub.tipo_label || pub.tipo || "—"}</td>
+                  <td className="py-2 pr-3 max-w-xs truncate" title={pub.firma || pub.entidade}>
+                    {pub.firma || pub.entidade || "—"}
+                  </td>
+                  <td className="py-2 pr-3">
+                    {pub.has_documento && pub.documento_url ? (
+                      <a
+                        href={pub.documento_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-teal-300 hover:underline"
+                      >
+                        Ver
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {(societario?.items ?? []).length > 8 && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Mostrando 8 de {societario?.total} publicações. Use a API{" "}
+              <code className="text-xs bg-white/10 px-1 rounded">GET /societario/companies/{nif}</code>{" "}
+              para consultar o restante.
+            </p>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

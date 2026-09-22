@@ -29,6 +29,26 @@ html, body, #root {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+/* O tema é só escuro: sem `color-scheme` o sistema pinta os widgets nativos
+   (a lista aberta de um `<select>`, seletores de data, barras de deslocamento)
+   com as cores claras do Windows — texto cinzento sobre branco na lista
+   «Todas as fontes» da Recolha. */
+html {
+  color-scheme: dark;
+}
+
+/* Reforço para a lista de um `<select>`: em Chromium/Windows as opções seguem a
+   cor do sistema mesmo com `color-scheme`, pelo que se pintam à mão. */
+select option {
+  background-color: var(--color-card);
+  color: var(--color-foreground);
+}
+select option:checked,
+select option:hover {
+  background-color: var(--color-muted);
+  color: var(--color-foreground);
+}
+
 /* ------------------------------------------------------- material (vidro)
    Tokens do material partilhado pelo dock, janelas e painéis flutuantes.
    Os valores são escritos por `applyGlass()` (chat-ui/src/layout.ts) a partir
@@ -1152,6 +1172,125 @@ html[data-glass="off"] .dock-tray::after {
 .dock-mini-hint {
   font-size: 10px;
   color: var(--color-muted-foreground);
+}
+
+/* --- Pasta «Mais»: agrupa as aplicações que já não cabem no dock ---------- */
+/* Um só botão no lugar de um ícone: mostra quatro miniaturas do que tem
+   dentro (como uma pasta) e um selo com o número de aplicações. */
+.dock-folder {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    0 10px 22px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 var(--glass-highlight);
+  transition: box-shadow 200ms ease, border-color 200ms ease;
+}
+.dock-folder[data-open] {
+  border-color: rgba(94, 234, 212, 0.55);
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, 0.5),
+    0 0 18px rgba(52, 211, 153, 0.22);
+}
+.dock-folder-grid > span {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.dock-folder-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(20, 22, 27, 0.92);
+  color: #e2e8f0;
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1;
+}
+/* A barra de tarefas (Windows) desenha o fundo no próprio botão: a pasta segue
+   o mesmo material e não leva a sombra do dock do macOS. */
+.dock-shelf[data-style="windows"] .dock-folder {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+/* Painel da pasta: grelha de ícones das aplicações que estão lá dentro. */
+.dock-more {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(62vh, 460px);
+  padding: 12px;
+  border-radius: 18px;
+  overflow-y: auto;
+}
+.dock-more-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+}
+.dock-more-title {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+.dock-more-count {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+  font-size: 10.5px;
+  color: var(--color-muted-foreground);
+}
+.dock-more-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+.dock-more-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 4px 6px;
+  border-radius: 12px;
+  transition: background-color 120ms ease;
+}
+.dock-more-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+.dock-more-tile {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 4px 10px rgba(0, 0, 0, 0.32);
+}
+.dock-more-label {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--color-foreground);
+}
+/* No aspeto Windows o painel segue o menu Iniciar (Mica, cantos de 8 px). */
+.dock-more[data-style="windows"] {
+  border-radius: 8px;
+  background: rgba(32, 32, 32, 0.9);
+  backdrop-filter: blur(30px) saturate(150%);
 }
 
 /* --- Janelas: encolher para o dock (minimizar) e crescer (restaurar) ----- */
