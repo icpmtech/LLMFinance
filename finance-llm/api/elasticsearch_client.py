@@ -6331,6 +6331,157 @@ def contratos_es_autocomplete(q: str, size: int = 10, es: Optional[Elasticsearch
         return {"error": str(exc), "suggestions": []}
 
 
+# Entidades do PLACSP. Cada documento do índice é **um contrato**, pelo que as
+# entidades (órgãos adjudicantes e empresas adjudicatárias) são obtidas por
+# agregação sobre o nome — é a forma de «pesquisar entidades» nos dados espanhóis.
+CONTRATOS_ES_ENTITY_FIELDS: Dict[str, Dict[str, str]] = {
+    "organo": {"field": "organo_nombre.keyword", "label": "Órgão adjudicante"},
+    "adjudicatario": {"field": "adjudicatario_nombre.keyword", "label": "Empresa adjudicatária"},
+}
+
+CONTRATOS_ES_ENTITY_SAMPLE_FIELDS = [
+    "organo_ciudad",
+    "organo_id",
+    "organo_tipo",
+    "nuts",
+    "adjudicatario_nif",
+    "adjudicatario_nuts",
+]
+
+
+def _contratos_es_entity_filter(field: str, text: str) -> Dict[str, Any]:
+    """Filtro de documentos cujo nome de entidade casa com o texto.
+
+    Aceita a frase exata (`match_phrase`) e o prefixo da última palavra
+    (`match_phrase_prefix`), para «Renfe» encontrar «Dirección General de Renfe
+    Viajeros…» sem exigir o nome completo.
+    """
+    source = field[: -len(".keyword")] if field.endswith(".keyword") else field
+    if not text:
+        return {"match_all": {}}
+    return {
+        "bool": {
+            "should": [
+                {"match_phrase": {source: text}},
+                {"match_phrase_prefix": {source: text}},
+            ],
+            "minimum_should_match": 1,
+        }
+    }
+
+
+def search_contratos_es_entities(
+    q: Optional[str] = None,
+    *,
+    kind: Optional[str] = None,
+    ano: Optional[int] = None,
+    min_count: int = 1,
+    size: int = 20,
+    from_: int = 0,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Entidades de Espanha (órgãos adjudicantes e adjudicatárias) por nome.
+
+    Agrega os contratos por nome de entidade e devolve, para cada uma, o número
+    de contratos, o valor adjudicado somado, a cidade, o NIF/DIR3 quando exista e
+    o ano do último contrato. Sem texto devolve o diretório por volume; com texto
+    filtra os nomes que casam com o termo.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+
+    text = (q or "").strip()
+    kinds = [kind] if kind in CONTRATOS_ES_ENTITY_FIELDS else list(CONTRATOS_ES_ENTITY_FIELDS)
+    wanted = max(1, min(int(size), 100))
+    offset = max(0, int(from_))
+    # Os `terms` não têm paginação: pede-se o topo (offset + página) de cada tipo.
+    bucket_size = min(300, offset + wanted)
+
+    filters: List[Dict[str, Any]] = []
+    if ano is not None:
+        filters.append({"term": {"ano": ano}})
+
+    aggs: Dict[str, Any] = {}
+    for name in kinds:
+        field = CONTRATOS_ES_ENTITY_FIELDS[name]["field"]
+        aggs[name] = {
+            "filter": _contratos_es_entity_filter(field, text),
+            "aggs": {
+                "entities": {
+                    "terms": {"field": field, "size": bucket_size, "order": {"_count": "desc"}},
+                    "aggs": {
+                        "valor": {"sum": {"field": "valor_adjudicado"}},
+                        "valor_base": {"sum": {"field": "valor_base"}},
+                        "ultimo_ano": {"max": {"field": "ano"}},
+                        "sample": {"top_hits": {"size": 1, "_source": CONTRATOS_ES_ENTITY_SAMPLE_FIELDS}},
+                    },
+                }
+            },
+        }
+
+    try:
+        resp = client.search(
+            index=CONTRATOS_ES_INDEX,
+            body={
+                "size": 0,
+                "track_total_hits": False,
+                "query": {"bool": {"filter": filters}} if filters else {"match_all": {}},
+                "aggs": aggs,
+            },
+        )
+    except Exception as exc:
+        return {"error": str(exc), "items": [], "total": 0}
+
+    floor = max(1, int(min_count))
+    pages: Dict[str, List[Dict[str, Any]]] = {}
+    counts: Dict[str, int] = {}
+    for name in kinds:
+        info = CONTRATOS_ES_ENTITY_FIELDS[name]
+        bucket_group = resp.get("aggregations", {}).get(name, {})
+        entries: List[Dict[str, Any]] = []
+        for bucket in bucket_group.get("entities", {}).get("buckets", []):
+            if bucket["doc_count"] < floor:
+                continue
+            sample = ((bucket.get("sample", {}).get("hits", {}).get("hits") or [{}])[0].get("_source")) or {}
+            entries.append(
+                {
+                    "kind": name,
+                    "kind_label": info["label"],
+                    "name": bucket["key"],
+                    "count": bucket["doc_count"],
+                    "total_value": bucket.get("valor", {}).get("value"),
+                    "total_value_base": bucket.get("valor_base", {}).get("value"),
+                    "city": sample.get("organo_ciudad") or "",
+                    "nuts": sample.get("nuts") or sample.get("adjudicatario_nuts") or "",
+                    "nif": sample.get("adjudicatario_nif") or "",
+                    "organo_id": sample.get("organo_id") or "",
+                    "organo_tipo": sample.get("organo_tipo") or "",
+                    "last_year": bucket.get("ultimo_ano", {}).get("value"),
+                }
+            )
+        counts[name] = len(entries)
+        pages[name] = entries[offset : offset + wanted]
+
+    # Intercala os dois tipos (1.º órgão, 1.ª adjudicatária, 2.º órgão, …) para
+    # que a página mostre sempre entidades contratantes e empresas adjudicatárias.
+    items: List[Dict[str, Any]] = []
+    depth = max((len(entries) for entries in pages.values()), default=0)
+    for index in range(depth):
+        for entries in pages.values():
+            if index < len(entries):
+                items.append(entries[index])
+
+    return {
+        "query": q,
+        "total": sum(counts.values()),
+        "by_kind": counts,
+        "items": items[:wanted],
+        "from": offset,
+        "size": wanted,
+    }
+
+
 def get_contrato_es(doc_id: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
     """Devolve um contrato de Espanha pelo respetivo `_id`."""
     client = es or get_es_client()

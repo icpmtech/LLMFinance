@@ -1,6 +1,6 @@
 """Rotas da pesquisa unificada (`/search/*`) — a pesquisa «estilo Google» do IQ OS.
 
-- `GET /search/scopes`   — catálogo de âmbitos (Recolha, Contratos, Empresas, …)
+- `GET /search/scopes`   — catálogo de âmbitos (Recolha, Contratos, Contratos ES, …)
 - `GET /search/unified`  — pesquisa por texto em todos os âmbitos (ou num só)
 - `GET /search/suggest`  — sugestões para a caixa de pesquisa
 
@@ -45,7 +45,7 @@ def search_scopes() -> Dict[str, Any]:
 @router.get("/unified")
 def search_unified(
     q: str = Query("", description="Texto a pesquisar (título, descrição, entidades, NIF, ticker…)."),
-    scope: str = Query("all", description="Âmbito: all | scraped | contracts | entities | trademarks | firmas | news | market | crm"),
+    scope: str = Query("all", description="Âmbito: all | scraped | contracts | contracts_es | entities | trademarks | firmas | news | market | crm"),
     size: int = Query(8, ge=1, le=50, description="Resultados por âmbito."),
     offset: int = Query(0, ge=0, description="Resultados a saltar (no âmbito escolhido)."),
     session: Session = None,
@@ -66,5 +66,5 @@ def search_suggest(
     limit: int = Query(8, ge=1, le=20),
     session: Session = None,
 ) -> Dict[str, Any]:
-    """Sugestões (empresas, recolha e tickers) para autocompletar a pesquisa."""
+    """Sugestões (empresas, recolha, tickers e Espanha) para autocompletar a pesquisa."""
     return search_service.suggest(q, limit=limit, session_scope=_scope(session))

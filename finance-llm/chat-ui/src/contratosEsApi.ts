@@ -6,6 +6,14 @@
  */
 import { API_BASE } from "./api";
 
+/**
+ * Chave de `localStorage` para abrir um contrato concreto na app «Contratos
+ * Espanha» a partir de outra aplicação do IQ OS (ex.: a Pesquisa total).
+ * Quem abre escreve o `doc_id`; a página lê-o, fixa o contrato no topo da lista
+ * com o detalhe aberto e limpa a chave.
+ */
+export const CONTRATOS_ES_OPEN_KEY = "finance-llm-contratos-es-doc";
+
 /** Valor de uma faceta (código ou rótulo, contagem e, no caso dos CPV, descrição). */
 export type ContratoEsFacet = { value: string | number; count: number; label?: string };
 

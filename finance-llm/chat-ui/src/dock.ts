@@ -728,10 +728,15 @@ export function useDock() {
     [prefs.items, apps]
   );
 
-  const parked = useMemo(
-    () => prefs.parked.map((id) => apps.find((app) => app.id === id)).filter((app): app is DockApp => Boolean(app)),
-    [prefs.parked, apps]
-  );
+  /* «Fora do dock»: ícones que o utilizador retirou + aplicações que ainda não
+     conhece (inclui páginas iframe criadas depois da última arrumação). */
+  const parked = useMemo(() => {
+    const known = new Set([...prefs.items, ...prefs.parked]);
+    const ids = [...prefs.parked, ...apps.filter((app) => !known.has(app.id)).map((app) => app.id)];
+    return ids
+      .map((id) => apps.find((app) => app.id === id))
+      .filter((app): app is DockApp => Boolean(app));
+  }, [prefs.items, prefs.parked, apps]);
 
   const iframe = useMemo(() => iframePages.filter((page) => page.enabled).map(iframeToDockApp), [iframePages]);
 

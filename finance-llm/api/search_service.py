@@ -1,9 +1,10 @@
 """Pesquisa unificada («estilo Google») sobre tudo o que o IQ OS tem.
 
 Uma pergunta, um resultado por área. O `unified_search` dispara em paralelo uma
-consulta por **âmbito** (recolha, contratos, empresas, marcas, firmas, notícias,
-mercado e CRM) e devolve grupos normalizados — cada item com título, subtítulo,
-excerto, data, etiquetas e (quando faz sentido) a vista interna que o abre.
+consulta por **âmbito** (recolha, contratos, contratos de Espanha, empresas,
+marcas, firmas, notícias, mercado e CRM) e devolve grupos normalizados — cada item
+com título, subtítulo, excerto, data, etiquetas e (quando faz sentido) a vista
+interna que o abre.
 
 Decisões importantes:
 
@@ -15,6 +16,9 @@ Decisões importantes:
   e nunca devolve registos de outra pessoa.
 - **Parallelismo limitado** (`ThreadPoolExecutor`) para não sobrecarregar o
   Elasticsearch nem a API com uma pesquisa por clique.
+- **Espanha é um âmbito próprio** (`contratos_es`, PLACSP): são 4 milhões de
+  documentos noutro esquema de campos (castelhano), por isso não se misturam com
+  os contratos portugueses.
 """
 from __future__ import annotations
 
@@ -30,8 +34,10 @@ from elasticsearch import Elasticsearch
 
 from api.elasticsearch_client import (
     CRM_INDEX,
+    contratos_es_autocomplete,
     ensure_indices,
     get_es_client,
+    search_contratos_es,
     search_contracts,
     search_entities,
     search_firmas,
@@ -48,6 +54,7 @@ PRICES_INDEX = "finance_prices"
 SCOPES: List[Dict[str, Any]] = [
     {"id": "scraped", "label": "Recolha", "hint": "Dados recolhidos de sites (scraping)"},
     {"id": "contracts", "label": "Contratos", "hint": "Contratação pública (portal base)"},
+    {"id": "contracts_es", "label": "Contratos ES", "hint": "Contratação pública de Espanha (PLACSP)"},
     {"id": "entities", "label": "Empresas", "hint": "Cadastro de entidades"},
     {"id": "trademarks", "label": "Marcas", "hint": "Marcas registadas (INPI)"},
     {"id": "firmas", "label": "Firmas", "hint": "Firmas e denominações (RNPC)"},
@@ -56,6 +63,9 @@ SCOPES: List[Dict[str, Any]] = [
     {"id": "crm", "label": "CRM", "hint": "Contas, contactos e oportunidades", "session": True},
 ]
 SCOPE_IDS = [scope["id"] for scope in SCOPES]
+
+# Vista interna de cada âmbito, quando o resultado abre uma ficha dentro do IQ OS.
+CONTRATOS_ES_VIEW = "contratos-es"
 
 _ACCENTS = str.maketrans("áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ", "aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC")
 
@@ -250,6 +260,66 @@ def _search_contracts_group(q: str, size: int, offset: int) -> Dict[str, Any]:
             )
         )
     return _group("contracts", _label_for("contracts"), items, result.get("total", 0), 0)
+
+
+def _search_contratos_es_group(q: str, size: int, offset: int) -> Dict[str, Any]:
+    """Contratos públicos de Espanha (PLACSP).
+
+    O índice `contratos_es` tem outro esquema (campos em castelhano) e é muito
+    maior do que o português, pelo que é pesquisado com relevância quando há
+    texto e ordenado por data de publicação quando não há.
+    """
+    result = search_contratos_es(
+        q=q or None,
+        size=size,
+        from_=offset,
+        sort_by="relevancia" if q else None,
+        with_facets=False,
+    )
+    if result.get("error"):
+        return _error_group("contracts_es", _label_for("contracts_es"), str(result["error"]))
+    items = []
+    for row in result.get("items", []):
+        valor = row.get("valor_adjudicado")
+        valor_tipo = "adjudicado"
+        if not isinstance(valor, (int, float)):
+            valor = row.get("valor_base")
+            valor_tipo = "base"
+        badges: List[Any] = [
+            row.get("ano"),
+            row.get("tipo_contrato_label"),
+            row.get("estado_label"),
+            row.get("localidad") or row.get("nuts"),
+            "Contrato menor" if row.get("es_menor") else None,
+        ]
+        items.append(
+            _item(
+                "contracts_es",
+                row.get("doc_id") or "",
+                row.get("objeto") or row.get("descripcion") or "Contrato (Espanha)",
+                subtitle=" → ".join(
+                    filter(None, [str(row.get("organo_nombre") or ""), str(row.get("adjudicatario_nombre") or "")])
+                ),
+                snippet=row.get("descripcion") or row.get("objeto") or "",
+                url=row.get("enlace") or "",
+                date=row.get("fecha_publicacion") or row.get("fecha_adjudicacion"),
+                badges=badges,
+                extra={
+                    "valor": valor if isinstance(valor, (int, float)) else None,
+                    "valor_tipo": valor_tipo,
+                    "organo": row.get("organo_nombre"),
+                    "adjudicatario": row.get("adjudicatario_nombre"),
+                    "adjudicatario_nif": row.get("adjudicatario_nif"),
+                    "cpv": _cpv_code(row.get("cpv")),
+                    "ano": row.get("ano"),
+                    "fonte": row.get("fonte"),
+                    "pais": "ES",
+                },
+                open_view={"view": CONTRATOS_ES_VIEW, "arg": str(row.get("doc_id") or "")},
+                score=row.get("score"),
+            )
+        )
+    return _group("contracts_es", _label_for("contracts_es"), items, result.get("total", 0), 0)
 
 
 def _search_entities_group(q: str, size: int, offset: int) -> Dict[str, Any]:
@@ -494,6 +564,7 @@ def unified_search(
     workers: Dict[str, Any] = {
         "scraped": lambda: _search_scraped_group(query, size, offset),
         "contracts": lambda: _search_contracts_group(query, size, offset),
+        "contracts_es": lambda: _search_contratos_es_group(query, size, offset),
         "entities": lambda: _search_entities_group(query, size, offset),
         "trademarks": lambda: _search_trademarks_group(query, size, offset),
         "firmas": lambda: _search_firmas_group(query, size, offset),
@@ -538,7 +609,7 @@ def unified_search(
 
 
 def suggest(q: str, *, limit: int = 8, session_scope: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Sugestões para a caixa de pesquisa (entidades, recolha, tickers)."""
+    """Sugestões para a caixa de pesquisa (entidades, recolha, tickers, Espanha)."""
     query = (q or "").strip()
     if len(query) < 2:
         return {"query": query, "items": []}
@@ -565,6 +636,21 @@ def suggest(q: str, *, limit: int = 8, session_scope: Optional[Dict[str, Any]] =
             if hit.get("title")
         ]
 
+    def contratos_es() -> List[Dict[str, Any]]:
+        """Órgãos, adjudicatários e CPV do PLACSP."""
+        label = {"organo": "Órgão (ES)", "adjudicatario": "Adjudicatário (ES)", "cpv": "CPV (ES)"}
+        result = contratos_es_autocomplete(q=query, size=limit)
+        return [
+            {
+                "text": entry.get("text") or "",
+                "scope": "contracts_es",
+                "hint": f"{label.get(entry.get('type') or '', 'Espanha')} · {entry.get('count') or 0}",
+                "arg": entry.get("text") or "",
+            }
+            for entry in (result.get("suggestions") or [])
+            if entry.get("text")
+        ]
+
     def tickers() -> List[Dict[str, Any]]:
         resp = client.search(
             index=PRICES_INDEX,
@@ -577,15 +663,31 @@ def suggest(q: str, *, limit: int = 8, session_scope: Optional[Dict[str, Any]] =
         buckets = (resp.get("aggregations", {}).get("tickers", {}) or {}).get("buckets", [])
         return [{"text": b["key"], "scope": "market", "hint": f"Mercado · {b['doc_count']} cotações", "arg": b["key"]} for b in buckets]
 
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        jobs = {"entities": pool.submit(entities), "scraped": pool.submit(scraped), "market": pool.submit(tickers)}
+    by_kind: Dict[str, List[Dict[str, Any]]] = {}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        jobs = {
+            "entities": pool.submit(entities),
+            "scraped": pool.submit(scraped),
+            "market": pool.submit(tickers),
+            "contracts_es": pool.submit(contratos_es),
+        }
         for name, job in jobs.items():
             try:
-                for entry in job.result(timeout=10):
-                    entry["kind"] = name
-                    items.append(entry)
+                entries = list(job.result(timeout=10))
             except Exception as exc:
                 logger.debug("Sugestões (%s) falharam: %s", name, exc)
+                continue
+            for entry in entries:
+                entry["kind"] = name
+            by_kind[name] = entries
+
+    # Intercala as fontes (a 1.ª sugestão de cada uma aparece sempre), para
+    # nenhuma ficar sem espaço — sem isto o Espanha nunca chegava à lista.
+    depth = max((len(entries) for entries in by_kind.values()), default=0)
+    for index in range(depth):
+        for entries in by_kind.values():
+            if index < len(entries):
+                items.append(entries[index])
 
     seen = set()
     unique: List[Dict[str, Any]] = []

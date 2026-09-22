@@ -651,6 +651,28 @@ export default function App() {
     setViewAndHistory("company-detail");
   };
 
+  /**
+   * Abre uma vista ou ficha a partir de um resultado da Pesquisa total.
+   * Em modo janelas abre (ou foca) a janela da aplicação; em modo página navega
+   * para ela. As fichas levam o identificador no próprio nome da vista
+   * (`company-detail:<nif>`, `contract-detail:<id>`), tal como as janelas do CRM.
+   */
+  const handleOpenSearchView = useCallback(
+    (target: string, title?: string) => {
+      if (target.startsWith("company-detail:")) {
+        const nif = target.slice("company-detail:".length);
+        if (nif) setSelectedCompany(nif);
+      }
+      if (windowMode) {
+        if (windowFor(target)) restoreWindow(target);
+        else openWindow(target, workspaceEstimate(), title ? { title } : undefined);
+        return;
+      }
+      setViewAndHistory(target as AppView);
+    },
+    [windowMode, setViewAndHistory],
+  );
+
   /* ------------------------------------------------- janelas do CRM (macOS) */
 
   /** Cada separador do CRM abre (ou foca) a janela da sua secção. */
@@ -861,7 +883,7 @@ export default function App() {
       );
     }
     if (target === "pesquisa") {
-      return <UnifiedSearchPage initialQuery={searchQuery} onOpenTicker={handleSelectTicker} />;
+      return <UnifiedSearchPage initialQuery={searchQuery} onOpenTicker={handleSelectTicker} onOpenView={handleOpenSearchView} />;
     }
     if (target === "sentimento") {
       return <SentimentPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;

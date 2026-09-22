@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import {
   autocompleteContratosEs,
+  CONTRATOS_ES_OPEN_KEY,
+  getContratoEs,
   getContratosEsImports,
   getContratosEsMeta,
   getContratosEsStatus,
@@ -120,6 +122,8 @@ export function ContractsEsSearchPage({ onSwitchView, onSwitchDashboard }: Contr
   const [error, setError] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [openDocId, setOpenDocId] = useState<string | null>(null);
+  /** Contrato aberto a partir de outra app (Pesquisa total), fixado no topo. */
+  const [pinnedDoc, setPinnedDoc] = useState<ContratoEsItem | null>(null);
 
   const [suggestions, setSuggestions] = useState<ContratoEsSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -231,6 +235,24 @@ export function ContractsEsSearchPage({ onSwitchView, onSwitchDashboard }: Contr
     void doSearch(true);
     void loadJobs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Contrato pedido por outra aplicação (ex.: Pesquisa total): abre o detalhe fixado.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const docId = window.localStorage.getItem(CONTRATOS_ES_OPEN_KEY);
+    if (!docId) return;
+    window.localStorage.removeItem(CONTRATOS_ES_OPEN_KEY);
+    void (async () => {
+      try {
+        const doc = (await getContratoEs(docId)) as ContratoEsItem & { error?: string };
+        if (doc?.error) return;
+        setPinnedDoc(doc);
+        setOpenDocId(doc.doc_id ?? docId);
+      } catch {
+        /* contrato indisponível: a pesquisa normal continua a funcionar */
+      }
+    })();
   }, []);
 
   // Autocomplete (órgãos, adjudicatários e CPV) com atraso curto.
@@ -401,6 +423,13 @@ export function ContractsEsSearchPage({ onSwitchView, onSwitchDashboard }: Contr
 
   const hasMore = results.length < total;
   const totalValue = stats?.valor_adjudicado_sum ?? null;
+
+  // O contrato pedido por outra app aparece primeiro, sem se repetir na lista.
+  const displayResults = useMemo(() => {
+    if (!pinnedDoc) return results;
+    const pinnedId = pinnedDoc.doc_id;
+    return [pinnedDoc, ...results.filter((row) => (row.doc_id ?? "") !== (pinnedId ?? ""))];
+  }, [pinnedDoc, results]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 md:px-8 fade-in">
@@ -792,7 +821,7 @@ export function ContractsEsSearchPage({ onSwitchView, onSwitchDashboard }: Contr
           )}
 
           <div className="space-y-4">
-            {results.map((c, i) => {
+            {displayResults.map((c, i) => {
               const open = openDocId === (c.doc_id ?? String(i));
               return (
                 <article
@@ -806,6 +835,9 @@ export function ContractsEsSearchPage({ onSwitchView, onSwitchDashboard }: Contr
                         {c.estado_label && <span className="px-2 py-0.5 rounded-full glass-card">{c.estado_label}</span>}
                         {c.tipo_contrato_label && <span>{c.tipo_contrato_label}</span>}
                         {c.es_menor && <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300">contrato menor</span>}
+                        {pinnedDoc?.doc_id && pinnedDoc.doc_id === c.doc_id && (
+                          <span className="px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300">aberto da Pesquisa total</span>
+                        )}
                         <span className="truncate">Exp.: {c.id_expediente}</span>
                       </div>
                       <h3 className="font-semibold text-foreground leading-tight mb-1 truncate-2-lines">

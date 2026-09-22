@@ -2,8 +2,9 @@
  * Cliente da pesquisa unificada (`/search/*`) — a pesquisa «estilo Google» do IQ OS.
  *
  * Uma pergunta, resultados de todas as áreas: dados recolhidos (scraping),
- * contratos públicos, empresas, marcas, firmas, notícias de mercado, tickers e
- * CRM (este último só com sessão, porque é privado por utilizador).
+ * contratos públicos (Portugal e Espanha), empresas, marcas, firmas, notícias de
+ * mercado, tickers e CRM (este último só com sessão, porque é privado por
+ * utilizador).
  */
 import { API_BASE } from "./api";
 
@@ -11,6 +12,7 @@ export type SearchScopeId =
   | "all"
   | "scraped"
   | "contracts"
+  | "contracts_es"
   | "entities"
   | "trademarks"
   | "firmas"

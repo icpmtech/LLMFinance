@@ -2,10 +2,12 @@
  * Pesquisa total — a pesquisa «estilo Google» do IQ OS.
  *
  * Uma caixa, tudo o que a plataforma sabe: **Recolha** (dados recolhidos de
- * sites), **Contratos** públicos, **Empresas**, **Marcas**, **Firmas**,
- * **Notícias**, **Mercado** e **CRM** (privado, só com sessão). Os resultados
- * chegam agrupados por área, com contagem por âmbito, sugestões enquanto se
- * escreve e abertura direta das fichas internas (empresa, contrato, ticker).
+ * sites), **Contratos** públicos, **Contratos ES** (contratação pública de
+ * Espanha, PLACSP), **Empresas**, **Marcas**, **Firmas**, **Notícias**,
+ * **Mercado** e **CRM** (privado, só com sessão). Os resultados chegam
+ * agrupados por área, com contagem por âmbito, sugestões enquanto se escreve e
+ * abertura direta das fichas internas (empresa, contrato, contrato espanhol,
+ * ticker).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -20,11 +22,13 @@ import {
   LineChart,
   Loader2,
   Newspaper,
+  ScrollText,
   Search,
   Tag,
   Users,
   X,
 } from "lucide-react";
+import { CONTRATOS_ES_OPEN_KEY } from "../contratosEsApi";
 import { openWindow } from "../windows";
 import {
   externalSearchUrl,
@@ -41,6 +45,9 @@ import {
 
 /* ------------------------------------------------------------------ apoio */
 
+/** Vista interna da app de contratos públicos de Espanha. */
+const CONTRATOS_ES_VIEW = "contratos-es";
+
 const dateFormat = new Intl.DateTimeFormat("pt-PT", { dateStyle: "short" });
 const numberFormat = new Intl.NumberFormat("pt-PT");
 const moneyFormat = new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -48,6 +55,7 @@ const moneyFormat = new Intl.NumberFormat("pt-PT", { style: "currency", currency
 const SCOPE_ICON: Record<string, React.ReactNode> = {
   scraped: <Globe2 size={14} />,
   contracts: <FileSignature size={14} />,
+  contracts_es: <ScrollText size={14} />,
   entities: <Building2 size={14} />,
   trademarks: <Tag size={14} />,
   firmas: <Landmark size={14} />,
@@ -56,7 +64,7 @@ const SCOPE_ICON: Record<string, React.ReactNode> = {
   crm: <Users size={14} />,
 };
 
-const EXAMPLES = ["EDP", "combustíveis", "Sonae", "AAPL", "energia solar"];
+const EXAMPLES = ["EDP", "combustíveis", "Sonae", "AAPL", "Renfe"];
 
 function formatDate(value?: string | null): string {
   if (!value) return "";
@@ -77,6 +85,7 @@ function openLabel(item: SearchItem): string | null {
   if (!item.open) return null;
   if (item.open.view === "company-detail") return "Abrir ficha da empresa";
   if (item.open.view === "contract-detail") return "Abrir ficha do contrato";
+  if (item.open.view === CONTRATOS_ES_VIEW) return "Abrir em Contratos Espanha";
   if (item.open.view.startsWith("crm-")) return "Abrir no CRM";
   return "Abrir no IQ OS";
 }
@@ -95,9 +104,11 @@ function Badge({ children, tone = "muted" }: { children: React.ReactNode; tone?:
 interface UnifiedSearchPageProps {
   initialQuery?: string;
   onOpenTicker?: (ticker: string) => void;
+  /** Abre uma vista/ficha interna (janela própria ou navegação, conforme o modo). */
+  onOpenView?: (view: string, title?: string) => void;
 }
 
-export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker }: UnifiedSearchPageProps) {
+export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onOpenView }: UnifiedSearchPageProps) {
   const [query, setQuery] = useState(initialQuery);
   const [submitted, setSubmitted] = useState(initialQuery.trim());
   const [scope, setScope] = useState<SearchScopeId>("all");
@@ -202,19 +213,35 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker }: U
   };
 
   const openItem = (item: SearchItem) => {
-    if (item.open?.view === "ticker-detail") {
+    const target = item.open;
+    if (!target) {
+      if (item.url) window.open(item.url, "_blank", "noreferrer");
+      return;
+    }
+    const title = item.title.slice(0, 60);
+    if (target.view === "ticker-detail") {
       if (onOpenTicker) {
-        onOpenTicker(item.open.arg);
+        onOpenTicker(target.arg);
         return;
       }
-      openWindow(`ticker-detail`, undefined, { title: `Ticker · ${item.open.arg}` });
+      if (onOpenView) onOpenView("ticker-detail", `Ticker · ${target.arg}`);
+      else openWindow("ticker-detail", undefined, { title: `Ticker · ${target.arg}` });
       return;
     }
-    if (item.open) {
-      openWindow(item.open.view, undefined, { title: item.title.slice(0, 60) });
+    // Contratos de Espanha: a app abre o detalhe do `doc_id` indicado.
+    if (target.view === CONTRATOS_ES_VIEW) {
+      if (target.arg && typeof window !== "undefined") {
+        window.localStorage.setItem(CONTRATOS_ES_OPEN_KEY, target.arg);
+      }
+      if (onOpenView) onOpenView(CONTRATOS_ES_VIEW, title);
+      else openWindow(CONTRATOS_ES_VIEW, undefined, { title });
       return;
     }
-    if (item.url) window.open(item.url, "_blank", "noreferrer");
+    // Fichas e registos internos levam o identificador no nome da vista
+    // (`contract-detail:<id>`, `company-detail:<nif>`); no CRM já vem incluído.
+    const view = target.arg && !target.view.includes(":") ? `${target.view}:${target.arg}` : target.view;
+    if (onOpenView) onOpenView(view, title);
+    else openWindow(view, undefined, { title });
   };
 
   const visibleGroups = useMemo(() => {
@@ -254,7 +281,7 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker }: U
           onFocus={() => setShowSuggestions(true)}
           onBlur={() => window.setTimeout(() => setShowSuggestions(false), 150)}
           onKeyDown={onKeyDown}
-          placeholder="Pesquisar em tudo: recolha, contratos, empresas, marcas, firmas, notícias e mercado…"
+          placeholder="Pesquisar em tudo: recolha, contratos (PT/ES), empresas, marcas, firmas, notícias e mercado…"
           aria-label="Pesquisar em todos os dados do IQ OS"
           className={`w-full bg-transparent outline-none placeholder:text-muted-foreground ${compact ? "text-sm" : "text-base"}`}
         />
@@ -317,7 +344,7 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker }: U
         </h1>
         <p className="mt-2 max-w-xl text-center text-sm text-muted-foreground">
           Uma caixa para tudo o que o IQ OS sabe: <strong className="font-medium text-foreground">recolha</strong> de sites,{" "}
-          contratos públicos, empresas, marcas, firmas, notícias, mercado e CRM.
+          contratos públicos (Portugal e Espanha), empresas, marcas, firmas, notícias, mercado e CRM.
         </p>
 
         <div className="mt-7 w-full">{searchBox(false)}</div>
@@ -513,8 +540,8 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker }: U
           ) : null}
 
           <p className="px-1 text-[10px] leading-relaxed text-muted-foreground">
-            A pesquisa cobre a recolha, os contratos públicos, o cadastro de entidades, INPI, RNPC, notícias e mercado. O CRM só é
-            incluído quando há sessão, porque é privado por utilizador.
+            A pesquisa cobre a recolha, os contratos públicos (Portugal e Espanha/PLACSP), o cadastro de entidades, INPI,
+            RNPC, notícias e mercado. O CRM só é incluído quando há sessão, porque é privado por utilizador.
           </p>
         </aside>
       </div>
@@ -565,7 +592,8 @@ function ScopeResults({
       <ul className="space-y-2">
         {group.items.map((item) => {
           const label = openLabel(item);
-          const money = typeof item.extra?.preco === "number" ? moneyFormat.format(item.extra.preco as number) : null;
+          const rawMoney = item.extra?.preco ?? item.extra?.valor;
+          const money = typeof rawMoney === "number" ? moneyFormat.format(rawMoney) : null;
           return (
             <li key={`${item.scope}:${item.id}`} className="glass-card overflow-hidden rounded-2xl p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
