@@ -6,6 +6,8 @@ import time
 env = os.environ.copy()
 env['PYTHONUNBUFFERED'] = '1'
 env['ELASTICSEARCH_URL'] = 'http://127.0.0.1:9200'
+env['TWOCAPTCHA_API_KEY'] = '603223f68a8474f3a9531cddce3e1d6c'
+
 # Ensure the venv interpreter is found by any subprocess spawned by uvicorn.
 env['PATH'] = r'c:\LLMFinance\.venv\Scripts;' + env.get('PATH', '')
 env['VIRTUAL_ENV'] = r'c:\LLMFinance\.venv'

@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -58,7 +59,7 @@ GRID_CLIENT_ID = "ctl00_ContentPlaceHolderMain_gvSearchResult"
 
 RECAPTCHA_SITEKEY = "6LfWfwkTAAAAAF_tbbsmS54u0N7kpwdWF_kxp3Ks"
 
-MIN_REQUEST_INTERVAL = 1.0
+MIN_REQUEST_INTERVAL = 3.5
 PAGE_SIZE = 20
 
 HEADERS = {
@@ -104,15 +105,41 @@ def _clean(fragment: str) -> str:
 
 
 def _decode(resp: requests.Response) -> str:
-    """Descodifica uma resposta do portal (Windows-1252, não UTF-8)."""
+    """Descodifica uma resposta do portal.
+
+    O portal tanto devolve páginas com ``charset`` declarado (Windows-1252) como
+    páginas sem declaração que estão, na realidade, em **UTF-8**. Descodificar
+    estas últimas como CP1252 produz mojibake (``FARMACÃŠUTICA``). Por isso
+    testamos primeiro o charset declarado; se for uma variante ``latin-1`` e os
+    bytes forem UTF-8 válidos, preferimos UTF-8.
+    """
     raw = resp.content
     head = raw[:4000].decode("latin-1", errors="ignore")
     match = re.search(r'charset=["\']?([\w-]+)', head, re.I)
-    encoding = match.group(1) if match else "cp1252"
+    declared = (match.group(1) if match else "").lower()
+
+    latin_variants = {"cp1252", "windows-1252", "latin-1", "iso-8859-1", "latin1", ""}
+    if declared in latin_variants:
+        try:
+            return raw.decode("utf-8")
+        except UnicodeDecodeError:
+            pass
+
+    encoding = declared or "cp1252"
     try:
         return raw.decode(encoding, errors="replace")
     except (LookupError, UnicodeDecodeError):
         return raw.decode("cp1252", errors="replace")
+
+
+def _fix_mojibake(text: str) -> str:
+    """Corrige texto UTF-8 que foi descodificado como CP1252 (``FARMACÃŠUTICA``)."""
+    if not text or "Ã" not in text:
+        return text
+    try:
+        return text.encode("cp1252").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return text
 
 
 @dataclass
@@ -135,6 +162,7 @@ class PublicacaoMJ:
     conservatoria: Optional[str] = None
     matricula_nipc: Optional[str] = None
     pedido: Optional[str] = None
+    referencia_registo: Optional[str] = None
     requerente: Optional[str] = None
     ano_contas: Optional[str] = None
     texto: Optional[str] = None
@@ -149,9 +177,19 @@ class PublicacaoMJ:
 
     @property
     def pub_id(self) -> str:
-        """Identificador estável (idempotente em reingestões)."""
+        """Identificador estável (idempotente em reingestões).
+
+        Inclui o número de apresentação/pedido sempre que existir no detalhe,
+        para distinguir vários actos distintos publicados no mesmo dia.
+        """
         basis = "|".join(
-            str(x or "") for x in (self.nif, self.data_publicacao, self.acto, self.firma or self.entidade)
+            str(x or "") for x in (
+                self.nif,
+                self.data_publicacao,
+                self.acto,
+                self.firma or self.entidade,
+                self.pedido,
+            )
         )
         return hashlib.sha1(basis.encode("utf-8")).hexdigest()
 
@@ -173,6 +211,7 @@ class PublicacaoMJ:
             "conservatoria": self.conservatoria,
             "matricula_nipc": self.matricula_nipc,
             "pedido": self.pedido,
+            "referencia_registo": self.referencia_registo,
             "requerente": self.requerente,
             "ano_contas": self.ano_contas,
             "texto": self.texto,
@@ -190,6 +229,32 @@ class CaptchaRequiredError(RuntimeError):
     """A pesquisa foi recusada por falta de reCAPTCHA válido."""
 
 
+def _debug_dir() -> str:
+    """Diretório base para guardar páginas de debug da recolha MJ."""
+    base = os.environ.get("MJ_DEBUG_DIR") or os.path.join(os.getcwd(), "debug_mj")
+    os.makedirs(base, exist_ok=True)
+    return base
+
+
+def _save_debug_page(kind: str, nif: Optional[str], index: int, html: str) -> None:
+    """Persiste o HTML de uma página de debug (form, result, detalhe, etc.)."""
+    if not os.environ.get("MJ_DEBUG"):
+        return
+    folder = _debug_dir()
+    if nif:
+        folder = os.path.join(folder, nif)
+    os.makedirs(folder, exist_ok=True)
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    fname = f"{kind}_{index:03d}_{ts}.html"
+    path = os.path.join(folder, fname)
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(html)
+        logger.info("Página de debug guardada: %s", path)
+    except Exception as exc:
+        logger.warning("Não foi possível guardar página de debug %s: %s", path, exc)
+
+
 class PublicacoesMjClient:
     """Cliente do portal de publicações do MJ (recolha assistida)."""
 
@@ -198,6 +263,7 @@ class PublicacoesMjClient:
         cookies: Optional[Dict[str, str]] = None,
         min_interval: float = MIN_REQUEST_INTERVAL,
         timeout: int = 60,
+        proxy: Optional[str] = None,
     ):
         self.timeout = timeout
         self.min_interval = max(0.0, min_interval)
@@ -206,6 +272,45 @@ class PublicacoesMjClient:
         self.session.headers.update(HEADERS)
         if cookies:
             self.session.cookies.update(cookies)
+        # Suporte a proxy explícito ou via variáveis de ambiente padrão.
+        proxies = self._build_proxies(proxy)
+        if proxies:
+            self.session.proxies.update(proxies)
+        self._debug_nif: Optional[str] = None
+        self._debug_counter: Dict[str, int] = {}
+
+    def _set_debug_nif(self, nif: Optional[str]) -> None:
+        self._debug_nif = nif
+        self._debug_counter.clear()
+
+    def _set_debug_enabled(self, enabled: bool = True) -> None:
+        """Ativa/desativa debug dinamicamente (sem depender só do env var)."""
+        if enabled:
+            os.environ["MJ_DEBUG"] = "1"
+        elif os.environ.get("MJ_DEBUG") == "1":
+            del os.environ["MJ_DEBUG"]
+
+    def _debug_key(self, kind: str) -> int:
+        self._debug_counter[kind] = self._debug_counter.get(kind, 0) + 1
+        return self._debug_counter[kind]
+
+    def _save(self, kind: str, html: str) -> None:
+        if not os.environ.get("MJ_DEBUG"):
+            return
+        _save_debug_page(kind, self._debug_nif, self._debug_key(kind), html)
+
+    @staticmethod
+    def _build_proxies(proxy: Optional[str] = None) -> Dict[str, str]:
+        if proxy:
+            return {"http": proxy, "https": proxy}
+        env_http = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
+        env_https = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+        proxies: Dict[str, str] = {}
+        if env_http:
+            proxies["http"] = env_http
+        if env_https:
+            proxies["https"] = env_https
+        return proxies
 
     # --- infraestrutura -------------------------------------------------
 
@@ -215,13 +320,23 @@ class PublicacoesMjClient:
             time.sleep(self.min_interval - elapsed)
         self._last_request_at = time.monotonic()
 
-    def _get(self, url: str) -> str:
+    def _get(self, url: str, *, allow_retry: bool = True) -> str:
         self._throttle()
-        resp = self.session.get(url, timeout=self.timeout)
-        resp.raise_for_status()
-        return _decode(resp)
+        try:
+            resp = self.session.get(url, timeout=self.timeout)
+            resp.raise_for_status()
+            return _decode(resp)
+        except requests.exceptions.ConnectionError as exc:
+            if allow_retry:
+                logger.warning("Connection reset no GET %s: tentar uma vez", url)
+                time.sleep(2.0)
+                self._throttle()
+                resp = self.session.get(url, timeout=self.timeout)
+                resp.raise_for_status()
+                return _decode(resp)
+            raise
 
-    def _post(self, html_state: str, fields: Dict[str, str], event_target: str = "", event_argument: str = "") -> str:
+    def _post(self, html_state: str, fields: Dict[str, str], event_target: str = "", event_argument: str = "", *, allow_retry: bool = True) -> str:
         """Faz um postback usando o estado (ViewState/EventValidation) de ``html_state``."""
         state = form_state(html_state)
         payload: Dict[str, str] = {
@@ -235,19 +350,38 @@ class PublicacoesMjClient:
             payload["__VIEWSTATEGENERATOR"] = state["__VIEWSTATEGENERATOR"]
         payload.update(fields)
         self._throttle()
-        resp = self.session.post(PAGE, data=payload, timeout=self.timeout)
-        resp.raise_for_status()
-        return _decode(resp)
+        try:
+            resp = self.session.post(PAGE, data=payload, timeout=self.timeout)
+            resp.raise_for_status()
+            return _decode(resp)
+        except requests.exceptions.ConnectionError as exc:
+            if allow_retry:
+                logger.warning("Connection reset no POST: tentar uma vez")
+                time.sleep(2.0)
+                self._throttle()
+                resp = self.session.post(PAGE, data=payload, timeout=self.timeout)
+                resp.raise_for_status()
+                return _decode(resp)
+            raise
 
-    def _post_with_retry(self, html_state: str, fields: Dict[str, str], *, retries: int = 3, base_delay: float = 8.0, event_target: str = "", event_argument: str = "") -> str:
+    def _post_with_retry(self, html_state: str, fields: Dict[str, str], *, retries: int = 5, base_delay: float = 15.0, event_target: str = "", event_argument: str = "") -> str:
         """Envia POST e espera se o portal devolver throttling."""
         last_html = ""
         for attempt in range(retries):
-            html = self._post(html_state, fields, event_target=event_target, event_argument=event_argument)
+            try:
+                html = self._post(html_state, fields, event_target=event_target, event_argument=event_argument)
+            except requests.exceptions.ConnectionError as exc:
+                logger.warning("Connection reset no postback (%s/%s): aguardar e repetir", attempt + 1, retries)
+                time.sleep(base_delay + attempt * 4.0)
+                try:
+                    html_state = self.fetch_form()
+                except requests.exceptions.ConnectionError:
+                    pass
+                continue
             last_html = html
             if not _rate_limited(html):
                 return html
-            delay = base_delay + attempt * 4.0
+            delay = base_delay + attempt * 8.0
             logger.warning("Rate-limit do MJ (%s/%s): aguardar %.1fs e tentar de novo", attempt + 1, retries, delay)
             time.sleep(delay)
             html_state = self.fetch_form()
@@ -271,7 +405,9 @@ class PublicacoesMjClient:
 
     def fetch_form(self) -> str:
         """Obtém a página inicial do formulário de pesquisa."""
-        return self._get(PAGE)
+        html = self._get(PAGE)
+        self._save("form", html)
+        return html
 
     def search(
         self,
@@ -291,6 +427,7 @@ class PublicacoesMjClient:
         Requer um ``recaptcha_token`` válido (resolvido por uma pessoa); sem ele o
         portal responde com «Por favor, efetue a Validação».
         """
+        self._set_debug_nif(nif)
         fields = self._search_fields(
             html_state=html_form,
             nif=nif, entidade=entidade, distrito=distrito, concelho=concelho,
@@ -299,6 +436,7 @@ class PublicacoesMjClient:
         fields["g-recaptcha-response"] = recaptcha_token
         fields[f"{FIELD_PREFIX}btSearch"] = "Pesquisar"
         html = self._post_with_retry(html_form, fields)
+        self._save("search", html)
         if _captcha_rejected(html):
             raise CaptchaRequiredError(
                 "O portal recusou a pesquisa: é necessário um reCAPTCHA válido "
@@ -380,6 +518,7 @@ class PublicacoesMjClient:
             data_ini=data_ini, data_fim=data_fim, tipo=tipo,
         )
         html = self._post_with_retry(html_results, fields, event_target=f"{FIELD_PREFIX}gvSearchResult", event_argument="Page$Next")
+        self._save("next_page", html)
         return self.parse_results(html, search_nif=nif, search_term=entidade, tipo=tipo), html
 
     # --- detalhe --------------------------------------------------------
@@ -410,7 +549,9 @@ class PublicacoesMjClient:
             html_results, fields,
             event_target=f"{FIELD_PREFIX}gvSearchResult", event_argument=f"Conteudo${index}",
         )
+        self._save("grid_click", grid_html)
         detalhe_html = self._get(DETALHE_PAGE)
+        self._save("detalhe", detalhe_html)
         return detalhe_html, grid_html
 
     def documento_url(
@@ -660,10 +801,27 @@ def parse_detalhe(html: str) -> Dict[str, Any]:
     # Código postal no fim da freguesia (ex.: «Cidade da Maia 4470 MAIA»).
     freguesia = out.get("freguesia")
     if freguesia:
-        match = re.search(r"\b(\d{4}(?:-\d{3})?)\s+([A-ZÀ-Ú][A-ZÀ-Ú\s]*)$", freguesia)
+        # O portal cola a referência do registo à freguesia:
+        # «Porto Salvo 2740 - 262 Porto Salvo pela Apresentação AP. 62/20260805 ,
+        #  referente ao averbamento 1 à inscrição 13,».
+        match = re.search(
+            r"\s*(?P<ref>(?:pela|pelo)\s+Apresenta[çc][ãa]o\s+.*|"
+            r"Matriculada\s+na\s*:?\s*.*)$",
+            freguesia,
+            re.I,
+        )
         if match:
-            out["codigo_postal"] = f"{match.group(1)} {_clean(match.group(2))}"
-            out["freguesia"] = _clean(freguesia[: match.start()])
+            out["referencia_registo"] = _clean(match.group("ref"))
+            freguesia = _clean(freguesia[: match.start()])
+            out["freguesia"] = freguesia or None
+        match = re.search(
+            r"\b(\d{4})\s*(?:-\s*(\d{3}))?\s+([A-Za-zÀ-Úà-ú][A-Za-zÀ-Úà-ú\s]*)$",
+            freguesia or "",
+        )
+        if match:
+            codigo = match.group(1) + (f"-{match.group(2)}" if match.group(2) else "")
+            out["codigo_postal"] = f"{codigo} {_clean(match.group(3))}"
+            out["freguesia"] = _clean(freguesia[: match.start()]) or None
 
     # Pedido e ato de registo.
     match = re.search(r"pelo\s*pedido\s+(.*?),\s*foi\s*efectuado\s*o\s*seguinte\s*acto", body, re.I | re.S)

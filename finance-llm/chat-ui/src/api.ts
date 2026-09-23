@@ -79,8 +79,13 @@ import type {
   ContractRegionalResponse,
   ContractRelationsResponse,
   CompanySocietarioResponse,
+  SocietarioCompanyPeopleResponse,
   ContractItem,
   GraphDimensionsResponse,
+  PeopleSearchResponse,
+  Person,
+  PeopleGraphResponse,
+  PeopleIngestResponse,
   ImportFileType,
   ImportDataType,
   ImportPreviewRow,
@@ -92,6 +97,7 @@ import type {
 
 export type { ContractAnalyticsResponse, ContractAnalyticsFilters, CompanySearchResponse, CompanyDetail, CompanyContractsResponse, CompanyAnalyticsResponse };
 export type { ImportFileType, ImportDataType, ImportPreviewRow, ImportPreviewResponse, ImportIngestRequest, ImportIngestResponse, ImportStatusResponse };
+export type { PeopleSearchResponse, Person, PeopleGraphResponse, PeopleIngestResponse };
 
 export function getPlotUrl(plot_url: string): string {
   if (plot_url.startsWith("http://") || plot_url.startsWith("https://")) {
@@ -1176,6 +1182,180 @@ export async function getCompanySocietarioPublicacoes(
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Erro ao obter publicações societárias: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Pessoas/cargos extraídos das publicações societárias de uma entidade. */
+export async function getCompanySocietarioPeople(
+  nif: string,
+): Promise<SocietarioCompanyPeopleResponse> {
+  const res = await fetch(
+    `${API_BASE}/societario/companies/${encodeURIComponent(nif)}/people`,
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter pessoas societárias: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export interface SocietarioTimelineResponse {
+  nif: string;
+  total: number;
+  backend_used: string;
+  markdown: string;
+  error?: string;
+}
+
+export async function generateCompanySocietarioTimeline(
+  nif: string,
+  opts?: { backend?: string; max_tokens?: number; temperature?: number },
+): Promise<SocietarioTimelineResponse> {
+  const res = await fetch(
+    `${API_BASE}/societario/companies/${encodeURIComponent(nif)}/timeline`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        backend: opts?.backend,
+        max_tokens: opts?.max_tokens ?? 2048,
+        temperature: opts?.temperature ?? 0.3,
+      }),
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao gerar timeline societária: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export interface SocietarioCollectEntitiesResponse {
+  entities: number;
+  collected: number;
+  ingested: number;
+  deleted_stale: number;
+  with_details: boolean;
+  items: Array<Record<string, unknown>>;
+  errors: Array<{ nif?: string; name?: string; error: string }>;
+  message?: string;
+}
+
+/** Recolhe publicações societárias do MJ para um NIF via recolha automática (2captcha). */
+export async function collectSocietarioForNif(
+  nif: string,
+  opts?: { max_pages?: number; min_interval?: number; recaptcha_timeout?: number; stop_on_captcha?: boolean; api_key?: string; proxy?: string; debug?: boolean },
+): Promise<SocietarioCollectEntitiesResponse> {
+  const res = await fetch(`${API_BASE}/societario/collect-entities`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      nifs: [nif],
+      max_pages: opts?.max_pages ?? 50,
+      min_interval: opts?.min_interval ?? 10,
+      recaptcha_timeout: opts?.recaptcha_timeout ?? 180,
+      stop_on_captcha: opts?.stop_on_captcha ?? false,
+      ingest: true,
+      api_key: opts?.api_key,
+      proxy: opts?.proxy,
+      debug: opts?.debug ?? true,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao recolher dados societários: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+// --- Pessoas e cargos (societário) ---
+
+export async function searchPeople(
+  q?: string,
+  opts?: {
+    nif?: string;
+    companyNif?: string;
+    role?: string;
+    isCompany?: boolean;
+    size?: number;
+    from?: number;
+  },
+): Promise<PeopleSearchResponse> {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (opts?.nif) params.set("nif", opts.nif);
+  if (opts?.companyNif) params.set("company_nif", opts.companyNif);
+  if (opts?.role) params.set("role", opts.role);
+  if (opts?.isCompany !== undefined) params.set("is_company", String(opts.isCompany));
+  params.set("size", String(opts?.size ?? 20));
+  params.set("from", String(opts?.from ?? 0));
+  const res = await fetch(`${API_BASE}/people/search?${params}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao pesquisar pessoas: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function getPerson(nif: string): Promise<Person> {
+  const res = await fetch(`${API_BASE}/people/${encodeURIComponent(nif)}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter pessoa: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function getPersonGraph(nif: string): Promise<PeopleGraphResponse> {
+  const res = await fetch(`${API_BASE}/people/${encodeURIComponent(nif)}/graph`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter grafo da pessoa: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function getCompanyPeopleGraph(companyNif: string): Promise<PeopleGraphResponse> {
+  const res = await fetch(
+    `${API_BASE}/people/company/${encodeURIComponent(companyNif)}/graph`,
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter grafo da empresa: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function getCompanyCombinedGraph(
+  companyNif: string,
+  opts?: { includePeople?: boolean; includeContracts?: boolean; contractLimit?: number },
+): Promise<PeopleGraphResponse> {
+  const params = new URLSearchParams();
+  if (opts?.includePeople !== undefined) params.set("include_people", String(opts.includePeople));
+  if (opts?.includeContracts !== undefined) params.set("include_contracts", String(opts.includeContracts));
+  if (opts?.contractLimit !== undefined) params.set("contract_limit", String(opts.contractLimit));
+  const query = params.toString() ? `?${params}` : "";
+  const res = await fetch(
+    `${API_BASE}/people/company/${encodeURIComponent(companyNif)}/graph/full${query}`,
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter grafo combinado: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+export async function ingestPeopleForCompany(nif: string): Promise<PeopleIngestResponse> {
+  const res = await fetch(`${API_BASE}/people/ingest/${encodeURIComponent(nif)}`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao indexar pessoas/cargos: ${res.status} - ${text}`);
   }
   return res.json();
 }

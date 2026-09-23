@@ -97,6 +97,10 @@ AGENT_CONFIGS_INDEX = "iq_os_agent_configs"
 # a recolha é assistida e o resultado fica guardado aqui para consulta e pesquisa.
 SOCIETARIO_INDEX = "finance_publicacoes_mj"
 
+# Pessoas e cargos extraídos das publicações societárias (MJ). Um documento por
+# NIF de pessoa (individual ou coletiva), com roles aninhados por empresa/acto.
+PEOPLE_INDEX = "finance_people"
+
 # Definições (settings) específicas de determinados índices — nomeadamente
 # analisadores usados em subcampos de pesquisa por prefixo.
 INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
@@ -148,7 +152,31 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
                 },
             },
         }
-    }
+    },
+    PEOPLE_INDEX: {
+        "analysis": {
+            "tokenizer": {
+                "entity_edge_ngram": {
+                    "type": "edge_ngram",
+                    "min_gram": 2,
+                    "max_gram": 20,
+                    "token_chars": ["letter", "digit"],
+                }
+            },
+            "analyzer": {
+                "entity_index_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "entity_edge_ngram",
+                    "filter": ["lowercase", "asciifolding"],
+                },
+                "entity_search_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                },
+            },
+        }
+    },
 }
 
 
@@ -545,6 +573,60 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    people_mappings = {
+        "properties": {
+            "nif": {"type": "keyword"},
+            "name": {
+                "type": "text",
+                "fields": {
+                    "keyword": {"type": "keyword", "ignore_above": 512},
+                    "autocomplete": {
+                        "type": "text",
+                        "analyzer": "entity_index_analyzer",
+                        "search_analyzer": "entity_search_analyzer",
+                    },
+                },
+            },
+            "name_keyword": {"type": "keyword", "ignore_above": 512},
+            "is_company": {"type": "boolean"},
+            "roles": {
+                "type": "nested",
+                "properties": {
+                    "role": {"type": "keyword"},
+                    "role_org": {"type": "keyword"},
+                    "company_nif": {"type": "keyword"},
+                    "company_name": {
+                        "type": "text",
+                        "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+                    },
+                    "date": {"type": "date"},
+                    "publication_date": {"type": "date"},
+                    "acto": {"type": "keyword"},
+                    "event": {"type": "keyword"},
+                    "quota": {"type": "float"},
+                    "causa": {"type": "keyword"},
+                    "residencia": {"type": "keyword"},
+                    "publication_id": {"type": "keyword"},
+                    "nacionalidade": {"type": "keyword"},
+                },
+            },
+            "companies": {
+                "type": "nested",
+                "properties": {
+                    "nif": {"type": "keyword"},
+                    "name": {"type": "keyword", "ignore_above": 512},
+                },
+            },
+            "companies_count": {"type": "integer"},
+            "roles_count": {"type": "integer"},
+            "latest_roles": {"type": "object", "enabled": False},
+            "first_seen": {"type": "date"},
+            "last_seen": {"type": "date"},
+            "source": {"type": "keyword"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
     entities_mappings = {
         "properties": {
             "nif": {"type": "keyword"},
@@ -569,6 +651,16 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "as_adjudicante_value": {"type": "float"},
             "source": {"type": "keyword"},
             "ingested_at": {"type": "date"},
+            "societario_timeline": {
+                "type": "object",
+                "enabled": False,
+                "properties": {
+                    "markdown": {"type": "text", "index": False},
+                    "total": {"type": "integer", "index": False},
+                    "backend_used": {"type": "keyword", "index": False},
+                    "generated_at": {"type": "date", "index": False},
+                },
+            },
         }
     }
 
@@ -827,6 +919,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (TRADEMARKS_INDEX, trademarks_mappings),
         (FIRMAS_INDEX, firmas_mappings),
         (SOCIETARIO_INDEX, societario_mappings),
+        (PEOPLE_INDEX, people_mappings),
         (ENTITIES_INDEX, entities_mappings),
         (USER_STATE_INDEX, user_state_mappings),
         (AUTH_USERS_INDEX, auth_users_mappings),
@@ -6290,6 +6383,41 @@ def get_entity_by_nif(nif: str, es: Optional[Elasticsearch] = None) -> Dict[str,
         return {"error": str(exc)}
 
 
+def save_entity_societario_timeline(
+    nif: str,
+    markdown: str,
+    total: int,
+    backend_used: str,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Guarda a timeline societária gerada por IA na ficha da entidade (ENTITIES_INDEX)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "nif": nif}
+
+    ensure_indices(client)
+
+    doc = {
+        "societario_timeline": {
+            "markdown": markdown,
+            "total": total,
+            "backend_used": backend_used,
+            "generated_at": _today(),
+        }
+    }
+
+    try:
+        resp = client.update(
+            index=ENTITIES_INDEX,
+            id=f"{ENTITIES_INDEX}:{nif}",
+            body={"doc": doc, "doc_as_upsert": True},
+            refresh=True,
+        )
+        return {"nif": nif, "updated": resp.get("result") in ("updated", "created")}
+    except Exception as exc:
+        return {"error": str(exc), "nif": nif}
+
+
 def list_entity_countries(es: Optional[Elasticsearch] = None) -> List[Dict[str, Any]]:
     """Lista os países presentes no cadastro de entidades, com contagem."""
     client = es or get_es_client()
@@ -8090,4 +8218,517 @@ def societario_targets(
     if exclude_collected:
         items = [item for item in items if not item["publications_count"]]
     return {"items": items, "total": len(items), "from": from_, "size": limit}
+
+
+# --- Pessoas e cargos extraídos do societário ---
+
+def index_people_from_societario(
+    nif: Optional[str] = None,
+    replace_for_nif: Optional[str] = None,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa pessoas/cargos extraídos das publicações societárias.
+
+    Se ``nif`` for dado, processa apenas as publicações dessa entidade. Se
+    ``replace_for_nif`` for dado, apaga os documentos antigos da pessoa ligados
+    a essa empresa antes de indexar (garante coerência após reingestão).
+    """
+    from collectors.people_extractor import extract_from_publicacoes
+
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed_count": 0, "total": 0}
+    ensure_indices(client)
+
+    target_nif = nif or replace_for_nif
+    publicacoes_resp = company_publicacoes(str(target_nif), size=1000, es=client) if target_nif else search_societario(size=1000, es=client)
+    items = publicacoes_resp.get("items", [])
+
+    if not items:
+        return {"indexed_count": 0, "total": 0, "nif": target_nif}
+
+    people = extract_from_publicacoes(items)
+
+    # Opcional: apagar os docs de pessoas cujas roles só continham esta empresa.
+    if replace_for_nif:
+        try:
+            existing = client.search(
+                index=PEOPLE_INDEX,
+                body={
+                    "query": {"nested": {"path": "roles", "query": {"term": {"roles.company_nif": str(replace_for_nif)}}}},
+                    "size": 1000,
+                    "_source": ["nif"],
+                },
+            )
+            to_delete = [hit["_id"] for hit in existing.get("hits", {}).get("hits", [])]
+            if to_delete:
+                client.delete_by_query(
+                    index=PEOPLE_INDEX,
+                    body={"query": {"terms": {"_id": to_delete}}},
+                    refresh=True,
+                )
+        except Exception as exc:
+            logger.debug("delete_stale_people ignorado: %s", exc)
+
+    actions = []
+    now = _today()
+    for person in people:
+        doc = {k: v for k, v in person.items() if v is not None}
+        doc["ingested_at"] = now
+        actions.append({
+            "_op_type": "index",
+            "_index": PEOPLE_INDEX,
+            "_id": f"{PEOPLE_INDEX}:{doc['nif']}",
+            **doc,
+        })
+
+    if not actions:
+        return {"indexed_count": 0, "total": 0, "nif": target_nif}
+
+    try:
+        success, errors = bulk(client, actions, raise_on_error=False, refresh=True)
+        return {
+            "indexed_count": success,
+            "total": len(actions),
+            "errors": len(errors),
+            "nif": target_nif,
+        }
+    except Exception as exc:
+        return {"error": str(exc), "indexed_count": 0, "total": len(actions), "nif": target_nif}
+
+
+def get_person_by_nif(nif: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Devolve ficha de uma pessoa pelo NIF."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    ensure_indices(client)
+    try:
+        resp = client.get(index=PEOPLE_INDEX, id=f"{PEOPLE_INDEX}:{nif}", _source=True)
+        return {**resp.get("_source", {}), "doc_id": resp.get("_id")}
+    except Exception as exc:
+        return {"nif": nif, "error": str(exc)}
+
+
+def search_people(
+    q: Optional[str] = None,
+    nif: Optional[str] = None,
+    company_nif: Optional[str] = None,
+    role: Optional[str] = None,
+    is_company: Optional[bool] = None,
+    size: int = 20,
+    from_: int = 0,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa no índice finance_people.
+
+    ``q`` procura nome e NIF; ``company_nif`` exige pelo menos uma role nessa
+    empresa; ``role`` filtra cargo/evento (ex.: Gerente, Sócio).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+    ensure_indices(client)
+
+    must: List[Dict[str, Any]] = []
+    filters: List[Dict[str, Any]] = []
+    nested_filters: List[Dict[str, Any]] = []
+
+    if q:
+        must.append({
+            "multi_match": {
+                "query": q,
+                "fields": ["name^3", "name.autocomplete^2", "nif"],
+                "type": "best_fields",
+            }
+        })
+    if nif:
+        filters.append({"term": {"nif": str(nif)}})
+    if is_company is not None:
+        filters.append({"term": {"is_company": bool(is_company)}})
+    if company_nif:
+        nested_filters.append({
+            "nested": {
+                "path": "roles",
+                "query": {"term": {"roles.company_nif": str(company_nif)}},
+            }
+        })
+    if role:
+        role_norm = role.lower()
+        nested_filters.append({
+            "nested": {
+                "path": "roles",
+                "query": {"wildcard": {"roles.role": f"*{role_norm}*"}},
+            }
+        })
+
+    bool_query: Dict[str, Any] = {}
+    if must:
+        bool_query["must"] = must
+    if filters:
+        bool_query["filter"] = filters
+    if nested_filters:
+        bool_query.setdefault("filter", []).extend(nested_filters)
+
+    query = {"bool": bool_query} if bool_query else {"match_all": {}}
+
+    body = {
+        "query": query,
+        "from": max(0, from_),
+        "size": max(1, min(size, 200)),
+        "sort": [{"roles_count": {"order": "desc"}}, "_score"],
+        "track_total_hits": True,
+    }
+
+    try:
+        resp = client.search(index=PEOPLE_INDEX, body=body)
+        return {
+            "total": resp["hits"]["total"]["value"],
+            "items": [{**hit["_source"], "doc_id": hit["_id"]} for hit in resp["hits"]["hits"]],
+            "from": from_,
+            "size": size,
+        }
+    except Exception as exc:
+        return {"error": str(exc), "items": [], "total": 0}
+
+
+def people_graph_for_person(nif: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Constrói grafo empresa->pessoa e pessoa->empresa a partir de roles."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "nodes": [], "edges": []}
+    ensure_indices(client)
+
+    person = get_person_by_nif(str(nif), es=client)
+    if person.get("error"):
+        return {"error": person["error"], "nodes": [], "edges": []}
+
+    nodes: Dict[str, Dict[str, Any]] = {}
+    edges: List[Dict[str, Any]] = []
+
+    person_id = f"person:{nif}"
+    nodes[person_id] = {
+        "id": person_id,
+        "type": "person",
+        "label": person.get("name", nif),
+        "nif": nif,
+        "is_company": person.get("is_company", False),
+    }
+
+    for role in person.get("roles", []):
+        cnif = role.get("company_nif")
+        cname = role.get("company_name") or cnif
+        if not cnif:
+            continue
+        company_id = f"company:{cnif}"
+        if company_id not in nodes:
+            nodes[company_id] = {
+                "id": company_id,
+                "type": "company",
+                "label": cname,
+                "nif": cnif,
+                "is_company": True,
+            }
+        edges.append({
+            "source": person_id,
+            "target": company_id,
+            "label": role.get("role", ""),
+            "role": role.get("role", ""),
+            "role_org": role.get("role_org", ""),
+            "event": role.get("event", ""),
+            "date": role.get("date"),
+            "acto": role.get("acto", ""),
+            "quota": role.get("quota"),
+        })
+
+    return {
+        "person_nif": nif,
+        "person_name": person.get("name"),
+        "nodes": list(nodes.values()),
+        "edges": edges,
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+    }
+
+
+def people_graph_for_company(company_nif: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Constrói grafo de todas as pessoas ligadas a uma empresa."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "nodes": [], "edges": []}
+    ensure_indices(client)
+
+    try:
+        resp = client.search(
+            index=PEOPLE_INDEX,
+            body={
+                "query": {
+                    "nested": {
+                        "path": "roles",
+                        "query": {"term": {"roles.company_nif": str(company_nif)}},
+                    }
+                },
+                "size": 500,
+            },
+        )
+        people = [hit["_source"] for hit in resp["hits"]["hits"]]
+    except Exception as exc:
+        return {"error": str(exc), "nodes": [], "edges": []}
+
+    company_id = f"company:{company_nif}"
+    nodes: Dict[str, Dict[str, Any]] = {
+        company_id: {
+            "id": company_id,
+            "type": "company",
+            "label": company_nif,
+            "nif": company_nif,
+            "is_company": True,
+        }
+    }
+    edges: List[Dict[str, Any]] = []
+
+    for person in people:
+        pnif = person.get("nif")
+        if not pnif:
+            continue
+        person_id = f"person:{pnif}"
+        if person_id not in nodes:
+            nodes[person_id] = {
+                "id": person_id,
+                "type": "person",
+                "label": person.get("name", pnif),
+                "nif": pnif,
+                "is_company": person.get("is_company", False),
+            }
+        for role in person.get("roles", []):
+            if role.get("company_nif") == company_nif:
+                edges.append({
+                    "source": person_id,
+                    "target": company_id,
+                    "label": role.get("role", ""),
+                    "role": role.get("role", ""),
+                    "role_org": role.get("role_org", ""),
+                    "event": role.get("event", ""),
+                    "date": role.get("date"),
+                    "acto": role.get("acto", ""),
+                    "quota": role.get("quota"),
+                })
+
+    return {
+        "company_nif": company_nif,
+        "nodes": list(nodes.values()),
+        "edges": edges,
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+    }
+
+
+def people_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Volumetria rápida do índice de pessoas/cargos."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    ensure_indices(client)
+    try:
+        count = client.count(index=PEOPLE_INDEX).get("count", 0)
+        out: Dict[str, Any] = {"index": PEOPLE_INDEX, "documents": count}
+        if count:
+            resp = client.search(
+                index=PEOPLE_INDEX,
+                body={
+                    "size": 0,
+                    "aggs": {
+                        "is_company": {"terms": {"field": "is_company", "size": 5}},
+                        "companies_stats": {"sum": {"field": "companies_count"}},
+                        "top_roles": {
+                            "nested": {"path": "roles"},
+                            "aggs": {"roles": {"terms": {"field": "roles.role", "size": 15}}},
+                        },
+                    },
+                },
+            )
+            aggs = resp.get("aggregations", {})
+            out["is_company"] = [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("is_company", {}).get("buckets", [])]
+            out["total_company_links"] = int(aggs.get("companies_stats", {}).get("value", 0))
+            out["top_roles"] = [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("top_roles", {}).get("roles", {}).get("buckets", [])]
+        return out
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+_UNIFIED_GRAPH_MAX_CONTRACTS = 200
+_UNIFIED_GRAPH_MAX_PEOPLE = 100
+
+
+def combined_graph_for_company(
+    company_nif: str,
+    include_people: bool = True,
+    include_contracts: bool = True,
+    contract_limit: int = 60,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Grafo unificado: pessoas/cargos, contratos e entidades para um NIF.
+
+    - Nó central: `company:<nif>` (empresa do cadastro).
+    - Pessoas: nós `person:<nif>` ligadas por cargos/sócios.
+    - Contratos: nós `entity:<nif>` de adjudicantes/adjudicatários ligados por
+      arestas `contrato`, agregando valor e contagem.
+    - Entidade: metadados do cadastro enriquecem o nó central.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "nodes": [], "edges": []}
+    ensure_indices(client)
+
+    nodes: Dict[str, Dict[str, Any]] = {}
+    edges: Dict[str, Dict[str, Any]] = {}
+
+    company_nif = str(company_nif)
+    company_id = f"company:{company_nif}"
+
+    # Enriquece com cadastro de entidades (melhor nome, contagem de contratos, etc.)
+    entity = get_entity_by_nif(company_nif, es=client)
+    company_name = entity.get("name") or company_nif
+    if entity.get("error"):
+        company_name = company_nif
+
+    nodes[company_id] = {
+        "id": company_id,
+        "type": "company",
+        "label": company_name,
+        "nif": company_nif,
+        "is_company": True,
+        "entity": {
+            "name": company_name,
+            "country": entity.get("country"),
+            "contracts_count": entity.get("contracts_count"),
+            "as_adjudicante_count": entity.get("as_adjudicante_count"),
+            "as_adjudicatario_count": entity.get("as_adjudicatario_count"),
+            "total_value": entity.get("total_value"),
+            "has_nif": entity.get("has_nif", True),
+        },
+    }
+
+    total_people_edges = 0
+    total_contract_nodes = 0
+    total_contract_edges = 0
+    contract_value_total = 0.0
+    contract_count_total = 0
+
+    if include_people:
+        people = people_graph_for_company(company_nif, es=client)
+        total_people_edges = people.get("edge_count", 0)
+        for node in people.get("nodes", []):
+            node_id = node["id"]
+            if node_id in nodes:
+                continue
+            nodes[node_id] = {
+                "id": node_id,
+                "type": node.get("type", "person"),
+                "label": node.get("label", node_id),
+                "nif": node.get("nif"),
+                "is_company": node.get("is_company", False),
+            }
+        for edge in people.get("edges", []):
+            edge_id = f"{edge['source']}->{edge['target']}|{edge.get('role','')}"
+            if edge_id not in edges:
+                edges[edge_id] = {
+                    "source": edge["source"],
+                    "target": edge["target"],
+                    "label": edge.get("label", ""),
+                    "type": "role",
+                    "role": edge.get("role"),
+                    "role_org": edge.get("role_org"),
+                    "event": edge.get("event"),
+                    "date": edge.get("date"),
+                    "acto": edge.get("acto"),
+                    "quota": edge.get("quota"),
+                    "count": 1,
+                    "value": 0.0,
+                }
+            else:
+                edges[edge_id]["count"] = edges[edge_id].get("count", 0) + 1
+
+    if include_contracts:
+        contract_data = get_company_contracts(
+            nif=company_nif,
+            role="all",
+            size=_UNIFIED_GRAPH_MAX_CONTRACTS,
+            es=client,
+        )
+        for contract in contract_data.get("items", [])[:_UNIFIED_GRAPH_MAX_CONTRACTS]:
+            value = float(contract.get("precoContratual") or contract.get("PrecoTotalEfetivo") or 0)
+            contract_count_total += 1
+            contract_value_total += value
+            other_role = None
+            other_nif = None
+            other_name = None
+            # Determina o lado oposto da empresa central
+            sides = []
+            for party in contract.get("adjudicantes", {}).get("parsed", []):
+                if party.get("nif") != company_nif:
+                    sides.append(("adjudicante", party.get("nif"), party.get("nome")))
+            for party in contract.get("adjudicatarios", {}).get("parsed", []):
+                if party.get("nif") != company_nif:
+                    sides.append(("adjudicatario", party.get("nif"), party.get("nome")))
+            for role_side, onif, oname in sides:
+                if not onif:
+                    continue
+                other_nif = onif
+                other_name = oname or onif
+                other_role = role_side
+                entity_id = f"entity:{onif}"
+                if entity_id in nodes:
+                    existing = nodes[entity_id]
+                    existing["contract_count"] = existing.get("contract_count", 0) + 1
+                    existing["total_value"] = existing.get("total_value", 0.0) + value
+                else:
+                    total_contract_nodes += 1
+                    nodes[entity_id] = {
+                        "id": entity_id,
+                        "type": "entity",
+                        "label": other_name,
+                        "nif": onif,
+                        "is_company": True,
+                        "role_side": other_role,
+                        "contract_count": 1,
+                        "total_value": value,
+                    }
+                edge_id = f"{company_id}<->{entity_id}"
+                if edge_id not in edges:
+                    edges[edge_id] = {
+                        "source": company_id,
+                        "target": entity_id,
+                        "label": "contrato",
+                        "type": "contract",
+                        "count": 1,
+                        "value": value,
+                    }
+                    total_contract_edges += 1
+                else:
+                    edges[edge_id]["count"] = edges[edge_id].get("count", 0) + 1
+                    edges[edge_id]["value"] = edges[edge_id].get("value", 0.0) + value
+
+    return {
+        "company_nif": company_nif,
+        "company_name": company_name,
+        "nodes": list(nodes.values()),
+        "edges": list(edges.values()),
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+        "meta": {
+            "include_people": include_people,
+            "include_contracts": include_contracts,
+            "people_edge_count": total_people_edges,
+            "contract_nodes": total_contract_nodes,
+            "contract_edges": total_contract_edges,
+            "contract_count_total": contract_count_total,
+            "contract_value_total": round(contract_value_total, 2),
+            "contract_limit": _UNIFIED_GRAPH_MAX_CONTRACTS,
+            "notes": [
+                "Grafo combinado: pessoas/cargos, contratos públicos e entidades.",
+                f"Contratos analisados: {contract_count_total} (limite {_UNIFIED_GRAPH_MAX_CONTRACTS}).",
+            ],
+        },
+    }
 

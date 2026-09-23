@@ -236,6 +236,7 @@ from api.vector_routes import router as vector_router
 from api.agent_routes import router as agent_router
 from api.companies_global_routes import router as companies_global_router
 from api.societario_routes import router as societario_router
+from api.people_routes import router as people_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -404,6 +405,7 @@ app.include_router(vector_router)
 app.include_router(agent_router)
 app.include_router(companies_global_router)
 app.include_router(societario_router)
+app.include_router(people_router)
 
 
 # Cache curta de `user_id → email`, para o registo de pedidos identificar quem
@@ -633,6 +635,13 @@ def companies_detail(request: Request, nif: str, year: Optional[int] = Query(Non
         company["firmas_total"] = firmas.get("total", 0)
     except Exception as exc:
         logging.getLogger(__name__).warning(f"Falha ao ler firmas de {nif}: {exc}")
+
+    # Enriquecimento: timeline societária gerada por IA guardada na ficha da entidade.
+    try:
+        entity = get_entity_by_nif(nif)
+        company["societario_timeline"] = entity.get("societario_timeline")
+    except Exception as exc:
+        logging.getLogger(__name__).warning(f"Falha ao ler timeline societária de {nif}: {exc}")
 
     return CompanyDetail(**company)
 

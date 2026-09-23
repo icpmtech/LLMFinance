@@ -1,5 +1,13 @@
-# IQ OS — solução completa em containers (Elasticsearch + backend FastAPI + frontend nginx)
-# Uso: docker compose up --build -d
+# IQ OS — solução completa em containers.
+#
+# Serviços "core" (arrancam sempre):  elasticsearch + backend (API FastAPI) + frontend (nginx/SPA)
+# Serviços "tools":                   mcp   -> servidor MCP em HTTP (profile: tools)
+# Serviços "test":                    tests -> pytest + smoke test da API (profile: test)
+#
+# Uso:
+#   docker compose up --build -d                     # núcleo da solução
+#   docker compose --profile tools up -d             # + servidor MCP (http://127.0.0.1:8765/mcp)
+#   docker compose --profile test run --rm tests     # testes de dentro do container
 services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
@@ -79,6 +87,63 @@ services:
       start_period: 10s
       retries: 3
     restart: unless-stopped
+
+  # Servidor MCP do IQ OS em transporte HTTP (para o Inspector, agentes ou o VS Code).
+  # Reutiliza a imagem do backend (mesmo código e dependências) e fala com o
+  # backend pelo nome do serviço.
+  mcp:
+    image: iq-os-backend:latest
+    container_name: finance-llm-mcp
+    profiles: ["tools"]
+    command: ["python", "-m", "mcp_server", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8765"]
+    ports:
+      - "${IQOS_MCP_PORT:-8765}:8765"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+      - IQOS_API_URL=${IQOS_API_URL:-http://backend:8000}
+      - IQOS_API_TOKEN=${IQOS_API_TOKEN:-}
+      - IQOS_API_EMAIL=${IQOS_API_EMAIL:-}
+      - IQOS_API_PASSWORD=${IQOS_API_PASSWORD:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Testes executados *dentro* de Docker (pytest + smoke test dos endpoints).
+  # Não arranca com "up": corre explicitamente com
+  #   docker compose --profile test run --rm tests
+  tests:
+    image: iq-os-backend:latest
+    container_name: finance-llm-tests
+    profiles: ["test"]
+    working_dir: /app
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        python -m pytest tests -q &&
+        python docker/smoke_test.py --base-url http://backend:8000 --ui-url http://frontend/
+        --json /app/logs/smoke_test.json
+    volumes:
+      - ./data:/app/data
+      - ./model:/app/model
+      - ./rag:/app/rag
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+      - ELASTICSEARCH_URL=${FINANCE_ES_URL:-http://elasticsearch:9200}
+      - IQOS_API_TOKEN=${IQOS_API_TOKEN:-}
+      - IQOS_API_EMAIL=${IQOS_API_EMAIL:-}
+      - IQOS_API_PASSWORD=${IQOS_API_PASSWORD:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
 
 volumes:
   es-data:

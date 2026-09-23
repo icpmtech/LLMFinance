@@ -961,6 +961,117 @@ export interface CompanyDetail extends CompanySummary {
   trademarks_total?: number;
   firmas?: FirmaItem[];
   firmas_total?: number;
+  societario_timeline?: SocietarioTimelinePayload | null;
+}
+
+export interface SocietarioTimelinePayload {
+  markdown: string;
+  total: number;
+  backend_used: string;
+  generated_at: string;
+}
+
+// --- Pessoas e cargos extraídos do societário ---
+
+export interface PersonRole {
+  role: string;
+  role_org?: string | null;
+  company_nif?: string | null;
+  company_name?: string | null;
+  date?: string | null;
+  publication_date?: string | null;
+  acto?: string | null;
+  event?: string | null;
+  quota?: number | null;
+  causa?: string | null;
+  residencia?: string | null;
+  publication_id?: string | null;
+  nacionalidade?: string | null;
+}
+
+export interface Person {
+  nif: string;
+  name: string;
+  name_keyword?: string | null;
+  is_company: boolean;
+  roles: PersonRole[];
+  companies: { nif: string; name?: string | null }[];
+  companies_count: number;
+  roles_count: number;
+  first_seen?: string | null;
+  last_seen?: string | null;
+  source?: string | null;
+  ingested_at?: string | null;
+  doc_id?: string;
+}
+
+export interface PeopleSearchResponse {
+  total: number;
+  items: Person[];
+  from: number;
+  size: number;
+}
+
+export interface PeopleGraphNode {
+  id: string;
+  // "entity" = entidade contratual (nó de contratos) devolvido por
+  // `combined_graph_for_company` no backend.
+  type: "person" | "company" | "entity";
+  label: string;
+  nif?: string;
+  is_company?: boolean;
+  /** Lado da relação contratual: adjudicante/adjudicatário. */
+  role_side?: string;
+  contract_count?: number;
+  total_value?: number;
+  entity?: Record<string, any> | null;
+}
+
+export interface PeopleGraphEdge {
+  source: string;
+  target: string;
+  label?: string;
+  /** "role" (cargos/sócios) ou "contrato" (valor agregado). */
+  type?: string;
+  role?: string;
+  role_org?: string | null;
+  event?: string | null;
+  date?: string | null;
+  acto?: string | null;
+  quota?: number | null;
+  /** Nº de contratos/cargos agregados na aresta. */
+  count?: number;
+  /** Valor total (€) agregado na aresta. */
+  value?: number;
+}
+
+export interface PeopleGraphResponse {
+  person_nif?: string | null;
+  person_name?: string | null;
+  company_nif?: string | null;
+  company_name?: string | null;
+  nodes: PeopleGraphNode[];
+  edges: PeopleGraphEdge[];
+  node_count: number;
+  edge_count: number;
+  meta?: Record<string, any> | null;
+}
+
+export interface PeopleIngestResponse {
+  nif?: string | null;
+  indexed_count: number;
+  total: number;
+  errors?: number;
+  error?: string | null;
+}
+
+export interface PeopleStatusResponse {
+  index: string;
+  documents: number;
+  is_company: { key: boolean; count: number }[];
+  total_company_links: number;
+  top_roles: { key: string; count: number }[];
+  error?: string | null;
 }
 
 export interface CompanySearchRequest {
@@ -1246,6 +1357,7 @@ export interface SocietarioPublicacao {
   conservatoria?: string;
   matricula_nipc?: string;
   pedido?: string;
+  referencia_registo?: string;
   requerente?: string;
   ano_contas?: string;
   texto?: string;
@@ -1253,6 +1365,45 @@ export interface SocietarioPublicacao {
   documento_url?: string;
   source?: string;
   detail_fetched?: boolean;
+}
+
+export interface SocietarioPersonRole {
+  role: string;
+  role_org?: string;
+  company_nif?: string;
+  company_name?: string;
+  date?: string;
+  publication_date?: string;
+  acto?: string;
+  event?: string;
+  quota?: number;
+  causa?: string;
+  residencia?: string;
+  publication_id?: string;
+  nacionalidade?: string;
+}
+
+export interface SocietarioPerson {
+  nif: string;
+  name: string;
+  name_keyword?: string;
+  is_company: boolean;
+  roles: SocietarioPersonRole[];
+  companies: { nif: string; name: string }[];
+  companies_count: number;
+  roles_count: number;
+  first_seen?: string;
+  last_seen?: string;
+  latest_roles?: SocietarioPersonRole[];
+  source?: string;
+  ingested_at?: string;
+}
+
+export interface SocietarioCompanyPeopleResponse {
+  nif: string;
+  total: number;
+  people: SocietarioPerson[];
+  error?: string;
 }
 
 export interface CompanySocietarioResponse {

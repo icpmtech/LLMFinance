@@ -203,7 +203,7 @@ async function flushServerSave() {
   pendingSave = null;
   saving = true;
   try {
-    await authApi.updateProfile({ iframe_pages: payload.map(toPreference) });
+    await authApi.updateProfile({ preferences: { iframe_pages: payload.map(toPreference) } });
   } catch (error) {
     // Falha silenciosa: o localStorage já tem a versão mais recente; na próxima
     // abertura o servidor é sincronizado novamente.
@@ -301,15 +301,24 @@ export function iframeViewFor(id: string): string {
   return `${IFRAME_VIEW_PREFIX}${id}`;
 }
 
+/** Procura uma página iframe pelo id. */
+export function iframePageById(id: string): IframePageConfig | undefined {
+  return cache.find((p) => p.id === id);
+}
+
 /** Constrói o caminho da SPA para uma página iframe. */
-export function iframePathFor(id: string): string {
+export function iframePathFor(view: string): string | null {
+  const id = iframeIdFromView(view);
+  if (!id) return null;
+  if (!iframePageById(id)) return null;
   return `/iframe/${id}`;
 }
 
 /** Extrai o id de um caminho `/iframe/<id>`. */
 export function iframeViewFromPath(path: string): string | null {
   const match = path.match(/^\/iframe\/([^/?#]+)$/);
-  return match ? iframeViewFor(match[1]) : null;
+  if (!match) return null;
+  return iframeViewFor(match[1]);
 }
 
 export function isIframeView(view: string): boolean {
@@ -318,28 +327,20 @@ export function isIframeView(view: string): boolean {
 
 /** Transforma uma página iframe numa aplicação do dock. */
 export function iframeToDockApp(page: IframePageConfig): DockApp {
+  const Icon = IFRAME_ICONS[page.icon] ?? Globe2;
   return {
     id: iframeViewFor(page.id),
     label: page.title,
-    icon: page.icon,
+    hint: page.url,
+    icon: Icon,
     gradient: page.gradient,
     accent: page.accent,
-    view: iframeViewFor(page.id),
-    category: "Aplicações",
-    singleton: true,
   };
 }
 
-/** Aplicações do dock geradas a partir das páginas ativas. */
+/** Lista de entradas do dock para as páginas iframe ativas. */
 export function iframeDockApps(): DockApp[] {
-  return cache
-    .filter((p) => p.enabled)
-    .sort((a, b) => {
-      const ai = cache.findIndex((p) => p.id === a.id);
-      const bi = cache.findIndex((p) => p.id === b.id);
-      return ai - bi;
-    })
-    .map(iframeToDockApp);
+  return cache.filter((p) => p.enabled).map(iframeToDockApp);
 }
 
 /**
@@ -347,8 +348,13 @@ export function iframeDockApps(): DockApp[] {
  * com o cache local. Chamado pelo `AuthProvider` quando o perfil é carregado.
  */
 export function syncIframePagesFromUser(pages: unknown[]): void {
-  const sanitized = (Array.isArray(pages) ? pages : []).map(sanitizePage).filter((p): p is IframePageConfig => p !== null);
+  const sanitized = (Array.isArray(pages) ? pages : [])
+    .map(sanitizePage)
+    .filter((p): p is IframePageConfig => p !== null);
   const local = readRaw();
   if (JSON.stringify(local) === JSON.stringify(sanitized)) return;
-  commit(sanitized, { skipServer: true });
+  cache = sanitized;
+  revision += 1;
+  persistLocal(sanitized);
+  window.dispatchEvent(new Event(CHANGE_EVENT));
 }

@@ -28,8 +28,9 @@ from typing import Annotated, Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from api import societario_service
+from api import societario_service, providers_service as providers
 from api.auth_routes import CurrentSession, require_session
+from api.elasticsearch_client import save_entity_societario_timeline
 from collectors.publicacoes_mj import CaptchaRequiredError
 
 logger = logging.getLogger(__name__)
@@ -84,10 +85,13 @@ class SocietarioCollectEntitiesRequest(BaseModel):
     tipo: str = Field("0", description="Tipo de publicação (0 = todos os actos)")
     with_details: bool = Field(True, description="Abrir o detalhe de cada publicação")
     max_pages: int = Field(50, ge=1, le=500, description="Máximo de páginas da grelha por entidade")
-    min_interval: float = Field(1.0, ge=0, le=10, description="Intervalo mínimo entre pedidos ao portal (segundos)")
+    min_interval: float = Field(1.0, ge=0, le=60, description="Intervalo mínimo entre pedidos ao portal (segundos)")
     recaptcha_timeout: int = Field(180, ge=30, le=600, description="Timeout para resolução do reCAPTCHA (segundos)")
     ingest: bool = Field(True, description="Indexar o resultado em `finance_publicacoes_mj`")
     stop_on_captcha: bool = Field(False, description="Parar imediatamente se o captcha for rejeitado")
+    api_key: Optional[str] = Field(None, description="API key da 2captcha (fallback se a env var não estiver definida)")
+    proxy: Optional[str] = Field(None, description="Proxy HTTP(S) para as chamadas ao portal do MJ e 2captcha")
+    debug: bool = Field(False, description="Guardar páginas HTML de debug numa pasta por NIF (MJ_DEBUG=1)")
 
 
 class SocietarioCollectResponse(BaseModel):
@@ -186,6 +190,132 @@ def societario_company(
     return {**res, "nif": nif}
 
 
+@router.get("/companies/{nif}/people")
+def societario_company_people(nif: str) -> Dict[str, Any]:
+    """Pessoas/cargos extraídos das publicações societárias indexadas de uma entidade."""
+    res = societario_service.company_people(nif)
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res["error"])
+    return res
+
+
+class SocietarioTimelineRequest(BaseModel):
+    """Pedido de timeline com IA para uma entidade."""
+
+    backend: Optional[str] = Field(None, description="Fornecedor:modelo (ex.: deepseek:deepseek-chat). Padrão = preferência do utilizador.")
+    max_tokens: int = Field(2048, ge=256, le=4096, description="Máximo de tokens da resposta")
+    temperature: float = Field(0.3, ge=0.0, le=1.0)
+
+
+class SocietarioTimelineResponse(BaseModel):
+    nif: str
+    total: int
+    backend_used: str = "unknown"
+    markdown: str = ""
+    error: Optional[str] = None
+
+
+@router.post("/companies/{nif}/timeline", response_model=SocietarioTimelineResponse)
+async def societario_company_timeline(
+    nif: str,
+    req: SocietarioTimelineRequest,
+    session: Session,
+) -> SocietarioTimelineResponse:
+    """Gera uma timeline/resumo da vida societária da entidade usando IA.
+
+    O contexto enviado ao modelo inclui as publicações indexadas para o NIF
+    (data, acto, firma, natureza jurídica, sede, texto integral resumido).
+    """
+    from api import ontology_ai as ai, cloud_chat
+    from api.providers_service import parse_backend, resolve_provider_model
+
+    res = societario_service.company_publicacoes(nif, size=100, from_=0)
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res["error"])
+    items = res.get("items", [])
+    if not items:
+        return SocietarioTimelineResponse(nif=nif, total=0, markdown="Sem publicações societárias indexadas para este NIF.")
+
+    user_id = getattr(getattr(session, "user", None), "id", None)
+    backend_str = (req.backend or "").strip()
+    if not backend_str:
+        defaults = providers.load_user_config(user_id).get("defaults") or {}
+        if defaults.get("provider"):
+            backend_str = f"{defaults['provider']}:{defaults.get('model', '')}".rstrip(":")
+    if not backend_str:
+        backend_str = "deepseek:deepseek-chat"
+
+    backend = ai.available_backend(session, backend_str)
+    if backend.get("kind") != "cloud":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Fornecedor «{backend_str}» indisponível. Configure em Definições → Fornecedores de IA.",
+        )
+
+    context_lines = []
+    for item in sorted(items, key=lambda x: x.get("data_publicacao") or "", reverse=True):
+        line_parts = [
+            f"Data: {item.get('data_publicacao', '—')}",
+            f"Acto: {item.get('acto', '—')}",
+            f"Tipo: {item.get('tipo_label') or item.get('tipo', '—')}",
+            f"Firma: {item.get('firma', item.get('entidade', '—'))}",
+        ]
+        if item.get("natureza_juridica"):
+            line_parts.append(f"Natureza jurídica: {item['natureza_juridica']}")
+        if item.get("sede"):
+            line_parts.append(f"Sede: {item['sede']}")
+        if item.get("texto"):
+            texto = str(item["texto"]).replace("\n", " ").replace("\r", " ")
+            line_parts.append(f"Texto: {texto[:400]}{'...' if len(texto) > 400 else ''}")
+        context_lines.append(" | ".join(line_parts))
+
+    system = (
+        "És um assistente jurídico-financeiro português. Analisa publicações de atos "
+        "societários do Ministério da Justiça e produz uma timeline clara, cronológica "
+        "e um resumo executivo. Usa Markdown. Inclui: (1) resumo da entidade "
+        "(firma, natureza jurídica, sede, NIPC), (2) timeline cronológica com os "
+        "atos mais relevantes, (3) alterações estruturais relevantes, (4) conclusão. "
+        "Máximo 1500 palavras. Responde em português de Portugal."
+    )
+    prompt = (
+        f"NIF/NIPC: {nif}\n"
+        f"Total de publicações: {len(items)}\n\n"
+        "Publicações (mais recentes primeiro):\n"
+        + "\n".join(f"- {line}" for line in context_lines)
+        + "\n\nGera a timeline e o resumo executivo."
+    )
+
+    try:
+        answer = await cloud_chat.complete_answer(
+            provider=backend["provider"],
+            spec=backend["spec"],
+            model=backend["model"],
+            api_key=backend["api_key"],
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+            temperature=req.temperature,
+            max_tokens=req.max_tokens,
+        )
+        response = SocietarioTimelineResponse(
+            nif=nif,
+            total=len(items),
+            backend_used=backend.get("backend") or backend_str,
+            markdown=answer,
+        )
+        try:
+            save_entity_societario_timeline(
+                nif=nif,
+                markdown=answer,
+                total=len(items),
+                backend_used=backend.get("backend") or backend_str,
+            )
+        except Exception as exc:
+            logger.warning("Não foi possível persistir a timeline da entidade %s: %s", nif, exc)
+        return response
+    except Exception as exc:
+        logger.exception("Falha ao gerar timeline societária com IA")
+        raise HTTPException(status_code=502, detail=f"Erro ao gerar timeline: {exc}") from exc
+
+
 @router.post("/collect", response_model=SocietarioCollectResponse)
 def societario_collect(req: SocietarioCollectRequest, session: Session) -> SocietarioCollectResponse:
     """Recolha assistida das publicações de uma entidade.
@@ -241,6 +371,7 @@ def societario_collect_entities(req: SocietarioCollectEntitiesRequest, session: 
     """
     try:
         return societario_service.collect_entities(
+            api_key=req.api_key,
             nifs=req.nifs,
             limit=req.limit,
             min_contracts=req.min_contracts,
@@ -254,6 +385,8 @@ def societario_collect_entities(req: SocietarioCollectEntitiesRequest, session: 
             recaptcha_timeout=req.recaptcha_timeout,
             ingest_result=req.ingest,
             stop_on_captcha=req.stop_on_captcha,
+            proxy=req.proxy,
+            debug=req.debug,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

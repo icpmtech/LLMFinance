@@ -78,6 +78,9 @@ import {
   getCompanyContracts,
   getCompanyAnalytics,
   getCompanySocietarioPublicacoes,
+  getCompanySocietarioPeople,
+  generateCompanySocietarioTimeline,
+  collectSocietarioForNif,
   analyzeContract,
 } from "../api";
 import {
@@ -93,11 +96,13 @@ import {
 import { useFavorites, type FavoriteKind } from "../favorites";
 import { useCompare, openCompareWindow } from "../compare";
 import { EntityContractsPanel, SeeAllContractsButton } from "./EntityContractsWindow";
-import { useSidebarHidden, useSidebarWidth, useWindowMode } from "../layout";
+import { useSidebarHidden, useSidebarWidth, useWindowMode, getWindowMode } from "../layout";
 import { openWindow } from "../windows";
 import { useAuth } from "../auth";
 import { Avatar } from "./SettingsPage";
 import { companiesIn, useWorkspace, type WorkspaceEntry } from "../workspace";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { GraphCanvas } from "../components/graph/GraphCanvas";
 import { toStudioGraph, type GraphMetric, type StudioNode } from "../components/graph/graphStudio";
 import type {
@@ -121,6 +126,9 @@ import type {
   ContractSearchRequest,
   ContractParty,
   ContractPartyParsed,
+  SocietarioPublicacao,
+  SocietarioPerson,
+  SocietarioPersonRole,
 } from "../types";
 
 type EmpresasIQSection =
@@ -4636,6 +4644,15 @@ export function EntityDetailPanel({
   const [analytics, setAnalytics] = useState<CompanyAnalyticsResponse | null>(null);
   const [societario, setSocietario] = useState<CompanySocietarioResponse | null>(null);
   const [societarioLoading, setSocietarioLoading] = useState(false);
+  const [societarioCollecting, setSocietarioCollecting] = useState(false);
+  const [societarioCollectError, setSocietarioCollectError] = useState<string | null>(null);
+  const [selectedPub, setSelectedPub] = useState<SocietarioPublicacao | null>(null);
+  const [showAllSocietario, setShowAllSocietario] = useState(false);
+  const [societarioPeople, setSocietarioPeople] = useState<SocietarioPerson[] | null>(null);
+  const [societarioPeopleLoading, setSocietarioPeopleLoading] = useState(false);
+  const [timeline, setTimeline] = useState<string | null>(null);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelinePersisted, setTimelinePersisted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { recordVisit } = useWorkspace();
@@ -4654,6 +4671,14 @@ export function EntityDetailPanel({
         setCompany(d);
         setContracts(c);
         setAnalytics(a);
+        const saved = d?.societario_timeline;
+        if (saved?.markdown) {
+          setTimeline(saved.markdown);
+          setTimelinePersisted(true);
+        } else {
+          setTimeline(null);
+          setTimelinePersisted(false);
+        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -4683,6 +4708,28 @@ export function EntityDetailPanel({
       })
       .finally(() => {
         if (!cancelled) setSocietarioLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [nif]);
+
+  // Carrega pessoas/cargos extraídos do societário em segundo plano.
+  useEffect(() => {
+    let cancelled = false;
+    setSocietarioPeopleLoading(true);
+    getCompanySocietarioPeople(nif)
+      .then((resp) => {
+        if (cancelled) return;
+        setSocietarioPeople(resp.people ?? null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        // eslint-disable-next-line no-console
+        console.warn("Falha a carregar pessoas societárias para", nif, err);
+      })
+      .finally(() => {
+        if (!cancelled) setSocietarioPeopleLoading(false);
       });
     return () => {
       cancelled = true;
@@ -4847,7 +4894,104 @@ export function EntityDetailPanel({
                   : "Sem publicações societárias indexadas"}
             </p>
           </div>
+          {societario && societario.total > 0 ? (
+            <button
+              type="button"
+              onClick={() => {
+                setTimelineLoading(true);
+                setTimeline(null);
+                generateCompanySocietarioTimeline(nif)
+                  .then((res) => {
+                    setTimeline(res.markdown);
+                    setTimelinePersisted(false);
+                  })
+                  .catch((err) => setTimeline(`**Erro:** ${err instanceof Error ? err.message : err}`))
+                  .finally(() => setTimelineLoading(false));
+              }}
+              disabled={timelineLoading}
+              className="flex items-center gap-2 rounded-xl bg-teal-400/10 px-3 py-1.5 text-sm text-teal-300 border border-teal-400/20 hover:bg-teal-400/20 transition disabled:opacity-50"
+            >
+              <Sparkles size={16} />
+              {timelineLoading ? "A gerar..." : timelinePersisted ? "Regenerar timeline" : "Timeline com AI"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={societarioCollecting}
+              onClick={() => {
+                setSocietarioCollecting(true);
+                setSocietarioCollectError(null);
+                collectSocietarioForNif(nif, { max_pages: 50, debug: true })
+                  .then((res) => {
+                    if (res.ingested > 0 || res.collected > 0) {
+                      getCompanySocietarioPublicacoes(nif).then(setSocietario);
+                    } else {
+                      setSocietarioCollectError(res.message || "Nenhuma publicação encontrada.");
+                    }
+                  })
+                  .catch((err) => setSocietarioCollectError(err instanceof Error ? err.message : String(err)))
+                  .finally(() => setSocietarioCollecting(false));
+              }}
+              className="flex min-h-[40px] items-center gap-2 rounded-xl bg-rose-400/10 px-3 py-2 text-sm text-rose-300 border border-rose-400/20 hover:bg-rose-400/20 transition disabled:opacity-50"
+            >
+              {societarioCollecting ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Download size={18} />
+              )}
+              {societarioCollecting ? "A indexar publicações…" : "Obter dados societários"}
+            </button>
+          )}
         </div>
+
+        {societarioCollectError && (
+          <p className="mb-4 rounded-lg bg-rose-400/10 px-3 py-2 text-xs text-rose-300 border border-rose-400/20">
+            {societarioCollectError}
+          </p>
+        )}
+
+        {timeline && (
+          <div className="mb-5 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-xs text-teal-300 font-medium">Timeline gerada por IA</p>
+              <button
+                onClick={() => setTimeline(null)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Fechar
+              </button>
+            </div>
+            <div className="prose prose-sm prose-invert max-w-none text-sm leading-relaxed text-foreground/90">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{timeline}</ReactMarkdown>
+            </div>
+          </div>
+        )}
+
+        {societarioPeopleLoading ? (
+          <p className="mb-5 text-sm text-muted-foreground">A carregar pessoas e cargos...</p>
+        ) : (
+          societarioPeople &&
+          societarioPeople.length > 0 && (
+            <div className="mb-5">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="flex items-center gap-2 text-xs font-medium text-teal-300">
+                  <Users size={14} />
+                  Pessoas e cargos
+                </p>
+                <span className="text-xs text-muted-foreground">
+                  {societarioPeople.length} pessoa{societarioPeople.length === 1 ? "" : "s"} com cargos
+                  registados
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {societarioPeople.map((p) => (
+                  <SocietarioPersonCard key={p.nif} person={p} />
+                ))}
+              </div>
+            </div>
+          )
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -4860,8 +5004,12 @@ export function EntityDetailPanel({
               </tr>
             </thead>
             <tbody>
-              {(societario?.items ?? []).slice(0, 8).map((pub, idx) => (
-                <tr key={pub.pub_id || idx} className="border-b border-white/5">
+              {(showAllSocietario ? (societario?.items ?? []) : (societario?.items ?? []).slice(0, 8)).map((pub, idx) => (
+                <tr
+                  key={pub.pub_id || idx}
+                  className="border-b border-white/5 cursor-pointer hover:bg-white/[0.04]"
+                  onClick={() => setSelectedPub(pub)}
+                >
                   <td className="py-2 pr-3 whitespace-nowrap">{pub.data_publicacao || "—"}</td>
                   <td className="py-2 pr-3 max-w-xs truncate" title={pub.acto}>{pub.acto || "—"}</td>
                   <td className="py-2 pr-3">{pub.tipo_label || pub.tipo || "—"}</td>
@@ -4875,6 +5023,7 @@ export function EntityDetailPanel({
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-teal-300 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         Ver
                       </a>
@@ -4887,16 +5036,252 @@ export function EntityDetailPanel({
             </tbody>
           </table>
           {(societario?.items ?? []).length > 8 && (
-            <p className="mt-3 text-xs text-muted-foreground">
-              Mostrando 8 de {societario?.total} publicações. Use a API{" "}
-              <code className="text-xs bg-white/10 px-1 rounded">GET /societario/companies/{nif}</code>{" "}
-              para consultar o restante.
-            </p>
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                {showAllSocietario
+                  ? `A mostrar todos os ${societario?.total ?? societario?.items?.length ?? 0} registos.`
+                  : `Mostrando 8 de ${societario?.total ?? societario?.items?.length ?? 0} publicações.`}
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowAllSocietario((v) => !v)}
+                className="text-xs text-teal-300 hover:underline"
+              >
+                {showAllSocietario ? "Mostrar menos" : "Ver todos os registos"}
+              </button>
+            </div>
           )}
         </div>
       </Card>
+
+      {/* Modal com todos os detalhes da publicação */}
+      {selectedPub && (
+        <div
+          className="fixed inset-0 z-[110] flex items-start justify-center overflow-y-auto bg-[#03080b]/55 p-3 pt-5 backdrop-blur-sm sm:p-6 sm:pt-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Detalhe da publicação societária"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setSelectedPub(null);
+          }}
+        >
+          <div className="flex w-full max-w-3xl flex-col">
+            <div className="file-tab pl-3 text-[11px] uppercase tracking-wide text-muted-foreground">
+              <FileText size={13} className="text-teal-300" />
+              <span className="text-foreground">Detalhe da publicação societária</span>
+              <span className="hidden truncate opacity-70 sm:inline">#{selectedPub.pub_id}</span>
+            </div>
+            <div className="file-sheet glass-modal gradient-border relative rounded-tl-none rounded-tr-2xl rounded-b-2xl p-4 sm:p-6">
+              <button
+                type="button"
+                onClick={() => setSelectedPub(null)}
+                aria-label="Fechar"
+                className="absolute right-3 top-3 z-10 rounded-lg border border-white/10 bg-white/[0.06] p-2 text-muted-foreground hover:text-foreground"
+              >
+                <X size={18} />
+              </button>
+              <div className="pt-8 space-y-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">Data de publicação</p>
+                  <p className="text-lg font-semibold">{selectedPub.data_publicacao || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Acto</p>
+                  <p className="font-medium">{selectedPub.acto || "—"}</p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {[
+                    { label: "Firma", value: selectedPub.firma },
+                    { label: "Entidade", value: selectedPub.entidade },
+                    { label: "Natureza jurídica", value: selectedPub.natureza_juridica },
+                    { label: "Sede", value: selectedPub.sede },
+                    { label: "Distrito", value: selectedPub.distrito },
+                    { label: "Concelho", value: selectedPub.concelho },
+                    { label: "Freguesia", value: selectedPub.freguesia },
+                    { label: "Código postal", value: selectedPub.codigo_postal },
+                    { label: "Conservatória", value: selectedPub.conservatoria },
+                    { label: "Matrícula/NIPC", value: selectedPub.matricula_nipc },
+                    { label: "Pedido", value: selectedPub.pedido },
+                    { label: "Referência do registo", value: selectedPub.referencia_registo },
+                    { label: "Requerente", value: selectedPub.requerente },
+                    { label: "Ano de contas", value: selectedPub.ano_contas },
+                  ].map(
+                    (field) =>
+                      field.value && (
+                        <div key={field.label}>
+                          <p className="text-xs text-muted-foreground">{field.label}</p>
+                          <p className="text-sm font-medium">{field.value}</p>
+                        </div>
+                      ),
+                  )}
+                </div>
+                {selectedPub.texto && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Texto integral</p>
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm leading-relaxed whitespace-pre-wrap max-h-[50vh] overflow-y-auto">
+                      {selectedPub.texto}
+                    </div>
+                  </div>
+                )}
+                {selectedPub.has_documento && selectedPub.documento_url && (
+                  <a
+                    href={selectedPub.documento_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-xl bg-teal-400/10 px-4 py-2 text-sm text-teal-300 border border-teal-400/20 hover:bg-teal-400/20 transition"
+                  >
+                    <FileText size={16} /> Ver documento original
+                  </a>
+                )}
+
+                {/* Pessoas/cargos referenciados nesta publicação */}
+                <SocietarioPubPeople
+                  pub={selectedPub}
+                  people={societarioPeople}
+                  loading={societarioPeopleLoading}
+                  onOpenPerson={(personNif) => {
+                    setSelectedPub(null);
+                    openPersonIQ(personNif);
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+/** Secção de pessoas/cargos dentro do detalhe de uma publicação societária. */
+function SocietarioPubPeople({
+  pub,
+  people,
+  loading,
+  onOpenPerson,
+}: {
+  pub: SocietarioPublicacao;
+  people: SocietarioPerson[] | null;
+  loading: boolean;
+  onOpenPerson?: (nif: string) => void;
+}) {
+  const matched = useMemo(() => {
+    if (!people || !pub.pub_id) return [];
+    return people
+      .map((p) => {
+        const roles = (p.roles || []).filter((r) => r.publication_id === pub.pub_id);
+        return roles.length ? { ...p, roles } : null;
+      })
+      .filter(Boolean) as SocietarioPerson[];
+  }, [people, pub.pub_id]);
+
+  if (loading) {
+    return (
+      <div className="pt-2">
+        <p className="text-xs text-muted-foreground mb-2">Pessoas e cargos</p>
+        <p className="text-sm text-muted-foreground">A carregar…</p>
+      </div>
+    );
+  }
+
+  if (!matched.length) {
+    return null;
+  }
+
+  return (
+    <div className="pt-2">
+      <p className="text-xs text-muted-foreground mb-2">Pessoas e cargos</p>
+      <div className="space-y-2">
+        {matched.map((p) => (
+          <SocietarioPersonCard key={p.nif} person={p} compact onOpen={onOpenPerson} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Rótulo legível de um cargo (órgão · cargo · causa, quando relevante). */
+function roleLabel(role: SocietarioPersonRole): string {
+  const parts = [role.role_org, role.role].filter(Boolean) as string[];
+  const label = parts.join(" · ") || role.event || "Cargo";
+  if (role.event === "cessacao") {
+    return `${label} · cessou${role.causa ? ` (${role.causa})` : ""}`;
+  }
+  return label;
+}
+
+/**
+ * Cartão de uma pessoa com os seus cargos. O cartão inteiro é um botão que abre
+ * a ficha da pessoa no PessoasIQ (`/pessoas-iq/<NIF>`).
+ */
+function SocietarioPersonCard({
+  person,
+  compact = false,
+  onOpen,
+}: {
+  person: SocietarioPerson;
+  compact?: boolean;
+  onOpen?: (nif: string) => void;
+}) {
+  const roles = (person.latest_roles?.length ? person.latest_roles : person.roles).slice(0, 4);
+  const seen = roles.length === 1 && roles[0].event === "cessacao" ? person.roles.length : 0;
+  return (
+    <button
+      type="button"
+      onClick={() => (onOpen ?? openPersonIQ)(person.nif)}
+      title={`Abrir ficha de ${person.name} no PessoasIQ`}
+      className="group flex w-full flex-col items-start gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-left transition hover:border-teal-400/30 hover:bg-teal-400/[0.06]"
+    >
+      <span className="flex w-full items-start justify-between gap-2">
+        <span className={`min-w-0 truncate font-medium text-foreground ${compact ? "text-sm" : "text-sm"}`}>
+          {person.name}
+        </span>
+        <span className="shrink-0 text-[11px] text-teal-300 opacity-0 transition group-hover:opacity-100">
+          Abrir ficha →
+        </span>
+      </span>
+      <span className="text-[11px] text-muted-foreground">
+        NIF {person.nif} · {person.is_company ? "Pessoa coletiva" : "Pessoa singular"}
+      </span>
+      <span className="flex flex-wrap gap-1">
+        {roles.map((r, i) => (
+          <span
+            key={i}
+            className="inline-flex items-center rounded-md border border-white/10 bg-white/[0.06] px-2 py-0.5 text-[11px] text-foreground"
+            title={roleLabel(r)}
+          >
+            {roleLabel(r)}
+          </span>
+        ))}
+        {seen > 0 && (
+          <span className="inline-flex items-center rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] text-muted-foreground">
+            +{seen} evento{seen === 1 ? "" : "s"}
+          </span>
+        )}
+      </span>
+      {person.last_seen && (
+        <span className="text-[11px] text-muted-foreground">Último registo: {person.last_seen}</span>
+      )}
+    </button>
+  );
+}
+
+/**
+ * Abre a ficha de uma pessoa no PessoasIQ. Em modo janelas abre (ou foca) a
+ * janela `person-detail:<NIF>`; em modo página navega para `/pessoas-iq/<NIF>`.
+ */
+function openPersonIQ(nif: string) {
+  if (!nif) return;
+  if (getWindowMode()) {
+    openWindow(`person-detail:${nif}`, undefined, {
+      title: `Pessoas IQ · ${nif}`,
+      rect: { width: 980, height: 760 },
+    });
+    return;
+  }
+  if (typeof window === "undefined") return;
+  window.history.pushState({}, "", `/pessoas-iq/${encodeURIComponent(nif)}`);
+  window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
 // --- CONTRACT DETAIL ---
@@ -5885,6 +6270,17 @@ export default function EmpresasIQPage() {
 
   useEffect(() => {
     void load();
+  }, []);
+
+  // Abre a ficha automaticamente quando o URL contém /empresas-iq/<NIF>.
+  useEffect(() => {
+    const match = window.location.pathname.match(/^\/empresas-iq\/([^/]+)$/);
+    if (match) {
+      const nif = decodeURIComponent(match[1]);
+      if (/^\d{9}$/.test(nif)) {
+        setDetail({ type: "entity", id: nif });
+      }
+    }
   }, []);
 
   useEffect(() => {

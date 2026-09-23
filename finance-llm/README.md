@@ -127,6 +127,13 @@ docker compose down
 
 Os volumes `./data`, `./model`, `./rag` e `./logs` são montados no backend (os mesmos dados da execução local), e o índice do Elasticsearch persiste no volume `es-data`. Mais detalhes em [`docs/docker-setup.md`](docs/docker-setup.md).
 
+Serviços opcionais (perfis do compose):
+
+```bash
+docker compose --profile tools up -d mcp     # servidor MCP em HTTP (http://127.0.0.1:8765/mcp)
+docker compose --profile test run --rm tests # pytest + smoke test de todos os endpoints, em Docker
+```
+
 ## Recolha de dados
 
 ```bash

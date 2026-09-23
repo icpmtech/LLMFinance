@@ -41,8 +41,10 @@ class PublicacoesMjCaptchaClient(PublicacoesMjClient):
         min_interval: float = 4.0,
         timeout: int = 60,
         recaptcha_timeout: int = 180,
+        proxy: Optional[str] = None,
+        debug: bool = False,
     ):
-        super().__init__(cookies=cookies, min_interval=min_interval, timeout=timeout)
+        super().__init__(cookies=cookies, min_interval=min_interval, timeout=timeout, proxy=proxy)
         self.api_key = api_key or os.environ.get("TWOCAPTCHA_API_KEY") or os.environ.get("TWOCAPTCHA_KEY")
         if not self.api_key:
             raise ValueError(
@@ -51,6 +53,9 @@ class PublicacoesMjCaptchaClient(PublicacoesMjClient):
             )
         self.recaptcha_timeout = recaptcha_timeout
         self._solver: Optional[Any] = None
+        if debug:
+            os.environ["MJ_DEBUG"] = "1"
+            self._set_debug_enabled(True)
 
     def _get_solver(self) -> Any:
         """Importa a biblioteca twocaptcha só quando necessário (lazy)."""
@@ -59,9 +64,7 @@ class PublicacoesMjCaptchaClient(PublicacoesMjClient):
 
             self._solver = TwoCaptcha(
                 self.api_key,
-                defaultTimeout=self.recaptcha_timeout,
-                recaptchaTimeout=self.recaptcha_timeout,
-                pollingInterval=5,
+                sleep_time=5,
             )
         return self._solver
 
@@ -70,18 +73,17 @@ class PublicacoesMjCaptchaClient(PublicacoesMjClient):
         solver = self._get_solver()
         logger.info("A resolver reCAPTCHA via 2captcha para %s (sitekey=%s)", page_url, RECAPTCHA_SITEKEY)
         try:
-            result = solver.recaptcha(
-                sitekey=RECAPTCHA_SITEKEY,
-                url=page_url,
+            token = solver.solve_captcha(
+                site_key=RECAPTCHA_SITEKEY,
+                page_url=page_url,
             )
         except Exception as exc:
             logger.exception("Falha ao resolver reCAPTCHA via 2captcha")
             raise CaptchaRequiredError(f"2captcha não conseguiu resolver o reCAPTCHA: {exc}") from exc
 
-        token = getattr(result, "code", None) if hasattr(result, "code") else (result.get("code") if isinstance(result, dict) else result)
         if not token:
-            raise CaptchaRequiredError(f"2captcha devolveu resposta vazia: {result!r}")
-        logger.info("reCAPTCHA resolvido (token=%s...%s)", token[:12], token[-12:])
+            raise CaptchaRequiredError("2captcha devolveu token vazio")
+        logger.info("reCAPTCHA resolvido (token=%s...%s)", str(token)[:12], str(token)[-12:])
         return str(token)
 
     def collect(
@@ -131,12 +133,16 @@ def collect_with_captcha(
     max_pages: int = 50,
     min_interval: float = 1.0,
     recaptcha_timeout: int = 180,
+    proxy: Optional[str] = None,
+    debug: bool = False,
 ) -> List[Dict[str, Any]]:
     """Função de conveniência para recolha automática de uma entidade/janela."""
     client = PublicacoesMjCaptchaClient(
         api_key=api_key,
         min_interval=min_interval,
         recaptcha_timeout=recaptcha_timeout,
+        proxy=proxy,
+        debug=debug,
     )
     pubs = client.collect(
         nif=nif,

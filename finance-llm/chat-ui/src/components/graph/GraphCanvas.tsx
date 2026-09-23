@@ -629,7 +629,7 @@ export function GraphCanvas({
       )}
 
       <div className="absolute bottom-3 right-3 z-20 flex items-center gap-1.5">
-        <span className="rounded-lg border border-white/10 bg-[#07151b]/90 px-2 py-1 text-[11px] text-muted-foreground">
+        <span className="rounded-lg border border-white/10 bg-[#07151b]/90 px-2 py-1.5 text-[11px] text-muted-foreground">
           {Math.round(scale * 100)}%
         </span>
         <button
@@ -640,27 +640,27 @@ export function GraphCanvas({
           }}
           aria-label="Ajustar à vista"
           title="Ajustar à vista (0)"
-          className="glass-card rounded-lg p-1.5 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+          className="glass-card flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
         >
-          <Scan size={15} />
+          <Scan size={18} />
         </button>
         <button
           type="button"
           onClick={() => setScale((current) => Math.min(3, current + 0.2))}
           aria-label="Aproximar"
           title="Aproximar (+)"
-          className="glass-card rounded-lg p-1.5 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+          className="glass-card flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
         >
-          <ZoomIn size={15} />
+          <ZoomIn size={18} />
         </button>
         <button
           type="button"
           onClick={() => setScale((current) => Math.max(0.3, current - 0.2))}
           aria-label="Afastar"
           title="Afastar (-)"
-          className="glass-card rounded-lg p-1.5 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+          className="glass-card flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
         >
-          <ZoomOut size={15} />
+          <ZoomOut size={18} />
         </button>
       </div>
     </div>

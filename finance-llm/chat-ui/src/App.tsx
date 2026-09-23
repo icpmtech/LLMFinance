@@ -10,7 +10,7 @@ import { useAuth } from "./auth";
 import LoginPage from "./pages/LoginPage";
 import SettingsPage from "./pages/SettingsPage";
 import CliPage from "./pages/CliPage";
-import { FileText, Loader2, Sparkles } from "lucide-react";
+import { FileText, Loader2, Sparkles, Users } from "lucide-react";
 import { DashboardPage } from "./pages/DashboardPage";
 import { TickerDetailPage } from "./pages/TickerDetailPage";
 import RealtimeChartPage from "./pages/RealtimeChartPage";
@@ -35,6 +35,7 @@ import CompanyDashboardPage from "./pages/CompanyDashboardPage";
 import EntityDashboardPage from "./pages/EntityDashboardPage";
 import EntityComparePage from "./pages/EntityComparePage";
 import EmpresasIQPage from "./pages/EmpresasIQPage";
+import PessoasIQPage from "./pages/PessoasIQPage";
 import CompaniesGlobalPage from "./pages/CompaniesGlobalPage";
 import OntologyPage from "./pages/OntologyPage";
 import VisualizadorPage from "./pages/VisualizadorPage";
@@ -100,6 +101,7 @@ type AppView =
   | "ticker-detail"
   | "ticker-chart"
   | "empresas-iq"
+  | "pessoas-iq"
   | "ontology"
   | "crm"
   | "crm-accounts"
@@ -208,6 +210,7 @@ function pathForView(
   if (view === "admin") return "/admin";
   if (view === "cli") return "/cli";
   if (view === "empresas-iq") return "/empresas-iq";
+  if (view === "pessoas-iq") return "/pessoas-iq";
   if (view === "ontology") return "/ontology";
   if (view === "hermes") return "/hermes";
   if (view === "researcher") return "/researcher";
@@ -246,6 +249,7 @@ function isDetailView(view: string): boolean {
   return (
     view.startsWith("company-detail:") ||
     view.startsWith("contract-detail:") ||
+    view.startsWith("person-detail:") ||
     view.startsWith("quicklook:") ||
     view.startsWith("entity-contracts:") ||
     view.startsWith("region-detail:") ||
@@ -398,6 +402,7 @@ export default function App() {
     if (path === "/cli") return "cli";
     if (path === "/contracts-list" || path.startsWith("/contracts-list/")) return "contracts-list";
     if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) return "empresas-iq";
+    if (path === "/pessoas-iq" || path.startsWith("/pessoas-iq/")) return "pessoas-iq";
     if (path === "/empresas-global") return "companies-global";
     if (path === "/ontology" || path.startsWith("/ontology/")) return "ontology";
     if (path === "/hermes" || path.startsWith("/hermes/")) return "hermes";
@@ -471,6 +476,7 @@ export default function App() {
       else if (path === "/cli") next = "cli";
       else if (path === "/contracts-list" || path.startsWith("/contracts-list/")) next = "contracts-list";
       else if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) next = "empresas-iq";
+      else if (path === "/pessoas-iq" || path.startsWith("/pessoas-iq/")) next = "pessoas-iq";
       else if (path === "/empresas-global") next = "companies-global";
       else if (path === "/ontology" || path.startsWith("/ontology/")) next = "ontology";
       else if (path === "/hermes" || path.startsWith("/hermes/")) next = "hermes";
@@ -852,6 +858,9 @@ export default function App() {
     if (target.startsWith("company-detail:")) {
       return <EntityDetailWindow nif={target.slice("company-detail:".length)} />;
     }
+    if (target.startsWith("person-detail:")) {
+      return <PessoasIQPage nif={target.slice("person-detail:".length)} />;
+    }
     if (target.startsWith("contract-detail:")) {
       return <ContractDetailWindow id={target.slice("contract-detail:".length)} />;
     }
@@ -892,6 +901,7 @@ export default function App() {
     }
     if (target === "dashboard") return <DashboardPage onSwitchView={handleSwitchView} onSelectTicker={handleSelectTicker} />;
     if (target === "empresas-iq") return <EmpresasIQPage />;
+    if (target === "pessoas-iq") return <PessoasIQPage />;
     if (target === "companies-global") return <CompaniesGlobalPage onOpenView={handleOpenSearchView} />;
     if (target === "ontology") return <OntologyPage />;
     if (target === "hermes") return <HermesPage />;
@@ -1168,6 +1178,10 @@ export default function App() {
    * visual) e cai num genérico para vistas que não têm ícone próprio.
    */
   const labelFor = (target: string): { title: string; icon: React.ReactNode } => {
+    // Ficha de pessoa (PessoasIQ) aberta como janela a partir do societário.
+    if (target.startsWith("person-detail:")) {
+      return { title: "Pessoas IQ", icon: <Users size={13} /> };
+    }
     // Janelas com título próprio (fichas, quick look).
     const custom = windowFor(target)?.title;
     if (custom) {
@@ -1296,7 +1310,7 @@ export default function App() {
     );
   }
 
-  if (view === "empresas-iq") {
+  if (view === "empresas-iq" || view === "pessoas-iq") {
     return (
       <div className={["relative w-full bg-background text-foreground", dockSpacer.sides, dockSpacer.bottom].join(" ")}>
         {renderContent()}

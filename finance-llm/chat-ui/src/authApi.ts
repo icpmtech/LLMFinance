@@ -68,7 +68,6 @@ export type ProfilePatch = {
   phone?: string;
   locale?: string;
   timezone?: string;
-  iframe_pages?: IframePagePreference[];
   preferences?: ProfilePreferences;
 };
 

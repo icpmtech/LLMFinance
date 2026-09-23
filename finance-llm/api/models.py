@@ -1067,6 +1067,7 @@ class CompanyDetail(CompanySummary):
     trademarks_total: int = 0
     firmas: List["FirmaItem"] = []
     firmas_total: int = 0
+    societario_timeline: Optional[Dict[str, Any]] = None
 
 
 class CompanySearchRequest(BaseModel):

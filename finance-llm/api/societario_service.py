@@ -201,6 +201,24 @@ def company_publicacoes(nif: str, size: int = 100, from_: int = 0) -> Dict[str, 
     return _company_publicacoes(nif, size=size, from_=from_)
 
 
+def company_people(nif: str) -> Dict[str, Any]:
+    """Pessoas/cargos extraídos das publicações societárias de uma entidade.
+
+    Não indexa — apenas devolve os registos agregados para apresentação.
+    """
+    from api.elasticsearch_client import company_publicacoes as _company_publicacoes
+    from collectors.people_extractor import extract_from_publicacoes
+
+    pubs = _company_publicacoes(nif, size=1000)
+    if pubs.get("error"):
+        return pubs
+    items = pubs.get("items", [])
+    if not items:
+        return {"nif": nif, "total": 0, "people": []}
+    people = extract_from_publicacoes(items)
+    return {"nif": nif, "total": len(people), "people": people}
+
+
 def status() -> Dict[str, Any]:
     """Volumetria do índice societário."""
     from api.elasticsearch_client import societario_status
@@ -311,6 +329,8 @@ def collect_entities(
     recaptcha_timeout: int = 180,
     ingest_result: bool = True,
     stop_on_captcha: bool = False,
+    proxy: Optional[str] = None,
+    debug: bool = False,
 ) -> Dict[str, Any]:
     """Recolhe publicações do MJ para um conjunto de entidades indexadas.
 
@@ -334,6 +354,8 @@ def collect_entities(
         api_key=api_key,
         min_interval=min_interval,
         recaptcha_timeout=recaptcha_timeout,
+        proxy=proxy,
+        debug=debug,
     )
 
     windows: List[Tuple[str, str]] = [(None, None)]

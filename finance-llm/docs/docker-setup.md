@@ -1,16 +1,25 @@
 # Docker Setup — IQ OS
 
-Este documento explica como correr toda a solução IQ OS (Elasticsearch + backend FastAPI + frontend React) com Docker Compose.
+Este documento explica como correr toda a solução IQ OS (Elasticsearch + backend FastAPI + frontend React + servidor MCP) com Docker Compose.
 
 ## Ficheiros
 
 - `Dockerfile.backend` — container Python 3.11 com FastAPI, uvicorn e dependências.
 - `Dockerfile.frontend` — build do React/Vite servido por nginx (build com `VITE_API_URL=/api`).
-- `docker-compose.yml` — orquestra `elasticsearch`, `backend` e `frontend`.
+- `docker-compose.yml` — orquestra `elasticsearch`, `backend` e `frontend` (núcleo) mais `mcp` e `tests` (por perfis).
 - `docker/nginx.conf` — nginx com SPA, proxy `/api/` e `/forecast/plot/` para o backend, uploads até 256 MB e SSE sem buffering.
 - `docker/entrypoint.backend.sh` — cria as pastas de dados e arranca o uvicorn em `0.0.0.0:8000`.
+- `docker/smoke_test.py` — teste de fumo que percorre o OpenAPI e valida a API e a SPA.
 - `.dockerignore` — exclui `data/`, `model/`, `training/`, `logs/` e `node_modules` do contexto da build.
 - `.env.example` — portas e variáveis opcionais (copiar para `.env` se necessário).
+
+## Perfis de serviços
+
+| Perfil  | Serviços                          | Para que serve                                              |
+|---------|-----------------------------------|-------------------------------------------------------------|
+| (nenhum)| `elasticsearch`, `backend`, `frontend` | Núcleo da solução — é isto que arranca com `docker compose up`. |
+| `tools` | `mcp`                             | Servidor MCP em HTTP (`http://127.0.0.1:8765/mcp`).          |
+| `test`  | `tests`                           | `pytest tests` + smoke test de todos os endpoints, em Docker. |
 
 ## Portas expostas
 
@@ -19,8 +28,9 @@ Este documento explica como correr toda a solução IQ OS (Elasticsearch + backe
 | Elasticsearch | `9200`    | http://127.0.0.1:9200    |
 | Backend API   | `8000`    | http://127.0.0.1:8003    |
 | Frontend UI   | `80`      | http://127.0.0.1:4180    |
+| Servidor MCP  | `8765`    | http://127.0.0.1:8765/mcp |
 
-Os portos do host são configuráveis por variáveis (`ELASTICSEARCH_PORT`, `FINANCE_API_PORT`, `FINANCE_UI_PORT`), com os valores por omissão acima.
+Os portos do host são configuráveis por variáveis (`ELASTICSEARCH_PORT`, `FINANCE_API_PORT`, `FINANCE_UI_PORT`, `IQOS_MCP_PORT`), com os valores por omissão acima.
 
 ## Requisitos
 
@@ -71,6 +81,37 @@ docker compose down --rmi all -v
 
 O volume `es-data` guarda os índices do Elasticsearch (utilizadores, contratos, entidades, etc.); `down` sem `-v` preserva-os.
 
+### 5. Testes dentro de Docker
+
+O perfil `test` corre os testes unitários e, a seguir, um smoke test que descobre **todos** os
+`GET` sem parâmetros no `/openapi.json` e valida a API e a SPA:
+
+```powershell
+docker compose --profile test run --rm tests
+```
+
+O resultado fica em `logs/smoke_test.json` (volume montado) e o código de saída é 1 se houver
+falhas. Para validar um ambiente já a correr sem construir nada:
+
+```powershell
+docker compose run --rm --no-deps tests python docker/smoke_test.py --base-url http://backend:8000
+```
+
+Rotas autenticadas contam como `GUARDADO` (401/403) quando não há credenciais; para as testar a
+sério, define `IQOS_API_EMAIL`/`IQOS_API_PASSWORD` (ou `IQOS_API_TOKEN`) no `.env`.
+
+### 6. Servidor MCP em container
+
+O VS Code arranca o servidor MCP por `stdio`; dentro de Docker corre-se em HTTP:
+
+```powershell
+docker compose --profile tools up -d mcp
+```
+
+- Endpoint: `http://127.0.0.1:8765/mcp`
+- Ver as ferramentas registadas: `docker compose run --rm mcp python -m mcp_server --list-tools`
+- O container fala com a API pelo nome do serviço (`IQOS_API_URL=http://backend:8000`).
+
 ## Volumes montados
 
 O `docker-compose.yml` monta as seguintes pastas do host no container backend:
@@ -90,6 +131,9 @@ Isto permite que os dados e modelos persistam entre execuções dos containers e
 | `FINANCE_UI_PORT` | `4180` | Porto do host para a UI. |
 | `ELASTICSEARCH_PORT` | `9200` | Porto do host para o Elasticsearch. |
 | `VITE_API_URL` | `/api` | Base da API compilada na SPA. `/api` usa o proxy do nginx (mesma origem, sem CORS). |
+| `IQOS_MCP_PORT` | `8765` | Porto do host para o servidor MCP (perfil `tools`). |
+| `IQOS_API_URL` | `http://backend:8000` | API vista de dentro do container `mcp`/`tests`. |
+| `IQOS_API_TOKEN` / `IQOS_API_EMAIL` + `IQOS_API_PASSWORD` | vazio | Sessão para o MCP e para o smoke test cobrirem rotas autenticadas. |
 | `FINANCE_ES_URL` | `http://elasticsearch:9200` | Endereço do Elasticsearch **visto de dentro do container**. |
 | `FINANCE_AUTH_SECRET` | vazio | Se vazio, é usado/reutilizado `data/.auth_secret`. |
 | `FRED_API_KEY`, `BRAVE_API_KEY`, `SERPAPI_KEY`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `OLLAMA_URL` | vazio | Chaves/endpoints opcionais das ferramentas do agente. |
