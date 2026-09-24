@@ -15,6 +15,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  RotateCcw,
   Save,
   Trash2,
   X,
@@ -25,6 +26,7 @@ import {
   IFRAME_GRADIENTS,
   IFRAME_ICON_NAMES,
   IFRAME_ICONS,
+  installDefaultIframePages,
   reorderIframePages,
   saveIframePage,
   subscribeIframePages,
@@ -177,15 +179,33 @@ export default function IframePagesPage({ onOpenIframe }: IframePagesPageProps) 
               Adicione aplicações externas para incorporar na plataforma. Podem ser abertas como
               janelas ou aplicações independentes.
             </p>
+            <p className="text-xs text-zinc-500 mt-1">
+              A solução já traz as páginas <strong className="text-zinc-400">Pesquisa</strong> (SearXNG),{" "}
+              <strong className="text-zinc-400">n8n</strong> e{" "}
+              <strong className="text-zinc-400">Hermes Agent</strong> pré-instaladas.
+            </p>
           </div>
           {!editing && (
-            <button
-              onClick={() => setEditing(emptyForm())}
-              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition"
-            >
-              <Plus size={16} />
-              Nova página
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  const next = installDefaultIframePages();
+                  setError(next.length === pages.length ? "As páginas predefinidas já estão instaladas." : null);
+                }}
+                title="Repõe as páginas Pesquisa, n8n e Hermes Agent"
+                className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-200 hover:text-white transition"
+              >
+                <RotateCcw size={16} />
+                Predefinidas
+              </button>
+              <button
+                onClick={() => setEditing(emptyForm())}
+                className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition"
+              >
+                <Plus size={16} />
+                Nova página
+              </button>
+            </div>
           )}
         </div>
 

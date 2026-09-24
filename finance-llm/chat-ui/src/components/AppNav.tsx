@@ -49,6 +49,8 @@ export type AppView =
   | "search"
   | "pesquisa"
   | "sentimento"
+  | "cire"
+  | "contribuintes"
   | "contracts"
   | "contracts-search"
   | "contracts-dashboard"
@@ -74,6 +76,12 @@ export type AppView =
   | "scraper-execucoes"
   | "scraper-pesquisa"
   | "scraper-agenda"
+  | "social"
+  | "social-canais"
+  | "social-execucoes"
+  | "social-modelos"
+  | "social-agenda"
+  | "social-estado"
   | "search360"
   | "search360-dossie"
   | "search360-projetos"
@@ -125,6 +133,7 @@ const APP_MATCH: Record<string, AppView[]> = {
   tickers: ["ticker-detail", "ticker-chart"],
   crm: ["crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard"],
   scraper: ["scraper-templates", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda"],
+  social: ["social-canais", "social-execucoes", "social-modelos", "social-agenda", "social-estado"],
   search360: ["search360-dossie", "search360-projetos", "search360-grafo", "search360-biblioteca"],
   office: ["office-dossies"],
   visualizador: ["visualizador-dashboards"],

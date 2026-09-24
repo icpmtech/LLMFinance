@@ -84,6 +84,8 @@ def _corpus(payload: CorpusPayload, session: Optional[CurrentSession]) -> list:
     limit = payload.limit
     if origin == "scraped":
         return sentiment.corpus_from_scraped(q=payload.q, source_id=payload.source_id, limit=limit)
+    if origin == "social":
+        return sentiment.corpus_from_social(q=payload.q, channel_id=payload.source_id, limit=limit)
     if origin == "news":
         return sentiment.corpus_from_news(q=payload.q, limit=limit)
     if origin == "contracts":

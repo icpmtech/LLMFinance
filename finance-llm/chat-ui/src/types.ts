@@ -987,6 +987,8 @@ export interface PersonRole {
   residencia?: string | null;
   publication_id?: string | null;
   nacionalidade?: string | null;
+  /** Comarca do tribunal (cargos vindos dos processos do CIRE). */
+  tribunal?: string | null;
 }
 
 export interface Person {
@@ -1001,6 +1003,8 @@ export interface Person {
   first_seen?: string | null;
   last_seen?: string | null;
   source?: string | null;
+  /** Fontes que alimentaram a ficha (`publicacoes_mj`, `cire`). */
+  sources?: string[] | null;
   ingested_at?: string | null;
   doc_id?: string;
 }
@@ -1071,7 +1075,40 @@ export interface PeopleStatusResponse {
   is_company: { key: boolean; count: number }[];
   total_company_links: number;
   top_roles: { key: string; count: number }[];
+  by_source?: { key: string; count: number }[];
   error?: string | null;
+}
+
+/** Pedido de ingestão de pessoas a partir dos processos de insolvência (CIRE). */
+export interface PeopleCireIngestRequest {
+  /** Máximo de publicações do CIRE a ler (amostra). Sem valor, percorre todas. */
+  limit?: number | null;
+  /** Incluir pessoas coletivas (credores institucionais, sociedades insolventes). */
+  include_companies?: boolean;
+  /** Filtrar papéis do processo (ex.: `["Insolvente", "Administrador da insolvência"]`). */
+  papeis?: string[] | null;
+  wait?: boolean;
+}
+
+/** Trabalho de ingestão do CIRE (progresso e resultado). */
+export interface PeopleCireJobResponse {
+  job_id: string;
+  status: "running" | "done" | "error";
+  started_at?: string | null;
+  finished_at?: string | null;
+  progress: Record<string, number | string>;
+  result?: PeopleCireIngestResult | null;
+  error?: string | null;
+}
+
+export interface PeopleCireIngestResult {
+  indexed_count: number;
+  total: number;
+  publications?: number;
+  intervenientes?: number;
+  errors?: number;
+  error?: string | null;
+  message?: string | null;
 }
 
 export interface CompanySearchRequest {
@@ -1403,6 +1440,14 @@ export interface SocietarioCompanyPeopleResponse {
   nif: string;
   total: number;
   people: SocietarioPerson[];
+  error?: string;
+}
+
+/** Resposta de `POST /people/exists`: que NIF do societário já estão no PessoasIQ. */
+export interface PeoplePresenceResponse {
+  total: number;
+  indexed: string[];
+  missing: string[];
   error?: string;
 }
 

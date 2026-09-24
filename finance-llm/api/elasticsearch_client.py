@@ -16,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, NotFoundError
 from elasticsearch.helpers import bulk
 
 logger = logging.getLogger(__name__)
@@ -88,6 +88,12 @@ CRM_INDEX = "finance_crm"
 # sem precisar de um mapping diferente por site.
 SCRAPED_INDEX = "finance_scraped"
 
+# Módulo de pesquisa social: publicações recolhidas de redes sociais (LinkedIn,
+# TikTok, Reddit e Facebook) pelos "canais" (definições) do `social_service`.
+# Cada documento é uma publicação normalizada, com as métricas de interação em
+# campos próprios (pesquisáveis e agregáveis) e o resto em `data` (`flattened`).
+SOCIAL_INDEX = "finance_social"
+
 # Configurações de agentes dinâmicos do IQ OS (LangGraph + ferramentas).
 # Guarda grafos de agentes, nós, ferramentas, prompts e chaves por utilizador.
 AGENT_CONFIGS_INDEX = "iq_os_agent_configs"
@@ -97,9 +103,22 @@ AGENT_CONFIGS_INDEX = "iq_os_agent_configs"
 # a recolha é assistida e o resultado fica guardado aqui para consulta e pesquisa.
 SOCIETARIO_INDEX = "finance_publicacoes_mj"
 
+# Publicações do CIRE (CITIUS / Ministério da Justiça): publicidade do PER, do
+# PEAP, do PEVE e dos processos de insolvência — tribunal, processo, espécie,
+# datas e intervenientes (com NIF/NIPC). Recolhido de `consultascire.aspx`.
+CIRE_INDEX = "finance_cire"
+
 # Pessoas e cargos extraídos das publicações societárias (MJ). Um documento por
 # NIF de pessoa (individual ou coletiva), com roles aninhados por empresa/acto.
 PEOPLE_INDEX = "finance_people"
+
+# Contribuintes: um documento por **NIF/NIPC**, agregando todas as entidades e
+# pessoas que aparecem nos restantes índices da plataforma (contratos PT/ES,
+# cadastro de entidades, publicações societárias, CIRE, PessoasIQ, firmas,
+# marcas e CRM). É um índice **derivado**: `api/contribuintes_service.py`
+# reconstrói-o periodicamente (cron) a partir das fontes, para haver um ponto
+# único de pesquisa de contribuintes em todo o sistema.
+CONTRIBUINTES_INDEX = "finance_contribuintes"
 
 # Definições (settings) específicas de determinados índices — nomeadamente
 # analisadores usados em subcampos de pesquisa por prefixo.
@@ -170,6 +189,35 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
                     "filter": ["lowercase", "asciifolding"],
                 },
                 "entity_search_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                },
+            },
+        }
+    },
+    CONTRIBUINTES_INDEX: {
+        "analysis": {
+            "tokenizer": {
+                "entity_edge_ngram": {
+                    "type": "edge_ngram",
+                    "min_gram": 2,
+                    "max_gram": 20,
+                    "token_chars": ["letter", "digit"],
+                }
+            },
+            "analyzer": {
+                "entity_index_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "entity_edge_ngram",
+                    "filter": ["lowercase", "asciifolding"],
+                },
+                "entity_search_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                },
+                "contribuinte_folding": {
                     "type": "custom",
                     "tokenizer": "standard",
                     "filter": ["lowercase", "asciifolding"],
@@ -573,10 +621,46 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    cire_mappings = {
+        "properties": {
+            "pub_id": {"type": "keyword"},
+            "referencia": {"type": "keyword"},
+            "data_publicacao": {"type": "date"},
+            "data_propositura": {"type": "date"},
+            "tribunal": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "tribunal_comarca": {"type": "keyword"},
+            "tribunal_sede": {"type": "keyword"},
+            "ato": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "processo": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "processo_numero": {"type": "keyword"},
+            "juizo": {"type": "keyword", "ignore_above": 512},
+            "especie": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "tipo": {"type": "keyword"},
+            "insolvente": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            # Intervenientes do processo (insolvente, administrador, credores, …).
+            "intervenientes": {
+                "type": "nested",
+                "properties": {
+                    "papel": {"type": "keyword"},
+                    "nome": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+                    "nif": {"type": "keyword"},
+                },
+            },
+            # Todos os NIF/NIPC do processo (pesquisa por entidade sem passar por `nested`).
+            "nifs": {"type": "keyword"},
+            "has_documento": {"type": "boolean"},
+            "documento_url": {"type": "keyword", "index": False},
+            "texto": {"type": "text"},
+            "extra": {"type": "flattened"},
+            "run_id": {"type": "keyword"},
+            "source": {"type": "keyword"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
     people_mappings = {
         "properties": {
-            "nif": {"type": "keyword"},
-            "name": {
+            "nif": {"type": "keyword"},            "name": {
                 "type": "text",
                 "fields": {
                     "keyword": {"type": "keyword", "ignore_above": 512},
@@ -608,6 +692,8 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
                     "residencia": {"type": "keyword"},
                     "publication_id": {"type": "keyword"},
                     "nacionalidade": {"type": "keyword"},
+                    # Comarca do tribunal (cargos vindos dos processos do CIRE).
+                    "tribunal": {"type": "keyword", "ignore_above": 512},
                 },
             },
             "companies": {
@@ -623,7 +709,96 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "first_seen": {"type": "date"},
             "last_seen": {"type": "date"},
             "source": {"type": "keyword"},
+            # Fontes que contribuíram para a ficha (`publicacoes_mj`, `cire`, ...).
+            "sources": {"type": "keyword"},
             "ingested_at": {"type": "date"},
+        }
+    }
+
+    # Contribuintes: índice derivado, com um documento por NIF/NIPC, que agrega os
+    # identificadores fiscais de **todos** os índices da plataforma. Os campos
+    # `src_*` guardam o contributo de cada fonte (não indexados: são a matéria-prima
+    # dos campos derivados e da ficha do contribuinte).
+    contribuintes_mappings = {
+        "properties": {
+            "nif": {"type": "keyword"},
+            "name": {
+                "type": "text",
+                "fields": {
+                    "keyword": {"type": "keyword", "ignore_above": 512},
+                    "autocomplete": {
+                        "type": "text",
+                        "analyzer": "entity_index_analyzer",
+                        "search_analyzer": "entity_search_analyzer",
+                    },
+                },
+            },
+            # Todas as designações conhecidas (a primeira é a preferida em `name`).
+            "names": {"type": "keyword", "ignore_above": 512},
+            "name_norm": {"type": "keyword", "ignore_above": 512},
+            # `type`: empresa | empresario | pessoa | entidade_publica | estrangeiro | desconhecido
+            "type": {"type": "keyword"},
+            "is_company": {"type": "boolean"},
+            # Validade do dígito de controlo (só para NIF portugueses).
+            "nif_valid": {"type": "boolean"},
+            "country": {"type": "keyword"},
+            # Índices de origem onde o contribuinte foi encontrado (ver o catálogo de fontes).
+            "sources": {"type": "keyword"},
+            "source_labels": {"type": "keyword", "ignore_above": 256},
+            "roles": {"type": "keyword"},
+            "contracts_count": {"type": "integer"},
+            "contracts_as_adjudicante": {"type": "integer"},
+            "contracts_as_adjudicatario": {"type": "integer"},
+            "contracts_value": {"type": "float"},
+            "contracts_first_date": {"type": "date"},
+            "contracts_last_date": {"type": "date"},
+            "contratos_es_count": {"type": "integer"},
+            "contratos_es_value": {"type": "float"},
+            "contratos_es_last_date": {"type": "date"},
+            # Totais que o cadastro de entidades já traz calculados.
+            "entities_contracts_count": {"type": "integer"},
+            "entities_value": {"type": "float"},
+            "societario_count": {"type": "integer"},
+            "societario_last_date": {"type": "date"},
+            "cire_count": {"type": "integer"},
+            "cire_last_date": {"type": "date"},
+            "cire_roles": {"type": "keyword"},
+            "trademarks_count": {"type": "integer"},
+            "firmas_count": {"type": "integer"},
+            "people_roles_count": {"type": "integer"},
+            "people_companies_count": {"type": "integer"},
+            "crm_account": {"type": "boolean"},
+            # Soma das ocorrências em todas as fontes (ordenação por relevância/atividade).
+            "records_total": {"type": "integer"},
+            "first_seen": {"type": "date"},
+            "last_seen": {"type": "date"},
+            "location": {
+                "properties": {
+                    "pais": {"type": "keyword"},
+                    "distrito": {"type": "keyword"},
+                    "concelho": {"type": "keyword"},
+                    "freguesia": {"type": "keyword"},
+                    "codigo_postal": {"type": "keyword"},
+                }
+            },
+            # Evidência por fonte (o que cada índice mostrou sobre este NIF) em `src_*`;
+            # ver o catálogo de fontes em `api/contribuintes_service.py`.
+            "search_text": {
+                "type": "text",
+                "analyzer": "contribuinte_folding",
+                "search_analyzer": "contribuinte_folding",
+            },
+            "run_id": {"type": "keyword"},
+            "synced_at": {"type": "date"},
+            "src_contratos": {"type": "object", "enabled": False},
+            "src_contratos_es": {"type": "object", "enabled": False},
+            "src_entidades": {"type": "object", "enabled": False},
+            "src_societario": {"type": "object", "enabled": False},
+            "src_cire": {"type": "object", "enabled": False},
+            "src_pessoas": {"type": "object", "enabled": False},
+            "src_firmas": {"type": "object", "enabled": False},
+            "src_marcas": {"type": "object", "enabled": False},
+            "src_crm": {"type": "object", "enabled": False},
         }
     }
 
@@ -846,6 +1021,41 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    # Pesquisa social: uma publicação de rede social por documento. As métricas
+    # de interação têm campos próprios (para filtrar/ordenar/agregar) e os dados
+    # específicos de cada plataforma vivem em `data` (`flattened`).
+    social_mappings = {
+        "properties": {
+            "platform": {"type": "keyword"},
+            "channel_id": {"type": "keyword"},
+            "channel_name": {"type": "keyword"},
+            "kind": {"type": "keyword"},
+            "run_id": {"type": "keyword"},
+            "item_id": {"type": "keyword"},
+            "post_id": {"type": "keyword"},
+            "url": {"type": "keyword", "ignore_above": 1024},
+            "title": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "text": {"type": "text"},
+            "author": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+            "community": {"type": "keyword", "ignore_above": 256},
+            "lang": {"type": "keyword"},
+            "image": {"type": "keyword", "ignore_above": 1024},
+            "tags": {"type": "keyword"},
+            "metrics": {"type": "long"},
+            "likes": {"type": "long"},
+            "comments": {"type": "long"},
+            "shares": {"type": "long"},
+            "views": {"type": "long"},
+            "published_at": {"type": "date"},
+            "collected_at": {"type": "date"},
+            "sentiment": {"type": "keyword"},
+            "sentiment_score": {"type": "float"},
+            "sentiment_engine": {"type": "keyword"},
+            "trigger": {"type": "keyword"},
+            "data": {"type": "flattened"},
+        }
+    }
+
     # Agentes dinâmicos do IQ OS: configuração de grafos/nós/ferramentas/prompts.
     agent_configs_mappings = {
         "properties": {
@@ -919,7 +1129,9 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (TRADEMARKS_INDEX, trademarks_mappings),
         (FIRMAS_INDEX, firmas_mappings),
         (SOCIETARIO_INDEX, societario_mappings),
+        (CIRE_INDEX, cire_mappings),
         (PEOPLE_INDEX, people_mappings),
+        (CONTRIBUINTES_INDEX, contribuintes_mappings),
         (ENTITIES_INDEX, entities_mappings),
         (USER_STATE_INDEX, user_state_mappings),
         (AUTH_USERS_INDEX, auth_users_mappings),
@@ -928,6 +1140,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (PROVIDER_KEYS_INDEX, provider_keys_mappings),
         (CRM_INDEX, crm_mappings),
         (SCRAPED_INDEX, scraped_mappings),
+        (SOCIAL_INDEX, social_mappings),
         (AGENT_CONFIGS_INDEX, agent_configs_mappings),
     ]:
         if not client.indices.exists(index=name):
@@ -940,16 +1153,62 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             # em falta, para manter índices antigos compatíveis com o código atual.
             try:
                 existing = client.indices.get_mapping(index=name)[name]["mappings"].get("properties", {})
-                missing = {
-                    field: spec
-                    for field, spec in (mappings.get("properties") or {}).items()
-                    if field not in existing
-                }
+                missing = _missing_mapping_fields(existing, mappings.get("properties") or {})
                 if missing:
-                    client.indices.put_mapping(index=name, body={"properties": missing})
+                    try:
+                        client.indices.put_mapping(index=name, body={"properties": missing})
+                    except Exception as exc:
+                        # Um campo em conflito (tipo diferente do já indexado, ex.: criado
+                        # por mapeamento dinâmico) não deve impedir a criação dos restantes.
+                        accepted = 0
+                        for field, spec in missing.items():
+                            try:
+                                client.indices.put_mapping(index=name, body={"properties": {field: spec}})
+                                accepted += 1
+                            except Exception as inner:
+                                logger.debug("put_mapping de %s.%s ignorado: %s", name, field, inner)
+                        logger.debug(
+                            "put_mapping parcial em %s (%d/%d campos): %s",
+                            name,
+                            accepted,
+                            len(missing),
+                            exc,
+                        )
             except Exception as exc:
                 logger.debug("put_mapping ignorado para %s: %s", name, exc)
     return True
+
+
+def _missing_mapping_fields(
+    existing: Dict[str, Any],
+    spec: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Campos de `spec` que ainda não existem em `existing`.
+
+    Desce dentro de `properties` (objectos e `nested`), para que campos novos em
+    estruturas já mapeadas — como `roles.tribunal` — também sejam acrescentados a
+    índices que já existiam. Ao descer preserva `type` (o Elasticsearch recusa
+    juntar um mapeamento `nested` sem o respetivo `type`) e `dynamic`.
+    """
+    missing: Dict[str, Any] = {}
+    for field, definition in (spec or {}).items():
+        if not isinstance(definition, dict):
+            continue
+        current = (existing or {}).get(field)
+        if current is None:
+            missing[field] = definition
+            continue
+        children = definition.get("properties")
+        if isinstance(children, dict):
+            child_missing = _missing_mapping_fields((current or {}).get("properties") or {}, children)
+            if child_missing:
+                nested_spec: Dict[str, Any] = {}
+                for key in ("type", "dynamic"):
+                    if key in definition:
+                        nested_spec[key] = definition[key]
+                nested_spec["properties"] = child_missing
+                missing[field] = nested_spec
+    return missing
 
 
 def _today() -> str:
@@ -6983,6 +7242,311 @@ def delete_scraped_source(source_id: str, es: Optional[Elasticsearch] = None) ->
         return {"error": str(exc)}
 
 
+# ---------------------------------------------------------------------------
+# Pesquisa social (LinkedIn, TikTok, Reddit, Facebook) — índice `finance_social`
+# ---------------------------------------------------------------------------
+
+#: Métricas de interação guardadas como campos próprios (para ordenar/agregar).
+SOCIAL_METRIC_FIELDS = ("likes", "comments", "shares", "views")
+
+
+def index_social_items(
+    channel: Dict[str, Any],
+    items: List[Dict[str, Any]],
+    trigger: str = "manual",
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa publicações sociais em `finance_social`.
+
+    O `_id` do documento é o `item_id` calculado pelo `social_service`
+    (`sha1(plataforma|tipo|alvo|id-da-publicação)`), pelo que repetir uma recolha
+    **atualiza** as publicações já conhecidas (métricas mais recentes) em vez de
+    as duplicar.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed_count": 0, "error_count": 0}
+
+    ensure_indices(client)
+    now = _today()
+    channel = channel or {}
+    actions: List[Dict[str, Any]] = []
+    for item in items or []:
+        item_id = str(item.get("item_id") or "").strip()
+        if not item_id:
+            continue
+        metrics = item.get("metrics") if isinstance(item.get("metrics"), dict) else {}
+        tags = item.get("tags")
+        if isinstance(tags, str):
+            tags = [tags]
+        sentimento = item.get("sentiment") if isinstance(item.get("sentiment"), dict) else {}
+        doc: Dict[str, Any] = {
+            "platform": str(item.get("platform") or channel.get("platform") or "")[:32],
+            "channel_id": str(item.get("channel_id") or channel.get("id") or "")[:128],
+            "channel_name": str(item.get("channel_name") or channel.get("name") or "")[:256],
+            "kind": str(item.get("kind") or channel.get("kind") or "")[:32],
+            "run_id": str(item.get("run_id") or "")[:64],
+            "item_id": item_id,
+            "post_id": str(item.get("post_id") or "")[:256],
+            "url": str(item.get("url") or "")[:1024],
+            "title": str(item.get("title") or "")[:1024],
+            "text": str(item.get("text") or "")[:100000],
+            "author": str(item.get("author") or "")[:256],
+            "community": str(item.get("community") or "")[:256],
+            "lang": str(item.get("lang") or "")[:16],
+            "image": str((item.get("media") or {}).get("image") or item.get("image") or "")[:1024],
+            "tags": [str(t) for t in (tags or []) if t not in (None, "")][:64],
+            "collected_at": str(item.get("collected_at") or now),
+            "trigger": trigger or "manual",
+            "data": _clean_flattened(item.get("data") or {}) or {},
+        }
+        for metric in SOCIAL_METRIC_FIELDS:
+            try:
+                doc[metric] = int(metrics.get(metric) or 0)
+            except (TypeError, ValueError):
+                doc[metric] = 0
+        published = item.get("published_at")
+        if published:
+            doc["published_at"] = str(published)
+        label = str(sentimento.get("label") or "").strip().lower()
+        if label:
+            doc["sentiment"] = label
+            doc["sentiment_engine"] = str(sentimento.get("engine") or "")[:32]
+            try:
+                doc["sentiment_score"] = float(sentimento.get("polarity") or 0.0)
+            except (TypeError, ValueError):
+                doc["sentiment_score"] = 0.0
+        actions.append({"_index": SOCIAL_INDEX, "_id": item_id, "_source": doc})
+
+    if not actions:
+        return {"indexed_count": 0, "error_count": 0}
+
+    try:
+        success, errors = bulk(client, actions, raise_on_error=False, stats_only=False, refresh=True)
+        error_list = errors if isinstance(errors, list) else []
+        if error_list:
+            logger.warning("Pesquisa social: %s de %s itens falharam na indexação", len(error_list), len(actions))
+        return {
+            "indexed_count": int(success),
+            "error_count": len(error_list),
+            "errors": [str(e.get("index", {}).get("error", e))[:300] for e in error_list[:5]],
+        }
+    except Exception as exc:
+        return {"error": str(exc), "indexed_count": 0, "error_count": len(actions)}
+
+
+def _social_query(
+    q: Optional[str] = None,
+    platform: Optional[str] = None,
+    channel_id: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    sentiments: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Constrói a query de pesquisa de publicações sociais."""
+    must: List[Dict[str, Any]] = []
+    if q:
+        must.append(
+            {
+                "query_string": {
+                    "query": q,
+                    "fields": ["title^3", "text^2", "author^2", "community", "url", "data.*"],
+                    "default_operator": "and",
+                    "lenient": True,
+                    "analyze_wildcard": True,
+                }
+            }
+        )
+    filters: List[Dict[str, Any]] = []
+    if platform:
+        filters.append({"term": {"platform": platform}})
+    if channel_id:
+        filters.append({"term": {"channel_id": channel_id}})
+    if tags:
+        filters.append({"terms": {"tags": tags}})
+    etiquetas = [str(s).strip().lower() for s in (sentiments or []) if str(s).strip()]
+    if etiquetas:
+        filters.append({"terms": {"sentiment": etiquetas}})
+    if date_from or date_to:
+        rng: Dict[str, Any] = {}
+        if date_from:
+            rng["gte"] = date_from
+        if date_to:
+            rng["lte"] = date_to
+        # Filtra pela data de publicação, mas cai na de recolha quando a
+        # publicação não traz data (é o caso dos vídeos do TikTok e de páginas
+        # do Facebook sem `created_time`).
+        filters.append(
+            {
+                "bool": {
+                    "should": [
+                        {"range": {"published_at": rng}},
+                        {
+                            "bool": {
+                                "must_not": {"exists": {"field": "published_at"}},
+                                "must": [{"range": {"collected_at": rng}}],
+                            }
+                        },
+                    ],
+                    "minimum_should_match": 1,
+                }
+            }
+        )
+
+    bool_query: Dict[str, Any] = {"must": must or [{"match_all": {}}]}
+    if filters:
+        bool_query["filter"] = filters
+    return {"bool": bool_query}
+
+
+def search_social(
+    q: Optional[str] = None,
+    platform: Optional[str] = None,
+    channel_id: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    sentiments: Optional[List[str]] = None,
+    size: int = 20,
+    from_: int = 0,
+    sort: str = "recent",
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa publicações sociais, com facetas por plataforma, canal, etiqueta e dia."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "total": 0, "items": [], "facets": {}}
+
+    ensure_indices(client)
+
+    sort_spec: List[Any]
+    if sort == "oldest":
+        sort_spec = [{"collected_at": {"order": "asc"}}]
+    elif sort == "engagement":
+        sort_spec = [{"likes": {"order": "desc"}}, {"comments": {"order": "desc"}}]
+    elif sort == "views":
+        sort_spec = [{"views": {"order": "desc"}}, {"likes": {"order": "desc"}}]
+    elif sort == "relevance" and q:
+        sort_spec = [{"_score": {"order": "desc"}}, {"collected_at": {"order": "desc"}}]
+    else:
+        sort_spec = [{"collected_at": {"order": "desc"}}]
+
+    body: Dict[str, Any] = {
+        "size": max(0, min(int(size), 200)),
+        "from": max(0, int(from_)),
+        "query": _social_query(q, platform, channel_id, tags, date_from, date_to, sentiments),
+        "sort": sort_spec,
+        "track_total_hits": True,
+        "aggs": {
+            "platforms": {"terms": {"field": "platform", "size": 20}},
+            "channels": {"terms": {"field": "channel_id", "size": 50}},
+            "tags": {"terms": {"field": "tags", "size": 50}},
+            "days": {"date_histogram": {"field": "collected_at", "calendar_interval": "day", "min_doc_count": 0}},
+            "sentiment": {"terms": {"field": "sentiment", "size": 10}},
+            "sentiment_avg": {"avg": {"field": "sentiment_score"}},
+        },
+    }
+
+    try:
+        resp = client.search(index=SOCIAL_INDEX, body=body)
+    except Exception as exc:
+        logger.debug("Pesquisa social falhou (%s); a repetir sem `data.*`: %s", q, exc)
+        if not q:
+            return {"error": str(exc), "total": 0, "items": [], "facets": {}}
+        fallback = dict(body)
+        fallback["query"] = {
+            "bool": {
+                "must": [{"multi_match": {"query": q, "fields": ["title", "text", "author"], "lenient": True}}],
+                "filter": _social_query(None, platform, channel_id, tags, date_from, date_to, sentiments)["bool"].get("filter", []),
+            }
+        }
+        try:
+            resp = client.search(index=SOCIAL_INDEX, body=fallback)
+        except Exception as inner:
+            return {"error": str(inner), "total": 0, "items": [], "facets": {}}
+
+    aggs = resp.get("aggregations", {}) or {}
+    total = resp.get("hits", {}).get("total", 0)
+    total_value = total.get("value", 0) if isinstance(total, dict) else total
+    return {
+        "total": int(total_value or 0),
+        "items": [hit.get("_source") or {} for hit in resp.get("hits", {}).get("hits", [])],
+        "facets": {
+            "platforms": [
+                {"key": b["key"], "count": b["doc_count"]} for b in aggs.get("platforms", {}).get("buckets", [])
+            ],
+            "channels": [
+                {"key": b["key"], "count": b["doc_count"]} for b in aggs.get("channels", {}).get("buckets", [])
+            ],
+            "tags": [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("tags", {}).get("buckets", [])],
+            "days": [
+                {"key": b.get("key_as_string"), "count": b["doc_count"]}
+                for b in aggs.get("days", {}).get("buckets", [])
+                if b.get("doc_count")
+            ],
+            "sentiment": [
+                {"key": b["key"], "count": b["doc_count"]} for b in aggs.get("sentiment", {}).get("buckets", [])
+            ],
+        },
+        "sentiment": _sentiment_summary(aggs, int(total_value or 0)),
+    }
+
+
+def social_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Volumetria do índice social (total e por plataforma)."""
+    client = es or get_es_client()
+    if not client:
+        return {"available": False, "total": 0, "platforms": []}
+
+    ensure_indices(client)
+    try:
+        resp = client.search(
+            index=SOCIAL_INDEX,
+            body={
+                "size": 0,
+                "track_total_hits": True,
+                "aggs": {
+                    "platforms": {"terms": {"field": "platform", "size": 20}},
+                    "channels": {"terms": {"field": "channel_id", "size": 50}},
+                },
+            },
+        )
+        total = resp.get("hits", {}).get("total", 0)
+        total_value = total.get("value", 0) if isinstance(total, dict) else total
+        aggs = resp.get("aggregations", {}) or {}
+        return {
+            "available": True,
+            "total": int(total_value or 0),
+            "platforms": [
+                {"key": b["key"], "count": b["doc_count"]} for b in aggs.get("platforms", {}).get("buckets", [])
+            ],
+            "channels": [
+                {"key": b["key"], "count": b["doc_count"]} for b in aggs.get("channels", {}).get("buckets", [])
+            ],
+        }
+    except Exception as exc:
+        return {"available": False, "total": 0, "platforms": [], "error": str(exc)}
+
+
+def delete_social_channel(channel_id: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Remove do índice todas as publicações de um canal."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    ensure_indices(client)
+    try:
+        resp = client.delete_by_query(
+            index=SOCIAL_INDEX,
+            body={"query": {"term": {"channel_id": channel_id}}},
+            refresh=True,
+            conflicts="proceed",
+        )
+        return {"ok": True, "deleted": resp.get("deleted", 0)}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
 # --- Contratos públicos de Espanha (PLACSP) ---------------------------------
 # Documentos produzidos por `collectors/contratos_es.py`. O `_id` do documento é
 # `fonte|DIR3 do órgão|n.º de expediente`, pelo que reprocessar um ano atualiza em
@@ -8220,7 +8784,669 @@ def societario_targets(
     return {"items": items, "total": len(items), "from": from_, "size": limit}
 
 
+# --- CIRE: publicidade da insolvência e da revitalização de empresas ---
+
+def cire_existing_ids(
+    pub_ids: List[str],
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Devolve quais dos ``pub_ids`` já existem no índice do CIRE.
+
+    Serve para a importação **não reescrever** documentos que já lá estão: uma
+    recolha repetida do mesmo período só acrescenta o que é novo. A consulta é
+    feita em blocos (o ``terms`` tem limite prático de 10 000 valores).
+    """
+    client = es or get_es_client()
+    if not client or not pub_ids:
+        return {"found": [], "known": 0, "checked": 0, "index": CIRE_INDEX}
+
+    unique = list(dict.fromkeys(str(item) for item in pub_ids if item))
+    found: List[str] = []
+    chunk_size = 5000
+    try:
+        ensure_indices(client)
+        for start in range(0, len(unique), chunk_size):
+            chunk = unique[start: start + chunk_size]
+            resp = client.search(
+                index=CIRE_INDEX,
+                body={
+                    "size": len(chunk),
+                    "track_total_hits": False,
+                    "_source": ["pub_id"],
+                    "query": {"terms": {"pub_id": chunk}},
+                },
+            )
+            for hit in resp.get("hits", {}).get("hits", []):
+                # O `_id` do documento leva o prefixo do índice (`finance_cire:<pub_id>`),
+                # por isso o valor tem de vir do campo `pub_id`.
+                valor = (hit.get("_source") or {}).get("pub_id")
+                if not valor:
+                    valor = str(hit.get("_id", "")).split(":", 1)[-1]
+                found.append(str(valor))
+    except Exception as exc:
+        return {"error": str(exc), "found": [], "known": 0, "checked": len(unique), "index": CIRE_INDEX}
+
+    return {
+        "found": found,
+        "known": len(found),
+        "checked": len(unique),
+        "index": CIRE_INDEX,
+    }
+
+
+def index_cire_items(
+    items: List[Dict[str, Any]],
+    run_id: Optional[str] = None,
+    replace_for_referencias: Optional[List[str]] = None,
+    skip_existing: bool = True,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa publicações do CIRE no índice ``CIRE_INDEX``.
+
+    O ``_id`` é o ``pub_id`` (sha1 de referência + processo + data + ato). Com
+    ``skip_existing`` (por omissão) os documentos **que já existem no índice são
+    ignorados** — recolher de novo o mesmo período só acrescenta o que é novo e
+    não reescreve nada (o número de ignorados vem em ``skipped_existing``). Use
+    ``skip_existing=False`` para forçar a atualização dos existentes.
+
+    Se ``replace_for_referencias`` for dado, os documentos dessas referências que
+    já não constem da lista são apagados (a lista considera **todos** os itens
+    recebidos, mesmo os ignorados por já existirem).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed_count": 0, "total": 0}
+
+    preparados: List[Dict[str, Any]] = []
+    referencias_por_pub: Dict[str, str] = {}
+    for item in items:
+        doc = {k: v for k, v in item.items() if not k.startswith("_") and v is not None}
+        if not doc.get("pub_id"):
+            continue
+        doc["source"] = doc.get("source") or "citius_cire"
+        if run_id:
+            doc["run_id"] = run_id
+        preparados.append(doc)
+        if doc.get("referencia") is not None:
+            referencias_por_pub[str(doc["pub_id"])] = str(doc["referencia"])
+
+    ignorados: List[str] = []
+    if skip_existing and preparados:
+        existentes = cire_existing_ids([str(d["pub_id"]) for d in preparados], es=client)
+        ja_no_indice = set(existentes.get("found") or [])
+        ignorados = [str(d["pub_id"]) for d in preparados if str(d["pub_id"]) in ja_no_indice]
+        preparados = [d for d in preparados if str(d["pub_id"]) not in ja_no_indice]
+        if existentes.get("error"):
+            logger.warning("Não foi possível verificar duplicados do CIRE: %s", existentes["error"])
+
+    now = datetime.utcnow().isoformat()
+    docs = [{**doc, "ingested_at": now} for doc in preparados]
+    result = _bulk_index_docs(CIRE_INDEX, docs, id_field="pub_id", es=client)
+    result["received"] = len(items)
+    result["indexed_count"] = result.get("indexed_count", 0)
+    result["skipped_existing"] = len(ignorados)
+    result["candidates"] = len(preparados)
+
+    if replace_for_referencias:
+        deleted = 0
+        for referencia in replace_for_referencias:
+            keep_ids = [
+                f"{CIRE_INDEX}:{pub_id}"
+                for pub_id, ref in referencias_por_pub.items()
+                if ref == str(referencia)
+            ]
+            deleted += _delete_stale_docs(
+                CIRE_INDEX, "referencia", str(referencia), keep_ids, es=client
+            )
+        result["deleted_stale"] = deleted
+    return result
+
+
+def search_cire(
+    q: Optional[str] = None,
+    referencia: Optional[str] = None,
+    processo: Optional[str] = None,
+    nif: Optional[str] = None,
+    tribunal: Optional[str] = None,
+    tribunal_comarca: Optional[str] = None,
+    tipo: Optional[str] = None,
+    ato: Optional[str] = None,
+    especie: Optional[str] = None,
+    insolvente: Optional[str] = None,
+    papel: Optional[str] = None,
+    data_from: Optional[str] = None,
+    data_to: Optional[str] = None,
+    has_documento: Optional[bool] = None,
+    size: int = 20,
+    from_: int = 0,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa publicações do CIRE (insolvências e revitalizações).
+
+    ``q`` procura em texto livre (interveniente, tribunal, processo, ato). Os
+    restantes parâmetros são filtros exatos, exceto as datas (intervalo
+    inclusivo sobre a data de publicação) e ``papel`` (papel do interveniente).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+
+    ensure_indices(client)
+
+    must: List[Dict[str, Any]] = []
+    filters: List[Dict[str, Any]] = []
+    if q:
+        must.append(
+            {
+                "multi_match": {
+                    "query": q,
+                    "fields": [
+                        "insolvente^3",
+                        "intervenientes.nome^3",
+                        "referencia^3",
+                        "processo^2",
+                        "processo_numero^2",
+                        "tribunal^2",
+                        "ato^2",
+                        "especie",
+                        "texto",
+                    ],
+                    "operator": "and",
+                }
+            }
+        )
+    if referencia:
+        filters.append({"term": {"referencia": str(referencia)}})
+    if processo:
+        filters.append({"match_phrase": {"processo": processo}})
+    if nif:
+        filters.append({"term": {"nifs": str(nif)}})
+    if tribunal:
+        filters.append({"match_phrase": {"tribunal": tribunal}})
+    if tribunal_comarca:
+        filters.append({"term": {"tribunal_comarca": tribunal_comarca}})
+    if tipo:
+        filters.append({"term": {"tipo": tipo}})
+    if ato:
+        filters.append({"match_phrase": {"ato": ato}})
+    if especie:
+        filters.append({"match_phrase": {"especie": especie}})
+    if insolvente:
+        filters.append({"match_phrase": {"insolvente": insolvente}})
+    if papel:
+        filters.append(
+            {"nested": {"path": "intervenientes", "query": {"term": {"intervenientes.papel": papel}}}}
+        )
+    if has_documento is not None:
+        filters.append({"term": {"has_documento": bool(has_documento)}})
+    if data_from or data_to:
+        interval: Dict[str, str] = {}
+        if data_from:
+            interval["gte"] = data_from
+        if data_to:
+            interval["lte"] = data_to
+        filters.append({"range": {"data_publicacao": interval}})
+
+    query: Dict[str, Any]
+    if must or filters:
+        query = {"bool": {}}
+        if must:
+            query["bool"]["must"] = must
+        if filters:
+            query["bool"]["filter"] = filters
+    else:
+        query = {"match_all": {}}
+
+    body: Dict[str, Any] = {
+        "query": query,
+        "from": max(0, from_),
+        "size": max(1, min(size, 200)),
+        "track_total_hits": True,
+        "sort": [{"data_publicacao": {"order": "desc", "missing": "_last"}}, "_score"],
+        "aggs": {
+            "by_tipo": {"terms": {"field": "tipo", "size": 10}},
+            "by_comarca": {"terms": {"field": "tribunal_comarca", "size": 25}},
+            "by_tribunal": {"terms": {"field": "tribunal.keyword", "size": 25}},
+            "by_especie": {"terms": {"field": "especie.keyword", "size": 15}},
+            "by_ato": {"terms": {"field": "ato.keyword", "size": 20}},
+            "by_ano": {
+                "date_histogram": {"field": "data_publicacao", "calendar_interval": "year", "format": "yyyy"}
+            },
+            "by_mes": {
+                "date_histogram": {"field": "data_publicacao", "calendar_interval": "month", "format": "yyyy-MM"}
+            },
+            "by_papel": {
+                "nested": {"path": "intervenientes"},
+                "aggs": {"papel": {"terms": {"field": "intervenientes.papel", "size": 15}}},
+            },
+        },
+    }
+
+    try:
+        resp = client.search(index=CIRE_INDEX, body=body)
+        aggs = resp.get("aggregations", {})
+        return {
+            "query": q,
+            "total": resp["hits"]["total"]["value"],
+            "items": [{**hit["_source"], "doc_id": hit["_id"]} for hit in resp["hits"]["hits"]],
+            "from": from_,
+            "size": size,
+            "facets": {
+                "tipo": [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("by_tipo", {}).get("buckets", [])],
+                "tribunal_comarca": [
+                    {"key": b["key"], "count": b["doc_count"]} for b in aggs.get("by_comarca", {}).get("buckets", [])
+                ],
+                "tribunal": [
+                    {"key": b["key"], "count": b["doc_count"]} for b in aggs.get("by_tribunal", {}).get("buckets", [])
+                ],
+                "especie": [
+                    {"key": b["key"], "count": b["doc_count"]} for b in aggs.get("by_especie", {}).get("buckets", [])
+                ],
+                "ato": [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("by_ato", {}).get("buckets", [])],
+                "ano": [
+                    {"key": b.get("key_as_string"), "count": b["doc_count"]}
+                    for b in aggs.get("by_ano", {}).get("buckets", [])
+                ],
+                "mes": [
+                    {"key": b.get("key_as_string"), "count": b["doc_count"]}
+                    for b in aggs.get("by_mes", {}).get("buckets", [])
+                ],
+                "papel": [
+                    {"key": b["key"], "count": b["doc_count"]}
+                    for b in aggs.get("by_papel", {}).get("papel", {}).get("buckets", [])
+                ],
+            },
+        }
+    except Exception as exc:
+        return {"error": str(exc), "items": [], "total": 0}
+
+
+def cire_interveniente(nif: str, size: int = 100, from_: int = 0, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Publicações do CIRE em que um NIF/NIPC é interveniente (qualquer papel)."""
+    return search_cire(nif=str(nif), size=size, from_=from_, es=es)
+
+
+def cire_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Volumetria do índice do CIRE (documentos, NIFs, datas e distribuições)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    ensure_indices(client)
+    try:
+        count = client.count(index=CIRE_INDEX).get("count", 0)
+        out: Dict[str, Any] = {"index": CIRE_INDEX, "documents": count}
+        if not count:
+            return out
+        resp = client.search(
+            index=CIRE_INDEX,
+            body={
+                "size": 0,
+                "aggs": {
+                    "nifs": {"cardinality": {"field": "nifs"}},
+                    "insolventes": {"cardinality": {"field": "insolvente.keyword"}},
+                    "referencias": {"cardinality": {"field": "referencia"}},
+                    "min_date": {"min": {"field": "data_publicacao"}},
+                    "max_date": {"max": {"field": "data_publicacao"}},
+                    "by_tipo": {"terms": {"field": "tipo", "size": 10}},
+                    "by_comarca": {"terms": {"field": "tribunal_comarca", "size": 15}},
+                    "by_tribunal": {"terms": {"field": "tribunal.keyword", "size": 15}},
+                    "by_ato": {"terms": {"field": "ato.keyword", "size": 15}},
+                    "by_especie": {"terms": {"field": "especie.keyword", "size": 15}},
+                    "by_ano": {
+                        "date_histogram": {
+                            "field": "data_publicacao", "calendar_interval": "year", "format": "yyyy"
+                        }
+                    },
+                    "by_mes": {
+                        "date_histogram": {
+                            "field": "data_publicacao", "calendar_interval": "month", "format": "yyyy-MM"
+                        }
+                    },
+                    "com_documento": {"filter": {"term": {"has_documento": True}}},
+                },
+            },
+        )
+        aggs = resp.get("aggregations", {})
+
+        def _buckets(name: str) -> List[Dict[str, Any]]:
+            return [
+                {"key": b["key"], "count": b["doc_count"]}
+                for b in aggs.get(name, {}).get("buckets", [])
+            ]
+
+        out["nifs"] = aggs.get("nifs", {}).get("value", 0)
+        out["insolventes"] = aggs.get("insolventes", {}).get("value", 0)
+        out["referencias"] = aggs.get("referencias", {}).get("value", 0)
+        out["min_date"] = (aggs.get("min_date", {}) or {}).get("value_as_string")
+        out["max_date"] = (aggs.get("max_date", {}) or {}).get("value_as_string")
+        out["with_documento"] = aggs.get("com_documento", {}).get("doc_count", 0)
+        out["by_tipo"] = _buckets("by_tipo")
+        out["top_comarcas"] = _buckets("by_comarca")
+        out["top_tribunais"] = _buckets("by_tribunal")
+        out["top_actos"] = _buckets("by_ato")
+        out["by_especie"] = _buckets("by_especie")
+        out["by_ano"] = [
+            {"key": b.get("key_as_string"), "count": b["doc_count"]}
+            for b in aggs.get("by_ano", {}).get("buckets", [])
+        ]
+        out["by_mes"] = [
+            {"key": b.get("key_as_string"), "count": b["doc_count"]}
+            for b in aggs.get("by_mes", {}).get("buckets", [])
+        ]
+        return out
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def cire_runs_summary(run_ids: List[str], es: Optional[Elasticsearch] = None) -> Dict[str, int]:
+    """Número de documentos indexados por ``run_id`` (para a lista de recolhas)."""
+    client = es or get_es_client()
+    if not client or not run_ids:
+        return {}
+    try:
+        resp = client.search(
+            index=CIRE_INDEX,
+            body={
+                "size": 0,
+                "query": {"terms": {"run_id": run_ids}},
+                "aggs": {"by_run": {"terms": {"field": "run_id", "size": len(run_ids)}}},
+            },
+        )
+        return {
+            b["key"]: b["doc_count"]
+            for b in resp.get("aggregations", {}).get("by_run", {}).get("buckets", [])
+        }
+    except Exception:
+        return {}
+
+
 # --- Pessoas e cargos extraídos do societário ---
+
+# Campos que identificam um cargo, para o deduplicar ao juntar fichas da mesma pessoa.
+_PEOPLE_ROLE_KEYS = ("publication_id", "company_nif", "role", "event", "date")
+
+
+def _person_role_key(role: Dict[str, Any]) -> tuple:
+    """Chave de deduplicação de um cargo (publicação + empresa + cargo + evento + data)."""
+    return tuple(str(role.get(key) or "") for key in _PEOPLE_ROLE_KEYS)
+
+
+def _merge_person_docs(
+    existing: Optional[Dict[str, Any]],
+    incoming: Dict[str, Any],
+    drop_company_nif: Optional[str] = None,
+    drop_role_org: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Junta uma ficha guardada com a recém-extraída sem perder cargos de outras empresas.
+
+    A extração é feita **por empresa** (as publicações são pesquisadas por NIF),
+    mas o documento `finance_people:{nif}` é único por pessoa: indexar apenas o
+    resultado da empresa A substituiria os cargos que a mesma pessoa tem na
+    empresa B. Aqui os cargos são acumulados. Quando é uma reingestão
+    (``drop_company_nif``) os cargos antigos dessa empresa são descartados; com
+    ``drop_role_org`` (ex.: `CIRE`) descartam-se os cargos dessa origem, para não
+    deixar registos obsoletos.
+    """
+    merged: Dict[str, Any] = dict(existing or {})
+    merged.update({k: v for k, v in incoming.items() if k not in ("roles", "sources")})
+
+    roles: List[Dict[str, Any]] = list(incoming.get("roles") or [])
+    for role in (existing or {}).get("roles") or []:
+        if drop_company_nif and str(role.get("company_nif") or "") == str(drop_company_nif):
+            continue
+        if drop_role_org and str(role.get("role_org") or "") == str(drop_role_org):
+            continue
+        roles.append(role)
+
+    seen_roles: set = set()
+    unique: List[Dict[str, Any]] = []
+    for role in roles:
+        key = _person_role_key(role)
+        if key in seen_roles:
+            continue
+        seen_roles.add(key)
+        unique.append(role)
+    unique.sort(key=lambda role: str(role.get("date") or ""), reverse=True)
+
+    companies: List[Dict[str, str]] = []
+    seen_companies: set = set()
+    latest: Dict[str, Dict[str, Any]] = {}
+    for role in unique:
+        cnif = role.get("company_nif")
+        if cnif and cnif not in seen_companies:
+            seen_companies.add(cnif)
+            companies.append({"nif": cnif, "name": role.get("company_name") or cnif})
+        latest.setdefault(str(cnif or ""), role)
+
+    dates = [str(role["date"]) for role in unique if role.get("date")]
+    name = str(merged.get("name") or "")
+    if len(str(incoming.get("name") or "")) > len(name):
+        name = str(incoming["name"])
+
+    merged.update({
+        "name": name,
+        "name_keyword": name,
+        "roles": unique,
+        "companies": companies,
+        "companies_count": len(companies),
+        "roles_count": len(unique),
+        "latest_roles": list(latest.values()),
+        "first_seen": min(dates) if dates else merged.get("first_seen"),
+        "last_seen": max(dates) if dates else merged.get("last_seen"),
+    })
+    # Fontes: a ficha pode vir do societário e ser enriquecida pelo CIRE (e vice-versa).
+    sources = _person_sources(existing, incoming)
+    if sources:
+        merged["sources"] = sources
+        # `source` fica com a fonte primária (a que criou a ficha).
+        merged["source"] = sources[0]
+    return merged
+
+
+def _person_sources(
+    existing: Optional[Dict[str, Any]],
+    incoming: Optional[Dict[str, Any]],
+) -> List[str]:
+    """União ordenada das fontes que alimentaram a ficha (`sources` + `source`)."""
+    sources: List[str] = []
+    for doc in (existing or {}, incoming or {}):
+        for value in (doc.get("sources"), doc.get("source")):
+            values = [value] if isinstance(value, str) else list(value or [])
+            for item in values:
+                item = str(item or "").strip()
+                if item and item not in sources:
+                    sources.append(item)
+    return sources
+
+
+def _fetch_people_docs(
+    nifs: Iterable[str],
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Dict[str, Any]]:
+    """Fichas já indexadas dos NIF indicados (``nif`` -> ``_source``)."""
+    client = es or get_es_client()
+    wanted = list(dict.fromkeys(str(n).strip() for n in nifs if str(n or "").strip()))
+    if not client or not wanted:
+        return {}
+
+    out: Dict[str, Dict[str, Any]] = {}
+    for start in range(0, len(wanted), 500):
+        batch = wanted[start : start + 500]
+        try:
+            resp = client.mget(index=PEOPLE_INDEX, ids=[f"{PEOPLE_INDEX}:{n}" for n in batch])
+        except Exception as exc:
+            logger.debug("mget de pessoas falhou: %s", exc)
+            continue
+        for doc in resp.get("docs", []):
+            source = doc.get("_source")
+            if doc.get("found") and isinstance(source, dict):
+                nif = str(source.get("nif") or str(doc.get("_id") or "").split(":")[-1])
+                out[nif] = source
+    return out
+
+
+def people_index_presence(nifs: Iterable[str], es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Indica quais dos NIF indicados já têm ficha no PessoasIQ (`finance_people`)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "total": 0, "indexed": [], "missing": []}
+    ensure_indices(client)
+
+    wanted = list(dict.fromkeys(str(n).strip() for n in nifs if str(n or "").strip()))
+    if not wanted:
+        return {"total": 0, "indexed": [], "missing": []}
+
+    found = set(_fetch_people_docs(wanted, es=client))
+    return {
+        "total": len(wanted),
+        "indexed": [nif for nif in wanted if nif in found],
+        "missing": [nif for nif in wanted if nif not in found],
+    }
+
+
+def index_people(
+    people: Iterable[Dict[str, Any]],
+    merge: bool = True,
+    drop_company_nif: Optional[str] = None,
+    drop_role_org: Optional[str] = None,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa fichas de pessoas no `finance_people` (um documento por NIF).
+
+    Com ``merge`` (por omissão) os cargos já indexados são preservados, para que
+    processar as publicações de uma empresa não apague os cargos da mesma pessoa
+    noutras empresas. ``drop_company_nif`` / ``drop_role_org`` descartam os cargos
+    obsoletos da empresa / da origem que está a ser reingerida.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed_count": 0, "total": 0}
+    ensure_indices(client)
+
+    docs: List[Dict[str, Any]] = []
+    for person in people:
+        nif = str((person or {}).get("nif") or "").strip()
+        if not nif:
+            continue
+        doc = {k: v for k, v in person.items() if v is not None}
+        doc["nif"] = nif
+        doc.setdefault("sources", [doc.get("source")] if doc.get("source") else [])
+        docs.append(doc)
+    if not docs:
+        return {"indexed_count": 0, "total": 0}
+
+    previous = _fetch_people_docs([d["nif"] for d in docs], es=client) if merge else {}
+    now = _today()
+    actions = []
+    for doc in docs:
+        base = previous.get(doc["nif"])
+        if base:
+            doc = _merge_person_docs(
+                base,
+                doc,
+                drop_company_nif=drop_company_nif,
+                drop_role_org=drop_role_org,
+            )
+        doc["ingested_at"] = now
+        actions.append({
+            "_op_type": "index",
+            "_index": PEOPLE_INDEX,
+            "_id": f"{PEOPLE_INDEX}:{doc['nif']}",
+            **doc,
+        })
+
+    try:
+        success, errors = bulk(client, actions, raise_on_error=False, refresh=True)
+        return {"indexed_count": success, "total": len(actions), "errors": len(errors)}
+    except Exception as exc:
+        return {"error": str(exc), "indexed_count": 0, "total": len(actions)}
+
+
+def _prune_people_company_roles(
+    company_nif: str,
+    keep_nifs: Iterable[str],
+    es: Optional[Elasticsearch] = None,
+) -> int:
+    """Remove cargos obsoletos de uma empresa, apagando as fichas que fiquem sem cargos.
+
+    Numa reingestão, as pessoas que já não constam das publicações da empresa
+    deixam de ter lá cargos; se não tiverem cargos noutras empresas, a ficha é
+    removida (senão ficaria uma pessoa vazia no PessoasIQ).
+    """
+    client = es or get_es_client()
+    if not client or not company_nif:
+        return 0
+    keep = {str(n) for n in keep_nifs}
+    try:
+        resp = client.search(
+            index=PEOPLE_INDEX,
+            body={
+                "query": {"nested": {"path": "roles", "query": {"term": {"roles.company_nif": str(company_nif)}}}},
+                "size": 2000,
+            },
+        )
+    except Exception as exc:
+        logger.debug("prune de pessoas ignorado: %s", exc)
+        return 0
+
+    now = _today()
+    actions: List[Dict[str, Any]] = []
+    to_delete: List[str] = []
+    for hit in resp.get("hits", {}).get("hits", []):
+        source = hit.get("_source") or {}
+        nif = str(source.get("nif") or "")
+        if nif in keep:
+            continue
+        doc = _merge_person_docs(source, {"nif": nif, "roles": []}, drop_company_nif=str(company_nif))
+        if not doc.get("roles"):
+            to_delete.append(hit["_id"])
+            continue
+        doc["ingested_at"] = now
+        actions.append({"_op_type": "index", "_index": PEOPLE_INDEX, "_id": hit["_id"], **doc})
+
+    if actions:
+        try:
+            bulk(client, actions, raise_on_error=False, refresh=False)
+        except Exception as exc:
+            logger.debug("prune de pessoas (update) falhou: %s", exc)
+    if to_delete:
+        try:
+            client.delete_by_query(
+                index=PEOPLE_INDEX,
+                body={"query": {"terms": {"_id": to_delete}}},
+                refresh=False,
+            )
+        except Exception as exc:
+            logger.debug("prune de pessoas (delete) falhou: %s", exc)
+    try:
+        client.indices.refresh(index=PEOPLE_INDEX)
+    except Exception:
+        pass
+    return len(actions) + len(to_delete)
+
+
+def _publicacoes_for_people(
+    nif: Optional[str],
+    es: Optional[Elasticsearch] = None,
+) -> List[Dict[str, Any]]:
+    """Publicações societárias a usar na extração de pessoas (de uma entidade ou todas)."""
+    client = es or get_es_client()
+    if not client:
+        return []
+    if nif:
+        return (company_publicacoes(str(nif), size=1000, es=client) or {}).get("items", [])
+
+    items: List[Dict[str, Any]] = []
+    offset = 0
+    while offset < 20000:
+        page = search_societario(size=200, from_=offset, es=client)
+        batch = page.get("items", [])
+        items.extend(batch)
+        if len(batch) < 200:
+            break
+        offset += len(batch)
+    return items
+
 
 def index_people_from_societario(
     nif: Optional[str] = None,
@@ -8229,9 +9455,10 @@ def index_people_from_societario(
 ) -> Dict[str, Any]:
     """Indexa pessoas/cargos extraídos das publicações societárias.
 
-    Se ``nif`` for dado, processa apenas as publicações dessa entidade. Se
-    ``replace_for_nif`` for dado, apaga os documentos antigos da pessoa ligados
-    a essa empresa antes de indexar (garante coerência após reingestão).
+    Se ``nif`` for dado, processa apenas as publicações dessa entidade (caso
+    contrário percorre o índice societário completo). Se ``replace_for_nif`` for
+    dado, os cargos dessa empresa que já não constem da recolha são removidos —
+    os cargos da mesma pessoa noutras empresas são preservados.
     """
     from collectors.people_extractor import extract_from_publicacoes
 
@@ -8241,73 +9468,239 @@ def index_people_from_societario(
     ensure_indices(client)
 
     target_nif = nif or replace_for_nif
-    publicacoes_resp = company_publicacoes(str(target_nif), size=1000, es=client) if target_nif else search_societario(size=1000, es=client)
-    items = publicacoes_resp.get("items", [])
-
+    items = _publicacoes_for_people(str(target_nif) if target_nif else None, es=client)
     if not items:
         return {"indexed_count": 0, "total": 0, "nif": target_nif}
 
     people = extract_from_publicacoes(items)
-
-    # Opcional: apagar os docs de pessoas cujas roles só continham esta empresa.
+    result = index_people(
+        people,
+        drop_company_nif=str(replace_for_nif) if replace_for_nif else None,
+        es=client,
+    )
     if replace_for_nif:
+        result["pruned"] = _prune_people_company_roles(
+            str(replace_for_nif), [p.get("nif") for p in people], es=client
+        )
+    result["nif"] = target_nif
+    return result
+
+
+#: Campos do CIRE necessários para extrair pessoas.
+_CIRE_PEOPLE_FIELDS = (
+    "pub_id",
+    "data_publicacao",
+    "processo",
+    "processo_numero",
+    "especie",
+    "ato",
+    "tribunal_comarca",
+    "tribunal",
+    "insolvente",
+    "intervenientes",
+)
+
+
+def _iter_cire_publications(
+    client: Elasticsearch,
+    *,
+    limit: Optional[int] = None,
+    page_size: int = 2000,
+    progress: Optional[Dict[str, Any]] = None,
+) -> Any:
+    """Percorre as publicações do CIRE (com intervenientes), com `search_after`."""
+    body: Dict[str, Any] = {
+        "size": page_size,
+        # `intervenientes` é `nested`: um `exists` direto não encontra nada.
+        "query": {"nested": {"path": "intervenientes", "query": {"match_all": {}}}},
+        "_source": list(_CIRE_PEOPLE_FIELDS),
+        "sort": [{"pub_id": "asc"}],
+    }
+    emitted = 0
+    search_after: Optional[List[Any]] = None
+    while True:
+        if search_after:
+            body["search_after"] = search_after
         try:
-            existing = client.search(
-                index=PEOPLE_INDEX,
-                body={
-                    "query": {"nested": {"path": "roles", "query": {"term": {"roles.company_nif": str(replace_for_nif)}}}},
-                    "size": 1000,
-                    "_source": ["nif"],
-                },
-            )
-            to_delete = [hit["_id"] for hit in existing.get("hits", {}).get("hits", [])]
-            if to_delete:
-                client.delete_by_query(
-                    index=PEOPLE_INDEX,
-                    body={"query": {"terms": {"_id": to_delete}}},
-                    refresh=True,
-                )
+            resp = client.search(index=CIRE_INDEX, body=body)
         except Exception as exc:
-            logger.debug("delete_stale_people ignorado: %s", exc)
+            logger.warning("Leitura do CIRE para pessoas falhou: %s", exc)
+            break
+        hits = resp.get("hits", {}).get("hits", [])
+        if not hits:
+            break
+        for hit in hits:
+            yield hit.get("_source") or {}
+            emitted += 1
+            if limit and emitted >= limit:
+                if progress is not None:
+                    progress["publications"] = emitted
+                return
+        search_after = hits[-1].get("sort")
+        if progress is not None:
+            progress["publications"] = emitted
+        if not search_after or len(hits) < page_size:
+            break
 
-    actions = []
-    now = _today()
-    for person in people:
-        doc = {k: v for k, v in person.items() if v is not None}
-        doc["ingested_at"] = now
-        actions.append({
-            "_op_type": "index",
-            "_index": PEOPLE_INDEX,
-            "_id": f"{PEOPLE_INDEX}:{doc['nif']}",
-            **doc,
-        })
 
-    if not actions:
-        return {"indexed_count": 0, "total": 0, "nif": target_nif}
+def index_people_from_cire(
+    *,
+    limit: Optional[int] = None,
+    include_companies: bool = False,
+    papeis: Optional[Iterable[str]] = None,
+    write_chunk: int = 1000,
+    progress: Optional[Dict[str, Any]] = None,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa no PessoasIQ as pessoas que constam dos processos do CIRE.
 
-    try:
-        success, errors = bulk(client, actions, raise_on_error=False, refresh=True)
+    Percorre `finance_cire` (publicações com intervenientes), transforma cada
+    interveniente pessoa singular num cargo (`role_org = CIRE`) e junta-o à ficha
+    da pessoa em `finance_people`. Os cargos do CIRE já indexados são substituídos
+    (``drop_role_org``), mas os cargos do societário são preservados.
+
+    ``papeis`` filtra os papéis a considerar (ex.: `["Insolvente", "Administrador
+    da insolvência"]`); ``include_companies`` inclui pessoas coletivas (por
+    omissão só entram pessoas singulares).
+    """
+    from collectors.cire_people import (
+        CIRE_ROLE_ORG,
+        aggregate_cire_people,
+        extract_people_from_cire,
+    )
+
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed_count": 0, "total": 0}
+    ensure_indices(client)
+
+    if progress is not None:
+        progress.setdefault("phase", "a ler o CIRE")
+    records: List[Dict[str, Any]] = []
+    publications = 0
+    for pub in _iter_cire_publications(client, limit=limit, progress=progress):
+        publications += 1
+        records.extend(
+            extract_people_from_cire(pub, papeis=papeis, include_companies=include_companies)
+        )
+
+    if progress is not None:
+        progress["phase"] = "a agregar por pessoa"
+        progress["intervenientes"] = len(records)
+
+    people = aggregate_cire_people(records)
+    if not people:
         return {
-            "indexed_count": success,
-            "total": len(actions),
-            "errors": len(errors),
-            "nif": target_nif,
+            "indexed_count": 0,
+            "total": 0,
+            "publications": publications,
+            "intervenientes": len(records),
+            "message": "Sem pessoas a indexar a partir do CIRE.",
         }
+
+    if progress is not None:
+        progress["phase"] = "a indexar"
+        progress["people"] = len(people)
+
+    indexed = 0
+    errors = 0
+    chunk = max(1, int(write_chunk or 1000))
+    for start in range(0, len(people), chunk):
+        batch = people[start : start + chunk]
+        result = index_people(batch, drop_role_org=CIRE_ROLE_ORG, es=client)
+        indexed += int(result.get("indexed_count") or 0)
+        errors += int(result.get("errors") or 0)
+        if progress is not None:
+            progress["indexed"] = indexed
+            progress["errors"] = errors
+        if result.get("error"):
+            logger.warning("Indexação de pessoas do CIRE falhou: %s", result["error"])
+            return {
+                "error": result["error"],
+                "indexed_count": indexed,
+                "total": len(people),
+                "publications": publications,
+                "intervenientes": len(records),
+                "errors": errors,
+            }
+
+    return {
+        "indexed_count": indexed,
+        "total": len(people),
+        "publications": publications,
+        "intervenientes": len(records),
+        "errors": errors,
+        "source": CIRE_ROLE_ORG.lower(),
+    }
+
+
+def _person_from_publications(nif: str, es: Optional[Elasticsearch] = None) -> Optional[Dict[str, Any]]:
+    """Reconstrói a ficha de uma pessoa a partir das publicações que a mencionam.
+
+    Rede de segurança para pessoas que aparecem no societário mas cujas
+    publicações ainda não foram processadas para o índice `finance_people`.
+    """
+    from collectors.people_extractor import extract_from_publicacoes
+
+    client = es or get_es_client()
+    if not client:
+        return None
+    try:
+        resp = client.search(
+            index=SOCIETARIO_INDEX,
+            body={
+                "query": {
+                    "bool": {
+                        "should": [
+                            {"match_phrase": {"texto": str(nif)}},
+                            {"term": {"nif": str(nif)}},
+                            {"match": {"requerente": str(nif)}},
+                        ],
+                        "minimum_should_match": 1,
+                    }
+                },
+                "size": 500,
+            },
+        )
+        items = [hit.get("_source") or {} for hit in resp.get("hits", {}).get("hits", [])]
     except Exception as exc:
-        return {"error": str(exc), "indexed_count": 0, "total": len(actions), "nif": target_nif}
+        logger.debug("Ficha de %s a partir das publicações falhou: %s", nif, exc)
+        return None
+
+    for person in extract_from_publicacoes(items):
+        if str(person.get("nif")) == str(nif):
+            return person
+    return None
 
 
 def get_person_by_nif(nif: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
-    """Devolve ficha de uma pessoa pelo NIF."""
+    """Devolve ficha de uma pessoa pelo NIF.
+
+    Se ainda não estiver em `finance_people` (o índice é alimentado pelas
+    publicações societárias processadas), a ficha é reconstruída a partir das
+    publicações que mencionam o NIF e fica indexada — abrir uma pessoa a partir
+    do dossiê de uma empresa não deve falhar por falta de ingestão.
+    """
     client = es or get_es_client()
     if not client:
         return {"error": "Elasticsearch indisponível"}
     ensure_indices(client)
+    nif = str(nif).strip()
     try:
         resp = client.get(index=PEOPLE_INDEX, id=f"{PEOPLE_INDEX}:{nif}", _source=True)
         return {**resp.get("_source", {}), "doc_id": resp.get("_id")}
+    except NotFoundError:
+        pass
     except Exception as exc:
         return {"nif": nif, "error": str(exc)}
+
+    person = _person_from_publications(nif, es=client)
+    if not person:
+        return {"nif": nif, "error": "Pessoa não encontrada nas publicações societárias indexadas"}
+
+    index_people([person], es=client)
+    stored = _fetch_people_docs([nif], es=client).get(nif)
+    return {**(stored or person), "doc_id": f"{PEOPLE_INDEX}:{nif}", "derived": True}
 
 
 def search_people(
@@ -8354,11 +9747,16 @@ def search_people(
             }
         })
     if role:
-        role_norm = role.lower()
         nested_filters.append({
             "nested": {
                 "path": "roles",
-                "query": {"wildcard": {"roles.role": f"*{role_norm}*"}},
+                # `wildcard` sem `case_insensitive` não encontra cargos com maiúsculas
+                # (o campo é keyword e mantém o texto original).
+                "query": {
+                    "wildcard": {
+                        "roles.role": {"value": f"*{role}*", "case_insensitive": True},
+                    }
+                },
             }
         })
 
@@ -8540,6 +9938,7 @@ def people_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
                     "aggs": {
                         "is_company": {"terms": {"field": "is_company", "size": 5}},
                         "companies_stats": {"sum": {"field": "companies_count"}},
+                        "by_source": {"terms": {"field": "source", "size": 10}},
                         "top_roles": {
                             "nested": {"path": "roles"},
                             "aggs": {"roles": {"terms": {"field": "roles.role", "size": 15}}},
@@ -8550,6 +9949,7 @@ def people_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
             aggs = resp.get("aggregations", {})
             out["is_company"] = [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("is_company", {}).get("buckets", [])]
             out["total_company_links"] = int(aggs.get("companies_stats", {}).get("value", 0))
+            out["by_source"] = [{"key": str(b["key"]), "count": b["doc_count"]} for b in aggs.get("by_source", {}).get("buckets", [])]
             out["top_roles"] = [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("top_roles", {}).get("roles", {}).get("buckets", [])]
         return out
     except Exception as exc:

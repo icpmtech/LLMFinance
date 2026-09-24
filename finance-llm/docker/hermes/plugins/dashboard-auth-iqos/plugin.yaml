@@ -1,0 +1,20 @@
+# Manifesto do plugin de autenticação do dashboard do Hermes Agent.
+#
+# O gestor de plugins do Hermes só descobre pastas em `$HERMES_HOME/plugins/`
+# que tenham um manifesto (`plugin.yaml` ou `plugin.json`); sem este ficheiro o
+# `register()` do `__init__.py` nunca era chamado e o dashboard recusava ligar-se
+# a 0.0.0.0 por não ter nenhum provider registado.
+name: dashboard-auth-iqos
+version: 1.0.0
+description: >-
+  Provider de autenticação do dashboard do Hermes Agent que valida o login nas
+  contas do IQ OS (`POST /auth/login`), em vez de um par fixo de credenciais:
+  o formulário «Sign in with Username & Password» passa a usar as mesmas contas
+  da plataforma.
+author: IQ OS
+kind: standalone
+
+# Variáveis lidas pelo provider (ver o `__init__.py`).
+optional_env:
+  - IQOS_API_URL
+  - HERMES_DASHBOARD_IQOS_SECRET

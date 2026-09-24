@@ -73,10 +73,17 @@ services:
       args:
         # Mesma origem: o nginx faz proxy de /api/ para backend:8000
         VITE_API_URL: ${VITE_API_URL:-/api}
+        # Apps incorporadas por iframe (vazio = host do browser + porta do compose)
+        VITE_SEARXNG_URL: ${VITE_SEARXNG_URL:-}
+        VITE_N8N_URL: ${VITE_N8N_URL:-}
+        VITE_HERMES_URL: ${VITE_HERMES_URL:-}
     image: iq-os-frontend:latest
     container_name: finance-llm-frontend
     ports:
       - "${FINANCE_UI_PORT:-4180}:80"
+      # Proxy de incorporação (iframe) das apps de apoio — ver docker/nginx.conf
+      - "${N8N_EMBED_PORT:-8891}:8891"
+      - "${HERMES_EMBED_PORT:-8892}:8892"
     depends_on:
       backend:
         condition: service_healthy
@@ -88,14 +95,109 @@ services:
       retries: 3
     restart: unless-stopped
 
+  # Metasearch self-hosted (SearXNG) — alimenta a página iframe «Pesquisa» e
+  # pode ser usado como fonte de pesquisa pelos agentes.
+  # Configuração própria em docker/searxng/settings.yml (JSON ligado, limiter off).
+  searxng:
+    image: searxng/searxng:latest
+    container_name: finance-llm-searxng
+    ports:
+      - "${SEARXNG_PORT:-8888}:8080"
+    volumes:
+      - ./docker/searxng:/etc/searxng:rw
+      - searxng-cache:/var/cache/searxng
+    environment:
+      - SEARXNG_BASE_URL=http://127.0.0.1:${SEARXNG_PORT:-8888}/
+      - SEARXNG_SETTINGS_PATH=/etc/searxng/settings.yml
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 5
+    restart: unless-stopped
+
+  # n8n — automação de fluxos e agentes; a UI vive na página iframe «n8n».
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: finance-llm-n8n
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    volumes:
+      - n8n-data:/home/node/.n8n
+      - ./docker/n8n:/files
+    environment:
+      - N8N_HOST=127.0.0.1
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_SECURE_COOKIE=false
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_PERSONALIZATION_ENABLED=false
+      - GENERIC_TIMEZONE=Europe/Lisbon
+      - TZ=Europe/Lisbon
+      - WEBHOOK_URL=http://127.0.0.1:${N8N_PORT:-5678}/
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+    restart: unless-stopped
+
+  # Hermes Agent (Nous Research) — agente autónomo. Traz:
+  #   * API OpenAI-compatível + health em :8642 ("gateway run")
+  #   * dashboard web em :9119 (HERMES_DASHBOARD=1) — é o que abre na página iframe.
+  #
+  # Fica no perfil "agents" porque o 1.º arranque passa pelo assistente de
+  # configuração (chaves de API): `docker compose --profile agents run --rm hermes-agent setup`.
+  # O estado (config, sessões, memórias) vive no volume `hermes-data` → /opt/data.
+  hermes-agent:
+    image: nousresearch/hermes-agent:latest
+    container_name: finance-llm-hermes-agent
+    profiles: ["agents"]
+    # Dois argumentos distintos: `["gateway run"]` (um só argumento) faz o
+    # dispatcher responder «'gateway run' is not a hermes command».
+    command: ["gateway", "run"]
+    ports:
+      # API OpenAI-compatível do gateway. O dashboard (9119) **não** é publicado
+      # no host: só é acessível pelo proxy de incorporação do nginx (porto 8892),
+      # que valida a sessão do IQ OS e injeta a credencial interna — ver
+      # `docker/nginx.conf` (SSO com as mesmas contas da plataforma).
+      - "${HERMES_API_PORT:-8642}:8642"
+    volumes:
+      - hermes-data:/opt/data
+      # Provider de autenticação do dashboard: valida o login nas contas do IQ OS.
+      - ./docker/hermes/plugins/dashboard-auth-iqos:/opt/data/plugins/dashboard-auth-iqos:ro
+      # Ativa esse plugin em cada arranque (o estado de ativação vive no volume).
+      - ./docker/hermes/init/026-enable-iqos-plugin.sh:/etc/cont-init.d/026-enable-iqos-plugin.sh:ro
+    environment:
+      - HERMES_DASHBOARD=1
+      - HERMES_DASHBOARD_HOST=0.0.0.0
+      - HERMES_DASHBOARD_PORT=9119
+      # O dashboard não tem contas próprias: o formulário «Sign in with Username &
+      # Password» é validado em `POST /auth/login` do IQ OS pelo plugin acima.
+      - IQOS_API_URL=${IQOS_API_URL:-http://backend:8000}
+      # Chave de assinatura das sessões do dashboard (32+ bytes). Vazio => por processo.
+      - HERMES_DASHBOARD_IQOS_SECRET=${HERMES_DASHBOARD_IQOS_SECRET:-}
+      - API_SERVER_ENABLED=true
+      - API_SERVER_HOST=0.0.0.0
+      - API_SERVER_KEY=${HERMES_API_KEY:-iqos-hermes-api-key-please-change}
+      - API_SERVER_CORS_ORIGINS=*
+    shm_size: "1gb"
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2.0"
+    restart: unless-stopped
+
   # Servidor MCP do IQ OS em transporte HTTP (para o Inspector, agentes ou o VS Code).
   # Reutiliza a imagem do backend (mesmo código e dependências) e fala com o
   # backend pelo nome do serviço.
+  #
+  # Nota: o ENTRYPOINT da imagem do backend arranca o uvicorn; aqui é substituído
+  # pelo próprio servidor MCP, senão o container serviria a API na porta errada.
   mcp:
     image: iq-os-backend:latest
     container_name: finance-llm-mcp
     profiles: ["tools"]
-    command: ["python", "-m", "mcp_server", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8765"]
+    entrypoint: ["python", "-m", "mcp_server"]
+    command: ["--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8765"]
     ports:
       - "${IQOS_MCP_PORT:-8765}:8765"
     volumes:
@@ -111,13 +213,23 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8765), 3).close()"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
     restart: unless-stopped
 
   # Testes executados *dentro* de Docker (pytest + smoke test dos endpoints).
   # Não arranca com "up": corre explicitamente com
+  #   docker compose --profile test build tests     (usa a imagem do backend como base)
   #   docker compose --profile test run --rm tests
   tests:
-    image: iq-os-backend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    image: iq-os-tests:latest
     container_name: finance-llm-tests
     profiles: ["test"]
     working_dir: /app
@@ -147,3 +259,6 @@ services:
 
 volumes:
   es-data:
+  searxng-cache:
+  n8n-data:
+  hermes-data:

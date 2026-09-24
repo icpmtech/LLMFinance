@@ -315,12 +315,23 @@ def extract_people_from_publicacao(pub: Dict[str, Any]) -> List[Dict[str, Any]]:
 # Agregação por pessoa
 # ---------------------------------------------------------------------------
 
-def aggregate_people(records: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def aggregate_people(
+    records: Iterable[Dict[str, Any]],
+    source: str = "publicacoes_mj",
+    max_roles: Optional[int] = None,
+    max_companies: Optional[int] = None,
+) -> List[Dict[str, Any]]:
     """Agrava registos de eventos em documentos por NIF pessoa.
 
     Cada documento tem uma lista `roles` com todos os eventos observados,
     campos resumo (`first_seen`, `last_seen`, `companies`, `roles_summary`) e
     metadados de origem. O `_id` final em ES será `finance_people:{nif}`.
+
+    ``source`` identifica a origem (societário ou CIRE). ``max_roles`` e
+    ``max_companies`` limitam o tamanho da ficha (os cargos/empresas mais antigos
+    são descartados, mas `roles_count`/`companies_count` continuam a refletir o
+    total observado) — necessário para quem tem milhares de processos (ex.: um
+    credor pessoa singular no CIRE).
     """
     by_nif: Dict[str, Dict[str, Any]] = {}
     today = date.today().isoformat()
@@ -356,35 +367,45 @@ def aggregate_people(records: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "residencia": r["residencia"],
             "publication_id": r["publication_id"],
             "nacionalidade": r["nacionalidade"],
+            "tribunal": r.get("tribunal"),
         }
         entry["roles"].append(role)
-        entry["sources"].add("publicacoes_mj")
+        entry["sources"].add(source)
         if r["company_nif"]:
             entry["companies"].append({"nif": r["company_nif"], "name": r["company_name"]})
 
     people: List[Dict[str, Any]] = []
     for entry in by_nif.values():
+        # Cargos: mais recentes primeiro (e limitados ao máximo configurado).
+        entry["roles"].sort(key=lambda x: str(x.get("date") or ""), reverse=True)
+        total_roles = len(entry["roles"])
+        if max_roles and max_roles > 0:
+            entry["roles"] = entry["roles"][:max_roles]
+
         dates = [r["date"] for r in entry["roles"] if r["date"]]
         entry["first_seen"] = min(dates) if dates else None
         entry["last_seen"] = max(dates) if dates else None
-        # Deduplicar empresas mantendo ordem de primeira ocorrência.
+        # Deduplicar empresas mantendo a ordem de primeira ocorrência.
         seen_companies: List[Dict[str, str]] = []
         seen_nifs: set = set()
         for c in entry["companies"]:
             if c["nif"] and c["nif"] not in seen_nifs:
                 seen_nifs.add(c["nif"])
                 seen_companies.append(c)
+        total_companies = len(seen_companies)
+        if max_companies and max_companies > 0:
+            seen_companies = seen_companies[:max_companies]
         entry["companies"] = seen_companies
-        entry["companies_count"] = len(seen_companies)
-        entry["roles_count"] = len(entry["roles"])
+        entry["companies_count"] = total_companies
+        entry["roles_count"] = total_roles
         # Resumo dos cargos mais recentes (último evento por empresa).
         latest_by_company: Dict[str, Dict[str, Any]] = {}
-        for role in sorted(entry["roles"], key=lambda x: x["date"] or "", reverse=True):
+        for role in entry["roles"]:
             cnif = role["company_nif"] or ""
             if cnif not in latest_by_company:
                 latest_by_company[cnif] = role
         entry["latest_roles"] = list(latest_by_company.values())
-        entry["source"] = "publicacoes_mj"
+        entry["source"] = source
         entry["ingested_at"] = today
         entry.pop("sources")
         people.append(entry)

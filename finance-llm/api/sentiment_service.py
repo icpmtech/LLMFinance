@@ -600,9 +600,37 @@ def corpus_from_scraped(q: Optional[str] = None, source_id: Optional[str] = None
     return documents
 
 
+def corpus_from_social(q: Optional[str] = None, channel_id: Optional[str] = None, limit: int = 60) -> List[Dict[str, Any]]:
+    """Constrói um corpus a partir das publicações das redes sociais (`finance_social`)."""
+    from api.elasticsearch_client import search_social
+
+    result = search_social(
+        q=q,
+        channel_id=channel_id,
+        size=max(1, min(limit, 200)),
+        sort="relevance" if q else "recent",
+    )
+    documents = []
+    for hit in result.get("items") or []:
+        platform = str(hit.get("platform") or "")
+        community = str(hit.get("community") or "")
+        source = " · ".join(part for part in (platform.capitalize(), hit.get("channel_name"), community) if part)
+        documents.append(
+            {
+                "id": hit.get("item_id") or "",
+                "title": hit.get("title") or "",
+                "source": source or "Redes sociais",
+                "date": hit.get("published_at") or hit.get("collected_at"),
+                "url": hit.get("url") or "",
+                "tags": (hit.get("tags") or [])[:6],
+                "text": clean_text(" ".join([str(hit.get("title") or ""), str(hit.get("text") or "")])),
+            }
+        )
+    return documents
+
+
 def corpus_from_news(q: Optional[str] = None, limit: int = 60) -> List[Dict[str, Any]]:
     """Constrói um corpus a partir das notícias indexadas (`finance_news`)."""
-    from api.elasticsearch_client import get_es_client, ensure_indices
 
     client = get_es_client()
     if not client:
@@ -899,6 +927,7 @@ def corpus_from_email(owner: str, account_id: str, *, folder: str = "INBOX", lim
 # `available_sources()` diz quantos documentos cada uma tem disponíveis.
 ORIGINS: List[Dict[str, Any]] = [
     {"id": "scraped", "label": "Recolha (sites)", "group": "Recolha e fontes externas", "hint": "Itens recolhidos de sites", "index": "finance_scraped"},
+    {"id": "social", "label": "Redes sociais", "group": "Recolha e fontes externas", "hint": "Publicações de LinkedIn, TikTok, Reddit e Facebook", "index": "finance_social"},
     {"id": "news", "label": "Notícias de mercado", "group": "Recolha e fontes externas", "hint": "Notícias indexadas por ticker", "index": "finance_news"},
     {"id": "contracts", "label": "Contratos públicos", "group": "Dados da plataforma", "hint": "Objeto e descrição dos contratos", "index": "contratos"},
     {"id": "firmas", "label": "Firmas (RNPC)", "group": "Dados da plataforma", "hint": "Firmas e denominações", "index": "finance_firmas"},

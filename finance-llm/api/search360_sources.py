@@ -935,6 +935,8 @@ def index_overview() -> List[Dict[str, Any]]:
         es_client.ENTITIES_INDEX: ("Entidades", "entidades"),
         es_client.CRM_INDEX: ("CRM", "privado"),
         es_client.SCRAPED_INDEX: ("Recolhas", "documentos"),
+        es_client.CIRE_INDEX: ("Insolvências (CIRE)", "publicações"),
+        es_client.CONTRIBUINTES_INDEX: ("Contribuintes", "entidades"),
         "finance_news": ("Notícias", "documentos"),
         "finance_prices": ("Cotações", "mercados"),
         "finance_sentiment_daily": ("Sentimento", "mercados"),

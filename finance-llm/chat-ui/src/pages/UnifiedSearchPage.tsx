@@ -59,6 +59,7 @@ const moneyFormat = new Intl.NumberFormat("pt-PT", { style: "currency", currency
 
 const SCOPE_ICON: Record<string, React.ReactNode> = {
   scraped: <Globe2 size={14} />,
+  social: <Users size={14} />,
   contracts: <FileSignature size={14} />,
   contracts_es: <ScrollText size={14} />,
   entities_es: <Handshake size={14} />,

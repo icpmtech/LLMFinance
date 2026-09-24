@@ -12,6 +12,7 @@ import { API_BASE } from "./api";
 export type SearchScopeId =
   | "all"
   | "scraped"
+  | "social"
   | "contracts"
   | "contracts_es"
   | "entities_es"

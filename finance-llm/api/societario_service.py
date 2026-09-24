@@ -107,12 +107,29 @@ def normalize_date(value: str) -> Optional[str]:
 
 
 def ingest(items: List[Dict[str, Any]], replace_for_nif: Optional[str] = None) -> Dict[str, Any]:
-    """Indexa publicações recolhidas no índice societário."""
-    from api.elasticsearch_client import index_societario_items
+    """Indexa publicações recolhidas no índice societário.
+
+    Alimenta também o PessoasIQ: as pessoas/cargos extraídos das publicações
+    passam a existir no índice `finance_people`, para que as fichas abertas a
+    partir do dossiê da empresa não dependam de uma segunda ação manual.
+    """
+    from api.elasticsearch_client import index_people_from_societario, index_societario_items
 
     docs = normalize_items(items)
     result = index_societario_items(docs, replace_for_nif=replace_for_nif)
     result["received"] = len(items)
+    if result.get("error"):
+        return result
+
+    nifs = {str(d.get("nif")) for d in docs if d.get("nif")}
+    target = replace_for_nif or (next(iter(nifs)) if len(nifs) == 1 else None)
+    people = index_people_from_societario(nif=target, replace_for_nif=target)
+    result["people"] = {
+        "indexed_count": people.get("indexed_count", 0),
+        "total": people.get("total", 0),
+        "errors": people.get("errors", 0),
+        "error": people.get("error"),
+    }
     return result
 
 

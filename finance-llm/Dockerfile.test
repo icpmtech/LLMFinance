@@ -1,0 +1,22 @@
+# Imagem de testes do IQ OS.
+#
+# Parte da imagem do backend (que já traz todo o código e dependências de
+# runtime) e acrescenta apenas o que é preciso para correr a bateria de testes:
+# pytest. Assim a build é de segundos em vez de repetir o `pip install` de
+# PyTorch/transformers.
+FROM iq-os-backend:latest
+
+# A imagem do backend define um HEALTHCHECK para o uvicorn: aqui não se aplica
+# (o container corre testes e termina), e sem isto o container aparece "unhealthy".
+HEALTHCHECK NONE
+
+RUN pip install --no-cache-dir "pytest>=8.0.0"
+
+# O código, os testes e o smoke test vêm do COPY . . do Dockerfile.backend.
+WORKDIR /app
+
+# Re-copiar o código de teste a partir do contexto da build: a imagem do backend
+# é reconstruída quando o backend muda (≈ horas) e sem isto a bateria de testes
+# correria uma versão antiga de `tests/` e do smoke test.
+COPY tests/ /app/tests/
+COPY docker/smoke_test.py /app/docker/smoke_test.py

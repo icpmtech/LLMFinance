@@ -45,6 +45,9 @@ export function GraphCanvas({
   layoutVersion = 0,
   loading = false,
   heightClass = "h-[560px]",
+  unitLabel = "contratos",
+  nodeSummary,
+  edgeSummary,
   onNodeClick,
   onEdgeClick,
 }: {
@@ -55,6 +58,12 @@ export function GraphCanvas({
   layoutVersion?: number;
   loading?: boolean;
   heightClass?: string;
+  /** Unidade mostrada nas dicas (ex.: «contratos» ou «publicações»). */
+  unitLabel?: string;
+  /** Resumo personalizado do nó na dica (por omissão: contratos · valor). */
+  nodeSummary?: (node: StudioNode) => string;
+  /** Resumo personalizado da aresta na dica (por omissão: métrica · contratos). */
+  edgeSummary?: (edge: StudioEdge) => string;
   onNodeClick?: (node: StudioNode) => void;
   onEdgeClick?: (edge: StudioEdge) => void;
 }) {
@@ -606,7 +615,9 @@ export function GraphCanvas({
               <p className="text-sm font-medium text-foreground break-words">{hovered.label}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">{hovered.role ?? hovered.dimension}</p>
               <p className="mt-1 text-xs text-teal-300">
-                {formatCompact(hovered.count)} contratos · {formatMoney(hovered.total_value)}
+                {nodeSummary
+                  ? nodeSummary(hovered)
+                  : `${formatCompact(hovered.count)} ${unitLabel} · ${formatMoney(hovered.total_value)}`}
               </p>
               <p className="mt-2 text-[10px] uppercase tracking-wide text-muted-foreground">Clique para detalhar</p>
             </>
@@ -619,9 +630,9 @@ export function GraphCanvas({
                 → {nodes.find((node) => node.id === hoveredEdge?.target)?.label ?? hoveredEdge?.target}
               </p>
               <p className="mt-1.5 text-xs text-muted-foreground">
-                {metricLabel(metric, metric === "valor" ? hoveredEdge?.value ?? 0 : hoveredEdge?.count ?? 0)}
-                {" · "}
-                {formatCompact(hoveredEdge?.count ?? 0)} contratos
+                {edgeSummary
+                  ? edgeSummary(hoveredEdge as StudioEdge)
+                  : `${metricLabel(metric, metric === "valor" ? hoveredEdge?.value ?? 0 : hoveredEdge?.count ?? 0)} · ${formatCompact(hoveredEdge?.count ?? 0)} ${unitLabel}`}
               </p>
             </>
           )}

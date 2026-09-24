@@ -118,6 +118,8 @@ docker compose up --build -d
 - Frontend: http://127.0.0.1:4180
 - API docs (Swagger): http://127.0.0.1:8003/docs
 - Elasticsearch: http://127.0.0.1:9200
+- SearXNG (página iframe «Pesquisa»): http://127.0.0.1:8888
+- n8n (página iframe «n8n»): http://127.0.0.1:8891 · direto em http://127.0.0.1:5678
 
 Para parar:
 
@@ -130,9 +132,12 @@ Os volumes `./data`, `./model`, `./rag` e `./logs` são montados no backend (os 
 Serviços opcionais (perfis do compose):
 
 ```bash
+docker compose --profile agents up -d        # Hermes Agent (API :8642 + dashboard na página iframe «Hermes Agent»)
 docker compose --profile tools up -d mcp     # servidor MCP em HTTP (http://127.0.0.1:8765/mcp)
 docker compose --profile test run --rm tests # pytest + smoke test de todos os endpoints, em Docker
 ```
+
+Três aplicações de apoio ficam pré-instaladas como **páginas iframe** na plataforma (dock → Pesquisa, n8n, Hermes Agent). O dashboard do Hermes entra com **as mesmas contas do IQ OS** (`docker/hermes/plugins/dashboard-auth-iqos`).
 
 ## Recolha de dados
 

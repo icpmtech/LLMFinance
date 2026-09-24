@@ -86,6 +86,10 @@ import type {
   Person,
   PeopleGraphResponse,
   PeopleIngestResponse,
+  PeoplePresenceResponse,
+  PeopleCireIngestRequest,
+  PeopleCireIngestResult,
+  PeopleCireJobResponse,
   ImportFileType,
   ImportDataType,
   ImportPreviewRow,
@@ -97,7 +101,8 @@ import type {
 
 export type { ContractAnalyticsResponse, ContractAnalyticsFilters, CompanySearchResponse, CompanyDetail, CompanyContractsResponse, CompanyAnalyticsResponse };
 export type { ImportFileType, ImportDataType, ImportPreviewRow, ImportPreviewResponse, ImportIngestRequest, ImportIngestResponse, ImportStatusResponse };
-export type { PeopleSearchResponse, Person, PeopleGraphResponse, PeopleIngestResponse };
+export type { PeopleSearchResponse, Person, PeopleGraphResponse, PeopleIngestResponse, PeoplePresenceResponse };
+export type { PeopleCireIngestRequest, PeopleCireIngestResult, PeopleCireJobResponse };
 
 export function getPlotUrl(plot_url: string): string {
   if (plot_url.startsWith("http://") || plot_url.startsWith("https://")) {
@@ -1200,6 +1205,25 @@ export async function getCompanySocietarioPeople(
   return res.json();
 }
 
+/**
+ * Valida, no PessoasIQ, quais destes NIF já têm ficha indexada (`finance_people`).
+ * Serve para marcar as pessoas do societário que ainda faltam alimentar.
+ */
+export async function checkPeopleIndexed(
+  nifs: string[],
+): Promise<PeoplePresenceResponse> {
+  const res = await fetch(`${API_BASE}/people/exists`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nifs }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao validar o índice de pessoas: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
 export interface SocietarioTimelineResponse {
   nif: string;
   total: number;
@@ -1356,6 +1380,52 @@ export async function ingestPeopleForCompany(nif: string): Promise<PeopleIngestR
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Erro ao indexar pessoas/cargos: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/**
+ * Indexa no PessoasIQ as pessoas que constam dos processos de insolvência do CIRE.
+ * A ingestão é longa (corre em segundo plano): devolve o trabalho a acompanhar com
+ * `getPeopleCireJob`.
+ */
+export async function ingestPeopleFromCire(
+  opts?: PeopleCireIngestRequest,
+): Promise<PeopleCireJobResponse> {
+  const res = await fetch(`${API_BASE}/people/ingest-cire`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      limit: opts?.limit ?? null,
+      include_companies: opts?.include_companies ?? false,
+      papeis: opts?.papeis ?? null,
+      wait: opts?.wait ?? false,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao indexar pessoas do CIRE: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Progresso de um trabalho de ingestão de pessoas do CIRE. */
+export async function getPeopleCireJob(jobId: string): Promise<PeopleCireJobResponse> {
+  const res = await fetch(`${API_BASE}/people/ingest-cire/jobs/${encodeURIComponent(jobId)}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter o progresso da ingestão do CIRE: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Trabalhos de ingestão de pessoas do CIRE (mais recentes primeiro). */
+export async function getPeopleCireJobs(): Promise<PeopleCireJobResponse[]> {
+  const res = await fetch(`${API_BASE}/people/ingest-cire/jobs`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter as ingestões do CIRE: ${res.status} - ${text}`);
   }
   return res.json();
 }

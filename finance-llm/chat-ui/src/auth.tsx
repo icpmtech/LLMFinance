@@ -51,6 +51,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const prefs = next.preferences || {};
     const reduced = Boolean(prefs.reduced_motion);
     document.documentElement.classList.toggle("reduce-motion", reduced);
+    // Lista vazia + sem marcador de semente = primeira utilização: o
+    // `iframePages` instala aí as páginas predefinidas (Pesquisa, n8n, Hermes Agent).
     syncIframePagesFromUser((prefs as { iframe_pages?: unknown[] }).iframe_pages || []);
   }, []);
 

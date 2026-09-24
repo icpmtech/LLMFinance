@@ -61,6 +61,35 @@ const STORAGE_KEY = "finance-llm-iframe-pages:v1";
 const CHANGE_EVENT = "finance-llm-iframe-pages-changed";
 const SAVE_DEBOUNCE_MS = 600;
 
+/**
+ * Marcador local de «as páginas predefinidas já foram instaladas neste browser».
+ *
+ * O backend (por agora) guarda `iframe_pages: []` para contas novas, portanto
+ * não é possível distinguir «nunca teve páginas» de «removeu todas» só pelas
+ * preferências: uma lista vazia + marcador ausente significa que ainda não
+ * houve semente, e é aí que se instalam as predefinidas. O marcador permite que
+ * quem apague as páginas não as veja reaparecer no arranque seguinte.
+ */
+const SEEDED_KEY = "finance-llm-iframe-pages:seeded";
+
+function hasSeededDefaults(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return window.localStorage.getItem(SEEDED_KEY) === "1";
+  } catch {
+    return true;
+  }
+}
+
+function markDefaultsSeeded(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SEEDED_KEY, "1");
+  } catch {
+    // Sem localStorage: mantém-se o comportamento em memória.
+  }
+}
+
 export const IFRAME_VIEW_PREFIX = "iframe:";
 
 /** Catálogo de ícones disponíveis para as páginas iframe. */
@@ -343,14 +372,99 @@ export function iframeDockApps(): DockApp[] {
   return cache.filter((p) => p.enabled).map(iframeToDockApp);
 }
 
+// ---------------------------------------------------------------------------
+// Páginas predefinidas da solução (Pesquisa, n8n, Hermes Agent)
+// ---------------------------------------------------------------------------
+//
+// São serviços que o `docker-compose.yml` do IQ OS arranca em containers:
+//   * SearXNG (metasearch) ............ http://<host>:8888  (direto)
+//   * n8n (automação/agentes) ......... http://<host>:8891  (proxy nginx de embed)
+//   * Hermes Agent (dashboard) ........ http://<host>:8892  (proxy nginx de embed)
+//
+// O n8n e o dashboard do Hermes enviam `X-Frame-Options`, por isso são
+// incorporados através do proxy de nginx que os retira (ver `docker/nginx.conf`).
+
+/**
+ * Constrói o URL de um serviço de apoio: usa `VITE_*_URL` quando definido na
+ * build e, caso contrário, o mesmo host da SPA com a porta por omissão do
+ * compose (funciona em `127.0.0.1` e a partir de outra máquina da rede).
+ */
+function supportServiceUrl(envValue: unknown, port: number): string {
+  const configured = String(envValue || "").trim();
+  if (configured) return configured;
+  const host =
+    typeof window !== "undefined" && window.location.hostname ? window.location.hostname : "127.0.0.1";
+  return `http://${host}:${port}/`;
+}
+
+/** Páginas iframe que a solução instala por omissão (totalmente editáveis). */
+export function defaultIframePages(): IframePageConfig[] {
+  const now = new Date().toISOString();
+  return [
+    {
+      id: "iqos-pesquisa",
+      title: "Pesquisa",
+      url: supportServiceUrl(import.meta.env.VITE_SEARXNG_URL, 8888),
+      icon: "Search",
+      accent: "56,189,248",
+      gradient: "from-sky-300 via-sky-500 to-sky-700",
+      enabled: true,
+      createdAt: now,
+    },
+    {
+      id: "iqos-n8n",
+      title: "n8n",
+      url: supportServiceUrl(import.meta.env.VITE_N8N_URL, 8891),
+      icon: "Network",
+      accent: "168,85,247",
+      gradient: "from-purple-300 via-purple-500 to-purple-700",
+      enabled: true,
+      createdAt: now,
+    },
+    {
+      id: "iqos-hermes-agent",
+      title: "Hermes Agent",
+      url: supportServiceUrl(import.meta.env.VITE_HERMES_URL, 8892),
+      icon: "Bot",
+      accent: "249,115,22",
+      gradient: "from-orange-300 via-orange-500 to-orange-700",
+      enabled: true,
+      createdAt: now,
+    },
+  ];
+}
+
+/**
+ * Acrescenta as páginas predefinidas que ainda não existam (comparadas por id).
+ * Devolve a lista resultante; se já estavam todas, não altera nada.
+ */
+export function installDefaultIframePages(): IframePageConfig[] {
+  markDefaultsSeeded();
+  const existing = new Set(cache.map((page) => page.id));
+  const missing = defaultIframePages().filter((page) => !existing.has(page.id));
+  if (!missing.length) return cache;
+  const next = [...cache, ...missing];
+  commit(next);
+  return next;
+}
+
 /**
  * Sincroniza as páginas iframe vindas do servidor (preferências do utilizador)
  * com o cache local. Chamado pelo `AuthProvider` quando o perfil é carregado.
+ *
+ * Quando o utilizador nunca teve páginas (lista vazia e sem marcador de semente
+ * neste browser) são instaladas as **páginas predefinidas** da solução. Se as
+ * tiver removido (marcador presente), a lista vazia é respeitada.
  */
-export function syncIframePagesFromUser(pages: unknown[]): void {
+export function syncIframePagesFromUser(pages?: unknown[] | null): void {
   const sanitized = (Array.isArray(pages) ? pages : [])
     .map(sanitizePage)
     .filter((p): p is IframePageConfig => p !== null);
+
+  if (!sanitized.length && !hasSeededDefaults()) {
+    installDefaultIframePages();
+    return;
+  }
   const local = readRaw();
   if (JSON.stringify(local) === JSON.stringify(sanitized)) return;
   cache = sanitized;

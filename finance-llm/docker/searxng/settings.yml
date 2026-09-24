@@ -1,0 +1,40 @@
+# Configuração do SearXNG do IQ OS (metasearch self-hosted).
+#
+# `use_default_settings: true` mantém os motores predefinidos do SearXNG e
+# acrescenta/sobrepõe apenas o que é preciso para a plataforma:
+#
+# - `secret_key` fixo: sem ele o container gera uma chave nova a cada arranque,
+#   o que invalida sessões e o limiter.
+# - `limiter: false`: o limiter bloqueia pedidos programáticos (HTTP 429) quando
+#   a app IQ OS usa o SearXNG como fonte de pesquisa.
+# - `formats: html, json`: o `json` é o que permite consumir o SearXNG a partir
+#   do backend/agentes; o `html` é o que aparece na página iframe «Pesquisa».
+#
+# Este ficheiro é montado em `/etc/searxng/settings.yml`.
+use_default_settings: true
+
+server:
+  secret_key: "iq-os-searxng-secret-key-please-change"
+  limiter: false
+  public_instance: false
+  bind_address: "0.0.0.0"
+  image_proxy: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  formats:
+    - html
+    - json
+
+ui:
+  # Tem de ser um código de `LOCALE_NAMES` do SearXNG: "pt" (não "pt-PT",
+  # que faz o arranque falhar com `ValidationException: Invalid value`).
+  default_locale: "pt"
+  query_in_title: true
+
+# Os motores predefinidos do SearXNG ficam ativos (use_default_settings).
+# Se algum motor passar a bloquear pedidos, desative-o aqui:
+# engines:
+#   - name: google
+#     disabled: true

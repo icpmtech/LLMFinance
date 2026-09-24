@@ -58,8 +58,15 @@ import ScraperPage, {
   scraperSectionForView,
   type ScraperSection,
 } from "./pages/ScraperPage";
+import SocialPage, {
+  SOCIAL_SECTION_VIEWS,
+  socialSectionForView,
+  type SocialSection,
+} from "./pages/SocialPage";
 import UnifiedSearchPage from "./pages/UnifiedSearchPage";
 import SentimentPage from "./pages/SentimentPage";
+import CirePage from "./pages/CirePage";
+import ContribuintesPage from "./pages/ContribuintesPage";
 import Search360Page, {
   SEARCH360_SECTION_VIEWS,
   search360SectionForView,
@@ -229,8 +236,16 @@ function pathForView(
   if (view === "scraper-execucoes") return "/scraper/execucoes";
   if (view === "scraper-pesquisa") return "/scraper/pesquisa";
   if (view === "scraper-agenda") return "/scraper/agenda";
+  if (view === "social") return "/social";
+  if (view === "social-canais") return "/social/canais";
+  if (view === "social-execucoes") return "/social/execucoes";
+  if (view === "social-modelos") return "/social/modelos";
+  if (view === "social-agenda") return "/social/agenda";
+  if (view === "social-estado") return "/social/estado";
   if (view === "pesquisa") return "/pesquisa";
   if (view === "sentimento") return "/sentimento";
+  if (view === "cire") return "/cire";
+  if (view === "contribuintes") return "/contribuintes";
   if (view === "search360") return "/search360";
   if (view === "search360-dossie") return "/search360/dossie";
   if (view === "search360-projetos") return "/search360/projetos";
@@ -276,6 +291,17 @@ function scraperSectionFromPath(path: string): ScraperSection | null {
   if (path === "/scraper/execucoes") return "runs";
   if (path === "/scraper/pesquisa") return "search";
   if (path === "/scraper/agenda") return "schedule";
+  return null;
+}
+
+/** Secção da pesquisa social a partir do caminho do URL (ou `null`). */
+function socialSectionFromPath(path: string): SocialSection | null {
+  if (path === "/social" || path === "/social/pesquisa") return "pesquisa";
+  if (path === "/social/canais") return "canais";
+  if (path === "/social/execucoes") return "execucoes";
+  if (path === "/social/modelos") return "modelos";
+  if (path === "/social/agenda") return "agenda";
+  if (path === "/social/estado") return "estado";
   return null;
 }
 
@@ -374,6 +400,8 @@ export default function App() {
     if (path === "/search") return "search";
     if (path === "/pesquisa") return "pesquisa";
     if (path === "/sentimento") return "sentimento";
+    if (path === "/cire" || path.startsWith("/cire/")) return "cire";
+    if (path === "/contribuintes" || path.startsWith("/contribuintes/")) return "contribuintes";
     if (path === "/contracts") return "contracts-search";
     if (path === "/contracts/search") return "contracts-search";
     if (path === "/contratos-es") return "contratos-es";
@@ -420,6 +448,8 @@ export default function App() {
     {
       const scraperSection = scraperSectionFromPath(path);
       if (scraperSection) return SCRAPER_SECTION_VIEWS[scraperSection] as AppView;
+      const socialSection = socialSectionFromPath(path);
+      if (socialSection) return SOCIAL_SECTION_VIEWS[socialSection] as AppView;
       const search360Section = search360SectionFromPath(path);
       if (search360Section) return SEARCH360_SECTION_VIEWS[search360Section] as AppView;
       const officeSection = officeSectionFromPath(path);
@@ -458,6 +488,8 @@ export default function App() {
       else if (path === "/search") next = "search";
       else if (path === "/pesquisa") next = "pesquisa";
       else if (path === "/sentimento") next = "sentimento";
+      else if (path === "/cire" || path.startsWith("/cire/")) next = "cire";
+      else if (path === "/contribuintes" || path.startsWith("/contribuintes/")) next = "contribuintes";
       else if (path === "/contracts" || path === "/contracts/search") next = "contracts-search";
       else if (path === "/contratos-es") next = "contratos-es";
       else if (path === "/contratos-es/dashboard") next = "contratos-es-dashboard";
@@ -488,6 +520,7 @@ export default function App() {
       else if (iframeViewFromPath(path)) next = iframeViewFromPath(path) as AppView;
       else if (crmSectionFromPath(path)) next = CRM_SECTION_VIEWS[crmSectionFromPath(path) as CrmSection] as AppView;
       else if (scraperSectionFromPath(path)) next = SCRAPER_SECTION_VIEWS[scraperSectionFromPath(path) as ScraperSection] as AppView;
+      else if (socialSectionFromPath(path)) next = SOCIAL_SECTION_VIEWS[socialSectionFromPath(path) as SocialSection] as AppView;
       else if (search360SectionFromPath(path)) next = SEARCH360_SECTION_VIEWS[search360SectionFromPath(path) as Search360Section] as AppView;
       else if (officeSectionFromPath(path)) next = OFFICE_SECTION_VIEWS[officeSectionFromPath(path) as OfficeSection] as AppView;
       else if (path.startsWith("/companies/")) {
@@ -950,6 +983,15 @@ export default function App() {
         />
       );
     }
+    if (socialSectionForView(target)) {
+      const section = socialSectionForView(target) as SocialSection;
+      return (
+        <SocialPage
+          section={section}
+          onSectionChange={windowMode ? (next) => setViewAndHistory(SOCIAL_SECTION_VIEWS[next] as AppView) : undefined}
+        />
+      );
+    }
     const search360WindowSection = search360SectionForView(target);
     if (search360WindowSection) {
       return (
@@ -1012,6 +1054,8 @@ export default function App() {
     if (target === "sentimento") {
       return <SentimentPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
     }
+    if (target === "cire") return <CirePage />;
+    if (target === "contribuintes") return <ContribuintesPage />;
     if (target === "contracts-dashboard") {
       return (
         <ContractsDashboardPage

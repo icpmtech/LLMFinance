@@ -85,11 +85,17 @@ export function TreemapChart({
   nodes,
   metric,
   height = 460,
+  unitLabel = "contratos",
+  areaHint,
   onNodeClick,
 }: {
   nodes: StudioNode[];
   metric: GraphMetric;
   height?: number;
+  /** Unidade mostrada nas dicas (ex.: «contratos» ou «publicações»). */
+  unitLabel?: string;
+  /** Texto do rodapé (por omissão derivado da métrica). */
+  areaHint?: string;
   onNodeClick?: (node: StudioNode) => void;
 }) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -114,7 +120,7 @@ export function TreemapChart({
   }, [height, nodes, width]);
 
   const total = nodes.reduce((acc, node) => acc + node.value, 0);
-  const hint = metric === "valor" ? "área = valor contratado" : "área = nº de contratos";
+  const hint = areaHint ?? (metric === "valor" ? "área = valor contratado" : `área = nº de ${unitLabel}`);
 
   return (
     <div
@@ -158,7 +164,7 @@ export function TreemapChart({
                     {rect.node.label.length > Math.floor(rect.w / 7) ? `${rect.node.label.slice(0, Math.floor(rect.w / 7))}…` : rect.node.label}
                   </text>
                   <text x={rect.x + 8} y={rect.y + 32} fontSize={10} className="fill-slate-300">
-                    {metric === "valor" ? formatMoney(rect.node.total_value) : `${formatCompact(rect.node.count)} contratos`} ·{" "}
+                    {metric === "valor" ? formatMoney(rect.node.total_value) : `${formatCompact(rect.node.count)} ${unitLabel}`} ·{" "}
                     {share.toFixed(1)}%
                   </text>
                 </>
@@ -180,7 +186,9 @@ export function TreemapChart({
           <p className="text-sm text-foreground break-words">{hovered.label}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">{typeLabel(hovered.type)}</p>
           <p className="mt-1 text-xs text-teal-300">
-            {formatCompact(hovered.count)} contratos · {formatMoney(hovered.total_value)}
+            {metric === "valor"
+              ? formatMoney(hovered.total_value)
+              : `${formatCompact(hovered.count)} ${unitLabel}${hovered.total_value ? ` · ${formatMoney(hovered.total_value)}` : ""}`}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground">
             {total > 0 ? `${((hovered.value / total) * 100).toFixed(1)}% do total representado` : ""}

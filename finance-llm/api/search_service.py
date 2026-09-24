@@ -45,6 +45,7 @@ from api.elasticsearch_client import (
     search_entities,
     search_firmas,
     search_scraped,
+    search_social,
     search_trademarks,
 )
 
@@ -56,6 +57,7 @@ PRICES_INDEX = "finance_prices"
 # Âmbitos mostrados na página. `all` não é um grupo: significa «todos».
 SCOPES: List[Dict[str, Any]] = [
     {"id": "scraped", "label": "Recolha", "hint": "Dados recolhidos de sites (scraping)"},
+    {"id": "social", "label": "Redes sociais", "hint": "Publicações de LinkedIn, TikTok, Reddit e Facebook"},
     {"id": "contracts", "label": "Contratos", "hint": "Contratação pública (portal base)"},
     {"id": "contracts_es", "label": "Contratos ES", "hint": "Contratação pública de Espanha (PLACSP)"},
     {"id": "entities_es", "label": "Entidades ES", "hint": "Órgãos adjudicantes e empresas adjudicatárias de Espanha"},
@@ -294,6 +296,81 @@ def _search_scraped_group(q: str, size: int, offset: int) -> Dict[str, Any]:
     grupo = {**_group("scraped", _label_for("scraped"), items, total, 0), "facets": result.get("facets") or {}}
     # Sentimento do conjunto de resultados (não só da página): é o que permite
     # dizer o tom da pesquisa, e não apenas o de cada notícia.
+    if result.get("sentiment"):
+        grupo["sentiment"] = result["sentiment"]
+    return grupo
+
+
+#: Nome apresentável de cada plataforma social (etiquetas dos resultados).
+_SOCIAL_PLATFORM_LABELS = {
+    "linkedin": "LinkedIn",
+    "tiktok": "TikTok",
+    "reddit": "Reddit",
+    "facebook": "Facebook",
+}
+
+
+def _social_badges(hit: Dict[str, Any]) -> List[str]:
+    """Etiquetas de uma publicação social (plataforma, comunidade e interação)."""
+    badges: List[str] = []
+    platform = str(hit.get("platform") or "")
+    if platform:
+        badges.append(_SOCIAL_PLATFORM_LABELS.get(platform, platform))
+    community = str(hit.get("community") or "")
+    if community:
+        badges.append(community)
+    for name, label in (("likes", "reações"), ("comments", "comentários"), ("shares", "partilhas"), ("views", "vistas")):
+        try:
+            value = int(hit.get(name) or 0)
+        except (TypeError, ValueError):
+            value = 0
+        if value:
+            badges.append(f"{value:,} {label}".replace(",", " "))
+    return badges
+
+
+def _search_social_group(q: str, size: int, offset: int) -> Dict[str, Any]:
+    """Publicações recolhidas das redes sociais (âmbito «Redes sociais»)."""
+    result = search_social(q=q or None, size=size, from_=offset, sort="relevance" if q else "recent")
+    if result.get("error"):
+        return _error_group("social", _label_for("social"), str(result["error"]))
+    items = []
+    for hit in result.get("items", []):
+        items.append(
+            _item(
+                "social",
+                hit.get("item_id") or hit.get("url") or "",
+                hit.get("title") or hit.get("text") or hit.get("item_id") or "",
+                subtitle=" · ".join(
+                    part for part in (hit.get("channel_name"), hit.get("author")) if part
+                ),
+                snippet=hit.get("text") or hit.get("title") or "",
+                url=hit.get("url") or "",
+                date=hit.get("published_at") or hit.get("collected_at"),
+                badges=_social_badges(hit),
+                image=hit.get("image") or "",
+                sentiment={
+                    "label": hit.get("sentiment") or "",
+                    "polarity": hit.get("sentiment_score"),
+                    "engine": hit.get("sentiment_engine") or "",
+                }
+                if hit.get("sentiment")
+                else None,
+                extra={
+                    "valores": {k: v for k, v in (hit.get("data") or {}).items() if v not in (None, "")},
+                    "plataforma": _SOCIAL_PLATFORM_LABELS.get(str(hit.get("platform") or ""), hit.get("platform") or ""),
+                    "canal": hit.get("channel_name") or "",
+                    "interacao": {
+                        "likes": hit.get("likes"),
+                        "comentarios": hit.get("comments"),
+                        "partilhas": hit.get("shares"),
+                        "vistas": hit.get("views"),
+                    },
+                },
+            )
+        )
+    total = int(result.get("total") or 0)
+    grupo = {**_group("social", _label_for("social"), items, total, 0), "facets": result.get("facets") or {}}
     if result.get("sentiment"):
         grupo["sentiment"] = result["sentiment"]
     return grupo
@@ -669,6 +746,7 @@ def unified_search(
 
     workers: Dict[str, Any] = {
         "scraped": lambda: _search_scraped_group(query, size, offset),
+        "social": lambda: _search_social_group(query, size, offset),
         "contracts": lambda: _search_contracts_group(query, size, offset),
         "contracts_es": lambda: _search_contratos_es_group(query, size, offset),
         "entities_es": lambda: _search_entities_es_group(query, size, offset),

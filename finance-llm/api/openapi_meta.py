@@ -274,6 +274,15 @@ TAGS_METADATA: List[Dict[str, str]] = [
         ),
     },
     {
+        "name": "social",
+        "description": (
+            "Pesquisa social: recolha de LinkedIn, TikTok, Reddit e Facebook por "
+            "canais (plataforma + variante + alvo), teste de amostra, execuções, "
+            "publicações indexadas em `finance_social`, pesquisa com facetas e "
+            "sentimento, agendamentos (cron) e o estado das credenciais de cada canal."
+        ),
+    },
+    {
         "name": "vectors",
         "description": (
             "Embeddings e pesquisa semântica: indexar embeddings, estado das "
@@ -317,6 +326,16 @@ TAGS_METADATA: List[Dict[str, str]] = [
         "description": (
             "Importação de ficheiros (.zip/.xlsx/.json): pré-visualização das linhas "
             "e indexação (contratos no Elasticsearch, entidades em JSONL)."
+        ),
+    },
+    {
+        "name": "contribuintes",
+        "description": (
+            "Contribuintes: índice único com todos os NIF/NIPC do sistema "
+            "(agregado dos contratos PT/ES, cadastro de entidades, publicações "
+            "societárias, CIRE, PessoasIQ, firmas, marcas e CRM), pesquisa e ficha "
+            "por NIF, e sincronização manual/agendada (cron) a partir de todos os "
+            "índices da plataforma."
         ),
     },
     {
@@ -374,6 +393,7 @@ SPA_PATHS: Tuple[str, ...] = (
     "/contracts/search",
     "/contracts/map",
     "/contratos-es",
+    "/contribuintes",
     "/elastic",
     "/rag",
     "/forecast",
@@ -399,6 +419,7 @@ PATH_TAG_RULES: Sequence[Tuple[str, str]] = (
     ("/contracts/map", "spa"),
     ("/contracts", "contratos"),
     ("/companies-global", "companies-global"),
+    ("/contribuintes", "contribuintes"),
     ("/societario", "societario"),
     ("/companies/role-summary", "empresas"),
     ("/companies", "empresas"),

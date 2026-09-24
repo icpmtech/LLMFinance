@@ -28,11 +28,13 @@ import {
   Gauge,
   GitCompare,
   Globe2,
+  Gavel,
   Landmark,
   LayoutDashboard,
   Layers,
   Mail,
   Map as MapIcon,
+  MessageCircle,
   MessageSquare,
   Network,
   PersonStanding,
@@ -235,6 +237,68 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: CalendarClock,
     gradient: "from-violet-200 via-violet-500 to-indigo-700",
     accent: "139,92,246",
+  },  {
+    id: "social",
+    label: "Pesquisa social",
+    hint: "LinkedIn, TikTok, Reddit e Facebook: recolher, agendar e pesquisar",
+    icon: MessageCircle,
+    gradient: "from-sky-200 via-fuchsia-500 to-indigo-700",
+    accent: "217,70,239",
+  },
+  {
+    id: "social-canais",
+    label: "Social · Canais",
+    hint: "Definições de recolha por plataforma",
+    icon: Globe2,
+    gradient: "from-sky-200 via-cyan-500 to-blue-700",
+    accent: "14,165,233",
+  },
+  {
+    id: "social-execucoes",
+    label: "Social · Execuções",
+    hint: "Histórico das recolhas e publicações gravadas",
+    icon: Play,
+    gradient: "from-emerald-200 via-emerald-500 to-teal-600",
+    accent: "16,185,129",
+  },
+  {
+    id: "social-modelos",
+    label: "Social · Modelos",
+    hint: "Canais prontos a criar por plataforma",
+    icon: Layers,
+    gradient: "from-orange-200 via-amber-500 to-yellow-600",
+    accent: "245,158,11",
+  },
+  {
+    id: "social-agenda",
+    label: "Social · Agenda",
+    hint: "Cron das recolhas sociais e próximas execuções",
+    icon: CalendarClock,
+    gradient: "from-violet-200 via-violet-500 to-indigo-700",
+    accent: "139,92,246",
+  },
+  {
+    id: "social-estado",
+    label: "Social · Estado",
+    hint: "Ambiente, indexação e volumetria por plataforma",
+    icon: Database,
+    gradient: "from-slate-200 via-slate-400 to-slate-600",
+    accent: "148,163,184",
+  },  {
+    id: "cire",
+    label: "Insolvências",
+    hint: "CIRE: publicidade do PER, PEAP, PEVE e da insolvência (CITIUS)",
+    icon: Gavel,
+    gradient: "from-emerald-200 via-teal-500 to-slate-700",
+    accent: "16,185,129",
+  },
+  {
+    id: "contribuintes",
+    label: "Contribuintes",
+    hint: "Todos os NIF/NIPC do sistema (contratos, empresas, CIRE, marcas, CRM) com cron",
+    icon: Users,
+    gradient: "from-lime-200 via-emerald-500 to-teal-700",
+    accent: "132,204,22",
   },
   {
     id: "finder",
@@ -510,7 +574,7 @@ const LEGACY_DEFAULT_ITEMS = [
 const ORDER_VERSION = 2;
 
 /** Ícones fora do dock por defeito (disponíveis para adicionar). */
-const DEFAULT_PARKED = ["iframe-pages", "elastic", "import", "compare", "contratos-es", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard", "scraper-templates", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda"];
+const DEFAULT_PARKED = ["iframe-pages", "elastic", "import", "compare", "contratos-es", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard", "scraper-templates", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda", "social-canais", "social-execucoes", "social-modelos", "social-agenda", "social-estado"];
 
 export type DockPrefs = {
   position: DockPosition;

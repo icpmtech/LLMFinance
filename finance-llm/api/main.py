@@ -223,6 +223,7 @@ from api.contratos_es_routes import router as contratos_es_router
 from api.ontology_routes import router as ontology_router
 from api.ontology_workspace_routes import router as ontology_workspace_router
 from api.scraper_routes import router as scraper_router
+from api.social_routes import router as social_router
 from api.search_routes import router as search_router
 from api.sentiment_routes import router as sentiment_router
 from api.search360_routes import router as search360_router
@@ -236,7 +237,9 @@ from api.vector_routes import router as vector_router
 from api.agent_routes import router as agent_router
 from api.companies_global_routes import router as companies_global_router
 from api.societario_routes import router as societario_router
+from api.cire_routes import router as cire_router
 from api.people_routes import router as people_router
+from api.contribuintes_routes import router as contribuintes_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -289,13 +292,41 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logging.getLogger(__name__).warning("Agendador de recolha não arrancou: %s", exc)
 
+    # Agendador da pesquisa social (cron por canal).
+    try:
+        from api import social_scheduler
+
+        social_scheduler.start()
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Agendador social não arrancou: %s", exc)
+
+    # Agendador da sincronização do índice de contribuintes (cron).
+    try:
+        from api import contribuintes_scheduler
+
+        contribuintes_scheduler.start()
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Agendador de contribuintes não arrancou: %s", exc)
+
     yield
 
-    # Encerramento: para o agendador (jobs em curso terminam sozinhos).
+    # Encerramento: para os agendadores (jobs em curso terminam sozinhos).
+    try:
+        from api import social_scheduler
+
+        social_scheduler.shutdown()
+    except Exception:
+        pass
     try:
         from api import scraper_scheduler
 
         scraper_scheduler.shutdown()
+    except Exception:
+        pass
+    try:
+        from api import contribuintes_scheduler
+
+        contribuintes_scheduler.shutdown()
     except Exception:
         pass
 
@@ -392,6 +423,7 @@ app.include_router(contratos_es_router)
 app.include_router(ontology_router)
 app.include_router(ontology_workspace_router)
 app.include_router(scraper_router)
+app.include_router(social_router)
 app.include_router(search_router)
 app.include_router(sentiment_router)
 app.include_router(search360_router)
@@ -405,7 +437,9 @@ app.include_router(vector_router)
 app.include_router(agent_router)
 app.include_router(companies_global_router)
 app.include_router(societario_router)
+app.include_router(cire_router)
 app.include_router(people_router)
+app.include_router(contribuintes_router)
 
 
 # Cache curta de `user_id → email`, para o registo de pedidos identificar quem
@@ -1180,8 +1214,16 @@ def entities_detail(nif: str):
 @app.get("/scraper/execucoes")
 @app.get("/scraper/pesquisa")
 @app.get("/scraper/agenda")
+@app.get("/social")
+@app.get("/social/canais")
+@app.get("/social/modelos")
+@app.get("/social/execucoes")
+@app.get("/social/pesquisa")
+@app.get("/social/agenda")
 @app.get("/pesquisa")
 @app.get("/sentimento")
+@app.get("/cire")
+@app.get("/contribuintes")
 @app.get("/empresas-global")
 @app.get("/search360")
 @app.get("/search360/dossie")

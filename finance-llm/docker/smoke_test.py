@@ -64,6 +64,62 @@ CORE_ENDPOINTS: Tuple[Tuple[str, str, Tuple[int, ...]], ...] = (
 OK_STATUSES = range(200, 300)
 GUARDED_STATUSES = {400, 401, 403, 422}
 
+# Rotas que devolvem o `index.html` da SPA quando o build existe **no backend**
+# (`spa_index_response`). Em Docker o build é servido pelo nginx (serviço
+# `frontend`) e o backend não o tem — 404 é o resultado esperado, não um erro.
+SPA_PAGE_PATHS = {
+    "/companies",
+    "/companies/search",
+    "/companies/dashboard",
+    "/entities/dashboard",
+    "/entities/adjudicantes",
+    "/entities/adjudicatarios",
+    "/entities/compare",
+    "/adjudicantes",
+    "/adjudicatarios",
+    "/forecast",
+    "/trading",
+    "/ticker-detail",
+    "/rag",
+    "/elastic",
+    "/contracts",
+    "/contracts/dashboard",
+    "/contracts/search",
+    "/contracts/map",
+    "/empresas-iq",
+    "/crm",
+    "/crm/contas",
+    "/crm/contactos",
+    "/crm/agenda",
+    "/crm/relatorios",
+    "/scraper",
+    "/scraper/fontes",
+    "/scraper/modelos",
+    "/scraper/execucoes",
+    "/scraper/pesquisa",
+    "/scraper/agenda",
+    "/pesquisa",
+    "/sentimento",
+    "/empresas-global",
+    "/search360",
+    "/search360/dossie",
+    "/search360/projetos",
+    "/search360/grafo",
+    "/search360/biblioteca",
+    "/hermes",
+    "/office",
+    "/office/documentos",
+    "/office/dossies",
+    "/search",
+    "/import",
+    "/cire",
+}
+
+# Endpoints que só respondem depressa depois de "aquecer": o RAG carrega o
+# modelo de embeddings na primeira chamada (~85 s num container novo) e sem
+# isto o teste falhava com ReadTimeout de 60 s.
+COLD_START_PATHS = {"/rag/documents"}
+
 
 class Report:
     """Acumula resultados e devolve um resumo legível."""
@@ -100,6 +156,7 @@ class Report:
         print("SMOKE TEST IQ OS — RESUMO")
         print("=" * 78)
         print(f"  OK ............ {self.count('OK')}")
+        print(f"  SPA ........... {self.count('SPA')}  (página da SPA: servida pelo nginx)")
         print(f"  GUARDADO ...... {self.count('GUARDADO')}")
         print(f"  AVISO ......... {self.count('AVISO')}")
         print(f"  FALHA ......... {self.count('FALHA')}")
@@ -131,6 +188,7 @@ class Report:
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "totals": {
                 "ok": self.count("OK"),
+                "spa_page": self.count("SPA"),
                 "guarded": self.count("GUARDADO"),
                 "warning": self.count("AVISO"),
                 "failure": self.count("FALHA"),
@@ -201,7 +259,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--base-url", default=os.getenv("IQOS_API_URL", "http://127.0.0.1:8003"))
     parser.add_argument("--ui-url", default=os.getenv("IQOS_UI_URL", ""),
                         help="URL do frontend (nginx) para validar a SPA. Vazio = saltar.")
-    parser.add_argument("--timeout", type=float, default=60.0)
+    parser.add_argument("--timeout", type=float, default=180.0)
     parser.add_argument("--ui-timeout", type=float, default=20.0)
     parser.add_argument("--json", dest="json_path", default="", help="Guardar relatório JSON.")
     parser.add_argument("--no-discovery", action="store_true", help="Só o núcleo (rápido).")
@@ -257,13 +315,16 @@ def main(argv: Optional[List[str]] = None) -> int:
                 elif status in GUARDED_STATUSES:
                     outcome = "GUARDADO"
                 elif status == 404:
-                    outcome = "AVISO"
+                    outcome = "SPA" if path in SPA_PAGE_PATHS else "AVISO"
                 else:
                     outcome = "FALHA"
                 report.add("discovery", "GET", path, outcome, status, ms, detail)
                 if outcome != "OK":
                     print(f"  [{outcome}] {status} {path}")
-            print(f"  OK: {report.count('OK')} · guardado: {report.count('GUARDADO')} · "
+                elif path in COLD_START_PATHS or ms > 5000:
+                    print(f"  [ok  ] {status} {path} — {ms / 1000:.1f} s (arranque frio)" if ms > 5000
+                          else f"  [ok  ] {status} {path}")
+            print(f"  OK: {report.count('OK')} · SPA: {report.count('SPA')} · guardado: {report.count('GUARDADO')} · "
                   f"aviso: {report.count('AVISO')} · falha: {report.count('FALHA')}")
 
     # ---------------------------------------------------------------- fase 3

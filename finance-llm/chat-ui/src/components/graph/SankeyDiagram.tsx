@@ -35,12 +35,15 @@ export function SankeyDiagram({
   edges,
   metric,
   height = 460,
+  unitLabel = "contratos",
   onNodeClick,
 }: {
   nodes: StudioNode[];
   edges: StudioEdge[];
   metric: GraphMetric;
   height?: number;
+  /** Unidade mostrada nas dicas (ex.: «contratos» ou «publicações»). */
+  unitLabel?: string;
   onNodeClick?: (node: StudioNode) => void;
 }) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -219,7 +222,9 @@ export function SankeyDiagram({
             <>
               <p className="text-sm text-foreground break-words">{hovered.node.label}</p>
               <p className="mt-1 text-xs text-teal-300">
-                {formatCompact(hovered.node.count)} contratos · {formatMoney(hovered.node.total_value)}
+                {metric === "valor"
+                  ? formatMoney(hovered.node.total_value)
+                  : `${formatCompact(hovered.node.count)} ${unitLabel}${hovered.node.total_value ? ` · ${formatMoney(hovered.node.total_value)}` : ""}`}
               </p>
             </>
           ) : (
@@ -227,7 +232,9 @@ export function SankeyDiagram({
               <p className="text-xs text-teal-300 break-words">{hovered.flow.source.label}</p>
               <p className="text-xs text-blue-300 break-words">→ {hovered.flow.target.label}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {formatCompact(hovered.flow.edge.count)} contratos · {formatMoney(hovered.flow.edge.value)}
+                {metric === "valor"
+                  ? formatMoney(hovered.flow.edge.value)
+                  : `${formatCompact(hovered.flow.edge.count)} ${unitLabel}${hovered.flow.edge.value ? ` · ${formatMoney(hovered.flow.edge.value)}` : ""}`}
               </p>
             </>
           )}
