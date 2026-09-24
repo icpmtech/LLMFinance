@@ -10,7 +10,7 @@ import { useAuth } from "./auth";
 import LoginPage from "./pages/LoginPage";
 import SettingsPage from "./pages/SettingsPage";
 import CliPage from "./pages/CliPage";
-import { FileText, Loader2, Network, Sparkles, Users } from "lucide-react";
+import { FileText, Fingerprint, Loader2, Network, Sparkles, Users } from "lucide-react";
 import { DashboardPage } from "./pages/DashboardPage";
 import { TickerDetailPage } from "./pages/TickerDetailPage";
 import RealtimeChartPage from "./pages/RealtimeChartPage";
@@ -69,6 +69,12 @@ import UnifiedSearchPage from "./pages/UnifiedSearchPage";
 import SentimentPage from "./pages/SentimentPage";
 import CirePage from "./pages/CirePage";
 import ContribuintesPage from "./pages/ContribuintesPage";
+import GleifPage, {
+  GLEIF_SECTION_VIEWS,
+  gleifSectionForView,
+  gleifSectionFromPath,
+  type GleifSection,
+} from "./pages/GleifPage";
 import Search360Page, {
   SEARCH360_SECTION_VIEWS,
   search360SectionForView,
@@ -89,6 +95,7 @@ import { EntitiesSearchPage } from "./pages/EntitiesSearchPage";
 import { ImportPage } from "./pages/ImportPage";
 import { ContractsListPage } from "./pages/ContractsListPage";
 import { RegionDetailWindow } from "./pages/RegionDetailWindow";
+import GleifRegionWindow, { type GleifRegionLevel } from "./components/gleif/GleifRegionWindow";
 import IframePage from "./pages/IframePage";
 import IframePagesPage from "./pages/IframePagesPage";
 import {
@@ -131,11 +138,15 @@ type AppView =
   | "compare"
   | "admin"
   | "agents"
+  | "gleif-region"
   | "iframe-pages";
 const COMPANY_DETAIL_KEY = "finance-llm-company-detail";
 const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
 /** Região de contratos aberta a partir do mapa (janela `region-detail`). */
 const REGION_DETAIL_KEY = "finance-llm-region-detail";
+
+/** Divisão do mapa GLEIF cujas empresas estão abertas (vista/janela `gleif-region`). */
+type GleifRegionTarget = { level: GleifRegionLevel; code: string; label?: string };
 
 type RegionDetailTarget = { pais: "PT" | "ES"; code: string; label?: string; ano?: number | null };
 
@@ -249,6 +260,9 @@ function pathForView(
   if (view === "sentimento") return "/sentimento";
   if (view === "cire") return "/cire";
   if (view === "contribuintes") return "/contribuintes";
+  if (view === "gleif") return "/gleif";
+  if (view === "gleif-mapa") return "/gleif/mapa";
+  if (view === "gleif-ingestao") return "/gleif/ingestao";
   if (view === "search360") return "/search360";
   if (view === "search360-dossie") return "/search360/dossie";
   if (view === "search360-projetos") return "/search360/projetos";
@@ -271,6 +285,7 @@ function isDetailView(view: string): boolean {
     view.startsWith("quicklook:") ||
     view.startsWith("entity-contracts:") ||
     view.startsWith("region-detail:") ||
+    view.startsWith("gleif-region:") ||
     view.startsWith("crm-account:") ||
     view.startsWith("crm-edit:")
   );
@@ -375,6 +390,14 @@ export default function App() {
   /** Região cuja ficha está aberta (`/contracts/region/<pais>/<código>`). */
   const [regionDetail, setRegionDetail] = useState<RegionDetailTarget | null>(() => readRegionDetailTarget());
 
+  /**
+   * Divisão do mapa GLEIF (país ou região) cujas **empresas** estão abertas.
+   *
+   * Em modo janelas vive na janela `gleif-region:<nível>:<código>`; em modo
+   * página é a vista `gleif-region` (`/gleif/regiao/<nível>/<código>`).
+   */
+  const [gleifRegion, setGleifRegion] = useState<GleifRegionTarget | null>(null);
+
   const rememberRegionDetail = useCallback((target: RegionDetailTarget | null) => {
     setRegionDetail(target);
     if (typeof window === "undefined") return;
@@ -405,12 +428,24 @@ export default function App() {
     if (path === "/sentimento") return "sentimento";
     if (path === "/cire" || path.startsWith("/cire/")) return "cire";
     if (path === "/contribuintes" || path.startsWith("/contribuintes/")) return "contribuintes";
+    {
+      const gleifSection = gleifSectionFromPath(path);
+      if (gleifSection) return GLEIF_SECTION_VIEWS[gleifSection] as AppView;
+    }
     if (path === "/contracts") return "contracts-search";
     if (path === "/contracts/search") return "contracts-search";
     if (path === "/contratos-es") return "contratos-es";
     if (path === "/contratos-es/dashboard") return "contratos-es-dashboard";
     if (path === "/contracts/dashboard") return "contracts-dashboard";
     if (path === "/contracts/map") return "contracts-map";
+    if (path.startsWith("/gleif/regiao/")) {
+      const [, , , level, ...rest] = path.split("/");
+      const code = decodeURIComponent(rest.join("/"));
+      if ((level === "country" || level === "region") && code) {
+        setGleifRegion((prev) => ({ level, code, label: prev?.label }));
+        return "gleif-region";
+      }
+    }
     if (path.startsWith("/contracts/region/")) {
       const [, , , pais, ...rest] = path.split("/");
       const code = decodeURIComponent(rest.join("/"));
@@ -493,11 +528,20 @@ export default function App() {
       else if (path === "/sentimento") next = "sentimento";
       else if (path === "/cire" || path.startsWith("/cire/")) next = "cire";
       else if (path === "/contribuintes" || path.startsWith("/contribuintes/")) next = "contribuintes";
+      else if (gleifSectionFromPath(path)) next = GLEIF_SECTION_VIEWS[gleifSectionFromPath(path) as GleifSection] as AppView;
       else if (path === "/contracts" || path === "/contracts/search") next = "contracts-search";
       else if (path === "/contratos-es") next = "contratos-es";
       else if (path === "/contratos-es/dashboard") next = "contratos-es-dashboard";
       else if (path === "/contracts/dashboard") next = "contracts-dashboard";
       else if (path === "/contracts/map") next = "contracts-map";
+      else if (path.startsWith("/gleif/regiao/")) {
+        const [, , , level, ...rest] = path.split("/");
+        const code = decodeURIComponent(rest.join("/"));
+        if ((level === "country" || level === "region") && code) {
+          setGleifRegion((prev) => ({ level, code, label: prev?.label }));
+          next = "gleif-region";
+        }
+      }
       else if (path === "/companies" || path === "/companies/search") next = "companies-search";
       else if (path === "/entities" || path === "/entities/search" || path === "/empresas") next = "entities-search";
       else if (path === "/entities/dashboard" || path === "/empresas/dashboard") next = "entities-dashboard";
@@ -779,6 +823,36 @@ export default function App() {
   );
 
   /**
+   * Abre as **empresas** de uma divisão do mapa GLEIF (país ou região).
+   *
+   * Em modo janelas abre (ou foca) a janela `gleif-region:<nível>:<código>`; em
+   * modo página navega para `/gleif/regiao/<nível>/<código>`. O `replaceState`
+   * evita deixar no histórico o caminho genérico que `setViewAndHistory` escreve
+   * (a vista não tem caminho próprio em `pathForView`).
+   */
+  const openGleifRegion = useCallback(
+    (level: GleifRegionLevel, code: string, label: string) => {
+      if (!code) return;
+      const view = `gleif-region:${level}:${code}`;
+      if (windowMode && typeof window !== "undefined") {
+        if (windowFor(view)) restoreWindow(view);
+        else
+          openWindow(view, workspaceEstimate(), {
+            title: `${label || code} · empresas LEI`,
+            rect: { width: 1140, height: 820 },
+          });
+        return;
+      }
+      setGleifRegion({ level, code, label });
+      setViewAndHistory("gleif-region" as AppView);
+      if (typeof window !== "undefined") {
+        window.history.replaceState({}, "", `/gleif/regiao/${level}/${encodeURIComponent(code)}`);
+      }
+    },
+    [setViewAndHistory, windowMode],
+  );
+
+  /**
    * Abre uma vista ou ficha a partir de um resultado da Pesquisa total.
    * Em modo janelas abre (ou foca) a janela da aplicação; em modo página navega
    * para ela. As fichas levam o identificador no próprio nome da vista
@@ -916,6 +990,29 @@ export default function App() {
     if (target.startsWith("entity-contracts:")) {
       return <EntityContractsWindow nif={target.slice("entity-contracts:".length)} />;
     }
+    if (target === "gleif-region") {
+      return gleifRegion ? (
+        <GleifRegionWindow
+          level={gleifRegion.level}
+          code={gleifRegion.code}
+          label={gleifRegion.label}
+          onClose={() => setViewAndHistory("gleif-mapa" as AppView)}
+        />
+      ) : (
+        <GleifPage section="mapa" onOpenRegion={openGleifRegion} />
+      );
+    }
+    if (target.startsWith("gleif-region:")) {
+      const [, level, ...rest] = target.split(":");
+      const code = rest.join(":");
+      return (
+        <GleifRegionWindow
+          level={level === "country" ? "country" : "region"}
+          code={code}
+          label={gleifRegion?.code === code ? gleifRegion.label : undefined}
+        />
+      );
+    }
     if (target.startsWith("region-detail:")) {
       const [, pais, ...rest] = target.split(":");
       const code = rest.join(":");
@@ -1019,6 +1116,16 @@ export default function App() {
         <OfficePage
           section={officeWindowSection}
           onSectionChange={windowMode ? (next) => setViewAndHistory(OFFICE_SECTION_VIEWS[next] as AppView) : undefined}
+        />
+      );
+    }
+    const gleifSection = gleifSectionForView(target);
+    if (gleifSection) {
+      return (
+        <GleifPage
+          section={gleifSection}
+          onSectionChange={windowMode ? (next) => setViewAndHistory(GLEIF_SECTION_VIEWS[next] as AppView) : undefined}
+          onOpenRegion={openGleifRegion}
         />
       );
     }
@@ -1244,10 +1351,17 @@ export default function App() {
       const suffix = parsed ? ` · ${parsed.nif}` : "";
       return { title: `Grafo${suffix}`, icon: <Network size={13} /> };
     }
-    // Janelas com título próprio (fichas, quick look).
+    // Janelas com título próprio (fichas, quick look, empresas de uma região LEI).
     const custom = windowFor(target)?.title;
     if (custom) {
-      return { title: custom, icon: <FileText size={13} /> };
+      return {
+        title: custom,
+        icon: target.startsWith("gleif-region:") || target.startsWith("gleif-record:") ? (
+          <Fingerprint size={13} />
+        ) : (
+          <FileText size={13} />
+        ),
+      };
     }
     if (isIframeView(target)) {
       const id = iframeIdFromView(target);

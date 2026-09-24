@@ -34,7 +34,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence
+from typing import Any, Dict, Iterator, List, Optional, Sequence
 
 import httpx
 
@@ -42,6 +42,14 @@ logger = logging.getLogger(__name__)
 
 GLEIF_API = "https://api.gleif.org/api/v1"
 LEIDATA_API = "https://leidata.gleif.org/api/v1"
+#: Tag de abertura de um registo do LEI-CDF no XML, com o prefixo de namespace
+#: opcional (`<lei:LEIRecord>` no ficheiro publicado pelo GLEIF). O grupo 1 é o
+#: prefixo, para que o tag de fecho seja procurado com o mesmo prefixo.
+_RECORD_OPEN_RE = re.compile(r"<([A-Za-z0-9_.-]*:)?(?:LEIRecordData|LEIRecord)(?:\s[^>]*)?>")
+#: A API oficial não permite paginação profunda além de 10 000 resultados
+#: (`page[number] * page[size] <= 10000`). Acima disso é preciso o ficheiro
+#: Golden Copy, que não tem esse limite.
+API_MAX_RESULTS = 10000
 #: A API do GLEIF aceita no máximo 200 registos por página.
 API_PAGE_SIZE = 200
 #: Jurisdições recolhidas por omissão (a ingestão completa do mundo não cabe no
@@ -208,6 +216,16 @@ def fetch_from_api(
         for country in targets:
             page = 1
             while True:
+                # Paginação profunda não é suportada: parar antes do limite em vez
+                # de esperar por um 400. Para o universo completo existe o ficheiro
+                # Golden Copy (`iter_golden_copy_file`).
+                if (page - 1) * page_size >= API_MAX_RESULTS:
+                    logger.info(
+                        "GLEIF API: limite de %s resultados atingido (%s) — use a origem «golden-copy» para o total.",
+                        API_MAX_RESULTS,
+                        country or "global",
+                    )
+                    break
                 params: Dict[str, Any] = {"page[size]": page_size, "page[number]": page}
                 if country:
                     params["filter[entity.legalAddress.country]"] = country
@@ -290,6 +308,7 @@ def download_golden_copy(dest: Path, *, kind: str = "lei2", index: int = 0, time
 # Aliases das colunas do LEI-CDF (o CSV do GLEIF não é estável entre versões,
 # pelo que se procura por subcadeia, não por nome exato).
 _CSV_ALIASES: Dict[str, Sequence[str]] = {
+    "lei": ("lei",),
     "legal_name": ("entity.legalname", "legalname", "legal name"),
     "other_names": ("entity.otherentitynames", "otherentitynames", "other entity names"),
     "transliterated_names": ("entity.transliteratedothernames",),
@@ -330,37 +349,84 @@ _CSV_ALIAS_RANGES: Dict[str, Sequence[str]] = {
 }
 
 
-def _match_columns(header: Sequence[str]) -> Dict[str, List[str]]:
-    """Mapeia cada campo normalizado para as colunas do CSV que o alimentam."""
-    normalized = {fold(h.replace("_", ".")): h for h in header}
-    resolved: Dict[str, List[str]] = {}
-    for field, aliases in _CSV_ALIASES.items():
-        matches = [column for key, column in normalized.items() if any(alias in key for alias in aliases)]
-        if matches:
-            resolved[field] = matches
-    for field, aliases in _CSV_ALIAS_RANGES.items():
-        matches = [column for key, column in normalized.items() if any(alias in key for alias in aliases)]
-        if matches:
-            resolved[field] = matches
+def _column_indexes(header: Sequence[str]) -> Dict[str, List[int]]:
+    """Mapeia cada campo normalizado para as **posições** das colunas do CSV.
+
+    Trabalha com índices (e não com nomes) porque a golden copy tem ~3,4 milhões
+    de linhas e uma busca por nome em cada linha seria o principal custo da
+    ingestão. O CSV do GLEIF também não é estável entre versões, pelo que se
+    procura por subcadeia e não por nome exato.
+    """
+    normalized = [fold(column.replace("_", ".")) for column in header]
+    resolved: Dict[str, List[int]] = {}
+    for field, aliases in {**_CSV_ALIASES, **_CSV_ALIAS_RANGES}.items():
+        positions = [index for index, key in enumerate(normalized) if any(alias in key for alias in aliases)]
+        if positions:
+            resolved[field] = positions
     return resolved
 
 
-def _normalize_from_csv_rows(row: Dict[str, str], columns: Dict[str, List[str]], source: str) -> Optional[Dict[str, Any]]:
-    """Converte uma linha do CSV do LEI-CDF num documento (ainda por finalizar)."""
-    doc: Dict[str, Any] = {"lei": _text(row.get("LEI") or row.get("lei")), "source": source}
-    for field, cols in columns.items():
-        if field == "address_extra":
+def _first_value(row: Sequence[str], positions: Sequence[int]) -> Optional[str]:
+    """Primeiro valor não vazio de uma lista de posições da linha."""
+    for index in positions:
+        if index < len(row):
+            value = row[index].strip()
+            if value:
+                return value
+    return None
+
+
+def _csv_row_to_doc(row: Sequence[str], indexes: Dict[str, List[int]], source: str) -> Optional[Dict[str, Any]]:
+    """Converte uma linha de CSV (por índices) num documento por finalizar."""
+    if not row:
+        return None
+    doc: Dict[str, Any] = {"lei": _first_value(row, indexes.get("lei", []))}
+    if not doc["lei"]:
+        return None
+    for field, positions in indexes.items():
+        if field in {"lei", "address_extra"}:
             continue
-        value = next((_text(row.get(col)) for col in cols if _text(row.get(col))), None)
+        value = _first_value(row, positions)
         if value:
             doc[field] = value
-    extra = [v for col in columns.get("address_extra", []) if (v := _text(row.get(col)))]
-    lines = [v for v in [doc.get("address_lines")] if v] + extra
+    extras = [value for index in indexes.get("address_extra", []) if index < len(row) and (value := row[index].strip())]
+    lines = [doc["address_lines"]] if doc.get("address_lines") else []
+    lines.extend(extras)
     if lines:
         doc["address_lines"] = lines
-    if not doc.get("legal_name") or not doc.get("lei"):
+    if not doc.get("legal_name"):
         return None
+    doc["source"] = source
     return doc
+
+
+def _iter_csv(handle: io.TextIOBase, source: str, countries: Optional[Sequence[str]] = None) -> Iterator[Dict[str, Any]]:
+    """Itera um CSV do LEI-CDF (a primeira linha é o cabeçalho).
+
+    O filtro por país é aplicado **antes** de construir o documento: na golden
+    copy completa a maioria das linhas não interessa e construir o `dict` de 40
+    campos para todas elas era o grosso do tempo de ingestão.
+    """
+    reader = csv.reader(handle)
+    try:
+        header = next(reader)
+    except StopIteration:
+        return
+    indexes = _column_indexes(header)
+    country_positions = [*indexes.get("country", []), *indexes.get("jurisdiction", [])]
+    wanted = {code.strip().upper() for code in (countries or []) if code and code.strip()}
+    for row in reader:
+        if wanted and country_positions:
+            country = _first_value(row, country_positions)
+            if not country or country.upper() not in wanted:
+                continue
+        doc = _csv_row_to_doc(row, indexes, source)
+        if not doc:
+            continue
+        final = _finalize_golden_doc(doc, source)
+        if final:
+            yield final
+
 
 
 def _finalize_golden_doc(doc: Dict[str, Any], source: str) -> Optional[Dict[str, Any]]:
@@ -440,23 +506,91 @@ def _strip_ns(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
-def _iter_xml(handle: io.TextIOBase, source: str) -> Iterator[Dict[str, Any]]:
-    """Itera um XML do LEI-CDF (`<LEIHeader>` ou `<LEIRecords>` com `<LEIRecord>`)."""
-    context = ET.iterparse(handle, events=("end",))
-    for _event, element in context:
-        if _strip_ns(element.tag) not in {"LEIRecord", "LEIRecordData"}:
-            continue
-        doc = normalize_lei_record({"id": None, "attributes": _xml_record_to_dict(element)}, source=source)
-        element.clear()
-        if doc:
-            yield doc
-        else:
-            # Sem nome/LEI no formato esperado: tentar o mapeamento dos filhos diretos.
+def _xml_country(element: ET.Element) -> Optional[str]:
+    """País do endereço da sede legal dentro de um `<LEIRecord>` (leitura leve).
+
+    Serve só para decidir se o registo interessa: evitar construir o
+    dicionário achatado dos ~3,4 M de registos que não são pedidos é o que
+    torna a ingestão do ficheiro Golden Copy viável.
+    """
+    for child in element.iter():
+        if _strip_ns(child.tag) == "Country" and child.text:
+            return child.text.strip()
+    return None
+
+
+def _iter_xml(
+    handle: io.TextIOBase,
+    source: str,
+    countries: Optional[Sequence[str]] = None,
+) -> Iterator[Dict[str, Any]]:
+    """Itera um XML do LEI-CDF (`<lei:LEIRecord>`), opcionalmente filtrado por país.
+
+    O XML do Golden Copy tem ~8,4 GB. Em vez de `ElementTree.iterparse` — que ou
+    acumula 3,4 milhões de nós vazios na árvore (memória a crescer e leitura a
+    degradar-se) ou obriga a gerir a pilha de elementos a cada evento (600 M de
+    eventos) — o ficheiro é lido em blocos de 4 MB e cada registo é recortado
+    pelo seu tag de abertura/fecho (com o prefixo de namespace que o ficheiro
+    usar, tipicamente `lei:`) e interpretado isoladamente com `ET.fromstring`:
+    memória constante e o custo fica na busca de subcadeias, que corre em C.
+    """
+    wanted = {code.strip().upper() for code in (countries or []) if code and code.strip()}
+    # Pré-filtro barato: um bloco sem `>PT<`/`>ES<` nunca tem a sede legal num
+    # país pedido, pelo que não vale a pena interpretar o XML (94% dos registos
+    # da golden copy completa ficam de fora). O filtro exato por campo continua a
+    # ser aplicado depois, se este passar.
+    hint = re.compile(">\\s*(" + "|".join(sorted(wanted)) + ")\\s*<", re.IGNORECASE) if wanted else None
+    buffer = ""
+    pos = 0
+    while True:
+        chunk = handle.read(4 * 1024 * 1024)
+        if chunk:
+            if pos:
+                buffer = buffer[pos:]
+                pos = 0
+            buffer += chunk
+        while True:
+            opening = _RECORD_OPEN_RE.search(buffer, pos)
+            if not opening:
+                # Sem registo a começar: descarta tudo menos a cauda (o tag pode
+                # estar dividido entre dois blocos). É assim que o cabeçalho do
+                # ficheiro (com a lista de LOUs) sai sem custo.
+                if len(buffer) - pos > 4096:
+                    buffer = buffer[-64:]
+                    pos = 0
+                break
+            tag = opening.group(0)
+            prefix = opening.group(1) or ""
+            name = "LEIRecordData" if "LEIRecordData" in tag else "LEIRecord"
+            closing = f"</{prefix}{name}>"
+            end = buffer.find(closing, opening.end())
+            if end < 0:
+                # Registo incompleto: descarta o que está antes e espera pelo resto.
+                if opening.start() > pos:
+                    buffer = buffer[opening.start() :]
+                    pos = 0
+                break
+            block = buffer[opening.start() : end + len(closing)]
+            pos = end + len(closing)
+            if hint is not None and not hint.search(block):
+                continue
+            try:
+                element = ET.fromstring(block)
+            except ET.ParseError:
+                continue
+            if wanted and (_xml_country(element) or "").upper() not in wanted:
+                continue
+            doc = normalize_lei_record({"id": None, "attributes": _xml_record_to_dict(element)}, source=source)
+            if doc:
+                yield doc
+                continue
+            # Formato inesperado: cair no mapeamento dos filhos diretos.
             raw = {_strip_ns(child.tag): (child.text or "").strip() for child in element.iter() if child.text}
-            alias_doc = {fold(k): v for k, v in raw.items()}
-            fallback = _finalize_golden_doc(_alias_lookup(alias_doc), source)
+            fallback = _finalize_golden_doc(_alias_lookup({fold(k): v for k, v in raw.items()}), source)
             if fallback:
                 yield fallback
+        if not chunk:
+            break
 
 
 def _alias_lookup(values: Dict[str, str]) -> Dict[str, Any]:
@@ -470,82 +604,115 @@ def _alias_lookup(values: Dict[str, str]) -> Dict[str, Any]:
     return out
 
 
-def _xml_record_to_dict(element: ET.Element) -> Dict[str, Any]:
-    """Achata um `<LEIRecord>` do LEI-CDF numa estrutura equivalente à da API."""
-    flat: Dict[str, str] = {}
-    for child in element.iter():
-        name = _strip_ns(child.tag)
-        if child is element or child.text is None:
-            continue
-        text = (child.text or "").strip()
-        if not text:
-            continue
-        flat.setdefault(name, text)
-        flat.setdefault(name.lower(), text)
+def _child(element: Optional[ET.Element], *path: str) -> Optional[ET.Element]:
+    """Desce por uma sequência de nomes de elementos (sem o namespace)."""
+    current = element
+    for name in path:
+        if current is None:
+            return None
+        current = next((child for child in current if _strip_ns(child.tag) == name), None)
+    return current
 
-    def get(*names: str) -> Optional[str]:
-        for name in names:
-            if flat.get(name):
-                return flat[name]
-        for key, value in flat.items():
-            if any(name.lower() in key for name in names):
-                return value
+
+def _child_text(element: Optional[ET.Element], *path: str) -> Optional[str]:
+    """Texto do elemento no caminho indicado (ou `None` se não existir/vazio)."""
+    node = _child(element, *path)
+    if node is None or not node.text:
         return None
+    return node.text.strip() or None
 
-    def get_all(*names: str) -> List[str]:
-        out: List[str] = []
-        for name in names:
-            for key, value in flat.items():
-                if name.lower() in key and value not in out:
-                    out.append(value)
-        return out
 
+def _address(element: Optional[ET.Element]) -> Dict[str, Any]:
+    """Endereço de um `<LegalAddress>`/`<HeadquartersAddress>` do LEI-CDF."""
+    if element is None:
+        return {}
+    lines = [
+        child.text.strip()
+        for child in element
+        if _strip_ns(child.tag) in {"FirstAddressLine", "AdditionalAddressLine"} and child.text and child.text.strip()
+    ]
     return {
-        "lei": get("LEI"),
-        "entity": {
-            "legalName": {"name": get("LegalName")},
-            "otherNames": [{"name": n} for n in get_all("OtherEntityName")],
-            "transliteratedOtherNames": [{"name": n} for n in get_all("TransliteratedOtherEntityName")],
-            "legalAddress": {
-                "addressLines": get_all("FirstAddressLine", "AdditionalAddressLine"),
-                "city": get("City"),
-                "region": get("Region"),
-                "country": get("Country"),
-                "postalCode": get("PostalCode"),
-            },
-            "headquartersAddress": {
-                "city": get("RegistrationAuthorityEntityID") or None,
-            },
-            "legalJurisdiction": get("LegalJurisdiction"),
-            "category": get("EntityCategory"),
-            "subCategory": get("EntitySubCategory"),
-            "legalForm": {"id": get("LegalForm")},
-            "status": get("EntityStatus"),
-            "creationDate": get("EntityCreationDate"),
-            "registeredAs": get("RegistrationAuthorityEntityID"),
-            "registeredAt": {"id": get("RegistrationAuthorityID")},
-        },
-        "registration": {
-            "initialRegistrationDate": get("InitialRegistrationDate"),
-            "lastUpdateDate": get("LastUpdateDate"),
-            "status": get("RegistrationStatus"),
-            "nextRenewalDate": get("NextRenewalDate"),
-            "managingLou": get("ManagingLOU"),
-            "corroborationLevel": get("CorroborationLevel"),
-            "validatedAs": get("ValidationAuthorityEntityID"),
-        },
-        "conformityFlag": get("ConformityFlag"),
-        "bic": get("BIC"),
-        "mic": get("MIC"),
-        "ocid": get("OCID"),
-        "qcc": get("QCC"),
-        "gem": get("GEM"),
-        "spglobal": get("SPGlobal"),
+        "addressLines": lines,
+        "city": _child_text(element, "City"),
+        "region": _child_text(element, "Region"),
+        "country": _child_text(element, "Country"),
+        "postalCode": _child_text(element, "PostalCode"),
     }
 
 
-def iter_golden_copy_file(path: Path, *, source: str = "golden-copy") -> Iterator[Dict[str, Any]]:
-    """Itera os registos de um ficheiro Golden Copy local.
+def _xml_record_to_dict(element: ET.Element) -> Dict[str, Any]:
+    """Converte um `<LEIRecord>` do LEI-CDF na estrutura equivalente à da API do GLEIF.
+
+    Percorre o caminho dos elementos (e não um dicionário achatado) porque o
+    LEI-CDF tem blocos com os mesmos nomes em sítios diferentes — `City` existe
+    tanto no endereço da sede legal como no da sede operacional, e o nível de
+    corroboração chama-se `ValidationSources` no XML (a API do GLEIF expõe-o
+    como `corroborationLevel`).
+    """
+    entity = _child(element, "Entity")
+    registration = _child(element, "Registration")
+    legal_address = _child(entity, "LegalAddress")
+    headquarters = _child(entity, "HeadquartersAddress")
+    authority = _child(entity, "RegistrationAuthority")
+    legal_form = _child(entity, "LegalForm")
+    validation = _child(registration, "ValidationAuthority")
+    conformity = _child(element, "Extension", "ConformityFlag")
+
+    def names(container: Optional[ET.Element], tag: str) -> List[str]:
+        """Nomes alternativos (um ou vários elementos `<…Name>` com o mesmo tag)."""
+        if container is None:
+            return []
+        out: List[str] = []
+        for child in container:
+            if _strip_ns(child.tag) == tag and child.text and child.text.strip() and child.text.strip() not in out:
+                out.append(child.text.strip())
+        return out
+
+    return {
+        "lei": _child_text(element, "LEI"),
+        "entity": {
+            "legalName": {"name": _child_text(entity, "LegalName")},
+            "otherNames": [{"name": name} for name in names(entity, "OtherEntityName")],
+            "transliteratedOtherNames": [{"name": name} for name in names(entity, "TransliteratedOtherEntityName")],
+            "legalAddress": _address(legal_address),
+            "headquartersAddress": _address(headquarters),
+            "registeredAt": {"id": _child_text(authority, "RegistrationAuthorityID")},
+            "registeredAs": _child_text(authority, "RegistrationAuthorityEntityID"),
+            "jurisdiction": _child_text(entity, "LegalJurisdiction"),
+            "category": _child_text(entity, "EntityCategory"),
+            "subCategory": _child_text(entity, "EntitySubCategory"),
+            "legalForm": {
+                "id": _child_text(legal_form, "EntityLegalFormCode") or (legal_form.text or "").strip() or None,
+                "other": _child_text(legal_form, "OtherLegalForm"),
+            },
+            "status": _child_text(entity, "EntityStatus"),
+            "creationDate": _child_text(entity, "EntityCreationDate"),
+        },
+        "registration": {
+            "initialRegistrationDate": _child_text(registration, "InitialRegistrationDate"),
+            "lastUpdateDate": _child_text(registration, "LastUpdateDate"),
+            "status": _child_text(registration, "RegistrationStatus"),
+            "nextRenewalDate": _child_text(registration, "NextRenewalDate"),
+            "managingLou": _child_text(registration, "ManagingLOU"),
+            # No LEI-CDF o nível de corroboração chama-se `ValidationSources`.
+            "corroborationLevel": _child_text(registration, "ValidationSources"),
+            "validatedAt": {"id": _child_text(validation, "ValidationAuthorityID")},
+            "validatedAs": _child_text(validation, "ValidationAuthorityEntityID"),
+        },
+        "conformityFlag": _child_text(conformity) or _child_text(element, "Extension", "ConformityFlag"),
+    }
+
+
+def iter_golden_copy_file(
+    path: Path,
+    *,
+    source: str = "golden-copy",
+    countries: Optional[Sequence[str]] = None,
+) -> Iterator[Dict[str, Any]]:
+    """Itera os registos de um ficheiro Golden Copy local, opcionalmente filtrados por país.
+
+    `countries` (ISO 3166-1 alfa-2) é aplicado durante a leitura do CSV — evita
+    construir os ~3,4 M de documentos quando só se quer uma parte.
 
     Aceita `.zip` (com CSV ou XML do LEI-CDF), `.csv`, `.xml`, `.json`/`.jsonl`
     (a resposta da API, item a item ou uma lista).
@@ -561,7 +728,10 @@ def iter_golden_copy_file(path: Path, *, source: str = "golden-copy") -> Iterato
                 raise RuntimeError(f"ZIP sem CSV/XML do LEI-CDF: {names[:5]}")
             with archive.open(target) as raw:
                 handle = io.TextIOWrapper(raw, encoding="utf-8-sig", errors="replace")
-                yield from (_iter_csv(handle, source) if target.lower().endswith(".csv") else _iter_xml(handle, source))
+                if target.lower().endswith(".csv"):
+                    yield from _iter_csv(handle, source, countries)
+                else:
+                    yield from _iter_xml(handle, source, countries)
             return
 
     suffix = path.suffix.lower()
@@ -586,6 +756,6 @@ def iter_golden_copy_file(path: Path, *, source: str = "golden-copy") -> Iterato
 
     with path.open("r", encoding="utf-8-sig", errors="replace") as handle:
         if suffix == ".xml":
-            yield from _iter_xml(handle, source)
+            yield from _iter_xml(handle, source, countries)
         else:
-            yield from _iter_csv(handle, source)
+            yield from _iter_csv(handle, source, countries)

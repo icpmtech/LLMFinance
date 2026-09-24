@@ -23,6 +23,7 @@ import {
   Compass,
   Database,
   FileText,
+  Fingerprint,
   FolderOpen,
   FolderSearch,
   Gauge,
@@ -301,6 +302,30 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "132,204,22",
   },
   {
+    id: "gleif",
+    label: "GLEIF · LEI",
+    hint: "Legal Entity Identifier (Golden Copy do GLEIF): pesquisar, ver ficha e mapa",
+    icon: Fingerprint,
+    gradient: "from-sky-200 via-cyan-500 to-indigo-700",
+    accent: "14,165,233",
+  },
+  {
+    id: "gleif-mapa",
+    label: "GLEIF · Mapa",
+    hint: "Os registos LEI no mapa OpenStreetMap, por país e por região",
+    icon: MapIcon,
+    gradient: "from-teal-200 via-sky-500 to-indigo-700",
+    accent: "45,212,191",
+  },
+  {
+    id: "gleif-ingestao",
+    label: "GLEIF · Ingestão",
+    hint: "Recolher os LEI da API oficial ou do ficheiro Golden Copy (LEI-CDF)",
+    icon: Database,
+    gradient: "from-slate-200 via-sky-400 to-blue-700",
+    accent: "148,163,184",
+  },
+  {
     id: "finder",
     label: "Finder",
     hint: "Explorar dados como ficheiros",
@@ -541,6 +566,7 @@ const DEFAULT_ITEMS = [
   "contracts-search",
   "contracts-dashboard",
   "entities-search",
+  "gleif",
   "tickers",
   "forecast",
   "trading",
@@ -574,7 +600,7 @@ const LEGACY_DEFAULT_ITEMS = [
 const ORDER_VERSION = 2;
 
 /** Ícones fora do dock por defeito (disponíveis para adicionar). */
-const DEFAULT_PARKED = ["iframe-pages", "elastic", "import", "compare", "contratos-es", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard", "scraper-templates", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda", "social-canais", "social-execucoes", "social-modelos", "social-agenda", "social-estado"];
+const DEFAULT_PARKED = ["iframe-pages", "elastic", "import", "compare", "contratos-es", "gleif-mapa", "gleif-ingestao", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard", "scraper-templates", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda", "social-canais", "social-execucoes", "social-modelos", "social-agenda", "social-estado"];
 
 export type DockPrefs = {
   position: DockPosition;

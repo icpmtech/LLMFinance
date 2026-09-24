@@ -51,6 +51,9 @@ export type AppView =
   | "sentimento"
   | "cire"
   | "contribuintes"
+  | "gleif"
+  | "gleif-mapa"
+  | "gleif-ingestao"
   | "contracts"
   | "contracts-search"
   | "contracts-dashboard"
@@ -135,6 +138,7 @@ const APP_MATCH: Record<string, AppView[]> = {
   scraper: ["scraper-templates", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda"],
   social: ["social-canais", "social-execucoes", "social-modelos", "social-agenda", "social-estado"],
   search360: ["search360-dossie", "search360-projetos", "search360-grafo", "search360-biblioteca"],
+  gleif: ["gleif-mapa", "gleif-ingestao"],
   office: ["office-dossies"],
   visualizador: ["visualizador-dashboards"],
   "iframe-pages": [],

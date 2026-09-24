@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **361 operações** em **30 grupos**.
+Versão `0.4.0` · **473 operações** em **34 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -16,6 +16,7 @@ Versão `0.4.0` · **361 operações** em **30 grupos**.
 - **contratos-es** — Contratos públicos de Espanha (PLACSP): volumetria, metadados e listas CODICE, analytics do dashboard, pesquisa, autocomplete, entidades, importação por ano e detalhe de contrato.
 - **empresas** — Cadastro de entidades e empresas: pesquisa (GET/POST), estatísticas, países, autocomplete, ficha por NIF, contratos, analytics, marcas (INPI) e firmas (RNPC), enriquecimento a partir dos serviços públicos.
 - **companies-global** — Pesquisa global de empresas em todas as fontes (entidades, firmas, marcas, órgãos e adjudicatárias de Espanha, CRM), com contagem por fonte.
+- **societario** — Publicações de atos societários (publicacoes.mj.pt): recolha assistida por entidade (a pesquisa do portal exige reCAPTCHA), pesquisa das publicações indexadas, alvos com contratos no Portal BASE e ficha por NIF.
 - **search** — Pesquisa unificada da plataforma: âmbitos disponíveis, pesquisa em paralelo com resultados agrupados e sugestões para autocompletar.
 - **search360** — Dossiê 360: pesquisa federada por tema, biblioteca organizada, grafo de navegação, síntese com citações, projetos e dossiês guardados (criar, refrescar, exportar).
 - **hermes** — Investigador Hermes: metamodelo (modos, fontes, índices) e `/hermes/ask` para respostas citadas com evidências e sub-perguntas.
@@ -27,7 +28,8 @@ Versão `0.4.0` · **361 operações** em **30 grupos**.
 - **email** — Correio: contas IMAP/SMTP, pastas e mensagens, sinalizadores, mover, apagar e enviar (com anexos).
 - **sentiment** — Análise de sentimento: fontes disponíveis, motores (léxico/neural), análise de texto livre e de corpora, gravação em dossiê e em documento Office.
 - **visualizador** — Business Intelligence: catálogo de datasets, consultas analíticas (dimensões × medidas × fórmulas), registos (drill-through), valores de dimensão, exportação CSV/Excel e dashboards (templates, guardar, duplicar, exportar).
-- **scraper** — Recolha de dados (scraping): definições de fontes, pré-visualização, sugestão assistida por IA, execuções e itens recolhidos, pesquisa no corpus recolhido e agendamentos (cron).
+- **scraper** — Recolha de dados (scraping): templates de sites prontos a usar, definições de fontes, pré-visualização, sugestão assistida por IA, execuções e itens recolhidos (incluindo o texto integral dos artigos), pesquisa no corpus recolhido e agendamentos (cron).
+- **social** — Pesquisa social: recolha de LinkedIn, TikTok, Reddit e Facebook por canais (plataforma + variante + alvo), teste de amostra, execuções, publicações indexadas em `finance_social`, pesquisa com facetas e sentimento, agendamentos (cron) e o estado das credenciais de cada canal.
 - **vectors** — Embeddings e pesquisa semântica: indexar embeddings, estado das tarefas, pesquisa vetorial/híbrida e garantia de mapeamentos `dense_vector`.
 - **skills** — Biblioteca de *skills* (métodos) usada pelos assistentes: listar, guardar, escolher a skill de uma pergunta, garantir/criar, editar e apagar.
 - **providers** — Fornecedores de IA (OpenAI, DeepSeek, Ollama, …): catálogo com estado das chaves, modelos disponíveis para o chat, guardar chaves e predefinições, e teste de ligação.
@@ -35,6 +37,8 @@ Versão `0.4.0` · **361 operações** em **30 grupos**.
 - **proxy** — Proxy para ler páginas externas e incorporá-las na interface (iframe), com limites e estado.
 - **dossier** — Dossier do utilizador: fichas favoritas (entidades e contratos) e pastas/histórico de consultas.
 - **import** — Importação de ficheiros (.zip/.xlsx/.json): pré-visualização das linhas e indexação (contratos no Elasticsearch, entidades em JSONL).
+- **contribuintes** — Contribuintes: índice único com todos os NIF/NIPC do sistema (agregado dos contratos PT/ES, cadastro de entidades, publicações societárias, CIRE, PessoasIQ, firmas, marcas e CRM), pesquisa e ficha por NIF, e sincronização manual/agendada (cron) a partir de todos os índices da plataforma.
+- **gleif** — GLEIF / LEI: registos *Legal Entity Identifier* do *Golden Copy* (Golden Copy em ficheiro `data/gleif/lei.jsonl` e índice `finance_gleif_lei`), pesquisa por nome/LEI/cidade com facetas, agregado por país/região para o mapa e ingestão a partir da API oficial ou dos ficheiros Golden Copy (LEI-CDF).
 - **spa** — Páginas da interface (single-page app). Devolvem o `index.html` e existem para permitir abrir os ecrãs diretamente pelo endereço — não são endpoints de dados.
 
 ## core
@@ -47,9 +51,50 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `POST` | `/chat` | Chat |
 | `POST` | `/chat/stream` | Chat Stream Post |
 | `GET` | `/chat/stream` | Chat Stream Get |
+| `GET` | `/cire` | Serve Spa Page |
+| `POST` | `/cire/collect` | Cire Collect |
+| `GET` | `/cire/coverage` | Cire Coverage |
+| `GET` | `/cire/graph` | Cire Graph |
+| `GET` | `/cire/graph/dimensions` | Cire Graph Dimensions Endpoint |
+| `POST` | `/cire/ingest` | Cire Ingest |
+| `GET` | `/cire/intervenientes/{nif}` | Cire Interveniente |
+| `GET` | `/cire/jobs` | Cire Jobs |
+| `GET` | `/cire/jobs/{job_id}` | Cire Job |
+| `POST` | `/cire/jobs/{job_id}/stop` | Cire Job Stop |
+| `GET` | `/cire/meta` | Cire Meta |
+| `GET` | `/cire/options` | Cire Options |
+| `GET` | `/cire/runs` | Cire Runs |
+| `GET` | `/cire/runs/{run_id}` | Cire Run Detail |
+| `DELETE` | `/cire/runs/{run_id}` | Cire Run Delete |
+| `GET` | `/cire/search` | Cire Search |
+| `GET` | `/cire/status` | Cire Status Endpoint |
 | `GET` | `/health` | Health |
 | `GET` | `/openapi/export` | Openapi Export |
 | `GET` | `/openapi/summary` | Openapi Summary |
+| `GET` | `/people/autocomplete` | People Autocomplete Route |
+| `GET` | `/people/company/{company_nif}/graph` | People Company Graph Route |
+| `GET` | `/people/company/{company_nif}/graph/full` | People Company Graph Full Route |
+| `POST` | `/people/exists` | People Exists Route |
+| `GET` | `/people/filters` | People Filters Route |
+| `POST` | `/people/ingest-cire` | People Ingest Cire Route |
+| `GET` | `/people/ingest-cire/jobs` | People Ingest Cire Jobs Route |
+| `GET` | `/people/ingest-cire/jobs/{job_id}` | People Ingest Cire Job Route |
+| `POST` | `/people/ingest/{nif}` | People Ingest Route |
+| `GET` | `/people/search` | People Search Route |
+| `GET` | `/people/status` | People Status Route |
+| `GET` | `/people/summary` | Node Summary Get Route |
+| `POST` | `/people/summary` | Node Summary Post Route |
+| `GET` | `/people/{nif}` | People Detail Route |
+| `GET` | `/people/{nif}/360` | People 360 Route |
+| `GET` | `/people/{nif}/graph` | People Person Graph Route |
+| `GET` | `/people/{nif}/social` | People Social Route |
+| `POST` | `/people/{nif}/social-collect` | People Social Collect Route |
+| `GET` | `/social` | Serve Spa Page |
+| `GET` | `/social/agenda` | Serve Spa Page |
+| `GET` | `/social/canais` | Serve Spa Page |
+| `GET` | `/social/execucoes` | Serve Spa Page |
+| `GET` | `/social/modelos` | Serve Spa Page |
+| `GET` | `/social/pesquisa` | Serve Spa Page |
 
 ## auth
 
@@ -159,6 +204,7 @@ Contratos públicos portugueses (BASE.gov): pesquisa e ficha, analytics e agrega
 | `GET` | `/contracts/analytics` | Contracts Analytics |
 | `GET` | `/contracts/analytics/graph` | Contracts Graph |
 | `GET` | `/contracts/analytics/graph/dimensions` | Contracts Graph Dimensions |
+| `GET` | `/contracts/analytics/iberia-map` | Contracts Iberia Map |
 | `GET` | `/contracts/analytics/network` | Contracts Network |
 | `GET` | `/contracts/analytics/regional` | Contracts Regional Analytics |
 | `GET` | `/contracts/analytics/relations` | Contracts Relations |
@@ -167,6 +213,7 @@ Contratos públicos portugueses (BASE.gov): pesquisa e ficha, analytics e agrega
 | `POST` | `/contracts/export/excel` | Contracts Export Excel |
 | `POST` | `/contracts/export/pdf` | Contracts Export Pdf |
 | `POST` | `/contracts/ingest` | Contracts Ingest |
+| `GET` | `/contracts/region-detail` | Contracts Region Detail |
 | `POST` | `/contracts/search` | Contracts Search |
 | `GET` | `/contracts/status` | Contracts Status Endpoint |
 | `GET` | `/contracts/years` | Contracts Years |
@@ -227,6 +274,23 @@ Pesquisa global de empresas em todas as fontes (entidades, firmas, marcas, órg�
 | --- | --- | --- |
 | `GET` | `/companies-global/search` | Companies Global Search |
 | `GET` | `/companies-global/sources` | Companies Global Sources |
+
+## societario
+
+Publicações de atos societários (publicacoes.mj.pt): recolha assistida por entidade (a pesquisa do portal exige reCAPTCHA), pesquisa das publicações indexadas, alvos com contratos no Portal BASE e ficha por NIF.
+
+| Método | Caminho | Resumo |
+| --- | --- | --- |
+| `POST` | `/societario/collect` | Societario Collect |
+| `POST` | `/societario/collect-entities` | Societario Collect Entities |
+| `GET` | `/societario/companies/{nif}` | Societario Company |
+| `GET` | `/societario/companies/{nif}/people` | Societario Company People |
+| `POST` | `/societario/companies/{nif}/timeline` | Societario Company Timeline |
+| `POST` | `/societario/ingest` | Societario Ingest |
+| `GET` | `/societario/meta` | Societario Meta |
+| `GET` | `/societario/search` | Societario Search |
+| `GET` | `/societario/status` | Societario Status |
+| `GET` | `/societario/targets` | Societario Targets |
 
 ## search
 
@@ -450,7 +514,7 @@ Business Intelligence: catálogo de datasets, consultas analíticas (dimensões 
 
 ## scraper
 
-Recolha de dados (scraping): definições de fontes, pré-visualização, sugestão assistida por IA, execuções e itens recolhidos, pesquisa no corpus recolhido e agendamentos (cron).
+Recolha de dados (scraping): templates de sites prontos a usar, definições de fontes, pré-visualização, sugestão assistida por IA, execuções e itens recolhidos (incluindo o texto integral dos artigos), pesquisa no corpus recolhido e agendamentos (cron).
 
 | Método | Caminho | Resumo |
 | --- | --- | --- |
@@ -462,17 +526,53 @@ Recolha de dados (scraping): definições de fontes, pré-visualização, sugest
 | `GET` | `/scraper/runs/{run_id}` | Get Run |
 | `GET` | `/scraper/runs/{run_id}/items` | Get Run Items |
 | `GET` | `/scraper/search` | Search Scraped Items |
+| `POST` | `/scraper/sentiment` | Analyze Sentiment |
 | `GET` | `/scraper/sources` | List Sources |
 | `POST` | `/scraper/sources` | Create Source |
 | `GET` | `/scraper/sources/{source_id}` | Get Source |
 | `PATCH` | `/scraper/sources/{source_id}` | Update Source |
 | `DELETE` | `/scraper/sources/{source_id}` | Delete Source |
+| `POST` | `/scraper/sources/{source_id}/apply-template` | Apply Template To Source |
 | `POST` | `/scraper/sources/{source_id}/preview` | Preview Saved Source |
 | `POST` | `/scraper/sources/{source_id}/run` | Run Source |
 | `GET` | `/scraper/sources/{source_id}/runs` | List Source Runs |
 | `GET` | `/scraper/stats` | Scraper Stats |
 | `GET` | `/scraper/status` | Scraper Availability |
 | `POST` | `/scraper/suggest` | Suggest Source |
+| `GET` | `/scraper/templates` | List Templates |
+| `GET` | `/scraper/templates/{template_id}` | Get Template |
+| `POST` | `/scraper/templates/{template_id}/preview` | Preview Template |
+| `POST` | `/scraper/templates/{template_id}/source` | Create Source From Template |
+
+## social
+
+Pesquisa social: recolha de LinkedIn, TikTok, Reddit e Facebook por canais (plataforma + variante + alvo), teste de amostra, execuções, publicações indexadas em `finance_social`, pesquisa com facetas e sentimento, agendamentos (cron) e o estado das credenciais de cada canal.
+
+| Método | Caminho | Resumo |
+| --- | --- | --- |
+| `GET` | `/social/channels` | List Channels |
+| `POST` | `/social/channels` | Create Channel |
+| `GET` | `/social/channels/{channel_id}` | Get Channel |
+| `PATCH` | `/social/channels/{channel_id}` | Update Channel |
+| `DELETE` | `/social/channels/{channel_id}` | Delete Channel |
+| `POST` | `/social/channels/{channel_id}/preview` | Preview Saved Channel |
+| `POST` | `/social/channels/{channel_id}/run` | Run Channel |
+| `GET` | `/social/channels/{channel_id}/runs` | List Channel Runs |
+| `GET` | `/social/jobs` | List Jobs |
+| `POST` | `/social/jobs/reload` | Reload Jobs |
+| `GET` | `/social/meta` | Social Meta |
+| `GET` | `/social/platforms` | List Platforms |
+| `POST` | `/social/preview` | Preview Channel |
+| `GET` | `/social/runs` | List Runs |
+| `GET` | `/social/runs/{run_id}` | Get Run |
+| `GET` | `/social/runs/{run_id}/items` | Get Run Items |
+| `GET` | `/social/search` | Search Social Items |
+| `GET` | `/social/stats` | Social Stats |
+| `GET` | `/social/status` | Social Availability |
+| `GET` | `/social/templates` | List Templates |
+| `GET` | `/social/templates/{template_id}` | Get Template |
+| `POST` | `/social/templates/{template_id}/channel` | Create From Template |
+| `POST` | `/social/templates/{template_id}/preview` | Preview Template |
 
 ## vectors
 
@@ -558,6 +658,44 @@ Importação de ficheiros (.zip/.xlsx/.json): pré-visualização das linhas e i
 | `POST` | `/import/ingest` | Import Ingest |
 | `POST` | `/import/preview` | Import Preview |
 
+## contribuintes
+
+Contribuintes: índice único com todos os NIF/NIPC do sistema (agregado dos contratos PT/ES, cadastro de entidades, publicações societárias, CIRE, PessoasIQ, firmas, marcas e CRM), pesquisa e ficha por NIF, e sincronização manual/agendada (cron) a partir de todos os índices da plataforma.
+
+| Método | Caminho | Resumo |
+| --- | --- | --- |
+| `GET` | `/contribuintes/autocomplete` | Contribuintes Autocomplete |
+| `GET` | `/contribuintes/export` | Export Contribuintes List |
+| `GET` | `/contribuintes/export/{nif}` | Export Contribuinte |
+| `DELETE` | `/contribuintes/index` | Contribuintes Delete Index |
+| `GET` | `/contribuintes/jobs` | Contribuintes Jobs |
+| `GET` | `/contribuintes/jobs/{job_id}` | Contribuintes Job |
+| `GET` | `/contribuintes/meta` | Contribuintes Meta |
+| `GET` | `/contribuintes/schedule` | Contribuintes Schedule |
+| `PUT` | `/contribuintes/schedule` | Contribuintes Set Schedule |
+| `GET` | `/contribuintes/search` | Contribuintes Search |
+| `GET` | `/contribuintes/status` | Contribuintes Status |
+| `POST` | `/contribuintes/sync` | Contribuintes Sync |
+| `GET` | `/contribuintes/{nif}` | Contribuintes Detail |
+
+## gleif
+
+GLEIF / LEI: registos *Legal Entity Identifier* do *Golden Copy* (Golden Copy em ficheiro `data/gleif/lei.jsonl` e índice `finance_gleif_lei`), pesquisa por nome/LEI/cidade com facetas, agregado por país/região para o mapa e ingestão a partir da API oficial ou dos ficheiros Golden Copy (LEI-CDF).
+
+| Método | Caminho | Resumo |
+| --- | --- | --- |
+| `GET` | `/gleif/export.csv` | Gleif Export Csv |
+| `DELETE` | `/gleif/index` | Gleif Delete Index |
+| `POST` | `/gleif/ingest` | Gleif Ingest |
+| `GET` | `/gleif/jobs` | Gleif Jobs |
+| `GET` | `/gleif/jobs/{job_id}` | Gleif Job |
+| `GET` | `/gleif/map` | Gleif Map |
+| `GET` | `/gleif/meta` | Gleif Meta |
+| `GET` | `/gleif/records/{lei}` | Gleif Detail |
+| `GET` | `/gleif/search` | Gleif Search |
+| `GET` | `/gleif/status` | Gleif Status |
+| `GET` | `/gleif/suggest` | Gleif Suggest |
+
 ## spa
 
 Páginas da interface (single-page app). Devolvem o `index.html` e existem para permitir abrir os ecrãs diretamente pelo endereço — não são endpoints de dados.
@@ -571,7 +709,9 @@ Páginas da interface (single-page app). Devolvem o `index.html` e existem para 
 | `GET` | `/companies/search` | Serve Companies Spa Page |
 | `GET` | `/contracts` | Página da interface (SPA) |
 | `GET` | `/contracts/dashboard` | Página da interface (SPA) |
+| `GET` | `/contracts/map` | Página da interface (SPA) |
 | `GET` | `/contracts/search` | Página da interface (SPA) |
+| `GET` | `/contribuintes` | Página da interface (SPA) |
 | `GET` | `/crm` | Página da interface (SPA) |
 | `GET` | `/crm/agenda` | Página da interface (SPA) |
 | `GET` | `/crm/contactos` | Página da interface (SPA) |
@@ -585,6 +725,9 @@ Páginas da interface (single-page app). Devolvem o `index.html` e existem para 
 | `GET` | `/entities/compare` | Serve Entities Spa Page |
 | `GET` | `/entities/dashboard` | Serve Entities Spa Page |
 | `GET` | `/forecast` | Página da interface (SPA) |
+| `GET` | `/gleif` | Página da interface (SPA) |
+| `GET` | `/gleif/ingestao` | Página da interface (SPA) |
+| `GET` | `/gleif/mapa` | Página da interface (SPA) |
 | `GET` | `/hermes` | Página da interface (SPA) |
 | `GET` | `/import` | Página da interface (SPA) |
 | `GET` | `/office` | Página da interface (SPA) |
@@ -596,6 +739,7 @@ Páginas da interface (single-page app). Devolvem o `index.html` e existem para 
 | `GET` | `/scraper/agenda` | Página da interface (SPA) |
 | `GET` | `/scraper/execucoes` | Página da interface (SPA) |
 | `GET` | `/scraper/fontes` | Página da interface (SPA) |
+| `GET` | `/scraper/modelos` | Página da interface (SPA) |
 | `GET` | `/scraper/pesquisa` | Página da interface (SPA) |
 | `GET` | `/search` | Página da interface (SPA) |
 | `GET` | `/search360` | Página da interface (SPA) |

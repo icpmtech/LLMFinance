@@ -219,6 +219,7 @@ from api.admin_routes import router as admin_router
 from api.providers_routes import router as providers_router
 from api.proxy_routes import router as proxy_router
 from api.crm_routes import router as crm_router
+from api.crm_suite_routes import router as crm_suite_router
 from api.contratos_es_routes import router as contratos_es_router
 from api.ontology_routes import router as ontology_router
 from api.ontology_workspace_routes import router as ontology_workspace_router
@@ -429,6 +430,10 @@ app.include_router(cli_router)
 app.include_router(admin_router)
 app.include_router(providers_router)
 app.include_router(proxy_router)
+# A arquitetura de CRM (genérica, 24 módulos) é registada antes do CRM comercial
+# para que `/crm/mod/*`, `/crm/rbac/*` e `/crm/ai/*` não colidam com
+# `/crm/{tipo}/{id}` (que interpretaria «mod» como um tipo de registo).
+app.include_router(crm_suite_router)
 app.include_router(crm_router)
 app.include_router(contratos_es_router)
 app.include_router(ontology_router)
@@ -1220,6 +1225,30 @@ def entities_detail(nif: str):
 @app.get("/crm/contactos")
 @app.get("/crm/agenda")
 @app.get("/crm/relatorios")
+@app.get("/crm/leads")
+@app.get("/crm/oportunidades")
+@app.get("/crm/casos")
+@app.get("/crm/encomendas")
+@app.get("/crm/contratos")
+@app.get("/crm/produtos")
+@app.get("/crm/propostas")
+@app.get("/crm/previsoes")
+@app.get("/crm/campanhas")
+@app.get("/crm/campanhas-membros")
+@app.get("/crm/marketing-atividades")
+@app.get("/crm/marketing-jornadas")
+@app.get("/crm/utilizadores")
+@app.get("/crm/equipas")
+@app.get("/crm/perfis")
+@app.get("/crm/eventos")
+@app.get("/crm/auditoria")
+@app.get("/crm/documentos")
+@app.get("/crm/conhecimento")
+@app.get("/crm/ia-percecoes")
+@app.get("/crm/ia-interacoes")
+@app.get("/crm/rbac")
+@app.get("/crm/admin")
+@app.get("/crm/todos")
 @app.get("/scraper")
 @app.get("/scraper/fontes")
 @app.get("/scraper/modelos")

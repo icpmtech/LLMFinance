@@ -37,7 +37,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 import threading
 import time
 import uuid
@@ -52,6 +51,7 @@ from api.elasticsearch_client import (
     ensure_indices,
     get_es_client,
 )
+from api import gleif_geo
 from collectors import gleif as collector
 
 logger = logging.getLogger(__name__)
@@ -84,12 +84,26 @@ FACET_LABELS: Dict[str, str] = {
     "lou": "LOU emissor",
 }
 
+#: A API do GLEIF não permite paginação profunda além de 10 000 resultados
+#: (`page[number] * page[size] <= 10000`); acima disso é preciso o ficheiro
+#: Golden Copy (que não tem esse limite).
+API_MAX_RESULTS = 10000
+
 WRITE_CHUNK = 2000
 
 #: Registo de sincronizações (em memória, como nos restantes módulos de recolha).
 _JOBS: Dict[str, Dict[str, Any]] = {}
 _JOBS_LOCK = threading.Lock()
 _MAX_JOBS = 20
+
+#: Cache das estatísticas do ficheiro. Contar as linhas da golden copy (229 MB)
+#: a cada pedido custava ~1 s; o ficheiro só muda numa ingestão, pelo que a
+#: contagem é refeita apenas quando o tamanho/Data de modificação mudam.
+_FILE_STATS_CACHE: Dict[str, Any] = {}
+
+#: Cache do `status()` (a interface pede-o ao montar cada página do módulo).
+_STATUS_CACHE: Dict[str, Any] = {}
+STATUS_TTL_S = float(os.getenv("GLEIF_STATUS_TTL", "60"))
 
 
 # --------------------------------------------------------------------- estado
@@ -120,21 +134,30 @@ def _save_meta(meta: Dict[str, Any]) -> None:
 
 
 def _file_stats() -> Dict[str, Any]:
-    """Estatísticas da golden copy local (linhas, tamanho e última alteração)."""
+    """Estatísticas da golden copy local (linhas, tamanho e última alteração).
+
+    A contagem de linhas é a parte cara (um ficheiro de 229 MB); só é refeita
+    quando o ficheiro muda (tamanho ou data de modificação diferentes).
+    """
     if not LEI_FILE.exists():
         return {"path": str(LEI_FILE), "exists": False, "records": 0, "bytes": 0, "modified": None}
+    stat = LEI_FILE.stat()
+    key = (stat.st_size, stat.st_mtime)
+    if _FILE_STATS_CACHE.get("key") == key and _FILE_STATS_CACHE.get("payload"):
+        return _FILE_STATS_CACHE["payload"]
     lines = 0
     with LEI_FILE.open("r", encoding="utf-8") as handle:
         for _ in handle:
             lines += 1
-    stat = LEI_FILE.stat()
-    return {
+    payload = {
         "path": str(LEI_FILE),
         "exists": True,
         "records": lines,
         "bytes": stat.st_size,
         "modified": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
     }
+    _FILE_STATS_CACHE.update({"key": key, "payload": payload})
+    return payload
 
 
 def _golden_copy_files() -> List[Dict[str, Any]]:
@@ -177,13 +200,26 @@ def meta() -> Dict[str, Any]:
         "default_countries": list(collector.DEFAULT_COUNTRIES),
         "facets": [{"id": key, "label": FACET_LABELS.get(key, key), "field": field} for key, field in FACET_FIELDS.items()],
         "pt_regions": collector.PT_REGIONS,
+        "geo": {
+            "countries": gleif_geo.available_countries(),
+            "tables": gleif_geo.stats(),
+            "precisions": gleif_geo.PRECISION_LABELS,
+        },
         "last_run": meta_state.get("last_run"),
         "countries": meta_state.get("countries") or list(collector.DEFAULT_COUNTRIES),
     }
 
 
-def status() -> Dict[str, Any]:
-    """Volumetria e distribuições: o que está no Elasticsearch e no ficheiro."""
+def status(force: bool = False) -> Dict[str, Any]:
+    """Volumetria e distribuições: o que está no Elasticsearch e no ficheiro.
+
+    O resultado é guardado por `STATUS_TTL_S` segundos (a interface pede-o ao
+    montar cada página do módulo e são 7 agregações sobre 212 mil documentos).
+    """
+    now = time.time()
+    if not force and _STATUS_CACHE.get("payload") and now - _STATUS_CACHE.get("at", 0) < STATUS_TTL_S:
+        return _STATUS_CACHE["payload"]
+
     client = get_es_client()
     out: Dict[str, Any] = {
         "index": GLEIF_LEI_INDEX,
@@ -202,7 +238,6 @@ def status() -> Dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         out["elasticsearch"]["error"] = str(exc)
         return out
-
     facets: Dict[str, List[Dict[str, Any]]] = {}
     for key, field in FACET_FIELDS.items():
         try:
@@ -241,6 +276,7 @@ def status() -> Dict[str, Any]:
         ]
     except Exception:  # noqa: BLE001
         out["timeline"] = []
+    _STATUS_CACHE.update({"at": now, "payload": out})
     return out
 
 
@@ -434,25 +470,89 @@ def map_data(
     level: str = "country",
     metric: str = "count",
     country: Optional[str] = None,
+    precision: int = 6,
     size: int = 400,
     **filters: Optional[str],
 ) -> Dict[str, Any]:
-    """Agrega os registos por **país** ou por **região** — a base do mapa OSM.
+    """Agrega os registos por **país**, por **região** ou por **célula geográfica**.
 
-    Devolve `{key, label, count}` por cada divisão; o frontend resolve as
-    coordenadas (centroides de país/distrito) e desenha os círculos sobre os
-    tiles do OpenStreetMap.
+    Os níveis `country`/`region` usam as facetas do índice; o nível `grid` (as
+    empresas **pelas suas sedes legais**) usa as coordenadas resolvidas na
+    ingestão e agrega-as em células geohash — devolve o centro de cada célula, a
+    contagem e a cidade dominante, pronto a desenhar sobre os tiles do OSM.
+
+    A par da agregação, devolve `missing`: os registos sem valor no campo (sem
+    região no endereço, ou sem ponto geocodificado). O GLEIF só preenche a região
+    quando o LOU a comunica — em PT+ES são ~75% dos registos —, pelo que a vista
+    por região é necessariamente parcial e a interface diz quanto ficou de fora
+    (a vista por país cobre-os a todos).
     """
     client = get_es_client()
     if not client:
         return {"error": "Elasticsearch indisponível", "regions": []}
     ensure_indices(client)
 
-    field = "country" if level == "country" else "region"
+    field = "country" if level == "country" else ("location" if level == "grid" else "region")
     clauses = _filters(country=country, **filters)
-    body: Dict[str, Any] = {
+    query = {"bool": {"filter": clauses or [{"match_all": {}}]}}
+
+    if level == "grid":
+        cell_precision = max(1, min(9, int(precision or 6)))
+        body: Dict[str, Any] = {
+            "size": 0,
+            "query": query,
+            "aggs": {
+                "cells": {
+                    "geohash_grid": {"field": "location", "precision": cell_precision, "size": max(1, min(5000, size))},
+                    "aggs": {
+                        "cities": {"terms": {"field": "city", "size": 1}},
+                        "active": {"filter": {"term": {"status": "ACTIVE"}}},
+                    },
+                },
+                "missing": {"missing": {"field": "location"}},
+                "matched": {"value_count": {"field": "lei"}},
+            },
+        }
+        try:
+            response = client.search(index=GLEIF_LEI_INDEX, body=body)
+        except Exception as exc:  # noqa: BLE001
+            return {"error": str(exc), "regions": []}
+        cells: List[Dict[str, Any]] = []
+        for bucket in response.get("aggregations", {}).get("cells", {}).get("buckets", []):
+            centre = gleif_geo.decode_geohash(bucket["key"])
+            if not centre:
+                continue
+            top_cities = bucket.get("cities", {}).get("buckets", [])
+            cells.append(
+                {
+                    "key": bucket["key"],
+                    "label": (top_cities[0]["key"] if top_cities else bucket["key"]).title(),
+                    "city": top_cities[0]["key"] if top_cities else None,
+                    "count": bucket["doc_count"],
+                    "active": bucket.get("active", {}).get("doc_count", 0),
+                    "lat": round(centre[0], 5),
+                    "lon": round(centre[1], 5),
+                }
+            )
+        aggregations = response.get("aggregations", {})
+        total = client.count(index=GLEIF_LEI_INDEX).get("count", 0)
+        return {
+            "level": "grid",
+            "metric": metric,
+            "field": field,
+            "precision": cell_precision,
+            "regions": cells,
+            "index_total": total,
+            "returned_total": sum(cell["count"] for cell in cells),
+            "missing": int(aggregations.get("missing", {}).get("doc_count", 0)),
+            "missing_label": "sem endereço geocodificado",
+            "matched": int(aggregations.get("matched", {}).get("value", 0)),
+            "took_ms": response.get("took"),
+        }
+
+    body = {
         "size": 0,
-        "query": {"bool": {"filter": clauses or [{"match_all": {}}]}},
+        "query": query,
         "aggs": {
             "regions": {
                 "terms": {"field": field, "size": max(1, min(1000, size))},
@@ -461,7 +561,10 @@ def map_data(
                     "active": {"filter": {"term": {"status": "ACTIVE"}}},
                     "updated": {"max": {"field": "last_update_date"}},
                 },
-            }
+            },
+            # Registos sem valor no campo (só relevante no nível da região).
+            "missing": {"missing": {"field": field}},
+            "matched": {"value_count": {"field": "lei"}},
         },
     }
     try:
@@ -485,6 +588,8 @@ def map_data(
         )
 
     total = client.count(index=GLEIF_LEI_INDEX).get("count", 0)
+    aggregations = response.get("aggregations", {})
+    missing = aggregations.get("missing", {}).get("doc_count", 0)
     return {
         "level": level,
         "metric": metric,
@@ -492,6 +597,10 @@ def map_data(
         "regions": regions,
         "index_total": total,
         "returned_total": sum(r["count"] for r in regions),
+        # Registos que ficaram de fora por não terem valor no campo agregado.
+        "missing": int(missing),
+        "missing_label": "sem região" if level == "region" else "sem país",
+        "matched": int(aggregations.get("matched", {}).get("value", 0)),
         "took_ms": response.get("took"),
     }
 
@@ -538,7 +647,7 @@ def _docs_from_source(
 ) -> Iterable[Dict[str, Any]]:
     """Escolhe o iterador de documentos adequado à origem pedida."""
     if source == "file":
-        return _iter_local_file(limit)
+        return _only_countries(_iter_local_file(limit), countries)
     if source == "golden-copy":
         if not path:
             raise RuntimeError("Indique o ficheiro Golden Copy (ZIP/CSV/XML/JSON).")
@@ -547,20 +656,31 @@ def _docs_from_source(
             resolved = GOLDEN_DIR / resolved
         if not resolved.exists():
             raise RuntimeError(f"Ficheiro não encontrado: {resolved}")
-        return collector.iter_golden_copy_file(resolved)
+        return _only_countries(collector.iter_golden_copy_file(resolved, countries=countries), countries)
 
     if source in {"golden-copy-download", "download"}:
         GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
         dest = GOLDEN_DIR / "lei2-latest.zip"
         if download or not dest.exists():
-            _update_job(job_id, phase="download", note=f"a descarregar {dest.name}")
+            _update_job(job_id, phase="download", note=f"a descarregar {dest.name} (~540 MB)")
             collector.download_golden_copy(dest)
-        _update_job(job_id, phase="parse", note=f"a ler {dest.name}")
+        _update_job(job_id, phase="parse", countries=countries, note=f"a ler {dest.name} e a filtrar {', '.join(countries) or 'todos'}")
         meta_state = _load_meta()
         _save_meta({**meta_state, "golden_copy": {"path": str(dest), "at": _now()}})
-        return collector.iter_golden_copy_file(dest)
+        return _only_countries(collector.iter_golden_copy_file(dest, countries=countries), countries)
 
     return collector.fetch_from_api(countries or [], limit=limit)
+
+
+def _only_countries(docs: Iterable[Dict[str, Any]], countries: List[str]) -> Iterable[Dict[str, Any]]:
+    """Filtra um iterador de documentos pelos países pedidos (vazio = todos)."""
+    if not countries:
+        yield from docs
+        return
+    wanted = {c.upper() for c in countries}
+    for doc in docs:
+        if (doc.get("country") or "").upper() in wanted:
+            yield doc
 
 
 def _iter_local_file(limit: Optional[int]) -> Iterable[Dict[str, Any]]:
@@ -638,6 +758,7 @@ def _run_ingest(
         total = 0
         indexed = 0
         errors = 0
+        truncated = False
         batch: List[Dict[str, Any]] = []
         _update_job(job_id, phase="index", total=0, indexed=0)
 
@@ -647,6 +768,10 @@ def _run_ingest(
                 if not lei or lei in seen:
                     continue
                 seen.add(lei)
+                # Geocodificação da sede legal (código postal → cidade → nada).
+                # Guardada no ficheiro e no índice, para o mapa poder colocar as
+                # empresas pelo endereço e não só pela região.
+                gleif_geo.enrich(doc)
                 handle.write(json.dumps(doc, ensure_ascii=False) + "\n")
                 total += 1
                 batch.append(doc)
@@ -670,13 +795,15 @@ def _run_ingest(
             pass
 
         duration = round(time.time() - started, 1)
+        if source == "api" and total >= API_MAX_RESULTS:
+            truncated = True
         summary = {
-            "job_id": job_id,
             "source": source,
             "countries": countries,
             "records": total,
             "indexed": indexed,
             "errors": errors,
+            "truncated": truncated,
             "duration_s": duration,
             "finished_at": _now(),
             "file": str(LEI_FILE),
@@ -692,7 +819,7 @@ def _run_ingest(
                 "countries": countries or meta_state.get("countries"),
             }
         )
-        _update_job(job_id, status="done", phase="done", **summary)
+        _update_job(job_id, status="done", phase="done", total=total, **summary)
         logger.info("GLEIF: %s registos indexados (%s erros) em %ss", indexed, errors, duration)
     except Exception as exc:  # noqa: BLE001
         logger.exception("GLEIF: ingestão falhou")

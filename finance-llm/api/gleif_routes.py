@@ -67,9 +67,11 @@ def gleif_meta() -> Dict[str, Any]:
 
 
 @router.get("/status")
-def gleif_status() -> Dict[str, Any]:
+def gleif_status(
+    refresh: bool = Query(False, description="Ignorar a cache curta do estado e recalcular as agregações")
+) -> Dict[str, Any]:
     """Estado do índice e da golden copy local (volumetria e distribuições)."""
-    return service.status()
+    return service.status(force=refresh)
 
 
 @router.get("/suggest")
@@ -118,22 +120,32 @@ def gleif_search(
 
 @router.get("/map")
 def gleif_map(
-    level: str = Query("country", description="Divisão do agregado: `country` ou `region`"),
+    level: str = Query("country", description="Divisão do agregado: `country`, `region` ou `grid`"),
     metric: str = Query("count", description="Métrica (por agora sempre `count`)"),
     country: Optional[str] = Query(None, description="Restringir a um país"),
     region: Optional[str] = Query(None, description="Restringir a uma região"),
     status: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
-    size: int = Query(400, ge=1, le=1000),
+    precision: int = Query(6, ge=1, le=9, description="Nível `grid`: precisão da célula geohash (6 ≈ 1,2 km)"),
+    size: int = Query(400, ge=1, le=5000),
 ) -> Dict[str, Any]:
-    """Agregado dos registos por país/região (base do mapa OpenStreetMap)."""
+    """Agregado dos registos por país, região ou célula geográfica (mapa OSM).
+
+    `level=grid` agrega as empresas **pelas suas sedes legais** (coordenadas
+    resolvidas na ingestão a partir do código postal/cidade) em células geohash,
+    devolvendo o centro de cada célula e a cidade dominante.
+
+    Devolve também `missing`: os registos sem região no endereço ou sem ponto
+    geocodificado, para a interface poder dizer quanto ficou de fora.
+    """
     result = service.map_data(
-        level=level if level in {"country", "region"} else "country",
+        level=level if level in {"country", "region", "grid"} else "country",
         metric=metric,
         country=country,
         region=region,
         status=status,
         category=category,
+        precision=precision,
         size=size,
     )
     if result.get("error"):

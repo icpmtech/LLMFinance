@@ -82,6 +82,12 @@ PROVIDER_KEYS_INDEX = "finance_provider_keys"
 # (os administradores veem todos os registos).
 CRM_INDEX = "finance_crm"
 
+# Arquitetura de CRM: índice próprio para os utilizadores do CRM (atribuições de
+# perfil/área/departamento/equipa), equipas, perfis personalizados e o registo de
+# auditoria imutável. Fica separado de `finance_crm` para que os registos de
+# negócio nunca sejam contaminados por metadados de administração.
+CRM_RBAC_INDEX = "finance_crm_rbac"
+
 # Módulo de recolha (scraping): itens extraídos de sites pelas "fontes"
 # (definições) do `scraper_service`. Os campos de cada fonte variam, por isso o
 # conteúdo extraído vive em `data` (tipo `flattened`), pesquisável e agregável
@@ -1069,6 +1075,72 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    # Campos dos restantes módulos do CRM (leads, casos, encomendas, contratos,
+    # produtos, propostas, previsões, campanhas, marketing, eventos, documentos,
+    # conhecimento e IA). O registo declarativo em `api/crm_registry.py` é a
+    # fonte única: os mapeamentos são gerados a partir dele, ignorando os campos
+    # já existentes (o Elasticsearch não permite alterar tipos já definidos).
+    try:
+        from api import crm_registry as _crm_registry
+
+        crm_mappings["properties"].update(
+            _crm_registry.es_extra_properties(crm_mappings["properties"])
+        )
+    except Exception as _crm_exc:  # pragma: no cover - defensivo
+        logger.warning("Mapeamentos do CRM não foram ampliados: %s", _crm_exc)
+
+    # CRM — administração: utilizadores do CRM, equipas, perfis e auditoria.
+    crm_rbac_mappings = {
+        "properties": {
+            "kind": {"type": "keyword"},
+            "id": {"type": "keyword"},
+            "user_id": {"type": "keyword"},
+            "name": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "email": {"type": "keyword"},
+            "key": {"type": "keyword"},
+            "label": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "role": {"type": "keyword"},
+            "area": {"type": "keyword"},
+            "department": {"type": "keyword"},
+            "scope": {"type": "keyword"},
+            "modules": {"type": "keyword"},
+            "actions": {"type": "keyword"},
+            "rank": {"type": "integer"},
+            "team_id": {"type": "keyword"},
+            "team": {"type": "keyword"},
+            "job_title": {"type": "keyword"},
+            "phone": {"type": "keyword"},
+            "quota": {"type": "float"},
+            "manager_email": {"type": "keyword"},
+            "members": {"type": "keyword"},
+            "members_total": {"type": "integer"},
+            "region": {"type": "keyword"},
+            "target": {"type": "float"},
+            "currency": {"type": "keyword"},
+            "parent_team_id": {"type": "keyword"},
+            "status": {"type": "keyword"},
+            "description": {"type": "text"},
+            "last_login_at": {"type": "date"},
+            "suspended": {"type": "boolean"},
+            # --- auditoria ---
+            "at": {"type": "date"},
+            "actor_id": {"type": "keyword"},
+            "actor_email": {"type": "keyword"},
+            "action": {"type": "keyword"},
+            "module": {"type": "keyword"},
+            "record_id": {"type": "keyword"},
+            "record_label": {"type": "keyword", "ignore_above": 512},
+            "summary": {"type": "text"},
+            "changes": {"type": "keyword"},
+            "ip": {"type": "keyword"},
+            "user_agent": {"type": "keyword"},
+            "before": {"type": "object", "enabled": False},
+            "after": {"type": "object", "enabled": False},
+            "created_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
     # Recolha (scraping): cada documento é um item extraído por uma "fonte".
     # Os campos variam de site para site e ficam em `data` (`flattened`), o que
     # permite pesquisar e agregar por qualquer campo declarado na definição da
@@ -1248,6 +1320,14 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "next_renewal_date": {"type": "date"},
             "ingested_at": {"type": "date"},
             "source": {"type": "keyword"},
+            # Geolocalização da **sede legal**, resolvida na ingestão a partir do
+            # código postal/cidade (ver `api/gleif_geo.py`). `location` é o
+            # `geo_point` usado pela agregação `geohash_grid` do mapa;
+            # `geo_precision` diz de onde veio o ponto (postal/city).
+            "location": {"type": "geo_point"},
+            "lat": {"type": "float"},
+            "lon": {"type": "float"},
+            "geo_precision": {"type": "keyword"},
         }
     }
 
@@ -1274,6 +1354,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (EVENTS_INDEX, events_mappings),
         (PROVIDER_KEYS_INDEX, provider_keys_mappings),
         (CRM_INDEX, crm_mappings),
+        (CRM_RBAC_INDEX, crm_rbac_mappings),
         (SCRAPED_INDEX, scraped_mappings),
         (SOCIAL_INDEX, social_mappings),
         (AGENT_CONFIGS_INDEX, agent_configs_mappings),

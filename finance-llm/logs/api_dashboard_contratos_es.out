@@ -349,3 +349,8 @@ INFO:     127.0.0.1:53135 - "OPTIONS /auth/sessions HTTP/1.1" 200 OK
 INFO:     127.0.0.1:53003 - "OPTIONS /auth/sessions HTTP/1.1" 200 OK
 INFO:     127.0.0.1:49668 - "GET /auth/sessions HTTP/1.1" 200 OK
 INFO:     127.0.0.1:53003 - "GET /auth/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64296 - "GET /providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52707 - "OPTIONS /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52707 - "PUT /favorites HTTP/1.1" 200 OK
+[2026-09-24 20:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-09-24 20:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
