@@ -240,6 +240,7 @@ from api.societario_routes import router as societario_router
 from api.cire_routes import router as cire_router
 from api.people_routes import router as people_router
 from api.contribuintes_routes import router as contribuintes_router
+from api.gleif_routes import router as gleif_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -307,6 +308,16 @@ async def lifespan(app: FastAPI):
         contribuintes_scheduler.start()
     except Exception as exc:
         logging.getLogger(__name__).warning("Agendador de contribuintes não arrancou: %s", exc)
+
+    # Módulo GLEIF / LEI: cria o índice (se faltar) sem bloquear o arranque.
+    def _preload_gleif():
+        try:
+            from api import gleif_service
+
+            gleif_service.warmup()
+        except Exception:
+            pass
+    threading.Thread(target=_preload_gleif, daemon=True).start()
 
     yield
 
@@ -440,6 +451,7 @@ app.include_router(societario_router)
 app.include_router(cire_router)
 app.include_router(people_router)
 app.include_router(contribuintes_router)
+app.include_router(gleif_router)
 
 
 # Cache curta de `user_id → email`, para o registo de pedidos identificar quem
@@ -1225,6 +1237,9 @@ def entities_detail(nif: str):
 @app.get("/cire")
 @app.get("/contribuintes")
 @app.get("/empresas-global")
+@app.get("/gleif")
+@app.get("/gleif/mapa")
+@app.get("/gleif/ingestao")
 @app.get("/search360")
 @app.get("/search360/dossie")
 @app.get("/search360/projetos")

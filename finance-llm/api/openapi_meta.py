@@ -339,6 +339,16 @@ TAGS_METADATA: List[Dict[str, str]] = [
         ),
     },
     {
+        "name": "gleif",
+        "description": (
+            "GLEIF / LEI: registos *Legal Entity Identifier* do *Golden Copy* "
+            "(Golden Copy em ficheiro `data/gleif/lei.jsonl` e índice "
+            "`finance_gleif_lei`), pesquisa por nome/LEI/cidade com facetas, "
+            "agregado por país/região para o mapa e ingestão a partir da API "
+            "oficial ou dos ficheiros Golden Copy (LEI-CDF)."
+        ),
+    },
+    {
         "name": "spa",
         "description": (
             "Páginas da interface (single-page app). Devolvem o `index.html` e "
@@ -394,6 +404,9 @@ SPA_PATHS: Tuple[str, ...] = (
     "/contracts/map",
     "/contratos-es",
     "/contribuintes",
+    "/gleif",
+    "/gleif/mapa",
+    "/gleif/ingestao",
     "/elastic",
     "/rag",
     "/forecast",
@@ -420,6 +433,9 @@ PATH_TAG_RULES: Sequence[Tuple[str, str]] = (
     ("/contracts", "contratos"),
     ("/companies-global", "companies-global"),
     ("/contribuintes", "contribuintes"),
+    ("/gleif/mapa", "spa"),
+    ("/gleif/ingestao", "spa"),
+    ("/gleif", "gleif"),
     ("/societario", "societario"),
     ("/companies/role-summary", "empresas"),
     ("/companies", "empresas"),

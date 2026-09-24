@@ -125,6 +125,14 @@ CONTRIBUINTES_INDEX = "finance_contribuintes"
 # posterior (um documento por nó, substituído a cada novo resumo).
 NODE_SUMMARIES_INDEX = "finance_node_summaries"
 
+# GLEIF — «Golden Copy» dos registos LEI (Legal Entity Identifier). Um documento
+# por LEI, com o nível 1 (quem é quem: nome legal, endereço, jurisdição, forma
+# jurídica, estado, datas) e os identificadores associados (BIC, MIC, OCID, QCC,
+# S&P Global). O índice é alimentado por `collectors/gleif.py` — quer a partir da
+# API oficial do GLEIF, quer a partir do ficheiro *Golden Copy* (LEI-CDF) — e é
+# pesquisável no módulo «GLEIF / LEI» (`/gleif/*`).
+GLEIF_LEI_INDEX = "finance_gleif_lei"
+
 # Definições (settings) específicas de determinados índices — nomeadamente
 # analisadores usados em subcampos de pesquisa por prefixo.
 INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
@@ -194,6 +202,38 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
                     "filter": ["lowercase", "asciifolding"],
                 },
                 "entity_search_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                },
+            },
+        }
+    },
+    GLEIF_LEI_INDEX: {
+        "analysis": {
+            "tokenizer": {
+                # Pesquisa incremental no nome da entidade («SIE» → «SIEMENS»).
+                "gleif_edge_ngram": {
+                    "type": "edge_ngram",
+                    "min_gram": 2,
+                    "max_gram": 18,
+                    "token_chars": ["letter", "digit"],
+                }
+            },
+            "analyzer": {
+                "gleif_index_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "gleif_edge_ngram",
+                    "filter": ["lowercase", "asciifolding"],
+                },
+                "gleif_search_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                },
+                # Os textos vêm em várias línguas; `asciifolding` deixa que uma
+                # pesquisa sem acentos encontre «Câmara»/«Gesellschaft für …».
+                "gleif_folding": {
                     "type": "custom",
                     "tokenizer": "standard",
                     "filter": ["lowercase", "asciifolding"],
@@ -1159,12 +1199,65 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    # GLEIF: um documento por LEI. Campos de texto com analisador de n-gramas
+    # (`gleif_index_analyzer`) para pesquisa incremental e subcampo `.keyword`
+    # para ordenação/agregação exata.
+    gleif_lei_mappings = {
+        "properties": {
+            "lei": {"type": "keyword"},
+            "legal_name": {
+                "type": "text",
+                "analyzer": "gleif_index_analyzer",
+                "search_analyzer": "gleif_search_analyzer",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "legal_name_folded": {"type": "keyword", "ignore_above": 512},
+            "other_names": {"type": "text", "analyzer": "gleif_folding"},
+            "transliterated_names": {"type": "text", "analyzer": "gleif_folding"},
+            "country": {"type": "keyword"},
+            "region": {"type": "keyword"},
+            "region_name": {"type": "keyword", "ignore_above": 256},
+            "city": {"type": "keyword", "ignore_above": 256},
+            "postal_code": {"type": "keyword", "ignore_above": 32},
+            "address_lines": {"type": "text", "analyzer": "gleif_folding"},
+            "hq_country": {"type": "keyword"},
+            "hq_region": {"type": "keyword"},
+            "hq_city": {"type": "keyword", "ignore_above": 256},
+            "jurisdiction": {"type": "keyword"},
+            "category": {"type": "keyword"},
+            "sub_category": {"type": "keyword"},
+            "legal_form": {"type": "keyword"},
+            "legal_form_other": {"type": "keyword", "ignore_above": 256},
+            "status": {"type": "keyword"},
+            "registration_status": {"type": "keyword"},
+            "corroboration_level": {"type": "keyword"},
+            "conformity_flag": {"type": "keyword"},
+            "managing_lou": {"type": "keyword"},
+            "registered_as": {"type": "keyword", "ignore_above": 128},
+            "registered_at": {"type": "keyword"},
+            "validated_as": {"type": "keyword", "ignore_above": 128},
+            "bic": {"type": "keyword"},
+            "mic": {"type": "keyword"},
+            "ocid": {"type": "keyword", "ignore_above": 128},
+            "qcc": {"type": "keyword"},
+            "gem": {"type": "keyword", "ignore_above": 128},
+            "spglobal": {"type": "keyword", "ignore_above": 128},
+            "creation_date": {"type": "date"},
+            "initial_registration_date": {"type": "date"},
+            "last_update_date": {"type": "date"},
+            "next_renewal_date": {"type": "date"},
+            "ingested_at": {"type": "date"},
+            "source": {"type": "keyword"},
+        }
+    }
+
     for name, mappings in [
         ("finance_prices", prices_mappings),
         ("finance_news", news_mappings),
         ("finance_sentiment_daily", sentiment_mappings),
         ("finance_macro", macro_mappings),
         ("finance_earnings", earnings_mappings),
+        (GLEIF_LEI_INDEX, gleif_lei_mappings),
         (CONTRACTS_INDEX, contracts_mappings),
         (CONTRATOS_ES_INDEX, contratos_es_mappings),
         (TRADEMARKS_INDEX, trademarks_mappings),
