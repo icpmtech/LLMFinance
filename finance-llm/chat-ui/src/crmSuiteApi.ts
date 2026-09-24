@@ -253,6 +253,36 @@ export function getCrmSuite(): Promise<CrmSuiteMeta> {
   return request<CrmSuiteMeta>("/crm/suite");
 }
 
+/* ------------------------------------------------------------------- cache */
+
+let suiteCache: CrmSuiteMeta | null = null;
+let suiteInFlight: Promise<CrmSuiteMeta> | null = null;
+
+/** Estrutura já carregada (ou `null`). */
+export function peekCrmSuite(): CrmSuiteMeta | null {
+  return suiteCache;
+}
+
+/**
+ * Estrutura do CRM com cache: a mesma promessa serve todas as janelas do módulo,
+ * para não repetir o pedido a cada painel aberto.
+ */
+export function loadCrmSuite(force = false): Promise<CrmSuiteMeta> {
+  if (!force && suiteCache) return Promise.resolve(suiteCache);
+  if (!force && suiteInFlight) return suiteInFlight;
+  suiteInFlight = getCrmSuite()
+    .then((meta) => {
+      suiteCache = meta;
+      suiteInFlight = null;
+      return meta;
+    })
+    .catch((error: unknown) => {
+      suiteInFlight = null;
+      throw error;
+    });
+  return suiteInFlight;
+}
+
 export function getCrmSuiteOverview(): Promise<CrmSuiteOverview> {
   return request<CrmSuiteOverview>("/crm/suite/overview");
 }

@@ -166,6 +166,17 @@ def _percent(part: Any, whole: Any) -> Optional[float]:
     return round(top / bottom * 100.0, 2)
 
 
+# Probabilidade típica de cada fase, usada quando o utilizador não a indica.
+STAGE_PROBABILITY: Dict[str, int] = {
+    "prospeccao": 10,
+    "qualificacao": 25,
+    "proposta": 50,
+    "negociacao": 70,
+    "ganho": 100,
+    "perdido": 0,
+}
+
+
 def apply_derived(module: registry.Module, doc: Dict[str, Any]) -> Dict[str, Any]:
     """Calcula os campos derivados do módulo (totais, margens, taxas, estados)."""
     slug = module.slug
@@ -173,7 +184,9 @@ def apply_derived(module: registry.Module, doc: Dict[str, Any]) -> Dict[str, Any
     if slug == "opportunities":
         amount = _as_float(doc.get("amount")) or 0.0
         probability = _as_int(doc.get("probability"))
-        probability = 20 if probability is None else max(0, min(100, probability))
+        if probability is None:
+            probability = STAGE_PROBABILITY.get(str(doc.get("stage") or ""), 20)
+        probability = max(0, min(100, probability))
         doc["probability"] = probability
         doc["weighted_amount"] = round(amount * probability / 100.0, 2)
     elif slug == "orders":
@@ -465,6 +478,12 @@ def can(perm: Dict[str, Any], slug: str, action: str) -> bool:
     module = registry.MODULE_BY_SLUG.get(slug)
     if module is None:
         return False
+    # Limites do próprio módulo: valem também para o administrador.
+    if module.read_only and action in ("create", "update", "delete"):
+        return False
+    if slug == "users" and action in ("create", "delete"):
+        # Os utilizadores vêm da autenticação; aqui só se ajusta a atribuição.
+        return False
     if perm.get("is_admin"):
         return True
     if slug not in (perm.get("modules") or []):
@@ -473,11 +492,6 @@ def can(perm: Dict[str, Any], slug: str, action: str) -> bool:
     if action not in actions:
         return False
     if module.admin_only and "manage" not in actions:
-        return False
-    if module.read_only and action in ("create", "update", "delete"):
-        return False
-    if slug == "users" and action in ("create", "delete"):
-        # Os utilizadores vêm da autenticação; aqui só se ajusta a atribuição.
         return False
     return True
 
@@ -658,9 +672,89 @@ def _record(hit: Dict[str, Any], module: registry.Module) -> Dict[str, Any]:
     record_id = source.get("id") or (raw_id.split(":", 1)[1] if ":" in raw_id else raw_id)
     source["id"] = record_id
     source["doc_id"] = raw_id
-    source["module"] = module.slug
+    # `module` é um campo de negócio em alguns módulos (auditoria, IA): só se
+    # escreve a marca sintética quando o módulo não declara esse campo.
+    if "module" not in module.field_map:
+        source["module"] = module.slug
     source["label"] = module.label_of(source)
     return source
+
+
+# --------------------------------------------------------------- perfis (roles)
+def _role_items() -> List[Dict[str, Any]]:
+    """Perfis de sistema e personalizados, já resolvidos (catálogo efetivo)."""
+    items: List[Dict[str, Any]] = []
+    for key, role in effective_roles().items():
+        items.append(
+            {
+                "id": key,
+                "key": key,
+                "kind": "crm_role",
+                "label": role.get("label") or key,
+                "area": role.get("area") or "",
+                "department": role.get("department") or "",
+                "scope": role.get("scope") or "own",
+                "modules": list(role.get("modules") or []),
+                "actions": list(role.get("actions") or []),
+                "rank": role.get("rank"),
+                "builtin": bool(role.get("builtin")),
+                "description": role.get("description") or "",
+            }
+        )
+    items.sort(key=lambda item: (item.get("rank") if item.get("rank") is not None else 99, item["label"]))
+    return items
+
+
+def _list_roles(
+    perm: Dict[str, Any],
+    *,
+    q: Optional[str] = None,
+    filters: Optional[Dict[str, Any]] = None,
+    size: int = DEFAULT_SIZE,
+    from_: int = 0,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Lista de perfis: junta o catálogo de sistema com os perfis personalizados."""
+    items = _role_items()
+    if q:
+        needle = q.strip().lower()
+        items = [
+            item
+            for item in items
+            if needle in str(item["label"]).lower()
+            or needle in str(item["key"]).lower()
+            or needle in str(item.get("description") or "").lower()
+        ]
+    for key, value in (filters or {}).items():
+        if value in (None, "", []):
+            continue
+        if key == "modules":
+            wanted = value if isinstance(value, list) else str(value).split(",")
+            items = [item for item in items if any(slug in item["modules"] for slug in wanted)]
+            continue
+        if key == "actions":
+            wanted = value if isinstance(value, list) else str(value).split(",")
+            items = [item for item in items if any(action in item["actions"] for action in wanted)]
+            continue
+        items = [item for item in items if str(item.get(key)) == str(value)]
+
+    module = registry.MODULE_BY_SLUG["roles"]
+    spec = module.field_map.get(sort_by or "")
+    if spec is not None and spec.sortable:
+        items.sort(
+            key=lambda item: str(item.get(spec.key) or ""),
+            reverse=(sort_order or "desc") != "asc",
+        )
+    total = len(items)
+    return {
+        "module": "roles",
+        "kind": "crm_role",
+        "total": total,
+        "from": from_,
+        "size": size,
+        "items": items[from_ : from_ + max(1, min(MAX_SIZE, size))],
+    }
 
 
 def list_module(
@@ -679,6 +773,8 @@ def list_module(
     client = _client()
     if not client:
         return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+    if module.slug == "roles":
+        return _list_roles(perm, q=q, filters=filters, size=size, from_=from_, sort_by=sort_by, sort_order=sort_order)
     if module.slug == "users":
         sync_members()
     try:
@@ -712,6 +808,11 @@ def get_module(module: registry.Module, record_id: str, perm: Dict[str, Any]) ->
     client = _client()
     if not client:
         return {"error": "Elasticsearch indisponível"}
+    if module.slug == "roles":
+        for item in _role_items():
+            if str(item["id"]) == str(record_id):
+                return {"item": item}
+        return {"error": "Registo não encontrado"}
     try:
         if not client.exists(index=index_for(module), id=doc_id(module, record_id)):
             return {"error": "Registo não encontrado"}
@@ -826,10 +927,19 @@ def save_module(
             return {"error": f"O campo «{spec.label}» é obrigatório"}
 
     document = _stamp(module, document, perm, creating=existing is None)
+    # Mudar de fase sem indicar probabilidade: adota a probabilidade típica da fase
+    # (mantendo o valor quando o utilizador o define à mão).
+    if module.slug == "opportunities" and "stage" in fields and "probability" not in fields:
+        typed = STAGE_PROBABILITY.get(str(document.get("stage") or ""))
+        if typed is not None:
+            document["probability"] = typed
     document = apply_derived(module, document)
+    # Campos sintéticos (marca do módulo e etiqueta) só se forem mesmo sintéticos.
     document.pop("doc_id", None)
-    document.pop("label", None)
-    document.pop("module", None)
+    if "label" not in module.field_map:
+        document.pop("label", None)
+    if "module" not in module.field_map:
+        document.pop("module", None)
 
     try:
         client.index(index=index_for(module), id=doc_id(module, record_id), document=document, refresh=True)
@@ -876,23 +986,34 @@ def delete_module(
         return {"error": f"O módulo {module.label} é só de leitura"}
     if module.slug == "users":
         return {"error": "Os utilizadores gerem-se na autenticação; aqui só se altera a atribuição"}
-    if module.slug == "roles" and record_id in registry.ROLE_BY_KEY:
-        # Um perfil de sistema pode ser reposto (elimina o ajuste), não apagado.
+    if module.slug == "roles":
+        # Um perfil de sistema pode ser afinado (ou reposto), nunca apagado.
+        key = doc_id(module, record_id)
+        removed = False
         try:
-            client.delete(index=CRM_RBAC_INDEX, id=doc_id(module, record_id), refresh=True)
-            audit(
-                action="delete",
-                module=module.slug,
-                perm=perm,
-                record_id=record_id,
-                record_label=record_id,
-                summary=f"Ajuste do perfil {record_id} reposto para o valor de sistema",
-                ip=ip,
-                user_agent=user_agent,
-            )
-            return {"ok": True, "deleted": 1, "reset": True}
+            if client.exists(index=CRM_RBAC_INDEX, id=key):
+                client.delete(index=CRM_RBAC_INDEX, id=key, refresh=True)
+                removed = True
         except Exception as exc:  # pragma: no cover
             return {"error": str(exc)}
+        if not removed and record_id not in registry.ROLE_BY_KEY:
+            return {"error": "Registo não encontrado"}
+        audit(
+            action="delete",
+            module=module.slug,
+            perm=perm,
+            record_id=record_id,
+            record_label=record_id,
+            summary=(
+                f"Ajuste do perfil {record_id} reposto para o valor de sistema"
+                if removed
+                else f"Perfil {record_id} apagado (não tinha ajustes guardados)"
+            ),
+            ip=ip,
+            user_agent=user_agent,
+        )
+        _MEMBER_CACHE["synced_at"] = None
+        return {"ok": True, "deleted": 1, "reset": removed}
 
     found = get_module(module, record_id, perm)
     if found.get("error"):

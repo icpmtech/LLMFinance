@@ -46,6 +46,7 @@ import {
   getCrmModuleStats,
   getCrmRbac,
   listCrmModule,
+  loadCrmSuite,
   updateCrmModuleRecord,
   type CrmFieldMeta,
   type CrmModuleMeta,
@@ -270,7 +271,63 @@ function FieldInput({
 
 /* --------------------------------------------------------------------- painel */
 
-export function CrmModulePanel({ module }: { module: CrmModuleMeta }) {
+/**
+ * Módulo do CRM: a página só indica qual; o painel resolve a descrição do módulo
+ * e as permissões do perfil, com uma segunda tentativa (a primeira pode cruzar-se
+ * com o arranque da sessão).
+ */
+export function CrmModulePanel({ slug, label }: { slug: string; label?: string }) {
+  const [state, setState] = useState<{ module: CrmModuleMeta | null; error: string | null; loading: boolean }>({
+    module: null,
+    error: null,
+    loading: true,
+  });
+
+  useEffect(() => {
+    let alive = true;
+    setState({ module: null, error: null, loading: true });
+    loadCrmSuite()
+      .catch(() => loadCrmSuite(true))
+      .then((meta) => {
+        if (!alive) return;
+        setState({ module: meta.modules.find((item) => item.slug === slug) ?? null, error: null, loading: false });
+      })
+      .catch((err: unknown) => {
+        if (!alive) return;
+        setState({
+          module: null,
+          error: err instanceof Error ? err.message : "Não foi possível obter a arquitetura de CRM",
+          loading: false,
+        });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [slug]);
+
+  if (state.loading) {
+    return (
+      <p className="flex items-center gap-2 py-10 text-[12.5px] text-muted-foreground">
+        <Loader2 size={14} className="animate-spin" /> A carregar {label ?? slug}…
+      </p>
+    );
+  }
+  if (state.error) return <Notice text={state.error} tone="error" />;
+  if (!state.module) {
+    return (
+      <div className="flex flex-col items-center gap-2 py-12 text-center">
+        <ShieldCheck size={20} className="text-muted-foreground/70" />
+        <p className="text-[13px] text-foreground">Sem acesso a este módulo</p>
+        <p className="max-w-md text-[11.5px] text-muted-foreground">
+          O seu perfil não inclui {label ?? slug}. Peça ao administrador do CRM para o incluir.
+        </p>
+      </div>
+    );
+  }
+  return <CrmModuleBody module={state.module} />;
+}
+
+function CrmModuleBody({ module }: { module: CrmModuleMeta }) {
   const [items, setItems] = useState<CrmSuiteRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [stats, setStats] = useState<CrmModuleStats | null>(null);

@@ -1,356 +1,104 @@
 warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
-INFO:     Started server process [69356]
+INFO:     Started server process [88008]
 INFO:     Waiting for application startup.
 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
-Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  51%|█████     | 129/254 [00:00<00:00, 1265.78it/s]Loading weights: 100%|██████████| 254/254 [00:00<00:00, 1451.06it/s]
-INFO:     127.0.0.1:50466 - "GET /people/autocomplete?q=Andre%20Manuel%20Lopes&limit=4 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50469 - "GET /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50475 - "GET /people/search?q=Andre%20Manuel%20Lopes%20de%20Jesus&origin=cire&role=Insolvente&min_roles=5&sort=roles&size=3 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52197 - "OPTIONS /people/212192760/social-collect HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62914 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58439 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54962 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54962 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60638 - "GET /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54962 - "GET /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52015 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62535 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58439 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52015 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54962 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56529 - "GET /people/status HTTP/1.1" 200 OK
-[2026-09-24 19:09:19] INFO: Fetched (200) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+212192760> (referer: https://www.google.com/)
-INFO:     127.0.0.1:54962 - "GET /people/status HTTP/1.1" 200 OK
-[2026-09-24 19:09:23] INFO: Fetched (200) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+212192760> (referer: https://www.google.com/)
-[2026-09-24 19:09:30] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+NIF+212192760> (referer: https://www.google.com/)
-[2026-09-24 19:09:33] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+NIF+212192760> (referer: https://www.google.com/)
-[2026-09-24 19:09:39] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22> (referer: https://www.google.com/)
-INFO:     127.0.0.1:51232 - "OPTIONS /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51497 - "OPTIONS /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56545 - "OPTIONS /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65224 - "OPTIONS /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59463 - "GET /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61802 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-[2026-09-24 19:09:42] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22> (referer: https://www.google.com/)
-INFO:     127.0.0.1:65224 - "GET /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59463 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65224 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59463 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59463 - "GET /people/autocomplete?q=pedro&limit=8 HTTP/1.1" 200 OK
-[2026-09-24 19:09:48] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Alinkedin.com%2Fin> (referer: https://www.google.com/)
-INFO:     127.0.0.1:50461 - "OPTIONS /people/autocomplete?q=pedro+va&limit=8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59368 - "OPTIONS /people/autocomplete?q=pedro+vaz&limit=8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57222 - "OPTIONS /people/autocomplete?q=pedro+vaz+ma&limit=8 HTTP/1.1" 200 OK
-[2026-09-24 19:09:51] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Alinkedin.com%2Fin> (referer: https://www.google.com/)
-INFO:     127.0.0.1:53857 - "OPTIONS /people/search?q=Maria+Luiza+Pedrozo&nif=297651943&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53857 - "GET /people/search?q=Maria+Luiza+Pedrozo&nif=297651943&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53857 - "OPTIONS /people/autocomplete?q=Andre+Manuel+Lopes&limit=8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50462 - "GET /people/autocomplete?q=Andre+Manuel+Lopes&limit=8 HTTP/1.1" 200 OK
-[2026-09-24 19:09:56] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Atiktok.com> (referer: https://www.google.com/)
-INFO:     127.0.0.1:50462 - "OPTIONS /people/search?q=Andr%C3%A9+Manuel+Lopes+de+Jesus&nif=226815340&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53857 - "GET /people/search?q=Andr%C3%A9+Manuel+Lopes+de+Jesus&nif=226815340&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-[2026-09-24 19:09:59] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Atiktok.com> (referer: https://www.google.com/)
-[2026-09-24 19:10:05] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Afacebook.com> (referer: https://www.google.com/)
-INFO:     127.0.0.1:53039 - "OPTIONS /people/search?q=Andr%C3%A9+Manuel+Lopes+de+Jesus&is_company=true&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53039 - "GET /people/search?q=Andr%C3%A9+Manuel+Lopes+de+Jesus&is_company=true&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-[2026-09-24 19:10:08] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Afacebook.com> (referer: https://www.google.com/)
-INFO:     127.0.0.1:53039 - "OPTIONS /people/autocomplete?q=ite&limit=8&is_company=true HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53039 - "OPTIONS /people/autocomplete?q=iten&limit=8&is_company=true HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51347 - "OPTIONS /people/search?q=iten&is_company=true&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51347 - "GET /people/search?q=iten&is_company=true&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-[2026-09-24 19:10:15] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+%22Trust+In+News+Unipessoal+Lda%22> (referer: https://www.google.com/)
-INFO:     127.0.0.1:51347 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-[2026-09-24 19:10:18] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+%22Trust+In+News+Unipessoal+Lda%22> (referer: https://www.google.com/)
-INFO:     127.0.0.1:51347 - "GET /people/autocomplete?q=Andre+Manuel+Lopes&limit=8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51347 - "GET /people/search?q=Andr%C3%A9+Manuel+Lopes+de+Jesus&nif=226815340&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-[2026-09-24 19:10:26] INFO: Fetched (200) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+212192760> (referer: https://www.google.com/)
-[2026-09-24 19:10:30] INFO: Fetched (200) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+212192760> (referer: https://www.google.com/)
-[2026-09-24 19:10:35] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+NIF+212192760> (referer: https://www.google.com/)
-INFO:     127.0.0.1:64078 - "OPTIONS /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64078 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-[2026-09-24 19:10:38] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+NIF+212192760> (referer: https://www.google.com/)
-[2026-09-24 19:10:44] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22> (referer: https://www.google.com/)
-INFO:     127.0.0.1:53931 - "OPTIONS /people/summary?node_id=person%3A226815340&nif=226815340&name=Andr%C3%A9+Manuel+Lopes+de+Jesus HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49389 - "OPTIONS /people/summary?node_id=person%3A226815340&nif=226815340&name=Andr%C3%A9+Manuel+Lopes+de+Jesus HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53931 - "GET /people/summary?node_id=person%3A226815340&nif=226815340&name=Andr%C3%A9+Manuel+Lopes+de+Jesus HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49389 - "GET /people/summary?node_id=person%3A226815340&nif=226815340&name=Andr%C3%A9+Manuel+Lopes+de+Jesus HTTP/1.1" 200 OK
-[2026-09-24 19:10:47] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22> (referer: https://www.google.com/)
-INFO:     127.0.0.1:49389 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50537 - "GET /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50537 - "OPTIONS /people/search?q=Lopes+de+Jesus&role=Insolvente&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-[2026-09-24 19:10:53] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Alinkedin.com%2Fin> (referer: https://www.google.com/)
-INFO:     127.0.0.1:49389 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52551 - "GET /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57864 - "GET /people/search?q=Lopes+de+Jesus&role=Insolvente&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50537 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57864 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57864 - "OPTIONS /people/search?q=Lopes+de+Jesus&role=Insolvente&origin=cire&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50537 - "GET /people/search?q=Lopes+de+Jesus&role=Insolvente&origin=cire&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-[2026-09-24 19:10:56] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Alinkedin.com%2Fin> (referer: https://www.google.com/)
-INFO:     127.0.0.1:50537 - "OPTIONS /people/search?q=Lopes+de+Jesus&role=Insolvente&origin=cire&min_roles=3&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57864 - "GET /people/search?q=Lopes+de+Jesus&role=Insolvente&origin=cire&min_roles=3&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-[2026-09-24 19:11:01] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Atiktok.com> (referer: https://www.google.com/)
-INFO:     127.0.0.1:61709 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-[2026-09-24 19:11:05] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Atiktok.com> (referer: https://www.google.com/)
-[2026-09-24 19:11:10] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Afacebook.com> (referer: https://www.google.com/)
-[2026-09-24 19:11:13] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Afacebook.com> (referer: https://www.google.com/)
-INFO:     127.0.0.1:51502 - "OPTIONS /people/company/506362299/graph/full?contract_limit=100 HTTP/1.1" 200 OK
-[2026-09-24 19:11:18] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+%22Trust+In+News+Unipessoal+Lda%22> (referer: https://www.google.com/)
-INFO:     127.0.0.1:51502 - "GET /people/company/506362299/graph/full?contract_limit=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58068 - "GET /people/company/506362299/graph/full?contract_limit=100 HTTP/1.1" 200 OK
-[2026-09-24 19:11:21] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+%22Trust+In+News+Unipessoal+Lda%22> (referer: https://www.google.com/)
-[2026-09-24 19:11:29] INFO: Fetched (200) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+212192760+site%3Ayoutube.com> (referer: https://www.google.com/)
-[2026-09-24 19:11:32] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+212192760+site%3Ayoutube.com> (referer: https://www.google.com/)
-INFO:     127.0.0.1:55613 - "OPTIONS /people/summary?node_id=company%3A506362299&nif=506362299&name=IPO+Porto+FG%2C+EPE HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65374 - "OPTIONS /people/summary?node_id=company%3A506362299&nif=506362299&name=IPO+Porto+FG%2C+EPE HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55613 - "GET /people/summary?node_id=company%3A506362299&nif=506362299&name=IPO+Porto+FG%2C+EPE HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65374 - "GET /people/summary?node_id=company%3A506362299&nif=506362299&name=IPO+Porto+FG%2C+EPE HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57826 - "GET /people/search?origin=societario&min_roles=4&sort=roles&size=3 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57829 - "GET /people/autocomplete?q=a HTTP/1.1" 200 OK
-[2026-09-24 19:11:47] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Ayoutube.com> (referer: https://www.google.com/)
-[2026-09-24 19:11:50] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Ayoutube.com> (referer: https://www.google.com/)
-[2026-09-24 19:11:55] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Avimeo.com> (referer: https://www.google.com/)
-[2026-09-24 19:11:58] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Avimeo.com> (referer: https://www.google.com/)
-[2026-09-24 19:12:04] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Atiktok.com> (referer: https://www.google.com/)
-[2026-09-24 19:12:07] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Atiktok.com> (referer: https://www.google.com/)
-INFO:     127.0.0.1:60396 - "OPTIONS /people/summary?node_id=entity%3A504009540&nif=504009540&name=Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60396 - "GET /people/summary?node_id=entity%3A504009540&nif=504009540&name=Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59597 - "OPTIONS /people/summary HTTP/1.1" 200 OK
-[2026-09-24 19:15:19] INFO: Fetched (200) <GET https://lite.duckduckgo.com/lite/?q=%22Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o%22> (referer: https://www.google.com/)
-[2026-09-24 19:15:23] INFO: Fetched (200) <GET https://lite.duckduckgo.com/lite/?q=%22Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o%22> (referer: https://www.google.com/)
-[2026-09-24 19:15:29] INFO: Fetched (200) <GET https://lite.duckduckgo.com/lite/?q=%22Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o%22+insolv%C3%AAncia> (referer: https://www.google.com/)
-[2026-09-24 19:15:32] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o%22+insolv%C3%AAncia> (referer: https://www.google.com/)
-[2026-09-24 19:15:32] INFO: Fetched (200) <GET https://el-vinculo.com/pt/fornecedor/proestima-projectos-estudos-instalacoes-e-manutencao-lda-117156> (referer: https://www.google.com/)
-[2026-09-24 19:15:33] INFO: Fetched (200) <GET https://concursospro.com/fornecedores/proestima-projectos-estudos-instalacoes-e-manutencao-504009540> (referer: https://www.google.com/)
-INFO:     127.0.0.1:53860 - "POST /people/summary HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53860 - "OPTIONS /people/company/506362299/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53860 - "GET /people/company/506362299/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53860 - "GET /people/company/506362299/graph/full?contract_limit=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53860 - "GET /people/summary?node_id=entity%3A504009540&nif=504009540&name=Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57428 - "GET /people/summary?node_id=entity%3A504009540&nif=504009540&name=Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59876 - "OPTIONS /people/summary?node_id=entity%3A501180044&nif=501180044&name=ASSOCIA%C3%87%C3%83O+HUMANITARIA+DE+BOMBEIROS+VOLUNT%C3%81RIOS+VILA+NOVA+FAMALIC%C3%83O HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59876 - "GET /people/summary?node_id=entity%3A501180044&nif=501180044&name=ASSOCIA%C3%87%C3%83O+HUMANITARIA+DE+BOMBEIROS+VOLUNT%C3%81RIOS+VILA+NOVA+FAMALIC%C3%83O HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59876 - "GET /people/summary?node_id=entity%3A504009540&nif=504009540&name=Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61562 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60535 - "GET /people/summary?node_id=person%3A226815340&nif=226815340&name=Andr%C3%A9+Manuel+Lopes+de+Jesus HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60535 - "GET /people/summary?node_id=person%3A226815340&nif=226815340&name=Andr%C3%A9+Manuel+Lopes+de+Jesus HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60535 - "OPTIONS /people/summary?node_id=company%3A226815340&nif=226815340&name=Andr%C3%A9+Manuel+Lopes+de+Jesus HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50820 - "GET /people/summary?node_id=company%3A226815340&nif=226815340&name=Andr%C3%A9+Manuel+Lopes+de+Jesus HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61198 - "OPTIONS /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54604 - "OPTIONS /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59880 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61198 - "GET /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54604 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59880 - "GET /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61198 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59880 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59880 - "OPTIONS /people/autocomplete?q=rui&limit=8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59880 - "OPTIONS /people/search?q=rui&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54604 - "GET /people/search?q=rui&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52146 - "OPTIONS /people/191606286/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52146 - "GET /people/191606286/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49668 - "OPTIONS /people/summary?node_id=person%3A191606286&nif=191606286&name=Rui+Pina HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65307 - "OPTIONS /people/summary?node_id=person%3A191606286&nif=191606286&name=Rui+Pina HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49668 - "GET /people/summary?node_id=person%3A191606286&nif=191606286&name=Rui+Pina HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65307 - "GET /people/summary?node_id=person%3A191606286&nif=191606286&name=Rui+Pina HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56194 - "OPTIONS /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56194 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62332 - "GET /people/191606286/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62332 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56194 - "GET /people/191606286/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58079 - "OPTIONS /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65151 - "OPTIONS /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61515 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61515 - "OPTIONS /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58079 - "OPTIONS /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50460 - "OPTIONS /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62219 - "OPTIONS /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50460 - "OPTIONS /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62219 - "OPTIONS /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58079 - "GET /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58079 - "GET /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62219 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58079 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65151 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61515 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50460 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61515 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65151 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60229 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65151 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65151 - "OPTIONS /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65151 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65151 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65151 - "GET /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49996 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65151 - "GET /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53858 - "OPTIONS /people/autocomplete?q=Andre+Manuel+Lopes&limit=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53858 - "GET /people/autocomplete?q=Andre+Manuel+Lopes&limit=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56876 - "OPTIONS /people/autocomplete?q=IPO+Porto&limit=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56876 - "GET /people/autocomplete?q=IPO+Porto&limit=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52620 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58763 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52620 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55540 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57628 - "GET /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58601 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57628 - "GET /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58601 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52048 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55540 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63947 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58601 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55540 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59022 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55540 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55540 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55540 - "GET /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53883 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55540 - "GET /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51207 - "OPTIONS /people/search?q=IPO+Porto&is_company=true&sort=roles&size=12&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51207 - "GET /people/search?q=IPO+Porto&is_company=true&sort=roles&size=12&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60430 - "GET /people/autocomplete?q=IPO+Porto&limit=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54352 - "OPTIONS /people/search?q=IPO+Porto&is_company=false&sort=roles&size=12&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64631 - "OPTIONS /people/search?q=IPO+Porto&role=Insolvente&is_company=false&sort=roles&size=12&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49267 - "OPTIONS /people/autocomplete?q=Lopes+de+Jesus&limit=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54352 - "GET /people/search?q=IPO+Porto&is_company=false&sort=roles&size=12&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64631 - "GET /people/search?q=IPO+Porto&role=Insolvente&is_company=false&sort=roles&size=12&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64631 - "OPTIONS /people/search?q=Lopes+de+Jesus&role=Insolvente&is_company=false&sort=roles&size=12&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49267 - "GET /people/autocomplete?q=Lopes+de+Jesus&limit=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54352 - "GET /people/search?q=Lopes+de+Jesus&role=Insolvente&is_company=false&sort=roles&size=12&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54352 - "OPTIONS /people/139237194/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49267 - "GET /people/139237194/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64076 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62138 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59305 - "GET /people/139237194/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50810 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50810 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50810 - "OPTIONS /people/178766143/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61743 - "GET /people/178766143/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61743 - "OPTIONS /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61743 - "GET /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61743 - "GET /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50810 - "GET /people/178766143/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49209 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53218 - "GET /people/139237194/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63162 - "GET /people/178766143/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53218 - "GET /people/178766143/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50461 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62272 - "GET /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64967 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62272 - "GET /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64967 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59447 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59462 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50461 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64967 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59447 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50929 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59447 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59447 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59447 - "GET /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65391 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59447 - "GET /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64221 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51951 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64221 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49668 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60276 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49668 - "GET /people/226815340/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53861 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56877 - "GET /proxy?url=https%3A%2F%2Fwww.gleif.org%2Fen%2Flei-data%2Fgleif-golden-copy%2Fdownload-the-golden-copy HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59700 - "OPTIONS /favorites HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51170 - "OPTIONS /contracts/analytics?top_entities=10&top_cpv=8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51857 - "OPTIONS /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64173 - "OPTIONS /contracts/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51170 - "OPTIONS /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54896 - "OPTIONS /contracts/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51857 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64173 - "GET /contracts/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59700 - "GET /contracts/analytics?top_entities=10&top_cpv=8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63408 - "GET /favorites HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54896 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51170 - "GET /contracts/analytics?top_entities=10&top_cpv=8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51857 - "GET /contracts/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59194 - "OPTIONS /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54810 - "OPTIONS /contracts/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57409 - "OPTIONS /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49381 - "OPTIONS /contracts/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59194 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54810 - "POST /contracts/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59050 - "POST /contracts/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49381 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49381 - "OPTIONS /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59050 - "OPTIONS /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49668 - "POST /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49381 - "POST /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49381 - "POST /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59050 - "POST /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59050 - "POST /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59194 - "POST /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54810 - "POST /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54810 - "POST /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54810 - "OPTIONS /workspace HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53226 - "OPTIONS /companies/503106542 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52571 - "OPTIONS /companies/503106542/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52054 - "OPTIONS /companies/503106542/analytics?role=all HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64641 - "OPTIONS /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54810 - "OPTIONS /societario/companies/503106542/people HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53226 - "OPTIONS /companies/503106542 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52571 - "OPTIONS /companies/503106542/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52054 - "OPTIONS /companies/503106542/analytics?role=all HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54810 - "OPTIONS /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53226 - "OPTIONS /societario/companies/503106542/people HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52571 - "GET /companies/503106542/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52571 - "GET /companies/503106542/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49996 - "GET /workspace HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53226 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52054 - "GET /companies/503106542/analytics?role=all HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54810 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49996 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52054 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53226 - "GET /companies/503106542/analytics?role=all HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64641 - "GET /companies/503106542 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53226 - "GET /companies/503106542 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53226 - "OPTIONS /workspace/history HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64641 - "PUT /workspace/history HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56478 - "OPTIONS /societario/collect-entities HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62211 - "POST /societario/collect-entities HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51445 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64747 - "OPTIONS /societario/companies/503106542/timeline HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63229 - "POST /societario/companies/503106542/timeline HTTP/1.1" 400 Bad Request
-INFO:     127.0.0.1:58605 - "OPTIONS /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58605 - "POST /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58605 - "OPTIONS /companies/503106542 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63788 - "OPTIONS /companies/503106542/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62014 - "OPTIONS /companies/503106542/analytics?role=all HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58619 - "OPTIONS /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64252 - "OPTIONS /societario/companies/503106542/people HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63788 - "OPTIONS /companies/503106542/analytics?role=all HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65270 - "OPTIONS /companies/503106542/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58619 - "OPTIONS /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64252 - "OPTIONS /societario/companies/503106542/people HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62014 - "GET /companies/503106542/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64252 - "GET /companies/503106542/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63788 - "GET /companies/503106542/analytics?role=all HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65270 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58619 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63788 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64252 - "GET /companies/503106542/analytics?role=all HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65270 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58605 - "GET /companies/503106542 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65270 - "GET /companies/503106542 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65270 - "OPTIONS /workspace/history HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58605 - "PUT /workspace/history HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64296 - "OPTIONS /providers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53135 - "OPTIONS /auth/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53003 - "OPTIONS /auth/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49668 - "GET /auth/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53003 - "GET /auth/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64296 - "GET /providers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52707 - "OPTIONS /favorites HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52707 - "PUT /favorites HTTP/1.1" 200 OK
-[2026-09-24 20:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
-[2026-09-24 20:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+INFO:     127.0.0.1:58696 - "GET /health HTTP/1.1" 200 OK
+Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  86%|████████▌ | 218/254 [00:00<00:00, 2143.91it/s]Loading weights: 100%|██████████| 254/254 [00:00<00:00, 2475.60it/s]
+INFO:     127.0.0.1:59805 - "GET /crm/perfis HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59805 - "GET /assets/index-drzz9jeh.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57493 - "GET /assets/index-C6ZwOfou.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52815 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59805 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59805 - "GET /crm/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61224 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59526 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55654 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55531 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57493 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59805 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57493 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55654 - "GET /crm/mod/roles/references?size=300 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55531 - "GET /crm/mod/roles/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59805 - "GET /crm/mod/roles?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57493 - "GET /crm/rbac HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55531 - "GET /crm/mod/roles?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59405 - "GET /crm/ia-percecoes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59405 - "GET /assets/index-drzz9jeh.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58183 - "GET /assets/index-C6ZwOfou.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63684 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58183 - "GET /assets/index-C6ZwOfou.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59405 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59405 - "GET /crm/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51605 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65490 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60780 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57676 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58183 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59405 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58183 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57676 - "GET /crm/mod/ai-insights/references?size=300 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59405 - "GET /crm/mod/ai-insights/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58183 - "GET /crm/mod/ai-insights?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59405 - "GET /crm/mod/ai-insights?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59405 - "POST /crm/ai/insights/generate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59405 - "GET /crm/mod/ai-insights?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54447 - "POST /crm/mod/accounts HTTP/1.1" 201 Created
+INFO:     127.0.0.1:54447 - "POST /crm/mod/opportunities HTTP/1.1" 201 Created
+INFO:     127.0.0.1:54447 - "POST /crm/mod/activities HTTP/1.1" 201 Created
+INFO:     127.0.0.1:54447 - "POST /crm/ai/insights/generate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52142 - "GET /crm/ia-percecoes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52142 - "GET /assets/index-drzz9jeh.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61706 - "GET /assets/index-C6ZwOfou.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61626 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52142 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52142 - "GET /crm/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64838 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61025 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52836 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62053 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61706 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52142 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61706 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61706 - "GET /crm/mod/ai-insights?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52142 - "GET /crm/mod/ai-insights/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62053 - "GET /crm/mod/ai-insights/references?size=300 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52836 - "GET /crm/mod/ai-insights?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57047 - "GET /crm/ia-interacoes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57047 - "GET /assets/index-drzz9jeh.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56195 - "GET /assets/index-C6ZwOfou.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56696 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56195 - "GET /assets/index-C6ZwOfou.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57047 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57047 - "GET /crm/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62756 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49394 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60081 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56195 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57047 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56195 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56195 - "GET /crm/mod/ai-interactions?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60081 - "GET /crm/mod/ai-interactions/references?size=300 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57047 - "GET /crm/mod/ai-interactions/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49394 - "GET /crm/mod/ai-interactions?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49394 - "POST /crm/ai/ask HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49394 - "GET /crm/mod/ai-interactions?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49394 - "POST /crm/ai/ask HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51593 - "GET /crm/mod/ai-insights?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51593 - "DELETE /crm/mod/ai-insights/ain_557ea925a4f9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51593 - "DELETE /crm/mod/ai-insights/ain_0e0236bab711 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51593 - "DELETE /crm/mod/ai-insights/ain_4b99b5734225 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51593 - "GET /crm/mod/ai-interactions?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51593 - "DELETE /crm/mod/ai-interactions/aix_33566251832f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51593 - "DELETE /crm/mod/ai-interactions/aix_6e38df9bd3dd HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51593 - "DELETE /crm/mod/accounts/acc_893dba7e8dd1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51593 - "GET /crm/mod/leads?size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51593 - "GET /crm/mod/accounts?size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51593 - "GET /crm/mod/opportunities?size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51593 - "GET /crm/mod/activities?size=5 HTTP/1.1" 200 OK
+[2026-09-24 23:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-09-24 23:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+INFO:     127.0.0.1:51593 - "GET /crm/mod/ai-insights?size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51593 - "GET /crm/mod/ai-interactions?size=5 HTTP/1.1" 200 OK

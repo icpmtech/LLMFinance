@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **473 operações** em **34 grupos**.
+Versão `0.4.0` · **510 operações** em **34 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -713,10 +713,47 @@ Páginas da interface (single-page app). Devolvem o `index.html` e existem para 
 | `GET` | `/contracts/search` | Página da interface (SPA) |
 | `GET` | `/contribuintes` | Página da interface (SPA) |
 | `GET` | `/crm` | Página da interface (SPA) |
+| `GET` | `/crm/admin` | Serve Spa Page |
 | `GET` | `/crm/agenda` | Página da interface (SPA) |
+| `POST` | `/crm/ai/ask` | Ai Ask |
+| `POST` | `/crm/ai/insights/generate` | Ai Insights Generate |
+| `GET` | `/crm/auditoria` | Serve Spa Page |
+| `GET` | `/crm/campanhas` | Serve Spa Page |
+| `GET` | `/crm/campanhas-membros` | Serve Spa Page |
+| `GET` | `/crm/casos` | Serve Spa Page |
+| `GET` | `/crm/conhecimento` | Serve Spa Page |
 | `GET` | `/crm/contactos` | Página da interface (SPA) |
 | `GET` | `/crm/contas` | Página da interface (SPA) |
+| `GET` | `/crm/contratos` | Serve Spa Page |
+| `GET` | `/crm/documentos` | Serve Spa Page |
+| `GET` | `/crm/encomendas` | Serve Spa Page |
+| `GET` | `/crm/equipas` | Serve Spa Page |
+| `GET` | `/crm/eventos` | Serve Spa Page |
+| `GET` | `/crm/ia-interacoes` | Serve Spa Page |
+| `GET` | `/crm/ia-percecoes` | Serve Spa Page |
+| `GET` | `/crm/leads` | Serve Spa Page |
+| `GET` | `/crm/marketing-atividades` | Serve Spa Page |
+| `GET` | `/crm/marketing-jornadas` | Serve Spa Page |
+| `GET` | `/crm/me` | Crm Me |
+| `GET` | `/crm/mod/{module}` | Module List |
+| `POST` | `/crm/mod/{module}` | Module Create |
+| `GET` | `/crm/mod/{module}/references` | Module References |
+| `GET` | `/crm/mod/{module}/stats` | Module Statistics |
+| `GET` | `/crm/mod/{module}/{record_id}` | Module Get |
+| `PATCH` | `/crm/mod/{module}/{record_id}` | Module Update |
+| `DELETE` | `/crm/mod/{module}/{record_id}` | Module Delete |
+| `GET` | `/crm/oportunidades` | Serve Spa Page |
+| `GET` | `/crm/perfis` | Serve Spa Page |
+| `GET` | `/crm/previsoes` | Serve Spa Page |
+| `GET` | `/crm/produtos` | Serve Spa Page |
+| `GET` | `/crm/propostas` | Serve Spa Page |
+| `GET` | `/crm/rbac` | Serve Spa Page |
+| `POST` | `/crm/rbac/sync` | Crm Rbac Sync |
 | `GET` | `/crm/relatorios` | Página da interface (SPA) |
+| `GET` | `/crm/suite` | Crm Suite Meta |
+| `GET` | `/crm/suite/overview` | Crm Suite Overview |
+| `GET` | `/crm/todos` | Serve Spa Page |
+| `GET` | `/crm/utilizadores` | Serve Spa Page |
 | `GET` | `/elastic` | Página da interface (SPA) |
 | `GET` | `/empresas-global` | Página da interface (SPA) |
 | `GET` | `/empresas-iq` | Página da interface (SPA) |

@@ -29,7 +29,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  ShieldAlert,
   Target,
   Trash2,
   TrendingUp,
@@ -1985,10 +1984,6 @@ export default function CrmPage({
   );
   const groupSections = visibleGroups.find((group) => group.id === activeGroup)?.sections ?? [];
   const sectionMeta = crmSuiteSection(section);
-  const moduleMeta = useMemo(
-    () => (sectionMeta?.slug ? moduleIndex.get(sectionMeta.slug) ?? null : null),
-    [moduleIndex, sectionMeta],
-  );
   const scopeLabels: Record<string, string> = {
     own: "os meus registos",
     team: "a minha equipa",
@@ -2152,22 +2147,8 @@ export default function CrmPage({
         )}
 
         {/* Módulos da arquitetura de CRM: lista, filtros e ficha genéricos. */}
-        {crmSuiteIsModuleSection(section) && moduleMeta?.allowed && <CrmModulePanel module={moduleMeta} />}
-
-        {crmSuiteIsModuleSection(section) && moduleMeta && !moduleMeta.allowed && (
-          <EmptyState
-            icon={ShieldAlert}
-            title="Sem acesso a este módulo"
-            hint={`O perfil «${suite?.me.role_label ?? "atual"}» não inclui ${moduleMeta.label}. Peça ao administrador do CRM para o incluir.`}
-          />
-        )}
-
-        {crmSuiteIsModuleSection(section) && !moduleMeta && suite && (
-          <EmptyState
-            icon={Target}
-            title="Módulo desconhecido"
-            hint={`A secção «${section}» não existe na arquitetura de CRM.`}
-          />
+        {crmSuiteIsModuleSection(section) && sectionMeta?.slug && (
+          <CrmModulePanel slug={sectionMeta.slug} label={sectionMeta.label} />
         )}
 
         {!meta && !error && !crmSuiteIsModuleSection(section) && (
