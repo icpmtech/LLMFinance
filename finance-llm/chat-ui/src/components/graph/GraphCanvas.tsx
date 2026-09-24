@@ -22,19 +22,140 @@ const CELL = 170;
 const REPULSION = 2400;
 const LINK_DISTANCE = 110;
 
-function seedPosition(index: number, count: number, groupIndex = 0, groupCount = 1): NodePosition {
-  if (groupCount > 1) {
-    const groupAngle = (groupIndex / groupCount) * Math.PI * 2;
-    const localAngle = (index / Math.max(count, 1)) * Math.PI * 2;
-    return {
-      x: Math.cos(groupAngle) * 200 + Math.cos(localAngle) * 48,
-      y: Math.sin(groupAngle) * 200 + Math.sin(localAngle) * 48,
-      vx: 0,
-      vy: 0,
-    };
+/** Orçamento de desenho: acima disto o grafo fica ilegível e a simulação arrasta-se. */
+const MAX_DRAW_NODES = 110;
+const MAX_DRAW_EDGES = 350;
+/** A partir deste número de nós tira-se peso ao desenho (sombras/gradientes) e às etiquetas. */
+const DENSE_NODE_COUNT = 70;
+
+type NodeShape = "circle" | "square" | "diamond" | "hexagon";
+
+/** Forma por tipo de nó: pessoa ●, empresa ■, entidade ◆, site/perfil ⬢. */
+function shapeForType(type: string | undefined): NodeShape {
+  switch (String(type || "").toLowerCase()) {
+    case "company":
+      return "square";
+    case "entity":
+      return "diamond";
+    case "source":
+      return "hexagon";
+    case "person":
+    default:
+      return "circle";
   }
-  const angle = (index / Math.max(count, 1)) * Math.PI * 2;
-  return { x: Math.cos(angle) * 140, y: Math.sin(angle) * 140, vx: 0, vy: 0 };
+}
+
+function traceRoundRect(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, radius: number) {
+  const left = x - size / 2;
+  const top = y - size / 2;
+  const r = Math.max(0, Math.min(radius, size / 2));
+  ctx.beginPath();
+  ctx.moveTo(left + r, top);
+  ctx.lineTo(left + size - r, top);
+  ctx.quadraticCurveTo(left + size, top, left + size, top + r);
+  ctx.lineTo(left + size, top + size - r);
+  ctx.quadraticCurveTo(left + size, top + size, left + size - r, top + size);
+  ctx.lineTo(left + r, top + size);
+  ctx.quadraticCurveTo(left, top + size, left, top + size - r);
+  ctx.lineTo(left, top + r);
+  ctx.quadraticCurveTo(left, top, left + r, top);
+  ctx.closePath();
+}
+
+/** Traça o contorno do nó na forma do seu tipo (todas as formas cabem no mesmo raio). */
+function traceShape(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, shape: NodeShape) {
+  if (shape === "square") {
+    traceRoundRect(ctx, x, y, radius * 1.66, Math.max(3, radius * 0.32));
+    return;
+  }
+  if (shape === "diamond") {
+    const r = radius * 1.14;
+    ctx.beginPath();
+    ctx.moveTo(x, y - r);
+    ctx.lineTo(x + r, y);
+    ctx.lineTo(x, y + r);
+    ctx.lineTo(x - r, y);
+    ctx.closePath();
+    return;
+  }
+  if (shape === "hexagon") {
+    ctx.beginPath();
+    for (let index = 0; index < 6; index += 1) {
+      const angle = (Math.PI / 3) * index - Math.PI / 2;
+      const px = x + Math.cos(angle) * radius * 1.08;
+      const py = y + Math.sin(angle) * radius * 1.08;
+      if (index === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    return;
+  }
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+}
+
+/** Glifo dentro do nó: pessoa, edifício, documento e globo (desenhados, sem imagens). */
+function drawGlyph(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, shape: NodeShape, alpha: number) {
+  if (radius < 7) return;
+  const s = Math.max(3, radius * 0.46);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.lineWidth = Math.max(1.1, radius * 0.11);
+  ctx.strokeStyle = "rgba(255,255,255,0.95)";
+  ctx.fillStyle = "rgba(255,255,255,0.95)";
+  if (shape === "circle") {
+    // Pessoa: cabeça + ombros.
+    ctx.beginPath();
+    ctx.arc(x, y - s * 0.5, s * 0.42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y + s * 0.95, s * 0.78, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.stroke();
+  } else if (shape === "square") {
+    // Empresa: edifício com janelas.
+    const w = s * 1.1;
+    const h = s * 1.35;
+    ctx.strokeRect(x - w / 2, y - h / 2, w, h);
+    ctx.beginPath();
+    const step = w / 3;
+    for (let row = 0; row < 2; row += 1) {
+      for (let col = 0; col < 2; col += 1) {
+        ctx.rect(x - w / 2 + step * (col + 0.6), y - h / 2 + h * (0.22 + row * 0.42), step * 0.42, h * 0.2);
+      }
+    }
+    ctx.fill();
+  } else if (shape === "diamond") {
+    // Entidade: documento com linhas.
+    const w = s * 1.0;
+    const h = s * 1.3;
+    ctx.beginPath();
+    ctx.moveTo(x - w / 2, y - h / 2);
+    ctx.lineTo(x + w / 2, y - h / 2);
+    ctx.lineTo(x + w / 2, y + h / 2 - s * 0.3);
+    ctx.lineTo(x + w / 2 - s * 0.3, y + h / 2);
+    ctx.lineTo(x - w / 2, y + h / 2);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - w * 0.28, y - h * 0.18);
+    ctx.lineTo(x + w * 0.28, y - h * 0.18);
+    ctx.moveTo(x - w * 0.28, y + h * 0.12);
+    ctx.lineTo(x + w * 0.12, y + h * 0.12);
+    ctx.stroke();
+  } else {
+    // Site/perfil: globo com um meridiano.
+    ctx.beginPath();
+    ctx.arc(x, y, s * 0.75, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(x, y, s * 0.34, s * 0.75, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.73, y);
+    ctx.lineTo(x + s * 0.73, y);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 export function GraphCanvas({
@@ -85,18 +206,59 @@ export function GraphCanvas({
   const [mouse, setMouse] = useState({ x: 0, y: 0 });
   const [settled, setSettled] = useState(false);
 
-  const nodes = useMemo(() => graph?.nodes ?? [], [graph]);
-  const edges = useMemo(() => graph?.edges ?? [], [graph]);
+  const degree = useMemo(() => {
+    const counts = new Map<string, number>();
+    (graph?.edges ?? []).forEach((edge) => {
+      counts.set(edge.source, (counts.get(edge.source) ?? 0) + 1);
+      counts.set(edge.target, (counts.get(edge.target) ?? 0) + 1);
+    });
+    return counts;
+  }, [graph]);
+
+  /**
+   * Orçamento de desenho.
+   *
+   * Um grafo com centenas de nós deixa de se ler e a simulação de forças arrasta
+   * o browser. Aqui escolhem-se os nós mais relevantes (valor + ligações),
+   * guardando sempre o nó selecionado, e cortam-se as ligações mais fracas; o
+   * que ficar de fora é anunciado no próprio canvas (e não desaparece do painel
+   * de detalhe, que trabalha sobre o grafo completo, em `graph`).
+   */
+  const drawn = useMemo(() => {
+    const allNodes = graph?.nodes ?? [];
+    const allEdges = graph?.edges ?? [];
+    const relevance = (node: StudioNode) =>
+      (node.value || 0) * 2 + (degree.get(node.id) ?? 0) * 3 + (node.type === "company" ? 1 : 0);
+    const ranked = [...allNodes].sort((a, b) => relevance(b) - relevance(a));
+    const keep = new Set(ranked.slice(0, MAX_DRAW_NODES).map((node) => node.id));
+    if (selectedNodeId) keep.add(selectedNodeId);
+    const nodes = allNodes.filter((node) => keep.has(node.id));
+    const ids = new Set(nodes.map((node) => node.id));
+    const edges = allEdges
+      .filter((edge) => ids.has(edge.source) && ids.has(edge.target))
+      .sort((a, b) => (b.value || b.count || 0) - (a.value || a.count || 0))
+      .slice(0, MAX_DRAW_EDGES);
+    return {
+      nodes,
+      edges,
+      omittedNodes: allNodes.length - nodes.length,
+      omittedEdges: allEdges.length - edges.length,
+    };
+  }, [degree, graph, selectedNodeId]);
+
+  const nodes = drawn.nodes;
+  const edges = drawn.edges;
+  const dense = nodes.length > DENSE_NODE_COUNT;
 
   const labelledIds = useMemo(
     () =>
       new Set(
         [...nodes]
           .sort((a, b) => b.value - a.value)
-          .slice(0, layout === "circular" ? 16 : 12)
+          .slice(0, dense ? 6 : layout === "circular" ? 16 : 12)
           .map((node) => node.id),
       ),
-    [nodes, layout],
+    [nodes, layout, dense],
   );
 
   const layoutKey = useMemo(() => {
@@ -114,10 +276,25 @@ export function GraphCanvas({
     hoveredEdge,
     selectedNodeId,
     labelledIds,
+    dense,
+    omittedNodes: drawn.omittedNodes,
+    omittedEdges: drawn.omittedEdges,
   });
 
   useEffect(() => {
-    frame.current = { nodes, edges, scale, offset, hovered, hoveredEdge, selectedNodeId, labelledIds };
+    frame.current = {
+      nodes,
+      edges,
+      scale,
+      offset,
+      hovered,
+      hoveredEdge,
+      selectedNodeId,
+      labelledIds,
+      dense,
+      omittedNodes: drawn.omittedNodes,
+      omittedEdges: drawn.omittedEdges,
+    };
   });
 
   const draw = useCallback(() => {
@@ -144,20 +321,53 @@ export function GraphCanvas({
       ? [current.hoveredEdge.source, current.hoveredEdge.target].sort().join("|")
       : null;
 
-    current.edges.forEach((edge) => {
-      const a = positions.get(edge.source);
-      const b = positions.get(edge.target);
-      if (!a || !b) return;
-      const key = [edge.source, edge.target].sort().join("|");
-      const active = key === hoveredEdgeKey;
-      const alpha = 0.12 + edge.weight * 0.6;
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.strokeStyle = active ? `rgba(251,191,36,${Math.min(0.95, alpha + 0.3)})` : `rgba(125,211,252,${alpha})`;
-      ctx.lineWidth = 1 + edge.weight * 5;
-      ctx.stroke();
-    });
+    if (current.dense) {
+      // Grafos densos: as arestas são traçadas em três grupos (por intensidade) e
+      // as formas por cor — são 6 chamadas de desenho em vez de uma por elemento.
+      const bands = [new Path2D(), new Path2D(), new Path2D()];
+      const hoverPath = new Path2D();
+      let hovered = false;
+      current.edges.forEach((edge) => {
+        const a = positions.get(edge.source);
+        const b = positions.get(edge.target);
+        if (!a || !b) return;
+        const key = [edge.source, edge.target].sort().join("|");
+        if (hoveredEdgeKey && key === hoveredEdgeKey) {
+          hoverPath.moveTo(a.x, a.y);
+          hoverPath.lineTo(b.x, b.y);
+          hovered = true;
+          return;
+        }
+        const band = edge.weight > 0.66 ? 2 : edge.weight > 0.33 ? 1 : 0;
+        bands[band].moveTo(a.x, a.y);
+        bands[band].lineTo(b.x, b.y);
+      });
+      bands.forEach((path, index) => {
+        ctx.strokeStyle = `rgba(125,211,252,${0.2 + index * 0.22})`;
+        ctx.lineWidth = 0.7 + index * 0.7;
+        ctx.stroke(path);
+      });
+      if (hovered) {
+        ctx.strokeStyle = "rgba(251,191,36,0.95)";
+        ctx.lineWidth = 2.6;
+        ctx.stroke(hoverPath);
+      }
+    } else {
+      current.edges.forEach((edge) => {
+        const a = positions.get(edge.source);
+        const b = positions.get(edge.target);
+        if (!a || !b) return;
+        const key = [edge.source, edge.target].sort().join("|");
+        const active = key === hoveredEdgeKey;
+        const alpha = 0.12 + edge.weight * 0.6;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.strokeStyle = active ? `rgba(251,191,36,${Math.min(0.95, alpha + 0.3)})` : `rgba(125,211,252,${alpha})`;
+        ctx.lineWidth = 1 + edge.weight * 5;
+        ctx.stroke();
+      });
+    }
 
     const boxes: { x: number; y: number; w: number; h: number }[] = [];
     const drawLabel = (text: string, x: number, y: number, emphasised: boolean) => {
@@ -181,30 +391,99 @@ export function GraphCanvas({
       ctx.fillText(label, x, y);
     };
 
-    current.nodes.forEach((node) => {
-      const p = positions.get(node.id);
-      if (!p) return;
-      const isSelected = current.selectedNodeId === node.id;
-      const isHovered = current.hovered?.id === node.id;
+    const drawNodeAt = (
+      node: StudioNode,
+      p: { x: number; y: number },
+      isSelected: boolean,
+      isHovered: boolean,
+    ) => {
       const radius = isSelected ? node.radius + 5 : isHovered ? node.radius + 3 : node.radius;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-      ctx.shadowBlur = isSelected || isHovered ? 20 : 9;
-      ctx.shadowColor = node.color;
-      const fill = ctx.createRadialGradient(p.x - radius * 0.35, p.y - radius * 0.35, 1, p.x, p.y, radius);
-      fill.addColorStop(0, node.color);
-      fill.addColorStop(0.4, `${node.color}cc`);
-      fill.addColorStop(1, "rgba(7,21,27,0.98)");
-      ctx.fillStyle = fill;
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.lineWidth = isSelected ? 4 : isHovered ? 3.5 : 2.5;
+      // A forma identifica o tipo: ● pessoa · ■ empresa · ◆ entidade · ⬢ site/perfil.
+      const shape = shapeForType(node.type ?? node.dimension);
+      traceShape(ctx, p.x, p.y, radius, shape);
+
+      if (current.dense && !isSelected && !isHovered) {
+        // Em grafos densos: sem sombras nem gradientes por nó (é o que mais custa).
+        ctx.fillStyle = `${node.color}b8`;
+        ctx.fill();
+      } else {
+        ctx.shadowBlur = isSelected || isHovered ? 20 : 9;
+        ctx.shadowColor = node.color;
+        const fill = ctx.createRadialGradient(p.x - radius * 0.35, p.y - radius * 0.35, 1, p.x, p.y, radius);
+        fill.addColorStop(0, node.color);
+        fill.addColorStop(0.4, `${node.color}cc`);
+        fill.addColorStop(1, "rgba(7,21,27,0.98)");
+        ctx.fillStyle = fill;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      ctx.lineWidth = isSelected ? 4 : isHovered ? 3.5 : Math.max(1.6, radius * 0.16);
       ctx.strokeStyle = isSelected || isHovered ? "#ffffff" : node.color;
       ctx.stroke();
-      if (isSelected || isHovered || current.labelledIds.has(node.id)) {
+
+      // Os glifos dão a ler o tipo; em grafos enormes são o primeiro luxo a cair.
+      if (!current.dense || isSelected || isHovered || current.nodes.length <= 350) {
+        drawGlyph(ctx, p.x, p.y, radius, shape, isSelected || isHovered ? 1 : current.dense ? 0.7 : 0.85);
+      }
+
+      if (isSelected || isHovered || (!current.dense && current.labelledIds.has(node.id))) {
         drawLabel(node.label, p.x + radius + 6, p.y + 3, isSelected || isHovered);
       }
-    });
+    };
+
+    if (current.dense) {
+      // Em bloco: formas sem sombras nem gradientes (o que mais custa por nó); só o
+      // nó escolhido/a pairar ganha o desenho completo.
+      const emphasised: { node: StudioNode; p: { x: number; y: number }; selected: boolean }[] = [];
+      current.nodes.forEach((node) => {
+        const p = positions.get(node.id);
+        if (!p) return;
+        const isSelected = current.selectedNodeId === node.id;
+        const isHovered = current.hovered?.id === node.id;
+        if (isSelected || isHovered) {
+          emphasised.push({ node, p, selected: isSelected });
+          return;
+        }
+        const radius = node.radius;
+        const shape = shapeForType(node.type ?? node.dimension);
+        traceShape(ctx, p.x, p.y, radius, shape);
+        ctx.fillStyle = `${node.color}b8`;
+        ctx.fill();
+        ctx.lineWidth = Math.max(1.4, radius * 0.14);
+        ctx.strokeStyle = node.color;
+        ctx.stroke();
+        if (current.nodes.length <= 350) {
+          drawGlyph(ctx, p.x, p.y, radius, shape, 0.7);
+        }
+      });
+      emphasised.forEach((entry) => drawNodeAt(entry.node, entry.p, entry.selected, true));
+    } else {
+      current.nodes.forEach((node) => {
+        const p = positions.get(node.id);
+        if (!p) return;
+        drawNodeAt(
+          node,
+          p,
+          current.selectedNodeId === node.id,
+          current.hovered?.id === node.id,
+        );
+      });
+    }
+
+    // Anúncio do que ficou de fora do desenho (o painel de detalhe tem tudo).
+    if (current.omittedNodes > 0 || current.omittedEdges > 0) {
+      const message =
+        `${current.omittedNodes} nó(s) e ${current.omittedEdges} ligação(ões) não desenhados ` +
+        "(limite de desempenho: use os filtros para reduzir o grafo)";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.font = "600 10px ui-sans-serif, system-ui";
+      const textWidth = ctx.measureText(message).width;
+      ctx.fillStyle = "rgba(3,12,17,0.85)";
+      ctx.fillRect(10, 10, textWidth + 16, 20);
+      ctx.fillStyle = "#fcd34d";
+      ctx.fillText(message, 18, 24);
+    }
   }, []);
 
   // Dimensionamento (ResizeObserver) + reenquadramento automático.
@@ -336,8 +615,27 @@ export function GraphCanvas({
       return;
     }
 
-    nodes.forEach((node, index) => {
-      if (!positions.has(node.id)) positions.set(node.id, seedPosition(index, nodes.length));
+    // Semeadura por tipo em anéis concêntricos: empresas por fora, pessoas no meio,
+    // sites/perfis por dentro. Com centenas de nós isto poupa centenas de iterações
+    // (a física parte de um arranjo legível em vez de um círculo aleatório).
+    const ringByType: Record<string, number> = { company: 1, entity: 0.88, person: 0.58, source: 0.4 };
+    const radiusBase = Math.max(170, Math.min(460, 70 + nodes.length * 1.7));
+    const groups = new Map<string, StudioNode[]>();
+    nodes.forEach((node) => {
+      const type = String(node.type ?? node.dimension ?? "person");
+      const bucket = groups.get(type) ?? [];
+      bucket.push(node);
+      groups.set(type, bucket);
+    });
+    groups.forEach((group, type) => {
+      const ring = (ringByType[type] ?? 0.7) * radiusBase;
+      [...group]
+        .sort((a, b) => b.value - a.value)
+        .forEach((node, index) => {
+          if (positions.has(node.id)) return;
+          const angle = (index / Math.max(group.length, 1)) * Math.PI * 2;
+          positions.set(node.id, { x: Math.cos(angle) * ring, y: Math.sin(angle) * ring, vx: 0, vy: 0 });
+        });
     });
 
     const runStep = () => {
@@ -405,8 +703,45 @@ export function GraphCanvas({
     };
 
     const reduceMotion = Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+    const maxTicks = nodes.length > 1200 ? 100 : nodes.length > 600 ? 120 : nodes.length > 250 ? 180 : 420;
+
+    /**
+     * Grafos grandes: **desenha-se já** com o arranjo por anéis (determinístico e
+     * legível) e o refinamento da física corre em blocos de ~10 ms por frame — o
+     * browser nunca fica preso e a vista não espera por «a estabilizar layout…».
+     */
+    if (nodes.length > 45) {
+      draw();
+      if (!userMovedRef.current) fitToView();
+      setSettled(true);
+
+      let raf = 0;
+      let ticks = 0;
+      const refine = () => {
+        const deadline = performance.now() + 10;
+        let energy = 0;
+        while (ticks < maxTicks && performance.now() < deadline) {
+          energy = runStep();
+          ticks += 1;
+          if (!Number.isFinite(energy) || energy <= 0.4) break;
+        }
+        draw();
+        if (ticks < maxTicks && Number.isFinite(energy) && energy > 0.4) {
+          raf = requestAnimationFrame(refine);
+        } else if (!userMovedRef.current) {
+          fitToView();
+          draw();
+        }
+      };
+      raf = requestAnimationFrame(refine);
+      return () => cancelAnimationFrame(raf);
+    }
+
     if (reduceMotion) {
-      for (let tick = 0; tick < 320; tick++) runStep();
+      for (let tick = 0; tick < maxTicks; tick += 1) {
+        const energy = runStep();
+        if (!Number.isFinite(energy) || energy <= 0.4) break;
+      }
       draw();
       if (!userMovedRef.current) fitToView();
       setSettled(true);
@@ -415,13 +750,19 @@ export function GraphCanvas({
 
     let raf = 0;
     let ticks = 0;
-    // Grafos grandes: menos iterações para a vista ficar utilizável depressa.
-    const maxTicks = nodes.length > 1500 ? 140 : nodes.length > 700 ? 260 : 420;
+    let frames = 0;
+    const stepsPerFrame = 2;
+    const maxFrames = 120;
     const loop = () => {
-      const energy = runStep();
+      let energy = 0;
+      for (let step = 0; step < stepsPerFrame && ticks < maxTicks; step += 1) {
+        energy = runStep();
+        ticks += 1;
+        if (!Number.isFinite(energy) || energy <= 0.4) break;
+      }
       draw();
-      ticks += 1;
-      if (ticks < maxTicks && Number.isFinite(energy) && energy > 0.4) {
+      frames += 1;
+      if (ticks < maxTicks && frames < maxFrames && Number.isFinite(energy) && energy > 0.4) {
         raf = requestAnimationFrame(loop);
       } else {
         if (!userMovedRef.current) fitToView();
@@ -560,7 +901,9 @@ export function GraphCanvas({
         ref={canvasRef}
         role="img"
         tabIndex={0}
-        aria-label={`Grafo com ${nodes.length} nós e ${edges.length} ligações. Setas para mover, mais e menos para zoom, zero para ajustar à vista.`}
+        aria-label={`Grafo com ${nodes.length} nós e ${edges.length} ligações${
+          drawn.omittedNodes > 0 ? ` (mais ${drawn.omittedNodes} nós não desenhados por limite de desempenho)` : ""
+        }. Setas para mover, mais e menos para zoom, zero para ajustar à vista.`}
         className={`h-full w-full rounded-xl bg-[#07151b] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-400/50 ${
           tooltipVisible ? "cursor-pointer" : "cursor-move"
         }`}

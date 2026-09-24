@@ -10,7 +10,7 @@ import { useAuth } from "./auth";
 import LoginPage from "./pages/LoginPage";
 import SettingsPage from "./pages/SettingsPage";
 import CliPage from "./pages/CliPage";
-import { FileText, Loader2, Sparkles, Users } from "lucide-react";
+import { FileText, Loader2, Network, Sparkles, Users } from "lucide-react";
 import { DashboardPage } from "./pages/DashboardPage";
 import { TickerDetailPage } from "./pages/TickerDetailPage";
 import RealtimeChartPage from "./pages/RealtimeChartPage";
@@ -36,6 +36,8 @@ import EntityDashboardPage from "./pages/EntityDashboardPage";
 import EntityComparePage from "./pages/EntityComparePage";
 import EmpresasIQPage from "./pages/EmpresasIQPage";
 import PessoasIQPage from "./pages/PessoasIQPage";
+import { PessoasGraphWindow } from "./pages/PessoasGraphWindow";
+import { parseGraphWindowView } from "./components/people/peopleKit";
 import CompaniesGlobalPage from "./pages/CompaniesGlobalPage";
 import OntologyPage from "./pages/OntologyPage";
 import VisualizadorPage from "./pages/VisualizadorPage";
@@ -109,6 +111,7 @@ type AppView =
   | "ticker-chart"
   | "empresas-iq"
   | "pessoas-iq"
+  | "pessoas-graph"
   | "ontology"
   | "crm"
   | "crm-accounts"
@@ -894,6 +897,15 @@ export default function App() {
     if (target.startsWith("person-detail:")) {
       return <PessoasIQPage nif={target.slice("person-detail:".length)} />;
     }
+    // Grafo de pessoas numa janela própria (`pessoas-graph[:<lado>:<NIF>]`):
+    // permite ter vários grafos abertos em paralelo, com pesquisa e filtros.
+    if (target === "pessoas-graph" || target.startsWith("pessoas-graph:")) {
+      return (
+        <PessoasGraphWindow
+          target={target.includes(":") ? target.slice("pessoas-graph:".length) : null}
+        />
+      );
+    }
     if (target.startsWith("contract-detail:")) {
       return <ContractDetailWindow id={target.slice("contract-detail:".length)} />;
     }
@@ -1225,6 +1237,12 @@ export default function App() {
     // Ficha de pessoa (PessoasIQ) aberta como janela a partir do societário.
     if (target.startsWith("person-detail:")) {
       return { title: "Pessoas IQ", icon: <Users size={13} /> };
+    }
+    // Grafo de pessoas/cargos numa janela própria.
+    if (target === "pessoas-graph" || target.startsWith("pessoas-graph:")) {
+      const parsed = parseGraphWindowView(target.includes(":") ? target.slice("pessoas-graph:".length) : null);
+      const suffix = parsed ? ` · ${parsed.nif}` : "";
+      return { title: `Grafo${suffix}`, icon: <Network size={13} /> };
     }
     // Janelas com título próprio (fichas, quick look).
     const custom = windowFor(target)?.title;

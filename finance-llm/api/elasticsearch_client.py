@@ -120,6 +120,11 @@ PEOPLE_INDEX = "finance_people"
 # único de pesquisa de contribuintes em todo o sistema.
 CONTRIBUINTES_INDEX = "finance_contribuintes"
 
+# Resumos de nós dos grafos (pessoas, empresas, sites): texto redigido por IA a
+# partir dos factos do IQ OS e de pesquisa na web, guardado para consulta
+# posterior (um documento por nó, substituído a cada novo resumo).
+NODE_SUMMARIES_INDEX = "finance_node_summaries"
+
 # Definições (settings) específicas de determinados índices — nomeadamente
 # analisadores usados em subcampos de pesquisa por prefixo.
 INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
@@ -660,7 +665,8 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
 
     people_mappings = {
         "properties": {
-            "nif": {"type": "keyword"},            "name": {
+            "nif": {"type": "keyword"},
+            "name": {
                 "type": "text",
                 "fields": {
                     "keyword": {"type": "keyword", "ignore_above": 512},
@@ -711,6 +717,34 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "source": {"type": "keyword"},
             # Fontes que contribuíram para a ficha (`publicacoes_mj`, `cire`, ...).
             "sources": {"type": "keyword"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    # Resumos de nós: um documento por nó de grafo (`person:123`, `company:456`,
+    # `source:host`), com o texto do resumo, a evidência usada e os factos.
+    node_summaries_mappings = {
+        "properties": {
+            "node_id": {"type": "keyword"},
+            "nif": {"type": "keyword"},
+            "name": {
+                "type": "text",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "kind": {"type": "keyword"},
+            "summary": {"type": "text"},
+            "mode": {"type": "keyword"},
+            "provider": {"type": "keyword"},
+            "model": {"type": "keyword"},
+            "queries": {"type": "keyword", "ignore_above": 512},
+            # Evidência (web) e factos ficam guardados mas não indexados: servem
+            # para reabrir o resumo sem repetir as pesquisas.
+            "evidence": {"type": "object", "enabled": False},
+            "facts": {"type": "object", "enabled": False},
+            "evidence_count": {"type": "integer"},
+            "pages_read": {"type": "integer"},
+            "generations": {"type": "integer"},
+            "generated_at": {"type": "date"},
             "ingested_at": {"type": "date"},
         }
     }
@@ -1040,6 +1074,10 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "community": {"type": "keyword", "ignore_above": 256},
             "lang": {"type": "keyword"},
             "image": {"type": "keyword", "ignore_above": 1024},
+            "video": {"type": "keyword", "ignore_above": 1024},
+            # Galeria: todas as imagens/vídeos encontrados (a primeira é a `image`/`video`).
+            "images": {"type": "keyword", "ignore_above": 1024},
+            "videos": {"type": "keyword", "ignore_above": 1024},
             "tags": {"type": "keyword"},
             "metrics": {"type": "long"},
             "likes": {"type": "long"},
@@ -1052,6 +1090,9 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "sentiment_score": {"type": "float"},
             "sentiment_engine": {"type": "keyword"},
             "trigger": {"type": "keyword"},
+            # Pessoa do PessoasIQ a que a publicação foi associada (recolha por pessoa).
+            "person_nif": {"type": "keyword"},
+            "person_name": {"type": "keyword", "ignore_above": 512},
             "data": {"type": "flattened"},
         }
     }
@@ -1132,6 +1173,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (CIRE_INDEX, cire_mappings),
         (PEOPLE_INDEX, people_mappings),
         (CONTRIBUINTES_INDEX, contribuintes_mappings),
+        (NODE_SUMMARIES_INDEX, node_summaries_mappings),
         (ENTITIES_INDEX, entities_mappings),
         (USER_STATE_INDEX, user_state_mappings),
         (AUTH_USERS_INDEX, auth_users_mappings),
@@ -7295,6 +7337,11 @@ def index_social_items(
             "community": str(item.get("community") or "")[:256],
             "lang": str(item.get("lang") or "")[:16],
             "image": str((item.get("media") or {}).get("image") or item.get("image") or "")[:1024],
+            "video": str((item.get("media") or {}).get("video") or item.get("video") or "")[:1024],
+            "images": [str(url)[:1024] for url in ((item.get("media") or {}).get("images") or item.get("images") or []) if url][:24],
+            "videos": [str(url)[:1024] for url in ((item.get("media") or {}).get("videos") or item.get("videos") or []) if url][:12],
+            "person_nif": str(item.get("person_nif") or channel.get("person_nif") or "")[:32],
+            "person_name": str(item.get("person_name") or channel.get("person_name") or "")[:512],
             "tags": [str(t) for t in (tags or []) if t not in (None, "")][:64],
             "collected_at": str(item.get("collected_at") or now),
             "trigger": trigger or "manual",
@@ -7343,6 +7390,7 @@ def _social_query(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     sentiments: Optional[List[str]] = None,
+    person_nif: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Constrói a query de pesquisa de publicações sociais."""
     must: List[Dict[str, Any]] = []
@@ -7363,6 +7411,8 @@ def _social_query(
         filters.append({"term": {"platform": platform}})
     if channel_id:
         filters.append({"term": {"channel_id": channel_id}})
+    if person_nif:
+        filters.append({"term": {"person_nif": str(person_nif)}})
     if tags:
         filters.append({"terms": {"tags": tags}})
     etiquetas = [str(s).strip().lower() for s in (sentiments or []) if str(s).strip()]
@@ -7408,6 +7458,7 @@ def search_social(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     sentiments: Optional[List[str]] = None,
+    person_nif: Optional[str] = None,
     size: int = 20,
     from_: int = 0,
     sort: str = "recent",
@@ -7435,7 +7486,7 @@ def search_social(
     body: Dict[str, Any] = {
         "size": max(0, min(int(size), 200)),
         "from": max(0, int(from_)),
-        "query": _social_query(q, platform, channel_id, tags, date_from, date_to, sentiments),
+        "query": _social_query(q, platform, channel_id, tags, date_from, date_to, sentiments, person_nif),
         "sort": sort_spec,
         "track_total_hits": True,
         "aggs": {
@@ -7458,7 +7509,7 @@ def search_social(
         fallback["query"] = {
             "bool": {
                 "must": [{"multi_match": {"query": q, "fields": ["title", "text", "author"], "lenient": True}}],
-                "filter": _social_query(None, platform, channel_id, tags, date_from, date_to, sentiments)["bool"].get("filter", []),
+                "filter": _social_query(None, platform, channel_id, tags, date_from, date_to, sentiments, person_nif)["bool"].get("filter", []),
             }
         }
         try:
@@ -9709,14 +9760,22 @@ def search_people(
     company_nif: Optional[str] = None,
     role: Optional[str] = None,
     is_company: Optional[bool] = None,
+    origin: Optional[str] = None,
+    min_roles: Optional[int] = None,
+    min_companies: Optional[int] = None,
+    sort: str = "relevance",
     size: int = 20,
     from_: int = 0,
     es: Optional[Elasticsearch] = None,
 ) -> Dict[str, Any]:
-    """Pesquisa no índice finance_people.
+    """Pesquisa no índice finance_people (com filtros).
 
-    ``q`` procura nome e NIF; ``company_nif`` exige pelo menos uma role nessa
-    empresa; ``role`` filtra cargo/evento (ex.: Gerente, Sócio).
+    - ``q``: nome (frase/termos) ou NIF;
+    - ``role``: cargo/papel (contém, sem distinguir maiúsculas) — ex.: `Credor`;
+    - ``company_nif``: tem de ter um cargo nessa empresa;
+    - ``origin``: `cire` (papéis do CIRE) ou `societario` (cargos das publicações do MJ);
+    - ``min_roles`` / ``min_companies``: nº mínimo de cargos/empresas na ficha;
+    - ``sort``: `relevance` (por omissão, com mais cargos primeiro), `roles`, `recent`.
     """
     client = es or get_es_client()
     if not client:
@@ -9728,17 +9787,27 @@ def search_people(
     nested_filters: List[Dict[str, Any]] = []
 
     if q:
+        # Sem `operator: and` (e sem a frase completa) uma pesquisa por nome
+        # completo devolvia quase todo o índice — os nomes partilham termos.
         must.append({
-            "multi_match": {
-                "query": q,
-                "fields": ["name^3", "name.autocomplete^2", "nif"],
-                "type": "best_fields",
+            "bool": {
+                "should": [
+                    {"term": {"nif": str(q)}},
+                    {"match_phrase": {"name": {"query": q, "boost": 6}}},
+                    {"match": {"name": {"query": q, "operator": "and", "boost": 3}}},
+                    {"match": {"name.autocomplete": {"query": q, "operator": "and"}}},
+                ],
+                "minimum_should_match": 1,
             }
         })
     if nif:
         filters.append({"term": {"nif": str(nif)}})
     if is_company is not None:
         filters.append({"term": {"is_company": bool(is_company)}})
+    if min_roles is not None:
+        filters.append({"range": {"roles_count": {"gte": int(min_roles)}}})
+    if min_companies is not None:
+        filters.append({"range": {"companies_count": {"gte": int(min_companies)}}})
     if company_nif:
         nested_filters.append({
             "nested": {
@@ -9759,6 +9828,17 @@ def search_people(
                 },
             }
         })
+    if origin:
+        wanted = str(origin).strip().lower()
+        if wanted in ("cire", "societario", "societário"):
+            # CIRE = cargos com `role_org = CIRE`; societário = todos os outros.
+            condition = {"term": {"roles.role_org": "CIRE"}}
+            nested_filters.append({
+                "nested": {
+                    "path": "roles",
+                    "query": condition if wanted == "cire" else {"bool": {"must_not": [condition]}},
+                }
+            })
 
     bool_query: Dict[str, Any] = {}
     if must:
@@ -9770,28 +9850,413 @@ def search_people(
 
     query = {"bool": bool_query} if bool_query else {"match_all": {}}
 
+    sort_spec: List[Any]
+    if sort == "roles":
+        sort_spec = [{"roles_count": {"order": "desc"}}, {"last_seen": {"order": "desc"}}, "_score"]
+    elif sort == "recent":
+        sort_spec = [{"last_seen": {"order": "desc"}}, {"roles_count": {"order": "desc"}}]
+    elif sort == "name":
+        sort_spec = [{"name.keyword": {"order": "asc"}}]
+    else:
+        sort_spec = [{"_score": {"order": "desc"}}, {"roles_count": {"order": "desc"}}]
+
     body = {
         "query": query,
         "from": max(0, from_),
         "size": max(1, min(size, 200)),
-        "sort": [{"roles_count": {"order": "desc"}}, "_score"],
+        "sort": sort_spec,
         "track_total_hits": True,
     }
 
     try:
         resp = client.search(index=PEOPLE_INDEX, body=body)
+        total = resp["hits"]["total"]["value"]
         return {
-            "total": resp["hits"]["total"]["value"],
+            "total": total,
             "items": [{**hit["_source"], "doc_id": hit["_id"]} for hit in resp["hits"]["hits"]],
             "from": from_,
             "size": size,
+            "filters": {
+                "q": q or None,
+                "role": role or None,
+                "company_nif": company_nif or None,
+                "origin": origin or None,
+                "is_company": is_company,
+                "min_roles": min_roles,
+                "min_companies": min_companies,
+                "sort": sort,
+            },
         }
     except Exception as exc:
         return {"error": str(exc), "items": [], "total": 0}
 
 
+def people_autocomplete(
+    q: str,
+    *,
+    limit: int = 8,
+    is_company: Optional[bool] = None,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Sugestões de pessoas/entidades para o autocomplete (nome, NIF e cargo).
+
+    Usa o analisador de prefixo (`name.autocomplete`) para sugerir enquanto se
+    escreve, com o nome, o NIF, o nº de cargos/empresas e um cargo recente — o
+    suficiente para escolher a pessoa certa sem fazer a pesquisa completa.
+    """
+    client = es or get_es_client()
+    term = str(q or "").strip()
+    if not client or len(term) < 2:
+        return {"q": term, "items": []}
+    ensure_indices(client)
+
+    should: List[Dict[str, Any]] = [
+        {"term": {"nif": {"value": term, "boost": 8}}},
+        {"match_phrase_prefix": {"name": {"query": term, "boost": 5, "max_expansions": 30}}},
+        {"match": {"name.autocomplete": {"query": term, "operator": "and", "boost": 2}}},
+    ]
+    body: Dict[str, Any] = {
+        "size": max(1, min(int(limit or 8), 25)),
+        "query": {"bool": {"should": should, "minimum_should_match": 1}},
+        "_source": ["nif", "name", "name_keyword", "is_company", "roles_count", "companies_count", "latest_roles", "sources", "last_seen"],
+        "sort": ["_score", {"roles_count": {"order": "desc"}}],
+    }
+    if is_company is not None:
+        body["query"]["bool"]["filter"] = [{"term": {"is_company": bool(is_company)}}]
+
+    try:
+        resp = client.search(index=PEOPLE_INDEX, body=body)
+    except Exception as exc:
+        return {"q": term, "items": [], "error": str(exc)}
+
+    items: List[Dict[str, Any]] = []
+    for hit in resp.get("hits", {}).get("hits", []):
+        source = hit.get("_source") or {}
+        latest = (source.get("latest_roles") or [])
+        role = latest[0] if latest and isinstance(latest[0], dict) else {}
+        items.append({
+            "nif": source.get("nif"),
+            "name": source.get("name_keyword") or source.get("name") or "",
+            "is_company": bool(source.get("is_company")),
+            "roles_count": int(source.get("roles_count") or 0),
+            "companies_count": int(source.get("companies_count") or 0),
+            "role": role.get("role"),
+            "company_name": role.get("company_name"),
+            "origin": (source.get("sources") or [None])[0] if source.get("sources") else None,
+            "last_seen": source.get("last_seen"),
+        })
+    return {"q": term, "items": items}
+
+
+def people_filters(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Facetas para os filtros da pesquisa de pessoas (cargos, origens e tipos)."""
+    client = es or get_es_client()
+    if not client:
+        return {"available": False}
+    ensure_indices(client)
+    try:
+        resp = client.search(
+            index=PEOPLE_INDEX,
+            body={
+                "size": 0,
+                "aggs": {
+                    "roles": {"nested": {"path": "roles"}, "aggs": {"top": {"terms": {"field": "roles.role", "size": 40}}}},
+                    "origins": {"terms": {"field": "source", "size": 10}},
+                    "types": {"terms": {"field": "is_company", "size": 5}},
+                    "with_cire": {
+                        "nested": {"path": "roles"},
+                        "aggs": {"cire": {"filter": {"term": {"roles.role_org": "CIRE"}}}},
+                    },
+                },
+            },
+        )
+    except Exception as exc:
+        return {"available": False, "error": str(exc)}
+
+    aggs = resp.get("aggregations", {})
+    return {
+        "available": True,
+        "roles": [
+            {"key": bucket["key"], "count": bucket["doc_count"]}
+            for bucket in aggs.get("roles", {}).get("top", {}).get("buckets", [])
+        ],
+        "origins": [
+            {"key": bucket["key"], "count": bucket["doc_count"]}
+            for bucket in aggs.get("origins", {}).get("buckets", [])
+        ],
+        "types": [
+            {"key": "company" if bucket["key"] else "person", "count": bucket["doc_count"]}
+            for bucket in aggs.get("types", {}).get("buckets", [])
+        ],
+        "with_cire": aggs.get("with_cire", {}).get("cire", {}).get("doc_count", 0),
+    }
+
+
+def cire_person_processes(
+    nif: str,
+    *,
+    size: int = 200,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Processos do CIRE em que um NIF participa, com papéis e co-intervenientes.
+
+    Serve a análise 360 de uma pessoa: quantos processos tem, em que papéis
+    (insolvente, devedor, credor, administrador da insolvência…) e com quem
+    contracena. A lista de processos é limitada a ``size`` (os mais recentes),
+    pelo que a contagem de co-intervenientes é uma **amostra** — o `total` de
+    processos vem do próprio Elasticsearch.
+    """
+    client = es or get_es_client()
+    nif = str(nif or "").strip()
+    empty: Dict[str, Any] = {
+        "total": 0,
+        "sampled": 0,
+        "processes": [],
+        "by_papel": [],
+        "co_intervenientes": [],
+        "tribunais": [],
+        "years": [],
+    }
+    if not client or not nif:
+        return empty
+    ensure_indices(client)
+
+    try:
+        resp = client.search(
+            index=CIRE_INDEX,
+            body={
+                "size": max(1, min(int(size), 1000)),
+                "query": {"term": {"nifs": nif}},
+                "_source": [
+                    "pub_id",
+                    "data_publicacao",
+                    "processo",
+                    "processo_numero",
+                    "especie",
+                    "tipo",
+                    "ato",
+                    "tribunal",
+                    "tribunal_comarca",
+                    "insolvente",
+                    "intervenientes",
+                    "has_documento",
+                    "documento_url",
+                ],
+                "sort": [{"data_publicacao": {"order": "desc", "missing": "_last"}}],
+            },
+        )
+    except Exception as exc:
+        return {**empty, "error": str(exc)}
+
+    hits = resp.get("hits", {}).get("hits", []) or []
+    total = resp.get("hits", {}).get("total", 0)
+    total_value = int((total.get("value", 0) if isinstance(total, dict) else total) or 0)
+
+    from collections import Counter
+
+    papeis: Counter = Counter()
+    comarcas: Counter = Counter()
+    anos: Counter = Counter()
+    co: Dict[str, Dict[str, Any]] = {}
+    processes: List[Dict[str, Any]] = []
+
+    for hit in hits:
+        source = hit.get("_source") or {}
+        intervenientes = [i for i in (source.get("intervenientes") or []) if isinstance(i, dict)]
+        meus = []
+        seen_papeis: set = set()
+        for item in intervenientes:
+            if str(item.get("nif") or "").strip() == nif:
+                papel = str(item.get("papel") or "").strip() or "Interveniente"
+                # Uma publicação conta uma vez por papel (o mesmo NIF pode aparecer
+                # repetido na lista de intervenientes).
+                if papel not in seen_papeis:
+                    seen_papeis.add(papel)
+                    papeis[papel] += 1
+                if papel not in meus:
+                    meus.append(papel)
+        data = source.get("data_publicacao") or ""
+        if data[:4].isdigit():
+            anos[data[:4]] += 1
+        comarca = str(source.get("tribunal_comarca") or "").strip()
+        if comarca:
+            comarcas[comarca] += 1
+
+        outros = []
+        for item in intervenientes:
+            outro_nif = str(item.get("nif") or "").strip()
+            if not outro_nif or outro_nif == nif:
+                continue
+            entry = co.setdefault(outro_nif, {"nif": outro_nif, "name": "", "papeis": Counter(), "processes": 0})
+            nome = str(item.get("nome") or "").strip()
+            if nome and (not entry["name"] or len(nome) > len(entry["name"])):
+                entry["name"] = nome
+            entry["papeis"][str(item.get("papel") or "Interveniente").strip()] += 1
+            entry["processes"] += 1
+            outros.append({"nif": outro_nif, "name": nome, "papel": str(item.get("papel") or "")})
+
+        processes.append({
+            "pub_id": source.get("pub_id") or str(hit.get("_id", "")).split(":")[-1],
+            "processo": source.get("processo_numero") or source.get("processo") or "",
+            "especie": source.get("especie") or source.get("tipo") or "",
+            "tribunal": source.get("tribunal_comarca") or source.get("tribunal") or "",
+            "date": data or None,
+            "insolvente": source.get("insolvente") or "",
+            "papeis": meus,
+            "intervenientes": len(intervenientes),
+            "co_intervenientes": outros[:12],
+            "has_documento": bool(source.get("has_documento")),
+        })
+
+    co_intervenientes = [
+        {
+            "nif": entry["nif"],
+            "name": entry["name"] or entry["nif"],
+            "processes": entry["processes"],
+            "papeis": [{"key": key, "count": value} for key, value in entry["papeis"].most_common(3)],
+        }
+        for entry in sorted(co.values(), key=lambda item: -item["processes"])
+    ]
+
+    return {
+        "total": total_value,
+        "sampled": len(processes),
+        "processes": processes,
+        "by_papel": [{"key": key, "count": value} for key, value in papeis.most_common(20)],
+        "co_intervenientes": co_intervenientes[:60],
+        "tribunais": [{"key": key, "count": value} for key, value in comarcas.most_common(10)],
+        "years": [{"key": key, "count": value} for key, value in sorted(anos.items(), reverse=True)[:12]],
+    }
+
+
+def _node_summary_id(node_id: str) -> str:
+    return f"{NODE_SUMMARIES_INDEX}:{node_id}"
+
+
+def index_node_summary(doc: Dict[str, Any], es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Guarda (ou substitui) o resumo de um nó de grafo.
+
+    Um documento por nó (`node_id` = `person:<nif>`, `company:<nif>`,
+    `source:<host>`), com o texto, a evidência e os factos usados. Cada gravação
+    conta em `generations` e atualiza `generated_at`/`ingested_at`, para se saber
+    quantas vezes o resumo foi refeito e quando.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "saved": False}
+    node_id = str((doc or {}).get("node_id") or "").strip()
+    if not node_id:
+        return {"error": "Resumo sem `node_id`.", "saved": False}
+    ensure_indices(client)
+
+    previous = get_node_summary(node_id, es=client) or {}
+    generations = int(previous.get("generations") or 0) + 1
+    now = _today()
+    payload: Dict[str, Any] = {
+        "node_id": node_id,
+        "nif": str(doc.get("nif") or "")[:32],
+        "name": str(doc.get("name") or "")[:512],
+        "kind": str(doc.get("kind") or "")[:32],
+        "summary": str(doc.get("summary") or ""),
+        "mode": str(doc.get("mode") or "factual")[:32],
+        "provider": str(doc.get("provider") or "")[:64],
+        "model": str(doc.get("model") or "")[:128],
+        "queries": [str(q)[:512] for q in (doc.get("queries") or [])][:12],
+        "evidence": (doc.get("evidence") or [])[:40],
+        "facts": doc.get("facts") or {},
+        "evidence_count": len(doc.get("evidence") or []),
+        "pages_read": int(doc.get("pages_read") or 0),
+        "generations": generations,
+        "generated_at": doc.get("generated_at") or now,
+        "ingested_at": now,
+    }
+    try:
+        client.index(index=NODE_SUMMARIES_INDEX, id=_node_summary_id(node_id), document=payload, refresh=True)
+        return {"saved": True, "node_id": node_id, "generations": generations, "generated_at": payload["generated_at"]}
+    except Exception as exc:
+        return {"error": str(exc), "saved": False}
+
+
+def get_node_summary(
+    node_id: Optional[str] = None,
+    *,
+    nif: Optional[str] = None,
+    name: Optional[str] = None,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Resumo já guardado de um nó (por `node_id`, ou por NIF/nome como recurso)."""
+    client = es or get_es_client()
+    if not client:
+        return {}
+    ensure_indices(client)
+    node_id = str(node_id or "").strip()
+    try:
+        if node_id:
+            resp = client.get(index=NODE_SUMMARIES_INDEX, id=_node_summary_id(node_id), _source=True)
+            source = resp.get("_source")
+            if isinstance(source, dict):
+                return source
+            return {}
+        query: Dict[str, Any] = {"match_all": {}}
+        if nif:
+            query = {"term": {"nif": str(nif)}}
+        elif name:
+            query = {"match": {"name": str(name)}}
+        resp = client.search(
+            index=NODE_SUMMARIES_INDEX,
+            body={"size": 1, "query": query, "sort": [{"generated_at": {"order": "desc"}}]},
+        )
+        hits = resp.get("hits", {}).get("hits", [])
+        return (hits[0].get("_source") if hits else {}) or {}
+    except Exception as exc:
+        logger.debug("Resumo de nó %s não encontrado: %s", node_id or nif or name, exc)
+        return {}
+
+
+def node_summaries_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Volumetria do índice de resumos (total, por tipo de nó e por modo)."""
+    client = es or get_es_client()
+    if not client:
+        return {"available": False, "total": 0}
+    ensure_indices(client)
+    try:
+        count = int(client.count(index=NODE_SUMMARIES_INDEX).get("count", 0) or 0)
+        out: Dict[str, Any] = {"available": True, "index": NODE_SUMMARIES_INDEX, "total": count}
+        if count:
+            resp = client.search(
+                index=NODE_SUMMARIES_INDEX,
+                body={
+                    "size": 0,
+                    "aggs": {
+                        "kinds": {"terms": {"field": "kind", "size": 10}},
+                        "modes": {"terms": {"field": "mode", "size": 10}},
+                        "latest": {"max": {"field": "generated_at"}},
+                    },
+                },
+            )
+            aggs = resp.get("aggregations", {})
+            out["kinds"] = [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("kinds", {}).get("buckets", [])]
+            out["modes"] = [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("modes", {}).get("buckets", [])]
+            out["latest"] = aggs.get("latest", {}).get("value_as_string")
+        return out
+    except Exception as exc:
+        return {"available": False, "error": str(exc), "total": 0}
+
+
+#: Limites dos grafos de pessoas: com centenas de cargos o grafo fica ilegível (e o
+#: browser lento), por isso agrega-se **uma aresta por empresa** e mostra-se só o
+#: topo por número de cargos/atividade recente.
+PEOPLE_GRAPH_MAX_COMPANIES = int(os.getenv("PEOPLE_GRAPH_MAX_COMPANIES", "60"))
+PEOPLE_GRAPH_MAX_PEOPLE = int(os.getenv("PEOPLE_GRAPH_MAX_PEOPLE", "60"))
+
+
 def people_graph_for_person(nif: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
-    """Constrói grafo empresa->pessoa e pessoa->empresa a partir de roles."""
+    """Constrói grafo pessoa->empresas a partir dos cargos (agregado por empresa).
+
+    Uma aresta por empresa (com o total de cargos e o cargo mais recente) e apenas
+    as `PEOPLE_GRAPH_MAX_COMPANIES` empresas com mais cargos — é o que mantém o
+    grafo legível e rápido mesmo para quem tem centenas de processos.
+    """
     client = es or get_es_client()
     if not client:
         return {"error": "Elasticsearch indisponível", "nodes": [], "edges": []}
@@ -9802,8 +10267,6 @@ def people_graph_for_person(nif: str, es: Optional[Elasticsearch] = None) -> Dic
         return {"error": person["error"], "nodes": [], "edges": []}
 
     nodes: Dict[str, Dict[str, Any]] = {}
-    edges: List[Dict[str, Any]] = []
-
     person_id = f"person:{nif}"
     nodes[person_id] = {
         "id": person_id,
@@ -9813,30 +10276,53 @@ def people_graph_for_person(nif: str, es: Optional[Elasticsearch] = None) -> Dic
         "is_company": person.get("is_company", False),
     }
 
+    by_company: Dict[str, Dict[str, Any]] = {}
     for role in person.get("roles", []):
-        cnif = role.get("company_nif")
-        cname = role.get("company_name") or cnif
+        cnif = str(role.get("company_nif") or "")
         if not cnif:
             continue
+        entry = by_company.setdefault(cnif, {
+            "name": role.get("company_name") or cnif,
+            "count": 0,
+            "roles": [],
+            "latest": None,
+        })
+        entry["count"] += 1
+        label = str(role.get("role") or "")
+        if label and label not in entry["roles"]:
+            entry["roles"].append(label)
+        if role.get("company_name") and len(str(role["company_name"])) > len(str(entry["name"])):
+            entry["name"] = role["company_name"]
+        if role.get("date") and (not entry["latest"] or str(role["date"]) > str(entry["latest"].get("date") or "")):
+            entry["latest"] = role
+
+    edges: List[Dict[str, Any]] = []
+    ranked = sorted(by_company.items(), key=lambda kv: (-kv[1]["count"], str(kv[1]["name"])))[:PEOPLE_GRAPH_MAX_COMPANIES]
+    for cnif, entry in ranked:
         company_id = f"company:{cnif}"
-        if company_id not in nodes:
-            nodes[company_id] = {
-                "id": company_id,
-                "type": "company",
-                "label": cname,
-                "nif": cnif,
-                "is_company": True,
-            }
+        nodes[company_id] = {
+            "id": company_id,
+            "type": "company",
+            "label": entry["name"],
+            "nif": cnif,
+            "is_company": True,
+        }
+        latest = entry["latest"] or {}
         edges.append({
             "source": person_id,
             "target": company_id,
-            "label": role.get("role", ""),
-            "role": role.get("role", ""),
-            "role_org": role.get("role_org", ""),
-            "event": role.get("event", ""),
-            "date": role.get("date"),
-            "acto": role.get("acto", ""),
-            "quota": role.get("quota"),
+            "label": latest.get("role", "") or (entry["roles"][0] if entry["roles"] else ""),
+            "type": "role",
+            "role": latest.get("role", "") or (entry["roles"][0] if entry["roles"] else ""),
+            "role_org": latest.get("role_org", ""),
+            "event": latest.get("event", ""),
+            "date": latest.get("date"),
+            "acto": latest.get("acto", ""),
+            "quota": latest.get("quota"),
+            # Cargos não são euros: `count` é o nº de cargos nessa empresa e é o
+            # que engrossa a aresta. `value` fica a 0 (só contratos têm valor).
+            "count": entry["count"],
+            "value": 0.0,
         })
 
     return {
@@ -9846,11 +10332,16 @@ def people_graph_for_person(nif: str, es: Optional[Elasticsearch] = None) -> Dic
         "edges": edges,
         "node_count": len(nodes),
         "edge_count": len(edges),
+        "meta": {
+            "companies_total": len(by_company),
+            "companies_shown": len(ranked),
+            "grouped": True,
+        },
     }
 
 
 def people_graph_for_company(company_nif: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
-    """Constrói grafo de todas as pessoas ligadas a uma empresa."""
+    """Constrói grafo de todas as pessoas ligadas a uma empresa (uma aresta por pessoa)."""
     client = es or get_es_client()
     if not client:
         return {"error": "Elasticsearch indisponível", "nodes": [], "edges": []}
@@ -9884,33 +10375,47 @@ def people_graph_for_company(company_nif: str, es: Optional[Elasticsearch] = Non
         }
     }
     edges: List[Dict[str, Any]] = []
+    ranked: List[tuple] = []
 
     for person in people:
         pnif = person.get("nif")
         if not pnif:
             continue
+        relevant = [role for role in person.get("roles", []) if role.get("company_nif") == company_nif]
+        if not relevant:
+            continue
+        latest = max(relevant, key=lambda role: str(role.get("date") or ""))
+        ranked.append((len(relevant), person, latest))
+
+    ranked.sort(key=lambda item: -item[0])
+    for count, person, latest in ranked[:PEOPLE_GRAPH_MAX_PEOPLE]:
+        pnif = person.get("nif")
         person_id = f"person:{pnif}"
-        if person_id not in nodes:
-            nodes[person_id] = {
-                "id": person_id,
-                "type": "person",
-                "label": person.get("name", pnif),
-                "nif": pnif,
-                "is_company": person.get("is_company", False),
-            }
-        for role in person.get("roles", []):
-            if role.get("company_nif") == company_nif:
-                edges.append({
-                    "source": person_id,
-                    "target": company_id,
-                    "label": role.get("role", ""),
-                    "role": role.get("role", ""),
-                    "role_org": role.get("role_org", ""),
-                    "event": role.get("event", ""),
-                    "date": role.get("date"),
-                    "acto": role.get("acto", ""),
-                    "quota": role.get("quota"),
-                })
+        company = nodes[company_id]
+        if company["label"] in (company_nif, ""):
+            company["label"] = latest.get("company_name") or company_nif
+        nodes[person_id] = {
+            "id": person_id,
+            "type": "person",
+            "label": person.get("name", pnif),
+            "nif": pnif,
+            "is_company": person.get("is_company", False),
+        }
+        edges.append({
+            "source": person_id,
+            "target": company_id,
+            "label": latest.get("role", ""),
+            "type": "role",
+            "role": latest.get("role", ""),
+            "role_org": latest.get("role_org", ""),
+            "event": latest.get("event", ""),
+            "date": latest.get("date"),
+            "acto": latest.get("acto", ""),
+            "quota": latest.get("quota"),
+            # `count` = nº de cargos (não euros).
+            "count": count,
+            "value": 0.0,
+        })
 
     return {
         "company_nif": company_nif,
@@ -9918,6 +10423,7 @@ def people_graph_for_company(company_nif: str, es: Optional[Elasticsearch] = Non
         "edges": edges,
         "node_count": len(nodes),
         "edge_count": len(edges),
+        "meta": {"people_total": len(ranked), "people_shown": min(len(ranked), PEOPLE_GRAPH_MAX_PEOPLE), "grouped": True},
     }
 
 

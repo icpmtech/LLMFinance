@@ -1014,13 +1014,17 @@ export interface PeopleSearchResponse {
   items: Person[];
   from: number;
   size: number;
+  /** Filtros aplicados (eco do servidor) e erro, quando há. */
+  filters?: Record<string, unknown> | null;
+  error?: string | null;
 }
 
 export interface PeopleGraphNode {
   id: string;
   // "entity" = entidade contratual (nó de contratos) devolvido por
-  // `combined_graph_for_company` no backend.
-  type: "person" | "company" | "entity";
+  // `combined_graph_for_company` no backend; "source" = site/perfil onde a
+  // pessoa aparece (análise 360).
+  type: "person" | "company" | "entity" | "source";
   label: string;
   nif?: string;
   is_company?: boolean;
@@ -1029,6 +1033,9 @@ export interface PeopleGraphNode {
   contract_count?: number;
   total_value?: number;
   entity?: Record<string, any> | null;
+  /** Análise 360: ligação do site/perfil e plataforma de origem. */
+  url?: string | null;
+  platform?: string | null;
 }
 
 export interface PeopleGraphEdge {
@@ -1059,6 +1066,37 @@ export interface PeopleGraphResponse {
   node_count: number;
   edge_count: number;
   meta?: Record<string, any> | null;
+}
+
+/** Sugestão da caixa de pesquisa de pessoas (autocomplete). */
+export interface PeopleAutocompleteItem {
+  nif?: string | null;
+  name: string;
+  is_company: boolean;
+  roles_count: number;
+  companies_count: number;
+  /** Cargo/papel mais recente, quando existe. */
+  role?: string | null;
+  company_name?: string | null;
+  /** Origem do registo: `cire` ou `societario`. */
+  origin?: string | null;
+  last_seen?: string | null;
+}
+
+/** Faceta (valor + nº de fichas) usada nos filtros de pesquisa. */
+export interface PeopleFacet {
+  key: string;
+  count: number;
+}
+
+/** Opções disponíveis para os filtros da pesquisa de pessoas. */
+export interface PeopleFiltersResponse {
+  available: boolean;
+  roles: PeopleFacet[];
+  origins: PeopleFacet[];
+  types: PeopleFacet[];
+  with_cire: number;
+  error?: string | null;
 }
 
 export interface PeopleIngestResponse {
@@ -1109,6 +1147,143 @@ export interface PeopleCireIngestResult {
   errors?: number;
   error?: string | null;
   message?: string | null;
+}
+
+// --- Dados públicos da pessoa (redes sociais + internet) e análise 360 ---
+
+/** Publicação/perfil recolhido sobre uma pessoa (imagem, vídeo ou texto). */
+export interface PeopleSocialItem {
+  url?: string | null;
+  title?: string | null;
+  text?: string | null;
+  platform?: string | null;
+  kind?: string | null;
+  date?: string | null;
+  sentiment?: string | null;
+  sentiment_score?: number | null;
+  image?: string | null;
+  video?: string | null;
+  /** Miniatura do vídeo (ou imagem pequena da mesma página). */
+  thumbnail?: string | null;
+}
+
+/** O que cada fonte devolveu numa recolha (`ok`, `empty`, `blocked`, …). */
+export interface PeopleSocialSourceResult {
+  source: string;
+  label: string;
+  status: "ok" | "empty" | "blocked" | "credentials" | "error" | "skipped";
+  found: number;
+  urls_checked: number;
+  items: number;
+  indexed: number;
+  notes: string[];
+  links: { url?: string | null; title?: string | null; platform?: string | null }[];
+}
+
+export interface PeopleSocialCollectResponse {
+  nif?: string | null;
+  name?: string | null;
+  collected_at?: string | null;
+  queries: { query: string; scope: string; engine: string; items: number; attempt?: number; error?: string | null }[];
+  sources: PeopleSocialSourceResult[];
+  items: number;
+  items_indexed: number;
+  engine_hint?: string | null;
+  error?: string | null;
+}
+
+export interface PeopleSocialResponse {
+  nif: string;
+  total: number;
+  images: PeopleSocialItem[];
+  videos: PeopleSocialItem[];
+  texts: PeopleSocialItem[];
+  by_platform: { key: string; count: number }[];
+  sentiment: Record<string, any>;
+  last_collected?: string | null;
+}
+
+/** Fator da pontuação de risco (com a evidência que o sustenta). */
+export interface PersonRiskFactor {
+  key: string;
+  label: string;
+  points: number;
+  level: string;
+  direction: string;
+  evidence: string;
+}
+
+export interface PersonRisk {
+  score: number;
+  level: string;
+  factors: PersonRiskFactor[];
+  risk_factors: number;
+  confidence: string;
+  data_points: number;
+  disclaimer: string;
+}
+
+export interface People360Cire {
+  total: number;
+  sampled: number;
+  by_papel?: { key: string; count: number }[];
+  processes?: Record<string, any>[];
+  co_intervenientes?: Record<string, any>[];
+  tribunais?: { key: string; count: number }[];
+  years?: { key: string; count: number }[];
+  error?: string | null;
+}
+
+/** Análise 360 de uma pessoa: ficha, insolvências, presença digital, risco e ficha analítica. */
+export interface People360Response {
+  nif: string;
+  name?: string | null;
+  is_company: boolean;
+  generated_at?: string | null;
+  profile: Record<string, any>;
+  cire: People360Cire;
+  social: Record<string, any>;
+  risk: PersonRisk;
+  graph: PeopleGraphResponse;
+  analysis: { mode: string; text: string; notes?: string[]; warnings?: string[]; backend?: Record<string, any> };
+  error?: string | null;
+}
+
+// --- Resumo de um nó do grafo (IA + pesquisa na web, guardado no Elasticsearch) ---
+
+/** Evidência usada num resumo (resultado de pesquisa e, quando lido, o texto da página). */
+export interface NodeSummaryEvidence {
+  title?: string | null;
+  url?: string | null;
+  snippet?: string | null;
+  page_text?: string | null;
+  engine?: string | null;
+  query?: string | null;
+}
+
+export interface NodeSummaryResponse {
+  node_id: string;
+  nif?: string | null;
+  name?: string | null;
+  kind?: string | null;
+  summary?: string | null;
+  mode?: string | null;
+  provider?: string | null;
+  model?: string | null;
+  backend?: Record<string, any> | null;
+  facts: Record<string, any>;
+  evidence: NodeSummaryEvidence[];
+  evidence_count: number;
+  pages_read: number;
+  queries: any[];
+  generated_at?: string | null;
+  generations?: number | null;
+  saved: boolean;
+  cached: boolean;
+  found: boolean;
+  notes: string[];
+  warnings: string[];
+  error?: string | null;
 }
 
 export interface CompanySearchRequest {

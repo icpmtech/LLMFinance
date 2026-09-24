@@ -1,476 +1,157 @@
 warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
-INFO:     Started server process [108192]
+INFO:     Started server process [69356]
 INFO:     Waiting for application startup.
 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
-INFO:     127.0.0.1:61014 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61014 - "GET /social/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61014 - "GET /social/stats HTTP/1.1" 200 OK
-Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]INFO:     127.0.0.1:61014 - "GET /social/search?q=Microsoft&size=2 HTTP/1.1" 200 OK
-Loading weights:  65%|######4   | 164/254 [00:00<00:00, 1638.46it/s]Loading weights: 100%|##########| 254/254 [00:00<00:00, 1531.66it/s]
-INFO:     127.0.0.1:61014 - "GET /social/jobs HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:61014 - "GET /openapi.json HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60581 - "GET /social/templates HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60581 - "GET /social/templates HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60581 - "OPTIONS /social/templates/facebook-pagina/channel HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51173 - "POST /social/templates/facebook-pagina/channel HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51173 - "OPTIONS /social/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60581 - "OPTIONS /social/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53858 - "GET /social/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51173 - "GET /social/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65071 - "GET /social/channels HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62585 - "OPTIONS /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65104 - "OPTIONS /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62585 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62585 - "OPTIONS /social/channels HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58363 - "OPTIONS /social/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51371 - "GET /social/channels HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58363 - "GET /social/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51371 - "GET /social/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59259 - "GET /social/channels HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57425 - "GET /social/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65104 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59259 - "GET /social/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62585 - "GET /social/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62585 - "GET /social/channels HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65104 - "GET /social/channels HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59259 - "GET /social/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62806 - "OPTIONS /social/channels/facebook-page-nasa-28d42f?purge_items=true HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62806 - "DELETE /social/channels/facebook-page-nasa-28d42f?purge_items=true HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50463 - "GET /social/channels HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50463 - "GET /social/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62291 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58688 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53893 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55702 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55714 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55718 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56011 - "POST /social/channels/reddit-investimentos/run HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56011 - "OPTIONS /social/runs/20260924T144103-932f35?channel_id=reddit-investimentos HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56011 - "GET /social/runs/20260924T144103-932f35?channel_id=reddit-investimentos HTTP/1.1" 200 OK
-[2026-09-24 15:41:06] INFO: Fetched (403) <GET https://www.reddit.com/r/investimentos/hot/> (referer: https://www.google.com/)
-INFO:     127.0.0.1:56011 - "GET /social/runs/20260924T144103-932f35?channel_id=reddit-investimentos HTTP/1.1" 200 OK
-[2026-09-24 15:41:07] INFO: Fetched (200) <GET https://old.reddit.com/login/?reason=lor2&dest=https%3A%2F%2Fold.reddit.com%2Fr%2Finvestimentos%2Fhot%2F> (referer: https://www.google.com/)
-Recolha social reddit-investimentos: O Reddit n�o devolveu publica��es de r/investimentos em nenhum dos endere�os p�blicos. (blocked)
-INFO:     127.0.0.1:56011 - "GET /social/runs/20260924T144103-932f35?channel_id=reddit-investimentos HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56011 - "OPTIONS /social/runs/20260924T144103-932f35/items?channel_id=reddit-investimentos&limit=100&offset=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55438 - "GET /social/runs/20260924T144103-932f35/items?channel_id=reddit-investimentos&limit=100&offset=0 HTTP/1.1" 500 Internal Server Error
-ERROR:    Exception in ASGI application
-  + Exception Group Traceback (most recent call last):
-  |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_utils.py", line 85, in create_collapsing_task_group
-  |     async with anyio.create_task_group() as tg:
-  |   File "C:\LLMFinance\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 815, in __aexit__
-  |     raise BaseExceptionGroup(
-  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
-  +-+---------------- 1 ----------------
-    | Traceback (most recent call last):
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 416, in run_asgi
-    |     result = await app(  # type: ignore[func-returns-value]
-    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
-    |     return await self.app(scope, receive, send)
-    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
-    |     await super().__call__(scope, receive, send)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\applications.py", line 96, in __call__
-    |     await self.middleware_stack(scope, receive, send)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
-    |     raise exc
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
-    |     await self.app(scope, receive, _send)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
-    |     response = await self.dispatch_func(request, call_next)
-    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    |   File "c:\LLMFinance/finance-llm\api\main.py", line 488, in _event_log_middleware
-    |     response = await call_next(request)
-    |                ^^^^^^^^^^^^^^^^^^^^^^^^
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
-    |     raise app_exc from app_exc.__cause__ or app_exc.__context__
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
-    |     await self.app(scope, receive_or_disconnect, send_no_error)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
-    |     response = await self.dispatch_func(request, call_next)
-    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    |   File "c:\LLMFinance/finance-llm\api\main.py", line 410, in _no_store_for_docs
-    |     response = await call_next(request)
-    |                ^^^^^^^^^^^^^^^^^^^^^^^^
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
-    |     raise app_exc from app_exc.__cause__ or app_exc.__context__
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
-    |     await self.app(scope, receive_or_disconnect, send_no_error)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\cors.py", line 96, in __call__
-    |     await self.simple_response(scope, receive, send, request_headers=headers)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\cors.py", line 154, in simple_response
-    |     await self.app(scope, receive, send)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
-    |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    |     raise exc
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    |     await app(scope, receive, sender)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
-    |     await self.app(scope, receive, send)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\routing.py", line 670, in __call__
-    |     await self.middleware_stack(scope, receive, send)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 2734, in app
-    |     await route.handle(scope, receive, send)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 1780, in handle
-    |     await self.original_router.handle(scope, receive, send)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 2789, in handle
-    |     await included_router._handle_selected(scope, receive, send)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 1800, in _handle_selected
-    |     await original_route.handle(scope, receive, send)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 1279, in handle
-    |     await app(scope, receive, send)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 158, in app
-    |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    |     raise exc
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    |     await app(scope, receive, sender)
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 144, in app
-    |     response = await f(request)
-    |                ^^^^^^^^^^^^^^^^
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 706, in app
-    |     raw_response = await run_endpoint_function(
-    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
-    |     return await run_in_threadpool(dependant.call, **values)
-    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
-    |     return await anyio.to_thread.run_sync(func)
-    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
-    |     return await get_async_backend().run_sync_in_worker_thread(
-    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2641, in run_sync_in_worker_thread
-    |     return await future
-    |            ^^^^^^^^^^^^
-    |   File "C:\LLMFinance\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1033, in run
-    |     result = context.run(func, *args)
-    |              ^^^^^^^^^^^^^^^^^^^^^^^^
-    |   File "c:\LLMFinance/finance-llm\api\social_routes.py", line 269, in get_run_items
-    |     return social.read_run_items(run_id, channel_id, limit=limit, offset=offset)
-    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    |   File "c:\LLMFinance/finance-llm\api\social_service.py", line 705, in read_run_items
-    |     raise KeyError(run_id)
-    | KeyError: '20260924T144103-932f35'
-    +------------------------------------
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "C:\LLMFinance\.venv\Lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 416, in run_asgi
-    result = await app(  # type: ignore[func-returns-value]
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\LLMFinance\.venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
-    return await self.app(scope, receive, send)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
-    await super().__call__(scope, receive, send)
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\applications.py", line 96, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
-    raise exc
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
-    await self.app(scope, receive, _send)
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
-    response = await self.dispatch_func(request, call_next)
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "c:\LLMFinance/finance-llm\api\main.py", line 488, in _event_log_middleware
-    response = await call_next(request)
-               ^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
-    raise app_exc from app_exc.__cause__ or app_exc.__context__
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
-    await self.app(scope, receive_or_disconnect, send_no_error)
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
-    response = await self.dispatch_func(request, call_next)
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "c:\LLMFinance/finance-llm\api\main.py", line 410, in _no_store_for_docs
-    response = await call_next(request)
-               ^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
-    raise app_exc from app_exc.__cause__ or app_exc.__context__
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
-    await self.app(scope, receive_or_disconnect, send_no_error)
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\cors.py", line 96, in __call__
-    await self.simple_response(scope, receive, send, request_headers=headers)
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\cors.py", line 154, in simple_response
-    await self.app(scope, receive, send)
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
-    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
-    await self.app(scope, receive, send)
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\routing.py", line 670, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 2734, in app
-    await route.handle(scope, receive, send)
-  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 1780, in handle
-    await self.original_router.handle(scope, receive, send)
-  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 2789, in handle
-    await included_router._handle_selected(scope, receive, send)
-  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 1800, in _handle_selected
-    await original_route.handle(scope, receive, send)
-  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 1279, in handle
-    await app(scope, receive, send)
-  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 158, in app
-    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 144, in app
-    response = await f(request)
-               ^^^^^^^^^^^^^^^^
-  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 706, in app
-    raw_response = await run_endpoint_function(
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
-    return await run_in_threadpool(dependant.call, **values)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
-    return await anyio.to_thread.run_sync(func)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\LLMFinance\.venv\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
-    return await get_async_backend().run_sync_in_worker_thread(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\LLMFinance\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2641, in run_sync_in_worker_thread
-    return await future
-           ^^^^^^^^^^^^
-  File "C:\LLMFinance\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1033, in run
-    result = context.run(func, *args)
-             ^^^^^^^^^^^^^^^^^^^^^^^^
-  File "c:\LLMFinance/finance-llm\api\social_routes.py", line 269, in get_run_items
-    return social.read_run_items(run_id, channel_id, limit=limit, offset=offset)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "c:\LLMFinance/finance-llm\api\social_service.py", line 705, in read_run_items
-    raise KeyError(run_id)
-KeyError: '20260924T144103-932f35'
-INFO:     127.0.0.1:60361 - "OPTIONS /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49258 - "OPTIONS /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51985 - "OPTIONS /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59044 - "OPTIONS /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57422 - "OPTIONS /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65455 - "OPTIONS /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49258 - "OPTIONS /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51985 - "GET /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57422 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49258 - "GET /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51985 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60361 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59044 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60361 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51985 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59012 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53857 - "OPTIONS /contribuintes/502604751 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53857 - "GET /contribuintes/502604751 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51465 - "OPTIONS /contribuintes/search?q=xmxf0n%5DzoxzK338&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51465 - "GET /contribuintes/search?q=xmxf0n%5DzoxzK338&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51465 - "OPTIONS /contribuintes/autocomplete?q=xmxf0n%5DzoxzK338&size=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60656 - "GET /contribuintes/autocomplete?q=xmxf0n%5DzoxzK338&size=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60656 - "OPTIONS /contribuintes/search?q=xmxf0n%5DzoxzK33&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51465 - "GET /contribuintes/search?q=xmxf0n%5DzoxzK33&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51465 - "OPTIONS /contribuintes/autocomplete?q=xmxf0n%5DzoxzK33&size=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60656 - "GET /contribuintes/autocomplete?q=xmxf0n%5DzoxzK33&size=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60656 - "OPTIONS /contribuintes/search?q=xmxf0n%5DzoxzK3&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60656 - "OPTIONS /contribuintes/search?q=xmxf0n%5DzoxzK&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62506 - "OPTIONS /contribuintes/search?q=xmxf0n%5Dzoxz&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58740 - "OPTIONS /contribuintes/search?q=xmxf0n%5Dzox&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53857 - "OPTIONS /contribuintes/search?q=xmxf0n%5Dzo&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55244 - "OPTIONS /contribuintes/search?q=xmxf0n%5Dz&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51465 - "GET /contribuintes/search?q=xmxf0n%5DzoxzK3&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51465 - "OPTIONS /contribuintes/search?q=xmxf0n%5D&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51465 - "OPTIONS /contribuintes/search?q=xmxf0n&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51465 - "OPTIONS /contribuintes/search?q=xmxf0&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51465 - "OPTIONS /contribuintes/search?q=xmxf&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51465 - "OPTIONS /contribuintes/search?q=xmx&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51465 - "OPTIONS /contribuintes/search?q=xm&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51465 - "OPTIONS /contribuintes/search?q=x&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62506 - "GET /contribuintes/search?q=xmxf0n%5Dzoxz&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60656 - "GET /contribuintes/search?q=xmxf0n%5DzoxzK&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58740 - "GET /contribuintes/search?q=xmxf0n%5Dzox&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53857 - "GET /contribuintes/search?q=xmxf0n%5Dzo&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55244 - "GET /contribuintes/search?q=xmxf0n%5Dz&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51465 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62506 - "GET /contribuintes/search?q=xmxf0n%5D&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60656 - "GET /contribuintes/search?q=xmxf0n&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58740 - "GET /contribuintes/search?q=xmxf0&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53857 - "GET /contribuintes/search?q=xmxf&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55244 - "GET /contribuintes/search?q=xmx&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53857 - "OPTIONS /contribuintes/search?q=5&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51465 - "GET /contribuintes/search?q=xm&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62506 - "GET /contribuintes/search?q=x&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55244 - "GET /contribuintes/search?q=5&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55244 - "OPTIONS /contribuintes/search?q=51&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62506 - "GET /contribuintes/search?q=51&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62506 - "OPTIONS /contribuintes/search?q=510&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55244 - "GET /contribuintes/search?q=510&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55244 - "OPTIONS /contribuintes/autocomplete?q=510&size=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62506 - "GET /contribuintes/autocomplete?q=510&size=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62506 - "OPTIONS /contribuintes/510338879 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55244 - "GET /contribuintes/510338879 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55244 - "OPTIONS /contribuintes/510460666 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62506 - "GET /contribuintes/510460666 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61039 - "GET /contribuintes/510103448 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52775 - "OPTIONS /contribuintes/510470220 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52775 - "GET /contribuintes/510470220 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52246 - "OPTIONS /contribuintes/510856721 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52246 - "GET /contribuintes/510856721 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52246 - "OPTIONS /contribuintes/510334156 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53857 - "GET /contribuintes/510334156 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53871 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51533 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51536 - "GET /contribuintes/sync HTTP/1.1" 400 Bad Request
-INFO:     127.0.0.1:57851 - "OPTIONS /contribuintes/search?q=510&has_contracts=true&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57851 - "GET /contribuintes/search?q=510&has_contracts=true&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51956 - "GET /contribuintes/search?q=510&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51956 - "GET /contribuintes/search?q=510&has_contracts=true&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51956 - "OPTIONS /contribuintes/510249922 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51956 - "GET /contribuintes/510249922 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52036 - "GET /contribuintes/search?q=510103448&size=2 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50461 - "OPTIONS /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62837 - "OPTIONS /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50461 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50462 - "GET /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62490 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50462 - "GET /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49669 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50461 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62837 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55229 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49669 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62837 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62837 - "GET /contribuintes/search?q=5&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50870 - "GET /contribuintes/search?q=51&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54348 - "GET /contribuintes/autocomplete?q=510&size=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62837 - "GET /contribuintes/search?q=510&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54348 - "OPTIONS /contribuintes/search?q=510460666&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54348 - "OPTIONS /contribuintes/autocomplete?q=510460666&size=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50870 - "GET /contribuintes/search?q=510460666&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62837 - "GET /contribuintes/510460666 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54348 - "GET /contribuintes/autocomplete?q=510460666&size=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54874 - "OPTIONS /social/channels HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52392 - "OPTIONS /social/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51262 - "OPTIONS /social/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59899 - "OPTIONS /social/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55618 - "OPTIONS /social/channels HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59498 - "OPTIONS /social/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52392 - "OPTIONS /social/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51262 - "OPTIONS /social/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54874 - "GET /social/channels HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59899 - "GET /social/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54874 - "GET /social/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51262 - "GET /social/channels HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59498 - "GET /social/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51262 - "GET /social/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55618 - "GET /social/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51262 - "GET /social/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56860 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59572 - "GET /contribuintes/510103448 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53869 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61505 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61509 - "GET /contribuintes/503933813 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49997 - "GET /contribuintes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49999 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50702 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:49997 - "GET /assets/index-BZWG2cF3.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50464 - "GET /assets/index-BK6H5JMe.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49997 - "GET /favicon-32.png HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:49997 - "GET /favicon.svg HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:57761 - "GET /sw.js HTTP/1.1" 404 Not Found
-[2026-09-24 16:00:27] WARNING: Proxy 'None' failed (attempt 1) | Retrying in 1 seconds...
-[2026-09-24 16:00:34] WARNING: Proxy 'None' failed (attempt 1) | Retrying in 1 seconds...
-[2026-09-24 16:00:49] WARNING: Proxy 'None' failed (attempt 2) | Retrying in 1 seconds...
-INFO:     127.0.0.1:56041 - "OPTIONS /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56041 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60650 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60650 - "OPTIONS /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56041 - "OPTIONS /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56041 - "OPTIONS /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50464 - "GET /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56041 - "OPTIONS /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50464 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
-[2026-09-24 16:00:56] WARNING: Proxy 'None' failed (attempt 2) | Retrying in 1 seconds...
-INFO:     127.0.0.1:50464 - "GET /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60650 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56041 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57813 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50464 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56041 - "GET /contribuintes/status HTTP/1.1" 200 OK
-[2026-09-24 16:01:12] ERROR: Failed after 3 attempts: Failed to perform, curl: (28) Failed to connect to sapo.pt:443 after 21042 ms: Could not connect to server. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
-Recolha de sapo-e47529 falhou: Failed to perform, curl: (28) Failed to connect to sapo.pt:443 after 21042 ms: Could not connect to server. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
-[2026-09-24 16:01:18] ERROR: Failed after 3 attempts: Failed to perform, curl: (28) Failed to connect to www.lusa.pt:443 after 21261 ms: Could not connect to server. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
-Recolha de lusa-920462 falhou: Failed to perform, curl: (28) Failed to connect to www.lusa.pt:443 after 21261 ms: Could not connect to server. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
-INFO:     127.0.0.1:49670 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49670 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49670 - "OPTIONS /contribuintes/search?q=Infraestruturas+de+Portugal&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64987 - "GET /contribuintes/search?q=Infraestruturas+de+Portugal&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64987 - "OPTIONS /contribuintes/autocomplete?q=Infraestruturas+de+Portugal&size=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49670 - "GET /contribuintes/autocomplete?q=Infraestruturas+de+Portugal&size=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64331 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51533 - "OPTIONS /contribuintes/search?q=503933813&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51533 - "GET /contribuintes/search?q=503933813&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51533 - "OPTIONS /contribuintes/autocomplete?q=503933813&size=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54563 - "GET /contribuintes/autocomplete?q=503933813&size=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62951 - "OPTIONS /contribuintes/503933813 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62951 - "GET /contribuintes/503933813 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62908 - "GET /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62908 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57206 - "GET /contribuintes/search?q=503933813&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51902 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54352 - "GET /contribuintes/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64565 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58499 - "GET /contribuintes/search?q=503933813&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59222 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50711 - "GET /contribuintes/510103448 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50796 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59459 - "OPTIONS /contribuintes/search?q=503933813&has_contracts=true&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59459 - "GET /contribuintes/search?q=503933813&has_contracts=true&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59459 - "OPTIONS /contribuintes/search?q=503933813&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59459 - "GET /contribuintes/search?q=503933813&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58003 - "GET /contribuintes/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58007 - "GET /contribuintes/503933813 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58017 - "GET /social/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58019 - "GET /social/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58026 - "GET /social/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58876 - "OPTIONS /social/channels/linkedin-microsoft/run HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58876 - "POST /social/channels/linkedin-microsoft/run HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63322 - "GET /social/stats HTTP/1.1" 200 OK
-[2026-09-24 16:24:41] WARNING: Proxy 'None' failed (attempt 1) | Retrying in 1 seconds...
-INFO:     127.0.0.1:63346 - "GET /social/runs?limit=1 HTTP/1.1" 200 OK
-[2026-09-24 16:25:03] WARNING: Proxy 'None' failed (attempt 2) | Retrying in 1 seconds...
-INFO:     127.0.0.1:50462 - "OPTIONS /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53861 - "OPTIONS /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53862 - "GET /people/status HTTP/1.1" 200 OK
-[2026-09-24 16:25:26] ERROR: Failed after 3 attempts: Failed to perform, curl: (28) Failed to connect to www.linkedin.com:443 after 21247 ms: Could not connect to server. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
-INFO:     127.0.0.1:53861 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51970 - "GET /social/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51978 - "GET /social/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56061 - "GET /social/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56075 - "GET /social/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56085 - "GET /social/stats HTTP/1.1" 200 OK
-Recolha social linkedin-microsoft: Falha de rede ao contactar https://www.linkedin.com/company/microsoft/: [WinError 10060] A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond (error)
-INFO:     127.0.0.1:63476 - "GET /social/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57698 - "OPTIONS /people/search?q=*&size=20&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57698 - "GET /people/search?q=*&size=20&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51621 - "OPTIONS /people/search?q=510&size=20&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51621 - "GET /people/search?q=510&size=20&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62555 - "OPTIONS /people/search?q=pedro&size=20&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62555 - "GET /people/search?q=pedro&size=20&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62583 - "OPTIONS /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50585 - "OPTIONS /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59487 - "OPTIONS /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59487 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50585 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59487 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50585 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59286 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59286 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64977 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59286 - "GET /people/status HTTP/1.1" 200 OK
+Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  51%|█████     | 129/254 [00:00<00:00, 1265.78it/s]Loading weights: 100%|██████████| 254/254 [00:00<00:00, 1451.06it/s]
+INFO:     127.0.0.1:50466 - "GET /people/autocomplete?q=Andre%20Manuel%20Lopes&limit=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50469 - "GET /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50475 - "GET /people/search?q=Andre%20Manuel%20Lopes%20de%20Jesus&origin=cire&role=Insolvente&min_roles=5&sort=roles&size=3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52197 - "OPTIONS /people/212192760/social-collect HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62914 - "GET /people/226815340/graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58439 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54962 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54962 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60638 - "GET /contribuintes/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54962 - "GET /contribuintes/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52015 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62535 - "GET /contribuintes/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58439 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52015 - "GET /contribuintes/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54962 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56529 - "GET /people/status HTTP/1.1" 200 OK
+[2026-09-24 19:09:19] INFO: Fetched (200) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+212192760> (referer: https://www.google.com/)
+INFO:     127.0.0.1:54962 - "GET /people/status HTTP/1.1" 200 OK
+[2026-09-24 19:09:23] INFO: Fetched (200) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+212192760> (referer: https://www.google.com/)
+[2026-09-24 19:09:30] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+NIF+212192760> (referer: https://www.google.com/)
+[2026-09-24 19:09:33] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+NIF+212192760> (referer: https://www.google.com/)
+[2026-09-24 19:09:39] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22> (referer: https://www.google.com/)
+INFO:     127.0.0.1:51232 - "OPTIONS /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51497 - "OPTIONS /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56545 - "OPTIONS /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65224 - "OPTIONS /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59463 - "GET /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61802 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+[2026-09-24 19:09:42] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22> (referer: https://www.google.com/)
+INFO:     127.0.0.1:65224 - "GET /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59463 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65224 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59463 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59463 - "GET /people/autocomplete?q=pedro&limit=8 HTTP/1.1" 200 OK
+[2026-09-24 19:09:48] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Alinkedin.com%2Fin> (referer: https://www.google.com/)
+INFO:     127.0.0.1:50461 - "OPTIONS /people/autocomplete?q=pedro+va&limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59368 - "OPTIONS /people/autocomplete?q=pedro+vaz&limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57222 - "OPTIONS /people/autocomplete?q=pedro+vaz+ma&limit=8 HTTP/1.1" 200 OK
+[2026-09-24 19:09:51] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Alinkedin.com%2Fin> (referer: https://www.google.com/)
+INFO:     127.0.0.1:53857 - "OPTIONS /people/search?q=Maria+Luiza+Pedrozo&nif=297651943&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "GET /people/search?q=Maria+Luiza+Pedrozo&nif=297651943&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "OPTIONS /people/autocomplete?q=Andre+Manuel+Lopes&limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50462 - "GET /people/autocomplete?q=Andre+Manuel+Lopes&limit=8 HTTP/1.1" 200 OK
+[2026-09-24 19:09:56] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Atiktok.com> (referer: https://www.google.com/)
+INFO:     127.0.0.1:50462 - "OPTIONS /people/search?q=Andr%C3%A9+Manuel+Lopes+de+Jesus&nif=226815340&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "GET /people/search?q=Andr%C3%A9+Manuel+Lopes+de+Jesus&nif=226815340&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+[2026-09-24 19:09:59] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Atiktok.com> (referer: https://www.google.com/)
+[2026-09-24 19:10:05] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Afacebook.com> (referer: https://www.google.com/)
+INFO:     127.0.0.1:53039 - "OPTIONS /people/search?q=Andr%C3%A9+Manuel+Lopes+de+Jesus&is_company=true&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53039 - "GET /people/search?q=Andr%C3%A9+Manuel+Lopes+de+Jesus&is_company=true&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+[2026-09-24 19:10:08] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Afacebook.com> (referer: https://www.google.com/)
+INFO:     127.0.0.1:53039 - "OPTIONS /people/autocomplete?q=ite&limit=8&is_company=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53039 - "OPTIONS /people/autocomplete?q=iten&limit=8&is_company=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51347 - "OPTIONS /people/search?q=iten&is_company=true&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51347 - "GET /people/search?q=iten&is_company=true&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+[2026-09-24 19:10:15] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+%22Trust+In+News+Unipessoal+Lda%22> (referer: https://www.google.com/)
+INFO:     127.0.0.1:51347 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+[2026-09-24 19:10:18] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+%22Trust+In+News+Unipessoal+Lda%22> (referer: https://www.google.com/)
+INFO:     127.0.0.1:51347 - "GET /people/autocomplete?q=Andre+Manuel+Lopes&limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51347 - "GET /people/search?q=Andr%C3%A9+Manuel+Lopes+de+Jesus&nif=226815340&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+[2026-09-24 19:10:26] INFO: Fetched (200) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+212192760> (referer: https://www.google.com/)
+[2026-09-24 19:10:30] INFO: Fetched (200) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+212192760> (referer: https://www.google.com/)
+[2026-09-24 19:10:35] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+NIF+212192760> (referer: https://www.google.com/)
+INFO:     127.0.0.1:64078 - "OPTIONS /people/226815340/graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64078 - "GET /people/226815340/graph HTTP/1.1" 200 OK
+[2026-09-24 19:10:38] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+NIF+212192760> (referer: https://www.google.com/)
+[2026-09-24 19:10:44] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22> (referer: https://www.google.com/)
+INFO:     127.0.0.1:53931 - "OPTIONS /people/summary?node_id=person%3A226815340&nif=226815340&name=Andr%C3%A9+Manuel+Lopes+de+Jesus HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49389 - "OPTIONS /people/summary?node_id=person%3A226815340&nif=226815340&name=Andr%C3%A9+Manuel+Lopes+de+Jesus HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53931 - "GET /people/summary?node_id=person%3A226815340&nif=226815340&name=Andr%C3%A9+Manuel+Lopes+de+Jesus HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49389 - "GET /people/summary?node_id=person%3A226815340&nif=226815340&name=Andr%C3%A9+Manuel+Lopes+de+Jesus HTTP/1.1" 200 OK
+[2026-09-24 19:10:47] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22> (referer: https://www.google.com/)
+INFO:     127.0.0.1:49389 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50537 - "GET /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50537 - "OPTIONS /people/search?q=Lopes+de+Jesus&role=Insolvente&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+[2026-09-24 19:10:53] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Alinkedin.com%2Fin> (referer: https://www.google.com/)
+INFO:     127.0.0.1:49389 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52551 - "GET /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57864 - "GET /people/search?q=Lopes+de+Jesus&role=Insolvente&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50537 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57864 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57864 - "OPTIONS /people/search?q=Lopes+de+Jesus&role=Insolvente&origin=cire&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50537 - "GET /people/search?q=Lopes+de+Jesus&role=Insolvente&origin=cire&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+[2026-09-24 19:10:56] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Alinkedin.com%2Fin> (referer: https://www.google.com/)
+INFO:     127.0.0.1:50537 - "OPTIONS /people/search?q=Lopes+de+Jesus&role=Insolvente&origin=cire&min_roles=3&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57864 - "GET /people/search?q=Lopes+de+Jesus&role=Insolvente&origin=cire&min_roles=3&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+[2026-09-24 19:11:01] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Atiktok.com> (referer: https://www.google.com/)
+INFO:     127.0.0.1:61709 - "GET /people/226815340/graph HTTP/1.1" 200 OK
+[2026-09-24 19:11:05] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Atiktok.com> (referer: https://www.google.com/)
+[2026-09-24 19:11:10] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Afacebook.com> (referer: https://www.google.com/)
+[2026-09-24 19:11:13] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Afacebook.com> (referer: https://www.google.com/)
+INFO:     127.0.0.1:51502 - "OPTIONS /people/company/506362299/graph/full?contract_limit=100 HTTP/1.1" 200 OK
+[2026-09-24 19:11:18] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+%22Trust+In+News+Unipessoal+Lda%22> (referer: https://www.google.com/)
+INFO:     127.0.0.1:51502 - "GET /people/company/506362299/graph/full?contract_limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58068 - "GET /people/company/506362299/graph/full?contract_limit=100 HTTP/1.1" 200 OK
+[2026-09-24 19:11:21] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+%22Trust+In+News+Unipessoal+Lda%22> (referer: https://www.google.com/)
+[2026-09-24 19:11:29] INFO: Fetched (200) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+212192760+site%3Ayoutube.com> (referer: https://www.google.com/)
+[2026-09-24 19:11:32] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+212192760+site%3Ayoutube.com> (referer: https://www.google.com/)
+INFO:     127.0.0.1:55613 - "OPTIONS /people/summary?node_id=company%3A506362299&nif=506362299&name=IPO+Porto+FG%2C+EPE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65374 - "OPTIONS /people/summary?node_id=company%3A506362299&nif=506362299&name=IPO+Porto+FG%2C+EPE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55613 - "GET /people/summary?node_id=company%3A506362299&nif=506362299&name=IPO+Porto+FG%2C+EPE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65374 - "GET /people/summary?node_id=company%3A506362299&nif=506362299&name=IPO+Porto+FG%2C+EPE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57826 - "GET /people/search?origin=societario&min_roles=4&sort=roles&size=3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57829 - "GET /people/autocomplete?q=a HTTP/1.1" 200 OK
+[2026-09-24 19:11:47] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Ayoutube.com> (referer: https://www.google.com/)
+[2026-09-24 19:11:50] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Ayoutube.com> (referer: https://www.google.com/)
+[2026-09-24 19:11:55] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Avimeo.com> (referer: https://www.google.com/)
+[2026-09-24 19:11:58] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Avimeo.com> (referer: https://www.google.com/)
+[2026-09-24 19:12:04] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Atiktok.com> (referer: https://www.google.com/)
+[2026-09-24 19:12:07] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Rui+Pedro+Pita+Andrade+Jorge%22+site%3Atiktok.com> (referer: https://www.google.com/)
+INFO:     127.0.0.1:60396 - "OPTIONS /people/summary?node_id=entity%3A504009540&nif=504009540&name=Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60396 - "GET /people/summary?node_id=entity%3A504009540&nif=504009540&name=Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59597 - "OPTIONS /people/summary HTTP/1.1" 200 OK
+[2026-09-24 19:15:19] INFO: Fetched (200) <GET https://lite.duckduckgo.com/lite/?q=%22Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o%22> (referer: https://www.google.com/)
+[2026-09-24 19:15:23] INFO: Fetched (200) <GET https://lite.duckduckgo.com/lite/?q=%22Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o%22> (referer: https://www.google.com/)
+[2026-09-24 19:15:29] INFO: Fetched (200) <GET https://lite.duckduckgo.com/lite/?q=%22Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o%22+insolv%C3%AAncia> (referer: https://www.google.com/)
+[2026-09-24 19:15:32] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o%22+insolv%C3%AAncia> (referer: https://www.google.com/)
+[2026-09-24 19:15:32] INFO: Fetched (200) <GET https://el-vinculo.com/pt/fornecedor/proestima-projectos-estudos-instalacoes-e-manutencao-lda-117156> (referer: https://www.google.com/)
+[2026-09-24 19:15:33] INFO: Fetched (200) <GET https://concursospro.com/fornecedores/proestima-projectos-estudos-instalacoes-e-manutencao-504009540> (referer: https://www.google.com/)
+INFO:     127.0.0.1:53860 - "POST /people/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53860 - "OPTIONS /people/company/506362299/graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53860 - "GET /people/company/506362299/graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53860 - "GET /people/company/506362299/graph/full?contract_limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53860 - "GET /people/summary?node_id=entity%3A504009540&nif=504009540&name=Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /people/summary?node_id=entity%3A504009540&nif=504009540&name=Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59876 - "OPTIONS /people/summary?node_id=entity%3A501180044&nif=501180044&name=ASSOCIA%C3%87%C3%83O+HUMANITARIA+DE+BOMBEIROS+VOLUNT%C3%81RIOS+VILA+NOVA+FAMALIC%C3%83O HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59876 - "GET /people/summary?node_id=entity%3A501180044&nif=501180044&name=ASSOCIA%C3%87%C3%83O+HUMANITARIA+DE+BOMBEIROS+VOLUNT%C3%81RIOS+VILA+NOVA+FAMALIC%C3%83O HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59876 - "GET /people/summary?node_id=entity%3A504009540&nif=504009540&name=Proestima+-+Projectos+Estudos+Instala%C3%A7%C3%B5es+e+Manuten%C3%A7%C3%A3o HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61562 - "GET /people/226815340/graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60535 - "GET /people/summary?node_id=person%3A226815340&nif=226815340&name=Andr%C3%A9+Manuel+Lopes+de+Jesus HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60535 - "GET /people/summary?node_id=person%3A226815340&nif=226815340&name=Andr%C3%A9+Manuel+Lopes+de+Jesus HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60535 - "OPTIONS /people/summary?node_id=company%3A226815340&nif=226815340&name=Andr%C3%A9+Manuel+Lopes+de+Jesus HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50820 - "GET /people/summary?node_id=company%3A226815340&nif=226815340&name=Andr%C3%A9+Manuel+Lopes+de+Jesus HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61198 - "OPTIONS /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54604 - "OPTIONS /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59880 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61198 - "GET /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54604 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59880 - "GET /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61198 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59880 - "GET /people/search?q=iten&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59880 - "OPTIONS /people/autocomplete?q=rui&limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59880 - "OPTIONS /people/search?q=rui&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54604 - "GET /people/search?q=rui&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52146 - "OPTIONS /people/191606286/graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52146 - "GET /people/191606286/graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "OPTIONS /people/summary?node_id=person%3A191606286&nif=191606286&name=Rui+Pina HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65307 - "OPTIONS /people/summary?node_id=person%3A191606286&nif=191606286&name=Rui+Pina HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "GET /people/summary?node_id=person%3A191606286&nif=191606286&name=Rui+Pina HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65307 - "GET /people/summary?node_id=person%3A191606286&nif=191606286&name=Rui+Pina HTTP/1.1" 200 OK

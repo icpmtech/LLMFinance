@@ -83,6 +83,9 @@ import type {
   ContractItem,
   GraphDimensionsResponse,
   PeopleSearchResponse,
+  PeopleAutocompleteItem,
+  PeopleFiltersResponse,
+  PeopleFacet,
   Person,
   PeopleGraphResponse,
   PeopleIngestResponse,
@@ -90,6 +93,10 @@ import type {
   PeopleCireIngestRequest,
   PeopleCireIngestResult,
   PeopleCireJobResponse,
+  PeopleSocialCollectResponse,
+  PeopleSocialResponse,
+  People360Response,
+  NodeSummaryResponse,
   ImportFileType,
   ImportDataType,
   ImportPreviewRow,
@@ -102,7 +109,10 @@ import type {
 export type { ContractAnalyticsResponse, ContractAnalyticsFilters, CompanySearchResponse, CompanyDetail, CompanyContractsResponse, CompanyAnalyticsResponse };
 export type { ImportFileType, ImportDataType, ImportPreviewRow, ImportPreviewResponse, ImportIngestRequest, ImportIngestResponse, ImportStatusResponse };
 export type { PeopleSearchResponse, Person, PeopleGraphResponse, PeopleIngestResponse, PeoplePresenceResponse };
+export type { PeopleAutocompleteItem, PeopleFiltersResponse, PeopleFacet };
 export type { PeopleCireIngestRequest, PeopleCireIngestResult, PeopleCireJobResponse };
+export type { PeopleSocialCollectResponse, PeopleSocialResponse, People360Response };
+export type { NodeSummaryResponse };
 
 export function getPlotUrl(plot_url: string): string {
   if (plot_url.startsWith("http://") || plot_url.startsWith("https://")) {
@@ -1304,6 +1314,11 @@ export async function searchPeople(
     companyNif?: string;
     role?: string;
     isCompany?: boolean;
+    /** `cire` (papéis de insolvência) ou `societario` (cargos das publicações). */
+    origin?: "cire" | "societario" | "";
+    minRoles?: number;
+    minCompanies?: number;
+    sort?: "relevance" | "roles" | "recent" | "name";
     size?: number;
     from?: number;
   },
@@ -1314,6 +1329,10 @@ export async function searchPeople(
   if (opts?.companyNif) params.set("company_nif", opts.companyNif);
   if (opts?.role) params.set("role", opts.role);
   if (opts?.isCompany !== undefined) params.set("is_company", String(opts.isCompany));
+  if (opts?.origin) params.set("origin", opts.origin);
+  if (opts?.minRoles) params.set("min_roles", String(opts.minRoles));
+  if (opts?.minCompanies) params.set("min_companies", String(opts.minCompanies));
+  if (opts?.sort) params.set("sort", opts.sort);
   params.set("size", String(opts?.size ?? 20));
   params.set("from", String(opts?.from ?? 0));
   const res = await fetch(`${API_BASE}/people/search?${params}`);
@@ -1321,6 +1340,30 @@ export async function searchPeople(
     const text = await res.text();
     throw new Error(`Erro ao pesquisar pessoas: ${res.status} - ${text}`);
   }
+  return res.json();
+}
+
+/** Sugestões (nome/NIF/cargo) enquanto se escreve na pesquisa de pessoas. */
+export async function autocompletePeople(
+  q: string,
+  opts?: { limit?: number; isCompany?: boolean; signal?: AbortSignal },
+): Promise<PeopleAutocompleteItem[]> {
+  const params = new URLSearchParams();
+  params.set("q", q);
+  params.set("limit", String(opts?.limit ?? 8));
+  if (opts?.isCompany !== undefined) params.set("is_company", String(opts.isCompany));
+  const res = await fetch(`${API_BASE}/people/autocomplete?${params}`, {
+    signal: opts?.signal ?? AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`Erro no autocomplete: ${res.status}`);
+  const data = (await res.json()) as { items?: PeopleAutocompleteItem[] };
+  return data.items ?? [];
+}
+
+/** Opções de filtro (cargos, origens, tipos) para a pesquisa de pessoas. */
+export async function getPeopleFilters(): Promise<PeopleFiltersResponse> {
+  const res = await fetch(`${API_BASE}/people/filters`, { signal: AbortSignal.timeout(30000) });
+  if (!res.ok) throw new Error(`Erro ao obter filtros: ${res.status}`);
   return res.json();
 }
 
@@ -1334,7 +1377,9 @@ export async function getPerson(nif: string): Promise<Person> {
 }
 
 export async function getPersonGraph(nif: string): Promise<PeopleGraphResponse> {
-  const res = await fetch(`${API_BASE}/people/${encodeURIComponent(nif)}/graph`);
+  const res = await fetch(`${API_BASE}/people/${encodeURIComponent(nif)}/graph`, {
+    signal: AbortSignal.timeout(45000),
+  });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Erro ao obter grafo da pessoa: ${res.status} - ${text}`);
@@ -1345,6 +1390,7 @@ export async function getPersonGraph(nif: string): Promise<PeopleGraphResponse> 
 export async function getCompanyPeopleGraph(companyNif: string): Promise<PeopleGraphResponse> {
   const res = await fetch(
     `${API_BASE}/people/company/${encodeURIComponent(companyNif)}/graph`,
+    { signal: AbortSignal.timeout(45000) },
   );
   if (!res.ok) {
     const text = await res.text();
@@ -1364,6 +1410,7 @@ export async function getCompanyCombinedGraph(
   const query = params.toString() ? `?${params}` : "";
   const res = await fetch(
     `${API_BASE}/people/company/${encodeURIComponent(companyNif)}/graph/full${query}`,
+    { signal: AbortSignal.timeout(45000) },
   );
   if (!res.ok) {
     const text = await res.text();
@@ -1426,6 +1473,119 @@ export async function getPeopleCireJobs(): Promise<PeopleCireJobResponse[]> {
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Erro ao obter as ingestões do CIRE: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+// --- Dados públicos da pessoa (redes sociais + internet) e análise 360 ---
+
+/**
+ * Vai buscar o que é público sobre a pessoa: LinkedIn, TikTok, Facebook e internet.
+ * Guarda imagens, vídeos e textos ligados à ficha e devolve o que cada fonte conseguiu.
+ */
+export async function collectPersonSocial(
+  nif: string,
+  opts?: { sources?: string[]; limit?: number },
+): Promise<PeopleSocialCollectResponse> {
+  const res = await fetch(`${API_BASE}/people/${encodeURIComponent(nif)}/social-collect`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      sources: opts?.sources ?? ["internet", "linkedin", "tiktok", "facebook"],
+      limit: opts?.limit ?? 6,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter dados públicos: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Conteúdos já recolhidos sobre a pessoa (imagens, vídeos e textos). */
+export async function getPersonSocial(nif: string, size = 100): Promise<PeopleSocialResponse> {
+  const res = await fetch(
+    `${API_BASE}/people/${encodeURIComponent(nif)}/social?size=${encodeURIComponent(String(size))}`,
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter os conteúdos recolhidos: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Análise 360: ficha, insolvências, presença digital, risco, grafo e ficha analítica. */export async function getPerson360(
+  nif: string,
+  opts?: { withAi?: boolean; cireSize?: number; socialSize?: number; backend?: string },
+): Promise<People360Response> {
+  const params = new URLSearchParams();
+  if (opts?.withAi !== undefined) params.set("with_ai", String(opts.withAi));
+  if (opts?.cireSize !== undefined) params.set("cire_size", String(opts.cireSize));
+  if (opts?.socialSize !== undefined) params.set("social_size", String(opts.socialSize));
+  if (opts?.backend) params.set("backend", opts.backend);
+  const res = await fetch(
+    `${API_BASE}/people/${encodeURIComponent(nif)}/360?${params.toString()}`,
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter a análise 360: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+// --- Resumo de um nó do grafo (IA + pesquisa na web) ---
+
+/** Resumo já gravado de um nó (não gera nada nem gasta tokens). */
+export async function getNodeSummary(opts: {
+  nodeId?: string;
+  nif?: string;
+  name?: string;
+}): Promise<NodeSummaryResponse> {
+  const params = new URLSearchParams();
+  if (opts.nodeId) params.set("node_id", opts.nodeId);
+  if (opts.nif) params.set("nif", opts.nif);
+  if (opts.name) params.set("name", opts.name);
+  const res = await fetch(`${API_BASE}/people/summary?${params.toString()}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter o resumo do nó: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/**
+ * Gera o resumo de um nó (factos do IQ OS + pesquisa na web + modelo) e guarda-o
+ * sempre em `finance_node_summaries`.
+ */
+export async function generateNodeSummary(opts: {
+  nodeId?: string;
+  nif?: string;
+  name?: string;
+  kind?: string;
+  limit?: number;
+  pages?: number;
+  reuseHours?: number;
+  backend?: string;
+}): Promise<NodeSummaryResponse> {
+  const res = await fetch(`${API_BASE}/people/summary`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      node_id: opts.nodeId ?? null,
+      nif: opts.nif ?? null,
+      name: opts.name ?? null,
+      kind: opts.kind ?? null,
+      limit: opts.limit ?? 6,
+      pages: opts.pages ?? 2,
+      reuse_hours: opts.reuseHours ?? 0,
+      backend: opts.backend ?? null,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao gerar o resumo do nó: ${res.status} - ${text}`);
   }
   return res.json();
 }

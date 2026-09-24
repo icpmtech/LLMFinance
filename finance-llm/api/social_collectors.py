@@ -30,13 +30,17 @@ por canal, sem derrubar a API nem os outros canais.
 from __future__ import annotations
 
 import hashlib
+import importlib
+import importlib.util
 import json
 import logging
 import os
 import re
 import time
+import warnings
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote_plus, urljoin, urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +126,19 @@ PLATFORMS: Dict[str, Dict[str, Any]] = {
         ),
         "color": "#1877f2",
     },
+    "internet": {
+        "label": "Internet",
+        "kinds": {
+            "page": {
+                "label": "Página (URL)",
+                "target": "ligação completa da página",
+                "credentials": False,
+                "notes": "Lê a página pública e traz título, texto, imagem e vídeo (Open Graph).",
+            },
+        },
+        "credential_hint": "",
+        "color": "#0ea5e9",
+    },
 }
 
 PLATFORM_IDS = tuple(PLATFORMS.keys())
@@ -200,11 +217,23 @@ def _post(
     published_at: Optional[str] = None,
     metrics: Optional[Dict[str, Any]] = None,
     image: str = "",
+    video: str = "",
+    images: Optional[List[str]] = None,
+    videos: Optional[List[str]] = None,
     tags: Optional[List[str]] = None,
     data: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Publicação normalizada (a mesma forma para todas as plataformas)."""
     metrics = {k: _int(v) for k, v in (metrics or {}).items() if v is not None}
+    gallery = [url for url in (images or []) if url]
+    clips = [url for url in (videos or []) if url]
+    media: Dict[str, Any] = {}
+    if image or gallery:
+        media["image"] = image or gallery[0]
+        media["images"] = list(dict.fromkeys([media["image"], *gallery]))[:24]
+    if video or clips:
+        media["video"] = video or clips[0]
+        media["videos"] = list(dict.fromkeys([media["video"], *clips]))[:12]
     return {
         "platform": platform,
         "kind": kind,
@@ -218,7 +247,7 @@ def _post(
         "community": _clean(community, 256),
         "published_at": published_at,
         "metrics": metrics,
-        "media": {"image": image} if image else {},
+        "media": media,
         "tags": [str(t) for t in (tags or []) if t][:32],
         "lang": "",
         "collected_at": _now(),
@@ -399,20 +428,34 @@ def _fetch_html(url: str, options: Optional[Dict[str, Any]] = None) -> Any:
     status = getattr(page, "status", None)
     if status == 403:
         raise CollectorError(f"A plataforma recusou o pedido (403) a {url}.", status="blocked")
+    if status in (401, 429, 999):
+        # 999 é o código com que o LinkedIn (e outros) recusam robôs.
+        raise CollectorError(
+            f"A plataforma bloqueou a leitura de {url} (estado {status}).",
+            status="blocked",
+            hint="Esta plataforma só serve conteúdos a sessões autenticadas; o que a pesquisa devolve fica registado como ligação.",
+        )
     return page
 
 
 def _page_html(page: Any) -> str:
     """HTML de uma página do Scrapling (`html_content` é o corpo já descodificado)."""
     for name in ("html_content", "body"):
-        value = getattr(page, name, None)
+        try:
+            value = getattr(page, name, None)
+        except Exception as exc:
+            # Algumas páginas trazem bytes mal formados e o descodificador interno falha.
+            logger.debug("Leitura de %s falhou numa página: %s", name, exc)
+            continue
         if value is None:
             continue
         if isinstance(value, (bytes, bytearray)):
-            try:
-                return value.decode("utf-8", "replace")
-            except Exception:
-                continue
+            for encoding in ("utf-8", "cp1252", "latin-1"):
+                try:
+                    return bytes(value).decode(encoding, "replace")
+                except Exception:
+                    continue
+            continue
         text = str(value)
         if text:
             return text
@@ -965,12 +1008,528 @@ def collect_facebook(channel: Dict[str, Any], *, limit: int = DEFAULT_LIMIT) -> 
     return {"items": posts, "notes": notes}
 
 
+# ------------------------------------------------------------------ internet
+#: Meta-informação (Open Graph/Twitter) usada para tirar texto, imagem e vídeo de uma página.
+_META_AFTER_RE = re.compile(
+    r"<meta[^>]+(?:property|name|itemprop)\s*=\s*[\"'](?P<key>[^\"']+)[\"'][^>]*?content\s*=\s*[\"'](?P<value>[^\"']*)[\"']",
+    re.I,
+)
+_META_BEFORE_RE = re.compile(
+    r"<meta[^>]+content\s*=\s*[\"'](?P<value>[^\"']*)[\"'][^>]*?(?:property|name|itemprop)\s*=\s*[\"'](?P<key>[^\"']+)[\"']",
+    re.I,
+)
+_TITLE_RE = re.compile(r"<title[^>]*>(?P<title>.*?)</title>", re.I | re.S)
+_IMG_RE = re.compile(r"<img[^>]+src\s*=\s*[\"'](?P<src>[^\"']+)[\"']", re.I)
+_VIDEO_RE = re.compile(r"<(?:video|source)[^>]+src\s*=\s*[\"'](?P<src>[^\"']+\.(?:mp4|webm|m3u8)[^\"']*)[\"']", re.I)
+_IFRAME_RE = re.compile(r"<iframe[^>]+src\s*=\s*[\"'](?P<src>https?://[^\"']+)[\"']", re.I)
+_SCRIPT_VIDEO_RE = re.compile(r"https?://[^\"'\s]+(?:youtube\.com/embed/[^\"'\s]+|player\.vimeo\.com/video/\d+)", re.I)
+
+#: Resultados do DuckDuckGo Lite (usado quando os pacotes de pesquisa falham).
+_LITE_LINK_RE = re.compile(
+    r"<a[^>]+class=[\"']result-link[\"'][^>]*href=[\"'](?P<url>[^\"']+)[\"'][^>]*>(?P<title>.*?)</a>",
+    re.I | re.S,
+)
+_LITE_SNIPPET_RE = re.compile(
+    r"<td[^>]*class=[\"']result-snippet[\"'][^>]*>(?P<snippet>.*?)</td>", re.I | re.S
+)
+
+#: Cache de pesquisas na web (`(query, limite)` -> (momento, resultado)).
+_search_cache: Dict[Tuple[str, int], Tuple[float, Dict[str, Any]]] = {}
+#: Cache das pesquisas de imagens/vídeos (`("images"|"videos", query, limite)`).
+_media_cache: Dict[Tuple[str, str, int], Tuple[float, Dict[str, Any]]] = {}
+_SEARCH_TTL_SECONDS = 900.0
+
+
+def _strip_tags(value: str) -> str:
+    """Texto limpo a partir de HTML (sem marcação)."""
+    return _clean(re.sub(r"<[^>]+>", " ", value or ""), 4000)
+
+
+def _absolutize(url: str, base: str) -> str:
+    """Ligação absoluta (as páginas usam muitas vezes caminhos relativos)."""
+    url = _clean(url, 1024)
+    if not url or url.startswith("data:"):
+        return ""
+    if url.lower().startswith(("http://", "https://")):
+        return url
+    try:
+        return urljoin(base, url)
+    except Exception:
+        return url
+
+
+def _visible_text(html: str, limit: int = 1200) -> str:
+    """Texto visível de uma página (sem scripts, estilos e marcação)."""
+    text = re.sub(r"<(script|style|noscript|svg)[^>]*>.*?</\1>", " ", html or "", flags=re.I | re.S)
+    text = re.sub(r"<!--.*?-->", " ", text, flags=re.S)
+    return _strip_tags(text)[:limit]
+
+
+def _page_metas(html: str) -> Dict[str, str]:
+    """Meta-informação da página: `og:*`, `twitter:*` e afins (primeira ocorrência ganha)."""
+    metas: Dict[str, str] = {}
+    for regex in (_META_AFTER_RE, _META_BEFORE_RE):
+        for match in regex.finditer(html or ""):
+            key = str(match.group("key") or "").strip().lower()
+            value = _clean(match.group("value") or "", 2000)
+            if key and value and key not in metas:
+                metas[key] = value
+    return metas
+
+
+def _first_match(regex: "re.Pattern[str]", html: str) -> str:
+    match = regex.search(html or "")
+    return _clean(match.group(1), 1024) if match else ""
+
+
+#: Atributos onde as imagens aparecem (inclui as preguiçosas e o `srcset`).
+_IMG_ATTR_RE = re.compile(
+    r"(?:src|data-src|data-original|data-lazy-src|data-image|srcset)\s*=\s*[\"'](?P<value>[^\"']+)[\"']",
+    re.I,
+)
+_IMG_TAG_RE = re.compile(r"<img[^>]+>", re.I)
+_IMAGE_EXT_RE = re.compile(r"\.(jpe?g|png|webp|gif|avif)", re.I)
+_YT_ID_RE = re.compile(r"(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{6,})", re.I)
+_YT_VIDEOID_RE = re.compile(r"[\"']videoId[\"']\s*:\s*[\"']([A-Za-z0-9_-]{6,})[\"']", re.I)
+#: Ligações de **vídeo** (e não de canais/perfis) usadas na alternativa da pesquisa web.
+_VIDEO_URL_RE = re.compile(
+    r"(youtube\.com/watch\?v=|youtu\.be/|youtube\.com/shorts/|vimeo\.com/\d+|dailymotion\.com/video/"
+    r"|tiktok\.com/@[^/]+/video/\d+|facebook\.com/[^/]+/videos/)",
+    re.I,
+)
+
+
+def _page_images(html: str, metas: Dict[str, str], base: str, limit: int = 12) -> List[str]:
+    """Imagens de uma página: primeiro as anunciadas (`og:image`), depois os `<img>`."""
+    announced = [
+        metas.get(key) or ""
+        for key in ("og:image", "og:image:secure_url", "og:image:url", "twitter:image", "twitter:image:src")
+    ]
+    found: List[str] = []
+    for raw in announced:
+        absolute = _absolutize(raw, base)
+        if absolute and absolute not in found:
+            found.append(absolute)
+
+    for tag in _IMG_TAG_RE.finditer(html or ""):
+        for attr in _IMG_ATTR_RE.finditer(tag.group(0)):
+            for candidate in str(attr.group("value")).split(","):
+                raw = candidate.strip().split(" ")[0]
+                if not raw:
+                    continue
+                absolute = _absolutize(raw, base)
+                if not absolute or absolute in found:
+                    continue
+                # Sem extensão de imagem conhecida não se arrisca (pixels, tracking);
+                # `.svg` são ícones de interface, não fotografias.
+                if not _IMAGE_EXT_RE.search(absolute) or _IMAGE_SKIP_RE.search(absolute) or ".svg" in absolute.lower():
+                    continue
+                found.append(absolute)
+                if len(found) >= limit:
+                    return found
+    return found[:limit]
+
+
+def _page_videos(html: str, metas: Dict[str, str], base: str, limit: int = 8) -> List[str]:
+    """Vídeos de uma página: `og:video`, `<video>/<source>` e incorporações conhecidas."""
+    found: List[str] = []
+
+    def add(value: str) -> bool:
+        absolute = _absolutize(value, base)
+        if absolute and absolute not in found and absolute.lower().startswith("http"):
+            found.append(absolute)
+        return len(found) >= limit
+
+    for raw in (
+        metas.get("og:video"),
+        metas.get("og:video:url"),
+        metas.get("og:video:secure_url"),
+        metas.get("twitter:player:stream"),
+        metas.get("twitter:player"),
+    ):
+        if raw and add(raw):
+            return found
+
+    for match in _VIDEO_RE.finditer(html or ""):
+        if add(match.group("src")):
+            return found
+    for match in _IFRAME_RE.finditer(html or ""):
+        candidate = match.group("src")
+        if _VIDEO_HOSTS_RE.search(candidate) and add(candidate):
+            return found
+    for match in _YT_VIDEOID_RE.finditer(html or ""):
+        if add(f"https://www.youtube.com/watch?v={match.group(1)}"):
+            return found
+    return found[:limit]
+
+
+def search_web(query: str, *, limit: int = 10) -> Dict[str, Any]:
+    """Pesquisa na internet (Brave/SerpAPI se houver chave; senão DuckDuckGo).
+
+    Devolve `{query, items: [{title, url, snippet, engine}], engine, error}`.
+    Os motores são tentados por ordem e a falha de um não impede os seguintes:
+    `ddgs` (pacote atual), `duckduckgo_search` (antigo) e, por fim, o HTML do
+    DuckDuckGo Lite (sem dependências). Os resultados ficam em cache durante
+    `_SEARCH_TTL_SECONDS` — repetir a mesma pesquisa (a UI fá-lo) não volta a
+    bater no motor, evitando o bloqueio por ritmo.
+    """
+    query = _clean(query, 300)
+    if not query:
+        return {"query": query, "items": [], "engine": "", "error": "Pesquisa vazia."}
+
+    cached = _search_cache.get((query, int(limit or 10)))
+    if cached and (time.time() - cached[0]) < _SEARCH_TTL_SECONDS:
+        return {**cached[1], "cached": True}
+
+    def _normalize(rows: Any, engine: str) -> List[Dict[str, Any]]:
+        items: List[Dict[str, Any]] = []
+        for row in rows or []:
+            if not isinstance(row, dict) or row.get("error"):
+                continue
+            url = str(row.get("href") or row.get("url") or row.get("link") or "").strip()
+            if not url:
+                continue
+            items.append(
+                {
+                    "title": _strip_tags(str(row.get("title") or ""))[:400],
+                    "url": url[:1024],
+                    "snippet": _strip_tags(str(row.get("body") or row.get("snippet") or row.get("description") or ""))[:1200],
+                    "engine": engine,
+                }
+            )
+        return items
+
+    def _remember(outcome: Dict[str, Any]) -> Dict[str, Any]:
+        if outcome.get("items"):
+            _search_cache[(query, int(limit or 10))] = (time.time(), outcome)
+            if len(_search_cache) > 400:
+                oldest = sorted(_search_cache.items(), key=lambda kv: kv[1][0])[:100]
+                for key, _ in oldest:
+                    _search_cache.pop(key, None)
+        return outcome
+
+    # 1. Chaves de API (Brave/SerpAPI) têm prioridade.
+    if os.getenv("BRAVE_API_KEY") or os.getenv("SERPAPI_KEY"):
+        try:
+            from api import tools as tools_module  # noqa: PLC0415
+
+            items = _normalize(tools_module.web_search(query, limit, "auto"), "api")
+            if items:
+                return _remember({"query": query, "items": items, "engine": items[0].get("engine") or "api"})
+        except Exception as exc:  # pragma: no cover - depende do ambiente
+            logger.info("Pesquisa web por API falhou: %s", exc)
+
+    # 2. Pacotes do DuckDuckGo (`ddgs` é o nome atual; o `duckduckgo_search`
+    #    antigo só é usado se aquele não estiver instalado).
+    module_name = next(
+        (name for name in ("ddgs", "duckduckgo_search") if importlib.util.find_spec(name) is not None),
+        "",
+    )
+    if module_name:
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                module = importlib.import_module(module_name)
+                with module.DDGS() as ddgs:
+                    rows = list(ddgs.text(query, max_results=limit))
+            items = _normalize(rows, "duckduckgo")
+            if items:
+                return _remember({"query": query, "items": items, "engine": "duckduckgo"})
+        except Exception as exc:
+            logger.info("Pesquisa web com %s falhou: %s", module_name, exc)
+
+    # 3. HTML do DuckDuckGo Lite (sem dependências). Em época de muito uso o
+    #    motor responde 202 (pedido aceite mas sem resultados): vale a pena
+    #    esperar e tentar de novo uma vez.
+    for attempt in (1, 2):
+        try:
+            html = _fetch_text(f"https://lite.duckduckgo.com/lite/?q={quote_plus(query)}", {"timeout": DEFAULT_TIMEOUT})
+            links = list(_LITE_LINK_RE.finditer(html or ""))
+            snippets = [_strip_tags(m.group("snippet")) for m in _LITE_SNIPPET_RE.finditer(html or "")]
+            items = [
+                {
+                    "title": _strip_tags(m.group("title"))[:400],
+                    "url": _clean(m.group("url"), 1024),
+                    "snippet": (snippets[index] if index < len(snippets) else "")[:1200],
+                    "engine": "duckduckgo-lite",
+                }
+                for index, m in enumerate(links[:limit])
+            ]
+            if items:
+                return _remember({"query": query, "items": items, "engine": "duckduckgo-lite"})
+        except Exception as exc:
+            logger.info("DuckDuckGo Lite falhou: %s", exc)
+        if attempt == 1:
+            time.sleep(2.5)
+
+    return {
+        "query": query,
+        "items": [],
+        "engine": "",
+        "error": "Sem motor de pesquisa disponível (instale `ddgs` ou configure BRAVE_API_KEY/SERPAPI_KEY).",
+    }
+
+
+def collect_web_page(
+    url: str,
+    *,
+    options: Optional[Dict[str, Any]] = None,
+    target: str = "",
+    tags: Optional[List[str]] = None,
+    kind: str = "page",
+) -> Dict[str, Any]:
+    """Lê uma página da internet e devolve uma publicação normalizada.
+
+    Extrai o que a página expõe de forma pública: título, descrição, **imagens**
+    (`og:image` e todos os `<img>`/`srcset`) e **vídeos** (`og:video`,
+    `<video>`/`<source>` e incorporações do YouTube/Vimeo/TikTok), além da data de
+    publicação. Páginas que bloqueiem a leitura (LinkedIn, por exemplo) levantam
+    `CollectorError` com `status`.
+    """
+    url = str(url or "").strip()
+    if not url.lower().startswith(("http://", "https://")):
+        raise CollectorError(f"Ligação inválida: {url!r}.", status="definition")
+    html = _fetch_text(url, options)
+    if not html:
+        raise CollectorError(f"A página {url} não devolveu conteúdo.", status="empty")
+
+    metas = _page_metas(html)
+    title = metas.get("og:title") or metas.get("twitter:title") or _strip_tags(_first_match(_TITLE_RE, html))
+    description = (
+        metas.get("og:description")
+        or metas.get("twitter:description")
+        or metas.get("description")
+        or ""
+    )
+    images = _page_images(html, metas, url)
+    videos = _page_videos(html, metas, url)
+    published = (
+        metas.get("article:published_time")
+        or metas.get("og:updated_time")
+        or metas.get("date")
+        or metas.get("pubdate")
+        or None
+    )
+    site = metas.get("og:site_name") or urlparse(url).netloc
+    post_id = _post_id_from_url(url) or hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
+    # Sem descrição na meta-informação, vale o texto visível da página.
+    if not description:
+        description = _visible_text(html)
+
+    return _post(
+        platform="internet",
+        kind=kind,
+        target=target or site or url,
+        post_id=post_id,
+        url=url,
+        title=title,
+        text=description,
+        author=site,
+        community=site,
+        published_at=_iso_from_epoch(published) if str(published or "").isdigit() else published,
+        image=images[0] if images else "",
+        video=videos[0] if videos else "",
+        images=images,
+        videos=videos,
+        tags=[*(tags or []), "internet", site],
+        data={
+            "site": site,
+            "og_type": metas.get("og:type") or "",
+            "has_image": bool(images),
+            "has_video": bool(videos),
+            "images_found": len(images),
+            "videos_found": len(videos),
+        },
+    )
+
+
+# ------------------------------------------------- imagens e vídeos (pesquisa)
+#: Campos de imagem/vídeo que interessam (e que não são ícones nem pixels).
+_IMAGE_SKIP_RE = re.compile(
+    r"(sprite|logo|icon|favicon|avatar|pixel|blank|spacer|placeholder|loading|1x1|badge|button|/ads?/"
+    r"|preview|notificat|wrapper|share|banner|social|thumb-|_thumb|watermark|flag|arrow|bullet)",
+    re.I,
+)
+_VIDEO_HOSTS_RE = re.compile(r"(youtube\.com|youtu\.be|vimeo\.com|dailymotion\.com|tiktok\.com|facebook\.com/.*video)", re.I)
+
+
+def _ddgs_module() -> str:
+    """Nome do pacote de pesquisa instalado (`ddgs` é o atual)."""
+    return next(
+        (name for name in ("ddgs", "duckduckgo_search") if importlib.util.find_spec(name) is not None),
+        "",
+    )
+
+
+def _media_cache_get(key: Tuple[str, str, int]) -> Optional[Dict[str, Any]]:
+    cached = _media_cache.get(key)
+    if cached and (time.time() - cached[0]) < _SEARCH_TTL_SECONDS:
+        return {**cached[1], "cached": True}
+    return None
+
+
+def _media_cache_put(key: Tuple[str, str, int], outcome: Dict[str, Any]) -> Dict[str, Any]:
+    if outcome.get("items"):
+        _media_cache[key] = (time.time(), outcome)
+        if len(_media_cache) > 300:
+            for old_key, _ in sorted(_media_cache.items(), key=lambda kv: kv[1][0])[:80]:
+                _media_cache.pop(old_key, None)
+    return outcome
+
+
+def _run_ddgs(method: str, query: str, limit: int) -> List[Dict[str, Any]]:
+    """Corre um método do pacote de pesquisa (`images`, `videos`) e devolve as linhas cruas."""
+    module_name = _ddgs_module()
+    if not module_name:
+        return []
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        module = importlib.import_module(module_name)
+        with module.DDGS() as ddgs:
+            fn = getattr(ddgs, method, None)
+            if fn is None:
+                return []
+            return list(fn(query, max_results=limit))
+
+
+def search_images(query: str, *, limit: int = 12) -> Dict[str, Any]:
+    """Pesquisa **imagens** na internet (DuckDuckGo/Bing por trás do `ddgs`).
+
+    Devolve `{query, items: [{title, image, thumbnail, page_url, host, engine}], error}`.
+    Sem o pacote `ddgs` (ou bloqueado por ritmo) devolve a lista vazia com o motivo.
+    """
+    query = _clean(query, 300)
+    if not query:
+        return {"query": query, "items": [], "engine": "", "error": "Pesquisa vazia."}
+    key = ("images", query, int(limit or 12))
+    cached = _media_cache_get(key)
+    if cached:
+        return cached
+    try:
+        rows = _run_ddgs("images", query, max(1, min(int(limit or 12), 50)))
+    except Exception as exc:
+        return {"query": query, "items": [], "engine": "", "error": f"Pesquisa de imagens falhou: {exc}"}
+
+    items: List[Dict[str, Any]] = []
+    seen: set = set()
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        image = str(row.get("image") or "").strip()
+        if not image or image in seen or not image.lower().startswith("http"):
+            continue
+        seen.add(image)
+        page_url = str(row.get("url") or row.get("source") or "").strip()
+        items.append({
+            "title": _strip_tags(str(row.get("title") or ""))[:300],
+            "image": image[:1024],
+            "thumbnail": str(row.get("thumbnail") or "")[:1024],
+            "page_url": page_url[:1024],
+            "host": urlparse(page_url or image).netloc.lower().removeprefix("www."),
+            "width": row.get("width"),
+            "height": row.get("height"),
+            "engine": "duckduckgo-images",
+        })
+    outcome = {"query": query, "items": items, "engine": "duckduckgo-images", "error": None if items else "Sem imagens."}
+    return _media_cache_put(key, outcome)
+
+
+def search_videos(query: str, *, limit: int = 8) -> Dict[str, Any]:
+    """Pesquisa **vídeos** na internet. Devolve `{query, items: [...], error}`.
+
+    Cada item traz a ligação do vídeo, a miniatura, o autor e a duração — dá para
+    mostrar a miniatura na ficha e abrir o vídeo no browser. Quando o motor de
+    vídeos não devolve nada (acontece com frequência), cai numa pesquisa web por
+    `site:youtube.com`, `site:vimeo.com` e `site:tiktok.com`, e a miniatura do
+    YouTube é derivada do identificador do vídeo (sem chave de API).
+    """
+    query = _clean(query, 300)
+    if not query:
+        return {"query": query, "items": [], "engine": "", "error": "Pesquisa vazia."}
+    key = ("videos", query, int(limit or 8))
+    cached = _media_cache_get(key)
+    if cached:
+        return cached
+
+    items: List[Dict[str, Any]] = []
+    seen: set = set()
+    engine = "duckduckgo-videos"
+    try:
+        rows = _run_ddgs("videos", query, max(1, min(int(limit or 8), 30)))
+    except Exception as exc:
+        rows = []
+        logger.info("Pesquisa de vídeos falhou (%s); a cair na pesquisa web.", exc)
+
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        url = str(row.get("content") or row.get("url") or "").strip()
+        if not url or url in seen or not url.lower().startswith("http"):
+            continue
+        seen.add(url)
+        thumbs = row.get("images") if isinstance(row.get("images"), dict) else {}
+        thumb = str(thumbs.get("large") or thumbs.get("medium") or thumbs.get("small") or row.get("thumbnail") or "")
+        items.append({
+            "title": _strip_tags(str(row.get("title") or ""))[:300],
+            "url": url[:1024],
+            "thumbnail": thumb[:1024],
+            "description": _strip_tags(str(row.get("description") or ""))[:400],
+            "publisher": _strip_tags(str(row.get("publisher") or row.get("uploader") or ""))[:200],
+            "duration": str(row.get("duration") or "")[:32],
+            "published_at": row.get("published") or row.get("published_at"),
+            "host": urlparse(url).netloc.lower().removeprefix("www."),
+            "engine": engine,
+        })
+
+    if not items:
+        # Alternativa: procurar as ligações de vídeo na pesquisa web (que tem
+        # DuckDuckGo Lite como rede de segurança).
+        engine = "web-videos"
+        for site in ("youtube.com", "vimeo.com", "tiktok.com"):
+            outcome = search_web(f"{query} site:{site}", limit=max(3, min(int(limit or 6), 10)))
+            for row in outcome.get("items") or []:
+                url = str(row.get("url") or "").strip()
+                if not url or url in seen or not _VIDEO_URL_RE.search(url):
+                    # Só vídeos: a pesquisa devolve também canais e perfis.
+                    continue
+                seen.add(url)
+                host = urlparse(url).netloc.lower().removeprefix("www.")
+                yt_id = _YT_ID_RE.search(url)
+                thumbnail = f"https://img.youtube.com/vi/{yt_id.group(1)}/hqdefault.jpg" if yt_id else ""
+                items.append({
+                    "title": _strip_tags(str(row.get("title") or ""))[:300],
+                    "url": url[:1024],
+                    "thumbnail": thumbnail,
+                    "description": _strip_tags(str(row.get("snippet") or ""))[:400],
+                    "publisher": host,
+                    "duration": "",
+                    "published_at": None,
+                    "host": host,
+                    "engine": engine,
+                })
+            if len(items) >= (limit or 8):
+                break
+
+    outcome = {
+        "query": query,
+        "items": items[: max(1, int(limit or 8))],
+        "engine": engine,
+        "error": None if items else "Sem vídeos encontrados.",
+    }
+    return _media_cache_put(key, outcome)
+
+
+
 # -------------------------------------------------------------------- despacho
 _COLLECTORS = {
     "linkedin": collect_linkedin,
     "reddit": collect_reddit,
     "tiktok": collect_tiktok,
     "facebook": collect_facebook,
+    "internet": lambda channel, limit=DEFAULT_LIMIT: {
+        "items": [collect_web_page(str(channel.get("target") or ""), options=channel.get("options") or {}, tags=channel.get("tags") or [])],
+        "notes": [],
+    },
 }
 
 
