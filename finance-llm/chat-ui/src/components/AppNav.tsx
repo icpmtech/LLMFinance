@@ -17,6 +17,7 @@ import {
   Plus,
 } from "lucide-react";
 import { DOCK_CATALOG, IFRAME_PAGES_APP, type DockApp } from "../dock";
+import { CRM_SUITE_GROUPS } from "../crmSuite";
 import { useWindows } from "../windows";
 import {
   SIDEBAR_MIN_WIDTH,
@@ -74,6 +75,7 @@ export type AppView =
   | "crm-contacts"
   | "crm-agenda"
   | "crm-dashboard"
+  | `crm-mod:${string}`
   | "scraper"
   | "scraper-templates"
   | "scraper-execucoes"
@@ -134,7 +136,16 @@ const APP_MATCH: Record<string, AppView[]> = {
   "entities-search": ["companies-search", "company-detail"],
   compare: ["entities-compare"],
   tickers: ["ticker-detail", "ticker-chart"],
-  crm: ["crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard"],
+  crm: [
+    "crm-accounts",
+    "crm-contacts",
+    "crm-agenda",
+    "crm-dashboard",
+    // As vistas dos módulos da arquitetura (`crm-mod:<slug>`) mantêm o CRM realçado.
+    ...CRM_SUITE_GROUPS.flatMap((group) => group.sections.map((section) => section.view as AppView)).filter(
+      (view) => view !== "crm",
+    ),
+  ],
   scraper: ["scraper-templates", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda"],
   social: ["social-canais", "social-execucoes", "social-modelos", "social-agenda", "social-estado"],
   search360: ["search360-dossie", "search360-projetos", "search360-grafo", "search360-biblioteca"],

@@ -267,6 +267,7 @@ def F(
     search: int = 0,
     filter: Optional[bool] = None,
     computed: bool = False,
+    system: bool = False,
     unique: bool = False,
 ) -> Field:
     """Construtor compacto de campos do registo."""
@@ -284,6 +285,7 @@ def F(
         search=search,
         filter=is_filter,
         computed=computed,
+        system=system,
         unique=unique,
     )
 

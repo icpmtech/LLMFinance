@@ -110,7 +110,7 @@ export function gleifPathForSection(section: GleifSection): string {
 interface GleifPageProps {
   section?: GleifSection;
   onSectionChange?: (section: GleifSection) => void;
-  onOpenRegion?: (level: "country" | "region", code: string, label: string) => void;
+  onOpenRegion?: (level: "country" | "region" | "city", code: string, label: string) => void;
   initialQuery?: string;
 }
 
@@ -692,6 +692,8 @@ function MapSection({
   const [level, setLevel] = useState<GleifMapLevel>("grid");
   /** Nível `grid`: precisão da célula geohash (5 ≈ 4,9 km · 6 ≈ 1,2 km · 7 ≈ 150 m). */
   const [precision, setPrecision] = useState(6);
+  /** Nível `grid`: quantas células se pedem ao agregado (as maiores primeiro). */
+  const [gridSize, setGridSize] = useState(1200);
   const [country, setCountry] = useState<string>(presets.country || "");
   const [region, setRegion] = useState<string>(presets.region || "");
   const [result, setResult] = useState<GleifMapResult | null>(null);
@@ -722,7 +724,7 @@ function MapSection({
         country: country || undefined,
         region: region || undefined,
         precision: level === "grid" ? precision : undefined,
-        size: level === "grid" ? 1200 : 400,
+        size: level === "grid" ? gridSize : 400,
       });
       setResult(data);
     } catch (err) {
@@ -731,7 +733,7 @@ function MapSection({
     } finally {
       setLoading(false);
     }
-  }, [country, level, precision, region]);
+  }, [country, gridSize, level, precision, region]);
 
   useEffect(() => {
     void load();
@@ -788,6 +790,8 @@ function MapSection({
   /** Registos sem região no endereço (vista por região) ou sem ponto geocodificado (vista por empresa). */
   const semRegiao = level === "country" ? 0 : result?.missing || 0;
   const matched = result?.matched ?? totalShown;
+  /** Com muitas células distintas, o agregado só devolve as maiores: as restantes não se desenham. */
+  const restantes = level === "grid" ? Math.max(0, matched - semRegiao - totalShown) : 0;
 
   /**
    * Abre a janela com as empresas de uma divisão.
@@ -921,6 +925,20 @@ function MapSection({
               {formatNumber(semRegiao)} {result?.missing_label || "sem região"} · ver por país
             </button>
           )}
+          {restantes > 0 && (
+            <button
+              type="button"
+              onClick={() => setGridSize(gridSize >= 4000 ? 1200 : 4000)}
+              title={
+                `${formatNumber(restantes)} LEI estão em células mais pequenas, fora das ${formatNumber(
+                  result?.regions?.length || 0,
+                )} maiores. ` + (gridSize >= 4000 ? "Clica para voltar ao mapa simplificado." : "Clica para desenhar até 4 000 células.")
+              }
+              className="rounded-full border border-white/15 bg-white/5 px-2 py-0.5 transition hover:bg-white/10"
+            >
+              {formatNumber(restantes)} em células menores · {gridSize >= 4000 ? "simplificar" : "ver mais"}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void load()}
@@ -983,13 +1001,15 @@ function MapSection({
         <aside className="flex w-full shrink-0 flex-col overflow-hidden border-white/10 lg:w-[360px] lg:border-l">
           <div className="flex items-center gap-2 border-b border-white/10 px-4 py-2 text-[11px] text-muted-foreground">
             <Sparkles size={12} />
-            {level === "country" ? "Países por LEI" : "Regiões por LEI"}
+            {level === "country" ? "Países por LEI" : level === "region" ? "Regiões por LEI" : "Cidades por LEI (sede legal)"}
             {semCentroide > 0 && <span className="ml-auto text-amber-300/90">{semCentroide} sem centroide</span>}
           </div>
           {semRegiao > 0 && (
             <p className="border-b border-white/10 bg-amber-400/5 px-4 py-1.5 text-[10.5px] text-amber-200/90">
-              {formatNumber(semRegiao)} registos ({Math.round((semRegiao / Math.max(1, matched)) * 100)}%) não trazem
-              região no endereço — só aparecem na vista por país.
+              {formatNumber(semRegiao)} registos ({Math.round((semRegiao / Math.max(1, matched)) * 100)}%){" "}
+              {level === "grid"
+                ? "não trazem endereço geocodificável — só aparecem nas vistas por região e por país."
+                : "não trazem região no endereço — só aparecem na vista por país."}
             </p>
           )}
           <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">

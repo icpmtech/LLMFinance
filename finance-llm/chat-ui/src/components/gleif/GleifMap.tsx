@@ -255,10 +255,15 @@ export default function GleifMap({
     // o item desaparecia antes de receber o `click` (o clique nunca acontecia).
     if (!(event.target as HTMLElement).closest("[role='menu']")) setMenu(null);
     if ((event.target as HTMLElement).closest("[data-map-chrome]")) return;
+    const onNode = !!(event.target as HTMLElement).closest("[data-map-node='true']");
     dragRef.current = { px: event.clientX, py: event.clientY, lat: center.lat, lon: center.lon };
     dragMovedRef.current = false;
     setDragging(true);
-    event.currentTarget.setPointerCapture(event.pointerId);
+    // A captura do ponteiro no contentor redireciona o `pointerup` (e com ele o
+    // `click`) para o contentor: os círculos nunca recebiam o clique. Nos
+    // círculos deixa-se o evento seguir o caminho normal — o `click` chega ao botão
+    // e o `onSelect` abre a janela das empresas.
+    if (!onNode) event.currentTarget.setPointerCapture(event.pointerId);
   };
 
   /** Abre o menu de contexto na posição do clique (ou sobre um círculo). */
@@ -468,7 +473,7 @@ export default function GleifMap({
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: colorFor(spotlight) }} />
             <span className="text-sm font-medium">{spotlight.label}</span>
             <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-              {level === "country" ? "país" : "região"}
+              {level === "country" ? "país" : level === "region" ? "região" : "cidade (sede legal)"}
             </span>
           </div>
           <div className="mt-1 grid grid-cols-3 gap-2 text-[11px]">
@@ -524,7 +529,7 @@ export default function GleifMap({
                 </p>
                 <p className="mt-0.5 text-[10px] text-muted-foreground">
                   <span className="font-mono">{menu.point.key}</span> · {formatNumber(menu.point.count)} LEI ·{" "}
-                  {level === "country" ? "país" : "região"}
+                  {level === "country" ? "país" : level === "region" ? "região" : "cidade (sede legal)"}
                   {menu.point.active !== undefined ? ` · ${formatNumber(menu.point.active)} ativos` : ""}
                 </p>
               </div>
@@ -537,7 +542,8 @@ export default function GleifMap({
                   className="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs text-primary transition hover:bg-primary/10"
                 >
                   <Fingerprint size={13} className="shrink-0" />
-                  Abrir janela · empresas {level === "country" ? "deste país" : "desta região"}
+                  Abrir janela · empresas{" "}
+                  {level === "country" ? "deste país" : level === "region" ? "desta região" : "desta cidade (sede legal)"}
                 </button>
               )}
               {onFocus && (

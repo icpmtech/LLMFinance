@@ -20,7 +20,6 @@ import {
   ExternalLink,
   FileText,
   Filter,
-  LayoutDashboard,
   Link2,
   Loader2,
   Mail,
@@ -30,6 +29,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  ShieldAlert,
   Target,
   Trash2,
   TrendingUp,
@@ -64,6 +64,17 @@ import {
   type CrmPriority,
   type CrmRecord,
 } from "../crmApi";
+import {
+  CRM_SECTION_VIEWS as SUITE_SECTION_VIEWS,
+  CRM_SUITE_GROUPS,
+  CRM_SUITE_SECTIONS,
+  crmSuiteGroupOf,
+  crmSuiteIsModuleSection,
+  crmSuiteSection,
+  crmSuiteSectionForView,
+} from "../crmSuite";
+import { getCrmSuite, type CrmSuiteMeta } from "../crmSuiteApi";
+import { CrmModulePanel } from "./CrmSuitePanels";
 
 /* ------------------------------------------------------------------ aspeto */
 
@@ -1718,38 +1729,26 @@ function DashboardPanel({
 
 /* -------------------------------------------------------------------- página */
 
-export type CrmSection = "pipeline" | "accounts" | "contacts" | "agenda" | "dashboard";
+/** Identificador de secção do CRM (vistas de topo e o slug de cada módulo). */
+export type CrmSection = string;
 
-/** Secções do CRM (separadores na barra de topo de cada janela). */
-export const CRM_SECTIONS: { id: CrmSection; label: string; icon: LucideIcon }[] = [
-  { id: "pipeline", label: "Pipeline", icon: Columns3 },
-  { id: "accounts", label: "Contas", icon: Building2 },
-  { id: "contacts", label: "Contactos", icon: Users },
-  { id: "agenda", label: "Agenda", icon: CalendarClock },
-  { id: "dashboard", label: "Relatórios", icon: LayoutDashboard },
-];
+/**
+ * Secções do CRM (barra de navegação de cada janela), derivadas da estrutura
+ * declarativa em `crmSuite.ts` — a mesma que desenha o dock e as janelas.
+ */
+export const CRM_SECTIONS: { id: CrmSection; label: string; icon: LucideIcon; group: string }[] =
+  CRM_SUITE_SECTIONS.map((item) => ({
+    id: item.id,
+    label: item.label,
+    icon: item.icon,
+    group: item.group,
+  }));
 
 /** Aplicação/janela correspondente a cada secção do CRM. */
-export const CRM_SECTION_VIEWS: Record<CrmSection, string> = {
-  pipeline: "crm",
-  accounts: "crm-accounts",
-  contacts: "crm-contacts",
-  agenda: "crm-agenda",
-  dashboard: "crm-dashboard",
-};
-
-const VIEW_SECTIONS: Record<string, CrmSection> = {
-  crm: "pipeline",
-  "crm-accounts": "accounts",
-  "crm-contacts": "contacts",
-  "crm-agenda": "agenda",
-  "crm-dashboard": "dashboard",
-};
+export const CRM_SECTION_VIEWS: Record<string, string> = SUITE_SECTION_VIEWS;
 
 /** Secção do CRM correspondente a uma vista (ou `null` se a vista não for do CRM). */
-export function crmSectionForView(view: string): CrmSection | null {
-  return VIEW_SECTIONS[view] ?? null;
-}
+export const crmSectionForView = crmSuiteSectionForView;
 
 /** Título da janela de uma secção do CRM. */
 export function crmSectionTitle(section: CrmSection) {
@@ -1831,6 +1830,36 @@ function useCrmData() {
     setActivities,
     reload,
   };
+}
+
+/**
+ * Arquitetura de CRM (`GET /crm/suite`): os 24 módulos, os campos de cada um e as
+ * permissões do utilizador. É esta a fonte da navegação e do conteúdo genérico —
+ * o perfil decide o que aparece.
+ */
+function useCrmSuite() {
+  const [suite, setSuite] = useState<CrmSuiteMeta | null>(null);
+
+  const reload = useCallback(async () => {
+    try {
+      setSuite(await getCrmSuite());
+    } catch {
+      /* a estrutura declarativa local mantém a navegação utilizável */
+    }
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  /* O perfil pode ter mudado noutra janela (ou nesta): recarrega a estrutura. */
+  useEffect(() => {
+    const onChange = () => void reload();
+    window.addEventListener(CRM_CHANGED, onChange);
+    return () => window.removeEventListener(CRM_CHANGED, onChange);
+  }, [reload]);
+
+  return suite;
 }
 
 export default function CrmPage({
@@ -1932,6 +1961,43 @@ export default function CrmPage({
 
   const openDealCount = deals.filter((deal) => (meta?.open_stages ?? FALLBACK_OPEN_STAGES).includes(deal.stage)).length;
 
+  /* ------------------------------------------- navegação da arquitetura de CRM */
+  const suite = useCrmSuite();
+  const moduleIndex = useMemo(
+    () => new Map((suite?.modules ?? []).map((item) => [item.slug, item])),
+    [suite],
+  );
+  const moduleAllowed = useCallback(
+    (slug: string | null) => (slug ? moduleIndex.get(slug)?.allowed !== false : true),
+    [moduleIndex],
+  );
+  const activeGroup = crmSuiteGroupOf(section)?.id ?? "visao";
+  const visibleGroups = useMemo(
+    () =>
+      CRM_SUITE_GROUPS.map((group) => ({
+        ...group,
+        // Enquanto a estrutura não chega, mostra tudo (navegação sempre utilizável).
+        sections: group.sections.filter(
+          (item) => moduleAllowed(item.slug) && (suite === null || item.slug === null || moduleIndex.has(item.slug)),
+        ),
+      })).filter((group) => group.sections.length > 0),
+    [moduleAllowed, moduleIndex, suite],
+  );
+  const groupSections = visibleGroups.find((group) => group.id === activeGroup)?.sections ?? [];
+  const sectionMeta = crmSuiteSection(section);
+  const moduleMeta = useMemo(
+    () => (sectionMeta?.slug ? moduleIndex.get(sectionMeta.slug) ?? null : null),
+    [moduleIndex, sectionMeta],
+  );
+  const scopeLabels: Record<string, string> = {
+    own: "os meus registos",
+    team: "a minha equipa",
+    department: "o meu departamento",
+    area: "a minha área",
+    all: "toda a organização",
+  };
+  const scopeLabel = suite ? scopeLabels[suite.me.scope] ?? suite.me.scope : "";
+
   if (loading) {
     return (
       <div className="grid min-h-[320px] place-items-center">
@@ -1944,18 +2010,50 @@ export default function CrmPage({
 
   return (
     <div className="@container flex h-full min-h-[520px] flex-col bg-background text-foreground">
-      <header className="sticky top-16 z-20 border-b border-white/8 bg-[#07151b]/85 py-2 backdrop-blur-xl md:top-0">
+      <header className="sticky top-16 z-20 border-b border-white/8 bg-[#07151b]/85 pb-2 pt-2 backdrop-blur-xl md:top-0">
         <div className="flex flex-wrap items-center gap-2 px-4">
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-gradient-to-br from-teal-400 to-blue-500 text-white">
             <Target size={15} />
           </span>
           <h1 className="text-[14px] font-semibold">CRM</h1>
-          {meta?.scope === "all" && (
-            <Badge className="bg-indigo-400/15 text-indigo-200" >vista de equipa</Badge>
-          )}
+          {suite && <Badge className="bg-teal-400/15 text-teal-100">{suite.me.role_label}</Badge>}
+          {suite && scopeLabel && <Badge className="bg-indigo-400/15 text-indigo-200">vê {scopeLabel}</Badge>}
           <div className="min-w-0 flex-1" />
-          <div className="dock-scroll flex items-center gap-1 overflow-x-auto rounded-[8px] border border-white/8 bg-white/[0.05] p-0.5">
-            {CRM_SECTIONS.map((item) => {
+          <Button onClick={() => void reload()} title="Recarregar">
+            <RefreshCw size={13} /> Actualizar
+          </Button>
+        </div>
+
+        {/* Nível 1 — grupos funcionais da arquitetura de CRM. */}
+        <div className="dock-scroll mt-2 flex items-center gap-1 overflow-x-auto px-4">
+          {visibleGroups.map((group) => {
+            const Icon = group.icon;
+            const active = group.id === activeGroup;
+            return (
+              <button
+                key={group.id}
+                type="button"
+                onClick={() => changeSection(group.sections[0].id)}
+                title={group.hint}
+                className={[
+                  "flex shrink-0 items-center gap-1.5 rounded-[6px] border px-2 py-1 text-[11.5px] transition",
+                  active
+                    ? "border-teal-300/30 bg-teal-400/15 font-medium text-teal-100"
+                    : "border-transparent text-muted-foreground hover:bg-white/[0.07] hover:text-foreground",
+                ].join(" ")}
+              >
+                <Icon size={12} />
+                <span className="whitespace-nowrap">{group.label}</span>
+                <span className="text-[10px] opacity-70">{group.sections.length}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Nível 2 — secções do grupo ativo. */}
+        <div className="px-4">
+          <div className="dock-scroll mt-1.5 flex items-center gap-1 overflow-x-auto rounded-[8px] border border-white/8 bg-white/[0.05] p-0.5">
+            {groupSections.map((item) => {
               const Icon = item.icon;
               const active = section === item.id;
               const badge =
@@ -1967,6 +2065,7 @@ export default function CrmPage({
                   role="tab"
                   aria-selected={active}
                   onClick={() => changeSection(item.id)}
+                  title={item.hint}
                   className={[
                     "flex shrink-0 items-center gap-1.5 rounded-[6px] px-2.5 py-1 text-[12px] transition",
                     active
@@ -1983,9 +2082,6 @@ export default function CrmPage({
               );
             })}
           </div>
-          <Button onClick={() => void reload()} title="Recarregar">
-            <RefreshCw size={13} /> Actualizar
-          </Button>
         </div>
       </header>
 
@@ -2055,7 +2151,26 @@ export default function CrmPage({
           />
         )}
 
-        {!meta && !error && (
+        {/* Módulos da arquitetura de CRM: lista, filtros e ficha genéricos. */}
+        {crmSuiteIsModuleSection(section) && moduleMeta?.allowed && <CrmModulePanel module={moduleMeta} />}
+
+        {crmSuiteIsModuleSection(section) && moduleMeta && !moduleMeta.allowed && (
+          <EmptyState
+            icon={ShieldAlert}
+            title="Sem acesso a este módulo"
+            hint={`O perfil «${suite?.me.role_label ?? "atual"}» não inclui ${moduleMeta.label}. Peça ao administrador do CRM para o incluir.`}
+          />
+        )}
+
+        {crmSuiteIsModuleSection(section) && !moduleMeta && suite && (
+          <EmptyState
+            icon={Target}
+            title="Módulo desconhecido"
+            hint={`A secção «${section}» não existe na arquitetura de CRM.`}
+          />
+        )}
+
+        {!meta && !error && !crmSuiteIsModuleSection(section) && (
           <EmptyState icon={Target} title="CRM indisponível" hint="Não foi possível obter a configuração do módulo." />
         )}
       </div>

@@ -54,6 +54,7 @@ import {
   Microscope,
 } from "lucide-react";
 import { getIframePages, iframeDockApps, iframeToDockApp, subscribeIframePages } from "./iframePages";
+import { CRM_SUITE_GROUPS } from "./crmSuite";
 
 export type DockPosition = "bottom" | "left" | "right";
 
@@ -68,6 +69,25 @@ export type DockApp = {
   /** Cor do brilho/realce do tile, em `r,g,b`. */
   accent: string;
 };
+
+/** Catálogo de aplicações que podem entrar no dock. */
+/**
+ * Uma aplicação de dock por cada módulo da arquitetura de CRM. As vistas de topo
+ * (pipeline, agenda e relatórios) e os painéis próprios de contas e contactos já
+ * têm entradas próprias no catálogo, por isso não se repetem aqui.
+ */
+const CRM_SUITE_DOCK: DockApp[] = CRM_SUITE_GROUPS.flatMap((group) =>
+  group.sections
+    .filter((section) => section.view.startsWith("crm-mod:"))
+    .map((section) => ({
+      id: section.view,
+      label: `CRM · ${section.label}`,
+      hint: section.hint,
+      icon: section.icon,
+      gradient: group.gradient,
+      accent: group.accent,
+    })),
+);
 
 /** Catálogo de aplicações que podem entrar no dock. */
 export const DOCK_CATALOG: DockApp[] = [
@@ -549,6 +569,7 @@ export const DOCK_CATALOG: DockApp[] = [
     gradient: "from-zinc-800 via-zinc-700 to-slate-900",
     accent: "113,113,122",
   },
+  ...CRM_SUITE_DOCK,
 ];
 
 /** Ícones visíveis por defeito (a ordem é a ordem no dock). */
@@ -600,7 +621,7 @@ const LEGACY_DEFAULT_ITEMS = [
 const ORDER_VERSION = 2;
 
 /** Ícones fora do dock por defeito (disponíveis para adicionar). */
-const DEFAULT_PARKED = ["iframe-pages", "elastic", "import", "compare", "contratos-es", "gleif-mapa", "gleif-ingestao", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard", "scraper-templates", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda", "social-canais", "social-execucoes", "social-modelos", "social-agenda", "social-estado"];
+const DEFAULT_PARKED = ["iframe-pages", "elastic", "import", "compare", "contratos-es", "gleif-mapa", "gleif-ingestao", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard", "scraper-templates", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda", "social-canais", "social-execucoes", "social-modelos", "social-agenda", "social-estado", ...CRM_SUITE_DOCK.map((app) => app.id)];
 
 export type DockPrefs = {
   position: DockPosition;

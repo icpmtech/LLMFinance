@@ -178,6 +178,40 @@ def main() -> int:
         sum(r["count"] for r in countries["regions"]) == count,
         f"{sum(r['count'] for r in countries['regions'])} de {count}",
     )
+    grid, ms = timed("/gleif/map?level=grid&precision=6&size=1200")
+    cells = grid.get("regions") or []
+    check("nível «Empresas pela sede legal»", len(cells) >= 500, f"{len(cells)} células em {ms:.0f} ms")
+    coords = [c for c in cells if isinstance(c.get("lat"), (int, float)) and isinstance(c.get("lon"), (int, float))]
+    check(
+        "cada célula traz as coordenadas da sede legal",
+        bool(cells) and len(coords) == len(cells),
+        f"1.ª: {cells[0]['key']} {cells[0]['lat']:.4f}, {cells[0]['lon']:.4f} · {cells[0]['count']} LEI" if cells else "sem células",
+    )
+    named = sum(1 for c in cells if c.get("city"))
+    check("célula traz a cidade dominante", named == len(cells), f"{named}/{len(cells)} com cidade")
+    top = ", ".join(f"{c.get('city')} ({c['count']})" for c in cells[:3])
+    check(
+        "sedes legais nos grandes centros (Lisboa/Madrid/Valencia)",
+        any((c.get("city") or "").lower().startswith("lisbo") for c in cells[:3]),
+        top,
+    )
+    check(
+        "sem endereço geocodificado é residual (<1 %)",
+        (grid.get("missing") or 0) < count * 0.01,
+        f"{grid.get('missing')} de {count} sem ponto",
+    )
+    detail = get("/gleif/map?level=grid&precision=7&size=200")
+    check(
+        "detalhe da grelha (≈150 m) aumenta o número de células",
+        len(detail["regions"]) <= 200 and len(detail["regions"]) > 0,
+        f"precisão 7 → {len(detail['regions'])} células (limite 200)",
+    )
+    pt_grid = get("/gleif/map?level=grid&precision=6&country=PT")
+    check(
+        "grelha filtrada por país (PT cobre 18 544)",
+        pt_grid.get("matched") == 18544,
+        f"{pt_grid.get('matched')} LEI (esperado 18 544) · {len(pt_grid['regions'])} células · {pt_grid.get('missing')} sem ponto",
+    )
 
     print("\n== ingestão (ecrã) ==")
     jobs = get("/gleif/jobs")

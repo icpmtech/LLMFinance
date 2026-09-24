@@ -55,6 +55,7 @@ import CrmPage, {
   type CrmSection,
 } from "./pages/CrmPage";
 import type { CrmKind, CrmRecord } from "./crmApi";
+import { crmSuiteSectionFromPath } from "./crmSuite";
 import ScraperPage, {
   SCRAPER_SECTION_VIEWS,
   scraperSectionForView,
@@ -125,6 +126,7 @@ type AppView =
   | "crm-contacts"
   | "crm-agenda"
   | "crm-dashboard"
+  | `crm-mod:${string}`
   | "contracts-list"
   | "contracts-map"
   | "region-detail"
@@ -240,6 +242,7 @@ function pathForView(
   if (view === "iframe-pages") return "/iframe-pages";
   const iframePath = iframePathFor(view);
   if (iframePath) return iframePath;
+  if (view.startsWith("crm-mod:")) return `/crm/${view.slice("crm-mod:".length)}`;
   if (view === "crm") return "/crm";
   if (view === "crm-accounts") return "/crm/contas";
   if (view === "crm-contacts") return "/crm/contactos";
@@ -293,12 +296,8 @@ function isDetailView(view: string): boolean {
 
 /** Secção do CRM a partir do caminho do URL (ou `null`). */
 function crmSectionFromPath(path: string): CrmSection | null {
-  if (path === "/crm") return "pipeline";
-  if (path === "/crm/contas") return "accounts";
-  if (path === "/crm/contactos") return "contacts";
-  if (path === "/crm/agenda") return "agenda";
-  if (path === "/crm/relatorios") return "dashboard";
-  return null;
+  // A estrutura declarativa conhece todas as secções (vistas de topo e módulos).
+  return crmSuiteSectionFromPath(path);
 }
 
 /** Secção da recolha (scraping) a partir do caminho do URL (ou `null`). */
