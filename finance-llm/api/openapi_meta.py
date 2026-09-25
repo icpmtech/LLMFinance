@@ -241,6 +241,15 @@ TAGS_METADATA: List[Dict[str, str]] = [
         ),
     },
     {
+        "name": "cms",
+        "description": (
+            "CMS: páginas por blocos, conteúdos reutilizáveis, blog com taxonomia, "
+            "media, modelos, menus e aparência — com rascunho, agendamento, "
+            "publicação, revisões e auditoria. O resultado público é servido em "
+            "`/site/…` (HTML com SEO, RSS, sitemap e robots.txt)."
+        ),
+    },
+    {
         "name": "email",
         "description": (
             "Correio: contas IMAP/SMTP, pastas e mensagens, sinalizadores, mover, "
@@ -462,6 +471,8 @@ PATH_TAG_RULES: Sequence[Tuple[str, str]] = (
     ("/office/documentos", "spa"),
     ("/office/dossies", "spa"),
     ("/office", "spa"),
+    ("/site", "cms"),
+    ("/cms", "cms"),
     ("/hermes", "spa"),
     ("/search360", "spa"),
     ("/scraper", "spa"),
@@ -533,6 +544,8 @@ PUBLIC_PREFIXES: Tuple[str, ...] = (
     "/auth/login",
     "/auth/register",
     "/proxy/status",
+    # O site publicado é público: leitura sem sessão em `/site/…`.
+    "/site",
 )
 
 

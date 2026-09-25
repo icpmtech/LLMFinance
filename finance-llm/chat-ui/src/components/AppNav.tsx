@@ -97,6 +97,7 @@ export type AppView =
   | "hermes"
   | "office"
   | "office-dossies"
+  | "cms"
   | "email"
   | "visualizador"
   | "visualizador-dashboards"

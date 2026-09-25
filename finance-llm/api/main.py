@@ -231,6 +231,8 @@ from api.search360_routes import router as search360_router
 from api.hermes_routes import router as hermes_router
 from api.skills_routes import router as skills_router
 from api.office_routes import router as office_router
+from api.cms_routes import router as cms_router
+from api.shop_routes import router as shop_router
 from api.email_routes import router as email_router
 from api.visualizador_routes import router as visualizador_router
 from api.researcher_routes import router as researcher_router
@@ -446,6 +448,10 @@ app.include_router(search360_router)
 app.include_router(hermes_router)
 app.include_router(skills_router)
 app.include_router(office_router)
+# CMS: gestão em `/cms/*` e site público em `/site/*`.
+app.include_router(cms_router)
+# Loja online: gestão em `/shop/*` e vitrine pública em `/loja/*`.
+app.include_router(shop_router)
 app.include_router(email_router)
 app.include_router(visualizador_router)
 app.include_router(researcher_router)

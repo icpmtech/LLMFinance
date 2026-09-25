@@ -89,6 +89,8 @@ import OfficePage, {
 } from "./pages/OfficePage";
 import FinderPage from "./pages/FinderPage";
 import EmailPage from "./pages/EmailPage";
+import CmsPage from "./pages/CmsPage";
+import ShopPage from "./pages/ShopPage";
 import CompareWindow from "./pages/CompareWindow";
 import { ContractDetailWindow, EntityDetailWindow, QuickLookWindow } from "./components/DetailWindow";
 import EntityContractsWindow from "./pages/EntityContractsWindow";
@@ -130,6 +132,8 @@ type AppView =
   | "crm-analytics"
   | "crm-dashboards"
   | `crm-mod:${string}`
+  | "cms"
+  | "shop"
   | "contracts-list"
   | "contracts-map"
   | "region-detail"
@@ -273,6 +277,17 @@ function pathForView(
   if (view === "search360-biblioteca") return "/search360/biblioteca";
   if (view === "office") return "/office";
   if (view === "office-dossies") return "/office/dossies";
+  if (view === "cms") {
+    // A secção do CMS vive no caminho (`/cms/paginas`, `/cms/blog`, …) e é a
+    // própria página que a gere; aqui mantém-se o caminho atual.
+    const current = typeof window === "undefined" ? "" : window.location.pathname;
+    return current.startsWith("/cms") ? current : "/cms";
+  }
+  if (view === "shop") {
+    // Tal como o CMS, a secção da loja vive no caminho (`/shop/produtos`, …).
+    const current = typeof window === "undefined" ? "" : window.location.pathname;
+    return current.startsWith("/shop") ? current : "/shop";
+  }
   if (view === "email") return "/email";
   if (view === "contracts-list") return "/contracts-list";
   if (view === "company-detail" && company) return `/companies/${company}`;
@@ -475,6 +490,8 @@ export default function App() {
     if (path === "/visualizador") return "visualizador";
     if (path.startsWith("/visualizador/")) return "visualizador-dashboards";
     if (path === "/email" || path.startsWith("/email/")) return "email";
+    if (path === "/cms" || path.startsWith("/cms/")) return "cms";
+    if (path === "/shop" || path.startsWith("/shop/")) return "shop";
     if (path === "/iframe-pages") return "iframe-pages";
     const iframeView = iframeViewFromPath(path);
     if (iframeView) return iframeView as AppView;
@@ -562,6 +579,8 @@ export default function App() {
       else if (path === "/visualizador") next = "visualizador";
       else if (path.startsWith("/visualizador/")) next = "visualizador-dashboards";
       else if (path === "/email" || path.startsWith("/email/")) next = "email";
+      else if (path === "/cms" || path.startsWith("/cms/")) next = "cms";
+      else if (path === "/shop" || path.startsWith("/shop/")) next = "shop";
       else if (path === "/iframe-pages") next = "iframe-pages";
       else if (iframeViewFromPath(path)) next = iframeViewFromPath(path) as AppView;
       else if (crmSectionFromPath(path)) next = CRM_SECTION_VIEWS[crmSectionFromPath(path) as CrmSection] as AppView;
@@ -1148,6 +1167,8 @@ export default function App() {
     if (target === "ticker-chart") return <RealtimeChartPage initialTicker={selectedTicker ?? undefined} />;
     if (target === "browser") return <BrowserPage onOpenInternal={handleSwitchView} onGlobalSearch={handleGlobalSearch} />;
     if (target === "email") return <EmailPage />;
+    if (target === "cms") return <CmsPage />;
+    if (target === "shop") return <ShopPage />;
     if (target === "trading") return <TradingPage />;
     if (target === "tickers") return <TickerPage onSwitchView={() => setViewAndHistory("dashboard")} />;
     if (target === "rag") return <RagPage onSwitchView={() => setViewAndHistory("dashboard")} />;

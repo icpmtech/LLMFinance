@@ -121,6 +121,12 @@ export const APP_MODULES: AppModule[] = [
     ids: ["office", "email", "visualizador", "sentimento", "ontology"],
   },
   {
+    id: "comercio",
+    label: "Comércio",
+    hint: "Loja online: catálogo, encomendas e clientes",
+    ids: ["shop"],
+  },
+  {
     id: "recolha",
     label: "Recolha de dados",
     hint: "Recolha de sites, templates, execuções e agenda",
