@@ -415,14 +415,16 @@ app.add_middleware(
 # A especificação e as páginas de documentação mudam com o código: sem
 # `Cache-Control` o browser aplica a heurística de frescura e o Swagger fica a
 # mostrar grupos antigos (o `index.html` da SPA já é servido com `no-store`).
-_DOCS_NO_STORE_PREFIXES = ("/docs", "/redoc", "/openapi")
+# Vale o mesmo para a **gestão da loja** (`/shop/*`): sem isto o backoffice
+# mostrava listas e o tema da vitrine desatualizados.
+_NO_STORE_PREFIXES = ("/docs", "/redoc", "/openapi", "/shop")
 
 
 @app.middleware("http")
-async def _no_store_for_docs(request: Request, call_next):
-    """Impede o cache do `/docs`, `/redoc`, `/openapi.json` e `/openapi/*`."""
+async def _no_store_for_management(request: Request, call_next):
+    """Impede o cache de `/docs`, `/redoc`, `/openapi*` e da gestão da loja."""
     response = await call_next(request)
-    if request.url.path.startswith(_DOCS_NO_STORE_PREFIXES):
+    if request.url.path.startswith(_NO_STORE_PREFIXES):
         response.headers["Cache-Control"] = "no-store, must-revalidate"
     return response
 
@@ -1292,13 +1294,21 @@ def serve_spa_page():
 
 
 @app.get("/")
-def read_root():
+def read_root(request: Request):
+    """Raiz: a aplicação para quem navega no browser, o estado da API para clientes.
+
+    Sem esta distinção, abrir `http://127.0.0.1:8002/` mostrava JSON em vez da
+    plataforma (o mesmo critério já usado em `/companies/{nif}` e no CMS).
+    """
+    if UI_BUILD_DIR.is_dir() and _accepts_html(request):
+        return spa_index_response()
     return {
         "status": "ok",
         "service": "IQ OS API",
         "models": ["gpt2", "mistral", "bloomberg"],
         "features": ["chat", "forecast", "rag", "elasticsearch"],
         "rag_model": None,
+        "ui": "/",
     }
 
 

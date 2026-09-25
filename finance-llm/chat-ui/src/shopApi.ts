@@ -344,10 +344,85 @@ export type ShopPublicOrder = ShopOrder & {
   currency?: string;
 };
 
+/* ------------------------------------------------------- vitrine (tema) */
+
+export type ShopThemeFieldKind =
+  | "text"
+  | "textarea"
+  | "number"
+  | "bool"
+  | "select"
+  | "media"
+  | "category"
+  | "items"
+  | "icon";
+
+export type ShopThemeField = {
+  key: string;
+  label: string;
+  kind: ShopThemeFieldKind;
+  wide?: boolean;
+  rows?: number;
+  mono?: boolean;
+  min?: number;
+  max?: number;
+  options?: { value?: string; id?: string; label: string }[];
+  item_fields?: ShopThemeField[];
+};
+
+export type ShopThemeSectionType = {
+  id: string;
+  label: string;
+  hint: string;
+  icon: string;
+  fields: ShopThemeField[];
+};
+
+export type ShopThemeSection = {
+  id: string;
+  type: string;
+  enabled: boolean;
+  title?: string;
+  subtitle?: string;
+  button_label?: string;
+  button_href?: string;
+  image_id?: string | null;
+  image_url?: string;
+  align?: string;
+  style?: string;
+  limit?: number;
+  columns?: number;
+  featured_only?: boolean;
+  sort?: string;
+  category_id?: string;
+  tag?: string;
+  markdown?: string;
+  text?: string;
+  items?: Record<string, string>[];
+};
+
+export type ShopTheme = {
+  announcement: { enabled: boolean; text: string; link: string; link_label: string };
+  catalog_columns: number;
+  footer_note: string;
+  sections: ShopThemeSection[];
+};
+
+export type ShopThemeCatalogue = {
+  theme: ShopTheme;
+  defaults: ShopTheme;
+  section_types: ShopThemeSectionType[];
+  store_url: string;
+  preview_url: string;
+  max_sections: number;
+};
+
 /* --------------------------------------------------------------- pedidos */
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, init);
+  // Sem `cache: no-store` o browser pode reutilizar respostas de gestão (tema,
+  // listas) e o backoffice mostra estado antigo depois de gravar.
+  const response = await fetch(`${API_BASE}${path}`, { cache: "no-store", ...init });
   if (!response.ok) {
     let detail = `${response.status}`;
     try {
@@ -510,6 +585,20 @@ export function registerShopMediaUrl(payload: { url: string; title?: string; tag
 
 export function linkShopCustomerToCrm(id: string, accountId = ""): Promise<{ saved: boolean; item: ShopCustomer }> {
   return request(`/shop/customers/${encodeURIComponent(id)}/crm`, withBody("POST", { account_id: accountId }));
+}
+
+/* ------------------------------------------------------------- vitrine */
+
+export function getShopTheme(): Promise<ShopThemeCatalogue> {
+  return request<ShopThemeCatalogue>("/shop/theme");
+}
+
+export function saveShopTheme(theme: ShopTheme): Promise<{ saved: boolean; theme: ShopTheme; preview_url: string }> {
+  return request("/shop/theme", withBody("PUT", theme));
+}
+
+export function resetShopTheme(): Promise<{ saved: boolean; theme: ShopTheme }> {
+  return request("/shop/theme/reset", withBody("POST"));
 }
 
 /* ------------------------------------------------------------------ URLs */

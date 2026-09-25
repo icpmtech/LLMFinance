@@ -1,94 +1,123 @@
 warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
-INFO:     Started server process [110308]
+INFO:     Started server process [99652]
 INFO:     Waiting for application startup.
 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
-INFO:     127.0.0.1:55036 - "GET /health HTTP/1.1" 200 OK
-Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  82%|████████▏ | 209/254 [00:00<00:00, 2031.04it/s]Loading weights: 100%|██████████| 254/254 [00:00<00:00, 2391.40it/s]
-INFO:     127.0.0.1:50461 - "GET /loja/produtos HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60864 - "GET /loja/produtos HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60864 - "GET /loja/carrinho HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60864 - "POST /loja/encomendas HTTP/1.1" 200 OK
-[2026-09-25 14:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
-[2026-09-25 14:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
-INFO:     127.0.0.1:50541 - "GET /shop HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50541 - "GET /assets/index-B0xGiKIB.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63395 - "GET /assets/index-gATnzCO8.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55153 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:50541 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50541 - "GET /shop/catalogue HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63395 - "GET /shop/overview HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63395 - "GET /shop/overview HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63395 - "GET /shop/products?status=all&limit=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63751 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57104 - "POST /shop/products HTTP/1.1" 422 Unprocessable Entity
-INFO:     127.0.0.1:57104 - "GET /shop/products?q=teste%20UI HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61994 - "POST /shop/products HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61994 - "POST /shop/products/prd_fb1e7337bf2d/publish HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61994 - "GET /shop/products?status=all&limit=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51361 - "GET /shop/overview HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51361 - "GET /shop/products?q=teste HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61028 - "GET /shop/products?status=rascunho&limit=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61028 - "POST /shop/products/prd_38ad1878a7a3/publish HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61028 - "GET /shop/products?status=rascunho&limit=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52797 - "GET /shop/overview HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52797 - "GET /shop/products?status=all&limit=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58109 - "PATCH /shop/products/prd_6ac13506cdc5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58109 - "GET /shop/products?status=all&limit=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58741 - "GET /shop/overview HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60131 - "GET /loja HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61495 - "GET /shop/produtos HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61495 - "GET /assets/index-B0xGiKIB.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62545 - "GET /assets/index-gATnzCO8.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56323 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:61495 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62545 - "GET /shop/overview HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61495 - "GET /shop/catalogue HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61495 - "GET /shop/products?status=all&limit=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56045 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61495 - "GET /loja HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60414 - "GET /loja/produtos HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60414 - "GET /loja/categoria/formacao HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60414 - "GET /loja/categoria/dados-e-api HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60414 - "GET /loja/categoria/dossies-de-empresa HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61631 - "GET /loja/produto/relatorio-contratacao-publica-portugal HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63198 - "GET /loja HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49997 - "GET /shop/produtos?v=1790341782226 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49997 - "GET /assets/index-DHFM7F-A.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54354 - "GET /assets/index-DVleB3YW.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58054 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:49997 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49997 - "GET /shop/catalogue HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54354 - "GET /shop/overview HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54354 - "GET /shop/products?status=all&limit=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63812 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49345 - "GET /shop/produtos?v=1790341782226 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49345 - "GET /assets/index-DHFM7F-A.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62484 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:61752 - "GET /assets/index-DVleB3YW.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49345 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49345 - "GET /shop/catalogue HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61752 - "GET /shop/overview HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61752 - "GET /shop/products?status=all&limit=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52937 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61752 - "GET /loja/produto/relatorio-contratacao-publica-portugal HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64885 - "GET /shop/products HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54354 - "GET /loja/categoria/relatorios HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51863 - "GET /loja/categoria/dados-e-api HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62229 - "POST /shop/products HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62229 - "GET /shop/produtos?v=1790341782226 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62229 - "GET /assets/index-DHFM7F-A.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51863 - "GET /assets/index-DVleB3YW.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61565 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:62229 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62229 - "GET /shop/catalogue HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51863 - "GET /shop/overview HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51863 - "GET /shop/products?status=all&limit=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55648 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55648 - "GET /shop/products?status=rascunho&limit=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55648 - "DELETE /shop/products/prd_fdb03022d805 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58920 - "GET /loja/categoria/formacao HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58920 - "GET /shop/products?status=all&limit=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57086 - "GET /loja/produtos HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54348 - "GET /loja HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59970 - "GET /health HTTP/1.1" 200 OK
+Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  58%|█████▊    | 148/254 [00:00<00:00, 1479.65it/s]Loading weights: 100%|██████████| 254/254 [00:00<00:00, 1497.29it/s]
+INFO:     127.0.0.1:59995 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59996 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59997 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59998 - "GET /loja HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59999 - "GET /loja/conta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60000 - "GET /shop/catalogue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "GET /assets/index-75-rdVxT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63948 - "GET /assets/index-B5z94NPo.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49668 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "GET /shop/catalogue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51354 - "GET /shop/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62801 - "GET /tickers/%5EGSPC/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50498 - "GET /tickers/BTC-USD/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50498 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62385 - "GET /tickers/%5EIXIC/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62801 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62385 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50498 - "GET /tickers/TSLA/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62385 - "GET /tickers/AAPL/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62801 - "GET /tickers/MSFT/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50498 - "GET /tickers/MSFT/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62801 - "GET /tickers/AAPL/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62385 - "GET /tickers/TSLA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58430 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51354 - "GET /tickers/NVDA/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "GET /tickers/AMZN/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "GET /tickers/AMZN/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51354 - "GET /tickers/NVDA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "GET /tickers/MSFT/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51354 - "GET /tickers/AAPL/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "GET /tickers/AMZN/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65156 - "GET /tickers/NVDA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58430 - "GET /tickers/TSLA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65156 - "GET /tickers/MSFT/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "GET /tickers/TSLA/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58430 - "GET /tickers/AAPL/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /shop/catalogue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /shop/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /shop/theme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /shop/products HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /shop/orders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /shop/customers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /shop/coupons HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /shop/shipping HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /shop/reviews HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /shop/categories HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /shop/products/prd_983a0ff57114 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /loja HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /loja?preview=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "POST /loja/newsletter HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:49695 - "POST /loja/newsletter HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /loja/conta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /loja/conta/encomendas HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:49695 - "GET /loja/conta/encomendas HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:49695 - "GET /loja/produtos?q=manual HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /loja/produtos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /loja/produto/relatorio-contratacao-publica-portugal HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /loja/carrinho HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /loja/produto/relatorio-contratacao-publica-portugal HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /loja/carrinho HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /loja/produto/nao-existe HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49695 - "GET /loja/sitemap.xml HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /loja/robots.txt HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "POST /loja/cupoes/validar HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "POST /loja/encomendas HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /loja/encomenda/EN2026-0006 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49695 - "GET /loja/encomenda/EN2026-0006?email=teste.api%40exemplo.pt HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "POST /loja/encomendas HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "GET /shop/customers?q=convidado.api HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49695 - "POST /loja/encomendas HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:49695 - "POST /loja/encomendas HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:50494 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62234 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62234 - "GET /assets/index-75-rdVxT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59615 - "GET /assets/index-B5z94NPo.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64070 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62234 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62234 - "GET /tickers/%5EGSPC/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62234 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64235 - "GET /tickers/BTC-USD/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59615 - "GET /tickers/%5EIXIC/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64235 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62234 - "GET /shop/catalogue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59615 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62558 - "GET /shop/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64235 - "GET /tickers/TSLA/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62234 - "GET /tickers/AAPL/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62558 - "GET /tickers/AMZN/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64235 - "GET /shop/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62234 - "GET /tickers/TSLA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64235 - "GET /tickers/AMZN/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62558 - "GET /tickers/AAPL/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52533 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59615 - "GET /tickers/MSFT/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63829 - "GET /tickers/NVDA/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59615 - "GET /tickers/MSFT/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63829 - "GET /tickers/NVDA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52533 - "GET /tickers/TSLA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59615 - "GET /tickers/MSFT/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64235 - "GET /tickers/AMZN/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63829 - "GET /tickers/AAPL/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62558 - "GET /tickers/NVDA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64235 - "GET /tickers/TSLA/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63829 - "GET /tickers/MSFT/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62558 - "GET /tickers/AAPL/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57240 - "GET /shop/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57240 - "GET /shop/theme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57240 - "GET /loja?preview=1&v=1790355164392 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57240 - "GET /shop/products?status=all&limit=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57240 - "GET /shop/orders?status=all&payment_status=all&limit=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57240 - "GET /shop/categories?limit=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57240 - "GET /shop/customers?status=all&limit=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57240 - "GET /shop/coupons?limit=400 HTTP/1.1" 200 OK

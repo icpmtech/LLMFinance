@@ -71,7 +71,7 @@ def _entity(entity: str) -> str:
 # Secções da interface da loja: `/shop/produtos`, `/shop/encomendas`… Estas rotas
 # colidem com `GET /shop/{entidade}`, pelo que uma **navegação do browser** (que
 # pede HTML) tem de devolver a SPA construída — senão recarregar dava JSON.
-UI_SECTION_SLUGS = frozenset({"produtos", "categorias", "encomendas", "clientes", "promocoes", "envios", "avaliacoes", "definicoes"})
+UI_SECTION_SLUGS = frozenset({"produtos", "vitrine", "categorias", "encomendas", "clientes", "promocoes", "envios", "avaliacoes", "definicoes"})
 
 
 def _is_browser_navigation(request: Request) -> bool:
@@ -133,6 +133,29 @@ def shop_put_settings(payload: Dict[str, Any] = Body(...), session: Session = No
     """Guarda as definições (só os campos enviados são alterados)."""
     author = _writer(session)
     return {"saved": True, "settings": store.save_settings(payload, author)}
+
+
+# ==========================================================================
+# Vitrine (tema) — o editor do backoffice lê e grava isto
+# ==========================================================================
+@router.get("/shop/theme")
+def shop_get_theme() -> Dict[str, Any]:
+    """Tema da vitrine: secções, aviso e tipos de secção disponíveis."""
+    return store.theme_catalogue()
+
+
+@router.put("/shop/theme")
+def shop_put_theme(payload: Dict[str, Any] = Body(...), session: Session = None) -> Dict[str, Any]:
+    """Grava o tema da vitrine (o editor grava sozinho, a cada alteração)."""
+    author = _writer(session)
+    return {"saved": True, "theme": store.save_theme(payload, author), "preview_url": "/loja?preview=1"}
+
+
+@router.post("/shop/theme/reset")
+def shop_reset_theme(session: Session = None) -> Dict[str, Any]:
+    """Repõe a vitrine predefinida."""
+    author = _writer(session)
+    return {"saved": True, "theme": store.reset_theme(author)}
 
 
 # ==========================================================================
@@ -399,6 +422,7 @@ def _catalogue_page(
     title: str = "Produtos",
     description: str = "",
     featured_only: bool = False,
+    current_path: str = "",
 ) -> HTMLResponse:
     settings = store.get_settings()
     catalogue = store.public_products(
@@ -425,6 +449,7 @@ def _catalogue_page(
         title=title or str(settings.get("store_name") or "Loja"),
         description=description or str(settings.get("description") or ""),
         all_products=catalogue,
+        current_path=current_path,
     )
     return HTMLResponse(body, headers=_PUBLIC_HEADERS)
 
@@ -435,20 +460,28 @@ def loja_home(
     ordenar: str = Query("destaque"),
     q: str = Query(""),
     categoria: str = Query(""),
+    preview: int = Query(0, description="1 = pré-visualização do editor de vitrine (sem cache)."),
 ) -> HTMLResponse:
-    """Montra pública: produtos publicados, com os destaques à frente."""
-    category = store.category_by_slug(categoria) if categoria else None
-    if category is not None and category.get("status") != "publicado":
-        category = None
+    """Montra pública: as secções configuradas no editor de vitrine."""
     settings = store.get_settings()
-    return _catalogue_page(
-        category=category,
-        query=q,
-        page=page,
-        sort=ordenar,
-        title=str(settings.get("store_name") or "Loja"),
-        description=str(settings.get("description") or ""),
-    )
+    if preview:
+        html = render.render_home(settings=settings, theme=store.get_theme(), preview=True)
+        return HTMLResponse(html, headers={"Cache-Control": "no-store, must-revalidate"})
+    # Com filtros (pesquisa, categoria, página, ordenação) mostra-se o catálogo clássico.
+    if q or categoria or page > 1 or ordenar != "destaque":
+        category = store.category_by_slug(categoria) if categoria else None
+        if category is not None and category.get("status") != "publicado":
+            category = None
+        return _catalogue_page(
+            category=category,
+            query=q,
+            page=page,
+            sort=ordenar,
+            title=str(settings.get("store_name") or "Loja"),
+            description=str(settings.get("description") or ""),
+            current_path="/loja",
+        )
+    return HTMLResponse(render.render_home(settings=settings), headers=_PUBLIC_HEADERS)
 
 
 @router.get("/loja/produtos", response_class=HTMLResponse)
@@ -463,7 +496,7 @@ def loja_products(
     category = store.category_by_slug(categoria) if categoria else None
     if category is not None and category.get("status") != "publicado":
         category = None
-    return _catalogue_page(category=category, query=q, tag=etiqueta, page=page, sort=ordenar, title="Todos os produtos")
+    return _catalogue_page(category=category, query=q, tag=etiqueta, page=page, sort=ordenar, title="Todos os produtos", current_path="/loja/produtos")
 
 
 @router.get("/loja/categoria/{slug}", response_class=HTMLResponse)
@@ -480,6 +513,7 @@ def loja_category(slug: str, page: int = Query(1, ge=1), ordenar: str = Query("d
         sort=ordenar,
         title=str(category.get("name") or "Categoria"),
         description=str(category.get("description") or ""),
+        current_path=f'/loja/categoria/{category.get("slug")}',
     )
 
 
@@ -498,6 +532,27 @@ def loja_cart() -> HTMLResponse:
     """Carrinho e finalização de compra (a página é desenhada pelo browser)."""
     settings = store.get_settings()
     return HTMLResponse(render.render_cart(settings=settings), headers={"Cache-Control": "no-store, must-revalidate"})
+
+
+@router.get("/loja/conta", response_class=HTMLResponse)
+def loja_account() -> HTMLResponse:
+    """As minhas encomendas: lista com sessão IQ OS ou consulta de convidado."""
+    settings = store.get_settings()
+    return HTMLResponse(render.render_account(settings=settings), headers={"Cache-Control": "no-store, must-revalidate"})
+
+
+@router.get("/loja/conta/encomendas")
+def loja_account_orders(session: Session = None, limit: int = Query(50, ge=1, le=200)) -> Dict[str, Any]:
+    """Encomendas do utilizador autenticado (a vitrine envia o token da plataforma)."""
+    if session is None:
+        raise HTTPException(status_code=401, detail="Entre na plataforma IQ OS para ver todas as suas encomendas.")
+    orders = store.orders_for_email(session.user.email, limit=limit)
+    return {
+        "email": session.user.email,
+        "name": getattr(session.user, "name", "") or "",
+        "total": len(orders),
+        "orders": orders,
+    }
 
 
 @router.get("/loja/encomenda/{number}", response_class=HTMLResponse)
@@ -561,6 +616,15 @@ def loja_review(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     return {"saved": True, "review": {key: value for key, value in review.items() if key != "email"}}
+
+
+@router.post("/loja/newsletter")
+def loja_newsletter(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """Email deixado na vitrine: fica como cliente com autorização de marketing."""
+    try:
+        return store.newsletter_signup(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
 
 @router.get("/loja/sitemap.xml")

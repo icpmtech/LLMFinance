@@ -120,6 +120,8 @@ ORDER_FLOW: Dict[str, List[str]] = {
 }
 # Estados em que a encomenda deixa de contar para as vendas.
 ORDER_CLOSED_LOST: Tuple[str, ...] = ("cancelado", "reembolsado")
+# Passos que uma encomenda segue (usados no seguimento mostrado ao cliente).
+ORDER_FLOW_STEPS: Tuple[str, ...] = ("pendente", "pago", "em_preparacao", "enviado", "entregue")
 
 PAYMENT_STATUSES: Tuple[str, ...] = ("pendente", "parcial", "pago", "reembolsado")
 PAYMENT_LABELS: Dict[str, str] = {
@@ -169,7 +171,220 @@ SORT_OPTIONS: List[Dict[str, str]] = [
 MAX_REVISIONS = 30
 MAX_ACTIVITY = 400
 MAX_ORDER_ITEMS = 60
+MAX_THEME_SECTIONS = 20
 PER_PAGE = 12
+
+# --------------------------------------------------------------------------
+# Vitrine (tema da montra) — secções editáveis como num construtor de temas
+# --------------------------------------------------------------------------
+VANTAGEM_ICONS: List[Dict[str, str]] = [
+    {"id": "entrega", "label": "Entrega"},
+    {"id": "seguro", "label": "Pagamento seguro"},
+    {"id": "estrela", "label": "Qualidade"},
+    {"id": "relogio", "label": "Rapidez"},
+    {"id": "caixa", "label": "Embalagem"},
+    {"id": "cartao", "label": "Cartão"},
+    {"id": "telefone", "label": "Apoio"},
+    {"id": "cadeado", "label": "Privacidade"},
+]
+
+THEME_SECTION_TYPES: List[Dict[str, Any]] = [
+    {
+        "id": "hero",
+        "label": "Destaque (hero)",
+        "hint": "Faixa de abertura com título, texto, imagem e botão",
+        "icon": "Sparkles",
+        "fields": [
+            {"key": "title", "label": "Título", "kind": "text", "wide": True},
+            {"key": "subtitle", "label": "Texto", "kind": "textarea", "rows": 3},
+            {"key": "button_label", "label": "Botão — texto", "kind": "text"},
+            {"key": "button_href", "label": "Botão — ligação", "kind": "text"},
+            {"key": "image_id", "label": "Imagem", "kind": "media"},
+            {"key": "image_url", "label": "…ou URL externo", "kind": "text"},
+            {
+                "key": "align",
+                "label": "Alinhamento",
+                "kind": "select",
+                "options": [{"value": "esquerda", "label": "Esquerda"}, {"value": "centro", "label": "Centro"}],
+            },
+            {
+                "key": "style",
+                "label": "Estilo",
+                "kind": "select",
+                "options": [
+                    {"value": "destaque", "label": "Fundo colorido"},
+                    {"value": "imagem", "label": "Imagem de fundo"},
+                    {"value": "suave", "label": "Suave"},
+                ],
+            },
+        ],
+    },
+    {
+        "id": "destaques",
+        "label": "Produtos em destaque",
+        "hint": "Grelha com os produtos marcados como destaque",
+        "icon": "Star",
+        "fields": [
+            {"key": "title", "label": "Título", "kind": "text", "wide": True},
+            {"key": "subtitle", "label": "Subtítulo", "kind": "text", "wide": True},
+            {"key": "limit", "label": "Nº de produtos", "kind": "number", "min": 1, "max": 12},
+        ],
+    },
+    {
+        "id": "categorias",
+        "label": "Categorias",
+        "hint": "Cartões das categorias publicadas",
+        "icon": "Tags",
+        "fields": [
+            {"key": "title", "label": "Título", "kind": "text", "wide": True},
+            {"key": "subtitle", "label": "Subtítulo", "kind": "text", "wide": True},
+            {"key": "columns", "label": "Colunas", "kind": "number", "min": 2, "max": 6},
+            {"key": "featured_only", "label": "Só categorias em destaque", "kind": "bool"},
+        ],
+    },
+    {
+        "id": "produtos",
+        "label": "Grelha de produtos",
+        "hint": "Produtos por ordem, categoria ou etiqueta",
+        "icon": "Boxes",
+        "fields": [
+            {"key": "title", "label": "Título", "kind": "text", "wide": True},
+            {"key": "subtitle", "label": "Subtítulo", "kind": "text", "wide": True},
+            {
+                "key": "sort",
+                "label": "Ordenação",
+                "kind": "select",
+                "options": [
+                    {"value": "destaque", "label": "Destaques primeiro"},
+                    {"value": "novidade", "label": "Mais recentes"},
+                    {"value": "preco", "label": "Preço (menor)"},
+                    {"value": "preco-desc", "label": "Preço (maior)"},
+                    {"value": "nome", "label": "Nome (A→Z)"},
+                ],
+            },
+            {"key": "limit", "label": "Nº de produtos", "kind": "number", "min": 2, "max": 16},
+            {"key": "category_id", "label": "Só desta categoria", "kind": "category"},
+            {"key": "tag", "label": "Só com esta etiqueta", "kind": "text"},
+        ],
+    },
+    {
+        "id": "vantagens",
+        "label": "Vantagens",
+        "hint": "Cartões com razões para comprar (entrega, segurança, apoio…)",
+        "icon": "ShieldCheck",
+        "fields": [
+            {"key": "title", "label": "Título", "kind": "text", "wide": True},
+            {
+                "key": "items",
+                "label": "Vantagens",
+                "kind": "items",
+                "item_fields": [
+                    {"key": "icon", "label": "Ícone", "kind": "icon", "options": VANTAGEM_ICONS},
+                    {"key": "title", "label": "Título", "kind": "text"},
+                    {"key": "text", "label": "Texto", "kind": "textarea"},
+                ],
+            },
+        ],
+    },
+    {
+        "id": "texto",
+        "label": "Texto livre",
+        "hint": "Bloco de texto em Markdown",
+        "icon": "AlignLeft",
+        "fields": [
+            {"key": "title", "label": "Título", "kind": "text", "wide": True},
+            {"key": "markdown", "label": "Texto (Markdown)", "kind": "textarea", "rows": 6, "mono": True},
+        ],
+    },
+    {
+        "id": "avaliacoes",
+        "label": "Avaliações",
+        "hint": "Opiniões aprovadas dos clientes",
+        "icon": "Star",
+        "fields": [
+            {"key": "title", "label": "Título", "kind": "text", "wide": True},
+            {"key": "limit", "label": "Nº de avaliações", "kind": "number", "min": 1, "max": 9},
+        ],
+    },
+    {
+        "id": "newsletter",
+        "label": "Novidades por email",
+        "hint": "Recolhe emails (ficam como clientes com autorização de marketing)",
+        "icon": "Mail",
+        "fields": [
+            {"key": "title", "label": "Título", "kind": "text", "wide": True},
+            {"key": "text", "label": "Texto", "kind": "textarea", "rows": 2},
+            {"key": "button_label", "label": "Botão", "kind": "text"},
+        ],
+    },
+]
+THEME_SECTION_IDS = {section["id"] for section in THEME_SECTION_TYPES}
+
+DEFAULT_THEME: Dict[str, Any] = {
+    "announcement": {"enabled": False, "text": "", "link": "", "link_label": ""},
+    "catalog_columns": 4,
+    "sections": [
+        {
+            "id": "sec_hero",
+            "type": "hero",
+            "enabled": True,
+            "title": "Inteligência financeira, pronta a usar",
+            "subtitle": "Relatórios, dossiês e formação para decidir com dados — entrega imediata nos produtos digitais.",
+            "button_label": "Ver produtos",
+            "button_href": "/loja/produtos",
+            "align": "esquerda",
+            "style": "destaque",
+            "image_id": None,
+            "image_url": "",
+        },
+        {
+            "id": "sec_destaques",
+            "type": "destaques",
+            "enabled": True,
+            "title": "Em destaque",
+            "subtitle": "O que os nossos clientes procuram primeiro",
+            "limit": 4,
+        },
+        {
+            "id": "sec_categorias",
+            "type": "categorias",
+            "enabled": True,
+            "title": "Explorar por tema",
+            "subtitle": "",
+            "columns": 4,
+            "featured_only": False,
+        },
+        {
+            "id": "sec_novidades",
+            "type": "produtos",
+            "enabled": True,
+            "title": "Novidades",
+            "subtitle": "",
+            "sort": "novidade",
+            "limit": 8,
+            "category_id": "",
+            "tag": "",
+        },
+        {
+            "id": "sec_vantagens",
+            "type": "vantagens",
+            "enabled": True,
+            "title": "Porquê comprar aqui",
+            "items": [
+                {"icon": "entrega", "title": "Entrega digital imediata", "text": "Os produtos digitais ficam disponíveis assim que o pagamento é confirmado."},
+                {"icon": "seguro", "title": "Pagamento à sua escolha", "text": "MB Way, referência Multibanco, transferência ou numerário na entrega."},
+                {"icon": "cadeado", "title": "Dados tratados com cuidado", "text": "Usamos os seus dados apenas para processar a encomenda e o apoio ao cliente."},
+            ],
+        },
+        {
+            "id": "sec_avaliacoes",
+            "type": "avaliacoes",
+            "enabled": True,
+            "title": "O que dizem os clientes",
+            "limit": 3,
+        },
+    ],
+}
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "store_name": "Loja IQ OS",
@@ -342,6 +557,7 @@ def _empty_store() -> Dict[str, Any]:
     store["revisions"] = []
     store["activity"] = []
     store["settings"] = _empty_settings()
+    store["theme"] = copy.deepcopy(DEFAULT_THEME)
     store["updated_at"] = _now()
     return store
 
@@ -364,6 +580,9 @@ def _read_store() -> Dict[str, Any]:
     settings = raw.get("settings")
     if isinstance(settings, dict):
         store["settings"].update({key: value for key, value in settings.items() if value is not None})
+    theme = raw.get("theme")
+    if isinstance(theme, dict):
+        store["theme"] = _normalise_theme(theme)
     return store
 
 
@@ -1586,6 +1805,172 @@ def validate_coupon(
 
 
 # --------------------------------------------------------------------------
+# Vitrine (tema)
+# --------------------------------------------------------------------------
+def _section_fields(section_type: str) -> List[Dict[str, Any]]:
+    for section in THEME_SECTION_TYPES:
+        if section["id"] == section_type:
+            return section["fields"]
+    return []
+
+
+def _normalise_theme_items(value: Any, item_fields: List[Dict[str, Any]], limit: int = 6) -> List[Dict[str, str]]:
+    items: List[Dict[str, str]] = []
+    if not isinstance(value, list):
+        return items
+    for raw in value[:limit]:
+        if not isinstance(raw, dict):
+            continue
+        # Um item só com valores por omissão (ícone ou lista) não conta como
+        # preenchido: é preciso conteúdo num campo de texto.
+        essenciais = [field for field in item_fields if field.get("kind") not in ("select", "icon")]
+        if essenciais and not any(str(raw.get(field["key"]) or "").strip() for field in essenciais):
+            continue
+        item: Dict[str, str] = {}
+        for field in item_fields:
+            key = field["key"]
+            options = field.get("options") or []
+            if field.get("kind") in ("select", "icon"):
+                allowed = {str(option.get("id")) for option in options}
+                chosen = str(raw.get(key) or "")
+                item[key] = chosen if chosen in allowed else (str(options[0].get("id")) if options else "")
+            else:
+                item[key] = str(raw.get(key) or "")
+        if any(item.values()):
+            items.append(item)
+    return items
+
+
+def _normalise_theme(payload: Any) -> Dict[str, Any]:
+    """Valida o tema da vitrine: aviso, colunas do catálogo e secções da montra."""
+    raw = payload if isinstance(payload, dict) else {}
+    columns = _int(raw.get("catalog_columns"), 4, minimum=2)
+    theme: Dict[str, Any] = {"catalog_columns": min(5, columns)}
+    announcement = raw.get("announcement") if isinstance(raw.get("announcement"), dict) else {}
+    theme["announcement"] = {
+        "enabled": _bool(announcement.get("enabled"), False),
+        "text": str(announcement.get("text") or "")[:180],
+        "link": str(announcement.get("link") or "")[:200],
+        "link_label": str(announcement.get("link_label") or "")[:60],
+    }
+    theme["footer_note"] = str(raw.get("footer_note") or "")[:240]
+
+    sections: List[Dict[str, Any]] = []
+    used: set = set()
+    for entry in raw.get("sections") or []:
+        if not isinstance(entry, dict):
+            continue
+        section_type = str(entry.get("type") or "").strip()
+        if section_type not in THEME_SECTION_IDS:
+            continue
+        section_id = str(entry.get("id") or "").strip() or _new_id("sec")
+        while section_id in used:
+            section_id = _new_id("sec")
+        used.add(section_id)
+        section: Dict[str, Any] = {"id": section_id, "type": section_type, "enabled": _bool(entry.get("enabled"), True)}
+        for field in _section_fields(section_type):
+            key = field["key"]
+            value = entry.get(key)
+            kind = str(field.get("kind") or "text")
+            if kind == "number":
+                low = _int(field.get("min"), 0)
+                high = _int(field.get("max"), 99)
+                section[key] = max(low, min(high, _int(value, low)))
+            elif kind == "bool":
+                section[key] = _bool(value, False)
+            elif kind == "select":
+                options = field.get("options") or []
+                allowed = {str(option.get("value")) for option in options}
+                chosen = str(value or "")
+                section[key] = chosen if chosen in allowed else (str(options[0].get("value")) if options else "")
+            elif kind == "media":
+                section[key] = value or None
+            elif kind == "items":
+                section[key] = _normalise_theme_items(value, field.get("item_fields") or [])
+            else:
+                section[key] = str(value if value is not None else "")
+        sections.append(section)
+        if len(sections) >= MAX_THEME_SECTIONS:
+            break
+    theme["sections"] = sections
+    return theme
+
+
+def get_theme() -> Dict[str, Any]:
+    """Tema da vitrine (com as secções por omissão quando o documento é antigo)."""
+    store = _load()
+    theme = copy.deepcopy(store.get("theme") or DEFAULT_THEME)
+    theme.setdefault("announcement", copy.deepcopy(DEFAULT_THEME["announcement"]))
+    theme.setdefault("footer_note", "")
+    if not theme.get("sections"):
+        theme["sections"] = copy.deepcopy(DEFAULT_THEME["sections"])
+    theme["catalog_columns"] = min(5, _int(theme.get("catalog_columns"), 4, minimum=2))
+    return theme
+
+
+def save_theme(payload: Dict[str, Any], author: str = "") -> Dict[str, Any]:
+    """Grava o tema da vitrine (o editor do backoffice chama isto com frequência)."""
+    store = _load()
+    theme = _normalise_theme(payload)
+    store["theme"] = theme
+    _log(store, "vitrine", "theme", {"id": "theme", "name": "Vitrine"}, author, f"{len(theme['sections'])} secção(ões)")
+    _write_store(store)
+    return copy.deepcopy(theme)
+
+
+def reset_theme(author: str = "") -> Dict[str, Any]:
+    """Repõe a vitrine de demonstração."""
+    store = _load()
+    store["theme"] = copy.deepcopy(DEFAULT_THEME)
+    _log(store, "vitrine (repor)", "theme", {"id": "theme", "name": "Vitrine"}, author)
+    _write_store(store)
+    return copy.deepcopy(store["theme"])
+
+
+def create_section_id() -> str:
+    """Identificador para uma secção nova do editor de vitrine."""
+    return _new_id("sec")
+
+
+def theme_catalogue() -> Dict[str, Any]:
+    """Tudo o que o editor de vitrine precisa de uma só vez."""
+    return {
+        "theme": get_theme(),
+        "defaults": copy.deepcopy(DEFAULT_THEME),
+        "section_types": copy.deepcopy(THEME_SECTION_TYPES),
+        "store_url": "/loja",
+        "preview_url": "/loja?preview=1",
+        "max_sections": MAX_THEME_SECTIONS,
+    }
+
+
+def newsletter_signup(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Email deixado na vitrine → cliente com autorização de marketing."""
+    email = str(payload.get("email") or "").strip().lower()
+    if "@" not in email or "." not in email.split("@")[-1] or len(email) < 6:
+        raise ValueError("Indique um email válido.")
+    name = str(payload.get("name") or "").strip()
+    store = _load()
+    customer = next((item for item in store["customers"] if str(item.get("email") or "").lower() == email), None)
+    if customer is None:
+        target = _normalise("customers", {"email": email, "name": name or email.split("@")[0], "marketing": True, "source": "loja-newsletter"})
+        target["id"] = _new_id(ID_PREFIX["customers"])
+        target["created_at"] = _now()
+        target["updated_at"] = _now()
+        target["updated_by"] = "loja"
+        store["customers"].insert(0, target)
+    else:
+        customer["marketing"] = True
+        if name:
+            customer["name"] = name
+        customer["updated_at"] = _now()
+        target = customer
+    _log(store, "newsletter", "customers", target, "loja", email)
+    _write_store(store)
+    return {"subscribed": True, "email": email, "customer_id": target.get("id")}
+
+
+# --------------------------------------------------------------------------
 # Vitrine pública
 # --------------------------------------------------------------------------
 def get_settings() -> Dict[str, Any]:
@@ -1723,6 +2108,20 @@ def product_payload(product: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _shipping_payload(method: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": method.get("id"),
+        "name": method.get("name"),
+        "description": method.get("description") or "",
+        "price": money(method.get("price")),
+        "free_above": money(method.get("free_above")),
+        "days_min": _int(method.get("days_min")),
+        "days_max": _int(method.get("days_max")),
+        "zone": method.get("zone") or "",
+        "digital": _bool(method.get("digital"), False),
+    }
+
+
 def public_shipping_methods(digital_only: bool = False) -> List[Dict[str, Any]]:
     store = _load()
     items = [method for method in store["shipping"] if _bool(method.get("active"), True)]
@@ -1731,20 +2130,19 @@ def public_shipping_methods(digital_only: bool = False) -> List[Dict[str, Any]]:
     # nesse caso mostram-se todos os métodos ativos.
     items = wanted or items
     items.sort(key=lambda item: (_int(item.get("order")), money(item.get("price"))))
-    return [
-        {
-            "id": method.get("id"),
-            "name": method.get("name"),
-            "description": method.get("description") or "",
-            "price": money(method.get("price")),
-            "free_above": money(method.get("free_above")),
-            "days_min": _int(method.get("days_min")),
-            "days_max": _int(method.get("days_max")),
-            "zone": method.get("zone") or "",
-            "digital": _bool(method.get("digital"), False),
-        }
-        for method in items
+    return [_shipping_payload(method) for method in items]
+
+
+def digital_shipping_method() -> Optional[Dict[str, Any]]:
+    """Método de entrega digital ativo, se a loja tiver um."""
+    store = _load()
+    candidates = [
+        method
+        for method in store["shipping"]
+        if _bool(method.get("active"), True) and _bool(method.get("digital"), False)
     ]
+    candidates.sort(key=lambda item: (_int(item.get("order")), money(item.get("price"))))
+    return _shipping_payload(candidates[0]) if candidates else None
 
 
 def shipping_price(method: Dict[str, Any], subtotal: float) -> float:
@@ -1863,6 +2261,7 @@ def checkout(payload: Dict[str, Any], actor: str = "loja") -> Dict[str, Any]:
         raise ValueError("O carrinho está vazio.")
 
     lines: List[Dict[str, Any]] = []
+    fisicos = 0
     for raw in raw_items[:MAX_ORDER_ITEMS]:
         if not isinstance(raw, dict):
             continue
@@ -1881,6 +2280,8 @@ def checkout(payload: Dict[str, Any], actor: str = "loja") -> Dict[str, Any]:
             if quantity > _int(product.get("stock")):
                 raise ValueError(f"Stock insuficiente para «{product.get('name')}» (disponível: {_int(product.get('stock'))}).")
         amounts = line_amounts(product.get("price"), quantity, product.get("tax_rate"), 0, prices_include_tax=inclusive)
+        if _bool(product.get("track_stock"), False) or str(product.get("type") or "") == "fisico":
+            fisicos += 1
         lines.append(
             {
                 "id": _new_id("lin"),
@@ -1900,11 +2301,18 @@ def checkout(payload: Dict[str, Any], actor: str = "loja") -> Dict[str, Any]:
         raise ValueError("O carrinho está vazio.")
 
     person = _normalise_person(payload.get("customer") or payload)
-    if not person.get("email"):
-        raise ValueError("Indique o email para receber a confirmação da encomenda.")
+    email = str(person.get("email") or "").strip().lower()
+    if "@" not in email or "." not in email.split("@")[-1] or len(email) < 6:
+        raise ValueError("Indique um email válido para receber a confirmação da encomenda.")
+    person["email"] = email
     raw_address = payload.get("shipping_address") if isinstance(payload.get("shipping_address"), dict) else payload.get("billing")
-    if not isinstance(raw_address, dict) or not str(raw_address.get("line1") or raw_address.get("address") or "").strip():
-        raise ValueError("Indique a morada de entrega (ou de faturação, nos produtos digitais).")
+    morada_preenchida = isinstance(raw_address, dict) and bool(str(raw_address.get("line1") or raw_address.get("address") or "").strip())
+    if fisicos and not morada_preenchida:
+        raise ValueError("Indique a morada de entrega dos artigos físicos.")
+    if not morada_preenchida:
+        # Carrinho só com produtos digitais: a morada é opcional.
+        raw_address = {}
+        payload = {**payload, "shipping_address": {}, "billing": {}}
 
     subtotal = money(sum(line["_amounts"]["gross"] for line in lines))
     minimum = money(settings.get("min_order"))
@@ -2016,6 +2424,22 @@ def public_order_view(order: Dict[str, Any], settings: Optional[Dict[str, Any]] 
     return payload
 
 
+def orders_for_email(email: str, limit: int = 50) -> List[Dict[str, Any]]:
+    """Encomendas de um email (mais recentes primeiro), prontas para o comprador."""
+    wanted = str(email or "").strip().lower()
+    if not wanted:
+        return []
+    store = _load()
+    settings = get_settings()
+    items = [
+        order
+        for order in store["orders"]
+        if str((order.get("customer") or {}).get("email") or "").strip().lower() == wanted
+    ]
+    items.sort(key=lambda item: str(item.get("placed_at") or item.get("created_at") or ""), reverse=True)
+    return [public_order_view(order, settings) for order in items[: max(1, min(limit, 200))]]
+
+
 def create_review(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Avaliação enviada na vitrine (entra sempre como pendente de moderação)."""
     doc = _normalise("reviews", {**payload, "status": "pendente"})
@@ -2121,6 +2545,9 @@ def catalogue() -> Dict[str, Any]:
         ],
         "media_index": media_index,
         "settings": settings,
+        "theme": get_theme(),
+        "theme_defaults": copy.deepcopy(DEFAULT_THEME),
+        "theme_section_types": THEME_SECTION_TYPES,
         "store_url": "/loja",
         "cart_url": "/loja/carrinho",
         "products_url": "/loja/produtos",

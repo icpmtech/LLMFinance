@@ -126,20 +126,53 @@ h1{font-size:clamp(24px,3.4vw,34px)}
 h2{font-size:20px}
 small{font-size:12px;color:var(--muted)}
 .muted{color:var(--muted)}
+/* faixa de topo */
+.topbar{background:var(--text);color:var(--surface);font-size:12.5px}
+.topbar .wrap{display:flex;align-items:center;gap:14px;min-height:34px;flex-wrap:wrap}
+.topbar a{color:inherit;text-decoration:none;opacity:.85}
+.topbar a:hover{opacity:1;text-decoration:underline}
+.topbar .grow{flex:1}
+.topbar .note{display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#04252a;border-radius:999px;padding:3px 11px;font-weight:600}
+.topbar .dot{opacity:.35}
 /* cabeçalho */
-.site-header{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--surface) 88%%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
-.site-header .wrap{display:flex;align-items:center;gap:14px;min-height:62px;flex-wrap:wrap}
-.brand{display:flex;flex-direction:column;font-weight:700;font-size:16px;line-height:1.1}
-.brand small{font-weight:400}
-.site-header nav{display:flex;gap:14px;font-size:13.5px;color:var(--muted);flex-wrap:wrap}
-.site-header nav a:hover{color:var(--text)}
-.header-tools{margin-left:auto;display:flex;align-items:center;gap:8px}
-.search{display:flex;align-items:center;gap:6px;background:var(--soft);border:1px solid var(--border);border-radius:999px;padding:6px 12px}
-.search input{border:0;background:transparent;color:var(--text);outline:none;width:170px;font-size:13.5px}
-.cart-pill{position:relative;display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#04252a;font-weight:600;
-border-radius:999px;padding:8px 14px;font-size:13.5px;cursor:pointer;border:0}
+.site-header{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--surface) 92%%,transparent);backdrop-filter:blur(14px);
+border-bottom:1px solid var(--border);transition:box-shadow .18s}
+.site-header.is-scrolled{box-shadow:0 8px 26px rgba(15,23,42,.14)}
+.header-main{display:flex;align-items:center;gap:16px;min-height:72px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:11px;flex-shrink:0;min-width:0}
+.brand-mark{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:var(--accent);color:#04252a;font-weight:800;font-size:15px;flex-shrink:0}
+.brand-text{display:flex;flex-direction:column;font-weight:700;font-size:16px;line-height:1.15;min-width:0}
+.brand-text small{font-weight:400;font-size:11.5px;color:var(--muted)}
+.header-tools{display:flex;align-items:center;gap:9px;margin-left:auto}
+.search{display:flex;align-items:center;gap:8px;flex:1;min-width:180px;background:var(--soft);border:1px solid var(--border);border-radius:999px;padding:8px 14px}
+.search:focus-within{border-color:var(--accent)}
+.search input{border:0;background:transparent;color:var(--text);outline:none;width:100%%;font-size:14px}
+.search button{background:transparent;border:0;color:var(--muted);cursor:pointer;display:grid;place-items:center;padding:0}
+.search button:hover{color:var(--text)}
+.cart-pill{position:relative;display:inline-flex;align-items:center;gap:9px;background:var(--accent);color:#04252a;font-weight:600;
+border-radius:999px;padding:9px 16px;font-size:13.5px;cursor:pointer;border:0;white-space:nowrap}
+.cart-pill small{font-weight:600;opacity:.85}
+.account-pill{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);background:var(--soft);color:var(--muted);
+border-radius:999px;padding:8px 14px;font-size:13px;white-space:nowrap}
+.account-pill:hover{color:var(--text);border-color:var(--accent)}
+/* conta do comprador */
+.orders{display:flex;flex-direction:column;gap:10px}
+.order{display:grid;grid-template-columns:minmax(140px,.7fr) minmax(0,1.6fr) auto;gap:14px;align-items:center;background:var(--surface);
+border:1px solid var(--border);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
+.order .num{font-weight:700;font-size:15px}
+.order .items{color:var(--muted);font-size:13px;margin-top:4px}
+.order .side{text-align:right;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.steps{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.steps span{border:1px solid var(--border);border-radius:999px;padding:2px 9px;font-size:11.5px;color:var(--muted);background:var(--soft)}
+.steps span.done{border-color:color-mix(in srgb,var(--accent) 45%%,transparent);background:color-mix(in srgb,var(--accent) 16%%,transparent);color:var(--text);font-weight:600}
+@media (max-width:820px){ .order{grid-template-columns:1fr} .order .side{align-items:flex-start;text-align:left} }
 .cart-pill[data-count]:not([data-count="0"])::after{content:attr(data-count);position:absolute;top:-6px;right:-6px;background:#0f172a;color:#fff;
 border-radius:999px;min-width:19px;height:19px;display:grid;place-items:center;font-size:11px;padding:0 5px}
+.nav-pills{display:flex;gap:2px;flex-wrap:wrap;border-top:1px solid var(--border)}
+.nav-pills a{padding:9px 11px;font-size:13.5px;color:var(--muted);border-bottom:2px solid transparent;transition:.15s}
+.nav-pills a:hover{color:var(--text)}
+.nav-pills a.active{color:var(--text);font-weight:600;border-bottom-color:var(--accent)}
+.nav-pills .all{margin-left:auto}
 /* botões */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid transparent;border-radius:calc(var(--radius) - 4px);
 padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer;background:var(--accent);color:#04252a;transition:.15s}
@@ -168,6 +201,9 @@ padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer;background:var(-
 .badge.out{background:#f1f5f9;color:#64748b}
 .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:18px 0}
 .chips{display:flex;gap:8px;flex-wrap:wrap}
+.sortbar{margin-left:auto;display:flex;align-items:center;gap:8px}
+.sortbar label{flex-direction:row;align-items:center;gap:7px;font-size:12.5px;color:var(--muted)}
+.sortbar select{width:auto;min-width:180px}
 .chip{border:1px solid var(--border);border-radius:999px;padding:6px 12px;font-size:13px;background:var(--surface);color:var(--muted)}
 .chip.active{background:var(--accent);color:#04252a;border-color:transparent;font-weight:600}
 select,input[type=text],input[type=email],input[type=tel],input[type=number],input[type=date],textarea{
@@ -176,6 +212,47 @@ select:focus,input:focus,textarea:focus{border-color:var(--accent)}
 label{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--muted)}
 .field-grid{display:grid;gap:12px;grid-template-columns:1fr 1fr}
 .field-grid .wide{grid-column:1/-1}
+/* secções da montra (editor de vitrine) */
+.grid.cols{grid-template-columns:repeat(var(--cols,4),minmax(0,1fr))}
+.cats{display:grid;gap:14px;grid-template-columns:repeat(var(--cols,4),minmax(0,1fr))}
+.home-section{margin:34px 0}
+.home-section>.head{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.home-section>.head h2{margin:0;font-size:22px}
+.home-section>.head p{margin:3px 0 0;color:var(--muted);font-size:13.5px}
+.home-section>.head a{margin-left:auto;font-size:13.5px;color:var(--muted);border-bottom:1px solid var(--border)}
+.home-section>.head a:hover{color:var(--accent);border-color:var(--accent)}
+.hero{position:relative;overflow:hidden;margin:22px 0 30px;border:1px solid var(--border);border-radius:calc(var(--radius) + 4px);background:var(--surface);box-shadow:var(--shadow)}
+.hero .inner{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:26px;align-items:center;padding:34px}
+.hero.sem-imagem .inner{grid-template-columns:1fr;max-width:760px}
+.hero.centro .inner{justify-items:center;text-align:center}
+.hero.centro p{margin-left:auto;margin-right:auto}
+.hero h1{margin-bottom:10px;font-size:clamp(24px,3.6vw,38px)}
+.hero p{margin:0 0 18px;color:var(--muted);font-size:15.5px;max-width:60ch}
+.hero .art{aspect-ratio:4/3;overflow:hidden;border-radius:calc(var(--radius) - 2px);background:var(--soft);display:grid;place-items:center}
+.hero .art img{width:100%%;height:100%%;object-fit:cover}
+.hero.destaque{border-color:transparent;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 20%%,var(--surface)),var(--surface) 72%%)}
+.hero.suave{background:var(--soft)}
+.hero.imagem{color:#fff;background:#0b1220;border-color:transparent}
+.hero.imagem::before{content:"";position:absolute;inset:0;z-index:0;background:linear-gradient(90deg,rgba(6,12,20,.85),rgba(6,12,20,.3))}
+.hero.imagem .inner{position:relative;z-index:1}
+.hero.imagem p{color:rgba(255,255,255,.86)}
+.hero.imagem .art{border:1px solid rgba(255,255,255,.14)}
+.cat-card{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
+.cat-card .thumb{aspect-ratio:16/9;background:var(--soft);overflow:hidden;display:grid;place-items:center}
+.cat-card .thumb img{width:100%%;height:100%%;object-fit:cover}
+.cat-card .body{padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.cat-card .body strong{font-size:14.5px}
+.cat-card .body small{color:var(--muted)}
+.perks{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.perk{display:flex;flex-direction:column;gap:7px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:16px;box-shadow:var(--shadow)}
+.perk .ic{display:grid;place-items:center;width:36px;height:36px;border-radius:11px;background:color-mix(in srgb,var(--accent) 20%%,transparent);color:var(--accent)}
+.perk strong{font-size:14px}
+.perk p{margin:0;color:var(--muted);font-size:13px}
+.newsletter{display:grid;gap:14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:26px;box-shadow:var(--shadow);max-width:760px}
+.newsletter form{display:flex;gap:8px;flex-wrap:wrap}
+.newsletter input{flex:1;min-width:200px}
+.review-wall{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.preview-flag{position:fixed;right:16px;bottom:16px;z-index:90;background:#0f172a;color:#fff;border-radius:999px;padding:8px 15px;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,.32)}
 /* ficha de produto */
 .product{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:28px;margin:22px 0 34px}
 .gallery{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
@@ -227,9 +304,25 @@ border:1px solid var(--border);border-radius:var(--radius);padding:10px}
 .receipt td,.receipt th{border-bottom:1px solid var(--border);padding:8px 4px;text-align:left}
 .receipt td:last-child,.receipt th:last-child{text-align:right}
 /* rodapé e avisos */
-.site-footer{margin-top:50px;border-top:1px solid var(--border);background:var(--surface)}
-.site-footer .wrap{display:flex;justify-content:space-between;gap:16px;padding:22px 18px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
-.site-footer nav{display:flex;gap:14px;flex-wrap:wrap}
+.site-footer{margin-top:56px;border-top:1px solid var(--border);background:var(--surface)}
+.footer-grid{display:grid;grid-template-columns:1.5fr 1fr 1.25fr 1.2fr;gap:28px;padding:36px 18px 26px}
+.footer-grid h3{margin:0 0 11px;font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.footer-grid p{margin:0 0 10px;font-size:13.5px;color:var(--muted)}
+.footer-grid ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:13.5px;color:var(--muted)}
+.footer-grid ul a{color:var(--muted)}
+.footer-grid ul a:hover{color:var(--accent)}
+.footer-grid .lead{color:var(--text);font-weight:600}
+.footer-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.footer-badges span{border:1px solid var(--border);border-radius:8px;padding:3px 8px;font-size:11.5px;color:var(--muted);background:var(--soft)}
+.footer-help{display:flex;flex-direction:column;gap:7px;align-items:stretch}
+.footer-help input{border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);padding:7px 10px;font:inherit;font-size:13px;width:100%%}
+.footer-help button{border:0;border-radius:9px;background:var(--accent);color:#04252a;font-weight:600;padding:8px 12px;font-size:13px;cursor:pointer}
+.footer-bottom{border-top:1px solid var(--border);display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 18px;font-size:12.5px;color:var(--muted)}
+.footer-bottom nav{display:flex;gap:14px;flex-wrap:wrap;margin-left:auto}
+.footer-bottom nav a:hover{color:var(--accent)}
+.social{display:flex;gap:10px;align-items:center}
+.social a{border:1px solid var(--border);border-radius:9px;padding:5px 10px;font-size:12.5px;color:var(--muted)}
+.social a:hover{border-color:var(--accent);color:var(--text)}
 .toast{position:fixed;left:50%%;bottom:22px;transform:translate(-50%%,20px);background:#0f172a;color:#fff;border-radius:12px;padding:11px 18px;
 font-size:13.5px;opacity:0;transition:.22s;pointer-events:none;z-index:80}
 .toast.show{opacity:1;transform:translate(-50%%,0)}
@@ -239,7 +332,26 @@ font-size:13.5px;opacity:0;transition:.22s;pointer-events:none;z-index:80}
 @media (max-width:900px){
  .product,.cart,.field-grid{grid-template-columns:1fr}
  .cart-side{position:static}
- .search input{width:120px}
+ .footer-grid{grid-template-columns:1fr 1fr}
+ .header-main{gap:12px;padding-bottom:10px}
+ .search{order:3;flex-basis:100%%}
+ .hero .inner{grid-template-columns:1fr;padding:24px}
+ .grid.cols,.cats{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:620px){
+ .footer-grid{grid-template-columns:1fr;gap:22px;padding:26px 18px 18px}
+ .topbar .wrap{min-height:auto;padding-top:7px;padding-bottom:7px}
+ /* Marca compacta: sem slogan, o carrinho cabe na mesma linha. */
+ .brand-text small{display:none}
+ .brand-text{font-size:15px}
+ .cart-pill{padding:8px 13px;gap:7px}
+ .nav-pills{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;-ms-overflow-style:none}
+ .nav-pills::-webkit-scrollbar{display:none}
+ .nav-pills a{white-space:nowrap}
+ .nav-pills .all{margin-left:0}
+ .footer-bottom nav{margin-left:0}
+ .grid.cols,.cats{grid-template-columns:1fr}
+ .hero .inner{padding:20px}
 }
 """ % {
         "bg": theme["bg"],
@@ -268,11 +380,30 @@ _CART_JS = r"""
     document.dispatchEvent(new CustomEvent("loja:carrinho", {detail: cart}));
     badge();
   }
+  /**
+   * Limpa do carrinho os artigos que já não existem no catálogo.
+   *
+   * Sem isto o carrinho guardado no browser ficava preso: o contador somava
+   * linhas que já não apareciam (produto retirado da loja ou dados repostos) e
+   * o cliente não tinha forma de as remover.
+   */
+  function prune(){
+    var cart = read();
+    var validos = cart.filter(function(line){ return Boolean(product(line.id)); });
+    var removidos = cart.length - validos.length;
+    if(removidos > 0) localStorage.setItem(KEY, JSON.stringify(validos));
+    return removidos;
+  }
   function badge(){
-    var count = read().reduce(function(sum, line){ return sum + (Number(line.qty)||0); }, 0);
+    var rows = lines();
+    var count = rows.reduce(function(sum, row){ return sum + (Number(row.qty)||0); }, 0);
+    var total = rows.reduce(function(sum, row){ return sum + row.item.price * (Number(row.qty)||0); }, 0);
     Array.prototype.forEach.call(document.querySelectorAll("[data-cart-count]"), function(node){
       node.setAttribute("data-count", String(count));
-      node.textContent = "Carrinho";
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-cart-total]"), function(node){
+      node.textContent = count ? money(total) : "";
+      node.hidden = !count;
     });
   }
   function product(id){ return (DATA.products || {})[id]; }
@@ -333,6 +464,26 @@ _CART_JS = r"""
     }
     if(emptyHost) emptyHost.hidden = true;
     conteudo.hidden = false;
+    var esgotados = rows.filter(function(row){ return !row.item.available; });
+    if(esgotados.length){
+      var aviso = document.getElementById("loja-aviso");
+      if(aviso){
+        aviso.hidden = false;
+        aviso.className = "notice error";
+        aviso.textContent = esgotados.length === 1
+          ? "Um artigo do carrinho está esgotado. Remova-o para concluir a encomenda."
+          : "Há " + esgotados.length + " artigos esgotados no carrinho. Remova-os para concluir a encomenda.";
+      }
+    }
+    // Carrinho só com produtos digitais: não há morada de entrega a pedir.
+    var soDigital = rows.every(function(row){ return !row.item.track_stock; });
+    var blocoEnvio = document.getElementById("loja-envio");
+    if(blocoEnvio) blocoEnvio.hidden = soDigital;
+    var notaDigital = document.getElementById("loja-digital");
+    if(notaDigital) notaDigital.hidden = !soDigital;
+    Array.prototype.forEach.call(formHost ? formHost.querySelectorAll('[name="line1"],[name="line2"],[name="postal_code"],[name="city"]') : [], function(campo){
+      campo.required = !soDigital;
+    });
     listHost.innerHTML = rows.map(function(row){
       return '<div class="line" data-id="' + row.item.id + '">'
         + '<div class="thumb">' + (row.item.image_url ? '<img src="' + row.item.image_url + '" alt="">' : '<span class="ph">' + row.item.name.slice(0,2).toUpperCase() + '</span>') + '</div>'
@@ -366,7 +517,11 @@ _CART_JS = r"""
     });
     var base = subtotal(rows);
     var selected = formHost ? formHost.querySelector("[name=shipping_method_id]:checked") : null;
-    var method = selected ? DATA.shipping.filter(function(item){ return String(item.id) === selected.value; })[0] : DATA.shipping[0];
+    var metodo = selected ? DATA.shipping.filter(function(item){ return String(item.id) === selected.value; })[0] : null;
+    // Carrinho só com digitais: o servidor vai escolher a entrega digital — a
+    // soma mostra o mesmo para não prometer portes que não existem.
+    if(soDigital) metodo = DATA.digital_shipping || metodo;
+    var method = metodo || DATA.shipping[0];
     var discount = couponDiscount(couponState, base);
     var shipping = shippingFor(method, base - discount);
     var total = Math.max(0, base - discount + shipping);
@@ -376,7 +531,10 @@ _CART_JS = r"""
       + '<div><span>Portes' + (method ? ' (' + method.name + ')' : '') + '</span><span>' + (shipping ? money(shipping) : 'grátis') + '</span></div>'
       + '<div class="grand"><span>Total (IVA incluído)</span><span>' + money(total) + '</span></div>';
     var submit = document.getElementById("loja-submeter");
-    if(submit) submit.textContent = "Finalizar encomenda · " + money(total);
+    if(submit){
+      submit.textContent = "Finalizar encomenda · " + money(total);
+      submit.disabled = esgotados.length > 0;
+    }
   }
   function validateCoupon(code){
     var rows = lines();
@@ -398,6 +556,7 @@ _CART_JS = r"""
     var form = event.target;
     var rows = lines();
     if(!rows.length){ toast("O carrinho está vazio."); return; }
+    if(rows.some(function(row){ return !row.item.available; })){ toast("Remova os artigos esgotados para concluir a encomenda."); renderCart(); return; }
     var button = document.getElementById("loja-submeter");
     if(button) button.disabled = true;
     var data = new FormData(form);
@@ -489,6 +648,138 @@ _CART_JS = r"""
   }
   var couponButton = document.getElementById("loja-aplicar-cupao");
   if(couponButton) couponButton.onclick = function(){ validateCoupon((document.getElementById("loja-cupao")||{}).value || ""); };
+  // Cabeçalho: ganha sombra quando a página rola.
+  var cabecalho = document.querySelector(".site-header");
+  if(cabecalho){
+    var aoRolar = function(){ cabecalho.classList.toggle("is-scrolled", window.scrollY > 4); };
+    window.addEventListener("scroll", aoRolar, {passive: true});
+    aoRolar();
+  }
+  // Rodapé: consultar uma encomenda pelo número e email.
+  var consulta = document.getElementById("loja-consulta");
+  if(consulta){
+    consulta.addEventListener("submit", function(event){
+      event.preventDefault();
+      var dados = new FormData(consulta);
+      var numero = String(dados.get("numero") || "").trim().toUpperCase();
+      var email = String(dados.get("email") || "").trim();
+      if(!numero){ toast("Indique o número da encomenda."); return; }
+      window.location.href = "/loja/encomenda/" + encodeURIComponent(numero) + (email ? "?email=" + encodeURIComponent(email) : "");
+    });
+  }
+  // Secção de novidades por email (se existir na vitrine).
+  var newsletter = document.getElementById("loja-newsletter");
+  if(newsletter){
+    newsletter.addEventListener("submit", function(event){
+      event.preventDefault();
+      var campo = newsletter.querySelector("input[name=email]");
+      var aviso = document.getElementById("loja-newsletter-aviso");
+      fetch("/loja/newsletter", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({email: campo.value})})
+        .then(function(response){ return response.json().then(function(body){ return {ok: response.ok, body: body}; }); })
+        .then(function(result){
+          if(!aviso) return;
+          aviso.hidden = false;
+          aviso.className = "notice " + (result.ok ? "ok" : "error");
+          aviso.textContent = result.ok ? "Obrigado! Vai receber as nossas novidades." : ((result.body && result.body.detail) || "Não foi possível registar o email.");
+          if(result.ok) newsletter.reset();
+        })
+        .catch(function(){ toast("Falha de rede ao registar o email."); });
+    });
+  }
+  /**
+   * Compra com sessão ou como convidado.
+   *
+   * Quem já está autenticado na plataforma (mesma origem) tem os dados
+   * preenchidos e a encomenda fica ligada à ficha de cliente existente; quem não
+   * está compra à mesma — só tem de deixar nome e email.
+   */
+  function preencherSessao(){
+    var form = document.getElementById("loja-form");
+    if(!form) return;
+    var token = null;
+    try { token = localStorage.getItem("finance-llm-token"); } catch(e){ token = null; }
+    if(!token) return;
+    fetch("/auth/me", {headers: {"Authorization": "Bearer " + token}})
+      .then(function(response){ return response.ok ? response.json() : null; })
+      .then(function(user){
+        if(!user || !user.email) return;
+        var nome = form.querySelector('[name="name"]');
+        var email = form.querySelector('[name="email"]');
+        if(nome && !nome.value && user.name) nome.value = user.name;
+        if(email && !email.value) email.value = user.email;
+        var aviso = document.getElementById("loja-sessao");
+        if(aviso){
+          aviso.hidden = false;
+          aviso.innerHTML = "Sessão IQ OS: <strong>" + user.email + "</strong> — a encomenda fica ligada à sua ficha de cliente.";
+        }
+      })
+      .catch(function(){ /* sem sessão: compra como convidado */ });
+  }
+  // Conta do comprador: lista as encomendas do utilizador com sessão; sem sessão,
+  // fica a consulta por número + email (compra como convidado).
+  function iniciarConta(){
+    var host = document.getElementById("loja-conta");
+    if(!host) return;
+    var convidado = document.getElementById("loja-conta-convidado");
+    var carregando = document.getElementById("loja-conta-carregando");
+    function mostrarConvidado(){
+      if(carregando) carregando.hidden = true;
+      if(convidado) convidado.hidden = false;
+    }
+    var token = null;
+    try { token = localStorage.getItem("finance-llm-token"); } catch(e){ token = null; }
+    if(!token){ mostrarConvidado(); return; }
+    fetch(DATA.urls.account + "/encomendas", {headers: {"Authorization": "Bearer " + token}, cache: "no-store"})
+      .then(function(response){ return response.ok ? response.json() : null; })
+      .then(function(dados){
+        if(!dados || !dados.orders){ mostrarConvidado(); return; }
+        if(carregando) carregando.hidden = true;
+        if(convidado) convidado.hidden = true;
+        host.hidden = false;
+        var cabecalho = document.getElementById("loja-conta-email");
+        if(cabecalho) cabecalho.textContent = "Sessao " + dados.email + " - " + dados.total + " encomenda(s)";
+        var lista = document.getElementById("loja-conta-lista");
+        if(!lista) return;
+        if(!dados.orders.length){
+          lista.innerHTML = '<div class="empty">Ainda não há encomendas nesta conta.</div>';
+          return;
+        }
+        var passos = DATA.order_flow || [];
+        lista.innerHTML = dados.orders.map(function(o){
+          var estado = o.status || "pendente";
+          var posicao = passos.indexOf(estado);
+          var caminho = passos.map(function(passo, indice){
+            return '<span class="' + (posicao >= 0 && indice <= posicao ? "done" : "") + '">' + (DATA.order_labels[passo] || passo) + '</span>';
+          }).join("");
+          var artigos = (o.items || []).map(function(linha){ return linha.name + " \u00d7 " + linha.quantity; }).join(" · ");
+          var data = o.placed_at || o.created_at;
+          return '<div class="order">'
+            + '<div><div class="num">' + o.number + '</div><small>' + (data ? new Date(data).toLocaleDateString("pt-PT") : "") + '</small></div>'
+            + '<div><div><span class="badge">' + (o.status_label || estado) + '</span> <span class="badge">' + (o.payment_label || "") + '</span>'
+            + (o.tracking ? ' <span class="badge">' + o.tracking + '</span>' : '') + '</div>'
+            + '<div class="items">' + artigos + '</div>'
+            + '<div class="steps">' + caminho + '</div></div>'
+            + '<div class="side"><div class="price">' + money(o.totals ? o.totals.total : o.total) + '</div>'
+            + '<a class="btn small ghost" href="' + DATA.urls.receipt + encodeURIComponent(o.number) + "?email=" + encodeURIComponent(dados.email) + '">Ver recibo</a>'
+            + '</div></div>';
+        }).join("");
+      })
+      .catch(function(){ mostrarConvidado(); });
+  }
+  // Carrinho guardado sem artigos válidos: avisa e segue (o contador já saiu limpo).
+  var removidos = prune();
+  if(removidos > 0){
+    var avisoRemovidos = document.getElementById("loja-removidos");
+    if(avisoRemovidos){
+      avisoRemovidos.hidden = false;
+      avisoRemovidos.textContent = removidos === 1
+        ? "Um artigo do carrinho já não está à venda e foi removido."
+        : removidos + " artigos do carrinho já não estão à venda e foram removidos.";
+    }
+    if(document.getElementById("loja-carrinho")) toast("O carrinho foi atualizado: " + removidos + " artigo(s) já não estão à venda.");
+  }
+  preencherSessao();
+  iniciarConta();
   badge();
   renderCart();
 })();
@@ -498,37 +789,149 @@ _CART_JS = r"""
 # --------------------------------------------------------------------------
 # Layout
 # --------------------------------------------------------------------------
-def _data_payload(settings: Dict[str, Any], products: List[Dict[str, Any]], shipping: List[Dict[str, Any]]) -> str:
+def _data_payload(
+    settings: Dict[str, Any],
+    products: List[Dict[str, Any]],
+    shipping: List[Dict[str, Any]],
+    digital_shipping: Optional[Dict[str, Any]] = None,
+) -> str:
     payload = {
         "cart_key": _CART_KEY,
         "currency": settings.get("currency") or "EUR",
         "products": {str(item["id"]): item for item in products},
         "shipping": shipping,
-        "urls": {"cart": "/loja/carrinho", "checkout": "/loja/encomendas", "coupon": "/loja/cupoes/validar", "review": "/loja/avaliacoes"},
+        "digital_shipping": digital_shipping,
+        "order_labels": dict(store.ORDER_LABELS),
+        "order_flow": list(store.ORDER_FLOW_STEPS),
+        "urls": {
+            "cart": "/loja/carrinho",
+            "account": "/loja/conta",
+            "receipt": "/loja/encomenda/",
+            "checkout": "/loja/encomendas",
+            "coupon": "/loja/cupoes/validar",
+            "review": "/loja/avaliacoes",
+        },
         "prices_include_tax": bool(settings.get("prices_include_tax", True)),
     }
     return json.dumps(payload, ensure_ascii=False)
 
 
-def _header(settings: Dict[str, Any], *, current_path: str = "", preview: bool = False) -> str:
+def _tel(value: Any) -> str:
+    return re.sub(r"[^+0-9]", "", str(value or ""))
+
+
+def _cms_pages(limit: int = 4) -> List[Dict[str, str]]:
+    """Páginas publicadas no CMS — ligações institucionais do rodapé (opcional)."""
+    try:
+        from api import cms_store
+
+        pages = cms_store.published_pages()
+    except Exception as exc:  # pragma: no cover - o CMS é opcional
+        logger.debug("CMS indisponível para o rodapé da loja (%s)", exc)
+        return []
+    items: List[Dict[str, str]] = []
+    for page in pages:
+        if page.get("show_in_menu") is False:
+            continue
+        label = str(page.get("menu_label") or page.get("title") or "").strip()
+        if not label:
+            continue
+        path = str(page.get("path") or "").strip("/")
+        items.append({"label": label, "href": f"/site/{path}" if path else "/site"})
+    return items[:limit]
+
+
+def _free_shipping_note(shipping: List[Dict[str, Any]]) -> str:
+    """Limite de portes grátis mais baixo entre os métodos ativos (se existir)."""
+    limits = [store.money(method.get("free_above")) for method in shipping if store.money(method.get("free_above")) > 0]
+    return f"Portes grátis acima de {_euros(min(limits))}" if limits else ""
+
+
+_SEARCH_ICON = (
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    'stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20.5 20.5-4-4"></path></svg>'
+)
+
+_BAG_ICON = (
+    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 7h12l-1.2 12H7.2z"></path>'
+    '<path d="M9 7a3 3 0 0 1 6 0"></path></svg>'
+)
+
+
+def _brand(settings: Dict[str, Any], *, small_text: str = "") -> str:
+    name = _esc(settings.get("store_name") or "Loja")
+    tagline = str(settings.get("tagline") or "")
+    suffix = f"<small>{_esc(small_text or tagline)}</small>" if (small_text or tagline) else ""
+    return (
+        f'<a class="brand" href="/loja" aria-label="{name}">'
+        f'<span class="brand-mark" aria-hidden="true">{_esc(_initials(str(settings.get("store_name") or "Loja")))}</span>'
+        f'<span class="brand-text">{name}{suffix}</span></a>'
+    )
+
+
+def _header(settings: Dict[str, Any], *, current_path: str = "", preview: bool = False, theme: Optional[Dict[str, Any]] = None) -> str:
     categories = store.public_categories()
-    nav = ['<a href="/loja">Catálogo</a>']
+    shipping = store.public_shipping_methods()
+    base = (current_path or "").split("?")[0].rstrip("/") or "/loja"
+
+    top: List[str] = []
+    if settings.get("phone"):
+        top.append(f'<a href="tel:{_esc(_tel(settings["phone"]))}">{_esc(settings["phone"])}</a>')
+    if settings.get("email"):
+        top.append(f'<a href="mailto:{_esc(settings["email"])}">{_esc(settings["email"])}</a>')
+    top.append('<span class="grow"></span>')
+    if _cms_pages(1):
+        top.append('<a href="/site">Site institucional</a><span class="dot">·</span>')
+
+    # Aviso da vitrine: texto do tema quando existe, senão o melhor limite de portes grátis.
+    note = ""
+    announcement = (theme or {}).get("announcement") or {}
+    if store._bool(announcement.get("enabled"), False) and str(announcement.get("text") or "").strip():
+        text = _esc(announcement.get("text"))
+        label = str(announcement.get("link_label") or "").strip()
+        link = str(announcement.get("link") or "").strip()
+        suffix = f" · {_esc(label)}" if label else ""
+        note = f'<a class="note" href="{_esc(link)}">{text}{suffix}</a>' if link else f'<span class="note">{text}</span>'
+    else:
+        free = _free_shipping_note(shipping)
+        if free:
+            note = f'<span class="note">{_esc(free)}</span>'
+    if note:
+        top.append(note)
+    topbar = f'<div class="topbar"><div class="wrap">{"".join(top)}</div></div>' if top else ""
+
+    montra_active = ' class="active"' if base == "/loja" else ""
+    all_active = ' class="all active"' if base == "/loja/produtos" else ' class="all"'
+    pills = [f'<a href="/loja"{montra_active}>Montra</a>']
     for category in categories[:5]:
-        nav.append(f'<a href="/loja/categoria/{_esc(category.get("slug"))}">{_esc(category.get("name"))}</a>')
-    nav.append('<a href="/loja/produtos">Todos os produtos</a>')
-    tagline = f'<small>{_esc(settings.get("tagline"))}</small>' if settings.get("tagline") else ""
-    banner = '<div class="notice warn" style="border-radius:0;margin:0">Pré-visualização — ainda não publicado</div>' if preview else ""
+        href = f'/loja/categoria/{category.get("slug")}'
+        active = ' class="active"' if base == href else ""
+        count = store._int(category.get("products"))
+        pills.append(f'<a href="{_esc(href)}"{active}>{_esc(category.get("name"))}<small> · {count}</small></a>')
+    pills.append(f'<a{all_active} href="/loja/produtos">Todos os produtos</a>')
+
+    banner = '<div class="notice warn" style="border-radius:0;margin:0">Modo de pré-visualização</div>' if preview else ""
     return (
         banner
+        + topbar
         + '<header class="site-header"><div class="wrap">'
-        + f'<a class="brand" href="/loja">{_esc(settings.get("store_name"))}{tagline}</a>'
-        + f'<nav>{"".join(nav)}</nav>'
+        + '<div class="header-main">'
+        + _brand(settings)
+        + '<form class="search" method="get" action="/loja/produtos" role="search">'
+        + _SEARCH_ICON
+        + f'<input type="search" name="q" placeholder="Procurar produtos, referências ou etiquetas…" value="{_esc(_query_of(current_path))}" aria-label="Procurar na loja">'
+        + '<button type="submit" title="Procurar" aria-label="Procurar">'
+        + _SEARCH_ICON
+        + "</button></form>"
         + '<div class="header-tools">'
-        + '<form class="search" method="get" action="/loja/produtos">'
-        + f'<input type="text" name="q" placeholder="Procurar produtos…" value="{_esc(_query_of(current_path))}">'
-        + '<button class="btn small ghost" type="submit">Procurar</button></form>'
-        + '<a class="cart-pill" href="/loja/carrinho" data-cart-count data-count="0">Carrinho</a>'
-        + "</div></div></header>"
+        + '<a class="account-pill" href="/loja/conta" title="As minhas encomendas">'
+        + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h9l-1 12H9z"></path><path d="M10.5 6a1.5 1.5 0 0 1 3 0"></path><path d="M5 9h14"></path></svg>'
+        + "<span>Encomendas</span></a>"
+        + f'<a class="cart-pill" href="/loja/carrinho" data-cart-count data-count="0">{_BAG_ICON}<span>Carrinho</span><small data-cart-total hidden></small></a>'
+        + "</div></div>"
+        + f'<nav class="nav-pills" aria-label="Navegação da loja">{"".join(pills)}</nav>'
+        + "</div></header>"
     )
 
 
@@ -543,7 +946,7 @@ def _query_of(path: str) -> str:
         return ""
 
 
-def _social_links(settings: Dict[str, Any]) -> str:
+def _social_links(settings: Dict[str, Any], *, as_buttons: bool = False) -> str:
     labels = {"email": "Email", "linkedin": "LinkedIn", "x": "X", "github": "GitHub"}
     parts = []
     for key, label in labels.items():
@@ -552,25 +955,85 @@ def _social_links(settings: Dict[str, Any]) -> str:
             continue
         href = f"mailto:{value}" if key == "email" else value
         parts.append(f'<a href="{_esc(href)}">{label}</a>')
-    return "".join(parts)
+    if not parts:
+        return ""
+    return f'<div class="{"social" if as_buttons else ""}">{"".join(parts)}</div>'
 
 
-def _footer(settings: Dict[str, Any]) -> str:
+def _footer(settings: Dict[str, Any], *, theme: Optional[Dict[str, Any]] = None) -> str:
+    categories = store.public_categories()
+    shipping = store.public_shipping_methods()
+    payments = [str(method["label"]) for method in store.PAYMENT_METHODS if store._bool((settings.get("payments") or {}).get(method["id"]), False)]
+
+    # Coluna 1 — a loja
+    description = str(settings.get("description") or "")
+    footer_note = str((theme or {}).get("footer_note") or "").strip()
+    first = (
+        _brand(settings)
+        + (f"<p>{_esc(description)}</p>" if description else "")
+        + (f"<p>{_esc(footer_note)}</p>" if footer_note else "")
+        + _social_links(settings, as_buttons=True)
+    )
+
+    # Coluna 2 — catálogo
+    shop_links = ['<li><a href="/loja">Montra</a></li>', '<li><a href="/loja/produtos">Todos os produtos</a></li>']
+    for category in categories[:4]:
+        shop_links.append(f'<li><a href="/loja/categoria/{_esc(category.get("slug"))}">{_esc(category.get("name"))} <small>({store._int(category.get("products"))})</small></a></li>')
+    shop_links.append('<li><a href="/loja/carrinho">Carrinho</a></li>')
+    shop_links.append('<li><a href="/loja/conta">As minhas encomendas</a></li>')
+
+    # Coluna 3 — envios e consulta de encomenda
+    shipping_items = "".join(
+        f'<li>{_esc(method["name"])} · <span class="lead">{_euros(method["price"]) if store.money(method["price"]) else "grátis"}</span>'
+        + (f' <small>{store._int(method.get("days_min"))}–{store._int(method.get("days_max"))} dias</small>' if method.get("days_max") else "")
+        + "</li>"
+        for method in shipping[:4]
+    ) or "<li>Portes calculados na finalização da compra.</li>"
+    second = (
+        f"<h3>Envios</h3><ul>{shipping_items}</ul>"
+        '<h3 style="margin-top:18px">Consultar encomenda</h3>'
+        '<form class="footer-help" id="loja-consulta">'
+        '<input name="numero" placeholder="N.º (EN2026-0001)" aria-label="Número da encomenda">'
+        '<input name="email" type="email" placeholder="Email" aria-label="Email da compra">'
+        '<button type="submit">Ver</button></form>'
+    )
+
+    # Coluna 4 — contactos e pagamentos
     contacts = []
     if settings.get("email"):
-        contacts.append(f'<a href="mailto:{_esc(settings["email"])}">{_esc(settings["email"])}</a>')
+        contacts.append(f'<li><a href="mailto:{_esc(settings["email"])}">{_esc(settings["email"])}</a></li>')
     if settings.get("phone"):
-        contacts.append(f'<a href="tel:{_esc(str(settings["phone"]).replace(" ", ""))}">{_esc(settings["phone"])}</a>')
+        contacts.append(f'<li><a href="tel:{_esc(_tel(settings["phone"]))}">{_esc(settings["phone"])}</a></li>')
     if settings.get("address"):
-        contacts.append(f'<span>{_esc(settings["address"])}</span>')
+        contacts.append(f"<li>{_esc(settings['address'])}</li>")
+    if settings.get("tax_id"):
+        contacts.append(f"<li>NIF {_esc(settings['tax_id'])}</li>")
+    badges = "".join(f"<span>{_esc(label)}</span>" for label in payments)
+    fourth = (
+        f'<h3>Contactos</h3><ul>{"".join(contacts)}</ul>'
+        + (f'<h3 style="margin-top:18px">Pagamentos aceites</h3><div class="footer-badges">{badges}</div>' if badges else "")
+    )
+
+    pages = _cms_pages(4)
+    bottom_nav = "".join(f'<a href="{_esc(page["href"])}">{_esc(page["label"])}</a>' for page in pages)
+    if not bottom_nav:
+        bottom_nav = '<a href="/loja/produtos">Produtos</a><a href="/loja/carrinho">Carrinho</a>'
+    footer_text = str(settings.get("footer_text") or f"© {settings.get('store_name') or 'Loja'}")
     return (
         '<footer class="site-footer"><div class="wrap">'
-        f'<div><strong>{_esc(settings.get("store_name"))}</strong><br>{_esc(settings.get("footer_text") or "")}'
-        + (f'<br><small>NIF {_esc(settings.get("tax_id"))}</small>' if settings.get("tax_id") else "")
-        + "</div>"
-        + f'<nav>{"".join(contacts)}{_social_links(settings)}<a href="/loja/produtos">Produtos</a><a href="/loja/carrinho">Carrinho</a></nav>'
-        + "</div></footer>"
+        '<div class="footer-grid">'
+        f"<div>{first}</div>"
+        f'<div><h3>Loja</h3><ul>{"".join(shop_links)}</ul></div>'
+        f"<div>{second}</div>"
+        f"<div>{fourth}</div>"
+        "</div>"
+        '<div class="footer-bottom">'
+        f"<span>{_esc(footer_text)}</span>"
+        f'<nav aria-label="Ligações do rodapé">{bottom_nav}</nav>'
+        "</div>"
+        "</div></footer>"
     )
+
 
 
 def _layout(
@@ -588,6 +1051,7 @@ def _layout(
     json_ld: Optional[Dict[str, Any]] = None,
     preview: bool = False,
     noindex: bool = False,
+    theme: Optional[Dict[str, Any]] = None,
 ) -> str:
     store_name = _esc(settings.get("store_name") or "Loja")
     full_title = f"{title} · {store_name}" if title and store_name not in title else (title or store_name)
@@ -619,18 +1083,31 @@ def _layout(
             '<script async src="https://www.googletagmanager.com/gtag/js?id=' + _esc(analytics) + '"></script>'
             '<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","' + _esc(analytics) + '");</script>'
         )
-    data = _data_payload(settings, products, shipping)
+    theme = theme if theme is not None else store.get_theme()
+    # O carrinho vive no browser e precisa de conhecer **todo** o catálogo
+    # publicado: em páginas filtradas (pesquisa, categoria, produto) a lista
+    # recebida é parcial e o carrinho descartaria artigos válidos.
+    conhecidos = {str(item.get("id")): item for item in products}
+    for item in store.public_products(limit=500):
+        conhecidos.setdefault(str(item.get("id")), item)
+    data = _data_payload(settings, list(conhecidos.values()), shipping, store.digital_shipping_method())
+    cols = store._int(theme.get("catalog_columns"), 4, minimum=2)
+    preview_attr = ' data-preview="1"' if preview else ""
+    preview_flag = '<div class="preview-flag">Pré-visualização da vitrine</div>' if preview else ""
     return (
         '<!doctype html><html lang="' + _esc(str(settings.get("language") or "pt-PT")) + '">'
         '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
         f"<title>{_esc(full_title)}</title>"
         + "".join(meta)
-        + f"<style>{_css(settings)}</style></head><body>"
-        + _header(settings, preview=preview)
+        + f"<style>{_css(settings)}</style></head>"
+        + f'<body class="shop" style="--cols:{cols}"{preview_attr}>'
+        + _header(settings, current_path=canonical, preview=preview, theme=theme)
         + f'<main><div class="wrap">{body}</div></main>'
-        + _footer(settings)
+        + _footer(settings, theme=theme)
         + f'<script type="application/json" id="loja-dados">{data}</script>'
-        + f"<script>{_CART_JS}</script></body></html>"
+        + f"<script>{_CART_JS}</script>"
+        + preview_flag
+        + "</body></html>"
     )
 
 
@@ -681,6 +1158,220 @@ def _product_card(product: Dict[str, Any], settings: Dict[str, Any]) -> str:
     )
 
 
+# --------------------------------------------------------------------------
+# Montra por secções (editor de vitrine)
+# --------------------------------------------------------------------------
+_PERK_ICONS: Dict[str, str] = {
+    "entrega": '<path d="M3 7h11v8H3z"></path><path d="M14 10h4l3 3v2h-7z"></path><circle cx="7" cy="18" r="1.6"></circle><circle cx="18" cy="18" r="1.6"></circle>',
+    "seguro": '<path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"></path><path d="m9 12 2 2 4-4"></path>',
+    "estrela": '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"></path>',
+    "relogio": '<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path>',
+    "caixa": '<path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5z"></path><path d="M3 8.5 12 13l9-4.5M12 13v7"></path>',
+    "cartao": '<rect x="3" y="6" width="18" height="12" rx="2"></rect><path d="M3 10h18"></path>',
+    "telefone": '<path d="M5 4h3l2 5-2 1.5a11 11 0 0 0 5.5 5.5L15 14l5 2v3a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2z"></path>',
+    "cadeado": '<rect x="5" y="10.5" width="14" height="10" rx="2"></rect><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"></path>',
+}
+
+
+def _perk_icon(name: str) -> str:
+    path = _PERK_ICONS.get(name) or _PERK_ICONS["estrela"]
+    return (
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+        f'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{path}</svg>'
+    )
+
+
+def _section_head(title: str, subtitle: str = "", link: str = "", link_label: str = "Ver todos") -> str:
+    if not (title or subtitle or link):
+        return ""
+    text = ""
+    if title:
+        text += f"<h2>{_esc(title)}</h2>"
+    if subtitle:
+        text += f"<p>{_esc(subtitle)}</p>"
+    anchor = f'<a href="{_esc(link)}">{_esc(link_label)}</a>' if link else ""
+    return f'<div class="head"><div>{text}</div>{anchor}</div>'
+
+
+def _section(section_id: str, inner: str, *, columns: int = 0) -> str:
+    style = f' style="--cols:{columns}"' if columns else ""
+    return f'<section class="home-section" id="{_esc(section_id or "secao")}"{style}>{inner}</section>'
+
+
+def _hero_section(section: Dict[str, Any], settings: Dict[str, Any]) -> str:
+    title = str(section.get("title") or "")
+    subtitle = str(section.get("subtitle") or "")
+    image = store._cms_media_url(str(section.get("image_id") or "")) or str(section.get("image_url") or "").strip()
+    style = str(section.get("style") or "destaque")
+    classes = f"hero {style}" + (" centro" if str(section.get("align")) == "centro" else "") + ("" if image else " sem-imagem")
+    label = str(section.get("button_label") or "").strip()
+    href = str(section.get("button_href") or "").strip() or "/loja/produtos"
+    button = f'<a class="btn" href="{_esc(href)}">{_esc(label)}</a>' if label else ""
+    copy = f"<div><h1>{_esc(title)}</h1>" if title else "<div>"
+    if subtitle:
+        copy += f"<p>{_esc(subtitle)}</p>"
+    copy += f"{button}</div>"
+    art = f'<div class="art">{_image(image, title)}</div>' if image else ""
+    return _section(str(section.get("id") or "sec_hero"), f'<div class="{classes}"><div class="inner">{copy}{art}</div></div>')
+
+
+def _products_section(section: Dict[str, Any], settings: Dict[str, Any], theme: Dict[str, Any]) -> str:
+    kind = str(section.get("type") or "produtos")
+    category_id = str(section.get("category_id") or "").strip()
+    products = store.public_products(
+        category_id=category_id or None,
+        tag=str(section.get("tag") or "").strip() or None,
+        sort="destaque" if kind == "destaques" else str(section.get("sort") or "destaque"),
+        featured_only=kind == "destaques",
+        limit=store._int(section.get("limit"), 4, minimum=1),
+    )
+    if not products:
+        return ""
+    link = "/loja/produtos"
+    if category_id:
+        category = next((item for item in store.public_categories() if item.get("id") == category_id), None)
+        if category:
+            link = f'/loja/categoria/{category.get("slug")}'
+    head = _section_head(str(section.get("title") or ""), str(section.get("subtitle") or ""), link)
+    grid = '<div class="grid cols">' + "".join(_product_card(product, settings) for product in products) + "</div>"
+    return _section(str(section.get("id")), head + grid, columns=store._int(theme.get("catalog_columns"), 4, minimum=2))
+
+
+def _categories_section(section: Dict[str, Any], settings: Dict[str, Any]) -> str:
+    categories = store.public_categories()
+    if store._bool(section.get("featured_only"), False):
+        categories = [item for item in categories if item.get("featured")]
+    columns = store._int(section.get("columns"), 4, minimum=2)
+    with_products = [item for item in categories if store._int(item.get("products")) > 0]
+    chosen = (with_products or categories)[:columns]
+    if not chosen:
+        return ""
+    cards = "".join(
+        f'<a class="cat-card" href="/loja/categoria/{_esc(item.get("slug"))}">'
+        f'<span class="thumb">{_image(str(item.get("image_url") or ""), str(item.get("name") or ""))}</span>'
+        f'<span class="body"><strong>{_esc(item.get("name"))}</strong>'
+        f'<small>{store._int(item.get("products"))} produto(s)</small></span></a>'
+        for item in chosen
+    )
+    head = _section_head(str(section.get("title") or ""), str(section.get("subtitle") or ""), "/loja/produtos", "Ver catálogo")
+    return _section(str(section.get("id")), head + f'<div class="cats">{cards}</div>', columns=columns)
+
+
+def _perks_section(section: Dict[str, Any], settings: Dict[str, Any]) -> str:
+    items = [item for item in (section.get("items") or []) if str(item.get("title") or "").strip()]
+    if not items:
+        return ""
+    cards = "".join(
+        f'<div class="perk"><span class="ic">{_perk_icon(str(item.get("icon") or ""))}</span>'
+        f'<strong>{_esc(item.get("title"))}</strong><p>{_esc(item.get("text"))}</p></div>'
+        for item in items
+    )
+    return _section(str(section.get("id")), _section_head(str(section.get("title") or "")) + f'<div class="perks">{cards}</div>')
+
+
+def _text_section(section: Dict[str, Any], settings: Dict[str, Any]) -> str:
+    markdown = str(section.get("markdown") or "")
+    if not markdown.strip() and not str(section.get("title") or "").strip():
+        return ""
+    head = _section_head(str(section.get("title") or ""))
+    return _section(str(section.get("id")), head + f'<div class="prose">{_md(markdown)}</div>')
+
+
+def _reviews_section(section: Dict[str, Any], settings: Dict[str, Any]) -> str:
+    collected: List[Dict[str, Any]] = []
+    for product in store.public_products(limit=60):
+        for review in store.approved_reviews(str(product.get("id")), limit=3):
+            review["product_name"] = product.get("name")
+            review["product_url"] = product.get("url")
+            collected.append(review)
+    collected.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    chosen = collected[: store._int(section.get("limit"), 3, minimum=1)]
+    if not chosen:
+        return ""
+    cards = "".join(
+        '<article class="review">'
+        f'<div>{_stars(store._int(review.get("rating")), 0)}</div>'
+        f'<strong>{_esc(review.get("title") or "")}</strong>'
+        f'<p>{_esc(review.get("body") or "")}</p>'
+        f'<small>{_esc(review.get("customer_name"))} · <a href="{_esc(review.get("product_url") or "#")}">{_esc(review.get("product_name") or "")}</a></small>'
+        "</article>"
+        for review in chosen
+    )
+    return _section(str(section.get("id")), _section_head(str(section.get("title") or "")) + f'<div class="review-wall">{cards}</div>')
+
+
+def _newsletter_section(section: Dict[str, Any], settings: Dict[str, Any]) -> str:
+    label = str(section.get("button_label") or "").strip() or "Subscrever"
+    title = str(section.get("title") or "").strip() or "Receba as novidades"
+    text = str(section.get("text") or "")
+    form = (
+        '<form id="loja-newsletter">'
+        '<input type="email" name="email" required placeholder="o.seu@email.pt" aria-label="O seu email">'
+        f'<button class="btn" type="submit">{_esc(label)}</button></form>'
+        '<div id="loja-newsletter-aviso" class="notice" hidden></div>'
+    )
+    inner = f'<div class="newsletter"><div><h2>{_esc(title)}</h2>' + (f'<p class="muted">{_esc(text)}</p>' if text else "") + f"</div>{form}</div>"
+    return _section(str(section.get("id")), inner)
+
+
+def render_home(*, settings: Optional[Dict[str, Any]] = None, theme: Optional[Dict[str, Any]] = None, preview: bool = False) -> str:
+    """Montra pública: as secções configuradas no editor de vitrine, por ordem."""
+    settings = settings or store.get_settings()
+    theme = theme or store.get_theme()
+    blocks: List[str] = []
+    for section in theme.get("sections") or []:
+        if not store._bool(section.get("enabled"), True):
+            continue
+        kind = str(section.get("type") or "")
+        if kind == "hero":
+            html = _hero_section(section, settings)
+        elif kind in ("destaques", "produtos"):
+            html = _products_section(section, settings, theme)
+        elif kind == "categorias":
+            html = _categories_section(section, settings)
+        elif kind == "vantagens":
+            html = _perks_section(section, settings)
+        elif kind == "texto":
+            html = _text_section(section, settings)
+        elif kind == "avaliacoes":
+            html = _reviews_section(section, settings)
+        elif kind == "newsletter":
+            html = _newsletter_section(section, settings)
+        else:
+            html = ""
+        if html:
+            blocks.append(html)
+    body = "".join(blocks)
+    if not body:
+        # Vitrine sem secções ativas: mostra o catálogo completo.
+        body = _catalogue_body(
+            store.public_products(limit=60),
+            settings=settings,
+            categories=store.public_categories(),
+            title=str(settings.get("store_name") or "Loja"),
+            description=str(settings.get("description") or ""),
+        )
+    json_ld = {
+        "@context": "https://schema.org",
+        "@type": "Store",
+        "name": settings.get("store_name"),
+        "description": settings.get("description"),
+        "url": "/loja",
+    }
+    return _layout(
+        title=str(settings.get("store_name") or "Loja"),
+        description=str(settings.get("description") or ""),
+        body=body,
+        settings=settings,
+        theme=theme,
+        products=store.public_products(limit=400),
+        shipping=store.public_shipping_methods(),
+        canonical="/loja",
+        json_ld=json_ld,
+        preview=preview,
+    )
+
+
 def _catalogue_body(
     products: List[Dict[str, Any]],
     *,
@@ -708,14 +1399,22 @@ def _catalogue_body(
         head += f'<p class="muted">Resultados para <strong>{_esc(query)}</strong>.</p>'
     if tag:
         head += f'<p class="muted">Produtos com a etiqueta <strong>{_esc(tag)}</strong>.</p>'
-    body = [head, f'<div class="toolbar"><div class="chips">{"".join(chips)}</div><div style="margin-left:auto">'
-            f'<form method="get" action="/loja/produtos" style="display:flex;gap:8px;align-items:center">'
-            f'<input type="hidden" name="q" value="{_esc(query)}">'
-            f'<select name="ordenar" onchange="this.form.submit()">{sorts}</select></form></div></div>']
+    sort_action = f"/loja/categoria/{current_category.get('slug')}" if current_category else "/loja/produtos"
+    body = [
+        head,
+        '<div class="toolbar">'
+        f'<div class="chips">{"".join(chips)}</div>'
+        '<div class="sortbar">'
+        f'<form method="get" action="{_esc(sort_action)}">'
+        f'<input type="hidden" name="q" value="{_esc(query)}">'
+        f'<input type="hidden" name="etiqueta" value="{_esc(tag)}">'
+        f'<label>Ordenar<select name="ordenar" onchange="this.form.submit()">{sorts}</select></label>'
+        "</form></div></div>",
+    ]
     if not products:
         body.append('<div class="empty"><p>Não encontrámos produtos com estes critérios.</p><p><a class="btn ghost small" href="/loja/produtos">Ver todos os produtos</a></p></div>')
     else:
-        body.append('<div class="grid">' + "".join(_product_card(product, settings) for product in products) + "</div>")
+        body.append('<div class="grid cols">' + "".join(_product_card(product, settings) for product in products) + "</div>")
     if pages > 1:
         links = []
         for number in range(1, pages + 1):
@@ -750,6 +1449,7 @@ def render_catalogue(
     title: str = "Loja",
     description: str = "",
     all_products: Optional[List[Dict[str, Any]]] = None,
+    current_path: str = "",
 ) -> str:
     settings = settings or store.get_settings()
     categories = categories if categories is not None else store.public_categories()
@@ -766,7 +1466,7 @@ def render_catalogue(
         title=title,
         description=description or str(settings.get("description") or ""),
     )
-    canonical = f"/loja/categoria/{current_category.get('slug')}" if current_category else "/loja/produtos"
+    canonical = current_path or (f"/loja/categoria/{current_category.get('slug')}" if current_category else "/loja/produtos")
     if page > 1:
         canonical += f"?pagina={page}"
     json_ld = {
@@ -940,6 +1640,7 @@ def render_cart(*, settings: Optional[Dict[str, Any]] = None, products: Optional
     ) or '<p class="notice warn">Não há métodos de pagamento ativos. Contacte a loja.</p>'
     body = (
         "<h1>Carrinho</h1>"
+        '<div id="loja-removidos" class="notice warn" hidden></div>'
         '<div class="empty" id="loja-vazio" hidden><p>O seu carrinho está vazio.</p>'
         '<p><a class="btn small" href="/loja/produtos">Ver produtos</a></p></div>'
         '<div class="cart" id="loja-carrinho"><div id="loja-conteudo">'
@@ -950,6 +1651,7 @@ def render_cart(*, settings: Optional[Dict[str, Any]] = None, products: Optional
         '<aside class="cart-side">'
         '<div id="loja-totais" class="totals"></div>'
         f'<form id="loja-form" class="field-grid">'
+        '<div class="wide notice" id="loja-sessao" hidden></div>'
         '<label>Nome<input type="text" name="name" required></label>'
         '<label>Email<input type="email" name="email" required></label>'
         '<label>Telefone<input type="tel" name="phone"></label>'
@@ -960,14 +1662,15 @@ def render_cart(*, settings: Optional[Dict[str, Any]] = None, products: Optional
         '<label>Código postal<input type="text" name="postal_code"></label>'
         '<label>Localidade<input type="text" name="city"></label>'
         '<label class="wide">País<input type="text" name="country" value="Portugal"></label>'
-        f'<div class="wide"><p class="muted" style="margin:14px 0 6px">Envio</p><div class="pay">{shipping_options}</div></div>'
+        f'<div class="wide" id="loja-digital" hidden><div class="notice">Produto digital — o acesso é enviado para o seu email logo após a confirmação do pagamento. Não é precisa morada.</div></div>'
+        f'<div class="wide" id="loja-envio"><p class="muted" style="margin:14px 0 6px">Envio</p><div class="pay">{shipping_options}</div></div>'
         f'<div class="wide"><p class="muted" style="margin:14px 0 6px">Pagamento</p><div class="pay">{payment_options}</div></div>'
         '<label class="wide">Notas para a loja<textarea name="notes" rows="3"></textarea></label>'
         '<label class="wide"><span><input type="checkbox" name="marketing"> Quero receber novidades por email</span></label>'
         '<div class="wide"><button class="btn" type="submit" id="loja-submeter">Finalizar encomenda</button></div>'
         "</form>"
         '<div id="loja-aviso" class="notice" hidden></div>'
-        '<p><small>Os valores são recalculados no servidor antes de a encomenda ser criada.</small></p>'
+        '<p><small>Os valores são recalculados no servidor antes de a encomenda ser criada. Pode comprar como convidado — basta o nome e o email.</small></p>'
         "</aside></div></div>"
     )
     return _layout(
@@ -997,6 +1700,14 @@ def render_order(order: Dict[str, Any], *, settings: Optional[Dict[str, Any]] = 
         for step in order.get("timeline") or []
     )
     payment = order.get("payment") or {}
+    estado_pagamento = str(payment.get("status") or "pendente")
+    if estado_pagamento == "pago":
+        aviso_pagamento = f'<div class="notice ok">Pagamento confirmado ({_esc(store.PAYMENT_LABELS.get(estado_pagamento, estado_pagamento))}). Obrigado!</div>'
+    elif estado_pagamento == "reembolsado":
+        aviso_pagamento = '<div class="notice">Pagamento devolvido. Se tiver dúvidas, responda ao email da encomenda.</div>'
+    else:
+        instrucoes = str((settings.get("payment_instructions") or {}).get(str(payment.get("method")), ""))
+        aviso_pagamento = f'<div class="notice">{_esc(instrucoes)}</div>' if instrucoes else ""
     body = (
         '<div class="receipt" style="margin:22px 0">'
         f'<div class="num">Encomenda {_esc(order.get("number"))}</div>'
@@ -1010,7 +1721,7 @@ def render_order(order: Dict[str, Any], *, settings: Optional[Dict[str, Any]] = 
         + f'<div><span>Portes</span><span>{_euros(totals.get("shipping_total")) if store.money(totals.get("shipping_total")) else "grátis"}</span></div>'
         + f'<div class="grand"><span>Total (IVA incluído)</span><span>{_euros(totals.get("total"))}</span></div>'
         "</div>"
-        + f'<div class="notice">{(settings.get("payment_instructions") or {}).get(str(payment.get("method")), "")}</div>'
+        + aviso_pagamento
         + (f'<section class="block"><h2>Seguimento</h2><ul>{timeline}</ul></section>' if timeline else "")
         + '<p><a class="btn ghost small" href="/loja/produtos">Continuar a comprar</a></p>'
         "</div>"
@@ -1023,6 +1734,40 @@ def render_order(order: Dict[str, Any], *, settings: Optional[Dict[str, Any]] = 
         products=[],
         shipping=store.public_shipping_methods(),
         canonical=f'/loja/encomenda/{order.get("number")}',
+        noindex=True,
+    )
+
+
+def render_account(*, settings: Optional[Dict[str, Any]] = None) -> str:
+    """As minhas encomendas: lista com sessão IQ OS ou consulta de convidado."""
+    settings = settings or store.get_settings()
+    body = (
+        "<h1>As minhas encomendas</h1>"
+        '<p class="muted">Estado, artigos e recibo de cada encomenda. Com sessão IQ OS vê tudo de uma vez; sem sessão, consulte pelo número e email.</p>'
+        '<div id="loja-conta" hidden>'
+        '<p class="muted" id="loja-conta-email"></p>'
+        '<div class="orders" id="loja-conta-lista"></div>'
+        '<div id="loja-conta-aviso" class="notice" hidden></div>'
+        "</div>"
+        '<div id="loja-conta-convidado" hidden>'
+        '<div class="newsletter"><div><h2>Consultar uma encomenda</h2>'
+        '<p class="muted">Indique o número da encomenda e o email usados na compra.</p></div>'
+        '<form class="footer-help" id="loja-consulta">'
+        '<input name="numero" placeholder="N.º (EN2026-0001)" aria-label="Número da encomenda">'
+        '<input name="email" type="email" placeholder="Email da compra" aria-label="Email da compra">'
+        '<button type="submit">Ver encomenda</button></form></div>'
+        '<p class="muted" style="margin-top:16px">Tem conta IQ OS? <a href="/">Entre na plataforma</a> e volte aqui para ver todas as encomendas de uma vez.</p>'
+        "</div>"
+        '<div class="empty" id="loja-conta-carregando"><p>A verificar a sua sessão…</p></div>'
+    )
+    return _layout(
+        title="As minhas encomendas",
+        description="Consulte o estado, os artigos e o recibo das suas encomendas.",
+        body=body,
+        settings=settings,
+        products=[],
+        shipping=store.public_shipping_methods(),
+        canonical="/loja/conta",
         noindex=True,
     )
 

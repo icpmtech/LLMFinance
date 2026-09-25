@@ -1,6 +1,7 @@
 """Teste da loja online em processo: catálogo, cupões, encomendas, stock e vitrine."""
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -156,6 +157,42 @@ except ValueError:
     ok += 1
     print("  OK  carrinho vazio recusado")
 
+print("== compra de produto digital (convidado) ==")
+digital = next(item for item in store.list_items("products")["items"] if item["sku"] == "REL-CP-PT")
+solta = store.checkout(
+    {"items": [{"product_id": digital["id"], "quantity": 1}], "customer": {"name": "Gui Convidado", "email": "gui.digital@exemplo.pt"}},
+    actor="loja",
+)
+check("digital sem morada é aceite", solta["number"].startswith("EN"), solta)
+check("entrega digital escolhida", "digital" in str(solta["shipping_method"]["name"]).lower(), solta["shipping_method"])
+check("sem portes no digital", solta["shipping_total"] == 0, solta["shipping_total"])
+check("cliente criado no checkout", store.customer_by_email("gui.digital@exemplo.pt") is not None)
+check("cliente sem morada inventada", not (store.customer_by_email("gui.digital@exemplo.pt") or {}).get("shipping_address", {}).get("line1"))
+repetida = store.checkout(
+    {"items": [{"product_id": digital["id"], "quantity": 1}], "customer": {"name": "Gui Convidado", "email": "gui.digital@exemplo.pt"}},
+    actor="loja",
+)
+check("segunda compra liga ao mesmo cliente", repetida["customer_id"] == solta["customer_id"], (repetida["customer_id"], solta["customer_id"]))
+clientes_digital = store.list_items("customers", query="gui.digital")["total"]
+check("cliente não duplicado", clientes_digital == 1, clientes_digital)
+
+try:
+    store.checkout(
+        {"items": [{"product_id": manual["id"], "quantity": 1}], "customer": {"name": "Gui", "email": "gui.fisico@exemplo.pt"}},
+        actor="loja",
+    )
+    raise SystemExit("FAIL devia exigir morada em artigo físico")
+except ValueError as exc:
+    ok += 1
+    print(f"  OK  artigo físico exige morada ({exc})")
+
+try:
+    store.checkout({"items": [{"product_id": digital["id"], "quantity": 1}], "customer": {"name": "Gui", "email": "sem-arroba"}}, actor="loja")
+    raise SystemExit("FAIL devia exigir email válido")
+except ValueError:
+    ok += 1
+    print("  OK  email inválido recusado")
+
 print("== pagamento e estado ==")
 paid = store.register_payment(order["id"], {"method": "mbway", "amount": 81.0, "reference": "MB-123"}, "teste@iqos.pt")
 check("pagamento pago", paid["payment"]["status"] == "pago", paid["payment"])
@@ -194,11 +231,33 @@ check("atividade registada", len(store.activity(5)) == 5, store.activity(5))
 
 print("== vitrine (HTML) ==")
 settings = store.get_settings()
-catalogue_html = render.render_catalogue(store.public_products(limit=50), settings=settings)
+catalogue_html = render.render_catalogue(store.public_products(limit=50), settings=settings, current_path="/loja")
 check("nome da loja no HTML", settings["store_name"] in catalogue_html)
 check("botão de carrinho", "data-add-to-cart" in catalogue_html)
 check("dados do carrinho embutidos", 'id="loja-dados"' in catalogue_html)
 check("preço formatado", "€" in catalogue_html and "249,00" in catalogue_html, "preço em falta")
+
+print("== cabeçalho e rodapé ==")
+check("faixa de topo com contactos", 'class="topbar"' in catalogue_html and "mailto:" in catalogue_html)
+check("faixa de topo anuncia portes grátis", "Portes grátis acima de" in catalogue_html)
+check("marca com símbolo", 'class="brand-mark"' in catalogue_html)
+check("navegação da loja", 'class="nav-pills"' in catalogue_html and "Montra" in catalogue_html)
+check("montra assinalada como ativa", 'href="/loja" class="active"' in catalogue_html, "sem estado ativo")
+check("pesquisa com papel de busca", 'role="search"' in catalogue_html)
+check("carrinho com total", "data-cart-total" in catalogue_html)
+check("rodapé em colunas", 'class="footer-grid"' in catalogue_html)
+check("rodapé com envios reais", "Correio registado" in catalogue_html)
+check("rodapé com pagamentos aceites", "Pagamentos aceites" in catalogue_html and "MB Way" in catalogue_html)
+check("rodapé permite consultar encomenda", 'id="loja-consulta"' in catalogue_html)
+check("rodapé com contactos e NIF", settings["email"] in catalogue_html and settings["tax_id"] in catalogue_html)
+
+categoria_html = render.render_catalogue(
+    store.public_products(category_id=store.public_categories()[0]["id"], limit=10),
+    settings=settings,
+    current_category=store.public_categories()[0],
+)
+check("página de categoria assinala o separador", 'class="active"' in categoria_html)
+check("ordenação mantém a categoria", f'action="/loja/categoria/{store.public_categories()[0]["slug"]}"' in categoria_html, "ação de ordenação errada")
 
 product_html = render.render_product(store.product_by_slug(product["slug"]), settings=settings)
 check("ficha com JSON-LD", '"@type": "Product"' in product_html, "JSON-LD em falta")
@@ -233,6 +292,107 @@ saved = store.save_settings({"store_name": "Loja IQ OS", "low_stock_threshold": 
 check("definições guardadas", saved["low_stock_threshold"] == 7, saved["low_stock_threshold"])
 check("pagamentos preservados", saved["payments"]["mbway"] is True and saved["payments"]["numerario"] is True, saved["payments"])
 check("campo desconhecido ignorado", store.save_settings({"inventado": 1}, "teste@iqos.pt").get("inventado") is None)
+
+print("== vitrine (tema) ==")
+theme_data = store.theme_catalogue()
+check("tipos de secção disponíveis", len(theme_data["section_types"]) == 8, len(theme_data["section_types"]))
+check("secções predefinidas", [item["type"] for item in theme_data["theme"]["sections"]] == ["hero", "destaques", "categorias", "produtos", "vantagens", "avaliacoes"], theme_data["theme"]["sections"])
+check("colunas do catálogo", theme_data["theme"]["catalog_columns"] == 4)
+check("URL de pré-visualização", theme_data["preview_url"] == "/loja?preview=1")
+
+saved_theme = store.save_theme(
+    {
+        "catalog_columns": 9,
+        "announcement": {"enabled": True, "text": "Envios grátis hoje", "link": "/loja/produtos", "link_label": "Ver"},
+        "footer_note": "Loja oficial do IQ OS.",
+        "sections": [
+            {"id": "s1", "type": "hero", "enabled": True, "title": "Nova montra", "style": "inexistente", "align": "centro", "limit": 99},
+            {"id": "s2", "type": "produtos", "enabled": True, "title": "Selecionados", "sort": "preco", "limit": 3},
+            {"id": "s3", "type": "desconhecido", "enabled": True},
+            {"id": "s4", "type": "newsletter", "enabled": False, "title": "Novidades"},
+            {"id": "s5", "type": "vantagens", "enabled": True, "items": [{"icon": "entrega", "title": "Rápido", "text": "24h"}, {"icon": "nada", "title": "Seguro", "text": ""}, {"icon": "cadeado", "title": "", "text": ""}]},
+        ],
+    },
+    "teste@iqos.pt",
+)
+check("colunas limitadas a 5", saved_theme["catalog_columns"] == 5, saved_theme["catalog_columns"])
+check("tipo desconhecido descartado", [item["type"] for item in saved_theme["sections"]] == ["hero", "produtos", "newsletter", "vantagens"], saved_theme["sections"])
+check("estilo inválido corrigido", saved_theme["sections"][0]["style"] == "destaque", saved_theme["sections"][0])
+check("campo extra do tipo é ignorado", "limit" not in saved_theme["sections"][0], saved_theme["sections"][0])
+check("ordenação guardada", saved_theme["sections"][1]["sort"] == "preco", saved_theme["sections"][1])
+check("item com ícone inválido corrigido", saved_theme["sections"][3]["items"][1]["icon"] == "entrega", saved_theme["sections"][3]["items"])
+check("itens sem texto descartados", len(saved_theme["sections"][3]["items"]) == 2, saved_theme["sections"][3]["items"])
+
+many = store.save_theme({"sections": [{"id": f"x{index}", "type": "texto", "title": f"Bloco {index}"} for index in range(40)]})
+check("máximo de secções respeitado", len(many["sections"]) == store.MAX_THEME_SECTIONS, len(many["sections"]))
+check("ids repetidos corrigidos", len({item["id"] for item in store.save_theme({"sections": [{"id": "igual", "type": "texto"}, {"id": "igual", "type": "texto"}]})["sections"]}) == 2)
+
+home = render.render_home(settings=settings, theme=saved_theme)
+check("montra com o hero do tema", "Nova montra" in home, "hero em falta")
+check("montra com o aviso", "Envios grátis hoje" in home)
+check("montra com a nota do rodapé", "Loja oficial do IQ OS." in home)
+check("colunas do tema no HTML", 'style="--cols:5"' in home, "sem largura de grelha")
+check("secção oculta não aparece", "loja-newsletter\"" not in home.split("<script")[0], "newsletter oculta renderizada")
+check("grelha de produtos com colunas", 'class="grid cols"' in home)
+check("vantagens do tema", "Rápido" in home and "perk" in home)
+check("pré-visualização marcada", 'data-preview="1"' in render.render_home(settings=settings, theme=saved_theme, preview=True))
+
+empty = store.save_theme({"sections": []})
+check("montra sem secções recorre ao catálogo", "data-add-to-cart" in render.render_home(settings=settings, theme=empty), "catálogo de recurso em falta")
+store.reset_theme("teste@iqos.pt")
+check("vitrine reposta", len(store.get_theme()["sections"]) == 6, len(store.get_theme()["sections"]))
+
+print("== newsletter ==")
+antes = store.list_items("customers")["total"]
+sub = store.newsletter_signup({"email": "novidades@exemplo.pt", "name": "Rita"})
+check("email registado", sub["subscribed"] and sub["email"] == "novidades@exemplo.pt", sub)
+check("cliente criado", store.list_items("customers")["total"] == antes + 1)
+check("autorização de marketing", store.customer_by_email("novidades@exemplo.pt")["marketing"] is True)
+store.newsletter_signup({"email": "novidades@exemplo.pt"})
+check("segunda subscrição não duplica", store.list_items("customers")["total"] == antes + 1)
+try:
+    store.newsletter_signup({"email": "sem-arroba"})
+    raise SystemExit("FAIL devia recusar email inválido")
+except ValueError:
+    ok += 1
+    print("  OK  email inválido recusado")
+
+print("== carrinho na vitrine (dados embutidos) ==")
+metodos = [item["name"] for item in store.public_shipping_methods()]
+check("envios físicos por omissão", "Correio registado" in metodos and "Entrega digital" not in metodos, metodos)
+check("método digital disponível à parte", (store.digital_shipping_method() or {}).get("digital") is True, store.digital_shipping_method())
+publicados = store.public_products(limit=500)
+pagina_carrinho = render.render_cart(settings=settings)
+dados_json = pagina_carrinho.split('id="loja-dados">', 1)[1].split("</script>", 1)[0]
+dados = json.loads(dados_json)
+check("carrinho conhece o catálogo todo", len(dados["products"]) == len(publicados), (len(dados["products"]), len(publicados)))
+check("carrinho tem o método digital", (dados.get("digital_shipping") or {}).get("digital") is True, dados.get("digital_shipping"))
+ficha = render.render_product(publicados[0], settings=settings)
+dados_ficha = json.loads(ficha.split('id="loja-dados">', 1)[1].split("</script>", 1)[0])
+check("página de produto também traz o catálogo todo", len(dados_ficha["products"]) == len(publicados), len(dados_ficha["products"]))
+filtrada = render.render_catalogue(store.public_products(query="manual", limit=10), settings=settings)
+dados_filtrada = json.loads(filtrada.split('id="loja-dados">', 1)[1].split("</script>", 1)[0])
+check("página filtrada não perde o catálogo", len(dados_filtrada["products"]) == len(publicados), len(dados_filtrada["products"]))
+check("carrinho explica convidados", "comprar como convidado" in pagina_carrinho)
+
+print("== encomendas do comprador ==")
+conta = render.render_account(settings=settings)
+check("página da conta existe", 'id="loja-conta"' in conta and 'id="loja-conta-convidado"' in conta, "faltam blocos")
+check("consulta de convidado disponível", 'id="loja-consulta"' in conta)
+check("rótulos de estado nos dados", '"order_labels"' in conta and 'em_preparacao' in conta, "sem rótulos")
+check("cabeçalho liga às encomendas", 'href="/loja/conta"' in conta)
+check("receita do recibo na ligação", '"receipt": "/loja/encomenda/"' in conta, "sem URL de recibo")
+
+conta_ana = store.orders_for_email("ana.ribeiro@exemplo.pt")
+check("encomendas por email", len(conta_ana) == 2, len(conta_ana))
+check("mais recente primeiro", conta_ana[0]["placed_at"] >= conta_ana[1]["placed_at"], [item["placed_at"] for item in conta_ana])
+check("sem notas internas para o cliente", all("internal_notes" not in item for item in conta_ana))
+check("estado legível", conta_ana[0]["status_label"] and conta_ana[0]["payment_label"], conta_ana[0]["status_label"])
+check("totais calculados", all(item["totals"]["total"] > 0 for item in conta_ana))
+check("email diferente não vê nada", store.orders_for_email("outra.pessoa@exemplo.pt") == [])
+check("email vazio não devolve nada", store.orders_for_email("") == [])
+paga = store.register_payment(conta_ana[0]["id"], {"method": "transferencia", "amount": conta_ana[0]["totals"]["total"]}, "teste@iqos.pt")
+check("estado reflete o pagamento", store.orders_for_email("ana.ribeiro@exemplo.pt")[0]["status_label"] == "Pago", store.orders_for_email("ana.ribeiro@exemplo.pt")[0]["status"])
 
 print("== limpeza ==")
 store.reset_seed()

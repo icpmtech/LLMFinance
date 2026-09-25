@@ -65,6 +65,7 @@ import {
 
 export type ShopSection =
   | "painel"
+  | "vitrine"
   | "produtos"
   | "categorias"
   | "encomendas"

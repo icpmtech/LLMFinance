@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   BadgePercent,
   LayoutDashboard,
+  LayoutTemplate,
   Loader2,
   Package,
   RefreshCw,
@@ -30,11 +31,13 @@ import {
 import { Notice, timeAgo } from "../components/shop/ShopKit";
 import { ShopCategoriesPanel, ShopCouponsPanel, ShopCustomersPanel, ShopReviewsPanel, ShopSettingsPanel, ShopShippingPanel } from "./ShopLibrary";
 import { ShopOrdersPanel, ShopOverviewPanel, ShopProductsPanel, type ShopCtx, type ShopSection } from "./ShopPanels";
+import { ShopThemePanel } from "./ShopTheme";
 import * as shopApi from "../shopApi";
 import type { ShopCatalogue, ShopOverview, ShopSearchHit } from "../shopApi";
 
 export const SHOP_SECTIONS: { id: ShopSection; label: string; path: string; icon: React.ReactNode; hint: string }[] = [
   { id: "painel", label: "Painel", path: "/shop", icon: <LayoutDashboard size={13} />, hint: "Vendas, encomendas abertas e stock a acabar" },
+  { id: "vitrine", label: "Vitrine", path: "/shop/vitrine", icon: <LayoutTemplate size={13} />, hint: "Monte a página inicial da loja por secções, com pré-visualização" },
   { id: "produtos", label: "Produtos", path: "/shop/produtos", icon: <Package size={13} />, hint: "Catálogo: preços, IVA, stock, imagens e publicação" },
   { id: "encomendas", label: "Encomendas", path: "/shop/encomendas", icon: <ShoppingBag size={13} />, hint: "Fila de trabalho, pagamentos e seguimento" },
   { id: "categorias", label: "Categorias", path: "/shop/categorias", icon: <Tags size={13} />, hint: "Arrumação do catálogo e menu da loja" },
@@ -282,6 +285,8 @@ export default function ShopPage() {
           </p>
         ) : section === "painel" ? (
           <ShopOverviewPanel ctx={ctx} />
+        ) : section === "vitrine" ? (
+          <ShopThemePanel ctx={ctx} />
         ) : section === "produtos" ? (
           <ShopProductsPanel ctx={ctx} />
         ) : section === "encomendas" ? (
