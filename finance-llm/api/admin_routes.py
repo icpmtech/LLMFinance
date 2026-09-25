@@ -13,6 +13,9 @@ Só acessíveis a contas com o papel `admin`. Dão suporte à aplicação
 - `POST /admin/events`              — registar um evento manualmente (teste/auditoria)
 - `GET  /admin/logs`                — ficheiros de log disponíveis
 - `GET  /admin/logs/{name}`         — últimas linhas de um ficheiro de log
+- `GET  /admin/sidebar-access`      — módulos da barra lateral escondidos por perfil
+- `PUT  /admin/sidebar-access`      — gravar essa matriz (perfil → módulos escondidos)
+- `POST /admin/sidebar-access/reset`— voltar a mostrar tudo a todos
 
 As ações de administração ficam elas próprias registadas como eventos de
 auditoria (origem `admin`).
@@ -29,6 +32,7 @@ from pydantic import BaseModel, Field
 
 from api import auth_service as auth
 from api import events_service as events
+from api import sidebar_access
 from api.auth_routes import CurrentSession, require_session
 from api.elasticsearch_client import (
     AUTH_SESSIONS_INDEX,
@@ -73,6 +77,15 @@ class ManualEvent(BaseModel):
     source: str = "admin"
     message: str
     data: Optional[Dict[str, Any]] = None
+
+
+class SidebarAccessPayload(BaseModel):
+    """Regras de visibilidade da barra lateral: perfil → módulos escondidos."""
+
+    rules: Dict[str, List[str]] = Field(
+        default_factory=dict,
+        description="Chave = perfil (papel da plataforma ou perfil de CRM); valor = ids dos módulos escondidos.",
+    )
 
 
 # -------------------------------------------------------------------- visão geral
@@ -362,3 +375,52 @@ def admin_log_tail(name: str, session: AdminSession, lines: int = Query(200, ge=
     if result.get("error"):
         raise HTTPException(status_code=404, detail=result["error"])
     return result
+
+
+# ------------------------------------------------------ módulos da barra lateral
+@router.get("/sidebar-access")
+def admin_sidebar_access(session: AdminSession) -> Dict[str, Any]:
+    """Regras de visibilidade da barra lateral: perfis, módulos escondidos e autor.
+
+    A matriz da página de administração usa esta resposta para desenhar as
+    colunas (perfis) e o estado atual de cada módulo.
+    """
+    return sidebar_access.overview()
+
+
+@router.put("/sidebar-access")
+def admin_sidebar_access_save(payload: SidebarAccessPayload, session: AdminSession) -> Dict[str, Any]:
+    """Grava as regras (substitui as anteriores) e registra o autor.
+
+    Os módulos intocáveis (`PROTECTED`) e perfis desconhecidos são descartados
+    pelo serviço — o cliente pode enviar a matriz completa sem se preocupar.
+    """
+    result = sidebar_access.save(payload.rules, actor_email=session.user.email)
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=result["error"])
+    total = sum(len(modules) for modules in result["rules"].values())
+    events.log_event(
+        "info",
+        "admin",
+        f"Acesso à barra lateral atualizado ({len(result['rules'])} perfil(es), {total} módulo(s) escondido(s))",
+        data={"rules": result["rules"]},
+        user_id=session.user.id,
+        user_email=session.user.email,
+    )
+    return {**sidebar_access.overview(), "gravado": True}
+
+
+@router.post("/sidebar-access/reset")
+def admin_sidebar_access_reset(session: AdminSession) -> Dict[str, Any]:
+    """Volta a mostrar todos os módulos a todos os perfis."""
+    result = sidebar_access.reset(actor_email=session.user.email)
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=result["error"])
+    events.log_event(
+        "warning",
+        "admin",
+        "Acesso à barra lateral reposto (todos os módulos visíveis)",
+        user_id=session.user.id,
+        user_email=session.user.email,
+    )
+    return {**sidebar_access.overview(), "reposto": True}

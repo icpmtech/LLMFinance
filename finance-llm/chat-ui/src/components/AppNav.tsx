@@ -17,7 +17,9 @@ import {
   Plus,
 } from "lucide-react";
 import { DOCK_CATALOG, IFRAME_PAGES_APP, type DockApp } from "../dock";
-import { CRM_SUITE_GROUPS, CRM_SUITE_SECTIONS } from "../crmSuite";
+import { CRM_SUITE_GROUPS } from "../crmSuite";
+import { dropHidden, hiddenModules, useSidebarAccess } from "../sidebarAccess";
+import { APP_MODULES, CRM_VIEW_IDS, TOOL_APP_IDS, dockAppById } from "../sidebarCatalog";
 import { useWindows } from "../windows";
 import {
   SIDEBAR_MIN_WIDTH,
@@ -126,8 +128,10 @@ interface AppNavProps {
  * Menu de aplicações (como o dock): a barra lateral lista as aplicações da
  * plataforma, não a árvore de páginas de cada uma. As páginas internas de cada
  * aplicação vivem dentro da própria aplicação.
+ *
+ * `TOOL_APP_IDS` e `CRM_VIEW_IDS` vêm de `sidebarCatalog` — a classificação dos
+ * módulos é única no projeto (a página de administração usa a mesma).
  */
-const TOOL_APP_IDS = ["elastic", "import", "cli", "settings", "admin", "iframe-pages"];
 
 /** Sub-ecrãs que pertencem a uma aplicação do menu (mantêm-na realçada). */
 const APP_MATCH: Record<string, AppView[]> = {
@@ -169,19 +173,22 @@ function appItem(app: DockApp): NavItem {
 }
 
 /**
- * Identificadores das aplicações do CRM: todas as secções da arquitetura
- * (`crmSuite.ts`), pela ordem das áreas funcionais.
+ * Menu de CRM: uma secção por área funcional (ver `CRM_NAV_GROUPS`).
+ * Identificadores das secções em `CRM_VIEW_IDS` (sidebarCatalog).
  */
-const CRM_VIEW_IDS: string[] = CRM_SUITE_SECTIONS.map((section) => section.view);
-
 /** Item de menu de uma secção do CRM (sem o prefixo «CRM · » do dock). */
 function crmItem(view: string): NavItem | null {
   const app = DOCK_CATALOG.find((candidate) => candidate.id === view);
   if (!app) return null;
   const item = appItem(app);
   return {
-    ...item,
+    id: item.id,
+    // O CRM **não** herda a lista de vistas de `APP_MATCH.crm`: o item «Pipeline»
+    // casaria com todas as páginas do CRM e o grupo «Visão» abriria sempre.
     label: view === "crm" ? "Pipeline" : item.label.replace(/^CRM\s*\u00b7\s*/, ""),
+    icon: item.icon,
+    keywords: item.keywords,
+    adminOnly: item.adminOnly,
   };
 }
 
@@ -209,36 +216,64 @@ const CRM_NAV_GROUPS: NavGroup[] = CRM_SUITE_GROUPS.map((area) => {
 });
 
 /**
- * Grupos fixos do menu (Aplicações e Ferramentas). O CRM e o grupo das páginas
- * iframe são acrescentados em `buildGroups()`.
+ * As aplicações no menu, **agrupadas por módulo** (`APP_MODULES`): Visão geral,
+ * Contratos públicos, Contratos de Espanha, Empresas, Pessoas, Dados públicos,
+ * Mercados e previsão, Investigação e IA, Conhecimento e conteúdos, Recolha de
+ * dados e Redes sociais.
+ *
+ * O ícone de cada módulo é o da sua primeira aplicação (não obriga a mais um
+ * mapa de ícones) e «Visão geral» é o único aberto por omissão — os restantes
+ * abrem a pedido, ou sozinhos quando lá está a aplicação ativa.
  */
-const BASE_GROUPS: NavGroup[] = [
-  {
-    id: "apps",
-    label: "Aplicações",
-    icon: <Sparkles size={14} />,
-    defaultOpen: true,
-    items: DOCK_CATALOG.filter(
-      (app) => !TOOL_APP_IDS.includes(app.id) && !CRM_VIEW_IDS.includes(app.id),
-    ).map(appItem),
-  },
-  {
-    id: "tools",
-    label: "Ferramentas",
-    icon: <SlidersHorizontal size={14} />,
-    defaultOpen: true,
-    items: [
-      ...DOCK_CATALOG.filter((app) => TOOL_APP_IDS.includes(app.id) && app.id !== "iframe-pages").map(appItem),
-      appItem(IFRAME_PAGES_APP),
-    ],
-  },
-];
+const APP_MODULE_GROUPS: NavGroup[] = APP_MODULES.map((module) => {
+  const items = module.ids
+    .map((id) => dockAppById(id))
+    .filter((app): app is DockApp => Boolean(app))
+    .map(appItem);
+  const Icon = dockAppById(module.ids[0])?.icon ?? Sparkles;
+  return {
+    id: `app-${module.id}`,
+    label: module.label,
+    icon: <Icon size={14} />,
+    defaultOpen: module.id === "visao-geral" ? true : undefined,
+    items,
+  };
+}).filter((group) => group.items.length > 0);
+
+/**
+ * Grupo das ferramentas. O CRM e o grupo das páginas iframe são acrescentados em
+ * `buildGroups()`.
+ */
+const TOOLS_GROUP: NavGroup = {
+  id: "tools",
+  label: "Ferramentas",
+  icon: <SlidersHorizontal size={14} />,
+  defaultOpen: true,
+  items: [
+    ...DOCK_CATALOG.filter((app) => TOOL_APP_IDS.includes(app.id) && app.id !== "iframe-pages").map(appItem),
+    appItem(IFRAME_PAGES_APP),
+  ],
+};
+
+/** Módulos do menu, na ordem em que aparecem na barra lateral. */
+function baseGroups(): NavGroup[] {
+  const known = new Set<string>(APP_MODULE_GROUPS.flatMap((group) => group.items.map((item) => String(item.id))));
+  const rest = DOCK_CATALOG.filter(
+    (app) => !known.has(app.id) && !TOOL_APP_IDS.includes(app.id) && !CRM_VIEW_IDS.includes(app.id),
+  ).map(appItem);
+  const groups = [...APP_MODULE_GROUPS];
+  if (rest.length > 0) {
+    // Aplicações novas, ainda sem módulo: mostram-se à parte em vez de desaparecer.
+    groups.push({ id: "app-outras", label: "Outras aplicações", icon: <Sparkles size={14} />, items: rest });
+  }
+  return [...groups, ...CRM_NAV_GROUPS, TOOLS_GROUP];
+}
 
 /** Grupos do menu já com o CRM e as páginas iframe configuradas pelo utilizador. */
 export function buildGroups(): NavGroup[] {
   const iframes = iframeDockApps();
-  // Aplicações · CRM (por área) · Ferramentas · Páginas iframe.
-  const groups = [BASE_GROUPS[0], ...CRM_NAV_GROUPS, BASE_GROUPS[1]];
+  // Módulos de aplicações · CRM (por área) · Ferramentas · Páginas iframe.
+  const groups = baseGroups();
   if (iframes.length === 0) return groups;
   return [
     ...groups,
@@ -255,7 +290,10 @@ export function buildGroups(): NavGroup[] {
 /** Todos os itens de navegação, associados ao respetivo grupo. */
 function allItems(role?: string | null) {
   const items = buildGroups().flatMap((group) => group.items.map((item) => ({ item, group })));
-  return isAdminRole(role) ? items : items.filter(({ item }) => !item.adminOnly);
+  const allowed = isAdminRole(role) ? items : items.filter(({ item }) => !item.adminOnly);
+  // Módulos escondidos por perfil (definidos na página de administração).
+  const hidden = hiddenModules();
+  return allowed.filter(({ item }) => !hidden.has(item.id));
 }
 
 /** Papel `admin` (a área de administração é a única restrita). */
@@ -274,9 +312,14 @@ export function itemsFor(role?: string | null) {
 /** Grupos de navegação permitidos ao papel indicado (sem grupos vazios). */
 export function groupsFor(role?: string | null): NavGroup[] {
   const groups = buildGroups();
-  if (isAdminRole(role)) return groups;
-  return groups
-    .map((group) => ({ ...group, items: group.items.filter((item) => !item.adminOnly) }))
+  const allowed = isAdminRole(role)
+    ? groups
+    : groups
+        .map((group) => ({ ...group, items: group.items.filter((item) => !item.adminOnly) }))
+        .filter((group) => group.items.length > 0);
+  // Módulos escondidos por perfil: o grupo desaparece quando fica sem itens.
+  return allowed
+    .map((group) => ({ ...group, items: dropHidden(group.items) }))
     .filter((group) => group.items.length > 0);
 }
 
@@ -321,6 +364,8 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
   );
   const recent = useRecentViews();
   const { user, logout } = useAuth();
+  /* Módulos escondidos por perfil: a barra volta a desenhar-se quando a matriz muda. */
+  const sidebarAccess = useSidebarAccess();
   const searchRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const asideRef = useRef<HTMLElement | null>(null);
@@ -349,7 +394,7 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
     void iframeRevision;
     const allowed = itemsFor(user?.role);
     return { items: allowed, groups: groupsFor(user?.role) };
-  }, [user?.role, iframeRevision]);
+  }, [user?.role, iframeRevision, sidebarAccess]);
 
   /* Histórico de vistas (alimenta a secção «Recentes»). */
   useEffect(() => {

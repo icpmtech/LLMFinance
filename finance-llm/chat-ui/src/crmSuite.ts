@@ -95,6 +95,7 @@ export const CRM_SUITE_GROUPS: CrmSuiteGroup[] = [
     accent: "99,102,241",
     sections: [
       { id: "analytics", slug: null, label: "Analytics", hint: "Receita, margem, CLV, SLA e cross-sell", icon: BarChart3, group: "analytics", view: "crm-analytics" },
+      { id: "dashboards", slug: "dashboards", label: "Quadros", hint: "Quadros de indicadores criados por si", icon: LayoutDashboard, group: "analytics", view: "crm-dashboards" },
     ],
   },
   {
@@ -251,6 +252,7 @@ const SECTION_PATHS: Record<string, string> = {
   dashboard: "relatorios",
   activities: "atividades",
   analytics: "indicadores",
+  dashboards: "quadros",
 };
 
 /** Caminho de URL de uma vista do CRM (secção ou módulo). */
@@ -275,6 +277,7 @@ export function crmSuiteSectionFromPath(path: string): string | null {
     agenda: "agenda",
     relatorios: "dashboard",
     indicadores: "analytics",
+    quadros: "dashboards",
     atividades: "activities",
     relatório: "dashboard",
     oportunidades: "opportunities",
@@ -325,7 +328,7 @@ export function crmSuiteViewFor(sectionId: string): string {
  * declarados no servidor). As restantes têm vistas próprias (pipeline, agenda,
  * relatórios) ou painéis especializados (contas e contactos).
  */
-const CUSTOM_SECTIONS = new Set(["pipeline", "agenda", "dashboard", "accounts", "contacts", "analytics"]);
+const CUSTOM_SECTIONS = new Set(["pipeline", "agenda", "dashboard", "accounts", "contacts", "analytics", "dashboards"]);
 
 export function crmSuiteIsModuleSection(sectionId: string): boolean {
   const section = SECTION_INDEX.get(sectionId);

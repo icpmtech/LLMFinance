@@ -14,6 +14,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { ChevronDown, Power, Search, X } from "lucide-react";
 import { useDock } from "../dock";
 import { useAuth } from "../auth";
+import { useSidebarAccess } from "../sidebarAccess";
 import { recordRecentView, useRecentViews } from "../layout";
 import { Avatar } from "../pages/SettingsPage";
 import { groupsFor, isActive, itemsFor, normalize, type AppView, type NavItem } from "./AppNav";
@@ -42,15 +43,18 @@ export function StartMenu({ active, onClose, onOpenView }: StartMenuProps) {
 
   /* Páginas iframe configuráveis: o menu volta a construir-se quando mudam. */
   const iframeRevision = useSyncExternalStore(subscribeIframePages, getIframeRevision, getIframeRevision);
+  /* Módulos escondidos por perfil: o menu volta a construir-se quando a matriz muda. */
+  const sidebarAccess = useSidebarAccess();
 
   const context = useMemo(
     () => {
-      // `iframeRevision` no corpo força a reconstrução do menu quando as páginas
-      // iframe configuradas mudam.
+      // `iframeRevision`/`sidebarAccess` no corpo forçam a reconstrução do menu
+      // quando as páginas iframe ou os acessos por perfil mudam.
       void iframeRevision;
+      void sidebarAccess;
       return { items: itemsFor(user?.role), groups: groupsFor(user?.role) };
     },
-    [user?.role, iframeRevision],
+    [user?.role, iframeRevision, sidebarAccess],
   );
 
   /** Afixadas: as aplicações do dock, na ordem do dock. */

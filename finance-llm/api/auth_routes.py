@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from api import auth_service as auth
 from api import events_service as events
+from api import sidebar_access
 
 logger = logging.getLogger(__name__)
 
@@ -283,6 +284,20 @@ def logout(session: Annotated[CurrentSession, Depends(require_session)]):
 def me(session: Annotated[CurrentSession, Depends(require_session)]):
     """Dados da conta autenticada (usados para revalidar a sessão ao abrir a app)."""
     return session.user
+
+
+@router.get("/sidebar-access")
+def sidebar_access_for_me(session: Annotated[CurrentSession, Depends(require_session)]) -> Dict[str, Any]:
+    """Módulos da solução que **não** devem aparecer na barra lateral deste utilizador.
+
+    O resultado junta o papel da plataforma (`admin`/`member`) com o perfil de CRM
+    atribuído ao utilizador; a matriz é gerida na página de administração.
+    """
+    try:
+        return sidebar_access.effective(session.user)
+    except Exception as error:  # pragma: no cover - nunca deve impedir o arranque da app
+        logger.debug("acesso à barra lateral indisponível: %s", error)
+        return {"hidden": [], "platform_role": getattr(session.user, "role", "") or "member", "profile": "", "profile_label": "", "protected": list(sidebar_access.PROTECTED)}
 
 
 @router.patch("/me", response_model=UserResponse)

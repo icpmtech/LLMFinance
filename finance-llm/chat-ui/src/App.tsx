@@ -4,6 +4,7 @@ import { AppNav, type AppView as AppNavView } from "./components/AppNav";
 import { Dock } from "./components/Dock";
 import { WindowManager } from "./components/WindowManager";
 import { useDockSpacer, updateDockPrefs, dockApp } from "./dock";
+import { clearSidebarAccess, loadSidebarAccess } from "./sidebarAccess";
 import { getSidebarMode, setSidebarHidden, setSidebarMode, setWindowMode, useSidebarShortcut, useWindowMode } from "./layout";
 import { openWindow, closeWindow, restoreWindow, windowFor } from "./windows";
 import { useAuth } from "./auth";
@@ -127,6 +128,7 @@ type AppView =
   | "crm-agenda"
   | "crm-dashboard"
   | "crm-analytics"
+  | "crm-dashboards"
   | `crm-mod:${string}`
   | "contracts-list"
   | "contracts-map"
@@ -913,8 +915,13 @@ export default function App() {
   useEffect(() => {
     if (authStatus !== "authenticated") {
       prefAppliedRef.current = false;
+      // Sem sessão, também não há módulos escondidos a aplicar.
+      if (authStatus === "anonymous") clearSidebarAccess();
       return;
     }
+    /* Acessos da barra lateral (módulos escondidos por perfil): carregados no
+       arranque da sessão e sempre que o utilizador muda. */
+    void loadSidebarAccess(true);
     if (!user || prefAppliedRef.current) return;
     prefAppliedRef.current = true;
     const preferences = (user.preferences || {}) as Record<string, unknown>;

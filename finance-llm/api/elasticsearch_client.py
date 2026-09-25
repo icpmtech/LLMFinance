@@ -77,6 +77,10 @@ EVENTS_INDEX = "finance_events"
 # Chaves de API dos fornecedores de IA (uma linha por utilizador; `_id` = user id).
 PROVIDER_KEYS_INDEX = "finance_provider_keys"
 
+# Definições da plataforma geridas pela administração (documento único com
+# `kind` próprio): por agora, o acesso aos módulos da barra lateral por perfil.
+SETTINGS_INDEX = "finance_settings"
+
 # Módulo de CRM: contas, contactos, oportunidades e atividades num único índice.
 # O campo `kind` distingue o tipo de registo e `owner_id` o utilizador dono
 # (os administradores veem todos os registos).
@@ -1016,6 +1020,20 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    # Definições da plataforma: um documento por definição (`id` fixo). O valor
+    # (`rules`, `payload`…) fica em `object` desligado — é lido e gravado tal como
+    # está, sem obrigar a um mapping por cada definição nova.
+    settings_mappings = {
+        "properties": {
+            "kind": {"type": "keyword"},
+            "id": {"type": "keyword"},
+            "rules": {"type": "object", "enabled": False},
+            "payload": {"type": "object", "enabled": False},
+            "updated_at": {"type": "date"},
+            "updated_by": {"type": "keyword"},
+        }
+    }
+
     # CRM: um único índice para os quatro tipos de registo (`kind`), porque as
     # suas propriedades não colidem e assim as pesquisas cruzadas (timeline de
     # uma conta) fazem-se sem consultas a vários índices.
@@ -1353,6 +1371,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (AUTH_SESSIONS_INDEX, auth_sessions_mappings),
         (EVENTS_INDEX, events_mappings),
         (PROVIDER_KEYS_INDEX, provider_keys_mappings),
+        (SETTINGS_INDEX, settings_mappings),
         (CRM_INDEX, crm_mappings),
         (CRM_RBAC_INDEX, crm_rbac_mappings),
         (SCRAPED_INDEX, scraped_mappings),

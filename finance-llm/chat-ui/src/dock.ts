@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 import { getIframePages, iframeDockApps, iframeToDockApp, subscribeIframePages } from "./iframePages";
 import { CRM_SUITE_GROUPS } from "./crmSuite";
+import { useSidebarAccess } from "./sidebarAccess";
 
 export type DockPosition = "bottom" | "left" | "right";
 
@@ -875,11 +876,14 @@ export function useDock() {
   /* As páginas iframe entram no catálogo: o dock volta a resolver os ícones
      sempre que a lista de páginas configuradas muda. */
   const iframePages = useSyncExternalStore(subscribeIframePages, getIframePages, getIframePages);
+  /* Módulos escondidos por perfil (página de administração): saem também do dock. */
+  const access = useSidebarAccess();
 
-  const apps = useMemo(
-    () => [...DOCK_CATALOG, IFRAME_PAGES_APP, ...iframePages.filter((page) => page.enabled).map(iframeToDockApp)],
-    [iframePages]
-  );
+  const apps = useMemo(() => {
+    const all = [...DOCK_CATALOG, IFRAME_PAGES_APP, ...iframePages.filter((page) => page.enabled).map(iframeToDockApp)];
+    const hidden = new Set(access.hidden || []);
+    return hidden.size === 0 ? all : all.filter((app) => !hidden.has(app.id));
+  }, [iframePages, access]);
 
   const visible = useMemo(
     () => prefs.items.map((id) => apps.find((app) => app.id === id)).filter((app): app is DockApp => Boolean(app)),

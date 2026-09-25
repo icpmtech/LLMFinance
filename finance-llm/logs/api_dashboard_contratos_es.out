@@ -1,95 +1,421 @@
 warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
-INFO:     Started server process [97016]
+INFO:     Started server process [108524]
 INFO:     Waiting for application startup.
 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
-INFO:     127.0.0.1:60390 - "GET /health HTTP/1.1" 200 OK
-Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights: 100%|██████████| 254/254 [00:00<00:00, 3390.64it/s]
-INFO:     127.0.0.1:58506 - "GET /crm/mod/accounts?size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "DELETE /crm/mod/accounts/acc_e5a792aab9e0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "DELETE /crm/mod/accounts/acc_6c1e5ffbdd01 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "GET /crm/mod/products?size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "DELETE /crm/mod/products/prd_7fcb2f03a41b HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "DELETE /crm/mod/products/prd_6b2846da8b6a HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "DELETE /crm/mod/products/prd_9397a67496f2 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "GET /crm/mod/suppliers?size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "DELETE /crm/mod/suppliers/sup_39e996d673b7 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "DELETE /crm/mod/suppliers/sup_f766c55bd9d2 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "GET /crm/mod/ai-insights?size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-insights/ain_dcde33ba0e76 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-insights/ain_8b4199d8ffcd HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "GET /crm/mod/ai-interactions?size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-interactions/aix_8ed834bc2b6a HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-interactions/aix_37d4d8f4c868 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-interactions/aix_7e5e50f8cc53 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-interactions/aix_b2eed5aa8d0d HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-interactions/aix_c20ae8a8fa5a HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-interactions/aix_0798127c32c2 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-interactions/aix_b58980a3a12c HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "GET /crm/mod/accounts?size=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "GET /crm/mod/products?size=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "GET /crm/mod/suppliers?size=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "GET /crm/mod/orders?size=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "GET /crm/mod/order-lines?size=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "GET /crm/mod/work-orders?size=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "GET /crm/mod/opportunities?size=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "GET /crm/mod/ai-insights?size=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "GET /crm/mod/ai-interactions?size=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "GET /crm/mod/leads?size=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58506 - "GET /crm/mod/activities?size=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55308 - "GET /crm/mod/accounts?size=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63190 - "GET /crm/mod/products?size=300 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53857 - "POST /crm/analytics/cross-sell HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53857 - "POST /crm/ai/ask HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63190 - "POST /crm/ai/ask HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55348 - "GET /crm/contas HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55348 - "GET /assets/index-BVHgIHnT.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55086 - "GET /assets/index-B0QD633-.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50460 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:55348 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55348 - "GET /crm/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55701 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62400 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52025 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51470 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55086 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55348 - "GET /crm/suite HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50469 - "GET /crm/contas HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50469 - "GET /assets/index-ckDQfWCX.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56633 - "GET /assets/index-B0QD633-.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56633 - "GET /assets/index-B0QD633-.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60283 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:50469 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50469 - "GET /crm/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55844 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61022 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51401 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60854 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56633 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50469 - "GET /crm/suite HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52696 - "GET /crm/contas HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52696 - "GET /assets/index-WqdVzJlU.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55563 - "GET /assets/index-B0QD633-.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63981 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:55563 - "GET /assets/index-B0QD633-.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55563 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55563 - "GET /crm/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63390 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60521 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54382 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53857 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52696 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55563 - "GET /crm/suite HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62620 - "GET /crm/suite HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62537 - "GET /crm/mod/suppliers/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50882 - "GET /crm/mod/suppliers/references?size=300 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62620 - "GET /crm/mod/suppliers?size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63679 - "GET /crm/analytics?months=12&top=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50882 - "GET /crm/mod/suppliers?size=200 HTTP/1.1" 200 OK
-Run time of job "Recolha · Dinheiro Vivo (trigger: cron[month='*', day='*', day_of_week='*', hour='*/6', minute='0'], next run at: 2026-09-25 00:00:00 WEST)" was missed by 3:23:00.837353
-Run time of job "Recolha · ECO (Sapo) (trigger: cron[month='*', day='*', day_of_week='*', hour='*/6', minute='0'], next run at: 2026-09-25 00:00:00 WEST)" was missed by 3:23:00.840063
-Run time of job "Recolha · Jornal Económico (trigger: cron[month='*', day='*', day_of_week='*', hour='*/6', minute='0'], next run at: 2026-09-25 12:00:00 WEST)" was missed by 3:23:00.841162
-Run time of job "Recolha · Lusa (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='0'], next run at: 2026-09-25 10:00:00 WEST)" was missed by 0:23:00.842881
-Run time of job "Recolha · Observador · Economia (trigger: cron[month='*', day='*', day_of_week='*', hour='*/6', minute='0'], next run at: 2026-09-25 00:00:00 WEST)" was missed by 3:23:00.844010
-Run time of job "Recolha · SAPO — Notícias (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='0'], next run at: 2026-09-25 10:00:00 WEST)" was missed by 0:23:00.845773
+INFO:     127.0.0.1:49388 - "GET /health HTTP/1.1" 200 OK
+Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  70%|███████   | 178/254 [00:00<00:00, 1746.45it/s]Loading weights: 100%|██████████| 254/254 [00:00<00:00, 1892.49it/s]
+INFO:     127.0.0.1:51397 - "GET /admin/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "GET /admin/users?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "PATCH /crm/mod/users/6a103cf62de69d3eb3654e937bddd4e0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "GET /admin/users?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "PATCH /crm/mod/users/e47f3201b0b0a713e1fbde20e11d5cb0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "GET /admin/users?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "PATCH /crm/mod/users/f6ca0db0d661c7c8b68d847839f1420d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "GET /admin/users?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "PATCH /crm/mod/users/21c476655e629c4e1dddc7bf8dc4acc6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "GET /admin/users?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "PATCH /admin/users/d3176cb827e143f7e8d6ee0e55ba28d7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "PATCH /crm/mod/users/d3176cb827e143f7e8d6ee0e55ba28d7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51397 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65366 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65366 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /?v=1790332872368 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /crm/contas?v=1790332873941 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /assets/index-Dv_LdTLW.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56901 - "GET /assets/index-BpbCbWUA.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64174 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49996 - "GET /assets/index-BpbCbWUA.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /favicon-32.png HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49996 - "GET /favicon.svg HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56901 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56901 - "GET /crm/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53858 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64450 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61574 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63662 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56901 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53858 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59308 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59308 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59308 - "GET /crm/contas?v=1790332900023 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59308 - "GET /assets/index-Dv_LdTLW.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62605 - "GET /assets/index-BpbCbWUA.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62605 - "GET /assets/index-BpbCbWUA.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61076 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59308 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59308 - "GET /crm/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61309 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56082 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57121 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54348 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62605 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59308 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61309 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50567 - "GET /admin/users?limit=1000 HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:50567 - "POST /admin/sidebar-access/reset HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:50567 - "GET /admin/sidebar-access HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:50567 - "GET /admin/users?limit=1000 HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:53246 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53246 - "GET /admin/users?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53246 - "DELETE /admin/users/d3176cb827e143f7e8d6ee0e55ba28d7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53246 - "DELETE /admin/users/21c476655e629c4e1dddc7bf8dc4acc6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53246 - "DELETE /admin/users/f6ca0db0d661c7c8b68d847839f1420d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53246 - "DELETE /admin/users/e47f3201b0b0a713e1fbde20e11d5cb0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53246 - "DELETE /admin/users/6a103cf62de69d3eb3654e937bddd4e0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53246 - "POST /admin/sidebar-access/reset HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53246 - "GET /admin/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53246 - "GET /admin/users?limit=1000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54352 - "GET /?v=1790333003701 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61130 - "GET /admin?v=1790333012352 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61130 - "GET /assets/index-Dv_LdTLW.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56176 - "GET /assets/index-BpbCbWUA.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56176 - "GET /assets/index-BpbCbWUA.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62139 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63117 - "GET /admin?v=1790333026031 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63117 - "GET /assets/index-Dv_LdTLW.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49239 - "GET /assets/index-BpbCbWUA.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49239 - "GET /assets/index-BpbCbWUA.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50702 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63117 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49239 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63117 - "GET /admin/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54425 - "GET /admin/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49350 - "GET /login?v=1790333050205 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49350 - "GET /assets/index-Dv_LdTLW.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58078 - "GET /assets/index-BpbCbWUA.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50461 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49350 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61909 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49350 - "GET /tickers/%5EGSPC/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64770 - "GET /tickers/BTC-USD/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64770 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58078 - "GET /tickers/%5EIXIC/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49350 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58078 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49350 - "GET /tickers/MSFT/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58078 - "GET /tickers/AAPL/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64770 - "GET /tickers/TSLA/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49350 - "GET /tickers/MSFT/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58078 - "GET /tickers/AAPL/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64770 - "GET /tickers/TSLA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61909 - "GET /tickers/NVDA/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65436 - "GET /tickers/AMZN/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61909 - "GET /tickers/NVDA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65436 - "GET /tickers/AMZN/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64770 - "GET /tickers/TSLA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49350 - "GET /tickers/AMZN/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58078 - "GET /tickers/NVDA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65436 - "GET /tickers/AAPL/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61909 - "GET /tickers/MSFT/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61909 - "GET /tickers/AAPL/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65436 - "GET /tickers/MSFT/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58078 - "GET /tickers/TSLA/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57901 - "GET /crm/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54892 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63832 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54352 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55585 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57901 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57901 - "GET /crm/mod/marketing-activities/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "GET /crm/mod/marketing-activities?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55585 - "GET /crm/mod/marketing-activities/references?size=300 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57901 - "GET /crm/mod/marketing-activities?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55663 - "GET /crm/mod/campaigns?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52200 - "GET /crm/mod/campaigns/references?size=300 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59738 - "GET /crm/mod/campaigns/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54352 - "GET /crm/mod/campaign-members/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54502 - "GET /crm/mod/campaign-members?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57985 - "GET /crm/mod/campaign-members/references?size=300 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55663 - "GET /crm/mod/marketing-activities?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52200 - "GET /crm/mod/marketing-activities/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59738 - "GET /crm/mod/marketing-activities/references?size=300 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54352 - "GET /crm/mod/marketing-journeys?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57985 - "GET /crm/mod/marketing-journeys/references?size=300 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54502 - "GET /crm/mod/marketing-journeys/stats HTTP/1.1" 502 Bad Gateway
+INFO:     127.0.0.1:55663 - "GET /crm/mod/campaigns?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52200 - "GET /crm/mod/campaign-members?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59738 - "GET /crm/mod/marketing-activities?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54352 - "GET /crm/mod/marketing-journeys?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55609 - "GET /social/channels HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60611 - "GET /social/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51469 - "GET /social/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59630 - "GET /social/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59630 - "POST /social/channels/linkedin-microsoft/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59630 - "GET /social/runs/20260925T104557-d1e556?channel_id=linkedin-microsoft HTTP/1.1" 200 OK
+[2026-09-25 11:45:59] INFO: Fetched (200) <GET https://www.linkedin.com/company/microsoft/> (referer: https://www.google.com/)
+INFO:     127.0.0.1:59630 - "GET /social/runs/20260925T104557-d1e556?channel_id=linkedin-microsoft HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59630 - "GET /social/runs/20260925T104557-d1e556/items?channel_id=linkedin-microsoft&limit=100&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59630 - "GET /social/channels HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65138 - "GET /social/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59630 - "GET /social/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61254 - "POST /social/channels/reddit-investimentos/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61254 - "GET /social/runs/20260925T104611-ad145d?channel_id=reddit-investimentos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61254 - "GET /social/runs/20260925T104611-ad145d?channel_id=reddit-investimentos HTTP/1.1" 200 OK
+[2026-09-25 11:46:14] INFO: Fetched (403) <GET https://www.reddit.com/r/investimentos/hot/> (referer: https://www.google.com/)
+[2026-09-25 11:46:14] INFO: Fetched (200) <GET https://old.reddit.com/login/?reason=lor2&dest=https%3A%2F%2Fold.reddit.com%2Fr%2Finvestimentos%2Fhot%2F> (referer: https://www.google.com/)
+Recolha social reddit-investimentos: O Reddit não devolveu publicações de r/investimentos em nenhum dos endereços públicos. (blocked)
+INFO:     127.0.0.1:61254 - "GET /social/runs/20260925T104611-ad145d?channel_id=reddit-investimentos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61254 - "GET /social/runs/20260925T104611-ad145d/items?channel_id=reddit-investimentos&limit=100&offset=0 HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+  + Exception Group Traceback (most recent call last):
+  |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_utils.py", line 85, in create_collapsing_task_group
+  |     async with anyio.create_task_group() as tg:
+  |   File "C:\LLMFinance\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 815, in __aexit__
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 416, in run_asgi
+    |     result = await app(  # type: ignore[func-returns-value]
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
+    |     return await self.app(scope, receive, send)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
+    |     await super().__call__(scope, receive, send)
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\applications.py", line 96, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    |     raise exc
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    |     await self.app(scope, receive, _send)
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "c:\LLMFinance/finance-llm\api\main.py", line 505, in _event_log_middleware
+    |     response = await call_next(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    |     raise app_exc from app_exc.__cause__ or app_exc.__context__
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "c:\LLMFinance/finance-llm\api\main.py", line 422, in _no_store_for_docs
+    |     response = await call_next(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    |     raise app_exc from app_exc.__cause__ or app_exc.__context__
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\routing.py", line 670, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 2734, in app
+    |     await route.handle(scope, receive, send)
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 1780, in handle
+    |     await self.original_router.handle(scope, receive, send)
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 2789, in handle
+    |     await included_router._handle_selected(scope, receive, send)
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 1800, in _handle_selected
+    |     await original_route.handle(scope, receive, send)
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 1279, in handle
+    |     await app(scope, receive, send)
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 158, in app
+    |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 144, in app
+    |     response = await f(request)
+    |                ^^^^^^^^^^^^^^^^
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 706, in app
+    |     raw_response = await run_endpoint_function(
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
+    |     return await run_in_threadpool(dependant.call, **values)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
+    |     return await anyio.to_thread.run_sync(func)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
+    |     return await get_async_backend().run_sync_in_worker_thread(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2641, in run_sync_in_worker_thread
+    |     return await future
+    |            ^^^^^^^^^^^^
+    |   File "C:\LLMFinance\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1033, in run
+    |     result = context.run(func, *args)
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "c:\LLMFinance/finance-llm\api\social_routes.py", line 269, in get_run_items
+    |     return social.read_run_items(run_id, channel_id, limit=limit, offset=offset)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "c:\LLMFinance/finance-llm\api\social_service.py", line 705, in read_run_items
+    |     raise KeyError(run_id)
+    | KeyError: '20260925T104611-ad145d'
+    +------------------------------------
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\LLMFinance\.venv\Lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\applications.py", line 96, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\LLMFinance/finance-llm\api\main.py", line 505, in _event_log_middleware
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\LLMFinance/finance-llm\api\main.py", line 422, in _no_store_for_docs
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\routing.py", line 670, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 2734, in app
+    await route.handle(scope, receive, send)
+  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 1780, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 2789, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 1800, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 1279, in handle
+    await app(scope, receive, send)
+  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 158, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 144, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 706, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2641, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1033, in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\LLMFinance/finance-llm\api\social_routes.py", line 269, in get_run_items
+    return social.read_run_items(run_id, channel_id, limit=limit, offset=offset)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "c:\LLMFinance/finance-llm\api\social_service.py", line 705, in read_run_items
+    raise KeyError(run_id)
+KeyError: '20260925T104611-ad145d'
+INFO:     127.0.0.1:57381 - "GET /social/templates HTTP/1.1" 200 OK
+[2026-09-25 11:46:39] INFO: Fetched (403) <GET https://www.reddit.com/r/investimentos/hot/> (referer: https://www.google.com/)
+[2026-09-25 11:46:39] INFO: Fetched (200) <GET https://old.reddit.com/login/?reason=lor2&dest=https%3A%2F%2Fold.reddit.com%2Fr%2Finvestimentos%2Fhot%2F> (referer: https://www.google.com/)
+INFO:     127.0.0.1:65421 - "POST /social/templates/reddit-comunidade/preview?limit=3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60199 - "POST /social/templates/reddit-pesquisa/preview?limit=3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65455 - "POST /social/templates/tiktok-hashtag/preview?limit=3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50460 - "POST /social/templates/tiktok-video/preview?limit=3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64738 - "GET /social/canais HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64738 - "GET /assets/index-Dv_LdTLW.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65022 - "GET /assets/index-BpbCbWUA.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63737 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64738 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65022 - "GET /social/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64738 - "GET /social/channels HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET /social/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52510 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58731 - "GET /social/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60799 - "GET /crm/contas?v=1790333395137 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60799 - "GET /assets/index-BNQmac-_.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52824 - "GET /assets/index-BpbCbWUA.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52824 - "GET /assets/index-BpbCbWUA.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54592 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52824 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52824 - "GET /crm/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50460 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64987 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53858 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54820 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60799 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52824 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50460 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61122 - "PUT /admin/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61122 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61122 - "GET /crm/contas?v=1790333413736 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61122 - "GET /assets/index-BNQmac-_.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63937 - "GET /assets/index-BpbCbWUA.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63937 - "GET /assets/index-BpbCbWUA.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52693 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61122 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61122 - "GET /crm/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61061 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52381 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52520 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54348 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63937 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61122 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61061 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "POST /admin/sidebar-access/reset HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "GET /admin?v=1790333428677 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "GET /assets/index-BNQmac-_.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53858 - "GET /assets/index-BpbCbWUA.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54639 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53858 - "GET /assets/index-BpbCbWUA.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53858 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "GET /admin/overview HTTP/1.1" 200 OK

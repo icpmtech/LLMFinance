@@ -571,6 +571,89 @@ export function askCrmAi(
   return request<CrmAiAnswer>("/crm/ai/ask", withBody("POST", { question, ...options }));
 }
 
+/* ------------------------------------------------ datasets e quadros (BI) */
+
+/** Tipo de métrica de um dataset (decide a formatação e o eixo). */
+export type CrmMetricKind = "money" | "number" | "int" | "percent" | "text";
+
+export type CrmChartKind = "barras" | "colunas" | "linhas" | "circular" | "tabela" | "kpi";
+
+export type CrmDatasetMetric = { key: string; label: string; kind: CrmMetricKind };
+
+export type CrmDataset = {
+  id: string;
+  label: string;
+  description: string;
+  group: string;
+  sources: string[];
+  dimension: { key: string; label: string };
+  metrics: CrmDatasetMetric[];
+  chart: CrmChartKind;
+  limit: number;
+};
+
+export type CrmDatasetCatalogue = {
+  datasets: CrmDataset[];
+  groups: string[];
+  total: number;
+  ignorados: string[];
+  charts: CrmChartKind[];
+  gerado_em: string;
+};
+
+export type CrmDatasetRow = Record<string, string | number>;
+
+export type CrmDatasetResult = {
+  id: string;
+  label: string;
+  description: string;
+  group: string;
+  dimension: { key: string; label: string };
+  metrics: CrmDatasetMetric[];
+  chart: CrmChartKind;
+  rows: CrmDatasetRow[];
+  totals: Record<string, number>;
+  linhas_totais: number;
+  linhas_mostradas: number;
+  filtros: Record<string, string | number>;
+  gerado_em: string;
+  error?: string;
+};
+
+/** Um gráfico dentro de um quadro de análise. */
+export type CrmDashboardWidget = {
+  id: string;
+  dataset: string;
+  metric: string;
+  chart: CrmChartKind;
+  title?: string;
+  limit?: number;
+};
+
+/** Quadro de análise gravado no CRM (módulo `dashboards`). */
+export type CrmDashboard = CrmSuiteRecord & {
+  name?: string;
+  description?: string;
+  visibility?: "privado" | "equipa" | "organizacao";
+  category?: string;
+  period_months?: number;
+  datasets?: string;
+  widgets?: CrmDashboardWidget[];
+  owner_email?: string;
+  updated_at?: string;
+};
+
+export function getCrmDatasetCatalogue(): Promise<CrmDatasetCatalogue> {
+  return request<CrmDatasetCatalogue>("/crm/analytics/datasets");
+}
+
+export function getCrmDatasetRows(
+  datasetId: string,
+  params: { months?: number; limit?: number } = {},
+): Promise<CrmDatasetResult> {
+  return request<CrmDatasetResult>(`/crm/analytics/datasets/${encodeURIComponent(datasetId)}${queryString(params)}`);
+}
+
 /* --------------------------------------------------------------- formatação */
 
 export function formatFieldValue(field: CrmFieldMeta, value: unknown): string {

@@ -76,6 +76,7 @@ import {
 } from "../crmSuite";
 import { getCrmSuite, type CrmSuiteMeta } from "../crmSuiteApi";
 import { CrmAnalyticsPanel, CrmModulePanel } from "./CrmSuitePanels";
+import { CrmDashboardsPanel } from "./CrmDashboards";
 
 /* ------------------------------------------------------------------ aspeto */
 
@@ -2195,12 +2196,15 @@ export default function CrmPage({
         {/* Analytics: vendas, clientes, operações e cross-sell assistido por IA. */}
         {section === "analytics" && <CrmAnalyticsPanel />}
 
+        {/* Quadros: o utilizador compõe os seus indicadores a partir dos datasets. */}
+        {section === "dashboards" && <CrmDashboardsPanel />}
+
         {/* Módulos da arquitetura de CRM: lista, filtros e ficha genéricos. */}
         {crmSuiteIsModuleSection(section) && sectionMeta?.slug && (
           <CrmModulePanel slug={sectionMeta.slug} label={sectionMeta.label} />
         )}
 
-        {!meta && !error && !crmSuiteIsModuleSection(section) && section !== "analytics" && (
+        {!meta && !error && !crmSuiteIsModuleSection(section) && section !== "analytics" && section !== "dashboards" && (
           <EmptyState icon={Target} title="CRM indisponível" hint="Não foi possível obter a configuração do módulo." />
         )}
       </div>

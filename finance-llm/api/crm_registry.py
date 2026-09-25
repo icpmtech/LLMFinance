@@ -250,6 +250,12 @@ GROUPS: Tuple[Dict[str, Any], ...] = (
         "description": "Documentos e base de conhecimento.",
     },
     {
+        "id": "analytics",
+        "label": "Análise e dashboards",
+        "icon": "BarChart3",
+        "description": "Conjuntos de dados analíticos e quadros de indicadores construídos pelo utilizador.",
+    },
+    {
         "id": "inteligencia",
         "label": "Inteligência artificial",
         "icon": "Sparkles",
@@ -1238,6 +1244,55 @@ SUPPLIER_MODULE = Module(
     default_sort=(("name.keyword", "asc"),),
 )
 
+DASHBOARD_MODULE = Module(
+    slug="dashboards",
+    kind="dashboard",
+    label="Quadros de análise",
+    singular="Quadro",
+    group="analytics",
+    icon="LayoutDashboard",
+    description=(
+        "Quadros de indicadores construídos a partir dos conjuntos de dados do "
+        "CRM (vendas, encomendas, clientes, operação, compras e comercial): o "
+        "utilizador escolhe o dataset, a métrica e o tipo de gráfico."
+    ),
+    id_prefix="dsh",
+    label_fields=("name",),
+    fields=(
+        F("name", "Nome", required=True, column=True, width=2, search=4),
+        F("description", "Descrição", TEXTAREA, search=2),
+        F(
+            "visibility",
+            "Visibilidade",
+            SELECT,
+            options="privado:Privado (só eu),equipa:Equipa,organizacao:Toda a organização",
+            required=True,
+            column=True,
+        ),
+        F(
+            "category",
+            "Área",
+            SELECT,
+            options="vendas:Vendas,clientes:Clientes,encomendas:Encomendas,operacao:Operação,compras:Compras,comercial:Comercial,geral:Geral",
+            column=True,
+        ),
+        F("period_months", "Período (meses)", INT, column=True, help="Janela de análise usada nos gráficos."),
+        F(
+            "datasets",
+            "Conjuntos de dados",
+            TEXT,
+            column=True,
+            width=2,
+            help="Preenchido a partir dos widgets do quadro.",
+            search=2,
+        ),
+        F("widgets", "Widgets", JSON, help="Gráficos do quadro: dataset, métrica, tipo e limite de linhas."),
+        F("notes", "Notas", TEXTAREA),
+    ),
+    defaults=(("visibility", "privado"), ("period_months", 12)),
+    default_sort=(("updated_at", "desc"),),
+)
+
 MODULES: Tuple[Module, ...] = (
     ACCOUNT_MODULE,
     CONTACT_MODULE,
@@ -1264,6 +1319,7 @@ MODULES: Tuple[Module, ...] = (
     AUDIT_MODULE,
     DOCUMENT_MODULE,
     KNOWLEDGE_MODULE,
+    DASHBOARD_MODULE,
     AI_INSIGHT_MODULE,
     AI_INTERACTION_MODULE,
 )
@@ -1350,6 +1406,9 @@ ALL_MODULES_NO_ADMIN: Tuple[str, ...] = tuple(
 )
 
 # ------------------------------------------------------------------- perfis
+# Quadros e conjuntos de dados analíticos (disponíveis a quem faz análise).
+ANALISE = ("dashboards",)
+
 RELACAO = (
     "accounts",
     "contacts",
@@ -1494,6 +1553,7 @@ ROLES: Tuple[Role, ...] = (
             *RELACAO,
             *CATALOGO,
             *COMPRAS,
+            *ANALISE,
             "campaigns",
             "ai-insights",
             "ai-interactions",
@@ -1524,6 +1584,7 @@ ROLES: Tuple[Role, ...] = (
             "documents",
             "knowledge",
             "cases",
+            *ANALISE,
             "ai-insights",
             "ai-interactions",
         ),
@@ -1547,6 +1608,7 @@ ROLES: Tuple[Role, ...] = (
             "documents",
             "knowledge",
             *COMPRAS,
+            *ANALISE,
             "ai-insights",
             "ai-interactions",
         ),
@@ -1560,7 +1622,7 @@ ROLES: Tuple[Role, ...] = (
         area="marketing",
         department="marketing",
         scope="department",
-        modules=(*MARKETING_SET, "teams", "users"),
+        modules=(*MARKETING_SET, *ANALISE, "teams", "users"),
         actions=("read", "create", "update", "delete", "export", "manage"),
         rank=2,
         description="Planeia e mede campanhas e jornadas de marketing.",
@@ -1571,7 +1633,7 @@ ROLES: Tuple[Role, ...] = (
         area="marketing",
         department="marketing",
         scope="own",
-        modules=MARKETING_SET,
+        modules=(*MARKETING_SET, *ANALISE),
         actions=("read", "create", "update", "export"),
         rank=4,
         description="Executa campanhas, atividades e jornadas; gere públicos e membros.",
@@ -1582,7 +1644,7 @@ ROLES: Tuple[Role, ...] = (
         area="servico",
         department="apoio-cliente",
         scope="department",
-        modules=(*SERVICO_SET, "orders", *COMPRAS, "teams", "users"),
+        modules=(*SERVICO_SET, "orders", *COMPRAS, *ANALISE, "teams", "users"),
         actions=("read", "create", "update", "delete", "export", "manage"),
         rank=2,
         description="Gere a fila de casos, SLAs e a equipa de apoio.",
@@ -1601,6 +1663,7 @@ ROLES: Tuple[Role, ...] = (
             "contacts",
             "knowledge",
             "documents",
+            *ANALISE,
             "ai-insights",
             "ai-interactions",
         ),
@@ -1614,7 +1677,7 @@ ROLES: Tuple[Role, ...] = (
         area="financeiro",
         department="financeiro",
         scope="all",
-        modules=FINANCEIRO_SET,
+        modules=(*FINANCEIRO_SET, *ANALISE),
         actions=("read", "update", "export"),
         rank=2,
         description="Acompanha contratos, encomendas, propostas e previsões em toda a organização.",
@@ -1625,7 +1688,7 @@ ROLES: Tuple[Role, ...] = (
         area="operacoes",
         department="operacoes",
         scope="department",
-        modules=(*OPERACOES_SET, *COMPRAS),
+        modules=(*OPERACOES_SET, *COMPRAS, *ANALISE),
         actions=("read", "create", "update", "export"),
         rank=3,
         description="Garante a execução de encomendas e contratos do departamento.",

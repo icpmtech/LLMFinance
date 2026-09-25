@@ -13,6 +13,8 @@
  *   automática, gráfico por hora, detalhe JSON de cada evento e criação de eventos
  *   manuais para teste.
  * - **Ficheiros de log** — lista e últimas linhas dos ficheiros em `logs/`.
+ * - **Menu lateral** — que módulos da solução cada perfil (papel da plataforma e
+ *   perfil de CRM) vê na barra lateral, no dock e no menu Iniciar.
  *
  * O acesso é restrito a contas com papel `admin` (o servidor devolve 403).
  */
@@ -28,6 +30,7 @@ import {
   Info,
   Loader2,
   Pause,
+  PanelLeft,
   Play,
   RefreshCw,
   Search,
@@ -60,8 +63,9 @@ import {
 } from "../adminApi";
 import { useAuth } from "../auth";
 import { useWindowMode } from "../layout";
+import { AdminSidebarAccessTab } from "./AdminSidebarAccess";
 
-type Tab = "overview" | "users" | "events" | "logs";
+type Tab = "overview" | "users" | "events" | "logs" | "sidebar";
 
 const LEVEL_STYLES: Record<string, { color: string; label: string; icon: typeof Info }> = {
   debug: { color: "bg-slate-500/15 text-slate-300 border-slate-400/20", label: "debug", icon: Bug },
@@ -1039,6 +1043,7 @@ export default function AdminPage() {
     { id: "overview", label: "Visão geral", icon: <Server size={13} /> },
     { id: "users", label: "Utilizadores", icon: <UserCog size={13} /> },
     { id: "events", label: "Eventos", icon: <Activity size={13} /> },
+    { id: "sidebar", label: "Menu lateral", icon: <PanelLeft size={13} /> },
     { id: "logs", label: "Ficheiros de log", icon: <FileText size={13} /> },
   ];
 
@@ -1094,6 +1099,7 @@ export default function AdminPage() {
         {tab === "overview" && <OverviewTab overview={overview} onError={setError} />}
         {tab === "users" && <UsersTab onError={setError} currentUserId={user?.id} />}
         {tab === "events" && <EventsTab onError={setError} />}
+        {tab === "sidebar" && <AdminSidebarAccessTab onError={setError} />}
         {tab === "logs" && <LogsTab onError={setError} />}
       </div>
 

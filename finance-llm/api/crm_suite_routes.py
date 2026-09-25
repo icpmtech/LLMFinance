@@ -19,6 +19,11 @@ utilizador (módulos, ações e âmbito de visibilidade).
 - `DELETE /crm/mod/{módulo}/{id}`            — eliminar (com cascata quando aplicável)
 - `POST   /crm/ai/insights/generate`         — gerar perceções de IA a partir dos dados reais
 - `POST   /crm/ai/ask`                       — perguntar ao assistente de CRM
+- `GET    /crm/analytics`                    — painel de analytics (vendas, clientes, operações, compras)
+- `GET    /crm/analytics/datasets`           — catálogo dos conjuntos de dados analíticos
+- `GET    /crm/analytics/datasets/{id}`      — linhas de um conjunto de dados (base dos gráficos)
+- `POST   /crm/analytics/cross-sell`         — público de cross-sell/upsell
+- `POST   /crm/analytics/opportunities`      — criar oportunidades para esse público
 
 Este router é registado **antes** do router do CRM comercial (`api.crm_routes`),
 para que os caminhos genéricos não colidam com `/crm/{tipo}/{id}`.
@@ -33,6 +38,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from api import crm_analytics as analytics
+from api import crm_datasets as datasets_engine
 from api import crm_registry as registry
 from api import crm_suite as suite
 from api.auth_routes import CurrentSession, require_session
@@ -400,6 +406,32 @@ def crm_analytics_board(
     (CLV, frequência, inatividade) e operações (encomendas, ordens, SLA, capacidade)."""
     _require_analytics(ctx)
     return analytics.snapshot(ctx.perm, months=months, top=top, days_without_purchase=days_without_purchase)
+
+
+@router.get("/analytics/datasets")
+def crm_analytics_datasets(ctx: Context):
+    """Catálogo de conjuntos de dados analíticos que o perfil pode usar.
+
+    É a base do construtor de quadros (`dashboards`): o utilizador escolhe o
+    dataset, a métrica e o tipo de gráfico.
+    """
+    _require_analytics(ctx)
+    return datasets_engine.catalogue(ctx.perm)
+
+
+@router.get("/analytics/datasets/{dataset_id}")
+def crm_analytics_dataset_rows(
+    dataset_id: str,
+    ctx: Context,
+    months: int = Query(12, ge=1, le=36, description="Janela de análise, em meses"),
+    limit: Optional[int] = Query(None, ge=1, le=datasets_engine.MAX_LIMIT, description="Número de linhas devolvidas"),
+):
+    """Linhas de um conjunto de dados (dimensão + métricas), já agregadas."""
+    _require_analytics(ctx)
+    result = datasets_engine.rows(dataset_id, ctx.perm, months=months, limit=limit)
+    if result.get("error"):
+        _fail(result, status=403)
+    return result
 
 
 @router.post("/analytics/cross-sell")

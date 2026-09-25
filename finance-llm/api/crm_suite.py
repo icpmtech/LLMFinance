@@ -622,6 +622,42 @@ def rbac_scope_clauses(perm: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [{"bool": {"should": should, "minimum_should_match": 1}}]
 
 
+# Módulos com registos **partilháveis**: além do âmbito do perfil, veem-se os
+# registos marcados como da equipa ou de toda a organização.
+SHARED_SLUGS: Tuple[str, ...] = ("dashboards",)
+
+
+def shared_clauses(perm: Dict[str, Any], module: registry.Module) -> List[Dict[str, Any]]:
+    """Registos partilhados visíveis (equipa do utilizador e organização)."""
+    if perm.get("is_admin") or module.slug not in SHARED_SLUGS:
+        return []
+    should: List[Dict[str, Any]] = [{"term": {"visibility": "organizacao"}}]
+    if perm.get("team_id"):
+        should.append(
+            {
+                "bool": {
+                    "filter": [
+                        {"term": {"visibility": "equipa"}},
+                        {"term": {"org_team": perm["team_id"]}},
+                    ]
+                }
+            }
+        )
+    return [{"bool": {"should": should, "minimum_should_match": 1}}]
+
+
+def visibility_clauses(perm: Dict[str, Any], module: registry.Module) -> List[Dict[str, Any]]:
+    """Âmbito do perfil **ou** partilha explícita do registo."""
+    scope = scope_clauses(perm, module)
+    shared = shared_clauses(perm, module)
+    if not shared:
+        return scope
+    if not scope:
+        # Âmbito total: já vê tudo, a partilha é irrelevante.
+        return []
+    return [{"bool": {"should": [*scope, *shared], "minimum_should_match": 1}}]
+
+
 # ---------------------------------------------------------------- auditoria
 def _audit_document(
     *,
@@ -699,7 +735,7 @@ def _build_query(
     if module.slug in RBAC_SLUGS:
         where.extend(rbac_scope_clauses(perm))
     else:
-        where.extend(scope_clauses(perm, module))
+        where.extend(visibility_clauses(perm, module))
     where.extend(extra or [])
     if ids:
         where.append({"terms": {"id": [str(item) for item in ids]}})
@@ -921,6 +957,12 @@ def get_module(module: registry.Module, record_id: str, perm: Dict[str, Any]) ->
             )
             or (scope == "area" and perm.get("area") and area == perm.get("area"))
         )
+        if not allowed and module.slug in SHARED_SLUGS:
+            # Registo partilhado: a equipa vê os da equipa, todos veem os da organização.
+            visibility = str(record.get("visibility") or "")
+            allowed = visibility == "organizacao" or (
+                visibility == "equipa" and bool(perm.get("team_id")) and team == perm.get("team_id")
+            )
         if not allowed:
             return {"error": "Sem permissão para este registo"}
     return {"item": record}
@@ -1283,7 +1325,9 @@ def update_assignment(
     except Exception as exc:  # pragma: no cover
         return {"error": str(exc)}
     if not current:
-        sync_members()
+        # O utilizador pode ter sido criado depois da última sincronização (que é
+        # limitada no tempo): força-se a sincronização para o poder atribuir já.
+        sync_members(force=True)
         try:
             current = dict(client.get(index=CRM_RBAC_INDEX, id=key)["_source"])
         except Exception:

@@ -1227,6 +1227,7 @@ def entities_detail(nif: str):
 @app.get("/crm/relatorios")
 @app.get("/crm/atividades")
 @app.get("/crm/indicadores")
+@app.get("/crm/quadros")
 @app.get("/crm/leads")
 @app.get("/crm/oportunidades")
 @app.get("/crm/casos")

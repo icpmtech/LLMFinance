@@ -20,6 +20,7 @@ import {
   Check,
   Download,
   Filter,
+  LayoutDashboard,
   LayoutGrid,
   Loader2,
   MessagesSquare,
@@ -29,11 +30,13 @@ import {
   Search,
   Send,
   ShieldCheck,
+  ShoppingCart,
   Sparkles,
   Table2,
   Trash2,
   TrendingUp,
   Truck,
+  UserCheck,
   Users,
   Wand2,
   Wrench,
@@ -66,6 +69,8 @@ import {
   type CrmRbacMeta,
   type CrmSuiteRecord,
 } from "../crmSuiteApi";
+import { CrmDatasetChart, CrmDashboardsPanel } from "./CrmDashboards";
+import type { CrmChartKind } from "../crmSuiteApi";
 
 /* ------------------------------------------------------------------ primitivas */
 
@@ -1037,11 +1042,50 @@ function MiniTable({ title, columns, rows }: { title: string; columns: string[];
 }
 
 /**
- * Painel de analytics do CRM: vendas, clientes, operações e o motor de
- * cross-sell, que além de responder às perguntas cria as oportunidades.
+ * Grelha de gráficos a partir dos **conjuntos de dados** analíticos.
+ *
+ * É o mesmo motor que alimenta o construtor de quadros (`CrmDashboardsPanel`), por
+ * isso os números do painel e os dos quadros do utilizador coincidem sempre.
+ */
+function DatasetGrid({ specs, months }: { specs: DatasetGridSpec[]; months: number }) {
+  return (
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      {specs.map((spec) => (
+        <div key={`${spec.dataset}-${spec.metric}-${spec.chart ?? ""}-${spec.title ?? ""}`} className={spec.wide ? "lg:col-span-2" : ""}>
+          <CrmDatasetChart
+            datasetId={spec.dataset}
+            metric={spec.metric}
+            chart={spec.chart ?? "colunas"}
+            months={months}
+            title={spec.title}
+            limit={spec.limit}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type DatasetGridSpec = {
+  dataset: string;
+  metric: string;
+  chart?: CrmChartKind;
+  title?: string;
+  limit?: number;
+  /** Ocupa as duas colunas da grelha (séries temporais). */
+  wide?: boolean;
+};
+
+/**
+ * Painel de analytics do CRM: vendas, equipa, encomendas, clientes, operações e o
+ * motor de cross-sell, que além de responder às perguntas cria as oportunidades.
+ *
+ * Os gráficos vêm dos **conjuntos de dados** (`/crm/analytics/datasets`): o mesmo
+ * motor que alimenta o construtor de quadros, de modo que os números do painel e
+ * os dos quadros do utilizador são sempre os mesmos.
  */
 export function CrmAnalyticsPanel() {
-  const [tab, setTab] = useState<"vendas" | "clientes" | "operacoes" | "compras" | "cross-sell">("vendas");
+  const [tab, setTab] = useState<"vendas" | "equipa" | "encomendas" | "clientes" | "operacoes" | "compras" | "quadros" | "cross-sell">("vendas");
   const [months, setMonths] = useState(12);
   const [board, setBoard] = useState<CrmAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1072,11 +1116,20 @@ export function CrmAnalyticsPanel() {
 
   const tabs = [
     ["vendas", "Vendas", <TrendingUp key="v" size={13} />],
+    ["equipa", "Vendas por utilizador", <UserCheck key="e" size={13} />],
+    ["encomendas", "Encomendas", <ShoppingCart key="n" size={13} />],
     ["clientes", "Clientes", <Users key="c" size={13} />],
     ["operacoes", "Operações", <Wrench key="o" size={13} />],
     ["compras", "Compras", <Truck key="k" size={13} />],
+    ["quadros", "Quadros", <LayoutDashboard key="d" size={13} />],
     ["cross-sell", "Cross-sell & IA", <Sparkles key="x" size={13} />],
-  ].filter(([id]) => id !== "compras" || Boolean(fornecedores)) as [typeof tab, string, ReactNode][];
+  ].filter(([id]) => {
+    if (id === "compras") return Boolean(fornecedores);
+    if (id === "equipa" || id === "encomendas") return Boolean(board?.acesso?.vendas);
+    if (id === "operacoes") return Boolean(board?.acesso?.operacoes);
+    if (id === "clientes") return Boolean(board?.acesso?.clientes);
+    return true;
+  }) as [typeof tab, string, ReactNode][];
 
   return (
     <div className="flex flex-col gap-3">
@@ -1096,7 +1149,7 @@ export function CrmAnalyticsPanel() {
           </button>
         ))}
         <div className="min-w-0 flex-1" />
-        {tab !== "cross-sell" && (
+        {tab !== "cross-sell" && tab !== "quadros" && (
           <>
             <select className={inputClass} value={months} onChange={(event) => setMonths(Number(event.target.value))} style={{ width: 130 }}>
               <option value={3}>3 meses</option>
@@ -1161,6 +1214,46 @@ export function CrmAnalyticsPanel() {
               rows={vendas.por_vendedor.map((row) => [row.owner ?? "", money(row.revenue), number(row.orders ?? 0), money(row.ticket_medio ?? 0)])}
             />
           </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------- vendas por utilizador */}
+      {tab === "equipa" && (
+        <div className="flex flex-col gap-3">
+          <p className="text-[11.5px] text-muted-foreground">
+            Quem vende o quê: receita, margem, ticket médio e pipeline de cada utilizador (últimos {months} meses).
+          </p>
+          <DatasetGrid
+            months={months}
+            specs={[
+              { dataset: "vendas-utilizador", metric: "receita", chart: "colunas", title: "Receita por utilizador", limit: 12 },
+              { dataset: "vendas-utilizador", metric: "margem", chart: "barras", title: "Margem por utilizador", limit: 12 },
+              { dataset: "vendas-utilizador", metric: "ticket_medio", chart: "colunas", title: "Ticket médio por utilizador", limit: 12 },
+              { dataset: "vendas-utilizador", metric: "encomendas", chart: "tabela", title: "Encomendas e unidades por utilizador", limit: 30 },
+              { dataset: "pipeline-responsavel", metric: "valor", chart: "colunas", title: "Pipeline aberto por responsável", limit: 12 },
+              { dataset: "pipeline-responsavel", metric: "taxa_ganho", chart: "barras", title: "Taxa de ganho por responsável", limit: 12 },
+            ]}
+          />
+        </div>
+      )}
+
+      {/* ------------------------------------------------------- encomendas */}
+      {tab === "encomendas" && (
+        <div className="flex flex-col gap-3">
+          <p className="text-[11.5px] text-muted-foreground">
+            Encomendas dos últimos {months} meses: evolução, estados, clientes e carga de entrega prevista.
+          </p>
+          <DatasetGrid
+            months={months}
+            specs={[
+              { dataset: "encomendas-mes", metric: "valor", chart: "linhas", title: "Valor das encomendas por mês", wide: true, limit: 24 },
+              { dataset: "encomendas-estado", metric: "encomendas", chart: "circular", title: "Encomendas por estado" },
+              { dataset: "encomendas-estado", metric: "valor", chart: "barras", title: "Valor por estado", limit: 10 },
+              { dataset: "encomendas-cliente", metric: "valor", chart: "colunas", title: "Valor por cliente", limit: 10 },
+              { dataset: "encomendas-cliente", metric: "atrasadas", chart: "tabela", title: "Encomendas atrasadas por cliente", limit: 20 },
+              { dataset: "entregas-mes", metric: "valor", chart: "colunas", title: "Entregas previstas por mês", limit: 24 },
+            ]}
+          />
         </div>
       )}
 
@@ -1292,6 +1385,26 @@ export function CrmAnalyticsPanel() {
               value={(row) => number(row.value)}
             />
           </div>
+          <DatasetGrid
+            months={months}
+            specs={[
+              { dataset: "compras-fornecedor", metric: "custo", chart: "barras", title: "Custo de aquisição por fornecedor", limit: 10 },
+              { dataset: "compras-fornecedor", metric: "margem", chart: "colunas", title: "Margem por fornecedor", limit: 10 },
+              { dataset: "compras-mes", metric: "custo", chart: "linhas", title: "Custo de aquisição por mês", limit: 24 },
+              { dataset: "compras-categoria", metric: "custo", chart: "circular", title: "Compras por categoria de fornecedor" },
+            ]}
+          />
+        </div>
+      )}
+
+      {/* ----------------------------------------------------------- quadros */}
+      {tab === "quadros" && (
+        <div className="flex flex-col gap-3">
+          <p className="text-[11.5px] text-muted-foreground">
+            Crie os seus próprios quadros: escolha o conjunto de dados (vendas, encomendas, clientes, operação, compras ou comercial),
+            a métrica e o tipo de gráfico. Os quadros ficam guardados para reutilizar ou partilhar.
+          </p>
+          <CrmDashboardsPanel months={months} />
         </div>
       )}
 
