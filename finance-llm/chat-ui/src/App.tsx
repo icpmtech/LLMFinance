@@ -55,7 +55,7 @@ import CrmPage, {
   type CrmSection,
 } from "./pages/CrmPage";
 import type { CrmKind, CrmRecord } from "./crmApi";
-import { crmSuiteSectionFromPath } from "./crmSuite";
+import { crmSuitePathForView, crmSuiteSectionForView, crmSuiteSectionFromPath } from "./crmSuite";
 import ScraperPage, {
   SCRAPER_SECTION_VIEWS,
   scraperSectionForView,
@@ -126,6 +126,7 @@ type AppView =
   | "crm-contacts"
   | "crm-agenda"
   | "crm-dashboard"
+  | "crm-analytics"
   | `crm-mod:${string}`
   | "contracts-list"
   | "contracts-map"
@@ -242,12 +243,9 @@ function pathForView(
   if (view === "iframe-pages") return "/iframe-pages";
   const iframePath = iframePathFor(view);
   if (iframePath) return iframePath;
-  if (view.startsWith("crm-mod:")) return `/crm/${view.slice("crm-mod:".length)}`;
-  if (view === "crm") return "/crm";
-  if (view === "crm-accounts") return "/crm/contas";
-  if (view === "crm-contacts") return "/crm/contactos";
-  if (view === "crm-agenda") return "/crm/agenda";
-  if (view === "crm-dashboard") return "/crm/relatorios";
+  // Todas as vistas do CRM (vistas de topo e módulos) resolvem-se pela
+  // estrutura declarativa partilhada (`crmSuite.ts`).
+  if (crmSuiteSectionForView(view)) return crmSuitePathForView(view);
   if (view === "scraper") return "/scraper";
   if (view === "scraper-templates") return "/scraper/modelos";
   if (view === "scraper-execucoes") return "/scraper/execucoes";
@@ -1054,7 +1052,9 @@ export default function App() {
       return (
         <CrmPage
           section={section}
-          onSectionChange={windowMode ? openCrmSection : undefined}
+          // Em modo janelas abre a janela da secção; em modo página navega para
+          // ela — nos dois casos os separadores do CRM funcionam.
+          onSectionChange={openCrmSection}
           onOpenAccount={windowMode ? openCrmAccount : undefined}
           onEditRecord={windowMode ? openCrmEditor : undefined}
           onOpenCompany={handleOpenCompany}

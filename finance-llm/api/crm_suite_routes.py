@@ -30,7 +30,9 @@ from dataclasses import dataclass
 from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 
+from api import crm_analytics as analytics
 from api import crm_registry as registry
 from api import crm_suite as suite
 from api.auth_routes import CurrentSession, require_session
@@ -334,3 +336,129 @@ def ai_ask(ctx: Context, payload: Dict[str, Any] = Body(default_factory=dict)):
     if result.get("error"):
         _fail(result)
     return result
+
+
+# --------------------------------------------------------------- analytics
+# A camada de analytics trabalha sobre contas, produtos, encomendas, linhas e
+# ordens de trabalho e fecha o ciclo «perceção → ação»: além dos indicadores,
+# cria oportunidades para um público concreto.
+ANALYTICS_SOURCES = ("orders", "order-lines", "products", "suppliers", "accounts", "work-orders")
+
+
+def _require_analytics(ctx: CrmContext) -> None:
+    """Exige acesso de leitura a pelo menos uma das fontes de venda/operação."""
+    if ctx.perm.get("is_admin") or any(ctx.can(slug, "read") for slug in ANALYTICS_SOURCES):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail=f"O perfil «{ctx.perm.get('role_label')}» não tem acesso aos dados de vendas e operação",
+    )
+
+
+def _resolve_product(ctx: CrmContext, reference: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Aceita um id, um nome ou uma referência de produto e devolve o produto real."""
+    text = (reference or "").strip()
+    if not text:
+        return None
+    catalogue = analytics.product_catalogue(ctx.perm)
+    for product in catalogue:
+        if str(product.get("id")) == text:
+            return product
+    return analytics.match_product(text, catalogue)
+
+
+class CrossSellPayload(BaseModel):
+    """Público de cross-sell: quem comprou (ou não) um produto, com receita mínima."""
+
+    have_product: Optional[str] = Field(None, description="Produto que o cliente já comprou (id, nome ou referência)")
+    missing_product: Optional[str] = Field(None, description="Produto que o cliente ainda não tem")
+    min_spend: Optional[float] = Field(None, ge=0, description="Receita mínima no período")
+    months: int = Field(12, ge=1, le=36)
+    limit: int = Field(50, ge=1, le=200)
+    exclude_with_open_opportunity: bool = True
+
+
+class AnalyticsActionPayload(CrossSellPayload):
+    """Ação de CRM: criar oportunidades para o público encontrado."""
+
+    title: Optional[str] = Field(None, description="Título das oportunidades (por omissão, «Cross-sell: <produto>»)")
+    amount: Optional[float] = Field(None, ge=0, description="Valor fixo por oportunidade")
+    amount_from: str = Field("revenue_pct", pattern="^(revenue_pct|revenue|fixed)$")
+    stage: str = "prospeccao"
+    expected_days: int = Field(60, ge=1, le=365)
+    dry_run: bool = Field(False, description="Simular sem gravar (mostra o que seria criado)")
+
+
+@router.get("/analytics")
+def crm_analytics_board(
+    ctx: Context,
+    months: int = Query(12, ge=1, le=36, description="Janela de análise, em meses"),
+    top: int = Query(10, ge=3, le=50, description="Dimensão das listas de ranking"),
+    days_without_purchase: int = Query(90, ge=7, le=730, description="Dias sem compra a partir dos quais o cliente é «em risco»"),
+):
+    """Painel de analytics: vendas (receita, margem, produtos, vendedores), clientes
+    (CLV, frequência, inatividade) e operações (encomendas, ordens, SLA, capacidade)."""
+    _require_analytics(ctx)
+    return analytics.snapshot(ctx.perm, months=months, top=top, days_without_purchase=days_without_purchase)
+
+
+@router.post("/analytics/cross-sell")
+def crm_analytics_cross_sell(ctx: Context, payload: CrossSellPayload = Body(default_factory=CrossSellPayload)):
+    """Clientes que compraram um produto mas não têm outro (cross-sell/upsell)."""
+    _require_analytics(ctx)
+    have = _resolve_product(ctx, payload.have_product)
+    missing = _resolve_product(ctx, payload.missing_product)
+    if payload.have_product and have is None:
+        raise HTTPException(status_code=404, detail=f"Produto não encontrado no catálogo: {payload.have_product}")
+    if payload.missing_product and missing is None:
+        raise HTTPException(status_code=404, detail=f"Produto não encontrado no catálogo: {payload.missing_product}")
+    return analytics.cross_sell(
+        ctx.perm,
+        have_product_id=(have or {}).get("id"),
+        missing_product_id=(missing or {}).get("id"),
+        min_spend=payload.min_spend,
+        months=payload.months,
+        limit=payload.limit,
+        exclude_with_open_opportunity=payload.exclude_with_open_opportunity,
+    )
+
+
+@router.post("/analytics/opportunities")
+def crm_analytics_opportunities(ctx: Context, payload: AnalyticsActionPayload = Body(default_factory=AnalyticsActionPayload)):
+    """Cria oportunidades para o público encontrado (o «Insight → Ação» do CRM).
+
+    Sem `dry_run`, grava uma oportunidade por conta, na fase indicada, com a fonte
+    `ia-cross-sell` e as notas a explicar o critério — e fica registado na auditoria.
+    """
+    _require_analytics(ctx)
+    missing = _resolve_product(ctx, payload.missing_product)
+    have = _resolve_product(ctx, payload.have_product)
+    if payload.missing_product and missing is None:
+        raise HTTPException(status_code=404, detail=f"Produto não encontrado no catálogo: {payload.missing_product}")
+    if payload.have_product and have is None:
+        raise HTTPException(status_code=404, detail=f"Produto não encontrado no catálogo: {payload.have_product}")
+
+    audience = analytics.cross_sell(
+        ctx.perm,
+        have_product_id=(have or {}).get("id"),
+        missing_product_id=(missing or {}).get("id"),
+        min_spend=payload.min_spend,
+        months=payload.months,
+        limit=max(payload.limit, 1),
+        exclude_with_open_opportunity=payload.exclude_with_open_opportunity,
+    )
+    title = (payload.title or "").strip() or analytics.suggest_title(str((missing or {}).get("name") or ""))
+    action = analytics.create_opportunities(
+        ctx.perm,
+        audience=audience["accounts"],
+        title=title,
+        amount=payload.amount,
+        amount_from=payload.amount_from,
+        stage=payload.stage,
+        source="ia-cross-sell",
+        dry_run=payload.dry_run,
+        limit=min(payload.limit, analytics.MAX_CREATE),
+    )
+    if action.get("error"):
+        _fail(action, status=403)
+    return {**action, "title": title, "publico": audience, "critério": audience.get("filtros")}

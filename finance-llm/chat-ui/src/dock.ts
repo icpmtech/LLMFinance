@@ -72,13 +72,15 @@ export type DockApp = {
 
 /** Catálogo de aplicações que podem entrar no dock. */
 /**
- * Uma aplicação de dock por cada módulo da arquitetura de CRM. As vistas de topo
- * (pipeline, agenda e relatórios) e os painéis próprios de contas e contactos já
- * têm entradas próprias no catálogo, por isso não se repetem aqui.
+ * Uma aplicação de dock por cada módulo da arquitetura de CRM. As aplicações
+ * que já têm entrada própria no catálogo (pipeline, contas, contactos, agenda e
+ * relatórios) não se repetem aqui.
  */
+const CRM_CATALOG_VIEWS = new Set(["crm", "crm-accounts", "crm-contacts", "crm-agenda", "crm-dashboard"]);
+
 const CRM_SUITE_DOCK: DockApp[] = CRM_SUITE_GROUPS.flatMap((group) =>
   group.sections
-    .filter((section) => section.view.startsWith("crm-mod:"))
+    .filter((section) => !CRM_CATALOG_VIEWS.has(section.view))
     .map((section) => ({
       id: section.view,
       label: `CRM · ${section.label}`,

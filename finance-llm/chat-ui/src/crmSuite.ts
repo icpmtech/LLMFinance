@@ -11,6 +11,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
+  BarChart3,
   BookOpen,
   Building2,
   CalendarClock,
@@ -24,6 +25,7 @@ import {
   LayoutDashboard,
   LifeBuoy,
   ListChecks,
+  ListOrdered,
   Megaphone,
   MessagesSquare,
   Package,
@@ -35,10 +37,12 @@ import {
   Sparkles,
   Target,
   TrendingUp,
+  Truck,
   UserCog,
   UserPlus,
   Users,
   UsersRound,
+  Wrench,
 } from "lucide-react";
 
 export type CrmSuiteSection = {
@@ -83,6 +87,17 @@ export const CRM_SUITE_GROUPS: CrmSuiteGroup[] = [
     ],
   },
   {
+    id: "analytics",
+    label: "Analytics",
+    hint: "Vendas, clientes, operações e cross-sell assistido por IA",
+    icon: BarChart3,
+    gradient: "from-indigo-200 via-indigo-500 to-violet-700",
+    accent: "99,102,241",
+    sections: [
+      { id: "analytics", slug: null, label: "Analytics", hint: "Receita, margem, CLV, SLA e cross-sell", icon: BarChart3, group: "analytics", view: "crm-analytics" },
+    ],
+  },
+  {
     id: "relacao",
     label: "Relação com o cliente",
     hint: "Contas, contactos, leads, oportunidades, casos, atividades, encomendas e contratos",
@@ -97,6 +112,8 @@ export const CRM_SUITE_GROUPS: CrmSuiteGroup[] = [
       { id: "cases", slug: "cases", label: "Casos", hint: "Pedidos de apoio e SLA", icon: LifeBuoy, group: "relacao", view: moduleView("cases") },
       { id: "activities", slug: "activities", label: "Atividades", hint: "Tarefas, chamadas, reuniões e notas", icon: ListChecks, group: "relacao", view: moduleView("activities") },
       { id: "orders", slug: "orders", label: "Encomendas", hint: "Encomendas do rascunho à faturação", icon: ShoppingCart, group: "relacao", view: moduleView("orders") },
+      { id: "order-lines", slug: "order-lines", label: "Linhas de encomenda", hint: "Produtos, quantidades e margem de cada encomenda", icon: ListOrdered, group: "relacao", view: moduleView("order-lines") },
+      { id: "work-orders", slug: "work-orders", label: "Ordens de trabalho", hint: "Instalações, manutenções e SLA da operação", icon: Wrench, group: "relacao", view: moduleView("work-orders") },
       { id: "contracts", slug: "contracts", label: "Contratos", hint: "Contratos, renovações e valores", icon: FileSignature, group: "relacao", view: moduleView("contracts") },
     ],
   },
@@ -111,6 +128,17 @@ export const CRM_SUITE_GROUPS: CrmSuiteGroup[] = [
       { id: "products", slug: "products", label: "Produtos", hint: "Catálogo com preços e margens", icon: Package, group: "comercial", view: moduleView("products") },
       { id: "quotes", slug: "quotes", label: "Propostas", hint: "Propostas com linhas e totais", icon: FileText, group: "comercial", view: moduleView("quotes") },
       { id: "forecasts", slug: "forecasts", label: "Previsões", hint: "Objetivos e previsão de venda", icon: TrendingUp, group: "comercial", view: moduleView("forecasts") },
+    ],
+  },
+  {
+    id: "compras",
+    label: "Compras e fornecedores",
+    hint: "Fornecedores, condições de compra e custo de aquisição",
+    icon: Truck,
+    gradient: "from-orange-200 via-orange-400 to-red-600",
+    accent: "249,115,22",
+    sections: [
+      { id: "suppliers", slug: "suppliers", label: "Fornecedores", hint: "Condições, prazos, pontualidade e custo de aquisição", icon: Truck, group: "compras", view: moduleView("suppliers") },
     ],
   },
   {
@@ -200,17 +228,40 @@ const LEGACY_VIEW_SECTIONS: Record<string, string> = {
 /** Secção a partir do identificador de vista (ou `null`). */
 export function crmSuiteSectionForView(view: string): string | null {
   if (!view) return null;
+  // Cada secção tem uma vista única — é o critério seguro, porque há secções
+  // que partilham o mesmo módulo (o Pipeline e as Oportunidades, a Agenda e as
+  // Atividades): a vista distingue-as.
+  const direct = CRM_SUITE_SECTIONS.find((section) => section.view === view);
+  if (direct) return direct.id;
+  if (LEGACY_VIEW_SECTIONS[view]) return LEGACY_VIEW_SECTIONS[view];
+  return null;
+}
+
+/**
+ * Segmento de URL de cada secção.
+ *
+ * As secções cujo slug coincide com uma rota JSON do CRM
+ * (`/crm/activities` responde com a lista de atividades da API) usam o nome
+ * português, como já acontecia com contas/contactos/agenda/relatórios.
+ */
+const SECTION_PATHS: Record<string, string> = {
+  accounts: "contas",
+  contacts: "contactos",
+  agenda: "agenda",
+  dashboard: "relatorios",
+  activities: "atividades",
+  analytics: "indicadores",
+};
+
+/** Caminho de URL de uma vista do CRM (secção ou módulo). */
+export function crmSuitePathForView(view: string): string {
   if (view.startsWith("crm-mod:")) {
     const slug = view.slice("crm-mod:".length);
-    for (const section of CRM_SUITE_SECTIONS) {
-      if (section.slug === slug) return section.id;
-    }
-    return null;
+    return `/crm/${SECTION_PATHS[slug] ?? slug}`;
   }
-  if (LEGACY_VIEW_SECTIONS[view]) return LEGACY_VIEW_SECTIONS[view];
-  // Uma secção cujo id coincide com a própria vista (ex.: `crm-leads`).
-  const byView = CRM_SUITE_SECTIONS.find((section) => section.view === view);
-  return byView ? byView.id : null;
+  const section = CRM_SUITE_SECTIONS.find((item) => item.view === view);
+  if (!section) return "/crm";
+  return `/crm/${SECTION_PATHS[section.id] ?? section.id}`;
 }
 
 /** Secção a partir de um caminho de URL (`/crm/...`) ou `null`. */
@@ -223,6 +274,8 @@ export function crmSuiteSectionFromPath(path: string): string | null {
     contactos: "contacts",
     agenda: "agenda",
     relatorios: "dashboard",
+    indicadores: "analytics",
+    atividades: "activities",
     relatório: "dashboard",
     oportunidades: "opportunities",
     casos: "cases",
@@ -272,7 +325,7 @@ export function crmSuiteViewFor(sectionId: string): string {
  * declarados no servidor). As restantes têm vistas próprias (pipeline, agenda,
  * relatórios) ou painéis especializados (contas e contactos).
  */
-const CUSTOM_SECTIONS = new Set(["pipeline", "agenda", "dashboard", "accounts", "contacts"]);
+const CUSTOM_SECTIONS = new Set(["pipeline", "agenda", "dashboard", "accounts", "contacts", "analytics"]);
 
 export function crmSuiteIsModuleSection(sectionId: string): boolean {
   const section = SECTION_INDEX.get(sectionId);

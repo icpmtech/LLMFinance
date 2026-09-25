@@ -1,104 +1,95 @@
 warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
-INFO:     Started server process [88008]
+INFO:     Started server process [97016]
 INFO:     Waiting for application startup.
 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
-INFO:     127.0.0.1:58696 - "GET /health HTTP/1.1" 200 OK
-Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  86%|████████▌ | 218/254 [00:00<00:00, 2143.91it/s]Loading weights: 100%|██████████| 254/254 [00:00<00:00, 2475.60it/s]
-INFO:     127.0.0.1:59805 - "GET /crm/perfis HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59805 - "GET /assets/index-drzz9jeh.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57493 - "GET /assets/index-C6ZwOfou.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52815 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:59805 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59805 - "GET /crm/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61224 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59526 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55654 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55531 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57493 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59805 - "GET /crm/suite HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57493 - "GET /crm/suite HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55654 - "GET /crm/mod/roles/references?size=300 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55531 - "GET /crm/mod/roles/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59805 - "GET /crm/mod/roles?size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57493 - "GET /crm/rbac HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55531 - "GET /crm/mod/roles?size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59405 - "GET /crm/ia-percecoes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59405 - "GET /assets/index-drzz9jeh.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58183 - "GET /assets/index-C6ZwOfou.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63684 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:58183 - "GET /assets/index-C6ZwOfou.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59405 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59405 - "GET /crm/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51605 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65490 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60780 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57676 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58183 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59405 - "GET /crm/suite HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58183 - "GET /crm/suite HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57676 - "GET /crm/mod/ai-insights/references?size=300 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59405 - "GET /crm/mod/ai-insights/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58183 - "GET /crm/mod/ai-insights?size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59405 - "GET /crm/mod/ai-insights?size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59405 - "POST /crm/ai/insights/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59405 - "GET /crm/mod/ai-insights?size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54447 - "POST /crm/mod/accounts HTTP/1.1" 201 Created
-INFO:     127.0.0.1:54447 - "POST /crm/mod/opportunities HTTP/1.1" 201 Created
-INFO:     127.0.0.1:54447 - "POST /crm/mod/activities HTTP/1.1" 201 Created
-INFO:     127.0.0.1:54447 - "POST /crm/ai/insights/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52142 - "GET /crm/ia-percecoes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52142 - "GET /assets/index-drzz9jeh.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61706 - "GET /assets/index-C6ZwOfou.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61626 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:52142 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52142 - "GET /crm/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64838 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61025 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52836 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62053 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61706 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52142 - "GET /crm/suite HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61706 - "GET /crm/suite HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61706 - "GET /crm/mod/ai-insights?size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52142 - "GET /crm/mod/ai-insights/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62053 - "GET /crm/mod/ai-insights/references?size=300 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52836 - "GET /crm/mod/ai-insights?size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57047 - "GET /crm/ia-interacoes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57047 - "GET /assets/index-drzz9jeh.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56195 - "GET /assets/index-C6ZwOfou.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56696 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:56195 - "GET /assets/index-C6ZwOfou.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57047 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57047 - "GET /crm/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62756 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53857 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49394 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60081 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56195 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57047 - "GET /crm/suite HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56195 - "GET /crm/suite HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56195 - "GET /crm/mod/ai-interactions?size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60081 - "GET /crm/mod/ai-interactions/references?size=300 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57047 - "GET /crm/mod/ai-interactions/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49394 - "GET /crm/mod/ai-interactions?size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49394 - "POST /crm/ai/ask HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49394 - "GET /crm/mod/ai-interactions?size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49394 - "POST /crm/ai/ask HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51593 - "GET /crm/mod/ai-insights?size=50 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51593 - "DELETE /crm/mod/ai-insights/ain_557ea925a4f9 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51593 - "DELETE /crm/mod/ai-insights/ain_0e0236bab711 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51593 - "DELETE /crm/mod/ai-insights/ain_4b99b5734225 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51593 - "GET /crm/mod/ai-interactions?size=50 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51593 - "DELETE /crm/mod/ai-interactions/aix_33566251832f HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51593 - "DELETE /crm/mod/ai-interactions/aix_6e38df9bd3dd HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51593 - "DELETE /crm/mod/accounts/acc_893dba7e8dd1 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51593 - "GET /crm/mod/leads?size=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51593 - "GET /crm/mod/accounts?size=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51593 - "GET /crm/mod/opportunities?size=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51593 - "GET /crm/mod/activities?size=5 HTTP/1.1" 200 OK
-[2026-09-24 23:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
-[2026-09-24 23:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
-INFO:     127.0.0.1:51593 - "GET /crm/mod/ai-insights?size=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51593 - "GET /crm/mod/ai-interactions?size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60390 - "GET /health HTTP/1.1" 200 OK
+Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights: 100%|██████████| 254/254 [00:00<00:00, 3390.64it/s]
+INFO:     127.0.0.1:58506 - "GET /crm/mod/accounts?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "DELETE /crm/mod/accounts/acc_e5a792aab9e0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "DELETE /crm/mod/accounts/acc_6c1e5ffbdd01 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "GET /crm/mod/products?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "DELETE /crm/mod/products/prd_7fcb2f03a41b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "DELETE /crm/mod/products/prd_6b2846da8b6a HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "DELETE /crm/mod/products/prd_9397a67496f2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "GET /crm/mod/suppliers?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "DELETE /crm/mod/suppliers/sup_39e996d673b7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "DELETE /crm/mod/suppliers/sup_f766c55bd9d2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "GET /crm/mod/ai-insights?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-insights/ain_dcde33ba0e76 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-insights/ain_8b4199d8ffcd HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "GET /crm/mod/ai-interactions?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-interactions/aix_8ed834bc2b6a HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-interactions/aix_37d4d8f4c868 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-interactions/aix_7e5e50f8cc53 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-interactions/aix_b2eed5aa8d0d HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-interactions/aix_c20ae8a8fa5a HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-interactions/aix_0798127c32c2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "DELETE /crm/mod/ai-interactions/aix_b58980a3a12c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "GET /crm/mod/accounts?size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "GET /crm/mod/products?size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "GET /crm/mod/suppliers?size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "GET /crm/mod/orders?size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "GET /crm/mod/order-lines?size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "GET /crm/mod/work-orders?size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "GET /crm/mod/opportunities?size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "GET /crm/mod/ai-insights?size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "GET /crm/mod/ai-interactions?size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "GET /crm/mod/leads?size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58506 - "GET /crm/mod/activities?size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55308 - "GET /crm/mod/accounts?size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63190 - "GET /crm/mod/products?size=300 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "POST /crm/analytics/cross-sell HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "POST /crm/ai/ask HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63190 - "POST /crm/ai/ask HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55348 - "GET /crm/contas HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55348 - "GET /assets/index-BVHgIHnT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55086 - "GET /assets/index-B0QD633-.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50460 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55348 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55348 - "GET /crm/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55701 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62400 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52025 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51470 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55086 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55348 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50469 - "GET /crm/contas HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50469 - "GET /assets/index-ckDQfWCX.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56633 - "GET /assets/index-B0QD633-.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56633 - "GET /assets/index-B0QD633-.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60283 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50469 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50469 - "GET /crm/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55844 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61022 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51401 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60854 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56633 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50469 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52696 - "GET /crm/contas HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52696 - "GET /assets/index-WqdVzJlU.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55563 - "GET /assets/index-B0QD633-.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63981 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55563 - "GET /assets/index-B0QD633-.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55563 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55563 - "GET /crm/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63390 - "GET /crm/activities?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60521 - "GET /crm/contacts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54382 - "GET /crm/deals?size=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "GET /crm/accounts?size=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52696 - "GET /crm/overview?months=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55563 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62620 - "GET /crm/suite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62537 - "GET /crm/mod/suppliers/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50882 - "GET /crm/mod/suppliers/references?size=300 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62620 - "GET /crm/mod/suppliers?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63679 - "GET /crm/analytics?months=12&top=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50882 - "GET /crm/mod/suppliers?size=200 HTTP/1.1" 200 OK
+Run time of job "Recolha · Dinheiro Vivo (trigger: cron[month='*', day='*', day_of_week='*', hour='*/6', minute='0'], next run at: 2026-09-25 00:00:00 WEST)" was missed by 3:23:00.837353
+Run time of job "Recolha · ECO (Sapo) (trigger: cron[month='*', day='*', day_of_week='*', hour='*/6', minute='0'], next run at: 2026-09-25 00:00:00 WEST)" was missed by 3:23:00.840063
+Run time of job "Recolha · Jornal Económico (trigger: cron[month='*', day='*', day_of_week='*', hour='*/6', minute='0'], next run at: 2026-09-25 12:00:00 WEST)" was missed by 3:23:00.841162
+Run time of job "Recolha · Lusa (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='0'], next run at: 2026-09-25 10:00:00 WEST)" was missed by 0:23:00.842881
+Run time of job "Recolha · Observador · Economia (trigger: cron[month='*', day='*', day_of_week='*', hour='*/6', minute='0'], next run at: 2026-09-25 00:00:00 WEST)" was missed by 3:23:00.844010
+Run time of job "Recolha · SAPO — Notícias (trigger: cron[month='*', day='*', day_of_week='*', hour='*', minute='0'], next run at: 2026-09-25 10:00:00 WEST)" was missed by 0:23:00.845773

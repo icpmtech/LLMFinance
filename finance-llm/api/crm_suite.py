@@ -47,6 +47,28 @@ SCOPES = tuple(item["id"] for item in registry.SCOPES)
 # Slugs que vivem no índice de administração (não em `finance_crm`).
 RBAC_SLUGS = registry.RBAC_SLUGS
 
+# Módulos cujo nome (singular) é feminino, para as mensagens de auditoria: o
+# mesmo verbo tem de concordar («Conta apagada», «Lead apagado»).
+_FEMININE_SLUGS = {
+    "accounts",
+    "opportunities",
+    "activities",
+    "orders",
+    "quotes",
+    "forecasts",
+    "campaigns",
+    "marketing-activities",
+    "marketing-journeys",
+    "teams",
+    "ai-insights",
+    "ai-interactions",
+}
+
+
+def agreement(module: registry.Module, masculine: str, feminine: str) -> str:
+    """Escolhe a forma do verbo/adjetivo conforme o género do módulo."""
+    return feminine if module.slug in _FEMININE_SLUGS else masculine
+
 
 # ------------------------------------------------------------------ infraestrutura
 def _now() -> str:
@@ -55,13 +77,21 @@ def _now() -> str:
 
 
 def _client() -> Optional[Any]:
+    """Cliente do Elasticsearch, garantindo os índices (no máximo uma vez por minuto).
+
+    `ensure_indices` compara os mapeamentos de ~30 índices; fazê-lo em cada
+    consulta de CRM tornava as listagens e o analytics desnecessariamente lentos.
+    """
     client = get_es_client()
     if not client:
         return None
-    try:
-        ensure_indices(client)
-    except Exception as exc:  # pragma: no cover - depende do Elasticsearch
-        logger.warning("CRM: não foi possível garantir os índices: %s", exc)
+    stamp = _INDICES_READY.get("at")
+    if stamp is None or (datetime.now(timezone.utc) - stamp).total_seconds() > INDICES_TTL:
+        try:
+            ensure_indices(client)
+            _INDICES_READY["at"] = datetime.now(timezone.utc)
+        except Exception as exc:  # pragma: no cover - depende do Elasticsearch
+            logger.warning("CRM: não foi possível garantir os índices: %s", exc)
     return client
 
 
@@ -177,6 +207,36 @@ STAGE_PROBABILITY: Dict[str, int] = {
 }
 
 
+def _parse_moment(value: Any) -> Optional[datetime]:
+    """Converte uma data/hora ISO (com ou sem fuso) num `datetime` com fuso."""
+    if not value:
+        return None
+    try:
+        moment = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+
+
+def _sla_state(document: Dict[str, Any], started: Optional[datetime], finished: Optional[datetime]) -> Optional[str]:
+    """Estado do SLA de uma ordem de trabalho, a partir das horas de SLA e do início."""
+    hours = _as_int(document.get("sla_hours"))
+    if not hours or hours <= 0:
+        return None
+    reference = started or _parse_moment(document.get("scheduled_start")) or _parse_moment(document.get("created_at"))
+    if reference is None:
+        return None
+    deadline = reference + timedelta(hours=hours)
+    now = datetime.now(timezone.utc)
+    if finished:
+        return "cumprido" if finished <= deadline else "incumprido"
+    if now > deadline:
+        return "incumprido"
+    if now > deadline - timedelta(hours=max(1.0, hours * 0.2)):
+        return "em-risco"
+    return "cumprido"
+
+
 def apply_derived(module: registry.Module, doc: Dict[str, Any]) -> Dict[str, Any]:
     """Calcula os campos derivados do módulo (totais, margens, taxas, estados)."""
     slug = module.slug
@@ -235,6 +295,26 @@ def apply_derived(module: registry.Module, doc: Dict[str, Any]) -> Dict[str, Any
         enrolled = _as_int(doc.get("enrolled"))
         doc["completion_rate"] = _percent(doc.get("completed"), enrolled)
         doc["conversion_rate"] = _percent(doc.get("converted"), enrolled)
+    elif slug == "order-lines":
+        quantity = _as_float(doc.get("quantity")) or 0.0
+        price = _as_float(doc.get("unit_price")) or 0.0
+        discount = _as_float(doc.get("discount")) or 0.0
+        cost = _as_float(doc.get("unit_cost"))
+        net = round(quantity * price * (1 - discount / 100.0), 2)
+        doc["line_total"] = net
+        if cost is not None:
+            margin = round(net - quantity * cost, 2)
+            doc["margin"] = margin
+            doc["margin_pct"] = _percent(margin, net)
+    elif slug == "work-orders":
+        started = _parse_moment(doc.get("started_at"))
+        finished = _parse_moment(doc.get("finished_at"))
+        if started:
+            end = finished or datetime.now(timezone.utc)
+            doc["duration_hours"] = round((end - started).total_seconds() / 3600.0, 2)
+        else:
+            doc["duration_hours"] = None
+        doc["sla_state"] = _sla_state(doc, started, finished)
     elif slug == "events":
         start = doc.get("start_at")
         end = doc.get("end_at")
@@ -269,6 +349,10 @@ def apply_derived(module: registry.Module, doc: Dict[str, Any]) -> Dict[str, Any
 # ---------------------------------------------------------------------- RBAC
 _MEMBER_CACHE: Dict[str, Any] = {"synced_at": None}
 SYNC_INTERVAL_SECONDS = 60
+
+# Momento em que os índices foram garantidos (evita repetir a verificação).
+_INDICES_READY: Dict[str, Any] = {"at": None}
+INDICES_TTL = 300
 
 
 def default_assignment(user: Any) -> Dict[str, Any]:
@@ -934,6 +1018,9 @@ def save_module(
         if typed is not None:
             document["probability"] = typed
     document = apply_derived(module, document)
+    if module.slug == "order-lines":
+        document = _fill_line_cost(client, module, document, perm)
+
     # Campos sintéticos (marca do módulo e etiqueta) só se forem mesmo sintéticos.
     document.pop("doc_id", None)
     if "label" not in module.field_map:
@@ -950,6 +1037,10 @@ def save_module(
     if module.slug in ("roles", "teams"):
         _MEMBER_CACHE["synced_at"] = None  # força releitura do catálogo
 
+    if module.slug == "order-lines" and document.get("order_id"):
+        # O subtotal e o total da encomenda são a soma das suas linhas.
+        refresh_order_totals(client, perm, str(document["order_id"]))
+
     audit(
         action="create" if existing is None else "update",
         module=module.slug,
@@ -957,7 +1048,9 @@ def save_module(
         record_id=record_id,
         record_label=module.label_of(document),
         summary=(
-            f"{module.singular} {'criado' if existing is None else 'alterado'}: {module.label_of(document)}"
+            f"{module.singular} "
+            f"{agreement(module, 'criado', 'criada') if existing is None else agreement(module, 'alterado', 'alterada')}: "
+            f"{module.label_of(document)}"
         ),
         changes=sorted(document.keys()) if existing is None else _changes(existing, document),
         before=existing,
@@ -1026,13 +1119,15 @@ def delete_module(
         return {"error": str(exc)}
 
     cascaded = _cascade_delete(client, module, record_id, perm)
+    if module.slug == "order-lines" and record.get("order_id"):
+        refresh_order_totals(client, perm, str(record["order_id"]))
     audit(
         action="delete",
         module=module.slug,
         perm=perm,
         record_id=record_id,
         record_label=module.label_of(record),
-        summary=f"{module.singular} apagado: {module.label_of(record)}",
+        summary=f"{module.singular} {agreement(module, 'apagado', 'apagada')}: {module.label_of(record)}",
         before=record,
         ip=ip,
         user_agent=user_agent,
@@ -1048,10 +1143,15 @@ _CASCADE: Dict[str, Tuple[Tuple[str, str], ...]] = {
         ("account_id", "activities"),
         ("account_id", "cases"),
         ("account_id", "orders"),
+        ("account_id", "work-orders"),
         ("account_id", "contracts"),
         ("account_id", "quotes"),
         ("account_id", "documents"),
         ("account_id", "events"),
+    ),
+    "orders": (
+        ("order_id", "order-lines"),
+        ("order_id", "work-orders"),
     ),
     "opportunities": (
         ("opportunity_id", "activities"),
@@ -1067,13 +1167,84 @@ _CASCADE: Dict[str, Tuple[Tuple[str, str], ...]] = {
 }
 
 
-def _cascade_delete(client: Any, module: registry.Module, record_id: str, perm: Dict[str, Any]) -> int:
+def _fill_line_cost(
+    client: Any, module: registry.Module, document: Dict[str, Any], perm: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Completa preço e custo de uma linha de encomenda a partir do produto."""
+    product_id = str(document.get("product_id") or "")
+    if not product_id:
+        return apply_derived(module, document)
+    product = get_module(registry.MODULE_BY_SLUG["products"], product_id, perm)
+    item = product.get("item") or {}
+    if not item:
+        return apply_derived(module, document)
+    if document.get("unit_cost") is None and item.get("cost") is not None:
+        document["unit_cost"] = _as_float(item.get("cost"))
+    if document.get("unit_price") is None and item.get("price") is not None:
+        document["unit_price"] = _as_float(item.get("price"))
+    if not document.get("description"):
+        document["description"] = item.get("name") or document.get("description")
+    return apply_derived(module, document)
+
+
+def refresh_order_totals(client: Any, perm: Dict[str, Any], order_id: str) -> Dict[str, Any]:
+    """Recalcula o subtotal e o total de uma encomenda a partir das suas linhas."""
+    order_module = registry.MODULE_BY_SLUG["orders"]
+    line_module = registry.MODULE_BY_SLUG["order-lines"]
+    lines = list_module(line_module, perm, filters={"order_id": order_id}, size=MAX_SIZE).get("items", [])
+    active = [line for line in lines if str(line.get("status")) != "cancelada"]
+    if not active:
+        return {"ok": False, "reason": "sem linhas"}
+
+    subtotal = round(sum(_as_float(line.get("line_total")) or 0.0 for line in active), 2)
+    found = get_module(order_module, order_id, perm)
+    if found.get("error"):
+        return found
+    order = found["item"]
+    discount = _as_float(order.get("discount")) or 0.0
+    tax = _as_float(order.get("tax_rate")) or 0.0
+    total = round(subtotal * (1 - discount / 100.0) * (1 + tax / 100.0), 2)
+    if abs((_as_float(order.get("subtotal")) or 0.0) - subtotal) < 0.01 and abs((_as_float(order.get("total")) or 0.0) - total) < 0.01:
+        return {"ok": True, "unchanged": True}
+    try:
+        client.update(
+            index=CRM_INDEX,
+            id=doc_id(order_module, order_id),
+            doc={"subtotal": subtotal, "total": total, "updated_at": _now()},
+            refresh=True,
+        )
+    except Exception as exc:  # pragma: no cover
+        logger.debug("CRM: totais da encomenda %s não atualizados: %s", order_id, exc)
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True, "subtotal": subtotal, "total": total, "linhas": len(active)}
+
+
+def _cascade_delete(
+    client: Any, module: registry.Module, record_id: str, perm: Dict[str, Any], *, depth: int = 0
+) -> int:
+    """Apaga os registos dependentes, propagando a cascata (conta → encomenda → linha)."""
     total = 0
+    if depth >= 3:
+        return total
     for field, target_slug in _CASCADE.get(module.slug, ()):
         target = registry.MODULE_BY_SLUG.get(target_slug)
         if target is None:
             continue
         body = _build_query(target, perm, filters={field: record_id})
+        # Guardar os ids antes de apagar: só assim a cascata desce ao nível seguinte
+        # (apagar uma conta arrasta as encomendas *e* as linhas dessas encomendas).
+        child_ids: List[str] = []
+        try:
+            found = client.search(
+                index=index_for(target),
+                body={"query": body, "size": MAX_SIZE, "_source": ["id"]},
+            )
+            child_ids = [
+                str(hit["_source"].get("id") or str(hit.get("_id", "")).split(":", 1)[-1])
+                for hit in found["hits"]["hits"]
+            ]
+        except Exception as exc:  # pragma: no cover
+            logger.debug("CRM: ids da cascata %s→%s não lidos: %s", module.slug, target_slug, exc)
         try:
             resp = client.delete_by_query(
                 index=index_for(target), body={"query": body}, refresh=True, conflicts="proceed"
@@ -1081,6 +1252,9 @@ def _cascade_delete(client: Any, module: registry.Module, record_id: str, perm: 
             total += int(resp.get("deleted", 0))
         except Exception as exc:  # pragma: no cover
             logger.debug("CRM: cascata %s→%s falhou: %s", module.slug, target_slug, exc)
+            continue
+        for child_id in child_ids:
+            total += _cascade_delete(client, target, child_id, perm, depth=depth + 1)
     return total
 
 
@@ -1387,6 +1561,7 @@ _SIGNATURES: Tuple[str, ...] = (
     "leads-sem-seguimento",
     "previsao-abaixo-do-objetivo",
     "campanhas-sem-conversao",
+    "fornecedores-em-risco",
 )
 
 
@@ -1803,6 +1978,55 @@ def generate_insights(perm: Dict[str, Any], *, limit: int = 40) -> Dict[str, Any
                 )
             )
 
+    # 8. Fornecedores com risco de fornecimento.
+    if can_read(perm, "suppliers"):
+        suppliers = list_module(registry.MODULE_BY_SLUG["suppliers"], perm, size=MAX_SIZE).get("items", [])
+        risky: List[Tuple[Dict[str, Any], List[str]]] = []
+        for item in suppliers:
+            reasons: List[str] = []
+            if str(item.get("status")) == "suspenso":
+                reasons.append("está suspenso")
+            if str(item.get("criticality")) == "fonte-unica":
+                reasons.append("é fonte única")
+            punctuality = item.get("on_time_pct")
+            if punctuality not in (None, "") and (_as_float(punctuality) or 0.0) < 80:
+                reasons.append(f"entrega a tempo em apenas {_as_float(punctuality):.0f}%")
+            if reasons:
+                risky.append((item, reasons))
+        if risky:
+            produced.append(
+                _insight_document(
+                    signature="fornecedores-em-risco",
+                    title=f"{len(risky)} fornecedores com risco de fornecimento",
+                    insight_type="risco",
+                    severity="alta" if len(risky) >= 3 else "media",
+                    summary=(
+                        "Há fornecedores suspensos, em regime de fonte única ou com pontualidade abaixo de 80%. "
+                        "Qualquer um destes casos coloca a operação de compras em risco."
+                    ),
+                    recommendation=(
+                        "Rever o contrato e o plano de contingência destes fornecedores e, nas fontes únicas, "
+                        "qualificar um segundo fornecedor."
+                    ),
+                    evidence={
+                        "fornecedores": [
+                            {
+                                "id": item.get("id"),
+                                "nome": item.get("name"),
+                                "motivo": "; ".join(reasons),
+                                "pontualidade": item.get("on_time_pct"),
+                                "prazo_dias": item.get("lead_time_days"),
+                            }
+                            for item, reasons in risky[:10]
+                        ]
+                    },
+                    module="suppliers",
+                    metric="fornecedores_em_risco",
+                    value=float(len(risky)),
+                    confidence=75,
+                )
+            )
+
     # Persistência: a mesma assinatura atualiza a perceção existente.
     created = 0
     updated = 0
@@ -1877,6 +2101,51 @@ def _find_by_signature(client: Any, perm: Dict[str, Any], signature: str) -> Opt
 
 
 _INTENT_HINTS: Tuple[Tuple[str, str], ...] = (
+    # Pedidos de análise/ação sobre vendas e operação vêm primeiro: implicam
+    # respostas com dados agregados (e, às vezes, uma ação no CRM).
+    ("cria uma oportunidade", "criar-oportunidade"),
+    ("criar uma oportunidade", "criar-oportunidade"),
+    ("cria oportunidade", "criar-oportunidade"),
+    ("criar oportunidade", "criar-oportunidade"),
+    ("criar oportunidades", "criar-oportunidade"),
+    ("gera oportunidade", "criar-oportunidade"),
+    ("gerar oportunidade", "criar-oportunidade"),
+    ("abre oportunidade", "criar-oportunidade"),
+    ("nao compram", "cross-sell"),
+    ("não compram", "cross-sell"),
+    ("nao compra", "cross-sell"),
+    ("não compra", "cross-sell"),
+    ("nao tem", "cross-sell"),
+    ("não tem", "cross-sell"),
+    ("nao têm", "cross-sell"),
+    ("não têm", "cross-sell"),
+    ("cross-sell", "cross-sell"),
+    ("cross sell", "cross-sell"),
+    ("upsell", "cross-sell"),
+    ("que produtos", "cross-sell"),
+    ("produtos que", "cross-sell"),
+    ("produtos mais vendidos", "analise-vendas"),
+    ("receita por", "analise-vendas"),
+    ("ticket medio", "analise-vendas"),
+    ("ticket médio", "analise-vendas"),
+    ("margem", "analise-vendas"),
+    ("clv", "analise-clientes"),
+    ("lifetime value", "analise-clientes"),
+    ("clientes sem compra", "analise-clientes"),
+    ("frequencia de compra", "analise-clientes"),
+    ("frequência de compra", "analise-clientes"),
+    ("fornecedor", "analise-compras"),
+    ("fornecedores", "analise-compras"),
+    ("compras", "analise-compras"),
+    ("custo de aquisicao", "analise-compras"),
+    ("custo de aquisição", "analise-compras"),
+    ("prazo de entrega", "analise-compras"),
+    ("ordens atrasadas", "analise-operacoes"),
+    ("encomendas pendentes", "analise-operacoes"),
+    ("sla", "analise-operacoes"),
+    ("capacidade", "analise-operacoes"),
+    ("taxa de conclusao", "analise-operacoes"),
+    ("taxa de conclusão", "analise-operacoes"),
     ("pipeline", "analise"),
     ("oportunidade", "analise"),
     ("negocio", "analise"),
@@ -1968,6 +2237,38 @@ def _facts(perm: Dict[str, Any]) -> Dict[str, Any]:
             {"titulo": item.get("title"), "severidade": item.get("severity"), "estado": item.get("status")}
             for item in insights
         ]
+    if can_read(perm, "orders"):
+        stats = module_stats(registry.MODULE_BY_SLUG["orders"], perm)
+        values = {metric["field"]: metric["sum"] for metric in stats.get("metrics", [])}
+        estados = {
+            bucket["key"]: bucket["count"]
+            for group in stats.get("groups", [])
+            if group["field"] == "status"
+            for bucket in group["buckets"]
+        }
+        facts["encomendas"] = {
+            "total": stats.get("total"),
+            "por_estado": estados,
+            "valor_total": values.get("total"),
+            "valor_em_aberto": values.get("subtotal"),
+        }
+    if can_read(perm, "work-orders"):
+        stats = module_stats(registry.MODULE_BY_SLUG["work-orders"], perm)
+        facts["ordens_trabalho"] = {
+            "total": stats.get("total"),
+            "por_estado": {
+                bucket["key"]: bucket["count"]
+                for group in stats.get("groups", [])
+                if group["field"] == "status"
+                for bucket in group["buckets"]
+            },
+            "por_sla": {
+                bucket["key"]: bucket["count"]
+                for group in stats.get("groups", [])
+                if group["field"] == "sla_state"
+                for bucket in group["buckets"]
+            },
+        }
     return facts
 
 
@@ -2032,6 +2333,27 @@ def grounded_answer(question: str, facts: Dict[str, Any]) -> str:
             f"{cases.get('criticos')} de prioridade alta ou crítica."
         )
 
+    orders = facts.get("encomendas")
+    if orders:
+        states = orders.get("por_estado") or {}
+        billed = states.get("faturada", 0)
+        open_orders = sum(
+            count for key, count in states.items() if key in ("rascunho", "aguarda-aprovacao", "confirmada", "em-producao", "enviada")
+        )
+        lines.append(
+            f"• Encomendas: {_spoken(orders.get('total'))} no total, {open_orders} em curso e {billed} faturadas"
+            + (f", valor de {_spoken(orders.get('valor_total'))} €." if orders.get("valor_total") else ".")
+        )
+
+    work = facts.get("ordens_trabalho")
+    if work:
+        states = work.get("por_estado") or {}
+        sla = work.get("por_sla") or {}
+        lines.append(
+            f"• Ordens de trabalho: {_spoken(work.get('total'))} no total, {states.get('concluida', 0)} concluídas"
+            + (f", SLA incumprido em {sla.get('incumprido', 0)}." if sla.get("incumprido") else ".")
+        )
+
     insights = facts.get("percecoes") or []
     if insights:
         lines.append(
@@ -2065,12 +2387,45 @@ def ask(
     module: str = "",
     record_id: str = "",
 ) -> Dict[str, Any]:
-    """Assistente de CRM: responde com factos reais e registar a interação."""
+    """Assistente de CRM: responde com factos reais e regista a interação.
+
+    Os pedidos de cross-sell/upsell e de indicadores de venda, cliente ou operação
+    são respondidos pelo motor de analytics (`api.crm_analytics`), que trabalha
+    sobre os registos reais e pode executar a ação pedida (criar oportunidades).
+    As restantes perguntas usam o resumo do CRM e, se houver modelo configurado,
+    são redigidas pelo modelo a partir desses factos.
+    """
     import asyncio
 
-    facts = _facts(perm)
     intent = detect_intent(question)
-    answer = grounded_answer(question, facts)
+    analysis: Optional[Dict[str, Any]] = None
+
+    if intent in ("cross-sell", "criar-oportunidade", "analise-vendas", "analise-clientes", "analise-operacoes", "analise-compras"):
+        try:
+            from api import crm_analytics as analytics_engine
+        except Exception as exc:  # pragma: no cover - defensivo
+            logger.debug("CRM: motor de analytics indisponível (%s)", exc)
+            analytics_engine = None
+        if analytics_engine is not None:
+            if intent in ("cross-sell", "criar-oportunidade"):
+                if intent == "criar-oportunidade" and not can(perm, "opportunities", "create"):
+                    analysis = {
+                        "answer": (
+                            "O seu perfil não permite criar oportunidades no CRM. "
+                            "Peça ao administrador para incluir a ação «create» no módulo Oportunidades."
+                        ),
+                        "intent": "criar-oportunidade",
+                        "data": {},
+                    }
+                else:
+                    analysis = analytics_engine.answer(question, perm, create=intent == "criar-oportunidade")
+            else:
+                analysis = analytics_engine.summary_answer(question, perm)
+
+    facts = _facts(perm)
+    answer = (analysis or {}).get("answer") or grounded_answer(question, facts)
+    if analysis and analysis.get("intent"):
+        intent = str(analysis["intent"])
     provider = ""
     model = ""
     status = "ok"
@@ -2079,8 +2434,9 @@ def ask(
     started = datetime.now(timezone.utc)
 
     # Com um fornecedor de IA configurado, a resposta é redigida pelo modelo a
-    # partir dos mesmos factos (nunca sem eles).
-    if session is not None:
+    # partir dos mesmos factos (nunca sem eles). As respostas do motor de
+    # analytics não passam pelo modelo: contêm números e ações a executar.
+    if session is not None and analysis is None:
         try:
             from api import ontology_ai
 
@@ -2123,6 +2479,12 @@ def ask(
     latency = int((datetime.now(timezone.utc) - started).total_seconds() * 1000)
 
     interaction_module = registry.MODULE_BY_SLUG["ai-interactions"]
+    context: Dict[str, Any] = {"facts": facts, "backend": backend or ""}
+    if analysis is not None:
+        context["motor"] = "analytics"
+        context["dados"] = analysis.get("data") or {}
+        if analysis.get("action"):
+            context["acao"] = analysis["action"]
     result = save_module(
         interaction_module,
         {
@@ -2134,8 +2496,8 @@ def ask(
             "record_id": record_id,
             "provider": provider,
             "model": model,
-            "context": {"facts": facts, "backend": backend or ""},
-            "confidence": 80 if provider else 65,
+            "context": context,
+            "confidence": 90 if analysis is not None else (80 if provider else 65),
             "latency_ms": latency,
             "tokens_prompt": tokens_prompt,
             "tokens_completion": tokens_completion,
@@ -2154,5 +2516,7 @@ def ask(
         "status": status,
         "latency_ms": latency,
         "facts": facts,
+        "data": (analysis or {}).get("data"),
+        "action": (analysis or {}).get("action"),
         "interaction": result.get("item"),
     }

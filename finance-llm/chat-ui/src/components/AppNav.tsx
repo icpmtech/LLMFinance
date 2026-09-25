@@ -17,7 +17,7 @@ import {
   Plus,
 } from "lucide-react";
 import { DOCK_CATALOG, IFRAME_PAGES_APP, type DockApp } from "../dock";
-import { CRM_SUITE_GROUPS } from "../crmSuite";
+import { CRM_SUITE_GROUPS, CRM_SUITE_SECTIONS } from "../crmSuite";
 import { useWindows } from "../windows";
 import {
   SIDEBAR_MIN_WIDTH,
@@ -169,8 +169,48 @@ function appItem(app: DockApp): NavItem {
 }
 
 /**
- * Grupos fixos do menu (Aplicações e Ferramentas). O grupo das páginas iframe
- * é acrescentado em `buildGroups()`, porque depende do que o utilizador criou.
+ * Identificadores das aplicações do CRM: todas as secções da arquitetura
+ * (`crmSuite.ts`), pela ordem das áreas funcionais.
+ */
+const CRM_VIEW_IDS: string[] = CRM_SUITE_SECTIONS.map((section) => section.view);
+
+/** Item de menu de uma secção do CRM (sem o prefixo «CRM · » do dock). */
+function crmItem(view: string): NavItem | null {
+  const app = DOCK_CATALOG.find((candidate) => candidate.id === view);
+  if (!app) return null;
+  const item = appItem(app);
+  return {
+    ...item,
+    label: view === "crm" ? "Pipeline" : item.label.replace(/^CRM\s*\u00b7\s*/, ""),
+  };
+}
+
+/**
+ * O CRM na barra lateral: **uma secção por área funcional** (Visão, Analytics,
+ * Relação com o cliente, Comercial e catálogo, Compras e fornecedores, Marketing,
+ * Administração, Operação e auditoria, Conhecimento, Inteligência artificial),
+ * com os módulos pela ordem da arquitetura.
+ *
+ * Sem `defaultOpen`: só a área onde o utilizador está abre automaticamente (e a
+ * escolha de abrir/fechar fica memorizada), para o menu não mostrar 29 linhas de
+ * CRM à vista.
+ */
+const CRM_NAV_GROUPS: NavGroup[] = CRM_SUITE_GROUPS.map((area) => {
+  const AreaIcon = area.icon;
+  return {
+    id: `crm-${area.id}`,
+    // A área «Visão» é a entrada do CRM: chama-se só «CRM».
+    label: area.id === "visao" ? "CRM" : `CRM · ${area.label}`,
+    icon: <AreaIcon size={14} />,
+    items: area.sections
+      .map((section) => crmItem(section.view))
+      .filter((item): item is NavItem => Boolean(item)),
+  };
+});
+
+/**
+ * Grupos fixos do menu (Aplicações e Ferramentas). O CRM e o grupo das páginas
+ * iframe são acrescentados em `buildGroups()`.
  */
 const BASE_GROUPS: NavGroup[] = [
   {
@@ -178,7 +218,9 @@ const BASE_GROUPS: NavGroup[] = [
     label: "Aplicações",
     icon: <Sparkles size={14} />,
     defaultOpen: true,
-    items: DOCK_CATALOG.filter((app) => !TOOL_APP_IDS.includes(app.id)).map(appItem),
+    items: DOCK_CATALOG.filter(
+      (app) => !TOOL_APP_IDS.includes(app.id) && !CRM_VIEW_IDS.includes(app.id),
+    ).map(appItem),
   },
   {
     id: "tools",
@@ -192,12 +234,14 @@ const BASE_GROUPS: NavGroup[] = [
   },
 ];
 
-/** Grupos do menu já com as páginas iframe configuradas pelo utilizador. */
+/** Grupos do menu já com o CRM e as páginas iframe configuradas pelo utilizador. */
 export function buildGroups(): NavGroup[] {
   const iframes = iframeDockApps();
-  if (iframes.length === 0) return BASE_GROUPS;
+  // Aplicações · CRM (por área) · Ferramentas · Páginas iframe.
+  const groups = [BASE_GROUPS[0], ...CRM_NAV_GROUPS, BASE_GROUPS[1]];
+  if (iframes.length === 0) return groups;
   return [
-    ...BASE_GROUPS,
+    ...groups,
     {
       id: "iframes",
       label: "Páginas iframe",

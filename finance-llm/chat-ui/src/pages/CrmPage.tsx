@@ -16,10 +16,12 @@ import {
   CalendarClock,
   Check,
   CheckCircle2,
+  ChevronDown,
   Columns3,
   ExternalLink,
   FileText,
   Filter,
+  LayoutGrid,
   Link2,
   Loader2,
   Mail,
@@ -73,7 +75,7 @@ import {
   crmSuiteSectionForView,
 } from "../crmSuite";
 import { getCrmSuite, type CrmSuiteMeta } from "../crmSuiteApi";
-import { CrmModulePanel } from "./CrmSuitePanels";
+import { CrmAnalyticsPanel, CrmModulePanel } from "./CrmSuitePanels";
 
 /* ------------------------------------------------------------------ aspeto */
 
@@ -1894,6 +1896,7 @@ export default function CrmPage({
   } = useCrmData();
   const [localSection, setLocalSection] = useState<CrmSection>("pipeline");
   const section = sectionProp ?? localSection;
+  const [navOpen, setNavOpen] = useState(false);
   const [editor, setEditor] = useState<{
     kind: CrmKind;
     record?: CrmAccount | CrmContact | CrmDeal | CrmActivity | null;
@@ -1903,6 +1906,7 @@ export default function CrmPage({
 
   /** Abre a secção: em janelas abre/foca a janela respetiva, senão troca no local. */
   const changeSection = (next: CrmSection) => {
+    setNavOpen(false);
     if (onSectionChange) onSectionChange(next);
     else setLocalSection(next);
   };
@@ -1983,6 +1987,8 @@ export default function CrmPage({
     [moduleAllowed, moduleIndex, suite],
   );
   const groupSections = visibleGroups.find((group) => group.id === activeGroup)?.sections ?? [];
+  const activeGroupDef = CRM_SUITE_GROUPS.find((group) => group.id === activeGroup);
+  const ActiveGroupIcon = activeGroupDef?.icon;
   const sectionMeta = crmSuiteSection(section);
   const scopeLabels: Record<string, string> = {
     own: "os meus registos",
@@ -1992,6 +1998,9 @@ export default function CrmPage({
     all: "toda a organização",
   };
   const scopeLabel = suite ? scopeLabels[suite.me.scope] ?? suite.me.scope : "";
+
+  const sectionBadge = (sectionId: string) =>
+    sectionId === "pipeline" ? openDealCount : sectionId === "agenda" ? activities.filter((a) => !a.done).length : 0;
 
   if (loading) {
     return (
@@ -2019,73 +2028,110 @@ export default function CrmPage({
           </Button>
         </div>
 
-        {/* Nível 1 — grupos funcionais da arquitetura de CRM. */}
-        <div className="dock-scroll mt-2 flex items-center gap-1 overflow-x-auto px-4">
-          {visibleGroups.map((group) => {
-            const Icon = group.icon;
-            const active = group.id === activeGroup;
-            return (
-              <button
-                key={group.id}
-                type="button"
-                onClick={() => changeSection(group.sections[0].id)}
-                title={group.hint}
-                className={[
-                  "flex shrink-0 items-center gap-1.5 rounded-[6px] border px-2 py-1 text-[11.5px] transition",
-                  active
-                    ? "border-teal-300/30 bg-teal-400/15 font-medium text-teal-100"
-                    : "border-transparent text-muted-foreground hover:bg-white/[0.07] hover:text-foreground",
-                ].join(" ")}
-              >
-                <Icon size={12} />
-                <span className="whitespace-nowrap">{group.label}</span>
-                <span className="text-[10px] opacity-70">{group.sections.length}</span>
-              </button>
-            );
-          })}
-        </div>
+        {/* Navegação: menu de grupos/módulos + separadores do grupo ativo (os
+            separadores quebram em várias linhas em vez de sair do ecrã). */}
+        <div className="relative mt-2 px-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setNavOpen((value) => !value)}
+              aria-expanded={navOpen}
+              title={activeGroupDef?.hint}
+              className="flex shrink-0 items-center gap-1.5 rounded-[8px] border border-teal-300/25 bg-teal-400/10 px-2.5 py-1 text-[12px] font-medium text-teal-100 transition hover:bg-teal-400/20"
+            >
+              {ActiveGroupIcon ? <ActiveGroupIcon size={13} /> : <LayoutGrid size={13} />}
+              <span className="whitespace-nowrap">{activeGroupDef?.label ?? "Navegação"}</span>
+              <span className="rounded-full bg-white/10 px-1.5 text-[10px] font-normal text-teal-100/80">
+                {groupSections.length}
+              </span>
+              <ChevronDown size={12} className={navOpen ? "rotate-180 transition" : "transition"} />
+            </button>
 
-        {/* Nível 2 — secções do grupo ativo. */}
-        <div className="px-4">
-          <div className="dock-scroll mt-1.5 flex items-center gap-1 overflow-x-auto rounded-[8px] border border-white/8 bg-white/[0.05] p-0.5">
-            {groupSections.map((item) => {
-              const Icon = item.icon;
-              const active = section === item.id;
-              const badge =
-                item.id === "pipeline" ? openDealCount : item.id === "agenda" ? activities.filter((a) => !a.done).length : 0;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => changeSection(item.id)}
-                  title={item.hint}
-                  className={[
-                    "flex shrink-0 items-center gap-1.5 rounded-[6px] px-2.5 py-1 text-[12px] transition",
-                    active
-                      ? "bg-white/[0.16] font-medium text-foreground shadow-sm"
-                      : "text-muted-foreground hover:bg-white/[0.07] hover:text-foreground",
-                  ].join(" ")}
-                >
-                  <Icon size={13} className={active ? "text-teal-300" : undefined} />
-                  <span className="whitespace-nowrap">{item.label}</span>
-                  {badge > 0 && (
-                    <span className="rounded-full bg-white/10 px-1.5 text-[10px] font-medium text-muted-foreground">{badge}</span>
-                  )}
-                </button>
-              );
-            })}
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 rounded-[8px] border border-white/8 bg-white/[0.05] p-0.5">
+              {groupSections.map((item) => {
+                const Icon = item.icon;
+                const active = section === item.id;
+                const badge = sectionBadge(item.id);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => changeSection(item.id)}
+                    title={item.hint}
+                    className={[
+                      "flex shrink-0 items-center gap-1.5 rounded-[6px] px-2.5 py-1 text-[12px] transition",
+                      active
+                        ? "bg-white/[0.16] font-medium text-foreground shadow-sm"
+                        : "text-muted-foreground hover:bg-white/[0.07] hover:text-foreground",
+                    ].join(" ")}
+                  >
+                    <Icon size={13} className={active ? "text-teal-300" : undefined} />
+                    <span className="whitespace-nowrap">{item.label}</span>
+                    {badge > 0 && (
+                      <span className="rounded-full bg-white/10 px-1.5 text-[10px] font-medium text-muted-foreground">{badge}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
+          {navOpen && (
+            <>
+              {/* Clicar fora fecha o menu. */}
+              <div className="fixed inset-0 z-30" onClick={() => setNavOpen(false)} />
+              <div className="absolute left-4 top-full z-40 mt-1 max-h-[64vh] w-[min(980px,94vw)] overflow-y-auto rounded-xl border border-white/12 bg-[#08181f] p-3 shadow-2xl">
+                <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {visibleGroups.map((group) => {
+                    const GroupIcon = group.icon;
+                    return (
+                      <div key={group.id}>
+                        <p className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          <GroupIcon size={11} /> {group.label}
+                        </p>
+                        <ul className="mt-1 space-y-0.5">
+                          {group.sections.map((item) => {
+                            const Icon = item.icon;
+                            const active = section === item.id;
+                            return (
+                              <li key={item.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => changeSection(item.id)}
+                                  title={item.hint}
+                                  className={[
+                                    "flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-[12px] transition",
+                                    active
+                                      ? "bg-white/[0.14] font-medium text-foreground"
+                                      : "text-muted-foreground hover:bg-white/[0.07] hover:text-foreground",
+                                  ].join(" ")}
+                                >
+                                  <Icon size={12} className={active ? "text-teal-300" : undefined} />
+                                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                                  {active && <Check size={11} className="text-teal-300" />}
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        {error && (
-          <div className="mb-3 flex items-center gap-2 rounded-lg border border-rose-400/25 bg-rose-500/10 px-3 py-2 text-[12.5px] text-rose-200">
-            <AlertTriangle size={14} /> {error}
-          </div>
-        )}
+      {error && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg border border-rose-400/25 bg-rose-500/10 px-3 py-2 text-[12.5px] text-rose-200">
+          <AlertTriangle size={14} /> {error}
+        </div>
+      )}
 
         {meta && section === "pipeline" && (
           <>
@@ -2146,12 +2192,15 @@ export default function CrmPage({
           />
         )}
 
+        {/* Analytics: vendas, clientes, operações e cross-sell assistido por IA. */}
+        {section === "analytics" && <CrmAnalyticsPanel />}
+
         {/* Módulos da arquitetura de CRM: lista, filtros e ficha genéricos. */}
         {crmSuiteIsModuleSection(section) && sectionMeta?.slug && (
           <CrmModulePanel slug={sectionMeta.slug} label={sectionMeta.label} />
         )}
 
-        {!meta && !error && !crmSuiteIsModuleSection(section) && (
+        {!meta && !error && !crmSuiteIsModuleSection(section) && section !== "analytics" && (
           <EmptyState icon={Target} title="CRM indisponível" hint="Não foi possível obter a configuração do módulo." />
         )}
       </div>

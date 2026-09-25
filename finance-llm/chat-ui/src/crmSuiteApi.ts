@@ -212,6 +212,176 @@ export type CrmAiAnswer = {
   interaction?: CrmSuiteRecord;
 };
 
+/* ---------------------------------------------------------------- analytics */
+
+export type CrmMoneyBlock = {
+  realizada: number;
+  faturada: number;
+  em_aberto: number;
+  encomendas: number;
+  encomendas_em_aberto: number;
+  ticket_medio: number;
+  margem: number;
+  margem_pct: number;
+  variacao_periodo_pct: number | null;
+};
+
+export type CrmRevenueRow = {
+  account_id?: string;
+  product_id?: string;
+  owner?: string;
+  month?: string;
+  name?: string;
+  category?: string;
+  revenue: number;
+  orders?: number;
+  units?: number;
+  margin?: number;
+  margin_pct?: number;
+  ticket_medio?: number;
+};
+
+export type CrmCustomerRow = {
+  account_id: string;
+  name: string;
+  status?: string;
+  clv: number;
+  orders: number;
+  ticket_medio: number;
+  frequencia_anual: number;
+  ultima_encomenda: string;
+  dias_sem_compra: number | null;
+  produtos: { product_id: string; name: string; units: number; revenue: number }[];
+  produtos_total: number;
+  receita_periodo: number;
+  variacao_pct: number | null;
+  estado: string;
+};
+
+export type CrmAnalytics = {
+  gerado_em: string;
+  filtros: { meses: number; top: number; dias_sem_compra: number };
+  fontes: Record<string, number>;
+  acesso: Record<string, boolean>;
+  vendas?: {
+    filtros: Record<string, unknown>;
+    receita: CrmMoneyBlock;
+    por_cliente: CrmRevenueRow[];
+    por_produto: CrmRevenueRow[];
+    por_vendedor: CrmRevenueRow[];
+    por_periodo: CrmRevenueRow[];
+    mais_vendidos: CrmRevenueRow[];
+  };
+  clientes?: {
+    resumo: Record<string, number>;
+    top_clv: CrmCustomerRow[];
+    sem_compra: CrmCustomerRow[];
+    a_crescer: CrmCustomerRow[];
+    a_encolher: CrmCustomerRow[];
+    nunca_compraram: CrmCustomerRow[];
+    dias_sem_compra: number;
+  };
+  operacoes?: {
+    encomendas: {
+      total: number;
+      pendentes: number;
+      valor_pendente: number;
+      atrasadas: number;
+      por_estado: { key: string; count: number; value: number }[];
+      exemplos_atrasadas: Record<string, unknown>[];
+    };
+    ordens: {
+      total: number;
+      abertas: number;
+      concluidas: number;
+      atrasadas: number;
+      taxa_conclusao_pct: number;
+      tempo_medio_horas: number;
+      horas_totais: number;
+      sla: { cumprido: number; em_risco: number; incumprido: number; cumprimento_pct: number };
+      custo: number;
+      valor_faturavel: number;
+      margem_servico: number;
+      exemplos_atrasadas: Record<string, unknown>[];
+    };
+    capacidade: { team_id: string; label: string; abertas: number; concluidas: number; horas: number; tecnicos: number }[];
+    por_tipo: { key: string; count: number; abertas: number; horas: number; custo: number }[];
+  };
+  fornecedores?: {
+    total: number;
+    por_estado: { key: string; count: number }[];
+    por_tipo: { key: string; count: number }[];
+    custo_aquisicao: number;
+    receita_atribuida: number;
+    margem_bruta: number;
+    prazos: {
+      lead_time_medio_dias: number | null;
+      pontualidade_media_pct: number | null;
+      qualidade_media: number | null;
+      cumprimento_prazos_medio: number | null;
+    };
+    compras: {
+      supplier_id: string;
+      name: string;
+      lines: number;
+      units: number;
+      cost: number;
+      revenue: number;
+      margin: number;
+      margin_pct: number;
+    }[];
+    sem_linhas_atribuidas: number;
+    risco: {
+      supplier_id: string;
+      name: string;
+      criticality: string;
+      status: string;
+      on_time_pct: number | null;
+      lead_time_days: number | null;
+      motivo: string;
+    }[];
+    criticos: number;
+  };
+  error?: string;
+};
+
+export type CrmCrossSellFilters = {
+  compraram: string;
+  nao_tem: string;
+  min_spend: number | null;
+  meses: number;
+};
+
+export type CrmCrossSellRow = {
+  account_id: string;
+  name: string;
+  revenue: number;
+  orders: number;
+  ultima_encomenda: string;
+  produtos: number;
+  comprados: { product_id: string; name: string; revenue: number }[];
+  falta: string;
+};
+
+export type CrmCrossSellResult = {
+  filtros: CrmCrossSellFilters;
+  catalogo: number;
+  total: number;
+  valor_potencial: number;
+  accounts: CrmCrossSellRow[];
+};
+
+export type CrmOpportunityAction = {
+  ok: boolean;
+  dry_run: boolean;
+  criadas: { account_id: string; name?: string; title: string; amount: number; opportunity_id?: string }[];
+  ignoradas: { account_id: string; name?: string; motivo: string }[];
+  total_criadas: number;
+  valor_total: number;
+  title?: string;
+  publico?: CrmCrossSellResult;
+};
+
 /* ----------------------------------------------------------------- helpers */
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -361,6 +531,37 @@ export function generateCrmInsights(): Promise<{
   total: number;
 }> {
   return request("/crm/ai/insights/generate", { method: "POST" });
+}
+
+export function getCrmAnalytics(params: { months?: number; top?: number; days_without_purchase?: number } = {}) {
+  return request<CrmAnalytics>(`/crm/analytics${queryString(params)}`);
+}
+
+export function runCrmCrossSell(body: {
+  have_product?: string;
+  missing_product?: string;
+  min_spend?: number;
+  months?: number;
+  limit?: number;
+  exclude_with_open_opportunity?: boolean;
+}) {
+  return request<CrmCrossSellResult>("/crm/analytics/cross-sell", withBody("POST", body));
+}
+
+export function createCrmCrossSellOpportunities(body: {
+  have_product?: string;
+  missing_product?: string;
+  min_spend?: number;
+  months?: number;
+  limit?: number;
+  title?: string;
+  amount?: number;
+  amount_from?: "revenue_pct" | "revenue" | "fixed";
+  stage?: string;
+  expected_days?: number;
+  dry_run?: boolean;
+}) {
+  return request<CrmOpportunityAction>("/crm/analytics/opportunities", withBody("POST", body));
 }
 
 export function askCrmAi(

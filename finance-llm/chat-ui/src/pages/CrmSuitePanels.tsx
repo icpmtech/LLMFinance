@@ -11,7 +11,7 @@
  * - `CrmAiComposer` — o assistente de CRM, na secção «Interações de IA»;
  * - o botão «Gerar perceções», na secção «Perceções de IA».
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowDownWideNarrow,
@@ -22,6 +22,7 @@ import {
   Filter,
   LayoutGrid,
   Loader2,
+  MessagesSquare,
   Pencil,
   Plus,
   RefreshCw,
@@ -31,6 +32,11 @@ import {
   Sparkles,
   Table2,
   Trash2,
+  TrendingUp,
+  Truck,
+  Users,
+  Wand2,
+  Wrench,
   X,
 } from "lucide-react";
 
@@ -38,19 +44,25 @@ import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import {
   askCrmAi,
+  createCrmCrossSellOpportunities,
   createCrmModuleRecord,
   deleteCrmModuleRecord,
   formatFieldValue,
   generateCrmInsights,
+  getCrmAnalytics,
   getCrmModuleReferences,
   getCrmModuleStats,
   getCrmRbac,
   listCrmModule,
   loadCrmSuite,
+  runCrmCrossSell,
   updateCrmModuleRecord,
+  type CrmAnalytics,
+  type CrmCrossSellResult,
   type CrmFieldMeta,
   type CrmModuleMeta,
   type CrmModuleStats,
+  type CrmOpportunityAction,
   type CrmRbacMeta,
   type CrmSuiteRecord,
 } from "../crmSuiteApi";
@@ -926,6 +938,578 @@ function CrmAiComposer({ onAnswered, onError }: { onAnswered: () => void; onErro
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ analytics */
+
+const money = (value: number | null | undefined) =>
+  new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(value ?? 0));
+
+const number = (value: number | null | undefined) => new Intl.NumberFormat("pt-PT").format(Number(value ?? 0));
+
+/** Percentagem à portuguesa: sem decimais desnecessárias e com vírgula. */
+const pct = (value: number | null | undefined) => {
+  const text = new Intl.NumberFormat("pt-PT", { maximumFractionDigits: 1 }).format(Number(value ?? 0));
+  return `${text}\u00a0%`;
+};
+
+function Kpi({ label, value, hint, tone = "teal" }: { label: string; value: string; hint?: string; tone?: "teal" | "indigo" | "amber" | "rose" }) {
+  const tones: Record<string, string> = {
+    teal: "text-teal-200",
+    indigo: "text-indigo-200",
+    amber: "text-amber-200",
+    rose: "text-rose-200",
+  };
+  return (
+    <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+      <p className="text-[10.5px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={`mt-0.5 text-[17px] font-semibold ${tones[tone]}`}>{value}</p>
+      {hint && <p className="text-[10.5px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+function Bars({ rows, label, value }: { rows: { label: string; value: number }[]; label: string; value: (row: { value: number }) => string }) {
+  const top = Math.max(1, ...rows.map((row) => row.value));
+  return (
+    <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+      <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      {rows.length === 0 && <p className="text-[11.5px] text-muted-foreground/80">Sem dados no período.</p>}
+      <ul className="space-y-1.5">
+        {rows.map((row) => (
+          <li key={row.label} className="flex items-center gap-2 text-[11.5px]">
+            <span className="w-[38%] min-w-0 truncate text-muted-foreground" title={row.label}>
+              {row.label}
+            </span>
+            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/8">
+              <span
+                className="block h-full rounded-full bg-gradient-to-r from-teal-300 to-indigo-500"
+                style={{ width: `${Math.max(3, (row.value / top) * 100)}%` }}
+              />
+            </span>
+            <span className="w-[22%] shrink-0 text-right font-medium text-foreground">{value(row)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function MiniTable({ title, columns, rows }: { title: string; columns: string[]; rows: (string | number | null)[][] }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-white/8">
+      <p className="border-b border-white/8 bg-white/[0.03] px-3 py-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">{title}</p>
+      <div className="max-h-[280px] overflow-auto">
+        <table className="w-full border-collapse text-left">
+          <thead className="sticky top-0 bg-[#0a1c24]/95">
+            <tr>
+              {columns.map((column) => (
+                <th key={column} className="whitespace-nowrap px-3 py-1.5 text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr>
+                <td className="px-3 py-3 text-[11.5px] text-muted-foreground/80" colSpan={columns.length}>
+                  Sem dados no período.
+                </td>
+              </tr>
+            )}
+            {rows.map((row, index) => (
+              <tr key={index} className="border-t border-white/6">
+                {row.map((cell, position) => (
+                  <td key={position} className={["max-w-[240px] truncate px-3 py-1.5 text-[12px]", position === 0 ? "text-foreground" : "text-muted-foreground"].join(" ")}>
+                    {cell ?? "—"}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Painel de analytics do CRM: vendas, clientes, operações e o motor de
+ * cross-sell, que além de responder às perguntas cria as oportunidades.
+ */
+export function CrmAnalyticsPanel() {
+  const [tab, setTab] = useState<"vendas" | "clientes" | "operacoes" | "compras" | "cross-sell">("vendas");
+  const [months, setMonths] = useState(12);
+  const [board, setBoard] = useState<CrmAnalytics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [loadedOnce, setLoadedOnce] = useState(false);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      setBoard(await getCrmAnalytics({ months, top: 10 }));
+      setError(null);
+      setLoadedOnce(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível carregar os indicadores");
+    } finally {
+      setLoading(false);
+    }
+  }, [months]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const vendas = board?.vendas;
+  const clientes = board?.clientes;
+  const operacoes = board?.operacoes;
+  const fornecedores = board?.fornecedores;
+
+  const tabs = [
+    ["vendas", "Vendas", <TrendingUp key="v" size={13} />],
+    ["clientes", "Clientes", <Users key="c" size={13} />],
+    ["operacoes", "Operações", <Wrench key="o" size={13} />],
+    ["compras", "Compras", <Truck key="k" size={13} />],
+    ["cross-sell", "Cross-sell & IA", <Sparkles key="x" size={13} />],
+  ].filter(([id]) => id !== "compras" || Boolean(fornecedores)) as [typeof tab, string, ReactNode][];
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {tabs.map(([id, label, icon]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={[
+              "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12px] transition",
+              tab === id ? "bg-white/[0.14] font-medium text-foreground" : "text-muted-foreground hover:bg-white/[0.07] hover:text-foreground",
+            ].join(" ")}
+          >
+            {icon}
+            {label}
+          </button>
+        ))}
+        <div className="min-w-0 flex-1" />
+        {tab !== "cross-sell" && (
+          <>
+            <select className={inputClass} value={months} onChange={(event) => setMonths(Number(event.target.value))} style={{ width: 130 }}>
+              <option value={3}>3 meses</option>
+              <option value={6}>6 meses</option>
+              <option value={12}>12 meses</option>
+              <option value={24}>24 meses</option>
+            </select>
+            <Button size="sm" variant="outline" icon={<RefreshCw size={13} />} loading={loading && loadedOnce} onClick={() => void reload()}>
+              Actualizar
+            </Button>
+          </>
+        )}
+      </div>
+
+      {error && <Notice text={error} tone="error" onClose={() => setError(null)} />}
+
+      {loading && !loadedOnce && (
+        <p className="flex items-center gap-2 py-8 text-[12.5px] text-muted-foreground">
+          <Loader2 size={14} className="animate-spin" /> A calcular os indicadores…
+        </p>
+      )}
+
+      {/* ------------------------------------------------------------- vendas */}
+      {tab === "vendas" && vendas && (
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <Kpi label="Receita realizada" value={money(vendas.receita.realizada)} hint={`${number(vendas.receita.encomendas)} encomenda(s)`} />
+            <Kpi label="Ticket médio" value={money(vendas.receita.ticket_medio)} tone="indigo" />
+            <Kpi label="Margem" value={money(vendas.receita.margem)} hint={`${pct(vendas.receita.margem_pct)} da receita`} tone="amber" />            <Kpi
+              label="Em aberto"
+              value={money(vendas.receita.em_aberto)}
+              hint={`${number(vendas.receita.encomendas_em_aberto)} por faturar`}
+              tone="rose"
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <Bars
+              label={`Receita por período (${number(vendas.receita.encomendas)} encomendas)`}
+              rows={vendas.por_periodo.map((row) => ({ label: row.month ?? "", value: row.revenue }))}
+              value={(row) => money(row.value)}
+            />
+            <Bars
+              label="Receita por cliente (top 10)"
+              rows={vendas.por_cliente.map((row) => ({ label: row.name ?? row.account_id ?? "", value: row.revenue }))}
+              value={(row) => money(row.value)}
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+            <MiniTable
+              title="Por produto"
+              columns={["Produto", "Receita", "Unid.", "Margem"]}
+              rows={vendas.por_produto.map((row) => [row.name ?? "", money(row.revenue), number(row.units ?? 0), `${money(row.margin ?? 0)} (${pct(row.margin_pct)})`])}
+            />
+            <MiniTable
+              title="Mais vendidos (unidades)"
+              columns={["Produto", "Unid.", "Receita"]}
+              rows={vendas.mais_vendidos.map((row) => [row.name ?? "", number(row.units ?? 0), money(row.revenue)])}
+            />
+            <MiniTable
+              title="Por vendedor"
+              columns={["Vendedor", "Receita", "Encom.", "Ticket"]}
+              rows={vendas.por_vendedor.map((row) => [row.owner ?? "", money(row.revenue), number(row.orders ?? 0), money(row.ticket_medio ?? 0)])}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ----------------------------------------------------------- clientes */}
+      {tab === "clientes" && clientes && (
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+            <Kpi label="Clientes com compras" value={number(clientes.resumo.clientes_com_compra)} />
+            <Kpi label="CLV médio" value={money(clientes.resumo.clv_medio)} tone="indigo" />
+            <Kpi label="Frequência média" value={`${clientes.resumo.frequencia_anual} /ano`} tone="amber" />
+            <Kpi label={`Sem comprar há +${clientes.dias_sem_compra} dias`} value={number(clientes.resumo.sem_compra_ha_dias)} tone="rose" />
+            <Kpi label="Nunca compraram" value={number(clientes.resumo.clientes_sem_compra)} tone="rose" />
+          </div>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <MiniTable
+              title="Maior valor (CLV)"
+              columns={["Cliente", "CLV", "Encom.", "Último pedido", "Produtos"]}
+              rows={clientes.top_clv.map((row) => [row.name, money(row.clv), number(row.orders), row.ultima_encomenda || "—", number(row.produtos_total)])}
+            />
+            <MiniTable
+              title="Em risco de inatividade"
+              columns={["Cliente", "Dias sem compra", "CLV", "Receita do período"]}
+              rows={clientes.sem_compra.map((row) => [row.name, number(row.dias_sem_compra ?? 0), money(row.clv), money(row.receita_periodo)])}
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <MiniTable
+              title="A crescer (≥ 20%)"
+              columns={["Cliente", "Variação", "Receita do período", "CLV"]}
+              rows={clientes.a_crescer.map((row) => [row.name, pct(row.variacao_pct), money(row.receita_periodo), money(row.clv)])}
+            />
+            <MiniTable
+              title="A encolher (≤ -20%)"
+              columns={["Cliente", "Variação", "Receita do período", "CLV"]}
+              rows={clientes.a_encolher.map((row) => [row.name, pct(row.variacao_pct), money(row.receita_periodo), money(row.clv)])}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* --------------------------------------------------------- operações */}
+      {tab === "operacoes" && operacoes && (
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <Kpi label="Encomendas pendentes" value={number(operacoes.encomendas.pendentes)} hint={money(operacoes.encomendas.valor_pendente)} />
+            <Kpi label="Encomendas atrasadas" value={number(operacoes.encomendas.atrasadas)} tone="rose" />
+            <Kpi label="Ordens abertas" value={number(operacoes.ordens.abertas)} hint={`${number(operacoes.ordens.atrasadas)} atrasada(s)`} tone="amber" />
+            <Kpi label="SLA cumprido" value={pct(operacoes.ordens.sla.cumprimento_pct)} hint={`${number(operacoes.ordens.sla.incumprido)} incumprido(s)`} tone="indigo" />
+          </div>
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <Kpi label="Taxa de conclusão" value={pct(operacoes.ordens.taxa_conclusao_pct)} />
+            <Kpi label="Tempo médio de execução" value={`${number(operacoes.ordens.tempo_medio_horas)} h`} tone="indigo" />
+            <Kpi label="Horas registadas" value={`${number(operacoes.ordens.horas_totais)} h`} tone="amber" />
+            <Kpi label="Margem de serviço" value={money(operacoes.ordens.margem_servico)} hint={`faturável ${money(operacoes.ordens.valor_faturavel)}`} tone="rose" />
+          </div>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <MiniTable
+              title="Capacidade por equipa"
+              columns={["Equipa / técnico", "Abertas", "Concluídas", "Horas", "Técnicos"]}
+              rows={operacoes.capacidade.map((row) => [row.label, number(row.abertas), number(row.concluidas), number(row.horas), number(row.tecnicos)])}
+            />
+            <MiniTable
+              title="Ordens por tipo"
+              columns={["Tipo", "Total", "Abertas", "Horas", "Custo"]}
+              rows={operacoes.por_tipo.map((row) => [row.key, number(row.count), number(row.abertas), number(row.horas), money(row.custo)])}
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <MiniTable
+              title="Encomendas atrasadas"
+              columns={["Encomenda", "Conta", "Entrega", "Valor"]}
+              rows={operacoes.encomendas.exemplos_atrasadas.map((row) => [
+                String(row.numero ?? row.id ?? ""),
+                String(row.conta ?? ""),
+                String(row.entrega ?? "").slice(0, 10),
+                money(Number(row.valor ?? 0)),
+              ])}
+            />
+            <MiniTable
+              title="Ordens atrasadas"
+              columns={["Ordem", "Conta", "SLA", "Início previsto"]}
+              rows={operacoes.ordens.exemplos_atrasadas.map((row) => [
+                String(row.numero ?? row.id ?? ""),
+                String(row.conta ?? ""),
+                String(row.sla_state ?? row.estado ?? ""),
+                String(row.inicio_previsto ?? "").slice(0, 16).replace("T", " "),
+              ])}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* --------------------------------------------------------- compras */}
+      {tab === "compras" && fornecedores && (
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+            <Kpi label="Fornecedores" value={number(fornecedores.total)} hint={`${fornecedores.sem_linhas_atribuidas} sem compras atribuídas`} />
+            <Kpi label="Custo de aquisição" value={money(fornecedores.custo_aquisicao)} tone="amber" />
+            <Kpi label="Margem bruta" value={money(fornecedores.margem_bruta)} tone="indigo" />
+            <Kpi label="Prazo médio de entrega" value={`${fornecedores.prazos.lead_time_medio_dias ?? "—"} dias`} />
+            <Kpi
+              label="Pontualidade média"
+              value={pct(fornecedores.prazos.pontualidade_media_pct)}
+              hint={`${fornecedores.criticos} fornecedor(es) em risco`}
+              tone="rose"
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <MiniTable
+              title="Custo de aquisição por fornecedor"
+              columns={["Fornecedor", "Linhas", "Unid.", "Custo", "Margem"]}
+              rows={fornecedores.compras.map((row) => [row.name, number(row.lines), number(row.units), money(row.cost), `${money(row.margin)} (${pct(row.margin_pct)})`])}
+            />
+            <MiniTable
+              title="Fornecedores em risco"
+              columns={["Fornecedor", "Estado", "Criticidade", "Prazo", "Motivo"]}
+              rows={fornecedores.risco.map((row) => [row.name, row.status || "—", row.criticality || "—", row.lead_time_days ?? "—", row.motivo])}
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <Bars
+              label="Fornecedores por tipo"
+              rows={fornecedores.por_tipo.map((row) => ({ label: row.key, value: row.count }))}
+              value={(row) => number(row.value)}
+            />
+            <Bars
+              label="Fornecedores por estado"
+              rows={fornecedores.por_estado.map((row) => ({ label: row.key, value: row.count }))}
+              value={(row) => number(row.value)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* -------------------------------------------------------- cross-sell */}
+      {tab === "cross-sell" && <CrmCrossSellTab onError={setError} />}
+    </div>
+  );
+}
+
+/** Cross-sell: escolher o público, ver quem cumpre o critério e criar as oportunidades. */
+function CrmCrossSellTab({ onError }: { onError: (text: string) => void }) {
+  const [products, setProducts] = useState<CrmSuiteRecord[]>([]);
+  const [accounts, setAccounts] = useState<CrmSuiteRecord[]>([]);
+  const [have, setHave] = useState("");
+  const [missing, setMissing] = useState("");
+  const [minSpend, setMinSpend] = useState("");
+  const [months, setMonths] = useState(12);
+  const [result, setResult] = useState<CrmCrossSellResult | null>(null);
+  const [action, setAction] = useState<CrmOpportunityAction | null>(null);
+  const [running, setRunning] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void listCrmModule("products", { size: 300 })
+      .then((listed) => alive && setProducts(listed.items ?? []))
+      .catch(() => undefined);
+    void listCrmModule("accounts", { size: 100 })
+      .then((listed) => alive && setAccounts(listed.items ?? []))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const filters = () => ({
+    have_product: have || undefined,
+    missing_product: missing || undefined,
+    min_spend: minSpend ? Number(minSpend) : undefined,
+    months,
+    limit: 50,
+  });
+
+  const search = async () => {
+    setRunning(true);
+    setAction(null);
+    try {
+      setResult(await runCrmCrossSell(filters()));
+      setNotice(null);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Não foi possível calcular o público");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const create = async () => {
+    if (result === null || result.total === 0) return;
+    const label = missing ? productName(missing) : "cross-sell";
+    if (!window.confirm(`Criar oportunidades «Cross-sell: ${label}» para ${Math.min(result.total, 25)} cliente(s)?`)) return;
+    setRunning(true);
+    try {
+      const created = await createCrmCrossSellOpportunities(filters());
+      setAction(created);
+      setNotice(
+        created.total_criadas
+          ? `${created.total_criadas} oportunidade(s) criada(s), no valor de ${money(created.valor_total)}.`
+          : "Não havia contas novas para criar oportunidade.",
+      );
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Não foi possível criar as oportunidades");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const productName = (id: string) => String(products.find((item) => item.id === id)?.label ?? id);
+  const accountExample = String(accounts[0]?.label ?? "ACME");
+  const productExample = String(products[0]?.label ?? "Produto A");
+  const productExampleB = String(products[1]?.label ?? "Produto B");
+
+  const suggestions = [
+    `Que produtos o cliente ${accountExample} ainda não compra?`,
+    `Mostra clientes que compraram ${productExample} mas não compraram ${productExampleB}.`,
+    `Cria uma oportunidade para os clientes que gastaram mais de 10 000 € este ano e não têm ${productExample}.`,
+  ];
+
+  const ask = async (text: string) => {
+    if (text.trim().length < 3) return;
+    setAsking(true);
+    setAnswer(null);
+    try {
+      const response = await askCrmAi(text);
+      setAnswer(response.answer);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "O assistente não respondeu");
+    } finally {
+      setAsking(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="rounded-xl border border-indigo-300/20 bg-indigo-400/[0.06] p-3">
+        <p className="mb-2 flex items-center gap-2 text-[12px] font-medium text-indigo-100">
+          <Sparkles size={13} /> Público de cross-sell / upsell
+        </p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+          <Field label="Já compraram">
+            <select className={inputClass} value={have} onChange={(event) => setHave(event.target.value)}>
+              <option value="">— qualquer produto —</option>
+              {products.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {String(item.label)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Ainda não têm">
+            <select className={inputClass} value={missing} onChange={(event) => setMissing(event.target.value)}>
+              <option value="">— qualquer —</option>
+              {products.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {String(item.label)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Gastaram mais de (€)">
+            <input className={inputClass} type="number" min="0" value={minSpend} onChange={(event) => setMinSpend(event.target.value)} placeholder="10000" />
+          </Field>
+          <Field label="Período">
+            <select className={inputClass} value={months} onChange={(event) => setMonths(Number(event.target.value))}>
+              <option value={3}>3 meses</option>
+              <option value={6}>6 meses</option>
+              <option value={12}>12 meses</option>
+              <option value={24}>24 meses</option>
+            </select>
+          </Field>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Button size="sm" loading={running} icon={<Search size={13} />} onClick={() => void search()}>
+            Encontrar clientes
+          </Button>
+          {result && result.total > 0 && (
+            <Button size="sm" variant="secondary" loading={running} icon={<Wand2 size={13} />} onClick={() => void create()}>
+              Criar oportunidades ({Math.min(result.total, 25)})
+            </Button>
+          )}
+          {result && (
+            <span className="text-[11.5px] text-muted-foreground">
+              {result.total} cliente(s) no critério · valor histórico {money(result.valor_potencial)}
+              {result.filtros.nao_tem ? ` · falta ${result.filtros.nao_tem}` : ""}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {notice && <Notice text={notice} onClose={() => setNotice(null)} />}
+
+      {result && (
+        <MiniTable
+          title="Clientes no critério (por receita do período)"
+          columns={["Cliente", "Receita", "Encom.", "Último pedido", "Produtos", "Falta"]}
+          rows={result.accounts.map((row) => [row.name, money(row.revenue), number(row.orders), row.ultima_encomenda || "—", number(row.produtos), row.falta || "—"])}
+        />
+      )}
+
+      {action && action.criadas.length > 0 && (
+        <MiniTable
+          title={`Oportunidades criadas (${action.total_criadas})`}
+          columns={["Cliente", "Oportunidade", "Valor", "Estado"]}
+          rows={action.criadas.map((row) => [String(row.name ?? row.account_id), row.title, money(row.amount), "prospeção"])}
+        />
+      )}
+
+      <div className="rounded-xl border border-teal-300/20 bg-teal-400/[0.06] p-3">
+        <p className="mb-2 flex items-center gap-2 text-[12px] font-medium text-teal-100">
+          <MessagesSquare size={13} /> Perguntar ao assistente
+        </p>
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {suggestions.map((text) => (
+            <button
+              key={text}
+              type="button"
+              onClick={() => void ask(text)}
+              className="rounded-full border border-white/12 bg-white/[0.05] px-2.5 py-1 text-left text-[11px] text-muted-foreground transition hover:bg-white/[0.1] hover:text-foreground"
+            >
+              {text}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-end gap-2">
+          <textarea
+            className={`${inputClass} min-h-[52px] flex-1`}
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            placeholder="Escreva a pergunta…"
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void ask(question);
+              }
+            }}
+          />
+          <Button size="sm" loading={asking} icon={<Send size={13} />} onClick={() => void ask(question)}>
+            Perguntar
+          </Button>
+        </div>
+        {answer && (
+          <div className="mt-3 rounded-lg border border-white/10 bg-[#08181f] p-3">
+            <p className="whitespace-pre-wrap text-[12.5px] text-foreground">{answer}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
