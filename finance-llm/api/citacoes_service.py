@@ -31,6 +31,8 @@ from collectors.citius_citacoes import (
     PAGE_SIZE,
     CitacoesEditalClient,
     CitacoesError,
+    analyze_documento,
+    extract_pdf_text,
     total_pages,
 )
 
@@ -196,14 +198,19 @@ def list_runs(limit: int = 50) -> List[Dict[str, Any]]:
     return metas[: max(1, limit)]
 
 
-def delete_run(run_id: str) -> Dict[str, Any]:
-    """Apaga os ficheiros de uma recolha (JSON e resumo)."""
+def delete_run(run_id: str, drop_index: bool = False) -> Dict[str, Any]:
+    """Apaga os ficheiros de uma recolha (JSON e resumo) e, se pedido, o índice."""
     removed: List[str] = []
     for path in (run_path(run_id), run_meta_path(run_id)):
         if path.exists():
             path.unlink()
             removed.append(path.name)
-    return {"run_id": run_id, "removed": removed}
+    resultado: Dict[str, Any] = {"run_id": run_id, "removed": removed}
+    if drop_index:
+        from api.elasticsearch_client import delete_citacoes_run
+
+        resultado["index"] = delete_citacoes_run(run_id)
+    return resultado
 
 
 def latest_run_id() -> Optional[str]:
@@ -453,12 +460,236 @@ def ingest_run(
     return result
 
 
+# --------------------------------------------------------------- documentos
+def _precisa_documento(doc: Dict[str, Any], force: bool) -> bool:
+    """Indica se um édito precisa de (nova) extração do PDF."""
+    if force:
+        return bool(doc.get("has_documento") or doc.get("documento_url"))
+    return bool(doc.get("has_documento") or doc.get("documento_url")) and not doc.get("texto")
+
+
+def extrair_documentos_run(
+    run_id: Optional[str] = None,
+    *,
+    max_documentos: int = DEFAULT_MAX_DOCUMENTOS,
+    max_text_chars: int = MAX_TEXT_CHARS,
+    force: bool = False,
+    min_interval: float = MIN_REQUEST_INTERVAL,
+    proxy: Optional[str] = None,
+    reindex: bool = True,
+    update_existing: bool = True,
+    on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
+    stop: Optional[Callable[[], bool]] = None,
+) -> Dict[str, Any]:
+    """Extrai o texto dos PDF de uma recolha já gravada em JSON.
+
+    O token do documento está ligado à **sessão** da pesquisa, pelo que a extração
+    volta a fazer a pesquisa no portal (com os mesmos critérios da recolha) para
+    obter tokens frescos e casar os éditos pelo ``pub_id``. O texto, a análise e os
+    NIF são acrescentados ao JSON da recolha e reenviados ao índice.
+    """
+    from collectors.citius_citacoes import EditalCitacao
+
+    run_id = run_id or latest_run_id()
+    if not run_id:
+        raise FileNotFoundError("Não há recolhas em data/citacoes/runs.")
+
+    payload = load_run(run_id)
+    meta_info = load_run_meta(run_id)
+    criterios = payload.get("criteria") or meta_info.get("criteria") or {}
+    nome = (criterios.get("nome") or "").strip()
+    if not nome:
+        raise ValueError("A recolha não guardou o «nome» do interveniente — não é possível repetir a pesquisa no portal.")
+
+    itens: List[Dict[str, Any]] = payload.get("items") or []
+    alvos = [doc for doc in itens if _precisa_documento(doc, force)]
+    if not alvos:
+        return {
+            "run_id": run_id,
+            "alvos": 0,
+            "extraidos": 0,
+            "falhados": 0,
+            "mensagem": "Todos os éditos da recolha já têm o texto do documento extraído.",
+        }
+    alvos = alvos[: max(1, int(max_documentos)) if max_documentos else alvos]
+    faltam = {str(doc["pub_id"]) for doc in alvos}
+    por_id = {str(doc["pub_id"]): doc for doc in itens}
+
+    desde = criterios.get("desde")
+    pedidos = extraidos = falhados = 0
+    caracteres = 0
+    parado = False
+
+    with CitacoesEditalClient(min_interval=min_interval, proxy=proxy) as client:
+        pagina = client.search(
+            nome=nome,
+            tribunal=criterios.get("tribunal"),
+            dias=criterios.get("dias") or "todos",
+        )
+        while faltam:
+            if stop and stop():
+                parado = True
+                break
+            for edito in pagina.items:
+                if edito.pub_id not in faltam:
+                    continue
+                faltam.discard(edito.pub_id)
+                if not edito.doc_token:
+                    falhados += 1
+                    continue
+                pedidos += 1
+                erro: Optional[str] = None
+                try:
+                    pdf = client.fetch_documento(edito.doc_token)
+                    extraido = extract_pdf_text(pdf, max_chars=max_text_chars)
+                    if extraido.get("erro"):
+                        erro = str(extraido["erro"])
+                    else:
+                        edito.texto = extraido.get("texto")
+                        edito.documento = {
+                            **(edito.documento or {}),
+                            **analyze_documento(edito.texto),
+                            "documento_paginas": extraido.get("paginas"),
+                            "documento_caracteres": extraido.get("caracteres"),
+                            "documento_bytes": len(pdf),
+                            "documento_extraido_em": datetime.now(timezone.utc).isoformat(),
+                        }
+                        edito.enriquecer_intervenientes()
+                        extraidos += 1
+                        caracteres += int(extraido.get("caracteres") or 0)
+                except Exception as exc:  # noqa: BLE001
+                    erro = str(exc)
+                if erro:
+                    falhados += 1
+                    edito.documento = {**(edito.documento or {}), "documento_erro": erro[:300]}
+                # O documento atualizado substitui o que estava gravado.
+                por_id[edito.pub_id] = {**por_id[edito.pub_id], **edito.to_dict()}
+                if on_progress:
+                    on_progress(
+                        {
+                            "stage": "documentos",
+                            "documento": pedidos,
+                            "documentos": len(alvos),
+                            "referencia": edito.referencia,
+                            "titulo": (edito.documento or {}).get("documento_titulo"),
+                            "ok": erro is None,
+                            "erro": erro,
+                            "extraidos": extraidos,
+                            "falhados": falhados,
+                        }
+                    )
+            if not faltam or not pagina.has_next:
+                break
+            if desde and pagina.items and all(
+                item.data_publicacao and item.data_publicacao < desde for item in pagina.items
+            ):
+                # Passou-se o corte da recolha: os éditos que faltam já não vêm.
+                break
+            pagina = client.next_page()
+
+    if extraidos or force:
+        ordem = [str(doc["pub_id"]) for doc in itens]
+        payload["items"] = [por_id[pub_id] for pub_id in ordem if pub_id in por_id]
+        payload["count"] = len(payload["items"])
+        meta_info = {
+            **meta_info,
+            "documentos_extraidos": int(meta_info.get("documentos_extraidos") or 0) + extraidos,
+            "documentos_falhados": int(meta_info.get("documentos_falhados") or 0) + falhados,
+            "documentos_caracteres": int(meta_info.get("documentos_caracteres") or 0) + caracteres,
+            "documentos_atualizado_em": datetime.now(timezone.utc).isoformat(),
+        }
+        save_run(payload, meta_info)
+
+    resultado: Dict[str, Any] = {
+        "run_id": run_id,
+        "alvos": len(alvos),
+        "pedidos": pedidos,
+        "extraidos": extraidos,
+        "falhados": falhados,
+        "caracteres": caracteres,
+        "por_extrair": len(faltam),
+        "parado": parado,
+        "indexado": 0,
+    }
+    if reindex and extraidos:
+        ingest = ingest_run(run_id, update_existing=update_existing)
+        resultado["indexado"] = ingest.get("indexed_count", 0)
+        resultado["index_total"] = ingest.get("index_total")
+        resultado["error"] = ingest.get("error")
+    return resultado
+
+
+def texto_documento(pub_id: str) -> Dict[str, Any]:
+    """Texto extraído do PDF de um édito (por ``pub_id``)."""
+    from api.elasticsearch_client import get_citacao
+
+    doc = get_citacao(pub_id)
+    if not doc or doc.get("error"):
+        return {"pub_id": pub_id, "error": doc.get("error") if doc else "Édito não encontrado"}
+    return {
+        "pub_id": pub_id,
+        "referencia": doc.get("referencia"),
+        "titulo": doc.get("documento_titulo"),
+        "assunto": doc.get("documento_assunto"),
+        "modelo": doc.get("documento_modelo"),
+        "valor": doc.get("documento_valor"),
+        "prazo": doc.get("documento_prazo"),
+        "nifs": doc.get("documento_nifs") or [],
+        "partes": doc.get("documento_partes") or [],
+        "paginas": doc.get("documento_paginas"),
+        "caracteres": doc.get("documento_caracteres"),
+        "extraido_em": doc.get("documento_extraido_em"),
+        "erro": doc.get("documento_erro"),
+        "texto": doc.get("texto"),
+    }
+
+
+# --------------------------------------------------------------- grafo/mapa
+def grafo(**kwargs: Any) -> Dict[str, Any]:
+    """Constrói o grafo dos éditos (rede de entidades, tribunais, tipos, tempo)."""
+    from api.citacoes_graph import build_citacoes_graph
+
+    return build_citacoes_graph(**kwargs)
+
+
+def grafo_dimensoes() -> Dict[str, Any]:
+    """Dimensões, métricas e receitas disponíveis para o grafo."""
+    from api.citacoes_graph import citacoes_graph_dimensions
+
+    return citacoes_graph_dimensions()
+
+
+def mapa(**kwargs: Any) -> Dict[str, Any]:
+    """Constrói os pontos do mapa OpenStreetMap (por sede, comarca ou serviço)."""
+    from api.citacoes_map import build_citacoes_map
+
+    return build_citacoes_map(**kwargs)
+
+
+def mapa_niveis() -> List[Dict[str, str]]:
+    """Níveis de agregação do mapa."""
+    from api.citacoes_map import mapa_niveis as _niveis
+
+    return _niveis()
+
+
 # --------------------------------------------------------------- leitura
 def search(**kwargs: Any) -> Dict[str, Any]:
     """Pesquisa éditos já indexados."""
     from api.elasticsearch_client import search_citacoes as _search
 
     return _search(**kwargs)
+
+
+def entidades(**kwargs: Any) -> Dict[str, Any]:
+    """Entidades (intervenientes) dos éditos, agregadas por nome.
+
+    Responde a «que entidades aparecem e onde»: pesquisar por nome e filtrar
+    (papel, tipo, tribunal, comarca, datas) sem devolver os éditos um a um.
+    """
+    from api.elasticsearch_client import search_citacoes_entidades
+
+    return search_citacoes_entidades(**kwargs)
 
 
 def status() -> Dict[str, Any]:

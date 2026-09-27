@@ -440,24 +440,38 @@ def analyze_documento(texto: Optional[str]) -> Dict[str, Any]:
             continue
         candidatos.append((indice, re.sub(r"\s+", " ", linha)))
 
-    fortes = ("citac", "notifica", "edital", "venda", "anuncio", "publicacao", "penhora", "insolve")
+    fortes = (
+        "citac",
+        "notifica",
+        "edital",
+        "venda",
+        "anuncio",
+        "publicidade",
+        "penhora",
+        "insolve",
+        "relatorio",
+        "diligencia",
+        "declaracao",
+        "aviso",
+        "convocatoria",
+        "rateio",
+        "massa",
+        "habilita",
+        "liquidacao",
+        "divida",
+    )
     depois_da_pagina = {
         indice + 1
         for indice, linha in enumerate(linhas)
         if re.match(r"^P[áa]gina\s+\d+\s+de\s+\d+", linha, re.I)
     }
 
-    def _peso(item: Tuple[int, str]) -> Tuple[int, int]:
-        indice, linha = item
-        alvo = _fold(linha)
-        peso = 3 if any(p in alvo for p in fortes) else 0
-        if indice in depois_da_pagina:
-            peso += 2
-        return (-peso, indice)
-
+    # Só linhas com uma palavra-chave do tipo de édito contam como título: sem ela
+    # corria-se o risco de escolher o nome (em maiúsculas) de uma das partes.
+    com_chave = [(i, l) for i, l in candidatos if any(p in _fold(l) for p in fortes)]
     titulos: List[str] = []
-    if candidatos:
-        escolhido = sorted(candidatos, key=_peso)[0]
+    if com_chave:
+        escolhido = sorted(com_chave, key=lambda item: (0 if item[0] in depois_da_pagina else 1, item[0]))[0]
         titulos.append(escolhido[1])
         seguintes = [linha for indice, linha in candidatos if indice > escolhido[0]]
         if seguintes:

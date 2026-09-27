@@ -26,6 +26,7 @@ o conjunto é pequeno.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -240,6 +241,24 @@ def _matches_papel(papeis_alvo: Optional[List[str]], papel: str) -> bool:
     return False
 
 
+_SUFIXOS_RE = re.compile(r"\b(s\.?a\.?s?\.?|lda\.?|unipessoal|e\s+filhos|e\s+companhia)\b", re.I)
+
+
+def _chave_entidade(nome: str) -> str:
+    """Chave de agrupamento de um interveniente.
+
+    A lista do portal e o PDF escrevem a mesma empresa de formas diferentes
+    («Caixa Económica Montepio Geral» e «Caixa Económica Montepio Geral, Caixa
+    Económica Bancária, S.A.»). A chave corta na primeira vírgula e remove
+    sufixos societários, para a rede juntar as variantes sem juntar empresas
+    distintas (ex.: «Montepio Crédito - Instituição Financeira de Crédito» é
+    outra entidade).
+    """
+    texto = _fold(nome).split(",", 1)[0]
+    texto = _SUFIXOS_RE.sub(" ", texto)
+    return re.sub(r"\s+", " ", texto).strip(" .-")
+
+
 def _values(doc: Dict[str, Any], dimension: str) -> List[Dict[str, Any]]:
     """Valores de uma dimensão num édito: ``[{id, label, description?}]``."""
     spec = CITACOES_GRAPH_DIMENSIONS.get(dimension)
@@ -267,7 +286,7 @@ def _values(doc: Dict[str, Any], dimension: str) -> List[Dict[str, Any]]:
             nome = str(item.get("nome") or "").strip()
             if not nome or not _matches_papel(spec["papeis"], papel):
                 continue
-            chave = _fold(nome)
+            chave = _chave_entidade(nome)
             if chave and not any(entry["id"] == chave for entry in out):
                 out.append({"id": chave, "label": nome, "papel": papel, "nif": item.get("nif")})
         return out
@@ -276,7 +295,7 @@ def _values(doc: Dict[str, Any], dimension: str) -> List[Dict[str, Any]]:
         out = []
         for item in doc.get("intervenientes") or []:
             nome = str(item.get("nome") or "").strip()
-            chave = _fold(nome)
+            chave = _chave_entidade(nome)
             if chave and not any(entry["id"] == chave for entry in out):
                 out.append({"id": chave, "label": nome, "papel": item.get("papel"), "nif": item.get("nif")})
         return out
@@ -328,6 +347,11 @@ def _add_node(
         node["keys"] = list(dict.fromkeys([*node["keys"], item["papel"]]))[:6]
     if item.get("nif"):
         node["nif"] = item["nif"]
+    # A mesma entidade aparece escrita de formas diferentes na lista e no PDF:
+    # fica o rótulo mais curto (habitualmente o nome limpo).
+    novo_label = str(item.get("label") or item["id"])
+    if len(novo_label) < len(str(node["label"])):
+        node["label"] = novo_label
     node["mentions"] += 1
     node["valor"] = round(float(node["valor"]) + valor, 2)
     return node_id
@@ -339,16 +363,21 @@ def _add_edge(
     target: str,
     valor: float,
     directed: bool,
-) -> None:
-    """Acumula uma aresta (não dirigida quando as duas pontas são iguais)."""
+) -> str:
+    """Acumula uma menção numa aresta e devolve a sua chave.
+
+    A contagem de **éditos** da aresta é feita uma vez por documento (fora daqui),
+    senão um édito com várias partes inflacionava o total.
+    """
     if not directed and target < source:
         source, target = target, source
     key = f"{source}->{target}"
     edge = edges.get(key)
     if edge is None:
         edge = edges[key] = {"source": source, "target": target, "count": 0, "mentions": 0, "valor": 0.0}
+    edge["mentions"] = int(edge.get("mentions") or 0) + 1
     edge["valor"] = round(float(edge["valor"]) + valor, 2)
-    edges[key] = edge
+    return key
 
 
 def build_citacoes_graph(
@@ -445,23 +474,24 @@ def build_citacoes_graph(
 
         if not dimension_b:
             continue
+        pares: Set[str] = set()
         if mesmo_lado:
             for index, left in enumerate(ids_a):
                 for right in ids_a[index + 1:]:
-                    _add_edge(edges, left, right, valor, directed=False)
-                    edges[f"{min(left, right)}->{max(left, right)}"]["mentions"] += 1
-            continue
-
-        valores_b = _values(doc, dimension_b)
-        ids_b = list(
-            dict.fromkeys(_add_node(nodes, dimension_b, item, valor) for item in valores_b)
-        )
-        for node_id in ids_b:
-            nodes[node_id]["count"] += 1
-        for left in ids_a:
-            for right in ids_b:
-                _add_edge(edges, left, right, valor, directed=True)
-                edges[f"{left}->{right}"]["mentions"] += 1
+                    pares.add(_add_edge(edges, left, right, valor, directed=False))
+        else:
+            valores_b = _values(doc, dimension_b)
+            ids_b = list(
+                dict.fromkeys(_add_node(nodes, dimension_b, item, valor) for item in valores_b)
+            )
+            for node_id in ids_b:
+                nodes[node_id]["count"] += 1
+            for left in ids_a:
+                for right in ids_b:
+                    pares.add(_add_edge(edges, left, right, valor, directed=True))
+        # Um édito conta uma vez por aresta (mesmo com várias partes do mesmo lado).
+        for key in pares:
+            edges[key]["count"] = int(edges[key].get("count") or 0) + 1
 
     metric_key = "count" if metric == "editais" else "mentions"
     ordenados = sorted(

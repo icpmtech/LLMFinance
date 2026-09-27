@@ -1327,6 +1327,7 @@ def entities_detail(nif: str):
 @app.get("/pesquisa")
 @app.get("/sentimento")
 @app.get("/cire")
+@app.get("/citacoes")
 @app.get("/contribuintes")
 @app.get("/world")
 @app.get("/world/rede")

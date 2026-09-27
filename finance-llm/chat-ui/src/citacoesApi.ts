@@ -33,6 +33,8 @@ export type CitacoesEdito = {
   tribunal?: string | null;
   tribunal_comarca?: string | null;
   tribunal_sede?: string | null;
+  /** Comarca judicial («… da Comarca de Santarém» → «Santarém»). */
+  comarca_judicial?: string | null;
   ato?: string | null;
   tipo?: string | null;
   processo?: string | null;
@@ -44,6 +46,24 @@ export type CitacoesEdito = {
   intervenientes?: CitacoesInterveniente[];
   has_documento?: boolean;
   documento_url?: string | null;
+  /** Texto integral extraído do PDF (só quando pedido, ou na extração). */
+  texto?: string | null;
+  has_texto?: boolean;
+  /** Análise do PDF: título, modelo, valor da execução, prazo e NIF. */
+  documento_titulo?: string | null;
+  documento_assunto?: string | null;
+  documento_modelo?: string | null;
+  documento_codigo?: string | null;
+  documento_referencia_interna?: string | null;
+  documento_valor?: number | null;
+  documento_prazo?: string | null;
+  documento_nifs?: string[];
+  documento_partes?: { nome: string; nif?: string | null }[];
+  documento_paginas?: number | null;
+  documento_caracteres?: number | null;
+  documento_bytes?: number | null;
+  documento_erro?: string | null;
+  documento_extraido_em?: string | null;
   run_id?: string;
   ingested_at?: string;
   extra?: Record<string, unknown>;
@@ -57,14 +77,22 @@ export type CitacoesSearchResult = {
   items: CitacoesEdito[];
   from?: number;
   size?: number;
+  /** Éditos do resultado com o texto do PDF já extraído. */
+  with_texto?: number;
+  /** Soma e média do valor das execuções (do que foi analisado dos PDF). */
+  valor_total?: number;
+  valor_medio?: number | null;
   error?: string;
   facets?: {
     tipo?: CitacoesFacet[];
     tribunal_comarca?: CitacoesFacet[];
+    comarca_judicial?: CitacoesFacet[];
     tribunal?: CitacoesFacet[];
     ato?: CitacoesFacet[];
     especie?: CitacoesFacet[];
     papel?: CitacoesFacet[];
+    modelo?: CitacoesFacet[];
+    assunto?: CitacoesFacet[];
     ano?: CitacoesFacet[];
     mes?: CitacoesFacet[];
   };
@@ -77,16 +105,26 @@ export type CitacoesStatus = {
   processos?: number;
   tribunais?: number;
   citados?: number;
+  /** NIF/NIPC distintos vistos no documento analisado. */
+  nifs?: number;
   min_date?: string | null;
   max_date?: string | null;
   with_documento?: number;
+  with_texto?: number;
+  with_valor?: number;
+  valor_total?: number;
+  valor_medio?: number | null;
+  valor_maximo?: number | null;
   by_tipo?: CitacoesFacet[];
   by_ano?: CitacoesFacet[];
   by_mes?: CitacoesFacet[];
   by_papel?: CitacoesFacet[];
   top_comarcas?: CitacoesFacet[];
+  top_comarcas_judiciais?: CitacoesFacet[];
   top_tribunais?: CitacoesFacet[];
   top_actos?: CitacoesFacet[];
+  top_modelos?: CitacoesFacet[];
+  top_assuntos?: CitacoesFacet[];
   error?: string;
 };
 
@@ -104,8 +142,14 @@ export type CitacoesMeta = {
   default_months: number;
   max_months: number;
   min_request_interval: number;
+  /** Extração do texto dos PDF durante a recolha. */
+  extrair_documentos?: boolean;
+  /** Documentos analisados por omissão numa recolha (0 = todos). */
+  max_documentos?: number;
+  max_text_chars?: number;
   dias: { value: string; label: string }[];
-  notes: string;
+  notes?: string;
+  notas?: string;
 };
 
 export type CitacoesOptions = {
@@ -123,6 +167,10 @@ export type CitacoesCollectCriteria = {
   meses?: number | null;
   max_pages?: number;
   max_items?: number | null;
+  /** Descarregar e analisar o PDF de cada édito (texto, valor, NIF). */
+  extrair_documentos?: boolean;
+  /** Documentos a extrair por recolha (0 = todos). */
+  max_documentos?: number;
   min_interval?: number;
   proxy?: string | null;
   index?: boolean;
@@ -138,7 +186,12 @@ export type CitacoesRun = {
   declared_pages?: number;
   pages?: number;
   page_size?: number;
+  /** Éditos anteriores ao corte de meses que foram descartados. */
   older_than_cutoff?: number;
+  /** Documentos (PDF) extraídos e falhados nesta operação. */
+  documentos_extraidos?: number;
+  documentos_falhados?: number;
+  documentos_caracteres?: number;
   duration_s?: number;
   created_at?: string;
   finished_at?: string;
@@ -157,6 +210,8 @@ export type CitacoesRun = {
 export type CitacoesJob = {
   id: string;
   state: "queued" | "running" | "done" | "error" | "stopped" | "empty";
+  /** `recolha` (pesquisa no portal) ou `documentos` (extração dos PDF de uma recolha). */
+  kind?: string;
   stage?: string;
   criteria?: CitacoesCollectCriteria;
   page?: number | null;
@@ -165,11 +220,21 @@ export type CitacoesJob = {
   declared_total?: number;
   declared_pages?: number;
   older_than_cutoff?: number;
+  /** Progresso da extração dos PDF. */
+  documento?: number | null;
+  documentos?: number | null;
+  documento_titulo?: string | null;
+  documento_referencia?: string | null;
+  documentos_extraidos?: number;
+  documentos_falhados?: number;
+  documentos_caracteres?: number;
+  documentos_pendentes?: number | null;
   duration_s?: number;
   indexed?: number;
   index_total?: number;
   run_id?: string;
   error?: string | null;
+  estado_final?: string | null;
   errors?: string[];
   skipped_existing?: number;
   stop_requested?: boolean;
@@ -198,17 +263,207 @@ export type CitacoesSearchParams = {
   processo?: string;
   tribunal?: string;
   tribunal_comarca?: string;
+  comarca_judicial?: string;
   tipo?: string;
   ato?: string;
   especie?: string;
   citado?: string;
   nome?: string;
   papel?: string;
+  nif?: string;
+  modelo?: string;
+  titulo?: string;
   data_from?: string;
   data_to?: string;
   has_documento?: boolean;
+  has_texto?: boolean;
+  with_texto?: boolean;
   size?: number;
   from?: number;
+};
+
+/* ------------------------------------------------------- grafo e mapa --- */
+
+/** Nó do grafo das citações (uma entidade, tribunal, comarca, tipo, modelo, mês…). */
+export type CitacoesGraphNode = {
+  id: string;
+  key: string;
+  label: string;
+  dimension: string;
+  type: string;
+  role?: string;
+  /** Éditos distintos em que o valor aparece. */
+  count: number;
+  /** Menções (intervenções) do valor em todos os éditos. */
+  mentions: number;
+  /** Soma do valor das execuções dos éditos em que aparece. */
+  valor: number;
+  /** Papéis vistos (quando a dimensão é derivada de intervenientes). */
+  keys?: string[];
+  nif?: string | null;
+};
+
+export type CitacoesGraphEdge = {
+  source: string;
+  target: string;
+  count: number;
+  mentions: number;
+  valor: number;
+};
+
+export type CitacoesGraphMeta = {
+  dimension_a: string;
+  dimension_b?: string | null;
+  metric: string;
+  mode?: string;
+  complete?: boolean;
+  documents_scanned: number;
+  documents_matching: number;
+  documents_value?: number;
+  documents_with_text?: number;
+  nodes_total: number;
+  edges_total: number;
+  kept_nodes: number;
+  kept_edges: number;
+  omitted_edges: number;
+  directed?: boolean;
+  generated_at?: string;
+  limits?: Record<string, number>;
+  notes: string[];
+  filters: Record<string, unknown>;
+};
+
+export type CitacoesGraphResponse = {
+  nodes: CitacoesGraphNode[];
+  edges: CitacoesGraphEdge[];
+  meta: CitacoesGraphMeta;
+  error?: string;
+};
+
+export type CitacoesGraphDimensions = {
+  dimensions: { key: string; label: string; short: string; type: string }[];
+  metrics: { key: string; label: string }[];
+  recipes: {
+    id: string;
+    label: string;
+    description: string;
+    dimension_a: string;
+    dimension_b: string | null;
+    metric: "editais" | "mencoes";
+    view: string;
+    limit: number;
+  }[];
+  limits: Record<string, number>;
+};
+
+export type CitacoesGraphParams = {
+  dimension_a: string;
+  dimension_b?: string | null;
+  metric?: "editais" | "mencoes";
+  q?: string;
+  tipo?: string;
+  comarca_judicial?: string;
+  tribunal?: string;
+  papel?: string;
+  nif?: string;
+  modelo?: string;
+  data_from?: string;
+  data_to?: string;
+  has_texto?: boolean;
+  min_count?: number;
+  limit?: number;
+  edge_limit?: number;
+  max_docs?: number;
+};
+
+/** Ponto do mapa: uma terra/comarca/serviço com éditos. */
+export type CitacoesMapPoint = {
+  key: string;
+  label: string;
+  lat: number;
+  lon: number;
+  precisao?: string;
+  nivel?: string;
+  count: number;
+  valor: number;
+  com_texto: number;
+  com_documento: number;
+  por_tipo?: CitacoesFacet[];
+  top_tribunais?: CitacoesFacet[];
+  min_date?: string | null;
+  max_date?: string | null;
+};
+
+export type CitacoesMapResponse = {
+  nivel: string;
+  nivel_label?: string;
+  niveis?: { key: string; label: string; campo: string; hint: string }[];
+  points: CitacoesMapPoint[];
+  sem_localizacao: CitacoesMapPoint[];
+  totals: {
+    editais: number;
+    locais: number;
+    locais_no_mapa: number;
+    locais_sem_coordenadas: number;
+    valor: number;
+    com_texto: number;
+    com_documento: number;
+    por_tipo: CitacoesFacet[];
+    documents_matching: number;
+    documents_scanned: number;
+  };
+  truncated?: boolean;
+  generated_at?: string;
+  filters?: Record<string, unknown>;
+  error?: string;
+};
+
+export type CitacoesMapParams = {
+  nivel?: "sede" | "comarca" | "tribunal";
+  q?: string;
+  tipo?: string;
+  comarca_judicial?: string;
+  tribunal?: string;
+  papel?: string;
+  nif?: string;
+  modelo?: string;
+  data_from?: string;
+  data_to?: string;
+  has_texto?: boolean;
+};
+
+/** Texto extraído do PDF de um édito (e o que a análise retirou dele). */
+export type CitacoesDocumento = {
+  pub_id: string;
+  referencia?: string | null;
+  titulo?: string | null;
+  assunto?: string | null;
+  modelo?: string | null;
+  valor?: number | null;
+  prazo?: string | null;
+  nifs?: string[];
+  partes?: { nome: string; nif?: string | null }[];
+  paginas?: number | null;
+  caracteres?: number | null;
+  extraido_em?: string | null;
+  erro?: string | null;
+  texto?: string | null;
+  error?: string;
+};
+
+export type CitacoesDocumentosResult = {
+  run_id?: string;
+  alvos?: number;
+  pedidos?: number;
+  extraidos?: number;
+  falhados?: number;
+  caracteres?: number;
+  por_extrair?: number;
+  parado?: boolean;
+  indexado?: number;
+  index_total?: number;
+  mensagem?: string;
+  error?: string;
 };
 
 /* ----------------------------------------------------------------- helpers */
@@ -271,10 +526,11 @@ export function getCitacoesRun(runId: string, withItems = false) {
   );
 }
 
-export function deleteCitacoesRun(runId: string) {
-  return request<{ run_id: string; removed: string[] }>(`/citacoes/runs/${encodeURIComponent(runId)}`, {
-    method: "DELETE",
-  });
+export function deleteCitacoesRun(runId: string, dropIndex = false) {
+  return request<{ run_id: string; removed: string[]; index?: { deleted?: number; error?: string } }>(
+    `/citacoes/runs/${encodeURIComponent(runId)}${dropIndex ? "?drop_index=true" : ""}`,
+    { method: "DELETE" },
+  );
 }
 
 /** Arranca uma recolha em segundo plano (grava JSON e, se `index`, importa). */
@@ -308,4 +564,46 @@ export function ingestCitacoes(
 /** Rótulo legível do tipo de édito. */
 export function citacoesTipoLabel(tipo?: string | null): string {
   return tipo || "Édito";
+}
+
+/** Dimensões, métricas e receitas disponíveis para o grafo. */
+export function getCitacoesGraphDimensions() {
+  return request<CitacoesGraphDimensions>("/citacoes/graph/dimensions");
+}
+
+/** Constrói o grafo das citações (rede de entidades, tribunais, tipos e tempo). */
+export function getCitacoesGraph(params: CitacoesGraphParams) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") return;
+    query.set(key, String(value));
+  });
+  return request<CitacoesGraphResponse>(`/citacoes/graph?${query.toString()}`);
+}
+
+/** Pontos do mapa OpenStreetMap (por sede do tribunal, comarca ou serviço). */
+export function getCitacoesMap(params: CitacoesMapParams = {}) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") return;
+    query.set(key, String(value));
+  });
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<CitacoesMapResponse>(`/citacoes/map${suffix}`);
+}
+
+/** Texto extraído do PDF de um édito (por `pub_id`). */
+export function getCitacoesDocumento(pubId: string) {
+  return request<CitacoesDocumento>(`/citacoes/documentos/${encodeURIComponent(pubId)}`);
+}
+
+/** Extrai (em segundo plano) o texto dos PDF de uma recolha gravada. */
+export function startCitacoesDocumentos(
+  runId: string,
+  payload: { max_documentos?: number; max_text_chars?: number; force?: boolean; min_interval?: number; index?: boolean } = {},
+) {
+  return request<CitacoesJob>(
+    `/citacoes/runs/${encodeURIComponent(runId)}/documentos`,
+    withBody("POST", payload),
+  );
 }

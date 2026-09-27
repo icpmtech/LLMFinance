@@ -28,11 +28,14 @@ import {
   Database,
   Download,
   FileJson,
+  FileText,
   Gavel,
   Loader2,
+  MapPin,
   Play,
   RefreshCw,
   Search,
+  Share2,
   Square,
   Trash2,
   Upload,
@@ -40,6 +43,7 @@ import {
 } from "lucide-react";
 import {
   deleteCitacoesRun,
+  getCitacoesDocumento,
   getCitacoesJob,
   getCitacoesMeta,
   getCitacoesOptions,
@@ -49,8 +53,10 @@ import {
   listCitacoesRuns,
   searchCitacoes,
   startCitacoesCollect,
+  startCitacoesDocumentos,
   stopCitacoesJob,
   type CitacoesCollectCriteria,
+  type CitacoesDocumento,
   type CitacoesEdito,
   type CitacoesFacet,
   type CitacoesJob,
@@ -61,15 +67,20 @@ import {
   type CitacoesSearchResult,
   type CitacoesStatus,
 } from "../citacoesApi";
+import CitacoesGraphPanel from "../components/citacoes/CitacoesGraphPanel";
+import CitacoesMapPanel from "../components/citacoes/CitacoesMapPanel";
+import { formatMoney } from "../components/graph/graphStudio";
 
 const numberFormat = new Intl.NumberFormat("pt-PT");
 const dateFormat = new Intl.DateTimeFormat("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric" });
 
-type Section = "pesquisa" | "recolha" | "execucoes" | "estado";
+type Section = "pesquisa" | "grafo" | "mapa" | "recolha" | "execucoes" | "estado";
 
 const SECTIONS: { id: Section; label: string; hint: string; icon: React.ReactNode }[] = [
   { id: "pesquisa", label: "Pesquisa", hint: "Procurar nos éditos indexados", icon: <Search size={14} /> },
-  { id: "recolha", label: "Recolha", hint: "Recolher a lista do portal para JSON e importar", icon: <Play size={14} /> },
+  { id: "grafo", label: "Grafo", hint: "Relacionar partes, tribunais, tipos e tempo", icon: <Share2 size={14} /> },
+  { id: "mapa", label: "Mapa", hint: "Ver os éditos no mapa OpenStreetMap (por sede/comarca)", icon: <MapPin size={14} /> },
+  { id: "recolha", label: "Recolha", hint: "Recolher a lista do portal, analisar os PDF e importar", icon: <Play size={14} /> },
   { id: "execucoes", label: "Execuções", hint: "Ficheiros gravados e importação", icon: <FileJson size={14} /> },
   { id: "estado", label: "Estado", hint: "Volumetria e distribuições do índice", icon: <Database size={14} /> },
 ];
@@ -148,11 +159,35 @@ function Facets({
 function EditoCard({ item }: { item: CitacoesEdito }) {
   const intervenientes = item.intervenientes ?? [];
   const [open, setOpen] = useState(false);
+  const [texto, setTexto] = useState<CitacoesDocumento | null>(null);
+  const [aCarregarTexto, setACarregarTexto] = useState(false);
+  const [mostrarTexto, setMostrarTexto] = useState(false);
   const visiveis = open ? intervenientes : intervenientes.slice(0, 4);
   const cor =
     item.tipo === "Notificação"
       ? "border-sky-400/30 bg-sky-400/10 text-sky-200"
-      : "border-emerald-400/30 bg-emerald-400/10 text-emerald-200";
+      : item.tipo === "Anúncio"
+        ? "border-violet-400/30 bg-violet-400/10 text-violet-200"
+        : "border-emerald-400/30 bg-emerald-400/10 text-emerald-200";
+
+  /** O texto integral não vem na pesquisa (é pesado): é pedido ao abrir. */
+  const verTexto = async () => {
+    if (mostrarTexto) {
+      setMostrarTexto(false);
+      return;
+    }
+    setMostrarTexto(true);
+    if (texto) return;
+    setACarregarTexto(true);
+    try {
+      setTexto(await getCitacoesDocumento(item.pub_id));
+    } catch {
+      setTexto({ pub_id: item.pub_id, error: "Não foi possível ler o documento guardado." });
+    } finally {
+      setACarregarTexto(false);
+    }
+  };
+
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -160,6 +195,11 @@ function EditoCard({ item }: { item: CitacoesEdito }) {
           <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded-full border px-2 py-0.5 text-[10.5px] ${cor}`}>{item.tipo || "Édito"}</span>
             <span className="text-sm font-semibold text-foreground">{item.citado || item.referencia}</span>
+            {item.documento_valor ? (
+              <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10.5px] text-amber-200">
+                {formatMoney(item.documento_valor)}
+              </span>
+            ) : null}
           </div>
           <div className="mt-0.5 text-[11px] text-muted-foreground">
             {item.tribunal || "—"} · {item.processo || "—"}
@@ -171,6 +211,13 @@ function EditoCard({ item }: { item: CitacoesEdito }) {
         </div>
       </div>
 
+      {item.documento_titulo || item.documento_assunto ? (
+        <div className="mt-2 rounded-lg border border-violet-400/20 bg-violet-400/5 px-2 py-1 text-[11px] text-violet-100">
+          {item.documento_titulo ? <div className="font-medium">{item.documento_titulo}</div> : null}
+          {item.documento_assunto ? <div className="text-violet-200/80">{item.documento_assunto}</div> : null}
+        </div>
+      ) : null}
+
       <div className="mt-2 grid gap-1 text-[11px] text-muted-foreground sm:grid-cols-2">
         <div>
           <span className="text-muted-foreground/70">Ato:</span> {item.ato || "—"}
@@ -178,17 +225,42 @@ function EditoCard({ item }: { item: CitacoesEdito }) {
         <div>
           <span className="text-muted-foreground/70">Espécie:</span> {item.especie || "—"}
         </div>
+        {item.comarca_judicial ? (
+          <div>
+            <span className="text-muted-foreground/70">Comarca:</span> {item.comarca_judicial}
+          </div>
+        ) : null}
         {item.juizo ? (
           <div className="truncate" title={item.juizo}>
             <span className="text-muted-foreground/70">Juízo:</span> {item.juizo}
           </div>
         ) : null}
-        {item.tribunal_comarca ? (
+        {item.documento_modelo ? (
           <div>
-            <span className="text-muted-foreground/70">Comarca:</span> {item.tribunal_comarca}
+            <span className="text-muted-foreground/70">Modelo:</span> {item.documento_modelo}
+            {item.documento_referencia_interna ? ` · ref. interna ${item.documento_referencia_interna}` : ""}
+          </div>
+        ) : null}
+        {item.documento_prazo ? (
+          <div>
+            <span className="text-muted-foreground/70">Prazo:</span> {item.documento_prazo}
           </div>
         ) : null}
       </div>
+
+      {(item.documento_nifs ?? []).length ? (
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">NIF do documento:</span>
+          {(item.documento_nifs ?? []).slice(0, 8).map((nif) => (
+            <span
+              key={nif}
+              className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-mono text-[10px] text-foreground"
+            >
+              {nif}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       {visiveis.length > 0 ? (
         <div className="mt-2 space-y-1">
@@ -216,8 +288,19 @@ function EditoCard({ item }: { item: CitacoesEdito }) {
         </div>
       ) : null}
 
-      {item.documento_url ? (
-        <div className="mt-2">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {item.has_documento || item.has_texto ? (
+          <button
+            type="button"
+            onClick={() => void verTexto()}
+            className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10.5px] text-muted-foreground hover:bg-white/10 hover:text-foreground"
+          >
+            {aCarregarTexto ? <Loader2 size={11} className="animate-spin" /> : <FileText size={11} />}
+            {mostrarTexto ? "ocultar texto" : "ver texto do documento"}
+            {item.documento_paginas ? ` (${item.documento_paginas}p)` : ""}
+          </button>
+        ) : null}
+        {item.documento_url ? (
           <a
             href={item.documento_url}
             target="_blank"
@@ -225,8 +308,27 @@ function EditoCard({ item }: { item: CitacoesEdito }) {
             className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10.5px] text-muted-foreground hover:bg-white/10 hover:text-foreground"
             title="Abre o PDF no portal do CITIUS (a ligação está ligada à sessão da recolha)"
           >
-            <Download size={11} /> documento
+            <Download size={11} /> PDF no portal
           </a>
+        ) : null}
+      </div>
+
+      {mostrarTexto ? (
+        <div className="mt-2 max-h-[320px] overflow-y-auto rounded-lg border border-white/10 bg-black/30 p-2 text-[10.5px] leading-relaxed text-muted-foreground">
+          {texto?.error ? (
+            <span className="text-amber-300">{texto.error}</span>
+          ) : texto?.texto ? (
+            <>
+              <div className="mb-1 flex flex-wrap gap-2 text-[10px] text-muted-foreground/80">
+                {texto.modelo ? <span>modelo {texto.modelo}</span> : null}
+                {texto.caracteres ? <span>{numberFormat.format(texto.caracteres)} caracteres</span> : null}
+                {texto.paginas ? <span>{texto.paginas} páginas</span> : null}
+              </div>
+              <pre className="whitespace-pre-wrap font-sans">{texto.texto}</pre>
+            </>
+          ) : (
+            <span>Sem texto guardado para este édito.</span>
+          )}
         </div>
       ) : null}
     </div>
@@ -242,6 +344,13 @@ export default function CitacoesPage({ section = "pesquisa" }: { section?: Secti
   const [status, setStatus] = useState<CitacoesStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /** Filtros vindos do grafo/mapa (navegação para a pesquisa). */
+  const [searchSeed, setSearchSeed] = useState<{ id: number; params: CitacoesSearchParams } | null>(null);
+
+  const openSearch = useCallback((params: CitacoesSearchParams) => {
+    setSearchSeed({ id: Date.now(), params });
+    setActive("pesquisa");
+  }, []);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -326,7 +435,9 @@ export default function CitacoesPage({ section = "pesquisa" }: { section?: Secti
           </div>
         )}
 
-        {active === "pesquisa" && <SearchSection meta={meta} onError={setError} />}
+        {active === "pesquisa" && <SearchSection meta={meta} onError={setError} seed={searchSeed} />}
+        {active === "grafo" && <CitacoesGraphPanel onOpenSearch={openSearch} />}
+        {active === "mapa" && <CitacoesMapPanel onOpenSearch={openSearch} />}
         {active === "recolha" && (
           <RecolhaSection
             meta={meta}
@@ -355,11 +466,30 @@ export default function CitacoesPage({ section = "pesquisa" }: { section?: Secti
 
 /* --------------------------------------------------------------- pesquisa */
 
-function SearchSection({ meta, onError }: { meta: CitacoesMeta | null; onError: (message: string) => void }) {
+function SearchSection({
+  meta,
+  onError,
+  seed,
+}: {
+  meta: CitacoesMeta | null;
+  onError: (message: string) => void;
+  /** Filtros vindos do grafo/mapa (cada `id` novo aplica-os). */
+  seed?: { id: number; params: CitacoesSearchParams } | null;
+}) {
   const [params, setParams] = useState<CitacoesSearchParams>({ size: 20, from: 0 });
   const [result, setResult] = useState<CitacoesSearchResult | null>(null);
   const [loading, setLoading] = useState(false);
-  const [draft, setDraft] = useState({ q: "", nome: "", citado: "", processo: "", tribunal: "", ato: "", tipo: "" });
+  const [draft, setDraft] = useState({
+    q: "",
+    nome: "",
+    citado: "",
+    processo: "",
+    tribunal: "",
+    ato: "",
+    tipo: "",
+    comarca_judicial: "",
+    nif: "",
+  });
 
   const run = useCallback(
     async (next: CitacoesSearchParams) => {
@@ -376,9 +506,33 @@ function SearchSection({ meta, onError }: { meta: CitacoesMeta | null; onError: 
   );
 
   useEffect(() => {
+    // Com filtros vindos do grafo/mapa (seed) não se faz a pesquisa inicial: os
+    // dois pedidos corriam em paralelo e a resposta sem filtros podia chegar
+    // depois, mostrando o índice inteiro em vez do subconjunto pedido.
+    if (seed) return;
     void run(params);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Filtros vindos do grafo ou do mapa: substituem a pesquisa em curso.
+  useEffect(() => {
+    if (!seed) return;
+    setParams(seed.params);
+    setDraft((prev) => ({
+      ...prev,
+      q: seed.params.q ?? "",
+      nome: seed.params.nome ?? "",
+      citado: seed.params.citado ?? "",
+      processo: seed.params.processo ?? "",
+      tribunal: seed.params.tribunal ?? "",
+      ato: seed.params.ato ?? "",
+      tipo: seed.params.tipo ?? "",
+      comarca_judicial: seed.params.comarca_judicial ?? "",
+      nif: seed.params.nif ?? "",
+    }));
+    void run(seed.params);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed?.id]);
 
   const apply = (patch: Partial<CitacoesSearchParams>) => {
     const next: CitacoesSearchParams = { ...params, ...patch, from: patch.from ?? 0 };
@@ -401,11 +555,13 @@ function SearchSection({ meta, onError }: { meta: CitacoesMeta | null; onError: 
       tribunal: draft.tribunal || undefined,
       ato: draft.ato || undefined,
       tipo: draft.tipo || undefined,
+      comarca_judicial: draft.comarca_judicial || undefined,
+      nif: draft.nif || undefined,
     });
   };
 
   const clear = () => {
-    setDraft({ q: "", nome: "", citado: "", processo: "", tribunal: "", ato: "", tipo: "" });
+    setDraft({ q: "", nome: "", citado: "", processo: "", tribunal: "", ato: "", tipo: "", comarca_judicial: "", nif: "" });
     setParams({ size: 20, from: 0 });
     void run({ size: 20, from: 0 });
   };
@@ -496,6 +652,36 @@ function SearchSection({ meta, onError }: { meta: CitacoesMeta | null; onError: 
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
+              <label className="text-[10.5px] uppercase tracking-wide text-muted-foreground">Comarca judicial</label>
+              <input
+                value={draft.comarca_judicial}
+                onChange={(event) => setDraft({ ...draft, comarca_judicial: event.target.value })}
+                placeholder="ex.: Santarém"
+                autoComplete="off"
+                className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-[12px] text-foreground outline-none focus:border-amber-400/40"
+              />
+            </div>
+            <div>
+              <label className="text-[10.5px] uppercase tracking-wide text-muted-foreground">NIF (do documento)</label>
+              <input
+                value={draft.nif}
+                onChange={(event) => setDraft({ ...draft, nif: event.target.value })}
+                placeholder="ex.: 166611565"
+                autoComplete="off"
+                className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-[12px] text-foreground outline-none focus:border-amber-400/40"
+              />
+            </div>
+          </div>
+          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={params.has_texto === true}
+              onChange={(event) => apply({ has_texto: event.target.checked ? true : undefined })}
+            />
+            só éditos com o PDF analisado (texto/NIF/valor)
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
               <label className="text-[10.5px] uppercase tracking-wide text-muted-foreground">De</label>
               <input
                 type="date"
@@ -537,6 +723,12 @@ function SearchSection({ meta, onError }: { meta: CitacoesMeta | null; onError: 
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-[11.5px] text-muted-foreground">
               <span className="font-semibold text-foreground">{numberFormat.format(total)}</span> éditos
+              {(result?.with_texto ?? 0) > 0 ? (
+                <span className="ml-2">· {numberFormat.format(result?.with_texto ?? 0)} com PDF analisado</span>
+              ) : null}
+              {(result?.valor_total ?? 0) > 0 ? (
+                <span className="ml-2">· valor {numberFormat.format(result?.valor_total ?? 0)} €</span>
+              ) : null}
               {result?.error ? <span className="ml-2 text-amber-300">{result.error}</span> : null}
             </div>
             <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
@@ -582,12 +774,24 @@ function SearchSection({ meta, onError }: { meta: CitacoesMeta | null; onError: 
               onPick={(key) => apply({ papel: key })}
             />
             <Facets
-              title="Comarca"
+              title="Comarca judicial"
+              facet={facets?.comarca_judicial}
+              active={params.comarca_judicial}
+              onPick={(key) => apply({ comarca_judicial: key })}
+            />
+            <Facets
+              title="Sede do tribunal"
               facet={facets?.tribunal_comarca}
               active={params.tribunal_comarca}
               onPick={(key) => apply({ tribunal_comarca: key })}
             />
             <Facets title="Ato" facet={facets?.ato} active={params.ato} onPick={(key) => apply({ ato: key })} />
+            <Facets
+              title="Modelo do documento"
+              facet={facets?.modelo}
+              active={params.modelo}
+              onPick={(key) => apply({ modelo: key })}
+            />
             <Facets
               title="Espécie"
               facet={facets?.especie}
@@ -639,6 +843,8 @@ function RecolhaSection({
   const [meses, setMeses] = useState<number>(meta?.default_months ?? 6);
   const [maxPages, setMaxPages] = useState(200);
   const [indexar, setIndexar] = useState(true);
+  const [extrairDocumentos, setExtrairDocumentos] = useState(true);
+  const [maxDocumentos, setMaxDocumentos] = useState(meta?.max_documentos ?? 200);
   const [job, setJob] = useState<CitacoesJob | null>(null);
   const [jobs, setJobs] = useState<CitacoesJob[]>([]);
   const [aRecolher, setARecolher] = useState(false);
@@ -647,6 +853,10 @@ function RecolhaSection({
   useEffect(() => {
     if (meta?.default_months) setMeses(meta.default_months);
   }, [meta?.default_months]);
+
+  useEffect(() => {
+    if (meta?.max_documentos) setMaxDocumentos(meta.max_documentos);
+  }, [meta?.max_documentos]);
 
   const refreshJobs = useCallback(async () => {
     try {
@@ -708,6 +918,8 @@ function RecolhaSection({
       dias,
       meses,
       max_pages: maxPages,
+      extrair_documentos: extrairDocumentos,
+      max_documentos: maxDocumentos,
       index: indexar,
     };
     try {
@@ -822,6 +1034,39 @@ function RecolhaSection({
           <p className="mt-1 text-[10px] text-muted-foreground">10 éditos por página (rede: ~1,2 s por pedido).</p>
         </div>
 
+        <div className="space-y-2 rounded-xl border border-violet-400/20 bg-violet-400/5 p-2">
+          <label className="flex items-start gap-2 text-[11.5px] text-violet-100">
+            <input
+              type="checkbox"
+              checked={extrairDocumentos}
+              onChange={(event) => setExtrairDocumentos(event.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-medium">Analisar o PDF de cada édito</span>
+              <span className="block text-[10px] text-violet-200/80">
+                Extrai o texto integral e o que a lista não traz: <b>NIF</b> dos executados/réus, valor da execução,
+                modelo do formulário e prazo. O documento está ligado à sessão da pesquisa, por isso a análise é
+                feita durante a recolha (mais lenta: 1 pedido por édito).
+              </span>
+            </span>
+          </label>
+          {extrairDocumentos ? (
+            <div className="flex items-center gap-2">
+              <label className="text-[10.5px] uppercase tracking-wide text-violet-200/80">máx. documentos</label>
+              <input
+                type="number"
+                min={0}
+                max={5000}
+                value={maxDocumentos}
+                onChange={(event) => setMaxDocumentos(Number(event.target.value))}
+                className="w-24 rounded-lg border border-white/10 bg-black/20 px-2 py-1 text-[11.5px] text-foreground outline-none focus:border-amber-400/40"
+              />
+              <span className="text-[10px] text-violet-200/70">0 = todos os éditos recolhidos</span>
+            </div>
+          ) : null}
+        </div>
+
         <label className="flex items-center gap-2 text-[11.5px] text-muted-foreground">
           <input type="checkbox" checked={indexar} onChange={(event) => setIndexar(event.target.checked)} />
           Importar para o Elasticsearch no fim
@@ -865,6 +1110,23 @@ function RecolhaSection({
               <Stat label="Páginas" value={numberFormat.format(job.pages ?? 0)} hint={job.declared_pages ? `de ~${job.declared_pages}` : undefined} />
               <Stat label="Importados" value={numberFormat.format(job.indexed ?? 0)} />
             </div>
+            {job.documentos || job.documento ? (
+              <div className="space-y-1 rounded-lg border border-violet-400/20 bg-violet-400/5 px-2 py-1.5">
+                <div className="flex items-center justify-between gap-2 text-[11px] text-violet-100">
+                  <span>
+                    PDF analisados: <b>{numberFormat.format(job.documentos_extraidos ?? 0)}</b>
+                    {job.documentos ? ` de ${numberFormat.format(job.documentos)}` : ""}
+                    {job.documentos_falhados ? ` · ${job.documentos_falhados} falhados` : ""}
+                  </span>
+                  <span className="text-[10px] text-violet-200/80">
+                    {job.documento_referencia ? `ref. ${job.documento_referencia}` : ""}
+                  </span>
+                </div>
+                {job.documento_titulo ? (
+                  <div className="truncate text-[10.5px] text-violet-200/80">{job.documento_titulo}</div>
+                ) : null}
+              </div>
+            ) : null}
             <div className="text-[10.5px] text-muted-foreground">
               {job.run_id ? (
                 <>
@@ -932,7 +1194,8 @@ function RecolhaSection({
             <span className="font-mono text-foreground">{meta?.index ?? "finance_citacoes_edital"}</span>. Reimportar a
             mesma recolha não duplica: os éditos já existentes são ignorados.
           </p>
-          <p>3. Cada édito traz o documento em PDF (ligação na secção Pesquisa).</p>
+          <p>3. Cada édito traz o documento em PDF — que é **descarregado e analisado** (texto integral,
+            NIF dos intervenientes, valor da execução, modelo e prazo) antes de ser indexado.</p>
         </Card>
       </div>
     </div>
@@ -952,6 +1215,10 @@ function ExecucoesSection({
   const [directory, setDirectory] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [extraindo, setExtraindo] = useState<CitacoesJob | null>(null);
+  const timer = useRef<number | null>(null);
+
+  useEffect(() => () => { if (timer.current) window.clearInterval(timer.current); }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -988,16 +1255,59 @@ function ExecucoesSection({
     }
   };
 
-  const remove = async (runId: string) => {
+  const remove = async (runId: string, dropIndex = false) => {
     setBusy(runId);
     try {
-      await deleteCitacoesRun(runId);
-      onDone(`Recolha «${runId}» apagada do disco.`);
+      const res = await deleteCitacoesRun(runId, dropIndex);
+      onDone(
+        `Recolha «${runId}» apagada do disco` +
+          (dropIndex && res.index ? ` e ${numberFormat.format(res.index.deleted ?? 0)} éditos removidos do índice.` : "."),
+      );
       await load();
     } catch (err) {
       onError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(null);
+    }
+  };
+
+  /** Extrai o texto dos PDF de uma recolha (volta a pedir os documentos ao portal) e acompanha o progresso. */
+  const extrairDocumentos = async (runId: string, force = false) => {
+    setBusy(runId);
+    try {
+      const job = await startCitacoesDocumentos(runId, { force, max_documentos: 500 });
+      setExtraindo(job);
+      if (timer.current) window.clearInterval(timer.current);
+      timer.current = window.setInterval(async () => {
+        try {
+          const atual = await getCitacoesJob(job.id);
+          setExtraindo(atual);
+          if (atual.finished) {
+            if (timer.current) window.clearInterval(timer.current);
+            timer.current = null;
+            setBusy(null);
+            await load();
+            if (atual.state === "error") {
+              onError(atual.error || "A extração dos documentos falhou.");
+            } else {
+              onDone(
+                `${runId}: ${numberFormat.format(atual.documentos_extraidos ?? 0)} PDF analisados` +
+                  (atual.documentos_falhados ? ` (${atual.documentos_falhados} falhados)` : "") +
+                  (atual.indexed ? ` · ${numberFormat.format(atual.indexed)} éditos reindexados` : "") +
+                  ".",
+              );
+            }
+          }
+        } catch (err) {
+          if (timer.current) window.clearInterval(timer.current);
+          timer.current = null;
+          setBusy(null);
+          onError(err instanceof Error ? err.message : String(err));
+        }
+      }, 1500);
+    } catch (err) {
+      setBusy(null);
+      onError(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -1015,6 +1325,23 @@ function ExecucoesSection({
           {loading ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />} atualizar
         </button>
       </Card>
+
+      {extraindo ? (
+        <Card className="flex flex-wrap items-center justify-between gap-2 border-violet-400/25 bg-violet-400/5 text-[11.5px] text-violet-100">
+          <span className="inline-flex items-center gap-1.5">
+            {extraindo.finished ? <CheckCircle2 size={13} /> : <Loader2 size={13} className="animate-spin" />}
+            PDF de <span className="font-mono">{extraindo.run_id}</span>: {numberFormat.format(extraindo.documentos_extraidos ?? 0)}
+            {extraindo.documentos ? ` / ${numberFormat.format(extraindo.documentos)}` : ""}
+            {extraindo.documento_titulo ? ` · ${extraindo.documento_titulo}` : ""}
+            {extraindo.stage ? ` · ${extraindo.stage}` : ""}
+          </span>
+          {extraindo.finished ? (
+            <button type="button" onClick={() => setExtraindo(null)} className="opacity-70 hover:opacity-100">
+              ×
+            </button>
+          ) : null}
+        </Card>
+      ) : null}
 
       {runs.length === 0 ? (
         <Card className="text-[11.5px] text-muted-foreground">Sem ficheiros de recolha no disco.</Card>
@@ -1053,17 +1380,41 @@ function ExecucoesSection({
                   <button
                     type="button"
                     disabled={busy === run.run_id}
+                    onClick={() => void extrairDocumentos(run.run_id)}
+                    title="Descarregar e analisar o PDF dos éditos que ainda não têm texto"
+                    className="inline-flex items-center gap-1 rounded-lg border border-violet-400/30 bg-violet-400/10 px-2 py-1 text-[10.5px] text-violet-100 hover:bg-violet-400/20 disabled:opacity-50"
+                  >
+                    {busy === run.run_id && extraindo && !extraindo.finished ? (
+                      <Loader2 size={11} className="animate-spin" />
+                    ) : (
+                      <FileText size={11} />
+                    )}
+                    PDF
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy === run.run_id}
                     onClick={() => void remove(run.run_id)}
                     className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10.5px] text-muted-foreground hover:bg-rose-500/20 hover:text-rose-200 disabled:opacity-50"
                   >
                     <Trash2 size={11} /> apagar
                   </button>
+                  <button
+                    type="button"
+                    disabled={busy === run.run_id}
+                    onClick={() => void remove(run.run_id, true)}
+                    title="Apaga os ficheiros e remove do Elasticsearch os éditos desta recolha"
+                    className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10.5px] text-muted-foreground hover:bg-rose-500/20 hover:text-rose-200 disabled:opacity-50"
+                  >
+                    <Trash2 size={11} /> +índice
+                  </button>
                 </div>
               </div>
-              <div className="grid gap-2 sm:grid-cols-5">
+              <div className="grid gap-2 sm:grid-cols-6">
                 <Stat label="Recolhidos" value={numberFormat.format(run.collected ?? 0)} />
                 <Stat label="Declarados" value={numberFormat.format(run.declared_total ?? 0)} />
                 <Stat label="Páginas" value={numberFormat.format(run.pages ?? 0)} />
+                <Stat label="PDF analisados" value={numberFormat.format(run.documentos_extraidos ?? 0)} hint={run.documentos_falhados ? `${run.documentos_falhados} falhados` : undefined} />
                 <Stat label="No índice" value={numberFormat.format(run.index_count ?? 0)} />
                 <Stat label="Duração" value={run.duration_s ? `${run.duration_s}s` : "—"} />
               </div>
@@ -1128,7 +1479,22 @@ function EstadoSection({ status, onRefresh }: { status: CitacoesStatus | null; o
         <Stat label="Processos" value={numberFormat.format(status.processos ?? 0)} />
         <Stat label="Tribunais" value={numberFormat.format(status.tribunais ?? 0)} />
         <Stat label="Citados" value={numberFormat.format(status.citados ?? 0)} />
-        <Stat label="Com documento" value={numberFormat.format(status.with_documento ?? 0)} />
+        <Stat label="NIF (do documento)" value={numberFormat.format(status.nifs ?? 0)} />
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat
+          label="Com PDF analisado"
+          value={numberFormat.format(status.with_texto ?? 0)}
+          hint={`de ${numberFormat.format(status.with_documento ?? 0)} com documento`}
+        />
+        <Stat label="Com valor de execução" value={numberFormat.format(status.with_valor ?? 0)} />
+        <Stat label="Valor total" value={formatMoney(status.valor_total ?? 0)} hint="soma das execuções lidas" />
+        <Stat
+          label="Valor médio / máximo"
+          value={`${formatMoney(status.valor_medio ?? 0)}`}
+          hint={`máx. ${formatMoney(status.valor_maximo ?? 0)}`}
+        />
       </div>
 
       <Card className="space-y-1 text-[11px] text-muted-foreground">
@@ -1190,6 +1556,36 @@ function EstadoSection({ status, onRefresh }: { status: CitacoesStatus | null; o
           ))}
           {(status.top_comarcas ?? []).length === 0 ? <div className="text-[11px] text-muted-foreground">—</div> : null}
         </Card>
+        <Card className="space-y-1">
+          <div className="text-[11.5px] font-semibold text-foreground">Comarcas judiciais</div>
+          {(status.top_comarcas_judiciais ?? []).map((item) => (
+            <div key={item.key} className="flex justify-between text-[11px] text-muted-foreground">
+              <span className="truncate text-foreground">{item.key}</span>
+              <span>{numberFormat.format(item.count)}</span>
+            </div>
+          ))}
+          {(status.top_comarcas_judiciais ?? []).length === 0 ? <div className="text-[11px] text-muted-foreground">—</div> : null}
+        </Card>
+        <Card className="space-y-1">
+          <div className="text-[11.5px] font-semibold text-foreground">Modelos de documento</div>
+          {(status.top_modelos ?? []).map((item) => (
+            <div key={item.key} className="flex justify-between text-[11px] text-muted-foreground">
+              <span className="truncate text-foreground">{item.key}</span>
+              <span>{numberFormat.format(item.count)}</span>
+            </div>
+          ))}
+          {(status.top_modelos ?? []).length === 0 ? <div className="text-[11px] text-muted-foreground">—</div> : null}
+        </Card>
+        <Card className="space-y-1">
+          <div className="text-[11.5px] font-semibold text-foreground">Títulos dos documentos</div>
+          {(status.top_assuntos ?? []).map((item) => (
+            <div key={item.key} className="flex justify-between gap-2 text-[11px] text-muted-foreground">
+              <span className="truncate text-foreground">{item.key}</span>
+              <span>{numberFormat.format(item.count)}</span>
+            </div>
+          ))}
+          {(status.top_assuntos ?? []).length === 0 ? <div className="text-[11px] text-muted-foreground">—</div> : null}
+        </Card>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
@@ -1216,8 +1612,9 @@ function EstadoSection({ status, onRefresh }: { status: CitacoesStatus | null; o
       </div>
 
       <Card className="flex items-center gap-2 text-[11px] text-muted-foreground">
-        <Users size={13} /> Os papéis vêm dos intervenientes de cada édito; a pesquisa permite filtrar por papel e por nome
-        do interveniente.
+        <Users size={13} /> Os papéis vêm dos intervenientes de cada édito; a pesquisa permite filtrar por papel e por nome.
+        O texto dos PDF torna pesquisável o conteúdo dos éditos (a pesquisa livre inclui-o) e acrescenta os **NIF** das
+        partes, que a lista do portal não publica.
       </Card>
     </div>
   );

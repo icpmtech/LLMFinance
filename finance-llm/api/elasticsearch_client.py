@@ -10116,7 +10116,8 @@ def index_citacoes_items(
     return result
 
 
-def search_citacoes(
+def _citacoes_query(
+    *,
     q: Optional[str] = None,
     referencia: Optional[str] = None,
     processo: Optional[str] = None,
@@ -10136,31 +10137,13 @@ def search_citacoes(
     data_to: Optional[str] = None,
     has_documento: Optional[bool] = None,
     has_texto: Optional[bool] = None,
-    with_texto: bool = True,
-    size: int = 20,
-    from_: int = 0,
-    search_after: Optional[List[Any]] = None,
-    es: Optional[Elasticsearch] = None,
 ) -> Dict[str, Any]:
-    """Pesquisa citações e notificações editais já indexadas.
+    """Cláusulas de pesquisa dos éditos — **uma só** definição, para a pesquisa e as entidades.
 
-    ``q`` procura em texto livre (interveniente, tribunal, processo, ato e o
-    **texto extraído do PDF**); ``nome`` restringe ao nome de um interveniente
-    (qualquer papel) e ``papel`` ao papel exato desse interveniente.
-    ``nif`` procura nos NIF dos intervenientes (da lista e do documento) e
-    ``modelo``/``titulo`` no que foi analisado do PDF. ``with_texto=False``
-    omite o texto integral da resposta (listas mais leves).
-
-    Com ``search_after`` (cursor devolvido em ``next``) a pesquisa entra em
-    **modo de varredura**: sem agregações, ordenada por data+`pub_id`, para
-    percorrer o índice inteiro em páginas (usado pelo grafo e pelo mapa).
+    Fica aqui (e não em cada função) para que «pesquisar éditos» e «pesquisar
+    entidades nos éditos» filtrem exatamente o mesmo conjunto: se divergissem, as
+    contagens por entidade não explicariam a lista de éditos.
     """
-    client = es or get_es_client()
-    if not client:
-        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
-
-    ensure_indices(client)
-
     must: List[Dict[str, Any]] = []
     filters: List[Dict[str, Any]] = []
     if q:
@@ -10257,15 +10240,83 @@ def search_citacoes(
             interval["lte"] = data_to
         filters.append({"range": {"data_publicacao": interval}})
 
-    query: Dict[str, Any]
     if must or filters:
-        query = {"bool": {}}
+        query: Dict[str, Any] = {"bool": {}}
         if must:
             query["bool"]["must"] = must
         if filters:
             query["bool"]["filter"] = filters
-    else:
-        query = {"match_all": {}}
+        return query
+    return {"match_all": {}}
+
+
+def search_citacoes(
+    q: Optional[str] = None,
+    referencia: Optional[str] = None,
+    processo: Optional[str] = None,
+    tribunal: Optional[str] = None,
+    tribunal_comarca: Optional[str] = None,
+    comarca_judicial: Optional[str] = None,
+    tipo: Optional[str] = None,
+    ato: Optional[str] = None,
+    especie: Optional[str] = None,
+    citado: Optional[str] = None,
+    nome: Optional[str] = None,
+    papel: Optional[str] = None,
+    nif: Optional[str] = None,
+    modelo: Optional[str] = None,
+    titulo: Optional[str] = None,
+    data_from: Optional[str] = None,
+    data_to: Optional[str] = None,
+    has_documento: Optional[bool] = None,
+    has_texto: Optional[bool] = None,
+    with_texto: bool = True,
+    size: int = 20,
+    from_: int = 0,
+    search_after: Optional[List[Any]] = None,
+    scan: bool = False,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa citações e notificações editais já indexadas.
+
+    ``q`` procura em texto livre (interveniente, tribunal, processo, ato e o
+    **texto extraído do PDF**); ``nome`` restringe ao nome de um interveniente
+    (qualquer papel) e ``papel`` ao papel exato desse interveniente.
+    ``nif`` procura nos NIF dos intervenientes (da lista e do documento) e
+    ``modelo``/``titulo`` no que foi analisado do PDF. ``with_texto=False``
+    omite o texto integral da resposta (listas mais leves).
+
+    Com ``search_after`` (cursor devolvido em ``next``) a pesquisa entra em
+    **modo de varredura**: sem agregações, ordenada por data+`pub_id`, para
+    percorrer o índice inteiro em páginas (usado pelo grafo e pelo mapa).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+
+    ensure_indices(client)
+
+    query = _citacoes_query(
+        q=q,
+        referencia=referencia,
+        processo=processo,
+        tribunal=tribunal,
+        tribunal_comarca=tribunal_comarca,
+        comarca_judicial=comarca_judicial,
+        tipo=tipo,
+        ato=ato,
+        especie=especie,
+        citado=citado,
+        nome=nome,
+        papel=papel,
+        nif=nif,
+        modelo=modelo,
+        titulo=titulo,
+        data_from=data_from,
+        data_to=data_to,
+        has_documento=has_documento,
+        has_texto=has_texto,
+    )
 
     body: Dict[str, Any] = {
         "query": query,
@@ -10295,16 +10346,18 @@ def search_citacoes(
         },
     }
 
-    if search_after is not None:
+    if scan or search_after:
         # Modo de varredura: ordem estável (data + `pub_id`) e sem agregações.
         body["sort"] = [
             {"data_publicacao": {"order": "desc", "missing": "_last"}},
             {"pub_id": {"order": "asc"}},
         ]
-        body["search_after"] = list(search_after)
         body["size"] = max(1, min(size, 1000))
         body.pop("from", None)
         body.pop("aggs", None)
+        # O Elasticsearch recusa `search_after` vazio (é o início da varredura).
+        if search_after:
+            body["search_after"] = list(search_after)
 
     try:
         resp = client.search(index=CITACOES_INDEX, body=body)
@@ -10362,11 +10415,121 @@ def search_citacoes(
         }
         # Cursor da página seguinte (modo de varredura) — ver `scan_citacoes`.
         hits = resp["hits"]["hits"]
-        if search_after is not None:
+        if scan or search_after:
             resposta["next"] = hits[-1].get("sort") if hits else None
         return resposta
     except Exception as exc:
         return {"error": str(exc), "items": [], "total": 0}
+
+
+def search_citacoes_entidades(
+    q: Optional[str] = None,
+    papel: Optional[str] = None,
+    tipo: Optional[str] = None,
+    tribunal: Optional[str] = None,
+    tribunal_comarca: Optional[str] = None,
+    comarca_judicial: Optional[str] = None,
+    data_from: Optional[str] = None,
+    data_to: Optional[str] = None,
+    has_texto: Optional[bool] = None,
+    size: int = 25,
+    min_editais: int = 1,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """As **entidades** (intervenientes) dos éditos, agregadas por nome.
+
+    É a pesquisa ao contrário da lista de éditos: em vez de documentos, devolve
+    **quem** aparece neles — nome, nº de éditos, papéis exercidos e NIF/NIPC
+    conhecidos. Com ``q`` procura no nome; os restantes filtros restringem os
+    éditos considerados (tipo, tribunal, comarca, papel, datas), pelo que as
+    contagens acompanham os filtros da pesquisa.
+
+    Contagens: ``editais`` = éditos distintos (via ``reverse_nested``, portanto
+    sem contar duas vezes quem aparece duas vezes no mesmo édito) e ``mentions``
+    = entradas de interveniente encontradas.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "entities": [], "total_editais": 0}
+
+    ensure_indices(client)
+
+    body = {
+        "size": 0,
+        "track_total_hits": True,
+        "query": _citacoes_query(
+            # O nome da entidade é pesquisado **no nested dos intervenientes**;
+            # os outros filtros são os mesmos da pesquisa de éditos.
+            q=None,
+            nome=q or None,
+            papel=papel,
+            tipo=tipo,
+            tribunal=tribunal,
+            tribunal_comarca=tribunal_comarca,
+            comarca_judicial=comarca_judicial,
+            data_from=data_from,
+            data_to=data_to,
+            has_texto=has_texto,
+        ),
+        "aggs": {
+            "por_entidade": {
+                "nested": {"path": "intervenientes"},
+                "aggs": {
+                    "nomes": {
+                        "terms": {
+                            "field": "intervenientes.nome.keyword",
+                            "size": max(1, min(int(size), 200)),
+                            "order": {"_count": "desc"},
+                        },
+                        "aggs": {
+                            # Volta ao édito: conta documentos e não entradas.
+                            "editais": {"reverse_nested": {}},
+                            "papeis": {"terms": {"field": "intervenientes.papel", "size": 8}},
+                            "nifs": {"terms": {"field": "intervenientes.nif", "size": 5}},
+                        },
+                    }
+                },
+            }
+        },
+    }
+    try:
+        resp = client.search(index=CITACOES_INDEX, body=body)
+    except Exception as exc:
+        return {"error": str(exc), "entities": [], "total_editais": 0}
+
+    aggs = resp.get("aggregations") or {}
+    buckets = ((aggs.get("por_entidade") or {}).get("nomes") or {}).get("buckets") or []
+    minimum = max(1, int(min_editais))
+    entities: List[Dict[str, Any]] = []
+    for bucket in buckets:
+        editais = int(((bucket.get("editais") or {}).get("doc_count") or 0))
+        if editais < minimum:
+            continue
+        entities.append(
+            {
+                "name": bucket.get("key"),
+                "editais": editais,
+                "mentions": int(bucket.get("doc_count") or 0),
+                "papeis": [
+                    {"key": item["key"], "count": item["doc_count"]}
+                    for item in (bucket.get("papeis") or {}).get("buckets", [])
+                ],
+                "nifs": [
+                    {"key": item["key"], "count": item["doc_count"]}
+                    for item in (bucket.get("nifs") or {}).get("buckets", [])
+                ],
+            }
+        )
+    nomes_agg = ((aggs.get("por_entidade") or {}).get("nomes") or {})
+    total_hits = resp.get("hits", {}).get("total")
+    return {
+        "query": q,
+        "entities": entities,
+        "total_editais": int(total_hits.get("value") if isinstance(total_hits, dict) else (total_hits or 0)),
+        "truncated": int(nomes_agg.get("sum_other_doc_count") or 0) > 0,
+        "min_editais": minimum,
+        "note": "Contagens de éditos distintos; os filtros aplicados restringem os éditos considerados.",
+    }
 
 
 def scan_citacoes(
@@ -10390,9 +10553,9 @@ def scan_citacoes(
     try:
         while len(items) < max_docs:
             size = max(1, min(page_size, max_docs - len(items)))
-            kwargs: Dict[str, Any] = {"with_texto": False, "size": size, "search_after": cursor or []}
-            if fields:
-                pass  # a projeção de campos é feita depois (os documentos são pequenos)
+            kwargs: Dict[str, Any] = {"with_texto": False, "size": size, "scan": True}
+            if cursor:
+                kwargs["search_after"] = cursor
             res = search_citacoes(**{**filters, **kwargs})
             if res.get("error"):
                 return {"items": items, "scanned": len(items), "total": total, "truncated": truncated, "error": res["error"]}
@@ -10521,6 +10684,24 @@ def get_citacao(pub_id: str, es: Optional[Elasticsearch] = None) -> Dict[str, An
     source = dict(resp.get("_source") or {})
     source["doc_id"] = resp.get("_id")
     return source
+
+
+def delete_citacoes_run(run_id: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Remove do índice todos os éditos de uma recolha (``run_id``)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    ensure_indices(client)
+    try:
+        resp = client.delete_by_query(
+            index=CITACOES_INDEX,
+            body={"query": {"term": {"run_id": run_id}}},
+            refresh=True,
+            conflicts="proceed",
+        )
+        return {"run_id": run_id, "deleted": resp.get("deleted", 0)}
+    except Exception as exc:  # noqa: BLE001
+        return {"run_id": run_id, "error": str(exc)}
 
 
 def citacoes_runs_summary(run_ids: List[str], es: Optional[Elasticsearch] = None) -> Dict[str, int]:
