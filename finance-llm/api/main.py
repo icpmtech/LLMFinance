@@ -227,12 +227,14 @@ from api.scraper_routes import router as scraper_router
 from api.social_routes import router as social_router
 from api.search_routes import router as search_router
 from api.sentiment_routes import router as sentiment_router
+from api.sentiment_market_routes import router as sentiment_market_router
 from api.search360_routes import router as search360_router
 from api.hermes_routes import router as hermes_router
 from api.skills_routes import router as skills_router
 from api.office_routes import router as office_router
 from api.cms_routes import router as cms_router
 from api.shop_routes import router as shop_router
+from api.rss_routes import router as rss_router
 from api.email_routes import router as email_router
 from api.visualizador_routes import router as visualizador_router
 from api.researcher_routes import router as researcher_router
@@ -241,9 +243,11 @@ from api.agent_routes import router as agent_router
 from api.companies_global_routes import router as companies_global_router
 from api.societario_routes import router as societario_router
 from api.cire_routes import router as cire_router
+from api.citacoes_routes import router as citacoes_router
 from api.people_routes import router as people_router
 from api.contribuintes_routes import router as contribuintes_router
 from api.gleif_routes import router as gleif_router
+from api.world_routes import router as world_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -312,6 +316,30 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logging.getLogger(__name__).warning("Agendador de contribuintes não arrancou: %s", exc)
 
+    # Agendador da recolha do leitor de RSS (cron).
+    try:
+        from api import rss_scheduler
+
+        rss_scheduler.start()
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Agendador do leitor RSS não arrancou: %s", exc)
+
+    # Agendador da série de sentimento de mercado (cron diário).
+    try:
+        from api import sentiment_market_scheduler
+
+        sentiment_market_scheduler.start()
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Agendador do sentimento de mercado não arrancou: %s", exc)
+
+    # Agendador do World Model (reconstrução do mundo + ciclo da rede).
+    try:
+        from api import world_scheduler
+
+        world_scheduler.start()
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Agendador do World Model não arrancou: %s", exc)
+
     # Módulo GLEIF / LEI: cria o índice (se faltar) sem bloquear o arranque.
     def _preload_gleif():
         try:
@@ -341,6 +369,24 @@ async def lifespan(app: FastAPI):
         from api import contribuintes_scheduler
 
         contribuintes_scheduler.shutdown()
+    except Exception:
+        pass
+    try:
+        from api import rss_scheduler
+
+        rss_scheduler.shutdown()
+    except Exception:
+        pass
+    try:
+        from api import sentiment_market_scheduler
+
+        sentiment_market_scheduler.shutdown()
+    except Exception:
+        pass
+    try:
+        from api import world_scheduler
+
+        world_scheduler.shutdown()
     except Exception:
         pass
 
@@ -416,8 +462,9 @@ app.add_middleware(
 # `Cache-Control` o browser aplica a heurística de frescura e o Swagger fica a
 # mostrar grupos antigos (o `index.html` da SPA já é servido com `no-store`).
 # Vale o mesmo para a **gestão da loja** (`/shop/*`): sem isto o backoffice
-# mostrava listas e o tema da vitrine desatualizados.
-_NO_STORE_PREFIXES = ("/docs", "/redoc", "/openapi", "/shop")
+# mostrava listas e o tema da vitrine desatualizados. O leitor de RSS segue a
+# mesma regra: as listas de artigos e o estado da recolha têm de estar frescos.
+_NO_STORE_PREFIXES = ("/docs", "/redoc", "/openapi", "/shop", "/rss", "/sentiment/market")
 
 
 @app.middleware("http")
@@ -446,6 +493,7 @@ app.include_router(scraper_router)
 app.include_router(social_router)
 app.include_router(search_router)
 app.include_router(sentiment_router)
+app.include_router(sentiment_market_router)
 app.include_router(search360_router)
 app.include_router(hermes_router)
 app.include_router(skills_router)
@@ -454,6 +502,8 @@ app.include_router(office_router)
 app.include_router(cms_router)
 # Loja online: gestão em `/shop/*` e vitrine pública em `/loja/*`.
 app.include_router(shop_router)
+# Leitor de RSS: fontes, artigos e digest em `/rss/*`.
+app.include_router(rss_router)
 app.include_router(email_router)
 app.include_router(visualizador_router)
 app.include_router(researcher_router)
@@ -462,9 +512,13 @@ app.include_router(agent_router)
 app.include_router(companies_global_router)
 app.include_router(societario_router)
 app.include_router(cire_router)
+app.include_router(citacoes_router)
 app.include_router(people_router)
 app.include_router(contribuintes_router)
 app.include_router(gleif_router)
+# World Model: estado do mundo, rede neuronal dinâmica (grafo), motor de
+# grafo/tempo, simulador de futuro e agente de investigação.
+app.include_router(world_router)
 
 
 # Cache curta de `user_id → email`, para o registo de pedidos identificar quem
@@ -1274,6 +1328,8 @@ def entities_detail(nif: str):
 @app.get("/sentimento")
 @app.get("/cire")
 @app.get("/contribuintes")
+@app.get("/world")
+@app.get("/world/rede")
 @app.get("/empresas-global")
 @app.get("/gleif")
 @app.get("/gleif/mapa")

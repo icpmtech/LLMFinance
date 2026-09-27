@@ -1,0 +1,17 @@
+flowchart TD
+    public_data["Public Data"]
+    world_model["World Model<br/>221 197 docs"]
+    dynamic_network["Dynamic Neural Network"]
+    graph_temporal["Graph / Temporal Engine"]
+    future_simulator["Future Simulator"]
+    investigation_agent["Investigation Agent"]
+    evidence_graph["Evidence Graph"]
+    public_data -->|lê índices| world_model
+    world_model -->|estado + relações| dynamic_network
+    world_model -->|relações + eventos| graph_temporal
+    dynamic_network -->|previsão + anomalias| future_simulator
+    graph_temporal -->|causalidade + séries| future_simulator
+    future_simulator -->|cenários| investigation_agent
+    dynamic_network -->|alvos (anomalias)| investigation_agent
+    graph_temporal -->|evidência| investigation_agent
+    investigation_agent -->|afirmações + fontes| evidence_graph

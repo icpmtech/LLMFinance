@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="20">
+  <title>IQ OS — origem indisponível</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center;
+      background: #0b1020; color: #e6ebf5;
+      font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      padding: 24px;
+    }
+    .card {
+      max-width: 560px; width: 100%; padding: 32px;
+      background: #141b31; border: 1px solid #26304d; border-radius: 16px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, .45);
+    }
+    h1 { margin: 0 0 12px; font-size: 22px; }
+    p { margin: 0 0 12px; color: #a9b4cd; }
+    code {
+      background: #0b1020; border: 1px solid #26304d; border-radius: 6px;
+      padding: 2px 6px; font-size: 13px; color: #cfe0ff;
+    }
+    .dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      background: #f2c14e; margin-right: 8px; vertical-align: middle;
+    }
+    .foot { margin-top: 20px; font-size: 13px; color: #6f7c9b; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1><span class="dot"></span>IQ OS — edge ativo, origem indisponível</h1>
+    <p>
+      O edge na Google Cloud está a responder, mas não conseguiu alcançar a
+      plataforma. Isto acontece quando a máquina onde corre a solução está
+      desligada, o <code>cloudflared</code> de origem parou, ou o backend ainda
+      está a arrancar (a primeira chamada ao modelo de embeddings demora ~85&nbsp;s).
+    </p>
+    <p>Esta página tenta novamente automaticamente a cada 20 segundos.</p>
+    <p class="foot">Se persistir, verifica no PC: <code>docker compose ps</code> e o túnel de origem.</p>
+  </main>
+</body>
+</html>

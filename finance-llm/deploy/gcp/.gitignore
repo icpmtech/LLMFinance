@@ -1,0 +1,11 @@
+# Segredos e estado local do deploy (nunca versionar)
+edge/edge.env
+origin/config.yml
+origin/*.json
+origin/edge-tunnel-info.txt
+
+# Estado do link público (o URL de um quick tunnel é um segredo partilhado)
+public-link.txt
+public-link.log
+public-link.err.log
+public-link.pid

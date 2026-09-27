@@ -629,54 +629,90 @@ def corpus_from_social(q: Optional[str] = None, channel_id: Optional[str] = None
     return documents
 
 
-def corpus_from_news(q: Optional[str] = None, limit: int = 60) -> List[Dict[str, Any]]:
-    """Constrói um corpus a partir das notícias indexadas (`finance_news`)."""
+def corpus_from_news(
+    q: Optional[str] = None,
+    limit: int = 60,
+    ticker: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Corpus a partir das notícias indexadas (`finance_news`).
+
+    Com `ticker`, o corpus fica limitado a esse ativo (é o que permite analisar
+    o tom de um ticker, e não só um termo livre); com datas, a uma janela.
+    """
+    from api.elasticsearch_client import ensure_indices, get_es_client
 
     client = get_es_client()
     if not client:
         return []
     ensure_indices(client)
-    query: Dict[str, Any] = (
-        {
-            "bool": {
-                "should": [
-                    {"multi_match": {"query": q, "fields": ["title^3", "summary^2", "summary_pt^2", "translated_title", "topics"], "lenient": True}},
-                    {"term": {"ticker": (q or "").upper()}},
-                ],
-                "minimum_should_match": 1,
+
+    must: List[Dict[str, Any]] = []
+    should: List[Dict[str, Any]] = []
+    if ticker:
+        must.append({"term": {"ticker": str(ticker).upper()}})
+    if start_date or end_date:
+        window: Dict[str, Any] = {}
+        if start_date:
+            window["gte"] = str(start_date)[:10]
+        if end_date:
+            window["lte"] = f"{str(end_date)[:10]}T23:59:59"
+        must.append({"range": {"published": window}})
+    if q:
+        should.append(
+            {
+                "multi_match": {
+                    "query": q,
+                    "fields": ["title^3", "summary^2", "summary_pt^2", "translated_title", "topics"],
+                    "lenient": True,
+                }
             }
-        }
-        if q
-        else {"match_all": {}}
-    )
-    try:
-        resp = client.search(
-            index="finance_news",
-            body={"size": max(1, min(limit, 200)), "query": query, "sort": ["_score", {"published": "desc"}]},
         )
+        should.append({"term": {"ticker": str(q).upper()}})
+
+    def _query(with_range: bool = True) -> Dict[str, Any]:
+        use_must = [clause for clause in must if with_range or "range" not in clause]
+        if not use_must and not should:
+            return {"match_all": {}}
+        bool_query: Dict[str, Any] = {"must": use_must}
+        if should:
+            bool_query["should"] = should
+            bool_query["minimum_should_match"] = 1
+        return {"bool": bool_query}
+
+    body: Dict[str, Any] = {"size": max(1, min(limit, 200)), "query": _query()}
+    try:
+        resp = client.search(index="finance_news", body={**body, "sort": ["_score", {"published": "desc"}]})
     except Exception as exc:
-        logger.warning("Corpus de notícias falhou: %s", exc)
-        return []
+        # `published` pode estar indexado como texto: repetir sem a janela.
+        logger.debug("Corpus de notícias com ordenação/janela falhou (%s); a repetir liso.", exc)
+        try:
+            resp = client.search(index="finance_news", body={"size": body["size"], "query": _query(with_range=False)})
+        except Exception as exc2:
+            logger.warning("Corpus de notícias falhou: %s", exc2)
+            return []
+
     documents: List[Dict[str, Any]] = []
     for hit in resp.get("hits", {}).get("hits", []):
         row = hit.get("_source") or {}
+        headline = row.get("translated_title") or row.get("title") or ""
+        body_text = row.get("summary_pt") or row.get("translated_summary") or row.get("summary") or ""
+        topics = [str(tag) for tag in (row.get("topics") or [])][:6]
         documents.append(
             {
-                "id": hit.get("_id") or "",
-                "title": row.get("translated_title") or row.get("title") or "",
+                "id": hit.get("_id") or f"{row.get('ticker')}|{headline}|{row.get('published')}",
+                "title": str(headline)[:200],
                 "source": " · ".join(filter(None, [row.get("publisher"), row.get("ticker")])) or "Notícias",
                 "date": row.get("published"),
                 "url": row.get("url") or "",
-                "text": " ".join(
-                    str(part)
-                    for part in (
-                        row.get("title"),
-                        row.get("translated_title"),
-                        row.get("summary_pt"),
-                        row.get("translated_summary"),
-                        row.get("summary"),
+                "tags": topics + ([str(row["ticker"])] if row.get("ticker") else []),
+                "text": clean_text(
+                    " ".join(
+                        str(part)
+                        for part in (row.get("title"), row.get("translated_title"), body_text)
+                        if part
                     )
-                    if part
                 ),
             }
         )

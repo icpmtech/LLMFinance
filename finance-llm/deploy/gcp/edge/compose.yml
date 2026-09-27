@@ -1,0 +1,35 @@
+# Edge do IQ OS na e2-micro (Google Cloud, free tier).
+#
+# Um único container: nginx a fazer de reverse proxy para o hostname de origem
+# (a stack que corre no teu PC) por cima do túnel Cloudflare.
+#
+# Publica **apenas** em 127.0.0.1:8080 — quem fala com a internet é o
+# `cloudflared` (túnel só de saída). Por isso a VM não abre 80/443 na firewall.
+services:
+  edge:
+    image: nginx:alpine
+    container_name: iqos-edge
+    restart: unless-stopped
+    env_file:
+      - edge.env
+    environment:
+      # Sem isto o envsubst do entrypoint substituiria também as variáveis do
+      # próprio nginx (ex.: $host, $remote_addr) e a config sairia corrompida.
+      NGINX_ENVSUBST_FILTER: "^(ORIGIN_HOSTNAME|CF_ACCESS_CLIENT_ID|CF_ACCESS_CLIENT_SECRET)$"
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./templates:/etc/nginx/templates:ro
+      - ./offline.html:/usr/share/nginx/html/offline.html:ro
+    healthcheck:
+      # `/healthz` é servido pelo próprio nginx (não depende da origem estar viva).
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

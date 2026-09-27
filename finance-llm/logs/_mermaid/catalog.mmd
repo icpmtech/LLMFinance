@@ -1,0 +1,18 @@
+flowchart LR
+    planner["Agente planeador"]
+    observer["Agente de observação"]
+    network["Agente da rede"]
+    historian["Agente de história"]
+    scout["Agente de recolha"]
+    simulator["Agente de simulação"]
+    verifier["Agente de verificação"]
+    narrator["Agente de narrativa"]
+    planner -->|plano| observer
+    planner -->|plano| historian
+    observer -->|estado do sujeito| network
+    historian -->|série por período| network
+    network -->|alvos e hipóteses| scout
+    scout -->|evidência| verifier
+    network -->|previsão e anomalias| simulator
+    simulator -->|cenários| verifier
+    verifier -->|afirmações verificadas| narrator

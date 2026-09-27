@@ -99,8 +99,8 @@ export const APP_MODULES: AppModule[] = [
   {
     id: "dados-publicos",
     label: "Dados públicos",
-    hint: "Insolvências, contribuintes e registos LEI",
-    ids: ["cire", "contribuintes", "gleif", "gleif-mapa", "gleif-ingestao"],
+    hint: "Insolvências, citações editais, contribuintes e registos LEI",
+    ids: ["cire", "citacoes", "contribuintes", "gleif", "gleif-mapa", "gleif-ingestao"],
   },
   {
     id: "mercados",
@@ -112,13 +112,19 @@ export const APP_MODULES: AppModule[] = [
     id: "investigacao",
     label: "Investigação e IA",
     hint: "Pesquisa 360, Hermes, investigador, agentes e RAG",
-    ids: ["search360", "hermes", "researcher", "agents", "rag"],
+    ids: ["search360", "hermes", "researcher", "world", "world-rede", "agents", "rag"],
   },
   {
     id: "conhecimento",
     label: "Conhecimento e conteúdos",
     hint: "Office, email, visualizador, sentimento e ontologia",
     ids: ["office", "email", "visualizador", "sentimento", "ontology"],
+  },
+  {
+    id: "noticias",
+    label: "Notícias e feeds",
+    hint: "Leitor de RSS: fontes, artigos, guardados e digest",
+    ids: ["rss"],
   },
   {
     id: "comercio",

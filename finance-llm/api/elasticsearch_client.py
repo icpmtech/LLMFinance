@@ -118,6 +118,12 @@ SOCIETARIO_INDEX = "finance_publicacoes_mj"
 # datas e intervenientes (com NIF/NIPC). Recolhido de `consultascire.aspx`.
 CIRE_INDEX = "finance_cire"
 
+# Citações e notificações editais (CITIUS / Ministério da Justiça): os éditos
+# publicados quando o citando/notificado não é encontrado — tribunal, ato,
+# processo, espécie, data e intervenientes (exequente, executado, réu, …).
+# Recolhido de `consultascitedital.aspx`.
+CITACOES_INDEX = "finance_citacoes_edital"
+
 # Pessoas e cargos extraídos das publicações societárias (MJ). Um documento por
 # NIF de pessoa (individual ou coletiva), com roles aninhados por empresa/acto.
 PEOPLE_INDEX = "finance_people"
@@ -142,6 +148,50 @@ NODE_SUMMARIES_INDEX = "finance_node_summaries"
 # API oficial do GLEIF, quer a partir do ficheiro *Golden Copy* (LEI-CDF) — e é
 # pesquisável no módulo «GLEIF / LEI» (`/gleif/*`).
 GLEIF_LEI_INDEX = "finance_gleif_lei"
+
+# ---------------------------------------------------------------------------
+# «World Model» — o estado do mundo da contratação pública, materializado.
+#
+# A camada de *public data* (contratos PT/ES, cadastro de entidades, CIRE,
+# pessoas, contribuintes) é lida por `api/world_sources.py`; `api/world_model.py`
+# transforma-a em **estado** (entidades e contratos), **eventos** (registo
+# temporal) e **relações** (grafo), gravando em três índices próprios. É este
+# estado — e não os dados em bruto — que alimenta a rede neuronal dinâmica
+# (`api/world_neural.py`), o motor de grafo/tempo (`api/world_graph.py`), o
+# simulador de futuro (`api/world_simulator.py`) e o agente de investigação
+# (`api/world_investigation.py`).
+# ---------------------------------------------------------------------------
+
+# Estado materializado: um documento por entidade (empresa, entidade pública,
+# pessoa) ou por contrato-agregado. `_id` = `<entity_ref>`.
+WORLD_STATE_INDEX = "finance_world_state"
+
+# Registo de eventos (append-only, um documento por acontecimento): adjudicações,
+# alterações de valor, cessação, insolvências, criação/desaparecimento de
+# relações. Alimenta a linha temporal e a causalidade.
+WORLD_EVENTS_INDEX = "finance_world_events"
+
+# Relações do grafo (uma aresta por par entidade↔entidade e tipo).
+WORLD_RELATIONS_INDEX = "finance_world_relations"
+
+# **Estado temporal** do mundo: um documento por entidade **e por período**
+# (mês/trimestre/ano), com os contadores acumulados e os do período, o risco
+# recalculado no fim do período e o número de contrapartes/administradores.
+# É esta série que alimenta o modelo de transição latente e a deteção de
+# anomalias (a rede neuronal vê a evolução, não só o retrato atual).
+WORLD_HISTORY_INDEX = "finance_world_history"
+
+# Estado da rede neuronal dinâmica (uma versão por treino/growth): nós, arestas,
+# memória, métricas e previsões. `_id` = `version:<n>`.
+NETWORK_STATE_INDEX = "finance_network_state"
+
+# Execuções do simulador de futuro (t0→t1→t2→t3) com os cenários e as
+# distribuições produzidas.
+SIMULATIONS_INDEX = "finance_world_simulations"
+
+# Execuções do agente de investigação (Observe→Hypothesize→Search→Validate→
+# Simulate→Evidence Report), com a auditoria completa e o relatório.
+INVESTIGATIONS_INDEX = "finance_world_investigations"
 
 # Definições (settings) específicas de determinados índices — nomeadamente
 # analisadores usados em subcampos de pesquisa por prefixo.
@@ -280,6 +330,85 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
             },
         }
     },
+    WORLD_STATE_INDEX: {
+        "analysis": {
+            "tokenizer": {
+                # Pesquisa incremental na designação da entidade («SON» → «SONAE»).
+                "world_edge_ngram": {
+                    "type": "edge_ngram",
+                    "min_gram": 2,
+                    "max_gram": 20,
+                    "token_chars": ["letter", "digit"],
+                }
+            },
+            "analyzer": {
+                "world_index_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "world_edge_ngram",
+                    "filter": ["lowercase", "asciifolding"],
+                },
+                "world_search_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                },
+                # Os nomes vêm em português e espanhol; sem acentos encontram-se
+                # «Camara»/«Adjudicacion».
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                },
+            },
+        }
+    },
+    WORLD_HISTORY_INDEX: {
+        "analysis": {
+            "analyzer": {
+                # Igual aos outros índices do mundo: sem acentos encontra «Camara».
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    WORLD_EVENTS_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    WORLD_RELATIONS_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    INVESTIGATIONS_INDEX: {
+        # O relatório e a pergunta são indexados com `world_folding` (sem esta
+        # definição, a criação do índice falha com «analyzer has not been configured»).
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
 }
 
 
@@ -357,6 +486,25 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "positive_ratio": {"type": "float"},
             "negative_ratio": {"type": "float"},
             "updated_at": {"type": "date"},
+            # Leitura ponderada (só documentos com termos de sentimento) e a
+            # cobertura: sem isto, um dia cheio de títulos sem léxico aparecia
+            # «neutro» por diluição, não por ausência de tom.
+            "sentiment_signal": {"type": "float"},
+            "coverage": {"type": "float"},
+            "documents_with_signal": {"type": "integer"},
+            # Histórias distintas no dia e quantas notícias eram repetições
+            # (a mesma notícia em vários sítios não vale por várias).
+            "unique_articles": {"type": "integer"},
+            "duplicates": {"type": "integer"},
+            "label": {"type": "keyword"},
+            "engine": {"type": "keyword"},
+            "topics": {"type": "keyword"},
+            "sources": {"type": "keyword"},
+            "articles": {"type": "integer"},
+            # Destaques do dia (títulos nas pontas): guardados para o drill-down,
+            # não indexados (não se pesquisam).
+            "highlights": {"type": "object", "enabled": False},
+            "generated_at": {"type": "date"},
         }
     }
 
@@ -706,6 +854,66 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "has_documento": {"type": "boolean"},
             "documento_url": {"type": "keyword", "index": False},
             "texto": {"type": "text"},
+            "extra": {"type": "flattened"},
+            "run_id": {"type": "keyword"},
+            "source": {"type": "keyword"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    citacoes_mappings = {
+        "properties": {
+            "pub_id": {"type": "keyword"},
+            "referencia": {"type": "keyword"},
+            "data_publicacao": {"type": "date"},
+            "tribunal": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "tribunal_comarca": {"type": "keyword"},
+            "tribunal_sede": {"type": "keyword", "ignore_above": 512},
+            "comarca_judicial": {"type": "keyword", "ignore_above": 512},
+            "ato": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "tipo": {"type": "keyword"},
+            "processo": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "processo_numero": {"type": "keyword"},
+            "juizo": {"type": "keyword", "ignore_above": 512},
+            "especie": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "citado": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "papeis": {"type": "keyword"},
+            # Intervenientes do édito (exequente, executado, réu, credor, …).
+            "intervenientes": {
+                "type": "nested",
+                "properties": {
+                    "papel": {"type": "keyword"},
+                    "nome": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+                    "nif": {"type": "keyword"},
+                },
+            },
+            "has_documento": {"type": "boolean"},
+            "documento_url": {"type": "keyword", "index": False},
+            "texto": {"type": "text"},
+            # Documento (PDF) analisado: texto extraído, modelo, valor da execução,
+            # prazo e NIF dos intervenientes (que a lista do portal não publica).
+            "has_texto": {"type": "boolean"},
+            "documento_paginas": {"type": "integer"},
+            "documento_caracteres": {"type": "integer"},
+            "documento_bytes": {"type": "integer"},
+            "documento_truncado": {"type": "boolean"},
+            "documento_modelo": {"type": "keyword"},
+            "documento_codigo": {"type": "keyword"},
+            "documento_referencia_interna": {"type": "keyword", "ignore_above": 256},
+            "documento_titulo": {"type": "keyword", "ignore_above": 512},
+            "documento_assunto": {"type": "keyword", "ignore_above": 512},
+            "documento_valor": {"type": "double"},
+            "documento_prazo": {"type": "keyword"},
+            "documento_nifs": {"type": "keyword"},
+            "documento_partes": {
+                "type": "nested",
+                "properties": {
+                    "nome": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+                    "nif": {"type": "keyword"},
+                },
+            },
+            "documento_erro": {"type": "text", "index": False},
+            "documento_extraido_em": {"type": "date"},
             "extra": {"type": "flattened"},
             "run_id": {"type": "keyword"},
             "source": {"type": "keyword"},
@@ -1349,6 +1557,229 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    # ------------------------------------------------------------------
+    # «World Model»: estado, eventos, relações, rede neuronal dinâmica,
+    # simulações de futuro e investigações. Os objetos grandes (lista de nós e
+    # arestas, memória da rede, evidências, relatório) ficam guardados mas
+    # **não indexados** (`enabled: false`); tudo o que é pesquisável/agregável
+    # vive em campos próprios e explícitos.
+    # ------------------------------------------------------------------
+    world_state_mappings = {
+        "properties": {
+            "entity_ref": {"type": "keyword"},
+            "entity_type": {"type": "keyword"},
+            "entity_id": {"type": "keyword"},
+            "name": {
+                "type": "text",
+                "analyzer": "world_index_analyzer",
+                "search_analyzer": "world_search_analyzer",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "name_folded": {"type": "keyword", "ignore_above": 512},
+            "country": {"type": "keyword"},
+            "roles": {"type": "keyword"},
+            "state": {"type": "object", "dynamic": True},
+            "metrics": {"type": "object", "dynamic": True},
+            "contracts_count": {"type": "long"},
+            "contracts_value": {"type": "double"},
+            "relations_count": {"type": "integer"},
+            "events_count": {"type": "integer"},
+            "counterparties_count": {"type": "integer"},
+            "cpv_codes": {"type": "keyword"},
+            "top_cpv": {"type": "keyword"},
+            "risk": {"type": "float"},
+            "risk_label": {"type": "keyword"},
+            "activity": {"type": "float"},
+            "activity_trend": {"type": "keyword"},
+            "first_seen": {"type": "date"},
+            "last_event_at": {"type": "date"},
+            "insolvent": {"type": "boolean"},
+            "sources": {"type": "keyword"},
+            "source_docs": {"type": "integer"},
+            "world_version": {"type": "long"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
+    world_events_mappings = {
+        "properties": {
+            "event_id": {"type": "keyword"},
+            "kind": {"type": "keyword"},
+            "kind_label": {"type": "keyword", "index": False},
+            "entity_ref": {"type": "keyword"},
+            "entity_type": {"type": "keyword"},
+            "entity_id": {"type": "keyword"},
+            "entity_name": {"type": "text", "analyzer": "world_folding"},
+            "counterparty_ref": {"type": "keyword"},
+            "counterparty_name": {"type": "text", "analyzer": "world_folding"},
+            "ts": {"type": "date"},
+            "year": {"type": "integer"},
+            "month": {"type": "keyword"},
+            "value": {"type": "double"},
+            "delta": {"type": "double"},
+            "severity": {"type": "float"},
+            "severity_label": {"type": "keyword"},
+            "country": {"type": "keyword"},
+            "source_index": {"type": "keyword"},
+            "source_id": {"type": "keyword"},
+            "payload": {"type": "object", "enabled": False},
+            "world_version": {"type": "long"},
+            "detected_at": {"type": "date"},
+        }
+    }
+
+    world_relations_mappings = {
+        "properties": {
+            "relation_id": {"type": "keyword"},
+            "kind": {"type": "keyword"},
+            "kind_label": {"type": "keyword", "index": False},
+            "source_type": {"type": "keyword"},
+            "source_id": {"type": "keyword"},
+            "source_ref": {"type": "keyword"},
+            "source_name": {"type": "text", "analyzer": "world_folding"},
+            "target_type": {"type": "keyword"},
+            "target_id": {"type": "keyword"},
+            "target_ref": {"type": "keyword"},
+            "target_name": {"type": "text", "analyzer": "world_folding"},
+            "weight": {"type": "float"},
+            "contracts_count": {"type": "long"},
+            "value_sum": {"type": "double"},
+            "first_ts": {"type": "date"},
+            "last_ts": {"type": "date"},
+            "status": {"type": "keyword"},
+            "country": {"type": "keyword"},
+            "evidence": {"type": "keyword"},
+            "world_version": {"type": "long"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
+    world_history_mappings = {
+        "properties": {
+            "entity_ref": {"type": "keyword"},
+            "entity_id": {"type": "keyword"},
+            "entity_type": {"type": "keyword"},
+            "name": {"type": "text", "analyzer": "world_folding"},
+            "grain": {"type": "keyword"},
+            "period": {"type": "keyword"},
+            "period_start": {"type": "date"},
+            "period_end": {"type": "date"},
+            # Contadores do período (o que mudou nesse intervalo).
+            "contracts": {"type": "long"},
+            "value": {"type": "double"},
+            "events": {"type": "long"},
+            "kinds": {"type": "object", "dynamic": True},
+            "new_counterparties": {"type": "long"},
+            "first_contract": {"type": "date"},
+            # Contadores acumulados até ao fim do período (o estado nessa data).
+            "cum_contracts": {"type": "long"},
+            "cum_value": {"type": "double"},
+            "cum_counterparties": {"type": "long"},
+            "cum_directors": {"type": "long"},
+            "insolvent": {"type": "boolean"},
+            "risk": {"type": "float"},
+            "risk_label": {"type": "keyword"},
+            "delta_value": {"type": "double"},
+            "delta_contracts": {"type": "long"},
+            "status": {"type": "keyword"},
+            "country": {"type": "keyword"},
+            "world_version": {"type": "long"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
+    network_state_mappings = {
+        "properties": {
+            "version": {"type": "long"},
+            "created_at": {"type": "date"},
+            "input_version": {"type": "long"},
+            "seed": {"type": "long"},
+            "nodes": {"type": "object", "enabled": False},
+            "edges": {"type": "object", "enabled": False},
+            "memory": {"type": "object", "enabled": False},
+            "growth": {"type": "object", "enabled": False},
+            "pruned": {"type": "object", "enabled": False},
+            "predictions": {"type": "object", "enabled": False},
+            "anomalies": {"type": "object", "enabled": False},
+            "transition": {"type": "object", "enabled": False},
+            "top_anomalies": {
+                "type": "nested",
+                "properties": {
+                    "entity_ref": {"type": "keyword"},
+                    "entity_name": {"type": "keyword", "ignore_above": 512},
+                    "entity_type": {"type": "keyword"},
+                    "score": {"type": "float"},
+                    "label": {"type": "keyword"},
+                    "signals": {"type": "keyword"},
+                },
+            },
+            "top_predictions": {
+                "type": "nested",
+                "properties": {
+                    "entity_ref": {"type": "keyword"},
+                    "entity_name": {"type": "keyword", "ignore_above": 512},
+                    "entity_type": {"type": "keyword"},
+                    "score": {"type": "float"},
+                    "expected_contracts": {"type": "float"},
+                    "expected_value": {"type": "float"},
+                    "risk_after": {"type": "float"},
+                },
+            },
+            "metrics": {"type": "object", "dynamic": True},
+            "params": {"type": "object", "enabled": False},
+        }
+    }
+
+    simulations_mappings = {
+        "properties": {
+            "run_id": {"type": "keyword"},
+            "created_at": {"type": "date"},
+            "kind": {"type": "keyword"},
+            "subject_ref": {"type": "keyword"},
+            "subject_name": {"type": "keyword", "ignore_above": 512},
+            "subject_type": {"type": "keyword"},
+            "horizon": {"type": "integer"},
+            "steps_per_year": {"type": "integer"},
+            "samples": {"type": "integer"},
+            "seed": {"type": "long"},
+            "input_version": {"type": "long"},
+            "network_version": {"type": "long"},
+            "steps": {"type": "object", "enabled": False},
+            "scenarios": {"type": "object", "enabled": False},
+            "parameters": {"type": "object", "enabled": False},
+            "summary": {"type": "object", "dynamic": True},
+            "status": {"type": "keyword"},
+            "elapsed_s": {"type": "float"},
+        }
+    }
+
+    investigations_mappings = {
+        "properties": {
+            "run_id": {"type": "keyword"},
+            "question": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 1024}},
+            },
+            "created_at": {"type": "date"},
+            "status": {"type": "keyword"},
+            "elapsed_s": {"type": "float"},
+            "subject_ref": {"type": "keyword"},
+            "subject_name": {"type": "keyword", "ignore_above": 512},
+            "subject_type": {"type": "keyword"},
+            "steps": {"type": "object", "enabled": False},
+            "hypotheses": {"type": "object", "enabled": False},
+            "evidence": {"type": "object", "enabled": False},
+            "claims": {"type": "object", "enabled": False},
+            "simulation": {"type": "object", "enabled": False},
+            "counters": {"type": "object", "dynamic": True},
+            "sources": {"type": "keyword"},
+            "world_version": {"type": "long"},
+            "report": {"type": "text", "analyzer": "world_folding"},
+            "engine": {"type": "keyword"},
+        }
+    }
+
     for name, mappings in [
         ("finance_prices", prices_mappings),
         ("finance_news", news_mappings),
@@ -1362,6 +1793,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (FIRMAS_INDEX, firmas_mappings),
         (SOCIETARIO_INDEX, societario_mappings),
         (CIRE_INDEX, cire_mappings),
+        (CITACOES_INDEX, citacoes_mappings),
         (PEOPLE_INDEX, people_mappings),
         (CONTRIBUINTES_INDEX, contribuintes_mappings),
         (NODE_SUMMARIES_INDEX, node_summaries_mappings),
@@ -1377,11 +1809,25 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (SCRAPED_INDEX, scraped_mappings),
         (SOCIAL_INDEX, social_mappings),
         (AGENT_CONFIGS_INDEX, agent_configs_mappings),
+        # World Model (estado, eventos, relações), rede neuronal dinâmica,
+        # simulações de futuro e investigações.
+        (WORLD_STATE_INDEX, world_state_mappings),
+        (WORLD_EVENTS_INDEX, world_events_mappings),
+        (WORLD_RELATIONS_INDEX, world_relations_mappings),
+        (WORLD_HISTORY_INDEX, world_history_mappings),
+        (NETWORK_STATE_INDEX, network_state_mappings),
+        (SIMULATIONS_INDEX, simulations_mappings),
+        (INVESTIGATIONS_INDEX, investigations_mappings),
     ]:
         if not client.indices.exists(index=name):
             settings: Dict[str, Any] = {"number_of_shards": 1, "number_of_replicas": 0}
             settings.update(INDEX_SETTINGS.get(name, {}))
-            client.indices.create(index=name, body={"mappings": mappings, "settings": settings})
+            try:
+                client.indices.create(index=name, body={"mappings": mappings, "settings": settings})
+            except Exception as exc:
+                # Um índice com uma definição em falta (ex.: analisador por
+                # configurar) não pode impedir a verificação dos restantes.
+                logger.warning("Não foi possível criar o índice %s: %s", name, exc)
         else:
             # Elasticsearch permite acrescentar campos novos a um índice existente
             # (não permite alterar/remover os já definidos). Enviamos apenas os campos
@@ -7386,6 +7832,179 @@ def search_scraped(
     }
 
 
+# ---------------------------------------------------------------------------
+# Sentimento diário de mercado — índice `finance_sentiment_daily`
+# ---------------------------------------------------------------------------
+SENTIMENT_DAILY_INDEX = "finance_sentiment_daily"
+
+
+def index_sentiment_daily(rows: List[Dict[str, Any]], es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Grava/atualiza o sentimento diário por ticker (idempotente).
+
+    O `_id` do documento é `ticker|data`, pelo que reconstruir o mesmo dia
+    **atualiza** o documento em vez de o duplicar: reprocessar é seguro.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed": 0}
+    ensure_indices(client)
+    bulk_body: List[Dict[str, Any]] = []
+    total = 0
+    for row in rows or []:
+        ticker = str(row.get("ticker") or "").strip().upper()
+        day = str(row.get("date") or "").strip()[:10]
+        if not ticker or not day:
+            continue
+        document = {key: value for key, value in row.items() if key != "_id"}
+        document["ticker"] = ticker
+        document["date"] = day
+        bulk_body.append({"index": {"_index": SENTIMENT_DAILY_INDEX, "_id": f"{ticker}|{day}"}})
+        bulk_body.append(document)
+        total += 1
+    if not bulk_body:
+        return {"indexed": 0, "errors": 0, "total": 0}
+    try:
+        response = client.bulk(body=bulk_body, refresh=True)
+    except Exception as exc:  # pragma: no cover - depende do Elasticsearch
+        return {"error": str(exc), "indexed": 0, "errors": total, "total": total}
+    errors = sum(1 for item in response.get("items", []) if (item.get("index") or {}).get("error"))
+    return {"indexed": total - errors, "errors": errors, "total": total}
+
+
+def search_sentiment_daily(
+    ticker: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    size: int = 3000,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Lê o sentimento diário guardado (por ticker e/ou intervalo de datas)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "total": 0, "items": []}
+    must: List[Dict[str, Any]] = []
+    if ticker:
+        must.append({"term": {"ticker": str(ticker).strip().upper()}})
+    window: Dict[str, str] = {}
+    if start_date:
+        window["gte"] = str(start_date)[:10]
+    if end_date:
+        window["lte"] = str(end_date)[:10]
+    query: Dict[str, Any] = {"bool": {"must": must or [{"match_all": {}}]}}
+    if window:
+        query["bool"]["filter"] = [{"range": {"date": window}}]
+    try:
+        response = client.search(
+            index=SENTIMENT_DAILY_INDEX,
+            body={
+                "query": query,
+                "size": max(1, min(int(size), 10000)),
+                "sort": [{"date": {"order": "asc"}}, {"ticker": {"order": "asc"}}],
+                "track_total_hits": True,
+            },
+        )
+    except Exception as exc:
+        return {"error": str(exc), "total": 0, "items": []}
+    total = response.get("hits", {}).get("total", 0)
+    total_value = total.get("value", 0) if isinstance(total, dict) else total
+    return {
+        "total": int(total_value or 0),
+        "items": [hit.get("_source") or {} for hit in response.get("hits", {}).get("hits", [])],
+    }
+
+
+def list_news_tickers(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Tickers com notícias indexadas em `finance_news` (com contagem)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "total": 0, "items": []}
+    try:
+        response = client.search(
+            index="finance_news",
+            body={
+                "size": 0,
+                "track_total_hits": True,
+                "aggs": {"tickers": {"terms": {"field": "ticker", "size": 500}}},
+            },
+        )
+    except Exception as exc:
+        return {"error": str(exc), "total": 0, "items": []}
+    total = response.get("hits", {}).get("total", 0)
+    total_value = total.get("value", 0) if isinstance(total, dict) else total
+    items = [
+        {"ticker": bucket.get("key"), "news": int(bucket.get("doc_count") or 0)}
+        for bucket in response.get("aggregations", {}).get("tickers", {}).get("buckets", [])
+    ]
+    return {"total": int(total_value or 0), "items": items}
+
+
+def list_sentiment_daily_tickers(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Tickers com sentimento diário guardado (nº de dias, primeira e última data)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "total": 0, "items": []}
+    try:
+        response = client.search(
+            index=SENTIMENT_DAILY_INDEX,
+            body={
+                "size": 0,
+                "track_total_hits": True,
+                "aggs": {
+                    "tickers": {
+                        "terms": {"field": "ticker", "size": 500},
+                        "aggs": {
+                            "first": {"min": {"field": "date", "format": "yyyy-MM-dd"}},
+                            "last": {"max": {"field": "date", "format": "yyyy-MM-dd"}},
+                            "news": {"sum": {"field": "news_count"}},
+                        },
+                    }
+                },
+            },
+        )
+    except Exception as exc:
+        return {"error": str(exc), "total": 0, "items": []}
+    total = response.get("hits", {}).get("total", 0)
+    total_value = total.get("value", 0) if isinstance(total, dict) else total
+    items = [
+        {
+            "ticker": bucket.get("key"),
+            "days": bucket.get("doc_count", 0),
+            "first_date": (bucket.get("first") or {}).get("value_as_string"),
+            "last_date": (bucket.get("last") or {}).get("value_as_string"),
+            "news": int((bucket.get("news") or {}).get("value") or 0),
+        }
+        for bucket in response.get("aggregations", {}).get("tickers", {}).get("buckets", [])
+    ]
+    return {"total": int(total_value or 0), "items": items}
+
+
+def delete_sentiment_daily(
+    ticker: Optional[str] = None,
+    dates: Optional[List[str]] = None,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Apaga o sentimento diário (de um ticker, de dias concretos ou de todos).
+
+    Com `dates`, apaga apenas esses dias (é o que permite limpar dias obsoletos da
+    série sem tocar no resto).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    ensure_indices(client)
+    must: List[Dict[str, Any]] = []
+    if ticker:
+        must.append({"term": {"ticker": str(ticker).strip().upper()}})
+    if dates:
+        must.append({"terms": {"date": [str(day)[:10] for day in dates if day]}})
+    query: Dict[str, Any] = {"bool": {"must": must}} if must else {"match_all": {}}
+    try:
+        response = client.delete_by_query(index=SENTIMENT_DAILY_INDEX, body={"query": query}, refresh=True, conflicts="proceed")
+        return {"ok": True, "deleted": response.get("deleted", 0)}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
 def update_scraped_sentiment(rows: List[Dict[str, Any]], es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
     """Actualiza só o sentimento de itens já indexados (análise à posteriori).
 
@@ -9402,6 +10021,529 @@ def cire_runs_summary(run_ids: List[str], es: Optional[Elasticsearch] = None) ->
         }
     except Exception:
         return {}
+
+
+# --- Citações e notificações editais (CITIUS) -------------------------------
+
+def citacoes_existing_ids(
+    pub_ids: List[str],
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Devolve quais dos ``pub_ids`` já existem no índice das citações editais.
+
+    Serve para a importação **não reescrever** documentos que já lá estão (uma
+    recolha repetida do mesmo nome só acrescenta o que é novo). A consulta é
+    feita em blocos (o ``terms`` tem limite prático de 10 000 valores).
+    """
+    client = es or get_es_client()
+    if not client or not pub_ids:
+        return {"found": [], "known": 0, "checked": 0, "index": CITACOES_INDEX}
+
+    unique = list(dict.fromkeys(str(item) for item in pub_ids if item))
+    found: List[str] = []
+    chunk_size = 5000
+    try:
+        ensure_indices(client)
+        for start in range(0, len(unique), chunk_size):
+            chunk = unique[start: start + chunk_size]
+            resp = client.search(
+                index=CITACOES_INDEX,
+                body={
+                    "size": len(chunk),
+                    "track_total_hits": False,
+                    "_source": ["pub_id"],
+                    "query": {"terms": {"pub_id": chunk}},
+                },
+            )
+            for hit in resp.get("hits", {}).get("hits", []):
+                valor = (hit.get("_source") or {}).get("pub_id")
+                if not valor:
+                    valor = str(hit.get("_id", "")).split(":", 1)[-1]
+                found.append(str(valor))
+    except Exception as exc:
+        return {
+            "error": str(exc), "found": [], "known": 0,
+            "checked": len(unique), "index": CITACOES_INDEX,
+        }
+
+    return {"found": found, "known": len(found), "checked": len(unique), "index": CITACOES_INDEX}
+
+
+def index_citacoes_items(
+    items: List[Dict[str, Any]],
+    run_id: Optional[str] = None,
+    skip_existing: bool = True,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa citações/notificações editais no índice ``CITACOES_INDEX``.
+
+    O ``_id`` é o ``pub_id`` (sha1 de referência + processo + data + ato). Com
+    ``skip_existing`` (por omissão) os documentos **que já existem no índice são
+    ignorados** — recolher de novo o mesmo nome só acrescenta o que é novo
+    (o número de ignorados vem em ``skipped_existing``). Use
+    ``skip_existing=False`` para forçar a atualização dos existentes.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed_count": 0, "total": 0}
+
+    preparados: List[Dict[str, Any]] = []
+    for item in items:
+        doc = {k: v for k, v in item.items() if not k.startswith("_") and v is not None}
+        if not doc.get("pub_id"):
+            continue
+        doc["source"] = doc.get("source") or "citius_citacoes"
+        if run_id:
+            doc["run_id"] = run_id
+        preparados.append(doc)
+
+    ignorados: List[str] = []
+    if skip_existing and preparados:
+        existentes = citacoes_existing_ids([str(d["pub_id"]) for d in preparados], es=client)
+        ja_no_indice = set(existentes.get("found") or [])
+        ignorados = [str(d["pub_id"]) for d in preparados if str(d["pub_id"]) in ja_no_indice]
+        preparados = [d for d in preparados if str(d["pub_id"]) not in ja_no_indice]
+        if existentes.get("error"):
+            logger.warning("Não foi possível verificar duplicados das citações editais: %s", existentes["error"])
+
+    now = datetime.utcnow().isoformat()
+    docs = [{**doc, "ingested_at": now} for doc in preparados]
+    result = _bulk_index_docs(CITACOES_INDEX, docs, id_field="pub_id", es=client)
+    result["received"] = len(items)
+    result["indexed_count"] = result.get("indexed_count", 0)
+    result["skipped_existing"] = len(ignorados)
+    result["candidates"] = len(preparados)
+    return result
+
+
+def search_citacoes(
+    q: Optional[str] = None,
+    referencia: Optional[str] = None,
+    processo: Optional[str] = None,
+    tribunal: Optional[str] = None,
+    tribunal_comarca: Optional[str] = None,
+    comarca_judicial: Optional[str] = None,
+    tipo: Optional[str] = None,
+    ato: Optional[str] = None,
+    especie: Optional[str] = None,
+    citado: Optional[str] = None,
+    nome: Optional[str] = None,
+    papel: Optional[str] = None,
+    nif: Optional[str] = None,
+    modelo: Optional[str] = None,
+    titulo: Optional[str] = None,
+    data_from: Optional[str] = None,
+    data_to: Optional[str] = None,
+    has_documento: Optional[bool] = None,
+    has_texto: Optional[bool] = None,
+    with_texto: bool = True,
+    size: int = 20,
+    from_: int = 0,
+    search_after: Optional[List[Any]] = None,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa citações e notificações editais já indexadas.
+
+    ``q`` procura em texto livre (interveniente, tribunal, processo, ato e o
+    **texto extraído do PDF**); ``nome`` restringe ao nome de um interveniente
+    (qualquer papel) e ``papel`` ao papel exato desse interveniente.
+    ``nif`` procura nos NIF dos intervenientes (da lista e do documento) e
+    ``modelo``/``titulo`` no que foi analisado do PDF. ``with_texto=False``
+    omite o texto integral da resposta (listas mais leves).
+
+    Com ``search_after`` (cursor devolvido em ``next``) a pesquisa entra em
+    **modo de varredura**: sem agregações, ordenada por data+`pub_id`, para
+    percorrer o índice inteiro em páginas (usado pelo grafo e pelo mapa).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+
+    ensure_indices(client)
+
+    must: List[Dict[str, Any]] = []
+    filters: List[Dict[str, Any]] = []
+    if q:
+        # `intervenientes.nome` é `nested`: o `multi_match` sozinho não o alcança
+        # (uma pesquisa por nome de uma parte devolvia zero), pelo que a pesquisa
+        # livre junta as duas vias — campos planos e intervenientes.
+        must.append(
+            {
+                "bool": {
+                    "should": [
+                        {
+                            "multi_match": {
+                                "query": q,
+                                "fields": [
+                                    "citado^3",
+                                    "referencia^3",
+                                    "processo^2",
+                                    "processo_numero^2",
+                                    "tribunal^2",
+                                    "ato^2",
+                                    "especie",
+                                    "texto",
+                                ],
+                                "operator": "and",
+                            }
+                        },
+                        {
+                            "nested": {
+                                "path": "intervenientes",
+                                "query": {
+                                    "match": {"intervenientes.nome": {"query": q, "operator": "and"}}
+                                },
+                            }
+                        },
+                    ],
+                    "minimum_should_match": 1,
+                }
+            }
+        )
+    if nome:
+        filters.append(
+            {"nested": {"path": "intervenientes", "query": {"match": {"intervenientes.nome": nome}}}}
+        )
+    if referencia:
+        filters.append({"term": {"referencia": str(referencia)}})
+    if processo:
+        filters.append({"match_phrase": {"processo": processo}})
+    if tribunal:
+        filters.append({"match_phrase": {"tribunal": tribunal}})
+    if tribunal_comarca:
+        filters.append({"term": {"tribunal_comarca": tribunal_comarca}})
+    if comarca_judicial:
+        filters.append({"term": {"comarca_judicial": comarca_judicial}})
+    if tipo:
+        filters.append({"term": {"tipo": tipo}})
+    if ato:
+        filters.append({"match_phrase": {"ato": ato}})
+    if especie:
+        filters.append({"match_phrase": {"especie": especie}})
+    if citado:
+        filters.append({"match_phrase": {"citado": citado}})
+    if papel:
+        filters.append({"term": {"papeis": papel}})
+    if nif:
+        filters.append(
+            {
+                "bool": {
+                    "should": [
+                        {"term": {"documento_nifs": str(nif)}},
+                        {
+                            "nested": {
+                                "path": "intervenientes",
+                                "query": {"term": {"intervenientes.nif": str(nif)}},
+                            }
+                        },
+                    ],
+                    "minimum_should_match": 1,
+                }
+            }
+        )
+    if modelo:
+        filters.append({"term": {"documento_modelo": modelo}})
+    if titulo:
+        filters.append({"term": {"documento_titulo": titulo}})
+    if has_documento is not None:
+        filters.append({"term": {"has_documento": bool(has_documento)}})
+    if has_texto is not None:
+        filters.append({"term": {"has_texto": bool(has_texto)}})
+    if data_from or data_to:
+        interval: Dict[str, str] = {}
+        if data_from:
+            interval["gte"] = data_from
+        if data_to:
+            interval["lte"] = data_to
+        filters.append({"range": {"data_publicacao": interval}})
+
+    query: Dict[str, Any]
+    if must or filters:
+        query = {"bool": {}}
+        if must:
+            query["bool"]["must"] = must
+        if filters:
+            query["bool"]["filter"] = filters
+    else:
+        query = {"match_all": {}}
+
+    body: Dict[str, Any] = {
+        "query": query,
+        "from": max(0, from_),
+        "size": max(1, min(size, 200)),
+        "track_total_hits": True,
+        "sort": [{"data_publicacao": {"order": "desc", "missing": "_last"}}, "_score"],
+        "aggs": {
+            "by_tipo": {"terms": {"field": "tipo", "size": 10}},
+            "by_comarca": {"terms": {"field": "tribunal_comarca", "size": 25}},
+            "by_comarca_judicial": {"terms": {"field": "comarca_judicial", "size": 25}},
+            "by_tribunal": {"terms": {"field": "tribunal.keyword", "size": 25}},
+            "by_ato": {"terms": {"field": "ato.keyword", "size": 20}},
+            "by_especie": {"terms": {"field": "especie.keyword", "size": 15}},
+            "by_papel": {"terms": {"field": "papeis", "size": 20}},
+            "by_modelo": {"terms": {"field": "documento_modelo", "size": 15}},
+            "by_assunto": {"terms": {"field": "documento_assunto", "size": 15}},
+            "by_ano": {
+                "date_histogram": {"field": "data_publicacao", "calendar_interval": "year", "format": "yyyy"}
+            },
+            "by_mes": {
+                "date_histogram": {"field": "data_publicacao", "calendar_interval": "month", "format": "yyyy-MM"}
+            },
+            "valor_total": {"sum": {"field": "documento_valor"}},
+            "valor_medio": {"avg": {"field": "documento_valor"}},
+            "com_texto": {"filter": {"term": {"has_texto": True}}},
+        },
+    }
+
+    if search_after is not None:
+        # Modo de varredura: ordem estável (data + `pub_id`) e sem agregações.
+        body["sort"] = [
+            {"data_publicacao": {"order": "desc", "missing": "_last"}},
+            {"pub_id": {"order": "asc"}},
+        ]
+        body["search_after"] = list(search_after)
+        body["size"] = max(1, min(size, 1000))
+        body.pop("from", None)
+        body.pop("aggs", None)
+
+    try:
+        resp = client.search(index=CITACOES_INDEX, body=body)
+        aggs = resp.get("aggregations", {})
+
+        def _buckets(name: str) -> List[Dict[str, Any]]:
+            return [
+                {"key": b["key"], "count": b["doc_count"]}
+                for b in aggs.get(name, {}).get("buckets", [])
+            ]
+
+        items: List[Dict[str, Any]] = []
+        for hit in resp["hits"]["hits"]:
+            source = dict(hit["_source"])
+            source["doc_id"] = hit["_id"]
+            # `texto`/`documento_partes` são pesados: saem só quando interessa.
+            if not with_texto:
+                source.pop("texto", None)
+                source.pop("documento_partes", None)
+            items.append(source)
+
+        total = aggs.get("com_texto", {}).get("doc_count", 0)
+        resposta: Dict[str, Any] = {
+            "query": q,
+            "total": resp["hits"]["total"]["value"] if isinstance(resp["hits"]["total"], dict) else resp["hits"]["total"],
+            "items": items,
+            "from": from_,
+            "size": size,
+            "with_texto": total,
+            "valor_total": round(float(aggs.get("valor_total", {}).get("value") or 0.0), 2),
+            "valor_medio": (
+                round(float(aggs["valor_medio"]["value"]), 2)
+                if isinstance(aggs.get("valor_medio", {}).get("value"), (int, float))
+                else None
+            ),
+            "facets": {
+                "tipo": _buckets("by_tipo"),
+                "tribunal_comarca": _buckets("by_comarca"),
+                "comarca_judicial": _buckets("by_comarca_judicial"),
+                "tribunal": _buckets("by_tribunal"),
+                "ato": _buckets("by_ato"),
+                "especie": _buckets("by_especie"),
+                "papel": _buckets("by_papel"),
+                "modelo": _buckets("by_modelo"),
+                "assunto": _buckets("by_assunto"),
+                "ano": [
+                    {"key": b.get("key_as_string"), "count": b["doc_count"]}
+                    for b in aggs.get("by_ano", {}).get("buckets", [])
+                ],
+                "mes": [
+                    {"key": b.get("key_as_string"), "count": b["doc_count"]}
+                    for b in aggs.get("by_mes", {}).get("buckets", [])
+                ],
+            },
+        }
+        # Cursor da página seguinte (modo de varredura) — ver `scan_citacoes`.
+        hits = resp["hits"]["hits"]
+        if search_after is not None:
+            resposta["next"] = hits[-1].get("sort") if hits else None
+        return resposta
+    except Exception as exc:
+        return {"error": str(exc), "items": [], "total": 0}
+
+
+def scan_citacoes(
+    *,
+    max_docs: int = 20_000,
+    page_size: int = 500,
+    fields: Optional[List[str]] = None,
+    **filters: Any,
+) -> Dict[str, Any]:
+    """Percorre (por `search_after`) os éditos que correspondem aos filtros.
+
+    Serve o grafo e o mapa, que precisam do conjunto inteiro — não de uma página.
+    Devolve ``{items, scanned, total, truncated, error}``: ``total`` é o total que
+    o Elasticsearch conta para os filtros e ``truncated`` diz se o teto de
+    ``max_docs`` cortou a varredura.
+    """
+    items: List[Dict[str, Any]] = []
+    cursor: Optional[List[Any]] = None
+    total = 0
+    truncated = False
+    try:
+        while len(items) < max_docs:
+            size = max(1, min(page_size, max_docs - len(items)))
+            kwargs: Dict[str, Any] = {"with_texto": False, "size": size, "search_after": cursor or []}
+            if fields:
+                pass  # a projeção de campos é feita depois (os documentos são pequenos)
+            res = search_citacoes(**{**filters, **kwargs})
+            if res.get("error"):
+                return {"items": items, "scanned": len(items), "total": total, "truncated": truncated, "error": res["error"]}
+            lote = res.get("items") or []
+            total = int(res.get("total") or total)
+            items.extend(lote)
+            cursor = res.get("next")
+            if not lote or not cursor:
+                break
+        truncated = len(items) >= max_docs and total > len(items)
+    except Exception as exc:  # noqa: BLE001
+        return {"items": items, "scanned": len(items), "total": total, "truncated": truncated, "error": str(exc)}
+    return {"items": items, "scanned": len(items), "total": total, "truncated": truncated}
+
+
+def citacoes_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Volumetria do índice das citações editais (documentos, datas e distribuições)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    ensure_indices(client)
+    try:
+        count = client.count(index=CITACOES_INDEX).get("count", 0)
+        out: Dict[str, Any] = {"index": CITACOES_INDEX, "documents": count}
+        if not count:
+            return out
+        resp = client.search(
+            index=CITACOES_INDEX,
+            body={
+                "size": 0,
+                "aggs": {
+                    "referencias": {"cardinality": {"field": "referencia"}},
+                    "processos": {"cardinality": {"field": "processo_numero"}},
+                    "tribunais": {"cardinality": {"field": "tribunal.keyword"}},
+                    "citados": {"cardinality": {"field": "citado.keyword"}},
+                    "nifs": {"cardinality": {"field": "documento_nifs"}},
+                    "min_date": {"min": {"field": "data_publicacao"}},
+                    "max_date": {"max": {"field": "data_publicacao"}},
+                    "by_tipo": {"terms": {"field": "tipo", "size": 10}},
+                    "by_comarca": {"terms": {"field": "tribunal_comarca", "size": 15}},
+                    "by_comarca_judicial": {"terms": {"field": "comarca_judicial", "size": 15}},
+                    "by_tribunal": {"terms": {"field": "tribunal.keyword", "size": 15}},
+                    "by_ato": {"terms": {"field": "ato.keyword", "size": 15}},
+                    "by_papel": {"terms": {"field": "papeis", "size": 15}},
+                    "by_modelo": {"terms": {"field": "documento_modelo", "size": 10}},
+                    "by_assunto": {"terms": {"field": "documento_assunto", "size": 10}},
+                    "by_ano": {
+                        "date_histogram": {
+                            "field": "data_publicacao", "calendar_interval": "year", "format": "yyyy"
+                        }
+                    },
+                    "by_mes": {
+                        "date_histogram": {
+                            "field": "data_publicacao", "calendar_interval": "month", "format": "yyyy-MM"
+                        }
+                    },
+                    "com_documento": {"filter": {"term": {"has_documento": True}}},
+                    "com_texto": {"filter": {"term": {"has_texto": True}}},
+                    "com_valor": {
+                        "filter": {"exists": {"field": "documento_valor"}},
+                        "aggs": {
+                            "total": {"sum": {"field": "documento_valor"}},
+                            "medio": {"avg": {"field": "documento_valor"}},
+                            "maximo": {"max": {"field": "documento_valor"}},
+                        },
+                    },
+                },
+            },
+        )
+        aggs = resp.get("aggregations", {})
+
+        def _buckets(name: str) -> List[Dict[str, Any]]:
+            return [
+                {"key": b["key"], "count": b["doc_count"]}
+                for b in aggs.get(name, {}).get("buckets", [])
+            ]
+
+        out["referencias"] = aggs.get("referencias", {}).get("value", 0)
+        out["processos"] = aggs.get("processos", {}).get("value", 0)
+        out["tribunais"] = aggs.get("tribunais", {}).get("value", 0)
+        out["citados"] = aggs.get("citados", {}).get("value", 0)
+        out["nifs"] = aggs.get("nifs", {}).get("value", 0)
+        out["min_date"] = (aggs.get("min_date", {}) or {}).get("value_as_string")
+        out["max_date"] = (aggs.get("max_date", {}) or {}).get("value_as_string")
+        out["with_documento"] = aggs.get("com_documento", {}).get("doc_count", 0)
+        out["with_texto"] = aggs.get("com_texto", {}).get("doc_count", 0)
+        valor = aggs.get("com_valor", {}) or {}
+        out["with_valor"] = valor.get("doc_count", 0)
+        out["valor_total"] = round(float((valor.get("total") or {}).get("value") or 0.0), 2)
+        out["valor_medio"] = (
+            round(float((valor.get("medio") or {}).get("value")), 2)
+            if isinstance((valor.get("medio") or {}).get("value"), (int, float))
+            else None
+        )
+        out["valor_maximo"] = round(float((valor.get("maximo") or {}).get("value") or 0.0), 2) or None
+        out["by_tipo"] = _buckets("by_tipo")
+        out["top_comarcas"] = _buckets("by_comarca")
+        out["top_comarcas_judiciais"] = _buckets("by_comarca_judicial")
+        out["top_tribunais"] = _buckets("by_tribunal")
+        out["top_actos"] = _buckets("by_ato")
+        out["by_papel"] = _buckets("by_papel")
+        out["top_modelos"] = _buckets("by_modelo")
+        out["top_assuntos"] = _buckets("by_assunto")
+        out["by_ano"] = [
+            {"key": b.get("key_as_string"), "count": b["doc_count"]}
+            for b in aggs.get("by_ano", {}).get("buckets", [])
+        ]
+        out["by_mes"] = [
+            {"key": b.get("key_as_string"), "count": b["doc_count"]}
+            for b in aggs.get("by_mes", {}).get("buckets", [])
+        ]
+        return out
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def get_citacao(pub_id: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Devolve um édito pelo ``pub_id`` (documento completo, com o texto extraído)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    try:
+        resp = client.get(index=CITACOES_INDEX, id=f"{CITACOES_INDEX}:{pub_id}")
+    except Exception as exc:  # noqa: BLE001
+        return {"pub_id": pub_id, "error": str(exc)}
+    source = dict(resp.get("_source") or {})
+    source["doc_id"] = resp.get("_id")
+    return source
+
+
+def citacoes_runs_summary(run_ids: List[str], es: Optional[Elasticsearch] = None) -> Dict[str, int]:
+    """Número de documentos indexados por ``run_id`` (para a lista de recolhas)."""
+    client = es or get_es_client()
+    if not client or not run_ids:
+        return {}
+    try:
+        resp = client.search(
+            index=CITACOES_INDEX,
+            body={
+                "size": 0,
+                "query": {"terms": {"run_id": run_ids}},
+                "aggs": {"by_run": {"terms": {"field": "run_id", "size": len(run_ids)}}},
+            },
+        )
+        return {
+            b["key"]: b["doc_count"]
+            for b in resp.get("aggregations", {}).get("by_run", {}).get("buckets", [])
+        }
+    except Exception:
+        return {}
+
 
 
 # --- Pessoas e cargos extraídos do societário ---

@@ -70,7 +70,9 @@ import SocialPage, {
 import UnifiedSearchPage from "./pages/UnifiedSearchPage";
 import SentimentPage from "./pages/SentimentPage";
 import CirePage from "./pages/CirePage";
+import CitacoesPage from "./pages/CitacoesPage";
 import ContribuintesPage from "./pages/ContribuintesPage";
+import WorldPage from "./pages/WorldPage";
 import GleifPage, {
   GLEIF_SECTION_VIEWS,
   gleifSectionForView,
@@ -91,6 +93,7 @@ import FinderPage from "./pages/FinderPage";
 import EmailPage from "./pages/EmailPage";
 import CmsPage from "./pages/CmsPage";
 import ShopPage from "./pages/ShopPage";
+import RssPage from "./pages/RssPage";
 import CompareWindow from "./pages/CompareWindow";
 import { ContractDetailWindow, EntityDetailWindow, QuickLookWindow } from "./components/DetailWindow";
 import EntityContractsWindow from "./pages/EntityContractsWindow";
@@ -134,6 +137,7 @@ type AppView =
   | `crm-mod:${string}`
   | "cms"
   | "shop"
+  | "rss"
   | "contracts-list"
   | "contracts-map"
   | "region-detail"
@@ -148,6 +152,8 @@ type AppView =
   | "admin"
   | "agents"
   | "gleif-region"
+  | "world"
+  | "world-rede"
   | "iframe-pages";
 const COMPANY_DETAIL_KEY = "finance-llm-company-detail";
 const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
@@ -266,7 +272,10 @@ function pathForView(
   if (view === "pesquisa") return "/pesquisa";
   if (view === "sentimento") return "/sentimento";
   if (view === "cire") return "/cire";
+  if (view === "citacoes") return "/citacoes";
   if (view === "contribuintes") return "/contribuintes";
+  if (view === "world") return "/world";
+  if (view === "world-rede") return "/world/rede";
   if (view === "gleif") return "/gleif";
   if (view === "gleif-mapa") return "/gleif/mapa";
   if (view === "gleif-ingestao") return "/gleif/ingestao";
@@ -287,6 +296,11 @@ function pathForView(
     // Tal como o CMS, a secção da loja vive no caminho (`/shop/produtos`, …).
     const current = typeof window === "undefined" ? "" : window.location.pathname;
     return current.startsWith("/shop") ? current : "/shop";
+  }
+  if (view === "rss") {
+    // Tal como o CMS e a loja, a secção do leitor vive no caminho (`/rss/artigos`, …).
+    const current = typeof window === "undefined" ? "" : window.location.pathname;
+    return current.startsWith("/rss") ? current : "/rss";
   }
   if (view === "email") return "/email";
   if (view === "contracts-list") return "/contracts-list";
@@ -441,7 +455,10 @@ export default function App() {
     if (path === "/pesquisa") return "pesquisa";
     if (path === "/sentimento") return "sentimento";
     if (path === "/cire" || path.startsWith("/cire/")) return "cire";
+    if (path === "/citacoes" || path.startsWith("/citacoes/")) return "citacoes";
     if (path === "/contribuintes" || path.startsWith("/contribuintes/")) return "contribuintes";
+    if (path === "/world/rede") return "world-rede";
+    if (path === "/world" || path.startsWith("/world/")) return "world";
     {
       const gleifSection = gleifSectionFromPath(path);
       if (gleifSection) return GLEIF_SECTION_VIEWS[gleifSection] as AppView;
@@ -492,6 +509,7 @@ export default function App() {
     if (path === "/email" || path.startsWith("/email/")) return "email";
     if (path === "/cms" || path.startsWith("/cms/")) return "cms";
     if (path === "/shop" || path.startsWith("/shop/")) return "shop";
+    if (path === "/rss" || path.startsWith("/rss/")) return "rss";
     if (path === "/iframe-pages") return "iframe-pages";
     const iframeView = iframeViewFromPath(path);
     if (iframeView) return iframeView as AppView;
@@ -543,7 +561,10 @@ export default function App() {
       else if (path === "/pesquisa") next = "pesquisa";
       else if (path === "/sentimento") next = "sentimento";
       else if (path === "/cire" || path.startsWith("/cire/")) next = "cire";
+      else if (path === "/citacoes" || path.startsWith("/citacoes/")) next = "citacoes";
       else if (path === "/contribuintes" || path.startsWith("/contribuintes/")) next = "contribuintes";
+      else if (path === "/world/rede") next = "world-rede";
+      else if (path === "/world" || path.startsWith("/world/")) next = "world";
       else if (gleifSectionFromPath(path)) next = GLEIF_SECTION_VIEWS[gleifSectionFromPath(path) as GleifSection] as AppView;
       else if (path === "/contracts" || path === "/contracts/search") next = "contracts-search";
       else if (path === "/contratos-es") next = "contratos-es";
@@ -581,6 +602,7 @@ export default function App() {
       else if (path === "/email" || path.startsWith("/email/")) next = "email";
       else if (path === "/cms" || path.startsWith("/cms/")) next = "cms";
       else if (path === "/shop" || path.startsWith("/shop/")) next = "shop";
+      else if (path === "/rss" || path.startsWith("/rss/")) next = "rss";
       else if (path === "/iframe-pages") next = "iframe-pages";
       else if (iframeViewFromPath(path)) next = iframeViewFromPath(path) as AppView;
       else if (crmSectionFromPath(path)) next = CRM_SECTION_VIEWS[crmSectionFromPath(path) as CrmSection] as AppView;
@@ -1169,6 +1191,7 @@ export default function App() {
     if (target === "email") return <EmailPage />;
     if (target === "cms") return <CmsPage />;
     if (target === "shop") return <ShopPage />;
+    if (target === "rss") return <RssPage />;
     if (target === "trading") return <TradingPage />;
     if (target === "tickers") return <TickerPage onSwitchView={() => setViewAndHistory("dashboard")} />;
     if (target === "rag") return <RagPage onSwitchView={() => setViewAndHistory("dashboard")} />;
@@ -1201,7 +1224,9 @@ export default function App() {
       return <SentimentPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
     }
     if (target === "cire") return <CirePage />;
+    if (target === "citacoes") return <CitacoesPage />;
     if (target === "contribuintes") return <ContribuintesPage />;
+    if (target === "world" || target === "world-rede") return <WorldPage />;
     if (target === "contracts-dashboard") {
       return (
         <ContractsDashboardPage

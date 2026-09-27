@@ -250,6 +250,15 @@ TAGS_METADATA: List[Dict[str, str]] = [
         ),
     },
     {
+        "name": "rss",
+        "description": (
+            "Leitor de RSS: fontes RSS/Atom (por endereço ou OPML) agrupadas em "
+            "pastas, recolha manual ou por agenda cron, artigos com lido/favorito/"
+            "guardado, pesquisa e integrações com o Office, o sentimento, o CRM e o "
+            "RAG, além de resumos e boletins por IA."
+        ),
+    },
+    {
         "name": "email",
         "description": (
             "Correio: contas IMAP/SMTP, pastas e mensagens, sinalizadores, mover, "
@@ -358,6 +367,18 @@ TAGS_METADATA: List[Dict[str, str]] = [
         ),
     },
     {
+        "name": "world",
+        "description": (
+            "World Model: estado materializado do mundo da contratação pública "
+            "(entidades, contratos, relações, eventos e histórico), rede neuronal "
+            "dinâmica (crescimento, poda, memória e previsão — mostrada como grafo), "
+            "motor de grafo/tempo (relações, timestamps e causalidade candidata), "
+            "simulador de futuro (t0 → t3 com cenários e Monte Carlo) e agente de "
+            "investigação (Observe → Hypothesize → Search → Validate → Simulate → "
+            "Evidence Report)."
+        ),
+    },
+    {
         "name": "spa",
         "description": (
             "Páginas da interface (single-page app). Devolvem o `index.html` e "
@@ -413,6 +434,8 @@ SPA_PATHS: Tuple[str, ...] = (
     "/contracts/map",
     "/contratos-es",
     "/contribuintes",
+    "/world",
+    "/world/rede",
     "/gleif",
     "/gleif/mapa",
     "/gleif/ingestao",
@@ -442,6 +465,8 @@ PATH_TAG_RULES: Sequence[Tuple[str, str]] = (
     ("/contracts", "contratos"),
     ("/companies-global", "companies-global"),
     ("/contribuintes", "contribuintes"),
+    ("/world/rede", "spa"),
+    ("/world", "world"),
     ("/gleif/mapa", "spa"),
     ("/gleif/ingestao", "spa"),
     ("/gleif", "gleif"),

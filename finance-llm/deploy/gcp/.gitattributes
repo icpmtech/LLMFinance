@@ -1,0 +1,9 @@
+# Ficheiros de deploy: forçar LF. Scripts bash e configs chegam à VM/Cloud Shell
+# a partir do Windows — com CRLF, o `edge.env` apanha um \r no valor das
+# variáveis e o hostname/service token ficam inválidos.
+* text eol=lf
+
+# Ficheiros gerados localmente com segredos
+edge/edge.env binary
+origin/config.yml binary
+origin/*.json binary

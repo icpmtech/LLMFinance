@@ -63,6 +63,9 @@ class CorpusPayload(BaseModel):
     title: Optional[str] = None
     term: Optional[str] = None
     ontology: Optional[str] = None
+    ticker: Optional[str] = Field(None, description="Notícias: limita o corpus a este ticker (ex.: EDP.LS).")
+    start_date: Optional[str] = Field(None, description="Notícias: data inicial (YYYY-MM-DD).")
+    end_date: Optional[str] = Field(None, description="Notícias: data final (YYYY-MM-DD).")
 
 
 class SaveDossierPayload(CorpusPayload):
@@ -87,7 +90,13 @@ def _corpus(payload: CorpusPayload, session: Optional[CurrentSession]) -> list:
     if origin == "social":
         return sentiment.corpus_from_social(q=payload.q, channel_id=payload.source_id, limit=limit)
     if origin == "news":
-        return sentiment.corpus_from_news(q=payload.q, limit=limit)
+        return sentiment.corpus_from_news(
+            q=payload.q,
+            limit=limit,
+            ticker=payload.ticker,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+        )
     if origin == "contracts":
         return sentiment.corpus_from_contracts(q=payload.q, limit=limit)
     if origin == "firmas":
@@ -122,7 +131,15 @@ def _describe(payload: CorpusPayload, documents: list) -> str:
         return payload.title
     origin = (payload.origin or "scraped").strip().lower()
     label = next((entry["label"] for entry in sentiment.ORIGINS if entry["id"] == origin), origin)
-    detail = payload.q or payload.source_id or payload.dossier_id or payload.document_id or payload.account_id or ""
+    detail = (
+        payload.ticker
+        or payload.q
+        or payload.source_id
+        or payload.dossier_id
+        or payload.document_id
+        or payload.account_id
+        or ""
+    )
     return f"Análise de sentimento — {label}{f' · {detail}' if detail else ''}"
 
 

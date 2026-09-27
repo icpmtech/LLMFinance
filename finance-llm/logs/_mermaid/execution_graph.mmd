@@ -1,0 +1,20 @@
+flowchart TD
+    planner_1["Agente planeador<br/>planear passos a partir dos sinais da rede<br/><small>passos=7, anomalia=atenção</small>"]:::passo
+    observer_2["Agente de observação<br/>ler estado do mundo<br/><small>contratos=0, risco=0.0, estado=ativo</small>"]:::passo
+    historian_3["Agente de história<br/>reconstruir série por período<br/><small>períodos=4, último=2025-Q4</small>"]:::passo
+    network_4["Agente da rede<br/>previsão, memória e anomalias<br/><small>rede=1790500480, anomalia=atenção (0.35), padrões=5</small>"]:::passo
+    scout_5["Agente de recolha<br/>recolher evidência às fontes<br/><small>evidência=14</small>"]:::passo
+    simulator_6["Agente de simulação<br/>correr cenários t0→t3<br/><small>contratos=5.271, cancel.=0.312, Δ€=27 106</small>"]:::passo
+    verifier_7["Agente de verificação<br/>verificar contas e corroboração<br/><small>verificações=5/5, afirmações=5</small>"]:::passo
+    narrator_8["Agente de narrativa<br/>relatório + diagramas<br/><small>caracteres=15539, grafos=3</small>"]:::passo
+    planner_1 -->|plano| observer_2
+    planner_1 -->|plano| historian_3
+    observer_2 -->|estado| network_4
+    historian_3 -->|série| network_4
+    network_4 -->|alvos| scout_5
+    network_4 -->|previsão| simulator_6
+    scout_5 -->|evidência| verifier_7
+    simulator_6 -->|cenários| verifier_7
+    verifier_7 -->|afirmações| narrator_8
+    network_4 -->|anomalia| narrator_8
+    classDef passo fill:#0b1a21,stroke:#38bdf8,color:#e6f6fb

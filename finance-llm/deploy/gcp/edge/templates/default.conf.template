@@ -1,0 +1,79 @@
+# Edge nginx do IQ OS — reverse proxy completo para a origem (stack no PC).
+#
+# É um *template*: o entrypoint da imagem `nginx:alpine` substitui
+# ${ORIGIN_HOSTNAME} / ${CF_ACCESS_CLIENT_ID} / ${CF_ACCESS_CLIENT_SECRET} a
+# partir do `edge.env`. O NGINX_ENVSUBST_FILTER (no compose.yml) garante que só
+# estas três variáveis são substituídas — as do nginx ($host, $remote_addr, …)
+# ficam intactas.
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 80;
+    server_name _;
+
+    # Resolução do hostname de origem **em tempo de pedido** (e não no arranque,
+    # que é o comportamento por omissão do nginx). Sem isto, um DNS ainda não
+    # criado — ou uma indisponibilidade momentânea — punha o container em
+    # crash-loop, precisamente quando o edge devia estar a servir a página de
+    # manutenção. Mesmo padrão usado em `docker/nginx.conf` para os iframes.
+    resolver 127.0.0.11 valid=30s ipv6=off;
+
+    client_max_body_size 512m;
+
+    gzip on;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+
+    # Sonda local (o container não tem portas abertas para fora).
+    location = /healthz {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 "ok\n";
+    }
+
+    # Tudo o resto vai para a origem. Passa também a página SPA, os assets, a API
+    # (/api/...), os gráficos (/forecast/plot/...) e o SSE do chat.
+    location / {
+        # Variável + resolver => o nome só é resolvido quando chega um pedido.
+        set $origin "https://${ORIGIN_HOSTNAME}";
+        proxy_pass $origin;
+        proxy_http_version 1.1;
+
+        # O hostname de origem está atrás do Cloudflare: SNI obrigatório.
+        proxy_ssl_server_name on;
+        proxy_ssl_name ${ORIGIN_HOSTNAME};
+
+        # Cloudflare Access (política «Service Auth») — é isto que permite ao edge
+        # falar com a origem sem que o hostname de origem esteja aberto ao mundo.
+        proxy_set_header CF-Access-Client-Id "${CF_ACCESS_CLIENT_ID}";
+        proxy_set_header CF-Access-Client-Secret "${CF_ACCESS_CLIENT_SECRET}";
+
+        proxy_set_header Host ${ORIGIN_HOSTNAME};
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        # O chat usa SSE e as importações demoram: sem buffering e com timeout longo.
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_connect_timeout 15s;
+    }
+
+    # Origem desligada (PC desligado, túnel em baixo, backend a arrancar):
+    # em vez de um 502 seco do Cloudflare, mostra-se a página de manutenção.
+    # Nota: os 404 da API *não* são intercetados (não há proxy_intercept_errors).
+    error_page 502 503 504 /offline.html;
+    location = /offline.html {
+        internal;
+        root /usr/share/nginx/html;
+    }
+}

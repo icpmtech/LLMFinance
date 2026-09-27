@@ -9,6 +9,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Activity,
   AlertTriangle,
   BarChart3,
   CheckCircle2,
@@ -44,6 +45,8 @@ import {
   type SentimentOrigin,
   type SentimentSource,
 } from "../sentimentApi";
+import SentimentMarketPanel from "./SentimentMarket";
+import { Kpi, PolarityBar, focusRing, labelChip, tap, tone } from "../components/sentiment/SentimentKit";
 
 const numberFormat = new Intl.NumberFormat("pt-PT", { maximumFractionDigits: 2 });
 
@@ -61,56 +64,18 @@ function formatCount(value: number): string {
   return String(value);
 }
 
-function tone(polarity: number): string {
-  if (polarity >= 0.15) return "text-emerald-300";
-  if (polarity <= -0.15) return "text-rose-300";
-  return "text-muted-foreground";
-}
-
-function labelChip(label: string): string {
-  if (label === "positivo") return "border-emerald-400/30 bg-emerald-400/10 text-emerald-200";
-  if (label === "negativo") return "border-rose-400/30 bg-rose-400/10 text-rose-200";
-  return "border-white/10 bg-white/5 text-muted-foreground";
-}
-
-/** Barra de polaridade (-1 a 1) com marca central. */
-function PolarityBar({ value, width = 120 }: { value: number; width?: number }) {
-  const clamped = Math.max(-1, Math.min(1, value || 0));
-  const percent = Math.abs(clamped) * (width / 2);
-  const positive = clamped >= 0;
-  return (
-    <span className="inline-flex items-center" style={{ width }} title={clamped.toFixed(3)}>
-      <span className="relative block h-2 w-full rounded-full bg-white/10">
-        <span className="absolute left-1/2 top-[-2px] h-3 w-px bg-white/20" />
-        <span
-          className={`absolute top-0 h-2 rounded-full ${positive ? "bg-emerald-400/70" : "bg-rose-400/70"}`}
-          style={positive ? { left: "50%", width: percent } : { right: "50%", width: percent }}
-        />
-      </span>
-    </span>
-  );
-}
-
-function Kpi({ label, value, hint, tone: toneClass }: { label: string; value: React.ReactNode; hint?: string; tone?: string }) {
-  return (
-    <div className="glass-card rounded-2xl px-4 py-3">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={`mt-1 text-xl font-semibold ${toneClass ?? ""}`}>{value}</p>
-      {hint ? <p className="mt-0.5 text-[10px] text-muted-foreground">{hint}</p> : null}
-    </div>
-  );
-}
-
 interface SentimentPageProps {
   onNavigate?: (view: string) => void;
 }
 
 export default function SentimentPage({ onNavigate }: SentimentPageProps) {
   const { user } = useAuth();
+  const [view, setView] = useState<"corpus" | "mercado">("corpus");
   const [meta, setMeta] = useState<SentimentMeta | null>(null);
   const [origin, setOrigin] = useState<SentimentOrigin>("scraped");
   const [engine, setEngine] = useState<SentimentEngineId>("lexicon");
   const [query, setQuery] = useState("");
+  const [newsTicker, setNewsTicker] = useState("");
   const [limit, setLimit] = useState(60);
   const [text, setText] = useState("");
   const [dossiers, setDossiers] = useState<{ id: string; title: string; term?: string; has_sentiment?: boolean }[]>([]);
@@ -159,25 +124,31 @@ export default function SentimentPage({ onNavigate }: SentimentPageProps) {
       q: query || undefined,
       limit,
       engine,
+      ticker: origin === "news" ? newsTicker.trim().toUpperCase() || undefined : undefined,
       dossierId: origin === "dossier" ? dossierId : undefined,
       documentId: origin === "office" ? documentId : undefined,
       accountId: origin === "email" ? accountId : undefined,
     }),
-    [origin, query, limit, engine, dossierId, documentId, accountId],
+    [origin, query, limit, engine, dossierId, documentId, accountId, newsTicker],
   );
 
   const sourceGroups = useMemo(() => [...new Set(sources.map((entry) => entry.group))], [sources]);
   const selectedSource = sources.find((entry) => entry.id === origin);
 
-  const run = async () => {
+  const run = async (override?: { origin: SentimentOrigin; ticker?: string }) => {
     setLoading(true);
     setError(null);
     setOfficeDoc(null);
     try {
+      const effectiveOrigin = override?.origin ?? origin;
       const payload =
-        origin === "text"
+        effectiveOrigin === "text"
           ? await analyzeSentimentText({ text, title: query || undefined, engine })
-          : await analyzeSentimentCorpus(corpusRequest());
+          : await analyzeSentimentCorpus({
+              ...corpusRequest(),
+              origin: effectiveOrigin,
+              ticker: override?.ticker ?? corpusRequest().ticker,
+            });
       setAnalysis(payload);
       if (!payload.rows?.length) setError("A análise não encontrou documentos com texto para avaliar.");
     } catch (err) {
@@ -186,6 +157,14 @@ export default function SentimentPage({ onNavigate }: SentimentPageProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  /** O painel de mercado manda analisar as notícias de um ticker no corpus. */
+  const analyseTicker = (ticker: string) => {
+    setOrigin("news");
+    setNewsTicker(ticker);
+    setView("corpus");
+    void run({ origin: "news", ticker });
   };
 
   const saveDossier = async () => {
@@ -292,6 +271,31 @@ export default function SentimentPage({ onNavigate }: SentimentPageProps) {
         </div>
       </header>
 
+      {/* ------------------------------------------------ vistas da página */}
+      <div className="mt-4 flex gap-2 overflow-x-auto [scrollbar-width:none]">
+        {(
+          [
+            { id: "corpus" as const, label: "Análise de corpus", icon: <Wand2 size={14} /> },
+            { id: "mercado" as const, label: "Mercado", icon: <Activity size={14} /> },
+          ]
+        ).map((entry) => (
+          <button
+            key={entry.id}
+            type="button"
+            onClick={() => setView(entry.id)}
+            aria-pressed={view === entry.id}
+            className={`${tap} ${focusRing} inline-flex shrink-0 items-center gap-2 rounded-xl border px-4 text-xs font-medium transition ${
+              view === entry.id
+                ? "border-violet-400/40 bg-violet-500/20 text-violet-100"
+                : "border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10"
+            }`}
+          >
+            {entry.icon} {entry.label}
+          </button>
+        ))}
+      </div>
+
+      <div className={view === "corpus" ? "contents" : "hidden"}>
       {meta ? (
         <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
           <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5">léxico: {meta.lexicon_size} termos</span>
@@ -353,7 +357,18 @@ export default function SentimentPage({ onNavigate }: SentimentPageProps) {
             </span>
           </label>
 
-          {origin === "dossier" ? (
+          {origin === "news" ? (
+            <label className="block">
+              <span className="text-[11px] text-muted-foreground">Ticker (opcional)</span>
+              <input
+                value={newsTicker}
+                onChange={(event) => setNewsTicker(event.target.value)}
+                className={`${inputClass} mt-1 font-mono`}
+                placeholder="ex.: EDP.LS"
+                title="Limita as notícias analisadas a este ticker"
+              />
+            </label>
+          ) : origin === "dossier" ? (
             <label className="block">
               <span className="text-[11px] text-muted-foreground">Dossiê de análise</span>
               <select value={dossierId} onChange={(event) => setDossierId(event.target.value)} className={`${inputClass} mt-1`}>
@@ -739,6 +754,9 @@ export default function SentimentPage({ onNavigate }: SentimentPageProps) {
           </div>
         </>
       ) : null}
+      </div>
+
+      {view === "mercado" ? <SentimentMarketPanel onAnalyseTicker={analyseTicker} /> : null}
     </div>
   );
 }

@@ -873,6 +873,31 @@ menores), num índice próprio (`contratos_es`) para não se misturar com os con
 
 Detalhes, volumes e limitações em [`docs/contratos-espanha.md`](docs/contratos-espanha.md).
 
+### Citações e notificações editais (CITIUS)
+
+Aplicação **Citações Edital** (`/citacoes`), no grupo **Dados públicos** do menu e no dock: recolhe e
+pesquisa as **citações e notificações editais eletrónicas** de executados, réus, requeridos e
+sujeitos processuais publicadas pelo Ministério da Justiça
+(`www.citius.mj.pt/portal/consultas/consultascitedital.aspx`) — os éditos publicados quando o
+citando **não foi encontrado**.
+
+- **Recolha** a partir do **nome do interveniente** (é o único critério desta consulta — o portal não
+  aceita NIF/NIPC) e, opcionalmente, por tribunal/serviço. O interruptor **últimos N meses**
+  (**6 por omissão**) corta na data: como os resultados vêm por data descendente, a recolha **para
+  sozinha** ao passar o limite (0 = tudo). O progresso acompanha-se página a página (10 éditos por
+  página) e pode ser interrompido.
+- **JSON primeiro, Elasticsearch depois**: cada recolha fica em `data/citacoes/runs/<run_id>.json`
+  (+ `.meta.json`) e só no fim é importada para `finance_citacoes_edital` — reimportar é idempotente
+  (o `_id` é o `pub_id`: referência + processo + data + ato; os já existentes são ignorados).
+- **Pesquisa** por texto livre, nome de interveniente, papel (exequente, executado, réu, credor,
+  agente de execução…), tribunal/comarca, tipo (citação, notificação, anúncio), ato, espécie,
+  processo e datas, com facetas clicáveis; cada édito mostra os intervenientes e a ligação para o
+  **documento em PDF** no portal.
+- **Execuções** (reimportar/apagar recolhas) e **Estado** (volumetria, Tribunal/comarca/papéis,
+  evolução mensal).
+
+Detalhes, limitações e rotas em [`docs/citacoes-edital.md`](docs/citacoes-edital.md).
+
 ### Comparação (entidades e contratos)
 
 Aplicação **Comparar** (`/compare`), no menu de aplicações: compara até **4 itens** da mesma
