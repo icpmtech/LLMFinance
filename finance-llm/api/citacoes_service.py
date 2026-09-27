@@ -18,10 +18,12 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from collectors.citius_citacoes import (
     DIAS_OPCOES,
@@ -32,6 +34,7 @@ from collectors.citius_citacoes import (
     CitacoesEditalClient,
     CitacoesError,
     analyze_documento,
+    completar_tribunal,
     extract_pdf_text,
     total_pages,
 )
@@ -54,6 +57,16 @@ MAX_MONTHS = 120
 #: Documentos (PDF) extraídos por recolha, por omissão. Cada documento é um
 #: pedido ao portal, logo este teto controla a duração da recolha.
 DEFAULT_MAX_DOCUMENTOS = 200
+
+#: Páginas entre gravações do progresso parcial. A lista completa do portal tem
+#: ~2 700 páginas (26 992 éditos) e leva horas: sem isto, um bloqueio a meio
+#: deixaria a recolha sem nada em disco.
+DEFAULT_PARTIAL_PAGES = 50
+
+#: Sessões em paralelo na recolha completa (cada serviço/tribunal tem a sua
+#: sessão: o `__VIEWSTATE` é uma cadeia e não se pode paginar em paralelo numa só).
+DEFAULT_WORKERS = 4
+MAX_WORKERS = 8
 
 # Cache das opções do formulário (serviços/tribunais), que o portal serve em ~1 s.
 _OPTIONS_CACHE: Dict[str, Any] = {"at": 0.0, "data": None}
@@ -229,7 +242,7 @@ def _new_run_id(nome: Optional[str]) -> str:
 # --------------------------------------------------------------- recolha
 def collect(
     *,
-    nome: str,
+    nome: Optional[str] = None,
     tribunal: Optional[str] = None,
     dias: Optional[str] = None,
     meses: Optional[int] = DEFAULT_MONTHS,
@@ -241,14 +254,22 @@ def collect(
     min_interval: float = MIN_REQUEST_INTERVAL,
     proxy: Optional[str] = None,
     run_id: Optional[str] = None,
+    todos: bool = False,
+    partial_every: int = DEFAULT_PARTIAL_PAGES,
+    workers: int = 1,
     on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
     stop: Optional[Callable[[], bool]] = None,
     persist: bool = True,
 ) -> Dict[str, Any]:
     """Recolhe éditos de citação/notificação e grava-os em JSON (sem tocar no Elasticsearch).
 
+    Com ``todos=True`` (e sem nome) recolhe a **lista completa** do portal — todos
+    os éditos publicados —, que combinada com ``meses`` dá «tudo o que existe nos
+    últimos N anos». Como a lista vem por data descendente, a recolha para sozinha
+    ao passar o corte.
+
     Com ``extrair_documentos`` (por omissão **ligado**) o PDF de cada édito é
-descarregado e o seu texto extraído e analisado logo a seguir à lista — na
+    descarregado e o seu texto extraído e analisado logo a seguir à lista — na
     **mesma sessão**, porque o token do documento está ligado a ela (uma ligação
     antiga devolve a página «Erro»). Ficam no documento o texto integral, o
     modelo, o valor da execução, o prazo e os **NIF dos intervenientes** (que a
@@ -259,21 +280,36 @@ descarregado e o seu texto extraído e analisado logo a seguir à lista — na
     e o corte aplicado).
     """
     nome = (nome or "").strip()
-    if not nome:
-        raise ValueError("Indique o nome do interveniente a pesquisar.")
+    if not nome and not todos:
+        raise ValueError("Indique o nome do interveniente a pesquisar (ou `todos` para recolher tudo).")
     if dias and dias not in DIAS_OPCOES:
         raise ValueError("Atalho de dias inválido (use 15, 30 ou todos).")
     if meses is not None and (meses < 0 or meses > MAX_MONTHS):
         raise ValueError(f"«meses» tem de estar entre 0 e {MAX_MONTHS}.")
 
+    # A lista completa com várias sessões: divide-se por serviço/tribunal, que é
+    # a única forma de varrer ~27 mil éditos em tempo útil (ver `collect_por_servico`).
+    if not nome and workers and int(workers) > 1:
+        return collect_por_servico(
+            meses=meses,
+            workers=int(workers),
+            max_pages_per_service=max(max_pages, 1),
+            min_interval=min_interval,
+            partial_every=partial_every,
+            proxy=proxy,
+            run_id=run_id,
+            on_progress=on_progress,
+            stop=stop,
+            persist=persist,
+        )
+
     desde = cutoff_from_months(meses)
-    run_id = run_id or _new_run_id(nome)
+    run_id = run_id or _new_run_id(nome or ("todos" if todos else None))
     started = datetime.now(timezone.utc)
 
     criterios = {
-        "nome": nome,
-        "tribunal": tribunal,
-        "dias": dias or "todos",
+        "nome": nome or None,
+        "todos": bool(todos) or not nome,
         "meses": meses,
         "desde": desde,
         "max_pages": max_pages,
@@ -290,10 +326,69 @@ descarregado e o seu texto extraído e analisado logo a seguir à lista — na
     total_declarado = 0
     antigos = 0
     docs_resumo: Dict[str, Any] = {}
+    ultimo_parcial = 0
+
+    def _payload_parcial(final: bool = False) -> Dict[str, Any]:
+        return {
+            "run_id": run_id,
+            "source": SOURCE,
+            "source_url": PAGE,
+            "criteria": criterios,
+            "collected_at": datetime.now(timezone.utc).isoformat(),
+            "partial": not final,
+            "count": len(itens),
+            "items": itens,
+        }
+
+    def _guardar_parcial(motivo: str) -> None:
+        """Grava o que já existe (recolhas de milhares de páginas levam horas: um
+        bloqueio do portal a meio não pode deitar fora o trabalho feito)."""
+        if not persist or not itens:
+            return
+        try:
+            agora = datetime.now(timezone.utc)
+            resumo_parcial = {
+                "run_id": run_id,
+                "source": SOURCE,
+                "criteria": criterios,
+                "collected": len(itens),
+                "declared_total": total_declarado,
+                "declared_pages": total_pages("", total_declarado),
+                "pages": paginas,
+                "page_size": PAGE_SIZE,
+                "older_than_cutoff": antigos,
+                "errors": erros,
+                "partial": True,
+                "motivo": motivo,
+                "created_at": started.isoformat(),
+                "finished_at": agora.isoformat(),
+                "duration_s": round((agora - started).total_seconds(), 1),
+                "index": INDEX_NAME,
+                "indexed": 0,
+                "file": str(run_path(run_id)),
+            }
+            save_run(_payload_parcial(), resumo_parcial)
+            logger.info(
+                "Recolha %s: progresso parcial gravado (%s éditos, %s páginas).",
+                run_id,
+                len(itens),
+                paginas,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Não foi possível gravar o progresso parcial de %s: %s", run_id, exc)
 
     def _report(page: Any, novos: List[Any]) -> None:
-        nonlocal paginas
+        nonlocal paginas, ultimo_parcial
         paginas = max(paginas, int(getattr(page, "page", 0) or 0))
+        for edito in novos:
+            doc = edito.to_dict()
+            if doc["pub_id"] in seen:
+                continue
+            seen.add(doc["pub_id"])
+            itens.append(doc)
+        if partial_every and paginas - ultimo_parcial >= partial_every:
+            ultimo_parcial = paginas
+            _guardar_parcial("partial")
         if on_progress:
             on_progress(
                 {
@@ -301,7 +396,7 @@ descarregado e o seu texto extraído e analisado logo a seguir à lista — na
                     "page": getattr(page, "page", None),
                     "pages": getattr(page, "pages_total", None),
                     "declared_total": getattr(page, "total", 0),
-                    "collected": len(itens) + len(novos),
+                    "collected": len(itens),
                     "last_batch": len(novos),
                     "desde": desde,
                 }
@@ -327,6 +422,7 @@ descarregado e o seu texto extraído e analisado logo a seguir à lista — na
             # a lista vem por data descendente, pelo que basta parar ao passar o limite.
             items, resumo = client.collect(
                 nome=nome,
+                todos=bool(todos or not nome),
                 tribunal=tribunal,
                 dias=dias or "todos",
                 desde=desde,
@@ -336,8 +432,17 @@ descarregado e o seu texto extraído e analisado logo a seguir à lista — na
                 stop=stop,
             )
             total_declarado = resumo.get("total", 0)
-            paginas = resumo.get("pages", paginas)
+            paginas = max(paginas, int(resumo.get("pages") or 0))
             antigos = resumo.get("oldest_skipped", 0)
+            # Os itens já foram acumulados página a página em `_report` (é o que
+            # permite gravar progresso parcial); aqui só se confirma a contagem.
+            if len(items) != len(itens):
+                for edito in items:
+                    doc = edito.to_dict()
+                    if doc["pub_id"] in seen:
+                        continue
+                    seen.add(doc["pub_id"])
+                    itens.append(doc)
 
             if extrair_documentos and items:
                 docs_resumo = client.extrair_documentos(
@@ -347,17 +452,17 @@ descarregado e o seu texto extraído e analisado logo a seguir à lista — na
                     on_document=_report_doc,
                     stop=stop,
                 )
-
-            for edito in items:
-                doc = edito.to_dict()
-                if doc["pub_id"] in seen:
-                    continue
-                seen.add(doc["pub_id"])
-                itens.append(doc)
-            parado = bool(stop and stop())
+            bloqueado = bool(getattr(client, "stalled", False))
+            if bloqueado:
+                erros.append(
+                    "O portal deixou de responder a meio da recolha: ficaram gravados os éditos "
+                    "recolhidos até aí (a lista vem por data descendente, pelo que os mais recentes estão completos)."
+                )
+            parado = bool(stop and stop()) or bloqueado
     except (CitacoesError, ValueError) as exc:
         logger.warning("Recolha de citações editais «%s» falhou: %s", nome, exc)
         erros.append(str(exc))
+        parado = True
 
     finished = datetime.now(timezone.utc)
     payload = {
@@ -404,6 +509,288 @@ descarregado e o seu texto extraído e analisado logo a seguir à lista — na
                 "collected": meta_info["collected"],
                 "declared_total": total_declarado,
                 "pages": paginas,
+                "errors": erros,
+            }
+        )
+
+    return {"run_id": run_id, "payload": payload, "meta": meta_info}
+
+
+# ------------------------------------------------- recolha paralela (serviços)
+def collect_por_servico(
+    *,
+    meses: Optional[int] = DEFAULT_MONTHS,
+    workers: int = DEFAULT_WORKERS,
+    max_pages_per_service: int = 2000,
+    min_interval: float = MIN_REQUEST_INTERVAL,
+    partial_every: int = DEFAULT_PARTIAL_PAGES,
+    proxy: Optional[str] = None,
+    run_id: Optional[str] = None,
+    servicos: Optional[List[str]] = None,
+    on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
+    stop: Optional[Callable[[], bool]] = None,
+    persist: bool = True,
+) -> Dict[str, Any]:
+    """Recolhe **todos** os éditos do portal dividindo o trabalho por serviço.
+
+    A lista completa tem ~27 mil éditos (~2 700 páginas) e o portal responde a
+    ~6 s por página: numa só sessão seriam mais de 5 horas. Como cada édito
+    pertence a **um** serviço/tribunal (`ddlTribunais`, 257 valores) e o filtro
+    por serviço aceita o nome vazio, o trabalho reparte-se por serviços, cada um
+    com a **sua própria sessão** (o `__VIEWSTATE` é uma cadeia: não se pode
+    paginar em paralelo na mesma sessão).
+
+    Cada serviço é independente — se um falhar (ou ficar sem resposta), os outros
+    continuam — e dentro do serviço aplica-se o corte por data (a lista de cada
+    serviço também vem por data descendente). O resultado é o mesmo conjunto, com
+    ``workers`` vezes menos tempo.
+
+    A análise dos PDF **não** é feita aqui (a 1 pedido por documento, 27 mil
+    documentos seriam horas): usa-se `POST /citacoes/runs/{id}/documentos` depois,
+    sobre os éditos que interessarem.
+    """
+    if meses is not None and (meses < 0 or meses > MAX_MONTHS):
+        raise ValueError(f"«meses» tem de estar entre 0 e {MAX_MONTHS}.")
+    workers = max(1, min(int(workers), MAX_WORKERS))
+    desde = cutoff_from_months(meses)
+    run_id = run_id or _new_run_id("todos-servicos")
+    started = datetime.now(timezone.utc)
+
+    criterios = {
+        "nome": None,
+        "todos": True,
+        "modo": "por-servico",
+        "workers": workers,
+        "meses": meses,
+        "desde": desde,
+        "max_pages_per_service": max_pages_per_service,
+        "extrair_documentos": False,
+    }
+
+    # Lista de serviços (uma visita ao formulário serve para todos os workers).
+    if servicos:
+        servicos = [s for s in servicos if s and not s.startswith("-")]
+    else:
+        with CitacoesEditalClient(min_interval=min_interval, proxy=proxy) as bootstrap:
+            bootstrap.fetch_form()
+            servicos = [opcao["label"] for opcao in bootstrap.tribunais()][1:]
+    if not servicos:
+        raise ValueError("O portal não devolveu a lista de serviços/tribunais.")
+
+    lock = threading.Lock()
+    itens: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    erros: List[str] = []
+    estado = {
+        "paginas": 0,
+        "declarados": 0,
+        "servicos_feitos": 0,
+        "parcial": 0,
+        "parado": False,
+    }
+
+    def _payload(final: bool = False) -> Dict[str, Any]:
+        return {
+            "run_id": run_id,
+            "source": SOURCE,
+            "source_url": PAGE,
+            "criteria": criterios,
+            "collected_at": datetime.now(timezone.utc).isoformat(),
+            "partial": not final,
+            "count": len(itens),
+            "items": itens,
+        }
+
+    def _guardar_parcial(motivo: str) -> None:
+        if not persist or not itens:
+            return
+        agora = datetime.now(timezone.utc)
+        try:
+            save_run(
+                _payload(),
+                {
+                    "run_id": run_id,
+                    "source": SOURCE,
+                    "criteria": criterios,
+                    "collected": len(itens),
+                    "declared_total": estado["declarados"],
+                    "declared_pages": total_pages("", estado["declarados"]),
+                    "pages": estado["paginas"],
+                    "page_size": PAGE_SIZE,
+                    "servicos_total": len(servicos),
+                    "servicos_feitos": estado["servicos_feitos"],
+                    "errors": list(erros),
+                    "partial": True,
+                    "motivo": motivo,
+                    "created_at": started.isoformat(),
+                    "finished_at": agora.isoformat(),
+                    "duration_s": round((agora - started).total_seconds(), 1),
+                    "index": INDEX_NAME,
+                    "indexed": 0,
+                    "file": str(run_path(run_id)),
+                },
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Progresso parcial de %s não gravado: %s", run_id, exc)
+
+    def _progresso(**campos: Any) -> None:
+        if not on_progress:
+            return
+        on_progress(
+            {
+                "stage": "collecting",
+                "collected": len(itens),
+                "declared_total": estado["declarados"],
+                "pages": estado["paginas"],
+                "servicos_feitos": estado["servicos_feitos"],
+                "servicos_total": len(servicos),
+                "desde": desde,
+                **campos,
+            }
+        )
+
+    def _trabalhador(lote: List[str]) -> None:
+        """Uma sessão por worker: pesquisa serviço a serviço e pagina cada um.
+
+        A sessão é reutilizada entre serviços da mesma fatia (o `__VIEWSTATE` da
+        resposta anterior serve de estado para o postback seguinte). Se a sessão
+        morrer (bloqueio/stall), é recriada e o serviço continua.
+        """
+        client: Optional[CitacoesEditalClient] = None
+        for indice, servico in enumerate(lote, start=1):
+            if stop and stop():
+                with lock:
+                    estado["parado"] = True
+                return
+            try:
+                if client is None or getattr(client, "stalled", False):
+                    if client is not None:
+                        client.close()
+                    client = CitacoesEditalClient(min_interval=min_interval, proxy=proxy)
+                    client.fetch_form()
+
+                pagina = client.search(
+                    todos=True, tribunal=servico, dias="todos", fetch_options=False
+                )
+                with lock:
+                    estado["declarados"] += int(getattr(pagina, "total", 0) or 0)
+                paginas_servico = 0
+                while True:
+                    novos = antigos = 0
+                    with lock:
+                        for edito in pagina.items:
+                            if desde and edito.data_publicacao and edito.data_publicacao < desde:
+                                antigos += 1
+                                continue
+                            # O bloco do portal às vezes não mostra o «Tribunal»:
+                            # como a pesquisa foi por serviço, é esse o tribunal a usar.
+                            completar_tribunal(edito, servico)
+                            doc = edito.to_dict()
+                            if doc["pub_id"] in seen:
+                                continue
+                            seen.add(doc["pub_id"])
+                            itens.append(doc)
+                            novos += 1
+                        paginas_servico += 1
+                        estado["paginas"] += 1
+                        if partial_every and estado["paginas"] - estado["parcial"] >= partial_every:
+                            estado["parcial"] = estado["paginas"]
+                            _guardar_parcial(f"parcial ({servico})")
+                    _progresso(
+                        page=getattr(pagina, "page", None),
+                        pages=getattr(pagina, "pages_total", None),
+                        servico=servico,
+                        servico_indice=indice,
+                        servico_total=len(lote),
+                        last_batch=novos,
+                    )
+                    if stop and stop():
+                        with lock:
+                            estado["parado"] = True
+                        return
+                    # Página inteira anterior ao corte: as seguintes também (ordem
+                    # por data descendente dentro do serviço) — passa ao serviço seguinte.
+                    if desde and pagina.items and novos == 0 and antigos == len(pagina.items):
+                        break
+                    if not pagina.items or not pagina.has_next:
+                        break
+                    if paginas_servico >= max_pages_per_service:
+                        break
+                    pagina = client.next_page()
+                    if getattr(client, "stalled", False):
+                        break
+            except (CitacoesError, ValueError) as exc:
+                with lock:
+                    erros.append(f"{servico}: {exc}")
+                logger.warning("Serviço «%s» falhou: %s", servico, exc)
+                if client is not None and getattr(client, "stalled", False):
+                    client.close()
+                    client = None
+            except Exception as exc:  # noqa: BLE001
+                with lock:
+                    erros.append(f"{servico}: {type(exc).__name__}: {exc}")
+            finally:
+                with lock:
+                    estado["servicos_feitos"] += 1
+        if client is not None:
+            client.close()
+
+    # Reparte os serviços por worker (à vez: os grandes ficam distribuídos).
+    lotes: List[List[str]] = [[] for _ in range(workers)]
+    for posicao, servico in enumerate(servicos):
+        lotes[posicao % workers].append(servico)
+
+    logger.info(
+        "Recolha completa por serviço: %s serviços em %s sessões (%s páginas máx. por serviço).",
+        len(servicos),
+        workers,
+        max_pages_per_service,
+    )
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="citius-svc") as pool:
+        for futuro in [pool.submit(_trabalhador, lote) for lote in lotes if lote]:
+            futuro.result()
+
+    finished = datetime.now(timezone.utc)
+    payload = _payload(final=True)
+    meta_info = {
+        "run_id": run_id,
+        "source": SOURCE,
+        "criteria": criterios,
+        "collected": len(itens),
+        "declared_total": estado["declarados"],
+        "declared_pages": total_pages("", estado["declarados"]),
+        "pages": estado["paginas"],
+        "page_size": PAGE_SIZE,
+        "servicos_total": len(servicos),
+        "servicos_feitos": estado["servicos_feitos"],
+        "older_than_cutoff": 0,
+        "documentos": {},
+        "documentos_extraidos": 0,
+        "documentos_falhados": 0,
+        "documentos_caracteres": 0,
+        "errors": erros,
+        "stopped": bool(estado["parado"]),
+        "created_at": started.isoformat(),
+        "finished_at": finished.isoformat(),
+        "duration_s": round((finished - started).total_seconds(), 1),
+        "index": INDEX_NAME,
+        "indexed": 0,
+        "file": str(run_path(run_id)),
+    }
+    if persist:
+        paths = save_run(payload, meta_info)
+        meta_info["file"] = paths["path"]
+        meta_info["meta_file"] = paths["meta_path"]
+
+    if on_progress:
+        on_progress(
+            {
+                "stage": "collected",
+                "collected": meta_info["collected"],
+                "declared_total": meta_info["declared_total"],
+                "pages": meta_info["pages"],
+                "servicos_feitos": estado["servicos_feitos"],
+                "servicos_total": len(servicos),
                 "errors": erros,
             }
         )
@@ -498,7 +885,8 @@ def extrair_documentos_run(
     meta_info = load_run_meta(run_id)
     criterios = payload.get("criteria") or meta_info.get("criteria") or {}
     nome = (criterios.get("nome") or "").strip()
-    if not nome:
+    todos = bool(criterios.get("todos")) or not nome
+    if not nome and not todos:
         raise ValueError("A recolha não guardou o «nome» do interveniente — não é possível repetir a pesquisa no portal.")
 
     itens: List[Dict[str, Any]] = payload.get("items") or []
@@ -523,6 +911,7 @@ def extrair_documentos_run(
     with CitacoesEditalClient(min_interval=min_interval, proxy=proxy) as client:
         pagina = client.search(
             nome=nome,
+            todos=todos,
             tribunal=criterios.get("tribunal"),
             dias=criterios.get("dias") or "todos",
         )

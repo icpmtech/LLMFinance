@@ -248,6 +248,7 @@ from api.people_routes import router as people_router
 from api.contribuintes_routes import router as contribuintes_router
 from api.gleif_routes import router as gleif_router
 from api.world_routes import router as world_router
+from api.padroes_routes import router as padroes_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -519,6 +520,7 @@ app.include_router(gleif_router)
 # World Model: estado do mundo, rede neuronal dinâmica (grafo), motor de
 # grafo/tempo, simulador de futuro e agente de investigação.
 app.include_router(world_router)
+app.include_router(padroes_router)
 
 
 # Cache curta de `user_id → email`, para o registo de pedidos identificar quem

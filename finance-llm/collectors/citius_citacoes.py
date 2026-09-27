@@ -44,6 +44,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -66,6 +67,9 @@ FIELD_TRIBUNAL = FIELD_PREFIX + "ddlTribunais"
 SELECT_TRIBUNAL_ID = "ctl00_ContentPlaceHolder1_ddlTribunais"
 PAGER_NEXT = FIELD_PREFIX + "Pager1$lnkNext"
 PAGER_PREV = FIELD_PREFIX + "Pager1$btnPreviousPage"
+#: Salta para a última página da lista — permite saber a data mais antiga publicada
+#: (e o volume total) sem percorrer milhares de páginas.
+PAGER_LAST = FIELD_PREFIX + "Pager1$btnLastPage"
 
 PAGE_SIZE = 10
 MIN_REQUEST_INTERVAL = 1.2
@@ -197,6 +201,23 @@ def comarca_judicial(tribunal: Optional[str], sede: Optional[str] = None) -> Opt
         return re.sub(r"\s+", " ", m.group(1)).strip()
     partes = [p.strip() for p in (tribunal or "").split(" - ", 1)]
     return partes[0] or None
+
+
+def completar_tribunal(edito: "EditalCitacao", servico: Optional[str]) -> None:
+    """Preenche o tribunal do édito com o **serviço pesquisado**, quando o bloco não o traz.
+
+    Na lista do portal alguns registos não mostram o campo «Tribunal» e nesse caso
+    perdem-se a sede, a comarca judicial e o serviço (o que esvazia o mapa e as
+    facetas por tribunal). Numa recolha **por serviço** sabe-se sempre a que serviço
+    pertence cada édito, pelo que é essa a informação a usar.
+    """
+    if not servico or (edito.tribunal or "").strip():
+        return
+    edito.tribunal = servico
+    comarca, sede = _split_tribunal(servico)
+    edito.tribunal_comarca = edito.tribunal_comarca or comarca
+    edito.tribunal_sede = edito.tribunal_sede or sede
+    edito.comarca_judicial = edito.comarca_judicial or comarca_judicial(servico, edito.tribunal_sede)
 
 
 _LABELS = {
@@ -733,11 +754,20 @@ class CitacoesEditalClient:
         *,
         min_interval: float = MIN_REQUEST_INTERVAL,
         timeout: float = 60.0,
+        connect_timeout: float = 15.0,
+        deadline: float = 45.0,
         proxy: Optional[str] = None,
         session: Optional[requests.Session] = None,
     ) -> None:
         self.min_interval = max(0.0, float(min_interval))
         self.timeout = timeout
+        self.connect_timeout = connect_timeout
+        #: Prazo máximo por pedido, independente do `timeout` do `requests`: o portal
+        #: já ficou a «pingar» uma página durante minutos (sem fechar o socket), o que
+        #: o timeout de leitura nunca deteta. Ao estourar este prazo a sessão é fechada
+        #: (para libertar o socket) e o erro sobe — a recolha termina e guarda o que tem.
+        self.deadline = deadline
+        self.stalled = False
         self.proxy = proxy
         self.session = session or requests.Session()
         self.session.headers.update(HEADERS)
@@ -772,28 +802,69 @@ class CitacoesEditalClient:
         for attempt in range(retries):
             self._throttle()
             try:
-                resp = self.session.get(url, timeout=self.timeout, headers={"Referer": PAGE})
+                resp = self._request("GET", url=url)
                 self._last_request = time.monotonic()
-                resp.raise_for_status()
                 text = resp.content.decode("utf-8", errors="replace")
                 if _blocked(text):
                     raise CitacoesError("Pedido bloqueado pelo portal (WAF).")
                 return text
             except Exception as exc:  # noqa: BLE001
                 last = exc
+                if self.stalled:
+                    break
                 time.sleep(1.5 * (attempt + 1))
         raise CitacoesError(f"Falha a obter {url}: {last}")
+
+    def _request(self, metodo: str, *, data: Optional[Dict[str, str]] = None, url: str = PAGE) -> requests.Response:
+        """Pedido HTTP com **prazo máximo** (watchdog) — devolve a resposta já validada.
+
+        O `timeout` do `requests` (ligação/leitura) não chega: o portal já manteve uma
+        página a chegar aos pingos durante minutos, o que nunca dispara o timeout de
+        leitura. Aqui o pedido corre numa thread e, se passar ``deadline`` segundos, a
+        sessão é fechada (o socket pendurado é libertado) e o erro sobe — a recolha
+        termina e guarda os éditos que já tem.
+        """
+        caixa: Dict[str, Any] = {"data": data}
+
+        def correr() -> None:
+            try:
+                if metodo == "GET":
+                    caixa["resp"] = self.session.get(
+                        url, timeout=(self.connect_timeout, self.timeout), headers={"Referer": PAGE}
+                    )
+                else:
+                    caixa["resp"] = self.session.post(
+                        PAGE,
+                        data=data,
+                        timeout=(self.connect_timeout, self.timeout),
+                        headers={"Referer": PAGE},
+                    )
+            except Exception as exc:  # noqa: BLE001
+                caixa["erro"] = exc
+
+        thread = threading.Thread(target=correr, name="citius-request", daemon=True)
+        thread.start()
+        thread.join(self.deadline)
+        if thread.is_alive():
+            self.stalled = True
+            self.close()
+            raise CitacoesError(
+                f"Pedido sem resposta em {self.deadline:.0f}s (o portal não respondeu: a recolha "
+                "para aqui e guarda o que já tem)."
+            )
+        if caixa.get("erro") is not None:
+            raise caixa["erro"]
+        resp: requests.Response = caixa["resp"]
+        resp.raise_for_status()
+        return resp
 
     def _post(self, data: Dict[str, str], *, retries: int = 3) -> str:
         last: Optional[Exception] = None
         for attempt in range(retries):
             self._throttle()
             try:
-                resp = self.session.post(
-                    PAGE, data=data, timeout=self.timeout, headers={"Referer": PAGE}
-                )
+                resp = self._request("POST", data=data)
                 self._last_request = time.monotonic()
-                resp.raise_for_status()
                 text = resp.content.decode("utf-8", errors="replace")
                 if _blocked(text):
                     raise CitacoesError("Pedido bloqueado pelo portal (WAF).")
@@ -801,6 +872,8 @@ class CitacoesEditalClient:
                 return text
             except Exception as exc:  # noqa: BLE001
                 last = exc
+                if self.stalled:
+                    break
                 time.sleep(2.0 * (attempt + 1))
         raise CitacoesError(f"Falha no postback: {last}")
 
@@ -849,17 +922,25 @@ class CitacoesEditalClient:
         nome: Optional[str] = None,
         tribunal: Optional[str] = None,
         dias: Optional[str] = None,
+        todos: bool = False,
         fetch_options: bool = True,
     ) -> CitacoesPage:
-        """Pesquisa éditos por nome do interveniente (obrigatório no portal).
+        """Pesquisa éditos pelo nome do interveniente ou a **lista completa**.
+
+        O formulário marca o nome como obrigatório (validator do lado do cliente),
+        mas o servidor aceita o campo vazio e devolve **todos** os éditos — é o que
+        faz ``todos=True``, usado para recolher o histórico por datas.
 
         ``tribunal`` é comparado pelo **rótulo** (ex.: «Porto - Tribunal Judicial
         da Comarca do Porto») e ``dias`` usa os atalhos do formulário
         (``"15"``, ``"30"``, ``"todos"``).
         """
         nome = (nome or "").strip()
-        if not nome:
-            raise ValueError("A consulta exige o nome do interveniente a pesquisar.")
+        if not nome and not todos:
+            raise ValueError(
+                "A consulta exige o nome do interveniente a pesquisar "
+                "(ou `todos=True` para a lista completa do portal)."
+            )
         if dias and dias not in DIAS_OPCOES:
             raise ValueError("Atalho de dias inválido (use 15, 30 ou todos).")
 
@@ -893,6 +974,22 @@ class CitacoesEditalClient:
     def next_page(self) -> CitacoesPage:
         """Avança para a página seguinte da pesquisa corrente."""
         html = self._post(self._payload(PAGER_NEXT))
+        self._absorb(html)
+        return CitacoesPage(
+            items=parse_items(html),
+            total=result_count(html),
+            page=current_page(html),
+            has_next=has_next_page(html),
+            html=html,
+        )
+
+    def last_page(self) -> CitacoesPage:
+        """Salta para a **última** página da pesquisa corrente (a mais antiga).
+
+        Serve para medir o âmbito do histórico (data mais antiga e total de
+        páginas) sem percorrer a lista toda.
+        """
+        html = self._post(self._payload(PAGER_LAST))
         self._absorb(html)
         return CitacoesPage(
             items=parse_items(html),

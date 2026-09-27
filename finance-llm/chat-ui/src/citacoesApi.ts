@@ -160,17 +160,21 @@ export type CitacoesOptions = {
 
 /** Critérios da recolha (os campos do formulário do portal). */
 export type CitacoesCollectCriteria = {
-  nome: string;
+  nome?: string | null;
+  /** Recolher a lista completa do portal (sem filtrar por nome). */
+  todos?: boolean;
   tribunal?: string | null;
   dias?: string | null;
   /** Últimos N meses (0 = tudo). Por omissão, 6. */
   meses?: number | null;
   max_pages?: number;
   max_items?: number | null;
-  /** Descarregar e analisar o PDF de cada édito (texto, valor, NIF). */
+  /** Extração do texto dos PDF por recolha. */
   extrair_documentos?: boolean;
   /** Documentos a extrair por recolha (0 = todos). */
   max_documentos?: number;
+  /** Sessões em paralelo na recolha completa (por serviço/tribunal). */
+  workers?: number;
   min_interval?: number;
   proxy?: string | null;
   index?: boolean;
@@ -219,6 +223,10 @@ export type CitacoesJob = {
   collected?: number;
   declared_total?: number;
   declared_pages?: number;
+  /** Recolha completa: serviços já percorridos e serviço em curso. */
+  servicos_feitos?: number | null;
+  servicos_total?: number | null;
+  servico?: string | null;
   older_than_cutoff?: number;
   /** Progresso da extração dos PDF. */
   documento?: number | null;
@@ -269,6 +277,8 @@ export type CitacoesSearchParams = {
   especie?: string;
   citado?: string;
   nome?: string;
+  /** Várias grafias da **mesma** entidade (vem do agrupamento da pesquisa de entidades). */
+  nomes?: string[];
   papel?: string;
   nif?: string;
   modelo?: string;
@@ -280,6 +290,45 @@ export type CitacoesSearchParams = {
   with_texto?: boolean;
   size?: number;
   from?: number;
+};
+
+/** Entidade (interveniente) dos éditos, com as grafias agrupadas. */
+export type CitacoesEntidade = {
+  name: string;
+  editais: number;
+  mentions: number;
+  /** Grafias da mesma designação (a primeira é o nome de apresentação). */
+  variants: { name: string; editais: number; mentions: number }[];
+  /** Todas as grafias do grupo — é isto que o filtro de éditos aceita. */
+  nomes: string[];
+  papeis: CitacoesFacet[];
+  nifs: CitacoesFacet[];
+  documento_nifs: CitacoesFacet[];
+  tribunais: CitacoesFacet[];
+};
+
+export type CitacoesEntidadesParams = {
+  q?: string;
+  papel?: string;
+  tipo?: string;
+  tribunal?: string;
+  tribunal_comarca?: string;
+  comarca_judicial?: string;
+  data_from?: string;
+  data_to?: string;
+  has_texto?: boolean;
+  min_editais?: number;
+  size?: number;
+};
+
+export type CitacoesEntidadesResult = {
+  query?: string | null;
+  entities: CitacoesEntidade[];
+  total_editais: number;
+  truncated?: boolean;
+  min_editais?: number;
+  note?: string;
+  error?: string;
 };
 
 /* ------------------------------------------------------- grafo e mapa --- */
@@ -505,15 +554,35 @@ export function getCitacoesStatus() {
   return request<CitacoesStatus>("/citacoes/status");
 }
 
-/** Pesquisa os éditos já indexados (só devolve o que está no Elasticsearch). */
-export function searchCitacoes(params: CitacoesSearchParams = {}) {
+/** Serializa parâmetros de pesquisa (listas repetem o parâmetro, ex.: `nomes`). */
+function toQueryString(params: Record<string, unknown>): string {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value === undefined || value === null || value === "") return;
+    if (Array.isArray(value)) {
+      value
+        .filter((item) => item !== undefined && item !== null && item !== "")
+        .forEach((item) => query.append(key, String(item)));
+      return;
+    }
     query.set(key, String(value));
   });
-  const suffix = query.toString() ? `?${query.toString()}` : "";
-  return request<CitacoesSearchResult>(`/citacoes/search${suffix}`);
+  return query.toString();
+}
+
+/** Pesquisa os éditos já indexados (só devolve o que está no Elasticsearch). */
+export function searchCitacoes(params: CitacoesSearchParams = {}) {
+  const suffix = toQueryString(params);
+  return request<CitacoesSearchResult>(`/citacoes/search${suffix ? `?${suffix}` : ""}`);
+}
+
+/**
+ * Pesquisa **entidades** nos éditos: por nome (com as grafias agrupadas) e com os
+ * mesmos filtros da pesquisa de éditos; devolve éditos, papéis e NIF por entidade.
+ */
+export function searchCitacoesEntidades(params: CitacoesEntidadesParams = {}) {
+  const suffix = toQueryString(params);
+  return request<CitacoesEntidadesResult>(`/citacoes/entidades${suffix ? `?${suffix}` : ""}`);
 }
 
 export function listCitacoesRuns(limit = 50) {

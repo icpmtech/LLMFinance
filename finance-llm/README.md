@@ -881,20 +881,42 @@ sujeitos processuais publicadas pelo Ministério da Justiça
 (`www.citius.mj.pt/portal/consultas/consultascitedital.aspx`) — os éditos publicados quando o
 citando **não foi encontrado**.
 
-- **Recolha** a partir do **nome do interveniente** (é o único critério desta consulta — o portal não
-  aceita NIF/NIPC) e, opcionalmente, por tribunal/serviço. O interruptor **últimos N meses**
-  (**6 por omissão**) corta na data: como os resultados vêm por data descendente, a recolha **para
-  sozinha** ao passar o limite (0 = tudo). O progresso acompanha-se página a página (10 éditos por
-  página) e pode ser interrompido.
+- **Recolha** a partir do **nome do interveniente** (é o critério normal desta consulta — o portal não
+  aceita NIF/NIPC) **ou da lista completa** (interruptor «Todos os éditos do portal»): o formulário
+  exige o nome, mas o servidor aceita o campo vazio e devolve **tudo** (26 992 éditos a 27/09/2026,
+  2 700 páginas). Como o portal responde a ~6 s por página e cada édito pertence a um
+  serviço/tribunal, a lista completa é recolhida **em paralelo por serviço** (`workers`, 4 por
+  omissão, 1–8): ~1 h em vez de ~5 h, com uma sessão por serviço, tolerância à falha de cada serviço
+  e **progresso parcial gravado em disco** a cada 50 páginas (mais: páginas que não carregam têm um
+  prazo máximo de 45 s, para a recolha não ficar presa). O interruptor **últimos N meses**
+  (**6 por omissão**; 60 = 5 anos) corta na data: como os resultados vêm por data descendente, cada
+  serviço **para sozinho** ao passar o limite (0 = tudo). Como o portal só publica ~1 ano de
+  histórico, «tudo dos últimos 5 anos» acaba por ser «tudo o que existe». O progresso acompanha-se
+  página a página (10 éditos por página), serviço a serviço, e pode ser interrompido.
 - **JSON primeiro, Elasticsearch depois**: cada recolha fica em `data/citacoes/runs/<run_id>.json`
   (+ `.meta.json`) e só no fim é importada para `finance_citacoes_edital` — reimportar é idempotente
   (o `_id` é o `pub_id`: referência + processo + data + ato; os já existentes são ignorados).
-- **Pesquisa** por texto livre, nome de interveniente, papel (exequente, executado, réu, credor,
-  agente de execução…), tribunal/comarca, tipo (citação, notificação, anúncio), ato, espécie,
-  processo e datas, com facetas clicáveis; cada édito mostra os intervenientes e a ligação para o
-  **documento em PDF** no portal.
-- **Execuções** (reimportar/apagar recolhas) e **Estado** (volumetria, Tribunal/comarca/papéis,
-  evolução mensal).
+- **PDF analisado**: o documento de cada édito é descarregado e lido **durante a recolha** (ligado à
+  sessão do portal): texto integral, **NIF dos executados/réus** (que a consulta pública não
+  publica), **valor da execução**, modelo do formulário (`547/0.05`), referência interna e prazo
+  («vinte dias»). Os nomes do PDF são colados aos intervenientes da lista, pelo que a pesquisa por
+  **NIF** funciona. É opcional (interruptor na Recolha) e pode ser refeito por recolha gravada.
+- **Pesquisa** por texto livre (inclui o **texto do PDF**), nome de interveniente, papel (exequente,
+  executado, réu, credor, agente de execução…), tribunal/comarca/comarca judicial, tipo (citação,
+  notificação, anúncio), ato, espécie, processo, modelo, NIF e datas, com facetas clicáveis e o
+  **valor total/médio das execuções** dos resultados; cada édito mostra o que o PDF revelou
+  (título, NIF, valor, prazo), o **texto integral** a pedido e a ligação para o PDF no portal.
+- **Grafo** — estúdio de grafos do módulo (rede, hierárquico, circular, fluxos, treemap, lista) com
+  **20 dimensões** (partes, NIF, comarca judicial, tribunal, juízo, tipo, ato, espécie, processo,
+  modelo, título, assunto, ano, mês) e **7 receitas** («quem cita quem», «partes do mesmo
+  processo», …); a métrica é **éditos** ou **menções** e cada nó/aresta traz o valor em euros. Clicar
+  num nó abre a pesquisa filtrada por esse critério.
+- **Mapa** — mosaicos **OpenStreetMap** com um círculo por **sede do tribunal**, **comarca judicial**
+  ou **tribunal** (tamanho pelo volume, detalhe com valor/período/serviços) e drill-down para a
+  pesquisa. A geocodificação é **offline** (tabelas GeoNames, como no mapa do GLEIF).
+- **Execuções** (importar/reimportar/**analisar PDF**/apagar recolhas, com ou sem remover do índice)
+  e **Estado** (volumetria, PDF analisados, NIF distintos, valor total/médio/máximo, comarcas
+  judiciais, modelos e títulos dos documentos, papéis, evolução mensal).
 
 Detalhes, limitações e rotas em [`docs/citacoes-edital.md`](docs/citacoes-edital.md).
 

@@ -52,12 +52,14 @@ import {
   listCitacoesJobs,
   listCitacoesRuns,
   searchCitacoes,
+  searchCitacoesEntidades,
   startCitacoesCollect,
   startCitacoesDocumentos,
   stopCitacoesJob,
   type CitacoesCollectCriteria,
   type CitacoesDocumento,
   type CitacoesEdito,
+  type CitacoesEntidade,
   type CitacoesFacet,
   type CitacoesJob,
   type CitacoesMeta,
@@ -152,6 +154,143 @@ function Facets({
         ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * Entidades dos éditos: pesquisar por nome e filtrar.
+ *
+ * A mesma entidade aparece com grafias diferentes («CAIXA ECONÓMICA MONTEPIO
+ * GERAL» e «Caixa Económica Montepio Geral»); o servidor agrupa-as e devolve as
+ * variantes, e o filtro de éditos aceita todas (senão a contagem não explicava a
+ * lista). Um clique no nome filtra os éditos; um clique num papel ou num NIF
+ * acrescenta esse filtro.
+ */
+function EntidadesPanel({
+  query,
+  onQuery,
+  onEntity,
+  onPapel,
+  onNif,
+  entities,
+  loading,
+  totalEditais,
+  truncated,
+  activeNomes,
+}: {
+  query: string;
+  onQuery: (value: string) => void;
+  onEntity: (entity: CitacoesEntidade) => void;
+  onPapel: (key: string) => void;
+  onNif: (key: string) => void;
+  entities: CitacoesEntidade[];
+  loading: boolean;
+  totalEditais: number;
+  truncated?: boolean;
+  activeNomes?: string[];
+}) {
+  const [aberta, setAberta] = useState<string | null>(null);
+  const ativo = (nomes?: string[]) =>
+    Boolean(nomes && activeNomes && nomes.some((nome) => activeNomes.includes(nome)));
+  return (
+    <Card className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Users size={15} className="text-amber-200" />
+        <div className="text-[12px] font-semibold text-foreground">Entidades (intervenientes)</div>
+        {loading ? <Loader2 size={13} className="animate-spin text-muted-foreground" /> : null}
+        <span className="text-[11px] text-muted-foreground">
+          {numberFormat.format(entities.length)} entidades em {numberFormat.format(totalEditais)} éditos
+        </span>
+      </div>
+      <div className="relative">
+        <Search size={13} className="pointer-events-none absolute left-2 top-2 text-muted-foreground" />
+        <input
+          value={query}
+          onChange={(event) => onQuery(event.target.value)}
+          placeholder="pesquisar entidade por nome (ex.: Montepio, Câmara de Lisboa, Segurança Social)"
+          autoComplete="off"
+          className="w-full rounded-lg border border-white/10 bg-black/20 py-1.5 pl-7 pr-2 text-[12px] text-foreground outline-none focus:border-amber-400/40"
+        />
+      </div>
+      <div className="space-y-1">
+        {entities.map((entity) => {
+          const selected = ativo(entity.nomes);
+          return (
+            <div
+              key={entity.nomes[0] ?? entity.name}
+              className={`rounded-lg border p-2 ${
+                selected ? "border-emerald-400/40 bg-emerald-400/10" : "border-white/10 bg-white/[0.03]"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => onEntity(entity)}
+                  title={`Filtrar os éditos por «${entity.name}»`}
+                  className="text-left text-[12px] font-medium text-foreground hover:text-amber-200"
+                >
+                  {entity.name}
+                </button>
+                <span className="shrink-0 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10.5px] text-amber-100">
+                  {numberFormat.format(entity.editais)} éditos
+                </span>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-1">
+                {entity.papeis.slice(0, 4).map((papel) => (
+                  <button
+                    key={papel.key}
+                    type="button"
+                    onClick={() => onPapel(papel.key)}
+                    title={`Filtrar pelo papel ${papel.key}`}
+                    className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10.5px] text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                  >
+                    {papel.key} <span className="opacity-60">{numberFormat.format(papel.count)}</span>
+                  </button>
+                ))}
+                {entity.documento_nifs.slice(0, 3).map((nif) => (
+                  <button
+                    key={nif.key}
+                    type="button"
+                    onClick={() => onNif(nif.key)}
+                    title={`Filtrar pelo NIF ${nif.key} (do documento)`}
+                    className="rounded-full border border-sky-400/25 bg-sky-400/10 px-2 py-0.5 text-[10.5px] text-sky-100 hover:bg-sky-400/20"
+                  >
+                    NIF {nif.key}
+                  </button>
+                ))}
+                {entity.variants.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => setAberta(aberta === entity.nomes[0] ? null : entity.nomes[0])}
+                    className="rounded-full border border-white/10 px-2 py-0.5 text-[10.5px] text-muted-foreground hover:text-foreground"
+                  >
+                    {entity.variants.length} grafias
+                  </button>
+                ) : null}
+              </div>
+              {aberta === entity.nomes[0] ? (
+                <ul className="mt-1 space-y-0.5 text-[10.5px] text-muted-foreground">
+                  {entity.variants.map((variant) => (
+                    <li key={variant.name}>
+                      • {variant.name} — {numberFormat.format(variant.editais)} éditos
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          );
+        })}
+        {entities.length === 0 && !loading ? (
+          <div className="text-[11.5px] text-muted-foreground">
+            Sem entidades para os filtros atuais. Limpe filtros ou procure outro nome.
+          </div>
+        ) : null}
+      </div>
+      <div className="text-[10.5px] text-muted-foreground">
+        Contagens de éditos distintos; as grafias da mesma designação são agrupadas
+        {truncated ? " — a lista mostra as entidades com mais éditos (refine por nome)" : ""}.
+      </div>
+    </Card>
   );
 }
 
@@ -478,6 +617,12 @@ function SearchSection({
 }) {
   const [params, setParams] = useState<CitacoesSearchParams>({ size: 20, from: 0 });
   const [result, setResult] = useState<CitacoesSearchResult | null>(null);
+  /** Pesquisa de **entidades** (intervenientes) por nome, com os mesmos filtros. */
+  const [entidadeQuery, setEntidadeQuery] = useState("");
+  const [entidades, setEntidades] = useState<CitacoesEntidade[]>([]);
+  const [entidadesTotal, setEntidadesTotal] = useState(0);
+  const [entidadesTruncadas, setEntidadesTruncadas] = useState(false);
+  const [entidadesLoading, setEntidadesLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState({
     q: "",
@@ -544,6 +689,67 @@ function SearchSection({
     setParams(next);
     void run(next);
   };
+
+  /** Cancela a pesquisa de entidades anterior (a escrita é mais rápida do que a resposta). */
+  const entidadesRun = useRef(0);
+
+  const loadEntidades = useCallback(
+    async (nome: string, filtros: CitacoesSearchParams) => {
+      const token = ++entidadesRun.current;
+      setEntidadesLoading(true);
+      try {
+        const resposta = await searchCitacoesEntidades({
+          q: nome.trim() || undefined,
+          papel: filtros.papel,
+          tipo: filtros.tipo,
+          tribunal: filtros.tribunal,
+          tribunal_comarca: filtros.tribunal_comarca,
+          comarca_judicial: filtros.comarca_judicial,
+          data_from: filtros.data_from,
+          data_to: filtros.data_to,
+          has_texto: filtros.has_texto,
+          size: 12,
+        });
+        if (token !== entidadesRun.current) return;
+        if (resposta.error) {
+          onError(resposta.error);
+          setEntidades([]);
+        } else {
+          setEntidades(resposta.entities ?? []);
+          setEntidadesTotal(resposta.total_editais ?? 0);
+          setEntidadesTruncadas(Boolean(resposta.truncated));
+        }
+      } catch (err) {
+        if (token === entidadesRun.current) {
+          onError(err instanceof Error ? err.message : String(err));
+          setEntidades([]);
+        }
+      } finally {
+        if (token === entidadesRun.current) setEntidadesLoading(false);
+      }
+    },
+    [onError],
+  );
+
+  // As entidades acompanham a pesquisa: filtros (tipo, tribunal, papel, datas) e
+  // o nome escrito. Debounce curto porque é uma agregação sobre poucos campos.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadEntidades(entidadeQuery, params);
+    }, 300);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    entidadeQuery,
+    params.tipo,
+    params.papel,
+    params.tribunal,
+    params.tribunal_comarca,
+    params.comarca_judicial,
+    params.data_from,
+    params.data_to,
+    params.has_texto,
+  ]);
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -719,6 +925,24 @@ function SearchSection({
       </Card>
 
       <div className="space-y-3">
+        <EntidadesPanel
+          query={entidadeQuery}
+          onQuery={setEntidadeQuery}
+          entities={entidades}
+          loading={entidadesLoading}
+          totalEditais={entidadesTotal}
+          truncated={entidadesTruncadas}
+          activeNomes={params.nomes}
+          onEntity={(entity) => {
+            // Filtra pelos **nomes do grupo** (todas as grafias), para a lista de
+            // éditos bater certo com os éditos contados na entidade.
+            setDraft((prev) => ({ ...prev, nome: "" }));
+            apply({ nome: undefined, nomes: entity.nomes });
+          }}
+          onPapel={(papel) => apply({ papel: params.papel === papel ? undefined : papel })}
+          onNif={(nif) => apply({ nif: params.nif === nif ? undefined : nif })}
+        />
+
         <Card className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-[11.5px] text-muted-foreground">
@@ -730,6 +954,17 @@ function SearchSection({
                 <span className="ml-2">· valor {numberFormat.format(result?.valor_total ?? 0)} €</span>
               ) : null}
               {result?.error ? <span className="ml-2 text-amber-300">{result.error}</span> : null}
+              {(params.nome || (params.nomes ?? []).length > 0) && (
+                <button
+                  type="button"
+                  onClick={() => apply({ nome: undefined, nomes: undefined })}
+                  title="Remover o filtro por entidade"
+                  className="ml-2 rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[10.5px] text-emerald-100 hover:bg-emerald-400/20"
+                >
+                  entidade: {(params.nomes?.[0] ?? params.nome ?? "").slice(0, 40)}
+                  {(params.nomes ?? []).length > 1 ? ` (+${(params.nomes ?? []).length - 1} grafias)` : ""} ✕
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
               <button
@@ -838,10 +1073,12 @@ function RecolhaSection({
   onError: (message: string) => void;
 }) {
   const [nome, setNome] = useState("");
+  const [todos, setTodos] = useState(false);
   const [tribunal, setTribunal] = useState("");
   const [dias, setDias] = useState("todos");
   const [meses, setMeses] = useState<number>(meta?.default_months ?? 6);
   const [maxPages, setMaxPages] = useState(200);
+  const [workers, setWorkers] = useState(4);
   const [indexar, setIndexar] = useState(true);
   const [extrairDocumentos, setExtrairDocumentos] = useState(true);
   const [maxDocumentos, setMaxDocumentos] = useState(meta?.max_documentos ?? 200);
@@ -908,18 +1145,20 @@ function RecolhaSection({
   useEffect(() => () => { if (timer.current) window.clearInterval(timer.current); }, []);
 
   const start = async () => {
-    if (nome.trim().length < 2) {
-      onError("Indique o nome do interveniente a pesquisar (mínimo 2 caracteres).");
+    if (!todos && nome.trim().length < 2) {
+      onError("Indique o nome do interveniente a pesquisar (mínimo 2 caracteres) ou ligue «Todos os éditos do portal».");
       return;
     }
     const criteria: CitacoesCollectCriteria = {
-      nome: nome.trim(),
+      nome: todos ? undefined : nome.trim(),
+      todos: todos || undefined,
       tribunal: tribunal || undefined,
       dias,
       meses,
       max_pages: maxPages,
       extrair_documentos: extrairDocumentos,
       max_documentos: maxDocumentos,
+      workers: todos ? workers : undefined,
       index: indexar,
     };
     try {
@@ -953,18 +1192,64 @@ function RecolhaSection({
       <Card className="space-y-3 self-start">
         <div className="text-[11.5px] font-semibold text-foreground">Recolher éditos do portal</div>
         <div>
+          <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={todos}
+              onChange={(event) => setTodos(event.target.checked)}
+              autoComplete="off"
+            />
+            <span>
+              <span className="font-medium text-foreground">Todos os éditos do portal</span> — sem filtrar por nome
+            </span>
+          </label>
+          {todos ? (
+            <div className="space-y-2 rounded-xl border border-amber-400/20 bg-amber-400/5 p-2">
+              <p className="text-[10px] text-amber-100/90">
+                O portal lista **dezenas de milhares** de éditos (26 992 a 27/09/2026) e responde a ~6 s por
+                página: numa só sessão seriam mais de 5 horas. Como cada édito pertence a um serviço/tribunal,
+                o trabalho divide-se por serviço com várias sessões em paralelo.
+              </p>
+              <div className="flex items-center gap-2">
+                <label className="text-[10.5px] uppercase tracking-wide text-amber-200/80">sessões em paralelo</label>
+                <select
+                  value={workers}
+                  onChange={(event) => setWorkers(Number(event.target.value))}
+                  className="rounded-lg border border-white/10 bg-black/20 px-2 py-1 text-[11.5px] text-foreground outline-none focus:border-amber-400/40"
+                >
+                  {[1, 2, 3, 4, 6, 8].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[10px] text-amber-200/70">
+                  {workers === 1 ? "uma sessão: ~5 h" : `~${Math.max(1, Math.round(300 / workers))} min para os 257 serviços`}
+                </span>
+              </div>
+              <p className="text-[10px] text-amber-200/70">
+                O progresso é gravado em disco a cada 50 páginas: um bloqueio do portal não perde o que já foi
+                recolhido.
+              </p>
+            </div>
+          ) : null}
+        </div>
+
+        <div>
           <label className="text-[10.5px] uppercase tracking-wide text-muted-foreground">
-            Nome do interveniente <span className="text-amber-300">*</span>
+            Nome do interveniente {todos ? null : <span className="text-amber-300">*</span>}
           </label>
           <input
             value={nome}
             onChange={(event) => setNome(event.target.value)}
-            placeholder="ex.: Montepio, Silva, 123456789"
+            disabled={todos}
+            placeholder={todos ? "(a recolher tudo)" : "ex.: Montepio, Silva, JOÃO SOARES RODRIGUES"}
             autoComplete="off"
-            className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-[12px] text-foreground outline-none focus:border-amber-400/40"
+            className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-[12px] text-foreground outline-none focus:border-amber-400/40 disabled:opacity-50"
           />
           <p className="mt-1 text-[10px] text-muted-foreground">
-            A consulta do CITIUS só pesquisa pelo nome do interveniente (não aceita NIF/NIPC).
+            A consulta do CITIUS só pesquisa pelo nome do interveniente (não aceita NIF/NIPC) — ou devolve a
+            **lista completa** quando o campo vai vazio.
           </p>
         </div>
 
@@ -1076,7 +1361,7 @@ function RecolhaSection({
           <button
             type="button"
             onClick={start}
-            disabled={aRecolher}
+            disabled={aRecolher || (!todos && nome.trim().length < 2)}
             className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-[11.5px] text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
           >
             {aRecolher ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />} Recolher
@@ -1104,12 +1389,24 @@ function RecolhaSection({
                 {job.state}
               </span>
             </div>
-            <div className="grid gap-2 sm:grid-cols-4">
+            <div className="grid gap-2 sm:grid-cols-5">
               <Stat label="Recolhidos" value={numberFormat.format(job.collected ?? 0)} />
               <Stat label="Declarados" value={numberFormat.format(job.declared_total ?? 0)} hint="total no portal" />
-              <Stat label="Páginas" value={numberFormat.format(job.pages ?? 0)} hint={job.declared_pages ? `de ~${job.declared_pages}` : undefined} />
+              <Stat
+                label="Página"
+                value={numberFormat.format(job.page ?? 0)}
+                hint={job.pages ? `de ~${numberFormat.format(job.pages)}` : undefined}
+              />
+              <Stat label="Éditos por página" value={String(meta?.page_size ?? 10)} hint={meta ? `~${meta.min_request_interval}s por pedido` : undefined} />
               <Stat label="Importados" value={numberFormat.format(job.indexed ?? 0)} />
             </div>
+            {job.servicos_total || job.servico ? (
+              <div className="rounded-lg border border-amber-400/20 bg-amber-400/5 px-2 py-1.5 text-[11px] text-amber-100">
+                Serviços: <b>{numberFormat.format(job.servicos_feitos ?? 0)}</b>
+                {job.servicos_total ? ` de ${numberFormat.format(job.servicos_total)}` : ""}
+                {job.servico ? ` · ${job.servico}` : ""}
+              </div>
+            ) : null}
             {job.documentos || job.documento ? (
               <div className="space-y-1 rounded-lg border border-violet-400/20 bg-violet-400/5 px-2 py-1.5">
                 <div className="flex items-center justify-between gap-2 text-[11px] text-violet-100">
@@ -1186,7 +1483,7 @@ function RecolhaSection({
           <div className="text-[11.5px] font-semibold text-foreground">Como funciona</div>
           <p>
             1. A recolha pesquisa o portal (<span className="font-mono">{meta?.source_url ?? "consultascitedital.aspx"}</span>)
-            pelo nome e percorre a lista página a página, gravando o JSON em{" "}
+            pelo nome — ou traz a lista completa (sem nome) — e percorre a lista página a página, gravando o JSON em{" "}
             <span className="font-mono text-foreground">data/citacoes/runs</span>.
           </p>
           <p>

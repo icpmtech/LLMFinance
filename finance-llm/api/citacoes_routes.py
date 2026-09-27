@@ -62,7 +62,21 @@ MAX_JOBS = 20
 class CitacoesCollectRequest(BaseModel):
     """Critérios da recolha (os campos do formulário do portal)."""
 
-    nome: str = Field(..., min_length=2, description="Nome do interveniente a pesquisar (obrigatório)")
+    nome: Optional[str] = Field(
+        None,
+        description=(
+            "Nome do interveniente a pesquisar. O portal exige o nome no formulário, mas o "
+            "servidor aceita o campo vazio: com `todos=true` (ou sem nome) a recolha traz a "
+            "**lista completa** de éditos publicados."
+        ),
+    )
+    todos: bool = Field(
+        False,
+        description=(
+            "Recolher a lista completa do portal (sem filtrar por nome). Implica uma recolha longa "
+            "(o portal tem dezenas de milhares de éditos): usar com `meses` para limitar ao período."
+        ),
+    )
     tribunal: Optional[str] = Field(
         None,
         description="Serviço/tribunal (rótulo, ex.: «Porto - Tribunal Judicial da Comarca do Porto»); omisso = todos",
@@ -77,7 +91,7 @@ class CitacoesCollectRequest(BaseModel):
             "descendente, pelo que a recolha para sozinha ao passar esse limite. Use 0 para recolher tudo."
         ),
     )
-    max_pages: int = Field(200, ge=1, le=2000, description="Máximo de páginas (10 éditos/página)")
+    max_pages: int = Field(200, ge=1, le=5000, description="Máximo de páginas (10 éditos/página)")
     max_items: Optional[int] = Field(None, ge=1, description="Máximo de éditos a recolher")
     extrair_documentos: bool = Field(
         True,
@@ -94,6 +108,25 @@ class CitacoesCollectRequest(BaseModel):
         description="Documentos a extrair por recolha (0 = todos os éditos recolhidos). Cada documento é um pedido ao portal.",
     )
     min_interval: float = Field(1.2, ge=0, le=30, description="Intervalo mínimo entre pedidos ao portal (segundos)")
+    partial_every: int = Field(
+        citacoes_service.DEFAULT_PARTIAL_PAGES,
+        ge=0,
+        le=1000,
+        description=(
+            "Páginas entre gravações do progresso parcial em JSON (0 = só no fim). A lista completa "
+            "tem ~2 700 páginas e leva horas: com isto, um bloqueio do portal não perde o que já foi recolhido."
+        ),
+    )
+    workers: int = Field(
+        1,
+        ge=1,
+        le=8,
+        description=(
+            "Sessões em paralelo na recolha completa: o trabalho divide-se pelos 257 serviços/tribunais "
+            "(cada sessão só pode paginar em série). Com 4 sessões, os ~27 mil éditos passam de ~5 h para pouco "
+            "mais de 1 h. Ignorado quando a recolha é por nome."
+        ),
+    )
     proxy: Optional[str] = Field(None, description="Proxy HTTP(S) para os pedidos ao portal")
     index: bool = Field(True, description="Importar para o Elasticsearch depois de gravar o JSON")
 
@@ -161,10 +194,14 @@ def _run_collect(job_id: str, req: CitacoesCollectRequest) -> None:
                 documento_referencia=info.get("referencia") or None,
                 documentos_extraidos=info.get("extraidos"),
                 documentos_falhados=info.get("falhados"),
+                servicos_feitos=info.get("servicos_feitos"),
+                servicos_total=info.get("servicos_total"),
+                servico=info.get("servico") or None,
             )
 
         resultado = citacoes_service.collect(
             nome=req.nome,
+            todos=req.todos,
             tribunal=req.tribunal,
             dias=req.dias,
             meses=req.meses,
@@ -173,6 +210,8 @@ def _run_collect(job_id: str, req: CitacoesCollectRequest) -> None:
             extrair_documentos=req.extrair_documentos,
             max_documentos=req.max_documentos,
             min_interval=req.min_interval,
+            partial_every=req.partial_every,
+            workers=req.workers,
             proxy=req.proxy,
             on_progress=on_progress,
             stop=lambda: bool(_jobs.get(job_id, {}).get("stop_requested")),
@@ -295,6 +334,7 @@ def citacoes_search(
     especie: Optional[str] = Query(None, description="Espécie do processo (texto parcial)"),
     citado: Optional[str] = Query(None, description="Nome do citado/réu/executado principal"),
     nome: Optional[str] = Query(None, description="Nome de um interveniente (qualquer papel)"),
+    nomes: Optional[List[str]] = Query(None, description="Várias grafias da mesma entidade (repetir o parâmetro)"),
     papel: Optional[str] = Query(None, description="Papel do interveniente (Exequente, Executado, Réu, Credor, …)"),
     nif: Optional[str] = Query(None, description="NIF/NIPC de um interveniente (da lista ou do documento)"),
     modelo: Optional[str] = Query(None, description="Modelo do documento analisado (ex.: «547/0.05»)"),
@@ -320,6 +360,7 @@ def citacoes_search(
         especie=especie,
         citado=citado,
         nome=nome,
+        nomes=nomes,
         papel=papel,
         nif=nif,
         modelo=modelo,

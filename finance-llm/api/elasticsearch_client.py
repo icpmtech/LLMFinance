@@ -10129,6 +10129,7 @@ def _citacoes_query(
     especie: Optional[str] = None,
     citado: Optional[str] = None,
     nome: Optional[str] = None,
+    nomes: Optional[List[str]] = None,
     papel: Optional[str] = None,
     nif: Optional[str] = None,
     modelo: Optional[str] = None,
@@ -10187,6 +10188,19 @@ def _citacoes_query(
         filters.append(
             {"nested": {"path": "intervenientes", "query": {"match": {"intervenientes.nome": nome}}}}
         )
+    if nomes:
+        # Várias grafias da **mesma** entidade (a pesquisa de entidades agrupa-as):
+        # o filtro tem de aceitar todas, senão a contagem do grupo não explicava a lista.
+        clean = [str(item).strip() for item in nomes if str(item).strip()]
+        if clean:
+            filters.append(
+                {
+                    "nested": {
+                        "path": "intervenientes",
+                        "query": {"terms": {"intervenientes.nome.keyword": clean}},
+                    }
+                }
+            )
     if referencia:
         filters.append({"term": {"referencia": str(referencia)}})
     if processo:
@@ -10262,6 +10276,7 @@ def search_citacoes(
     especie: Optional[str] = None,
     citado: Optional[str] = None,
     nome: Optional[str] = None,
+    nomes: Optional[List[str]] = None,
     papel: Optional[str] = None,
     nif: Optional[str] = None,
     modelo: Optional[str] = None,
@@ -10281,7 +10296,8 @@ def search_citacoes(
 
     ``q`` procura em texto livre (interveniente, tribunal, processo, ato e o
     **texto extraído do PDF**); ``nome`` restringe ao nome de um interveniente
-    (qualquer papel) e ``papel`` ao papel exato desse interveniente.
+    (qualquer papel), ``nomes`` aceita várias grafias da mesma designação e
+    ``papel`` ao papel exato desse interveniente.
     ``nif`` procura nos NIF dos intervenientes (da lista e do documento) e
     ``modelo``/``titulo`` no que foi analisado do PDF. ``with_texto=False``
     omite o texto integral da resposta (listas mais leves).
@@ -10308,6 +10324,7 @@ def search_citacoes(
         especie=especie,
         citado=citado,
         nome=nome,
+        nomes=nomes,
         papel=papel,
         nif=nif,
         modelo=modelo,
@@ -10422,6 +10439,22 @@ def search_citacoes(
         return {"error": str(exc), "items": [], "total": 0}
 
 
+def _entidade_key(value: Optional[str]) -> str:
+    """Chave de agrupamento de grafias da **mesma** designação.
+
+    Normaliza caixa, acentos, pontuação e abreviaturas escritas letra a letra
+    («INSTITUTO DA SEGURANÇA SOCIAL - I P» ≡ «… SOCIAL IP», «S A» ≡ «SA»). É a
+    diferença entre a mesma entidade escrita de duas formas e duas entidades
+    diferentes: nomes que não coincidam depois desta limpeza ficam **separados** —
+    agrupar por heurística ligaria de mais, e no domínio judicial isso é pior do
+    que ligar de menos.
+    """
+    text = re.sub(r"[^0-9A-Za-z]+", " ", _fold_text(value or ""))
+    text = " ".join(text.split()).upper()
+    # Sequências de letras isoladas são abreviaturas: «I P» → «IP».
+    return re.sub(r"\b([A-Z])(?: ([A-Z]))+\b", lambda m: m.group(0).replace(" ", ""), text)
+
+
 def search_citacoes_entidades(
     q: Optional[str] = None,
     papel: Optional[str] = None,
@@ -10444,6 +10477,13 @@ def search_citacoes_entidades(
     éditos considerados (tipo, tribunal, comarca, papel, datas), pelo que as
     contagens acompanham os filtros da pesquisa.
 
+    **Grafias da mesma designação são agrupadas**: o índice escreve «CAIXA
+    ECONÓMICA MONTEPIO GERAL» e «Caixa Económica Montepio Geral» como duas
+    entradas distintas e o mesmo acontece com quem é citado com o nome completo e
+    abreviado. O agrupamento é feito apenas por caixa/acentos/pontuação (não se
+    inventam equivalências) e cada grupo devolve as suas ``variants`` — é com
+    elas que a lista de éditos é depois filtrada (``nomes``).
+
     Contagens: ``editais`` = éditos distintos (via ``reverse_nested``, portanto
     sem contar duas vezes quem aparece duas vezes no mesmo édito) e ``mentions``
     = entradas de interveniente encontradas.
@@ -10454,6 +10494,9 @@ def search_citacoes_entidades(
 
     ensure_indices(client)
 
+    # Traz-se mais grafias do que as pedidas: o agrupamento acontece depois da
+    # agregação e é preciso ver as variantes antes de cortar a lista final.
+    fetch = max(50, min(int(size) * 8, 400))
     body = {
         "size": 0,
         "track_total_hits": True,
@@ -10478,12 +10521,20 @@ def search_citacoes_entidades(
                     "nomes": {
                         "terms": {
                             "field": "intervenientes.nome.keyword",
-                            "size": max(1, min(int(size), 200)),
+                            "size": fetch,
                             "order": {"_count": "desc"},
                         },
                         "aggs": {
                             # Volta ao édito: conta documentos e não entradas.
-                            "editais": {"reverse_nested": {}},
+                            "editais": {
+                                "reverse_nested": {},
+                                "aggs": {
+                                    # NIF/NIPC do documento (extraídos do PDF): é o que
+                                    # liga a entidade às outras fontes da plataforma.
+                                    "documento_nifs": {"terms": {"field": "documento_nifs", "size": 5}},
+                                    "tribunais": {"terms": {"field": "tribunal_comarca", "size": 3}},
+                                },
+                            },
                             "papeis": {"terms": {"field": "intervenientes.papel", "size": 8}},
                             "nifs": {"terms": {"field": "intervenientes.nif", "size": 5}},
                         },
@@ -10500,35 +10551,94 @@ def search_citacoes_entidades(
     aggs = resp.get("aggregations") or {}
     buckets = ((aggs.get("por_entidade") or {}).get("nomes") or {}).get("buckets") or []
     minimum = max(1, int(min_editais))
-    entities: List[Dict[str, Any]] = []
+
+    def _pairs(container: Optional[Dict[str, Any]], size: int = 8) -> List[Dict[str, Any]]:
+        return [
+            {"key": item["key"], "count": item["doc_count"]}
+            for item in (container or {}).get("buckets", [])[:size]
+        ]
+
+    # Agrupa variantes da mesma designação (caixa, acentos e pontuação).
+    groups: Dict[str, Dict[str, Any]] = {}
     for bucket in buckets:
-        editais = int(((bucket.get("editais") or {}).get("doc_count") or 0))
-        if editais < minimum:
+        name = str(bucket.get("key") or "").strip()
+        if not name:
             continue
+        key = _entidade_key(name)
+        if not key:
+            continue
+        editais_block = bucket.get("editais") or {}
+        editais = int(editais_block.get("doc_count") or 0)
+        mentions = int(bucket.get("doc_count") or 0)
+        group = groups.setdefault(
+            key,
+            {
+                "variants": [],
+                "editais": 0,
+                "mentions": 0,
+                "papeis": {},
+                "nifs": {},
+                "documento_nifs": {},
+                "tribunais": {},
+            },
+        )
+        group["variants"].append({"name": name, "editais": editais, "mentions": mentions})
+        group["editais"] += editais
+        group["mentions"] += mentions
+        for field, block in (
+            ("papeis", bucket.get("papeis")),
+            ("nifs", bucket.get("nifs")),
+            ("documento_nifs", editais_block.get("documento_nifs")),
+            ("tribunais", editais_block.get("tribunais")),
+        ):
+            for item in (block or {}).get("buckets", []):
+                group[field][item["key"]] = group[field].get(item["key"], 0) + item["doc_count"]
+
+    entities: List[Dict[str, Any]] = []
+    for group in groups.values():
+        if group["editais"] < minimum:
+            continue
+        group["variants"].sort(key=lambda item: (-item["editais"], item["name"]))
         entities.append(
             {
-                "name": bucket.get("key"),
-                "editais": editais,
-                "mentions": int(bucket.get("doc_count") or 0),
+                # Nome de apresentação = grafia com mais éditos.
+                "name": group["variants"][0]["name"],
+                "editais": group["editais"],
+                "mentions": group["mentions"],
+                "variants": group["variants"],
+                "nomes": [item["name"] for item in group["variants"]],
                 "papeis": [
-                    {"key": item["key"], "count": item["doc_count"]}
-                    for item in (bucket.get("papeis") or {}).get("buckets", [])
+                    {"key": key, "count": count}
+                    for key, count in sorted(group["papeis"].items(), key=lambda item: -item[1])[:8]
                 ],
                 "nifs": [
-                    {"key": item["key"], "count": item["doc_count"]}
-                    for item in (bucket.get("nifs") or {}).get("buckets", [])
+                    {"key": key, "count": count}
+                    for key, count in sorted(group["nifs"].items(), key=lambda item: -item[1])[:5]
+                ],
+                "documento_nifs": [
+                    {"key": key, "count": count}
+                    for key, count in sorted(group["documento_nifs"].items(), key=lambda item: -item[1])[:5]
+                ],
+                "tribunais": [
+                    {"key": key, "count": count}
+                    for key, count in sorted(group["tribunais"].items(), key=lambda item: -item[1])[:3]
                 ],
             }
         )
-    nomes_agg = ((aggs.get("por_entidade") or {}).get("nomes") or {})
+    entities.sort(key=lambda item: (-item["editais"], item["name"]))
+    nomes_agg = (aggs.get("por_entidade") or {}).get("nomes") or {}
     total_hits = resp.get("hits", {}).get("total")
     return {
         "query": q,
-        "entities": entities,
+        "entities": entities[: max(1, int(size))],
         "total_editais": int(total_hits.get("value") if isinstance(total_hits, dict) else (total_hits or 0)),
         "truncated": int(nomes_agg.get("sum_other_doc_count") or 0) > 0,
         "min_editais": minimum,
-        "note": "Contagens de éditos distintos; os filtros aplicados restringem os éditos considerados.",
+        "note": (
+            "Contagens de éditos distintos; os filtros aplicados restringem os éditos considerados. "
+            "As variantes de grafia da mesma designação contam para o grupo, por isso um édito que "
+            "cite duas grafias é contado nas duas."
+        ),
     }
 
 

@@ -138,9 +138,9 @@ PADROES: List[Dict[str, Any]] = [
         "id": "rede_pessoas",
         "label": "Laço societário entre adjudicatárias",
         "tipo": "grafo",
-        "metodo": "PessoasIQ (cargos) × contratos",
+        "metodo": "PessoasIQ (órgãos sociais) × contratos",
         "features": ["gerentes", "empresas", "adjudicantes"],
-        "descricao": "Empresas que ganham ao mesmo adjudicante e partilham gerente, ou pessoa ligada a várias empresas sinalizadas.",
+        "descricao": "Empresas que ganham ao mesmo adjudicante e partilham um gerente, ou pessoa com cargos em várias adjudicatárias (só órgãos sociais, não papéis processuais do CIRE).",
     },
     {
         "id": "insolvencia",
@@ -310,6 +310,19 @@ PAIS_DEFAULT = "PT"
 SAMPLE_PER_YEAR_DEFAULT = 1200
 SAMPLE_TOTAL_CAP = 40000
 CACHE_TTL_SECONDS = 900
+
+#: Órgãos sociais que contam como **cargo de gestão**. O índice `finance_people`
+#: é dominado por papéis processuais do CIRE («Credor», «Insolvente»,
+#: «Administrador da insolvência», …): 600 mil cargos contra poucas dezenas de
+#: órgãos sociais. Sem este filtro, o grafo ligava pessoas por serem credoras de
+#: várias empresas falidas — ruído, não laço societário.
+CARGO_GESTAO_ORGS: Tuple[str, ...] = (
+    "Gerência",
+    "Conselho De Administração",
+    "Administração",
+    "Sócios e Quotas",
+    "Órgão social",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1215,22 +1228,55 @@ def _relations(
             edge["count"] += 1
             edge["value"] += valor
 
-    # -- cargos: pessoas ligadas às empresas mais relevantes -----------------
+    # -- cargos: quem manda nas empresas que ganham aos mesmos adjudicantes --
+    # Âncora escolhida: os adjudicantes com **mais fornecedores distintos** (é aí
+    # que um gerente partilhado significa conluio). Ancorar nas empresas com
+    # maior score de anomalia não encontrava nada — essas são, por definição,
+    # casos isolados, e um gerente comum entre dois casos isolados é raro.
+    by_company: Dict[str, List[Dict[str, Any]]] = {}
+    by_adjudicante: Dict[str, List[Dict[str, Any]]] = {}
+    for edge in edges.values():
+        if edge["source"].startswith("entity:"):
+            by_company.setdefault(edge["target"], []).append(edge)
+            by_adjudicante.setdefault(edge["source"], []).append(edge)
+
+    ranked_adjudicantes = sorted(by_adjudicante.items(), key=lambda kv: -len(kv[1]))
+    pool_nifs: List[str] = []
+    adjudicantes_por_empresa: Dict[str, List[str]] = {}
+    for source, list_of_edges in ranked_adjudicantes[:25]:
+        for edge in list_of_edges:
+            company_nif = edge["target"].split(":", 1)[-1]
+            adjudicantes_por_empresa.setdefault(company_nif, []).append(source)
+            pool_nifs.append(company_nif)
+    # Junta ainda as empresas com maior valor contratado (peso económico) e as
+    # que têm mais contratos — é onde faz sentido procurar insolvências.
+    top_valor = sorted(entities, key=lambda e: -(e.get("valor_total") or 0))[:200]
+    top_contratos = sorted(entities, key=lambda e: -(e.get("contratos") or 0))[:200]
+    pool_nifs.extend(str(e["nif"]) for e in [*top_valor, *top_contratos] if e.get("nif"))
+    pool_nifs = list(dict.fromkeys(nif for nif in pool_nifs if nif))[:600]
+
     laços: List[Dict[str, Any]] = []
-    top = sorted(entities, key=lambda e: -(e.get("score") or 0))[:top_entities]
-    top_nifs = [str(e["nif"]) for e in top if e.get("nif")][:top_entities]
     people_alerts: List[Dict[str, Any]] = []
-    if client is not None and top_nifs:
-        for chunk_start in range(0, len(top_nifs), 40):
-            chunk = top_nifs[chunk_start : chunk_start + 40]
+    if client is not None and pool_nifs:
+        wanted = set(pool_nifs)
+        seen_persons: Dict[str, Dict[str, Any]] = {}
+        for chunk_start in range(0, len(pool_nifs), 40):
+            chunk = pool_nifs[chunk_start : chunk_start + 40]
             body = {
-                "size": 400,
+                "size": 500,
                 "track_total_hits": False,
-                "_source": ["nif", "name", "roles", "companies"],
+                "_source": ["nif", "name", "roles"],
                 "query": {
                     "nested": {
-                        "path": "companies",
-                        "query": {"terms": {"companies.nif": chunk}},
+                        "path": "roles",
+                        "query": {
+                            "bool": {
+                                "filter": [
+                                    {"terms": {"roles.company_nif": chunk}},
+                                    {"terms": {"roles.role_org": list(CARGO_GESTAO_ORGS)}},
+                                ]
+                            }
+                        },
                     }
                 },
             }
@@ -1239,64 +1285,70 @@ def _relations(
                 src = hit.get("_source") or {}
                 person_nif = str(src.get("nif") or hit.get("_id") or "").strip()
                 person_name = str(src.get("name") or "").strip()
-                companies = src.get("companies") or []
-                linked = [str((c or {}).get("nif") or "").strip() for c in companies if isinstance(c, dict)]
-                linked = [c for c in linked if c in set(top_nifs)]
+                cargos: Dict[str, List[str]] = {}
+                for role in (src.get("roles") or []):
+                    if not isinstance(role, dict):
+                        continue
+                    company_nif = str(role.get("company_nif") or "").strip()
+                    if company_nif not in wanted:
+                        continue
+                    if str(role.get("role_org") or "") not in CARGO_GESTAO_ORGS:
+                        continue
+                    cargos.setdefault(company_nif, [])
+                    cargo = str(role.get("role") or "cargo")
+                    if cargo not in cargos[company_nif]:
+                        cargos[company_nif].append(cargo)
+                linked = sorted(cargos)
                 if not person_nif or len(linked) < 2:
                     continue
-                p_key = f"person:{person_nif}"
-                add_node(p_key, person_name or person_nif, "person")
+                entry = seen_persons.setdefault(
+                    person_nif,
+                    {"pessoa": person_name or person_nif, "pessoa_nif": person_nif, "empresas_nif": [], "cargos": {}},
+                )
                 for company_nif in linked:
-                    c_key = f"company:{company_nif}"
-                    node = nodes.get(c_key)
-                    if node is None:
-                        add_node(c_key, company_nif, "company")
-                        node = nodes[c_key]
-                    edge = edges.setdefault((p_key, c_key), {"source": p_key, "target": c_key, "count": 0, "value": 0.0})
-                    edge["count"] += 1
-                names = [nodes.get(f"company:{c}", {}).get("label") or c for c in linked]
-                people_alerts.append(
-                    {
-                        "pessoa": person_name or person_nif,
-                        "pessoa_nif": person_nif,
-                        "empresas": names,
-                        "empresas_nif": linked,
-                        "tipo": "pessoa_ligada_a_varias_adjudicatarias",
-                    }
-                )
+                    if company_nif not in entry["empresas_nif"]:
+                        entry["empresas_nif"].append(company_nif)
+                    entry["cargos"][company_nif] = cargos[company_nif]
 
-    # -- empresas que partilham pessoa e ganham ao mesmo adjudicante ---------
-    # Índice `empresa → arestas de adjudicante` para não varrer todas as arestas
-    # por cada pessoa (era quadrático e o grafo tem dezenas de milhares).
-    by_company: Dict[str, List[Dict[str, Any]]] = {}
-    for edge in edges.values():
-        if edge["source"].startswith("entity:"):
-            by_company.setdefault(edge["target"], []).append(edge)
-
-    for alert in people_alerts:
-        for company_nif in alert["empresas_nif"]:
-            for edge in by_company.get(f"company:{company_nif}", []):
-                laços.append(
-                    {
-                        "tipo": "conluio_potencial",
-                        "detalhe": f"«{alert['pessoa']}» liga {len(alert['empresas'])} adjudicatárias; uma delas recebe de "
-                        f"«{nodes.get(edge['source'], {}).get('label') or edge['source']}»",
-                        "adjudicante": nodes.get(edge["source"], {}).get("label") or edge["source"],
-                        "empresa": nodes.get(f"company:{company_nif}", {}).get("label") or company_nif,
-                        "pessoa": alert["pessoa"],
-                        "contratos": edge["count"],
-                        "valor": num(edge["value"]),
-                    }
-                )
-    # Deduplica laços (a leitura acima repete por cada empresa da pessoa).
-    seen = set()
-    unique_laços = []
-    for laço in sorted(laços, key=lambda item: -(item.get("valor") or 0)):
-        key = (laço["tipo"], laço["pessoa"], laço["adjudicante"], laço["empresa"])
-        if key in seen:
-            continue
-        seen.add(key)
-        unique_laços.append(laço)
+        for entry in seen_persons.values():
+            if len(entry["empresas_nif"]) < 2:
+                continue
+            p_key = f"person:{entry['pessoa_nif']}"
+            add_node(p_key, entry["pessoa"], "person")
+            entry["empresas"] = []
+            for company_nif in entry["empresas_nif"]:
+                c_key = f"company:{company_nif}"
+                if c_key not in nodes:
+                    add_node(c_key, company_nif, "company")
+                entry["empresas"].append(nodes[c_key]["label"])
+                edge = edges.setdefault((p_key, c_key), {"source": p_key, "target": c_key, "count": 0, "value": 0.0})
+                edge["count"] += 1
+            entry["cargos"] = {nif: " / ".join(cargos) for nif, cargos in entry["cargos"].items()}
+            entry["tipo"] = "pessoa_ligada_a_varias_adjudicatarias"
+            people_alerts.append(entry)
+            # Laços concretos: empresas da mesma pessoa que ganham ao MESMO adjudicante.
+            for index, first in enumerate(entry["empresas_nif"]):
+                for second in entry["empresas_nif"][index + 1 :]:
+                    comuns = set(adjudicantes_por_empresa.get(first, [])) & set(adjudicantes_por_empresa.get(second, []))
+                    for source in comuns:
+                        first_edge = edges.get((source, f"company:{first}"))
+                        second_edge = edges.get((source, f"company:{second}"))
+                        laços.append(
+                            {
+                                "tipo": "conluio_potencial",
+                                "detalhe": f"«{entry['pessoa']}» liga "
+                                f"«{nodes.get(f'company:{first}', {}).get('label') or first}» e "
+                                f"«{nodes.get(f'company:{second}', {}).get('label') or second}», que ganharam ambas a "
+                                f"«{nodes.get(source, {}).get('label') or source}»",
+                                "adjudicante": nodes.get(source, {}).get("label") or source,
+                                "empresa": nodes.get(f"company:{first}", {}).get("label") or first,
+                                "empresa_2": nodes.get(f"company:{second}", {}).get("label") or second,
+                                "pessoa": entry["pessoa"],
+                                "contratos": (first_edge or {}).get("count", 0) + (second_edge or {}).get("count", 0),
+                                "valor": num(((first_edge or {}).get("value") or 0) + ((second_edge or {}).get("value") or 0)),
+                            }
+                        )
+    # (a deduplicação dos laços faz-se no fim, depois de juntar os do CIRE)
 
     # -- concentração: empresas que dominam um adjudicante -------------------
     concentration: List[Dict[str, Any]] = []
@@ -1328,33 +1380,118 @@ def _relations(
     concentration.sort(key=lambda item: -(item.get("parte_do_valor") or 0))
 
     # -- insolvências (join por NIF) -----------------------------------------
+    # O índice do CIRE guarda os NIFs em `nifs` (keyword) e o nome do insolvente
+    # em `insolvente`; `intervenientes` (nested) tem os restantes intervenientes,
+    # incluindo o administrador da insolvência.
     insolventes: List[Dict[str, Any]] = []
-    if client is not None and top_nifs:
-        for chunk_start in range(0, len(top_nifs), 200):
-            chunk = top_nifs[chunk_start : chunk_start + 200]
+    processos: Dict[str, Dict[str, Any]] = {}
+    if client is not None and pool_nifs:
+        for chunk_start in range(0, len(pool_nifs), 100):
+            chunk = pool_nifs[chunk_start : chunk_start + 100]
             body = {
-                "size": 200,
+                "size": 500,
                 "track_total_hits": False,
-                "_source": ["*"],
-                "query": {"terms": {"nif": chunk}},
+                "_source": [
+                    "nifs",
+                    "insolvente",
+                    "especie",
+                    "ato",
+                    "data_publicacao",
+                    "tribunal",
+                    "processo_numero",
+                    "intervenientes",
+                ],
+                "query": {"terms": {"nifs": chunk}},
             }
             resp = _search(client, CIRE_INDEX, body, timeout=45)
             for hit in _hits(resp):
                 src = hit.get("_source") or {}
-                nif = str(src.get("nif") or "").strip()
-                if not nif:
-                    continue
-                insolventes.append(
+                nome = str(src.get("insolvente") or "").strip()
+                processo = str(src.get("processo_numero") or src.get("processo") or "").strip()
+                # Só o **insolvente** conta como ligação: os credores são
+                # centenas (Segurança Social, AT, banca) e ligariam tudo a tudo.
+                insolventes_do_processo: List[str] = []
+                for entry in (src.get("intervenientes") or []):
+                    if not isinstance(entry, dict):
+                        continue
+                    nif_entry = str(entry.get("nif") or "").strip()
+                    if nif_entry and "insolvente" in fold(entry.get("papel")):
+                        insolventes_do_processo.append(nif_entry)
+                if processo:
+                    entry = processos.setdefault(
+                        processo,
+                        {
+                            "processo": processo,
+                            "nifs": set(),
+                            "empresas": [],
+                            "especie": src.get("especie"),
+                            "data": src.get("data_publicacao"),
+                            "tribunal": src.get("tribunal"),
+                            "insolvente": nome,
+                        },
+                    )
+                    entry["nifs"].update(insolventes_do_processo)
+                for nif in insolventes_do_processo:
+                    if nif not in chunk:
+                        continue
+                    insolventes.append(
+                        {
+                            "nif": nif,
+                            "nome": nome or None,
+                            "especie": src.get("especie"),
+                            "ato": src.get("ato"),
+                            "data": src.get("data_publicacao"),
+                            "tribunal": src.get("tribunal"),
+                            "processo": processo or None,
+                        }
+                    )
+
+    # Empresas adjudicatárias que aparecem no **mesmo processo** — sinal de
+    # grupo económico em dificuldade (não é «têm o mesmo administrador de
+    # insolvência»: ser administrador de muitos processos é a profissão deles).
+    pool_set = set(pool_nifs)
+    for entry in processos.values():
+        empresas = [nif for nif in entry["nifs"] if nif in pool_set]
+        entry["empresas"] = empresas
+        if len(empresas) < 2:
+            continue
+        for index, first in enumerate(empresas):
+            for second in empresas[index + 1 :]:
+                laços.append(
                     {
-                        "nif": nif,
-                        "nome": src.get("nome") or src.get("name") or src.get("company_name"),
-                        "tipo": src.get("tipo") or src.get("kind"),
-                        "data": src.get("data") or src.get("publication_date"),
+                        "tipo": "insolvencia_partilhada",
+                        "detalhe": f"as duas adjudicatárias são insolventes no mesmo processo {entry['processo']} "
+                        f"({entry.get('especie') or 'insolvência'})",
+                        "adjudicante": None,
+                        "empresa": nodes.get(f"company:{first}", {}).get("label") or first,
+                        "empresa_2": nodes.get(f"company:{second}", {}).get("label") or second,
+                        "pessoa": None,
+                        "contratos": 0,
+                        "valor": None,
+                        "processo": entry["processo"],
+                        "data": entry.get("data"),
                     }
                 )
     insolvente_nifs = {item["nif"] for item in insolventes}
     for entity in entities:
         entity["insolvente"] = bool(entity.get("nif") and str(entity["nif"]) in insolvente_nifs)
+
+    # Deduplicação final dos laços (inclui agora os do CIRE).
+    seen = set()
+    unique_laços: List[Dict[str, Any]] = []
+    for laço in sorted(laços, key=lambda item: -(item.get("valor") or 0)):
+        key = (
+            laço["tipo"],
+            laço.get("pessoa"),
+            laço.get("adjudicante"),
+            laço.get("empresa"),
+            laço.get("empresa_2"),
+            laço.get("processo"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_laços.append(laço)
 
     edge_list = [
         {"source": edge["source"], "target": edge["target"], "count": int(edge["count"]), "value": num(edge["value"]) or 0.0}
@@ -1523,9 +1660,14 @@ def _risk_model(rows: Sequence[Dict[str, Any]], matrix: np.ndarray, *, seed: int
     if sk is None:
         return {"disponivel": False, "motivo": "scikit-learn indisponível."}
 
-    X = matrix[indexes]
+    # IMPORTANTE: `ratio_efetivo` (valor efetivo / contratual) é a **origem do
+    # rótulo**, pelo que não pode ser feature — incluí-la daria AUC = 1,0 por
+    # fuga de informação (foi o erro apanhado na primeira validação).
+    names_all = list(feature_names)
+    keep_columns = [i for i, name in enumerate(names_all) if name != "ratio_efetivo"]
+    names = [names_all[i] for i in keep_columns] + ["cpv_frequencia"]
+    X = matrix[indexes][:, keep_columns]
     y = np.array(labels)
-    names = list(feature_names) + ["cpv_frequencia"]
     cpv_freq: Dict[str, float] = {}
     for row in rows:
         if row.get("cpv_grupo"):
@@ -1741,6 +1883,17 @@ def analyze(
 
     relations = _relations(client, rows, entities)
 
+    # As entidades insolventes entram no topo da lista (podem ter score baixo e
+    # desapareceriam da janela de 300 que a UI mostra).
+    top_entities = entities[:300]
+    presentes = {entity.get("nif") for entity in top_entities}
+    for entity in entities:
+        if entity.get("insolvente"):
+            entity["motivos"].append("processo de insolvência/PER registado no CIRE")
+            if entity.get("nif") not in presentes:
+                top_entities.append(entity)
+                presentes.add(entity.get("nif"))
+
     risk = _risk_model(rows, imputed, seed=seed, feature_names=used_features)
 
     valores = [row["valor"] for row in rows if row.get("valor")]
@@ -1778,7 +1931,7 @@ def analyze(
         "overview": overview,
         "cpvs": cpv_table,
         "anomalias": anomaly_list[:400],
-        "entidades": entities[:300],
+        "entidades": top_entities,
         "relacoes": relations,
         "risco_aditivo": risk,
         "deteccao": {
@@ -1798,6 +1951,23 @@ def analyze(
     if use_cache:
         _cache_put(key, payload)
     return payload
+
+
+def news_mentions(names: Sequence[Tuple[str, str]], *, per_name: int = 5, es: Optional[Elasticsearch] = None) -> List[Dict[str, Any]]:
+    """Menções públicas de uma lista de entidades (`(rótulo, nome)`).
+
+    Wrapper público de `_news_for` para as rotas (evita que o router conheça os
+    detalhes dos índices e do leitor RSS).
+    """
+    return _news_for(_client(es), names, per_name=per_name)
+
+
+def clear_cache() -> int:
+    """Esvazia a cache de análises e devolve quantas entradas removeu."""
+    with _CACHE_LOCK:
+        size = len(_CACHE)
+        _CACHE.clear()
+    return size
 
 
 def meta() -> Dict[str, Any]:
@@ -1905,22 +2075,43 @@ def entity_dossier(nif: str, *, pais: str = PAIS_DEFAULT, es: Optional[Elasticse
     body_people = {
         "size": 40,
         "track_total_hits": False,
-        "_source": ["nif", "name", "roles", "companies"],
-        "query": {"nested": {"path": "companies", "query": {"term": {"companies.nif": nif}}}},
+        "_source": ["nif", "name", "roles"],
+        "query": {"nested": {"path": "roles", "query": {"term": {"roles.company_nif": nif}}}},
     }
     for hit in _hits(_search(client, PEOPLE_INDEX, body_people, timeout=45)):
         src = hit.get("_source") or {}
         roles = [
-            {"role": role.get("role"), "acto": role.get("acto"), "data": role.get("date")}
+            {
+                "role": role.get("role"),
+                "role_org": role.get("role_org"),
+                "acto": role.get("acto"),
+                "data": role.get("date"),
+                "publicacao": role.get("publication_id"),
+            }
             for role in (src.get("roles") or [])
-            if isinstance(role, dict)
-        ][:8]
-        people.append({"nif": src.get("nif"), "nome": src.get("name"), "cargos": roles})
+            if isinstance(role, dict) and str(role.get("company_nif") or "") == nif
+        ][:10]
+        if roles:
+            people.append({"nif": src.get("nif"), "nome": src.get("name"), "cargos": roles})
 
     cire: List[Dict[str, Any]] = []
-    for hit in _hits(_search(client, CIRE_INDEX, {"size": 20, "query": {"term": {"nif": nif}}, "_source": ["*"]}, timeout=45)):
+    cire_body = {
+        "size": 20,
+        "track_total_hits": False,
+        "_source": ["insolvente", "especie", "ato", "data_publicacao", "tribunal", "processo_numero"],
+        "query": {"terms": {"nifs": [nif]}},
+    }
+    for hit in _hits(_search(client, CIRE_INDEX, cire_body, timeout=45)):
         src = hit.get("_source") or {}
-        cire.append({"tipo": src.get("tipo") or src.get("kind"), "data": src.get("data"), "tribunal": src.get("tribunal")})
+        cire.append(
+            {
+                "especie": src.get("especie"),
+                "ato": src.get("ato"),
+                "data": src.get("data_publicacao"),
+                "tribunal": src.get("tribunal"),
+                "processo": src.get("processo_numero"),
+            }
+        )
 
     name = None
     label = nif
@@ -1969,8 +2160,16 @@ def entity_dossier(nif: str, *, pais: str = PAIS_DEFAULT, es: Optional[Elasticse
         )
     if cire:
         sinais.append({"padrao": "insolvencia", "detalhe": f"{len(cire)} processo(s) no CIRE"})
-    if people and len(people) > 0:
-        sinais.append({"padrao": "rede_pessoas", "detalhe": f"{len(people)} pessoa(s) com cargo registado nesta empresa"})
+    cargos_sociais = [
+        person for person in people if any(str(c.get("role_org") or "") in CARGO_GESTAO_ORGS for c in person["cargos"])
+    ]
+    if cargos_sociais:
+        sinais.append(
+            {
+                "padrao": "rede_pessoas",
+                "detalhe": f"{len(cargos_sociais)} pessoa(s) com cargo de órgão social registado nesta empresa",
+            }
+        )
 
     noticias = _news_for(client, [(label, label)], per_name=6)
 
@@ -1990,7 +2189,8 @@ def entity_dossier(nif: str, *, pais: str = PAIS_DEFAULT, es: Optional[Elasticse
             "anos": sorted({c["ano"] for c in contracts if c.get("ano")}),
         },
         "sinais": sinais,
-        "pessoas": people,
+        "cargos_sociais": cargos_sociais,
+        "intervenientes_cire": [person for person in people if person not in cargos_sociais][:20],
         "insolvencias": cire,
         "noticias": noticias,
     }
