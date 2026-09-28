@@ -27,6 +27,8 @@ from starlette.concurrency import run_in_threadpool
 from api.auth_routes import CurrentSession, optional_session, require_session
 from api.elasticsearch_client import (
     combined_graph_for_company,
+    companies_with_people,
+    company_people_from_index,
     get_es_client,
     get_person_by_nif,
     index_people_from_cire,
@@ -136,6 +138,8 @@ class PeopleIngestResponse(BaseModel):
     indexed_count: int
     total: int
     errors: int = 0
+    #: Publicações societárias lidas na extração (0 = a entidade ainda não tem publicações).
+    publications: int = 0
     error: Optional[str] = None
 
 
@@ -278,6 +282,31 @@ class PeoplePresenceResponse(BaseModel):
     total: int = 0
     indexed: List[str] = Field(default_factory=list)
     missing: List[str] = Field(default_factory=list)
+    error: Optional[str] = None
+
+
+class PeopleCompanyItem(BaseModel):
+    """Empresa com pessoas/cargos no PessoasIQ."""
+
+    nif: str
+    name: Optional[str] = None
+    people_count: int = 0
+    roles_count: int = 0
+
+
+class PeopleCompaniesResponse(BaseModel):
+    total: int = 0
+    items: List[PeopleCompanyItem] = Field(default_factory=list)
+    error: Optional[str] = None
+
+
+class PeopleCompanyResponse(BaseModel):
+    """Ficha de empresa no PessoasIQ: dados da empresa + pessoas com cargos nela."""
+
+    nif: str
+    name: Optional[str] = None
+    total: int = 0
+    people: List[Dict[str, Any]] = Field(default_factory=list)
     error: Optional[str] = None
 
 
@@ -585,6 +614,38 @@ def people_filters_route(session: Annotated[CurrentSession, Depends(optional_ses
     if result.get("error"):
         raise HTTPException(status_code=500, detail=result["error"])
     return PeopleFiltersResponse(**result)
+
+
+# --- Empresas (pesquisa por empresa: empresa + pessoas + grafo) ---------------
+
+@router.get("/companies", response_model=PeopleCompaniesResponse)
+def people_companies_route(
+    q: Optional[str] = Query(default=None, description="Firma/denominação, NIF/NIPC ou nome de quem lá tem cargos"),
+    size: int = Query(default=20, ge=1, le=100),
+    session: Annotated[CurrentSession, Depends(optional_session)] = None,
+):
+    """Empresas com pessoas/cargos registados (pesquisa por empresa).
+
+    Procura contratos societários/CIRE das pessoas: uma empresa aparece aqui
+    mesmo sem ficha própria, porque o vínculo é o cargo da pessoa nela.
+    """
+    result = companies_with_people(q=q, size=size)
+    if result.get("error"):
+        raise HTTPException(status_code=500, detail=result["error"])
+    return PeopleCompaniesResponse(**result)
+
+
+@router.get("/companies/{company_nif}", response_model=PeopleCompanyResponse)
+def people_company_route(
+    company_nif: str,
+    size: int = Query(default=200, ge=1, le=500),
+    session: Annotated[CurrentSession, Depends(optional_session)] = None,
+):
+    """Ficha de empresa: pessoas com cargos nessa empresa (mais recentes primeiro)."""
+    result = company_people_from_index(company_nif, size=size)
+    if result.get("error"):
+        raise HTTPException(status_code=500, detail=result["error"])
+    return PeopleCompanyResponse(**result)
 
 
 @router.get("/{nif}", response_model=Person)

@@ -178,6 +178,88 @@ def _flatten(text: str) -> str:
     return text.strip()
 
 
+#: Termos que identificam órgãos sociais (usados para descartar restos de
+#: morada/numeração que fiquem colados à etiqueta do órgão).
+_ORG_KEYWORDS = (
+    "ADMINISTRADOR", "ADMINISTRADORES", "ADMINISTRAÇÃO", "ADMINISTRACAO", "ADMINISTRADORA",
+    "GERENTE", "GERENTES", "GERÊNCIA", "GERENCIA", "DIRECÇÃO", "DIRECAO", "GESTOR", "GESTORES",
+    "FISCALIZAÇÃO", "FISCALIZACAO", "FISCAL", "SUPLENTE", "SUPLENTES",
+    "CONSELHO", "COMISSÃO", "COMISSAO", "MESA", "ASSEMBLEIA", "PRESIDENTE",
+    "VOGAL", "VOGAIS", "SECRETÁRIO", "SECRETARIO", "TESOUREIRO", "LIQUIDATÁRIO",
+    "DEPOSITÁRIO", "REVISOR", "ROC", "MEMBRO", "MEMBROS", "ÓRGÃO", "ORGAO",
+)
+
+
+def _tidy_org_label(label: str) -> str:
+    """Descartar restos de morada/numeração colados à etiqueta do órgão.
+
+    Nalgumas publicações a morada vem em maiúsculas, pelo que a etiqueta do
+    órgão fica precedida de texto dela («1.06.2.4 1990 - 095 LISBOA FISCAL
+    ÚNICO»). Corta-se no primeiro termo de órgão conhecido para a frente.
+    """
+    label = label.strip()
+    if len(label) >= _ORG_LABEL_MAX:  # etiqueta cortada a meio de uma palavra
+        label = label[: label.rfind(" ") if " " in label else len(label)].strip()
+    upper = label.upper()
+    best: Optional[Tuple[int, str]] = None
+    for keyword in _ORG_KEYWORDS:
+        index = upper.find(keyword)
+        if index < 0:
+            continue
+        tail = label[index:]
+        if not re.fullmatch(r"[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ0-9ºª()&,./\s-]+", tail):
+            continue
+        if best is None or index < best[0]:
+            best = (index, tail)
+    return (best[1] if best else label).strip()
+
+
+#: Comprimento máximo de uma etiqueta de órgão (acima disto corta-se na palavra).
+_ORG_LABEL_MAX = 100
+
+#: Etiqueta de órgão imediatamente antes de um `Nome/Firma:`. O portal não
+#: normaliza os nomes dos órgãos («ADMINISTRADOR ÚNICO», «FISCAL ÚNICO»,
+#: «SUPLENTE(S) DO FISCAL ÚNICO», «MESA DA ASSEMBLEIA GERAL», …), pelo que se
+#: aceita qualquer etiqueta em maiúsculas colada aos dados da pessoa. A âncora
+#: apenas impede que a etiqueta comece a meio de uma palavra.
+_ORG_LABEL_RE = re.compile(
+    r"(?<![A-Za-zÀ-ÿ0-9])(?P<org>[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ0-9ºª()&,./\s-]{2," + str(_ORG_LABEL_MAX) + r"}?)\s*:\s*(?=Nome/Firma:)",
+)
+
+#: Marcadores que fecham a zona de designações/cessações de uma publicação.
+_ORG_BLOCK_STOP_RE = re.compile(
+    r"(SÓCIOS E QUOTAS|SOCIOS E QUOTAS|FORMA DE OBRIGAR|ÓRGÃOS SOCIAIS|ORGÃOS SOCIAIS"
+    r"|Data da deliberação|Os documentos)",
+    re.I,
+)
+
+
+def _org_segments(texto: str) -> List[Tuple[str, int, int]]:
+    """Zonas `(órgão, início, fim)` com dados de pessoas de uma publicação.
+
+    Cada zona começa na etiqueta de órgão que antecede um `Nome/Firma:` e acaba
+    na etiqueta seguinte ou num marcador de fim («SÓCIOS E QUOTAS», «FORMA DE
+    OBRIGAR», …). Publicações sem etiquetas reconhecíveis caem na lista de
+    órgãos conhecidos (`_ORG_HEADER_RE`) para não se perderem registos.
+    """
+    marks: List[Tuple[int, int, str]] = [
+        (m.start("org"), m.end(), m.group("org").strip()) for m in _ORG_LABEL_RE.finditer(texto)
+    ]
+    if not marks:
+        marks = [
+            (m.start(1), m.end(), m.group(1).strip()) for m in _ORG_HEADER_RE.finditer(texto)
+        ]
+
+    segments: List[Tuple[str, int, int]] = []
+    for index, (_start, end, org) in enumerate(marks):
+        stop = marks[index + 1][0] if index + 1 < len(marks) else len(texto)
+        tail = _ORG_BLOCK_STOP_RE.search(texto, end)
+        if tail and tail.start() < stop:
+            stop = tail.start()
+        segments.append((_tidy_org_label(org).title(), end, stop))
+    return segments
+
+
 # ---------------------------------------------------------------------------
 # Extração por publicação
 # ---------------------------------------------------------------------------
@@ -202,18 +284,8 @@ def extract_people_from_publicacao(pub: Dict[str, Any]) -> List[Dict[str, Any]]:
     seen: set = set()
 
     # 1. Designações de órgãos sociais.
-    for org_match in _ORG_HEADER_RE.finditer(texto):
-        org_name = org_match.group(1).strip().title()
-        start = org_match.end()
-        # Fim do bloco: próximo marcador de interesse.
-        end = len(texto)
-        for m in (
-            re.search(r"\s*(?:SÓCIOS E QUOTAS|SOCIOS E QUOTAS|FORMA DE OBRIGAR|ÓRGÃOS SOCIAIS|ORGÃOS SOCIAIS|Data da deliberação|Os documentos)", texto[start:], re.I),
-            re.search(r"\s*(?=(?:ORGÃO\(S\)\s*DESIGNADO\(S\)\s*:\s*)?(?:GERÊNCIA|GERENCIA|DIRECÇÃO|ADMINISTRAÇÃO|FISCALIZAÇÃO|CONSELHO|ASSEMBLEIA)\s*:)", texto[start:], re.I),
-        ):
-            if m and m.start() < end:
-                end = start + m.start()
-        block = texto[start:start + end]
+    for org_name, start, end in _org_segments(texto):
+        block = texto[start:end]
 
         for m in _DESIGNADO_RE.finditer(block):
             name = _normalize_name(m.group("name"))

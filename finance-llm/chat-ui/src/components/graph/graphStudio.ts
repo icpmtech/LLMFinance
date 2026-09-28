@@ -39,6 +39,9 @@ export const TYPE_COLORS: Record<string, string> = {
   cpv: "#a78bfa",
   processo: "#60a5fa",
   tempo: "#f59e0b",
+  // Pessoas (órgãos sociais, intervenientes em processos): distinguem-se das
+  // entidades e dos processos sem precisar de uma segunda dimensão.
+  pessoa: "#f472b6",
   outra: "#94a3b8",
 };
 
@@ -49,6 +52,7 @@ export const TYPE_LABELS: Record<string, string> = {
   cpv: "Classificação CPV",
   processo: "Procedimento",
   tempo: "Tempo",
+  pessoa: "Pessoas",
   outra: "Outros",
 };
 

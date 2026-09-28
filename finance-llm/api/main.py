@@ -249,6 +249,7 @@ from api.contribuintes_routes import router as contribuintes_router
 from api.gleif_routes import router as gleif_router
 from api.world_routes import router as world_router
 from api.padroes_routes import router as padroes_router
+from api.risco_routes import router as risco_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -521,6 +522,9 @@ app.include_router(gleif_router)
 # grafo/tempo, simulador de futuro e agente de investigação.
 app.include_router(world_router)
 app.include_router(padroes_router)
+# Empresas & Risco: nível de risco por empresa (ML + regras), pesquisa tipo
+# motor de busca, contratos associados, comparação e grafos analíticos 360.
+app.include_router(risco_router)
 
 
 # Cache curta de `user_id → email`, para o registo de pedidos identificar quem
@@ -1284,6 +1288,7 @@ def entities_detail(nif: str):
 @app.get("/contracts/search")
 @app.get("/contracts/map")
 @app.get("/empresas-iq")
+@app.get("/empresas-risco")
 @app.get("/crm")
 @app.get("/crm/contas")
 @app.get("/crm/contactos")

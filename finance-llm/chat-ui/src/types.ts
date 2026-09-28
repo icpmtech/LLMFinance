@@ -1104,6 +1104,8 @@ export interface PeopleIngestResponse {
   indexed_count: number;
   total: number;
   errors?: number;
+  /** Publicações societárias lidas na extração (0 = a entidade ainda não tem publicações). */
+  publications?: number;
   error?: string | null;
 }
 

@@ -1376,6 +1376,96 @@ export async function getPerson(nif: string): Promise<Person> {
   return res.json();
 }
 
+// --- Empresas no PessoasIQ (pesquisar por empresa: empresa + pessoas + grafo) ---
+
+export interface PeopleCompanyItem {
+  nif: string;
+  name?: string | null;
+  /** Pessoas distintas com cargos nesta empresa. */
+  people_count: number;
+  /** Cargos registados nesta empresa. */
+  roles_count: number;
+}
+
+export interface PeopleCompaniesResponse {
+  total: number;
+  items: PeopleCompanyItem[];
+  note?: string | null;
+  error?: string | null;
+}
+
+export interface CompanyPersonRole {
+  role?: string | null;
+  role_org?: string | null;
+  event?: string | null;
+  date?: string | null;
+  acto?: string | null;
+  publication_id?: string | null;
+}
+
+export interface CompanyPerson {
+  nif: string;
+  name: string;
+  is_company: boolean;
+  /** Cargos desta pessoa nesta empresa. */
+  cargos_empresa?: number;
+  cargo?: string | null;
+  role_org?: string | null;
+  event?: string | null;
+  date?: string | null;
+  acto?: string | null;
+  publication_id?: string | null;
+  roles_total?: number;
+  companies_total?: number;
+  origin?: string | null;
+  roles?: CompanyPersonRole[];
+}
+
+export interface PeopleCompanyResponse {
+  nif: string;
+  name?: string | null;
+  total: number;
+  people: CompanyPerson[];
+  error?: string | null;
+}
+
+/**
+ * Empresas com pessoas/cargos no PessoasIQ (pesquisa por empresa).
+ *
+ * A empresa pode não ter ficha própria no índice de pessoas: o vínculo é o
+ * cargo das pessoas nessa empresa, por isso aparece na mesma.
+ */
+export async function searchPeopleCompanies(
+  q: string,
+  size = 8,
+): Promise<PeopleCompaniesResponse> {
+  const params = new URLSearchParams({ q, size: String(size) });
+  const res = await fetch(`${API_BASE}/people/companies?${params}`, {
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao pesquisar empresas: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Ficha de empresa no PessoasIQ: a empresa e as pessoas com cargos nela. */
+export async function getCompanyPeople(
+  nif: string,
+  size = 200,
+): Promise<PeopleCompanyResponse> {
+  const res = await fetch(
+    `${API_BASE}/people/companies/${encodeURIComponent(nif)}?size=${size}`,
+    { signal: AbortSignal.timeout(45000) },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter a empresa: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
 export async function getPersonGraph(nif: string): Promise<PeopleGraphResponse> {
   const res = await fetch(`${API_BASE}/people/${encodeURIComponent(nif)}/graph`, {
     signal: AbortSignal.timeout(45000),

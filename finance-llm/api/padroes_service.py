@@ -35,6 +35,7 @@ import re
 import threading
 import time
 import unicodedata
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -47,11 +48,13 @@ from api.elasticsearch_client import (
     CIRE_INDEX,
     CONTRACTS_INDEX,
     CONTRATOS_ES_INDEX,
+    CONTRIBUINTES_INDEX,
     PEOPLE_INDEX,
     SCRAPED_INDEX,
     SOCIAL_INDEX,
     get_es_client,
 )
+from api import padroes_regras as regras
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +172,97 @@ PADROES: List[Dict[str, Any]] = [
 ]
 
 PADRAO_BY_ID = {item["id"]: item for item in PADROES}
+
+
+def catalogo_padroes() -> List[Dict[str, Any]]:
+    """Catálogo efetivo: as **regras** guardadas + os padrões não avaliáveis.
+
+    As regras vêm do registo (`padroes_regras`) e são editáveis; os padrões que
+    dependem de modelos, do grafo ou das notícias não se expressam por condição
+    e ficam como documentação (`editavel: false`).
+    """
+    try:
+        resumo = regras.resumo_regras(regras.listar()["regras"])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Regras indisponíveis (%s); a usar o catálogo estático.", exc)
+        return list(PADROES)
+    saida: List[Dict[str, Any]] = []
+    for item in resumo:
+        saida.append(
+            {
+                "id": item["id"],
+                "label": item["label"],
+                "tipo": "regra",
+                "metodo": item["condicao"] or "condição definida pelo utilizador",
+                "features": [condicao.get("campo") for condicao in item.get("condicoes") or []],
+                "descricao": item.get("descricao") or "",
+                "ativo": item["ativo"],
+                "severidade": item["severidade"],
+                "origem": item.get("origem"),
+                "editavel": True,
+            }
+        )
+    for item in regras.PADROES_NAO_AVALIAVEIS:
+        saida.append({**item, "ativo": True, "severidade": None, "editavel": False})
+    return saida
+
+
+# ---------------------------------------------------------------------------
+# Contexto de um contrato para as regras
+# ---------------------------------------------------------------------------
+def _contexto_regras(
+    row: Dict[str, Any],
+    *,
+    z: float = 0.0,
+    taxa_ajuste_direto_cpv: Optional[float] = None,
+    taxa_aditivo_cpv: Optional[float] = None,
+    taxa_ajuste_direto_global: Optional[float] = None,
+    contratos_do_cpv: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Campos derivados de um contrato que uma regra pode testar."""
+    adjudicataria = next(
+        (
+            party.get("nome") or party.get("nif")
+            for party in (row.get("adjudicatarios") or [])
+            if isinstance(party, dict)
+        ),
+        None,
+    )
+    return {
+        "valor": row.get("valor"),
+        "preco_base": row.get("base"),
+        "ratio_base": row.get("ratio_base"),
+        "ratio_efetivo": row.get("ratio_efetivo"),
+        "dias_decisao": row.get("dias_decisao"),
+        "dias_assinatura": row.get("dias_assinatura"),
+        "dias_publicacao": row.get("dias_publicacao"),
+        "prazo_execucao": row.get("prazo_execucao"),
+        "n_concorrentes": row.get("n_concorrentes"),
+        "ajuste_direto": row.get("ajuste_direto"),
+        "ano": row.get("ano"),
+        "cpv": row.get("cpv"),
+        "cpv_grupo": row.get("cpv_grupo"),
+        "procedimento": row.get("procedimento"),
+        "adjudicante": row.get("adjudicante_nome") or row.get("adjudicante_nif"),
+        "adjudicataria": adjudicataria,
+        "z_cpv": z,
+        "taxa_ajuste_direto_cpv": taxa_ajuste_direto_cpv,
+        "taxa_aditivo_cpv": taxa_aditivo_cpv,
+        "taxa_ajuste_direto_global": taxa_ajuste_direto_global,
+        "contratos_do_cpv": contratos_do_cpv,
+    }
+
+
+#: Severidades ordenadas (as piores primeiro), para resumos e ordenação.
+_SEVERIDADE_ORDEM = {"alerta": 0, "aviso": 1, "info": 2}
+
+
+def severidade_de(sinais: Sequence[Dict[str, Any]]) -> Optional[str]:
+    """Severidade mais grave de um conjunto de sinais (ou `None`)."""
+    valores = [str(sinal.get("severidade")) for sinal in sinais if sinal.get("severidade")]
+    if not valores:
+        return None
+    return sorted(valores, key=lambda valor: _SEVERIDADE_ORDEM.get(valor, 9))[0]
 
 
 # ---------------------------------------------------------------------------
@@ -448,6 +542,35 @@ def _hits(resp: Dict[str, Any]) -> List[Dict[str, Any]]:
     return ((resp.get("hits") or {}).get("hits")) or []
 
 
+def _top_hit_name(agregado: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Nome a partir de um `top_hits` (aceita o objeto aninhado ou o pai).
+
+    Dentro de um `nested` o `top_hits` pode devolver o documento aninhado ou o
+    documento pai, pelo que a chave é procurada em qualquer nível.
+    """
+    if not isinstance(agregado, dict):
+        return None
+
+    def procurar(no: Any, profundidade: int = 0) -> Optional[str]:
+        if profundidade > 3 or not isinstance(no, dict):
+            return None
+        for chave in ("nome", "name", "adjudicatario_nombre", "organo_nombre"):
+            valor = no.get(chave)
+            if isinstance(valor, str) and valor.strip():
+                return valor.strip()
+        for valor in no.values():
+            achado = procurar(valor, profundidade + 1)
+            if achado:
+                return achado
+        return None
+
+    for hit in (agregado.get("hits") or {}).get("hits") or []:
+        achado = procurar(hit.get("_source"))
+        if achado:
+            return achado
+    return None
+
+
 # ---------------------------------------------------------------------------
 # 1. Amostragem estratificada por ano
 # ---------------------------------------------------------------------------
@@ -473,6 +596,65 @@ def _cache_put(key: Tuple[Any, ...], payload: Dict[str, Any]) -> None:
         if len(_CACHE) > 24:
             _CACHE.clear()
         _CACHE[key] = (time.time(), payload)
+
+
+#: Cache das análises por empresa (independente da amostragem global).
+_EMP_CACHE: Dict[Tuple[Any, ...], Tuple[float, Dict[str, Any]]] = {}
+_EMP_CACHE_LOCK = threading.Lock()
+
+
+def _emp_cache_get(key: Tuple[Any, ...]) -> Optional[Dict[str, Any]]:
+    with _EMP_CACHE_LOCK:
+        entry = _EMP_CACHE.get(key)
+    if not entry:
+        return None
+    stamp, payload = entry
+    if time.time() - stamp > CACHE_TTL_SECONDS:
+        with _EMP_CACHE_LOCK:
+            _EMP_CACHE.pop(key, None)
+        return None
+    return payload
+
+
+def _emp_cache_put(key: Tuple[Any, ...], payload: Dict[str, Any]) -> None:
+    with _EMP_CACHE_LOCK:
+        if len(_EMP_CACHE) > 16:
+            _EMP_CACHE.clear()
+        _EMP_CACHE[key] = (time.time(), payload)
+
+
+#: Sufixos/palavras que não ajudam a encontrar menções em notícias.
+_RUIDO_SOCIETARIO = {
+    "lda",
+    "sa",
+    "s",
+    "a",
+    "unipessoal",
+    "sociedade",
+    "empresa",
+    "grupo",
+    "e",
+    "de",
+    "da",
+    "do",
+    "das",
+    "dos",
+    "portugal",
+}
+
+
+def _nome_curto(nome: str) -> Optional[str]:
+    """Marca curta para pesquisar notícias («Cimontubo - Tubagens, Lda» → «cimontubo»)."""
+    tokens = [
+        token
+        for token in re.split(r"[^0-9a-z\u00c0-\u00ff]+", fold(str(nome or "")))
+        if len(token) >= 3 and token not in _RUIDO_SOCIETARIO
+    ]
+    if not tokens:
+        return None
+    curto = " ".join(tokens[:2])
+    completo = fold(str(nome or "")).strip()
+    return None if curto == completo else curto
 
 
 def _cpv_filter(spec: CountrySpec, cpv: Optional[str]) -> Optional[Dict[str, Any]]:
@@ -578,6 +760,10 @@ def _row_from_hit(spec: CountrySpec, hit: Dict[str, Any]) -> Dict[str, Any]:
     value = as_float(src.get(spec.value_field)) or None
     base = as_float(src.get(spec.base_field))
     effective = as_float(src.get(spec.effective_field)) if spec.effective_field else None
+    # No Portal BASE `PrecoTotalEfetivo = 0` significa «ainda não há valor
+    # efetivo registado» (é assim em ~60 % dos contratos), não «pagou zero».
+    if effective is not None and effective <= 0:
+        effective = None
     procedure = str(src.get(spec.procedure_field) or "")
 
     pub = as_date(src.get(spec.pub_date))
@@ -859,6 +1045,7 @@ def _detect(matrix: np.ndarray, cpvs: Sequence[str], *, seed: int, contamination
         "votes": np.zeros(n, dtype=int),
         "detectors": [],
         "z_per_cpv": np.zeros(n),
+        "tempos": {},
         "error": None,
     }
     if n == 0:
@@ -873,78 +1060,104 @@ def _detect(matrix: np.ndarray, cpvs: Sequence[str], *, seed: int, contamination
             "votes": (z > 3.5).astype(int),
             "detectors": ["z_cpv"],
             "z_per_cpv": z,
+            "tempos": {},
             "error": "scikit-learn indisponível: só regras robustas por CPV",
         }
 
     scaled = sk["StandardScaler"]().fit_transform(matrix)
     scores: Dict[str, np.ndarray] = {}
     detectors: List[str] = []
+    tempos_detetores: Dict[str, float] = {}
+
+    def _lap(nome: str, inicio: float) -> None:
+        tempos_detetores[nome] = round(time.time() - inicio, 2)
 
     contamination = max(0.005, min(0.2, float(contamination)))
 
     try:
+        inicio = time.time()
         forest = sk["IsolationForest"](
-            n_estimators=300, contamination=contamination, random_state=seed, n_jobs=-1
+            n_estimators=200, contamination=contamination, random_state=seed, n_jobs=-1
         ).fit(scaled)
         scores["isolation_forest"] = _ranks(-forest.score_samples(scaled))
         detectors.append("isolation_forest")
+        _lap("isolation_forest", inicio)
     except Exception as exc:  # noqa: BLE001
         logger.warning("IsolationForest falhou: %s", exc)
 
     try:
+        inicio = time.time()
         neighbours = min(20, max(5, n // 20 or 5))
         lof = sk["LocalOutlierFactor"](n_neighbors=neighbours, contamination=contamination)
         lof.fit_predict(scaled)
         scores["lof"] = _ranks(-lof.negative_outlier_factor_)
         detectors.append("lof")
+        _lap("lof", inicio)
     except Exception as exc:  # noqa: BLE001
         logger.warning("LOF falhou: %s", exc)
 
     try:
+        inicio = time.time()
         clusters = max(2, min(12, len(set(cpvs)) or 6))
         kmeans = sk["KMeans"](n_clusters=clusters, n_init=10, random_state=seed).fit(scaled)
         distances = np.min(kmeans.transform(scaled), axis=1)
-        scores["cluster_distance"] = _ranks(distances)
+        # O id da chave tem de ser igual ao de `detectors` («kmeans»): se ficar
+        # «cluster_distance» a UI mostra o id cru no chip (bug apanhado).
+        scores["kmeans"] = _ranks(distances)
         detectors.append("kmeans")
+        _lap("kmeans", inicio)
     except Exception as exc:  # noqa: BLE001
         logger.warning("KMeans falhou: %s", exc)
 
     try:
-        if n <= 4000:
-            svm_scores = sk["OneClassSVM"](nu=contamination, gamma="scale").fit(scaled).decision_function(scaled)
-            scores["one_class_svm"] = _ranks(-svm_scores)
-            detectors.append("one_class_svm")
-        else:
-            rng = np.random.default_rng(seed)
-            subset = rng.choice(n, size=4000, replace=False)
-            svm = sk["OneClassSVM"](nu=contamination, gamma="scale").fit(scaled[subset])
-            partial = -svm.decision_function(scaled[subset])
-            full = np.full(n, np.nan)
-            full[subset] = partial
-            scores["one_class_svm"] = _ranks(full)
-            detectors.append("one_class_svm")
+        # O One-Class SVM é o detetor mais caro (SMO é quadrático no nº de
+        # amostras): corre numa sub-amostra de 2000 e só aí produz score.
+        inicio = time.time()
+        subset_size = min(n, 2000)
+        rng = np.random.default_rng(seed)
+        subset = rng.choice(n, size=subset_size, replace=False) if subset_size < n else np.arange(n)
+        svm = sk["OneClassSVM"](nu=max(0.01, contamination), gamma="scale").fit(scaled[subset])
+        partial = -svm.decision_function(scaled[subset])
+        full = np.full(n, np.nan)
+        full[subset] = partial
+        scores["one_class_svm"] = _ranks(full)
+        detectors.append("one_class_svm")
+        _lap("one_class_svm", inicio)
     except Exception as exc:  # noqa: BLE001
         logger.warning("OneClassSVM falhou: %s", exc)
 
     noise = np.zeros(n, dtype=int)
     try:
-        # `eps` a partir da distância ao k-ésimo vizinho (heurística clássica),
-        # medida numa sub-amostra para não construir uma matriz n×n gigante.
+        inicio = time.time()
+        # O DBSCAN é o detetor mais caro com `eps` alto (as region queries
+        # saturam e o algoritmo aproxima-se de O(n²)): corre numa sub-amostra
+        # de 4000 pontos e só aí marca ruído (`noise` = 0 no resto, «não
+        # avaliado»), tal como se faz com o One-Class SVM.
         k = min(10, max(4, n // 50 or 4))
-        sample = scaled[: min(n, 3000)]
+        subset_size = min(n, 4000)
+        if subset_size < n:
+            rng = np.random.default_rng(seed)
+            subset = rng.choice(n, size=subset_size, replace=False)
+        else:
+            subset = np.arange(n)
+        sample = scaled[subset]
         neighbours_model = sk["NearestNeighbors"](n_neighbors=min(k + 1, len(sample))).fit(sample)
         distances = neighbours_model.kneighbors(sample, return_distance=True)[0][:, -1]
         eps = float(np.quantile(distances, 0.9))
-        dbscan = sk["DBSCAN"](eps=max(eps, 0.5), min_samples=max(4, k)).fit(scaled)
-        labels = dbscan.labels_
-        noise = (labels == -1).astype(int)
+        dbscan = sk["DBSCAN"](eps=max(eps, 0.5), min_samples=max(4, k)).fit(sample)
+        noise[subset] = (dbscan.labels_ == -1).astype(int)
         detectors.append("dbscan")
+        _lap("dbscan", inicio)
     except Exception as exc:  # noqa: BLE001
         logger.warning("DBSCAN falhou: %s", exc)
 
+    inicio = time.time()
     z_cpv = _per_cpv_z(matrix, cpvs)
+    _lap("z_cpv", inicio)
 
-    continuous = [name for name in ("isolation_forest", "lof", "cluster_distance", "one_class_svm") if name in scores]
+    continuous = [
+        name for name in ("isolation_forest", "lof", "kmeans", "one_class_svm") if name in scores
+    ]
     if continuous:
         consensus = np.nanmean(np.vstack([scores[name] for name in continuous]), axis=0)
     else:
@@ -968,6 +1181,7 @@ def _detect(matrix: np.ndarray, cpvs: Sequence[str], *, seed: int, contamination
         "votes": votes,
         "detectors": detectors,
         "z_per_cpv": z_cpv,
+        "tempos": tempos_detetores,
         "error": None,
     }
 
@@ -976,44 +1190,19 @@ def _detect(matrix: np.ndarray, cpvs: Sequence[str], *, seed: int, contamination
 # 3. Regras interpretáveis (razões por contrato)
 # ---------------------------------------------------------------------------
 def _reasons(row: Dict[str, Any], *, z: float, cpv_rate_ad: Optional[float], global_rate_ad: Optional[float]) -> List[Dict[str, Any]]:
-    """Lista de sinais legíveis que explicam porque o contrato foi sinalizado."""
-    reasons: List[Dict[str, Any]] = []
-    ratio_base = row.get("ratio_base")
-    ratio_efetivo = row.get("ratio_efetivo")
-    dias_assinatura = row.get("dias_assinatura")
-    dias_publicacao = row.get("dias_publicacao")
-    dias_decisao = row.get("dias_decisao")
-    conc = row.get("n_concorrentes")
-    valor = row.get("valor") or 0
+    """Sinais das **regras predefinidas** para um contrato.
 
-    if ratio_base is not None and ratio_base > 1.2:
-        reasons.append({"padrao": "desvio_preco_alto", "detalhe": f"adjudicado {ratio_base * 100 - 100:.0f}% acima do preço base"})
-    if ratio_base is not None and 0 < ratio_base < 0.75:
-        reasons.append({"padrao": "desvio_preco_baixo", "detalhe": f"adjudicado {100 - ratio_base * 100:.0f}% abaixo do preço base"})
-    if ratio_efetivo is not None and ratio_efetivo > 1.15:
-        reasons.append({"padrao": "aditivo_valor", "detalhe": f"valor efetivo {ratio_efetivo * 100 - 100:.0f}% acima do contratual"})
-    if dias_publicacao is not None and dias_publicacao > 180:
-        reasons.append({"padrao": "publicacao_tardia", "detalhe": f"contrato publicado {dias_publicacao} dias depois de ser assinado"})
-    elif dias_publicacao is not None and dias_publicacao < 0:
-        reasons.append({"padrao": "publicacao_tardia", "detalhe": f"publicado {abs(dias_publicacao)} dias antes de ser assinado"})
-    if dias_assinatura is not None and dias_assinatura > 180:
-        reasons.append({"padrao": "assinatura_tardia", "detalhe": f"assinado {dias_assinatura} dias depois da decisão de adjudicação"})
-    if dias_decisao is not None and dias_decisao < -180:
-        reasons.append({"padrao": "publicacao_tardia", "detalhe": f"decisão publicada {abs(dias_decisao)} dias depois"})
-    if row.get("ajuste_direto") and cpv_rate_ad is not None and global_rate_ad is not None and cpv_rate_ad < global_rate_ad * 0.6:
-        reasons.append(
-            {
-                "padrao": "ajuste_direto_atipico",
-                "detalhe": f"ajuste direto num CPV onde só {cpv_rate_ad * 100:.0f}% dos contratos o usam",
-            }
-        )
-    if conc is not None and conc <= 1 and valor >= 25000:
-        reasons.append({"padrao": "baixa_concorrencia", "detalhe": f"{conc} concorrente(s) em contrato de {valor:,.0f} €"})
-    elif conc is not None and conc == 0:
-        reasons.append({"padrao": "baixa_concorrencia", "detalhe": "nenhum concorrente registado"})
-    if z > 3.5:
-        reasons.append({"padrao": "valor_atipico", "detalhe": f"{z:.1f}σ face à mediana do seu CPV"})
-    return reasons
+    Wrapper de compatibilidade: avalia o conjunto de fábrica
+    (`padroes_regras.REGRAS_DEFAULT`) sobre o contexto do contrato. O motor usa
+    esta via quando não há regras guardadas ou quando só se quer a régua base.
+    """
+    contexto = _contexto_regras(
+        row,
+        z=z,
+        taxa_ajuste_direto_cpv=cpv_rate_ad,
+        taxa_ajuste_direto_global=global_rate_ad,
+    )
+    return regras.avaliar(contexto, regras.REGRAS_DEFAULT)
 
 
 # ---------------------------------------------------------------------------
@@ -1547,6 +1736,7 @@ def _relations(
 def _news_for(client: Optional[Elasticsearch], names: Sequence[Tuple[str, str]], *, per_name: int = 5) -> List[Dict[str, Any]]:
     """Menções das entidades em RSS, recolha (scraping) e redes sociais."""
     out: List[Dict[str, Any]] = []
+    vistos: set = set()
     for label, name in names:
         clean = str(name or "").strip()
         if len(clean) < 4:
@@ -1556,8 +1746,15 @@ def _news_for(client: Optional[Elasticsearch], names: Sequence[Tuple[str, str]],
             continue
         out.extend(_es_mentions(client, SCRAPED_INDEX, label, clean, per_name, date_field="scraped_at", extra=["source_name"]))
         out.extend(_es_mentions(client, SOCIAL_INDEX, label, clean, per_name, date_field="published_at", extra=["platform", "channel_name"]))
-    out.sort(key=lambda item: str(item.get("data") or ""), reverse=True)
-    return out[:80]
+    dedupe: List[Dict[str, Any]] = []
+    for item in out:
+        chave = str(item.get("url") or item.get("titulo") or "").strip().lower()
+        if chave and chave in vistos:
+            continue
+        vistos.add(chave)
+        dedupe.append(item)
+    dedupe.sort(key=lambda item: str(item.get("data") or ""), reverse=True)
+    return dedupe[:80]
 
 
 def _rss_mentions(label: str, name: str, limit: int) -> List[Dict[str, Any]]:
@@ -1697,7 +1894,7 @@ def _risk_model(rows: Sequence[Dict[str, Any]], matrix: np.ndarray, *, seed: int
 
     full_probabilities = model.predict_proba(X)[:, 1]
     top_contracts = []
-    for position in np.argsort(-full_probabilities)[:40]:
+    for position in np.argsort(-full_probabilities)[:200]:
         row = rows[indexes[int(position)]]
         top_contracts.append(
             {
@@ -1767,6 +1964,15 @@ def analyze(
         return {"error": "Elasticsearch indisponível"}
 
     started = time.time()
+    mark = started
+    tempos: Dict[str, float] = {}
+
+    def _lap(nome: str) -> None:
+        nonlocal mark
+        agora = time.time()
+        tempos[nome] = round(agora - mark, 2)
+        mark = agora
+
     years = _years_in_index(client, spec)
     if ano_from is None and years:
         ano_from = years[0]
@@ -1774,6 +1980,7 @@ def analyze(
         ano_to = years[-1] if years else datetime.now().year
     if ano_from and ano_to and ano_from > ano_to:
         ano_from, ano_to = ano_to, ano_from
+    _lap("anos")
 
     rows, coverage = _sample(
         client,
@@ -1784,6 +1991,7 @@ def analyze(
         per_year=per_year,
         years=[y for y in years if ano_from <= y <= ano_to] or None,
     )
+    _lap("amostragem")
     if not rows:
         return {
             "error": "sem contratos para os filtros pedidos",
@@ -1806,13 +2014,34 @@ def analyze(
 
     imputed = _impute(matrix)
     detection = _detect(imputed, cpvs, seed=seed, contamination=contamination)
+    _lap("deteccao")
     consensus = detection["consensus"]
     votes = detection["votes"]
     z_cpv = detection["z_per_cpv"]
 
     global_rate_ad = sum(row.get("ajuste_direto") or 0 for row in rows) / len(rows)
     cpv_table = _cpv_table(rows, global_rate_ad)
+    _lap("cpv")
     cpv_rate_ad = {item["cpv"]: item["taxa_ajuste_direto"] for item in cpv_table}
+    cpv_metricas = {item["cpv"]: item for item in cpv_table}
+
+    # -- regras (editáveis na página) ----------------------------------------
+    regras_ativas = regras.regras_ativas()
+    contextos: List[Dict[str, Any]] = []
+    for index, row in enumerate(rows):
+        grupo = row.get("cpv_grupo") or ""
+        metricas = cpv_metricas.get(grupo) or {}
+        contextos.append(
+            _contexto_regras(
+                row,
+                z=float(z_cpv[index]) if index < z_cpv.size else 0.0,
+                taxa_ajuste_direto_cpv=metricas.get("taxa_ajuste_direto"),
+                taxa_aditivo_cpv=metricas.get("taxa_aditivo"),
+                taxa_ajuste_direto_global=global_rate_ad,
+                contratos_do_cpv=metricas.get("contratos"),
+            )
+        )
+    hits_por_contrato: List[List[Dict[str, Any]]] = [regras.avaliar(contexto, regras_ativas) for contexto in contextos]
 
     # Contratos sinalizados: consenso alto **e** pelo menos dois detectores de acordo.
     threshold = float(np.quantile(consensus, 0.9)) if consensus.size else 1.0
@@ -1822,12 +2051,7 @@ def analyze(
         score = float(consensus[index])
         if votes[index] < 2 or score < max(threshold, 0.6):
             continue
-        reasons = _reasons(
-            row,
-            z=float(z_cpv[index]),
-            cpv_rate_ad=cpv_rate_ad.get(row.get("cpv_grupo") or ""),
-            global_rate_ad=global_rate_ad,
-        )
+        reasons = hits_por_contrato[index]
         entry = {
             "id": row.get("id"),
             "pais": row.get("pais"),
@@ -1859,18 +2083,67 @@ def analyze(
                 if np.isfinite(column[index]) and column[index] >= 0.85
             ],
             "razoes": reasons,
+            "severidade": severidade_de(reasons),
         }
         anomalies[index] = entry
         anomaly_list.append(entry)
     anomaly_list.sort(key=lambda item: -(item.get("score") or 0))
+    _lap("sinalizacao")
 
     for item in cpv_table:
         item["contratos_sinalizados"] = sum(
             1 for entry in anomaly_list if entry.get("cpv_grupo") == item["cpv"]
         )
 
+    # -- regras: que contratos cumprem cada regra (independente do ML) -------
+    contagem_regras: Dict[str, int] = {}
+    regras_hits: List[Dict[str, Any]] = []
+    for index, hits in enumerate(hits_por_contrato):
+        if not hits:
+            continue
+        for hit in hits:
+            identificador = str(hit.get("padrao"))
+            contagem_regras[identificador] = contagem_regras.get(identificador, 0) + 1
+        row = rows[index]
+        regras_hits.append(
+            {
+                "id": row.get("id"),
+                "ano": row.get("ano"),
+                "objeto": row.get("objeto"),
+                "valor": num(row.get("valor")),
+                "cpv": row.get("cpv"),
+                "cpv_grupo": row.get("cpv_grupo"),
+                "procedimento": row.get("procedimento"),
+                "adjudicante": row.get("adjudicante_nome"),
+                "adjudicante_nif": row.get("adjudicante_nif"),
+                "adjudicataria": next(
+                    (party.get("nome") for party in row.get("adjudicatarios") or [] if isinstance(party, dict)),
+                    None,
+                ),
+                "adjudicataria_nif": next(
+                    (party.get("nif") for party in row.get("adjudicatarios") or [] if isinstance(party, dict)),
+                    None,
+                ),
+                "severidade": severidade_de(hits),
+                "regras": [hit.get("padrao") for hit in hits],
+                "rotulos": [hit.get("label") for hit in hits],
+                "detalhes": [hit.get("detalhe") for hit in hits][:6],
+            }
+        )
+    regras_hits.sort(
+        key=lambda item: (
+            _SEVERIDADE_ORDEM.get(str(item.get("severidade")), 9),
+            -len(item.get("regras") or []),
+            -(item.get("valor") or 0),
+        )
+    )
+    regras_resumo = regras.resumo_regras(regras_ativas)
+    for item in regras_resumo:
+        item["contratos"] = contagem_regras.get(str(item["id"]), 0)
+
     entities = _entity_table(rows, anomalies)
     entity_model = _score_entities(entities, seed=seed)
+    _lap("entidades")
     for entity in entities:
         if (entity.get("score") or 0) > 0.85:
             entity["motivos"].append("fora do padrão face às suas pares (LOF)")
@@ -1882,6 +2155,7 @@ def analyze(
     entities.sort(key=lambda item: (-(item.get("score") or 0), -(item.get("valor_total") or 0)))
 
     relations = _relations(client, rows, entities)
+    _lap("relacoes")
 
     # As entidades insolventes entram no topo da lista (podem ter score baixo e
     # desapareceriam da janela de 300 que a UI mostra).
@@ -1895,6 +2169,7 @@ def analyze(
                 presentes.add(entity.get("nif"))
 
     risk = _risk_model(rows, imputed, seed=seed, feature_names=used_features)
+    _lap("risco")
 
     valores = [row["valor"] for row in rows if row.get("valor")]
     aditivos = [row for row in rows if (row.get("ratio_efetivo") or 0) > 1.15]
@@ -1915,6 +2190,8 @@ def analyze(
         "dias_ate_decisao_mediano": num(median([row["dias_decisao"] for row in rows if row.get("dias_decisao") is not None])),
         "contratos_sinalizados": len(anomaly_list),
         "taxa_sinalizacao": num(len(anomaly_list) / len(rows)),
+        "contratos_com_regras": len(regras_hits),
+        "taxa_com_regras": num(len(regras_hits) / len(rows)),
         "entidades": len(entities),
         "entidades_sinalizadas": sum(1 for entity in entities if (entity.get("score") or 0) > 0.85),
         "cpvs": len({row.get("cpv_grupo") for row in rows if row.get("cpv_grupo")}),
@@ -1928,6 +2205,7 @@ def analyze(
         "filtros": {"ano_from": ano_from, "ano_to": ano_to, "cpv": cpv, "per_year": per_year},
         "gerado_em": datetime.now(timezone.utc).isoformat(),
         "duracao_s": num(time.time() - started),
+        "tempos": tempos,
         "overview": overview,
         "cpvs": cpv_table,
         "anomalias": anomaly_list[:400],
@@ -1942,9 +2220,16 @@ def analyze(
             "aviso": detection["error"],
             "features": used_features,
             "features_excluidas": dropped,
+            "tempos_detetores": detection.get("tempos") or {},
             "nota": "Os scores são percentis [0,1]: 1 é o contrato mais atípico da amostra.",
         },
-        "padroes": PADROES,
+        "padroes": catalogo_padroes(),
+        "regras": {
+            "ativas": regras_resumo,
+            "total_regras": len(regras.listar()["regras"]),
+            "templates": regras.listar()["templates"],
+        },
+        "regras_hits": regras_hits[:300],
         "modelo_entidades": entity_model,
         "parametros": {"sample_per_year": SAMPLE_PER_YEAR_DEFAULT, "cache_ttl_s": CACHE_TTL_SECONDS},
     }
@@ -1967,6 +2252,9 @@ def clear_cache() -> int:
     with _CACHE_LOCK:
         size = len(_CACHE)
         _CACHE.clear()
+    with _EMP_CACHE_LOCK:
+        size += len(_EMP_CACHE)
+        _EMP_CACHE.clear()
     return size
 
 
@@ -1993,7 +2281,9 @@ def meta() -> Dict[str, Any]:
             }
         )
     return {
-        "padroes": PADROES,
+        "padroes": catalogo_padroes(),
+        "regras_disponiveis": regras.listar()["regras"],
+        "templates": regras.listar()["templates"],
         "algoritmos": {
             "nao_supervisionado": [
                 {"id": "isolation_forest", "label": "Isolation Forest", "uso": "isola contratos atípicos em árvores de decisão"},
@@ -2023,6 +2313,271 @@ def meta() -> Dict[str, Any]:
     }
 
 
+def _co_intervenientes_cire(client: Elasticsearch, processos: Sequence[str], nif: str, *, size: int = 20) -> List[Dict[str, Any]]:
+    """Quem mais está nos processos do CIRE desta empresa.
+
+    É esta a ligação que interessa a um analista: quem aparece ao lado da empresa
+    num processo de insolvência (administradores, credores, outras empresas do
+    grupo). Uma só consulta por `terms` nos números de processo.
+
+    O limite é baixo de propósito: cada interveniente é um nó no grafo do
+    dossiê e o desenho (simulação de forças no browser) é o passo mais caro da
+    página. Com 8 processos chegam 20 nomes para ver quem se cruza.
+    """
+    numeros = [str(processo).strip() for processo in processos if str(processo or "").strip()]
+    numeros = list(dict.fromkeys(numeros))[:8]
+    if not numeros:
+        return []
+    body = {
+        "size": 20,
+        "track_total_hits": False,
+        "_source": ["processo_numero", "intervenientes"],
+        "query": {"terms": {"processo_numero": numeros}},
+    }
+    saida: List[Dict[str, Any]] = []
+    vistos: set = set()
+    try:
+        resp = _search(client, CIRE_INDEX, body, timeout=45)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Intervenientes do CIRE indisponíveis: %s", exc)
+        return []
+    for hit in _hits(resp):
+        src = hit.get("_source") or {}
+        processo = str(src.get("processo_numero") or "").strip()
+        for pessoa in src.get("intervenientes") or []:
+            if not isinstance(pessoa, dict):
+                continue
+            outro = str(pessoa.get("nif") or "").strip()
+            nome = str(pessoa.get("nome") or "").strip()
+            if not outro or outro == nif:
+                continue
+            chave = (processo, outro)
+            if chave in vistos:
+                continue
+            vistos.add(chave)
+            saida.append({"processo": processo, "nif": outro, "nome": nome or outro, "papel": pessoa.get("papel")})
+            if len(saida) >= size:
+                return saida
+    return saida
+
+
+def _dossie_grafo(
+    *,
+    nif: str,
+    label: str,
+    contracts: Sequence[Dict[str, Any]],
+    adjudicantes: Dict[str, float],
+    nomes_adjudicantes: Dict[str, str],
+    cargos_sociais: Sequence[Dict[str, Any]],
+    intervenientes_cire: Sequence[Dict[str, Any]],
+    cire: Sequence[Dict[str, Any]],
+    co_intervenientes: Sequence[Dict[str, Any]],
+    max_adjudicantes: int = 10,
+    max_pessoas: int = 12,
+    max_processos: int = 8,
+) -> Dict[str, Any]:
+    """Grafo do dossiê: empresa ↔ adjudicantes, órgãos sociais e processos do CIRE.
+
+    Segue a forma de `ContractGraphBuildResponse` (a mesma do estúdio de grafos),
+    para o dossiê poder desenhar com o `GraphCanvas` sem conversões próprias.
+
+    Os limites são apertados de propósito: um dossiê é uma vista de leitura e o
+    desenho é feito no browser — 30 nós dizem o mesmo que 70 e não prendem a
+    aplicação. O dossiê traz também as listas completas (contratos, cargos,
+    processos e intervenientes), pelo que nada se perde em detalhe.
+    """
+    centro = f"empresa:{nif}"
+    nodes: List[Dict[str, Any]] = [
+        {
+            "id": centro,
+            "key": nif,
+            "label": label or nif,
+            "dimension": "empresa",
+            "type": "entidade",
+            "role": "empresa analisada",
+            "count": len(contracts),
+            "total_value": num(sum((contrato.get("valor") or 0.0) for contrato in contracts)) or 0.0,
+        }
+    ]
+    edges: List[Dict[str, Any]] = []
+    ids = {centro}
+
+    # Adjudicantes (quem compra) — é onde está o valor.
+    contagens: Dict[str, int] = {}
+    for contrato in contracts:
+        chave = str(contrato.get("adjudicante_nif") or contrato.get("adjudicante") or "")
+        if chave:
+            contagens[chave] = contagens.get(chave, 0) + 1
+    for chave, valor in sorted(adjudicantes.items(), key=lambda item: -item[1])[:max_adjudicantes]:
+        no = f"adjudicante:{chave}"
+        if no in ids:
+            continue
+        ids.add(no)
+        nodes.append(
+            {
+                "id": no,
+                "key": str(chave),
+                "label": nomes_adjudicantes.get(str(chave)) or str(chave),
+                "dimension": "adjudicante",
+                "type": "entidade",
+                "role": f"compra ({contagens.get(str(chave), 0)} contratos)",
+                "count": contagens.get(str(chave), 0),
+                "total_value": num(valor) or 0.0,
+            }
+        )
+        edges.append({"source": centro, "target": no, "count": contagens.get(str(chave), 0), "value": num(valor) or 0.0})
+
+    # Órgãos sociais (pessoas com cargo registado).
+    for pessoa in cargos_sociais[:max_pessoas]:
+        chave = str(pessoa.get("nif") or pessoa.get("nome") or "")
+        no = f"pessoa:{chave}"
+        if no in ids:
+            continue
+        ids.add(no)
+        cargos = pessoa.get("cargos") or []
+        nodes.append(
+            {
+                "id": no,
+                "key": chave,
+                "label": pessoa.get("nome") or chave,
+                "dimension": "pessoa",
+                "type": "pessoa",
+                "role": ", ".join(
+                    sorted({str(cargo.get("role_org") or cargo.get("role") or "") for cargo in cargos} - {""})
+                )[:80],
+                "count": len(cargos),
+                "total_value": 0.0,
+            }
+        )
+        # A direção aponta para a empresa (quem gere), não o contrário.
+        edges.append({"source": no, "target": centro, "count": len(cargos), "value": 0.0})
+
+    # Processos do CIRE e quem mais lá aparece.
+    processos = [item for item in cire[:max_processos] if item.get("processo") or item.get("especie")]
+    for indice, item in enumerate(processos):
+        chave = str(item.get("processo") or f"processo-{indice}")
+        no = f"cire:{chave}"
+        if no in ids:
+            continue
+        ids.add(no)
+        nodes.append(
+            {
+                "id": no,
+                "key": chave,
+                "label": str(item.get("especie") or "processo CIRE")[:60],
+                "dimension": "cire",
+                "type": "processo",
+                "role": f"{item.get('tribunal') or 'tribunal'} · {str(item.get('data') or '')[:10]}",
+                "count": 1,
+                "total_value": 0.0,
+            }
+        )
+        edges.append({"source": centro, "target": no, "count": 1, "value": 0.0})
+
+    lacos: List[Dict[str, Any]] = []
+    for outro in co_intervenientes:
+        chave = str(outro.get("nif") or "")
+        no = f"interveniente:{chave}"
+        if no not in ids:
+            ids.add(no)
+            nodes.append(
+                {
+                    "id": no,
+                    "key": chave,
+                    "label": outro.get("nome") or chave,
+                    "dimension": "interveniente",
+                    "type": "pessoa" if _parece_pessoa(chave) else "entidade",
+                    "role": f"{outro.get('papel') or 'interveniente'} (CIRE)",
+                    "count": 1,
+                    "total_value": 0.0,
+                }
+            )
+        processo = str(outro.get("processo") or "")
+        alvo = f"cire:{processo}"
+        if alvo in ids and processo:
+            edges.append({"source": alvo, "target": no, "count": 1, "value": 0.0})
+        else:
+            edges.append({"source": centro, "target": no, "count": 1, "value": 0.0})
+        lacos.append(
+            {
+                "tipo": "processo_partilhado",
+                "detalhe": f"{outro.get('nome') or chave} é {outro.get('papel') or 'interveniente'} no processo {processo or '—'}",
+                "nif": chave,
+                "nome": outro.get("nome"),
+                "processo": processo or None,
+                "papel": outro.get("papel"),
+            }
+        )
+
+    # Pessoas com papéis processuais (mas sem cargo social) também contam como ligação.
+    for pessoa in intervenientes_cire[:6]:
+        chave = str(pessoa.get("nif") or "")
+        no = f"pessoa:{chave}"
+        if not chave or no in ids:
+            continue
+        ids.add(no)
+        cargos = pessoa.get("cargos") or []
+        nodes.append(
+            {
+                "id": no,
+                "key": chave,
+                "label": pessoa.get("nome") or chave,
+                "dimension": "pessoa",
+                "type": "pessoa",
+                "role": ", ".join(sorted({str(cargo.get("role") or "") for cargo in cargos} - {""}))[:80] or "papel processual",
+                "count": len(cargos),
+                "total_value": 0.0,
+            }
+        )
+        edges.append({"source": no, "target": centro, "count": len(cargos) or 1, "value": 0.0})
+
+    n_nodes = len(nodes)
+    n_edges = len(edges)
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "meta": {
+            "dimension_a": "empresa",
+            "dimension_b": None,
+            "metric": "contratos",
+            "mode": "relations",
+            "complete": False,
+            "scan_capped": True,
+            "sample_order": "amostra do dossiê (contratos mais recentes)",
+            "sample_limit": len(contracts),
+            "documents_scanned": len(contracts),
+            "documents_matching": len(contracts),
+            "scanned_value": num(sum((contrato.get("valor") or 0.0) for contrato in contracts)) or 0.0,
+            "nodes_total": n_nodes,
+            "edges_total": n_edges,
+            "kept_nodes": n_nodes,
+            "kept_edges": n_edges,
+            "omitted_edges": 0,
+            "coverage_value_share": None,
+            "coverage_count_share": None,
+            "directed": True,
+            "limits": {
+                "adjudicantes": max_adjudicantes,
+                "pessoas": max_pessoas,
+                "processos": max_processos,
+                "intervenientes_cire": len(co_intervenientes),
+            },
+            "notes": [
+                "Grafo da amostra do dossiê (não da totalidade do portal).",
+                "As ligações a pessoas usam cargos de órgãos sociais; os papéis processuais do CIRE aparecem como intervenientes.",
+            ],
+            "filters": {"nif": nif},
+        },
+        "lacos": lacos[:20],
+    }
+
+
+def _parece_pessoa(nif: str) -> bool:
+    """NIF de pessoa singular (PT: 1/2/3 + 8 dígitos) vs pessoa coletiva (5/6/7/8/9)."""
+    chave = "".join(ch for ch in str(nif or "") if ch.isdigit())
+    return len(chave) == 9 and chave[0] in {"1", "2", "3"}
+
+
 def entity_dossier(nif: str, *, pais: str = PAIS_DEFAULT, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
     """Ficha de uma entidade: contratos, sinais, relações e notícias."""
     spec = COUNTRIES.get(str(pais or "").upper(), PT)
@@ -2041,7 +2596,7 @@ def entity_dossier(nif: str, *, pais: str = PAIS_DEFAULT, es: Optional[Elasticse
     else:
         query = {"term": {"adjudicatario_nif": nif}}
     body = {
-        "size": 60,
+        "size": 300,
         "track_total_hits": True,
         "query": query,
         "sort": [{spec.pub_date: {"order": "desc", "unmapped_type": "date"}}],
@@ -2063,22 +2618,27 @@ def entity_dossier(nif: str, *, pais: str = PAIS_DEFAULT, es: Optional[Elasticse
                 "procedimento": row["procedimento"],
                 "ajuste_direto": bool(row["ajuste_direto"]),
                 "cpv": row["cpv"],
+                "cpv_desc": row["cpv_desc"],
+                "n_concorrentes": row["n_concorrentes"],
                 "adjudicante": row["adjudicante_nome"],
                 "adjudicante_nif": row["adjudicante_nif"],
                 "dias_decisao": row["dias_decisao"],
                 "dias_assinatura": row["dias_assinatura"],
                 "dias_publicacao": row["dias_publicacao"],
+                "data_publicacao": row["data_publicacao"],
             }
         )
 
     people: List[Dict[str, Any]] = []
     body_people = {
-        "size": 40,
-        "track_total_hits": False,
+        "size": 60,
+        "track_total_hits": True,
         "_source": ["nif", "name", "roles"],
         "query": {"nested": {"path": "roles", "query": {"term": {"roles.company_nif": nif}}}},
     }
-    for hit in _hits(_search(client, PEOPLE_INDEX, body_people, timeout=45)):
+    pessoas_resp = _search(client, PEOPLE_INDEX, body_people, timeout=45)
+    pessoas_total = int((((pessoas_resp.get("hits") or {}).get("total") or {}).get("value")) or 0)
+    for hit in _hits(pessoas_resp):
         src = hit.get("_source") or {}
         roles = [
             {
@@ -2096,12 +2656,15 @@ def entity_dossier(nif: str, *, pais: str = PAIS_DEFAULT, es: Optional[Elasticse
 
     cire: List[Dict[str, Any]] = []
     cire_body = {
-        "size": 20,
-        "track_total_hits": False,
+        "size": 50,
+        "track_total_hits": True,
         "_source": ["insolvente", "especie", "ato", "data_publicacao", "tribunal", "processo_numero"],
         "query": {"terms": {"nifs": [nif]}},
+        "sort": [{"data_publicacao": {"order": "desc", "unmapped_type": "date"}}],
     }
-    for hit in _hits(_search(client, CIRE_INDEX, cire_body, timeout=45)):
+    cire_resp = _search(client, CIRE_INDEX, cire_body, timeout=45)
+    cire_total = int((((cire_resp.get("hits") or {}).get("total") or {}).get("value")) or 0)
+    for hit in _hits(cire_resp):
         src = hit.get("_source") or {}
         cire.append(
             {
@@ -2137,9 +2700,12 @@ def entity_dossier(nif: str, *, pais: str = PAIS_DEFAULT, es: Optional[Elasticse
     ratios = [c["ratio_base"] for c in contracts if c.get("ratio_base") is not None]
     efetivos = [c for c in contracts if (c.get("ratio_efetivo") or 0) > 1.15]
     adjudicantes: Dict[str, float] = {}
+    nomes_adjudicantes: Dict[str, str] = {}
     for contract in contracts:
         key = contract.get("adjudicante_nif") or contract.get("adjudicante") or "?"
         adjudicantes[key] = adjudicantes.get(key, 0.0) + (contract.get("valor") or 0.0)
+        if contract.get("adjudicante"):
+            nomes_adjudicantes[str(key)] = str(contract["adjudicante"])
     total_valor = sum(adjudicantes.values()) or 0
     taxa_ad = sum(1 for c in contracts if c.get("ajuste_direto")) / len(contracts) if contracts else 0
     mediana = median(ratios)
@@ -2151,15 +2717,20 @@ def entity_dossier(nif: str, *, pais: str = PAIS_DEFAULT, es: Optional[Elasticse
     if taxa_ad > 0.6 and len(contracts) >= 5:
         sinais.append({"padrao": "ajuste_direto_atipico", "detalhe": f"{taxa_ad * 100:.0f}% dos contratos por ajuste direto"})
     if total_valor > 0 and len(adjudicantes) <= 3 and len(contracts) >= 5:
+        maior = max(adjudicantes, key=adjudicantes.get)
         sinais.append(
             {
                 "padrao": "concentracao_fornecedor",
-                "detalhe": f"{max(adjudicantes.values()) / total_valor * 100:.0f}% do valor vem de "
-                f"{max(adjudicantes, key=adjudicantes.get)}",
+                "detalhe": f"{adjudicantes[maior] / total_valor * 100:.0f}% do valor vem de "
+                f"{nomes_adjudicantes.get(str(maior)) or maior}",
             }
         )
     if cire:
-        sinais.append({"padrao": "insolvencia", "detalhe": f"{len(cire)} processo(s) no CIRE"})
+        total_cire = cire_total or len(cire)
+        detalhe = f"{total_cire} processo(s) no CIRE"
+        if len(cire) < total_cire:
+            detalhe += f" ({len(cire)} lidos)"
+        sinais.append({"padrao": "insolvencia", "detalhe": detalhe, "total": total_cire, "itens": len(cire)})
     cargos_sociais = [
         person for person in people if any(str(c.get("role_org") or "") in CARGO_GESTAO_ORGS for c in person["cargos"])
     ]
@@ -2168,10 +2739,27 @@ def entity_dossier(nif: str, *, pais: str = PAIS_DEFAULT, es: Optional[Elasticse
             {
                 "padrao": "rede_pessoas",
                 "detalhe": f"{len(cargos_sociais)} pessoa(s) com cargo de órgão social registado nesta empresa",
+                "total": len(cargos_sociais),
+                "itens": len(cargos_sociais),
             }
         )
 
     noticias = _news_for(client, [(label, label)], per_name=6)
+
+    # -- quem mais aparece nos processos desta empresa ----------------------
+    co_intervenientes = _co_intervenientes_cire(client, [item.get("processo") or "" for item in cire], nif)
+    intervenientes_cire = [person for person in people if person not in cargos_sociais]
+    grafo = _dossie_grafo(
+        nif=nif,
+        label=label,
+        contracts=contracts,
+        adjudicantes=adjudicantes,
+        nomes_adjudicantes=nomes_adjudicantes,
+        cargos_sociais=cargos_sociais,
+        intervenientes_cire=intervenientes_cire,
+        cire=cire,
+        co_intervenientes=co_intervenientes,
+    )
 
     return {
         "nif": nif,
@@ -2190,7 +2778,1277 @@ def entity_dossier(nif: str, *, pais: str = PAIS_DEFAULT, es: Optional[Elasticse
         },
         "sinais": sinais,
         "cargos_sociais": cargos_sociais,
-        "intervenientes_cire": [person for person in people if person not in cargos_sociais][:20],
+        "intervenientes_cire": intervenientes_cire[:20],
         "insolvencias": cire,
+        "insolvencias_total": cire_total or len(cire),
+        "pessoas_total": pessoas_total or len(people),
+        "intervenientes_processos": co_intervenientes,
+        "grafo": grafo,
+        "lacos": grafo["lacos"],
         "noticias": noticias,
+    }
+
+# ---------------------------------------------------------------------------
+# 9. Análise de uma empresa (pesquisa → análise dos seus contratos e relações)
+# ---------------------------------------------------------------------------
+def _empresa_query(spec: CountrySpec, nif: str) -> Dict[str, Any]:
+    """Filtro dos contratos em que a empresa é adjudicatária.
+
+    No PT o NIF vive num campo aninhado (`adjudicatarios.parsed.nif`, keyword);
+    no PLACSP é plano e aparece com capitalizações diferentes (`A28791069` vs
+    `a28791069`), pelo que a comparação é insensível a maiúsculas.
+    """
+    if spec.key == "PT":
+        return {"nested": {"path": spec.adjudicatario_path, "query": {"term": {spec.adjudicatario_nif: nif}}}}
+    return {"wildcard": {spec.adjudicatario_nif: {"value": nif, "case_insensitive": True}}}
+
+
+def _nif_puro(texto: str, spec: CountrySpec) -> Optional[str]:
+    """Devolve o NIF quando o texto **é** um NIF (e não um nome de empresa)."""
+    compacto = re.sub(r"[\s.\-/]", "", texto or "")
+    if not compacto or not re.fullmatch(r"[A-Za-z0-9]+", compacto):
+        return None
+    if len(compacto) < 8 or len(compacto) > 10:
+        return None
+    digitos = sum(1 for ch in compacto if ch.isdigit())
+    if digitos < 6:
+        return None
+    return compacto.upper() if spec.key == "ES" else compacto
+
+
+def _candidatos_contribuintes(client: Elasticsearch, texto: str, *, size: int = 8) -> List[Dict[str, Any]]:
+    """Empresas do cadastro (`finance_contribuintes`) cujo nome casa com o texto.
+
+    Aqui o nome é um campo `text` (analisador próprio, tolerante a acentos e
+    ruído), ao contrário do nome nos contratos, que é `keyword`.
+    """
+    body = {
+        "size": size,
+        "_source": [
+            "nif",
+            "name",
+            "names",
+            "country",
+            "location",
+            "roles",
+            "type",
+            "is_company",
+            "contracts_count",
+            "contracts_value",
+            "src_contratos",
+        ],
+        "query": {
+            "bool": {
+                "should": [
+                    {"match": {"name": {"query": texto, "operator": "and"}}},
+                    {"match": {"search_text": {"query": texto, "operator": "and"}}},
+                    {"match": {"names": {"query": texto, "operator": "and"}}},
+                ],
+                "minimum_should_match": 1,
+            }
+        },
+        "sort": [{"contracts_count": {"order": "desc", "unmapped_type": "long"}}],
+    }
+    try:
+        resp = _search(client, CONTRIBUINTES_INDEX, body, timeout=30)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Cadastro de contribuintes indisponível (%s).", exc)
+        return []
+    candidatos: List[Dict[str, Any]] = []
+    for hit in _hits(resp):
+        src = hit.get("_source") or {}
+        nif = str(src.get("nif") or "").strip()
+        if not nif:
+            continue
+        partes = ((src.get("src_contratos") or {}).get("parts") or {}).get("adjudicatario") or {}
+        candidatos.append(
+            {
+                "nif": nif,
+                "nome": src.get("name") or nif,
+                "alias": (src.get("names") or [])[:3],
+                "contratos": as_int(src.get("contracts_count")),
+                "valor": num(src.get("contracts_value")),
+                "papeis": list(src.get("roles") or []),
+                "concelho": (src.get("location") or {}).get("concelho") if isinstance(src.get("location"), dict) else None,
+                "fonte": "cadastro",
+                "valor_adjudicatario": num(partes.get("value")),
+            }
+        )
+    candidatos.sort(
+        key=lambda item: (
+            0 if "adjudicatario" in (item.get("papeis") or []) else 1,
+            -(item.get("contratos") or 0),
+        )
+    )
+    return candidatos
+
+
+def _candidatos_contratos_pt(client: Elasticsearch, spec: CountrySpec, texto: str, *, size: int = 6) -> List[Dict[str, Any]]:
+    """Último recurso: procurar o nome **dentro** dos contratos (campo `keyword`).
+
+    Usa `wildcard` insensível a maiúsculas sobre o nome da parte e agrega por
+    NIF; o `filter` dentro do `nested` garante que os baldes só contêm a parte
+    que realmente casou com o texto.
+    """
+    condicao = {"wildcard": {spec.adjudicatario_nome: {"value": f"*{texto}*", "case_insensitive": True}}}
+    body = {
+        "size": 0,
+        "track_total_hits": False,
+        "query": {"nested": {"path": spec.adjudicatario_path, "query": condicao}},
+        "aggs": {
+            "partes": {
+                "nested": {"path": spec.adjudicatario_path},
+                "aggs": {
+                    "casadas": {
+                        "filter": condicao,
+                        "aggs": {
+                            "nifs": {
+                                "terms": {"field": spec.adjudicatario_nif, "size": size},
+                                "aggs": {
+                                    "nome": {"top_hits": {"size": 1, "_source": [spec.adjudicatario_nome]}},
+                                    "valor": {
+                                        "reverse_nested": {},
+                                        "aggs": {"s": {"sum": {"field": spec.value_field}}},
+                                    },
+                                },
+                            }
+                        },
+                    }
+                },
+            }
+        },
+    }
+    try:
+        resp = _search(client, spec.index, body, timeout=90)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Pesquisa de empresa nos contratos falhou (%s).", exc)
+        return []
+    baldes = ((((resp.get("aggregations") or {}).get("partes") or {}).get("casadas") or {}).get("nifs") or {}).get(
+        "buckets"
+    ) or []
+    return [
+        {
+            "nif": str(balde.get("key") or "").strip(),
+            "nome": _top_hit_name(balde.get("nome")) or str(balde.get("key") or ""),
+            "contratos": int(balde.get("doc_count") or 0),
+            "valor": num(((balde.get("valor") or {}).get("s") or {}).get("value")),
+            "papeis": ["adjudicatario"],
+            "fonte": "contratos",
+        }
+        for balde in baldes
+        if str(balde.get("key") or "").strip()
+    ]
+
+
+def _candidatos_contratos_es(client: Elasticsearch, spec: CountrySpec, *, texto: Optional[str], nif: Optional[str], size: int = 6) -> List[Dict[str, Any]]:
+    """Empresas adjudicatárias no PLACSP (nome é `text`; NIF agrupado em maiúsculas)."""
+    if nif:
+        filtro: Dict[str, Any] = {"wildcard": {spec.adjudicatario_nif: {"value": nif, "case_insensitive": True}}}
+    else:
+        filtro = {"match": {spec.adjudicatario_nome: {"query": texto, "operator": "and"}}}
+    body = {
+        "size": 0,
+        "track_total_hits": False,
+        "query": filtro,
+        "aggs": {
+            "nifs": {
+                "terms": {"field": spec.adjudicatario_nif, "size": 20},
+                "aggs": {
+                    "nome": {"top_hits": {"size": 3, "_source": [spec.adjudicatario_nome]}},
+                    "valor": {"sum": {"field": spec.value_field}},
+                },
+            }
+        },
+    }
+    resp = _search(client, spec.index, body, timeout=90)
+    baldes = ((resp.get("aggregations") or {}).get("nifs") or {}).get("buckets") or []
+    agrupado: Dict[str, Dict[str, Any]] = {}
+    for balde in baldes:
+        chave = str(balde.get("key") or "").strip()
+        if not chave:
+            continue
+        registo = agrupado.setdefault(
+            chave.upper(),
+            {"nif": chave.upper(), "contratos": 0, "valor": 0.0, "nomes": Counter()},
+        )
+        registo["contratos"] += int(balde.get("doc_count") or 0)
+        registo["valor"] += float(((balde.get("valor") or {}).get("value") or 0.0))
+        for hit in ((balde.get("nome") or {}).get("hits") or {}).get("hits") or []:
+            nome = (hit.get("_source") or {}).get(spec.adjudicatario_nome)
+            if isinstance(nome, str) and nome.strip():
+                registo["nomes"][nome.strip()] += int(balde.get("doc_count") or 0)
+    candidatos = []
+    for registo in sorted(agrupado.values(), key=lambda item: -(item.get("contratos") or 0))[:size]:
+        nome = registo["nomes"].most_common(1)
+        candidatos.append(
+            {
+                "nif": registo["nif"],
+                "nome": nome[0][0] if nome else registo["nif"],
+                "alias": [item[0] for item in registo["nomes"].most_common(4)[1:]],
+                "contratos": registo["contratos"],
+                "valor": num(registo["valor"]),
+                "papeis": ["adjudicatario"],
+                "fonte": "contratos",
+            }
+        )
+    return candidatos
+
+
+def _nome_contribuinte(client: Elasticsearch, nif: str) -> Optional[Dict[str, Any]]:
+    """Ficha do cadastro para um NIF (nome, contratos, concelho)."""
+    try:
+        resp = _search(
+            client,
+            CONTRIBUINTES_INDEX,
+            {"size": 1, "query": {"term": {"nif": nif}}, "_source": ["nif", "name", "names", "roles", "location", "contracts_count", "contracts_value"]},
+            timeout=20,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Cadastro indisponível para %s (%s).", nif, exc)
+        return None
+    hits = _hits(resp)
+    if not hits:
+        return None
+    src = hits[0].get("_source") or {}
+    local = src.get("location") if isinstance(src.get("location"), dict) else {}
+    return {
+        "nif": str(src.get("nif") or nif),
+        "nome": src.get("name"),
+        "alias": (src.get("names") or [])[:3],
+        "papeis": list(src.get("roles") or []),
+        "contratos": as_int(src.get("contracts_count")),
+        "valor": num(src.get("contracts_value")),
+        "concelho": local.get("concelho"),
+    }
+
+
+def resolver_empresa(
+    query: str,
+    *,
+    pais: str = PAIS_DEFAULT,
+    es: Optional[Elasticsearch] = None,
+    size: int = 6,
+) -> Dict[str, Any]:
+    """Nome **ou** NIF → empresa(s) com contratos, para alimentar a análise.
+
+    Ordem de resolução (PT): cadastro de contribuintes → nomes dentro dos
+    contratos (`wildcard`); (ES): índice de contratos espanhol. Devolve sempre
+    uma lista de candidatos: quem digita «psg» tem de escolher entre oito PSG.
+    """
+    spec = COUNTRIES.get(str(pais or "").upper())
+    if spec is None:
+        return {"error": f"país desconhecido: {pais}", "paises": list(COUNTRIES)}
+    client = _client(es)
+    if client is None:
+        return {"error": "Elasticsearch indisponível"}
+    texto = str(query or "").strip()
+    if not texto:
+        return {"error": "pesquisa vazia"}
+    nif = _nif_puro(texto, spec)
+
+    candidatos: List[Dict[str, Any]] = []
+    if spec.key == "ES":
+        candidatos = _candidatos_contratos_es(client, spec, texto=None if nif else texto, nif=nif)
+    elif nif:
+        ficha = _nome_contribuinte(client, nif)
+        if ficha:
+            candidatos = [{**ficha, "fonte": "cadastro"}]
+        if not candidatos:
+            candidatos = _candidatos_contratos_pt(client, spec, texto)
+    else:
+        candidatos = _candidatos_contribuintes(client, texto)
+        if not candidatos:
+            candidatos = _candidatos_contratos_pt(client, spec, texto)
+
+    candidatos = [item for item in candidatos if item.get("nif")]
+    if not candidatos:
+        return {"error": "sem empresa para essa pesquisa", "query": texto, "candidatos": []}
+    principal = candidatos[0]
+    return {"pais": spec.key, "query": texto, "nif_detetado": bool(nif), **principal, "candidatos": candidatos[1 : size + 1]}
+
+
+def _baselines_cpv(
+    client: Elasticsearch,
+    spec: CountrySpec,
+    grupos: Sequence[str],
+    *,
+    ano_from: Optional[int],
+    ano_to: Optional[int],
+    size: int = 400,
+) -> Dict[str, Dict[str, Any]]:
+    """Régua de cada CPV (mediana/MAD do log do valor e taxas) na amostra.
+
+    Serve para dizer se um contrato da empresa é atípico **para o seu setor** —
+    sem isto, um contrato grande de obras seria sempre «anómalo».
+    """
+    saida: Dict[str, Dict[str, Any]] = {}
+    for grupo in grupos:
+        query = _base_query(spec, ano_from, ano_to, grupo)
+        body = {
+            "size": max(50, min(size, 1000)),
+            "track_total_hits": False,
+            "query": query,
+            "sort": ["_doc"],
+            "_source": list(spec.source_fields),
+        }
+        resp = _search(client, spec.index, body, timeout=90)
+        linhas = [_row_from_hit(spec, hit) for hit in _hits(resp)]
+        if not linhas:
+            continue
+        valores = [math.log10(row["valor"]) for row in linhas if row.get("valor") and row["valor"] > 0]
+        ratios = [row["ratio_base"] for row in linhas if row.get("ratio_base") is not None]
+        mediana_valor = median(valores)
+        mad_valor = median([abs(valor - mediana_valor) for valor in valores]) if mediana_valor is not None else None
+        saida[grupo] = {
+            "contratos": len(linhas),
+            "mediana_log_valor": mediana_valor,
+            "mad_log_valor": mad_valor,
+            "desvio_mediano": median(ratios),
+            "taxa_ajuste_direto": sum(row.get("ajuste_direto") or 0 for row in linhas) / len(linhas),
+            "taxa_aditivo": sum(1 for row in linhas if (row.get("ratio_efetivo") or 0) > 1.15) / len(linhas),
+            "valor_mediano": median([row["valor"] for row in linhas if row.get("valor")]),
+        }
+    return saida
+
+
+def _z_valor(valor: Optional[float], baseline: Optional[Dict[str, Any]]) -> float:
+    """σ robusto do log do valor face ao CPV (0 quando não há régua)."""
+    if not valor or valor <= 0 or not baseline:
+        return 0.0
+    mediana = baseline.get("mediana_log_valor")
+    mad = baseline.get("mad_log_valor")
+    if mediana is None:
+        return 0.0
+    escala = 1.4826 * mad if mad else 0.0
+    if not escala or escala <= 1e-9:
+        return 0.0
+    return abs((math.log10(valor) - mediana) / escala)
+
+
+def _agregar(rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Agregados do portefólio de uma empresa."""
+    valores = [row["valor"] for row in rows if row.get("valor")]
+    por_ano: Dict[int, Dict[str, Any]] = {}
+    por_cpv: Dict[str, Dict[str, Any]] = {}
+    por_procedimento: Dict[str, Dict[str, Any]] = {}
+    adjudicantes: Dict[str, Dict[str, Any]] = {}
+    escaloes = {"<10k": 0, "10k-100k": 0, "100k-1M": 0, ">1M": 0}
+
+    for row in rows:
+        valor = row.get("valor") or 0.0
+        ano = row.get("ano")
+        if ano:
+            entrada = por_ano.setdefault(int(ano), {"ano": int(ano), "contratos": 0, "valor": 0.0})
+            entrada["contratos"] += 1
+            entrada["valor"] += valor
+        grupo = row.get("cpv_grupo") or "??"
+        if grupo not in por_cpv:
+            por_cpv[grupo] = {
+                "cpv": grupo,
+                "descricao": row.get("cpv_desc"),
+                "contratos": 0,
+                "valor": 0.0,
+                "ajuste_direto": 0,
+                "aditivos": 0,
+                "ratios": [],
+            }
+        bloco = por_cpv[grupo]
+        bloco["contratos"] += 1
+        bloco["valor"] += valor
+        bloco["ajuste_direto"] += 1 if row.get("ajuste_direto") else 0
+        bloco["aditivos"] += 1 if (row.get("ratio_efetivo") or 0) > 1.15 else 0
+        if row.get("ratio_base") is not None:
+            bloco["ratios"].append(row["ratio_base"])
+
+        procedimento = row.get("procedimento") or "—"
+        proc = por_procedimento.setdefault(procedimento, {"procedimento": procedimento, "contratos": 0, "valor": 0.0})
+        proc["contratos"] += 1
+        proc["valor"] += valor
+
+        chave = row.get("adjudicante_nif") or row.get("adjudicante_nome") or "?"
+        adj = adjudicantes.setdefault(
+            str(chave),
+            {"nif": row.get("adjudicante_nif"), "nome": row.get("adjudicante_nome"), "contratos": 0, "valor": 0.0},
+        )
+        adj["contratos"] += 1
+        adj["valor"] += valor
+
+        if valor < 10_000:
+            escaloes["<10k"] += 1
+        elif valor < 100_000:
+            escaloes["10k-100k"] += 1
+        elif valor < 1_000_000:
+            escaloes["100k-1M"] += 1
+        else:
+            escaloes[">1M"] += 1
+
+    for bloco in por_cpv.values():
+        bloco["desvio_mediano"] = num(median(bloco.pop("ratios")))
+        bloco["taxa_ajuste_direto"] = num(bloco["ajuste_direto"] / bloco["contratos"]) if bloco["contratos"] else None
+        bloco["taxa_aditivo"] = num(bloco["aditivos"] / bloco["contratos"]) if bloco["contratos"] else None
+        bloco["valor"] = num(bloco["valor"])
+        bloco["relevancia"] = num(bloco["valor"] or 0)
+
+    valor_total = sum(valores)
+    return {
+        "por_ano": [por_ano[chave] for chave in sorted(por_ano)],
+        "por_cpv": sorted(por_cpv.values(), key=lambda item: -(item["valor"] or 0))[:12],
+        "por_procedimento": sorted(por_procedimento.values(), key=lambda item: -item["contratos"])[:10],
+        "adjudicantes": sorted(adjudicantes.values(), key=lambda item: -(item["valor"] or 0))[:12],
+        "escaloes": escaloes,
+        "valor_total": num(valor_total),
+        "valor_mediano": num(median(valores)),
+        "concentracao_adjudicante": num(
+            (max((item["valor"] for item in adjudicantes.values()), default=0.0) / valor_total) if valor_total else None
+        ),
+    }
+
+
+def analise_empresa(
+    *,
+    nif: Optional[str] = None,
+    nome: Optional[str] = None,
+    pais: str = PAIS_DEFAULT,
+    ano_from: Optional[int] = None,
+    ano_to: Optional[int] = None,
+    max_contratos: int = 400,
+    per_year_baseline: int = 250,
+    use_cache: bool = True,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Análise de **uma empresa**: portefólio, CPV, regras cumpridas e relações.
+
+    Aceita `nif` ou `nome` (o nome é resolvido para o NIF pelo cadastro/índice de
+    contratos). As réguas por CPV (mediana/MAD) vêm de uma amostra do próprio
+    CPV, para que «atípico» signifique atípico **no setor**.
+    """
+    spec = COUNTRIES.get(str(pais or "").upper())
+    if spec is None:
+        return {"error": f"país desconhecido: {pais}", "paises": list(COUNTRIES)}
+    client = _client(es)
+    if client is None:
+        return {"error": "Elasticsearch indisponível"}
+
+    candidatos: List[Dict[str, Any]] = []
+    if not nif:
+        resolvido = resolver_empresa(str(nome or ""), pais=spec.key, es=client)
+        if resolvido.get("error"):
+            return resolvido
+        nif = resolvido["nif"]
+        candidatos = resolvido.get("candidatos") or []
+    nif = str(nif).strip()
+
+    chave: Tuple[Any, ...] = (
+        spec.key,
+        nif,
+        ano_from,
+        ano_to,
+        int(max_contratos),
+        int(per_year_baseline),
+    )
+    if use_cache:
+        guardado = _emp_cache_get(chave)
+        if guardado is not None:
+            saida = dict(guardado)
+            saida["candidatos"] = candidatos or saida.get("candidatos") or []
+            saida["cache"] = True
+            return saida
+
+    ficha = _nome_contribuinte(client, nif) if spec.key == "PT" else None
+
+    filtros: List[Dict[str, Any]] = [_empresa_query(spec, nif)]
+    if ano_from is not None or ano_to is not None:
+        rng: Dict[str, Any] = {}
+        if ano_from is not None:
+            rng["gte"] = int(ano_from)
+        if ano_to is not None:
+            rng["lte"] = int(ano_to)
+        filtros.append({"range": {spec.year_field: rng}})
+    query = {"bool": {"filter": filtros}}
+
+    body = {
+        "size": max(10, min(max_contratos, 2000)),
+        "track_total_hits": True,
+        "query": query,
+        "sort": [{spec.pub_date: {"order": "desc", "unmapped_type": "date"}}],
+        "_source": list(spec.source_fields),
+    }
+    resp = _search(client, spec.index, body, timeout=120)
+    total = ((resp.get("hits") or {}).get("total") or {}).get("value")
+    rows = [_row_from_hit(spec, hit) for hit in _hits(resp)]
+    if not rows:
+        return {"error": "sem contratos para esta empresa", "nif": nif, "pais": spec.key}
+
+    nome_empresa = (ficha or {}).get("nome")
+    if not nome_empresa:
+        for row in rows:
+            for party in row.get("adjudicatarios") or []:
+                if str(party.get("nif")) == nif and party.get("nome"):
+                    nome_empresa = party["nome"]
+                    break
+            if nome_empresa:
+                break
+
+    # -- réguas do setor (por CPV) e baseline global -------------------------
+    grupos = [row.get("cpv_grupo") for row in rows if row.get("cpv_grupo")]
+    principais = [grupo for grupo, _ in Counter(grupos).most_common(6)]
+    baselines = _baselines_cpv(client, spec, principais, ano_from=ano_from, ano_to=ano_to)
+    base = analyze(pais=spec.key, ano_from=ano_from, ano_to=ano_to, per_year=per_year_baseline, use_cache=True)
+    global_ad = (base.get("overview") or {}).get("taxa_ajuste_direto")
+    cpv_metricas = {item["cpv"]: item for item in base.get("cpvs") or []}
+
+    # -- regras aplicadas aos contratos desta empresa -----------------------
+    regras_ativas = regras.regras_ativas()
+    contratos: List[Dict[str, Any]] = []
+    contagem: Dict[str, int] = {}
+    for row in rows:
+        grupo = row.get("cpv_grupo") or ""
+        regua = baselines.get(grupo) or {}
+        global_cpv = cpv_metricas.get(grupo) or {}
+        z = _z_valor(row.get("valor"), regua)
+        contexto = _contexto_regras(
+            row,
+            z=z,
+            taxa_ajuste_direto_cpv=regua.get("taxa_ajuste_direto"),
+            taxa_aditivo_cpv=regua.get("taxa_aditivo"),
+            taxa_ajuste_direto_global=(global_cpv.get("taxa_ajuste_direto") or global_ad),
+            contratos_do_cpv=regua.get("contratos"),
+        )
+        hits = regras.avaliar(contexto, regras_ativas)
+        for hit in hits:
+            contagem[str(hit.get("padrao"))] = contagem.get(str(hit.get("padrao")), 0) + 1
+        contratos.append(
+            {
+                "id": row.get("id"),
+                "ano": row.get("ano"),
+                "data_publicacao": row.get("data_publicacao"),
+                "objeto": row.get("objeto"),
+                "valor": num(row.get("valor")),
+                "preco_base": num(row.get("base")),
+                "valor_efetivo": num(row.get("efetivo")),
+                "ratio_base": num(row.get("ratio_base")),
+                "ratio_efetivo": num(row.get("ratio_efetivo")),
+                "procedimento": row.get("procedimento"),
+                "ajuste_direto": bool(row.get("ajuste_direto")),
+                "cpv": row.get("cpv"),
+                "cpv_grupo": row.get("cpv_grupo"),
+                "cpv_desc": row.get("cpv_desc"),
+                "n_concorrentes": row.get("n_concorrentes"),
+                "dias_decisao": row.get("dias_decisao"),
+                "dias_assinatura": row.get("dias_assinatura"),
+                "dias_publicacao": row.get("dias_publicacao"),
+                "adjudicante": row.get("adjudicante_nome"),
+                "adjudicante_nif": row.get("adjudicante_nif"),
+                "z_cpv": num(z),
+                "severidade": severidade_de(hits),
+                "razoes": hits,
+            }
+        )
+    contratos.sort(key=lambda item: (_SEVERIDADE_ORDEM.get(str(item.get("severidade")), 9), -(item.get("valor") or 0)))
+
+    reguas_resumo = [
+        {"cpv": grupo, **{chave: num(valor) if isinstance(valor, float) else valor for chave, valor in regua.items()}}
+        for grupo, regua in baselines.items()
+    ]
+
+    # -- relações: quem mais ganha aos mesmos adjudicantes ------------------
+    agregados = _agregar(rows)
+    top_adjudicantes = [item for item in agregados["adjudicantes"][:5] if item.get("nif")]
+    pares: Dict[str, Dict[str, Any]] = {}
+    for adjudicante in top_adjudicantes:
+        pares.update(_pares_no_adjudicante(client, spec, str(adjudicante["nif"]), nif, excluir=set(pares)))
+    relacoes_empresas = sorted(pares.values(), key=lambda item: -(item.get("contratos") or 0))[:15]
+
+    pessoas = _pessoas_da_empresa(client, nif)
+    cargos_sociais = [
+        person for person in pessoas if any(str(cargo.get("role_org") or "") in CARGO_GESTAO_ORGS for cargo in person["cargos"])
+    ]
+    insolvencias = _insolvencias_da_empresa(client, nif)
+    alvo_noticias = nome_empresa or nif
+    curto = _nome_curto(alvo_noticias)
+    nomes_noticias = [(alvo_noticias, alvo_noticias)]
+    if curto:
+        nomes_noticias.append((alvo_noticias, curto))
+    noticias = _news_for(client, nomes_noticias, per_name=6)
+
+    sinais = []
+    for regra in regras_ativas:
+        identificador = str(regra.get("id"))
+        quantidade = contagem.get(identificador, 0)
+        if not quantidade:
+            continue
+        sinais.append(
+            {
+                "padrao": identificador,
+                "label": regra.get("label"),
+                "severidade": regra.get("severidade"),
+                "descricao": regra.get("descricao"),
+                "contratos": quantidade,
+                "taxa": num(quantidade / len(contratos)),
+                "exemplos": [
+                    {
+                        "id": item["id"],
+                        "objeto": item["objeto"],
+                        "ano": item["ano"],
+                        "valor": item["valor"],
+                        "detalhe": next((hit["detalhe"] for hit in item["razoes"] if hit.get("padrao") == identificador), None),
+                    }
+                    for item in contratos
+                    if any(hit.get("padrao") == identificador for hit in item["razoes"])
+                ][:3],
+            }
+        )
+    sinais.sort(key=lambda item: (_SEVERIDADE_ORDEM.get(str(item.get("severidade")), 9), -item["contratos"]))
+
+    anos = sorted({row["ano"] for row in rows if row.get("ano")})
+    payload = {
+        "pais": spec.key,
+        "pais_label": spec.label,
+        "nif": nif,
+        "nome": nome_empresa or nif,
+        "candidatos": candidatos,
+        "ficha": ficha,
+        "filtros": {"ano_from": ano_from, "ano_to": ano_to},
+        "contratos_total": int(total or len(rows)),
+        "contratos_analisados": len(rows),
+        "anos": [anos[0], anos[-1]] if anos else None,
+        "resumo": {
+            **{chave: agregados[chave] for chave in ("valor_total", "valor_mediano", "escaloes", "concentracao_adjudicante")},
+            "contratos": len(rows),
+            "taxa_ajuste_direto": num(sum(1 for row in rows if row.get("ajuste_direto")) / len(rows)),
+            "taxa_aditivo": num(sum(1 for row in rows if (row.get("ratio_efetivo") or 0) > 1.15) / len(rows)),
+            "desvio_mediano": num(median([row["ratio_base"] for row in rows if row.get("ratio_base") is not None])),
+            "adjudicantes_distintos": len({row.get("adjudicante_nif") or row.get("adjudicante_nome") for row in rows}),
+            "cpvs": len({row.get("cpv_grupo") for row in rows if row.get("cpv_grupo")}),
+            "contratos_com_sinais": sum(1 for item in contratos if item["razoes"]),
+            "contratos_atipicos_cpv": sum(1 for item in contratos if (item.get("z_cpv") or 0) > 3.5),
+            "insolvente": bool(insolvencias),
+        },
+        "por_ano": agregados["por_ano"],
+        "por_cpv": agregados["por_cpv"],
+        "por_procedimento": agregados["por_procedimento"],
+        "adjudicantes": agregados["adjudicantes"],
+        "sinais": sinais,
+        "contratos": contratos,
+        "reguas_cpv": reguas_resumo,
+        "relacoes": {
+            "empresas": relacoes_empresas,
+            "cargos_sociais": cargos_sociais,
+            "intervenientes_cire": [person for person in pessoas if person not in cargos_sociais][:15],
+            "insolvencias": insolvencias,
+            "noticias": noticias,
+        },
+        "regras_ativas": regras.resumo_regras(regras_ativas),
+        "aviso": (
+            "Análise a partir de uma amostra dos contratos desta empresa (até "
+            f"{len(rows)} de {int(total or len(rows))}). As réguas por CPV vêm de uma amostra do próprio setor."
+        ),
+    }
+    if use_cache:
+        _emp_cache_put(chave, payload)
+    return payload
+
+
+def _pares_no_adjudicante(
+    client: Elasticsearch,
+    spec: CountrySpec,
+    adjudicante_nif: str,
+    empresa_nif: str,
+    *,
+    excluir: Optional[set] = None,
+) -> Dict[str, Dict[str, Any]]:
+    """Outras empresas que ganharam ao mesmo adjudicante (relação observada)."""
+    if spec.key == "PT":
+        query: Dict[str, Any] = {
+            "nested": {"path": "adjudicantes.parsed", "query": {"term": {"adjudicantes.parsed.nif": adjudicante_nif}}}
+        }
+        aggs = {
+            "partes": {
+                "nested": {"path": "adjudicatarios.parsed"},
+                "aggs": {
+                    "nifs": {
+                        "terms": {"field": "adjudicatarios.parsed.nif", "size": 30},
+                        "aggs": {
+                            "nome": {"top_hits": {"size": 1, "_source": ["adjudicatarios.parsed.nome"]}},
+                            "valor": {"reverse_nested": {}, "aggs": {"s": {"sum": {"field": "precoContratual"}}}},
+                        },
+                    }
+                },
+            }
+        }
+    else:
+        query = {"term": {"organo_id": adjudicante_nif}}
+        aggs = {
+            "nifs": {
+                "terms": {"field": "adjudicatario_nif", "size": 30},
+                "aggs": {
+                    "nome": {"top_hits": {"size": 1, "_source": ["adjudicatario_nombre"]}},
+                    "valor": {"sum": {"field": "valor_adjudicado"}},
+                },
+            }
+        }
+    resp = _search(client, spec.index, {"size": 0, "query": query, "aggs": aggs}, timeout=90)
+    aggs_resp = resp.get("aggregations") or {}
+    buckets = (aggs_resp.get("partes") or aggs_resp).get("nifs", {}).get("buckets") if spec.key == "PT" else aggs_resp.get("nifs", {}).get("buckets")
+    saida: Dict[str, Dict[str, Any]] = {}
+    for bucket in buckets or []:
+        outro = str(bucket.get("key") or "").strip()
+        if not outro or outro == empresa_nif or (excluir and outro in excluir):
+            continue
+        saida[outro] = {
+            "nif": outro,
+            "nome": _top_hit_name(bucket.get("nome")),
+            "adjudicante": adjudicante_nif,
+            "contratos": int(bucket.get("doc_count") or 0),
+            "valor": num(((bucket.get("valor") or {}).get("s") or {}).get("value") or (bucket.get("valor") or {}).get("value")),
+        }
+    return saida
+
+
+def _pessoas_da_empresa(client: Elasticsearch, nif: str) -> List[Dict[str, Any]]:
+    body = {
+        "size": 40,
+        "track_total_hits": False,
+        "_source": ["nif", "name", "roles"],
+        "query": {"nested": {"path": "roles", "query": {"term": {"roles.company_nif": nif}}}},
+    }
+    pessoas: List[Dict[str, Any]] = []
+    for hit in _hits(_search(client, PEOPLE_INDEX, body, timeout=45)):
+        src = hit.get("_source") or {}
+        cargos = [
+            {
+                "role": cargo.get("role"),
+                "role_org": cargo.get("role_org"),
+                "acto": cargo.get("acto"),
+                "data": cargo.get("date"),
+            }
+            for cargo in (src.get("roles") or [])
+            if isinstance(cargo, dict) and str(cargo.get("company_nif") or "") == nif
+        ][:10]
+        if cargos:
+            pessoas.append({"nif": src.get("nif"), "nome": src.get("name"), "cargos": cargos})
+    return pessoas
+
+
+def _insolvencias_da_empresa(client: Elasticsearch, nif: str) -> List[Dict[str, Any]]:
+    body = {
+        "size": 20,
+        "track_total_hits": False,
+        "_source": ["insolvente", "especie", "ato", "data_publicacao", "tribunal", "processo_numero"],
+        "query": {"terms": {"nifs": [nif]}},
+    }
+    saida: List[Dict[str, Any]] = []
+    for hit in _hits(_search(client, CIRE_INDEX, body, timeout=45)):
+        src = hit.get("_source") or {}
+        saida.append(
+            {
+                "especie": src.get("especie"),
+                "ato": src.get("ato"),
+                "data": src.get("data_publicacao"),
+                "tribunal": src.get("tribunal"),
+                "processo": src.get("processo_numero"),
+            }
+        )
+    return saida
+
+
+# ---------------------------------------------------------------------------
+# 10. Análise de **várias empresas** (comparação, cruzamentos e rede)
+# ---------------------------------------------------------------------------
+#: Quantas empresas se podem comparar de uma vez. Cada empresa custa as suas
+#: consultas (contratos + réguas por CPV), pelo que o teto é explícito.
+MAX_EMPRESAS_CONJUNTO = 12
+#: Contratos lidos por empresa no modo de comparação (o detalhe é o do dossiê).
+CONTRATOS_POR_EMPRESA = 120
+
+
+def _severidade_de_sinais(sinais: Sequence[Dict[str, Any]]) -> Optional[str]:
+    valores = [str(sinal.get("severidade") or "") for sinal in sinais]
+    return severidade_de([{"severidade": valor} for valor in valores if valor])
+
+
+def _linha_conjunto(analise: Dict[str, Any], *, top_adjudicantes: int = 12, top_cpv: int = 6) -> Dict[str, Any]:
+    """Uma linha comparável por empresa (sem os contratos, que pesam muito).
+
+    A comparação precisa de números alinhados: contratos, valor, desvio mediano,
+    ajuste direto, aditivos, adjudicantes, concentração e contagem de sinais. O
+    detalhe por contrato fica no dossiê — aqui não se copiam 300 contratos por
+    empresa para a resposta.
+    """
+    resumo = analise.get("resumo") or {}
+    sinais = [
+        {
+            "padrao": sinal.get("padrao"),
+            "label": sinal.get("label"),
+            "severidade": sinal.get("severidade"),
+            "contratos": sinal.get("contratos"),
+            "taxa": sinal.get("taxa"),
+            "exemplo": ((sinal.get("exemplos") or [{}])[0].get("objeto") if sinal.get("exemplos") else None),
+            "detalhe": ((sinal.get("exemplos") or [{}])[0].get("detalhe") if sinal.get("exemplos") else None),
+        }
+        for sinal in analise.get("sinais") or []
+    ]
+    relacoes = analise.get("relacoes") or {}
+    return {
+        "nif": analise.get("nif"),
+        "nome": analise.get("nome"),
+        "pais": analise.get("pais"),
+        "pais_label": analise.get("pais_label"),
+        "ficha": analise.get("ficha"),
+        "anos": analise.get("anos"),
+        "contratos_total": analise.get("contratos_total"),
+        "contratos_analisados": analise.get("contratos_analisados"),
+        "resumo": {
+            "contratos": resumo.get("contratos"),
+            "valor_total": resumo.get("valor_total"),
+            "valor_mediano": resumo.get("valor_mediano"),
+            "desvio_mediano": resumo.get("desvio_mediano"),
+            "taxa_ajuste_direto": resumo.get("taxa_ajuste_direto"),
+            "taxa_aditivo": resumo.get("taxa_aditivo"),
+            "adjudicantes_distintos": resumo.get("adjudicantes_distintos"),
+            "concentracao_adjudicante": resumo.get("concentracao_adjudicante"),
+            "contratos_com_sinais": resumo.get("contratos_com_sinais"),
+            "contratos_atipicos_cpv": resumo.get("contratos_atipicos_cpv"),
+            "insolvente": bool(resumo.get("insolvente")),
+        },
+        "severidade": _severidade_de_sinais(sinais),
+        "sinais": sinais,
+        "adjudicantes": (analise.get("adjudicantes") or [])[:top_adjudicantes],
+        "por_cpv": (analise.get("por_cpv") or [])[:top_cpv],
+        "por_procedimento": (analise.get("por_procedimento") or [])[:5],
+        "por_ano": analise.get("por_ano") or [],
+        "relacoes": {
+            "cargos_sociais": relacoes.get("cargos_sociais") or [],
+            "insolvencias": relacoes.get("insolvencias") or [],
+            "noticias": (relacoes.get("noticias") or [])[:8],
+            "empresas": (relacoes.get("empresas") or [])[:10],
+        },
+        "aviso": analise.get("aviso"),
+        "erro": None,
+    }
+
+
+def _cruzamentos(linhas: Sequence[Dict[str, Any]], *, minimo: int = 2) -> Dict[str, Any]:
+    """Onde é que as empresas do conjunto se tocam.
+
+    Três perguntas concretas, todas sobre dados já presentes nas linhas:
+
+    - **adjudicantes comuns** — vendem ao mesmo comprador (concorrência no mesmo
+      cliente, o que pode ser normal ou não);
+    - **pessoas comuns** — o mesmo gerente em duas empresas do conjunto (ligação
+      societária que o grafo de uma só empresa não mostra);
+    - **processos comuns** — as duas aparecem no mesmo processo do CIRE.
+
+    Só se devolvem ligações com **duas ou mais** empresas: o que se cruza com uma
+    só não é um cruzamento.
+    """
+    adjudicantes: Dict[str, Dict[str, Any]] = {}
+    pessoas: Dict[str, Dict[str, Any]] = {}
+    processos: Dict[str, Dict[str, Any]] = {}
+    cpvs: Dict[str, Dict[str, Any]] = {}
+    proprietarios = {str(linha.get("nif")): linha for linha in linhas if linha.get("nif")}
+
+    def _marca(alvo: Dict[str, Any], nif: str) -> None:
+        empresas = alvo.setdefault("empresas", [])
+        if nif not in empresas:
+            empresas.append(nif)
+
+    for linha in linhas:
+        nif = str(linha.get("nif") or "")
+        if not nif:
+            continue
+        for adjudicante in linha.get("adjudicantes") or []:
+            chave = str(adjudicante.get("nif") or adjudicante.get("nome") or "")
+            if not chave:
+                continue
+            registo = adjudicantes.setdefault(
+                chave,
+                {
+                    "nif": adjudicante.get("nif"),
+                    "nome": adjudicante.get("nome") or chave,
+                    "empresas": [],
+                    "contratos": 0,
+                    "valor": 0.0,
+                },
+            )
+            _marca(registo, nif)
+            registo["contratos"] += int(adjudicante.get("contratos") or 0)
+            registo["valor"] += float(adjudicante.get("valor") or 0.0)
+
+        for pessoa in (linha.get("relacoes") or {}).get("cargos_sociais") or []:
+            chave = str(pessoa.get("nif") or pessoa.get("nome") or "")
+            if not chave:
+                continue
+            registo = pessoas.setdefault(
+                chave,
+                {"nif": pessoa.get("nif"), "nome": pessoa.get("nome") or chave, "empresas": [], "cargos": []},
+            )
+            _marca(registo, nif)
+            for cargo in pessoa.get("cargos") or []:
+                papel = str(cargo.get("role_org") or cargo.get("role") or "").strip()
+                if papel and papel not in registo["cargos"]:
+                    registo["cargos"].append(papel)
+
+        for processo in (linha.get("relacoes") or {}).get("insolvencias") or []:
+            chave = str(processo.get("processo") or f"{processo.get('especie')}-{processo.get('data')}")
+            registo = processos.setdefault(
+                chave,
+                {
+                    "processo": processo.get("processo"),
+                    "especie": processo.get("especie"),
+                    "tribunal": processo.get("tribunal"),
+                    "data": processo.get("data"),
+                    "empresas": [],
+                },
+            )
+            _marca(registo, nif)
+
+        for cpv in linha.get("por_cpv") or []:
+            chave = str(cpv.get("cpv") or "")
+            if not chave:
+                continue
+            registo = cpvs.setdefault(
+                chave,
+                {"cpv": chave, "descricao": cpv.get("descricao"), "empresas": [], "contratos": 0, "valor": 0.0},
+            )
+            _marca(registo, nif)
+            registo["contratos"] += int(cpv.get("contratos") or 0)
+            registo["valor"] += float(cpv.get("valor") or 0.0)
+
+    def _nome(nif: str) -> str:
+        return str((proprietarios.get(nif) or {}).get("nome") or nif)
+
+    def _empacotar(registo: Dict[str, Any]) -> Dict[str, Any]:
+        registo["empresas_nome"] = [_nome(nif) for nif in registo["empresas"]]
+        registo["n_empresas"] = len(registo["empresas"])
+        registo["valor"] = num(registo.get("valor"))
+        return registo
+
+    comuns = lambda mapa: [  # noqa: E731 - a regra de corte é a mesma para os quatro mapas
+        _empacotar(registo) for registo in mapa.values() if len(registo.get("empresas") or []) >= minimo
+    ]
+    return {
+        "adjudicantes": sorted(comuns(adjudicantes), key=lambda item: (-item["n_empresas"], -(item["valor"] or 0)))[:40],
+        "pessoas": sorted(comuns(pessoas), key=lambda item: -item["n_empresas"])[:40],
+        "processos": sorted(comuns(processos), key=lambda item: -item["n_empresas"])[:40],
+        "cpvs": sorted(comuns(cpvs), key=lambda item: (-item["n_empresas"], -(item["valor"] or 0)))[:40],
+    }
+
+
+def _grafo_conjunto(
+    linhas: Sequence[Dict[str, Any]],
+    cruzamentos: Dict[str, Any],
+    *,
+    max_adjudicantes: int = 18,
+    max_pessoas: int = 12,
+    max_processos: int = 8,
+    max_cpvs: int = 10,
+) -> Dict[str, Any]:
+    """Rede do conjunto: as empresas ligadas pelo comprador, pelo mercado, pelo gerente e pelo processo.
+
+    Responde à pergunta que motiva a comparação — **como é que estas empresas se
+    ligam entre si?** — e mostra também *com quem cada uma contata*:
+
+    - **CPV comum** (lilás): competem no mesmo mercado;
+    - **adjudicante** (verde): o mesmo comprador, ou o maior comprador de cada uma;
+    - **pessoa** (rosa): o mesmo gerente em duas empresas do conjunto;
+    - **processo** (azul): as duas aparecem no mesmo processo do CIRE.
+
+    As ligações partilhadas aparecem primeiro e dizem quantas empresas tocam; os
+    nós extra (compradores individuais) existem para o grafo não ficar vazio
+    quando as empresas não se cruzam em nada.
+    """
+    nodes: List[Dict[str, Any]] = []
+    edges: List[Dict[str, Any]] = []
+    ids: set = set()
+
+    for linha in linhas:
+        nif = str(linha.get("nif") or "")
+        if not nif:
+            continue
+        resumo = linha.get("resumo") or {}
+        no = f"empresa:{nif}"
+        ids.add(no)
+        nodes.append(
+            {
+                "id": no,
+                "key": nif,
+                "label": linha.get("nome") or nif,
+                "dimension": "empresa",
+                "type": "entidade",
+                "role": "empresa comparada",
+                "count": int(linha.get("contratos_analisados") or 0),
+                "total_value": float(resumo.get("valor_total") or 0.0),
+            }
+        )
+
+    def _acrescentar(prefixo: str, chave: str, rotulo: str, tipo: str, papel: str, dimensao: str, *, count: int = 1, valor: float = 0.0) -> str:
+        no = f"{prefixo}:{chave}"
+        if no not in ids:
+            ids.add(no)
+            nodes.append(
+                {
+                    "id": no,
+                    "key": chave,
+                    "label": rotulo,
+                    "dimension": dimensao,
+                    "type": tipo,
+                    "role": papel[:80],
+                    "count": count,
+                    "total_value": float(valor or 0.0),
+                }
+            )
+        return no
+
+    # Mercado partilhado: o mesmo CPV em duas ou mais empresas do conjunto.
+    for item in (cruzamentos.get("cpvs") or [])[:max_cpvs]:
+        chave = str(item.get("cpv"))
+        no = _acrescentar(
+            "cpv",
+            chave,
+            f"CPV {chave}",
+            "cpv",
+            f"{(item.get('descricao') or 'mercado')[:60]} · {item['n_empresas']} empresas",
+            "cpv",
+            count=int(item.get("contratos") or 0),
+            valor=item.get("valor") or 0.0,
+        )
+        for linha in linhas:
+            nif = str(linha.get("nif") or "")
+            meu = next((cpv for cpv in linha.get("por_cpv") or [] if str(cpv.get("cpv")) == chave), None)
+            if not meu:
+                continue
+            edges.append(
+                {
+                    "source": f"empresa:{nif}",
+                    "target": no,
+                    "count": int(meu.get("contratos") or 0),
+                    "value": float(meu.get("valor") or 0.0),
+                }
+            )
+
+    # Compradores partilhados (primeiro) e, se sobrar espaço, os maiores de cada uma.
+    usados: set = set()
+    for item in cruzamentos.get("adjudicantes") or []:
+        if len(usados) >= max_adjudicantes:
+            break
+        chave = str(item.get("nif") or item.get("nome"))
+        usados.add(chave)
+        no = _acrescentar(
+            "adjudicante",
+            chave,
+            item.get("nome") or chave,
+            "entidade",
+            f"compra a {item['n_empresas']} empresas do conjunto",
+            "adjudicante",
+            count=int(item.get("contratos") or 0),
+            valor=item.get("valor") or 0.0,
+        )
+        for nif in item["empresas"]:
+            edges.append({"source": f"empresa:{nif}", "target": no, "count": int(item.get("contratos") or 0), "value": float(item.get("valor") or 0.0)})
+
+    for linha in linhas:
+        nif = str(linha.get("nif") or "")
+        for adjudicante in (linha.get("adjudicantes") or [])[:4]:
+            if len(usados) >= max_adjudicantes:
+                break
+            chave = str(adjudicante.get("nif") or adjudicante.get("nome") or "")
+            if not chave or chave in usados:
+                continue
+            usados.add(chave)
+            no = _acrescentar(
+                "adjudicante",
+                chave,
+                adjudicante.get("nome") or chave,
+                "entidade",
+                "comprador",
+                "adjudicante",
+                count=int(adjudicante.get("contratos") or 0),
+                valor=adjudicante.get("valor") or 0.0,
+            )
+            edges.append(
+                {
+                    "source": f"empresa:{nif}",
+                    "target": no,
+                    "count": int(adjudicante.get("contratos") or 0),
+                    "value": float(adjudicante.get("valor") or 0.0),
+                }
+            )
+
+    for item in (cruzamentos.get("pessoas") or [])[:max_pessoas]:
+        chave = str(item.get("nif") or item.get("nome"))
+        no = _acrescentar(
+            "pessoa",
+            chave,
+            item.get("nome") or chave,
+            "pessoa",
+            f"{', '.join(item.get('cargos') or []) or 'órgão social'} · {item['n_empresas']} empresas",
+            "pessoa",
+            count=len(item["empresas"]),
+        )
+        for nif in item["empresas"]:
+            edges.append({"source": no, "target": f"empresa:{nif}", "count": 1, "value": 0.0})
+
+    for item in (cruzamentos.get("processos") or [])[:max_processos]:
+        chave = str(item.get("processo") or item.get("especie"))
+        no = _acrescentar(
+            "cire",
+            chave,
+            item.get("especie") or "processo CIRE",
+            "processo",
+            f"{item.get('tribunal') or 'tribunal'} · {str(item.get('data') or '')[:10]}",
+            "cire",
+        )
+        for nif in item["empresas"]:
+            edges.append({"source": f"empresa:{nif}", "target": no, "count": 1, "value": 0.0})
+
+    n_nodes = len(nodes)
+    n_edges = len(edges)
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "meta": {
+            "dimension_a": "empresa",
+            "dimension_b": None,
+            "metric": "valor",
+            "mode": "relations",
+            "complete": False,
+            "scan_capped": True,
+            "sample_order": "empresas escolhidas pelo utilizador",
+            "sample_limit": len(linhas),
+            "documents_scanned": sum(int(linha.get("contratos_analisados") or 0) for linha in linhas),
+            "documents_matching": sum(int(linha.get("contratos_analisados") or 0) for linha in linhas),
+            "scanned_value": num(sum(float((linha.get("resumo") or {}).get("valor_total") or 0.0) for linha in linhas)) or 0.0,
+            "nodes_total": n_nodes,
+            "edges_total": n_edges,
+            "kept_nodes": n_nodes,
+            "kept_edges": n_edges,
+            "omitted_edges": 0,
+            "coverage_value_share": None,
+            "coverage_count_share": None,
+            "directed": True,
+            "limits": {"empresas": len(linhas), "adjudicantes_comuns": len(cruzamentos.get("adjudicantes") or [])},
+            "notes": [
+                "Rede das empresas comparadas: liga-as pelo comprador, pelo gerente e pelo processo.",
+                "Só aparecem adjudicantes, pessoas e processos partilhados por duas ou mais empresas do conjunto.",
+            ],
+            "filters": {},
+        },
+    }
+
+
+def analise_empresas(
+    *,
+    nifs: Optional[Sequence[str]] = None,
+    nomes: Optional[Sequence[str]] = None,
+    pais: str = PAIS_DEFAULT,
+    ano_from: Optional[int] = None,
+    ano_to: Optional[int] = None,
+    max_contratos: int = CONTRATOS_POR_EMPRESA,
+    max_empresas: int = 6,
+    per_year_baseline: int = 250,
+    use_cache: bool = True,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Compara **várias empresas**: números alinhados, cruzamentos e rede.
+
+    Cada empresa corre a análise normal (`analise_empresa`, com cache), mas a
+    resposta devolve só o que serve para comparar — as linhas, os cruzamentos
+    (adjudicantes, pessoas e processos partilhados), a distribuição por CPV e o
+    grafo do conjunto. Os contratos ficam de fora: estão no dossiê de cada uma.
+    """
+    spec = COUNTRIES.get(str(pais or "").upper())
+    if spec is None:
+        return {"error": f"país desconhecido: {pais}", "paises": list(COUNTRIES)}
+    client = _client(es)
+    if client is None:
+        return {"error": "Elasticsearch indisponível"}
+
+    pedidos: List[Dict[str, Optional[str]]] = []
+    for valor in list(nifs or []) + list(nomes or []):
+        texto = str(valor or "").strip()
+        if not texto:
+            continue
+        chave = _nif_puro(texto, spec)
+        pedido = {"nif": chave, "nome": None if chave else texto}
+        if pedido not in pedidos:
+            pedidos.append(pedido)
+    if not pedidos:
+        return {"error": "sem empresas para comparar"}
+    limite = max(2, min(int(max_empresas or 6), MAX_EMPRESAS_CONJUNTO))
+    if len(pedidos) > limite:
+        pedidos = pedidos[:limite]
+
+    linhas: List[Dict[str, Any]] = []
+    avisos: List[str] = []
+    for pedido in pedidos:
+        analise = analise_empresa(
+            nif=pedido.get("nif"),
+            nome=pedido.get("nome"),
+            pais=spec.key,
+            ano_from=ano_from,
+            ano_to=ano_to,
+            max_contratos=max_contratos,
+            per_year_baseline=per_year_baseline,
+            use_cache=use_cache,
+            es=client,
+        )
+        if analise.get("error"):
+            rotulo = pedido.get("nif") or pedido.get("nome") or "?"
+            avisos.append(f"{rotulo}: {analise['error']}")
+            continue
+        linhas.append(_linha_conjunto(analise))
+
+    if not linhas:
+        return {"error": "nenhuma das empresas foi analisada", "avisos": avisos, "pais": spec.key}
+
+    cruzamentos = _cruzamentos(linhas)
+    grafo = _grafo_conjunto(linhas, cruzamentos)
+
+    # Distribuição por CPV do conjunto (soma dos top de cada empresa).
+    por_cpv: Dict[str, Dict[str, Any]] = {}
+    for linha in linhas:
+        for cpv in linha.get("por_cpv") or []:
+            chave = str(cpv.get("cpv") or "")
+            registo = por_cpv.setdefault(
+                chave,
+                {"cpv": chave, "descricao": cpv.get("descricao"), "contratos": 0, "valor": 0.0, "empresas": 0},
+            )
+            registo["contratos"] += int(cpv.get("contratos") or 0)
+            registo["valor"] += float(cpv.get("valor") or 0.0)
+            registo["empresas"] += 1
+
+    valor_total = sum(float((linha.get("resumo") or {}).get("valor_total") or 0.0) for linha in linhas)
+    contratos_total = sum(int((linha.get("resumo") or {}).get("contratos") or 0) for linha in linhas)
+    return {
+        "pais": spec.key,
+        "pais_label": spec.label,
+        "filtros": {"ano_from": ano_from, "ano_to": ano_to, "max_contratos": max_contratos},
+        "gerado_em": datetime.now(timezone.utc).isoformat(),
+        "empresas": linhas,
+        "totais": {
+            "empresas": len(linhas),
+            "empresas_pedidas": len(pedidos),
+            "contratos": contratos_total,
+            "contratos_total_portal": sum(int(linha.get("contratos_total") or 0) for linha in linhas),
+            "valor_total": num(valor_total),
+            "valor_mediano": num(median([float((linha.get("resumo") or {}).get("valor_total") or 0.0) for linha in linhas])),
+            "insolventes": sum(1 for linha in linhas if (linha.get("resumo") or {}).get("insolvente")),
+            "com_sinais": sum(1 for linha in linhas if (linha.get("resumo") or {}).get("contratos_com_sinais")),
+            "adjudicantes_comuns": len(cruzamentos["adjudicantes"]),
+            "pessoas_comuns": len(cruzamentos["pessoas"]),
+            "processos_comuns": len(cruzamentos["processos"]),
+            "cpvs_comuns": len(cruzamentos["cpvs"]),
+        },
+        "cruzamentos": cruzamentos,
+        "por_cpv": [
+            {**item, "valor": num(item["valor"])}
+            for item in sorted(por_cpv.values(), key=lambda item: -(item.get("valor") or 0.0))[:15]
+        ],
+        "grafo": grafo,
+        "avisos": avisos,
+        "aviso": (
+            "Comparação a partir de uma amostra dos contratos de cada empresa. Os cruzamentos usam apenas "
+            "adjudicantes, cargos de órgãos sociais e processos do CIRE presentes nessas amostras."
+        ),
     }

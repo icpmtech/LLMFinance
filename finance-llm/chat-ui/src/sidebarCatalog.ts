@@ -78,8 +78,9 @@ export const APP_MODULES: AppModule[] = [
   {
     id: "empresas",
     label: "Empresas",
-    hint: "Diretórios, fichas, adjudicantes e comparação de entidades",
+    hint: "Risco, diretórios, fichas, adjudicantes e comparação de entidades",
     ids: [
+      "risco",
       "empresas-iq",
       "entities-search",
       "entities-dashboard",
@@ -112,7 +113,7 @@ export const APP_MODULES: AppModule[] = [
     id: "investigacao",
     label: "Investigação e IA",
     hint: "Pesquisa 360, Hermes, investigador, agentes e RAG",
-    ids: ["search360", "hermes", "researcher", "world", "world-rede", "agents", "rag"],
+    ids: ["search360", "hermes", "researcher", "world", "world-rede", "padroes", "agents", "rag"],
   },
   {
     id: "conhecimento",

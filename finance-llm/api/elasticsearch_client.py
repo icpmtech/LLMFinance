@@ -141,6 +141,14 @@ CONTRIBUINTES_INDEX = "finance_contribuintes"
 # posterior (um documento por nó, substituído a cada novo resumo).
 NODE_SUMMARIES_INDEX = "finance_node_summaries"
 
+#: Análises de padrões guardadas por empresa (módulo «Deteção de padrões»):
+#: fotografia da análise, ficha redigida por IA e páginas lidas no browser.
+ANALISES_EMPRESA_INDEX = "finance_analises_empresa"
+
+#: Métricas do **universo** por ano (dashboard global): um documento por ano, um
+#: de total e um de meta, calculados por agregação sobre o índice inteiro.
+GLOBAL_PADROES_INDEX = "finance_padroes_global"
+
 # GLEIF — «Golden Copy» dos registos LEI (Legal Entity Identifier). Um documento
 # por LEI, com o nível 1 (quem é quem: nome legal, endereço, jurisdição, forma
 # jurídica, estado, datas) e os identificadores associados (BIC, MIC, OCID, QCC,
@@ -196,6 +204,18 @@ INVESTIGATIONS_INDEX = "finance_world_investigations"
 # Definições (settings) específicas de determinados índices — nomeadamente
 # analisadores usados em subcampos de pesquisa por prefixo.
 INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
+    ANALISES_EMPRESA_INDEX: {
+        # Os nomes de empresas e as notas do analista são escritos com acentos.
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
     AGENT_CONFIGS_INDEX: {
         "analysis": {
             "analyzer": {
@@ -1780,6 +1800,74 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    analises_empresa_mappings = {
+        "properties": {
+            "doc_id": {"type": "keyword"},
+            "nif": {"type": "keyword"},
+            "nome": {"type": "keyword", "ignore_above": 512},
+            "pais": {"type": "keyword"},
+            "titulo": {"type": "text", "analyzer": "world_folding", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "notas": {"type": "text", "analyzer": "world_folding"},
+            "criado_em": {"type": "date"},
+            "atualizado_em": {"type": "date"},
+            "autor": {"type": "keyword"},
+            "autor_email": {"type": "keyword"},
+            "anos": {"type": "integer"},
+            "contratos_total": {"type": "long"},
+            "contratos_analisados": {"type": "long"},
+            "valor_total": {"type": "float"},
+            "severidade": {"type": "keyword"},
+            "sinais": {"type": "keyword"},
+            "regras": {"type": "keyword"},
+            "insolvente": {"type": "boolean"},
+            "ia": {"type": "boolean"},
+            "ia_modelo": {"type": "keyword"},
+            "ia_provider": {"type": "keyword"},
+            "resumo": {"type": "text", "analyzer": "world_folding"},
+            "ficha_ia": {"type": "text", "analyzer": "world_folding"},
+            # Fotografia completa da análise (a análise é grande e só é lida por id).
+            "analise": {"type": "object", "enabled": False},
+            "browser": {"type": "object", "enabled": False},
+            "fontes": {"type": "keyword"},
+        }
+    }
+
+    global_padroes_mappings = {
+        "properties": {
+            "kind": {"type": "keyword"},
+            "pais": {"type": "keyword"},
+            "pais_label": {"type": "keyword", "ignore_above": 128},
+            "indice": {"type": "keyword"},
+            "ano": {"type": "integer"},
+            "anos": {"type": "integer"},
+            "contratos": {"type": "long"},
+            "documentos": {"type": "long"},
+            "valor": {"type": "float"},
+            "valor_medio": {"type": "float"},
+            "valor_mediano": {"type": "float"},
+            "valor_maximo": {"type": "float"},
+            "valor_base": {"type": "float"},
+            "contratos_com_base": {"type": "long"},
+            "aditivos": {"type": "long"},
+            "valor_aditivos": {"type": "float"},
+            "taxa_aditivo": {"type": "float"},
+            "sem_concorrentes": {"type": "long"},
+            "ofertas_media": {"type": "float"},
+            "ofertas_mediana": {"type": "float"},
+            "gerado_em": {"type": "date"},
+            "duracao_s": {"type": "float"},
+            "versao": {"type": "integer"},
+            "ajuste_direto": {"type": "object", "enabled": False},
+            # Agregados e topos (lidos por id, não pesquisados campo a campo).
+            "meses": {"type": "object", "enabled": False},
+            "procedimentos": {"type": "object", "enabled": False},
+            "cpvs": {"type": "object", "enabled": False},
+            "cpvs_somados": {"type": "object", "enabled": False},
+            "adjudicatarias": {"type": "object", "enabled": False},
+            "adjudicantes": {"type": "object", "enabled": False},
+        }
+    }
+
     for name, mappings in [
         ("finance_prices", prices_mappings),
         ("finance_news", news_mappings),
@@ -1818,6 +1906,8 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (NETWORK_STATE_INDEX, network_state_mappings),
         (SIMULATIONS_INDEX, simulations_mappings),
         (INVESTIGATIONS_INDEX, investigations_mappings),
+        (ANALISES_EMPRESA_INDEX, analises_empresa_mappings),
+        (GLOBAL_PADROES_INDEX, global_padroes_mappings),
     ]:
         if not client.indices.exists(index=name):
             settings: Dict[str, Any] = {"number_of_shards": 1, "number_of_replicas": 0}
@@ -11147,7 +11237,7 @@ def index_people_from_societario(
     target_nif = nif or replace_for_nif
     items = _publicacoes_for_people(str(target_nif) if target_nif else None, es=client)
     if not items:
-        return {"indexed_count": 0, "total": 0, "nif": target_nif}
+        return {"indexed_count": 0, "total": 0, "nif": target_nif, "publications": 0}
 
     people = extract_from_publicacoes(items)
     result = index_people(
@@ -11155,6 +11245,7 @@ def index_people_from_societario(
         drop_company_nif=str(replace_for_nif) if replace_for_nif else None,
         es=client,
     )
+    result["publications"] = len(items)
     if replace_for_nif:
         result["pruned"] = _prune_people_company_roles(
             str(replace_for_nif), [p.get("nif") for p in people], es=client
@@ -11572,6 +11663,232 @@ def people_autocomplete(
             "last_seen": source.get("last_seen"),
         })
     return {"q": term, "items": items}
+
+
+def companies_with_people(
+    q: Optional[str] = None,
+    *,
+    size: int = 20,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Empresas com pessoas/cargos registados no PessoasIQ.
+
+    Agrega `roles.company_nif` (campo `nested`) e conta as pessoas distintas por
+    empresa. Serve a pesquisa **por empresa**: uma empresa que não tenha ficha
+    própria em `finance_people` (o caso comum) aparece na mesma, porque o vínculo
+    é o cargo da pessoa nessa empresa.
+
+    ``q`` aceita um NIF/NIPC (9 dígitos, correspondência exata) ou texto
+    (firma/denominação da empresa, ou o nome de quem lá tem cargos).
+    """
+    client = es or get_es_client()
+    term = str(q or "").strip()
+    if not client:
+        return {"total": 0, "items": [], "error": "Elasticsearch indisponível"}
+    if len(term) < 2:
+        # Sem termo a agregação corria sobre os ~135 mil documentos (400 cargos cada)
+        # e estourava o *circuit breaker* do Elasticsearch (429): exige-se pesquisa.
+        return {
+            "total": 0,
+            "items": [],
+            "note": "Indique a firma, o NIF/NIPC da empresa ou o nome de quem lá tem cargos.",
+        }
+    ensure_indices(client)
+
+    query: Optional[Dict[str, Any]] = None
+    if term:
+        if re.fullmatch(r"\d{9}", term):
+            query = {"nested": {"path": "roles", "query": {"term": {"roles.company_nif": term}}}}
+        else:
+            query = {
+                "bool": {
+                    "should": [
+                        {"nested": {"path": "roles", "query": {"match": {"roles.company_name": term}}}},
+                        {"nested": {"path": "companies", "query": {"match": {"companies.name": term}}}},
+                        {"match": {"name": term}},
+                        {"term": {"nif": term}},
+                    ],
+                    "minimum_should_match": 1,
+                }
+            }
+
+    body: Dict[str, Any] = {
+        "size": 0,
+        "aggs": {
+            "roles": {
+                "nested": {"path": "roles"},
+                "aggs": {
+                    "por_empresa": {
+                        # Ordem por omissão (`_count` = nº de cargos): ordenar por
+                        # `pessoas.distintas` não é permitido (agg de um só bucket).
+                        "terms": {
+                            "field": "roles.company_nif",
+                            "size": max(1, min(int(size or 20), 100)),
+                        },
+                        "aggs": {
+                            # `nif` é do documento pai: dentro do agg `nested` só se lá
+                            # chega com `reverse_nested` (sem isso a contagem fica a 0).
+                            "pessoas": {
+                                "reverse_nested": {},
+                                "aggs": {"distintas": {"cardinality": {"field": "nif"}}},
+                            },
+                            "cargos": {"value_count": {"field": "roles.publication_id"}},
+                        },
+                    }
+                },
+            }
+        },
+    }
+    if query:
+        body["query"] = query
+
+    try:
+        resp = client.search(index=PEOPLE_INDEX, body=body)
+    except Exception as exc:
+        logger.warning("Listagem de empresas com pessoas falhou: %s", exc)
+        return {"total": 0, "items": [], "error": str(exc)}
+
+    buckets = (
+        ((resp.get("aggregations") or {}).get("roles") or {}).get("por_empresa") or {}
+    ).get("buckets", [])
+    items: List[Dict[str, Any]] = []
+    for bucket in buckets:
+        nif = str(bucket.get("key") or "").strip()
+        if not nif:
+            continue
+        items.append({
+            "nif": nif,
+            "name": None,
+            "people_count": int((((bucket.get("pessoas") or {}).get("distintas") or {}).get("value")) or 0),
+            "roles_count": int(((bucket.get("cargos") or {}).get("value")) or 0),
+        })
+    if not items:
+        return {"total": 0, "items": []}
+
+    # Nomes: um `top_hits` dentro do agg `nested` reservava centenas de MB e
+    # estourava o circuit breaker (429); resolve-se com uma pesquisa leve pelos
+    # NIF encontrados e, no que faltar, com o cadastro de contratos.
+    nomes = _company_names_from_roles(client, [item["nif"] for item in items])
+    for item in items:
+        item["name"] = nomes.get(item["nif"])
+        if item["name"]:
+            continue
+        try:
+            empresa = get_company_by_nif(item["nif"], es=client) or {}
+            if not empresa.get("error") and empresa.get("name"):
+                item["name"] = empresa["name"]
+        except Exception:  # noqa: BLE001 - enriquecimento best-effort
+            continue
+    return {"total": len(items), "items": items}
+
+
+def _company_names_from_roles(
+    client: Elasticsearch,
+    nifs: List[str],
+) -> Dict[str, str]:
+    """Firma das empresas a partir do `company_name` dos cargos já indexados."""
+    alvo = {str(nif) for nif in nifs if nif}
+    if not alvo:
+        return {}
+    body: Dict[str, Any] = {
+        "size": min(200, max(10, len(alvo) * 4)),
+        "query": {"nested": {"path": "roles", "query": {"terms": {"roles.company_nif": list(alvo)}}}},
+        "_source": ["roles.company_nif", "roles.company_name"],
+    }
+    try:
+        resp = client.search(index=PEOPLE_INDEX, body=body)
+    except Exception as exc:
+        logger.debug("Nomes das empresas (cargos) falhou: %s", exc)
+        return {}
+    nomes: Dict[str, str] = {}
+    for hit in resp.get("hits", {}).get("hits", []):
+        for role in (hit.get("_source") or {}).get("roles") or []:
+            cnif = str(role.get("company_nif") or "")
+            if cnif in alvo and cnif not in nomes and role.get("company_name"):
+                nomes[cnif] = str(role["company_name"])
+    return nomes
+
+
+def company_people_from_index(
+    company_nif: str,
+    *,
+    size: int = 200,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Ficha de empresa no PessoasIQ: pessoas com cargos nessa empresa.
+
+    Lê `finance_people` pelos documentos que têm um cargo na empresa indicada e
+    devolve, por pessoa, os cargos **nessa empresa** (o mais recente primeiro),
+    além do nome da empresa tal como aparece nas publicações.
+    """
+    client = es or get_es_client()
+    nif = str(company_nif or "").strip()
+    if not client:
+        return {"nif": nif, "total": 0, "people": [], "error": "Elasticsearch indisponível"}
+    if not nif:
+        return {"nif": nif, "total": 0, "people": [], "error": "NIF da empresa em falta."}
+    ensure_indices(client)
+
+    body: Dict[str, Any] = {
+        "size": max(1, min(int(size or 200), 500)),
+        "query": {"nested": {"path": "roles", "query": {"term": {"roles.company_nif": nif}}}},
+        "_source": [
+            "nif", "name", "name_keyword", "is_company", "roles", "roles_count",
+            "companies_count", "source", "sources", "ingested_at", "last_seen",
+        ],
+        "sort": [{"roles_count": {"order": "desc"}}, {"nif": "asc"}],
+    }
+    try:
+        resp = client.search(index=PEOPLE_INDEX, body=body)
+    except Exception as exc:
+        logger.warning("Ficha de empresa %s no PessoasIQ falhou: %s", nif, exc)
+        return {"nif": nif, "total": 0, "people": [], "error": str(exc)}
+
+    total = int((resp.get("hits", {}).get("total") or {}).get("value") or 0)
+    people: List[Dict[str, Any]] = []
+    company_name: Optional[str] = None
+    for hit in resp.get("hits", {}).get("hits", []):
+        source = hit.get("_source") or {}
+        roles = [
+            role for role in (source.get("roles") or [])
+            if str(role.get("company_nif") or "") == nif
+        ]
+        if not roles:
+            continue
+        roles.sort(key=lambda role: str(role.get("date") or role.get("publication_date") or ""), reverse=True)
+        if not company_name:
+            for role in roles:
+                if role.get("company_name"):
+                    company_name = str(role["company_name"])
+                    break
+        latest = roles[0]
+        people.append({
+            "nif": source.get("nif"),
+            "name": source.get("name_keyword") or source.get("name") or "",
+            "is_company": bool(source.get("is_company")),
+            "cargos_empresa": len(roles),
+            "cargo": latest.get("role"),
+            "role_org": latest.get("role_org"),
+            "event": latest.get("event"),
+            "date": latest.get("date"),
+            "acto": latest.get("acto"),
+            "publication_id": latest.get("publication_id"),
+            "roles_total": int(source.get("roles_count") or 0),
+            "companies_total": int(source.get("companies_count") or 0),
+            "origin": (source.get("sources") or [None])[0] if source.get("sources") else source.get("source"),
+            "roles": [
+                {
+                    "role": role.get("role"),
+                    "role_org": role.get("role_org"),
+                    "event": role.get("event"),
+                    "date": role.get("date"),
+                    "acto": role.get("acto"),
+                    "publication_id": role.get("publication_id"),
+                }
+                for role in roles[:20]
+            ],
+        })
+    return {"nif": nif, "name": company_name, "total": total, "people": people}
 
 
 def people_filters(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
@@ -12264,3 +12581,157 @@ def combined_graph_for_company(
         },
     }
 
+
+
+# ---------------------------------------------------------------------------
+# Análises de padrões por empresa (`finance_analises_empresa`)
+#
+# O módulo «Deteção de padrões» produz uma análise pesada (amostra de contratos,
+# réguas por CPV, regras, relações). Guardá-la serve três coisas: comparar a
+# mesma empresa em datas diferentes, ter a ficha de IA com proveniência e poder
+# emitir o relatório mais tarde sem recalcular nada.
+#
+# O documento guarda a **fotografia completa** (`analise`, não indexada) e os
+# campos que interessam para listar e filtrar (nome, NIF, valor, severidade,
+# sinais, modelo de IA). `doc_id` é `<pais>:<nif>`, pelo que voltar a guardar a
+# mesma empresa **substitui** a análise anterior em vez de acumular duplicados.
+# ---------------------------------------------------------------------------
+def _analise_doc_id(pais: str, nif: str) -> str:
+    """Id estável de uma análise (`PT:503439800`) — evita duplicados por empresa."""
+    return f"{(pais or 'PT').upper()}:{str(nif or '').strip()}"
+
+
+def save_analise_empresa(payload: Dict[str, Any], *, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Guarda (ou substitui) a análise de uma empresa.
+
+    `payload` aceita a análise devolvida por `padroes_service.analise_empresa` ou
+    um dicionário já preparado (`nif`, `nome`, `analise`, `ficha_ia`, ...).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    nif = str(payload.get("nif") or "").strip()
+    if not nif:
+        return {"error": "NIF em falta"}
+    pais = str(payload.get("pais") or "PT").upper()
+    analise = payload.get("analise") if isinstance(payload.get("analise"), dict) else payload
+    resumo = (analise.get("resumo") or {}) if isinstance(analise, dict) else {}
+    sinais = [str(item.get("padrao")) for item in (analise.get("sinais") or []) if isinstance(item, dict)]
+    severidades = [str(item.get("severidade")) for item in (analise.get("sinais") or []) if isinstance(item, dict)]
+    ordem = {"alerta": 0, "aviso": 1, "info": 2}
+    severidade = sorted(severidades, key=lambda item: ordem.get(item, 9))[0] if severidades else None
+    ia = payload.get("ia") if isinstance(payload.get("ia"), dict) else {}
+    browser = payload.get("browser") if isinstance(payload.get("browser"), list) else []
+
+    ensure_indices(client)
+    now = _today()
+    doc_id = _analise_doc_id(pais, nif)
+    doc = {
+        "doc_id": doc_id,
+        "nif": nif,
+        "nome": str(payload.get("nome") or analise.get("nome") or nif)[:512],
+        "pais": pais,
+        "titulo": str(payload.get("titulo") or f"Análise de padrões · {analise.get('nome') or nif}")[:512],
+        "notas": str(payload.get("notas") or "")[:8000],
+        "criado_em": str(payload.get("criado_em") or now),
+        "atualizado_em": now,
+        "autor": str(payload.get("autor") or "")[:128],
+        "autor_email": str(payload.get("autor_email") or "")[:256],
+        "anos": [int(ano) for ano in (analise.get("anos") or []) if isinstance(ano, (int, float))][:8],
+        "contratos_total": int(analise.get("contratos_total") or 0),
+        "contratos_analisados": int(analise.get("contratos_analisados") or 0),
+        "valor_total": float(resumo.get("valor_total") or 0.0),
+        "severidade": severidade or "",
+        "sinais": sinais[:40],
+        "regras": [str(regra.get("id")) for regra in (analise.get("regras_ativas") or []) if isinstance(regra, dict)][:60],
+        "insolvente": bool(resumo.get("insolvente")),
+        "ia": bool(ia),
+        "ia_modelo": str(ia.get("model") or "")[:128],
+        "ia_provider": str(ia.get("provider") or "")[:64],
+        "resumo": str(payload.get("resumo") or "")[:20000],
+        "ficha_ia": str(payload.get("ficha_ia") or ia.get("text") or "")[:200000],
+        "analise": analise,
+        "browser": browser[:40],
+        "fontes": [str(fonte) for fonte in (payload.get("fontes") or [])][:40],
+    }
+    try:
+        client.index(index=ANALISES_EMPRESA_INDEX, id=doc_id, document=doc, refresh=True)
+    except Exception as exc:
+        return {"error": str(exc)}
+    return {"saved": True, "doc_id": doc_id, "index": ANALISES_EMPRESA_INDEX, "atualizado_em": now}
+
+
+def list_analises_empresa(
+    *,
+    nif: Optional[str] = None,
+    nome: Optional[str] = None,
+    pais: Optional[str] = None,
+    limit: int = 50,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Análises guardadas (mais recentes primeiro), sem a fotografia completa."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": []}
+
+    ensure_indices(client)
+    filtros: List[Dict[str, Any]] = []
+    if nif:
+        filtros.append({"term": {"nif": str(nif).strip()}})
+    if pais:
+        filtros.append({"term": {"pais": str(pais).upper()}})
+    if nome:
+        filtros.append({"match": {"nome": {"query": str(nome), "operator": "and"}}})
+    body = {
+        "size": max(1, min(int(limit or 50), 200)),
+        "track_total_hits": True,
+        "query": {"bool": {"filter": filtros}} if filtros else {"match_all": {}},
+        "sort": [{"atualizado_em": {"order": "desc", "missing": "_last"}}],
+        "_source": {
+            "excludes": ["analise", "browser", "ficha_ia", "regras"],
+        },
+    }
+    try:
+        resp = client.search(index=ANALISES_EMPRESA_INDEX, body=body)
+    except Exception as exc:
+        return {"error": str(exc), "items": []}
+    items = []
+    for hit in (resp.get("hits") or {}).get("hits") or []:
+        src = dict(hit.get("_source") or {})
+        src.pop("resumo", None)
+        items.append(src)
+    total = ((resp.get("hits") or {}).get("total") or {}).get("value")
+    return {"items": items, "total": total if total is not None else len(items)}
+
+
+def get_analise_empresa(doc_id: str, *, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Análise guardada por id (`<pais>:<nif>`), com a fotografia completa."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    chave = str(doc_id or "").strip()
+    if not chave:
+        return {"error": "Id em falta"}
+    ensure_indices(client)
+    try:
+        resp = client.get(index=ANALISES_EMPRESA_INDEX, id=chave)
+    except Exception as exc:
+        return {"error": "não encontrada", "detail": str(exc), "doc_id": chave}
+    return {"doc_id": chave, **(resp.get("_source") or {})}
+
+
+def delete_analise_empresa(doc_id: str, *, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Apaga uma análise guardada."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    chave = str(doc_id or "").strip()
+    if not chave:
+        return {"error": "Id em falta"}
+    ensure_indices(client)
+    try:
+        client.delete(index=ANALISES_EMPRESA_INDEX, id=chave, refresh=True)
+    except Exception as exc:
+        return {"error": "não encontrada", "detail": str(exc)}
+    return {"apagada": chave}

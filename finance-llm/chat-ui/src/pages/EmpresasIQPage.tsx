@@ -4747,8 +4747,8 @@ export function EntityDetailPanel({
    * Sem isto, um cartão podia abrir uma ficha inexistente (404) porque as
    * pessoas das publicações ainda não tinham sido processadas para o índice.
    */
-  const refreshPeopleIndexPresence = useCallback(async () => {
-    const nifs = (societarioPeople ?? []).map((p) => p.nif).filter(Boolean);
+  const refreshPeopleIndexPresence = useCallback(async (people?: SocietarioPerson[] | null) => {
+    const nifs = ((people ?? societarioPeople) ?? []).map((p) => p.nif).filter(Boolean);
     if (!nifs.length) {
       setPeopleIndexPresence(null);
       return;
@@ -4769,24 +4769,41 @@ export function EntityDetailPanel({
     void refreshPeopleIndexPresence();
   }, [refreshPeopleIndexPresence]);
 
-  /** Alimenta o PessoasIQ com as pessoas/cargos extraídos das publicações desta empresa. */
-  const handleFeedPeopleIndex = useCallback(() => {
+  /**
+   * Extrai as pessoas/cargos das publicações societárias desta empresa e indexa-as
+   * no PessoasIQ (ação «Extrair pessoas»). Recarrega a lista de pessoas e o estado
+   * «no PessoasIQ» para o painel mostrar o resultado sem novo carregamento.
+   */
+  const handleFeedPeopleIndex = useCallback(async () => {
     setPeopleIndexIngesting(true);
     setPeopleIndexError(null);
-    ingestPeopleForCompany(nif)
-      .then((res) => {
-        if (res.indexed_count === 0 && res.total === 0) {
-          setPeopleIndexError(
-            res.error || "Sem pessoas extraíveis: a empresa ainda não tem publicações societárias indexadas.",
-          );
-        }
-        return refreshPeopleIndexPresence();
-      })
-      .catch((err) =>
-        setPeopleIndexError(err instanceof Error ? err.message : "Erro ao alimentar o PessoasIQ"),
-      )
-      .finally(() => setPeopleIndexIngesting(false));
-  }, [nif, refreshPeopleIndexPresence]);
+    try {
+      const res = await ingestPeopleForCompany(nif);
+      if (res.indexed_count === 0 && res.total === 0) {
+        // `publications` só vem do backend novo; sem ele usa-se o total já carregado.
+        const publicacoes = res.publications ?? societario?.total ?? 0;
+        setPeopleIndexError(
+          res.error ||
+            (publicacoes > 0
+              ? "As publicações desta empresa não têm pessoas/cargos identificáveis (actos sem nomeações ou cessões com nomes)."
+              : "Sem pessoas extraíveis: a empresa ainda não tem publicações societárias indexadas."),
+        );
+      }
+      let extracted = societarioPeople;
+      try {
+        const resp = await getCompanySocietarioPeople(nif);
+        extracted = resp.people ?? null;
+        setSocietarioPeople(extracted);
+      } catch {
+        /* mantém-se a lista já carregada */
+      }
+      await refreshPeopleIndexPresence(extracted);
+    } catch (err) {
+      setPeopleIndexError(err instanceof Error ? err.message : "Erro ao extrair pessoas");
+    } finally {
+      setPeopleIndexIngesting(false);
+    }
+  }, [nif, refreshPeopleIndexPresence, societario, societarioPeople]);
 
   // Histórico do dossier: registar a consulta assim que a ficha carrega.
   useEffect(() => {
@@ -4947,25 +4964,41 @@ export function EntityDetailPanel({
             </p>
           </div>
           {societario && societario.total > 0 ? (
-            <button
-              type="button"
-              onClick={() => {
-                setTimelineLoading(true);
-                setTimeline(null);
-                generateCompanySocietarioTimeline(nif)
-                  .then((res) => {
-                    setTimeline(res.markdown);
-                    setTimelinePersisted(false);
-                  })
-                  .catch((err) => setTimeline(`**Erro:** ${err instanceof Error ? err.message : err}`))
-                  .finally(() => setTimelineLoading(false));
-              }}
-              disabled={timelineLoading}
-              className="flex items-center gap-2 rounded-xl bg-teal-400/10 px-3 py-1.5 text-sm text-teal-300 border border-teal-400/20 hover:bg-teal-400/20 transition disabled:opacity-50"
-            >
-              <Sparkles size={16} />
-              {timelineLoading ? "A gerar..." : timelinePersisted ? "Regenerar timeline" : "Timeline com AI"}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setTimelineLoading(true);
+                  setTimeline(null);
+                  generateCompanySocietarioTimeline(nif)
+                    .then((res) => {
+                      setTimeline(res.markdown);
+                      setTimelinePersisted(false);
+                    })
+                    .catch((err) => setTimeline(`**Erro:** ${err instanceof Error ? err.message : err}`))
+                    .finally(() => setTimelineLoading(false));
+                }}
+                disabled={timelineLoading}
+                className="flex items-center gap-2 rounded-xl bg-teal-400/10 px-3 py-1.5 text-sm text-teal-300 border border-teal-400/20 hover:bg-teal-400/20 transition disabled:opacity-50"
+              >
+                <Sparkles size={16} />
+                {timelineLoading ? "A gerar..." : timelinePersisted ? "Regenerar timeline" : "Timeline com AI"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleFeedPeopleIndex()}
+                disabled={peopleIndexIngesting}
+                title="Extrair pessoas/cargos das publicações societárias e indexar no PessoasIQ"
+                className="flex items-center gap-2 rounded-xl bg-blue-400/10 px-3 py-1.5 text-sm text-blue-300 border border-blue-400/20 hover:bg-blue-400/20 transition disabled:opacity-50"
+              >
+                {peopleIndexIngesting ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Database size={16} />
+                )}
+                {peopleIndexIngesting ? "A extrair..." : "Extrair pessoas"}
+              </button>
+            </div>
           ) : (
             <button
               type="button"
@@ -5002,6 +5035,12 @@ export function EntityDetailPanel({
           </p>
         )}
 
+        {peopleIndexError && (
+          <p className="mb-4 rounded-lg border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-300">
+            {peopleIndexError}
+          </p>
+        )}
+
         {timeline && (
           <div className="mb-5 rounded-xl border border-white/10 bg-white/[0.03] p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
@@ -5021,70 +5060,54 @@ export function EntityDetailPanel({
 
         {societarioPeopleLoading ? (
           <p className="mb-5 text-sm text-muted-foreground">A carregar pessoas e cargos...</p>
-        ) : (
-          societarioPeople &&
-          societarioPeople.length > 0 && (
-            <div className="mb-5">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <p className="flex items-center gap-2 text-xs font-medium text-teal-300">
-                  <Users size={14} />
-                  Pessoas e cargos
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-muted-foreground">
-                    {peopleIndexChecking
-                      ? "A validar o PessoasIQ..."
-                      : peopleIndexPresence
-                        ? `${Object.values(peopleIndexPresence).filter(Boolean).length} de ${societarioPeople.length} no PessoasIQ${
-                            societarioPeople.length - Object.values(peopleIndexPresence).filter(Boolean).length > 0
-                              ? ` · faltam ${societarioPeople.length - Object.values(peopleIndexPresence).filter(Boolean).length}`
-                              : ""
-                          }`
-                        : `${societarioPeople.length} pessoa${societarioPeople.length === 1 ? "" : "s"} com cargos registados`}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => void refreshPeopleIndexPresence()}
-                    disabled={peopleIndexChecking}
-                    title="Voltar a validar quais destas pessoas já estão no PessoasIQ"
-                    className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground disabled:opacity-50"
-                  >
-                    <RefreshCw size={12} className={peopleIndexChecking ? "animate-spin" : ""} />
-                    Validar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleFeedPeopleIndex}
-                    disabled={peopleIndexIngesting}
-                    title="Extrair pessoas/cargos das publicações e indexar no PessoasIQ"
-                    className="flex items-center gap-1.5 rounded-lg border border-teal-400/20 bg-teal-400/10 px-2.5 py-1 text-[11px] text-teal-300 transition hover:bg-teal-400/20 disabled:opacity-50"
-                  >
-                    {peopleIndexIngesting ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : (
-                      <Database size={12} />
-                    )}
-                    {peopleIndexIngesting ? "A alimentar..." : "Alimentar PessoasIQ"}
-                  </button>
-                </div>
-              </div>
-              {peopleIndexError && (
-                <p className="mb-2 rounded-lg border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-[11px] text-rose-300">
-                  {peopleIndexError}
-                </p>
-              )}
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                {societarioPeople.map((p) => (
-                  <SocietarioPersonCard
-                    key={p.nif}
-                    person={p}
-                    inPessoasIQ={peopleIndexPresence ? peopleIndexPresence[p.nif] ?? false : undefined}
-                  />
-                ))}
+        ) : societarioPeople && societarioPeople.length > 0 ? (
+          <div className="mb-5">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-xs font-medium text-teal-300">
+                <Users size={14} />
+                Pessoas e cargos
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {peopleIndexChecking
+                    ? "A validar o PessoasIQ..."
+                    : peopleIndexPresence
+                      ? `${Object.values(peopleIndexPresence).filter(Boolean).length} de ${societarioPeople.length} no PessoasIQ${
+                          societarioPeople.length - Object.values(peopleIndexPresence).filter(Boolean).length > 0
+                            ? ` · faltam ${societarioPeople.length - Object.values(peopleIndexPresence).filter(Boolean).length}`
+                            : ""
+                        }`
+                      : `${societarioPeople.length} pessoa${societarioPeople.length === 1 ? "" : "s"} com cargos registados`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void refreshPeopleIndexPresence()}
+                  disabled={peopleIndexChecking}
+                  title="Voltar a validar quais destas pessoas já estão no PessoasIQ"
+                  className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground disabled:opacity-50"
+                >
+                  <RefreshCw size={12} className={peopleIndexChecking ? "animate-spin" : ""} />
+                  Validar
+                </button>
               </div>
             </div>
-          )
-        )}
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {societarioPeople.map((p) => (
+                <SocietarioPersonCard
+                  key={p.nif}
+                  person={p}
+                  inPessoasIQ={peopleIndexPresence ? peopleIndexPresence[p.nif] ?? false : undefined}
+                />
+              ))}
+            </div>
+          </div>
+        ) : societario && societario.total > 0 ? (
+          <p className="mb-5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
+            Sem pessoas extraídas destas publicações. Use{" "}
+            <strong className="font-medium text-blue-300">Extrair pessoas</strong> para criar/atualizar as
+            fichas no PessoasIQ.
+          </p>
+        ) : null}
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -5360,7 +5383,7 @@ function SocietarioPersonCard({
             title={
               inPessoasIQ
                 ? "Já tem ficha no PessoasIQ"
-                : "Ainda não está indexada no PessoasIQ — use «Alimentar PessoasIQ»"
+                : "Ainda não está indexada no PessoasIQ — use «Extrair pessoas»"
             }
           >
             {inPessoasIQ ? <Circle size={7} /> : <AlertCircle size={9} />}

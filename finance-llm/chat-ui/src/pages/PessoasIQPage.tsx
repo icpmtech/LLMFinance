@@ -30,6 +30,7 @@ import {
   autocompletePeople,
   collectPersonSocial,
   getCompanyCombinedGraph,
+  getCompanyPeople,
   getCompanyPeopleGraph,
   getPeopleFilters,
   getPerson,
@@ -38,9 +39,12 @@ import {
   ingestPeopleForCompany,
   ingestPeopleFromCire,
   searchPeople,
+  searchPeopleCompanies,
 } from "../api";
+import type { CompanyPerson, PeopleCompaniesResponse, PeopleCompanyItem, PeopleCompanyResponse } from "../api";
 import { GraphCanvas } from "../components/graph/GraphCanvas";
 import type { GraphMetric } from "../components/graph/graphStudio";
+import { useWindowMode } from "../layout";
 import { openWindow } from "../windows";
 import {
   Card,
@@ -338,14 +342,134 @@ function PersonDetailPanel({
   );
 }
 
+function CompanyPersonRow({ person, onOpen }: { person: CompanyPerson; onOpen: () => void }) {
+  const cargos = person.cargos_empresa ?? 1;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="w-full rounded-xl border border-white/10 bg-white/[0.03] p-3 text-left text-sm transition hover:bg-white/[0.06]"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 font-medium text-foreground">
+            {person.is_company ? (
+              <Building2 size={14} className="shrink-0 text-blue-300" />
+            ) : (
+              <PersonStanding size={14} className="shrink-0 text-rose-300" />
+            )}
+            <span className="truncate">{person.name}</span>
+          </p>
+          <p className="text-xs text-muted-foreground">NIF {person.nif}</p>
+        </div>
+        <span className="shrink-0 rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] text-muted-foreground">
+          {cargos} cargo{cargos === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <span className="text-teal-300">{roleLabel(person.cargo, person.event)}</span>
+        {person.role_org && <span>{person.role_org}</span>}
+        {person.date && <span>Data: {formatDate(person.date)}</span>}
+        {person.roles_total ? <span>{person.roles_total} cargos no total</span> : null}
+      </div>
+    </button>
+  );
+}
+
+/**
+ * Ficha de empresa no PessoasIQ: a empresa e quem lá tem cargos.
+ *
+ * A empresa não precisa de ter ficha própria no índice de pessoas — o vínculo é
+ * o cargo que as pessoas nela têm (publicações societárias e processos do CIRE).
+ */
+function CompanyDetailPanel({
+  company,
+  detail,
+  loading,
+  error,
+  onClose,
+  onGraph,
+  onSelectPerson,
+}: {
+  company: PeopleCompanyItem;
+  detail: PeopleCompanyResponse | null;
+  loading: boolean;
+  error: string | null;
+  onClose: () => void;
+  onGraph: () => void;
+  onSelectPerson: (nif: string) => void;
+}) {
+  const people = detail?.people ?? [];
+  const nome = detail?.name || company.name || `NIF ${company.nif}`;
+  const total = people.length || company.people_count;
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-xl font-bold">
+            <Building2 size={22} className="shrink-0 text-blue-300" />
+            {nome}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            NIF {company.nif} · Empresa · {total} pessoa{total === 1 ? "" : "s"} com cargos
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg border border-white/10 p-1.5 text-muted-foreground transition hover:text-foreground"
+          aria-label="Fechar"
+        >
+          <X size={16} />
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onGraph}
+          className="flex items-center gap-2 rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-1.5 text-sm text-rose-300 transition hover:bg-rose-400/20"
+        >
+          <GitBranch size={16} /> Ver grafo
+        </button>
+      </div>
+
+      {loading && <p className="text-sm text-muted-foreground">A carregar as pessoas desta empresa…</p>}
+      {error && (
+        <p className="rounded-lg border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-300">
+          {error}
+        </p>
+      )}
+      {!loading && !error && people.length === 0 && (
+        <p className="text-sm text-muted-foreground">Sem pessoas com cargos indexados nesta empresa.</p>
+      )}
+      {people.length > 0 && (
+        <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+          <h3 className="text-sm font-semibold text-foreground">Pessoas e cargos nesta empresa</h3>
+          {people.map((pessoa) => (
+            <CompanyPersonRow
+              key={pessoa.nif}
+              person={pessoa}
+              onOpen={() => onSelectPerson(pessoa.nif)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SearchSection({
   initialQ,
   onSelectPerson,
+  onSelectCompany,
 }: {
   initialQ: string;
   onSelectPerson: (person: Person) => void;
+  onSelectCompany: (company: PeopleCompanyItem) => void;
 }) {
   const [q, setQ] = useState(initialQ);
+  const [companies, setCompanies] = useState<PeopleCompaniesResponse | null>(null);
   const [personType, setPersonType] = useState<PersonTypeFilter>("all");
   const [role, setRole] = useState("");
   const [origin, setOrigin] = useState<"" | "cire" | "societario">("");
@@ -404,6 +528,12 @@ function SearchSection({
         setResults((prev) =>
           append && prev ? { ...resp, items: [...prev.items, ...resp.items], from: 0 } : resp,
         );
+        if (!append) {
+          // Pesquisa por empresa: a empresa pode não ter ficha própria, porque o
+          // vínculo é o cargo que as pessoas nela têm.
+          const empresas = await searchPeopleCompanies(term || nif || "", 8).catch(() => null);
+          setCompanies(empresas);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Erro ao pesquisar");
         if (!append) setResults(null);
@@ -731,13 +861,45 @@ function SearchSection({
       )}
 
       {!results && !loading && !error && (
-        <EmptyState message="Introduza um termo para pesquisar pessoas e cargos." />
+        <EmptyState message="Introduza um termo para pesquisar pessoas, empresas e cargos." />
       )}
 
-      {loading && <Loading message="A pesquisar pessoas e cargos…" />}
+      {loading && <Loading message="A pesquisar pessoas, empresas e cargos…" />}
 
-      {results && results.total === 0 && !loading && (
-        <EmptyState message="Nenhuma pessoa ou cargo encontrado." />
+      {results && results.total === 0 && !loading && !(companies && companies.items.length > 0) && (
+        <EmptyState message="Nenhuma pessoa, empresa ou cargo encontrado." />
+      )}
+
+      {!loading && companies && companies.items.length > 0 && (
+        <div className="space-y-2">
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Building2 size={14} className="text-blue-300" />
+            Empresas com pessoas ({companies.items.length}) · abra para ver a empresa e quem lá tem cargos
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {companies.items.map((empresa) => (
+              <button
+                key={empresa.nif}
+                type="button"
+                onClick={() => onSelectCompany(empresa)}
+                className="flex min-h-[44px] items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-left transition hover:bg-white/[0.08]"
+              >
+                <Building2 size={18} className="shrink-0 text-blue-300" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-foreground">
+                    {empresa.name || `Empresa ${empresa.nif}`}
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    NIF {empresa.nif} · {empresa.roles_count} cargo{empresa.roles_count === 1 ? "" : "s"}
+                  </span>
+                </span>
+                <span className="shrink-0 rounded-full bg-blue-400/10 px-2 py-0.5 text-[11px] text-blue-200">
+                  {empresa.people_count} pessoa{empresa.people_count === 1 ? "" : "s"}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       {results && results.total > 0 && !loading && (
@@ -841,6 +1003,8 @@ export function GraphSection({
   const [companyNif, setCompanyNif] = useState(initialCompanyNif);
   const [mode, setMode] = useState<GraphMode>(person?.nif ? "person" : initialMode);
   const [label, setLabel] = useState<string | null>(initialLabel ?? null);
+  // Sem gestor de janelas (modo «ecrã inteiro») não há onde abrir «Nova janela».
+  const { windowMode: graphWindowMode } = useWindowMode();
   const [graphData, setGraphData] = useState<PeopleGraphResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1043,7 +1207,7 @@ export function GraphSection({
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : "Carregar grafo"}
             </button>
-            {targetNif.length === 9 && (
+            {graphWindowMode && targetNif.length === 9 && (
               <button
                 type="button"
                 onClick={() => openGraphWindow(effectiveMode, targetNif, label)}
@@ -2063,6 +2227,19 @@ export default function PessoasIQPage({ nif: nifProp }: { nif?: string } = {}) {
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState<PeopleCompanyItem | null>(null);
+  const [companyDetail, setCompanyDetail] = useState<PeopleCompanyResponse | null>(null);
+  const [companyLoading, setCompanyLoading] = useState(false);
+  const [companyError, setCompanyError] = useState<string | null>(null);
+  /**
+   * Alvo empresa do grafo mostrado na secção «Grafo».
+   *
+   * Em modo janelas o grafo abre numa janela própria; em modo «ecrã inteiro» o
+   * gestor de janelas não é renderizado (a janela ficava invisível), pelo que o
+   * grafo passa a ser mostrado na própria página.
+   */
+  const [graphCompany, setGraphCompany] = useState<{ nif: string; name: string | null } | null>(null);
+  const { windowMode } = useWindowMode();
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -2078,8 +2255,40 @@ export default function PessoasIQPage({ nif: nifProp }: { nif?: string } = {}) {
   }, [fetchStatus]);
 
   /**
+   * Abre a ficha de empresa: a empresa e as pessoas com cargos nela.
+   * Devolve o detalhe (ou lança) para quem precise de saber se a empresa existe.
+   */
+  const openCompany = useCallback(async (nif: string, name?: string | null) => {
+    setSelectedCompany({ nif, name: name ?? null, people_count: 0, roles_count: 0 });
+    setSelectedPerson(null);
+    setCompanyDetail(null);
+    setCompanyError(null);
+    setDetailError(null);
+    setCompanyLoading(true);
+    try {
+      const res = await getCompanyPeople(nif);
+      setCompanyDetail(res);
+      setSelectedCompany((prev) =>
+        prev && prev.nif === nif
+          ? { ...prev, name: res.name ?? prev.name, people_count: res.people.length }
+          : prev,
+      );
+      if (!res.people.length && !res.name) {
+        setCompanyError("Nenhuma pessoa com cargos indexados nesta empresa.");
+      }
+      return res;
+    } catch (err) {
+      setCompanyError(err instanceof Error ? err.message : "Erro ao obter a empresa");
+      throw err;
+    } finally {
+      setCompanyLoading(false);
+    }
+  }, []);
+
+  /**
    * Abre a ficha de uma pessoa: pelo NIF recebido em prop (janela `person-detail:`
    * aberta a partir do societário) ou pelo NIF no URL (`/pessoas-iq/<NIF>`).
+   * Sem ficha de pessoa, tenta a empresa (NIF de entidade coletiva).
    */
   useEffect(() => {
     const fromUrl = window.location.pathname.match(/^\/pessoas-iq\/([^/]+)$/);
@@ -2090,11 +2299,19 @@ export default function PessoasIQPage({ nif: nifProp }: { nif?: string } = {}) {
     getPerson(nif)
       .then((person) => {
         setSelectedPerson(person);
+        setSelectedCompany(null);
         setSection("search");
       })
-      .catch((err) => setDetailError(err instanceof Error ? err.message : "Erro"))
+      .catch(async (err) => {
+        try {
+          await openCompany(nif);
+          setSection("search");
+        } catch {
+          setDetailError(err instanceof Error ? err.message : "Erro");
+        }
+      })
       .finally(() => setDetailLoading(false));
-  }, [nifProp]);
+  }, [nifProp, openCompany]);
 
   const handleSearchTopbar = () => {
     setSection("search");
@@ -2102,11 +2319,47 @@ export default function PessoasIQPage({ nif: nifProp }: { nif?: string } = {}) {
 
   const handleSelectPerson = (person: Person) => {
     setSelectedPerson(person);
+    setSelectedCompany(null);
   };
 
+  /** Pessoa escolhida dentro do painel de empresa: abre a ficha da pessoa. */
+  const handlePickPersonFromCompany = useCallback(async (nif: string) => {
+    setCompanyLoading(true);
+    setCompanyError(null);
+    try {
+      const person = await getPerson(nif);
+      setSelectedCompany(null);
+      setCompanyDetail(null);
+      setSelectedPerson(person);
+    } catch (err) {
+      setCompanyError(err instanceof Error ? err.message : "Erro ao obter a pessoa");
+    } finally {
+      setCompanyLoading(false);
+    }
+  }, []);
+
   const handleGraphForSelected = () => {
+    // Modo janelas: grafo numa janela própria; senão, na secção da própria página.
+    if (windowMode && selectedPerson?.nif) {
+      openGraphWindow("person", selectedPerson.nif, selectedPerson.name);
+      return;
+    }
+    setGraphCompany(null);
     setSection("graph");
   };
+
+  /** Grafo de uma empresa (painel de empresa): janela própria ou secção da página. */
+  const handleGraphForCompany = useCallback(
+    (empresa: { nif: string; name?: string | null }) => {
+      if (windowMode) {
+        openGraphWindow("company", empresa.nif, empresa.name ?? null);
+        return;
+      }
+      setGraphCompany({ nif: empresa.nif, name: empresa.name ?? null });
+      setSection("graph");
+    },
+    [windowMode],
+  );
 
   const handle360ForSelected = () => {
     setSection("score360");
@@ -2146,10 +2399,22 @@ export default function PessoasIQPage({ nif: nifProp }: { nif?: string } = {}) {
         return <DashboardSection status={status} onSection={setSection} />;
       case "search":
         return (
-          <SearchSection initialQ={q} onSelectPerson={handleSelectPerson} />
+          <SearchSection
+            initialQ={q}
+            onSelectPerson={handleSelectPerson}
+            onSelectCompany={(empresa) => void openCompany(empresa.nif, empresa.name)}
+          />
         );
       case "graph":
-        return <GraphSection person={selectedPerson} />;
+        return (
+          <GraphSection
+            key={graphCompany ? `empresa:${graphCompany.nif}` : `pessoa:${selectedPerson?.nif ?? ""}`}
+            person={graphCompany ? null : selectedPerson}
+            initialCompanyNif={graphCompany?.nif ?? ""}
+            initialMode={graphCompany ? "company" : "person"}
+            initialLabel={graphCompany?.name ?? null}
+          />
+        );
       case "score360":
         return <Dossier360Section person={selectedPerson} onPickNif={(value) => void handlePickNif(value)} />;
       case "settings":
@@ -2157,7 +2422,7 @@ export default function PessoasIQPage({ nif: nifProp }: { nif?: string } = {}) {
       default:
         return null;
     }
-  }, [detailError, detailLoading, q, section, selectedPerson, status, handlePickNif]);
+  }, [detailError, detailLoading, q, section, selectedPerson, status, handlePickNif, openCompany, graphCompany]);
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-background text-foreground orbit-bg">
@@ -2167,7 +2432,32 @@ export default function PessoasIQPage({ nif: nifProp }: { nif?: string } = {}) {
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_minmax(0,420px)]">
           <div className={`min-w-0 ${section === "graph" || section === "score360" ? "lg:col-span-2" : "space-y-4"}`}>{content}</div>
 
-          {selectedPerson && section !== "graph" && section !== "score360" && (
+          {selectedCompany && section !== "graph" && section !== "score360" && (
+            <aside className="min-w-0 space-y-4">
+              <Card glow="blue">
+                <CompanyDetailPanel
+                  company={selectedCompany}
+                  detail={companyDetail}
+                  loading={companyLoading}
+                  error={companyError}
+                  onClose={() => {
+                    setSelectedCompany(null);
+                    setCompanyDetail(null);
+                    setCompanyError(null);
+                  }}
+                  onGraph={() =>
+                    handleGraphForCompany({
+                      nif: selectedCompany.nif,
+                      name: selectedCompany.name ?? null,
+                    })
+                  }
+                  onSelectPerson={(nif) => void handlePickPersonFromCompany(nif)}
+                />
+              </Card>
+            </aside>
+          )}
+
+          {!selectedCompany && selectedPerson && section !== "graph" && section !== "score360" && (
             <aside className="min-w-0 space-y-4">
               <Card glow="rose">
                 <PersonDetailPanel
