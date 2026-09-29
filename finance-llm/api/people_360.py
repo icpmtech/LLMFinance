@@ -651,6 +651,14 @@ async def build_ai_markdown(
     if chosen.get("kind") != "cloud":
         outcome["notes"].append(chosen.get("note") or "Sem modelo configurado: ficha montada só com factos.")
         return outcome
+    # `ai` é importado aqui (e não no topo) para evitar ciclos de importação — como
+    # em `resolve_backend`. Sem este import o `ai.ask_model` dava `NameError` e a
+    # ficha saía sempre em modo factual com o aviso «a IA falhou».
+    try:
+        from api import ontology_ai as ai  # noqa: PLC0415
+    except Exception as exc:  # pragma: no cover
+        outcome["warnings"].append(f"IA indisponível ({exc}); ficha factual.")
+        return outcome
     try:
         text = await ai.ask_model(
             chosen,

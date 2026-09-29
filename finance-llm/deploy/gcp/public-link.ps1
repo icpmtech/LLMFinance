@@ -227,8 +227,8 @@ Avisos:
     segredo e não o abras a terceiros.
   * O link muda a cada arranque. Para link fixo com Access, corre primeiro
     .\01-setup-tunnels.ps1 e depois: .\public-link.ps1 -ConfigPath .\origin\config.yml
-  * As páginas iframe (n8n, Hermes, SearXNG) usam portas 8891/8892/8888 e não
-    passam pelo túnel.
+  * As páginas iframe (n8n, Hermes, SearXNG, MiroFish) usam portas
+    8891/8892/8888/8893 e não passam pelo túnel.
 
 Para parar:  .\public-link.ps1 -Stop
 "@

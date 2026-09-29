@@ -23,6 +23,7 @@ import {
   CandlestickChart,
   Compass,
   Database,
+  FileJson,
   FileText,
   Fingerprint,
   FolderOpen,
@@ -393,6 +394,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: ShieldAlert,
     gradient: "from-amber-200 via-rose-400 to-rose-700",
     accent: "251,113,133",
+  },
+  {
+    id: "societario",
+    label: "Recolha Societária",
+    hint: "Recolha massiva de atos societários (MJ) para JSON e indexação: alvos pelos anos dos contratos e por empresa",
+    icon: FileJson,
+    gradient: "from-teal-200 via-emerald-500 to-cyan-700",
+    accent: "45,212,191",
   },
   {
     id: "gleif",

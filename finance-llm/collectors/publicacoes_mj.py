@@ -229,6 +229,15 @@ class CaptchaRequiredError(RuntimeError):
     """A pesquisa foi recusada por falta de reCAPTCHA válido."""
 
 
+class RateLimitedError(RuntimeError):
+    """O portal continuou a limitar os pedidos após todas as tentativas.
+
+    Antes, `_post_with_retry` devolvia a página de throttling e a pesquisa parecia
+    não ter resultados (0 publicações, sem erro) — numa recolha massiva isso era
+    indistinguível de uma entidade sem publicações.
+    """
+
+
 def _debug_dir() -> str:
     """Diretório base para guardar páginas de debug da recolha MJ."""
     base = os.environ.get("MJ_DEBUG_DIR") or os.path.join(os.getcwd(), "debug_mj")
@@ -365,7 +374,11 @@ class PublicacoesMjClient:
             raise
 
     def _post_with_retry(self, html_state: str, fields: Dict[str, str], *, retries: int = 5, base_delay: float = 15.0, event_target: str = "", event_argument: str = "") -> str:
-        """Envia POST e espera se o portal devolver throttling."""
+        """Envia POST e espera se o portal devolver throttling.
+
+        Se o rate-limit persistir, levanta `RateLimitedError` (em vez de devolver a
+        página de throttling, que se confundia com «sem resultados»).
+        """
         last_html = ""
         for attempt in range(retries):
             try:
@@ -386,7 +399,13 @@ class PublicacoesMjClient:
             time.sleep(delay)
             html_state = self.fetch_form()
         logger.error("Rate-limit do MJ persistiu após %s tentativas", retries)
-        return last_html
+        if last_html:
+            self._save("rate_limit", last_html)
+        raise RateLimitedError(
+            f"O portal do Ministério da Justiça está a limitar os pedidos "
+            f"(rate-limit persistente após {retries} tentativas). Tente mais tarde "
+            f"ou aumente o intervalo entre pedidos."
+        )
 
     def _search_fields(self, html_state: Optional[str] = None, **kwargs: Any) -> Dict[str, str]:
         """Campos do formulário (sem o botão), reenviados em todos os postbacks."""

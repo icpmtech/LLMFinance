@@ -59,6 +59,7 @@ export type AppView =
   | "world-rede"
   | "padroes"
   | "risco"
+  | "societario"
   | "gleif"
   | "gleif-mapa"
   | "gleif-ingestao"

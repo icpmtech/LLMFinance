@@ -9662,6 +9662,311 @@ def societario_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
         return {"error": str(exc)}
 
 
+# --- Recolha societária massiva: alvos por ANO de contrato e por empresa -----
+
+def societario_counts_by_nif(nifs: Iterable[str], es: Optional[Elasticsearch] = None) -> Dict[str, int]:
+    """Nº de publicações societárias indexadas por NIF.
+
+    Serve para saber o que já está indexado (ex.: indexar só os ficheiros JSON
+    exportados que ainda faltam).
+    """
+    client = es or get_es_client()
+    alvo = [str(nif).strip() for nif in nifs if str(nif).strip()]
+    if not client or not alvo:
+        return {}
+    counts: Dict[str, int] = {}
+    chunk = 500
+    for start in range(0, len(alvo), chunk):
+        lote = alvo[start : start + chunk]
+        try:
+            resp = client.search(
+                index=SOCIETARIO_INDEX,
+                body={
+                    "size": 0,
+                    "query": {"terms": {"nif": lote}},
+                    "aggs": {"by_nif": {"terms": {"field": "nif", "size": len(lote)}}},
+                },
+            )
+        except Exception as exc:
+            logger.debug("Contagem de publicações por NIF falhou: %s", exc)
+            continue
+        for bucket in (resp.get("aggregations") or {}).get("by_nif", {}).get("buckets", []):
+            counts[str(bucket["key"])] = int(bucket.get("doc_count") or 0)
+    return counts
+
+
+#: Caminhos `nested` das partes de um contrato (empresas adjudicatárias/adjudicantes).
+_CONTRACT_PARTY_PATHS = ("adjudicatarios.parsed", "adjudicantes.parsed")
+
+
+def contract_years(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Anos com contratos indexados (faceta do filtro por ano).
+
+    A recolha societária vai buscar as publicações das empresas que contratam;
+    este é o eixo temporal disponível para escolher os alvos («ir pelos anos dos
+    contratos»).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"years": [], "error": "Elasticsearch indisponível"}
+    try:
+        resp = client.search(
+            index=CONTRACTS_INDEX,
+            body={
+                "size": 0,
+                "aggs": {"years": {"terms": {"field": "Ano", "size": 60, "order": {"_key": "desc"}}}},
+            },
+        )
+    except Exception as exc:
+        logger.warning("Faceta de anos de contratos falhou: %s", exc)
+        return {"years": [], "error": str(exc)}
+    buckets = (resp.get("aggregations") or {}).get("years", {}).get("buckets", [])
+    years = [
+        {"year": int(bucket["key"]), "contracts": int(bucket.get("doc_count") or 0)}
+        for bucket in buckets
+        if bucket.get("key") is not None
+    ]
+    return {
+        "years": years,
+        "min": years[-1]["year"] if years else None,
+        "max": years[0]["year"] if years else None,
+    }
+
+
+def companies_with_contracts_in_years(
+    ano_ini: Optional[int] = None,
+    ano_fim: Optional[int] = None,
+    *,
+    papel: str = "ambos",
+    size: int = 1000,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Empresas com contratos num intervalo de anos (NIF → nº contratos e valor).
+
+    Agrega `adjudicatarios.parsed.nif` e `adjudicantes.parsed.nif` no intervalo de
+    `Ano` indicado. Devolve o conjunto de candidatos usado para filtrar as
+    entidades alvo da recolha societária pelos **anos dos contratos**.
+
+    ``papel`` escolhe o lado do contrato: ``ambos`` (por omissão),
+    ``adjudicatario`` (empresas que ganham contratos) ou ``adjudicante`` (quem
+    contrata, sobretudo entidades públicas).
+
+    Nota: o valor somado é o `precoContratual` (via `reverse_nested`, porque o
+    valor vive no documento pai) e conta uma vez por parte envolvida.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"items": {}, "total": 0, "error": "Elasticsearch indisponível"}
+
+    filtros: List[Dict[str, Any]] = []
+    span: Dict[str, Any] = {}
+    if ano_ini:
+        span["gte"] = int(ano_ini)
+    if ano_fim:
+        span["lte"] = int(ano_fim)
+    if span:
+        filtros.append({"range": {"Ano": span}})
+
+    def party_agg(path: str) -> Dict[str, Any]:
+        return {
+            "nested": {"path": path},
+            "aggs": {
+                "por_nif": {
+                    "terms": {"field": f"{path}.nif", "size": max(1, min(int(size or 1000), 5000))},
+                    "aggs": {"valor": {"reverse_nested": {}, "aggs": {"soma": {"sum": {"field": "precoContratual"}}}}},
+                }
+            },
+        }
+
+    escolha = str(papel or "ambos").strip().lower()
+    if escolha in {"adjudicatario", "adjudicatarios", "adjudicatária", "adjudicatárias"}:
+        lados = ["adjudicatarios"]
+    elif escolha in {"adjudicante", "adjudicantes"}:
+        lados = ["adjudicantes"]
+    else:
+        lados = ["adjudicatarios", "adjudicantes"]
+    aggs = {lado: party_agg(f"{lado}.parsed") for lado in lados}
+
+    body: Dict[str, Any] = {
+        "size": 0,
+        "query": {"bool": {"filter": filtros}} if filtros else {"match_all": {}},
+        "aggs": aggs,
+    }
+    try:
+        resp = client.search(index=CONTRACTS_INDEX, body=body)
+    except Exception as exc:
+        logger.warning("Agregação de empresas por anos falhou: %s", exc)
+        return {"items": {}, "total": 0, "error": str(exc)}
+
+    items: Dict[str, Dict[str, float]] = {}
+    for papel_agg in lados:
+        buckets = (((resp.get("aggregations") or {}).get(papel_agg) or {}).get("por_nif") or {}).get("buckets", [])
+        for bucket in buckets:
+            nif = str(bucket.get("key") or "").strip()
+            if not nif:
+                continue
+            entry = items.setdefault(nif, {"contracts": 0.0, "value": 0.0})
+            entry["contracts"] += int(bucket.get("doc_count") or 0)
+            entry["value"] += float(((bucket.get("valor") or {}).get("soma") or {}).get("value") or 0.0)
+    return {"items": items, "total": len(items), "ano_ini": ano_ini, "ano_fim": ano_fim, "papel": papel}
+
+
+def societario_targets_filtered(
+    *,
+    ano_ini: Optional[int] = None,
+    ano_fim: Optional[int] = None,
+    q: Optional[str] = None,
+    nifs: Optional[Iterable[str]] = None,
+    min_contracts: int = 1,
+    min_value: Optional[float] = None,
+    papel: str = "ambos",
+    period_size: int = 3000,
+    exclude_collected: bool = True,
+    limit: int = 50,
+    from_: int = 0,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Entidades alvo da recolha societária, filtradas por **ano de contrato** e por **empresa**.
+
+    Mantém a mesma base do `societario_targets` (`finance_entities`, Portugal, com
+    NIF) e acrescenta:
+
+    - ``ano_ini``/``ano_fim``: só entidades com contratos nesses anos (agregação no
+      índice de contratos, ver `companies_with_contracts_in_years`);
+    - ``q``: firma/denominação (ou NIF, se forem 9 dígitos);
+    - ``nifs``: lista explícita de empresas (interseção com os restantes filtros).
+
+    Cada item diz quantos contratos **do período** a empresa tem
+    (``period_contracts``/``period_value``), além do total no cadastro e das
+    publicações societárias já indexadas.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+
+    executar = [str(n).strip() for n in (nifs or []) if str(n).strip()]
+    period: Dict[str, Dict[str, float]] = {}
+    if ano_ini or ano_fim:
+        agg = companies_with_contracts_in_years(ano_ini, ano_fim, papel=papel, size=period_size, es=client)
+        if agg.get("error"):
+            return {"error": agg["error"], "items": [], "total": 0}
+        period = dict(agg.get("items") or {})
+        if not period:
+            return {"items": [], "total": 0, "from": from_, "size": limit, "period_entities": 0}
+
+    filters: List[Dict[str, Any]] = [
+        {"term": {"country_code": "PT"}},
+        {"term": {"has_nif": True}},
+        {"range": {"contracts_count": {"gte": max(1, int(min_contracts or 1))}}},
+    ]
+    if min_value:
+        filters.append({"range": {"total_value": {"gte": float(min_value)}}})
+
+    candidatos = executar or (list(period.keys()) if period else None)
+    if candidatos:
+        filters.append({"terms": {"nif": candidatos}})
+
+    must: List[Dict[str, Any]] = []
+    termo = (q or "").strip()
+    if termo:
+        if re.fullmatch(r"\d{9}", termo):
+            must.append({"term": {"nif": termo}})
+        else:
+            must.append(
+                {
+                    "bool": {
+                        "should": [
+                            {"match": {"name": {"query": termo, "operator": "and", "boost": 3}}},
+                            {"match": {"name.autocomplete": {"query": termo, "operator": "and"}}},
+                        ],
+                        "minimum_should_match": 1,
+                    }
+                }
+            )
+
+    query: Dict[str, Any] = {"bool": {"filter": filters}}
+    if must:
+        query["bool"]["must"] = must
+
+    try:
+        resp = client.search(
+            index=ENTITIES_INDEX,
+            body={
+                "query": query,
+                "from": max(0, from_),
+                "size": max(1, min(int(limit or 50), 500)),
+                "track_total_hits": False,
+                "_source": ["nif", "name", "contracts_count", "total_value", "as_adjudicante_count", "as_adjudicatario_count"],
+                "sort": [{"contracts_count": {"order": "desc", "missing": "_last"}}],
+            },
+        )
+        rows = [hit["_source"] for hit in resp["hits"]["hits"]]
+    except Exception as exc:
+        logger.warning("Listagem de alvos societários falhou: %s", exc)
+        return {"error": str(exc), "items": [], "total": 0}
+
+    alvo_nifs = [str(r.get("nif")) for r in rows if r.get("nif")]
+    counts: Dict[str, int] = {}
+    if alvo_nifs:
+        try:
+            agg = client.search(
+                index=SOCIETARIO_INDEX,
+                body={
+                    "size": 0,
+                    "query": {"terms": {"nif": alvo_nifs}},
+                    "aggs": {"by_nif": {"terms": {"field": "nif", "size": len(alvo_nifs)}}},
+                },
+            )
+            counts = {
+                b["key"]: b["doc_count"]
+                for b in agg.get("aggregations", {}).get("by_nif", {}).get("buckets", [])
+            }
+        except Exception:
+            counts = {}
+
+    items: List[Dict[str, Any]] = []
+    for row in rows:
+        nif = str(row.get("nif") or "").strip()
+        if not nif:
+            continue
+        metrics = period.get(nif) or {}
+        items.append(
+            {
+                "nif": nif,
+                "name": row.get("name"),
+                "contracts_count": row.get("contracts_count"),
+                "total_value": row.get("total_value"),
+                "period_contracts": int(metrics.get("contracts") or 0) if period else None,
+                "period_value": round(float(metrics.get("value") or 0.0), 2) if period else None,
+                "publications_count": counts.get(nif, 0),
+            }
+        )
+    if period:
+        # Com filtro de anos, ordenar pelo volume no período é mais útil.
+        items.sort(key=lambda item: (item.get("period_contracts") or 0), reverse=True)
+    if exclude_collected:
+        items = [item for item in items if not item["publications_count"]]
+    return {
+        "items": items,
+        "total": len(items),
+        "from": from_,
+        "size": limit,
+        "period_entities": len(period) if period else None,
+        "period_truncated": bool(period) and len(period) >= int(period_size or 0),
+        "period_size": period_size if period else None,
+        "filters": {
+            "ano_ini": ano_ini,
+            "ano_fim": ano_fim,
+            "papel": papel,
+            "q": termo or None,
+            "nifs": executar or None,
+            "min_contracts": min_contracts,
+            "min_value": min_value,
+            "exclude_collected": exclude_collected,
+        },
+    }
+
+
 def societario_targets(
     limit: int = 50,
     from_: int = 0,

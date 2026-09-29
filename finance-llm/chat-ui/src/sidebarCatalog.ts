@@ -100,8 +100,8 @@ export const APP_MODULES: AppModule[] = [
   {
     id: "dados-publicos",
     label: "Dados públicos",
-    hint: "Insolvências, citações editais, contribuintes e registos LEI",
-    ids: ["cire", "citacoes", "contribuintes", "gleif", "gleif-mapa", "gleif-ingestao"],
+    hint: "Insolvências, citações editais, contribuintes, societário e registos LEI",
+    ids: ["cire", "citacoes", "contribuintes", "societario", "gleif", "gleif-mapa", "gleif-ingestao"],
   },
   {
     id: "mercados",

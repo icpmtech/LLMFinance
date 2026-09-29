@@ -1,12 +1,16 @@
 # IQ OS — solução completa em containers.
 #
 # Serviços "core" (arrancam sempre):  elasticsearch + backend (API FastAPI) + frontend (nginx/SPA)
+#                                     + searxng (metasearch) + n8n (automação)
 # Serviços "tools":                   mcp   -> servidor MCP em HTTP (profile: tools)
-# Serviços "test":                    tests -> pytest + smoke test da API (profile: test)
+# Serviços "agents":                  hermes-agent -> agente autónomo + dashboard (profile: agents)
+# Serviços "mirofish":                mirofish -> previsão por enxame de agentes (profile: mirofish)
 #
 # Uso:
 #   docker compose up --build -d                     # núcleo da solução
 #   docker compose --profile tools up -d             # + servidor MCP (http://127.0.0.1:8765/mcp)
+#   docker compose --profile agents up -d            # + Hermes Agent (dashboard na página iframe)
+#   docker compose --profile mirofish up -d          # + MiroFish (precisa de chaves LLM + Zep)
 #   docker compose --profile test run --rm tests     # testes de dentro do container
 services:
   elasticsearch:
@@ -77,6 +81,7 @@ services:
         VITE_SEARXNG_URL: ${VITE_SEARXNG_URL:-}
         VITE_N8N_URL: ${VITE_N8N_URL:-}
         VITE_HERMES_URL: ${VITE_HERMES_URL:-}
+        VITE_MIROFISH_URL: ${VITE_MIROFISH_URL:-}
     image: iq-os-frontend:latest
     container_name: finance-llm-frontend
     ports:
@@ -84,6 +89,7 @@ services:
       # Proxy de incorporação (iframe) das apps de apoio — ver docker/nginx.conf
       - "${N8N_EMBED_PORT:-8891}:8891"
       - "${HERMES_EMBED_PORT:-8892}:8892"
+      - "${MIROFISH_EMBED_PORT:-8893}:8893"
     depends_on:
       backend:
         condition: service_healthy
@@ -186,6 +192,67 @@ services:
           cpus: "2.0"
     restart: unless-stopped
 
+  # MiroFish (https://github.com/666ghj/MiroFish) — motor de previsão por
+  # inteligência de enxame: extrai informação-semente do mundo real (notícias,
+  # relatórios, histórias), constrói um mundo digital paralelo e simula
+  # milhares de agentes com memória de longo prazo (Zep) para deduzir cenários.
+  #
+  # Imagem: oficial `ghcr.io/666ghj/mirofish` + um patch de uma linha — ver
+  # `docker/mirofish/Dockerfile` (base da API em caminho relativo, para a app
+  # funcionar incorporada por iframe e a partir de outra máquina).
+  #
+  # Perfil `mirofish` porque o backend **não arranca sem chaves**: o `run.py`
+  # valida `LLM_API_KEY` e `ZEP_API_KEY` e sai com código 1 — com
+  # `restart: unless-stopped` isso daria um ciclo de reinícios até estarem
+  # definidas. Arranca com:
+  #
+  #   docker compose --profile mirofish up -d
+  #
+  # Chaves (ver `.env.example`):
+  #   * MIROFISH_LLM_API_KEY / _BASE_URL / _MODEL_NAME — API compatível com
+  #     OpenAI (por omissão reutiliza OPENAI_API_KEY/OPENAI_BASE_URL/OPENAI_MODEL);
+  #   * MIROFISH_ZEP_API_KEY — Zep Cloud, memória de longo prazo dos agentes
+  #     (plano gratuito em https://app.getzep.com/).
+  mirofish:
+    build:
+      context: ./docker/mirofish
+      args:
+        MIROFISH_BASE_IMAGE: ${MIROFISH_BASE_IMAGE:-ghcr.io/666ghj/mirofish:latest}
+    image: iq-os-mirofish:latest
+    container_name: finance-llm-mirofish
+    profiles: ["mirofish"]
+    ports:
+      # API Flask do MiroFish (útil para diagnóstico e para clientes externos).
+      # O frontend **não** publica o porto do Vite (3000): é servido pelo proxy
+      # de incorporação do nginx (`MIROFISH_EMBED_PORT`, 8893 por omissão), que
+      # também serve para abrir a app diretamente no browser.
+      - "${MIROFISH_API_PORT:-5001}:5001"
+    volumes:
+      # Projetos, materiais-semente, relatórios e simulações (backend/uploads).
+      - mirofish-uploads:/app/backend/uploads
+    environment:
+      - TZ=Europe/Lisbon
+      # LLM (formato OpenAI). Vazio => o backend recusa arrancar.
+      - LLM_API_KEY=${MIROFISH_LLM_API_KEY:-${OPENAI_API_KEY:-}}
+      - LLM_BASE_URL=${MIROFISH_LLM_BASE_URL:-${OPENAI_BASE_URL:-}}
+      - LLM_MODEL_NAME=${MIROFISH_LLM_MODEL_NAME:-${OPENAI_MODEL:-}}
+      # Memória de longo prazo dos agentes (Zep Cloud). Vazio => não arranca.
+      - ZEP_API_KEY=${MIROFISH_ZEP_API_KEY:-${ZEP_API_KEY:-}}
+      # Acelerador opcional (2.º modelo para tarefas de volume); vazio = desligado.
+      - LLM_BOOST_API_KEY=${MIROFISH_LLM_BOOST_API_KEY:-}
+      - LLM_BOOST_BASE_URL=${MIROFISH_LLM_BOOST_BASE_URL:-}
+      - LLM_BOOST_MODEL_NAME=${MIROFISH_LLM_BOOST_MODEL_NAME:-}
+      # Rondas de simulação por omissão. O README do MiroFish sugere menos de 40
+      # nas primeiras tentativas: cada ronda chama o LLM para cada agente.
+      - OASIS_DEFAULT_MAX_ROUNDS=${MIROFISH_MAX_ROUNDS:-10}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 5
+    restart: unless-stopped
+
   # Servidor MCP do IQ OS em transporte HTTP (para o Inspector, agentes ou o VS Code).
   # Reutiliza a imagem do backend (mesmo código e dependências) e fala com o
   # backend pelo nome do serviço.
@@ -262,3 +329,4 @@ volumes:
   searxng-cache:
   n8n-data:
   hermes-data:
+  mirofish-uploads:

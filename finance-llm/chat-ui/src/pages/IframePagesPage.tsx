@@ -181,8 +181,9 @@ export default function IframePagesPage({ onOpenIframe }: IframePagesPageProps) 
             </p>
             <p className="text-xs text-zinc-500 mt-1">
               A solução já traz as páginas <strong className="text-zinc-400">Pesquisa</strong> (SearXNG),{" "}
-              <strong className="text-zinc-400">n8n</strong> e{" "}
-              <strong className="text-zinc-400">Hermes Agent</strong> pré-instaladas.
+              <strong className="text-zinc-400">n8n</strong>,{" "}
+              <strong className="text-zinc-400">Hermes Agent</strong> e{" "}
+              <strong className="text-zinc-400">MiroFish</strong> pré-instaladas.
             </p>
           </div>
           {!editing && (
@@ -192,7 +193,7 @@ export default function IframePagesPage({ onOpenIframe }: IframePagesPageProps) 
                   const next = installDefaultIframePages();
                   setError(next.length === pages.length ? "As páginas predefinidas já estão instaladas." : null);
                 }}
-                title="Repõe as páginas Pesquisa, n8n e Hermes Agent"
+                title="Repõe as páginas Pesquisa, n8n, Hermes Agent e MiroFish"
                 className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-200 hover:text-white transition"
               >
                 <RotateCcw size={16} />

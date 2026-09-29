@@ -43,9 +43,9 @@ estar ligado para a plataforma responder.
 1. **Latência**: cada pedido vai ao edge nos EUA e volta para o PC em Portugal
    (~200–300 ms a mais que o acesso local). Aceitável para uso administrativo e
    demonstrações; não é ideal para o chat interativo.
-2. **Páginas iframe** (`n8n`, dashboard do Hermes, SearXNG) apontam para
-   `hostname:8891/8892/8888`. Como o túnel só publica 80/443, essas páginas dão
-   erro através do edge. Resolve-se com hostnames extra (ver
+2. **Páginas iframe** (`n8n`, dashboard do Hermes, SearXNG, MiroFish) apontam
+   para `hostname:8891/8892/8888/8893`. Como o túnel só publica 80/443, essas
+   páginas dão erro através do edge. Resolve-se com hostnames extra (ver
    [Iframes](#páginas-iframe-por-porta)).
 3. **O PC tem de estar ligado.** É o preço de manter os 16 GB de índices locais.
 4. **Egress**: a SPA e as respostas da API passam todas pela VM. 200 GiB chegam
@@ -159,8 +159,8 @@ de mexer em DNS.
 ## Páginas iframe (por porta)
 
 As páginas iframe usam `window.location.hostname` + porta. Só 80/443 atravessam
-o túnel, por isso `n8n`, dashboard do Hermes e SearXNG não funcionam pelo edge
-tal como estão. Duas opções:
+o túnel, por isso `n8n`, dashboard do Hermes, SearXNG e MiroFish não funcionam
+pelo edge tal como estão. Duas opções:
 
 1. **Hostnames extra** (`n8n.teudominio.com` → CNAME do túnel do edge) +
    `location /` no template a apontar para `https://${ORIGIN_HOSTNAME}` com o

@@ -20,6 +20,7 @@ import {
   Compass,
   Database,
   FileText,
+  Fish,
   FolderOpen,
   FolderSearch,
   Gauge,
@@ -106,6 +107,7 @@ export const IFRAME_ICONS: Record<string, LucideIcon> = {
   Compass,
   Database,
   FileText,
+  Fish,
   FolderOpen,
   FolderSearch,
   Gauge,
@@ -373,13 +375,14 @@ export function iframeDockApps(): DockApp[] {
 }
 
 // ---------------------------------------------------------------------------
-// Páginas predefinidas da solução (Pesquisa, n8n, Hermes Agent)
+// Páginas predefinidas da solução (Pesquisa, n8n, Hermes Agent, MiroFish)
 // ---------------------------------------------------------------------------
 //
 // São serviços que o `docker-compose.yml` do IQ OS arranca em containers:
 //   * SearXNG (metasearch) ............ http://<host>:8888  (direto)
 //   * n8n (automação/agentes) ......... http://<host>:8891  (proxy nginx de embed)
 //   * Hermes Agent (dashboard) ........ http://<host>:8892  (proxy nginx de embed)
+//   * MiroFish (previsão por enxame) .. http://<host>:8893  (proxy nginx de embed)
 //
 // O n8n e o dashboard do Hermes enviam `X-Frame-Options`, por isso são
 // incorporados através do proxy de nginx que os retira (ver `docker/nginx.conf`).
@@ -428,6 +431,18 @@ export function defaultIframePages(): IframePageConfig[] {
       icon: "Bot",
       accent: "249,115,22",
       gradient: "from-orange-300 via-orange-500 to-orange-700",
+      enabled: true,
+      createdAt: now,
+    },
+    {
+      // MiroFish: motor de previsão por enxame de agentes (perfil `mirofish`
+      // do compose; só arranca com as chaves de LLM e do Zep definidas).
+      id: "iqos-mirofish",
+      title: "MiroFish",
+      url: supportServiceUrl(import.meta.env.VITE_MIROFISH_URL, 8893),
+      icon: "Fish",
+      accent: "34,211,238",
+      gradient: "from-cyan-300 via-cyan-500 to-cyan-700",
       enabled: true,
       createdAt: now,
     },

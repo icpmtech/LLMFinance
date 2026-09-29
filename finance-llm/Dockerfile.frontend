@@ -10,13 +10,15 @@ ENV VITE_API_URL=$VITE_API_URL
 
 # URLs das aplicações de apoio incorporadas por iframe. Vazio (por omissão) =>
 # a SPA usa o mesmo host do browser e as portas do compose (8888 SearXNG,
-# 8891 n8n, 8892 dashboard do Hermes Agent).
+# 8891 n8n, 8892 dashboard do Hermes Agent, 8893 MiroFish).
 ARG VITE_SEARXNG_URL
 ARG VITE_N8N_URL
 ARG VITE_HERMES_URL
+ARG VITE_MIROFISH_URL
 ENV VITE_SEARXNG_URL=$VITE_SEARXNG_URL \
     VITE_N8N_URL=$VITE_N8N_URL \
-    VITE_HERMES_URL=$VITE_HERMES_URL
+    VITE_HERMES_URL=$VITE_HERMES_URL \
+    VITE_MIROFISH_URL=$VITE_MIROFISH_URL
 
 # Copiar dependências primeiro para cache eficiente
 COPY chat-ui/package.json chat-ui/package-lock.json ./

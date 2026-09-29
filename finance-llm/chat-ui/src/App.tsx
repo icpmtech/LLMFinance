@@ -75,6 +75,7 @@ import ContribuintesPage from "./pages/ContribuintesPage";
 import WorldPage from "./pages/WorldPage";
 import PadroesPage from "./pages/PadroesPage";
 import RiscoPage from "./pages/RiscoPage";
+import SocietarioRecolhaPage from "./pages/SocietarioRecolhaPage";
 import GleifPage, {
   GLEIF_SECTION_VIEWS,
   gleifSectionForView,
@@ -158,6 +159,7 @@ type AppView =
   | "world-rede"
   | "padroes"
   | "risco"
+  | "societario"
   | "iframe-pages";
 const COMPANY_DETAIL_KEY = "finance-llm-company-detail";
 const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
@@ -282,6 +284,7 @@ function pathForView(
   if (view === "world-rede") return "/world/rede";
   if (view === "padroes") return "/padroes";
   if (view === "risco") return "/empresas-risco";
+  if (view === "societario") return "/societario";
   if (view === "gleif") return "/gleif";
   if (view === "gleif-mapa") return "/gleif/mapa";
   if (view === "gleif-ingestao") return "/gleif/ingestao";
@@ -467,6 +470,7 @@ export default function App() {
     if (path === "/world" || path.startsWith("/world/")) return "world";
     if (path === "/padroes" || path.startsWith("/padroes/")) return "padroes";
     if (path === "/empresas-risco" || path.startsWith("/empresas-risco/")) return "risco";
+    if (path === "/societario" || path.startsWith("/societario/")) return "societario";
     {
       const gleifSection = gleifSectionFromPath(path);
       if (gleifSection) return GLEIF_SECTION_VIEWS[gleifSection] as AppView;
@@ -575,6 +579,7 @@ export default function App() {
       else if (path === "/world" || path.startsWith("/world/")) next = "world";
       else if (path === "/padroes" || path.startsWith("/padroes/")) next = "padroes";
       else if (path === "/empresas-risco" || path.startsWith("/empresas-risco/")) next = "risco";
+      else if (path === "/societario" || path.startsWith("/societario/")) next = "societario";
       else if (gleifSectionFromPath(path)) next = GLEIF_SECTION_VIEWS[gleifSectionFromPath(path) as GleifSection] as AppView;
       else if (path === "/contracts" || path === "/contracts/search") next = "contracts-search";
       else if (path === "/contratos-es") next = "contratos-es";
@@ -1239,6 +1244,7 @@ export default function App() {
     if (target === "world" || target === "world-rede") return <WorldPage />;
     if (target === "padroes") return <PadroesPage />;
     if (target === "risco") return <RiscoPage />;
+    if (target === "societario") return <SocietarioRecolhaPage />;
     if (target === "contracts-dashboard") {
       return (
         <ContractsDashboardPage

@@ -120,6 +120,7 @@ docker compose up --build -d
 - Elasticsearch: http://127.0.0.1:9200
 - SearXNG (página iframe «Pesquisa»): http://127.0.0.1:8888
 - n8n (página iframe «n8n»): http://127.0.0.1:8891 · direto em http://127.0.0.1:5678
+- MiroFish (página iframe «MiroFish», perfil `mirofish`): http://127.0.0.1:8893
 
 Para parar:
 
@@ -133,11 +134,12 @@ Serviços opcionais (perfis do compose):
 
 ```bash
 docker compose --profile agents up -d        # Hermes Agent (API :8642 + dashboard na página iframe «Hermes Agent»)
+docker compose --profile mirofish up -d      # MiroFish (página iframe «MiroFish», :8893 — precisa de chaves LLM + Zep)
 docker compose --profile tools up -d mcp     # servidor MCP em HTTP (http://127.0.0.1:8765/mcp)
 docker compose --profile test run --rm tests # pytest + smoke test de todos os endpoints, em Docker
 ```
 
-Três aplicações de apoio ficam pré-instaladas como **páginas iframe** na plataforma (dock → Pesquisa, n8n, Hermes Agent). O dashboard do Hermes entra com **as mesmas contas do IQ OS** (`docker/hermes/plugins/dashboard-auth-iqos`).
+Quatro aplicações de apoio ficam pré-instaladas como **páginas iframe** na plataforma (dock → Pesquisa, n8n, Hermes Agent, MiroFish). O dashboard do Hermes entra com **as mesmas contas do IQ OS** (`docker/hermes/plugins/dashboard-auth-iqos`); o MiroFish é uma imagem própria derivada da oficial (`docker/mirofish/Dockerfile`).
 
 ## Recolha de dados
 
