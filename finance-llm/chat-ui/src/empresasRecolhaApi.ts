@@ -52,12 +52,18 @@ export interface EmpresasRecolhaRequest {
 
 export interface EmpresasRecolhaJob {
   job_id: string;
+  kind?: "concelho" | "distrito" | string;
   status: "pending" | "running" | "done" | "error" | string;
   started_at?: string | null;
   finished_at?: string | null;
-  payload?: EmpresasRecolhaRequest;
-  result?: EmpresasRecolhaResult | null;
+  payload?: EmpresasRecolhaRequest & EmpresasRecolhaDistritoRequest;
+  result?: EmpresasRecolhaResult | EmpresasRecolhaDistritoResultado | null;
   error?: string | null;
+  /** Progresso do modo «distrito» (evento do serviço). */
+  progress?: { tipo?: string; indice?: number; total?: number; concelho?: string } | null;
+  concelho_atual?: string | null;
+  concelhos_feitos?: number;
+  concelhos?: EmpresasRecolhaConcelhoResumo[] | null;
 }
 
 export interface EmpresasRecolhaExportFile {
@@ -96,6 +102,69 @@ export interface EmpresasRecolhaItem {
   text?: string;
   detail?: boolean;
   data?: Record<string, unknown>;
+}
+
+export interface EmpresasRecolhaDistritoRequest {
+  distrito: string;
+  start_page?: number;
+  max_pages?: number;
+  detail?: boolean;
+  delay?: number;
+  ingest?: boolean;
+  skip_done?: boolean;
+  concelhos?: string[];
+  paralelo?: number;
+}
+
+/** Concelho (ou distrito) no catálogo do diretório, com o volume anunciado. */
+export interface EmpresasRecolhaLocal {
+  slug: string;
+  nome: string;
+  empresas?: number | null;
+  concelhos?: EmpresasRecolhaLocal[];
+  error?: string;
+}
+
+export interface EmpresasRecolhaCatalogo {
+  source: string;
+  updated_at: string;
+  ttl: number;
+  distritos: EmpresasRecolhaLocal[];
+  total_distritos: number;
+  total_concelhos: number;
+  total_empresas: number;
+  sem_concelhos: string[];
+}
+
+export interface EmpresasRecolhaConcelhoResumo {
+  concelho: string;
+  ok: boolean;
+  items_count: number;
+  pages?: number;
+  file?: string;
+  run_id?: string;
+  collected_at?: string;
+  error?: string;
+  saltado?: boolean;
+}
+
+export interface EmpresasRecolhaManifesto {
+  distrito: string;
+  concelhos: Record<string, EmpresasRecolhaConcelhoResumo>;
+  total_items?: number;
+  concelhos_ok?: number;
+  updated_at?: string | null;
+}
+
+export interface EmpresasRecolhaDistritoResultado {
+  ok: boolean;
+  distrito: string;
+  concelhos: EmpresasRecolhaConcelhoResumo[];
+  total_concelhos: number;
+  concelhos_ok: number;
+  total_items: number;
+  falhados: string[];
+  manifest: string;
 }
 
 // --- API -------------------------------------------------------------------
@@ -174,5 +243,55 @@ export async function previewEmpresaDetail(url: string): Promise<EmpresasRecolha
       body: JSON.stringify({ url }),
     }),
     "detail",
+  );
+}
+
+// --- distrito inteiro ------------------------------------------------------
+
+/** Catálogo do diretório: todos os distritos **e** concelhos (com cache de 1 h). */
+export async function getCatalogo(refresh = false): Promise<EmpresasRecolhaCatalogo> {
+  return ler<EmpresasRecolhaCatalogo>(
+    await fetch(`${API_BASE}/empresas-recolha/catalogo${refresh ? "?refresh=true" : ""}`),
+    "catálogo",
+  );
+}
+
+/** Todos os distritos com diretório (pedido leve, sem concelhos). */
+export async function getDistritos(): Promise<{ distritos: EmpresasRecolhaLocal[]; total: number }> {
+  return ler<{ distritos: EmpresasRecolhaLocal[]; total: number }>(
+    await fetch(`${API_BASE}/empresas-recolha/distritos`),
+    "distritos",
+  );
+}
+
+/** Concelhos do distrito, lidos da página do diretório (fonte da verdade). */
+export async function getDistritoConcelhos(
+  distrito: string,
+): Promise<{ distrito: string; concelhos: EmpresasRecolhaLocal[]; total: number }> {
+  return ler<{ distrito: string; concelhos: EmpresasRecolhaLocal[]; total: number }>(
+    await fetch(`${API_BASE}/empresas-recolha/distrito/${encodeURIComponent(distrito)}/concelhos`),
+    "concelhos do distrito",
+  );
+}
+
+/** Estado por concelho da recolha de um distrito (manifesto). */
+export async function getDistritoEstado(distrito: string): Promise<EmpresasRecolhaManifesto> {
+  return ler<EmpresasRecolhaManifesto>(
+    await fetch(`${API_BASE}/empresas-recolha/distrito/${encodeURIComponent(distrito)}/estado`),
+    "estado do distrito",
+  );
+}
+
+/** Arranca em segundo plano a recolha de todos os concelhos do distrito. */
+export async function startDistritoJob(
+  req: EmpresasRecolhaDistritoRequest,
+): Promise<{ job_id: string; status: string }> {
+  return ler<{ job_id: string; status: string }>(
+    await fetch(`${API_BASE}/empresas-recolha/distrito`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(req),
+    }),
+    "distrito",
   );
 }

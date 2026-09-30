@@ -37,7 +37,8 @@ class RecolhaEmpresasRequest(BaseModel):
     distrito: str = Field(..., min_length=1, description="Distrito (ex.: Évora)")
     concelho: str = Field(..., min_length=1, description="Concelho (ex.: Alandroal)")
     start_page: int = Field(1, ge=1, description="Página inicial do diretório")
-    max_pages: int = Field(1, ge=1, le=50, description="Número de páginas a recolher")
+    max_pages: int = Field(1, ge=1, le=500, description="Número de páginas a recolher")
+    all_pages: bool = Field(False, description="Ler todas as páginas do concelho (ignora max_pages como limite)")
     detail: bool = Field(True, description="Recolher o texto integral da ficha de cada empresa")
     delay: float = Field(1.0, ge=0, le=10, description="Segundos entre pedidos de detalhe")
     ingest: bool = Field(False, description="Indexar automaticamente no finance_scraped")
@@ -60,6 +61,7 @@ class RecolhaDistritoRequest(BaseModel):
     ingest: bool = Field(False, description="Indexar automaticamente no finance_scraped")
     skip_done: bool = Field(True, description="Saltar concelhos já concluídos (retoma pelo manifesto)")
     concelhos: Optional[List[str]] = Field(None, description="Limitar a estes concelhos (por omissão: todos)")
+    paralelo: int = Field(1, ge=1, le=6, description="Concelhos recolhidos ao mesmo tempo")
 
 
 @router.get("/meta")
@@ -115,6 +117,7 @@ def recolha_start_job(
             detail=req.detail,
             delay=req.delay,
             ingest=req.ingest,
+            all_pages=req.all_pages,
         )
     except Exception as exc:
         logger.exception("Falha a arrancar recolha de empresas")
@@ -135,6 +138,7 @@ def recolha_sync(
         detail=req.detail,
         delay=req.delay,
         ingest=req.ingest,
+        all_pages=req.all_pages,
     )
 
 
@@ -171,6 +175,31 @@ def recolha_detail(
 
 
 # ------------------------------------------------------------------ distrito
+@router.get("/distritos")
+def recolha_distritos(
+    refresh: bool = Query(False, description="Ignorar a cache do catálogo"),
+    session: ReadSession = None,
+) -> Dict[str, Any]:
+    """Todos os distritos com diretório no Iberinform."""
+    try:
+        distritos = service.distritos_do_site()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Não foi possível ler os distritos: {exc}") from exc
+    return {"distritos": distritos, "total": len(distritos)}
+
+
+@router.get("/catalogo")
+def recolha_catalogo(
+    refresh: bool = Query(False, description="Ignorar a cache (1 hora por omissão)"),
+    session: ReadSession = None,
+) -> Dict[str, Any]:
+    """Catálogo completo: distritos **e** concelhos de todo o diretório."""
+    try:
+        return service.catalogo(forcar=refresh)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Não foi possível ler o catálogo: {exc}") from exc
+
+
 @router.get("/distrito/{distrito}/concelhos")
 def recolha_concelhos_do_site(
     distrito: str,
@@ -208,6 +237,7 @@ def recolha_distrito_job(
             delay=req.delay,
             ingest=req.ingest,
             skip_done=req.skip_done,
+            paralelo=req.paralelo,
         )
     except Exception as exc:
         logger.exception("Falha a arrancar recolha do distrito %s", req.distrito)
@@ -229,4 +259,5 @@ def recolha_distrito_sync(
         ingest=req.ingest,
         skip_done=req.skip_done,
         concelhos=req.concelhos,
+        paralelo=req.paralelo,
     )

@@ -68,6 +68,7 @@ def main() -> int:
     parser.add_argument("--start-page", type=int, default=1, help="Página inicial de cada concelho (padrão: 1)")
     parser.add_argument("--max-pages", type=int, default=service.DISTRICT_MAX_PAGES, help="Teto de páginas por concelho")
     parser.add_argument("--delay", type=float, default=0.5, help="Segundos entre pedidos de detalhe (padrão: 0.5)")
+    parser.add_argument("--paralelo", type=int, default=1, help="Concelhos recolhidos ao mesmo tempo (1-6)")
     parser.add_argument("--no-detail", action="store_false", dest="detail", help="Não recolher o detalhe das fichas")
     parser.add_argument("--ingest", action="store_true", help="Indexar automaticamente (reservado)")
     parser.add_argument("--skip-done", action="store_true", default=True, help="Saltar concelhos já concluídos (padrão: sim)")
@@ -95,6 +96,7 @@ def main() -> int:
         ingest=args.ingest,
         skip_done=args.skip_done,
         concelhos=args.concelho,
+        paralelo=args.paralelo,
         on_progress=_progresso,
     )
     logger.info(

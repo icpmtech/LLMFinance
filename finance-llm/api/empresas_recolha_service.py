@@ -21,6 +21,7 @@ import json
 import logging
 import re
 import threading
+import time
 import unicodedata
 import uuid
 import os
@@ -56,17 +57,32 @@ def _now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _sem_acentos(text: str) -> str:
+    decomposto = unicodedata.normalize("NFKD", text or "")
+    return "".join(ch for ch in decomposto if not unicodedata.combining(ch))
+
+
 def _slugify(text: str) -> str:
     """Converte um nome num slug seguro para ficheiros/pastas.
 
     Remove os acentos antes de reduzir a `[a-z0-9_]`, porque os URLs do
     Iberinform usam o nome sem diacríticos («Évora» → `evora`, não `vora`).
     """
-    s = unicodedata.normalize("NFKD", text or "")
-    s = "".join(ch for ch in s if not unicodedata.combining(ch))
-    s = s.lower().strip()
+    s = _sem_acentos(text).lower().strip()
     s = re.sub(r"[^a-z0-9]+", "_", s)
     return re.sub(r"_+", "_", s).strip("_") or "sem_nome"
+
+
+def _slug_url(text: str) -> str:
+    """Slug **como o site o escreve**: minúsculas, sem acentos e com hífenes.
+
+    Não usar `_slugify` nos URLs: os hífenes fazem parte do endereço
+    (`castelo-branco`, `viana-do-castelo`); trocá-los por `_` dá 404.
+    """
+    s = _sem_acentos(text).lower().strip()
+    s = re.sub(r"[\s_]+", "-", s)
+    s = re.sub(r"[^a-z0-9\-]+", "-", s)
+    return re.sub(r"-+", "-", s).strip("-")
 
 
 def _build_source(
@@ -78,7 +94,7 @@ def _build_source(
     delay: float = 1.0,
 ) -> Dict[str, Any]:
     """Constroi uma fonte Iberinform para o distrito/concelho pedido."""
-    url = f"https://www.iberinform.pt/diretorio/{_slugify(distrito)}/{_slugify(concelho)}/pagina/{max(1, int(start_page))}"
+    url = f"https://www.iberinform.pt/diretorio/{_slug_url(distrito)}/{_slug_url(concelho)}/pagina/{max(1, int(start_page))}"
     src = build_source(
         "iberinform-diretorio",
         overrides={
@@ -222,6 +238,7 @@ def start_job(
     delay: float = 1.0,
     keep_source: bool = True,
     ingest: bool = False,
+    all_pages: bool = False,
 ) -> Dict[str, Any]:
     """Arranca uma recolha em segundo plano e devolve o id do job."""
     job_id = f"emp-{uuid.uuid4().hex[:10]}"
@@ -240,6 +257,7 @@ def start_job(
                 delay=delay,
                 keep_source=keep_source,
                 ingest=ingest,
+                all_pages=all_pages,
             )
             with _JOBS_LOCK:
                 _JOBS[job_id]["status"] = "done" if result.get("ok") else "error"
@@ -272,6 +290,7 @@ def start_job(
                 "detail": detail,
                 "delay": delay,
                 "ingest": ingest,
+                "all_pages": all_pages,
             },
             "result": None,
             "error": None,
@@ -422,7 +441,68 @@ DISTRICT_MAX_PAGES = 200
 
 
 def _distrito_url(distrito: str) -> str:
-    return f"https://www.iberinform.pt/diretorio/{_slugify(distrito)}"
+    return f"https://www.iberinform.pt/diretorio/{_slug_url(distrito)}"
+
+
+#: TTL do catálogo de distritos/concelhos lido do site (segundos).
+CATALOG_TTL = 3600
+_CATALOG: Dict[str, Any] = {"at": 0.0, "data": None}
+_CATALOG_LOCK = threading.Lock()
+
+
+def _fetch_html(url: str):
+    """Lê uma página do diretório (sessão HTTP curta, como a recolha)."""
+    options = {"impersonate": "chrome", "timeout": 30}
+    with scraper_service._open_session("http", options) as session:
+        return scraper_service._session_fetch(session, "http", url, options)
+
+
+#: Ligações do diretório que **não** são distritos (ramos paralelos do site).
+DIRETORIO_NAO_DISTRITO = {"diretorio-cnae", "diretorio", "empresas"}
+
+#: Pausa entre pedidos do catálogo (evita throttling ao varrer o país).
+CATALOG_PAUSA = 1.0
+
+
+def _ligacoes_diretoria(page: Any, prefixo: str) -> List[Dict[str, Any]]:
+    """Ligações `/diretorio/<prefixo>/<slug>` da página, com o texto visível.
+
+    Devolve `{"slug", "nome", "empresas"}` sem repetições e por ordem de
+    aparição. O nome visível («Évora», «Montemor-o-Novo») é melhor para a UI do
+    que o slug e o site acrescenta o total de empresas entre parênteses
+    («Empresas de Évora (7.453)»), que se aproveita para planear a recolha.
+    """
+    base = f"/diretorio/{prefixo}" if prefixo else "/diretorio"
+    padrao = re.compile(rf"^{re.escape(base)}/([a-z0-9\-]+)/?$", re.I)
+    contagem = re.compile(r"\(([\d\.\s\u00a0]+)\)\s*$")
+    vistos: Dict[str, Dict[str, Any]] = {}
+    for node in page.css("a"):
+        href = str(node.attrib.get("href") or "").strip()
+        match = padrao.match(href)
+        if not match:
+            continue
+        slug = match.group(1).lower()
+        if slug in vistos:
+            continue
+        texto = (node.get_all_text(strip=True) or "").strip()
+        empresas: Optional[int] = None
+        achado = contagem.search(texto)
+        if achado:
+            digitos = re.sub(r"[^\d]", "", achado.group(1))
+            empresas = int(digitos) if digitos else None
+            texto = contagem.sub("", texto).strip()
+        # «Empresas de Évora» → «Évora»
+        nome = re.sub(r"^\s*empresas?\s+de\s+", "", texto, flags=re.I).strip() or slug.replace("-", " ").title()
+        vistos[slug] = {"slug": slug, "nome": nome, "empresas": empresas}
+    return list(vistos.values())
+
+
+def distritos_do_site() -> List[Dict[str, Any]]:
+    """Todos os distritos com diretório no Iberinform."""
+    page = _fetch_html("https://www.iberinform.pt/diretorio")
+    if page is None:
+        raise RuntimeError("Sem resposta de https://www.iberinform.pt/diretorio")
+    return [d for d in _ligacoes_diretoria(page, "") if d["slug"] not in DIRETORIO_NAO_DISTRITO]
 
 
 def concelhos_do_site(distrito: str) -> List[str]:
@@ -431,22 +511,75 @@ def concelhos_do_site(distrito: str) -> List[str]:
     Evita listas escritas à mão (e respetivos erros de slug): o site publica
     ligações `/diretorio/<distrito>/<concelho>` na página do distrito.
     """
+    return [item["slug"] for item in concelhos_com_nome_do_site(distrito)]
+
+
+def concelhos_com_nome_do_site(distrito: str) -> List[Dict[str, Any]]:
+    """Concelhos de um distrito, com slug, nome visível e n.º de empresas."""
     distrito_slug = _slugify(distrito)
     url = _distrito_url(distrito)
-    options = {"impersonate": "chrome", "timeout": 30}
-    with scraper_service._open_session("http", options) as session:
-        page = scraper_service._session_fetch(session, "http", url, options)
+    page = _fetch_html(url)
     if page is None:
         raise RuntimeError(f"Sem resposta de {url}")
-    padrao = re.compile(rf"^/diretorio/{re.escape(distrito_slug)}/([a-z0-9\-]+)/?$", re.I)
-    nomes: List[str] = []
-    for href in page.css("a::attr(href)").getall():
-        match = padrao.match(str(href).strip())
-        if match:
-            slug = match.group(1).lower()
-            if slug not in nomes:
-                nomes.append(slug)
-    return sorted(nomes)
+    # A própria página do distrito é paginada (`/diretorio/<d>/pagina/N`); essas
+    # ligações não são concelhos.
+    return [c for c in _ligacoes_diretoria(page, distrito_slug) if c["slug"] != "pagina"]
+
+
+def catalogo(forcar: bool = False) -> Dict[str, Any]:
+    """Distritos **e** concelhos disponíveis no diretório (com cache de 1 hora).
+
+    Uma passagem completa são ~1 pedido por distrito, pelo que fica em cache: a
+    UI pode pedir o catálogo à vontade sem martelar o site. Cada distrito é
+    pedido com uma pausa e, se vier sem concelhos (throttling), repete uma vez.
+    """
+    with _CATALOG_LOCK:
+        if not forcar and _CATALOG["data"] and (time.time() - float(_CATALOG["at"])) < CATALOG_TTL:
+            return _CATALOG["data"]
+
+    distritos = distritos_do_site()
+    saida: List[Dict[str, Any]] = []
+    for posicao, distrito in enumerate(distritos):
+        if posicao:
+            time.sleep(CATALOG_PAUSA)
+        item: Dict[str, Any] = {
+            "slug": distrito["slug"],
+            "nome": distrito["nome"],
+            "empresas": distrito.get("empresas"),
+            "concelhos": [],
+        }
+        for tentativa in range(2):
+            try:
+                item["concelhos"] = concelhos_com_nome_do_site(distrito["slug"])
+            except Exception as exc:
+                logger.warning("Concelhos de %s falharam: %s", distrito["slug"], exc)
+                item["error"] = str(exc)
+                break
+            if item["concelhos"]:
+                item.pop("error", None)
+                break
+            logger.info("Distrito %s veio sem concelhos; nova tentativa", distrito["slug"])
+            time.sleep(2.0)
+        original = next((d for d in distritos if d["slug"] == distrito["slug"]), None)
+        item["empresas"] = sum(c.get("empresas") or 0 for c in item["concelhos"]) or (original or {}).get("empresas")
+        saida.append(item)
+
+    total_concelhos = sum(len(d["concelhos"]) for d in saida)
+    total_empresas = sum(c.get("empresas") or 0 for d in saida for c in d["concelhos"])
+    data = {
+        "source": "iberinform.pt",
+        "updated_at": _now(),
+        "ttl": CATALOG_TTL,
+        "distritos": saida,
+        "total_distritos": len(saida),
+        "total_concelhos": total_concelhos,
+        "total_empresas": total_empresas,
+        "sem_concelhos": [d["slug"] for d in saida if not d["concelhos"]],
+    }
+    with _CATALOG_LOCK:
+        _CATALOG["data"] = data
+        _CATALOG["at"] = time.time()
+    return data
 
 
 def _manifest_path(distrito: str) -> Path:
@@ -490,12 +623,16 @@ def run_district_sync(
     skip_done: bool = True,
     concelhos: Optional[List[str]] = None,
     on_progress: Optional[Any] = None,
+    paralelo: int = 1,
 ) -> Dict[str, Any]:
     """Recolhe **todos os concelhos de um distrito**, todas as páginas de cada um.
 
     Cada concelho fica num JSON próprio (`<distrito>/<concelho>/pagina_X_a_Y.json`)
     e o manifesto `<distrito>/_manifest.json` guarda o estado, para que uma
     segunda passagem com `skip_done=True` continue só o que falta.
+
+    `paralelo > 1` recolhe vários concelhos ao mesmo tempo (cada um é uma fonte
+    independente, com a sua sessão HTTP e o seu ficheiro de execução).
 
     `on_progress(evento)` é chamado a cada mudança de estado (`inicio`,
     `concelho_inicio`, `concelho_fim`, `fim`), para o trabalho em segundo plano
@@ -514,16 +651,24 @@ def run_district_sync(
                 logger.debug("on_progress falhou", exc_info=True)
 
     reportar({"tipo": "inicio", "distrito": distrito, "concelhos": nomes})
-    resultados: List[Dict[str, Any]] = []
-    total_itens = 0
+    resultados: List[Optional[Dict[str, Any]]] = [None] * len(nomes)
 
-    for indice, nome in enumerate(nomes):
+    def _recolher(indice: int, nome: str) -> Optional[Dict[str, Any]]:
         anterior = estado.get(nome) or {}
         if skip_done and anterior.get("ok"):
-            resultados.append({**anterior, "concelho": nome, "saltado": True})
-            total_itens += int(anterior.get("items_count") or 0)
-            reportar({"tipo": "concelho_fim", "concelho": nome, "indice": indice, "total": len(nomes), "saltado": True, "resultado": anterior})
-            continue
+            resumo = {**anterior, "concelho": nome, "saltado": True}
+            resultados[indice] = resumo
+            reportar(
+                {
+                    "tipo": "concelho_fim",
+                    "concelho": nome,
+                    "indice": indice,
+                    "total": len(nomes),
+                    "saltado": True,
+                    "resultado": resumo,
+                }
+            )
+            return resumo
 
         reportar({"tipo": "concelho_inicio", "concelho": nome, "indice": indice, "total": len(nomes)})
         res = run_sync(
@@ -547,21 +692,42 @@ def run_district_sync(
         }
         if not res.get("ok"):
             resumo["error"] = res.get("error")
-        resultados.append(resumo)
-        estado[nome] = resumo
-        total_itens += resumo["items_count"]
-        _write_manifest(distrito, manifest)
+        resultados[indice] = resumo
+        with _JOBS_LOCK:  # o manifesto é partilhado: escrita serializada
+            estado[nome] = resumo
+            _write_manifest(distrito, manifest)
         reportar({"tipo": "concelho_fim", "concelho": nome, "indice": indice, "total": len(nomes), "resultado": resumo})
+        return resumo
 
+    trabalhadores = max(1, min(int(paralelo or 1), 6, len(nomes) or 1))
+    if trabalhadores == 1:
+        for indice, nome in enumerate(nomes):
+            _recolher(indice, nome)
+    else:
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=trabalhadores) as pool:
+            futuros = {pool.submit(_recolher, i, n): n for i, n in enumerate(nomes)}
+            for futuro in concurrent.futures.as_completed(futuros):
+                nome = futuros[futuro]
+                try:
+                    futuro.result()
+                except Exception as exc:  # nunca perder os restantes concelhos
+                    logger.exception("Concelho %s falhou de forma inesperada", nome)
+                    indice = nomes.index(nome)
+                    resultados[indice] = {"concelho": nome, "ok": False, "items_count": 0, "error": str(exc)}
+
+    resultados_finais = [r for r in resultados if r]
+    total_itens = sum(int(r.get("items_count") or 0) for r in resultados_finais)
     manifest["total_items"] = sum(int(v.get("items_count") or 0) for v in estado.values())
     manifest["concelhos_ok"] = sum(1 for v in estado.values() if v.get("ok"))
     _write_manifest(distrito, manifest)
 
-    falhados = [r["concelho"] for r in resultados if not r.get("ok")]
+    falhados = [r["concelho"] for r in resultados_finais if not r.get("ok")]
     saida = {
         "ok": not falhados,
         "distrito": distrito,
-        "concelhos": resultados,
+        "concelhos": resultados_finais,
         "total_concelhos": len(nomes),
         "concelhos_ok": manifest["concelhos_ok"],
         "total_items": total_itens,
@@ -581,6 +747,7 @@ def start_district_job(
     delay: float = 0.5,
     ingest: bool = False,
     skip_done: bool = True,
+    paralelo: int = 1,
 ) -> Dict[str, Any]:
     """Arranca em segundo plano a recolha de **todos os concelhos de um distrito**."""
     job_id = f"dist-{uuid.uuid4().hex[:10]}"
@@ -593,6 +760,11 @@ def start_district_job(
             job["progress"] = evento
             if evento.get("tipo") == "concelho_inicio":
                 job["concelho_atual"] = evento.get("concelho")
+                job["concelhos_feitos"] = int(job.get("concelhos_feitos") or 0)
+            elif evento.get("tipo") == "concelho_fim":
+                feito = job.setdefault("progresso_concelhos", {})
+                feito[evento["concelho"]] = evento.get("resultado") or {}
+                job["concelhos_feitos"] = len(feito)
 
     def _run() -> None:
         with _JOBS_LOCK:
@@ -607,6 +779,7 @@ def start_district_job(
                 delay=delay,
                 ingest=ingest,
                 skip_done=skip_done,
+                paralelo=paralelo,
                 on_progress=_progresso,
             )
             with _JOBS_LOCK:
@@ -642,16 +815,18 @@ def start_district_job(
                 "delay": delay,
                 "ingest": ingest,
                 "skip_done": skip_done,
+                "paralelo": paralelo,
             },
             "progress": None,
             "concelho_atual": None,
             "concelhos_feitos": 0,
+            "progresso_concelhos": {},
             "concelhos": None,
             "result": None,
             "error": None,
         }
     threading.Thread(target=_run, daemon=True).start()
-    return {"job_id": job_id, "status": "running"}
+    return {"job_id": job_id, "status": "running", "paralelo": paralelo}
 
 
 def districts_from_exports() -> List[str]:

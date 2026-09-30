@@ -50,3 +50,4 @@ INFO:     127.0.0.1:58475 - "GET /empresas-recolha/jobs/emp-fd78d86106 HTTP/1.1"
 INFO:     127.0.0.1:50761 - "GET /empresas-recolha/jobs/emp-fd78d86106 HTTP/1.1" 200 OK
 INFO:     127.0.0.1:58475 - "GET /empresas-recolha/jobs/emp-fd78d86106 HTTP/1.1" 200 OK
 [2026-09-30 16:55:35] INFO: Fetched (200) <GET https://www.iberinform.pt/empresa/24910596/2sps-service-and-spare-parts-solutions-lda> (referer: https://www.google.com/)
+INFO:     127.0.0.1:50761 - "GET /empresas-recolha/jobs/emp-fd78d86106 HTTP/1.1" 200 OK
