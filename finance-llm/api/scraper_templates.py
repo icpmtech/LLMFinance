@@ -41,6 +41,7 @@ CATEGORIES = [
     "Imprensa económica (Espanha)",
     "Mercados (internacional)",
     "Diretórios de empresas",
+    "Política e pessoas públicas",
     "Sites de exemplo",
 ]
 
@@ -433,6 +434,66 @@ TEMPLATES: List[Dict[str, Any]] = [
             "id_fields": ["autor", "citacao"],
             "title_field": "citacao",
             "detail": _detail("", max_items=0),
+        },
+    },
+    {
+        "id": "parlamento-deputados",
+        "name": "Parlamento · Deputados (XVII legislatura)",
+        "site": "parlamento.pt",
+        "category": "Política e pessoas públicas",
+        "description": "Deputados à Assembleia da República: nome, BID, círculo eleitoral, grupo parlamentar, ligações de atividade/presenças/interesses e a biografia completa.",
+        "tags": ["politica", "deputados", "pessoas", "parlamento", "assembleia-da-republica"],
+        "requires": "http",
+        "notes": (
+            "Página SharePoint/ASP.NET: **não tem endereço por página** — o «>» é um "
+            "`__doPostBack`, por isso a paginação é `type=\"postback\"`. Os cartões são "
+            "`.row.margin_h0.margin-Top-15`; o BID (identificador do deputado) sai do "
+            "`href` da biografia. O texto integral é a coluna `div.col-xs-12` da página "
+            "de biografia."
+        ),
+        "source": {
+            "name": "Parlamento · Deputados",
+            "description": "Deputados à Assembleia da República, com biografia (naturalidade, habilitações, profissão, comissões).",
+            "url": "https://www.parlamento.pt/deputadogp/paginas/deputados.aspx",
+            "enabled": False,
+            "fetcher": "http",
+            "list": {"selector": ".row.margin_h0.margin-Top-15", "type": "css"},
+            "fields": [
+                _field("nome", "Nome", "a::text", max_length=200),
+                _field(
+                    "bid",
+                    "BID",
+                    "a::attr(href)",
+                    max_length=20,
+                    regex=r"BID=(\d+)",
+                ),
+                _field(
+                    "url",
+                    "Biografia",
+                    "a[href*='Biografia.aspx']::attr(href)",
+                    selectors=["a[href*='Biografia.aspx']::attr(href)", "a::attr(href)"],
+                    max_length=1024,
+                ),
+                _field("circulo", "Círculo eleitoral", "span::text", max_length=160),
+                _field("partido", "Grupo parlamentar", "span:nth-of-type(2)::text", selectors=["span:nth-of-type(2)::text", "span::text"], max_length=160),
+                _field("url_atividade", "Atividade", "a[href*='ActividadeDeputado']::attr(href)", max_length=1024),
+                _field("url_presencas", "Presenças", "a[href*='PresencasReunioes']::attr(href)", max_length=1024),
+                _field("url_interesses", "Registo de interesses", "a[href*='RegInteresses']::attr(href)", max_length=1024),
+            ],
+            "pagination": {
+                "selector": 'a[href*="__doPostBack"]',
+                "type": "postback",
+                "next_text": ">",
+                "max_pages": 20,
+            },
+            "options": {"impersonate": "chrome", "timeout": 30},
+            "schedule": {"cron": "0 5 * * 1", "timezone": "Europe/Lisbon"},
+            "respect_robots": True,
+            "tags": ["politica", "deputados", "pessoas", "parlamento"],
+            "id_fields": ["bid"],
+            "title_field": "nome",
+            "summary_field": "partido",
+            "detail": _detail("div.col-xs-12", max_items=30, delay=0.4),
         },
     },
     {

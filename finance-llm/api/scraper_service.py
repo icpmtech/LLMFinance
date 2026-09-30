@@ -297,15 +297,35 @@ def _normalize_selector(raw: Any, default_type: str = "css") -> Dict[str, Any]:
 
 
 def _normalize_pagination(raw: Any) -> Dict[str, Any]:
+    """Normaliza o bloco `pagination`.
+
+    Dois modos:
+
+    - **Ligação** (`type` css/xpath/text): segue um `href` (o `.next a` clássico).
+    - **Postback** (`type="postback"`): muitos sites ASP.NET/SharePoint não têm
+      endereço por página — o «seguinte» é um `javascript:__doPostBack(...)` que
+      só funciona devolvendo o formulário (`__VIEWSTATE` e companhia) ao servidor.
+      Nesse modo o `selector` aponta para as ligações de paginação e `next_text`
+      identifica a que avança (por omissão o `>`).
+    """
     if isinstance(raw, str):
         raw = {"selector": raw}
     raw = raw if isinstance(raw, dict) else {}
-    base = _normalize_selector(raw, "css")
+    kind = str(raw.get("type") or "css").strip().lower()
+    # `postback` não é um tipo de seletor: é um modo de paginação. O seletor em
+    # si continua a ser CSS, por isso normaliza-se sempre como css.
+    postback = kind == "postback"
+    base = _normalize_selector({**raw, "type": "css"}, "css")
+    hidden = raw.get("hidden_fields")
+    if not isinstance(hidden, (list, tuple)):
+        hidden = None
     return {
         "selector": base["selector"],
-        "type": base["type"],
+        "type": "postback" if postback else base["type"],
         "attr": str(raw.get("attr") or "href").strip() or "href",
         "max_pages": max(1, min(int(raw.get("max_pages") or 1), 500)),
+        "next_text": str(raw.get("next_text") or ">").strip(),
+        "hidden_fields": [str(h).strip() for h in (hidden or []) if str(h).strip()],
     }
 
 
@@ -315,13 +335,25 @@ def _normalize_detail(raw: Any) -> Dict[str, Any]:
     `selector` aponta para o contentor do texto na página de detalhe: é escolhido
     o **maior** dos nós que casam com o seletor (as páginas têm muitas vezes um
     painel de data com as mesmas classes do corpo).
+
+    `max_items=0` passa a significar "todos os itens de cada página" (antes era
+    equivalente a desligado). Valores negativos são rejeitados.
+
+    `type` aceita os mesmos tipos de seletor dos campos (`css` por omissão,
+    `xpath`, `text` ou `regex`): há corpos que só se isolam por posição
+    (`//div[@class="col-xs-12" and div[@class="TextoRegular-Titulo"]]`).
     """
     raw = raw if isinstance(raw, dict) else {}
     enabled = bool(raw.get("enabled", False))
     selector = str(raw.get("selector") or "").strip()
+    kind = str(raw.get("type") or "css").strip().lower()
+    if kind not in SELECTOR_KINDS:
+        kind = "css"
     try:
-        max_items = int(raw.get("max_items") or 0)
+        max_items = int(raw.get("max_items") if raw.get("max_items") is not None else 0)
     except (TypeError, ValueError):
+        max_items = 0
+    if max_items < 0:
         max_items = 0
     try:
         delay = float(raw.get("delay") if raw.get("delay") is not None else 0.5)
@@ -334,7 +366,8 @@ def _normalize_detail(raw: Any) -> Dict[str, Any]:
     return {
         "enabled": enabled and bool(selector),
         "selector": selector,
-        "max_items": max(0, min(max_items, DETAIL_MAX_ITEMS)),
+        "type": kind,
+        "max_items": max_items,
         "delay": max(0.0, min(delay, DETAIL_MAX_DELAY)),
         "max_chars": max(500, min(max_chars, 200000)),
     }
@@ -559,6 +592,19 @@ def availability() -> Dict[str, Any]:
     return info
 
 
+class _FetcherContext:
+    """Envolve um `Fetcher` (não context manager) num context manager nulo."""
+
+    def __init__(self, fetcher):
+        self.fetcher = fetcher
+
+    def __enter__(self):
+        return self.fetcher
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return False
+
+
 def _open_session(kind: str, options: Dict[str, Any]):
     """Abre a sessão Scrapling adequada ao tipo de fetcher (context manager)."""
     classes = _load_scrapling()
@@ -571,7 +617,11 @@ def _open_session(kind: str, options: Dict[str, Any]):
             kwargs["http3"] = bool(opts["http3"])
         if opts.get("proxy"):
             kwargs["proxy"] = opts["proxy"]
-        return classes["FetcherSession"](**kwargs)
+        # O FetcherSession actual do Scrapling 0.4.x não tem métodos de fetch;
+        # usamos o Fetcher directamente, que já reutiliza a mesma sessão HTTP
+        # subjacente e suporta `impersonate` no construtor. Como o Fetcher não
+        # implementa context manager, envolvemo-lo numa classe nula.
+        return _FetcherContext(classes["Fetcher"](**kwargs))
     if kind == "dynamic":
         kwargs = {"headless": bool(opts.get("headless", True))}
         if opts.get("network_idle") is not None:
@@ -603,6 +653,37 @@ def _session_fetch(session: Any, kind: str, url: str, options: Dict[str, Any]) -
     if timeout:
         kwargs["timeout"] = timeout * 1000  # os browsers usam milissegundos
     return session.fetch(url, **kwargs)
+
+
+def _session_post(session: Any, kind: str, url: str, data: Dict[str, str], options: Dict[str, Any]) -> Any:
+    """Envia um formulário (`POST`) — usado pela paginação por *postback*.
+
+    O `http` usa `Fetcher.post`; os fetchers de browser não expõem formulários,
+    pelo que aí o `__doPostBack` é executado como JavaScript na página aberta.
+    """
+    timeout = options.get("timeout")
+    if kind == "http":
+        kwargs: Dict[str, Any] = {"stealthy_headers": True}
+        if timeout:
+            kwargs["timeout"] = timeout
+        post = getattr(session, "post", None)
+        if not callable(post):
+            # Algumas versões do Scrapling só expõem `request`.
+            post = getattr(session, "request", None)
+            if callable(post):
+                return post("POST", url, data=data, **kwargs)
+            raise RuntimeError("A sessão HTTP do Scrapling não suporta POST")
+        return post(url, data=data, **kwargs)
+    target = data.get("__EVENTTARGET") or ""
+    script = f"__doPostBack({json.dumps(target)}, '')"
+    kwargs = {}
+    if timeout:
+        kwargs["timeout"] = timeout * 1000
+    page = getattr(session, "page", None)
+    if page is not None and hasattr(page, "evaluate"):
+        page.evaluate(script)
+        return session.fetch(url, **kwargs)
+    raise RuntimeError("A paginação por postback exige o fetcher «HTTP rápido»")
 
 
 # -------------------------------------------------------------------- robots
@@ -679,6 +760,17 @@ def _select(node: Any, selector: str, kind: str = "css") -> List[Any]:
 
 
 def _node_text(node: Any) -> str:
+    # Scrapling 0.4.x: css()/xpath() devolve `Selectors` (lista de nós).
+    # `first` dá o primeiro Selector, que tem `.text`; `getall()` devolve HTML
+    # de todos os nós. Preferimos o texto do maior nó.
+    try:
+        first = getattr(node, "first", None)
+        if first is not None:
+            text = getattr(first, "text", "")
+            if isinstance(text, str) and text:
+                return text
+    except Exception:
+        pass
     for attr in ("get_all_text", "text", "get"):
         value = getattr(node, attr, None)
         try:
@@ -976,12 +1068,76 @@ def _extract_items(page: Any, source: Dict[str, Any]) -> List[Dict[str, Any]]:
     return items
 
 
+#: Campos que o ASP.NET/SharePoint exige de volta em cada postback.
+POSTBACK_FIELDS = ("__VIEWSTATE", "__VIEWSTATEGENERATOR", "__EVENTVALIDATION", "__EVENTTARGET", "__EVENTARGUMENT")
+#: Marcador do alvo de postback devolvido por `_next_page_url` (não é um URL).
+_POSTBACK_PREFIX = "postback:"
+
+
+def _postback_target(page: Any, pagination: Dict[str, Any]) -> Optional[str]:
+    """Alvo de `__doPostBack` da ligação «página seguinte» (ou `None`).
+
+    O seletor aponta para as ligações de paginação; escolhe-se a que tem o texto
+    de `next_text` (`>` por omissão). Quando nenhuma casa pelo texto, usa-se a
+    **última** ligação — nos paginadores numerados é a que avança.
+    """
+    selector = pagination.get("selector") or ""
+    if not selector:
+        return None
+    kind = pagination.get("type") or "css"
+    wanted = _clean_spaces(pagination.get("next_text") or ">").casefold()
+    links = _select(page, selector, kind if kind in SELECTOR_KINDS else "css")
+    fallback: Optional[str] = None
+    for link in links:
+        href = ""
+        try:
+            href = link.attrib.get("href") or ""
+        except Exception:
+            href = ""
+        if not href:
+            values = _select(link, "::attr(href)", "css")
+            href = str(values[0]) if values else ""
+        if "__doPostBack" not in href:
+            continue
+        target = _postback_from_href(href)
+        if not target:
+            continue
+        text = _clean_spaces(_node_text(link)).casefold()
+        if text and text == wanted:
+            return target
+        fallback = fallback or target
+    return fallback
+
+
+def _postback_from_href(href: str) -> Optional[str]:
+    """Tira o alvo de um `javascript:__doPostBack('alvo','')`."""
+    match = re.search(r"__doPostBack\(\s*'([^']*)'\s*,?\s*'([^']*)'?\s*\)", href or "")
+    if not match:
+        return None
+    return match.group(1)
+
+
+def _postback_form(page: Any, pagination: Dict[str, Any], target: str) -> Dict[str, str]:
+    """Formulário a reenviar: campos escondidos da página + o alvo pretendido."""
+    names = list(pagination.get("hidden_fields") or []) or list(POSTBACK_FIELDS)
+    data: Dict[str, str] = {}
+    for name in names:
+        values = _select(page, f'input[name="{name}"]::attr(value)', "css")
+        data[name] = str(values[0]) if values else ""
+    data["__EVENTTARGET"] = target
+    data.setdefault("__EVENTARGUMENT", "")
+    return data
+
+
 def _next_page_url(page: Any, source: Dict[str, Any], current_url: str) -> Optional[str]:
     pagination = source.get("pagination") or {}
     selector = pagination.get("selector") or ""
     if not selector:
         return None
     kind = pagination.get("type") or "css"
+    if kind == "postback":
+        target = _postback_target(page, pagination)
+        return f"{_POSTBACK_PREFIX}{target}" if target else None
     attr = pagination.get("attr") or "href"
     if kind == "css" and "::attr(" not in selector and "::text" not in selector:
         selector = f"{selector}::attr({attr})"
@@ -996,13 +1152,13 @@ def _next_page_url(page: Any, source: Dict[str, Any], current_url: str) -> Optio
 
 
 # ------------------------------------------------------------ texto integral
-def _longest_node_text(page: Any, selector: str) -> str:
+def _longest_node_text(page: Any, selector: str, kind: str = "css") -> str:
     """Devolve o texto do **maior** nó que casa com o seletor.
 
     As páginas de artigo repetem as classes do corpo em painéis laterais e
     caixas de data; o maior nó é, na prática, o corpo da notícia.
     """
-    nodes = _select(page, selector, "css")
+    nodes = _select(page, selector, kind or "css")
     melhor = ""
     for node in nodes:
         text = _node_text(node)
@@ -1013,17 +1169,33 @@ def _longest_node_text(page: Any, selector: str) -> str:
 
 
 def _detail_targets(source: Dict[str, Any], items: List[Dict[str, Any]], used: int) -> List[Dict[str, Any]]:
-    """Escolhe os itens cujo texto integral ainda vale a pena ir buscar."""
+    """Escolhe os itens cujo texto integral ainda vale a pena ir buscar.
+
+    `max_items` é o limite por página:
+      - 0 / None / "" = todos os itens desta página (até DETAIL_MAX_ITEMS).
+      - valor positivo = no máximo esse número de itens desta página.
+
+    O parâmetro `used` mantém compatibilidade com chamadas antigas mas já não
+    reduz o limite: a contagem global não deve fazer com que páginas
+    seguintes fiquem sem detalhe.
+    """
     detail = source.get("detail") or {}
-    limit = int(detail.get("max_items") or 0)
-    if not detail.get("enabled") or not detail.get("selector") or limit < 0 or used >= limit:
+    if not detail.get("enabled") or not detail.get("selector"):
         return []
-    if limit == 0:
-        # 0 significa "todos os itens desta página"
-        limit = max(1, len(items))
+    max_items = detail.get("max_items")
+    if max_items in (None, ""):
+        limit = len(items)
+    else:
+        try:
+            limit = int(max_items)
+        except (TypeError, ValueError):
+            limit = 0
+        if limit <= 0:
+            limit = len(items)
+    limit = max(1, min(limit, DETAIL_MAX_ITEMS))
     targets: List[Dict[str, Any]] = []
     for item in items:
-        if used + len(targets) >= limit:
+        if len(targets) >= limit:
             break
         url = str(item.get("url") or "").strip()
         if not re.match(r"^https?://", url, re.I):
@@ -1043,13 +1215,18 @@ def _enrich_with_detail(
 ) -> None:
     """Vai a cada página de detalhe e guarda o corpo do artigo no item.
 
+    `max_items=0` significa "todos os itens de cada página" — o contador de
+    itens usados de uma página não deve bloquear a página seguinte. Por isso,
+    o limite desta página é calculado com base nos itens passados, não no
+    acumulado global (exceto pelo teto absoluto DETAIL_MAX_ITEMS).
+
     Falhas individuais nunca invalidam a recolha: contam-se e a lista segue sem
     o texto integral desses itens.
     """
     detail = source.get("detail") or {}
-    used = int(stats.get("detail_count", 0)) + int(stats.get("detail_errors", 0))
-    targets = _detail_targets(source, items, used)
+    targets = _detail_targets(source, items, 0)
     if not targets:
+        logger.debug("Sem alvos de texto integral nesta página")
         return
     user_agent = str(options.get("user_agent") or DEFAULT_USER_AGENT)
     delay = float(detail.get("delay") or 0.5)
@@ -1059,14 +1236,14 @@ def _enrich_with_detail(
         if source.get("respect_robots", True) and not _robots_allows(url, user_agent):
             stats["detail_skipped"] = stats.get("detail_skipped", 0) + 1
             continue
-        if index or used:
+        if index:
             time.sleep(delay)  # cortesia: uma pausa entre páginas
         try:
             page = _session_fetch(session, source["fetcher"], url, options)
             if page is None:
                 stats["detail_errors"] = stats.get("detail_errors", 0) + 1
                 continue
-            text = _longest_node_text(page, detail["selector"])[:max_chars]
+            text = _longest_node_text(page, detail["selector"], detail.get("type") or "css")[:max_chars]
         except Exception as exc:
             logger.debug("Texto integral de %s falhou: %s", url, exc)
             stats["detail_errors"] = stats.get("detail_errors", 0) + 1
@@ -1103,11 +1280,17 @@ def _walk_source(
     seen_titles: set = set()
 
     with _open_session(source["fetcher"], options) as session:
+        # Numa paginação por postback a página seguinte já foi obtida no fim da
+        # iteração anterior (o POST devolve o HTML), pelo que se reaproveita.
+        pending: Any = None
         for page_number in range(1, pages_limit + 1):
             if source.get("respect_robots", True) and not _robots_allows(url, user_agent):
                 logger.warning("Recolha: robots.txt de %s não permite %s", source["id"], url)
                 break
-            page = _session_fetch(session, source["fetcher"], url, options)
+            if pending is not None:
+                page, pending = pending, None
+            else:
+                page = _session_fetch(session, source["fetcher"], url, options)
             if page is None:
                 break
             items = _extract_items(page, source)
@@ -1125,7 +1308,20 @@ def _walk_source(
             next_url = _next_page_url(page, source, url)
             if not next_url:
                 break
-            url = next_url
+            if next_url.startswith(_POSTBACK_PREFIX):
+                # Site sem endereço por página (ASP.NET): o avanço é um POST com
+                # os campos escondidos desta página e o alvo `__doPostBack`.
+                target = next_url[len(_POSTBACK_PREFIX):]
+                data = _postback_form(page, pagination, target)
+                try:
+                    pending = _session_post(session, source["fetcher"], url, data, options)
+                except Exception as exc:
+                    logger.warning("Recolha: postback de %s falhou: %s", source["id"], exc)
+                    break
+                if pending is None:
+                    break
+            else:
+                url = next_url
 
 
 # -------------------------------------------------------------------- execução

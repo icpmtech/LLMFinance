@@ -96,7 +96,7 @@ def run_and_export(distrito: str, concelho: str, start_page: int, max_pages: int
     # Resumo
     nifs = [i.get("data", {}).get("nif") for i in items if i.get("data", {}).get("nif")]
     sem_nif = [i for i in items if not i.get("data", {}).get("nif")]
-    com_detalhe = [i for i in items if i.get("detail_text")]
+    com_detalhe = [i for i in items if i.get("detail")]
     print(f"NIFs extraídos: {len(nifs)} / {len(items)}; com detalhe: {len(com_detalhe)}; sem NIF: {len(sem_nif)}")
 
     return meta, items, out_file

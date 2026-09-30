@@ -80,6 +80,7 @@ import MiroFishPage from "./pages/MiroFishPage";
 import SimuladorPage from "./pages/SimuladorPage";
 import RiscoPage from "./pages/RiscoPage";
 import SocietarioRecolhaPage from "./pages/SocietarioRecolhaPage";
+import EmpresasRecolhaPage from "./pages/EmpresasRecolhaPage";
 import GleifPage, {
   GLEIF_SECTION_VIEWS,
   gleifSectionForView,
@@ -167,6 +168,7 @@ type AppView =
   | "jarvis"
   | "risco"
   | "societario"
+  | "empresas-recolha"
   | "iframe-pages";
 const COMPANY_DETAIL_KEY = "finance-llm-company-detail";
 const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
@@ -295,6 +297,7 @@ function pathForView(
   if (view === "simulador") return "/simulador";
   if (view === "risco") return "/empresas-risco";
   if (view === "societario") return "/societario";
+  if (view === "empresas-recolha") return "/empresas-recolha";
   if (view === "gleif") return "/gleif";
   if (view === "gleif-mapa") return "/gleif/mapa";
   if (view === "gleif-ingestao") return "/gleif/ingestao";
@@ -483,6 +486,7 @@ export default function App() {
     if (path === "/simulador" || path.startsWith("/simulador/")) return "simulador";
     if (path === "/empresas-risco" || path.startsWith("/empresas-risco/")) return "risco";
     if (path === "/societario" || path.startsWith("/societario/")) return "societario";
+    if (path === "/empresas-recolha" || path.startsWith("/empresas-recolha/")) return "empresas-recolha";
     {
       const gleifSection = gleifSectionFromPath(path);
       if (gleifSection) return GLEIF_SECTION_VIEWS[gleifSection] as AppView;
@@ -595,6 +599,7 @@ export default function App() {
       else if (path === "/simulador" || path.startsWith("/simulador/")) next = "simulador";
       else if (path === "/empresas-risco" || path.startsWith("/empresas-risco/")) next = "risco";
       else if (path === "/societario" || path.startsWith("/societario/")) next = "societario";
+      else if (path === "/empresas-recolha" || path.startsWith("/empresas-recolha/")) next = "empresas-recolha";
       else if (gleifSectionFromPath(path)) next = GLEIF_SECTION_VIEWS[gleifSectionFromPath(path) as GleifSection] as AppView;
       else if (path === "/contracts" || path === "/contracts/search") next = "contracts-search";
       else if (path === "/contratos-es") next = "contratos-es";
@@ -1281,6 +1286,7 @@ export default function App() {
     if (target === "simulador") return <SimuladorPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
     if (target === "risco") return <RiscoPage />;
     if (target === "societario") return <SocietarioRecolhaPage />;
+    if (target === "empresas-recolha") return <EmpresasRecolhaPage />;
     if (target === "contracts-dashboard") {
       return (
         <ContractsDashboardPage

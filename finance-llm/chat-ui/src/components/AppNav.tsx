@@ -62,6 +62,7 @@ export type AppView =
   | "simulador"
   | "risco"
   | "societario"
+  | "empresas-recolha"
   | "gleif"
   | "gleif-mapa"
   | "gleif-ingestao"

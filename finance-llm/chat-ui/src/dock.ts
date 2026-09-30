@@ -430,6 +430,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "45,212,191",
   },
   {
+    id: "empresas-recolha",
+    label: "Recolha de Empresas",
+    hint: "Recolha massiva de diretórios web (ex.: Iberinform.pt) por distrito/concelho para JSON",
+    icon: Building2,
+    gradient: "from-cyan-200 via-sky-500 to-indigo-700",
+    accent: "14,165,233",
+  },
+  {
     id: "gleif",
     label: "GLEIF · LEI",
     hint: "Legal Entity Identifier (Golden Copy do GLEIF): pesquisar, ver ficha e mapa",
@@ -699,6 +707,7 @@ const DEFAULT_ITEMS = [
   "contracts-dashboard",
   "entities-search",
   "gleif",
+  "empresas-recolha",
   "tickers",
   "forecast",
   "trading",

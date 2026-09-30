@@ -245,6 +245,8 @@ from api.societario_routes import router as societario_router
 # Recolha massiva de dados societários: alvos por ano de contrato/empresa,
 # exportação para JSON (um ficheiro por entidade) e indexação em lote.
 from api.societario_recolha_routes import router as societario_recolha_router
+# Recolha massiva de empresas a partir de diretórios web (ex.: Iberinform.pt).
+from api.empresas_recolha_routes import router as empresas_recolha_router
 from api.cire_routes import router as cire_router
 from api.citacoes_routes import router as citacoes_router
 from api.people_routes import router as people_router
@@ -531,11 +533,18 @@ app.include_router(agent_router)
 app.include_router(companies_global_router)
 app.include_router(societario_router)
 app.include_router(societario_recolha_router)
+app.include_router(empresas_recolha_router)
 
 
 @app.get("/societario")
 def serve_societario_spa_page():
     """Página do módulo **Recolha Societária** (recolha massiva → JSON → Elasticsearch)."""
+    return spa_index_response()
+
+
+@app.get("/empresas-recolha")
+def serve_empresas_recolha_spa_page():
+    """Página do módulo **Recolha de Empresas** (diretórios web → JSON)."""
     return spa_index_response()
 app.include_router(cire_router)
 app.include_router(citacoes_router)
