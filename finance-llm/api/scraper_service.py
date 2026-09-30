@@ -251,6 +251,7 @@ def normalize_source(payload: Dict[str, Any], existing: Optional[Dict[str, Any]]
                 "join": str(raw.get("join") or " | "),
                 "cast": str(raw.get("cast") or "text").strip().lower(),
                 "max_length": int(raw.get("max_length") or 5000),
+                "regex": str(raw.get("regex") or "").strip() or None,
             }
         )
     if not fields:
@@ -1015,8 +1016,11 @@ def _detail_targets(source: Dict[str, Any], items: List[Dict[str, Any]], used: i
     """Escolhe os itens cujo texto integral ainda vale a pena ir buscar."""
     detail = source.get("detail") or {}
     limit = int(detail.get("max_items") or 0)
-    if not detail.get("enabled") or not detail.get("selector") or limit <= 0 or used >= limit:
+    if not detail.get("enabled") or not detail.get("selector") or limit < 0 or used >= limit:
         return []
+    if limit == 0:
+        # 0 significa "todos os itens desta página"
+        limit = max(1, len(items))
     targets: List[Dict[str, Any]] = []
     for item in items:
         if used + len(targets) >= limit:

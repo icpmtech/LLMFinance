@@ -40,6 +40,7 @@ CATEGORIES = [
     "Imprensa económica (Portugal)",
     "Imprensa económica (Espanha)",
     "Mercados (internacional)",
+    "Diretórios de empresas",
     "Sites de exemplo",
 ]
 
@@ -57,11 +58,15 @@ def _field(
     all_: bool = False,
     max_length: int = 2000,
     selectors: Optional[List[str]] = None,
+    regex: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Campo de um template (mesma forma que o módulo de recolha usa).
 
     `selectors` serve os sites que desenham o mesmo dado de duas maneiras: a
     extração usa o primeiro seletor que devolver valor.
+
+    `regex` aplica-se sobre o valor devolvido pelo seletor (útil para tirar
+    um NIF ou ID de um `href` antes de o campo ser devolvido).
     """
     alternativos = [s for s in (selectors or []) if s]
     if selector and selector not in alternativos:
@@ -79,6 +84,8 @@ def _field(
         field["selectors"] = alternativos
     if attr:
         field["attr"] = attr
+    if regex:
+        field["regex"] = regex
     return field
 
 
@@ -426,6 +433,46 @@ TEMPLATES: List[Dict[str, Any]] = [
             "id_fields": ["autor", "citacao"],
             "title_field": "citacao",
             "detail": _detail("", max_items=0),
+        },
+    },
+    {
+        "id": "iberinform-diretorio",
+        "name": "Iberinform · Diretório de empresas (PT)",
+        "site": "iberinform.pt",
+        "category": "Diretórios de empresas",
+        "description": "Diretório de empresas portuguesas do Iberinform, recolhido por distrito e concelho, com detalhe de ficha.",
+        "tags": ["empresas", "iberinform", "diretorio", "nif", "caudal"],
+        "requires": "http",
+        "notes": "Cada linha da tabela `table.table-hover.tabla-directorio-geografico` tem nome, NIF no `href`, distrito e concelho. A paginação usa `a[aria-label='Next']`. O detalhe da empresa fica em `section.section-company-data`.",
+        "source": {
+            "name": "Iberinform · Diretório de empresas (PT)",
+            "description": "Recolha do diretório Iberinform por distrito e concelho, com ficha detalhada de cada empresa.",
+            "url": "https://www.iberinform.pt/diretorio/evora/alandroal/pagina/1",
+            "enabled": False,
+            "fetcher": "http",
+            "list": {"selector": "table.table-hover.tabla-directorio-geografico tbody tr", "type": "css"},
+            "fields": [
+                _field("nome", "Nome", "a h3::text", max_length=400),
+                _field("url", "URL", "a::attr(href)", max_length=1024),
+                _field("distrito", "Distrito", "td.hidden-xs::text", max_length=120),
+                _field("concelho", "Concelho", "td:not(.hidden-xs)::text", max_length=120),
+                _field(
+                    "nif",
+                    "NIF",
+                    "a::attr(href)",
+                    max_length=20,
+                    regex=r"/empresa/(\d+)/",
+                ),
+            ],
+            "pagination": {"selector": "a[aria-label='Next']", "type": "css", "attr": "href", "max_pages": 5},
+            "options": {"impersonate": "chrome", "timeout": 30},
+            "schedule": {"cron": "0 3 * * 1", "timezone": "Europe/Lisbon"},
+            "respect_robots": True,
+            "tags": ["empresas", "iberinform", "diretorio"],
+            "id_fields": ["nif", "url"],
+            "title_field": "nome",
+            "summary_field": "nome",
+            "detail": _detail("section.section-company-data", max_items=50, delay=1.2),
         },
     },
 ]

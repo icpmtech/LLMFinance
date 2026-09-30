@@ -15,8 +15,12 @@ exatamente a soma do que os gateways expõem, e cada gateway pode ser testado
 Além disso, o Jarvis segue a **mesma biblioteca de skills** do Hermes, do Chat
 IA e do RAG: antes de responder, escolhe (ou cria) o método do pedido.
 
+E não se limita a responder: **propõe ações** — abrir a página certa, ou gravar
+um documento, um dossiê ou uma skill **em nome do utilizador**. As de escrita só
+correm depois de confirmadas, por clique ou por voz («sim»).
+
 ```
-pergunta → skill → plano → gateways → resposta → fala
+pergunta → skill → plano → gateways → resposta + ações propostas → fala
 ```
 
 Há **duas formas** de o usar, com a mesma conversa:
@@ -42,7 +46,10 @@ painel de Control Center com três andares:
    pedidos mais comuns em perguntas reais:
    *Maiores contratos*, *Ficha de empresa*, *Notícias de mercado* e
    *Estado do sistema*. Depois, os turnos com o rasto dos passos, as fontes
-   citadas e as sugestões seguintes.
+   citadas e as sugestões seguintes. Por baixo de cada resposta com ações surge
+   **«O Jarvis pode fazer isto por si»**: chips azuis para navegar, violetas
+   (com o selo `escreve`) para criar. Um clique executa; para as de escrita, a
+   interface sugere «diga *sim* ou *confirmar*».
 3. **Compositor** — microfone e caixa de texto, com `Enter` a enviar.
 
 Detalhes de comportamento:
@@ -57,7 +64,9 @@ Detalhes de comportamento:
   toda; o cabeçalho do widget tem um atalho para lá;
 - o **histórico é o mesmo** da página: os dois sincronizam-se por um `storage`
   event e por uma publicação interna (`subscribeJarvisHistory`), pelo que abrir
-  o widget a meio de um trabalho na página mostra a mesma conversa.
+  o widget a meio de um trabalho na página mostra a mesma conversa;
+- ao **navegar por uma ação**, o widget fecha-se para se ver o destino; o botão
+  volta a aparecer com o contador atualizado.
 
 O código vive em `chat-ui/src/components/jarvis/`:
 
@@ -120,6 +129,8 @@ mas só com dados públicos (os dados de CRM ficam de fora).
 | --- | --- |
 | `GET /jarvis/meta` | capacidades, gateways, ferramentas, vozes e modelo disponível |
 | `GET /jarvis/tools` | catálogo das ferramentas (`?gateway=hermes\|mcp\|web`) |
+| `GET /jarvis/actions` | catálogo das **ações** (destinos + criações) |
+| `POST /jarvis/actions/run` | executa uma criação em nome do utilizador |
 | `GET /jarvis/voice` | estado da voz (STT/TTS) e vozes disponíveis |
 | `POST /jarvis/ask` | pergunta → resposta + plano + passos + citações |
 | `POST /jarvis/ask/stream` | o mesmo, em SSE |
@@ -144,16 +155,70 @@ servidor); sem motor, vem `audio: null` e a interface usa a voz do sistema.
 
 ### Streaming
 
-`POST /jarvis/ask/stream` emite SSE com quatro tipos de evento:
+`POST /jarvis/ask/stream` emite SSE com sete tipos de evento:
 
 ```
 event: passo      { kind, label, at, tool?, ok?, reason?, source? }
 event: plano      { tools: [...], reason, source }
 event: ferramenta { tool, label, state: a_correr|ok|falhou, error? }
 event: skill      { skill: { id, title, steps, created } }
-event: resposta   { answer, speech, sources, suggestions, skill }
+event: acao       { action: { id, kind, label, description, ... } }
+event: resposta   { answer, speech, sources, suggestions, skill, actions, steps, tools_used }
 event: fim        { elapsed_seconds }
 ```
+
+### Ações: o que o Jarvis faz *por nós* (`api/jarvis_actions.py`)
+
+O Jarvis não só responde — **propõe ações**. Cada ação chega à interface como um
+chip, e a diferença entre os dois tipos é o que torna isto seguro:
+
+| Tipo | O que é | Quem executa | Confirmação |
+| --- | --- | --- | --- |
+| `navigate` | levar o utilizador a um sítio (`/contracts/search`, `/office`, …), com ou sem termo de pesquisa | o **cliente**, com um clique | não precisa (não altera nada) |
+| `create` | escrever um artefacto: documento no Office, dossiê 360, skill na biblioteca | o **servidor**, em `POST /jarvis/actions/run` | **obrigatória** |
+
+Três regras que a deteção respeita, e que não são óbvias:
+
+1. **Uma pergunta não é um pedido para navegar.** «Quais são os maiores
+   contratos de energia?» só propõe abrir a página de contratos se tiver um verbo
+   de navegação («abre», «mostra», «leva-me») ou se for uma frase de ≤ 3 palavras
+   («insolvências»). Sem isto, qualquer pergunta com a palavra «contratos»
+   arrastava o utilizador para fora da conversa.
+2. **Quem pede para gravar não quer também navegar.** «Guarda isto no Office»
+   propõe a criação, não a criação *mais* a abertura da página do Office.
+3. **O modelo nunca escolhe uma escrita.** As operações usadas pelas criações
+   (`office_save_document`, `search360_save_dossier`, `skills_save`) **não** estão
+   no catálogo curado de ferramentas — de propósito. São invocadas por
+   `mcp.call`, e só depois de a ação ter sido confirmada.
+
+#### Confirmação por voz
+
+O ciclo é fechado no cliente (`useJarvisChat`): dito «sim», «confirmar»,
+«guarda»… a pergunta **não** vai ao modelo — executa a proposta mais recente por
+confirmar. Só quando há exatamente uma, para não adivinhar entre duas. A chave de
+cada ação é `turno::ação`, porque o mesmo id de catálogo se repete ao longo da
+conversa e confirmar um pedido não pode marcar os outros como feitos.
+
+```json
+POST /jarvis/actions/run
+{
+  "action": "guardar_office",
+  "question": "guarda no office o relatório da EDP",
+  "answer": "A EDP lidera a distribuição elétrica em Portugal…",
+  "params": { "title": "Relatório EDP", "folder_id": "pasta-7" }
+}
+```
+
+`params` é opcional e limitado a um conjunto conhecido de campos do corpo
+(`title`, `markdown`, `kind`, `tags`, `folder_id`, `template`, `term`, `notes`,
+`name`, `summary`, `question`, `project_id`): o modelo pode ajustar o título ou
+escolher a pasta, mas não introduzir campos arbitrários no pedido. O corpo final
+é embrulhado no parâmetro que o catálogo MCP declara para o *body* (`payload`) —
+sem isso, o corpo ia parar ao *query string* e o endpoint respondia 422.
+
+Devolve `{ok, action, label, operation, result, error}`; `result` é
+`{saved: true, document: {…}}` para o Office. Uma ação de navegação devolve
+`422` — essas são do cliente.
 
 ### Também por MCP
 
@@ -230,6 +295,7 @@ frase.
 | Ficheiro | Papel |
 | --- | --- |
 | `api/jarvis_gateway.py` | catálogo dos gateways, `default_args`, `invoke`, `pick_tools` |
+| `api/jarvis_actions.py` | catálogo das ações (destinos e criações), deteção, `render`, `run` |
 | `api/jarvis_service.py` | ciclo `ask`/`stream`, skills, voz (STT/TTS), metamodelo |
 | `api/jarvis_routes.py` | rotas `/jarvis/*` |
 | `mcp_server/catalog.py` | operações `jarvis_*` (o Jarvis também é ferramenta MCP) |
@@ -240,6 +306,7 @@ frase.
 | `chat-ui/src/components/jarvis/JarvisOrb.tsx` | a órbita (canvas, sem dependências) |
 | `chat-ui/src/components/jarvis/useJarvisVoice.ts` | ouvir e falar |
 | `tests/test_jarvis.py` | 50 testes (catálogo, argumentos, plano, voz, ciclo, streaming) |
+| `tests/test_jarvis_actions.py` | 46 testes (deteção, proposta, `render`, execução, catálogo) |
 
 ---
 
@@ -247,7 +314,7 @@ frase.
 
 ```powershell
 cd c:/LLMFinance/finance-llm
-c:/LLMFinance/.venv/Scripts/python.exe -m pytest tests/test_jarvis.py -q
+c:/LLMFinance/.venv/Scripts/python.exe -m pytest tests/test_jarvis.py tests/test_jarvis_actions.py -q
 ```
 
 Verificação manual rápida (com o backend em `:8002`):
@@ -255,6 +322,9 @@ Verificação manual rápida (com o backend em `:8002`):
 ```powershell
 # o que o Jarvis pode fazer
 curl http://127.0.0.1:8002/jarvis/meta
+
+# as ações que pode executar por nós
+curl http://127.0.0.1:8002/jarvis/actions
 
 # uma pergunta real
 curl -X POST http://127.0.0.1:8002/jarvis/ask -H "Content-Type: application/json" `
@@ -265,6 +335,11 @@ Dicas:
 
 - `GET /jarvis/tools` é a forma mais rápida de ver o que está publicado em cada
   gateway sem percorrer o código;
+- para experimentar uma escrita sem passar pela interface, use
+  `POST /jarvis/actions/run` com o token de sessão — é o mesmo caminho que o
+  botão do chip usa;
+- se um chip ficar em erro com `HTTP 422: body Field required`, é sinal de que o
+  corpo não foi embrulhado no parâmetro do catálogo (`_mcp_params`);
 - sem chave de modelo configurada o Jarvis responde em modo factual — é o
   comportamento esperado, não uma falha (o `meta.model.kind` diz qual é o caso);
 - a primeira investigação do Hermes é lenta de propósito (agregações de

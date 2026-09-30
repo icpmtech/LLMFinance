@@ -100,3 +100,73 @@ INFO:     127.0.0.1:50820 - "GET /scraper/stats HTTP/1.1" 200 OK
 INFO:     127.0.0.1:55361 - "GET /scraper/status HTTP/1.1" 200 OK
 INFO:     127.0.0.1:62714 - "GET /search360/projects HTTP/1.1" 200 OK
 INFO:     127.0.0.1:49908 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57928 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57928 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64937 - "GET /search360/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60358 - "GET /search360/dossiers?limit=120 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60358 - "GET /scraper/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63520 - "GET /search360/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60358 - "GET /scraper/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /scraper/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57802 - "GET /scraper/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63520 - "GET /scraper/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60358 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63001 - "GET /scraper/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63001 - "GET /scraper/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65398 - "GET /scraper/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53555 - "GET /scraper/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60358 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63001 - "GET /search360/dossiers?limit=120 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60358 - "GET /search360/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64900 - "GET /scraper/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65398 - "GET /search360/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53989 - "PATCH /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53555 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53989 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58172 - "POST /jarvis/actions/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58172 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53767 - "POST /jarvis/ask/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54377 - "POST /jarvis/actions/run HTTP/1.1" 200 OK
+[2026-09-30 14:00:10] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-09-30 14:00:11] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+INFO:     127.0.0.1:56499 - "GET /jarvis HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56499 - "GET /assets/index-D2xETr70.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64397 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53339 - "GET /assets/index-CPKarOGb.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58314 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56499 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56499 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61874 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50760 - "POST /jarvis/actions/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56499 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52455 - "POST /jarvis/ask/stream HTTP/1.1" 200 OK
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|██████████| 103/103 [00:00<00:00, 1602.30it/s]
+INFO:     127.0.0.1:53678 - "POST /jarvis/ask/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59765 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52434 - "GET /jarvis HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52434 - "GET /assets/index-iViCzAvT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56978 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63074 - "GET /assets/index-CPKarOGb.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62112 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52434 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63945 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52434 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60783 - "GET /jarvis HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60783 - "GET /assets/index-iViCzAvT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62290 - "GET /assets/index-CPKarOGb.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64049 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53918 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60783 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50862 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60783 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50862 - "POST /jarvis/ask/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55320 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57804 - "GET /jarvis HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57804 - "GET /assets/index-iViCzAvT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53099 - "GET /assets/index-CPKarOGb.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56499 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56574 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57804 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51557 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57501 - "POST /jarvis/ask/stream HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57804 - "GET /jarvis/meta HTTP/1.1" 200 OK

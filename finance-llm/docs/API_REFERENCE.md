@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **841 operações** em **39 grupos**.
+Versão `0.4.0` · **843 operações** em **39 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -515,6 +515,8 @@ Jarvis: o assistente operacional com voz. Fala com o sistema por gateways (Herme
 
 | Método | Caminho | Resumo |
 | --- | --- | --- |
+| `GET` | `/jarvis/actions` | Actions |
+| `POST` | `/jarvis/actions/run` | Run Action |
 | `POST` | `/jarvis/ask` | Ask |
 | `POST` | `/jarvis/ask/stream` | Ask Stream |
 | `GET` | `/jarvis/meta` | Meta |

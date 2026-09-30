@@ -113,6 +113,17 @@ export function isConfirmation(text: string): boolean {
   return CONFIRMATIONS.some((word) => folded === word || folded.startsWith(`${word} `));
 }
 
+/**
+ * Chave única de uma ação **dentro da conversa**.
+ *
+ * O id do catálogo repete-se em vários turnos («guarda isto no office» duas
+ * vezes é a mesma ação `guardar_office`). Sem o turno na chave, confirmar uma
+ * marcaria as outras como feitas — e a segunda gravação seria bloqueada.
+ */
+export function actionKey(turnId: string, actionId: string): string {
+  return `${turnId}::${actionId}`;
+}
+
 const BACKEND_KEY = "finance-llm-backend";
 
 /** Modelo/fornecedor escolhido no chat (o Jarvis usa o mesmo). */
@@ -312,20 +323,21 @@ export function useJarvisChat(options: UseJarvisChatOptions) {
     const execute = optionsRef.current.executeAction;
     if (!execute) return;
     const source = turn ?? turnsRef.current[0];
-    setActionState({ id: action.id, state: "a_correr" });
+    const key = actionKey(source?.id ?? "", action.id);
+    setActionState({ id: key, state: "a_correr" });
     try {
       const message = await execute(action, {
         question: source?.question ?? "",
         answer: source?.answer ?? "",
       });
-      setActionState({ id: action.id, state: "ok", message: typeof message === "string" ? message : undefined });
-      doneActionsRef.current.add(action.id);
+      setActionState({ id: key, state: "ok", message: typeof message === "string" ? message : undefined });
+      doneActionsRef.current.add(key);
       if (typeof message === "string" && message) {
         if (optionsRef.current.autoSpeak) void optionsRef.current.voice.speak(message);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Não foi possível executar a ação.";
-      setActionState({ id: action.id, state: "falhou", message });
+      setActionState({ id: key, state: "falhou", message });
       setError(message);
     }
   }, []);
@@ -344,7 +356,8 @@ export function useJarvisChat(options: UseJarvisChatOptions) {
     let target: { action: JarvisAction; turn: JarvisTurn } | null = null;
     for (const turn of turnsRef.current) {
       const candidates = (turn.actions || []).filter(
-        (action) => action.requires_confirmation && !doneActionsRef.current.has(action.id),
+        (action) =>
+          action.requires_confirmation && !doneActionsRef.current.has(actionKey(turn.id, action.id)),
       );
       if (candidates.length > 1) return false;
       if (candidates.length === 1) {
@@ -597,11 +610,14 @@ export function ActionBar({
   actions,
   state,
   onRun,
+  scope,
   compact = false,
 }: {
   actions: JarvisAction[];
   state?: { id: string; state: "a_correr" | "ok" | "falhou"; message?: string } | null;
   onRun: (action: JarvisAction) => void;
+  /** Id do turno dono destas ações (ver `actionKey`). */
+  scope: string;
   compact?: boolean;
 }) {
   if (!actions.length) return null;
@@ -613,7 +629,7 @@ export function ActionBar({
       </h3>
       <div className={`mt-1.5 grid gap-1.5 ${compact ? "" : "@2xl:grid-cols-2"}`}>
         {actions.map((action) => {
-          const current = state?.id === action.id ? state : null;
+          const current = state?.id === actionKey(scope, action.id) ? state : null;
           const busy = current?.state === "a_correr";
           const done = current?.state === "ok";
           return (
@@ -702,6 +718,7 @@ export function TurnCard({
           <ActionBar
             actions={turn.actions}
             state={actionState}
+            scope={turn.id}
             onRun={(action) => onAction(action, turn)}
             compact={compact}
           />
@@ -900,10 +917,14 @@ export function JarvisThread({
   onAsk: (text: string) => void;
   onAction?: (action: JarvisAction, turn: JarvisTurn) => void;
 }) {
+  // O histórico é **guardado** do mais recente para o mais antigo (é essa a
+  // ordem que a confirmação por voz percorre), mas no ecrã tem de ser o
+  // contrário: a conversa lê-se de cima para baixo, do mais antigo para o mais
+  // recente. O turno a decorrer fica no fim, onde a resposta vai aparecer.
+  const ordered = useMemo(() => [...turns].reverse(), [turns]);
   return (
     <>
-      {pending ? <PendingCard turn={pending} compact={compact} /> : null}
-      {turns.map((turn) => (
+      {ordered.map((turn) => (
         <TurnCard
           key={turn.id}
           turn={turn}
@@ -915,6 +936,7 @@ export function JarvisThread({
           onAction={onAction}
         />
       ))}
+      {pending ? <PendingCard turn={pending} compact={compact} /> : null}
     </>
   );
 }

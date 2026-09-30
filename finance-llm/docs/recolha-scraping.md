@@ -73,6 +73,7 @@ template. Os seletores foram escritos e **validados contra as páginas reais** (
 | `jornal-de-negocios` | `jornaldenegocios.pt` | **browser** | não |
 | `expansion` | `expansion.com` | HTTP | sim |
 | `investing-mercados` | `investing.com/news/stock-market-news` | HTTP | não |
+| `iberinform-diretorio` | `iberinform.pt/diretorio/<distrito>/<concelho>` | HTTP | sim |
 | `quotes-demo` | `quotes.toscrape.com` | HTTP | não (site de exemplo) |
 
 Como se cria uma fonte a partir de um template:
@@ -132,6 +133,7 @@ desligam a recolha; `detail_count` diz quantos itens trouxeram texto.
 ```powershell
 c:\LLMFinance\.venv\Scripts\python.exe _test_scraper_templates.py           # todos
 c:\LLMFinance\.venv\Scripts\python.exe _test_scraper_templates.py eco publico-economia
+c:\LLMFinance\.venv\Scripts\python.exe _test_scraper_templates.py iberinform-diretorio
 ```
 
 O relatório (`_test_scraper_templates.txt` e `_test_scraper_templates.json`)

@@ -35,7 +35,7 @@ import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import httpx
 
@@ -782,16 +782,300 @@ def internal_search(term: str, *, limit: int = 6, scope: Optional[Dict[str, Any]
 
 
 def _internal_text_hits(term: str, *, limit: int = 6) -> List[Dict[str, Any]]:
-    """Procura o tema nos índices de texto da plataforma (notícias, recolhas, contratos)."""
+    """Procura o tema nos índices de texto e entidades da plataforma."""
     from api import elasticsearch_client as es_client  # noqa: PLC0415
+    from api.contribuintes_service import search as contribuintes_search
+    from api.devedores_service import search as devedores_search
+    from api.gleif_service import search as gleif_search
+    from api.world_model import (
+        relations as world_relations,
+        search_entities as world_search_entities,
+        timeline as world_timeline,
+    )
 
     results: List[Dict[str, Any]] = []
     client = es_client.get_es_client()
     if not client:
         return results
-    # Notícias de mercado
+
+    q = str(term or "").strip()
+    per_source = max(1, min(limit, 8))
+
+    # ── Entidades / contribuintes / pessoas / LEI / firmas ─────────────────
     try:
-        news = es_client.search_all_tickers(term, 0, limit)
+        entities = es_client.search_entities(q, sort_by="relevance", size=per_source)
+        for row in (entities or {}).get("items") or []:
+            if not isinstance(row, dict):
+                continue
+            results.append(
+                item(
+                    "internal",
+                    kind="entity",
+                    title=str(row.get("name") or row.get("nome") or ""),
+                    subtitle=str(row.get("nif") or row.get("country") or ""),
+                    snippet=f"{row.get('contracts_count', 0)} contratos · €{row.get('total_value', 0) or 0:.0f} valor",
+                    url=f"/entidades/{row.get('nif')}" if row.get("nif") else None,
+                    icon="building",
+                    badges=["entidade"],
+                    score=0.78,
+                    data={"nif": row.get("nif"), "country": row.get("country"), "contracts_count": row.get("contracts_count")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("Entidades: %s", exc)
+
+    try:
+        people = es_client.search_people(q, size=per_source)
+        for row in (people or {}).get("items") or []:
+            if not isinstance(row, dict):
+                continue
+            results.append(
+                item(
+                    "internal",
+                    kind="entity",
+                    title=str(row.get("name") or row.get("nome") or ""),
+                    subtitle=str(row.get("nif") or ""),
+                    snippet=f"{row.get('roles_count', 0)} cargos · {row.get('companies_count', 0)} empresas",
+                    url=f"/pessoas/{row.get('nif')}" if row.get("nif") else None,
+                    icon="user",
+                    badges=["pessoa"],
+                    score=0.76,
+                    data={"nif": row.get("nif"), "roles_count": row.get("roles_count"), "companies_count": row.get("companies_count")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("Pessoas: %s", exc)
+
+    try:
+        firmas = es_client.search_firmas(q, size=per_source)
+        for row in (firmas or {}).get("items") or []:
+            if not isinstance(row, dict):
+                continue
+            results.append(
+                item(
+                    "internal",
+                    kind="entity",
+                    title=str(row.get("nome") or ""),
+                    subtitle=str(row.get("company_nif") or row.get("nipc") or ""),
+                    snippet=f"Concelho {row.get('concelho') or '—'} · CAE {row.get('cae_principal') or '—'}",
+                    url=f"/empresas/{row.get('company_nif')}" if row.get("company_nif") else None,
+                    icon="tag",
+                    badges=["firma"],
+                    score=0.7,
+                    data={"company_nif": row.get("company_nif"), "cae": row.get("cae_principal"), "concelho": row.get("concelho")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("Firmas: %s", exc)
+
+    try:
+        contrib = contribuintes_search(q, size=per_source)
+        for row in (contrib or {}).get("items") or []:
+            if not isinstance(row, dict):
+                continue
+            results.append(
+                item(
+                    "internal",
+                    kind="entity",
+                    title=str(row.get("name") or row.get("nome") or ""),
+                    subtitle=str(row.get("nif") or ""),
+                    snippet=f"{row.get('records_total', 0)} registos · {row.get('sources') or []}",
+                    url=f"/contribuintes/{row.get('nif')}" if row.get("nif") else None,
+                    icon="database",
+                    badges=["contribuinte"],
+                    score=0.74,
+                    data={"nif": row.get("nif"), "type": row.get("type"), "sources": row.get("sources")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("Contribuintes: %s", exc)
+
+    try:
+        devedores = devedores_search(q, size=per_source)
+        for row in (devedores or {}).get("items") or []:
+            if not isinstance(row, dict):
+                continue
+            results.append(
+                item(
+                    "internal",
+                    kind="entity",
+                    title=str(row.get("nome") or ""),
+                    subtitle=str(row.get("nif") or ""),
+                    snippet=f"{row.get('tipo') or 'devedor'} · €{row.get('valor_min', 0) or 0:.0f} · {row.get('entidade') or ''}",
+                    url=f"/devedores/{row.get('nif')}" if row.get("nif") else None,
+                    icon="alert-triangle",
+                    badges=["devedor"],
+                    score=0.72,
+                    data={"nif": row.get("nif"), "tipo": row.get("tipo"), "escalao": row.get("escalao")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("Devedores: %s", exc)
+
+    try:
+        gleif = gleif_search(q, size=per_source)
+        for row in (gleif or {}).get("items") or []:
+            if not isinstance(row, dict):
+                continue
+            results.append(
+                item(
+                    "internal",
+                    kind="entity",
+                    title=str(row.get("legal_name") or ""),
+                    subtitle=f"{row.get('lei') or ''} · {row.get('country') or ''}",
+                    snippet=f"{row.get('status') or ''} · {row.get('city') or ''}",
+                    url=f"/gleif/{row.get('lei')}" if row.get("lei") else None,
+                    icon="globe",
+                    badges=["LEI"],
+                    score=0.71,
+                    data={"lei": row.get("lei"), "country": row.get("country"), "status": row.get("status")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("GLEIF: %s", exc)
+
+    try:
+        trademarks = es_client.search_trademarks(q, size=per_source)
+        for row in (trademarks or {}).get("items") or []:
+            if not isinstance(row, dict):
+                continue
+            results.append(
+                item(
+                    "internal",
+                    kind="document",
+                    title=str(row.get("mark_name") or ""),
+                    subtitle=str(row.get("holder_name") or ""),
+                    snippet=f"Processo {row.get('process_number') or '—'} · {row.get('current_phase') or ''}",
+                    url=f"/marcas/{row.get('doc_id')}" if row.get("doc_id") else None,
+                    icon="bookmark",
+                    badges=["marca"],
+                    score=0.68,
+                    data={"process_number": row.get("process_number"), "holder_name": row.get("holder_name")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("Marcas: %s", exc)
+
+    # ── Contratos (PT e ES) ──────────────────────────────────────────────
+    try:
+        contracts = es_client.search_contracts(q, size=per_source)
+        for row in (contracts or {}).get("items") or []:
+            if not isinstance(row, dict):
+                continue
+            results.append(
+                item(
+                    "internal",
+                    kind="document",
+                    title=str(row.get("objectoContrato") or row.get("objecto") or row.get("idcontrato") or "contrato"),
+                    subtitle=f"{row.get('adjudicantes') or ''} → {row.get('adjudicatarios') or ''}",
+                    snippet=str(row.get("descContrato") or "")[:400] or None,
+                    url=f"/contratos/{row.get('idcontrato')}" if row.get("idcontrato") else None,
+                    date=str(row.get("dataCelebracaoContrato") or "")[:10] or None,
+                    icon="file-text",
+                    badges=["contrato", str(row.get("Ano") or "")],
+                    score=0.66,
+                    data={"idcontrato": row.get("idcontrato"), "preco": row.get("precoContratual")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("Contratos PT: %s", exc)
+
+    try:
+        contracts_es = es_client.search_contratos_es(q, size=per_source)
+        for row in (contracts_es or {}).get("items") or []:
+            if not isinstance(row, dict):
+                continue
+            results.append(
+                item(
+                    "internal",
+                    kind="document",
+                    title=str(row.get("titulo") or row.get("description") or row.get("id") or "contrato ES"),
+                    subtitle=str(row.get("adjudicatario") or row.get("empresa") or ""),
+                    snippet=str(row.get("descripcion") or row.get("description") or "")[:400] or None,
+                    url=f"/contratos-es/{row.get('id')}" if row.get("id") else None,
+                    date=str(row.get("fecha") or row.get("fechaFormalizacion") or "")[:10] or None,
+                    icon="file-text",
+                    badges=["contrato ES", str(row.get("ano") or "")],
+                    score=0.64,
+                    data={"id": row.get("id"), "valor": row.get("valor_total")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("Contratos ES: %s", exc)
+
+    # ── Publicações (societário, CIRE, citações) ─────────────────────────
+    try:
+        societario = es_client.search_societario(q, size=per_source)
+        for row in (societario or {}).get("items") or []:
+            if not isinstance(row, dict):
+                continue
+            results.append(
+                item(
+                    "internal",
+                    kind="document",
+                    title=str(row.get("acto") or ""),
+                    subtitle=str(row.get("entidade") or row.get("firma") or ""),
+                    snippet=str(row.get("texto") or "")[:400] or None,
+                    url=f"/societario/{row.get('doc_id')}" if row.get("doc_id") else None,
+                    date=str(row.get("data_publicacao") or "")[:10] or None,
+                    icon="file-text",
+                    badges=["societário", str(row.get("tipo") or "")],
+                    score=0.65,
+                    data={"nif": row.get("nif"), "tipo": row.get("tipo"), "acto": row.get("acto")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("Societário: %s", exc)
+
+    try:
+        cire = es_client.search_cire(q, size=per_source)
+        for row in (cire or {}).get("items") or []:
+            if not isinstance(row, dict):
+                continue
+            results.append(
+                item(
+                    "internal",
+                    kind="document",
+                    title=str(row.get("ato") or row.get("tipo") or "insolvência"),
+                    subtitle=str(row.get("insolvente") or row.get("referencia") or ""),
+                    snippet=str(row.get("texto") or "")[:400] or None,
+                    url=f"/cire/{row.get('doc_id')}" if row.get("doc_id") else None,
+                    date=str(row.get("data_publicacao") or "")[:10] or None,
+                    icon="alert-circle",
+                    badges=["CIRE", str(row.get("tribunal_comarca") or "")],
+                    score=0.63,
+                    data={"referencia": row.get("referencia"), "processo": row.get("processo"), "tribunal": row.get("tribunal")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("CIRE: %s", exc)
+
+    try:
+        citacoes = es_client.search_citacoes(q, size=per_source, with_texto=False)
+        for row in (citacoes or {}).get("items") or []:
+            if not isinstance(row, dict):
+                continue
+            results.append(
+                item(
+                    "internal",
+                    kind="document",
+                    title=str(row.get("documento_assunto") or row.get("ato") or "citação/edital"),
+                    subtitle=str(row.get("tribunal") or row.get("processo") or ""),
+                    snippet=str(row.get("resumo") or row.get("especie") or "")[:400] or None,
+                    url=f"/citacoes/{row.get('doc_id')}" if row.get("doc_id") else None,
+                    date=str(row.get("data_publicacao") or "")[:10] or None,
+                    icon="mail",
+                    badges=["citação", str(row.get("tribunal_comarca") or "")],
+                    score=0.62,
+                    data={"referencia": row.get("referencia"), "processo": row.get("processo"), "papeis": row.get("papeis")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("Citações: %s", exc)
+
+    # ── Notícias, redes sociais e recolhas ───────────────────────────────
+    try:
+        news = es_client.search_all_tickers(q, 0, per_source)
         for row in (news or {}).get("items") or []:
             if not isinstance(row, dict):
                 continue
@@ -806,16 +1090,41 @@ def _internal_text_hits(term: str, *, limit: int = 6) -> List[Dict[str, Any]]:
                     date=str(row.get("published") or row.get("date") or "")[:10] or None,
                     icon="newspaper",
                     badges=["notícia"],
-                    score=0.66,
+                    score=0.6,
                     data={"ticker": row.get("ticker"), "source": "finance_news"},
                 )
             )
     except Exception as exc:
         logger.debug("Notícias: %s", exc)
-    # Recolhas (scraper)
+
     try:
-        scraped = es_client.search_scraped(term, size=limit)
+        social = es_client.search_social(q, size=per_source)
+        for row in (social or {}).get("items") or []:
+            if not isinstance(row, dict):
+                continue
+            results.append(
+                item(
+                    "internal",
+                    kind="news",
+                    title=str(row.get("title") or row.get("text") or "")[:140],
+                    subtitle=f"{row.get('platform') or 'social'} · {row.get('channel_id') or ''}",
+                    snippet=str(row.get("text") or "")[:280] or None,
+                    url=row.get("url"),
+                    date=str(row.get("collected_at") or "")[:10] or None,
+                    icon="share-2",
+                    badges=["social"],
+                    score=0.58,
+                    data={"platform": row.get("platform"), "channel_id": row.get("channel_id"), "tags": row.get("tags")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("Social: %s", exc)
+
+    try:
+        scraped = es_client.search_scraped(q, size=per_source)
         for row in (scraped or {}).get("items") or []:
+            if not isinstance(row, dict):
+                continue
             results.append(
                 item(
                     "internal",
@@ -827,39 +1136,176 @@ def _internal_text_hits(term: str, *, limit: int = 6) -> List[Dict[str, Any]]:
                     date=str(row.get("published_at") or row.get("collected_at") or "")[:10] or None,
                     icon="radar",
                     badges=["recolha"],
-                    score=0.58,
+                    score=0.56,
                     data={"source_id": row.get("source_id"), "tags": row.get("tags")},
                 )
             )
     except Exception as exc:
         logger.debug("Recolhas: %s", exc)
-    # Contratos públicos
+
+    # ── World Model (estado, eventos, relações) ─────────────────────────
     try:
-        contracts = es_client.search_contracts(term, size=limit)
-        for row in (contracts or {}).get("items") or []:
+        world = world_search_entities(q, size=per_source)
+        for row in (world or {}).get("results") or []:
+            if not isinstance(row, dict):
+                continue
+            results.append(
+                item(
+                    "internal",
+                    kind="entity",
+                    title=str(row.get("name") or ""),
+                    subtitle=f"{row.get('entity_type') or 'entidade'} · {row.get('country') or ''}",
+                    snippet=f"Risco {row.get('risk_label') or '—'} · {row.get('contracts_count', 0)} contratos · €{row.get('contracts_value', 0) or 0:.0f}",
+                    url=f"/world/entities/{row.get('entity_id')}" if row.get("entity_id") else None,
+                    icon="globe",
+                    badges=["mundo"],
+                    score=0.73,
+                    data={"entity_id": row.get("entity_id"), "entity_type": row.get("entity_type"), "risk_label": row.get("risk_label")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("World entities: %s", exc)
+
+    try:
+        timeline = world_timeline(kind=q, size=per_source)
+        for row in (timeline or {}).get("events") or []:
+            if not isinstance(row, dict):
+                continue
+            results.append(
+                item(
+                    "internal",
+                    kind="news",
+                    title=str(row.get("label") or row.get("kind") or ""),
+                    subtitle=f"{row.get('entity_name') or row.get('entity_ref') or ''}",
+                    snippet=str(row.get("description") or "")[:280] or None,
+                    url=f"/world/timeline/{row.get('entity_ref')}" if row.get("entity_ref") else None,
+                    date=str(row.get("ts") or "")[:10] or None,
+                    icon="clock",
+                    badges=["evento"],
+                    score=0.59,
+                    data={"entity_ref": row.get("entity_ref"), "kind": row.get("kind"), "severity": row.get("severity")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("World timeline: %s", exc)
+
+    try:
+        rels = world_relations(entity_ref=None, size=per_source)
+        seen_rels = 0
+        for row in (rels or {}).get("relations") or []:
+            if not isinstance(row, dict):
+                continue
+            text = f"{row.get('source_name') or row.get('source_ref') or ''} → {row.get('target_name') or row.get('target_ref') or ''}"
+            if q and q.lower() not in text.lower():
+                continue
+            seen_rels += 1
+            if seen_rels > per_source:
+                break
+            results.append(
+                item(
+                    "internal",
+                    kind="entity",
+                    title=str(row.get("kind") or "relação"),
+                    subtitle=text,
+                    snippet=f"€{row.get('value_sum', 0) or 0:.0f} · {row.get('contracts_count', 0)} contratos",
+                    url=f"/world/relations?ref={row.get('source_ref')}",
+                    icon="git-merge",
+                    badges=["relação"],
+                    score=0.55,
+                    data={"source_ref": row.get("source_ref"), "target_ref": row.get("target_ref"), "kind": row.get("kind")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("World relations: %s", exc)
+
+    # ── Análises, resumos e investigações ─────────────────────────────────
+    try:
+        analises = es_client.list_analises_empresa(nome=q, limit=per_source)
+        for row in (analises or {}).get("items") or []:
+            if not isinstance(row, dict):
+                continue
             results.append(
                 item(
                     "internal",
                     kind="document",
-                    title=str(row.get("objectoContrato") or row.get("objecto") or row.get("idcontrato") or "contrato"),
-                    subtitle=f"{row.get('adjudicantes') or ''} → {row.get('adjudicatarios') or ''}",
-                    snippet=str(row.get("descContrato") or "")[:400] or None,
-                    url=f"/contratos/{row.get('idcontrato')}" if row.get("idcontrato") else None,
-                    date=str(row.get("dataCelebracaoContrato") or "")[:10] or None,
-                    icon="file-text",
-                    badges=["contrato", str(row.get("Ano") or "")],
-                    score=0.6,
-                    data={"idcontrato": row.get("idcontrato"), "preco": row.get("precoContratual")},
+                    title=str(row.get("nome") or row.get("doc_id") or "análise"),
+                    subtitle=str(row.get("nif") or ""),
+                    snippet=str(row.get("resumo") or row.get("topicos") or "")[:280] or None,
+                    url=f"/analises/{row.get('doc_id')}" if row.get("doc_id") else None,
+                    date=str(row.get("atualizado_em") or "")[:10] or None,
+                    icon="activity",
+                    badges=["análise", str(row.get("pais") or "")],
+                    score=0.67,
+                    data={"nif": row.get("nif"), "pais": row.get("pais"), "doc_id": row.get("doc_id")},
                 )
             )
     except Exception as exc:
-        logger.debug("Contratos: %s", exc)
-    # Ficheiros/documentos indexados no RAG
+        logger.debug("Análises: %s", exc)
+
+    try:
+        node_summary = es_client.get_node_summary(q)
+        if node_summary and not node_summary.get("error"):
+            src = node_summary
+            results.append(
+                item(
+                    "internal",
+                    kind="document",
+                    title=str(src.get("title") or src.get("node_id") or "resumo de nó"),
+                    subtitle=str(src.get("node_id") or ""),
+                    snippet=str(src.get("summary") or "")[:280] or None,
+                    url=f"/nodes/{src.get('node_id')}",
+                    date=str(src.get("updated_at") or "")[:10] or None,
+                    icon="file-text",
+                    badges=["resumo"],
+                    score=0.61,
+                    data={"node_id": src.get("node_id"), "node_type": src.get("node_type")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("Resumo de nó: %s", exc)
+
+    try:
+        investigations = es_client.client.search(
+            index=es_client.INVESTIGATIONS_INDEX,
+            body={
+                "size": per_source,
+                "query": {
+                    "multi_match": {
+                        "query": q,
+                        "fields": ["question^3", "report.summary^2", "report.title^2", "entities.name"],
+                        "operator": "and",
+                    }
+                } if q else {"match_all": {}},
+                "sort": [{"created_at": {"order": "desc"}}, "_score"],
+            },
+        )
+        for hit in (investigations or {}).get("hits", {}).get("hits", []):
+            row = hit.get("_source") or {}
+            report = row.get("report") or {}
+            results.append(
+                item(
+                    "internal",
+                    kind="document",
+                    title=str(report.get("title") or row.get("question") or "investigação"),
+                    subtitle=str(row.get("status") or ""),
+                    snippet=str(report.get("summary") or "")[:280] or None,
+                    url=f"/investigacoes/{hit.get('_id')}",
+                    date=str(row.get("created_at") or "")[:10] or None,
+                    icon="search",
+                    badges=["investigação"],
+                    score=0.69,
+                    data={"investigation_id": hit.get("_id"), "status": row.get("status")},
+                )
+            )
+    except Exception as exc:
+        logger.debug("Investigações: %s", exc)
+
+    # ── RAG / ficheiros locais ───────────────────────────────────────────
     try:
         from api.rag_service import get_document_store  # noqa: PLC0415
 
         store = get_document_store()
-        needle = term.lower()[:40]
+        needle = q.lower()[:40]
         for row in store.list() or []:
             name = str(getattr(row, "title", None) or getattr(row, "filename", None) or getattr(row, "doc_id", ""))
             extra = getattr(row, "extra", None) or {}
@@ -884,7 +1330,8 @@ def _internal_text_hits(term: str, *, limit: int = 6) -> List[Dict[str, Any]]:
             )
     except Exception as exc:
         logger.debug("Documentos: %s", exc)
-    return results[: max(limit * 2, 6)]
+
+    return results[: max(limit * 3, 12)]
 
 
 def local_files(term: str, *, limit: int = 12) -> List[Dict[str, Any]]:
@@ -928,25 +1375,84 @@ def index_overview() -> List[Dict[str, Any]]:
     client = es_client.get_es_client()
     if not client:
         return []
-    labels = {
-        es_client.CONTRACTS_INDEX: ("Contratos públicos", "contratos"),
-        es_client.TRADEMARKS_INDEX: ("Marcas (INPI)", "documentos"),
-        es_client.FIRMAS_INDEX: ("Firmas (RNPC)", "documentos"),
+
+    # Mapeamento completo dos índices conhecidos da plataforma.
+    labels: Dict[str, Tuple[str, str]] = {
+        es_client.CONTRACTS_INDEX: ("Contratos públicos (PT)", "contratos"),
+        es_client.CONTRATOS_ES_INDEX: ("Contratos públicos (ES)", "contratos"),
         es_client.ENTITIES_INDEX: ("Entidades", "entidades"),
-        es_client.CRM_INDEX: ("CRM", "privado"),
-        es_client.SCRAPED_INDEX: ("Recolhas", "documentos"),
-        es_client.CIRE_INDEX: ("Insolvências (CIRE)", "publicações"),
+        es_client.PEOPLE_INDEX: ("Pessoas e cargos", "pessoas"),
         es_client.CONTRIBUINTES_INDEX: ("Contribuintes", "entidades"),
+        es_client.SOCIETARIO_INDEX: ("Publicações MJ (societário)", "publicações"),
+        es_client.CIRE_INDEX: ("Insolvências (CIRE)", "publicações"),
+        es_client.CITACOES_INDEX: ("Citações e editais", "publicações"),
+        es_client.TRADEMARKS_INDEX: ("Marcas (INPI)", "documentos"),
+        es_client.FIRMAS_INDEX: ("Firmas (RNPC)", "entidades"),
+        es_client.GLEIF_LEI_INDEX: ("Registos LEI (GLEIF)", "entidades"),
+        es_client.DEVEDORES_INDEX: ("Devedores (Finanças/SS)", "entidades"),
+        "finance_devedores_recolhas": ("Recolhas de devedores", "recolha"),
         "finance_news": ("Notícias", "documentos"),
         "finance_prices": ("Cotações", "mercados"),
         "finance_sentiment_daily": ("Sentimento", "mercados"),
+        "finance_macro": ("Indicadores macro", "mercados"),
+        "finance_earnings": ("Resultados empresariais", "mercados"),
+        es_client.SCRAPED_INDEX: ("Recolhas web", "documentos"),
+        es_client.SOCIAL_INDEX: ("Redes sociais", "documentos"),
+        es_client.CRM_INDEX: ("CRM", "privado"),
+        "finance_crm_rbac": ("CRM RBAC", "privado"),
+        "finance_user_state": ("Estado do utilizador", "privado"),
+        "finance_users": ("Utilizadores", "privado"),
+        "finance_sessions": ("Sessões", "privado"),
+        "finance_events": ("Eventos", "privado"),
+        "finance_provider_keys": ("Chaves de API", "privado"),
+        "finance_settings": ("Definições", "privado"),
+        es_client.NODE_SUMMARIES_INDEX: ("Resumos de nós", "documentos"),
+        es_client.ANALISES_EMPRESA_INDEX: ("Análises de padrões", "documentos"),
+        es_client.GLOBAL_PADROES_INDEX: ("Padrões globais", "analítica"),
+        es_client.AGENT_CONFIGS_INDEX: ("Configurações de agentes", "agentes"),
+        es_client.WORLD_STATE_INDEX: ("Estado do mundo", "entidades"),
+        es_client.WORLD_EVENTS_INDEX: ("Eventos do mundo", "eventos"),
+        es_client.WORLD_RELATIONS_INDEX: ("Relações do mundo", "grafo"),
+        es_client.WORLD_HISTORY_INDEX: ("Histórico do mundo", "entidades"),
+        es_client.NETWORK_STATE_INDEX: ("Estado da rede", "rede"),
+        es_client.SIMULATIONS_INDEX: ("Simulações", "simulações"),
+        es_client.INVESTIGATIONS_INDEX: ("Investigações", "investigação"),
     }
+
+    # Começar pelos índices reais reportados pelo cluster.
     overview: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for idx in es_client.list_elastic_indices(es=client):
+        index = idx.get("index", "")
+        if not index or index in seen:
+            continue
+        seen.add(index)
+        label, kind = labels.get(index, (_label_from_index(index), "dados"))
+        overview.append({
+            "index": index,
+            "label": label,
+            "kind": kind,
+            "documents": int(idx.get("docs") or 0),
+            "size": idx.get("size"),
+            "health": idx.get("health"),
+            "status": idx.get("status"),
+        })
+
+    # Garantir que índices previstos mas ainda vazios também aparecem no catálogo.
     for index, (label, kind) in labels.items():
+        if index in seen:
+            continue
         try:
             count = int(client.count(index=index).get("count", 0))
         except Exception:
             continue
         overview.append({"index": index, "label": label, "kind": kind, "documents": count})
-    overview.sort(key=lambda row: -int(row["documents"]))
+
+    overview.sort(key=lambda row: (-int(row["documents"]), row["label"]))
     return overview
+
+
+def _label_from_index(index: str) -> str:
+    """Label legível para um índice sem registo explícito no catálogo."""
+    name = index.removeprefix("finance_").removeprefix("iq_os_").replace("_", " ")
+    return name[:1].upper() + name[1:] if name else index

@@ -1416,8 +1416,15 @@ ouve**. Em vez de ir buscar os dados diretamente, fala com o sistema por **gatew
 empresas, mercado, RAG, ontologia, CRM…) e o **browser** (pesquisa e leitura de páginas
 externas, com extração de texto). Segue também a mesma biblioteca de **skills** do Hermes.
 
+E **faz coisas por nós**: além de responder, propõe **ações** — abrir a página certa, ou
+**gravar um documento no Office, um dossiê 360 ou uma skill em nosso nome**. As de escrita
+nunca acontecem sozinhas: só depois de confirmadas, por clique ou por voz («sim»,
+«confirmar»). As de escrita que o modelo pode propor são poucas e conhecidas — e as operações
+que escrevem **não** estão no catálogo de ferramentas dele, para nunca as poder escolher
+sozinho.
+
 ```
-pergunta → skill → plano → gateways → resposta → fala
+pergunta → skill → plano → gateways → resposta + ações propostas → fala
 ```
 
 Na página, a **órbita** é o estado do Jarvis: respira quando está à espera, pulsa com o
@@ -1445,7 +1452,10 @@ Endpoints (`api/jarvis_routes.py`):
 
 - `GET  /jarvis/meta` — capacidades, gateways, ferramentas, vozes e modelo
 - `GET  /jarvis/tools` · `GET /jarvis/voice` — catálogo das ferramentas e estado da voz
-- `POST /jarvis/ask` · `POST /jarvis/ask/stream` — pergunta (JSON ou SSE com os passos)
+- `GET  /jarvis/actions` · `POST /jarvis/actions/run` — o que o Jarvis pode fazer por nós
+  (navegar / escrever) e a execução, sempre confirmada, de uma criação
+- `POST /jarvis/ask` · `POST /jarvis/ask/stream` — pergunta (JSON ou SSE com os passos e as
+  ações propostas)
 - `POST /jarvis/transcribe` (áudio → texto) · `POST /jarvis/speak` (texto → mp3)
 
 Notas de implementação (`api/jarvis_gateway.py`, `api/jarvis_service.py`):
@@ -1458,6 +1468,11 @@ Notas de implementação (`api/jarvis_gateway.py`, `api/jarvis_service.py`):
   aplicação, com o token da sessão reencaminhado): sem rede nem login extra;
 - no modo factual o Jarvis mostra o que as ferramentas devolveram, sem interpretação; o texto
   falado é limpo de markdown, converte `[1]` em «(fonte 1)» e é cortado a 900 caracteres;
+- as **ações** vivem em `api/jarvis_actions.py`: a navegação é resolvida no cliente (um clique
+  muda de vista) e as criações seguem por `POST /jarvis/actions/run` → `mcp.call`. Três regras
+  da deteção: uma **pergunta** não navega (é preciso verbo de navegação ou frase de ≤ 3
+  palavras), quem pede para **gravar** não recebe também uma navegação, e um «sim» executa a
+  proposta mais recente em vez de virar pergunta nova;
 - o Jarvis está exposto no próprio servidor MCP (`jarvis_meta`, `jarvis_tools`, `jarvis_voice`,
   `jarvis_ask`, `jarvis_speak`), pelo que outro agente lhe pode pedir uma resposta com voz;
 - `JARVIS_VOICE` e `JARVIS_STT_MODEL` (ver `.env.example`) escolhem a voz e o modelo de
