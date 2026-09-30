@@ -5,6 +5,7 @@ import {
   Building2,
   Check,
   Copy,
+  Database,
   ExternalLink,
   GitBranch,
   Globe,
@@ -41,6 +42,24 @@ import {
   searchPeople,
   searchPeopleCompanies,
 } from "../api";
+import {
+  devedorPorNif,
+  devedoresCollect,
+  devedoresFontes,
+  devedoresIngest,
+  devedoresJob,
+  devedoresMeta,
+  devedoresPdfUrl,
+  devedoresRecolhas,
+  devedoresSearch,
+  type DevedorFicha,
+  type DevedorRegisto,
+  type DevedoresFontes,
+  type DevedoresJob,
+  type DevedoresKpis,
+  type DevedoresMeta,
+  type DevedoresRecolha,
+} from "../devedoresApi";
 import type { CompanyPerson, PeopleCompaniesResponse, PeopleCompanyItem, PeopleCompanyResponse } from "../api";
 import { GraphCanvas } from "../components/graph/GraphCanvas";
 import type { GraphMetric } from "../components/graph/graphStudio";
@@ -100,15 +119,781 @@ import type {
 // Sections
 // ---------------------------------------------------------------------------
 
-type PessoasIQSection = "dashboard" | "search" | "graph" | "score360" | "settings";
+type PessoasIQSection = "dashboard" | "search" | "graph" | "score360" | "devedores" | "settings";
 
 const SECTIONS: { id: PessoasIQSection; label: string; icon: React.ElementType }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "search", label: "Pesquisa", icon: Search },
   { id: "graph", label: "Grafo", icon: Network },
   { id: "score360", label: "360", icon: ShieldAlert },
+  { id: "devedores", label: "Devedores", icon: AlertTriangle },
   { id: "settings", label: "Configurações", icon: Settings },
 ];
+
+// ---------------------------------------------------------------------------
+// Devedores (listas públicas das Finanças e da Segurança Social)
+// ---------------------------------------------------------------------------
+
+const DEVEDORES_PAGE_SIZE = 25;
+
+function dataCurta(valor?: string | null): string {
+  if (!valor) return "—";
+  return String(valor).slice(0, 10).split("-").reverse().join("/");
+}
+
+/** Aviso de dívida ao Estado (Finanças / Segurança Social) para um NIF/NIPC. */
+function DebtBadge({ nif }: { nif: string }) {
+  const [ficha, setFicha] = useState<DevedorFicha | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    setFicha(null);
+    if (!nif) return () => undefined;
+    devedorPorNif(nif)
+      .then((resposta) => {
+        if (vivo) setFicha(resposta);
+      })
+      .catch(() => undefined);
+    return () => {
+      vivo = false;
+    };
+  }, [nif]);
+
+  if (!ficha || !ficha.devedor) return null;
+  const porEntidade = ficha.items.reduce<Record<string, DevedorRegisto[]>>((acc, item) => {
+    const chave = item.entidade_label || item.entidade;
+    acc[chave] = [...(acc[chave] || []), item];
+    return acc;
+  }, {});
+
+  return (
+    <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-xs">
+      <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-200">
+        <AlertTriangle size={15} /> Devedor ao Estado
+      </p>
+      {Object.entries(porEntidade).map(([entidade, registos]) => (
+        <p key={entidade} className="mt-1.5 text-amber-100/90">
+          <span className="font-medium">{entidade}</span>:{" "}
+          {registos
+            .map(
+              (registo) =>
+                `${registo.escalao} (${registo.tipo_label ?? registo.tipo}, lista de ${dataCurta(
+                  registo.lista_atualizada_em,
+                )}, recolhida em ${dataCurta(registo.collected_at)})`,
+            )
+            .join(" · ")}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Ficha de um devedor que **não** tem ficha de pessoa/empresa no PessoasIQ.
+ *
+ * As listas de devedores são a única fonte de alguns NIF (não têm publicações
+ * societárias nem contratos): em vez de «pessoa não encontrada», o PessoasIQ
+ * mostra o que as listas publicam — escalão, entidade credora e datas.
+ */
+function DevedorFichaPanel({
+  ficha,
+  onClose,
+  onOpenTab,
+}: {
+  ficha: DevedorFicha;
+  onClose: () => void;
+  onOpenTab: () => void;
+}) {
+  const [temFicha, setTemFicha] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    setTemFicha(null);
+    getPerson(ficha.nif)
+      .then(() => {
+        if (vivo) setTemFicha(true);
+      })
+      .catch(() => {
+        if (vivo) setTemFicha(false);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [ficha.nif]);
+
+  const nome = ficha.nome || `NIF ${ficha.nif}`;
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-xl font-bold">
+            <Building2 size={22} className="shrink-0 text-amber-300" />
+            {nome}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            NIF {ficha.nif} · {ficha.total} registo{ficha.total === 1 ? "" : "s"} nas listas de devedores
+            {ficha.maior_valor_min ? ` · dívida a partir de ${ficha.maior_valor_min.toLocaleString("pt-PT")} €` : ""}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg border border-white/10 p-1.5 text-muted-foreground transition hover:text-foreground"
+          aria-label="Fechar"
+        >
+          <X size={16} />
+        </button>
+      </div>
+
+      <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-3">
+        <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-200">
+          <AlertTriangle size={15} /> Devedor ao Estado
+        </p>
+        <ul className="mt-1.5 space-y-1 text-xs text-amber-100/90">
+          {ficha.items.map((registo) => (
+            <li key={registo.doc_id} className="flex flex-wrap items-center gap-x-2">
+              <span className="font-medium">{registo.escalao}</span>
+              <span className="text-muted-foreground">·</span>
+              <span>{registo.entidade_label ?? registo.entidade}</span>
+              <span className="text-muted-foreground">·</span>
+              <span>{registo.tipo_label ?? registo.tipo}</span>
+              <span className="text-muted-foreground">·</span>
+              <span>
+                lista de {dataCurta(registo.lista_atualizada_em)}, recolhida em {dataCurta(registo.collected_at)}
+              </span>
+              {registo.base && (
+                <a
+                  href={devedoresPdfUrl(registo.base)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 text-teal-300 hover:underline"
+                >
+                  <ExternalLink size={11} /> PDF
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onOpenTab}
+          className="flex items-center gap-2 rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-1.5 text-sm text-amber-200 transition hover:bg-amber-400/20"
+        >
+          <Search size={16} /> Pesquisar nas listas
+        </button>
+        {temFicha && (
+          <span className="flex items-center gap-2 rounded-xl border border-white/10 px-3 py-1.5 text-xs text-muted-foreground">
+            <Check size={14} className="text-emerald-300" /> Também tem ficha societária
+          </span>
+        )}
+      </div>
+
+      {temFicha === false && (
+        <p className="text-xs text-muted-foreground">
+          Este NIF não tem publicações societárias nem contratos indexados: os dados acima vêm das listas
+          públicas de devedores (Finanças e Segurança Social).
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Cartão de indicadores das listas de devedores. */
+function DevedoresKpiRow({ kpis }: { kpis: DevedoresKpis }) {
+  const cartoes: { label: string; valor: string; detalhe?: string }[] = [
+    { label: "Registos", valor: kpis.registos.toLocaleString("pt-PT"), detalhe: `${kpis.devedores_distintos.toLocaleString("pt-PT")} NIF distintos (aprox.)` },
+    { label: "Singulares", valor: kpis.singulares.toLocaleString("pt-PT"), detalhe: "Pessoas" },
+    { label: "Coletivos", valor: kpis.coletivos.toLocaleString("pt-PT"), detalhe: "Empresas" },
+    { label: "Finanças", valor: kpis.financas.toLocaleString("pt-PT"), detalhe: `${kpis.ficheiros} ficheiros` },
+    { label: "Segurança Social", valor: kpis.seguranca_social.toLocaleString("pt-PT"), detalhe: kpis.seguranca_social ? "Recolhida" : "Não recolhida" },
+    { label: "Lista de", valor: dataCurta(kpis.ultima_lista), detalhe: `Recolha: ${dataCurta(kpis.ultima_recolha)}` },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-2 @2xl:grid-cols-3 @4xl:grid-cols-6">
+      {cartoes.map((cartao) => (
+        <div key={cartao.label} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{cartao.label}</p>
+          <p className="mt-0.5 truncate text-lg font-semibold text-foreground">{cartao.valor}</p>
+          {cartao.detalhe && <p className="truncate text-[11px] text-muted-foreground">{cartao.detalhe}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Secção «Devedores» do PessoasIQ: área de pesquisa nas listas públicas de
+ * devedores (Finanças e Segurança Social), com os ficheiros recolhidos (PDF +
+ * JSON + data da recolha) e a recolha das listas a pedido.
+ */
+function DevedoresSection({ onPickNif }: { onPickNif: (nif: string) => void }) {
+  const [meta, setMeta] = useState<DevedoresMeta | null>(null);
+  const [fontes, setFontes] = useState<DevedoresFontes | null>(null);
+  const [recolhas, setRecolhas] = useState<DevedoresRecolha[]>([]);
+  const [kpis, setKpis] = useState<DevedoresKpis | null>(null);
+  const [itens, setItens] = useState<DevedorRegisto[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [aIndexar, setAIndexar] = useState(false);
+  const [job, setJob] = useState<DevedoresJob | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [detalhe, setDetalhe] = useState<DevedorFicha | null>(null);
+  const [detalheTemFicha, setDetalheTemFicha] = useState(false);
+  const [aCarregarDetalhe, setACarregarDetalhe] = useState(false);
+
+  const [q, setQ] = useState("");
+  const [nif, setNif] = useState("");
+  const [tipo, setTipo] = useState("");
+  const [entidade, setEntidade] = useState("");
+  const [escalao, setEscalao] = useState("");
+  const [sort, setSort] = useState<"relevancia" | "nome" | "escalao" | "recolha" | "lista">("escalao");
+  const [order, setOrder] = useState<"asc" | "desc">("desc");
+
+  const pesquisar = useCallback(
+    async (pagina = 1) => {
+      setCarregando(true);
+      setErro(null);
+      try {
+        const resposta = await devedoresSearch({
+          q: q.trim() || undefined,
+          nif: nif.trim() || undefined,
+          tipo: tipo || undefined,
+          entidade: entidade || undefined,
+          escalao: escalao ? [escalao] : undefined,
+          sort,
+          order,
+          page: pagina,
+          size: DEVEDORES_PAGE_SIZE,
+        });
+        if (resposta.error) setErro(resposta.error);
+        setItens(resposta.items ?? []);
+        setTotal(resposta.total ?? 0);
+        setKpis(resposta.kpis ?? null);
+        setPage(pagina);
+      } catch (err) {
+        setErro(err instanceof Error ? err.message : "Erro na pesquisa de devedores");
+      } finally {
+        setCarregando(false);
+      }
+    },
+    [q, nif, tipo, entidade, escalao, sort, order],
+  );
+
+  const carregarContexto = useCallback(async () => {
+    try {
+      const [m, f, r] = await Promise.all([devedoresMeta(), devedoresFontes(), devedoresRecolhas()]);
+      setMeta(m);
+      setFontes(f);
+      setRecolhas(r.items ?? []);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Erro ao carregar as fontes");
+    }
+  }, []);
+
+  useEffect(() => {
+    void carregarContexto();
+    void pesquisar(1);
+    // Só na entrada na secção: a pesquisa seguinte é sempre explícita.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Progresso da recolha (a recolha corre no servidor, em segundo plano).
+  useEffect(() => {
+    if (!jobId) return;
+    let vivo = true;
+    const timer = window.setInterval(async () => {
+      try {
+        const estado = await devedoresJob(jobId);
+        if (!vivo) return;
+        setJob(estado);
+        if (estado.status !== "running") {
+          window.clearInterval(timer);
+          setJobId(null);
+          await carregarContexto();
+          await pesquisar(1);
+        }
+      } catch {
+        /* o trabalho pode ter saído da lista; ignora-se */
+      }
+    }, 2500);
+    return () => {
+      vivo = false;
+      window.clearInterval(timer);
+    };
+  }, [jobId, carregarContexto, pesquisar]);
+
+  const recolher = async (payload: { ficheiros?: string[]; entidades?: ("financas" | "seguranca_social")[]; forcar?: boolean }) => {
+    setErro(null);
+    try {
+      const resposta = await devedoresCollect({ entidades: payload.entidades ?? ["financas"], ...payload });
+      setJob(resposta);
+      if (resposta.already_running) {
+        setJobId(resposta.job_id);
+      } else {
+        setJobId(resposta.job_id);
+      }
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Erro ao arrancar a recolha");
+    }
+  };
+
+  const indexar = async () => {
+    setAIndexar(true);
+    setErro(null);
+    try {
+      await devedoresIngest();
+      await carregarContexto();
+      await pesquisar(1);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Erro a indexar os ficheiros");
+    } finally {
+      setAIndexar(false);
+    }
+  };
+
+  const paginas = Math.max(1, Math.ceil(total / DEVEDORES_PAGE_SIZE));
+
+  /**
+   * Detalhe de um devedor (todas as listas em que o NIF aparece).
+   *
+   * A ficha do PessoasIQ só existe quando há publicações societárias indexadas
+   * para o NIF — um devedor pode muito bem não ter nenhuma. Por isso o detalhe
+   * abre aqui e o botão para a ficha só aparece se essa ficha existir.
+   */
+  const abrirDetalhe = async (nifAlvo: string) => {
+    setACarregarDetalhe(true);
+    setDetalheTemFicha(false);
+    setDetalhe(null);
+    try {
+      const ficha = await devedorPorNif(nifAlvo);
+      setDetalhe(ficha);
+      getPerson(nifAlvo)
+        .then(() => setDetalheTemFicha(true))
+        .catch(() => setDetalheTemFicha(false));
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Erro ao abrir o detalhe do devedor");
+    } finally {
+      setACarregarDetalhe(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {kpis && <DevedoresKpiRow kpis={kpis} />}
+
+      <Card>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <AlertTriangle size={16} className="text-amber-300" /> Listas públicas de devedores
+            </h3>
+            <p className="text-[11px] text-muted-foreground">
+              {meta ? `${meta.recolhas} recolha(s) · ${meta.ficheiros} ficheiro(s) · ${meta.registos_recolhidos.toLocaleString("pt-PT")} registos guardados` : "a carregar…"}
+            </p>
+          </div>
+
+          <div className="flex min-h-[44px] items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 focus-within:ring-2 focus-within:ring-amber-400/40">
+            <Search size={18} className="shrink-0 text-muted-foreground" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void pesquisar(1);
+              }}
+              placeholder="Nome do devedor…"
+              autoComplete="off"
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+            <input
+              value={nif}
+              onChange={(e) => setNif(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void pesquisar(1);
+              }}
+              placeholder="NIF/NIPC"
+              inputMode="numeric"
+              autoComplete="off"
+              className="w-[110px] bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+            <button
+              type="button"
+              onClick={() => void pesquisar(1)}
+              className="shrink-0 rounded-lg bg-amber-400/15 px-3 py-1.5 text-xs font-medium text-amber-200 transition hover:bg-amber-400/25"
+            >
+              Pesquisar
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <select
+              value={tipo}
+              onChange={(e) => setTipo(e.target.value)}
+              aria-label="Tipo de contribuinte"
+              className="min-h-[40px] rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5 text-xs text-foreground"
+            >
+              <option value="">Singulares e coletivos</option>
+              <option value="singulares">Contribuintes singulares</option>
+              <option value="coletivos">Contribuintes coletivos</option>
+            </select>
+            <select
+              value={entidade}
+              onChange={(e) => setEntidade(e.target.value)}
+              aria-label="Entidade credora"
+              className="min-h-[40px] rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5 text-xs text-foreground"
+            >
+              <option value="">Finanças e Segurança Social</option>
+              <option value="financas">Finanças</option>
+              <option value="seguranca_social">Segurança Social</option>
+            </select>
+            <select
+              value={escalao}
+              onChange={(e) => setEscalao(e.target.value)}
+              aria-label="Escalão da dívida"
+              className="min-h-[40px] max-w-[260px] rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5 text-xs text-foreground"
+            >
+              <option value="">Todos os escalões</option>
+              {(fontes?.financas.ficheiros ?? [])
+                .map((ficheiro) => ficheiro.escalao)
+                .concat((fontes?.seguranca_social.escaloes ?? []).map((item) => item.escalao))
+                .filter((valor, indice, lista) => lista.indexOf(valor) === indice)
+                .map((valor) => (
+                  <option key={valor} value={valor}>
+                    {valor}
+                  </option>
+                ))}
+            </select>
+            <select
+              value={`${sort}:${order}`}
+              onChange={(e) => {
+                const [novoSort, novaOrdem] = e.target.value.split(":") as [
+                  "relevancia" | "nome" | "escalao" | "recolha" | "lista",
+                  "asc" | "desc",
+                ];
+                setSort(novoSort);
+                setOrder(novaOrdem);
+              }}
+              aria-label="Ordenação"
+              className="min-h-[40px] rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5 text-xs text-foreground"
+            >
+              <option value="escalao:desc">Maior escalão primeiro</option>
+              <option value="escalao:asc">Menor escalão primeiro</option>
+              <option value="nome:asc">Nome (A→Z)</option>
+              <option value="recolha:desc">Recolha mais recente</option>
+              <option value="lista:desc">Lista mais recente</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => {
+                setQ("");
+                setNif("");
+                setTipo("");
+                setEntidade("");
+                setEscalao("");
+                setSort("escalao");
+                setOrder("desc");
+                void pesquisar(1);
+              }}
+              className="min-h-[40px] rounded-lg border border-white/10 px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground"
+            >
+              Limpar
+            </button>
+            {carregando && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
+          </div>
+        </div>
+      </Card>
+
+      {erro && (
+        <Card className="border-rose-400/30 bg-rose-400/5 p-4">
+          <p className="text-sm text-rose-300">{erro}</p>
+        </Card>
+      )}
+
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-foreground">
+            Resultados <span className="text-muted-foreground">({total.toLocaleString("pt-PT")})</span>
+          </h3>
+          {total > 0 && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => void pesquisar(page - 1)}
+                className="rounded-lg border border-white/10 px-2 py-1 transition hover:text-foreground disabled:opacity-40"
+              >
+                Anterior
+              </button>
+              <span>
+                Página {page} de {paginas}
+              </span>
+              <button
+                type="button"
+                disabled={page >= paginas}
+                onClick={() => void pesquisar(page + 1)}
+                className="rounded-lg border border-white/10 px-2 py-1 transition hover:text-foreground disabled:opacity-40"
+              >
+                Seguinte
+              </button>
+            </div>
+          )}
+        </div>
+
+        {itens.length === 0 && !carregando ? (
+          <EmptyState message="Sem devedores para estes filtros." icon={AlertTriangle} />
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[820px] text-left text-xs">
+              <thead className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-2 py-2">Nome</th>
+                  <th className="px-2 py-2">NIF/NIPC</th>
+                  <th className="px-2 py-2">Tipo</th>
+                  <th className="px-2 py-2">Entidade</th>
+                  <th className="px-2 py-2">Escalão</th>
+                  <th className="px-2 py-2">Lista</th>
+                  <th className="px-2 py-2">Recolha</th>
+                  <th className="px-2 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {itens.map((item) => (
+                  <tr key={item.doc_id} className="border-t border-white/[0.06] hover:bg-white/[0.03]">
+                    <td className="max-w-[260px] px-2 py-2">
+                      <span className="block truncate text-foreground" title={item.nome}>
+                        {item.nome}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">{item.ficheiro}</span>
+                    </td>
+                    <td className="px-2 py-2 font-mono text-[11px] text-muted-foreground">{item.nif}</td>
+                    <td className="px-2 py-2 text-muted-foreground">{item.tipo_label ?? item.tipo}</td>
+                    <td className="px-2 py-2 text-muted-foreground">{item.entidade_label ?? item.entidade}</td>
+                    <td className="px-2 py-2 text-amber-200">{item.escalao}</td>
+                    <td className="px-2 py-2 text-muted-foreground">{dataCurta(item.lista_atualizada_em)}</td>
+                    <td className="px-2 py-2 text-muted-foreground">{dataCurta(item.collected_at)}</td>
+                    <td className="px-2 py-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => void abrirDetalhe(item.nif)}
+                        className="rounded-lg border border-white/10 px-2 py-1 text-[11px] transition hover:text-foreground"
+                      >
+                        Detalhes
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {(aCarregarDetalhe || detalhe) && (
+          <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-400/[0.06] p-3">
+            {aCarregarDetalhe && (
+              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 size={13} className="animate-spin" /> A obter as listas deste NIF…
+              </p>
+            )}
+            {detalhe && (
+              <>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-amber-200">
+                      <AlertTriangle size={15} /> {detalhe.nome || `NIF ${detalhe.nif}`}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      NIF {detalhe.nif} · {detalhe.total} registo{detalhe.total === 1 ? "" : "s"} em{" "}
+                      {detalhe.entidades.length} entidade{detalhe.entidades.length === 1 ? "" : "s"}
+                      {detalhe.maior_valor_min ? ` · escalão a partir de ${detalhe.maior_valor_min.toLocaleString("pt-PT")} €` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {detalheTemFicha && (
+                      <button
+                        type="button"
+                        onClick={() => onPickNif(detalhe.nif)}
+                        className="flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-2 py-1 text-[11px] text-teal-200 transition hover:bg-white/[0.12]"
+                      >
+                        <PersonStanding size={12} /> Abrir ficha no PessoasIQ
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setDetalhe(null)}
+                      className="rounded-lg border border-white/10 p-1 text-muted-foreground transition hover:text-foreground"
+                      aria-label="Fechar detalhe"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                </div>
+                <ul className="mt-2 space-y-1">
+                  {detalhe.items.map((registo) => (
+                    <li key={registo.doc_id} className="flex flex-wrap items-center gap-x-2 text-[11px] text-amber-100/90">
+                      <span className="font-medium">{registo.escalao}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span>{registo.entidade_label ?? registo.entidade}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span>{registo.tipo_label ?? registo.tipo}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span>
+                        {registo.ficheiro} (lista de {dataCurta(registo.lista_atualizada_em)}, recolhida em{" "}
+                        {dataCurta(registo.collected_at)})
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {!detalheTemFicha && (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Sem ficha no PessoasIQ (não há publicações societárias indexadas para este NIF).
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-foreground">Recolhas e ficheiros</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void recolher({ entidades: ["financas"], forcar: false })}
+              disabled={Boolean(jobId)}
+              className="flex items-center gap-1.5 rounded-lg bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-200 transition hover:bg-emerald-400/25 disabled:opacity-40"
+            >
+              <RefreshCw size={13} /> Recolher agora
+            </button>
+            <button
+              type="button"
+              onClick={() => void recolher({ entidades: ["financas"], forcar: true })}
+              disabled={Boolean(jobId)}
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+            >
+              Recolher tudo de novo
+            </button>
+            <button
+              type="button"
+              onClick={() => void indexar()}
+              disabled={aIndexar}
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+            >
+              {aIndexar ? <Loader2 size={13} className="animate-spin" /> : <Database size={13} />} Indexar JSON
+            </button>
+            <button
+              type="button"
+              onClick={() => void recolher({ entidades: ["seguranca_social"] })}
+              disabled={Boolean(jobId)}
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+              title="Lista da Segurança Social: recolha experimental (a fonte recusa clientes automáticos)"
+            >
+              Segurança Social
+            </button>
+          </div>
+        </div>
+
+        {job && (
+          <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs">
+            <p className="flex items-center gap-2 text-foreground">
+              {job.status === "running" ? (
+                <Loader2 size={13} className="animate-spin text-emerald-300" />
+              ) : job.status === "done" ? (
+                <Check size={13} className="text-emerald-300" />
+              ) : (
+                <AlertTriangle size={13} className="text-amber-300" />
+              )}
+              Recolha {job.job_id} · {job.progress?.phase}
+              {typeof job.result?.registos === "number" && ` · ${job.result.registos.toLocaleString("pt-PT")} registos`}
+            </p>
+            {job.progress?.current?.ficheiro && (
+              <p className="mt-1 text-muted-foreground">
+                A processar {job.progress.current.ficheiro}
+                {job.progress.current.escalao ? ` · ${job.progress.current.escalao}` : ""}
+              </p>
+            )}
+            {job.error && <p className="mt-1 text-rose-300">{job.error}</p>}
+          </div>
+        )}
+
+        {recolhas.length > 0 && (
+          <div className="mt-3 max-h-[320px] overflow-y-auto">
+            <table className="w-full min-w-[720px] text-left text-xs">
+              <thead className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-2 py-2">Ficheiro</th>
+                  <th className="px-2 py-2">Tipo</th>
+                  <th className="px-2 py-2">Escalão</th>
+                  <th className="px-2 py-2">Registos</th>
+                  <th className="px-2 py-2">Lista</th>
+                  <th className="px-2 py-2">Recolha</th>
+                  <th className="px-2 py-2">Ficheiros</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recolhas.map((recolha) => (
+                  <tr key={recolha.recolha_id} className="border-t border-white/[0.06]">
+                    <td className="px-2 py-2 text-foreground">{recolha.ficheiro}</td>
+                    <td className="px-2 py-2 text-muted-foreground">{recolha.tipo_label ?? recolha.tipo}</td>
+                    <td className="px-2 py-2 text-amber-200">{recolha.escalao}</td>
+                    <td className="px-2 py-2 text-muted-foreground">{(recolha.registos ?? 0).toLocaleString("pt-PT")}</td>
+                    <td className="px-2 py-2 text-muted-foreground">{dataCurta(recolha.lista_atualizada_em)}</td>
+                    <td className="px-2 py-2 text-muted-foreground">{dataCurta(recolha.collected_at)}</td>
+                    <td className="px-2 py-2">
+                      <span className="flex items-center gap-2">
+                        {recolha.pdf_path && (
+                          <a
+                            href={devedoresPdfUrl(recolha.base)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1 text-teal-300 hover:underline"
+                          >
+                            <ExternalLink size={12} /> PDF
+                          </a>
+                        )}
+                        {recolha.source_url && (
+                          <a
+                            href={recolha.source_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1 text-muted-foreground hover:underline"
+                          >
+                            <Globe size={12} /> Fonte
+                          </a>
+                        )}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {fontes && (
+          <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+            <span className="text-foreground">Finanças:</span> {fontes.financas.recolhidos}/{fontes.financas.total} ficheiros
+            recolhidos (6 escalões de singulares e 6 de coletivos). <span className="text-foreground">Segurança Social:</span>{" "}
+            {fontes.seguranca_social.nota}
+          </p>
+        )}
+
+        {meta && (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Dados em <span className="text-foreground">{meta.export_dir}</span> (PDF em <code>pdf/</code>, JSON em{" "}
+            <code>json/</code>) · índice <code>{meta.index}</code>
+            {meta.indice?.registos !== undefined ? ` · ${meta.indice.registos.toLocaleString("pt-PT")} documentos` : ""}
+          </p>
+        )}
+      </Card>
+    </div>
+  );
+}
 
 function SectionTabs({
   active,
@@ -322,6 +1107,8 @@ function PersonDetailPanel({
         </button>
       </div>
 
+      <DebtBadge nif={person.nif} />
+
       {person.roles.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-foreground">Cargos e empresas</h3>
@@ -434,6 +1221,8 @@ function CompanyDetailPanel({
         </button>
       </div>
 
+      <DebtBadge nif={company.nif} />
+
       {loading && <p className="text-sm text-muted-foreground">A carregar as pessoas desta empresa…</p>}
       {error && (
         <p className="rounded-lg border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-300">
@@ -463,13 +1252,16 @@ function SearchSection({
   initialQ,
   onSelectPerson,
   onSelectCompany,
+  onSelectNif,
 }: {
   initialQ: string;
   onSelectPerson: (person: Person) => void;
   onSelectCompany: (company: PeopleCompanyItem) => void;
+  onSelectNif: (nif: string) => void;
 }) {
   const [q, setQ] = useState(initialQ);
   const [companies, setCompanies] = useState<PeopleCompaniesResponse | null>(null);
+  const [devedores, setDevedores] = useState<DevedorRegisto[]>([]);
   const [personType, setPersonType] = useState<PersonTypeFilter>("all");
   const [role, setRole] = useState("");
   const [origin, setOrigin] = useState<"" | "cire" | "societario">("");
@@ -533,6 +1325,16 @@ function SearchSection({
           // vínculo é o cargo que as pessoas nela têm.
           const empresas = await searchPeopleCompanies(term || nif || "", 8).catch(() => null);
           setCompanies(empresas);
+          // Alguns NIF só existem nas listas públicas de devedores (não têm
+          // publicações societárias): mostra-se o que as listas publicam.
+          const termoDevedores = (nif || term).replace(/\D/g, "");
+          const porNif = termoDevedores.length === 9;
+          const lista = await devedoresSearch(
+            porNif
+              ? { nif: termoDevedores, size: 8, sort: "escalao", order: "desc" }
+              : { q: term || undefined, size: 8, sort: "escalao", order: "desc" },
+          ).catch(() => null);
+          setDevedores(lista?.items ?? []);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Erro ao pesquisar");
@@ -866,8 +1668,38 @@ function SearchSection({
 
       {loading && <Loading message="A pesquisar pessoas, empresas e cargos…" />}
 
-      {results && results.total === 0 && !loading && !(companies && companies.items.length > 0) && (
+      {results && results.total === 0 && !loading && !(companies && companies.items.length > 0) && devedores.length === 0 && (
         <EmptyState message="Nenhuma pessoa, empresa ou cargo encontrado." />
+      )}
+
+      {!loading && devedores.length > 0 && (
+        <div className="space-y-2">
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <AlertTriangle size={14} className="text-amber-300" />
+            Devedores nas listas públicas ({devedores.length}) · Finanças e Segurança Social
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {devedores.map((registo) => (
+              <button
+                key={registo.doc_id}
+                type="button"
+                onClick={() => onSelectNif(registo.nif)}
+                className="flex min-h-[44px] items-center gap-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.06] px-3 py-2 text-left transition hover:bg-amber-400/[0.12]"
+              >
+                <AlertTriangle size={18} className="shrink-0 text-amber-300" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-foreground">{registo.nome}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    NIF {registo.nif} · {registo.escalao}
+                  </span>
+                </span>
+                <span className="shrink-0 rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] text-amber-200">
+                  lista {dataCurta(registo.lista_atualizada_em)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       {!loading && companies && companies.items.length > 0 && (
@@ -2225,6 +3057,7 @@ export default function PessoasIQPage({ nif: nifProp }: { nif?: string } = {}) {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<PeopleStatusResponse | null>(null);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
+  const [selectedDevedor, setSelectedDevedor] = useState<DevedorFicha | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [selectedCompany, setSelectedCompany] = useState<PeopleCompanyItem | null>(null);
@@ -2286,32 +3119,76 @@ export default function PessoasIQPage({ nif: nifProp }: { nif?: string } = {}) {
   }, []);
 
   /**
+   * Abre um NIF seja de onde for: ficha de pessoa → empresa com dados →
+   * listas públicas de devedores.
+   *
+   * Há NIF que **só** existem nas listas de devedores (nem publicações
+   * societárias, nem contratos, nem cargos): nesses casos mostra-se a ficha da
+   * dívida — com o nome que a própria lista publica — em vez de «não encontrado».
+   */
+  const abrirNif = useCallback(
+    async (nif: string, secao: PessoasIQSection = "search") => {
+      if (!/^\d{9}$/.test(nif)) {
+        setDetailError("NIF inválido (9 dígitos).");
+        return;
+      }
+      setDetailLoading(true);
+      setDetailError(null);
+      try {
+        const person = await getPerson(nif).catch(() => null);
+        if (person) {
+          setSelectedPerson(person);
+          setSelectedCompany(null);
+          setCompanyDetail(null);
+          setSelectedDevedor(null);
+          setSection(secao);
+          return;
+        }
+        // A empresa do PessoasIQ só conta se tiver nome ou pessoas com cargos.
+        const empresa = await openCompany(nif).catch(() => null);
+        if (empresa && (empresa.people.length > 0 || empresa.name)) {
+          setSelectedDevedor(null);
+          setSection(secao);
+          return;
+        }
+        const ficha = await devedorPorNif(nif).catch(() => null);
+        if (ficha?.devedor) {
+          setSelectedCompany(null);
+          setCompanyDetail(null);
+          setCompanyError(null);
+          setSelectedPerson(null);
+          setSelectedDevedor(ficha);
+          setSection(secao);
+          return;
+        }
+        if (empresa) {
+          // Empresa conhecida, mas sem pessoas: fica o painel dela com o aviso.
+          setSection(secao);
+          return;
+        }
+        setDetailError(
+          ficha?.error
+            ? `Sem dados para o NIF ${nif}: ${ficha.error}`
+            : `Sem dados para o NIF ${nif} (sem publicações societárias, contratos ou listas de devedores).`,
+        );
+        setSelectedDevedor(null);
+      } finally {
+        setDetailLoading(false);
+      }
+    },
+    [openCompany],
+  );
+
+  /**
    * Abre a ficha de uma pessoa: pelo NIF recebido em prop (janela `person-detail:`
    * aberta a partir do societário) ou pelo NIF no URL (`/pessoas-iq/<NIF>`).
-   * Sem ficha de pessoa, tenta a empresa (NIF de entidade coletiva).
    */
   useEffect(() => {
     const fromUrl = window.location.pathname.match(/^\/pessoas-iq\/([^/]+)$/);
     const nif = (nifProp || (fromUrl ? decodeURIComponent(fromUrl[1]) : "")).trim();
     if (!/^\d{9}$/.test(nif)) return;
-    setDetailLoading(true);
-    setDetailError(null);
-    getPerson(nif)
-      .then((person) => {
-        setSelectedPerson(person);
-        setSelectedCompany(null);
-        setSection("search");
-      })
-      .catch(async (err) => {
-        try {
-          await openCompany(nif);
-          setSection("search");
-        } catch {
-          setDetailError(err instanceof Error ? err.message : "Erro");
-        }
-      })
-      .finally(() => setDetailLoading(false));
-  }, [nifProp, openCompany]);
+    void abrirNif(nif, "search");
+  }, [nifProp, abrirNif]);
 
   const handleSearchTopbar = () => {
     setSection("search");
@@ -2320,6 +3197,7 @@ export default function PessoasIQPage({ nif: nifProp }: { nif?: string } = {}) {
   const handleSelectPerson = (person: Person) => {
     setSelectedPerson(person);
     setSelectedCompany(null);
+    setSelectedDevedor(null);
   };
 
   /** Pessoa escolhida dentro do painel de empresa: abre a ficha da pessoa. */
@@ -2366,23 +3244,12 @@ export default function PessoasIQPage({ nif: nifProp }: { nif?: string } = {}) {
   };
 
   /** Abre a ficha de uma pessoa pelo NIF (secção 360 sem pessoa selecionada). */
-  const handlePickNif = useCallback(async (nif: string) => {
-    if (!/^\d{9}$/.test(nif)) {
-      setDetailError("NIF inválido (9 dígitos).");
-      return;
-    }
-    setDetailLoading(true);
-    setDetailError(null);
-    try {
-      const person = await getPerson(nif);
-      setSelectedPerson(person);
-      setSection("score360");
-    } catch (err) {
-      setDetailError(err instanceof Error ? err.message : "Erro ao obter a pessoa");
-    } finally {
-      setDetailLoading(false);
-    }
-  }, []);
+  const handlePickNif = useCallback(
+    async (nif: string) => {
+      await abrirNif(nif, "score360");
+    },
+    [abrirNif],
+  );
 
   const content = useMemo(() => {
     if (detailLoading) return <Loading message="A carregar ficha…" />;
@@ -2402,6 +3269,7 @@ export default function PessoasIQPage({ nif: nifProp }: { nif?: string } = {}) {
           <SearchSection
             initialQ={q}
             onSelectPerson={handleSelectPerson}
+            onSelectNif={(value) => void abrirNif(value)}
             onSelectCompany={(empresa) => void openCompany(empresa.nif, empresa.name)}
           />
         );
@@ -2417,6 +3285,8 @@ export default function PessoasIQPage({ nif: nifProp }: { nif?: string } = {}) {
         );
       case "score360":
         return <Dossier360Section person={selectedPerson} onPickNif={(value) => void handlePickNif(value)} />;
+      case "devedores":
+        return <DevedoresSection onPickNif={(value) => void handlePickNif(value)} />;
       case "settings":
         return <IngestPanel />;
       default:
@@ -2465,6 +3335,18 @@ export default function PessoasIQPage({ nif: nifProp }: { nif?: string } = {}) {
                   onClose={() => setSelectedPerson(null)}
                   onGraph={handleGraphForSelected}
                   on360={handle360ForSelected}
+                />
+              </Card>
+            </aside>
+          )}
+
+          {!selectedCompany && !selectedPerson && selectedDevedor && section !== "graph" && section !== "score360" && (
+            <aside className="min-w-0 space-y-4">
+              <Card>
+                <DevedorFichaPanel
+                  ficha={selectedDevedor}
+                  onClose={() => setSelectedDevedor(null)}
+                  onOpenTab={() => setSection("devedores")}
                 />
               </Card>
             </aside>

@@ -71,11 +71,25 @@ def _anos(pais: str, *, anos: Optional[Sequence[int]] = None, es: Any = None) ->
 # Filtros
 # ---------------------------------------------------------------------------
 def _filtro_direct_award(spec: service.CountrySpec) -> Optional[Dict[str, Any]]:
-    """Filtro de ajuste direto: prefixos do país (o campo é keyword, sem analisador)."""
+    """Filtro de ajuste direto: prefixos do país sobre o campo `keyword` do procedimento.
+
+    O campo é `keyword` (sem analisador), pelo que um `prefix` é **sensível a
+    maiúsculas** e «ajuste direto» nunca casaria com «Ajuste Direto Regime Geral».
+    Usa-se `wildcard` com `case_insensitive` — que em `keyword` compara o valor
+    inteiro sem o normalizar.
+    """
     prefixos = spec.direct_award_prefixes
     if not prefixos:
         return None
-    return {"bool": {"should": [{"prefix": {spec.procedure_field: prefixo}} for prefixo in prefixos], "minimum_should_match": 1}}
+    return {
+        "bool": {
+            "should": [
+                {"wildcard": {spec.procedure_field: {"value": f"{prefixo}*", "case_insensitive": True}}}
+                for prefixo in prefixos
+            ],
+            "minimum_should_match": 1,
+        }
+    }
 
 
 def _runtime_aditivo(spec: service.CountrySpec) -> Dict[str, Any]:
@@ -750,6 +764,7 @@ def pesquisa(
     so_aditivo: bool = False,
     so_ajuste_direto: bool = False,
     granularidade: str = "mes",
+    facets: bool = True,
     size: int = 25,
     from_: int = 0,
     es: Any = None,
@@ -760,6 +775,9 @@ def pesquisa(
     (valor, mediana, ajuste direto, aditivos) e as facetas (série temporal na
     granularidade pedida, top CPV, top adjudicatárias, top adjudicantes e
     procedimentos) — todas calculadas por agregação, não por amostra.
+
+    `facets=False` serve as páginas seguintes: mantém os KPIs (baratos) e poupa
+    a série e os topos (os agregados caros).
     """
     spec = service.COUNTRIES.get(str(pais or "").upper())
     if spec is None:
@@ -854,15 +872,25 @@ def pesquisa(
     aggs: Dict[str, Any] = {
         "valor": {"stats": {"field": spec.value_field}},
         "mediana": {"percentiles": {"field": spec.value_field, "percents": [50]}},
-        "serie": {
-            "date_histogram": {"field": spec.pub_date, "calendar_interval": GRANULARIDADES[granularidade]["calendar"], "min_doc_count": 0},
+    }
+    if facets:
+        # A série e os topos são os agregados caros (nested + top_hits): pedem-se
+        # só na primeira página, onde são mostrados.
+        aggs["serie"] = {
+            "date_histogram": {
+                "field": spec.pub_date,
+                "calendar_interval": GRANULARIDADES[granularidade]["calendar"],
+                # Sem baldes vazios: num intervalo de anos, um histograma diário
+                # com `min_doc_count: 0` devolve milhares de buckets sem contratos.
+                "min_doc_count": 1,
+            },
             "aggs": {"valor": {"sum": {"field": spec.value_field}}},
-        },
-        "procedimentos": {
+        }
+        aggs["procedimentos"] = {
             "terms": {"field": spec.procedure_field, "size": TAMANHO_FACETA},
             "aggs": {"valor": {"sum": {"field": spec.value_field}}},
-        },
-        "cpvs": {
+        }
+        aggs["cpvs"] = {
             "nested": {"path": spec.cpv_path},
             "aggs": {
                 "codigos": {
@@ -870,8 +898,8 @@ def pesquisa(
                     "aggs": {"valor": {"reverse_nested": {}, "aggs": {"s": {"sum": {"field": spec.value_field}}}}},
                 }
             },
-        },
-        "adjudicatarias": {
+        }
+        aggs["adjudicatarias"] = {
             "nested": {"path": spec.adjudicatario_path},
             "aggs": {
                 "nifs": {
@@ -882,8 +910,8 @@ def pesquisa(
                     },
                 }
             },
-        },
-        "adjudicantes": {
+        }
+        aggs["adjudicantes"] = {
             "nested": {"path": spec.adjudicante_path},
             "aggs": {
                 "nifs": {
@@ -894,8 +922,7 @@ def pesquisa(
                     },
                 }
             },
-        },
-    }
+        }
     if spec.key == "PT":
         aggs["aditivos"] = {"filter": {"term": {"aditivo": True}}, "aggs": {"valor": {"sum": {"field": spec.effective_field}}}}
         aggs["sem_concorrentes"] = {

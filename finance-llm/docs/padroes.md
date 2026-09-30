@@ -297,6 +297,73 @@ páginas lidas e fontes/limitações) e entrega-a aos renderizadores de
 - a lista de contratos é limitada a 200 linhas — o relatório mostra a amostra, não o
   inventário.
 
+## Dashboard global (universo inteiro)
+
+O motor de amostra responde a «o que é atípico?». O **dashboard global** responde a
+outra pergunta: *o que dizem os 2 250 969 contratos portugueses (4 050 002 espanhóis),
+ano a ano?* Para isso não se lê documento a documento — pedem-se **agregações** ao
+Elasticsearch (`api/padroes_global.py`), que percorrem o índice inteiro e devolvem só
+números.
+
+### O processo de sincronização
+
+`POST /padroes/global/sincronizar` arranca um **processo em segundo plano**
+(`threading`, uma sincronização de cada vez) que:
+
+1. corre **uma única consulta** ao índice, restrita ao intervalo de anos, com
+   `terms` no campo do ano e, dentro de cada ano, as agregações (valor por `stats`,
+   mediana por `percentiles`, procedimentos por `terms`, meses por `date_histogram`,
+   CPV e partes por `nested` + `reverse_nested`, aditivos e «sem concorrentes» por
+   `filter`);
+2. **materializa** o resultado em `finance_padroes_global`: um documento por ano
+   (`PT:2025`), um de **total** (`PT:_total`) e um de **meta** (`PT:_meta`, com anos,
+   duração e quantos documentos varreu).
+
+O dashboard lê documentos já prontos (`GET /padroes/global`, ~0,2 s) e diz **sempre**
+de quando é o que mostra. Medições reais: **38–42 s** para 3 anos de Portugal
+(665 122 contratos) e ~13 s para 2 anos de Espanha.
+
+### Pormenores que já custaram tempo
+
+- **Aditivo** não é um campo do portal: é um `runtime_mappings` com `e > 0 && c > 0 &&
+  e > c * 1,15` (efetivo acima de 1,15× o contratado). Em `filter` agg a contagem vem
+  em **`doc_count`** — ler `count` dava zero aditivos.
+- **«Sem concorrentes»** em Portugal não é «campo inexistente»: `concorrentes` existe em
+  quase todos os documentos, muitas vezes **vazio** (141 697 dos 246 992 de 2025). A
+  métrica conta os vazios (termo `""` no `.keyword`) **ou** a ausência do campo.
+- O critério de **ajuste direto** é o do motor: `fold()` (minúsculas sem acentos) sobre
+  os prefixos do país — «Ajuste Direto Regime Geral», «Consulta Prévia» e «Contratação
+  excluída» (68 % dos contratos de 2025; inclui consulta prévia e contratação excluída,
+  que é a convenção do módulo). No filtro do Elasticsearch o campo é `keyword`, pelo que
+  se usa `wildcard` com `case_insensitive` — um `prefix` sensível a maiúsculas devolvia
+  zero.
+- Nos documentos com partes em `nested` (Portugal) o nome vem de um `top_hits` e o valor
+  de um `reverse_nested`; Espanha tem campos planos — `_partes_ano()` aceita as duas formas.
+
+### Pesquisa tipo Google (`GET /padroes/global/pesquisa`)
+
+Texto livre (`simple_query_string` sobre objeto, descrição, partes e `search_text`) mais
+filtros: período (`data_from`/`data_to` com `campo_data` = publicação, decisão ou
+assinatura; `ano_from`/`ano_to`), `empresa` e `adjudicante` (NIF exato ou nome contido),
+`cpv` (prefixo, em `nested`), `procedimento`, `valor_min`/`valor_max`,
+`concorrentes_min`/`concorrentes_max` (só onde há contagem: `num_ofertas` no PLACSP),
+`so_aditivo` e `so_ajuste_direto`, com **granularidade** da série em dia, semana, mês ou
+ano.
+
+A resposta traz os contratos da página, os **KPIs** do conjunto filtrado (valor, mediana,
+ajuste direto, aditivos, sem concorrentes) e as **facetas** (série temporal, top CPV,
+top adjudicatárias, top adjudicantes, procedimentos) — tudo por agregação, sem amostra.
+
+Duas cautelas de custo: a série usa `min_doc_count: 1` (um histograma diário com baldes
+vazios ao longo de anos devolvia milhares de pontos sem contratos) e as facetas só se
+pedem na **primeira página** (`facets=false` nas seguintes). Com isto, uma pesquisa
+filtrada responde em 0,3–3 s.
+
+Na página, a caixa de pesquisa tem âmbitos: **Contratos** (o universo, com os filtros
+acima), **Tudo**, **Empresas**, **Pessoas / recolha** e **Notícias** — os quatro últimos
+usam a pesquisa unificada do IQ OS (`/search/unified`), para a mesma caixa servir para
+tudo. «Sincronizar universo» acompanha o processo pelo estado (`GET /padroes/global/estado`).
+
 ## Frontend
 
 - `chat-ui/src/padroesApi.ts` — cliente tipado;
@@ -305,7 +372,9 @@ páginas lidas e fontes/limitações) e entrega-a aos renderizadores de
 - `chat-ui/src/components/padroes/PadroesEmpresaIA.tsx` — browser, ficha de IA, gravação e relatório;
 - `chat-ui/src/components/padroes/PadroesEmpresasComparar.tsx` — página «Comparar empresas»
   (escolha múltipla, comparação, cruzamentos, gráfico, rede e exportação);
-- `chat-ui/src/pages/PadroesPage.tsx` — a página (filtros, 9 painéis e dossiê lateral);
+- `chat-ui/src/components/padroes/PadroesGlobal.tsx` — **dashboard global** (estado do
+  universo, sincronização, pesquisa tipo Google, KPIs, série, tabela ano a ano e topos);
+- `chat-ui/src/pages/PadroesPage.tsx` — a página (filtros, 10 painéis e dossiê lateral);
 - registo em `dock.ts` (`padroes`), `sidebarCatalog.ts` (módulo «Investigação e IA»),
   `App.tsx` (vista + rota `/padroes`) e `AppNav.tsx`.
 

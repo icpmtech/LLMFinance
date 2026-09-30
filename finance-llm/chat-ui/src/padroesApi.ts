@@ -1275,6 +1275,7 @@ export type PadroesGlobalFiltros = {
   so_aditivo?: boolean;
   so_ajuste_direto?: boolean;
   granularidade?: PadroesGlobalGranularidade;
+  facets?: boolean;
   size?: number;
   from?: number;
 };

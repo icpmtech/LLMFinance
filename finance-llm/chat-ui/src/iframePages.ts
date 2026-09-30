@@ -437,8 +437,10 @@ export function defaultIframePages(): IframePageConfig[] {
     {
       // MiroFish: motor de previsão por enxame de agentes (perfil `mirofish`
       // do compose; só arranca com as chaves de LLM e do Zep definidas).
+      // É o **estúdio** do simulador: a página nativa «Simulador IQ OS»
+      // lança e apresenta os resultados, esta abre a app completa em PT.
       id: "iqos-mirofish",
-      title: "MiroFish",
+      title: "Simulador IQ OS · Estúdio",
       url: supportServiceUrl(import.meta.env.VITE_MIROFISH_URL, 8893),
       icon: "Fish",
       accent: "34,211,238",
@@ -464,6 +466,32 @@ export function installDefaultIframePages(): IframePageConfig[] {
 }
 
 /**
+ * Renomeações das páginas predefinidas já instaladas neste browser.
+ *
+ * A instalação das predefinidas só acrescenta o que falta (comparando por `id`),
+ * portanto um browser onde a página já existisse ficaria com o título antigo.
+ * Aqui atualizam-se **apenas** os títulos que ainda são exatamente o valor
+ * antigo por omissão — quem os tiver mudado à mão mantém a sua versão.
+ */
+const DEFAULT_PAGE_RENAMES: { id: string; from: string; to: string }[] = [
+  { id: "iqos-mirofish", from: "MiroFish", to: "Simulador IQ OS · Estúdio" },
+];
+
+export function migrateDefaultIframePages(): IframePageConfig[] {
+  const current = getIframePages();
+  let changed = false;
+  const next = current.map((page) => {
+    const rename = DEFAULT_PAGE_RENAMES.find((item) => item.id === page.id && page.title === item.from);
+    if (!rename) return page;
+    changed = true;
+    return { ...page, title: rename.to };
+  });
+  if (!changed) return current;
+  commit(next);
+  return next;
+}
+
+/**
  * Sincroniza as páginas iframe vindas do servidor (preferências do utilizador)
  * com o cache local. Chamado pelo `AuthProvider` quando o perfil é carregado.
  *
@@ -481,7 +509,12 @@ export function syncIframePagesFromUser(pages?: unknown[] | null): void {
     return;
   }
   const local = readRaw();
-  if (JSON.stringify(local) === JSON.stringify(sanitized)) return;
+  if (JSON.stringify(local) === JSON.stringify(sanitized)) {
+    // Títulos das predefinidas que entretanto mudaram de nome (ex.: «MiroFish» →
+    // «Simulador IQ OS · Estúdio»).
+    migrateDefaultIframePages();
+    return;
+  }
   cache = sanitized;
   revision += 1;
   persistLocal(sanitized);

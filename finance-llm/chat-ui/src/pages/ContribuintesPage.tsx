@@ -84,6 +84,7 @@ import {
   type ContribuintesStatus,
 } from "../contribuintesApi";
 import { useAuth } from "../auth";
+import { API_BASE } from "../api";
 
 type Section = "pesquisa" | "sincronizacao" | "agenda" | "cobertura";
 
@@ -132,6 +133,7 @@ const ROLE_LABELS: Record<string, string> = {
   administrador: "Administrador de insolvência",
   credor: "Credor",
   interveniente: "Interveniente",
+  devedor: "Devedor ao Estado",
   pessoa: "Pessoa/cargos",
   crm: "Conta de CRM",
 };
@@ -206,6 +208,14 @@ function metricsFor(doc: Contribuinte, sourceId: string): { label: string; value
     case "pessoas":
       if (doc.people_roles_count) rows.push({ label: "Cargos", value: numberFormat.format(doc.people_roles_count) });
       if (doc.people_companies_count) rows.push({ label: "Empresas", value: numberFormat.format(doc.people_companies_count) });
+      break;
+    case "devedores":
+      rows.push({ label: "Listas", value: valueOrDash(block.count) });
+      if (doc.devedores_escalao) rows.push({ label: "Escalão da dívida", value: doc.devedores_escalao });
+      if (doc.devedores_entidade) rows.push({ label: "Entidade credora", value: doc.devedores_entidade });
+      if (doc.devedores_tipo) rows.push({ label: "Contribuinte", value: doc.devedores_tipo });
+      if (doc.devedores_lista) rows.push({ label: "Lista de", value: formatDate(doc.devedores_lista) });
+      if (doc.devedores_recolha) rows.push({ label: "Recolhida em", value: formatDate(doc.devedores_recolha) });
       break;
     case "firmas":
       rows.push({ label: "Firmas", value: valueOrDash(block.count) });
@@ -828,6 +838,7 @@ function DetailPanel({ nif, meta, onClose }: { nif: string | null; meta: Contrib
                   value: numberFormat.format((doc.trademarks_count ?? 0) + (doc.firmas_count ?? 0)),
                 },
                 { label: "Cargos (PessoasIQ)", value: valueOrDash(doc.people_roles_count) },
+                { label: "Devedor ao Estado", value: doc.devedores_count ? doc.devedores_escalao ?? "sim" : "—" },
                 { label: "Conta de CRM", value: doc.crm_account ? "sim" : "—" },
               ].map((kpi) => (
                 <div key={kpi.label} className="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2">
@@ -843,6 +854,33 @@ function DetailPanel({ nif, meta, onClose }: { nif: string | null; meta: Contrib
                 {formatDate(doc.first_seen)} → {formatDate(doc.last_seen)}
               </div>
             </div>
+
+            {doc.devedores_count ? (
+              <div className="mt-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-2.5 py-2 text-[11px] text-amber-100">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-[11.5px] font-semibold text-amber-200">
+                    <AlertTriangle size={12} /> Devedor ao Estado
+                  </span>
+                  {doc.devedores_base ? (
+                    <a
+                      href={`${API_BASE}/devedores/files/${encodeURIComponent(doc.devedores_base)}/pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[10.5px] text-teal-300 hover:underline"
+                    >
+                      ver lista (PDF)
+                    </a>
+                  ) : null}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                  {doc.devedores_escalao ? <span>Escalão: {doc.devedores_escalao}</span> : null}
+                  {doc.devedores_entidade ? <span>{doc.devedores_entidade}</span> : null}
+                  {doc.devedores_tipo ? <span>{doc.devedores_tipo}</span> : null}
+                  {doc.devedores_lista ? <span>lista de {formatDate(doc.devedores_lista)}</span> : null}
+                  {doc.devedores_recolha ? <span>recolhida em {formatDate(doc.devedores_recolha)}</span> : null}
+                </div>
+              </div>
+            ) : null}
 
             {(doc.location && Object.values(doc.location).some(Boolean)) || doc.names?.length ? (
               <div className="mt-3 space-y-2">

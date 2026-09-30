@@ -180,8 +180,11 @@ def test_runtime_aditivo_so_em_portugal() -> None:
 def test_filtro_direct_award_usa_prefixos_do_pais() -> None:
     filtro = universo._filtro_direct_award(PT)
     assert filtro is not None
-    prefixos = [item["prefix"]["tipoprocedimento"] for item in filtro["bool"]["should"]]
-    assert "ajuste direto" in prefixos
+    # `wildcard` com `case_insensitive`: o campo é `keyword` (sem analisador) e
+    # um `prefix` sensível a maiúsculas nunca casaria «Ajuste Direto Regime Geral».
+    padroes = [item["wildcard"]["tipoprocedimento"] for item in filtro["bool"]["should"]]
+    assert "ajuste direto*" in [item["value"] for item in padroes]
+    assert all(item["case_insensitive"] is True for item in padroes)
     assert filtro["bool"]["minimum_should_match"] == 1
 
 
@@ -592,6 +595,26 @@ def test_pesquisa_sem_filtros_usa_match_all(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(universo, "get_es_client", lambda: cliente)
     universo.pesquisa("PT", size=5)
     assert cliente.pedidos[0]["body"]["query"] == {"match_all": {}}
+
+
+def test_pesquisa_sem_facets_poupa_os_agregados_caros(monkeypatch: pytest.MonkeyPatch) -> None:
+    """As páginas seguintes não pedem série nem topos (nested + top_hits)."""
+    cliente = _ClienteFalso([{"hits": {"total": {"value": 0}, "hits": []}, "aggregations": {}}])
+    monkeypatch.setattr(universo, "get_es_client", lambda: cliente)
+    universo.pesquisa("PT", size=25, from_=50, facets=False)
+    aggs = cliente.pedidos[0]["body"]["aggs"]
+    assert set(aggs) == {"valor", "mediana", "aditivos", "sem_concorrentes"}
+    assert cliente.pedidos[0]["body"]["from"] == 50
+
+
+def test_pesquisa_serie_sem_baldes_vazios(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`min_doc_count: 1`: num intervalo de anos, um histograma diário com zero
+    baldes vazios devolveria milhares de pontos sem contratos (e era lento)."""
+    cliente = _ClienteFalso([{"hits": {"total": {"value": 0}, "hits": []}, "aggregations": {}}])
+    monkeypatch.setattr(universo, "get_es_client", lambda: cliente)
+    universo.pesquisa("PT", granularidade="dia")
+    serie = cliente.pedidos[0]["body"]["aggs"]["serie"]["date_histogram"]
+    assert serie["calendar_interval"] == "1d" and serie["min_doc_count"] == 1
 
 
 def test_pesquisa_devolve_kpis_itens_e_facetas(monkeypatch: pytest.MonkeyPatch) -> None:

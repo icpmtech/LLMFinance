@@ -1,0 +1,341 @@
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+INFO:     Started server process [131736]
+INFO:     Waiting for application startup.
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  34%|###4      | 87/254 [00:00<00:00, 863.40it/s]Loading weights:  69%|######8   | 174/254 [00:00<00:00, 801.21it/s]Loading weights: 100%|##########| 254/254 [00:00<00:00, 1055.19it/s]
+Ficheiro do RSS ilegível (Extra data: line 7874 column 2 (char 1192276)); a recomeçar.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
+Agregação de empresas falhou: Connection timed out
+INFO:     127.0.0.1:51591 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62591 - "GET /devedores/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62591 - "GET /devedores/fontes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62591 - "GET /devedores/search?q=SONAE&size=3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62591 - "GET /devedores/devedor/501195142 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62591 - "GET /devedores/devedor/510960316 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50473 - "GET /devedores/search?q=ADIVINHA&size=3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50473 - "GET /devedores/search?tipo=singulares&size=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50473 - "GET /devedores/search?escalao=mais%20de%205.000.000%20%E2%82%AC&size=2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61547 - "GET /pessoas-iq?v=99001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61547 - "GET /assets/index-qWgR3-He.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58579 - "GET /assets/index-BrBL2pEU.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54636 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54651 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61547 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58579 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61547 - "GET /people/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60736 - "GET /devedores/fontes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51892 - "GET /devedores/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62781 - "GET /devedores/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59876 - "GET /devedores/search?sort=escalao&order=desc&page=1&size=25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57795 - "GET /devedores/search?q=ADIVINHA&sort=escalao&order=desc&page=1&size=25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58427 - "GET /people/513683356 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61577 - "GET /pessoas-iq?v=99002 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61577 - "GET /assets/index-BG0n2zNx.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57556 - "GET /assets/index-C1A3Lmna.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51714 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51005 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61577 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53038 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61577 - "GET /people/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56024 - "GET /devedores/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61577 - "GET /devedores/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55733 - "GET /devedores/fontes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57706 - "GET /devedores/search?sort=escalao&order=desc&page=1&size=25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63758 - "GET /devedores/devedor/510960316 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63758 - "GET /people/510960316 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56431 - "GET /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58129 - "GET /people/search?q=107145782&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56431 - "GET /people/search?q=107145782&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58129 - "GET /people/companies?q=107145782&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56431 - "GET /people/companies?q=107145782&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59048 - "GET /people/companies/107145782?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58374 - "GET /devedores/devedor/107145782 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58682 - "GET /devedores/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50462 - "GET /devedores/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65254 - "GET /devedores/fontes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "GET /devedores/search?sort=escalao&order=desc&page=1&size=25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "POST /devedores/collect HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "GET /devedores/jobs/361aa808a8c7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54828 - "GET /devedores/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "GET /devedores/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50462 - "GET /devedores/fontes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50462 - "GET /devedores/search?sort=escalao&order=desc&page=1&size=25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55643 - "GET /devedores/jobs HTTP/1.1" 200 OK
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+INFO:     Started server process [11944]
+INFO:     Waiting for application startup.
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Ficheiro do RSS ilegível (Extra data: line 7874 column 2 (char 1192276)); a recomeçar.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
+Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  25%|##4       | 63/254 [00:00<00:00, 627.00it/s]Loading weights:  50%|####9     | 126/254 [00:00<00:00, 607.60it/s]Loading weights: 100%|##########| 254/254 [00:00<00:00, 970.23it/s]
+INFO:     127.0.0.1:63513 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63519 - "GET /devedores/meta HTTP/1.1" 200 OK
+Agregação de empresas falhou: Connection timed out
+INFO:     127.0.0.1:58541 - "POST /devedores/collect HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58541 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58541 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58541 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58541 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64907 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58541 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64907 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58541 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64907 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58541 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64907 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58541 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64907 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58541 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64907 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58541 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64907 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58541 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64907 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64907 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64907 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63902 - "GET /devedores/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64907 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63895 - "GET /devedores/search?sort=escalao&order=desc&page=1&size=25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64907 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63895 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64907 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64907 - "GET /devedores/jobs/7740036994e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63895 - "GET /devedores/fontes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56309 - "GET /devedores/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64907 - "GET /devedores/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63354 - "GET /devedores/search?sort=escalao&order=desc&page=2&size=25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64907 - "GET /devedores/search?sort=escalao&order=desc&page=1&size=25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56309 - "GET /devedores/search?sort=escalao&order=desc&page=2&size=25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62685 - "GET /devedores/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62685 - "GET /devedores/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62189 - "GET /devedores/devedor/502834617 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62189 - "GET /people/502834617 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57146 - "GET /people/search?q=107145782&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51156 - "GET /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52688 - "GET /people/autocomplete?q=A+S+F+SOC+DE+SERVICOS+DE+VIGILANCIA&limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63373 - "GET /people/companies?q=107145782&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57146 - "GET /people/search?q=107145782&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57146 - "GET /people/companies?q=107145782&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57673 - "GET /people/companies/107145782?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52717 - "GET /people/search?q=A+S+F+SOC+DE+SERVICOS+DE+VIGILANCIA&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52717 - "GET /people/companies?q=A+S+F+SOC+DE+SERVICOS+DE+VIGILANCIA&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58316 - "GET /people/company/107145782/graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58316 - "GET /people/summary?node_id=person%3A182377130&nif=182377130&name=Maria+da+Concei%C3%A7%C3%A3o+Sousa+de+Queir%C3%B3s+Vieira HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58316 - "GET /people/summary?node_id=person%3A188720960&nif=188720960&name=Maria+do+C%C3%A9u+Leit%C3%A3o+Couto HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "GET /devedores/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53859 - "GET /devedores/fontes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53860 - "GET /devedores/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57846 - "GET /devedores/devedor/107145782 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65027 - "GET /devedores/search?sort=escalao&order=desc&page=1&size=25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55779 - "GET /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50872 - "GET /people/search?q=107145782&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64358 - "GET /people/autocomplete?q=510960316&limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55779 - "GET /people/search?q=107145782&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50872 - "GET /people/companies?q=107145782&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55779 - "GET /people/companies?q=107145782&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55779 - "GET /people/search?q=510960316&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55779 - "GET /people/companies?q=510960316&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "GET /people/search?q=107145782&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56632 - "GET /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60207 - "GET /people/companies?q=107145782&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "GET /people/search?q=107145782&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "GET /people/companies?q=107145782&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "GET /people/autocomplete?q=510960316&limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "GET /people/search?q=510960316&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53857 - "GET /people/companies?q=510960316&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60066 - "GET /people/search?q=510960316&is_company=false&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61462 - "GET /people/search?q=510960316&is_company=true&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60066 - "GET /people/companies?q=510960316&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61462 - "GET /people/companies?q=510960316&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61462 - "GET /people/search?q=510960316&is_company=true&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61462 - "GET /people/companies?q=510960316&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52430 - "GET /people/search?q=510960316&is_company=true&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52430 - "GET /people/companies?q=510960316&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61766 - "GET /people/search?q=510960316&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61766 - "GET /people/companies?q=510960316&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64775 - "GET /people/search?q=510960316&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64775 - "GET /people/companies?q=510960316&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60468 - "GET /pessoas-iq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60468 - "GET /assets/index-BG0n2zNx.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59993 - "GET /assets/index-C1A3Lmna.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57638 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55104 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59993 - "GET /assets/index-C1A3Lmna.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60468 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60468 - "GET /people/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59993 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55594 - "GET /people/search?q=510960316&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60791 - "GET /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60730 - "GET /people/companies?q=510960316&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55594 - "GET /people/search?q=510960316&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55594 - "GET /people/companies?q=510960316&size=8 HTTP/1.1" 200 OK
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+INFO:     Started server process [132008]
+INFO:     Waiting for application startup.
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  56%|#####5    | 141/254 [00:00<00:00, 1328.32it/s]Loading weights: 100%|##########| 254/254 [00:00<00:00, 1346.36it/s]
+Ficheiro do RSS ilegível (Extra data: line 7874 column 2 (char 1192276)); a recomeçar.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
+INFO:     127.0.0.1:51455 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51460 - "GET /contribuintes/entity/510960316 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51482 - "GET /contribuintes/510960316 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51482 - "GET /contribuintes/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51482 - "GET /contribuintes/search?q=ADIVINHABILITY&size=3 HTTP/1.1" 200 OK
+[2026-09-29 13:00:03] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-09-29 13:00:03] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+INFO:     Started server process [130848]
+INFO:     Waiting for application startup.
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  41%|####      | 103/254 [00:00<00:00, 1009.68it/s]Loading weights:  84%|########4 | 214/254 [00:00<00:00, 1067.69it/s]Loading weights: 100%|##########| 254/254 [00:00<00:00, 1187.62it/s]
+Ficheiro do RSS ilegível (Extra data: line 7874 column 2 (char 1192276)); a recomeçar.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
+INFO:     127.0.0.1:58443 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58446 - "GET /contribuintes/510960316 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58446 - "GET /devedores/devedor/510960316 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52928 - "GET /pessoas-iq/510960316?v=99100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52928 - "GET /assets/index-bbUoByJk.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59930 - "GET /assets/index-CRa7NT3u.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62890 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65253 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52928 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59930 - "GET /people/510960316 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56191 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52928 - "GET /people/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56191 - "GET /people/companies/510960316?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59930 - "GET /devedores/devedor/510960316 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56191 - "GET /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55624 - "GET /pessoas-iq/510960316?v=99100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55624 - "GET /assets/index-bbUoByJk.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54354 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56701 - "GET /assets/index-CRa7NT3u.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50461 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56701 - "GET /assets/index-CRa7NT3u.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55624 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54354 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56701 - "GET /people/510960316 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55624 - "GET /people/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56701 - "GET /people/companies/510960316?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55624 - "GET /devedores/devedor/510960316 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56701 - "GET /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56701 - "GET /people/company/510960316/graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56701 - "GET /people/summary?node_id=company%3A510960316&nif=510960316&name=510960316 HTTP/1.1" 200 OK
+[2026-09-29 13:08:57] INFO: Fetched (200) <GET https://www.einforma.pt/servlet/app/portal/ENTP/prod/ETIQUETA_EMPRESA_CONTRIBUINTE/nif/510960316/contribuinte/510960316/> (referer: https://www.google.com/)
+[2026-09-29 13:08:59] INFO: Fetched (200) <GET https://www.scribd.com/document/741759059/listaFC6> (referer: https://www.google.com/)
+INFO:     127.0.0.1:54354 - "GET /pessoas-iq/510960316?v=99101 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54354 - "GET /assets/index-DgIsVi_r.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54779 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55715 - "GET /assets/index-CRa7NT3u.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52016 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55715 - "GET /assets/index-CRa7NT3u.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54354 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54779 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55715 - "GET /people/510960316 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54354 - "GET /people/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55715 - "GET /people/companies/510960316?size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54779 - "GET /devedores/devedor/510960316 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55715 - "GET /devedores/devedor/510960316 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54779 - "GET /people/510960316 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55715 - "GET /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55662 - "GET /people/search?q=510960316&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55662 - "GET /people/companies?q=510960316&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55662 - "GET /devedores/search?nif=510960316&size=8&sort=escalao&order=desc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51750 - "GET /contribuintes?v=99102 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51750 - "GET /assets/index-DgIsVi_r.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62690 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54354 - "GET /assets/index-CRa7NT3u.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60787 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54354 - "GET /assets/index-CRa7NT3u.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51750 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62229 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54354 - "GET /contribuintes/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51750 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62690 - "GET /contribuintes/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58617 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60449 - "GET /contribuintes/autocomplete?q=510960316&size=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62199 - "GET /contribuintes/search?q=510960316&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51345 - "GET /contribuintes/510960316 HTTP/1.1" 200 OK
+[2026-09-29 14:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-09-29 14:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+INFO:     127.0.0.1:60188 - "GET /contribuintes/search?q=510960316&has_contracts=true&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60188 - "GET /contribuintes/search?q=510960316&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59000 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59000 - "GET /contribuintes/506362299 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49688 - "GET /contribuintes/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49688 - "GET /contribuintes/search?roles=devedor&size=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49688 - "GET /devedores/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49203 - "GET /iframe/iqos-mirofish?v=1790173000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49203 - "GET /assets/index-DgIsVi_r.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63514 - "GET /assets/index-CRa7NT3u.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62222 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61856 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49203 - "GET /favicon-32.png HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49203 - "GET /favicon.svg HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63514 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63514 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64783 - "GET /contribuintes/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65308 - "GET /contribuintes/schedule HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60361 - "GET /contribuintes/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62066 - "GET /contribuintes/search?q=P&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54508 - "GET /contribuintes/search?sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59581 - "GET /contribuintes/search?q=Pe&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62066 - "GET /contribuintes/autocomplete?q=Pedro&size=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59581 - "GET /contribuintes/autocomplete?q=Pedro+M&size=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65308 - "GET /contribuintes/search?q=Pedr&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59581 - "GET /contribuintes/autocomplete?q=Pedro+Mi&size=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59581 - "GET /contribuintes/autocomplete?q=Pedro+Mig&size=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60361 - "GET /contribuintes/search?q=Pedro&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64783 - "GET /contribuintes/search?q=Ped&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64783 - "GET /contribuintes/autocomplete?q=Pedro+Migue&size=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54508 - "GET /contribuintes/search?q=Pedro+M&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54508 - "GET /contribuintes/autocomplete?q=Pedro+Miguel&size=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62066 - "GET /contribuintes/search?q=Pedro+Mi&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65308 - "GET /contribuintes/search?q=Pedro+Mig&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59581 - "GET /contribuintes/search?q=Pedro+Migu&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60361 - "GET /contribuintes/search?q=Pedro+Migue&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59581 - "GET /contribuintes/autocomplete?q=Pedro+Miguel+Cau&size=6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64783 - "GET /contribuintes/search?q=Pedro+Miguel&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54508 - "GET /contribuintes/search?q=Pedro&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62066 - "GET /contribuintes/271394552 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65308 - "GET /contribuintes/search?q=Pedro+Miguel+Cau&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52357 - "GET /contribuintes/search?q=Pedro+Miguel+Cau&has_contracts=true&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /contribuintes/search?has_contracts=true&sort=relevance&page=1&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /contribuintes/search?has_contracts=true&sort=relevance&page=2&size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62360 - "GET /padroes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55841 - "GET /padroes/global/meta?pais=PT HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55844 - "GET /padroes/global/estado HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55845 - "GET /padroes/global?pais=PT&granularidade=mes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55848 - "GET /padroes/global/pesquisa?pais=PT&q=seguranca&ano_from=2024&so_ajuste_direto=true&size=3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61080 - "GET /padroes/global/pesquisa?pais=PT&empresa=503439800&size=2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61098 - "GET /padroes/global/pesquisa?pais=PT&data_from=2025-06-01&data_to=2025-06-30&granularidade=dia&size=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61106 - "GET /padroes/global?pais=ES&granularidade=ano HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61109 - "GET /padroes/global?pais=XX HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:61114 - "POST /padroes/global/sincronizar HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:60898 - "GET /padroes/global/meta?pais=PT HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60900 - "GET /padroes/global/estado HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60901 - "GET /padroes/global?pais=PT&granularidade=mes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60903 - "GET /padroes/global/pesquisa?pais=PT&q=seguranca&ano_from=2024&so_ajuste_direto=true&size=3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60905 - "GET /padroes/global/pesquisa?pais=PT&empresa=503439800&size=2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60909 - "GET /padroes/global/pesquisa?pais=PT&data_from=2025-06-01&data_to=2025-06-30&granularidade=dia&size=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60912 - "GET /padroes/global?pais=ES&granularidade=ano HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60915 - "GET /padroes/global?pais=XX HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:60919 - "POST /padroes/global/sincronizar HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:60940 - "GET /padroes/global/pesquisa?pais=PT&size=1&facets=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50796 - "GET /padroes/global/pesquisa?pais=PT&size=1&facets=false&so_ajuste_direto=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50798 - "GET /padroes/global/pesquisa?pais=PT&size=1&facets=false&so_aditivo=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50803 - "GET /padroes/global/pesquisa?pais=PT&size=1&facets=false&q=reabilita%C3%A7%C3%A3o HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50814 - "GET /padroes/global/pesquisa?pais=PT&size=1&facets=false&q=reabilitacao HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50816 - "GET /padroes/global/pesquisa?pais=PT&size=1&facets=false&q=seguran%C3%A7a HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50819 - "GET /padroes/global/pesquisa?pais=PT&size=1&facets=false&q=seguranca HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50822 - "GET /padroes/global/pesquisa?pais=PT&size=1&facets=false&q=seguranca&so_ajuste_direto=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50824 - "GET /padroes/global/pesquisa?pais=PT&size=1&facets=false&q=medicamentos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50828 - "GET /padroes/global/pesquisa?pais=PT&size=1&facets=false&cpv=45000000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50832 - "GET /padroes/global/pesquisa?pais=PT&size=1&facets=false&empresa=acme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50835 - "GET /padroes/global/pesquisa?pais=PT&size=1&facets=false&empresa=503439800 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50837 - "GET /padroes/global/pesquisa?pais=PT&size=1&facets=false&adjudicante=Munic%C3%ADpio+de+Lisboa HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50839 - "GET /padroes/global/pesquisa?pais=PT&size=1&facets=false&valor_min=10000&valor_max=50000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50474 - "GET /padroes/global/pesquisa?pais=PT&size=1&facets=false&ano_from=2025&ano_to=2025 HTTP/1.1" 200 OK

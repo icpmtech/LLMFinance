@@ -50,6 +50,11 @@ services:
       - PYTHONPATH=/app
       # Nome do serviço do compose, não 127.0.0.1 (dentro do container o host é outro)
       - ELASTICSEARCH_URL=${FINANCE_ES_URL:-http://elasticsearch:9200}
+      # MiroFish (módulo `/mirofish/*`): API do motor de simulação por enxame de
+      # agentes, vista de dentro do container pelo nome do serviço. Fora do Docker
+      # o backend usa `http://127.0.0.1:5001` (valor por omissão do módulo).
+      - MIROFISH_URL=${MIROFISH_URL:-http://mirofish:5001}
+      - MIROFISH_PUBLIC_URL=${MIROFISH_PUBLIC_URL:-}
       # Vazio => usa/reutiliza data/.auth_secret (sessões locais continuam válidas)
       - FINANCE_AUTH_SECRET=${FINANCE_AUTH_SECRET:-}
       - FRED_API_KEY=${FRED_API_KEY:-}
@@ -245,6 +250,10 @@ services:
       # Rondas de simulação por omissão. O README do MiroFish sugere menos de 40
       # nas primeiras tentativas: cada ronda chama o LLM para cada agente.
       - OASIS_DEFAULT_MAX_ROUNDS=${MIROFISH_MAX_ROUNDS:-10}
+      # Idioma das respostas do LLM. Os prompts do upstream são em chinês e, sem
+      # isto, as personas, as publicações dos agentes e as justificações saem em
+      # chinês. Vazio = desligado (idioma do prompt).
+      - MIROFISH_REPLY_LANGUAGE=${MIROFISH_REPLY_LANGUAGE:-pt-PT}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/health', timeout=5)"]
       interval: 30s

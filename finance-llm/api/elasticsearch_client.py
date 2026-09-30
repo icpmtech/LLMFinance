@@ -157,6 +157,19 @@ GLOBAL_PADROES_INDEX = "finance_padroes_global"
 # pesquisável no módulo «GLEIF / LEI» (`/gleif/*`).
 GLEIF_LEI_INDEX = "finance_gleif_lei"
 
+# Listas públicas de devedores (Autoridade Tributária e Segurança Social). Um
+# documento por devedor **e por lista**: `nif`/`nome` iguais em escalões
+# diferentes são registos distintos (o NIF pode até estar em ambas as entidades).
+# Alimentado por `api/devedores_service.py`, que descarrega os PDF oficiais das
+# Finanças (6 escalões de singulares + 6 de coletivos) e guarda, a par do JSON e
+# do próprio PDF, a **data da recolha** de cada ficheiro.
+DEVEDORES_INDEX = "finance_devedores"
+
+# Histórico das recolhas: um documento por **ficheiro e data** (lista + PDF
+# guardados + nº de registos), para a área de pesquisa poder mostrar de onde veio
+# cada dado e quando foi recolhido.
+DEVEDORES_RECOLHAS_INDEX = "finance_devedores_recolhas"
+
 # ---------------------------------------------------------------------------
 # «World Model» — o estado do mundo da contratação pública, materializado.
 #
@@ -419,6 +432,19 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
     INVESTIGATIONS_INDEX: {
         # O relatório e a pergunta são indexados com `world_folding` (sem esta
         # definição, a criação do índice falha com «analyzer has not been configured»).
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    DEVEDORES_INDEX: {
+        # Os nomes vêm em maiúsculas e com acentos («JOSÉ»); `world_folding` deixa
+        # que uma pesquisa sem acentos («JOSE») os encontre.
         "analysis": {
             "analyzer": {
                 "world_folding": {
@@ -1080,6 +1106,19 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "people_roles_count": {"type": "integer"},
             "people_companies_count": {"type": "integer"},
             "crm_account": {"type": "boolean"},
+            # --- devedores (listas das Finanças e da Segurança Social) ---
+            # Marcado quando o NIF consta de alguma lista; o escalão é o da lista
+            # (o valor exato da dívida não é publicado por devedor).
+            "devedor": {"type": "boolean"},
+            "devedores_count": {"type": "integer"},
+            "devedores_escalao": {"type": "keyword"},
+            "devedores_valor_min": {"type": "double"},
+            "devedores_entidade": {"type": "keyword"},
+            "devedores_tipo": {"type": "keyword"},
+            "devedores_ficheiro": {"type": "keyword"},
+            "devedores_base": {"type": "keyword"},
+            "devedores_lista": {"type": "date"},
+            "devedores_recolha": {"type": "date"},
             # Soma das ocorrências em todas as fontes (ordenação por relevância/atividade).
             "records_total": {"type": "integer"},
             "first_seen": {"type": "date"},
@@ -1108,6 +1147,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "src_societario": {"type": "object", "enabled": False},
             "src_cire": {"type": "object", "enabled": False},
             "src_pessoas": {"type": "object", "enabled": False},
+            "src_devedores": {"type": "object", "enabled": False},
             "src_firmas": {"type": "object", "enabled": False},
             "src_marcas": {"type": "object", "enabled": False},
             "src_crm": {"type": "object", "enabled": False},
@@ -1800,6 +1840,67 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    # Listas de devedores: um documento por devedor e por lista (Finanças ou
+    # Segurança Social), com o escalão da dívida em campos próprios (o PDF publica
+    # o escalão no cabeçalho, não o valor de cada devedor).
+    devedores_mappings = {
+        "properties": {
+            "doc_id": {"type": "keyword"},
+            "nif": {"type": "keyword"},
+            "nome": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            # `financas` (AT) ou `seguranca_social`.
+            "entidade": {"type": "keyword"},
+            # `singulares` ou `coletivos`.
+            "tipo": {"type": "keyword"},
+            "tipo_label": {"type": "keyword"},
+            "escalao": {"type": "keyword"},
+            "valor_min": {"type": "double"},
+            "valor_max": {"type": "double"},
+            "ficheiro": {"type": "keyword"},
+            "base": {"type": "keyword"},
+            "fonte": {"type": "keyword"},
+            "source_url": {"type": "keyword", "index": False},
+            "pdf": {"type": "keyword", "ignore_above": 512},
+            # Data de publicação da lista (a que o próprio ficheiro indica).
+            "lista_atualizada_em": {"type": "date"},
+            # Data em que a lista foi recolhida por nós (pedida pelo utilizador).
+            "collected_at": {"type": "date"},
+            "pagina": {"type": "integer"},
+            "run_id": {"type": "keyword"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    devedores_recolhas_mappings = {
+        "properties": {
+            "recolha_id": {"type": "keyword"},
+            "ficheiro": {"type": "keyword"},
+            "entidade": {"type": "keyword"},
+            "tipo": {"type": "keyword"},
+            "tipo_label": {"type": "keyword"},
+            "escalao": {"type": "keyword"},
+            "valor_min": {"type": "double"},
+            "valor_max": {"type": "double"},
+            "lista_atualizada_em": {"type": "date"},
+            "collected_at": {"type": "date"},
+            "registos": {"type": "long"},
+            "paginas": {"type": "integer"},
+            "pdf_bytes": {"type": "long"},
+            "pdf_sha256": {"type": "keyword"},
+            "pdf_path": {"type": "keyword", "ignore_above": 512},
+            "json_path": {"type": "keyword", "ignore_above": 512},
+            "source_url": {"type": "keyword", "index": False},
+            "last_modified": {"type": "keyword"},
+            "run_id": {"type": "keyword"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
     analises_empresa_mappings = {
         "properties": {
             "doc_id": {"type": "keyword"},
@@ -1908,6 +2009,8 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (INVESTIGATIONS_INDEX, investigations_mappings),
         (ANALISES_EMPRESA_INDEX, analises_empresa_mappings),
         (GLOBAL_PADROES_INDEX, global_padroes_mappings),
+        (DEVEDORES_INDEX, devedores_mappings),
+        (DEVEDORES_RECOLHAS_INDEX, devedores_recolhas_mappings),
     ]:
         if not client.indices.exists(index=name):
             settings: Dict[str, Any] = {"number_of_shards": 1, "number_of_replicas": 0}

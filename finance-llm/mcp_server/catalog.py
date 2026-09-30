@@ -312,6 +312,21 @@ OPERATIONS: List[Operation] = _ops(
     # -- hermes ----------------------------------------------------------
     _read("hermes_meta", "GET", "/hermes/meta", "Metamodelo do Hermes: modos, fontes, índices e modelo de IA.", "hermes"),
     _write("hermes_ask", "POST", "/hermes/ask", "Investiga a pergunta e devolve resposta citada, evidências e sub-perguntas.", "hermes", PAY()),
+    # -- jarvis ----------------------------------------------------------
+    _read("jarvis_meta", "GET", "/jarvis/meta", "Metamodelo do Jarvis: gateways (Hermes, MCP, web), ferramentas, vozes e modelo.", "jarvis"),
+    _read("jarvis_tools", "GET", "/jarvis/tools", "Catálogo de ferramentas dos gateways do Jarvis.", "jarvis",
+          Q("gateway", "str", "Limitar a um gateway: hermes, mcp ou web")),
+    _read("jarvis_voice", "GET", "/jarvis/voice", "Estado da voz do Jarvis: transcrição (STT), síntese (TTS) e vozes.", "jarvis"),
+    _write(
+        "jarvis_ask",
+        "POST",
+        "/jarvis/ask",
+        "Pergunta ao Jarvis: passa pelos gateways (Hermes, MCP do sistema e browser) e devolve resposta, "
+        "plano, passos e citações. Corpo: question (obrigatório), depth, backend, history, voice, speak.",
+        "jarvis",
+        PAY(),
+    ),
+    _write("jarvis_speak", "POST", "/jarvis/speak", "Sintetiza texto em áudio (mp3) com a voz do servidor.", "jarvis", PAY()),
     # -- researcher ------------------------------------------------------
     _read("researcher_tools", "GET", "/researcher/tools", "Catálogo fechado de ferramentas do investigador.", "researcher"),
     _write("researcher_investigate", "POST", "/researcher/investigate", "Executa uma investigação e devolve relatório com audit trail.", "researcher", PAY()),

@@ -65,6 +65,17 @@ export type Contribuinte = {
   people_roles_count?: number;
   people_companies_count?: number;
   crm_account?: boolean;
+  /** Dívida ao Estado (listas de devedores das Finanças e da Segurança Social). */
+  devedor?: boolean;
+  devedores_count?: number;
+  devedores_escalao?: string | null;
+  devedores_valor_min?: number | null;
+  devedores_entidade?: string | null;
+  devedores_tipo?: string | null;
+  devedores_ficheiro?: string | null;
+  devedores_base?: string | null;
+  devedores_lista?: string | null;
+  devedores_recolha?: string | null;
   records_total?: number;
   first_seen?: string | null;
   last_seen?: string | null;

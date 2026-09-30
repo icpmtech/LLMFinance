@@ -964,6 +964,7 @@ def padroes_global_pesquisa(
     so_aditivo: bool = Query(False, description="Só contratos com aditivo (efetivo > 1,15 × contratado)"),
     so_ajuste_direto: bool = Query(False, description="Só ajuste direto"),
     granularidade: str = Query("mes", description="dia | semana | mes | ano"),
+    facets: bool = Query(True, description="Série e topos (agregados caros); as páginas seguintes podem dispensá-los"),
     size: int = Query(25, ge=1, le=100),
     from_: int = Query(0, ge=0, le=10000, alias="from"),
 ) -> Dict[str, Any]:
@@ -989,6 +990,7 @@ def padroes_global_pesquisa(
         so_aditivo=so_aditivo,
         so_ajuste_direto=so_ajuste_direto,
         granularidade=granularidade,
+        facets=facets,
         size=size,
         from_=from_,
     )

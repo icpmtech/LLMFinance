@@ -44,6 +44,8 @@ import OntologyPage from "./pages/OntologyPage";
 import VisualizadorPage from "./pages/VisualizadorPage";
 import VisualizadorDashboardsPage from "./pages/VisualizadorDashboardsPage";
 import HermesPage from "./pages/HermesPage";
+import JarvisPage from "./pages/JarvisPage";
+import JarvisWidget from "./components/jarvis/JarvisWidget";
 import ResearcherPage from "./pages/ResearcherPage";
 import DynamicAgentsPage from "./pages/DynamicAgentsPage";
 import CrmPage, {
@@ -74,6 +76,8 @@ import CitacoesPage from "./pages/CitacoesPage";
 import ContribuintesPage from "./pages/ContribuintesPage";
 import WorldPage from "./pages/WorldPage";
 import PadroesPage from "./pages/PadroesPage";
+import MiroFishPage from "./pages/MiroFishPage";
+import SimuladorPage from "./pages/SimuladorPage";
 import RiscoPage from "./pages/RiscoPage";
 import SocietarioRecolhaPage from "./pages/SocietarioRecolhaPage";
 import GleifPage, {
@@ -158,6 +162,9 @@ type AppView =
   | "world"
   | "world-rede"
   | "padroes"
+  | "mirofish"
+  | "simulador"
+  | "jarvis"
   | "risco"
   | "societario"
   | "iframe-pages";
@@ -255,6 +262,7 @@ function pathForView(
   if (view === "pessoas-iq") return "/pessoas-iq";
   if (view === "ontology") return "/ontology";
   if (view === "hermes") return "/hermes";
+  if (view === "jarvis") return "/jarvis";
   if (view === "researcher") return "/researcher";
   if (view === "visualizador") return "/visualizador";
   if (view === "visualizador-dashboards") return "/visualizador/dashboards";
@@ -283,6 +291,8 @@ function pathForView(
   if (view === "world") return "/world";
   if (view === "world-rede") return "/world/rede";
   if (view === "padroes") return "/padroes";
+  if (view === "mirofish") return "/mirofish";
+  if (view === "simulador") return "/simulador";
   if (view === "risco") return "/empresas-risco";
   if (view === "societario") return "/societario";
   if (view === "gleif") return "/gleif";
@@ -469,6 +479,8 @@ export default function App() {
     if (path === "/world/rede") return "world-rede";
     if (path === "/world" || path.startsWith("/world/")) return "world";
     if (path === "/padroes" || path.startsWith("/padroes/")) return "padroes";
+    if (path === "/mirofish" || path.startsWith("/mirofish/")) return "mirofish";
+    if (path === "/simulador" || path.startsWith("/simulador/")) return "simulador";
     if (path === "/empresas-risco" || path.startsWith("/empresas-risco/")) return "risco";
     if (path === "/societario" || path.startsWith("/societario/")) return "societario";
     {
@@ -515,6 +527,7 @@ export default function App() {
     if (path === "/empresas-global") return "companies-global";
     if (path === "/ontology" || path.startsWith("/ontology/")) return "ontology";
     if (path === "/hermes" || path.startsWith("/hermes/")) return "hermes";
+    if (path === "/jarvis" || path.startsWith("/jarvis/")) return "jarvis";
     if (path === "/researcher" || path.startsWith("/researcher/")) return "researcher";
     if (path === "/visualizador") return "visualizador";
     if (path.startsWith("/visualizador/")) return "visualizador-dashboards";
@@ -578,6 +591,8 @@ export default function App() {
       else if (path === "/world/rede") next = "world-rede";
       else if (path === "/world" || path.startsWith("/world/")) next = "world";
       else if (path === "/padroes" || path.startsWith("/padroes/")) next = "padroes";
+      else if (path === "/mirofish" || path.startsWith("/mirofish/")) next = "mirofish";
+      else if (path === "/simulador" || path.startsWith("/simulador/")) next = "simulador";
       else if (path === "/empresas-risco" || path.startsWith("/empresas-risco/")) next = "risco";
       else if (path === "/societario" || path.startsWith("/societario/")) next = "societario";
       else if (gleifSectionFromPath(path)) next = GLEIF_SECTION_VIEWS[gleifSectionFromPath(path) as GleifSection] as AppView;
@@ -611,6 +626,7 @@ export default function App() {
       else if (path === "/empresas-global") next = "companies-global";
       else if (path === "/ontology" || path.startsWith("/ontology/")) next = "ontology";
       else if (path === "/hermes" || path.startsWith("/hermes/")) next = "hermes";
+      else if (path === "/jarvis" || path.startsWith("/jarvis/")) next = "jarvis";
       else if (path === "/researcher" || path.startsWith("/researcher/")) next = "researcher";
       else if (path === "/visualizador") next = "visualizador";
       else if (path.startsWith("/visualizador/")) next = "visualizador-dashboards";
@@ -847,6 +863,23 @@ export default function App() {
     setSearchQuery(value);
     setViewAndHistory("search");
   };
+
+  /**
+   * Executa uma ação de **navegação** proposta pelo Jarvis.
+   *
+   * As ações de criação não passam por aqui: essas vão pelo servidor
+   * (`/jarvis/actions/run`), que as executa em nome do utilizador.
+   */
+  const handleJarvisNavigate = useCallback(
+    (action: { view?: string; path?: string; query?: string | null }) => {
+      const target = action.view;
+      if (!target) return;
+      if (action.query) setSearchQuery(action.query);
+      handleSwitchView(target);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   /** Abre a ficha de uma entidade do cadastro (EmpresasIQ). */
   const handleOpenCompany = (nif: string) => {
@@ -1107,6 +1140,7 @@ export default function App() {
     if (target === "companies-global") return <CompaniesGlobalPage onOpenView={handleOpenSearchView} />;
     if (target === "ontology") return <OntologyPage />;
     if (target === "hermes") return <HermesPage />;
+    if (target === "jarvis") return <JarvisPage onNavigate={handleJarvisNavigate} />;
     if (target === "researcher") return <ResearcherPage />;
     if (target === "visualizador") return <VisualizadorPage onOpenDashboards={() => setViewAndHistory("visualizador-dashboards")} />;
     if (target === "visualizador-dashboards") return <VisualizadorDashboardsPage onOpenEditor={() => setViewAndHistory("visualizador")} />;
@@ -1243,6 +1277,8 @@ export default function App() {
     if (target === "contribuintes") return <ContribuintesPage />;
     if (target === "world" || target === "world-rede") return <WorldPage />;
     if (target === "padroes") return <PadroesPage />;
+    if (target === "mirofish") return <MiroFishPage />;
+    if (target === "simulador") return <SimuladorPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
     if (target === "risco") return <RiscoPage />;
     if (target === "societario") return <SocietarioRecolhaPage />;
     if (target === "contracts-dashboard") {
@@ -1502,6 +1538,7 @@ export default function App() {
           />
         </main>
         {renderDock()}
+        <JarvisWidget onNavigate={handleJarvisNavigate} />
         <InstallBanner />
       </div>
     );
@@ -1526,13 +1563,14 @@ export default function App() {
           {renderContent()}
         </main>
         {renderDock()}
+        <JarvisWidget onNavigate={handleJarvisNavigate} />
         <InstallBanner />
       </div>
     );
   }
 
-  if (view === "hermes" || view === "contracts-map") {
-    /* Hermes é uma conversa e o mapa de contratos é um mapa: ambos ocupam a altura
+  if (view === "hermes" || view === "jarvis" || view === "contracts-map") {
+    /* Hermes e Jarvis são conversas e o mapa de contratos é um mapa: todos ocupam a altura
        do ecrã (a lista/o painel rolam por dentro) em vez de fazer crescer a página
        — no mapa, o enquadramento da Península não deve empurrar o painel para baixo. */
     return (
@@ -1551,6 +1589,7 @@ export default function App() {
           {renderContent()}
         </main>
         {renderDock()}
+        <JarvisWidget hidden={view === "jarvis"} onNavigate={handleJarvisNavigate} />
         <InstallBanner />
       </div>
     );
@@ -1561,6 +1600,7 @@ export default function App() {
       <div className={["relative w-full bg-background text-foreground", dockSpacer.sides, dockSpacer.bottom].join(" ")}>
         {renderContent()}
         {renderDock()}
+        <JarvisWidget onNavigate={handleJarvisNavigate} />
         <InstallBanner />
       </div>
     );
@@ -1577,6 +1617,7 @@ export default function App() {
         {renderContent()}
       </main>
       {renderDock()}
+      <JarvisWidget onNavigate={handleJarvisNavigate} />
       <InstallBanner />
     </div>
   );

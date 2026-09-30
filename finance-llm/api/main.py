@@ -253,6 +253,20 @@ from api.gleif_routes import router as gleif_router
 from api.world_routes import router as world_router
 from api.padroes_routes import router as padroes_router
 from api.risco_routes import router as risco_router
+# MiroFish: simulações de previsão por enxame de agentes alimentadas com dados
+# do sistema (ficha de empresa, tema do Pesquisa 360, notícias, documentos).
+from api.mirofish_routes import router as mirofish_router
+# Devedores: listas públicas de devedores das Finanças (PDF oficiais) e da
+# Segurança Social — recolha para PDF/JSON (com a data da recolha), indexação
+# em `finance_devedores` e área de pesquisa (também usada no PessoasIQ).
+from api.devedores_routes import router as devedores_router
+# Jarvis: assistente operacional com voz (STT/TTS), gateways (Hermes, MCP do
+# sistema, browser) e skills partilhadas com o Hermes e o Chat IA.
+from api.jarvis_routes import router as jarvis_router
+# Motor do Hermes Agent: liga o container autónomo (perfil "agents") aos
+# fornecedores de IA que a plataforma já guardou, escrevendo no volume do
+# container (`config.yaml` + `.env`) e recriando-o.
+from api.hermes_agent_routes import router as hermes_agent_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -535,6 +549,18 @@ app.include_router(padroes_router)
 # Empresas & Risco: nível de risco por empresa (ML + regras), pesquisa tipo
 # motor de busca, contratos associados, comparação e grafos analíticos 360.
 app.include_router(risco_router)
+# MiroFish: semente a partir dos dados do sistema + condução da simulação
+# (projeto → grafo no Zep → personas → execução → relatório).
+app.include_router(mirofish_router)
+# Devedores: recolha das listas de devedores (Finanças e Segurança Social) e
+# pesquisa dos devedores indexados.
+app.include_router(devedores_router)
+# Jarvis: o assistente operacional com voz e browser. Fala com o sistema por
+# gateways (Hermes, MCP do sistema e web) e segue as skills partilhadas.
+app.include_router(jarvis_router)
+# Motor do Hermes Agent (`/hermes-agent/*`): liga o container autónomo aos
+# fornecedores de IA da plataforma.
+app.include_router(hermes_agent_router)
 
 
 # Cache curta de `user_id → email`, para o registo de pedidos identificar quem

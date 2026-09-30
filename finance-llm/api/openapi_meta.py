@@ -202,6 +202,22 @@ TAGS_METADATA: List[Dict[str, str]] = [
         ),
     },
     {
+        "name": "jarvis",
+        "description": (
+            "Jarvis: o assistente operacional com voz. Fala com o sistema por gateways "
+            "(Hermes, MCP do sistema e browser), segue as skills partilhadas e interage por "
+            "áudio — `/jarvis/ask` (e em streaming), `/jarvis/transcribe` e `/jarvis/speak`."
+        ),
+    },
+    {
+        "name": "hermes-agent",
+        "description": (
+            "Motor do Hermes Agent: liga o container autónomo (perfil `agents`) aos fornecedores "
+            "de IA da plataforma. Resolve a chave guardada, escreve-a no volume do container "
+            "(`config.yaml` + `.env`) e recria-o — `/hermes-agent/settings` e `/hermes-agent/diagnose`."
+        ),
+    },
+    {
         "name": "researcher",
         "description": (
             "Agente de investigação com *audit trail* e catálogo fechado de "

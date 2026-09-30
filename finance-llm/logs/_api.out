@@ -21,3 +21,106 @@ INFO:     127.0.0.1:55115 - "GET /people/status HTTP/1.1" 200 OK
 INFO:     127.0.0.1:49342 - "GET /people/filters HTTP/1.1" 200 OK
 INFO:     127.0.0.1:51690 - "GET /people/179018531/360?with_ai=true&cire_size=200&social_size=200 HTTP/1.1" 200 OK
 INFO:     127.0.0.1:62300 - "GET /health HTTP/1.1" 200 OK
+[2026-09-29 11:00:06] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-09-29 11:00:07] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+INFO:     127.0.0.1:54352 - "GET /pessoas-iq/179018531?v=1790674953651 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54352 - "GET /assets/index-Dl5sWosr.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61605 - "GET /assets/index-Gz-QewO1.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52985 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57029 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54352 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60191 - "GET /people/179018531 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51221 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54352 - "GET /people/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60191 - "GET /people/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52203 - "GET /people/179018531/360?with_ai=true&cire_size=200&social_size=200 HTTP/1.1" 200 OK
+[2026-09-29 11:20:19] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22DIOGO+LEMOS+PINTO+CARDOSO%22+site%3Alinkedin.com%2Fin> (referer: https://www.google.com/)
+[2026-09-29 11:20:21] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22DIOGO+LEMOS+PINTO+CARDOSO%22+site%3Alinkedin.com%2Fin> (referer: https://www.google.com/)
+[2026-09-29 11:20:40] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22DIOGO+LEMOS+PINTO+CARDOSO%22+site%3Alinkedin.com%2Fin> (referer: https://www.google.com/)
+[2026-09-29 11:20:43] INFO: Fetched (202) <GET https://lite.duckduckgo.com/lite/?q=%22DIOGO+LEMOS+PINTO+CARDOSO%22+site%3Alinkedin.com%2Fin> (referer: https://www.google.com/)
+[2026-09-29 11:20:47] INFO: Fetched (403) <GET https://www.wribrasil.org.br/equipe/diogo-lemos> (referer: https://www.google.com/)
+[2026-09-29 11:20:48] INFO: Fetched (200) <GET https://www.vda.pt/en/people/partners/miguel-pinto-cardoso/9109/> (referer: https://www.google.com/)
+[2026-09-29 11:20:49] INFO: Fetched (200) <GET https://x.com/diogopintobasto> (referer: https://www.google.com/)
+[2026-09-29 11:20:49] INFO: Fetched (200) <GET https://www.policiajudiciaria.pt/assets-content/2890DF2F-EA3D-4941-B662-3A85B8A38A11> (referer: https://www.google.com/)
+[2026-09-29 11:20:50] INFO: Fetched (200) <GET https://static.portaldasfinancas.gov.pt/app/devedores_static/listaFS1.pdf> (referer: https://www.google.com/)
+[2026-09-29 11:20:57] INFO: Fetched (200) <GET https://www.defensoria.rs.def.br/upload/arquivos/201904/08163440-20171215-edital-010-2017-resultado-final-de-concurso-publico.pdf> (referer: https://www.google.com/)
+[2026-09-29 11:21:00] INFO: Fetched (999) <GET https://www.linkedin.com/in/jo%C3%A3o-lemos-a52b31119> (referer: https://www.google.com/)
+[2026-09-29 11:21:02] INFO: Fetched (999) <GET https://www.linkedin.com/in/diogo-mlemos> (referer: https://www.google.com/)
+[2026-09-29 11:21:05] INFO: Fetched (200) <GET https://www.tiktok.com/discover/diogo-cardoso-oficial> (referer: https://www.google.com/)
+INFO:     127.0.0.1:52203 - "POST /people/179018531/social-collect HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52203 - "GET /people/179018531/360?with_ai=true&cire_size=200&social_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58125 - "GET /people/179018531/360?with_ai=true&cire_size=200&social_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62495 - "GET /iframe-pages?v=1790171000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62495 - "GET /assets/index-Dl5sWosr.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60270 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56307 - "GET /assets/index-Gz-QewO1.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57742 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62495 - "GET /favicon-32.png HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64852 - "GET /favicon.svg HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62495 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60269 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53860 - "PATCH /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53860 - "GET /iframe/iqos-mirofish?v=1790172000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53860 - "GET /assets/index-Dl5sWosr.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63880 - "GET /assets/index-Gz-QewO1.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57832 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59561 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53860 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53860 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+[2026-09-29 12:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-09-29 12:00:03] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-09-29 12:00:03] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/> (referer: https://www.google.com/)
+[2026-09-29 12:00:03] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/juros-altos-pressionam-empresas-portuguesas-leia-aqui-a/> (referer: https://www.google.com/)
+[2026-09-29 12:00:03] INFO: Fetched (200) <GET https://eco.sapo.pt/> (referer: https://www.google.com/)
+[2026-09-29 12:00:04] INFO: Fetched (200) <GET https://eco.sapo.pt/reportagem/apanhamos-boleia-da-flixbus-na-estreia-em-sete-rios-rede-expressos-nao-falta-a-festa/> (referer: https://www.google.com/)
+[2026-09-29 12:00:04] INFO: Fetched (200) <GET https://observador.pt/seccao/economia/> (referer: https://www.google.com/)
+[2026-09-29 12:00:04] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/divida-aperta-empresas-europeias-portugal-e-espanha-entre-os-mais-pressionados/> (referer: https://www.google.com/)
+[2026-09-29 12:00:04] INFO: Fetched (200) <GET https://observador.pt/2026/09/29/gnr-detem-duas-pessoas-em-campo-maior-por-burla-mbway/> (referer: https://www.google.com/)
+[2026-09-29 12:00:04] INFO: Fetched (200) <GET https://dinheirovivo.dn.pt/> (referer: https://www.google.com/)
+[2026-09-29 12:00:04] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/29/petroleo-mais-caro-por-mais-tempo-alimenta-incessante-subida-das-yields/> (referer: https://www.google.com/)
+[2026-09-29 12:00:04] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/reforma-da-lei-laboral-ate-pode-partir-das-confederacoes-patronais-mas-as-negociacoes-tem-de-voltar-diz-presidente-da-ctp/> (referer: https://www.google.com/)
+[2026-09-29 12:00:04] INFO: Fetched (200) <GET https://observador.pt/2026/09/29/rendas-medianas-em-portugal-aceleram-para-subida-de-102-em-termos-homologos-diz-ine/> (referer: https://www.google.com/)
+[2026-09-29 12:00:05] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/29/menzies-swissport-e-aviapartner-entre-interessados-no-handling-da-sata/> (referer: https://www.google.com/)
+[2026-09-29 12:00:05] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/preco-do-algodao-dispara-mais-de-30-desde-o-inicio-do-ano/> (referer: https://www.google.com/)
+[2026-09-29 12:00:05] INFO: Fetched (200) <GET https://observador.pt/2026/09/29/franca-em-greve-funcao-publica-bombeiros-e-escolas-param-em-vesperas-do-orcamento-de-2027/> (referer: https://www.google.com/)
+[2026-09-29 12:00:06] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/29/amt-recomenda-taxar-veiculos-pesados-e-comerciais-pelos-quilometros-percorridos/> (referer: https://www.google.com/)
+[2026-09-29 12:00:06] INFO: Fetched (200) <GET https://observador.pt/2026/09/29/carros-eletricos-e-fim-de-portagens-cortam-fundos-para-as-estradas-taxar-utilizadores-e-o-mais-eficaz-mas-tem-pouca-aceitacao-social/> (referer: https://www.google.com/)
+[2026-09-29 12:00:06] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/trump-ameaca-fechar-torneira-de-gasoleo-a-europa/> (referer: https://www.google.com/)
+[2026-09-29 12:00:06] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/29/com-orcamento-do-estado-a-porta-ministro-pinto-luz-rejeita-novas-isencoes-de-portagens/> (referer: https://www.google.com/)
+[2026-09-29 12:00:07] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/governo-espanhol-pressionado-nas-ruas-a-aprovar-hoje-decreto-para-habitacao/> (referer: https://www.google.com/)
+[2026-09-29 12:00:07] INFO: Fetched (200) <GET https://observador.pt/2026/09/29/mai-volta-a-reunir-se-com-sindicatos-da-psp-e-associacoes-da-gnr/> (referer: https://www.google.com/)
+[2026-09-29 12:00:07] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/29/confianca-dos-consumidores-e-clima-economico-pioram-em-setembro/> (referer: https://www.google.com/)
+[2026-09-29 12:00:07] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/dividendos-renderam-menos-60-ao-estado-mocambicano-em-seis-meses/> (referer: https://www.google.com/)
+[2026-09-29 12:00:08] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/29/portugal-espanha-e-luxemburgo-pedem-nova-meta-europeia-para-renovaveis/> (referer: https://www.google.com/)
+[2026-09-29 12:00:08] INFO: Fetched (200) <GET https://observador.pt/2026/09/29/acoes-da-shein-caem-ate-14-em-hong-kong-apos-queda-de-666-do-lucro-ajustado/> (referer: https://www.google.com/)
+[2026-09-29 12:00:08] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/conheca-o-programa-da-conferencia-dos-10-anos-do-jornal-economico/> (referer: https://www.google.com/)
+[2026-09-29 12:00:08] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/28/governo-estima-excedente-de-ate-02-no-orcamento-do-estado-para-2027-diz-chega/> (referer: https://www.google.com/)
+[2026-09-29 12:00:09] INFO: Fetched (200) <GET https://observador.pt/2026/09/29/cim-alto-minho-confiante-que-governo-acolhe-reivindicacao-de-300-milhoes-de-euros-para-rodovia/> (referer: https://www.google.com/)
+[2026-09-29 12:00:09] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/reserve-a-data-oe2027-em-debate-no-jornal-economico/> (referer: https://www.google.com/)
+[2026-09-29 12:00:10] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/28/governo-preve-inflacao-em-linha-com-a-media-de-2026-no-oe-avanca-ps/> (referer: https://www.google.com/)
+[2026-09-29 12:00:10] INFO: Fetched (200) <GET https://observador.pt/2026/09/28/castanheira-de-pera-contrai-emprestimo-de-28-milhoes-para-reabilitar-ribeira-e-requalificar-praia-das-rocas/> (referer: https://www.google.com/)
+[2026-09-29 12:00:10] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/juros-da-divida-descem-a-dois-a-cinco-e-a-10-anos/> (referer: https://www.google.com/)
+[2026-09-29 12:00:10] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/29/oe2027-agricultores-pedem-medidas-fiscais-para-empresas-assegurarem-habitacao-a-trabalhadores/> (referer: https://www.google.com/)
+[2026-09-29 12:00:11] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/australia-aumenta-juros-para-nivel-mais-elevado-em-15-anos/> (referer: https://www.google.com/)
+[2026-09-29 12:00:11] INFO: Fetched (200) <GET https://observador.pt/2026/09/28/porto-da-figueira-da-foz-lanca-concurso-de-91-milhoes-para-dragagem-que-garante-seguranca-da-navegacao/> (referer: https://www.google.com/)
+[2026-09-29 12:00:11] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/samsung-vai-investir-mil-milhoes-de-dolares-na-empresa-de-infraestrutura-de-ia-helix-digital/> (referer: https://www.google.com/)
+[2026-09-29 12:00:11] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/28/setor-dos-dispositivos-medicos-quer-taxa-extraordinaria-restrita-a-grandes-empresas/> (referer: https://www.google.com/)
+[2026-09-29 12:00:12] INFO: Fetched (200) <GET https://observador.pt/2026/09/28/ferreira-do-zezere-quer-criar-zonas-30-e-rede-ciclavel-em-plano-de-mobilidade-para-10-anos/> (referer: https://www.google.com/)
+[2026-09-29 12:00:12] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/pharol-propoe-aumento-da-remuneracao-fixa-do-presidente-para-100-mil-euros-por-ano/> (referer: https://www.google.com/)
+[2026-09-29 12:00:13] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/29/a-heranca-corte-da-taxa-de-irc-para-19-vai-custar-300-milhoes-de-euros-no-orcamento-do-estado-para-2027/> (referer: https://www.google.com/)
+[2026-09-29 12:00:13] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/asf-realizou-349-acoes-supervisao-da-mediacao-de-seguros-em-2025-com-cliente-misterio-e-28-processos-por-ilicitos/> (referer: https://www.google.com/)
+[2026-09-29 12:00:13] INFO: Fetched (200) <GET https://observador.pt/2026/09/28/lider-sindical-diz-que-luis-neves-nao-fez-nada-pela-psp-era-importante-que-tivesse-condicoes-politicas-para-aplicar-ideias/> (referer: https://www.google.com/)
+[2026-09-29 12:00:13] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/29/fisco-trava-uso-de-dividendos-antigos-no-incentivo-a-capitalizacao-das-empresas/> (referer: https://www.google.com/)
+[2026-09-29 12:00:13] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/corum-adquire-em-seis-ativos-imobiliarios-em-cinco-paises-europeus/> (referer: https://www.google.com/)
+[2026-09-29 12:00:13] INFO: Fetched (200) <GET https://observador.pt/2026/09/28/governador-do-banco-de-portugal-critica-linha-de-comboios-de-terceiro-mundo-no-algarve-nao-ha-qualidade/> (referer: https://www.google.com/)
+[2026-09-29 12:00:14] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/29/dona-da-bpi-vep-lidera-ranking-iberico-dos-seguros-fidelidade-e-setima/> (referer: https://www.google.com/)
+[2026-09-29 12:00:15] INFO: Fetched (200) <GET https://observador.pt/2026/09/28/portugal-sobe-ao-11-o-lugar-no-ranking-de-competitividade-turistica-do-forum-economico-mundial/> (referer: https://www.google.com/)
+[2026-09-29 12:00:15] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/29/dona-do-azeite-oliveira-da-serra-investe-cinco-milhoes-para-duplicar-embalamento/> (referer: https://www.google.com/)
+[2026-09-29 12:00:15] INFO: Fetched (200) <GET https://observador.pt/2026/09/28/no-final-saberemos-quanto-custa-e-como-se-paga-custo-do-novo-aeroporto-nao-sera-conhecido-antes-da-conclusao-do-projeto-diz-pinto-luz/> (referer: https://www.google.com/)
+[2026-09-29 12:00:15] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/29/pedidos-de-invencoes-disparam-43-em-portugal/> (referer: https://www.google.com/)
+[2026-09-29 12:00:16] INFO: Fetched (200) <GET https://observador.pt/2026/09/28/seguro-avisa-governo-que-tap-e-relevante-e-que-venda-nao-deve-ser-tratada-apenas-em-funcao-de-encaixes-financeiros/> (referer: https://www.google.com/)
+[2026-09-29 12:00:17] INFO: Fetched (200) <GET https://observador.pt/2026/09/28/governo-preve-excedente-entre-01-e-02-em-2027-e-margem-minima-para-medidas-diz-chega/> (referer: https://www.google.com/)
+[2026-09-29 12:00:18] INFO: Fetched (200) <GET https://observador.pt/2026/09/28/confagri-pede-audiencias-urgentes-a-seguro-e-montenegro-sobre-subida-dos-precos-na-agricultura/> (referer: https://www.google.com/)
+[2026-09-29 12:00:19] INFO: Fetched (200) <GET https://observador.pt/2026/09/28/apoio-as-artes-reforcado-em-10-milhoes-de-euros-em-2027-anuncia-ministra-da-cultura/> (referer: https://www.google.com/)
+[2026-09-29 12:00:20] INFO: Fetched (200) <GET https://observador.pt/2026/09/28/barcelos-vai-cobrar-taxa-municipal-turistica-de-dois-euros-por-dormida/> (referer: https://www.google.com/)
+[2026-09-29 12:00:22] INFO: Fetched (200) <GET https://observador.pt/2026/09/28/transito-cortado-de-noite-no-ip3-ate-sexta-feira-em-tondela-e-santa-comba-dao/> (referer: https://www.google.com/)

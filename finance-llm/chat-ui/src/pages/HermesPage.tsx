@@ -54,6 +54,7 @@ import {
   type SkillsStatus,
 } from "../skillsApi";
 import type { SkillRef } from "../types";
+import HermesAgentPanel from "../components/hermes/HermesAgentPanel";
 
 /** O que uma resposta precisa de ter para ser desenhada (viva ou guardada). */
 type DisplayAnswer = Pick<
@@ -488,8 +489,7 @@ export default function HermesPage() {
             <div className="mb-2 flex items-center justify-between gap-2">
               <h2 className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
                 <Compass size={12} /> Fontes
-              </h2>
-              {selectedSources.length ? (
+              </h2>              {selectedSources.length ? (
                 <button
                   type="button"
                   onClick={() => setSelectedSources([])}
@@ -536,6 +536,10 @@ export default function HermesPage() {
               {!meta ? <p className="text-[12px] text-muted-foreground">A carregar fontes…</p> : null}
             </div>
           </section>
+
+          {/* O Hermes Agent (container) é outra coisa que o Hermes nativo desta
+              página: aqui liga-se o agente aos fornecedores de IA da plataforma. */}
+          <HermesAgentPanel />
 
           <section className="glass-card rounded-2xl p-3">
             <div className="mb-2 flex items-center justify-between gap-2">

@@ -30,6 +30,7 @@ import {
   FileSearch,
   Filter,
   Gavel,
+  Globe2,
   Landmark,
   Layers,
   Loader2,
@@ -72,6 +73,7 @@ import type { GraphMetric, StudioNode } from "../components/graph/graphStudio";
 import { PadroesRegras } from "../components/padroes/PadroesRegras";
 import { PadroesEmpresa } from "../components/padroes/PadroesEmpresa";
 import { PadroesEmpresasComparar } from "../components/padroes/PadroesEmpresasComparar";
+import { PadroesGlobal } from "../components/padroes/PadroesGlobal";
 import {
   Chip,
   DETECTOR_LABELS,
@@ -94,9 +96,20 @@ import {
   padraoTone,
 } from "../components/padroes/padroesKit";
 
-type Tab = "visao" | "contratos" | "empresas" | "empresa" | "comparar" | "rede" | "risco" | "noticias" | "regras";
+type Tab =
+  | "visao"
+  | "global"
+  | "contratos"
+  | "empresas"
+  | "empresa"
+  | "comparar"
+  | "rede"
+  | "risco"
+  | "noticias"
+  | "regras";
 
 const TABS: { id: Tab; label: string; icon: typeof Scan }[] = [
+  { id: "global", label: "Dashboard global", icon: Globe2 },
   { id: "visao", label: "Padrões por CPV", icon: Layers },
   { id: "contratos", label: "Contratos sinalizados", icon: FileSearch },
   { id: "empresas", label: "Empresas", icon: Building2 },
@@ -1237,6 +1250,9 @@ export default function PadroesPage() {
             )}
 
             {tab === "empresa" && <PadroesEmpresa pais={pais} onDossie={(nif) => void openDossie(nif)} />}
+
+            {/* ---------------------------------------------------- dashboard global */}
+            {tab === "global" && <PadroesGlobal pais={pais} onDossie={(nif) => void openDossie(nif)} />}
 
             {/* ---------------------------------------------------- comparar empresas */}
             {tab === "comparar" && <PadroesEmpresasComparar pais={pais} onDossie={(nif) => void openDossie(nif)} />}

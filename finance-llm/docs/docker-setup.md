@@ -9,7 +9,7 @@ Este documento explica como correr toda a solução IQ OS (Elasticsearch + backe
 - `Dockerfile.test` — imagem de testes (`iq-os-tests`): parte da imagem do backend e acrescenta `pytest`.
 - `docker-compose.yml` — orquestra `elasticsearch`, `backend`, `frontend`, `searxng` e `n8n` (núcleo) mais `mcp`, `tests`, `hermes-agent` e `mirofish` (por perfis).
 - `docker/nginx.conf` — nginx com SPA, proxy `/api/` e `/forecast/plot/` para o backend, uploads até 256 MB, SSE sem buffering e os **proxies de incorporação** dos iframes (portos 8891/8892/8893).
-- `docker/mirofish/Dockerfile` — imagem do MiroFish: parte da oficial `ghcr.io/666ghj/mirofish` e aplica um patch de uma linha (base da API em caminho relativo).
+- `docker/mirofish/Dockerfile` — imagem do MiroFish: parte da oficial `ghcr.io/666ghj/mirofish`, sobrepõe o código atual do repositório (a imagem publicada é anterior à internacionalização) e aplica dois ajustes: interface em **português** e base da API **relativa**.
 - `docker/entrypoint.backend.sh` — cria as pastas de dados e arranca o uvicorn em `0.0.0.0:8000`.
 - `docker/smoke_test.py` — teste de fumo que percorre o OpenAPI e valida a API e a SPA.
 - `docker/searxng/settings.yml` — configuração do SearXNG (JSON ligado, limiter desligado).
@@ -180,11 +180,26 @@ docker compose --profile agents up -d hermes-agent
 - **Login**: as mesmas contas do IQ OS (ver acima); o dashboard mostra `Logged in as … via iqos`
 - **Dados**: volume `hermes-data` → `/opt/data` (config, sessões, memórias, skills)
 
-O primeiro arranque pode precisar do assistente de configuração para as chaves dos modelos de IA:
+**Configurar o modelo a partir da plataforma** (não precisa do assistente interativo): o painel
+**Motor do Hermes Agent**, na página **Hermes** (`/hermes`, coluna da esquerda → *configurar*),
+liga o container aos fornecedores de IA que a plataforma já tem. Escolhe-se o fornecedor, vê-se o
+plano exato e aplica-se:
 
 ```powershell
-docker compose --profile agents run --rm hermes-agent setup
+# o que a plataforma quer vs. o que o container tem
+curl http://127.0.0.1:8002/hermes-agent/diagnose -H "Authorization: Bearer <token>"
 ```
+
+A plataforma resolve a chave com `providers_service.resolve_key(user_id, provider)` (a chave da
+conta ou o fallback do ambiente), escreve-a onde o Hermes a lê e recria o container. Ver
+`docs/jarvis.md` e `api/hermes_agent_settings.py`:
+
+- fornecedores com **perfil nativo** no Hermes (`deepseek`, `anthropic`, `gemini`, `openrouter`,
+  `xai`, `ollama-cloud`) → `model.provider` = o perfil e a chave no `.env`, na variável do perfil
+  (`DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`, …);
+- os restantes (`openai`, `groq`, `mistral-ai`, `ollama`) → `provider: custom` com
+  `model.base_url` e `model.api_key` no `config.yaml` (não há perfil equivalente no upstream);
+- a **pesquisa web** do agente passa a usar o SearXNG da própria solução (`SEARXNG_URL`).
 
 Notas de implementação (armadilhas já resolvidas):
 
@@ -195,6 +210,19 @@ Notas de implementação (armadilhas já resolvidas):
   arranque por `docker/hermes/init/026-enable-iqos-plugin.sh` (sobrevive a `down -v`).
 - O volume de dados do Hermes deve ser um **volume nomeado** (não uma pasta do host): o `state.db`
   usa SQLite em modo WAL, que se corrompe nos mounts 9p/drvfs do Docker Desktop no Windows.
+- Sem configuração, o volume arranca com o `config.yaml` de exemplo (`provider: auto`,
+  `anthropic/claude-opus-4.6`) e um `.env` **sem chaves**: o agente não tem modelo. É isso que o
+  painel resolve.
+- A escrita faz-se com o CLI do próprio Hermes (`hermes config set|unset`, `docker exec -u hermes`),
+  não reescrevendo o YAML à mão — é ele que valida as chaves contra o esquema da versão instalada.
+- O `docker` tem de estar acessível a **quem corre o backend**: `docker compose` no host funciona;
+  dentro de um container seria preciso montar `/var/run/docker.sock` (o `diagnose` di-lo).
+- `OPENAI_API_KEY`/`OPENAI_BASE_URL`/`OPENAI_MODEL` **não** são lidos pelo Hermes Agent (só o
+  `VOICE_TOOLS_OPENAI_KEY`, para voz). O agente não tem perfil `openai`: endpoints
+  OpenAI-compatíveis entram por `custom`.
+- `hermes config unset` sai com código 1 quando a chave já não existe — o estado pedido está
+  cumprido, por isso conta como sucesso.
+- A chave nunca sai em claro nas respostas da API (`/hermes-agent/settings` mascara-a sempre).
 
 ### 8. MiroFish (previsão por enxame de agentes)
 
@@ -202,12 +230,23 @@ Notas de implementação (armadilhas já resolvidas):
 docker compose --profile mirofish up -d
 ```
 
-- **UI + API pela SPA**: página iframe «MiroFish» (`http://127.0.0.1:8893`); o mesmo porto serve
-  para abrir a app diretamente no browser.
+- **UI + API pela SPA**: página iframe «Simulador IQ OS · Estúdio» (`http://127.0.0.1:8893`); o
+  mesmo porto serve para abrir a app diretamente no browser.
 - **API Flask (direto)**: `http://127.0.0.1:5001` — `GET /health` →
   `{"service": "MiroFish Backend", "status": "ok"}`.
 - **Dados**: volume `mirofish-uploads` → `/app/backend/uploads` (projetos, materiais-semente,
   relatórios e simulações).
+- **Integração com a plataforma**: duas páginas distintas —
+  - **Simulador IQ OS** (`/simulador`): lança a simulação com dados do sistema (ficha de empresa,
+    tema do Pesquisa 360, notícias, documento do Office ou o panorama global) e **apresenta os
+    resultados** — rondas e ações, feed do que os agentes publicaram, elenco de personas (com
+    entrevistas), relatório e conversa sobre o grafo. Inclui a aba *Estúdio MiroFish* com a app
+    completa embebida;
+  - **MiroFish** (`/mirofish`): motor — catálogo de fontes, pré-visualização da semente,
+    trabalhos e **chaves** (o LLM pode vir de um fornecedor já configurado na plataforma e a
+    chave do Zep é atualizável na UI, que escreve o `.env` e recria o contentor).
+
+  Detalhes em [`docs/mirofish.md`](mirofish.md).
 - **Chaves obrigatórias**: `MIROFISH_LLM_API_KEY` (ou `OPENAI_API_KEY`) e `MIROFISH_ZEP_API_KEY`.
   Sem elas o backend sai logo com código 1 (`run.py` valida a configuração) — é por isso que o
   serviço vive num **perfil**: um `docker compose up` do núcleo nunca fica num ciclo de reinícios
@@ -224,15 +263,33 @@ e poucos agentes — o README do projeto sugere menos de 40 rondas nas primeiras
 
 #### Porque é que a imagem é derivada (e não a oficial tal e qual)
 
-`docker/mirofish/Dockerfile` parte de `ghcr.io/666ghj/mirofish:latest` e troca **uma linha** no
-frontend:
+`docker/mirofish/Dockerfile` parte da imagem oficial (`ghcr.io/666ghj/mirofish:v0.1.2`), **sobrepõe-lhe
+o código atual do repositório** e aplica quatro ajustes:
+
+1. **Interface em português** — o upstream só traz `zh`/`en`; a imagem acrescenta
+   `locales/pt.json` (tradução completa dos 635 textos), passa o idioma por omissão a `pt` (com
+   *fallback* em inglês) e traduz o título/idioma do `index.html`;
+2. **Base da API relativa** — sem isto a SPA do MiroFish só funciona em `localhost`;
+3. **Respostas do LLM em português** — os *prompts* do upstream são em chinês e as personas e
+   publicações dos agentes saíam em chinês; a diretiva de idioma é injetada em
+   `LLMClient._create_completion` (`pt_language.py`, ativa por `MIROFISH_REPLY_LANGUAGE=pt-PT`);
+4. **Mensagens do backend em português** — progresso da geração de personas e erros de operação
+   construídos em código (`pt_backend_strings.py`).
+
+O ajuste da base da API é uma linha no cliente do frontend:
 
 ```js
 // antes
 baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001'
 // depois
-baseURL: import.meta.env.VITE_API_BASE_URL ?? ''
+baseURL: import.meta.env.VITE_API_BASE_URL || ''
 ```
+
+O código é sobreposto porque a imagem publicada (`latest` = `v0.1.2`) é **anterior à camada de
+tradução** (não tem `locales/` nem `frontend/src/i18n`): sem trazer o código atual não há forma de
+ter a interface em português. O tarball usado é configurável
+(`--build-arg MIROFISH_TARBALL=...`) e só os diretórios de código são substituídos — `node_modules`,
+`backend/.venv` e os caches da imagem base são reaproveitados.
 
 A SPA do MiroFish chama a API num URL **absoluto** por omissão. Dentro de um iframe servido a partir
 de `http://<host>:8893/`, `localhost:5001` apontaria para a máquina do **browser** — não para o
@@ -293,7 +350,11 @@ Isto permite que os dados e modelos persistam entre execuções dos containers e
 | `MIROFISH_ZEP_API_KEY` | vazio | Chave do **Zep Cloud** (memória de longo prazo dos agentes). O backend do MiroFish não arranca sem ela. |
 | `MIROFISH_LLM_BOOST_*` | vazio | Acelerador opcional (2.º modelo para tarefas de volume); vazio = desligado. |
 | `MIROFISH_MAX_ROUNDS` | `10` | `OASIS_DEFAULT_MAX_ROUNDS`: rondas de simulação por omissão. |
-| `MIROFISH_BASE_IMAGE` | `ghcr.io/666ghj/mirofish:latest` | Imagem base do MiroFish (usar `ghcr.nju.edu.cn/...` como espelho). |
+| `MIROFISH_REPLY_LANGUAGE` | `pt-PT` | Idioma das respostas do LLM do MiroFish (prompts do upstream são em chinês); vazio = idioma do prompt. |
+| `MIROFISH_BASE_IMAGE` | `ghcr.io/666ghj/mirofish:v0.1.2` | Imagem base do MiroFish (usar `ghcr.nju.edu.cn/...` como espelho). |
+| `MIROFISH_TARBALL` | tarball de `main` no GitHub | Código do MiroFish aplicado sobre a imagem base (usar o URL de uma tag para fixar a versão). |
+| `MIROFISH_URL` | `http://mirofish:5001` | API do MiroFish **vista pelo backend** do IQ OS (módulo `/mirofish/*`). |
+| `MIROFISH_PUBLIC_URL` | vazio | Endereço público da UI usado nos links da plataforma (vazio = host do browser + `8893`). |
 | `IQOS_API_URL` | `http://backend:8000` | API do IQ OS vista pelo container `hermes-agent`/`mcp`/`tests`. |
 | `HERMES_DASHBOARD_IQOS_SECRET` | vazio | Chave HMAC das sessões do dashboard (vazio = gerada por processo). |
 | `HERMES_API_KEY` | `iqos-hermes-api-key-…` | Chave da API OpenAI-compatível do Hermes. |
@@ -312,7 +373,7 @@ Isto permite que os dados e modelos persistam entre execuções dos containers e
 - **Uploads**: o nginx tem `client_max_body_size 256m`; sem isto os uploads de PDF devolviam 413.
 - **Chat em streaming**: `/api/` é proxiado com `proxy_buffering off` e `proxy_read_timeout 3600s` para as respostas SSE não ficarem em buffer nem serem cortadas.
 - **Contexto da build**: `data/` (~12 GB) e `model/` (~3 GB) estão no `.dockerignore`. Sem isso a build enviaria >16 GB para o daemon.
-- **Base da API do MiroFish**: a SPA do MiroFish usa `http://localhost:5001` quando `VITE_API_BASE_URL` não está definido; como a app é incorporada por iframe (origem `:8893`), `localhost` apontaria para a máquina do browser. O `docker/mirofish/Dockerfile` passa a base a relativo (`/api`) e o nginx encaminha `/api/` para `mirofish:5001`. Se o upstream mudar essa linha, a build da imagem falha de propósito (`grep` antes e depois do `sed`).
+- **Base da API do MiroFish**: a SPA do MiroFish usa `http://localhost:5001` quando `VITE_API_BASE_URL` não está definido; como a app é incorporada por iframe (origem `:8893`), `localhost` apontaria para a máquina do browser. O `docker/mirofish/Dockerfile` substitui esse URL por uma cadeia vazia (base relativa) e o nginx encaminha `/api/` para `mirofish:5001`. Se o upstream mudar essa linha, a build da imagem falha de propósito (`grep` antes e depois do `sed`).
 - **Host do Vite dev server (MiroFish)**: o frontend do MiroFish corre em modo *dev*, e o Vite recusa pedidos cujo `Host` não seja `localhost`/IP (`Blocked request. This host is not allowed.`). O proxy `:8893` envia `Host: localhost`; sem isso a app só abriria em `127.0.0.1`.
 - **MiroFish sem chaves**: `mirofish` está no perfil `mirofish` porque o `run.py` valida `LLM_API_KEY` e `ZEP_API_KEY` e sai com código 1 — com `restart: unless-stopped` fora de um perfil, o `docker compose up` ficaria num ciclo de reinícios.
 

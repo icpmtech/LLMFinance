@@ -1,137 +1,102 @@
 warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
-INFO:     Started server process [99288]
+INFO:     Started server process [33416]
 INFO:     Waiting for application startup.
 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  39%|###8      | 99/254 [00:00<00:00, 953.80it/s]Ficheiro do RSS ileg�vel (Extra data: line 7874 column 2 (char 1192276)); a recome�ar.
-Loading weights:  83%|########3 | 211/254 [00:00<00:00, 1049.96it/s]INFO:     Application startup complete.
-Loading weights: 100%|##########| 254/254 [00:00<00:00, 1040.20it/s]
+Ficheiro do RSS ilegível (Extra data: line 7874 column 2 (char 1192276)); a recomeçar.
+INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
-INFO:     127.0.0.1:57591 - "GET /health HTTP/1.1" 200 OK
-Agrega��o de empresas falhou: Connection timed out
-INFO:     127.0.0.1:58498 - "GET /societario/recolha/empresas?q=JAJA&limit=3 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58498 - "GET /societario/recolha/empresas/503106542?limit_items=3 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58498 - "GET /societario/recolha/empresas/501506543 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60217 - "GET /societario/recolha/jobs/4ad508e6e5c5 HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:60217 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59675 - "GET /societario?v=1790673642494 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59675 - "GET /assets/index-g8UQ-SE_.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62242 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55724 - "GET /assets/index-Gz-QewO1.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49668 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:59675 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51839 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62242 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59675 - "GET /societario/recolha/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55724 - "GET /societario/recolha/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58119 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55724 - "GET /societario/recolha/targets?ano_ini=2026&ano_fim=2026&papel=ambos&min_contracts=1&exclude_collected=true&limit=60 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58119 - "POST /societario/recolha/exports/ingest HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55266 - "GET /societario/recolha/empresas?q=JAJA&limit=8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60784 - "GET /societario/recolha/empresas?q=JAJA+Gest%C3%A3o+e+Investimentos%2C+S.A.+%C2%B7+503106542&limit=8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55266 - "GET /societario/recolha/empresas/503106542?limit_items=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62317 - "GET /societario/recolha/empresas?q=506362299&limit=8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60063 - "GET /societario/recolha/empresas?q=IPO+Porto+FG%2C+EPE+%C2%B7+506362299&limit=8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62317 - "GET /societario/recolha/empresas/506362299?limit_items=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "POST /societario/recolha/empresas/506362299/obter HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62860 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50973 - "GET /societario/recolha/targets?ano_ini=2026&ano_fim=2026&papel=ambos&min_contracts=1&exclude_collected=true&limit=60 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50461 - "GET /societario/recolha/empresas/506362299?limit_items=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57023 - "GET /people/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60946 - "GET /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57023 - "GET /people/autocomplete?q=506362299&limit=8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57023 - "GET /people/search?q=506362299&sort=relevance&size=24&from=0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57023 - "GET /people/companies?q=506362299&size=8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57023 - "GET /people/companies/506362299?size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59301 - "GET /people/company/506362299/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49236 - "GET /people/summary?node_id=person%3A506942155&nif=506942155&name=Horwath+%26+Associados%2C+Sroc%2C+Lda+representada+por+Jos%C3%A9+Augusto+Silva+Mendes%2C+Roc HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52941 - "GET /people/company/506362299/graph HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52877 - "GET /people/filters HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52877 - "GET /people/134022475 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52877 - "GET /people/134022475 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62786 - "GET /people/134022475 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58772 - "GET /people/134022475/360?with_ai=true&cire_size=200&social_size=200 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52877 - "GET /people/134022475 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53872 - "GET /societario/recolha/jobs/1e908c8ae514 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61173 - "GET /health HTTP/1.1" 200 OK
+Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  21%|██        | 53/254 [00:00<00:00, 242.14it/s]Loading weights:  31%|███       | 78/254 [00:00<00:00, 240.54it/s]Loading weights: 100%|██████████| 254/254 [00:00<00:00, 617.67it/s]
+INFO:     127.0.0.1:60359 - "GET /scraper HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59948 - "GET /assets/index-CPKarOGb.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54842 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60359 - "GET /assets/index-YlqC4JSu.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50763 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50763 - "GET /scraper/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54860 - "GET /scraper/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60034 - "GET /scraper/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65267 - "GET /scraper/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53998 - "GET /scraper/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50763 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+Agregação de empresas falhou: Connection timed out
+INFO:     127.0.0.1:65318 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54874 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57597 - "POST /jarvis/actions/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58277 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58277 - "POST /jarvis/actions/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58307 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58307 - "POST /jarvis/actions/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63356 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63356 - "GET /office/folders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63356 - "POST /jarvis/actions/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63356 - "POST /jarvis/actions/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63356 - "POST /jarvis/actions/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62949 - "GET /scraper HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62949 - "GET /assets/index-YlqC4JSu.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62292 - "GET /assets/index-CPKarOGb.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61877 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62949 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62333 - "GET /scraper/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63864 - "GET /scraper/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61979 - "GET /scraper/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51071 - "GET /scraper/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /scraper/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62333 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50852 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56884 - "GET /jarvis HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56884 - "GET /assets/index-YlqC4JSu.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49222 - "GET /assets/index-CPKarOGb.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52901 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65340 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52982 - "POST /scraper/sources/lusa-920462/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52982 - "GET /scraper/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62227 - "GET /scraper/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52901 - "GET /scraper/sources HTTP/1.1" 200 OK
+[2026-09-30 13:54:34] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+INFO:     127.0.0.1:49222 - "GET /scraper/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56884 - "GET /scraper/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49222 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49363 - "GET /scraper/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49363 - "GET /scraper/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59125 - "GET /scraper/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59125 - "GET /scraper/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59125 - "GET /scraper/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54995 - "GET /scraper/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56884 - "POST /scraper/sources/investing-com-not-cias-de-mercados-75347f/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54995 - "GET /scraper/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56884 - "GET /scraper/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51928 - "GET /scraper/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49363 - "GET /scraper/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49222 - "POST /scraper/sources/https-pt-euronews-com-be02fa/run HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49363 - "GET /scraper/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49222 - "GET /scraper/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51928 - "GET /scraper/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56884 - "GET /scraper/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49222 - "GET /scraper/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59125 - "GET /scraper/status HTTP/1.1" 200 OK
+[2026-09-30 13:54:50] INFO: Fetched (200) <GET https://pt.euronews.com/> (referer: https://www.google.com/)
+INFO:     127.0.0.1:51928 - "GET /scraper/stats HTTP/1.1" 200 OK
+[2026-09-30 13:54:51] INFO: Fetched (200) <GET https://www.investing.com/news/stock-market-news> (referer: https://www.google.com/)
+INFO:     127.0.0.1:49222 - "GET /scraper/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49222 - "GET /scraper/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57928 - "GET /scraper/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56884 - "GET /scraper/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59125 - "GET /scraper/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51928 - "GET /scraper/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49222 - "GET /scraper/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51928 - "GET /scraper/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56884 - "GET /scraper/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57928 - "GET /scraper/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59125 - "GET /scraper/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51928 - "GET /scraper/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57928 - "GET /scraper/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55361 - "GET /scraper/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50820 - "GET /search360/dossiers?limit=120 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56499 - "GET /search360/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56499 - "GET /scraper/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56499 - "GET /scraper/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50820 - "GET /scraper/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55361 - "GET /scraper/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62714 - "GET /search360/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49908 - "GET /auth/sidebar-access HTTP/1.1" 200 OK

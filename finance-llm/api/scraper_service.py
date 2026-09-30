@@ -793,6 +793,10 @@ def _value_from(node: Any, field: Dict[str, Any]) -> Any:
         if attr and kind == "css" and "::attr(" not in selector and "::text" not in selector:
             selector = f"{selector}::attr({attr})"
         values = [str(v).strip() for v in _select(node, selector, kind)]
+        if field.get("regex"):
+            regex = str(field["regex"])
+            values = [m for v in values for m in re.findall(regex, v) if m]
+            logger.debug("Regex %r applied to values; result=%r", regex, values)
         values = [v[:max_length] for v in values if str(v).strip() and not _is_placeholder(v)]
         if not values:
             continue

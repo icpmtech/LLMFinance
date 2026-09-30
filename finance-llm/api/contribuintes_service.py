@@ -70,6 +70,7 @@ from api.elasticsearch_client import (
     CONTRATOS_ES_INDEX,
     CONTRACTS_INDEX,
     CRM_INDEX,
+    DEVEDORES_INDEX,
     ENTITIES_INDEX,
     FIRMAS_INDEX,
     PEOPLE_INDEX,
@@ -260,6 +261,36 @@ SOURCES: List[Dict[str, Any]] = [
         ],
     },
     {
+        "id": "devedores",
+        "label": "Devedores (Finanças e Segurança Social)",
+        "index": DEVEDORES_INDEX,
+        "specs": [
+            {
+                "key": "devedor",
+                "field": "nif",
+                "name_fields": ["nome"],
+                "roles": ["devedor"],
+                # As listas publicam o **escalão** da dívida (não o valor de cada
+                # devedor) e a data de publicação da lista: ficam guardados tal
+                # como vêm, para a ficha mostrar o que se sabe sem nova consulta.
+                "detail": [
+                    "escalao",
+                    "valor_min",
+                    "tipo_label",
+                    "entidade_label",
+                    "ficheiro",
+                    "base",
+                    "lista_atualizada_em",
+                    "collected_at",
+                ],
+                "metrics": {
+                    "first": ("lista_atualizada_em", "min"),
+                    "last": ("lista_atualizada_em", "max"),
+                },
+            },
+        ],
+    },
+    {
         "id": "pessoas",
         "label": "Pessoas e cargos (PessoasIQ)",
         "index": PEOPLE_INDEX,
@@ -341,6 +372,7 @@ NAME_PRIORITY: List[str] = [
     "crm",
     "marcas",
     "cire",
+    "devedores",
 ]
 
 # Ordem de apresentação dos papéis na ficha.
@@ -356,6 +388,7 @@ ROLE_ORDER: List[str] = [
     "administrador",
     "credor",
     "interveniente",
+    "devedor",
     "gerente",
     "socio",
     "pessoa",
@@ -1227,6 +1260,35 @@ def _build_doc(nif: str, blocks: Dict[str, Dict[str, Any]], run_id: str) -> Dict
             for role in block.get("roles") or []:
                 if role != "interveniente" and role not in cire_roles:
                     cire_roles.append(role)
+        elif source_id == "devedores":
+            doc["devedores_count"] = int(block.get("count") or 0)
+            if doc["devedores_count"]:
+                # Marca simples para filtrar/ordenar «quem deve ao Estado».
+                doc["devedor"] = True
+            escalao = _text(detail.get("escalao"))
+            if escalao:
+                doc["devedores_escalao"] = escalao
+            valor = _number(detail.get("valor_min"))
+            if valor is not None:
+                doc["devedores_valor_min"] = valor
+            entidade = _text(detail.get("entidade_label")) or _text(detail.get("entidade"))
+            if entidade:
+                doc["devedores_entidade"] = entidade
+            tipo = _text(detail.get("tipo_label"))
+            if tipo:
+                doc["devedores_tipo"] = tipo
+            ficheiro = _text(detail.get("ficheiro"))
+            if ficheiro:
+                doc["devedores_ficheiro"] = ficheiro
+            base = _text(detail.get("base"))
+            if base:
+                doc["devedores_base"] = base
+            lista = _text(detail.get("lista_atualizada_em"))
+            if lista:
+                doc["devedores_lista"] = lista
+            recolha = _text(detail.get("collected_at"))
+            if recolha:
+                doc["devedores_recolha"] = recolha
         elif source_id == "pessoas":
             roles_count = _number(detail.get("roles_count"))
             if roles_count:

@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **510 operações** em **34 grupos**.
+Versão `0.4.0` · **841 operações** em **39 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -20,11 +20,15 @@ Versão `0.4.0` · **510 operações** em **34 grupos**.
 - **search** — Pesquisa unificada da plataforma: âmbitos disponíveis, pesquisa em paralelo com resultados agrupados e sugestões para autocompletar.
 - **search360** — Dossiê 360: pesquisa federada por tema, biblioteca organizada, grafo de navegação, síntese com citações, projetos e dossiês guardados (criar, refrescar, exportar).
 - **hermes** — Investigador Hermes: metamodelo (modos, fontes, índices) e `/hermes/ask` para respostas citadas com evidências e sub-perguntas.
+- **jarvis** — Jarvis: o assistente operacional com voz. Fala com o sistema por gateways (Hermes, MCP do sistema e browser), segue as skills partilhadas e interage por áudio — `/jarvis/ask` (e em streaming), `/jarvis/transcribe` e `/jarvis/speak`.
+- **hermes-agent** — Motor do Hermes Agent: liga o container autónomo (perfil `agents`) aos fornecedores de IA da plataforma. Resolve a chave guardada, escreve-a no volume do container (`config.yaml` + `.env`) e recria-o — `/hermes-agent/settings` e `/hermes-agent/diagnose`.
 - **researcher** — Agente de investigação com *audit trail* e catálogo fechado de ferramentas.
 - **agents** — Agentes dinâmicos (LangGraph): criar/editar/remover configurações, executar (normal ou SSE) e catálogo de ferramentas disponíveis.
 - **ontology** — Ontologia: tipos de objeto e de ligação, ações, consulta de objetos, resolução de entidades, contexto/resposta factuais, validação anti-alucinação, desenho e sugestões com IA, projetos, fichas e fontes de dados.
 - **crm** — CRM: metamodelo (fases, estados, tipos), panorama do pipeline, contas, contactos, oportunidades, atividades, ligação ao EmpresasIQ e criação/edição de registos.
 - **office** — Office: documentos Markdown com pastas e etiquetas, estatísticas, duplicar, exportar (MD/HTML) e trazer dossiês 360 como documentos editáveis.
+- **cms** — CMS: páginas por blocos, conteúdos reutilizáveis, blog com taxonomia, media, modelos, menus e aparência — com rascunho, agendamento, publicação, revisões e auditoria. O resultado público é servido em `/site/…` (HTML com SEO, RSS, sitemap e robots.txt).
+- **rss** — Leitor de RSS: fontes RSS/Atom (por endereço ou OPML) agrupadas em pastas, recolha manual ou por agenda cron, artigos com lido/favorito/guardado, pesquisa e integrações com o Office, o sentimento, o CRM e o RAG, além de resumos e boletins por IA.
 - **email** — Correio: contas IMAP/SMTP, pastas e mensagens, sinalizadores, mover, apagar e enviar (com anexos).
 - **sentiment** — Análise de sentimento: fontes disponíveis, motores (léxico/neural), análise de texto livre e de corpora, gravação em dossiê e em documento Office.
 - **visualizador** — Business Intelligence: catálogo de datasets, consultas analíticas (dimensões × medidas × fórmulas), registos (drill-through), valores de dimensão, exportação CSV/Excel e dashboards (templates, guardar, duplicar, exportar).
@@ -39,6 +43,7 @@ Versão `0.4.0` · **510 operações** em **34 grupos**.
 - **import** — Importação de ficheiros (.zip/.xlsx/.json): pré-visualização das linhas e indexação (contratos no Elasticsearch, entidades em JSONL).
 - **contribuintes** — Contribuintes: índice único com todos os NIF/NIPC do sistema (agregado dos contratos PT/ES, cadastro de entidades, publicações societárias, CIRE, PessoasIQ, firmas, marcas e CRM), pesquisa e ficha por NIF, e sincronização manual/agendada (cron) a partir de todos os índices da plataforma.
 - **gleif** — GLEIF / LEI: registos *Legal Entity Identifier* do *Golden Copy* (Golden Copy em ficheiro `data/gleif/lei.jsonl` e índice `finance_gleif_lei`), pesquisa por nome/LEI/cidade com facetas, agregado por país/região para o mapa e ingestão a partir da API oficial ou dos ficheiros Golden Copy (LEI-CDF).
+- **world** — World Model: estado materializado do mundo da contratação pública (entidades, contratos, relações, eventos e histórico), rede neuronal dinâmica (crescimento, poda, memória e previsão — mostrada como grafo), motor de grafo/tempo (relações, timestamps e causalidade candidata), simulador de futuro (t0 → t3 com cenários e Monte Carlo) e agente de investigação (Observe → Hypothesize → Search → Validate → Simulate → Evidence Report).
 - **spa** — Páginas da interface (single-page app). Devolvem o `index.html` e existem para permitir abrir os ecrãs diretamente pelo endereço — não são endpoints de dados.
 
 ## core
@@ -68,10 +73,124 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `DELETE` | `/cire/runs/{run_id}` | Cire Run Delete |
 | `GET` | `/cire/search` | Cire Search |
 | `GET` | `/cire/status` | Cire Status Endpoint |
+| `GET` | `/citacoes` | Serve Spa Page |
+| `POST` | `/citacoes/collect` | Citacoes Collect |
+| `GET` | `/citacoes/documentos/{pub_id}` | Citacoes Documento |
+| `GET` | `/citacoes/entidades` | Citacoes Entidades |
+| `GET` | `/citacoes/graph` | Citacoes Graph |
+| `GET` | `/citacoes/graph/dimensions` | Citacoes Graph Dimensions |
+| `POST` | `/citacoes/ingest` | Citacoes Ingest |
+| `GET` | `/citacoes/jobs` | Citacoes Jobs |
+| `GET` | `/citacoes/jobs/{job_id}` | Citacoes Job |
+| `POST` | `/citacoes/jobs/{job_id}/stop` | Citacoes Job Stop |
+| `GET` | `/citacoes/map` | Citacoes Map |
+| `GET` | `/citacoes/meta` | Citacoes Meta |
+| `GET` | `/citacoes/options` | Citacoes Options |
+| `GET` | `/citacoes/runs` | Citacoes Runs |
+| `GET` | `/citacoes/runs/{run_id}` | Citacoes Run Detail |
+| `DELETE` | `/citacoes/runs/{run_id}` | Citacoes Run Delete |
+| `POST` | `/citacoes/runs/{run_id}/documentos` | Citacoes Run Documentos |
+| `GET` | `/citacoes/search` | Citacoes Search |
+| `GET` | `/citacoes/status` | Citacoes Status Endpoint |
+| `POST` | `/devedores/collect` | Devedores Collect |
+| `GET` | `/devedores/devedor/{nif}` | Devedores Devedor |
+| `GET` | `/devedores/files` | Devedores Files |
+| `GET` | `/devedores/files/{base}` | Devedores File |
+| `GET` | `/devedores/files/{base}/pdf` | Devedores File Pdf |
+| `GET` | `/devedores/fontes` | Devedores Fontes |
+| `POST` | `/devedores/ingest` | Devedores Ingest |
+| `GET` | `/devedores/jobs` | Devedores Jobs |
+| `GET` | `/devedores/jobs/{job_id}` | Devedores Job |
+| `GET` | `/devedores/meta` | Devedores Meta |
+| `GET` | `/devedores/search` | Devedores Search |
+| `GET` | `/empresas-risco` | Serve Spa Page |
 | `GET` | `/health` | Health |
+| `GET` | `/loja` | Loja Home |
+| `POST` | `/loja/avaliacoes` | Loja Review |
+| `GET` | `/loja/carrinho` | Loja Cart |
+| `GET` | `/loja/categoria/{slug}` | Loja Category |
+| `GET` | `/loja/conta` | Loja Account |
+| `GET` | `/loja/conta/encomendas` | Loja Account Orders |
+| `POST` | `/loja/cupoes/validar` | Loja Validate Coupon |
+| `GET` | `/loja/encomenda/{number}` | Loja Order |
+| `POST` | `/loja/encomendas` | Loja Checkout |
+| `POST` | `/loja/newsletter` | Loja Newsletter |
+| `GET` | `/loja/produto/{slug}` | Loja Product |
+| `GET` | `/loja/produtos` | Loja Products |
+| `GET` | `/loja/robots.txt` | Loja Robots |
+| `GET` | `/loja/sitemap.xml` | Loja Sitemap |
+| `GET` | `/mirofish/diagnose` | Diagnose |
+| `GET` | `/mirofish/jobs` | List Jobs |
+| `GET` | `/mirofish/jobs/{job_id}` | Get Job |
+| `GET` | `/mirofish/meta` | Meta |
+| `GET` | `/mirofish/runs` | List Runs |
+| `GET` | `/mirofish/runs/{simulation_id}` | Run Overview |
+| `GET` | `/mirofish/runs/{simulation_id}/actions` | Run Actions |
+| `GET` | `/mirofish/runs/{simulation_id}/agents` | Run Agents |
+| `GET` | `/mirofish/runs/{simulation_id}/comments` | Run Comments |
+| `GET` | `/mirofish/runs/{simulation_id}/environment` | Environment |
+| `POST` | `/mirofish/runs/{simulation_id}/environment/close` | Close Environment |
+| `GET` | `/mirofish/runs/{simulation_id}/graph` | Run Graph |
+| `POST` | `/mirofish/runs/{simulation_id}/graph/search` | Graph Search |
+| `GET` | `/mirofish/runs/{simulation_id}/graph/statistics` | Graph Statistics |
+| `POST` | `/mirofish/runs/{simulation_id}/interview` | Interview |
+| `POST` | `/mirofish/runs/{simulation_id}/interview/batch` | Interview Batch |
+| `GET` | `/mirofish/runs/{simulation_id}/posts` | Run Posts |
+| `GET` | `/mirofish/runs/{simulation_id}/report` | Get Run Report |
+| `POST` | `/mirofish/runs/{simulation_id}/report` | Generate Run Report |
+| `POST` | `/mirofish/runs/{simulation_id}/report/chat` | Chat With Report |
+| `GET` | `/mirofish/runs/{simulation_id}/report/logs` | Report Log |
+| `POST` | `/mirofish/runs/{simulation_id}/start` | Start Run |
+| `POST` | `/mirofish/runs/{simulation_id}/stop` | Stop Run |
+| `POST` | `/mirofish/seed` | Build Seed |
+| `POST` | `/mirofish/seed/office` | Save Seed To Office |
+| `GET` | `/mirofish/settings` | Get Settings |
+| `PUT` | `/mirofish/settings` | Put Settings |
+| `POST` | `/mirofish/settings/apply` | Apply Settings |
+| `POST` | `/mirofish/simulations` | Start Simulation |
+| `GET` | `/mirofish/status` | Status |
 | `GET` | `/openapi/export` | Openapi Export |
 | `GET` | `/openapi/summary` | Openapi Summary |
+| `GET` | `/padroes/analysis` | Análise completa de padrões |
+| `GET` | `/padroes/anomalies` | Contratos sinalizados |
+| `POST` | `/padroes/cache/clear` | Limpar a cache de análises |
+| `GET` | `/padroes/empresas/analise` | Análise de uma empresa e dos seus contratos |
+| `POST` | `/padroes/empresas/analise-multipla` | Comparar várias empresas (contratos, cruzamentos e rede) |
+| `POST` | `/padroes/empresas/browser` | Ler páginas externas no browser do IQ OS |
+| `GET` | `/padroes/empresas/guardada/{doc_id}` | Análise guardada (completa) |
+| `DELETE` | `/padroes/empresas/guardada/{doc_id}` | Apagar uma análise guardada |
+| `GET` | `/padroes/empresas/guardadas` | Análises de empresas guardadas |
+| `POST` | `/padroes/empresas/guardar` | Guardar a análise de uma empresa no Elasticsearch |
+| `POST` | `/padroes/empresas/ia` | Ficha analítica da empresa (IA + browser) |
+| `POST` | `/padroes/empresas/multipla/relatorio` | Relatório da comparação (PDF, Excel ou CSV) |
+| `GET` | `/padroes/empresas/relatorio` | Relatório da empresa (PDF, Excel ou CSV) |
+| `GET` | `/padroes/empresas/sugestoes` | Sugestões de empresas a analisar |
+| `GET` | `/padroes/entities` | Empresas/entidades com score |
+| `GET` | `/padroes/entity/{nif}` | Dossiê de uma entidade |
+| `GET` | `/padroes/global` | Dashboard global do universo (por ano, mês e topos) |
+| `GET` | `/padroes/global/estado` | Estado do processo de sincronização do universo |
+| `GET` | `/padroes/global/meta` | Estado do universo: índice, anos materializados e sincronização |
+| `GET` | `/padroes/global/pesquisa` | Pesquisa tipo Google no universo, com filtros e facetas |
+| `POST` | `/padroes/global/sincronizar` | Agregar o universo por ano (processo em segundo plano) |
+| `POST` | `/padroes/global/sincronizar/agora` | Agregar o universo e esperar pelo fim (síncrono) |
+| `GET` | `/padroes/meta` | Catálogo de padrões, algoritmos e fontes |
+| `GET` | `/padroes/news` | Menções em notícias das entidades sinalizadas |
+| `GET` | `/padroes/regras` | Regras de deteção e templates |
+| `POST` | `/padroes/regras` | Criar ou atualizar uma regra |
+| `GET` | `/padroes/regras/campos` | Campos e operadores que uma regra pode usar |
+| `GET` | `/padroes/regras/hits` | Contratos que cumprem as regras ativas |
+| `POST` | `/padroes/regras/repor` | Repor as regras predefinidas |
+| `GET` | `/padroes/regras/templates` | Listar templates de regras |
+| `POST` | `/padroes/regras/templates` | Guardar um template de regras |
+| `DELETE` | `/padroes/regras/templates/{template_id}` | Apagar um template |
+| `POST` | `/padroes/regras/templates/{template_id}/aplicar` | Aplicar um template |
+| `DELETE` | `/padroes/regras/{regra_id}` | Apagar uma regra |
+| `PATCH` | `/padroes/regras/{regra_id}/ativo` | Ligar/desligar uma regra |
+| `POST` | `/padroes/regras/{regra_id}/duplicar` | Duplicar uma regra |
+| `GET` | `/padroes/relations` | Rede de relações e concentração |
 | `GET` | `/people/autocomplete` | People Autocomplete Route |
+| `GET` | `/people/companies` | People Companies Route |
+| `GET` | `/people/companies/{company_nif}` | People Company Route |
 | `GET` | `/people/company/{company_nif}/graph` | People Company Graph Route |
 | `GET` | `/people/company/{company_nif}/graph/full` | People Company Graph Full Route |
 | `POST` | `/people/exists` | People Exists Route |
@@ -89,6 +208,41 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/people/{nif}/graph` | People Person Graph Route |
 | `GET` | `/people/{nif}/social` | People Social Route |
 | `POST` | `/people/{nif}/social-collect` | People Social Collect Route |
+| `POST` | `/risco/cache/clear` | Limpar a cache de risco |
+| `POST` | `/risco/comparar` | Comparar o risco de várias empresas |
+| `POST` | `/risco/empresa/ia` | Parecer de risco por IA (com recuo factual) |
+| `GET` | `/risco/empresa/{pais}/{nif}` | Risco e análise de uma empresa |
+| `GET` | `/risco/empresa/{pais}/{nif}/grafo` | Grafo analítico 360 da empresa |
+| `GET` | `/risco/meta` | Cartão do modelo de risco, features e fontes |
+| `GET` | `/risco/pesquisa` | Pesquisa de empresas com nível de risco |
+| `GET` | `/risco/sugestoes` | Sugestões de empresas para a caixa de pesquisa |
+| `GET` | `/shop/activity` | Shop Activity |
+| `GET` | `/shop/catalogue` | Shop Catalogue |
+| `POST` | `/shop/customers/{item_id}/crm` | Shop Customer Crm |
+| `POST` | `/shop/media` | Shop Upload Media |
+| `POST` | `/shop/orders/{item_id}/note` | Shop Order Note |
+| `POST` | `/shop/orders/{item_id}/payment` | Shop Order Payment |
+| `GET` | `/shop/orders/{item_id}/print` | Shop Order Print |
+| `POST` | `/shop/orders/{item_id}/status` | Shop Order Status |
+| `GET` | `/shop/overview` | Shop Overview |
+| `POST` | `/shop/revisions/{revision_id}/restore` | Shop Restore |
+| `GET` | `/shop/search` | Shop Search |
+| `GET` | `/shop/settings` | Shop Get Settings |
+| `PUT` | `/shop/settings` | Shop Put Settings |
+| `GET` | `/shop/taxonomy` | Shop Taxonomy |
+| `GET` | `/shop/theme` | Shop Get Theme |
+| `PUT` | `/shop/theme` | Shop Put Theme |
+| `POST` | `/shop/theme/reset` | Shop Reset Theme |
+| `GET` | `/shop/{entity}` | Shop List |
+| `POST` | `/shop/{entity}` | Shop Create |
+| `GET` | `/shop/{entity}/{item_id}` | Shop Get |
+| `PATCH` | `/shop/{entity}/{item_id}` | Shop Patch |
+| `DELETE` | `/shop/{entity}/{item_id}` | Shop Delete |
+| `POST` | `/shop/{entity}/{item_id}/duplicate` | Shop Duplicate |
+| `POST` | `/shop/{entity}/{item_id}/publish` | Shop Publish |
+| `GET` | `/shop/{entity}/{item_id}/revisions` | Shop Revisions |
+| `POST` | `/shop/{entity}/{item_id}/status` | Shop Status |
+| `POST` | `/shop/{entity}/{item_id}/unpublish` | Shop Unpublish |
 | `GET` | `/social` | Serve Spa Page |
 | `GET` | `/social/agenda` | Serve Spa Page |
 | `GET` | `/social/canais` | Serve Spa Page |
@@ -112,6 +266,7 @@ Contas e sessões: registo, login/logout, perfil, palavra-passe, dispositivos li
 | `GET` | `/auth/sessions` | Sessions |
 | `DELETE` | `/auth/sessions` | Revoke Other Sessions |
 | `DELETE` | `/auth/sessions/{session_id}` | Revoke Session |
+| `GET` | `/auth/sidebar-access` | Sidebar Access For Me |
 | `GET` | `/auth/stats` | Stats |
 
 ## admin
@@ -126,6 +281,9 @@ Consola de administração: panorama geral, gestão de contas e sessões, visual
 | `GET` | `/admin/logs` | Admin Logs |
 | `GET` | `/admin/logs/{name}` | Admin Log Tail |
 | `GET` | `/admin/overview` | Admin Overview |
+| `GET` | `/admin/sidebar-access` | Admin Sidebar Access |
+| `PUT` | `/admin/sidebar-access` | Admin Sidebar Access Save |
+| `POST` | `/admin/sidebar-access/reset` | Admin Sidebar Access Reset |
 | `GET` | `/admin/users` | Admin Users |
 | `PATCH` | `/admin/users/{user_id}` | Admin Update User |
 | `DELETE` | `/admin/users/{user_id}` | Admin Delete User |
@@ -281,6 +439,7 @@ Publicações de atos societários (publicacoes.mj.pt): recolha assistida por en
 
 | Método | Caminho | Resumo |
 | --- | --- | --- |
+| `GET` | `/societario` | Serve Societario Spa Page |
 | `POST` | `/societario/collect` | Societario Collect |
 | `POST` | `/societario/collect-entities` | Societario Collect Entities |
 | `GET` | `/societario/companies/{nif}` | Societario Company |
@@ -288,6 +447,19 @@ Publicações de atos societários (publicacoes.mj.pt): recolha assistida por en
 | `POST` | `/societario/companies/{nif}/timeline` | Societario Company Timeline |
 | `POST` | `/societario/ingest` | Societario Ingest |
 | `GET` | `/societario/meta` | Societario Meta |
+| `GET` | `/societario/recolha/empresas` | Recolha Empresas |
+| `GET` | `/societario/recolha/empresas/{nif}` | Recolha Empresa |
+| `POST` | `/societario/recolha/empresas/{nif}/obter` | Recolha Obter Empresa |
+| `GET` | `/societario/recolha/exports` | Recolha Exports |
+| `POST` | `/societario/recolha/exports/ingest` | Recolha Ingest Exports |
+| `GET` | `/societario/recolha/exports/{nif}` | Recolha Export |
+| `DELETE` | `/societario/recolha/exports/{nif}` | Recolha Delete Export |
+| `POST` | `/societario/recolha/jobs` | Recolha Start Job |
+| `GET` | `/societario/recolha/jobs` | Recolha Jobs |
+| `GET` | `/societario/recolha/jobs/{job_id}` | Recolha Job |
+| `GET` | `/societario/recolha/meta` | Recolha Meta |
+| `GET` | `/societario/recolha/targets` | Recolha Targets |
+| `GET` | `/societario/recolha/years` | Recolha Years |
 | `GET` | `/societario/search` | Societario Search |
 | `GET` | `/societario/status` | Societario Status |
 | `GET` | `/societario/targets` | Societario Targets |
@@ -336,6 +508,33 @@ Investigador Hermes: metamodelo (modos, fontes, índices) e `/hermes/ask` para r
 | --- | --- | --- |
 | `POST` | `/hermes/ask` | Ask |
 | `GET` | `/hermes/meta` | Meta |
+
+## jarvis
+
+Jarvis: o assistente operacional com voz. Fala com o sistema por gateways (Hermes, MCP do sistema e browser), segue as skills partilhadas e interage por áudio — `/jarvis/ask` (e em streaming), `/jarvis/transcribe` e `/jarvis/speak`.
+
+| Método | Caminho | Resumo |
+| --- | --- | --- |
+| `POST` | `/jarvis/ask` | Ask |
+| `POST` | `/jarvis/ask/stream` | Ask Stream |
+| `GET` | `/jarvis/meta` | Meta |
+| `POST` | `/jarvis/speak` | Speak |
+| `GET` | `/jarvis/tools` | Tools |
+| `POST` | `/jarvis/transcribe` | Transcribe |
+| `GET` | `/jarvis/voice` | Voice |
+
+## hermes-agent
+
+Motor do Hermes Agent: liga o container autónomo (perfil `agents`) aos fornecedores de IA da plataforma. Resolve a chave guardada, escreve-a no volume do container (`config.yaml` + `.env`) e recria-o — `/hermes-agent/settings` e `/hermes-agent/diagnose`.
+
+| Método | Caminho | Resumo |
+| --- | --- | --- |
+| `GET` | `/hermes-agent/container` | Container |
+| `GET` | `/hermes-agent/diagnose` | Diagnose |
+| `GET` | `/hermes-agent/providers` | Providers |
+| `GET` | `/hermes-agent/settings` | Get Settings |
+| `PUT` | `/hermes-agent/settings` | Put Settings |
+| `POST` | `/hermes-agent/settings/apply` | Apply Settings |
 
 ## researcher
 
@@ -456,6 +655,95 @@ Office: documentos Markdown com pastas e etiquetas, estatísticas, duplicar, exp
 | `DELETE` | `/office/folders/{folder_id}` | Delete Folder |
 | `GET` | `/office/stats` | Stats |
 
+## cms
+
+CMS: páginas por blocos, conteúdos reutilizáveis, blog com taxonomia, media, modelos, menus e aparência — com rascunho, agendamento, publicação, revisões e auditoria. O resultado público é servido em `/site/…` (HTML com SEO, RSS, sitemap e robots.txt).
+
+| Método | Caminho | Resumo |
+| --- | --- | --- |
+| `GET` | `/cms/activity` | Cms Activity |
+| `GET` | `/cms/catalogue` | Cms Catalogue |
+| `GET` | `/cms/media/{item_id}/raw` | Cms Media Raw |
+| `GET` | `/cms/media/{item_id}/usage` | Cms Media Usage |
+| `GET` | `/cms/menus` | Cms List Menus |
+| `POST` | `/cms/menus` | Cms Create Menu |
+| `PATCH` | `/cms/menus/{menu_id}` | Cms Patch Menu |
+| `DELETE` | `/cms/menus/{menu_id}` | Cms Delete Menu |
+| `GET` | `/cms/overview` | Cms Overview |
+| `GET` | `/cms/preview/{entity}/{item_id}` | Cms Preview |
+| `POST` | `/cms/revisions/{revision_id}/restore` | Cms Restore |
+| `GET` | `/cms/search` | Cms Search |
+| `GET` | `/cms/settings` | Cms Get Settings |
+| `PUT` | `/cms/settings` | Cms Put Settings |
+| `GET` | `/cms/taxonomy` | Cms Taxonomy |
+| `GET` | `/cms/tree` | Cms Tree |
+| `GET` | `/cms/{entity}` | Cms List |
+| `POST` | `/cms/{entity}` | Cms Create |
+| `GET` | `/cms/{entity}/{item_id}` | Cms Get |
+| `PATCH` | `/cms/{entity}/{item_id}` | Cms Patch |
+| `DELETE` | `/cms/{entity}/{item_id}` | Cms Delete |
+| `POST` | `/cms/{entity}/{item_id}/duplicate` | Cms Duplicate |
+| `POST` | `/cms/{entity}/{item_id}/publish` | Cms Publish |
+| `GET` | `/cms/{entity}/{item_id}/revisions` | Cms Revisions |
+| `POST` | `/cms/{entity}/{item_id}/status` | Cms Status |
+| `POST` | `/cms/{entity}/{item_id}/unpublish` | Cms Unpublish |
+| `GET` | `/site` | Site Home |
+| `GET` | `/site/blog` | Site Blog |
+| `GET` | `/site/blog/{slug}` | Site Post |
+| `GET` | `/site/categoria/{slug}` | Site Category |
+| `GET` | `/site/etiqueta/{tag}` | Site Tag |
+| `GET` | `/site/robots.txt` | Site Robots |
+| `GET` | `/site/rss.xml` | Site Rss |
+| `GET` | `/site/sitemap.xml` | Site Sitemap |
+| `GET` | `/site/{path}` | Site Page |
+
+## rss
+
+Leitor de RSS: fontes RSS/Atom (por endereço ou OPML) agrupadas em pastas, recolha manual ou por agenda cron, artigos com lido/favorito/guardado, pesquisa e integrações com o Office, o sentimento, o CRM e o RAG, além de resumos e boletins por IA.
+
+| Método | Caminho | Resumo |
+| --- | --- | --- |
+| `GET` | `/rss/articles` | Rss List Articles |
+| `POST` | `/rss/articles/digest` | Rss Articles Digest |
+| `POST` | `/rss/articles/purge-read` | Rss Purge Read |
+| `POST` | `/rss/articles/read-all` | Rss Read All |
+| `GET` | `/rss/articles/{article_id}` | Rss Get Article |
+| `PATCH` | `/rss/articles/{article_id}` | Rss Patch Article |
+| `POST` | `/rss/articles/{article_id}/crm` | Rss To Crm |
+| `POST` | `/rss/articles/{article_id}/digest` | Rss Digest Article |
+| `POST` | `/rss/articles/{article_id}/office` | Rss To Office |
+| `POST` | `/rss/articles/{article_id}/rag` | Rss To Rag |
+| `GET` | `/rss/articles/{article_id}/related` | Rss Related |
+| `POST` | `/rss/articles/{article_id}/sentiment` | Rss To Sentiment |
+| `GET` | `/rss/catalogue` | Rss Catalogue |
+| `GET` | `/rss/export` | Rss Export |
+| `GET` | `/rss/feeds` | Rss List Feeds |
+| `POST` | `/rss/feeds` | Rss Create Feed |
+| `GET` | `/rss/feeds/{feed_id}` | Rss Get Feed |
+| `PATCH` | `/rss/feeds/{feed_id}` | Rss Patch Feed |
+| `DELETE` | `/rss/feeds/{feed_id}` | Rss Delete Feed |
+| `POST` | `/rss/feeds/{feed_id}/fetch` | Rss Fetch Feed |
+| `POST` | `/rss/feeds/{feed_id}/purge-read` | Rss Feed Purge Read |
+| `POST` | `/rss/feeds/{feed_id}/read-all` | Rss Feed Read All |
+| `POST` | `/rss/fetch` | Rss Fetch All |
+| `GET` | `/rss/folders` | Rss List Folders |
+| `POST` | `/rss/folders` | Rss Create Folder |
+| `PATCH` | `/rss/folders/{folder_id}` | Rss Patch Folder |
+| `DELETE` | `/rss/folders/{folder_id}` | Rss Delete Folder |
+| `GET` | `/rss/opml` | Rss Export Opml |
+| `POST` | `/rss/opml/import` | Rss Import Opml |
+| `GET` | `/rss/overview` | Rss Overview |
+| `GET` | `/rss/rules` | Rss List Rules |
+| `PUT` | `/rss/rules` | Rss Save Rules |
+| `POST` | `/rss/rules/apply` | Rss Apply Rules |
+| `GET` | `/rss/schedule` | Rss Schedule |
+| `PUT` | `/rss/schedule` | Rss Save Schedule |
+| `POST` | `/rss/schedule/reload` | Rss Reload Schedule |
+| `GET` | `/rss/search` | Rss Search |
+| `GET` | `/rss/suggestions` | Rss Suggestions |
+| `POST` | `/rss/suggestions/subscribe` | Rss Subscribe Suggestions |
+| `GET` | `/rss/tags` | Rss Tags |
+
 ## email
 
 Correio: contas IMAP/SMTP, pastas e mensagens, sinalizadores, mover, apagar e enviar (com anexos).
@@ -485,6 +773,25 @@ Análise de sentimento: fontes disponíveis, motores (léxico/neural), análise 
 | --- | --- | --- |
 | `POST` | `/sentiment/analyze` | Analyze |
 | `POST` | `/sentiment/corpus` | Analyze Corpus |
+| `GET` | `/sentiment/market/alerts` | Sentiment Market Alerts |
+| `GET` | `/sentiment/market/brief` | Sentiment Market Brief |
+| `POST` | `/sentiment/market/brief/office` | Sentiment Market Brief Office |
+| `POST` | `/sentiment/market/build` | Sentiment Market Build |
+| `GET` | `/sentiment/market/divergence` | Sentiment Market Divergence |
+| `GET` | `/sentiment/market/export` | Sentiment Market Export |
+| `GET` | `/sentiment/market/overview` | Sentiment Market Overview |
+| `GET` | `/sentiment/market/price/{ticker}` | Sentiment Market Price |
+| `POST` | `/sentiment/market/report/office` | Sentiment Market Report |
+| `GET` | `/sentiment/market/schedule` | Sentiment Market Schedule |
+| `PUT` | `/sentiment/market/schedule` | Sentiment Market Save Schedule |
+| `POST` | `/sentiment/market/schedule/reload` | Sentiment Market Reload |
+| `GET` | `/sentiment/market/series` | Sentiment Market Series |
+| `DELETE` | `/sentiment/market/series` | Sentiment Market Delete |
+| `GET` | `/sentiment/market/state` | Sentiment Market State |
+| `GET` | `/sentiment/market/ticker/{ticker}` | Sentiment Market Ticker |
+| `GET` | `/sentiment/market/tickers` | Sentiment Market Tickers |
+| `POST` | `/sentiment/market/tickers` | Sentiment Market Follow |
+| `DELETE` | `/sentiment/market/tickers/{ticker}` | Sentiment Market Unfollow |
 | `GET` | `/sentiment/meta` | Sentiment Meta |
 | `POST` | `/sentiment/save/dossier` | Save To Dossier |
 | `POST` | `/sentiment/save/office` | Save To Office |
@@ -696,6 +1003,61 @@ GLEIF / LEI: registos *Legal Entity Identifier* do *Golden Copy* (Golden Copy em
 | `GET` | `/gleif/status` | Gleif Status |
 | `GET` | `/gleif/suggest` | Gleif Suggest |
 
+## world
+
+World Model: estado materializado do mundo da contratação pública (entidades, contratos, relações, eventos e histórico), rede neuronal dinâmica (crescimento, poda, memória e previsão — mostrada como grafo), motor de grafo/tempo (relações, timestamps e causalidade candidata), simulador de futuro (t0 → t3 com cenários e Monte Carlo) e agente de investigação (Observe → Hypothesize → Search → Validate → Simulate → Evidence Report).
+
+| Método | Caminho | Resumo |
+| --- | --- | --- |
+| `GET` | `/world/agent/catalog` | World Agent Catalog |
+| `POST` | `/world/agent/run` | World Agent Run |
+| `GET` | `/world/agent/runs` | World Agent Runs |
+| `GET` | `/world/agent/runs/{run_id}` | World Agent Run Detail |
+| `GET` | `/world/agent/targets` | World Agent Targets |
+| `GET` | `/world/architecture` | World Architecture |
+| `GET` | `/world/causality` | World Causality |
+| `GET` | `/world/centrality` | World Centrality |
+| `PUT` | `/world/config` | World Config |
+| `GET` | `/world/config` | World Config Get |
+| `GET` | `/world/entities` | World Entities |
+| `GET` | `/world/entities/{entity_ref}` | World Entity |
+| `GET` | `/world/entities/{entity_ref}/timeline` | World Entity Timeline |
+| `GET` | `/world/events` | World Events |
+| `GET` | `/world/events/stats` | World Events Stats |
+| `GET` | `/world/graph` | World Graph Build |
+| `GET` | `/world/graph/dimensions` | World Graph Dimensions |
+| `GET` | `/world/history` | World History |
+| `GET` | `/world/history/series` | World History Series |
+| `GET` | `/world/history/{entity_ref}` | World Entity History |
+| `POST` | `/world/investigate` | World Investigate |
+| `GET` | `/world/investigations` | World Investigations |
+| `GET` | `/world/investigations/{run_id}` | World Investigation |
+| `GET` | `/world/jobs` | World Jobs List |
+| `GET` | `/world/jobs/{job_id}` | World Job |
+| `GET` | `/world/meta` | World Meta |
+| `GET` | `/world/network` | World Network |
+| `GET` | `/world/network/anomalies` | World Network Anomalies |
+| `GET` | `/world/network/graph` | World Network Graph |
+| `GET` | `/world/network/history` | World Network History |
+| `GET` | `/world/network/recall/{entity_ref}` | World Network Recall |
+| `POST` | `/world/network/train` | World Network Train |
+| `GET` | `/world/network/transition` | World Network Transition |
+| `GET` | `/world/network/transition/{entity_ref}` | World Network Transition Entity |
+| `GET` | `/world/paths` | World Paths |
+| `GET` | `/world/pipeline/graph` | World Pipeline Graph |
+| `POST` | `/world/rebuild` | World Rebuild |
+| `GET` | `/world/relations` | World Relations |
+| `GET` | `/world/relations/stats` | World Relations Stats |
+| `GET` | `/world/schedule` | World Schedule |
+| `PUT` | `/world/schedule` | World Schedule Update |
+| `POST` | `/world/simulate` | World Simulate |
+| `GET` | `/world/simulations` | World Simulations |
+| `GET` | `/world/simulations/{run_id}` | World Simulation |
+| `GET` | `/world/sources` | World Sources Availability |
+| `PUT` | `/world/sources` | World Sources Save |
+| `GET` | `/world/status` | World Status |
+| `GET` | `/world/temporal` | World Temporal |
+
 ## spa
 
 Páginas da interface (single-page app). Devolvem o `index.html` e existem para permitir abrir os ecrãs diretamente pelo endereço — não são endpoints de dados.
@@ -713,10 +1075,15 @@ Páginas da interface (single-page app). Devolvem o `index.html` e existem para 
 | `GET` | `/contracts/search` | Página da interface (SPA) |
 | `GET` | `/contribuintes` | Página da interface (SPA) |
 | `GET` | `/crm` | Página da interface (SPA) |
-| `GET` | `/crm/admin` | Serve Spa Page |
 | `GET` | `/crm/agenda` | Página da interface (SPA) |
 | `POST` | `/crm/ai/ask` | Ai Ask |
 | `POST` | `/crm/ai/insights/generate` | Ai Insights Generate |
+| `GET` | `/crm/analytics` | Crm Analytics Board |
+| `POST` | `/crm/analytics/cross-sell` | Crm Analytics Cross Sell |
+| `GET` | `/crm/analytics/datasets` | Crm Analytics Datasets |
+| `GET` | `/crm/analytics/datasets/{dataset_id}` | Crm Analytics Dataset Rows |
+| `POST` | `/crm/analytics/opportunities` | Crm Analytics Opportunities |
+| `GET` | `/crm/atividades` | Serve Spa Page |
 | `GET` | `/crm/auditoria` | Serve Spa Page |
 | `GET` | `/crm/campanhas` | Serve Spa Page |
 | `GET` | `/crm/campanhas-membros` | Serve Spa Page |
@@ -731,6 +1098,7 @@ Páginas da interface (single-page app). Devolvem o `index.html` e existem para 
 | `GET` | `/crm/eventos` | Serve Spa Page |
 | `GET` | `/crm/ia-interacoes` | Serve Spa Page |
 | `GET` | `/crm/ia-percecoes` | Serve Spa Page |
+| `GET` | `/crm/indicadores` | Serve Spa Page |
 | `GET` | `/crm/leads` | Serve Spa Page |
 | `GET` | `/crm/marketing-atividades` | Serve Spa Page |
 | `GET` | `/crm/marketing-jornadas` | Serve Spa Page |
@@ -747,7 +1115,8 @@ Páginas da interface (single-page app). Devolvem o `index.html` e existem para 
 | `GET` | `/crm/previsoes` | Serve Spa Page |
 | `GET` | `/crm/produtos` | Serve Spa Page |
 | `GET` | `/crm/propostas` | Serve Spa Page |
-| `GET` | `/crm/rbac` | Serve Spa Page |
+| `GET` | `/crm/quadros` | Serve Spa Page |
+| `GET` | `/crm/rbac` | Crm Rbac |
 | `POST` | `/crm/rbac/sync` | Crm Rbac Sync |
 | `GET` | `/crm/relatorios` | Página da interface (SPA) |
 | `GET` | `/crm/suite` | Crm Suite Meta |
@@ -787,4 +1156,6 @@ Páginas da interface (single-page app). Devolvem o `index.html` e existem para 
 | `GET` | `/sentimento` | Página da interface (SPA) |
 | `GET` | `/ticker-detail` | Página da interface (SPA) |
 | `GET` | `/trading` | Página da interface (SPA) |
+| `GET` | `/world` | Página da interface (SPA) |
+| `GET` | `/world/rede` | Página da interface (SPA) |
 | `GET` | `/{full_path}` | Página da interface (SPA) |

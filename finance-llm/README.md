@@ -1410,9 +1410,117 @@ Notas de implementação (`api/hermes_service.py`):
 Sem modelo configurado a resposta é factual — configure um fornecedor em **Definições →
 Fornecedores de IA** para ter a resposta redigida com citações.
 
+### Jarvis (assistente com voz)Aplicação **Jarvis** (`/jarvis`, `docs/jarvis.md`) — o assistente operacional que **fala e
+ouve**. Em vez de ir buscar os dados diretamente, fala com o sistema por **gateways**: o
+**Hermes** (investigação citada), o **MCP do sistema** (as operações curadas: contratos,
+empresas, mercado, RAG, ontologia, CRM…) e o **browser** (pesquisa e leitura de páginas
+externas, com extração de texto). Segue também a mesma biblioteca de **skills** do Hermes.
+
+```
+pergunta → skill → plano → gateways → resposta → fala
+```
+
+Na página, a **órbita** é o estado do Jarvis: respira quando está à espera, pulsa com o
+microfone quando ouve, acelera quando fala com os gateways e ondula quando responde em voz
+alta. A resposta é construída em direto — os passos (skill, plano, ferramenta, resultado)
+aparecem à medida que acontecem.
+
+O Jarvis está **sempre à mão**: além da página `/jarvis`, um **widget flutuante** acompanha toda
+a plataforma — um botão só com o ícone que abre o **Control Center**. O painel tem o *estado do
+sistema* num relance (modelo, quantas ferramentas expõe cada gateway, estado da voz), quatro
+atalhos para os pedidos mais comuns (*maiores contratos*, *ficha de empresa*, *notícias de
+mercado*, *estado do sistema*) e a conversa completa com passos, fontes e sugestões. O botão
+arrasta-se (a posição fica guardada), o microfone está sempre no compositor e o histórico é
+**o mesmo** da página — os dois sincronizam-se. Na página `/jarvis` o widget esconde-se, porque
+aí já está a conversa toda.
+
+Voz, por ordem de preferência e sempre com degradação:
+
+- **ouvir** — `SpeechRecognition` do browser (Chrome/Edge); sem ele, grava com `MediaRecorder`
+  e transcreve no servidor com `faster-whisper`;
+- **falar** — vozes do sistema (`speechSynthesis`); com **Voz do servidor** ligado e
+  `edge-tts` instalado, usa vozes neurais `pt-PT` de `/jarvis/speak`.
+
+Endpoints (`api/jarvis_routes.py`):
+
+- `GET  /jarvis/meta` — capacidades, gateways, ferramentas, vozes e modelo
+- `GET  /jarvis/tools` · `GET /jarvis/voice` — catálogo das ferramentas e estado da voz
+- `POST /jarvis/ask` · `POST /jarvis/ask/stream` — pergunta (JSON ou SSE com os passos)
+- `POST /jarvis/transcribe` (áudio → texto) · `POST /jarvis/speak` (texto → mp3)
+
+Notas de implementação (`api/jarvis_gateway.py`, `api/jarvis_service.py`):
+
+- o **plano** é pedido ao modelo quando há um; **sem modelo** é por palavras-chave, e
+  `default_args()` só deixa entrar ferramentas para as quais se consegue construir um pedido
+  válido a partir da pergunta — uma ferramenta que exija um ticker/NIF/`dataset` que não se
+  adivinha nunca entra no plano (evita 422 garantidos);
+- as operações do **MCP correm dentro do processo** (`httpx.ASGITransport` sobre a própria
+  aplicação, com o token da sessão reencaminhado): sem rede nem login extra;
+- no modo factual o Jarvis mostra o que as ferramentas devolveram, sem interpretação; o texto
+  falado é limpo de markdown, converte `[1]` em «(fonte 1)» e é cortado a 900 caracteres;
+- o Jarvis está exposto no próprio servidor MCP (`jarvis_meta`, `jarvis_tools`, `jarvis_voice`,
+  `jarvis_ask`, `jarvis_speak`), pelo que outro agente lhe pode pedir uma resposta com voz;
+- `JARVIS_VOICE` e `JARVIS_STT_MODEL` (ver `.env.example`) escolhem a voz e o modelo de
+  transcrição; **sem `edge-tts`/`faster-whisper`** o Jarvis não perde funcionalidade — muda só
+  quem sintetiza e transcreve.
+
+### Motor do Hermes Agent (ligar o container aos fornecedores da plataforma)
+
+O **Hermes Agent** (`docker/profile agents`, dashboard na página iframe «Hermes Agent») é um
+agente **autónomo**: não partilha nada com o IQ OS além do login, e vive do seu próprio volume
+(`hermes-data` → `/opt/data`). Sem configuração, esse volume arranca com o `config.yaml` de
+exemplo (`provider: auto`, `anthropic/claude-opus-4.6`) e um `.env` **sem chaves** — ou seja, o
+agente fica sem modelo.
+
+O painel **Motor do Hermes Agent**, na página **Hermes** (`/hermes`, coluna da esquerda →
+*configurar*), fecha essa lacuna com o mesmo padrão do MiroFish: a plataforma resolve a chave que
+**já tem** para o utilizador, escreve-a onde o agente a lê e recria o container.
+
+```
+escolher fornecedor → ver o plano → aplicar (escreve no volume + recria o container)
+```
+
+Como se decide onde escrever (lido do container, não assumido):
+
+- fornecedores com **perfil nativo** no Hermes — `deepseek`, `anthropic`, `gemini`, `openrouter`,
+  `xai`, `ollama-cloud` — vão para `model.provider` e a chave para o `.env`, na variável que o
+  perfil espera (`DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, …). A lista de perfis
+  e das suas variáveis é lida de `/opt/hermes/plugins/model-providers/*`, para acompanhar a versão
+  instalada em vez de a fixar no código;
+- os restantes — `openai`, `groq`, `mistral-ai`, `ollama` — não têm perfil equivalente no upstream
+  e vão por `provider: custom` (OpenAI-compatível), com `model.base_url` e `model.api_key`;
+- endereços de loopback são reescritos para `host.docker.internal` (um Ollama no host não existe
+  dentro do container);
+- a **pesquisa web** do agente passa a usar o **SearXNG da própria solução** (`SEARXNG_URL`), ou a
+  Brave com a `BRAVE_API_KEY` da plataforma — sem chaves externas novas.
+
+A escrita é feita com o **CLI do próprio Hermes** (`hermes config set|unset`, via
+`docker exec -u hermes`), que valida as chaves contra o esquema da versão instalada — em vez de
+reescrever o YAML à mão. Trocar de fornecedor limpa as variáveis geridas que sobraram, para não
+ficar lá a chave antiga (que o modo `auto` poderia escolher).
+
+Endpoints (`api/hermes_agent_routes.py`, requerem sessão):
+
+- `GET  /hermes-agent/settings` — definições, plano a aplicar, diagnóstico e comandos
+- `PUT  /hermes-agent/settings` — grava as definições (sem tocar no container)
+- `POST /hermes-agent/settings/apply` — resolve, escreve no container e recria-o
+- `GET  /hermes-agent/diagnose` — o que está **dentro** do container vs. o que a plataforma quer
+- `GET  /hermes-agent/providers` — fornecedores utilizáveis e o modo (perfil nativo ou `custom`)
+
+Notas de implementação (`api/hermes_agent_settings.py`):
+
+- a chave **nunca** sai em claro nas respostas da API (é mascarada em `settings_view` e em
+  `apply_settings`);
+- sem chave não se aplica nada: o pedido falha com uma mensagem que diz exatamente onde a
+  guardar — recriar o container para o deixar sem LLM só interrompia o serviço;
+- o `docker` tem de estar acessível a quem corre o backend (funciona no host; dentro de um
+  container seria preciso montar `/var/run/docker.sock`) e o `diagnose` di-lo quando não está;
+- `hermes config unset` sai com código 1 quando a chave já não existe — o estado pedido está
+  cumprido, por isso conta como sucesso.
+
 ### Skills (o método dos assistentes)
 
-Antes de responder, o **Hermes**, o **Chat IA** e o **RAG** passam pelo mesmo passo: escolher — ou
+Antes de responder, o **Hermes**, o **Jarvis**, o **Chat IA** e o **RAG** passam pelo mesmo passo: escolher — ou
 **criar** — uma **skill** para o pedido, e seguir o seu método. Uma skill é um procedimento curto e
 verificável: nome, quando aplicar, passos, verificações e as ferramentas da plataforma a usar.
 
