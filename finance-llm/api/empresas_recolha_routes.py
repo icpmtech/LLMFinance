@@ -49,6 +49,19 @@ class EmpresaDetailRequest(BaseModel):
     url: str = Field(..., min_length=10, description="URL da página de detalhe (ex.: /empresa/<nif>/<slug>)")
 
 
+class RecolhaDistritoRequest(BaseModel):
+    """Pedido de recolha de **todos os concelhos de um distrito**."""
+
+    distrito: str = Field(..., min_length=1, description="Distrito (ex.: Évora)")
+    start_page: int = Field(1, ge=1, description="Página inicial de cada concelho")
+    max_pages: int = Field(service.DISTRICT_MAX_PAGES, ge=1, le=500, description="Teto de páginas por concelho")
+    detail: bool = Field(True, description="Recolher o texto integral da ficha de cada empresa")
+    delay: float = Field(0.5, ge=0, le=10, description="Segundos entre pedidos de detalhe")
+    ingest: bool = Field(False, description="Indexar automaticamente no finance_scraped")
+    skip_done: bool = Field(True, description="Saltar concelhos já concluídos (retoma pelo manifesto)")
+    concelhos: Optional[List[str]] = Field(None, description="Limitar a estes concelhos (por omissão: todos)")
+
+
 @router.get("/meta")
 def recolha_meta(session: ReadSession = None) -> Dict[str, Any]:
     """Metadados do módulo: pasta de exportação e distritos/concelhos disponíveis."""
@@ -155,3 +168,65 @@ def recolha_detail(
 ) -> Dict[str, Any]:
     """Recolhe o detalhe de uma empresa individual."""
     return service.preview_item(req.url)
+
+
+# ------------------------------------------------------------------ distrito
+@router.get("/distrito/{distrito}/concelhos")
+def recolha_concelhos_do_site(
+    distrito: str,
+    session: ReadSession = None,
+) -> Dict[str, Any]:
+    """Concelhos do distrito, lidos da página do diretório (fonte da verdade)."""
+    try:
+        nomes = service.concelhos_do_site(distrito)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Não foi possível ler os concelhos: {exc}") from exc
+    return {"distrito": distrito, "concelhos": nomes, "total": len(nomes)}
+
+
+@router.get("/distrito/{distrito}/estado")
+def recolha_distrito_estado(
+    distrito: str,
+    session: ReadSession = None,
+) -> Dict[str, Any]:
+    """Estado da recolha de um distrito (manifesto por concelho)."""
+    return service.read_manifest(distrito)
+
+
+@router.post("/distrito")
+def recolha_distrito_job(
+    req: RecolhaDistritoRequest,
+    session: Session,
+) -> Dict[str, Any]:
+    """Arranca em segundo plano a recolha de todos os concelhos do distrito."""
+    try:
+        return service.start_district_job(
+            distrito=req.distrito,
+            start_page=req.start_page,
+            max_pages=req.max_pages,
+            detail=req.detail,
+            delay=req.delay,
+            ingest=req.ingest,
+            skip_done=req.skip_done,
+        )
+    except Exception as exc:
+        logger.exception("Falha a arrancar recolha do distrito %s", req.distrito)
+        raise HTTPException(status_code=502, detail=f"Erro ao arrancar a recolha: {exc}") from exc
+
+
+@router.post("/distrito/sync")
+def recolha_distrito_sync(
+    req: RecolhaDistritoRequest,
+    session: Session,
+) -> Dict[str, Any]:
+    """Executa a recolha do distrito de forma síncrona (bloqueia até terminar)."""
+    return service.run_district_sync(
+        distrito=req.distrito,
+        start_page=req.start_page,
+        max_pages=req.max_pages,
+        detail=req.detail,
+        delay=req.delay,
+        ingest=req.ingest,
+        skip_done=req.skip_done,
+        concelhos=req.concelhos,
+    )

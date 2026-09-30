@@ -139,8 +139,13 @@ def run_sync(
     delay: float = 1.0,
     keep_source: bool = True,
     ingest: bool = False,
+    all_pages: bool = False,
 ) -> Dict[str, Any]:
     """Recolha síncrona por distrito/concelho. Usado pelos scripts e pela UI.
+
+    Com `all_pages=True`, `max_pages` passa a ser apenas o **teto de segurança** e
+    a recolha segue a paginação do site até não haver página seguinte; o ficheiro
+    exportado fica com o número de páginas realmente recolhidas.
 
     Devolve um dicionário com metadados, caminho do ficheiro exportado e a
     lista de itens recolhidos.
@@ -159,12 +164,18 @@ def run_sync(
 
     run_id = meta.get("run_id")
     items = _read_jsonl_items(run_id, source_id)
-    out_file = _export_path(distrito, concelho, start_page, max_pages)
+    # Páginas realmente recolhidas: com `all_pages` o nome do ficheiro deve
+    # refletir o que existe, não o teto pedido.
+    pages_real = int(meta.get("pages") or 0)
+    pages_efetivas = pages_real if (all_pages and pages_real > 0) else max(1, int(max_pages))
+    out_file = _export_path(distrito, concelho, start_page, pages_efetivas)
     payload = {
         "distrito": distrito,
         "concelho": concelho,
         "start_page": int(start_page),
         "max_pages": int(max_pages),
+        "pages": pages_real,
+        "all_pages": bool(all_pages),
         "run_id": run_id,
         "source_id": source_id,
         "collected_at": _now(),
@@ -191,9 +202,11 @@ def run_sync(
         "concelho": concelho,
         "start_page": int(start_page),
         "max_pages": int(max_pages),
+        "pages": pages_real,
         "run_id": run_id,
         "source_id": source_id,
         "file": str(out_file),
+        "file_rel": str(out_file.relative_to(export_dir())),
         "items_count": len(items),
         "meta": meta,
     }
@@ -402,6 +415,243 @@ def preview_item(url: str) -> Dict[str, Any]:
         "detail_errors": 0 if text else 1,
         "duplicates": 0,
     }
+
+
+#: Teto de segurança de páginas por concelho quando se recolhe um distrito todo.
+DISTRICT_MAX_PAGES = 200
+
+
+def _distrito_url(distrito: str) -> str:
+    return f"https://www.iberinform.pt/diretorio/{_slugify(distrito)}"
+
+
+def concelhos_do_site(distrito: str) -> List[str]:
+    """Concelhos de um distrito, lidos da página do próprio diretório.
+
+    Evita listas escritas à mão (e respetivos erros de slug): o site publica
+    ligações `/diretorio/<distrito>/<concelho>` na página do distrito.
+    """
+    distrito_slug = _slugify(distrito)
+    url = _distrito_url(distrito)
+    options = {"impersonate": "chrome", "timeout": 30}
+    with scraper_service._open_session("http", options) as session:
+        page = scraper_service._session_fetch(session, "http", url, options)
+    if page is None:
+        raise RuntimeError(f"Sem resposta de {url}")
+    padrao = re.compile(rf"^/diretorio/{re.escape(distrito_slug)}/([a-z0-9\-]+)/?$", re.I)
+    nomes: List[str] = []
+    for href in page.css("a::attr(href)").getall():
+        match = padrao.match(str(href).strip())
+        if match:
+            slug = match.group(1).lower()
+            if slug not in nomes:
+                nomes.append(slug)
+    return sorted(nomes)
+
+
+def _manifest_path(distrito: str) -> Path:
+    base = export_dir() / _slugify(distrito)
+    base.mkdir(parents=True, exist_ok=True)
+    return base / "_manifest.json"
+
+
+def read_manifest(distrito: str) -> Dict[str, Any]:
+    """Manifesto da recolha de um distrito (estado por concelho)."""
+    path = _manifest_path(distrito)
+    if not path.exists():
+        return {"distrito": distrito, "concelhos": {}, "updated_at": None}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("Manifesto ilegível em %s: %s", path, exc)
+        return {"distrito": distrito, "concelhos": {}, "updated_at": None}
+    data.setdefault("distrito", distrito)
+    data.setdefault("concelhos", {})
+    return data
+
+
+def _write_manifest(distrito: str, manifest: Dict[str, Any]) -> None:
+    manifest["distrito"] = distrito
+    manifest["updated_at"] = _now()
+    path = _manifest_path(distrito)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(path)
+
+
+def run_district_sync(
+    distrito: str,
+    *,
+    start_page: int = 1,
+    max_pages: int = DISTRICT_MAX_PAGES,
+    detail: bool = True,
+    delay: float = 0.5,
+    ingest: bool = False,
+    skip_done: bool = True,
+    concelhos: Optional[List[str]] = None,
+    on_progress: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """Recolhe **todos os concelhos de um distrito**, todas as páginas de cada um.
+
+    Cada concelho fica num JSON próprio (`<distrito>/<concelho>/pagina_X_a_Y.json`)
+    e o manifesto `<distrito>/_manifest.json` guarda o estado, para que uma
+    segunda passagem com `skip_done=True` continue só o que falta.
+
+    `on_progress(evento)` é chamado a cada mudança de estado (`inicio`,
+    `concelho_inicio`, `concelho_fim`, `fim`), para o trabalho em segundo plano
+    poder reportar progresso.
+    """
+    distrito = distrito.strip()
+    nomes = [c.strip().lower() for c in (concelhos or []) if c.strip()] or concelhos_do_site(distrito)
+    manifest = read_manifest(distrito)
+    estado: Dict[str, Any] = manifest.setdefault("concelhos", {})
+
+    def reportar(evento: Dict[str, Any]) -> None:
+        if on_progress:
+            try:
+                on_progress(evento)
+            except Exception:  # a UI nunca deve quebrar a recolha
+                logger.debug("on_progress falhou", exc_info=True)
+
+    reportar({"tipo": "inicio", "distrito": distrito, "concelhos": nomes})
+    resultados: List[Dict[str, Any]] = []
+    total_itens = 0
+
+    for indice, nome in enumerate(nomes):
+        anterior = estado.get(nome) or {}
+        if skip_done and anterior.get("ok"):
+            resultados.append({**anterior, "concelho": nome, "saltado": True})
+            total_itens += int(anterior.get("items_count") or 0)
+            reportar({"tipo": "concelho_fim", "concelho": nome, "indice": indice, "total": len(nomes), "saltado": True, "resultado": anterior})
+            continue
+
+        reportar({"tipo": "concelho_inicio", "concelho": nome, "indice": indice, "total": len(nomes)})
+        res = run_sync(
+            distrito=distrito,
+            concelho=nome,
+            start_page=start_page,
+            max_pages=max_pages,
+            detail=detail,
+            delay=delay,
+            ingest=ingest,
+            all_pages=True,
+        )
+        resumo = {
+            "concelho": nome,
+            "ok": bool(res.get("ok")),
+            "items_count": int(res.get("items_count") or 0),
+            "pages": int(res.get("pages") or 0),
+            "file": res.get("file_rel") or res.get("file"),
+            "run_id": res.get("run_id"),
+            "collected_at": _now(),
+        }
+        if not res.get("ok"):
+            resumo["error"] = res.get("error")
+        resultados.append(resumo)
+        estado[nome] = resumo
+        total_itens += resumo["items_count"]
+        _write_manifest(distrito, manifest)
+        reportar({"tipo": "concelho_fim", "concelho": nome, "indice": indice, "total": len(nomes), "resultado": resumo})
+
+    manifest["total_items"] = sum(int(v.get("items_count") or 0) for v in estado.values())
+    manifest["concelhos_ok"] = sum(1 for v in estado.values() if v.get("ok"))
+    _write_manifest(distrito, manifest)
+
+    falhados = [r["concelho"] for r in resultados if not r.get("ok")]
+    saida = {
+        "ok": not falhados,
+        "distrito": distrito,
+        "concelhos": resultados,
+        "total_concelhos": len(nomes),
+        "concelhos_ok": manifest["concelhos_ok"],
+        "total_items": total_itens,
+        "falhados": falhados,
+        "manifest": str(_manifest_path(distrito)),
+    }
+    reportar({"tipo": "fim", "distrito": distrito, "resultado": saida})
+    return saida
+
+
+def start_district_job(
+    distrito: str,
+    *,
+    start_page: int = 1,
+    max_pages: int = DISTRICT_MAX_PAGES,
+    detail: bool = True,
+    delay: float = 0.5,
+    ingest: bool = False,
+    skip_done: bool = True,
+) -> Dict[str, Any]:
+    """Arranca em segundo plano a recolha de **todos os concelhos de um distrito**."""
+    job_id = f"dist-{uuid.uuid4().hex[:10]}"
+
+    def _progresso(evento: Dict[str, Any]) -> None:
+        with _JOBS_LOCK:
+            job = _JOBS.get(job_id)
+            if not job:
+                return
+            job["progress"] = evento
+            if evento.get("tipo") == "concelho_inicio":
+                job["concelho_atual"] = evento.get("concelho")
+
+    def _run() -> None:
+        with _JOBS_LOCK:
+            _JOBS[job_id]["status"] = _RUNNING
+            _JOBS[job_id]["started_at"] = _now()
+        try:
+            resultado = run_district_sync(
+                distrito,
+                start_page=start_page,
+                max_pages=max_pages,
+                detail=detail,
+                delay=delay,
+                ingest=ingest,
+                skip_done=skip_done,
+                on_progress=_progresso,
+            )
+            with _JOBS_LOCK:
+                _JOBS[job_id]["status"] = "done" if resultado.get("ok") else "error"
+                _JOBS[job_id]["result"] = resultado
+                _JOBS[job_id]["concelhos"] = resultado.get("concelhos")
+                _JOBS[job_id]["finished_at"] = _now()
+                if not resultado.get("ok"):
+                    _JOBS[job_id]["error"] = f"Concelhos com falha: {', '.join(resultado.get('falhados') or [])}"
+        except Exception as exc:
+            logger.exception("Recolha do distrito %s falhou", distrito)
+            with _JOBS_LOCK:
+                _JOBS[job_id]["status"] = "error"
+                _JOBS[job_id]["error"] = str(exc)
+                _JOBS[job_id]["finished_at"] = _now()
+        finally:
+            with _JOBS_LOCK:
+                while len(_JOBS) > _JOBS_KEEP:
+                    _JOBS.pop(next(iter(_JOBS)), None)
+
+    with _JOBS_LOCK:
+        _JOBS[job_id] = {
+            "job_id": job_id,
+            "kind": "distrito",
+            "status": "pending",
+            "started_at": None,
+            "finished_at": None,
+            "payload": {
+                "distrito": distrito,
+                "start_page": start_page,
+                "max_pages": max_pages,
+                "detail": detail,
+                "delay": delay,
+                "ingest": ingest,
+                "skip_done": skip_done,
+            },
+            "progress": None,
+            "concelho_atual": None,
+            "concelhos_feitos": 0,
+            "concelhos": None,
+            "result": None,
+            "error": None,
+        }
+    threading.Thread(target=_run, daemon=True).start()
+    return {"job_id": job_id, "status": "running"}
 
 
 def districts_from_exports() -> List[str]:
