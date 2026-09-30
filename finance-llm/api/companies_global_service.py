@@ -20,8 +20,9 @@ Decisões:
 from __future__ import annotations
 
 import logging
+import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -30,11 +31,13 @@ from api.elasticsearch_client import (
     FIRMAS_INDEX,
     TRADEMARKS_INDEX,
     CONTRATOS_ES_INDEX,
+    SCRAPED_INDEX,
     ensure_indices,
     get_es_client,
     search_contratos_es_entities,
     search_entities,
     search_firmas,
+    search_iberinform,
     search_trademarks,
 )
 
@@ -86,9 +89,29 @@ SOURCES: List[Dict[str, Any]] = [
         "country": "—",
         "session": True,
     },
+    {
+        "id": "iberinform",
+        "label": "Iberinform",
+        "hint": "Empresas recolhidas do Iberinform",
+        "country": "PT",
+        "index": SCRAPED_INDEX,
+    },
 ]
 SOURCE_IDS = [source["id"] for source in SOURCES]
 _ES_KIND = {"organo_es": "organo", "adjudicataria_es": "adjudicatario"}
+
+#: Fontes «rápidas»: leem diretórios indexados. As de Espanha são **agregações**
+#: sobre os ~4 M de contratos do PLACSP e podem demorar dezenas de segundos
+#: (sobretudo com a cache do Elasticsearch fria).
+FAST_SOURCE_IDS = ("entity", "firma", "trademark", "iberinform")
+
+#: Teto de tempo por fonte: uma fonte lenta não pode segurar a resposta toda.
+SOURCE_TIMEOUT = 20.0
+
+#: Cache de resultados da pesquisa (a vista «Todas» é a mais pedida).
+SEARCH_TTL = 120.0
+_search_cache: Dict[tuple, tuple] = {}
+_search_lock = threading.Lock()
 
 # Cache da volumetria por fonte (a cardinalidade do PLACSP leva alguns segundos).
 _SUMMARY_TTL = 300.0
@@ -236,6 +259,38 @@ def _collect_es(source_id: str, q: str, size: int, offset: int) -> Dict[str, Any
     return {"items": rows, "total": int(result.get("total") or 0), "error": None}
 
 
+def _collect_iberinform(q: str, size: int, offset: int) -> Dict[str, Any]:
+    result = search_iberinform(q=q or None, size=size, from_=offset, sort="relevance" if q else "recent")
+    if result.get("error"):
+        return {"error": str(result["error"]), "items": [], "total": 0}
+    rows = []
+    for row in result.get("items") or []:
+        data = row.get("data") or {}
+        nome = data.get("nome") or row.get("title") or ""
+        nif = str(data.get("nif") or "")
+        distrito = data.get("distrito") or ""
+        concelho = data.get("concelho") or ""
+        rows.append(
+            _row(
+                "iberinform",
+                row.get("item_id") or row.get("_id") or nif or nome or "",
+                nome,
+                detail=" · ".join(filter(None, [distrito, concelho, data.get("sede")])),
+                nif=nif,
+                region=concelho or distrito or "",
+                date=row.get("scraped_at"),
+                extra={
+                    "distrito": distrito,
+                    "concelho": concelho,
+                    "source_id": row.get("source_id"),
+                    "url": data.get("url") or row.get("url"),
+                },
+                open_view={"view": "company-detail", "arg": nif} if nif else None,
+            )
+        )
+    return {"items": rows, "total": int(result.get("total") or 0), "error": None}
+
+
 def _collect_crm(q: str, size: int, offset: int, session_scope: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if not session_scope:
         return {"error": None, "items": [], "total": 0, "skipped": True}
@@ -273,6 +328,7 @@ COLLECTORS = {
     "organo_es": lambda q, size, offset, scope: _collect_es("organo_es", q, size, offset),
     "adjudicataria_es": lambda q, size, offset, scope: _collect_es("adjudicataria_es", q, size, offset),
     "crm": lambda q, size, offset, scope: _collect_crm(q, size, offset, scope),
+    "iberinform": lambda q, size, offset, scope: _collect_iberinform(q, size, offset),
 }
 
 
@@ -284,14 +340,31 @@ def search(
     size: int = 24,
     offset: int = 0,
     session_scope: Optional[Dict[str, Any]] = None,
+    fast: bool = False,
 ) -> Dict[str, Any]:
-    """Pesquisa empresas/entidades em todas as fontes (ou numa só)."""
-    query = (q or "").strip()
+    """Pesquisa empresas/entidades em todas as fontes (ou numa só).
+
+    Com `fast=True` e a vista «Todas», só correm as fontes de diretório (PT):
+    ninguém deve esperar pelas agregações do PLACSP para ver as primeiras
+    empresas. É o que a UI usa no primeiro desenho da página.
+    """
+    query = (q or "".strip())
     size = max(1, min(int(size), 100))
     offset = max(0, int(offset))
     requested = [source] if source in SOURCE_IDS else list(SOURCE_IDS)
     if not session_scope:
         requested = [item for item in requested if not _source(item).get("session")]
+    if fast and source not in SOURCE_IDS:
+        requested = [item for item in requested if item in FAST_SOURCE_IDS]
+
+    chave = (query, source, size, offset, bool(session_scope), bool(fast))
+    agora = time.time()
+    with _search_lock:
+        guardado = _search_cache.get(chave)
+    if guardado and (agora - guardado[0]) < SEARCH_TTL:
+        resposta = dict(guardado[1])
+        resposta["cached"] = True
+        return resposta
 
     client = get_es_client()
     if not client:
@@ -317,17 +390,26 @@ def search(
             }
         )
     else:
-        with ThreadPoolExecutor(max_workers=min(4, max(1, len(requested)))) as pool:
+        with ThreadPoolExecutor(max_workers=min(6, max(1, len(requested)))) as pool:
             futures = {
                 pool.submit(COLLECTORS[source_id], query, size, offset, session_scope): source_id
                 for source_id in requested
             }
-            for future, source_id in futures.items():
+            por_fonte: Dict[str, Any] = {}
+            for future in as_completed(futures, timeout=None):
+                source_id = futures[future]
                 try:
-                    result = future.result(timeout=30)
-                except Exception as exc:  # pragma: no cover - depende do Elasticsearch
+                    por_fonte[source_id] = future.result(timeout=SOURCE_TIMEOUT)
+                except Exception as exc:
                     logger.warning("Empresas globais: fonte %s falhou: %s", source_id, exc)
-                    result = {"error": f"{type(exc).__name__}: {exc}", "items": [], "total": 0}
+                    por_fonte[source_id] = {
+                        "error": f"{type(exc).__name__}: {exc}",
+                        "items": [],
+                        "total": 0,
+                    }
+            # A ordem dos cartões segue o catálogo, não a ordem de chegada.
+            for source_id in requested:
+                result = por_fonte.get(source_id) or {"items": [], "total": 0, "error": "sem resposta"}
                 collected[source_id] = result.get("items") or []
                 cards.append(
                     {
@@ -352,7 +434,7 @@ def search(
     order = {source_id: index for index, source_id in enumerate(SOURCE_IDS)}
     cards.sort(key=lambda card: order.get(card["id"], 99))
     took_ms = int((datetime.now() - started).total_seconds() * 1000)
-    return {
+    resposta = {
         "query": query,
         "source": source,
         "size": size,
@@ -361,7 +443,17 @@ def search(
         "total": sum(card["total"] for card in cards),
         "items": items[:size],
         "sources": cards,
+        "fast": bool(fast),
+        "cached": False,
     }
+    # Só vale a pena guardar respostas completas e sem falhas.
+    if not any(card.get("error") for card in cards):
+        with _search_lock:
+            _search_cache[chave] = (time.time(), resposta)
+            if len(_search_cache) > 200:
+                mais_antigo = min(_search_cache, key=lambda k: _search_cache[k][0])
+                _search_cache.pop(mais_antigo, None)
+    return resposta
 
 
 def sources_summary(session_scope: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

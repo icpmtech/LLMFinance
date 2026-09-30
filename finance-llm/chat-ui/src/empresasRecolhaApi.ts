@@ -32,6 +32,8 @@ export interface EmpresasRecolhaResult {
   concelho: string;
   start_page: number;
   max_pages: number;
+  /** Páginas realmente recolhidas. */
+  pages?: number;
   run_id: string;
   source_id: string;
   file: string;

@@ -493,7 +493,14 @@ TEMPLATES: List[Dict[str, Any]] = [
             "id_fields": ["bid"],
             "title_field": "nome",
             "summary_field": "partido",
-            "detail": _detail("div.col-xs-12", max_items=30, delay=0.4),
+            "detail": {
+                "enabled": True,
+                "selector": "//div[contains(@class, 'col-xs-12')][div[@class='TextoRegular-Titulo']][div[contains(@class, 'TitulosBio')]]",
+                "type": "xpath",
+                "max_items": 30,
+                "delay": 0.4,
+                "max_chars": 20000,
+            },
         },
     },
     {

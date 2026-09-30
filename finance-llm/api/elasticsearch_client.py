@@ -8025,6 +8025,69 @@ def search_scraped(
     }
 
 
+def search_iberinform(
+    q: Optional[str] = None,
+    size: int = 20,
+    from_: int = 0,
+    sort: str = "recent",
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa empresas recolhidas do Iberinform no índice `finance_scraped`.
+
+    Os documentos desta fonte têm `source_id` com prefixo `empresas-` e os
+    dados estruturados da empresa vivem em `data` (`nome`, `nif`, `url`,
+    `distrito`, `concelho`). A pesquisa cobre nome, NIF e texto recolhido.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "total": 0, "items": []}
+
+    ensure_indices(client)
+
+    sort_spec: List[Any]
+    if sort == "relevance" and q:
+        sort_spec = [{"_score": {"order": "desc"}}, {"scraped_at": {"order": "desc"}}]
+    else:
+        sort_spec = [{"scraped_at": {"order": "desc"}}]
+
+    clauses: List[Dict[str, Any]] = []
+    token = (q or "").strip()
+    if token:
+        # NIF exacto (9 dígitos) ou pesquisa de texto livre.
+        if token.isdigit():
+            clauses.append({"term": {"data.nif": token}})
+        else:
+            clauses.append({"multi_match": {"query": token, "fields": ["data.nome", "title", "summary", "text"], "lenient": True}})
+
+    query: Dict[str, Any] = {
+        "bool": {
+            "filter": [{"wildcard": {"source_id": "empresas-*"}}],
+            "must": clauses or [{"match_all": {}}],
+        }
+    }
+
+    body = {
+        "size": max(0, min(int(size), 200)),
+        "from": max(0, int(from_)),
+        "query": query,
+        "sort": sort_spec,
+        "track_total_hits": True,
+    }
+
+    try:
+        resp = client.search(index=SCRAPED_INDEX, body=body)
+    except Exception as exc:
+        logger.warning("Pesquisa Iberinform falhou: %s", exc)
+        return {"error": str(exc), "total": 0, "items": []}
+
+    total = resp.get("hits", {}).get("total", 0)
+    total_value = total.get("value", 0) if isinstance(total, dict) else total
+    return {
+        "total": int(total_value or 0),
+        "items": [hit.get("_source") or {} for hit in resp.get("hits", {}).get("hits", [])],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Sentimento diário de mercado — índice `finance_sentiment_daily`
 # ---------------------------------------------------------------------------

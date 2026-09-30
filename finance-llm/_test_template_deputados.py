@@ -9,6 +9,8 @@ entry = templates.get_template("parlamento-deputados")
 source = templates.build_source("parlamento-deputados")
 print("source:", json.dumps({k: v for k, v in source.items() if k in ("id", "url", "fetcher", "pagination", "id_fields", "title_field")}, ensure_ascii=False, indent=2))
 
+source["options"]["timeout"] = 60
+source["detail"]["enabled"] = False  # testamos só lista + postback
 stats = {}
 total = 0
 for page_number, page, items in scraper._walk_source(source, max_pages=3, stats=stats):
@@ -17,6 +19,5 @@ for page_number, page, items in scraper._walk_source(source, max_pages=3, stats=
     for it in items[:2]:
         print("   ", it.get("title"), "|", it["data"].get("bid"), "|", it["data"].get("partido"), "|", it["data"].get("circulo"))
         print("    url:", it.get("url"))
-        print("    texto:", (it.get("text") or "")[:160].replace("\n", " "))
 print("TOTAL (3 páginas):", total)
 print("stats:", stats)

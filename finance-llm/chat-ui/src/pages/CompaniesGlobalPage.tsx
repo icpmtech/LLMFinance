@@ -50,6 +50,7 @@ const SOURCE_ICON: Record<string, React.ReactNode> = {
   organo_es: <Landmark size={14} />,
   adjudicataria_es: <Handshake size={14} />,
   crm: <Briefcase size={14} />,
+  iberinform: <Search size={14} />,
 };
 
 const SOURCE_TONE: Record<string, string> = {
@@ -59,6 +60,7 @@ const SOURCE_TONE: Record<string, string> = {
   organo_es: "border-amber-400/25 bg-amber-400/10 text-amber-200",
   adjudicataria_es: "border-orange-400/25 bg-orange-400/10 text-orange-200",
   crm: "border-indigo-400/25 bg-indigo-400/10 text-indigo-200",
+  iberinform: "border-rose-400/25 bg-rose-400/10 text-rose-200",
 };
 
 const SORTS = [
@@ -104,7 +106,19 @@ export default function CompaniesGlobalPage({ initialQuery = "", onOpenView }: C
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Segundos desde o início da pesquisa (a vista «Todas» chega a demorar). */
+  const [segundosDecorridos, setSegundosDecorridos] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!loading) {
+      setSegundosDecorridos(0);
+      return;
+    }
+    const inicio = Date.now();
+    const id = setInterval(() => setSegundosDecorridos(Math.round((Date.now() - inicio) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [loading]);
 
   useEffect(() => {
     getCompaniesGlobalSources()
@@ -115,6 +129,20 @@ export default function CompaniesGlobalPage({ initialQuery = "", onOpenView }: C
   const run = useCallback(async (term: string, nextSource: CompaniesGlobalSourceId) => {
     setLoading(true);
     setError(null);
+    // Duas fases: as fontes de diretório (PT) respondem num instante e as
+    // empresas aparecem logo; as agregações do PLACSP chegam depois e
+    // substituem a lista pela versão completa.
+    try {
+      const rapida = await searchCompaniesGlobal({ q: term, source: nextSource, size: 24, fast: true });
+      if (rapida.error) {
+        setError(rapida.error);
+      } else {
+        setResult(rapida);
+        setRows(rapida.items ?? []);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha na pesquisa.");
+    }
     try {
       const payload = await searchCompaniesGlobal({ q: term, source: nextSource, size: 24 });
       if (payload.error) {
@@ -218,8 +246,10 @@ export default function CompaniesGlobalPage({ initialQuery = "", onOpenView }: C
             Empresas Global
           </h1>
           <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
-            Cadastro português, firmas (RNPC), marcas (INPI), entidades contratantes e empresas adjudicatárias de
-            Espanha (PLACSP) e contas do CRM — com contratos e valores somados por entidade.
+            Cadastro português, firmas (RNPC), marcas (INPI), empresas recolhidas
+            do Iberinform, entidades contratantes e empresas adjudicatárias de
+            Espanha (PLACSP) e contas do CRM — com contratos e valores somados
+            por entidade.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -295,13 +325,22 @@ export default function CompaniesGlobalPage({ initialQuery = "", onOpenView }: C
         {loading ? (
           <>
             <Loader2 size={12} className="animate-spin" /> A pesquisar
-            {submitted ? ` «${submitted}»` : " no diretório"}…
+            {submitted ? ` «${submitted}»` : " no diretório"}… {segundosDecorridos}s
           </>
         ) : result ? (
           <>
             {numberFormat.format(result.total)} registos em {result.took_ms} ms
             {submitted ? ` para «${result.query}»` : ""} · a mostrar {sorted.length}
           </>
+        ) : null}
+        {!loading && !result ? (
+          <button
+            type="button"
+            onClick={() => void run(submitted, source)}
+            className="rounded-full border border-white/15 bg-white/5 px-3 py-1 hover:bg-white/10"
+          >
+            Carregar empresas
+          </button>
         ) : null}
       </div>
 

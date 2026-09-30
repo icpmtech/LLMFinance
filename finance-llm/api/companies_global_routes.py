@@ -45,9 +45,13 @@ def companies_global_sources(session: Session = None) -> Dict[str, Any]:
 @router.get("/search")
 def companies_global_search(
     q: str = Query("", description="Nome, NIF/NIPC, marca, órgão ou conta a pesquisar."),
-    source: str = Query("all", description="Fonte: all | entity | firma | trademark | organo_es | adjudicataria_es | crm"),
+    source: str = Query("all", description="Fonte: all | entity | firma | trademark | organo_es | adjudicataria_es | crm | iberinform"),
     size: int = Query(24, ge=1, le=100, description="Resultados a devolver."),
     offset: int = Query(0, ge=0, description="Resultados a saltar (na fonte escolhida)."),
+    fast: bool = Query(
+        False,
+        description="Só as fontes de diretório (PT): resposta imediata, sem as agregações do PLACSP.",
+    ),
     session: Session = None,
 ) -> Dict[str, Any]:
     """Pesquisa empresas e entidades, com a contagem por fonte."""
@@ -57,4 +61,5 @@ def companies_global_search(
         size=size,
         offset=offset,
         session_scope=_scope(session),
+        fast=fast,
     )
