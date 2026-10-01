@@ -3,14 +3,19 @@
 Suporta múltiplos backends via variável de ambiente:
 - Ollama local/cloud: OLLAMA_URL=http://127.0.0.1:11434 (padrão)
 - OpenAI-compatível: OPENAI_API_KEY + OPENAI_BASE_URL
+- Fornecedores cloud configurados do sistema (OpenAI, DeepSeek, Anthropic, Google, etc.)
 - Fallback para os modelos locais do IQ OS via api.agent
 """
+import asyncio
 import json
 import os
 import re
 from typing import Any, Dict, List, Optional
 
 import requests
+
+from api import cloud_chat
+from api import providers_service
 
 
 def _get_ollama_url() -> str:
@@ -267,8 +272,12 @@ def _build_prompt(
         for nif, info in list(entities.items())[:4]
     ) or "Sem dados de entidades."
 
+    def _first_name(contract_dict: Dict[str, Any], field: str) -> str:
+        parsed = contract_dict.get(field, {}).get("parsed", []) or []
+        return parsed[0].get("nome", "N/A") if parsed else "N/A"
+
     related_text = "\n".join(
-        f"- {r.get('idcontrato')}: {r.get('objectoContrato')} | {r.get('adjudicantes', {}).get('parsed', [{}])[0].get('nome', 'N/A')} -> {r.get('adjudicatarios', {}).get('parsed', [{}])[0].get('nome', 'N/A')} | {_format_money(r.get('precoContratual'))}"
+        f"- {r.get('idcontrato')}: {r.get('objectoContrato')} | {_first_name(r, 'adjudicantes')} -> {_first_name(r, 'adjudicatarios')} | {_format_money(r.get('precoContratual'))}"
         for r in related[:6] if isinstance(r, dict)
     ) or "Sem contratos relacionados."
 
@@ -301,6 +310,64 @@ Analisa o contrato abaixo e responde de forma factual, concisa e estruturada em 
 """
 
 
+def _resolve_backend(model: str, user_id: Optional[str]) -> Dict[str, Any]:
+    """Resolve o backend a usar. Se model='' e houver user_id, lê defaults do sistema."""
+    chosen_model = model.strip()
+    chosen_backend = chosen_model
+
+    if not chosen_backend and user_id:
+        config = providers_service.load_user_config(user_id)
+        defaults = config.get("defaults") or {}
+        provider = defaults.get("provider")
+        if provider:
+            default_model = defaults.get("model") or ""
+            chosen_backend = f"{provider}:{default_model}" if default_model else provider
+
+    if not chosen_backend:
+        # fallback: variável OPENAI_API_KEY ou Ollama local
+        openai_cfg = _get_openai_config()
+        if openai_cfg:
+            chosen_backend = f"openai:{openai_cfg['model']}"
+        else:
+            chosen_backend = "ollama"
+
+    parsed = providers_service.parse_backend(chosen_backend)
+    return parsed
+
+
+def _cloud_complete(
+    backend: Dict[str, Any],
+    messages: List[Dict[str, str]],
+    user_id: Optional[str],
+    temperature: float,
+    max_tokens: int,
+) -> tuple[str, str]:
+    """Chama fornecedor cloud configurado do sistema."""
+    provider = backend.get("provider") or ""
+    spec = backend.get("spec") or {}
+    model = backend.get("model") or spec.get("default_model") or ""
+
+    api_key, key_source = providers_service.resolve_key(user_id, provider)
+    if not api_key and not spec.get("key_optional"):
+        raise RuntimeError(
+            f"O fornecedor {spec.get('label') or provider} ainda não tem chave de API. "
+            "Configura-a em Definições → Fornecedores de IA."
+        )
+
+    answer = asyncio.run(
+        cloud_chat.complete_answer(
+            provider=provider,
+            spec=spec,
+            model=model,
+            messages=messages,
+            api_key=api_key,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+    )
+    return answer, f"{provider}:{model}"
+
+
 def analyze_contract(
     contract: Dict[str, Any],
     question: Optional[str] = None,
@@ -309,8 +376,9 @@ def analyze_contract(
     temperature: float = 0.3,
     use_web_search: bool = True,
     use_related_contracts: bool = True,
+    user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Analisa um contrato usando IA (Ollama/OpenAI/local) e ferramentas externas."""
+    """Analisa um contrato usando IA (providers configurados, Ollama, OpenAI ou local) e ferramentas externas."""
     context = _gather_context(
         contract,
         question=question,
@@ -327,17 +395,26 @@ def analyze_contract(
     answer = ""
     backend_used = "unknown"
 
-    # 1) OpenAI-compatible se estiver configurado ou o modelo parecer OpenAI
-    openai_cfg = _get_openai_config()
-    is_openai_model = bool(openai_cfg) and (not model or model.startswith("gpt-") or model in openai_cfg["model"])
-    if openai_cfg and (is_openai_model or (model and "http" in model)):
+    # 1) Provider cloud configurado do sistema (inclui OpenAI, DeepSeek, Anthropic, Google, etc.)
+    backend = _resolve_backend(model, user_id)
+    if backend.get("kind") == "cloud":
         try:
-            answer = _openai_chat(messages, temperature=temperature, max_tokens=max_tokens)
-            backend_used = f"openai:{openai_cfg['model']}"
+            answer, backend_used = _cloud_complete(backend, messages, user_id, temperature, max_tokens)
         except Exception as exc:
-            answer = f"[Erro OpenAI: {exc}]"
+            answer = f"[Erro {backend.get('provider')}: {exc}]"
 
-    # 2) Ollama se não usou OpenAI
+    # 2) OpenAI-compatível via variáveis de ambiente (mantido para compatibilidade)
+    if not answer:
+        openai_cfg = _get_openai_config()
+        is_openai_model = bool(openai_cfg) and (not model or model.startswith("gpt-") or model in openai_cfg["model"])
+        if openai_cfg and (is_openai_model or (model and "http" in model)):
+            try:
+                answer = _openai_chat(messages, temperature=temperature, max_tokens=max_tokens)
+                backend_used = f"openai:{openai_cfg['model']}"
+            except Exception as exc:
+                answer = f"[Erro OpenAI: {exc}]"
+
+    # 3) Ollama local se não usou cloud/OpenAI
     if not answer:
         try:
             models = ollama_list_models()
@@ -350,7 +427,7 @@ def analyze_contract(
         except Exception as exc:
             answer = f"[Erro Ollama: {exc}]"
 
-    # 3) Fallback local (apenas se Ollama/OpenAI não responderam)
+    # 4) Fallback local (apenas se nenhum outro responder)
     if not answer:
         answer = _local_llm_generate(prompt, backend="mistral")
         backend_used = "local:mistral"

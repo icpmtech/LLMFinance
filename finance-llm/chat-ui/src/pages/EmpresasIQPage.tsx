@@ -58,6 +58,8 @@ import {
   Cell,
   LineChart,
   Line,
+  BarChart,
+  Bar,
   Area,
   AreaChart,
   Legend,
@@ -84,6 +86,8 @@ import {
   checkPeopleIndexed,
   ingestPeopleForCompany,
   analyzeContract,
+  getContractDocument,
+  downloadContractReport,
 } from "../api";
 import {
   MAP_CENTER,
@@ -116,6 +120,7 @@ import type {
   ContractAnalyticsResponse,
   ContractAnalyzeRequest,
   ContractAnalyzeResponse,
+  ContractDocumentResponse,
   ContractGraphBuildNode,
   ContractGraphBuildResponse,
   ContractGraphResponse,
@@ -4255,10 +4260,155 @@ function ContractParticipantsGraph({
   );
 }
 
-function ContractAIAnalysis({
-  idcontrato,
+/** Detalhes do procedimento publicados no portal (fundamento, regime, concorrentes, PME). */
+function ContractProcedureDetails({ contract }: { contract: ContractItem }) {
+  const rows: { label: string; value: string }[] = [];
+  const push = (label: string, value?: string | number | null) => {
+    if (value === undefined || value === null || value === "" || value === 0) return;
+    rows.push({ label, value: String(value) });
+  };
+  push("Regime", contract.regime);
+  push("Fundamentação", contract.fundamentacao);
+  push("Fundamento do ajuste direto", contract.fundamentAjusteDireto);
+  push("Critério de adjudicação", contract.TipoCriterioAdjudicacao);
+  push("Critérios materiais", contract.CritMateriais);
+  push(
+    "Concorrentes",
+    Array.isArray(contract.concorrentes) ? contract.concorrentes.join(", ") : contract.concorrentes,
+  );
+  push("PME adjudicatária", contract.adjudicatarioPMEs);
+  push("Decisão de adjudicação", contract.dataDecisaoAdjudicacao ? fmtDate(contract.dataDecisaoAdjudicacao) : null);
+  push("Fecho do contrato", contract.dataFechoContrato ? fmtDate(contract.dataFechoContrato) : null);
+  push("Procedimento centralizado", contract.ProcedimentoCentralizado);
+  push("Contratação ecológica", contract.ContratEcologico);
+  push("Lotes", contract.Lotes);
+  push("Observações", contract.Observacoes);
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="mt-6">
+      <p className="text-xs text-muted-foreground mb-2">Detalhes do procedimento</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {rows.map((row) => (
+          <div key={row.label} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+            <p className="text-[11px] text-muted-foreground">{row.label}</p>
+            <p className="text-sm text-foreground/90 break-words">{row.value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type ContractCompanyIntel = {  nif: string;
+  nome: string;
+  role: string;
+  detail: CompanyDetail | null;
+  analytics: CompanyAnalyticsResponse | null;
+};
+
+/** Cartões com os dados (e a evolução anual) das empresas envolvidas no contrato. */
+function ContractCompaniesPanel({
+  companies,
+  onEntity,
 }: {
+  companies: ContractCompanyIntel[];
+  onEntity: (nif: string) => void;
+}) {
+  if (companies.length === 0) return null;
+  const tooltipStyle = {
+    background: "#0b1620",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 12,
+    fontSize: 12,
+  };
+  return (
+    <div className="mt-5">
+      <p className="text-xs text-muted-foreground mb-2">Empresas envolvidas</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {companies.map((c) => {
+          const detail = c.detail;
+          const analytics = c.analytics;
+          const roleSummary = c.role === "adjudicante" ? detail?.adjudicante : detail?.adjudicatario;
+          const byYear = [...(analytics?.by_year ?? [])]
+            .sort((a, b) => String(a.key).localeCompare(String(b.key)))
+            .slice(-6)
+            .map((row) => ({ ano: String(row.key), valor: Number(row.total_value ?? 0), n: row.count }));
+          return (
+            <div key={c.nif} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[11px] uppercase tracking-wider text-teal-300">{c.role}</p>
+                  <p className="font-medium truncate" title={detail?.name ?? c.nome}>
+                    {detail?.name ?? c.nome}
+                  </p>
+                  <p className="text-xs text-muted-foreground">NIF {c.nif}</p>
+                </div>
+                <button
+                  onClick={() => onEntity(c.nif)}
+                  className="shrink-0 rounded-lg border border-teal-400/30 px-2 py-1 text-xs text-teal-200 hover:bg-teal-400/10 transition"
+                >
+                  Abrir ficha
+                </button>
+              </div>
+
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-lg bg-white/[0.03] p-2">
+                  <p className="text-[11px] text-muted-foreground">Contratos</p>
+                  <p className="text-sm font-semibold">
+                    {full(detail?.contracts_total ?? analytics?.total_contracts)}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-white/[0.03] p-2">
+                  <p className="text-[11px] text-muted-foreground">Valor total</p>
+                  <p className="text-sm font-semibold">{money(detail?.total_value ?? analytics?.total_value)}</p>
+                </div>
+                <div className="rounded-lg bg-white/[0.03] p-2">
+                  <p className="text-[11px] text-muted-foreground">Média</p>
+                  <p className="text-sm font-semibold">{money(roleSummary?.avg_value ?? analytics?.avg_value)}</p>
+                </div>
+              </div>
+
+              {byYear.length > 0 && (
+                <div className="mt-3 h-24">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={byYear}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                      <XAxis dataKey="ano" tick={{ fontSize: 10 }} stroke="rgba(255,255,255,0.35)" />
+                      <YAxis hide />
+                      <Tooltip contentStyle={tooltipStyle} formatter={euroFormatter} />
+                      <Bar dataKey="valor" fill="#2dd4bf" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                {roleSummary?.first_year && (
+                  <span>
+                    Atividade: {roleSummary.first_year}–{roleSummary.last_year ?? "…"}
+                  </span>
+                )}
+                {detail?.trademarks_total ? <span>Marcas INPI: {full(detail.trademarks_total)}</span> : null}
+                {detail?.firmas_total ? <span>Firmas (RNPC): {full(detail.firmas_total)}</span> : null}
+                {analytics?.max_value ? <span>Maior contrato: {money(analytics.max_value)}</span> : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ContractAIAnalysis({
+  contract,
+  idcontrato,
+  onEntity,
+}: {
+  contract: ContractItem;
   idcontrato: string;
+  onEntity: (nif: string) => void;
 }) {
   const [question, setQuestion] = useState("");
   const [model, setModel] = useState("");
@@ -4269,6 +4419,76 @@ function ContractAIAnalysis({
   const [result, setResult] = useState<ContractAnalyzeResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [piece, setPiece] = useState<ContractDocumentResponse | null>(null);
+  const [pieceLoading, setPieceLoading] = useState(false);
+  const [showPieceText, setShowPieceText] = useState(false);
+  const [companies, setCompanies] = useState<ContractCompanyIntel[]>([]);
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  // Peça do procedimento (convite / caderno de encargos) e valores publicados.
+  useEffect(() => {
+    let alive = true;
+    setPieceLoading(true);
+    setPiece(null);
+    getContractDocument(idcontrato)
+      .then((data) => {
+        if (alive) setPiece(data);
+      })
+      .catch(() => {
+        if (alive) setPiece(null);
+      })
+      .finally(() => {
+        if (alive) setPieceLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [idcontrato]);
+
+  // Empresas envolvidas: ficha + analítica de cada NIF do contrato.
+  useEffect(() => {
+    let alive = true;
+    const parties: { nif: string; nome: string; role: string }[] = [];
+    const toParties = (party?: ContractParty | ContractParty[]): ContractParty[] =>
+      Array.isArray(party) ? party : party ? [party] : [];
+    const collect = (party: ContractParty | ContractParty[] | undefined, role: string) => {
+      for (const entry of toParties(party)) {
+        for (const item of entry.parsed ?? []) {
+          if (item?.nif) parties.push({ nif: item.nif, nome: item.nome ?? item.nif, role });
+        }
+      }
+    };
+    collect(contract.adjudicantes, "adjudicante");
+    collect(contract.adjudicatarios, "adjudicatária");
+    if (parties.length === 0) {
+      setCompanies([]);
+      return;
+    }
+    Promise.all(
+      parties.map(async (p) => {
+        const [detail, analytics] = await Promise.all([
+          getCompanyDetail(p.nif).catch(() => null),
+          getCompanyAnalytics(p.nif).catch(() => null),
+        ]);
+        return { ...p, detail, analytics } as ContractCompanyIntel;
+      }),
+    ).then((rows) => {
+      if (alive) setCompanies(rows);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [contract.adjudicantes, contract.adjudicatarios]);
+
+  const compare = useMemo(() => {
+    const rows = [
+      { name: "Contrato", valor: Number(contract.precoContratual ?? 0) },
+      { name: "Preço base", valor: Number(contract.precoBaseProcedimento ?? 0) },
+      { name: "Média adjudicante", valor: Number(companies[0]?.detail?.adjudicante?.avg_value ?? 0) },
+      { name: "Média adjudicatária", valor: Number(companies[1]?.detail?.adjudicatario?.avg_value ?? 0) },
+    ];
+    return rows.filter((row) => row.valor > 0);
+  }, [contract.precoContratual, contract.precoBaseProcedimento, companies]);
 
   const handleAnalyze = async () => {
     setLoading(true);
@@ -4291,16 +4511,164 @@ function ContractAIAnalysis({
     }
   };
 
+  const handlePdf = async () => {
+    setPdfLoading(true);
+    setError(null);
+    try {
+      const blob = await downloadContractReport(idcontrato, {
+        question: question.trim() || undefined,
+        model: model.trim() || undefined,
+        max_tokens: maxTokens,
+        temperature,
+        use_web_search: useWeb,
+        use_related_contracts: useRelated,
+        analysis: result?.answer,
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `contrato-${idcontrato}.pdf`;
+      anchor.rel = "noreferrer";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao gerar o PDF");
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const tooltipStyle = {
+    background: "#0b1620",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 12,
+    fontSize: 12,
+  };
+
   return (
     <Card className="mt-6">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-wider text-teal-300">Análise IA</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Analisa este contrato com Ollama/cloud + web search e contratos relacionados
+            Lê a peça do procedimento, cruza os valores com o mercado e analisa riscos
           </p>
         </div>
-        <Sparkles size={18} className="text-teal-300" />
+        <button
+          onClick={handlePdf}
+          disabled={pdfLoading}
+          className="shrink-0 rounded-xl border border-teal-400/30 bg-teal-400/10 px-3 py-2 text-xs font-medium text-teal-100 hover:bg-teal-400/20 transition disabled:opacity-60 flex items-center gap-2"
+        >
+          {pdfLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+          Descarregar PDF
+        </button>
+      </div>
+
+      {/* Indicadores-chave do contrato */}
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[11px] text-muted-foreground">Valor contratual</p>
+          <p className="mt-1 text-lg font-semibold text-amber-400">
+            {money(contract.precoContratual ?? contract.PrecoTotalEfetivo)}
+          </p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[11px] text-muted-foreground">Preço base</p>
+          <p className="mt-1 text-lg font-semibold">{money(contract.precoBaseProcedimento)}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[11px] text-muted-foreground">Prazo de execução</p>
+          <p className="mt-1 text-lg font-semibold">
+            {contract.prazoExecucao ? `${Math.round(Number(contract.prazoExecucao))} dias` : "—"}
+          </p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+          <p className="text-[11px] text-muted-foreground">Critério</p>
+          <p className="mt-1 text-lg font-semibold">
+            {contract.TipoCriterioAdjudicacao || contract.tipoprocedimento || "—"}
+          </p>
+        </div>
+      </div>
+
+      {compare.length > 1 && (
+        <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+          <p className="text-xs text-muted-foreground mb-2">Contrato vs. médias das partes</p>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={compare}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="rgba(255,255,255,0.35)" />
+                <YAxis tick={{ fontSize: 10 }} stroke="rgba(255,255,255,0.35)" width={70} />
+                <Tooltip contentStyle={tooltipStyle} formatter={euroFormatter} />
+                <Bar dataKey="valor" fill="#5eead4" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Peça do procedimento */}
+      <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">Peça do procedimento</p>
+          {pieceLoading && <Loader2 size={14} className="animate-spin text-teal-300" />}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {(piece?.links ?? []).length === 0 && !pieceLoading && (
+            <span className="text-xs text-muted-foreground">Sem ligações oficiais publicadas.</span>
+          )}
+          {(piece?.links ?? []).map((link) => (
+            <a
+              key={link.url}
+              href={link.url}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-teal-200 hover:border-teal-400/40 transition flex items-center gap-1.5"
+            >
+              <FileText size={12} /> {link.label}
+            </a>
+          ))}
+        </div>
+
+        {(piece?.highlights ?? []).length > 0 && (
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {(piece?.highlights ?? []).map((fact) => (
+              <div key={`${fact.label}-${fact.value}`} className="rounded-lg bg-white/[0.03] p-2">
+                <p className="text-[11px] text-muted-foreground">{fact.label}</p>
+                <p className="text-xs font-medium text-foreground/90 break-words">{String(fact.value ?? "—")}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {(piece?.pieces ?? []).some((p) => p.text) && (
+          <div className="mt-3">
+            <button
+              onClick={() => setShowPieceText((v) => !v)}
+              className="text-xs text-teal-300 hover:underline flex items-center gap-1"
+            >
+              <FileText size={12} />
+              {showPieceText ? "Ocultar texto da peça" : "Ver texto da peça"}
+            </button>
+            {showPieceText && (
+              <div className="mt-2 max-h-72 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-3 text-xs whitespace-pre-wrap text-foreground/80">
+                {(piece?.pieces ?? [])
+                  .filter((p) => p.text)
+                  .map((p) => (
+                    <div key={p.name}>
+                      <p className="mb-1 font-medium text-teal-200">{p.name}</p>
+                      {p.text}
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {piece?.note && <p className="mt-2 text-xs text-muted-foreground">{piece.note}</p>}
+        {piece?.error && <p className="mt-2 text-xs text-amber-300">{piece.error}</p>}
       </div>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -4390,8 +4758,8 @@ function ContractAIAnalysis({
         <div className="mt-5 space-y-4">
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
             <p className="text-xs text-muted-foreground mb-2">Análise</p>
-            <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
-              {result.analysis}
+            <div className="prose prose-sm prose-invert max-w-none text-sm leading-relaxed text-foreground/90">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{result.answer}</ReactMarkdown>
             </div>
           </div>
 
@@ -4405,15 +4773,15 @@ function ContractAIAnalysis({
                     className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm"
                   >
                     <a
-                      href={s.url}
+                      href={s.href}
                       target="_blank"
                       rel="noreferrer"
                       className="font-medium text-teal-300 hover:underline"
                     >
-                      {s.title || s.url}
+                      {s.title || s.href}
                     </a>
-                    {s.snippet && (
-                      <p className="mt-1 text-xs text-muted-foreground">{s.snippet}</p>
+                    {s.body && (
+                      <p className="mt-1 text-xs text-muted-foreground">{s.body}</p>
                     )}
                   </div>
                 ))}
@@ -4421,11 +4789,13 @@ function ContractAIAnalysis({
             </div>
           )}
 
-          {result.model_used && (
-            <p className="text-xs text-muted-foreground">Modelo: {result.model_used}</p>
+          {result.backend_used && (
+            <p className="text-xs text-muted-foreground">Modelo: {result.backend_used}</p>
           )}
         </div>
       )}
+
+      <ContractCompaniesPanel companies={companies} onEntity={onEntity} />
     </Card>
   );
 }
@@ -5576,7 +5946,7 @@ export function ContractDetailPanel({
 
         <ContractParticipantsGraph contract={contract} onEntity={onEntity} />
 
-        <ContractAIAnalysis idcontrato={id} />
+        <ContractAIAnalysis contract={contract} idcontrato={id} onEntity={onEntity} />
 
         <div className="mt-6">
           <p className="text-xs text-muted-foreground mb-2">Descrição</p>
@@ -5597,6 +5967,8 @@ export function ContractDetailPanel({
             </div>
           </div>
         )}
+
+        <ContractProcedureDetails contract={contract} />
       </Card>
     </div>
   );

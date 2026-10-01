@@ -710,6 +710,7 @@ class ContractItem(BaseModel):
     idcontrato: Optional[str] = None
     nAnuncio: Optional[str] = None
     TipoAnuncio: Optional[str] = None
+    idINCM: Optional[str] = None
     idprocedimento: Optional[str] = None
     tipoContrato: Optional[List[str]] = None
     tipoprocedimento: Optional[str] = None
@@ -737,6 +738,60 @@ class ContractItem(BaseModel):
     entities: List[ContractEntity] = []
     score: Optional[float] = None
     doc_id: Optional[str] = None
+    # Detalhe publicado no portal (e peças do procedimento)
+    prazoExecucao: Optional[float] = None
+    fundamentacao: Optional[str] = None
+    fundamentAjusteDireto: Optional[str] = None
+    ProcedimentoCentralizado: Optional[str] = None
+    numAcordoQuadro: Optional[str] = None
+    DescrAcordoQuadro: Optional[str] = None
+    dataDecisaoAdjudicacao: Optional[str] = None
+    dataFechoContrato: Optional[str] = None
+    justifNReducEscrContrato: Optional[str] = None
+    CritMateriais: Optional[str] = None
+    concorrentes: Optional[str] = None
+    linkPecasProc: Optional[str] = None
+    Observacoes: Optional[str] = None
+    ContratEcologico: Optional[str] = None
+    adjudicatarioPMEs: Optional[str] = None
+    Lotes: Optional[str] = None
+    TipoCriterioAdjudicacao: Optional[str] = None
+
+
+class ContractDocumentLink(BaseModel):
+    label: str
+    url: str
+    kind: Optional[str] = None
+    host: Optional[str] = None
+
+
+class ContractDocumentValue(BaseModel):
+    label: str
+    value: Any = None
+    source: Optional[str] = None
+
+
+class ContractDocumentPiece(BaseModel):
+    name: str
+    kind: Optional[str] = None
+    text: Optional[str] = None
+
+
+class ContractDocumentFact(BaseModel):
+    label: str
+    value: Any = None
+    source: Optional[str] = None
+    document: Optional[str] = None
+
+
+class ContractDocumentResponse(BaseModel):
+    contract_id: Optional[str] = None
+    links: List[ContractDocumentLink] = []
+    values: List[ContractDocumentValue] = []
+    pieces: List[ContractDocumentPiece] = []
+    highlights: List[ContractDocumentFact] = []
+    note: Optional[str] = None
+    error: Optional[str] = None
 
 
 class ContractIngestRequest(BaseModel):
@@ -826,11 +881,17 @@ class ContractChatRequest(BaseModel):
 
 class ContractAnalyzeRequest(BaseModel):
     question: Optional[str] = None
-    model: str = "llama3.2"
+    model: str = ""  # vazio = usar provider/modelo padrão do sistema
     max_tokens: int = 1024
     temperature: float = 0.3
     use_web_search: bool = True
     use_related_contracts: bool = True
+
+
+class ContractReportRequest(ContractAnalyzeRequest):
+    """Pedido do relatório PDF (mesmos parâmetros da análise; a análise é gerada se faltar)."""
+
+    analysis: Optional[str] = None
 
 
 class ContractChatSource(BaseModel):

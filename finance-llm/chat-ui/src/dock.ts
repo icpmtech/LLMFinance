@@ -128,6 +128,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "244,63,94",
   },
   {
+    id: "pessoas-iq-politicos",
+    label: "Políticos Portugal",
+    hint: "Deputados do Parlamento.pt e políticos da Wikipédia PT",
+    icon: Landmark,
+    gradient: "from-rose-200 via-rose-400 to-red-500",
+    accent: "244,63,94",
+  },
+  {
     id: "companies-global",
     label: "Empresas Global",
     hint: "Entidades e empresas de todo o sistema (PT + Espanha + CRM)",

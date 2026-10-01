@@ -14,6 +14,7 @@ import type {
   ContractAutocompleteResponse,
   ContractAnalyzeRequest,
   ContractAnalyzeResponse,
+  ContractDocumentResponse,
   ContractIngestRequest,
   ContractIngestResponse,
   ContractSearchRequest,
@@ -96,6 +97,7 @@ import type {
   PeopleSocialCollectResponse,
   PeopleSocialResponse,
   People360Response,
+  PoliticianProfile,
   NodeSummaryResponse,
   ImportFileType,
   ImportDataType,
@@ -111,7 +113,7 @@ export type { ImportFileType, ImportDataType, ImportPreviewRow, ImportPreviewRes
 export type { PeopleSearchResponse, Person, PeopleGraphResponse, PeopleIngestResponse, PeoplePresenceResponse };
 export type { PeopleAutocompleteItem, PeopleFiltersResponse, PeopleFacet };
 export type { PeopleCireIngestRequest, PeopleCireIngestResult, PeopleCireJobResponse };
-export type { PeopleSocialCollectResponse, PeopleSocialResponse, People360Response };
+export type { PeopleSocialCollectResponse, PeopleSocialResponse, People360Response, PoliticianProfile };
 export type { NodeSummaryResponse };
 
 export function getPlotUrl(plot_url: string): string {
@@ -780,6 +782,31 @@ export async function analyzeContract(
   return res.json();
 }
 
+/** Ligações oficiais, peça do procedimento (lida) e valores do contrato. */
+export async function getContractDocument(
+  id: string,
+  fetchPiece = true,
+): Promise<ContractDocumentResponse> {
+  const params = new URLSearchParams({ fetch: String(fetchPiece) });
+  const res = await fetch(`${API_BASE}/contracts/${encodeURIComponent(id)}/document?${params}`);
+  if (!res.ok) throw new Error(`Erro ao obter a peça do contrato: ${res.status}`);
+  return res.json();
+}
+
+/** Descarrega o dossiê do contrato em PDF (gera a análise se não for fornecida). */
+export async function downloadContractReport(
+  id: string,
+  request: ContractAnalyzeRequest & { analysis?: string },
+): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/contracts/${encodeURIComponent(id)}/report/pdf`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) throw new Error(`Erro ao gerar o relatório PDF: ${res.status}`);
+  return res.blob();
+}
+
 export async function getContractRegionalAnalytics(year?: number): Promise<ContractRegionalResponse> {
   const params = new URLSearchParams({ size: "30" });
   if (year !== undefined) params.set("year", String(year));
@@ -1316,6 +1343,10 @@ export async function searchPeople(
     isCompany?: boolean;
     /** `cire` (papéis de insolvência) ou `societario` (cargos das publicações). */
     origin?: "cire" | "societario" | "";
+    /** Sub-string do campo `source` (ex.: `parlamento`, `wikipedia`). */
+    source?: string;
+    /** Partido político (sub-string, sem distinção de maiúsculas). */
+    party?: string;
     minRoles?: number;
     minCompanies?: number;
     sort?: "relevance" | "roles" | "recent" | "name";
@@ -1328,8 +1359,9 @@ export async function searchPeople(
   if (opts?.nif) params.set("nif", opts.nif);
   if (opts?.companyNif) params.set("company_nif", opts.companyNif);
   if (opts?.role) params.set("role", opts.role);
-  if (opts?.isCompany !== undefined) params.set("is_company", String(opts.isCompany));
   if (opts?.origin) params.set("origin", opts.origin);
+  if (opts?.source) params.set("source", opts.source);
+  if (opts?.party) params.set("party", opts.party);
   if (opts?.minRoles) params.set("min_roles", String(opts.minRoles));
   if (opts?.minCompanies) params.set("min_companies", String(opts.minCompanies));
   if (opts?.sort) params.set("sort", opts.sort);
@@ -1640,6 +1672,78 @@ export async function getNodeSummary(opts: {
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Erro ao obter o resumo do nó: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Perfil político enriquecido de uma pessoa (técnico + biográfico + notícias + grafo). */
+export async function getPoliticianProfile(
+  nif: string,
+  opts?: { backend?: string; reuseHours?: number },
+): Promise<PoliticianProfile> {
+  const params = new URLSearchParams();
+  if (opts?.backend) params.set("backend", opts.backend);
+  if (opts?.reuseHours !== undefined) params.set("reuse_hours", String(opts.reuseHours));
+  const res = await fetch(
+    `${API_BASE}/people/${encodeURIComponent(nif)}/politician/profile?${params.toString()}`,
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter o perfil político: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Gera/reativa o enriquecimento político de uma pessoa. */
+export async function enrichPolitician(
+  nif: string,
+  opts?: { backend?: string; save?: boolean; reuseHours?: number; limitPartyNews?: number; maxCoParty?: number },
+): Promise<PoliticianProfile> {
+  const res = await fetch(`${API_BASE}/people/${encodeURIComponent(nif)}/politician/enrich`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      backend: opts?.backend ?? null,
+      save: opts?.save ?? true,
+      reuse_hours: opts?.reuseHours ?? 0,
+      limit_party_news: opts?.limitPartyNews ?? 12,
+      max_co_party: opts?.maxCoParty ?? 20,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao enriquecer o perfil político: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Notícias e artigos sobre o partido do político. */
+export async function getPoliticianPartyNews(
+  nif: string,
+  limit = 12,
+): Promise<{ party?: string | null; total: number; items: Record<string, any>[]; warnings?: string[] }> {
+  const res = await fetch(
+    `${API_BASE}/people/${encodeURIComponent(nif)}/politician/party-news?limit=${encodeURIComponent(String(limit))}`,
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter notícias do partido: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Grafo de relações políticas: partido, cargos, colegas e eventos/notícias. */
+export async function getPoliticianGraph(nif: string, opts?: { maxCoParty?: number; limitPartyNews?: number }): Promise<PeopleGraphResponse> {
+  const params = new URLSearchParams();
+  if (opts?.maxCoParty !== undefined) params.set("max_co_party", String(opts.maxCoParty));
+  if (opts?.limitPartyNews !== undefined) params.set("limit_party_news", String(opts.limitPartyNews));
+  const res = await fetch(
+    `${API_BASE}/people/${encodeURIComponent(nif)}/politician/graph?${params.toString()}`,
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter o grafo político: ${res.status} - ${text}`);
   }
   return res.json();
 }

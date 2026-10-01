@@ -47,6 +47,7 @@ from api.people_social import SOURCES as SOCIAL_SOURCES
 from api.people_social import collect_person_social
 from api.node_summary import saved_summary as load_node_summary
 from api.node_summary import node_summary, normalize_node
+from api.people_politician import enrich_politician, party_news, build_political_graph, _co_party_people, _person_party
 
 router = APIRouter(prefix="/people", tags=["people"])
 
@@ -80,6 +81,15 @@ class Person(BaseModel):
     last_seen: Optional[str] = None
     source: Optional[str] = None
     ingested_at: Optional[str] = None
+    photo_path: Optional[str] = None
+    photo_url: Optional[str] = None
+    biography: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    latest_roles: Optional[List[Dict[str, Any]]] = None
+    tags: Optional[List[str]] = None
+    doc_id: Optional[str] = None
+
+    model_config = {"extra": "allow"}
 
 
 class PeopleSearchResponse(BaseModel):
@@ -568,6 +578,8 @@ def people_search_route(
     role: Optional[str] = None,
     is_company: Optional[bool] = None,
     origin: Optional[str] = Query(default=None, description="`cire` ou `societario`"),
+    source: Optional[str] = Query(default=None, description="Sub-string do campo `source` (ex.: `parlamento`, `wikipedia`)"),
+    party: Optional[str] = Query(default=None, description="Partido político (sub-string, case-insensitive)"),
     min_roles: Optional[int] = Query(default=None, ge=0),
     min_companies: Optional[int] = Query(default=None, ge=0),
     sort: str = Query(default="relevance", pattern="^(relevance|roles|recent|name)$"),
@@ -582,6 +594,8 @@ def people_search_route(
         role=role,
         is_company=is_company,
         origin=origin,
+        source=source,
+        party=party,
         min_roles=min_roles,
         min_companies=min_companies,
         sort=sort,
@@ -647,6 +661,117 @@ def people_company_route(
         raise HTTPException(status_code=500, detail=result["error"])
     return PeopleCompanyResponse(**result)
 
+
+# ---------------------------------------------------------------------------
+# Enriquecimento político (perfis, notícias do partido, grafo de eventos)
+# ---------------------------------------------------------------------------
+
+class PoliticianEnrichRequest(BaseModel):
+    """Pedido para gerar/reativar o enriquecimento político de uma pessoa."""
+
+    backend: Optional[str] = Field(default=None, description="Modelo a usar (ex.: openai:gpt-4o-mini).")
+    save: bool = Field(default=True, description="Guardar o resultado em finance_node_summaries.")
+    reuse_hours: float = Field(default=0.0, ge=0, le=720, description="Reaproveitar resultado recente.")
+    limit_party_news: int = Field(default=12, ge=1, le=30)
+    max_co_party: int = Field(default=20, ge=0, le=50)
+
+
+class PoliticianProfileResponse(BaseModel):
+    """Perfil técnico + biográfico de um político."""
+
+    nif: str
+    name: Optional[str] = None
+    party: Optional[str] = None
+    technical_profile: Dict[str, Any] = Field(default_factory=dict)
+    biographical_profile: Dict[str, Any] = Field(default_factory=dict)
+    party_news: Dict[str, Any] = Field(default_factory=dict)
+    political_graph: Dict[str, Any] = Field(default_factory=dict)
+    generated_at: Optional[str] = None
+    cached: bool = False
+    saved: Optional[bool] = None
+    evidence_count: int = 0
+    error: Optional[str] = None
+
+
+@router.post("/{nif}/politician/enrich", response_model=PoliticianProfileResponse)
+async def politician_enrich_route(
+    nif: str,
+    payload: PoliticianEnrichRequest,
+    session: Annotated[CurrentSession, Depends(optional_session)] = None,
+):
+    """Gera/reativa o enriquecimento político: perfis, notícias do partido e grafo."""
+    result = await enrich_politician(
+        nif,
+        session=session,
+        backend=payload.backend,
+        save=payload.save,
+        reuse_hours=payload.reuse_hours,
+        limit_party_news=payload.limit_party_news,
+        max_co_party=payload.max_co_party,
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=404, detail=result["error"])
+    return PoliticianProfileResponse(**result)
+
+
+@router.get("/{nif}/politician/profile", response_model=PoliticianProfileResponse)
+async def politician_profile_route(
+    nif: str,
+    backend: Optional[str] = None,
+    reuse_hours: float = Query(default=24.0, ge=0, le=720),
+    session: Annotated[CurrentSession, Depends(optional_session)] = None,
+):
+    """Devolve perfil técnico e biográfico de um político (reaproveita resultado recente por defeito)."""
+    result = await enrich_politician(
+        nif,
+        session=session,
+        backend=backend,
+        save=True,
+        reuse_hours=reuse_hours,
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=404, detail=result["error"])
+    return PoliticianProfileResponse(**result)
+
+
+@router.get("/{nif}/politician/party-news", response_model=Dict[str, Any])
+async def politician_party_news_route(
+    nif: str,
+    limit: int = Query(default=12, ge=1, le=30),
+    session: Annotated[CurrentSession, Depends(optional_session)] = None,
+):
+    """Notícias e artigos sobre o partido do político."""
+    person = get_person_by_nif(nif)
+    if person.get("error") or not person.get("name"):
+        raise HTTPException(status_code=404, detail=person.get("error") or f"Pessoa {nif} não encontrada.")
+    party = _person_party(person)
+    if not party:
+        return {"party": None, "total": 0, "items": [], "warnings": ["Político sem partido indexado."]}
+    result = await party_news(party, person_name=person.get("name"), limit=limit)
+    return result
+
+
+@router.get("/{nif}/politician/graph", response_model=PeopleGraphResponse)
+async def politician_graph_route(
+    nif: str,
+    max_co_party: int = Query(default=20, ge=0, le=50),
+    limit_party_news: int = Query(default=12, ge=0, le=30),
+    session: Annotated[CurrentSession, Depends(optional_session)] = None,
+):
+    """Grafo de relações políticas: partido, cargos, colegas e eventos/notícias."""
+    person = get_person_by_nif(nif)
+    if person.get("error") or not person.get("name"):
+        raise HTTPException(status_code=404, detail=person.get("error") or f"Pessoa {nif} não encontrada.")
+    party = _person_party(person)
+    co_party = _co_party_people(party or "", nif, size=max_co_party) if party else []
+    news = await party_news(party, person_name=person.get("name"), limit=limit_party_news) if party else {"items": []}
+    graph = build_political_graph(person, party, co_party, news.get("items") or [])
+    return PeopleGraphResponse(**graph)
+
+
+# ---------------------------------------------------------------------------
+# Detalhe de uma pessoa
+# ---------------------------------------------------------------------------
 
 @router.get("/{nif}", response_model=Person)
 def people_detail_route(

@@ -664,6 +664,23 @@ export interface ContractItem {
   entities: ContractEntity[];
   score?: number;
   doc_id?: string;
+  // Detalhe publicado no portal e peças do procedimento
+  prazoExecucao?: number;
+  fundamentacao?: string;
+  fundamentAjusteDireto?: string;
+  ProcedimentoCentralizado?: string;
+  numAcordoQuadro?: string;
+  DescrAcordoQuadro?: string;
+  dataDecisaoAdjudicacao?: string;
+  dataFechoContrato?: string;
+  justifNReducEscrContrato?: string;
+  CritMateriais?: string;
+  linkPecasProc?: string;
+  Observacoes?: string;
+  ContratEcologico?: string;
+  adjudicatarioPMEs?: string;
+  Lotes?: string;
+  TipoCriterioAdjudicacao?: string;
 }
 
 export interface ContractSearchRequest {
@@ -785,14 +802,53 @@ export interface ContractAnalyzeRequest {
 
 export interface ContractAnalyzeSource {
   title?: string;
-  url?: string;
-  snippet?: string;
+  href?: string;
+  body?: string;
+  source?: string;
 }
 
 export interface ContractAnalyzeResponse {
-  analysis: string;
+  answer: string;
+  backend_used?: string;
   sources?: ContractAnalyzeSource[];
-  model_used?: string;
+  tools?: unknown[];
+  contract_id?: string;
+  error?: string;
+}
+
+export interface ContractDocumentLink {
+  label: string;
+  url: string;
+  kind?: string;
+  host?: string;
+}
+
+export interface ContractDocumentValue {
+  label: string;
+  value?: string | number | null;
+  source?: string;
+}
+
+export interface ContractDocumentPiece {
+  name: string;
+  kind?: string;
+  text?: string;
+}
+
+export interface ContractDocumentFact {
+  label: string;
+  value?: string | number | null;
+  source?: string;
+  document?: string;
+}
+
+export interface ContractDocumentResponse {
+  contract_id?: string;
+  links: ContractDocumentLink[];
+  values: ContractDocumentValue[];
+  pieces: ContractDocumentPiece[];
+  highlights: ContractDocumentFact[];
+  note?: string;
   error?: string;
 }
 
@@ -1007,6 +1063,18 @@ export interface Person {
   sources?: string[] | null;
   ingested_at?: string | null;
   doc_id?: string;
+  /** Caminho relativo da foto local (ex.: `data/deputados/fotos/7489.jpg`). */
+  photo_path?: string | null;
+  /** URL externa da foto (ex.: Parlamento.pt). */
+  photo_url?: string | null;
+  /** Biografia ou resumo da pessoa. */
+  biography?: string | null;
+  /** Metadados específicos da fonte (partido, círculo, URL, etc.). */
+  metadata?: Record<string, unknown> | null;
+  /** Cargos recentes normalizados pelo backend. */
+  latest_roles?: PersonRole[] | null;
+  /** Etiquetas/temas associados. */
+  tags?: string[] | null;
 }
 
 export interface PeopleSearchResponse {
@@ -1248,6 +1316,22 @@ export interface People360Response {
   risk: PersonRisk;
   graph: PeopleGraphResponse;
   analysis: { mode: string; text: string; notes?: string[]; warnings?: string[]; backend?: Record<string, any> };
+  error?: string | null;
+}
+
+/** Perfil político enriquecido (técnico + biográfico + notícias do partido + grafo). */
+export interface PoliticianProfile {
+  nif: string;
+  name?: string | null;
+  party?: string | null;
+  technical_profile: { mode?: string; text?: string; notes?: string[]; warnings?: string[]; backend?: Record<string, any> };
+  biographical_profile: { mode?: string; text?: string; notes?: string[]; warnings?: string[]; backend?: Record<string, any> };
+  party_news: { party?: string | null; total: number; items: Record<string, any>[]; warnings?: string[] };
+  political_graph: PeopleGraphResponse;
+  generated_at?: string | null;
+  cached: boolean;
+  saved?: boolean | null;
+  evidence_count: number;
   error?: string | null;
 }
 

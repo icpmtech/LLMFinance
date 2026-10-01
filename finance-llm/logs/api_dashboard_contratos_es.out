@@ -1,0 +1,46 @@
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+INFO:     Started server process [26896]
+INFO:     Waiting for application startup.
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  48%|####8     | 122/254 [00:00<00:00, 1205.86it/s]Loading weights:  96%|#########5| 243/254 [00:00<00:00, 1182.61it/s]Loading weights: 100%|##########| 254/254 [00:00<00:00, 1227.37it/s]
+Ficheiro do RSS ilegível (Extra data: line 7874 column 2 (char 1192276)); a recomeçar.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
+INFO:     127.0.0.1:63246 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63246 - "GET /contracts/15609253/document?fetch=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62078 - "GET /empresas-iq?v=1790857068224 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62078 - "GET /assets/index-C6hl2Dwy.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64788 - "GET /assets/index-Bfv6INdD.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49670 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51314 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64788 - "GET /sw.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62078 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49670 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64788 - "GET /contracts/analytics?top_entities=10&top_cpv=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62078 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59124 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64293 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58360 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64293 - "GET /contracts/years HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58360 - "POST /contracts/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64293 - "GET /contracts/15609253 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58360 - "GET /workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62078 - "GET /companies/508035546/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64293 - "GET /contracts/15609253/document?fetch=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64788 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58360 - "GET /companies/519242335/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49670 - "GET /companies/519242335 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59124 - "GET /companies/508035546 HTTP/1.1" 200 OK
+[2026-10-01 14:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-01 14:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-01 14:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-01 14:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+INFO:     127.0.0.1:58613 - "GET /contracts/15609254 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64216 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60109 - "GET /companies/508669685/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54604 - "GET /companies/508669685 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59092 - "GET /companies/501305734 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51978 - "GET /companies/501305734/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58613 - "GET /contracts/15609254/document?fetch=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51384 - "POST /contracts/15609254/analyze HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56872 - "POST /companies/search HTTP/1.1" 200 OK

@@ -1022,6 +1022,11 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             # Fontes que contribuíram para a ficha (`publicacoes_mj`, `cire`, ...).
             "sources": {"type": "keyword"},
             "ingested_at": {"type": "date"},
+            "photo_path": {"type": "keyword", "ignore_above": 512},
+            "photo_url": {"type": "keyword", "ignore_above": 1024},
+            "biography": {"type": "text"},
+            "tags": {"type": "keyword"},
+            "metadata": {"type": "object", "enabled": False},
         }
     }
 
@@ -11949,6 +11954,8 @@ def search_people(
     role: Optional[str] = None,
     is_company: Optional[bool] = None,
     origin: Optional[str] = None,
+    source: Optional[str] = None,
+    party: Optional[str] = None,
     min_roles: Optional[int] = None,
     min_companies: Optional[int] = None,
     sort: str = "relevance",
@@ -11962,8 +11969,10 @@ def search_people(
     - ``role``: cargo/papel (contém, sem distinguir maiúsculas) — ex.: `Credor`;
     - ``company_nif``: tem de ter um cargo nessa empresa;
     - ``origin``: `cire` (papéis do CIRE) ou `societario` (cargos das publicações do MJ);
+    - ``source``: filtra por substring do campo `source` (ex.: `parlamento`, `wikipedia`);
+    - ``party``: filtra por partido político (substring, sem distinção de maiúsculas);
     - ``min_roles`` / ``min_companies``: nº mínimo de cargos/empresas na ficha;
-    - ``sort``: `relevance` (por omissão, com mais cargos primeiro), `roles`, `recent`.
+    - ``sort``: `relevance` (por omissão, com mais cargos primeiro), `roles`, `recent`, `name`.
     """
     client = es or get_es_client()
     if not client:
@@ -12027,6 +12036,18 @@ def search_people(
                     "query": condition if wanted == "cire" else {"bool": {"must_not": [condition]}},
                 }
             })
+    if source:
+        filters.append({"wildcard": {"source": {"value": f"*{source}*", "case_insensitive": True}}})
+    if party:
+        filters.append({
+            "bool": {
+                "should": [
+                    {"wildcard": {"metadata.party": {"value": f"*{party}*", "case_insensitive": True}}},
+                    {"wildcard": {"party": {"value": f"*{party}*", "case_insensitive": True}}},
+                ],
+                "minimum_should_match": 1,
+            }
+        })
 
     bool_query: Dict[str, Any] = {}
     if must:
@@ -12069,6 +12090,8 @@ def search_people(
                 "role": role or None,
                 "company_nif": company_nif or None,
                 "origin": origin or None,
+                "source": source or None,
+                "party": party or None,
                 "is_company": is_company,
                 "min_roles": min_roles,
                 "min_companies": min_companies,

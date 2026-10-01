@@ -95,7 +95,7 @@ export const APP_MODULES: AppModule[] = [
     id: "pessoas",
     label: "Pessoas",
     hint: "Pessoas, cargos e relações societárias",
-    ids: ["pessoas-iq"],
+    ids: ["pessoas-iq", "pessoas-iq-politicos"],
   },
   {
     id: "dados-publicos",

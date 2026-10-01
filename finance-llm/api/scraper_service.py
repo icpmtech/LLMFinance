@@ -617,6 +617,8 @@ def _open_session(kind: str, options: Dict[str, Any]):
             kwargs["http3"] = bool(opts["http3"])
         if opts.get("proxy"):
             kwargs["proxy"] = opts["proxy"]
+        if opts.get("http_version"):
+            kwargs["http_version"] = opts["http_version"]
         # O FetcherSession actual do Scrapling 0.4.x não tem métodos de fetch;
         # usamos o Fetcher directamente, que já reutiliza a mesma sessão HTTP
         # subjacente e suporta `impersonate` no construtor. Como o Fetcher não
@@ -763,11 +765,15 @@ def _node_text(node: Any) -> str:
     # Scrapling 0.4.x: css()/xpath() devolve `Selectors` (lista de nós).
     # `first` dá o primeiro Selector, que tem `.text`; `getall()` devolve HTML
     # de todos os nós. Preferimos o texto do maior nó.
+    # Em páginas SharePoint gzip (ex. parlamento.pt), `.text` pode ser vazio
+    # mesmo com `.body` decodificável; recorremos a `get_all_text()`.
+    tried: List[str] = []
     try:
         first = getattr(node, "first", None)
         if first is not None:
             text = getattr(first, "text", "")
-            if isinstance(text, str) and text:
+            tried.append(text)
+            if isinstance(text, str) and text.strip():
                 return text
     except Exception:
         pass
@@ -782,8 +788,14 @@ def _node_text(node: Any) -> str:
                 continue
         except Exception:
             continue
-        if isinstance(text, str) and text:
+        tried.append(text)
+        if isinstance(text, str) and text.strip():
             return text
+    # Se nenhuma fonte devolveu texto não vazio, devolvemos a primeira string
+    # que encontrámos (mesmo vazia) ou a representação do nó.
+    for t in tried:
+        if isinstance(t, str):
+            return t
     return str(node)
 
 

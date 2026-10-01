@@ -486,7 +486,7 @@ TEMPLATES: List[Dict[str, Any]] = [
                 "next_text": ">",
                 "max_pages": 20,
             },
-            "options": {"impersonate": "chrome", "timeout": 30},
+            "options": {"impersonate": "chrome", "timeout": 30, "http_version": 2},
             "schedule": {"cron": "0 5 * * 1", "timezone": "Europe/Lisbon"},
             "respect_robots": True,
             "tags": ["politica", "deputados", "pessoas", "parlamento"],
@@ -495,7 +495,7 @@ TEMPLATES: List[Dict[str, Any]] = [
             "summary_field": "partido",
             "detail": {
                 "enabled": True,
-                "selector": "//div[contains(@class, 'col-xs-12')][div[@class='TextoRegular-Titulo']][div[contains(@class, 'TitulosBio')]]",
+                "selector": "//div[contains(@class, 'col-xs-12')][.//div[contains(@class, 'TitulosBio')]][.//div[@class='TextoRegular-Titulo']]",
                 "type": "xpath",
                 "max_items": 30,
                 "delay": 0.4,

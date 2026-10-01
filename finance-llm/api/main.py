@@ -24,6 +24,8 @@ from api.models import (
     ContractAnalyzeRequest,
     ContractAutocompleteResponse,
     ContractChatRequest,
+    ContractDocumentResponse,
+    ContractReportRequest,
     ContractGraphBuildResponse,
     ContractGraphResponse,
     ContractChatResponse,
@@ -213,7 +215,7 @@ from sentiment.feature_engineering import generate_sentiment_blended_forecast
 
 
 from api.rag_routes import router as rag_router
-from api.auth_routes import router as auth_router, optional_session
+from api.auth_routes import router as auth_router, optional_session, CurrentSession
 from api.cli_routes import router as cli_router
 from api.admin_routes import router as admin_router
 from api.providers_routes import router as providers_router
@@ -655,6 +657,14 @@ if UI_BUILD_DIR.is_dir():
             return response
 
     app.mount("/assets", _StaticFiles(directory=UI_BUILD_DIR / "assets"), name="assets")
+
+# Servir fotos e outros dados recolhidos (deputados, políticos Wikipédia, etc.)
+# Preferir a pasta data dentro do projecto; fallback para a pasta irmã no workspace.
+DATA_DIR = ROOT / "data"
+if not DATA_DIR.is_dir():
+    DATA_DIR = ROOT.parent / "data"
+if DATA_DIR.is_dir():
+    app.mount("/data", StaticFiles(directory=DATA_DIR), name="data")
 
 
 # --- Diretório de empresas (entidades) derivado de contratos ---
@@ -1333,6 +1343,8 @@ def entities_detail(nif: str):
 @app.get("/contracts/search")
 @app.get("/contracts/map")
 @app.get("/empresas-iq")
+@app.get("/pessoas-iq")
+@app.get("/pessoas-iq/politicos")
 @app.get("/empresas-risco")
 @app.get("/crm")
 @app.get("/crm/contas")
@@ -2560,13 +2572,18 @@ def contract_detail(idcontrato: str):
 
 
 @app.post("/contracts/{idcontrato}/analyze")
-def analyze_contract_endpoint(idcontrato: str, req: ContractAnalyzeRequest = Body(...)):
-    """Analisa um contrato com IA (Ollama/OpenAI/local) e ferramentas de pesquisa."""
+def analyze_contract_endpoint(
+    idcontrato: str,
+    req: ContractAnalyzeRequest = Body(...),
+    session: Optional[CurrentSession] = Depends(optional_session),
+):
+    """Analisa um contrato com IA (provider/modelo padrão do sistema ou escolhido) e ferramentas de pesquisa."""
     result = get_contract_by_id(idcontrato)
     if result.get("error"):
         raise HTTPException(status_code=result.get("status_code", 502), detail=result["error"])
 
     contract = result
+    user_id = getattr(getattr(session, "user", None), "id", None) if session else None
     answer = analyze_contract(
         contract,
         question=req.question,
@@ -2575,8 +2592,99 @@ def analyze_contract_endpoint(idcontrato: str, req: ContractAnalyzeRequest = Bod
         temperature=req.temperature,
         use_web_search=req.use_web_search,
         use_related_contracts=req.use_related_contracts,
+        user_id=user_id,
     )
     return answer
+
+
+@app.get("/contracts/{idcontrato}/document", response_model=ContractDocumentResponse)
+def contract_document_endpoint(idcontrato: str, fetch: bool = Query(True)):
+    """Peça do procedimento (convite/caderno de encargos), ligações oficiais e valores lidos.
+
+    `fetch=false` devolve só as ligações e os valores do índice (sem descarregar a peça).
+    """
+    from api.contract_document import contract_document as _contract_document
+
+    contract = get_contract_by_id(idcontrato)
+    if contract.get("error"):
+        raise HTTPException(status_code=contract.get("status_code", 502), detail=contract["error"])
+    data = _contract_document(idcontrato, contract, fetch=fetch)
+    if data.get("error") and data.get("status_code"):
+        raise HTTPException(status_code=data["status_code"], detail=data["error"])
+    return ContractDocumentResponse(**data)
+
+
+@app.post("/contracts/{idcontrato}/report/pdf")
+def contract_report_pdf_endpoint(
+    idcontrato: str,
+    req: ContractReportRequest = Body(...),
+    session: Optional[CurrentSession] = Depends(optional_session),
+):
+    """Gera o PDF do dossiê do contrato: valores, peça, empresas envolvidas e análise IA."""
+    from api.contract_document import contract_document as _contract_document
+    from api.contract_report import build_report_pdf
+
+    contract = get_contract_by_id(idcontrato)
+    if contract.get("error"):
+        raise HTTPException(status_code=contract.get("status_code", 502), detail=contract["error"])
+
+    user_id = getattr(getattr(session, "user", None), "id", None) if session else None
+
+    if req.analysis:
+        analysis: Dict[str, Any] = {"answer": req.analysis, "backend_used": "análise fornecida"}
+    else:
+        analysis = analyze_contract(
+            contract,
+            question=req.question,
+            model=req.model,
+            max_tokens=req.max_tokens,
+            temperature=req.temperature,
+            use_web_search=req.use_web_search,
+            use_related_contracts=req.use_related_contracts,
+            user_id=user_id,
+        )
+
+    document = _contract_document(idcontrato, contract, fetch=True)
+
+    # Empresas envolvidas (adjudicante/adjudicatária), com o detalhe e a analítica disponíveis.
+    companies: List[Dict[str, Any]] = []
+    roles = (("adjudicantes", "adjudicante"), ("adjudicatarios", "adjudicatário"))
+    for field, role in roles:
+        for party in (contract.get(field) or {}).get("parsed", []) or []:
+            nif = party.get("nif")
+            if not nif:
+                continue
+            detail: Dict[str, Any] = {}
+            analytics: Dict[str, Any] = {}
+            try:
+                detail = get_company_by_nif(nif) or {}
+            except Exception as exc:  # pragma: no cover - ES indisponível
+                logging.getLogger(__name__).warning("Relatório: ficha de %s falhou (%s)", nif, exc)
+            try:
+                analytics = get_company_analytics(nif=nif) or {}
+            except Exception as exc:  # pragma: no cover
+                logging.getLogger(__name__).warning("Relatório: analítica de %s falhou (%s)", nif, exc)
+            companies.append(
+                {"nif": nif, "nome": party.get("nome"), "role": role, "detail": detail, "analytics": analytics}
+            )
+
+    try:
+        pdf = build_report_pdf(
+            contract=contract,
+            document=document,
+            analysis=analysis,
+            companies=companies,
+            question=req.question,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Falha ao gerar o PDF: {exc}")
+
+    filename = f"contrato-{idcontrato}.pdf"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.post("/contracts/export/excel")

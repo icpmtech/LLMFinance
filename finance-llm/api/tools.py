@@ -774,17 +774,75 @@ def forecast_prices(symbol: str, future_days: int = 5, period: str = "5y", backe
 from api.explain_technical import explain_technical_indicators
 
 
+_searxng_base_cache: Optional[str] = None
+
+
+def _searxng_bases() -> List[str]:
+    """Bases do SearXNG a tentar: env `SEARXNG_URL`, host (8888) e rede do compose."""
+    env = (os.getenv("SEARXNG_URL") or "").strip().rstrip("/")
+    bases = [env] if env else []
+    bases += ["http://127.0.0.1:8888", "http://searxng:8080"]
+    return list(dict.fromkeys(b for b in bases if b))
+
+
+def _web_search_searxng(query: str, max_results: int = 5) -> Optional[List[Dict]]:
+    """Pesquisa no SearXNG self-hosted da plataforma (formato JSON).
+
+    Devolve `None` se o SearXNG estiver inacessível e uma lista (possivelmente
+    vazia) quando respondeu, para o chamador distinguir «sem motor» de «sem
+    resultados».
+    """
+    global _searxng_base_cache
+    candidates = [_searxng_base_cache] if _searxng_base_cache else _searxng_bases()
+    for base in candidates:
+        if not base:
+            continue
+        try:
+            r = requests.get(
+                f"{base}/search",
+                params={"q": query, "format": "json"},
+                timeout=15,
+            )
+            r.raise_for_status()
+            results = (r.json() or {}).get("results")
+            if not isinstance(results, list):
+                continue
+            _searxng_base_cache = base
+            return [
+                {
+                    "title": it.get("title", ""),
+                    "href": it.get("url", ""),
+                    "body": it.get("content", ""),
+                    "source": "searxng",
+                }
+                for it in results
+                if it.get("url")
+            ][:max_results]
+        except Exception:
+            if _searxng_base_cache == base:
+                _searxng_base_cache = None
+    return None
+
+
 def web_search(query: str, max_results: int = 5, source: str = "auto") -> List[Dict]:
-    """Pesquisa web via DuckDuckGo (padrão), Brave ou SerpAPI conforme configuração.
+    """Pesquisa web via SearXNG (padrão da plataforma), DuckDuckGo, Brave ou SerpAPI.
 
     Args:
         query: Termos de pesquisa.
         max_results: Número máximo de resultados a devolver.
-        source: Motor a usar: "auto", "duckduckgo", "brave", "serpapi".
+        source: Motor a usar: "auto", "searxng", "duckduckgo", "brave", "serpapi".
 
     Devolve lista de resultados com title, href, body e source.
     """
     source = (source or "auto").lower()
+    if source in ("auto", "searxng"):
+        # Se o SearXNG da plataforma responder, é a fonte de verdade (mesmo sem
+        # resultados): o scraper do DuckDuckGo tem devolvido resultados errados.
+        results = _web_search_searxng(query, max_results)
+        if results is not None:
+            return results
+    if source == "searxng":
+        return []
     if source in ("auto", "brave") and os.getenv("BRAVE_API_KEY"):
         return _web_search_brave(query, max_results)
     if source in ("auto", "serpapi") and os.getenv("SERPAPI_KEY"):

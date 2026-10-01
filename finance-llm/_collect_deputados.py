@@ -62,8 +62,18 @@ def build_people_doc(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     nif = f"PT-AR-BID:{bid}"
 
     biografia = str(item.get("text") or "").strip()
-    partido = str(data.get("partido") or "").strip()
     circulo = str(data.get("circulo") or "").strip()
+
+    # O template devolve o partido no campo errado (repete o círculo eleitoral).
+    # Extraímos a sigla do grupo parlamentar a partir da biografia.
+    partido = str(data.get("partido") or "").strip()
+    partido_match = re.search(
+        r"Grupo\s+Parlamentar\s*/?\s*Partido\s*:\s*(.+?)(?:\s+Legislatura|\s+Círculo eleitoral|\s+Vídeobiografia|\s+Nome completo|\s+Data de nascimento|$)",
+        biografia,
+        re.IGNORECASE,
+    )
+    if partido_match:
+        partido = partido_match.group(1).strip()
 
     doc: Dict[str, Any] = {
         "nif": nif,
@@ -84,28 +94,32 @@ def build_people_doc(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         },
     }
 
-    # Se tivermos foto local, guardamos caminho relativo e URL da API.
+    # Sempre referenciar a foto (mesmo que o download ainda não tenha corrido,
+    # o ficheiro é criado durante a recolha).
     foto_path = FOTOS_DIR / f"{bid}.jpg"
-    if foto_path.exists():
-        doc["photo_path"] = str(foto_path.relative_to(ROOT).as_posix())
-        doc["photo_url"] = f"{PHOTO_BASE}?id={bid}&type=deputado"
+    doc["photo_path"] = str(foto_path.relative_to(ROOT).as_posix())
+    doc["photo_url"] = f"{PHOTO_BASE}?id={bid}&type=deputado"
 
     return doc
 
 
-def download_photo(bid: str, session: Any, options: Dict[str, Any]) -> Optional[Path]:
-    """Descarrega foto do deputado via Scrapling session."""
+def download_photo(bid: str, session: Optional[Any], options: Dict[str, Any]) -> Optional[Path]:
+    """Descarrega foto do deputado via Scrapling Fetcher.get (HTTP simples)."""
+    from scrapling.fetchers import Fetcher
+
     url = f"{PHOTO_BASE}?id={bid}&type=deputado"
     path = FOTOS_DIR / f"{bid}.jpg"
     if path.exists() and path.stat().st_size > 0:
         return path
     try:
-        # Preferimos HTTP simples; o fetcher http do Scrapling suporta get().
-        kwargs = {"stealthy_headers": True}
+        kwargs: Dict[str, Any] = {"stealthy_headers": True}
         timeout = options.get("timeout")
         if timeout:
             kwargs["timeout"] = timeout
-        resp = session.get(url, **kwargs)
+        # Manter HTTP/1.1 para evitar stalls no app.parlamento.pt
+        if options.get("http_version"):
+            kwargs["http_version"] = options["http_version"]
+        resp = Fetcher.get(url, **kwargs)
         content = getattr(resp, "content", None)
         if content is None:
             content = getattr(resp, "body", b"")
@@ -113,6 +127,7 @@ def download_photo(bid: str, session: Any, options: Dict[str, Any]) -> Optional[
                 content = content.encode("latin-1", errors="ignore")
         if content and len(content) > 128:
             path.write_bytes(content)
+            logger.debug("Foto %s descarregada (%d bytes)", bid, len(content))
             return path
     except Exception as exc:
         logger.debug("Foto %s falhou: %s", bid, exc)
@@ -134,15 +149,11 @@ def collect_deputados(*, max_pages: int = 20, download_photos: bool = True) -> D
     for page_number, page, page_items in _walk_source(source, stats=stats):
         logger.info("Página %d: %d itens", page_number, len(page_items))
         if download_photos:
-            # Para obter a session temos de reabrir uma sessão HTTP; o iterador não a expõe.
-            # Descarregamos fotos logo após cada página reabrindo sessão HTTP.
-            from scrapling.fetchers import Fetcher
-            with Fetcher.async_session() as photo_session:
-                for item in page_items:
-                    bid = str((item.get("data") or {}).get("bid") or "").strip()
-                    if bid:
-                        if download_photo(bid, photo_session, source.get("options", {})):
-                            foto_count += 1
+            for item in page_items:
+                bid = str((item.get("data") or {}).get("bid") or "").strip()
+                if bid:
+                    if download_photo(bid, None, source.get("options", {})):
+                        foto_count += 1
         items.extend(page_items)
 
     logger.info("Total de itens: %d | Fotos descarregadas: %d", len(items), foto_count)

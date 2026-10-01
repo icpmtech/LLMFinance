@@ -37,6 +37,7 @@ import EntityDashboardPage from "./pages/EntityDashboardPage";
 import EntityComparePage from "./pages/EntityComparePage";
 import EmpresasIQPage from "./pages/EmpresasIQPage";
 import PessoasIQPage from "./pages/PessoasIQPage";
+import PoliticosPortugalPage from "./pages/PoliticosPortugalPage";
 import { PessoasGraphWindow } from "./pages/PessoasGraphWindow";
 import { parseGraphWindowView } from "./components/people/peopleKit";
 import CompaniesGlobalPage from "./pages/CompaniesGlobalPage";
@@ -133,6 +134,7 @@ type AppView =
   | "ticker-chart"
   | "empresas-iq"
   | "pessoas-iq"
+  | "pessoas-iq-politicos"
   | "pessoas-graph"
   | "ontology"
   | "crm"
@@ -262,6 +264,7 @@ function pathForView(
   if (view === "cli") return "/cli";
   if (view === "empresas-iq") return "/empresas-iq";
   if (view === "pessoas-iq") return "/pessoas-iq";
+  if (view === "pessoas-iq-politicos") return "/pessoas-iq/politicos";
   if (view === "ontology") return "/ontology";
   if (view === "hermes") return "/hermes";
   if (view === "jarvis") return "/jarvis";
@@ -527,6 +530,7 @@ export default function App() {
     if (path === "/cli") return "cli";
     if (path === "/contracts-list" || path.startsWith("/contracts-list/")) return "contracts-list";
     if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) return "empresas-iq";
+    if (path === "/pessoas-iq/politicos") return "pessoas-iq-politicos";
     if (path === "/pessoas-iq" || path.startsWith("/pessoas-iq/")) return "pessoas-iq";
     if (path === "/empresas-global") return "companies-global";
     if (path === "/ontology" || path.startsWith("/ontology/")) return "ontology";
@@ -627,6 +631,7 @@ export default function App() {
       else if (path === "/cli") next = "cli";
       else if (path === "/contracts-list" || path.startsWith("/contracts-list/")) next = "contracts-list";
       else if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) next = "empresas-iq";
+      else if (path === "/pessoas-iq/politicos") next = "pessoas-iq-politicos";
       else if (path === "/pessoas-iq" || path.startsWith("/pessoas-iq/")) next = "pessoas-iq";
       else if (path === "/empresas-global") next = "companies-global";
       else if (path === "/ontology" || path.startsWith("/ontology/")) next = "ontology";
@@ -1142,6 +1147,7 @@ export default function App() {
     if (target === "dashboard") return <DashboardPage onSwitchView={handleSwitchView} onSelectTicker={handleSelectTicker} />;
     if (target === "empresas-iq") return <EmpresasIQPage />;
     if (target === "pessoas-iq") return <PessoasIQPage />;
+    if (target === "pessoas-iq-politicos") return <PoliticosPortugalPage />;
     if (target === "companies-global") return <CompaniesGlobalPage onOpenView={handleOpenSearchView} />;
     if (target === "ontology") return <OntologyPage />;
     if (target === "hermes") return <HermesPage />;
@@ -1601,7 +1607,7 @@ export default function App() {
     );
   }
 
-  if (view === "empresas-iq" || view === "pessoas-iq") {
+  if (view === "empresas-iq" || view === "pessoas-iq" || view === "pessoas-iq-politicos") {
     return (
       <div className={["relative w-full bg-background text-foreground", dockSpacer.sides, dockSpacer.bottom].join(" ")}>
         {renderContent()}
