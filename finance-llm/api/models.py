@@ -978,6 +978,7 @@ class ContractAnalyticsRow(BaseModel):
     key: str
     count: int
     total_value: Optional[float] = None
+    avg_value: Optional[float] = None
     description: Optional[str] = None
 
 
@@ -986,10 +987,16 @@ class ContractAnalyticsResponse(BaseModel):
     total_value: Optional[float] = None
     avg_value: Optional[float] = None
     max_value: Optional[float] = None
+    # Cardinalidade distinta (exata) do universo filtrado.
+    distinct_adjudicantes: int = 0
+    distinct_adjudicatarios: int = 0
+    distinct_cpv: int = 0
     by_year: List[ContractAnalyticsRow] = []
     by_month: List[ContractAnalyticsRow] = []
     value_distribution: List[ContractAnalyticsRow] = []
     top_entities: List[ContractAnalyticsRow] = []
+    top_adjudicantes: List[ContractAnalyticsRow] = []
+    top_adjudicatarios: List[ContractAnalyticsRow] = []
     top_cpv: List[ContractAnalyticsRow] = []
     procedure_types: List[ContractAnalyticsRow] = []
     contract_types: List[ContractAnalyticsRow] = []

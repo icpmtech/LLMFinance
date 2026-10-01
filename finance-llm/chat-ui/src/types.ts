@@ -709,6 +709,7 @@ export interface ContractAnalyticsFilters {
   cpv_code?: string;
   procedure_type?: string;
   contract_type?: string;
+  role?: "all" | "adjudicante" | "adjudicatario";
   region?: string;
   min_price?: number;
   max_price?: number;
@@ -858,6 +859,7 @@ export interface ContractAnalyticsRow {
   key: string;
   count: number;
   total_value?: number;
+  avg_value?: number;
   description?: string;
 }
 
@@ -866,10 +868,16 @@ export interface ContractAnalyticsResponse {
   total_value?: number;
   avg_value?: number;
   max_value?: number;
+  /** Cardinalidade distinta (exata) do universo filtrado. */
+  distinct_adjudicantes?: number;
+  distinct_adjudicatarios?: number;
+  distinct_cpv?: number;
   by_year: ContractAnalyticsRow[];
   by_month: ContractAnalyticsRow[];
   value_distribution: ContractAnalyticsRow[];
   top_entities: ContractAnalyticsRow[];
+  top_adjudicantes?: ContractAnalyticsRow[];
+  top_adjudicatarios?: ContractAnalyticsRow[];
   top_cpv: ContractAnalyticsRow[];
   procedure_types: ContractAnalyticsRow[];
   contract_types: ContractAnalyticsRow[];

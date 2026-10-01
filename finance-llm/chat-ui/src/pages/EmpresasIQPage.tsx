@@ -257,9 +257,39 @@ const euroFormatter: RechartsFormatter = (value) => [
   money(Number(value)),
   "Valor",
 ];
+/**
+ * Animação de entrada dos gráficos: desligada de propósito.
+ *
+ * O Recharts só produz as formas animadas (fatias de piza, barras) dentro de um
+ * `requestAnimationFrame`. Numa janela inactiva do IQ OS — e no browser embutido,
+ * onde o rAF não chega a correr — isso deixava os gráficos vazios (pizas sem
+ * fatias, barras sem altura). Sem animação o desenho é determinista.
+ */
+const CHART_ANIMATION = false;
+
+/**
+ * Percentagem desenhada **dentro** da fatia, a branco.
+ *
+ * O rótulo por omissão do Recharts herda a cor da fatia, pelo que ficava
+ * invisível sobre ela (e sem contraste no fundo escuro). Fica no meio do anel e
+ * as fatias abaixo de 5% não levam rótulo, para não se sobreporem.
+ */
 const percentPieLabel: PieLabel = (props) => {
-  const p = props?.percent ?? 0;
-  return `${(p * 100).toFixed(0)}%`;
+  const percent = props?.percent ?? 0;
+  if (percent < 0.05) return null;
+  const mid = Number(props?.midAngle ?? 0);
+  const inner = Number(props?.innerRadius ?? 0);
+  const outer = Number(props?.outerRadius ?? 0);
+  const cx = Number(props?.cx ?? 0);
+  const cy = Number(props?.cy ?? 0);
+  const radius = (inner + outer) / 2;
+  const x = cx + radius * Math.cos((-mid * Math.PI) / 180);
+  const y = cy + radius * Math.sin((-mid * Math.PI) / 180);
+  return (
+    <text x={x} y={y} fill="#ffffff" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={600}>
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
 };
 
 function useDebounce<T>(value: T, delay = 350) {
@@ -3054,6 +3084,7 @@ function DashboardSection({
                   paddingAngle={3}
                   labelLine={false}
                   label={percentPieLabel}
+                  isAnimationActive={CHART_ANIMATION}
                 >
                   {byProcedure.slice(0, 6).map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
@@ -4814,6 +4845,7 @@ type AnalysisFilterDraft = {
   cpvCode: string;
   procedureType: string;
   contractType: string;
+  role: AnalysisRole;
   region: string;
   minPrice: string;
   maxPrice: string;
@@ -4831,6 +4863,7 @@ const EMPTY_ANALYSIS_DRAFT: AnalysisFilterDraft = {
   cpvCode: "",
   procedureType: "",
   contractType: "",
+  role: "all",
   region: "",
   minPrice: "",
   maxPrice: "",
@@ -4842,8 +4875,21 @@ const EMPTY_ANALYSIS_DRAFT: AnalysisFilterDraft = {
 /** Filtro base (sem restrições) — o mesmo universo que a página carrega ao abrir. */
 const DEFAULT_ANALYSIS_FILTERS: ContractAnalyticsFilters = { top_entities: 10, top_cpv: 10 };
 
+/**
+ * Papel da parte no contrato. `short` é o rótulo do toggle do cartão de rankings
+ * («Ambos», para não colidir com o separador «Entidades» do módulo); `title` é o
+ * que aparece no título do cartão («Top 10 Entidades»).
+ */
+type AnalysisRole = "all" | "adjudicante" | "adjudicatario";
+
+const ANALYSIS_ROLE_OPTIONS: { value: AnalysisRole; label: string; short: string; title: string }[] = [
+  { value: "all", label: "Ambos os papéis", short: "Ambos", title: "Entidades" },
+  { value: "adjudicante", label: "Só adjudicantes", short: "Adjudicantes", title: "Adjudicantes" },
+  { value: "adjudicatario", label: "Só adjudicatários", short: "Adjudicatários", title: "Adjudicatários" },
+];
+
 /** Dimensões oferecidas no seletor «Top N» das listas. */
-const ANALYSIS_TOP_OPTIONS = [5, 10, 20, 50];
+const ANALYSIS_TOP_OPTIONS = [10, 20, 50, 100];
 
 const ANALYSIS_INPUT_CLASS =
   "w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none transition focus:border-teal-400/50";
@@ -4857,6 +4903,7 @@ function buildAnalysisFilters(draft: AnalysisFilterDraft): ContractAnalyticsFilt
   if (draft.cpvCode.trim()) f.cpv_code = draft.cpvCode.trim();
   if (draft.procedureType.trim()) f.procedure_type = draft.procedureType.trim();
   if (draft.contractType.trim()) f.contract_type = draft.contractType.trim();
+  if (draft.role !== "all") f.role = draft.role;
   if (draft.region.trim()) f.region = draft.region.trim();
   if (draft.minPrice.trim() && !Number.isNaN(Number(draft.minPrice))) f.min_price = Number(draft.minPrice);
   if (draft.maxPrice.trim() && !Number.isNaN(Number(draft.maxPrice))) f.max_price = Number(draft.maxPrice);
@@ -4881,6 +4928,9 @@ function filterChipLabel(filters: ContractAnalyticsFilters): { key: keyof Contra
   if (filters.cpv_code) chips.push({ key: "cpv_code", label: `CPV: ${filters.cpv_code}` });
   if (filters.procedure_type) chips.push({ key: "procedure_type", label: `Procedimento: ${filters.procedure_type}` });
   if (filters.contract_type) chips.push({ key: "contract_type", label: `Tipo: ${filters.contract_type}` });
+  if (filters.role && filters.role !== "all") {
+    chips.push({ key: "role", label: `Papel: ${filters.role === "adjudicante" ? "adjudicantes" : "adjudicatários"}` });
+  }
   if (filters.region) chips.push({ key: "region", label: `Região: ${filters.region}` });
   if (filters.min_price !== undefined) chips.push({ key: "min_price", label: `Mín.: ${money(filters.min_price)}` });
   if (filters.max_price !== undefined) chips.push({ key: "max_price", label: `Máx.: ${money(filters.max_price)}` });
@@ -4904,6 +4954,7 @@ function AnalysisSection({
   const [draft, setDraft] = useState<AnalysisFilterDraft>(EMPTY_ANALYSIS_DRAFT);
   const [years, setYears] = useState<number[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [entityView, setEntityView] = useState<AnalysisRole>("all");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // O snapshot da página já cobre o filtro base: evita repetir o pedido ao montar.
@@ -4982,11 +5033,15 @@ function AnalysisSection({
         .map((row) => ({ ...row, label: monthLabel(row.key) })),
     [analytics],
   );
-  const topEntities = analytics?.top_entities ?? [];
   const topCpv = analytics?.top_cpv ?? [];
   const procedureTypes = analytics?.procedure_types ?? [];
   const contractTypes = analytics?.contract_types ?? [];
   const valueDistribution = analytics?.value_distribution ?? [];
+  // `slice()` dentro do JSX criava um array novo a cada render, o que fazia o
+  // Recharts reiniciar a animação das fatias (e o gráfico desaparecia por
+  // instantes a cada mudança de estado, p.ex. ao alternar o ranking).
+  const contractPie = useMemo(() => contractTypes.slice(0, 6), [contractTypes]);
+  const procedurePie = useMemo(() => procedureTypes.slice(0, 6), [procedureTypes]);
   const yearsSpan = useMemo(() => {
     if (byYear.length === 0) return null;
     const first = byYear[0].key;
@@ -5000,6 +5055,29 @@ function AnalysisSection({
         .slice(0, 8),
     [regional],
   );
+
+  // Vista das listas de entidades (não filtra: os dois rankings vêm na mesma resposta).
+  const entityRows = useMemo(() => {
+    if (entityView === "adjudicante") return analytics?.top_adjudicantes ?? [];
+    if (entityView === "adjudicatario") return analytics?.top_adjudicatarios ?? [];
+    return analytics?.top_entities ?? [];
+  }, [analytics, entityView]);
+
+  const roleShort = ANALYSIS_ROLE_OPTIONS.find((option) => option.value === entityView)?.title ?? "Entidades";
+
+  // Descrição do recorte activo, para os cartões dizerem a que universo se referem
+  // (p.ex. «top entidades no CPV 33600000-6»).
+  const scopeLabel = useMemo(() => {
+    const parts: string[] = [];
+    if (filters.cpv_code) parts.push(`CPV ${filters.cpv_code}`);
+    if (filters.contract_type) parts.push(`tipo «${filters.contract_type}»`);
+    if (filters.procedure_type) parts.push(`procedimento «${filters.procedure_type}»`);
+    if (filters.entity) parts.push(`entidade «${filters.entity}»`);
+    if (filters.nif) parts.push(`NIF ${filters.nif}`);
+    if (filters.region) parts.push(`região ${filters.region}`);
+    if (filters.year !== undefined) parts.push(`ano ${filters.year}`);
+    return parts.length > 0 ? parts.join(" · ") : null;
+  }, [filters]);
 
   const applyFilters = (next: AnalysisFilterDraft) => {
     setDraft(next);
@@ -5021,6 +5099,7 @@ function AnalysisSection({
       case "cpv_code": next.cpvCode = ""; break;
       case "procedure_type": next.procedureType = ""; break;
       case "contract_type": next.contractType = ""; break;
+      case "role": next.role = "all"; break;
       case "region": next.region = ""; break;
       case "min_price": next.minPrice = ""; break;
       case "max_price": next.maxPrice = ""; break;
@@ -5149,6 +5228,20 @@ function AnalysisSection({
                 {contractTypeOptions.map((option) => (
                   <option key={option} value={option}>
                     {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-xs text-muted-foreground">Papel nos contratos</span>
+              <select
+                value={draft.role}
+                onChange={(e) => setDraft((d) => ({ ...d, role: e.target.value as AnalysisRole }))}
+                className={ANALYSIS_INPUT_CLASS}
+              >
+                {ANALYSIS_ROLE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </select>
@@ -5291,25 +5384,35 @@ function AnalysisSection({
         </div>
       )}
 
-      <div className="grid gap-4 @xl:grid-cols-2 @5xl:grid-cols-4">
+      <div className="grid gap-4 @xl:grid-cols-2 @4xl:grid-cols-3">
         <Card glow="teal">
           <p className="text-xs uppercase tracking-wider text-muted-foreground">Valor Total Adjudicado</p>
           <p className="mt-2 text-2xl font-bold stat-value text-glow-teal">{money(analytics?.total_value)}</p>
           <p className="mt-1 text-xs text-muted-foreground">em {full(analytics?.total_contracts)} contratos</p>
         </Card>
         <Card glow="blue">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Valor Médio por Contrato</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Valor Médio</p>
           <p className="mt-2 text-2xl font-bold stat-value text-glow-blue">{money(analytics?.avg_value)}</p>
           <p className="mt-1 text-xs text-muted-foreground">Maior: {money(analytics?.max_value)}</p>
         </Card>
         <Card glow="amber">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Entidades em Destaque</p>
-          <p className="mt-2 text-2xl font-bold stat-value text-glow-amber">{full(topEntities.length)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">Top {filters.top_entities ?? 10} por valor adjudicado</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Adjudicantes</p>
+          <p className="mt-2 text-2xl font-bold stat-value text-glow-amber">{full(analytics?.distinct_adjudicantes)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">entidades que adjudicam</p>
         </Card>
-        <Card glow="violet">
+        <Card glow="rose">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Adjudicatários</p>
+          <p className="mt-2 text-2xl font-bold stat-value text-glow-rose">{full(analytics?.distinct_adjudicatarios)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">fornecedores distintos</p>
+        </Card>
+        <Card glow="teal">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">CPV Distintos</p>
+          <p className="mt-2 text-2xl font-bold stat-value text-glow-teal">{full(analytics?.distinct_cpv)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">categorias com contratos</p>
+        </Card>
+        <Card glow="blue">
           <p className="text-xs uppercase tracking-wider text-muted-foreground">Regiões com Contratos</p>
-          <p className="mt-2 text-2xl font-bold stat-value text-glow-violet">{full(regional?.region_count ?? regional?.regions.length ?? 0)}</p>
+          <p className="mt-2 text-2xl font-bold stat-value text-glow-blue">{full(regional?.region_count ?? regional?.regions.length ?? 0)}</p>
           <p className="mt-1 text-xs text-muted-foreground">{yearsSpan ? `NUTS · período ${yearsSpan}` : "Distribuição territorial (NUTS)"}</p>
         </Card>
       </div>
@@ -5372,6 +5475,7 @@ function AnalysisSection({
                   strokeWidth={2}
                   dot={{ r: 3, fill: "#10a37f" }}
                   name="Valor adjudicado"
+                  isAnimationActive={CHART_ANIMATION}
                 />
                 <Line
                   type="monotone"
@@ -5381,6 +5485,7 @@ function AnalysisSection({
                   strokeWidth={2}
                   dot={{ r: 3, fill: "#3b82f6" }}
                   name="Nº contratos"
+                  isAnimationActive={CHART_ANIMATION}
                 />
                 <Legend />
               </LineChart>
@@ -5425,6 +5530,7 @@ function AnalysisSection({
                   strokeWidth={2}
                   dot={false}
                   name="Contratos"
+                  isAnimationActive={CHART_ANIMATION}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -5445,7 +5551,7 @@ function AnalysisSection({
             <ResponsiveContainer width="100%" height="100%">
               <RePieChart>
                 <Pie
-                  data={contractTypes.slice(0, 6)}
+                  data={contractPie}
                   dataKey="count"
                   nameKey="key"
                   innerRadius={50}
@@ -5453,12 +5559,13 @@ function AnalysisSection({
                   paddingAngle={3}
                   labelLine={false}
                   label={percentPieLabel}
+                  isAnimationActive={CHART_ANIMATION}
                   onClick={(entry: PieSectorDataItem) => {
                     const code = String(entry?.payload?.key ?? entry?.name ?? "");
                     if (code) applyFilters({ ...draft, contractType: draft.contractType === code ? "" : code });
                   }}
                 >
-                  {contractTypes.slice(0, 6).map((_, i) => (
+                  {contractPie.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
@@ -5487,7 +5594,7 @@ function AnalysisSection({
             <ResponsiveContainer width="100%" height="100%">
               <RePieChart>
                 <Pie
-                  data={procedureTypes.slice(0, 6)}
+                  data={procedurePie}
                   dataKey="count"
                   nameKey="key"
                   innerRadius={50}
@@ -5495,12 +5602,13 @@ function AnalysisSection({
                   paddingAngle={3}
                   labelLine={false}
                   label={percentPieLabel}
+                  isAnimationActive={CHART_ANIMATION}
                   onClick={(entry: PieSectorDataItem) => {
                     const code = String(entry?.payload?.key ?? entry?.name ?? "");
                     if (code) applyFilters({ ...draft, procedureType: draft.procedureType === code ? "" : code });
                   }}
                 >
-                  {procedureTypes.slice(0, 6).map((_, i) => (
+                  {procedurePie.map((_, i) => (
                     <Cell key={i} fill={COLORS[(i + 2) % COLORS.length]} />
                   ))}
                 </Pie>
@@ -5545,7 +5653,7 @@ function AnalysisSection({
                   }}
                   formatter={countFormatter}
                 />
-                <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Contratos" />
+                <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Contratos" isAnimationActive={CHART_ANIMATION} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -5554,45 +5662,79 @@ function AnalysisSection({
 
       <div className="grid gap-6 @3xl:grid-cols-2 @7xl:grid-cols-[1fr_1fr_0.6fr]">
         <Card>
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h3 className="font-semibold">Top 5 Entidades por Valor</h3>
-              <p className="text-xs text-muted-foreground">Clique para abrir a ficha</p>
+          <div className="mb-4 flex flex-col gap-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="font-semibold">
+                  Top {entityRows.length} {roleShort}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {scopeLabel ? `Valor adjudicado · ${scopeLabel}` : "Valor adjudicado · clique para abrir a ficha"}
+                </p>
+              </div>
+              <Badge color="violet">Valor</Badge>
+            </div>
+            <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-0.5 text-[11px]">
+              {ANALYSIS_ROLE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setEntityView(option.value)}
+                  aria-pressed={entityView === option.value}
+                  className={`flex-1 whitespace-nowrap rounded-lg px-2 py-1 transition ${
+                    entityView === option.value
+                      ? "bg-teal-400/15 text-teal-200"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {option.short}
+                </button>
+              ))}
             </div>
           </div>
-          <BarList
-            rows={topEntities.slice(0, 5).map((row) => ({
-              key: row.key,
-              label: row.description || row.key,
-              value: row.total_value || 0,
-              display: money(row.total_value),
-            }))}
-            onSelect={(row) => onEntity(row.key)}
-          />
+          <div className="max-h-[380px] overflow-auto pr-1">
+            <BarList
+              rows={entityRows.map((row) => ({
+                key: row.key,
+                label: row.description || row.key,
+                value: row.total_value || 0,
+                display: money(row.total_value),
+              }))}
+              onSelect={(row) => onEntity(row.key)}
+              emptyLabel="Sem entidades para os filtros aplicados."
+            />
+          </div>
         </Card>
 
         <Card>
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h3 className="font-semibold">CPV Mais Frequentes</h3>
-              <p className="text-xs text-muted-foreground">Nº de contratos por categoria · clique para filtrar</p>
+              <h3 className="font-semibold">Top {topCpv.length} CPV</h3>
+              <p className="text-xs text-muted-foreground">
+                {filters.nif || filters.entity
+                  ? `Categorias de ${filters.nif ? `NIF ${filters.nif}` : `«${filters.entity}»`} · clique para filtrar`
+                  : "Nº de contratos por categoria · clique para filtrar"}
+              </p>
             </div>
             <Badge color="amber">Nº</Badge>
           </div>
-          <BarList
-            color="bg-amber-400"
-            rows={topCpv.slice(0, 5).map((row) => ({
-              key: row.key,
-              code: row.key,
-              label: row.description || "Sem descrição",
-              value: row.count || 0,
-              display: full(row.count),
-            }))}
-            onSelect={(row) => {
-              const code = row.code || row.key;
-              applyFilters({ ...draft, cpvCode: draft.cpvCode === code ? "" : code });
-            }}
-          />
+          <div className="max-h-[380px] overflow-auto pr-1">
+            <BarList
+              color="bg-amber-400"
+              rows={topCpv.map((row) => ({
+                key: row.key,
+                code: row.key,
+                label: row.description || "Sem descrição",
+                value: row.count || 0,
+                display: full(row.count),
+              }))}
+              onSelect={(row) => {
+                const code = row.code || row.key;
+                applyFilters({ ...draft, cpvCode: draft.cpvCode === code ? "" : code });
+              }}
+              emptyLabel="Sem CPV para os filtros aplicados."
+            />
+          </div>
         </Card>
 
         <Card>
@@ -5635,6 +5777,59 @@ function AnalysisSection({
           </p>
         </Card>
       </div>
+
+      <Card>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="font-semibold">Indicadores por Ano</h3>
+            <p className="text-xs text-muted-foreground">
+              {byYear.length} anos no universo filtrado · clique num ano para o filtrar
+            </p>
+          </div>
+          <Badge color="teal">Ano</Badge>
+        </div>
+        <div className="max-h-[420px] overflow-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="sticky top-0 z-10 bg-[rgba(7,21,27,0.95)] text-xs uppercase tracking-wider text-muted-foreground backdrop-blur">
+              <tr>
+                <th className="px-3 py-2">Ano</th>
+                <th className="px-3 py-2 text-right">Contratos</th>
+                <th className="px-3 py-2 text-right">Valor adjudicado</th>
+                <th className="px-3 py-2 text-right">Valor médio</th>
+                <th className="px-3 py-2 text-right">% do valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...byYear].reverse().map((row) => {
+                const share = analytics?.total_value ? ((row.total_value || 0) / analytics.total_value) * 100 : 0;
+                const active = filters.year !== undefined && String(filters.year) === row.key;
+                return (
+                  <tr
+                    key={row.key}
+                    onClick={() => applyFilters({ ...draft, year: draft.year === Number(row.key) ? "" : Number(row.key) })}
+                    className={`cursor-pointer border-t border-white/5 transition ${
+                      active ? "bg-teal-400/10 text-teal-100" : "hover:bg-white/[0.03]"
+                    }`}
+                  >
+                    <td className="px-3 py-2 font-medium tabular-nums">{row.key}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{full(row.count)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{money(row.total_value)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{money(row.avg_value)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{share.toFixed(1)}%</td>
+                  </tr>
+                );
+              })}
+              {byYear.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">
+                    Sem dados para os filtros aplicados.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   );
 }

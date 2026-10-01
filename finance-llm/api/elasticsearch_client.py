@@ -3278,6 +3278,7 @@ def _build_contract_query(
     max_price: Optional[float] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    role: Optional[str] = None,
 ) -> Dict[str, Any]:
     must: List[Dict[str, Any]] = []
     filters: List[Dict[str, Any]] = []
@@ -3360,6 +3361,11 @@ def _build_contract_query(
                 ]
             }
         })
+    if role in ("adjudicante", "adjudicatario"):
+        # Restringe aos contratos em que a parte participa nesse papel. Basta um
+        # `match_all` dentro do `nested`: o que se testa é ter filhos nesse caminho.
+        role_path = "adjudicantes.parsed" if role == "adjudicante" else "adjudicatarios.parsed"
+        filters.append({"nested": {"path": role_path, "query": {"match_all": {}}}})
     if region:
         filters.append(_region_filter(region))
     if cpv_code:
@@ -3505,6 +3511,7 @@ def get_contract_analytics(
     cpv_code: Optional[str] = None,
     procedure_type: Optional[str] = None,
     contract_type: Optional[str] = None,
+    role: Optional[str] = None,
     region: Optional[str] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
@@ -3523,6 +3530,7 @@ def get_contract_analytics(
     base_query = _build_contract_query(
         q, year, entity, nif, region=region, cpv_code=cpv_code,
         min_price=min_price, max_price=max_price, start_date=start_date, end_date=end_date,
+        role=role,
     )
 
     procedure_agg = _resolve_agg_target(client, "tipoprocedimento")
@@ -3548,7 +3556,10 @@ def get_contract_analytics(
                     "max_value": {"max": {"field": "precoContratual"}},
                     "by_year": {
                         "terms": {"field": "Ano", "size": 50, "order": {"_key": "desc"}},
-                        "aggs": {"total_value": {"sum": {"field": "precoContratual"}}},
+                        "aggs": {
+                            "total_value": {"sum": {"field": "precoContratual"}},
+                            "avg_value": {"avg": {"field": "precoContratual"}},
+                        },
                     },
                     "by_month": {
                         "date_histogram": {
@@ -3632,6 +3643,20 @@ def get_contract_analytics(
                     "contract_types": {
                         "terms": {"field": contract_agg["field"], "size": 20, "missing": "N/A"}
                     },
+                    # Universo distinto por papel: cardinalidade (exata) em vez de
+                    # `terms`, que truncaria a contagem no tamanho pedido.
+                    "distinct_adjudicantes": {
+                        "nested": {"path": "adjudicantes.parsed"},
+                        "aggs": {"value": {"cardinality": {"field": "adjudicantes.parsed.nif"}}},
+                    },
+                    "distinct_adjudicatarios": {
+                        "nested": {"path": "adjudicatarios.parsed"},
+                        "aggs": {"value": {"cardinality": {"field": "adjudicatarios.parsed.nif"}}},
+                    },
+                    "distinct_cpv": {
+                        "nested": {"path": "cpv"},
+                        "aggs": {"value": {"cardinality": {"field": "cpv.code"}}},
+                    },
         },
     }
     if runtime_mappings:
@@ -3645,22 +3670,35 @@ def get_contract_analytics(
         def fmt_money(v):
             return round(v, 2) if v is not None else None
 
-        entity_rows: List[Dict[str, Any]] = []
-        seen_entities: set = set()
-        for agg_key in ("top_adjudicantes", "top_adjudicatarios"):
+        def entity_rows_from(agg_key: str) -> List[Dict[str, Any]]:
+            """Ranking de uma das partes (adjudicantes ou adjudicatários)."""
+            rows: List[Dict[str, Any]] = []
             for b in aggs.get(agg_key, {}).get("names", {}).get("buckets", []):
                 key = b["key"]
-                if not key or key in seen_entities:
+                if not key:
                     continue
-                seen_entities.add(key)
                 total_value_obj = b.get("total_value", {})
                 value = total_value_obj.get("value", {}).get("value") if isinstance(total_value_obj.get("value"), dict) else total_value_obj.get("value")
-                entity_rows.append({
+                rows.append({
                     "key": key,
                     "count": b["doc_count"],
                     "total_value": fmt_money(value),
                     "description": _top_hit_name(b.get("name")),
                 })
+            return rows
+
+        # Rankings separados por papel (a UI mostra-os em separado) + lista
+        # combinada, que continua a ser o que `top_entities` sempre devolveu.
+        adjudicantes = entity_rows_from("top_adjudicantes")
+        adjudicatarios = entity_rows_from("top_adjudicatarios")
+
+        entity_rows: List[Dict[str, Any]] = []
+        seen_entities: set = set()
+        for row in adjudicantes + adjudicatarios:
+            if row["key"] in seen_entities:
+                continue
+            seen_entities.add(row["key"])
+            entity_rows.append(row)
         entity_rows.sort(key=lambda x: (x.get("total_value") or 0, x.get("count") or 0), reverse=True)
         entity_rows = entity_rows[:top_entities]
 
@@ -3675,12 +3713,26 @@ def get_contract_analytics(
                 "description": _cpv_description_from_hits(b.get("description"), b["key"]),
             })
 
+        def agg_count(agg: Optional[Dict[str, Any]]) -> int:
+            return int((agg or {}).get("value", {}).get("value") or 0)
+
         return {
             "total_contracts": resp["hits"]["total"]["value"],
             "total_value": fmt_money(aggs["total_value"].get("value")),
             "avg_value": fmt_money(aggs["avg_value"].get("value")),
             "max_value": fmt_money(aggs["max_value"].get("value")),
-            "by_year": [{"key": str(b["key"]), "count": b["doc_count"], "total_value": fmt_money(b.get("total_value", {}).get("value"))} for b in aggs["by_year"]["buckets"]],
+            "distinct_adjudicantes": agg_count(aggs.get("distinct_adjudicantes")),
+            "distinct_adjudicatarios": agg_count(aggs.get("distinct_adjudicatarios")),
+            "distinct_cpv": agg_count(aggs.get("distinct_cpv")),
+            "by_year": [
+                {
+                    "key": str(b["key"]),
+                    "count": b["doc_count"],
+                    "total_value": fmt_money(b.get("total_value", {}).get("value")),
+                    "avg_value": fmt_money(b.get("avg_value", {}).get("value")),
+                }
+                for b in aggs["by_year"]["buckets"]
+            ],
             "by_month": [{"key": b["key_as_string"], "count": b["doc_count"]} for b in aggs["by_month"]["buckets"]],
             # `precoContratual` tem valores negativos (correções/notas de crédito) que
             # caíam nos primeiros escalões do histograma; ignoram-se aqui.
@@ -3690,6 +3742,8 @@ def get_contract_analytics(
                 if b.get("key") is not None and b["key"] >= 0
             ][:value_buckets],
             "top_entities": entity_rows,
+            "top_adjudicantes": adjudicantes,
+            "top_adjudicatarios": adjudicatarios,
             "top_cpv": cpv_rows,
             "procedure_types": [{"key": b["key"], "count": b["doc_count"]} for b in aggs["procedure_types"]["buckets"]],
             "contract_types": [{"key": b["key"], "count": b["doc_count"]} for b in aggs["contract_types"]["buckets"]],
@@ -4828,6 +4882,7 @@ def get_contract_regional_analytics(
     cpv_code: Optional[str] = None,
     procedure_type: Optional[str] = None,
     contract_type: Optional[str] = None,
+    role: Optional[str] = None,
     region: Optional[str] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
@@ -4848,6 +4903,7 @@ def get_contract_regional_analytics(
     query = _build_contract_query(
         q, year, entity, nif, region=region, cpv_code=cpv_code,
         min_price=min_price, max_price=max_price, start_date=start_date, end_date=end_date,
+        role=role,
     )
     type_filters, runtime_mappings = _contract_type_filters(client, procedure_type, contract_type)
     query = _and_filters(query, type_filters)

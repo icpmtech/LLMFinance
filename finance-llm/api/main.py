@@ -2247,18 +2247,19 @@ def contracts_analytics(
     cpv_code: Optional[str] = Query(None),
     procedure_type: Optional[str] = Query(None, description="Tipo de procedimento (valor da agregação `procedure_types`)"),
     contract_type: Optional[str] = Query(None, description="Tipo de contrato (valor da agregação `contract_types`)"),
+    role: Optional[str] = Query("all", pattern="^(all|adjudicante|adjudicatario)$", description="Papel da parte nos contratos"),
     region: Optional[str] = Query(None, description="Região NUTS (código ou string completa)"),
     min_price: Optional[float] = Query(None),
     max_price: Optional[float] = Query(None),
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
-    top_entities: int = Query(8, ge=1, le=50),
-    top_cpv: int = Query(8, ge=1, le=50),
+    top_entities: int = Query(8, ge=1, le=100),
+    top_cpv: int = Query(8, ge=1, le=100),
 ):
     """Devolve analytics/aggregações para o dashboard de contratos."""
     res = get_contract_analytics(
         q=q, year=year, entity=entity, nif=nif, cpv_code=cpv_code,
-        procedure_type=procedure_type, contract_type=contract_type, region=region,
+        procedure_type=procedure_type, contract_type=contract_type, role=role, region=region,
         min_price=min_price, max_price=max_price, start_date=start_date, end_date=end_date,
         top_entities=top_entities, top_cpv=top_cpv,
     )
@@ -2276,6 +2277,7 @@ def contracts_regional_analytics(
     cpv_code: Optional[str] = Query(None),
     procedure_type: Optional[str] = Query(None),
     contract_type: Optional[str] = Query(None),
+    role: Optional[str] = Query("all", pattern="^(all|adjudicante|adjudicatario)$"),
     region: Optional[str] = Query(None),
     min_price: Optional[float] = Query(None),
     max_price: Optional[float] = Query(None),
@@ -2286,7 +2288,7 @@ def contracts_regional_analytics(
     """Agrega contratos por região NUTS, aceitando os mesmos filtros da análise."""
     result = get_contract_regional_analytics(
         q=q, year=year, entity=entity, nif=nif, cpv_code=cpv_code,
-        procedure_type=procedure_type, contract_type=contract_type, region=region,
+        procedure_type=procedure_type, contract_type=contract_type, role=role, region=region,
         min_price=min_price, max_price=max_price, start_date=start_date, end_date=end_date,
         size=size,
     )
