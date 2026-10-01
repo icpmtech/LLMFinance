@@ -9763,12 +9763,16 @@ def _delete_stale_docs(
 def index_societario_items(
     items: List[Dict[str, Any]],
     replace_for_nif: Optional[str] = None,
+    drop_stale: bool = True,
     es: Optional[Elasticsearch] = None,
 ) -> Dict[str, Any]:
     """Indexa publicações de atos societários no índice SOCIETARIO_INDEX.
 
-    ``replace_for_nif`` (NIF) ativa a limpeza dos registos dessa entidade que já
-    não constam da recolha atual, mantendo a ficha coerente após reingestão.
+    ``replace_for_nif`` (NIF) identifica a entidade da recolha e ``drop_stale``
+    ativa a limpeza dos registos dessa entidade que **já não constam** da
+    recolha atual. Essa limpeza só é segura quando a recolha é **completa**
+    (sem janela de datas): uma recolha parcial apagaria todas as publicações
+    fora da janela.
     """
     client = es or get_es_client()
     if not client:
@@ -9785,6 +9789,8 @@ def index_societario_items(
         docs.append(doc)
 
     result = _bulk_index_docs(SOCIETARIO_INDEX, docs, id_field="pub_id", es=client)
+    if not drop_stale:
+        return result
     target_nif = replace_for_nif or (docs[0].get("nif") if docs and _single_nif(docs) else None)
     if target_nif:
         keep_ids = [f"{SOCIETARIO_INDEX}:{d['pub_id']}" for d in docs if d.get("nif") == target_nif]

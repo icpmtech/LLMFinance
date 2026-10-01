@@ -633,3 +633,179 @@ export function unfollowSentimentMarketTicker(ticker: string) {
     { method: "DELETE" },
   );
 }
+
+/* ---------------------------------------------------------------------- *
+ * Panorama em direto (`/sentiment/market/live`)                           *
+ *                                                                         *
+ * É a leitura que o painel do Dashboard usa: uma só chamada devolve as     *
+ * cotações do Yahoo com a variação **do dia**, as manchetes com o tom, os  *
+ * movimentos, as oportunidades (tom vs preço) e a contraprova de cada      *
+ * cotação. Nada disto vem da série guardada — é sempre lido na hora.       *
+ * ---------------------------------------------------------------------- */
+
+/** Manchete em direto com o tom que lhe foi lido. */
+export type MarketLiveArticle = {
+  ticker: string;
+  title: string;
+  /** Tradução PT quando a leitura fina está ligada (`translate=1`). */
+  title_pt: string | null;
+  url: string;
+  source: string;
+  published: string;
+  day: string | null;
+  polarity: number;
+  label: string;
+  /** Termos de sentimento reconhecidos (evidência da etiqueta). */
+  hits: number;
+  /** `lexico-pt` | `bilingue` | `traduzido` | `sem-texto` — de onde veio o tom. */
+  material: string;
+};
+
+/** Cotação em direto, com o resultado da contraprova contra o Yahoo. */
+export type MarketLiveQuote = {
+  ticker: string;
+  price: number | null;
+  previous_close: number | null;
+  change: number | null;
+  change_pct: number | null;
+  currency: string | null;
+  exchange: string | null;
+  quote_type: string | null;
+  open: number | null;
+  day_high: number | null;
+  day_low: number | null;
+  volume: number | null;
+  market_cap: number | null;
+  fifty_day_average: number | null;
+  year_high: number | null;
+  year_low: number | null;
+  /** Tom médio das manchetes deste ticker (`null` sem manchetes). */
+  sentiment: number | null;
+  label: string | null;
+  news_count: number;
+  positive: number;
+  neutral: number;
+  negative: number;
+  with_signal: number;
+  news: MarketLiveArticle[];
+  /** Último fecho lido por outro caminho do Yahoo (a contraprova). */
+  cross_check_price?: number | null;
+  verify_delta_pct?: number | null;
+  verified?: boolean;
+  error?: string;
+};
+
+export type MarketLiveSummary = {
+  tickers: number;
+  quoted: number;
+  errors: { ticker: string; error: string | null }[];
+  advancers: number;
+  decliners: number;
+  flat: number;
+  average_change_pct: number | null;
+  news: number;
+  duplicates: number;
+  positive: number;
+  neutral: number;
+  negative: number;
+  positive_share: number | null;
+  neutral_share: number | null;
+  negative_share: number | null;
+  sentiment: number | null;
+  coverage: number | null;
+  label: string | null;
+};
+
+export type MarketLiveOpportunity = {
+  ticker: string;
+  sentiment: number;
+  label: string | null;
+  change_pct: number;
+  news: number;
+  gap: number;
+  reading: "tom_acima_do_preco" | "preco_acima_do_tom";
+  rationale: string;
+};
+
+export type MarketLiveValidation = {
+  enabled: boolean;
+  source: string;
+  method: string;
+  tolerance_pct: number;
+  checked: number;
+  verified: number;
+  ok: boolean;
+  failed: {
+    ticker: string;
+    shown: number | null;
+    cross_check: number | null;
+    delta_pct: number | null;
+    reason: string;
+  }[];
+};
+
+export type MarketLive = {
+  source: string;
+  generated_at: string;
+  translated: boolean;
+  caveat: string;
+  reference_move: number;
+  watchlist: string[];
+  quotes: MarketLiveQuote[];
+  movers: { up: MarketLiveQuote[]; down: MarketLiveQuote[] };
+  summary: MarketLiveSummary;
+  news: MarketLiveArticle[];
+  opportunities: MarketLiveOpportunity[];
+  validation: MarketLiveValidation;
+};
+
+/**
+ * Panorama em direto do Yahoo Finance (cotações, notícias com tom, movimentos,
+ * oportunidades e contraprova). Sem `tickers`, o servidor usa a lista seguida.
+ */
+export function getSentimentMarketLive(tickers: string[] = [], news = 5, translate = false) {
+  const list = tickers.map((code) => encodeURIComponent(code)).join(",");
+  const query = [`news=${news}`, `translate=${translate ? 1 : 0}`];
+  if (list) query.push(`tickers=${list}`);
+  return request<MarketLive>(`/sentiment/market/live?${query.join("&")}`);
+}
+
+/* ---------------------------------------------------------------------- *
+ * Favoritos (`/sentiment/market/watchlist`)                               *
+ *                                                                         *
+ * É uma lista **guardada**, não uma série: escolher os tickers que o       *
+ * painel mostra e ficar com eles. Acrescentar confirma o símbolo no Yahoo  *
+ * (sem trazer notícias nem cotações) e exige sessão; ler é público.        *
+ * ---------------------------------------------------------------------- */
+
+export type MarketWatchlist = {
+  tickers: string[];
+  max: number;
+  updated_at: string | null;
+  actor: string | null;
+  /** Sugestões que ainda não estão na lista. */
+  suggested: string[];
+};
+
+/** Favoritos guardados (leitura leve — não vai ao Elasticsearch). */
+export function getSentimentMarketWatchlist() {
+  return request<MarketWatchlist>("/sentiment/market/watchlist");
+}
+
+/** Guarda um ticker nos favoritos, depois de o confirmar no Yahoo Finance. */
+export function addSentimentMarketFavourite(ticker: string) {
+  return request<{
+    ticker: string;
+    watchlist: string[];
+    added: boolean;
+    quote: { price: number | null; change_pct: number | null; currency: string | null; exchange: string | null } | null;
+  }>("/sentiment/market/watchlist", withBody({ ticker }));
+}
+
+/** Retira um ticker dos favoritos (a série já construída mantém-se). */
+export function removeSentimentMarketFavourite(ticker: string) {
+  return request<{ ticker: string; removed: boolean; watchlist: string[] }>(
+    `/sentiment/market/watchlist/${encodeURIComponent(ticker)}`,
+    { method: "DELETE" },
+  );
+}

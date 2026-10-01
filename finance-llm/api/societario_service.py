@@ -106,17 +106,24 @@ def normalize_date(value: str) -> Optional[str]:
     return value or None
 
 
-def ingest(items: List[Dict[str, Any]], replace_for_nif: Optional[str] = None) -> Dict[str, Any]:
+def ingest(
+    items: List[Dict[str, Any]],
+    replace_for_nif: Optional[str] = None,
+    drop_stale: bool = True,
+) -> Dict[str, Any]:
     """Indexa publicações recolhidas no índice societário.
 
     Alimenta também o PessoasIQ: as pessoas/cargos extraídos das publicações
     passam a existir no índice `finance_people`, para que as fichas abertas a
     partir do dossiê da empresa não dependam de uma segunda ação manual.
+
+    ``drop_stale`` só deve ser ``True`` quando a recolha abrange **todas** as
+    publicações da entidade (sem janela de datas).
     """
     from api.elasticsearch_client import index_people_from_societario, index_societario_items
 
     docs = normalize_items(items)
-    result = index_societario_items(docs, replace_for_nif=replace_for_nif)
+    result = index_societario_items(docs, replace_for_nif=replace_for_nif, drop_stale=drop_stale)
     result["received"] = len(items)
     if result.get("error"):
         return result
@@ -200,7 +207,7 @@ def collect(
         "items": items,
     }
     if ingest_result and items:
-        out["ingest"] = ingest(items, replace_for_nif=nif)
+        out["ingest"] = ingest(items, replace_for_nif=nif, drop_stale=not bool(data_ini and data_fim))
     return out
 
 
@@ -424,7 +431,7 @@ def collect_entities(
             total_collected += len(items)
 
             if ingest_result and items:
-                result = ingest(items, replace_for_nif=nif)
+                result = ingest(items, replace_for_nif=nif, drop_stale=not bool(data_ini and data_fim))
                 total_ingested += result.get("indexed_count", 0)
                 total_stale += result.get("deleted_stale", 0)
 

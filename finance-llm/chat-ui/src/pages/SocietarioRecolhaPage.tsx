@@ -203,6 +203,7 @@ export default function SocietarioRecolhaPage() {
   const [aObterDados, setAObterDados] = useState(false);
   const [mostrarDados, setMostrarDados] = useState(true);
   const [erroEmpresa, setErroEmpresa] = useState<string | null>(null);
+  const [mensagemEmpresa, setMensagemEmpresa] = useState<string | null>(null);
 
   const carregarExportacoes = useCallback(async () => {
     try {
@@ -213,17 +214,26 @@ export default function SocietarioRecolhaPage() {
     }
   }, []);
 
-  /** Recarrega a ficha de empresa (o que existe e os dados). */
-  const recarregarFicha = useCallback(async (nif: string) => {
-    setACarregarFicha(true);
-    setErroEmpresa(null);
+  /**
+   * Recarrega a ficha de empresa (o que existe e os dados). Com `silent` não
+   * alterna o estado «a carregar» — serve para refrescar durante a recolha sem
+   * fazer piscar a tabela.
+   */
+  const recarregarFicha = useCallback(async (nif: string, opts?: { silent?: boolean }) => {
+    const silencioso = opts?.silent === true;
+    if (!silencioso) {
+      setACarregarFicha(true);
+      setErroEmpresa(null);
+    }
     try {
       setFichaEmpresa(await getRecolhaEmpresa(nif, 20));
     } catch (exc) {
-      setErroEmpresa(exc instanceof Error ? exc.message : "Erro ao obter a ficha da empresa");
-      setFichaEmpresa(null);
+      if (!silencioso) {
+        setErroEmpresa(exc instanceof Error ? exc.message : "Erro ao obter a ficha da empresa");
+        setFichaEmpresa(null);
+      }
     } finally {
-      setACarregarFicha(false);
+      if (!silencioso) setACarregarFicha(false);
     }
   }, []);
 
@@ -293,7 +303,8 @@ export default function SocietarioRecolhaPage() {
     };
   }, []);
 
-  // Seguimento do trabalho de recolha (enquanto corre).
+  // Seguimento do trabalho de recolha, com atualização progressiva do que já
+  // ficou guardado (JSON/índice) enquanto o trabalho corre.
   useEffect(() => {
     const jobId = job?.job_id;
     if (!jobId || job?.status !== "running") return;
@@ -303,10 +314,19 @@ export default function SocietarioRecolhaPage() {
         const atual = await getRecolhaJob(jobId);
         if (cancelado) return;
         setJob(atual);
+        // Mostra já o que ficou guardado, sem esperar pelo fim do trabalho.
+        void carregarExportacoes();
+        if (fichaEmpresa) void recarregarFicha(fichaEmpresa.nif, { silent: true });
         if (atual.status !== "running") {
-          void carregarExportacoes();
-          if (fichaEmpresa) void recarregarFicha(fichaEmpresa.nif);
           if (empresa.trim() || excluirRecolhidas) void carregarAlvos();
+          if (fichaEmpresa) {
+            void recarregarFicha(fichaEmpresa.nif);
+            setMensagemEmpresa(
+              atual.status === "error"
+                ? atual.error || "A recolha terminou com erro."
+                : `Recolha concluída: ${formatNumber(atual.result?.publications ?? 0)} publicação(ões) guardadas${atual.result?.ingested ? " e indexadas" : ""}.`,
+            );
+          }
         }
       } catch {
         /* mantém o último estado conhecido */
@@ -397,6 +417,7 @@ export default function SocietarioRecolhaPage() {
     if (!nif) return;
     setAObterDados(true);
     setErroEmpresa(null);
+    setMensagemEmpresa(null);
     try {
       const res = await obterDadosEmpresa(nif, {
         with_details: comDetalhe,
@@ -406,9 +427,12 @@ export default function SocietarioRecolhaPage() {
         ingest: indexarLogo,
       });
       setJob(res);
-      if (res.already_running) {
-        setErroEmpresa(res.message || "Já existe uma recolha a correr — a ficha atualiza no fim.");
-      }
+      setMensagemEmpresa(
+        res.already_running
+          ? res.message ||
+              "Já existe uma recolha a correr — esta ficha vai sendo atualizada à medida que os dados são guardados."
+          : `Recolha iniciada para ${fichaEmpresa?.name || nif}. Os dados vão aparecendo aqui à medida que forem guardados.`,
+      );
     } catch (exc) {
       setErroEmpresa(exc instanceof Error ? exc.message : "Erro ao arrancar a recolha da empresa");
     } finally {
@@ -609,6 +633,7 @@ export default function SocietarioRecolhaPage() {
                     onClick={() => {
                       setFichaEmpresa(null);
                       setErroEmpresa(null);
+                      setMensagemEmpresa(null);
                       setBuscaEmpresa("");
                     }}
                     className="min-h-[40px] rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted-foreground transition hover:text-foreground"
@@ -620,6 +645,14 @@ export default function SocietarioRecolhaPage() {
             >
               {aCarregarFicha && <Loading label="A procurar dados societários desta empresa…" />}
               {erroEmpresa && <EmptyState tone="warn">{erroEmpresa}</EmptyState>}
+              {mensagemEmpresa && (
+                <EmptyState>
+                  {job?.status === "running" && (
+                    <Loader2 size={13} className="mr-1.5 inline animate-spin align-[-2px]" />
+                  )}
+                  {mensagemEmpresa}
+                </EmptyState>
+              )}
               {fichaEmpresa && !aCarregarFicha && (
                 <>
                   <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
@@ -641,7 +674,7 @@ export default function SocietarioRecolhaPage() {
                     </EmptyState>
                   )}
                   {!fichaEmpresa.has_data && job?.status === "running" && (
-                    <EmptyState>Recolha em curso — os dados aparecem aqui quando terminar.</EmptyState>
+                    <EmptyState>Recolha em curso — os dados já guardados vão aparecendo aqui à medida que chegam.</EmptyState>
                   )}
 
                   {mostrarDados && fichaEmpresa.items.length > 0 && (

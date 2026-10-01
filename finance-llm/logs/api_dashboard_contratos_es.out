@@ -1,273 +1,391 @@
 warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
-INFO:     Started server process [47028]
+INFO:     Started server process [46104]
 INFO:     Waiting for application startup.
-Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
 Ficheiro do RSS ilegível (Extra data: line 7874 column 2 (char 1192276)); a recomeçar.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
-INFO:     127.0.0.1:61269 - "GET /empresas-iq HTTP/1.1" 200 OK
-Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  33%|###2      | 83/254 [00:00<00:00, 829.59it/s]INFO:     127.0.0.1:52636 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  51%|#####1    | 130/254 [00:00<00:00, 1266.93it/s]Loading weights: 100%|##########| 254/254 [00:00<00:00, 1751.23it/s]
+INFO:     127.0.0.1:64644 - "GET /health HTTP/1.1" 200 OK
+Agregação de empresas falhou: Connection timed out
+INFO:     127.0.0.1:51005 - "GET /societario/recolha/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57894 - "GET /societario/recolha/targets?limit=3&min_contracts=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63377 - "GET /empresas-iq?v=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63377 - "GET /assets/index-BxRdiHIK.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56735 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53487 - "GET /assets/index-BzWnv0sp.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53552 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63377 - "GET /sw.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53487 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49244 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53487 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65465 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50769 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64004 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56737 - "GET /societario?v=1790874591844 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56737 - "GET /assets/index-BxRdiHIK.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50817 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55216 - "GET /assets/index-BzWnv0sp.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64576 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56737 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63377 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 502 Bad Gateway
+INFO:     127.0.0.1:64050 - "GET /societario/recolha/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62341 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64050 - "POST /societario/recolha/jobs HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:56737 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56498 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64300 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54628 - "GET /societario/recolha/years HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54628 - "GET /societario/recolha/targets?ano_ini=2026&ano_fim=2026&papel=ambos&min_contracts=1&exclude_collected=true&limit=60 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56563 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51885 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49908 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 502 Bad Gateway
+INFO:     127.0.0.1:54628 - "POST /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49963 - "POST /entities/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50760 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49680 - "GET /tickers/BTC-USD/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49680 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+Rate-limit do MJ (1/5): aguardar 15.0s e tentar de novo
+INFO:     127.0.0.1:56500 - "GET /tickers/%5EIXIC/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60817 - "GET /tickers/%5EGSPC/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60817 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53581 - "GET /tickers/TSLA/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60817 - "GET /tickers/MSFT/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /tickers/AAPL/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /tickers/AAPL/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53581 - "GET /tickers/MSFT/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60817 - "GET /tickers/TSLA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57703 - "GET /tickers/NVDA/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50760 - "GET /tickers/AMZN/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50760 - "GET /tickers/AMZN/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57703 - "GET /tickers/NVDA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57703 - "GET /tickers/AAPL/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50760 - "GET /tickers/MSFT/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53943 - "GET /tickers/AMZN/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52227 - "GET /tickers/TSLA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58079 - "GET /tickers/NVDA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53943 - "GET /tickers/TSLA/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58079 - "GET /tickers/AAPL/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52227 - "GET /tickers/MSFT/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53962 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59010 - "GET /societario?v=1790874809585 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59010 - "GET /assets/index-BxRdiHIK.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62057 - "GET /assets/index-BzWnv0sp.css HTTP/1.1" 200 OK
 INFO:     127.0.0.1:56498 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61269 - "GET /assets/index-BvhrtInv.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63503 - "GET /assets/index-DkVaFnPR.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51953 - "GET /contracts/status HTTP/1.1" 200 OK
-Loading weights:  97%|#########7| 247/254 [00:00<00:00, 1303.42it/s]Loading weights: 100%|##########| 254/254 [00:00<00:00, 1220.83it/s]
-INFO:     127.0.0.1:63992 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61269 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50761 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56498 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61269 - "GET /favorites HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55253 - "GET /contracts/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57869 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62713 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63992 - "GET /contracts/analytics?top_entities=100&top_cpv=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63992 - "GET /contracts/analytics?role=adjudicante&top_entities=5&top_cpv=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63992 - "GET /contracts/analytics?role=adjudicatario&top_entities=5&top_cpv=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63992 - "GET /contracts/analytics/regional?role=adjudicatario&size=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63992 - "GET /contracts/analytics?cpv_code=33600000-6&top_entities=5&top_cpv=5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63992 - "GET /contracts/analytics?nif=508481287&top_entities=5&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52924 - "POST /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52924 - "POST /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52924 - "POST /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51401 - "GET /companies/504615947/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52534 - "GET /societario/companies/504615947?from=0&size=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58541 - "GET /societario/companies/504615947/people HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65309 - "GET /companies/504615947/analytics?role=all HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64701 - "GET /workspace HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56942 - "GET /companies/504615947 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56942 - "PUT /workspace/history HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51936 - "GET /empresas-iq?v=1790869615812 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51936 - "GET /assets/index-DVdR134N.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53233 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56498 - "GET /assets/index-XsEirINW.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55060 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:51936 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53233 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56498 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59682 - "GET /contracts/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51936 - "GET /favorites HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53093 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63304 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63304 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56498 - "GET /contracts/analytics?top_entities=100&top_cpv=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52606 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64311 - "GET /contracts/analytics/regional?size=30&role=adjudicatario HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61237 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49668 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60649 - "GET /contracts/analytics?role=adjudicatario&top_entities=100&top_cpv=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57768 - "GET /contracts/analytics/regional?size=30&year=2026 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59839 - "GET /contracts/analytics?year=2026&top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63881 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51946 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57693 - "GET /contracts/analytics/regional?size=30&cpv_code=33600000-6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50762 - "GET /contracts/analytics?cpv_code=33600000-6&top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58530 - "GET /contracts/analytics/regional?size=30&cpv_code=33600000-6&role=adjudicatario HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54668 - "GET /contracts/analytics?cpv_code=33600000-6&role=adjudicatario&top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56510 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56512 - "GET /contracts/analytics?top_entities=50&top_cpv=50 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56514 - "GET /contracts/analytics?top_entities=100&top_cpv=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56516 - "GET /contracts/analytics?role=adjudicatario&top_entities=100&top_cpv=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54062 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54442 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56528 - "GET /companies/504615947/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56530 - "GET /companies/504615947/analytics?role=all HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53747 - "GET /societario/companies/504615947?from=0&size=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63146 - "GET /societario/companies/504615947/people HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58984 - "GET /companies/504615947 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58984 - "PUT /workspace/history HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58984 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58335 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53847 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58335 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59286 - "GET /contracts/analytics?region=N%C3%A3o+especificado&top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58335 - "GET /contracts/analytics/regional?size=30&cpv_code=33000000-0 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59286 - "GET /contracts/analytics?cpv_code=33000000-0&top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58335 - "GET /companies/508080142/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56879 - "GET /societario/companies/508080142/people HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56528 - "GET /societario/companies/508080142?from=0&size=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54632 - "GET /companies/508080142/analytics?role=all HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59286 - "GET /companies/508080142 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59286 - "PUT /workspace/history HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64295 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60242 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61969 - "GET /contracts/analytics?top_entities=50&top_cpv=50 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56499 - "GET /contracts/analytics/regional?size=30&year=2026 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54839 - "GET /contracts/analytics?year=2026&top_entities=50&top_cpv=50 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62001 - "GET /empresas-iq?v=1790869933281 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62001 - "GET /assets/index-DVdR134N.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53634 - "GET /assets/index-XsEirINW.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52390 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56499 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:62001 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52390 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53634 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62001 - "GET /favorites HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60816 - "GET /contracts/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49911 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57200 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57200 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56560 - "GET /empresas-iq HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56560 - "GET /assets/index-DVdR134N.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62926 - "GET /assets/index-XsEirINW.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49327 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51408 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:56560 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49327 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62926 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57961 - "GET /contracts/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56560 - "GET /favorites HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52935 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54932 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56560 - "GET /contracts/analytics/graph/dimensions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52935 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54932 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52935 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54932 - "GET /contracts/analytics/graph?dimension_a=adjudicante&metric=valor&mode=auto&limit=60&edge_limit=400&sample=3000&sample_order=valor&dimension_b=adjudicatario HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60273 - "GET /contracts/analytics/regional?size=30&procedure_type=Concurso+de+conce%C3%A7%C3%A3o+simplificado HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57500 - "GET /contracts/analytics?procedure_type=Concurso+de+conce%C3%A7%C3%A3o+simplificado&top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63661 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63661 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50764 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52368 - "GET /contracts/analytics/graph/dimensions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50764 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53365 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53365 - "GET /contracts/analytics/graph?dimension_a=adjudicante&metric=valor&mode=auto&limit=60&edge_limit=400&sample=3000&sample_order=valor&dimension_b=adjudicatario HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63661 - "POST /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50764 - "GET /contracts/analytics/graph?dimension_a=cpv_divisao&metric=valor&mode=auto&limit=60&edge_limit=400&sample=3000&sample_order=valor&dimension_b=cpv_classe HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60783 - "POST /contracts/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63952 - "GET /empresas-iq?v=1790870081217 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63952 - "GET /assets/index-3MK3Jmqm.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60408 - "GET /assets/index-p_Uj4Vzz.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60288 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61975 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:63952 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63952 - "GET /favorites HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57925 - "GET /contracts/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60288 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57714 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56505 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60408 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60408 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56499 - "GET /contracts/analytics/regional?size=30&procedure_type=Concurso+p%C3%BAblico HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /contracts/analytics?procedure_type=Concurso+p%C3%BAblico&top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56499 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56499 - "GET /contracts/analytics/regional?size=30&contract_type=Aquisi%C3%A7%C3%A3o+de+servi%C3%A7os HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /contracts/analytics?contract_type=Aquisi%C3%A7%C3%A3o+de+servi%C3%A7os&top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56499 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56499 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /contracts/analytics?region=PT150+-+Algarve&top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56499 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56499 - "GET /contracts/analytics/regional?size=30&year=2015 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /contracts/analytics?year=2015&top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56499 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56499 - "GET /contracts/analytics/regional?size=30&q=res%C3%ADduos HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /contracts/analytics?q=res%C3%ADduos&top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56499 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52713 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64247 - "POST /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56893 - "GET /empresas-iq?v=1790870248975 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56893 - "GET /assets/index-B8EUWokm.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63522 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54255 - "GET /assets/index-p_Uj4Vzz.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63468 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:56893 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63522 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54255 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56893 - "GET /favorites HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53974 - "GET /contracts/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61942 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56499 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56499 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62387 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58582 - "GET /contracts/analytics?region=PT1A0+-+Grande+Lisboa&top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64367 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58582 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64367 - "GET /contracts/analytics/regional?size=30&year=2026 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58582 - "GET /contracts/analytics?year=2026&top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64367 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58582 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65261 - "GET /empresas-iq?v=1790870352944 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65261 - "GET /assets/index-CtHVVEzK.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61511 - "GET /assets/index-p_Uj4Vzz.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59512 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57660 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:65261 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59512 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61511 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49668 - "GET /contracts/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65261 - "GET /favorites HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64911 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61409 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61409 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59544 - "POST /contracts/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59544 - "POST /contracts/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63403 - "GET /contracts/analytics/graph?dimension_a=concorrente&metric=contratos&mode=auto&limit=50&edge_limit=400&sample=3000&sample_order=valor&dimension_b=concorrente HTTP/1.1" 200 OK
-[2026-10-01 17:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
-[2026-10-01 17:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
-[2026-10-01 17:00:03] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
-[2026-10-01 17:00:03] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
-INFO:     127.0.0.1:53321 - "GET /contracts/analytics/graph?dimension_a=concorrente&metric=contratos&mode=auto&limit=50&edge_limit=400&sample=3000&sample_order=valor&dimension_b=concorrente&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53321 - "GET /contracts/analytics/graph?dimension_a=concorrente&metric=contratos&mode=auto&limit=50&edge_limit=400&sample=3000&sample_order=recentes&dimension_b=concorrente&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60338 - "GET /contracts/analytics/graph?dimension_a=concorrente&metric=contratos&mode=auto&limit=50&edge_limit=400&sample=3000&sample_order=recentes&dimension_b=concorrente&year=2025&region=PT11A+-+%C3%81rea+Metropolitana+do+Porto HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49938 - "GET /empresas-iq?v=1790870486509 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49938 - "GET /assets/index--XyQ9e1k.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54043 - "GET /assets/index-p_Uj4Vzz.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54564 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59410 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:49938 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54564 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54043 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49938 - "GET /favorites HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64873 - "GET /contracts/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55470 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62477 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62477 - "POST /contracts/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62477 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61487 - "GET /contracts/analytics/regional?size=30&procedure_type=Ajuste+Direto+Regime+Geral HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63915 - "GET /contracts/analytics?procedure_type=Ajuste+Direto+Regime+Geral&top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60748 - "POST /contracts/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60748 - "GET /empresas-iq?v=1790870512884 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60748 - "GET /assets/index--XyQ9e1k.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53033 - "GET /assets/index-p_Uj4Vzz.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57782 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65004 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:60748 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57782 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53033 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64789 - "GET /contracts/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60748 - "GET /favorites HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58005 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54351 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54351 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62194 - "GET /contracts/analytics/graph?dimension_a=procedimento&metric=valor&mode=auto&limit=40&edge_limit=400&sample=3000&sample_order=recentes&dimension_b=regiao&year=2025&region=PT11A+-+%C3%81rea+Metropolitana+do+Porto HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62194 - "GET /contracts/analytics/graph?dimension_a=regiao&metric=valor&mode=auto&limit=30&edge_limit=400&sample=3000&sample_order=recentes&year=2025&region=PT11A+-+%C3%81rea+Metropolitana+do+Porto HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59012 - "GET /empresas-iq?v=1790870563273 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59012 - "GET /assets/index--XyQ9e1k.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58150 - "GET /assets/index-p_Uj4Vzz.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62258 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51614 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:59012 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62258 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58150 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59012 - "GET /favorites HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61191 - "GET /contracts/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60304 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64680 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64680 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62357 - "GET /contracts/analytics/graph?dimension_a=ano&metric=valor&mode=auto&limit=50&edge_limit=400&sample=3000&sample_order=recentes&dimension_b=adjudicatario&year=2025&region=PT11A+-+%C3%81rea+Metropolitana+do+Porto HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62362 - "GET /favicon.ico HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:62364 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:62366 - "GET /apple-touch-icon.png HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:50761 - "POST /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50761 - "POST /companies/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54464 - "GET /companies/504615947/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50761 - "GET /workspace HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61895 - "GET /societario/companies/504615947/people HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60906 - "GET /societario/companies/504615947?from=0&size=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51116 - "GET /companies/504615947/analytics?role=all HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50767 - "GET /companies/504615947 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50767 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49367 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58040 - "GET /tickers/EDP.LS/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58041 - "GET /tickers/EDP.LS/news?max_items=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59010 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59010 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62976 - "GET /societario/recolha/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61375 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57048 - "GET /societario/recolha/years HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63602 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52335 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57048 - "GET /societario/recolha/targets?ano_ini=2026&ano_fim=2026&papel=ambos&min_contracts=1&exclude_collected=true&limit=60 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63602 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63602 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63602 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57048 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57048 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56978 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56978 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60301 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60301 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56978 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53128 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56978 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+Falha ao resolver reCAPTCHA via 2captcha
+Traceback (most recent call last):
+  File "C:\LLMFinance\.venv\Lib\site-packages\urllib3\connectionpool.py", line 788, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\urllib3\connectionpool.py", line 534, in _make_request
+    response = conn.getresponse()
+               ^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\urllib3\connection.py", line 571, in getresponse
+    httplib_response = super().getresponse()
+                       ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pedro.mourao.martins\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\http\client.py", line 1415, in getresponse
+    response.begin()
+  File "C:\Users\pedro.mourao.martins\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\http\client.py", line 330, in begin
+    version, status, reason = self._read_status()
+                              ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pedro.mourao.martins\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\http\client.py", line 299, in _read_status
+    raise RemoteDisconnected("Remote end closed connection without"
+http.client.RemoteDisconnected: Remote end closed connection without response
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\LLMFinance\.venv\Lib\site-packages\requests\adapters.py", line 696, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\urllib3\connectionpool.py", line 842, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\urllib3\util\retry.py", line 498, in increment
+    raise reraise(type(error), error, _stacktrace)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\urllib3\util\util.py", line 38, in reraise
+    raise value.with_traceback(tb)
+  File "C:\LLMFinance\.venv\Lib\site-packages\urllib3\connectionpool.py", line 788, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\urllib3\connectionpool.py", line 534, in _make_request
+    response = conn.getresponse()
+               ^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\urllib3\connection.py", line 571, in getresponse
+    httplib_response = super().getresponse()
+                       ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pedro.mourao.martins\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\http\client.py", line 1415, in getresponse
+    response.begin()
+  File "C:\Users\pedro.mourao.martins\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\http\client.py", line 330, in begin
+    version, status, reason = self._read_status()
+                              ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pedro.mourao.martins\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\http\client.py", line 299, in _read_status
+    raise RemoteDisconnected("Remote end closed connection without"
+urllib3.exceptions.ProtocolError: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "c:\LLMFinance/finance-llm\collectors\publicacoes_mj_captcha.py", line 76, in solve_recaptcha
+    token = solver.solve_captcha(
+            ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\twocaptcha\wrapper.py", line 36, in solve_captcha
+    captcha_id = self.__get_captcha_id(site_key, page_url)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\twocaptcha\wrapper.py", line 17, in __get_captcha_id
+    response = requests.post(endpoint, params=params)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\requests\api.py", line 134, in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\requests\api.py", line 71, in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\requests\sessions.py", line 651, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\requests\sessions.py", line 784, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\LLMFinance\.venv\Lib\site-packages\requests\adapters.py", line 711, in send
+    raise ConnectionError(err, request=request)
+requests.exceptions.ConnectionError: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
+INFO:     127.0.0.1:56978 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53128 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53128 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62237 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53128 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62237 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62237 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62264 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62237 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62237 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64983 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64983 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64983 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64983 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58303 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58303 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64983 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64983 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57843 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57843 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57843 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57843 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57843 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57843 - "GET /societario/recolha/exports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61482 - "GET /societario/recolha/targets?ano_ini=2026&ano_fim=2026&papel=ambos&min_contracts=1&exclude_collected=true&limit=60 HTTP/1.1" 200 OK
+C:\LLMFinance\.venv\Lib\site-packages\yfinance\scrapers\fundamentals.py:33: DeprecationWarning: 'Ticker.earnings' is deprecated as not available via API. Look for "Net Income" in Ticker.income_stmt.
+  warnings.warn("'Ticker.earnings' is deprecated as not available via API. Look for \"Net Income\" in Ticker.income_stmt.", DeprecationWarning)
+Kronos base forecast failed for EDP.LS: Dados insuficientes para EDP.LS: 23 dias
+ES prices error EDP.LS: invalid unit abbreviation: mo
+C:\LLMFinance\.venv\Lib\site-packages\yfinance\scrapers\fundamentals.py:33: DeprecationWarning: 'Ticker.earnings' is deprecated as not available via API. Look for "Net Income" in Ticker.income_stmt.
+  warnings.warn("'Ticker.earnings' is deprecated as not available via API. Look for \"Net Income\" in Ticker.income_stmt.", DeprecationWarning)
+INFO:     127.0.0.1:65081 - "GET /societario/recolha/jobs/619cc24dacc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58543 - "POST /societario/recolha/empresas/503106542/obter HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56501 - "GET /empresas-iq?v=1790875174221 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56501 - "GET /assets/index-BxRdiHIK.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52630 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59576 - "GET /assets/index-BzWnv0sp.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55365 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59576 - "GET /assets/index-BzWnv0sp.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59576 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52630 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59576 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50763 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61705 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59432 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56501 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50763 - "POST /companies/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50767 - "POST /companies/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "GET /companies/503106542/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50767 - "GET /workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63169 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50773 - "GET /companies/503106542/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50767 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50763 - "GET /companies/503106542 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "POST /people/exists HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49669 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50763 - "PUT /workspace/folders/pasta-mulescb5-63z4a HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56501 - "POST /companies/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61333 - "GET /societario/recolha/jobs/3e9ff61dec0a HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56501 - "POST /societario/recolha/empresas/503106542/obter HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56501 - "GET /empresas-iq?v=1790875242111 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56501 - "GET /assets/index-BxRdiHIK.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54779 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56529 - "GET /assets/index-BzWnv0sp.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53251 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56501 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58190 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56529 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56501 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54779 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52551 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56728 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52551 - "POST /companies/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56728 - "POST /companies/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52551 - "POST /companies/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60082 - "GET /companies/503106542/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53306 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52551 - "GET /workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62740 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64405 - "GET /companies/503106542/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60082 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56728 - "GET /companies/503106542 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62740 - "POST /people/exists HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56728 - "PUT /workspace/folders/pasta-mulescb5-63z4a HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62740 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62740 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62740 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62740 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62740 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62740 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62740 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62740 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62740 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62781 - "GET /sentiment/market/state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62740 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54304 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54304 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54304 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61000 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61000 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61000 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57467 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57467 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57467 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61000 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61000 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61000 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57499 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57499 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57499 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60824 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60824 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60824 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59141 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59141 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57324 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59141 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59141 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59141 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59141 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59141 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59141 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54833 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54833 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54833 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51139 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51139 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51139 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51504 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51504 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51504 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51504 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51504 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51504 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51504 - "GET /societario/recolha/jobs/26974b3b7dbb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51504 - "GET /societario/companies/503106542?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51504 - "GET /societario/companies/503106542/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49684 - "GET /societario/companies/503106542?from=0&size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49686 - "GET /societario/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52004 - "GET /tickers/search/yahoo?query=ctt HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51283 - "GET /tickers/search/yahoo?query=ctt. HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54352 - "GET /tickers/search/yahoo?query=ctt.ls HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51283 - "GET /tickers/CTT.LS/history?period=1y HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53089 - "GET /tickers/CTT.LS/news?max_items=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52004 - "GET /tickers/CTT.LS/technical?period=1y HTTP/1.1" 200 OK
+HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"No fundamentals data found for symbol: CTT.LS"}}}
+INFO:     127.0.0.1:59773 - "GET /tickers/CTT.LS/recommendations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54352 - "GET /tickers/CTT.LS/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54352 - "GET /tickers/CTT.LS/technical/explain?period=1y HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54352 - "POST /forecast HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52768 - "GET /tickers/%5EGSPC/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57083 - "GET /tickers/BTC-USD/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57083 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52768 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58626 - "GET /tickers/%5EIXIC/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58626 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58626 - "GET /tickers/AAPL/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58626 - "GET /tickers/AAPL/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50761 - "GET /tickers/MSFT/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61520 - "GET /tickers/AMZN/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51902 - "GET /tickers/NVDA/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61520 - "GET /tickers/AMZN/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51902 - "GET /tickers/NVDA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56714 - "GET /tickers/TSLA/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50761 - "GET /tickers/MSFT/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56714 - "GET /tickers/TSLA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61520 - "GET /tickers/NVDA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50761 - "GET /tickers/MSFT/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51902 - "GET /tickers/TSLA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58626 - "GET /tickers/AMZN/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56714 - "GET /tickers/AAPL/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58626 - "GET /tickers/MSFT/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56714 - "GET /tickers/AAPL/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51902 - "GET /tickers/TSLA/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60255 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60255 - "GET /assets/index-BxRdiHIK.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55290 - "GET /assets/index-BzWnv0sp.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52499 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59200 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55290 - "GET /sw.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60255 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60255 - "GET /tickers/%5EGSPC/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60255 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56511 - "GET /tickers/BTC-USD/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56511 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55290 - "GET /tickers/%5EIXIC/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55290 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55290 - "GET /tickers/AAPL/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56511 - "GET /tickers/MSFT/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60255 - "GET /tickers/TSLA/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56511 - "GET /tickers/AAPL/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55290 - "GET /tickers/AMZN/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60255 - "GET /tickers/MSFT/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56511 - "GET /tickers/TSLA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55290 - "GET /tickers/AMZN/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61688 - "GET /tickers/NVDA/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61688 - "GET /tickers/NVDA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61688 - "GET /tickers/AAPL/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56511 - "GET /tickers/TSLA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60255 - "GET /tickers/NVDA/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55290 - "GET /tickers/MSFT/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61688 - "GET /tickers/AMZN/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55290 - "GET /tickers/MSFT/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61688 - "GET /tickers/AAPL/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60255 - "GET /tickers/TSLA/news?max_items=4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60589 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61622 - "GET /jarvis/meta HTTP/1.1" 200 OK

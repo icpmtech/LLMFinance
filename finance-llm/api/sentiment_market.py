@@ -27,6 +27,7 @@ Nada aqui é inventado: os números vêm sempre de notícias reais indexadas e a
 """
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import logging
 import re
@@ -1367,6 +1368,56 @@ def unfollow_ticker(ticker: str, actor: str = "") -> Dict[str, Any]:
     return {"ticker": code, "removed": code not in tickers, "watchlist": tickers}
 
 
+def watchlist_state() -> Dict[str, Any]:
+    """Favoritos guardados — leitura **leve** (ficheiro local, sem Elasticsearch nem Yahoo).
+
+    É o que o painel em direto lê para saber o que mostrar. Distingue-se do
+    `tickers_status` (que vai à série e aos índices) de propósito: abrir o painel
+    não deve depender de nenhum índice.
+    """
+    state = _read_watchlist()
+    return {
+        "tickers": state["tickers"],
+        "max": MAX_WATCHLIST,
+        "updated_at": state.get("updated_at"),
+        "actor": state.get("actor"),
+        "suggested": [code for code in LIVE_DEFAULT_FAVOURITES if code not in state["tickers"]],
+    }
+
+
+def add_favourite(ticker: str, *, actor: str = "", verify: bool = True) -> Dict[str, Any]:
+    """Guarda um ticker nos favoritos, **confirmando-o primeiro no Yahoo Finance**.
+
+    Leve de propósito: não traz notícias, não pede histórico nem constrói série
+    (isso é o `follow_ticker`, que é lento). Aqui só se confirma que o símbolo
+    devolve cotação — para não guardar código inventado — e acrescenta-se à lista
+    que o painel em direto passa a mostrar.
+    """
+    code = normalise_ticker(ticker)
+    quote: Dict[str, Any] = {}
+    if verify:
+        quote = live_quote(code)
+        if quote.get("error") or quote.get("price") is None:
+            raise KeyError(
+                f"«{code}» não devolve cotação no Yahoo Finance. Confirme o símbolo e o mercado "
+                "(ex.: EDP.LS para Lisboa, AAPL para Nova Iorque)."
+            )
+    tickers = add_ticker(code, actor=actor)
+    return {
+        "ticker": code,
+        "watchlist": tickers,
+        "added": code in tickers,
+        "quote": {
+            "price": quote.get("price"),
+            "change_pct": quote.get("change_pct"),
+            "currency": quote.get("currency"),
+            "exchange": quote.get("exchange"),
+        }
+        if verify
+        else None,
+    }
+
+
 def tickers_status(*, days: int = DEFAULT_DAYS, es: Any = None) -> Dict[str, Any]:
     """Estado por ticker: seguido ou não, dias de série, notícias e cotações guardadas."""
     window_days, start_date, end_date, _previous_start, _previous_end = _window_pair(days)
@@ -1825,3 +1876,371 @@ def export_rows(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
             }
         )
     return rows
+
+
+# --------------------------------------------------------------------------
+# Panorama em direto — leitura ao Yahoo Finance, com contraprova
+# --------------------------------------------------------------------------
+# Tickers por omissão quando a lista de seguidos está vazia.
+LIVE_DEFAULT_TICKERS: List[str] = ["^GSPC", "^IXIC", "^DJI", "AAPL", "MSFT", "NVDA", "EDP.LS"]
+# Carteira sugerida quando ainda não há favoritos guardados (o painel propõe estes).
+LIVE_DEFAULT_FAVOURITES: List[str] = ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "EDP.LS"]
+LIVE_MAX_TICKERS = 24
+# Diferença máxima tolerada entre a cotação em direto e o último fecho (contraprova).
+LIVE_VERIFY_TOLERANCE = 2.0  # %
+LIVE_SOURCE = "Yahoo Finance"
+
+
+def _live_number(value: Any) -> Optional[float]:
+    """Número finito ou `None` (o Yahoo devolve `NaN` quando o campo falta)."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number or number in (float("inf"), float("-inf")):
+        return None
+    return number
+
+
+def _live_get(source: Any, *keys: str) -> Any:
+    """Primeiro campo presente (aceita camelCase e snake_case)."""
+    for key in keys:
+        try:
+            value = source.get(key)
+        except Exception:
+            continue
+        if value is not None:
+            return value
+    return None
+
+
+def live_quote(ticker: str) -> Dict[str, Any]:
+    """Cotação **em direto** de um ticker no Yahoo Finance (`fast_info`).
+
+    É a mesma fonte da app de mercados, mas a variação é a **do dia**
+    (`lastPrice / previousClose − 1`) e não a da janela — era isso que tornava
+    a leitura do painel enganadora.
+    """
+    code = normalise_ticker(ticker)
+    row: Dict[str, Any] = {"ticker": code}
+    try:
+        import yfinance as yf
+
+        fast = yf.Ticker(code).fast_info
+    except Exception as exc:
+        row["error"] = f"Cotação indisponível no Yahoo Finance: {exc}"
+        return row
+    price = _live_number(_live_get(fast, "lastPrice", "last_price"))
+    previous = _live_number(_live_get(fast, "previousClose", "previous_close")) or _live_number(
+        _live_get(fast, "regularMarketPreviousClose", "regular_market_previous_close")
+    )
+    row.update(
+        {
+            "price": price,
+            "previous_close": previous,
+            "currency": _live_get(fast, "currency"),
+            "exchange": _live_get(fast, "exchange"),
+            "quote_type": _live_get(fast, "quoteType", "quote_type"),
+            "open": _live_number(_live_get(fast, "open")),
+            "day_high": _live_number(_live_get(fast, "dayHigh", "day_high")),
+            "day_low": _live_number(_live_get(fast, "dayLow", "day_low")),
+            "volume": _live_number(_live_get(fast, "lastVolume", "last_volume")),
+            "market_cap": _live_number(_live_get(fast, "marketCap", "market_cap")),
+            "fifty_day_average": _live_number(_live_get(fast, "fiftyDayAverage", "fifty_day_average")),
+            "year_high": _live_number(_live_get(fast, "yearHigh", "year_high")),
+            "year_low": _live_number(_live_get(fast, "yearLow", "year_low")),
+        }
+    )
+    if price is not None and previous:
+        row["change"] = round(price - previous, 4)
+        row["change_pct"] = round((price / previous - 1) * 100, 4)
+    else:
+        row["change"] = None
+        row["change_pct"] = None
+    return row
+
+
+def _live_cross_check(ticker: str) -> Optional[float]:
+    """Último fecho lido por **outro caminho** do Yahoo (`history`) — a contraprova.
+
+    Serve para garantir que o número mostrado no painel não é um valor preso em
+    cache ou um campo errado: duas leituras independentes do Yahoo têm de bater.
+    """
+    try:
+        from api.tools import get_stock_history
+
+        frame = get_stock_history(ticker, period="5d", interval="1d")
+    except Exception as exc:
+        logger.debug("Contraprova de %s falhou: %s", ticker, exc)
+        return None
+    try:
+        closes = [float(value) for value in list(frame["Close"]) if float(value) == float(value)]
+    except Exception:
+        return None
+    return closes[-1] if closes else None
+
+
+def _live_ticker(ticker: str, news_limit: int, verify: bool) -> Dict[str, Any]:
+    """Cotação em direto e manchetes de um ticker.
+
+    O tom é atribuído **depois**, em lote (uma tradução única para todas as
+    manchetes) — fazer isso por ticker obrigaria a carregar o modelo de tradução
+    várias vezes em paralelo.
+    """
+    from api.tools import get_news
+
+    row = live_quote(ticker)
+    headlines: List[Dict[str, Any]] = []
+    if news_limit:
+        try:
+            headlines = list((get_news(ticker, max_items=max(1, news_limit)).get("news") or []))
+        except Exception as exc:
+            logger.debug("Notícias de %s não obtidas: %s", ticker, exc)
+    row["headlines"] = headlines
+    if verify:
+        cross = _live_cross_check(ticker)
+        row["cross_check_price"] = cross
+        price = row.get("price")
+        if price is not None and cross:
+            delta = abs(price - cross) / cross * 100
+            row["verify_delta_pct"] = round(delta, 4)
+            row["verified"] = delta <= LIVE_VERIFY_TOLERANCE
+        else:
+            row["verify_delta_pct"] = None
+            row["verified"] = False
+    return row
+
+
+def _live_articles(quotes: Sequence[Dict[str, Any]], *, translate: bool) -> List[Dict[str, Any]]:
+    """Manchetes em direto **com tom**.
+
+    A ordem de leitura evita os dois males: o tom lê-se primeiro com o léxico
+    português do motor de sentimento; quando a manchete não tem nenhum termo
+    reconhecido — o caso das manchetes em inglês, que são a maioria no Yahoo —
+    recorre-se ao léxico **bilingue PT/EN** do módulo NLP, que é imediato. Só com
+    `translate=True` se traduz (modelo Helsinki), o que dá a leitura mais fina mas
+    custa segundos por título em CPU.
+
+    `material` diz sempre de onde veio o tom (`lexico-pt`, `bilingue` ou `traduzido`).
+    """
+    from api import news_nlp
+
+    flat: List[Dict[str, Any]] = []
+    for row in quotes:
+        for item in row.get("headlines") or []:
+            if isinstance(item, dict):
+                flat.append({"ticker": row["ticker"], **item})
+    if not flat:
+        return []
+    if translate:
+        try:
+            translated = news_nlp.translate_titles([str(item.get("title") or "") for item in flat])
+        except Exception as exc:
+            logger.warning("Tradução das manchetes falhou (%s); o tom lê-se sobre o original.", exc)
+            translated = []
+        for item, text in zip(flat, translated):
+            item["title_pt"] = text
+    articles: List[Dict[str, Any]] = []
+    for item in flat:
+        original = str(item.get("title") or "").strip()
+        portuguese = str(item.get("title_pt") or "").strip()
+        text = portuguese or original
+        polarity, hits, label, material = 0.0, 0, "neutro", "sem-texto"
+        if text:
+            analysis = sentiment.analyze_text(text)
+            polarity = float(analysis.get("polarity") or 0.0)
+            hits = int(analysis.get("hits") or 0)
+            label = str(analysis.get("label") or tone_of(polarity))
+            material = "traduzido" if portuguese else "lexico-pt"
+            if hits == 0 or polarity == 0.0:
+                # Sem sinal do léxico português: manchete em inglês (o caso comum no
+                # Yahoo) ou termos que se anularam. Lê-se com o léxico bilingue, sem
+                # traduzir — se ele também não vir nada, fica «neutro», como deve.
+                fallback = news_nlp.keyword_sentiment(text)
+                if fallback["label"] != "neutro":
+                    label = str(fallback["label"])
+                    polarity = LABEL_TO_POLARITY.get(label, 0.0)
+                    hits = int(fallback["positive"]) + int(fallback["negative"])
+                    material = "bilingue"
+        articles.append(
+            {
+                "ticker": item["ticker"],
+                "title": original or "(sem título)",
+                "title_pt": portuguese or None,
+                "url": str(item.get("url") or ""),
+                "source": str(item.get("publisher") or "—")[:120],
+                "published": str(item.get("published") or ""),
+                "day": _iso_day(item.get("published")),
+                "polarity": round(polarity, 3),
+                "label": label,
+                "hits": hits,
+                "material": material,
+            }
+        )
+    return articles
+
+
+def live_snapshot(
+    tickers: Optional[Sequence[str]] = None,
+    *,
+    news_per_ticker: int = 5,
+    verify: bool = True,
+    translate: bool = False,
+    workers: int = 6,
+) -> Dict[str, Any]:
+    """Panorama do mercado **em direto**: cotações, notícias com tom e oportunidades.
+
+    Vai sempre ao Yahoo Finance (não usa a série guardada) e, quando `verify`,
+    confirma cada cotação contra o último fecho lido por outro caminho do Yahoo.
+    Um ticker sem resposta fica com `error` à vista — **nunca** é preenchido com
+    um valor suposto.
+    """
+    codes: List[str] = []
+    for candidate in list(tickers or []) or list(watchlist()) or list(LIVE_DEFAULT_TICKERS):
+        try:
+            code = normalise_ticker(candidate)
+        except KeyError:
+            continue
+        if code not in codes:
+            codes.append(code)
+    codes = codes[:LIVE_MAX_TICKERS] or list(LIVE_DEFAULT_TICKERS)
+
+    limit = _clamp(news_per_ticker, 0, 20, 5)
+    pool_size = max(1, min(8, int(workers or 6), len(codes)))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=pool_size) as pool:
+        quotes = list(pool.map(lambda code: _live_ticker(code, limit, verify), codes))
+
+    priced = [row for row in quotes if row.get("price") is not None]
+    changes = [float(row["change_pct"]) for row in priced if row.get("change_pct") is not None]
+
+    # Tom das manchetes em lote (uma só passagem de tradução) e distribuição por ticker.
+    articles = _live_articles(quotes, translate=translate)
+    by_ticker: Dict[str, List[Dict[str, Any]]] = {}
+    for article in articles:
+        by_ticker.setdefault(str(article["ticker"]), []).append(article)
+    for row in quotes:
+        rows = by_ticker.get(str(row["ticker"]), [])
+        polarities = [float(article["polarity"]) for article in rows]
+        labels = Counter(str(article.get("label") or "neutro") for article in rows)
+        mean = (sum(polarities) / len(polarities)) if polarities else None
+        row.pop("headlines", None)
+        row["news"] = rows
+        row["news_count"] = len(rows)
+        row["positive"] = labels.get("positivo", 0)
+        row["neutral"] = labels.get("neutro", 0)
+        row["negative"] = labels.get("negativo", 0)
+        row["sentiment"] = round(mean, 4) if mean is not None else None
+        row["label"] = tone_of(mean) if mean is not None else None
+        row["with_signal"] = sum(1 for article in rows if int(article.get("hits") or 0) > 0)
+
+    unique_articles, duplicates = _dedupe_rows(articles)
+    labels = Counter(str(article.get("label") or "neutro") for article in unique_articles)
+    polarities = [float(article["polarity"]) for article in unique_articles]
+    total = len(unique_articles)
+    mean_polarity = (sum(polarities) / len(polarities)) if polarities else None
+    signal = sum(1 for article in unique_articles if int(article.get("hits") or 0) > 0)
+
+    def _share(label: str) -> Optional[float]:
+        return round(labels.get(label, 0) / total, 4) if total else None
+
+    gainers = sorted(
+        [row for row in priced if (row.get("change_pct") or 0) > 0],
+        key=lambda row: -float(row["change_pct"]),
+    )[:5]
+    losers = sorted(
+        [row for row in priced if (row.get("change_pct") or 0) < 0],
+        key=lambda row: float(row["change_pct"]),
+    )[:5]
+
+    opportunities: List[Dict[str, Any]] = []
+    for row in priced:
+        sentiment_value = row.get("sentiment")
+        change = row.get("change_pct")
+        if sentiment_value is None or change is None:
+            continue
+        normalized = max(-1.0, min(1.0, float(change) / PRICE_REFERENCE_MOVE))
+        gap = round(float(sentiment_value) - normalized, 4)
+        if abs(gap) < 0.25:
+            continue
+        opportunities.append(
+            {
+                "ticker": row["ticker"],
+                "sentiment": sentiment_value,
+                "label": row.get("label"),
+                "change_pct": change,
+                "news": row.get("news_count", 0),
+                "gap": gap,
+                "reading": "tom_acima_do_preco" if gap > 0 else "preco_acima_do_tom",
+                "rationale": (
+                    "As notícias estão mais positivas do que o preço sugere."
+                    if gap > 0
+                    else "O preço subiu mais do que o tom das notícias justifica."
+                ),
+            }
+        )
+    opportunities.sort(key=lambda item: -abs(float(item["gap"])))
+
+    checked = [row for row in quotes if row.get("verified") is not None]
+    verified = [row for row in checked if row.get("verified")]
+    validation = {
+        "enabled": bool(verify),
+        "source": LIVE_SOURCE,
+        "method": "fast_info.lastPrice vs último fecho de history(5d)",
+        "tolerance_pct": LIVE_VERIFY_TOLERANCE,
+        "checked": len(checked),
+        "verified": len(verified),
+        "ok": bool(checked) and len(verified) == len(checked),
+        "failed": [
+            {
+                "ticker": row["ticker"],
+                "shown": row.get("price"),
+                "cross_check": row.get("cross_check_price"),
+                "delta_pct": row.get("verify_delta_pct"),
+                "reason": (
+                    "sem contraprova disponível"
+                    if row.get("cross_check_price") is None
+                    else f"diferença de {row.get('verify_delta_pct')} %"
+                ),
+            }
+            for row in checked
+            if not row.get("verified")
+        ],
+    }
+
+    return {
+        "source": LIVE_SOURCE,
+        "generated_at": _now(),
+        "translated": bool(translate),
+        "caveat": PRICE_CAVEAT,
+        "reference_move": PRICE_REFERENCE_MOVE,
+        "watchlist": codes,
+        "quotes": quotes,
+        "movers": {"up": gainers, "down": losers},
+        "summary": {
+            "tickers": len(quotes),
+            "quoted": len(priced),
+            "errors": [
+                {"ticker": row["ticker"], "error": row.get("error") or row.get("message")}
+                for row in quotes
+                if row.get("price") is None
+            ],
+            "advancers": sum(1 for value in changes if value > 0),
+            "decliners": sum(1 for value in changes if value < 0),
+            "flat": sum(1 for value in changes if value == 0),
+            "average_change_pct": round(sum(changes) / len(changes), 4) if changes else None,
+            "news": total,
+            "duplicates": duplicates,
+            "positive": labels.get("positivo", 0),
+            "neutral": labels.get("neutro", 0),
+            "negative": labels.get("negativo", 0),
+            "positive_share": _share("positivo"),
+            "neutral_share": _share("neutro"),
+            "negative_share": _share("negativo"),
+            "sentiment": round(mean_polarity, 4) if mean_polarity is not None else None,
+            "coverage": round(signal / total, 4) if total else None,
+            "label": tone_of(mean_polarity) if mean_polarity is not None else None,
+        },
+        "news": unique_articles,
+        "opportunities": opportunities[:8],
+        "validation": validation,
+    }

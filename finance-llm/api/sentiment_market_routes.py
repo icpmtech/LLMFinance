@@ -8,8 +8,11 @@
 - `GET  /sentiment/market/state` — volume guardado, cobertura e o que falta construir
 - `GET  /sentiment/market/alerts?days=30` — movimentos, viragens, dias extremos e cobertura baixa
 - `GET  /sentiment/market/divergence?days=30` — tom vs variação do preço (com `live=1` vai ao Yahoo)
+- `GET  /sentiment/market/live?tickers=EDP.LS,AAPL` — **panorama em direto**: cotações do Yahoo,
+  notícias com tom, oportunidades e a contraprova de cada cotação (nunca usa a série guardada)
 - `GET  /sentiment/market/price/{ticker}?days=90` — tom × preço de um ticker (correlação e divergência)
 - `GET  /sentiment/market/tickers?days=30` — tickers seguidos e o estado de cada um
+- `GET  /sentiment/market/watchlist` — favoritos guardados (leitura leve, sem índices)
 - `GET  /sentiment/market/brief?days=7` — boletim do mercado (Markdown pronto a ler)
 - `GET  /sentiment/market/schedule` — estado do agendador
 - `GET  /sentiment/market/export?format=csv|md` — descarregar o panorama
@@ -18,6 +21,8 @@
 
 - `POST /sentiment/market/build` — (re)construir a série (`{"days": 7, "tickers": ["EDP.LS"]}`)
 - `POST /sentiment/market/tickers` — seguir um ticker (traz notícias e cotações e constrói a série)
+- `POST /sentiment/market/watchlist` — guardar um ticker nos favoritos (leve: só confirma no Yahoo)
+- `DELETE /sentiment/market/watchlist/{ticker}` — retirar dos favoritos
 - `DELETE /sentiment/market/tickers/{ticker}` — deixar de seguir (a série guardada mantém-se)
 - `POST /sentiment/market/report/office` — guardar o relatório no Office
 - `POST /sentiment/market/brief/office` — guardar o boletim no Office
@@ -217,6 +222,37 @@ def sentiment_market_unfollow(ticker: str, session: Session = None) -> Dict[str,
         raise HTTPException(status_code=422, detail=str(exc))
 
 
+@router.get("/watchlist")
+def sentiment_market_watchlist() -> Dict[str, Any]:
+    """Favoritos guardados, com o que ainda falta sugerir (leitura leve)."""
+    return market.watchlist_state()
+
+
+@router.post("/watchlist")
+def sentiment_market_watchlist_add(
+    payload: Dict[str, Any] = Body(default={}),
+    session: Session = None,
+) -> Dict[str, Any]:
+    """Guarda um ticker nos favoritos, depois de o confirmar no Yahoo Finance."""
+    session = _writer(session)
+    try:
+        return market.add_favourite(str(payload.get("ticker") or ""), actor=session.user.email)
+    except KeyError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+@router.delete("/watchlist/{ticker}")
+def sentiment_market_watchlist_remove(ticker: str, session: Session = None) -> Dict[str, Any]:
+    """Retira um ticker dos favoritos (a série já construída mantém-se)."""
+    session = _writer(session)
+    try:
+        return market.unfollow_ticker(str(ticker), actor=session.user.email)
+    except KeyError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
 @router.post("/schedule/reload")
 def sentiment_market_reload(session: Session = None) -> Dict[str, Any]:
     """Recarrega o agendador com as definições guardadas."""
@@ -387,6 +423,28 @@ def sentiment_market_divergence(
 ) -> Dict[str, Any]:
     """Ranking de divergência entre o tom e a variação do preço."""
     return market.divergences(days=_num(days, 30), limit=_num(limit, 12), live=_flag(live))
+
+
+@router.get("/live")
+def sentiment_market_live(
+    tickers: Optional[str] = Query(None, description="Tickers separados por vírgula; sem valor, usa os seguidos."),
+    news: int = Query(5, ge=0, le=20, description="Notícias a analisar por ticker."),
+    verify: bool = Query(True, description="Confirmar cada cotação contra um segundo caminho do Yahoo."),
+    translate: bool = Query(False, description="Traduzir as manchetes EN→PT (leitura mais fina, muito mais lenta)."),
+) -> Dict[str, Any]:
+    """Panorama **em direto**: cotações do Yahoo, notícias com tom e oportunidades.
+
+    Não usa a série guardada: lê o Yahoo Finance a cada pedido e devolve, para
+    cada cotação, o resultado da contraprova — para o painel mostrar de onde veio
+    cada número e se bate com a fonte.
+    """
+    codes = [part.strip() for part in (tickers or "").replace(";", ",").split(",") if part.strip()]
+    return market.live_snapshot(
+        codes or None,
+        news_per_ticker=_num(news, 5),
+        verify=_flag(verify, True),
+        translate=_flag(translate, False),
+    )
 
 
 @router.delete("/series")

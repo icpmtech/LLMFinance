@@ -283,11 +283,20 @@ def recolher(
     return [p.to_dict() for p in publicacoes]
 
 
-def indexar(items: List[Dict[str, Any]], replace_for_nif: Optional[str] = None) -> Dict[str, Any]:
-    """Indexa no Elasticsearch (import tardio: `--sem-indexar` não precisa de ES)."""
+def indexar(
+    items: List[Dict[str, Any]],
+    replace_for_nif: Optional[str] = None,
+    drop_stale: bool = True,
+) -> Dict[str, Any]:
+    """Indexa no Elasticsearch (import tardio: `--sem-indexar` não precisa de ES).
+
+    ``drop_stale`` tem de ser ``False`` quando a recolha é uma **janela** (uma
+    parte das publicações da entidade) — senão a janela seguinte apagaria a
+    anterior.
+    """
     from api.societario_service import ingest
 
-    return ingest(items, replace_for_nif=replace_for_nif)
+    return ingest(items, replace_for_nif=replace_for_nif, drop_stale=drop_stale)
 
 
 def _browser_fechado(exc: BaseException) -> bool:
@@ -448,7 +457,12 @@ def main() -> int:
 
                 print(f"      {resumo_janela(publicacoes, total)} em {time.monotonic() - inicio:.0f}s", flush=True)
                 if publicacoes and not args.sem_indexar:
-                    resultado = indexar(publicacoes, replace_for_nif=criterios.get("nif"))
+                    parcial = bool(criterios.get("data_ini") and criterios.get("data_fim"))
+                    resultado = indexar(
+                        publicacoes,
+                        replace_for_nif=criterios.get("nif"),
+                        drop_stale=not parcial,
+                    )
                     print(
                         f"      indexadas: {resultado.get('indexed_count', 0)}"
                         f" | obsoletas removidas: {resultado.get('deleted_stale', 0)}"

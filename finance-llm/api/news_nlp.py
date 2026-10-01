@@ -247,6 +247,27 @@ def _heuristic_sentiment(title: str, summary: Optional[str]) -> str:
     return "neutro"
 
 
+def keyword_sentiment(text: Optional[str]) -> Dict[str, Any]:
+    """Tom de uma manchete **sem traduzir**, pelo léxico bilingue PT/EN.
+
+    Existe para o painel em direto: as manchetes do Yahoo são quase sempre em
+    inglês e traduzi-las com o modelo Helsinki custa segundos por título numa CPU
+    (incompatível com um painel que refresca a cada minuto). Aqui a leitura é
+    imediata e determinística; devolve também as contagens de pistas, para se ver
+    o que sustentou a etiqueta.
+    """
+    lowered = str(text or "").lower()
+    positive = sum(1 for word in POSITIVE_WORDS if word in lowered)
+    negative = sum(1 for word in NEGATIVE_WORDS if word in lowered)
+    if positive > negative:
+        label = "positivo"
+    elif negative > positive:
+        label = "negativo"
+    else:
+        label = "neutro"
+    return {"label": label, "positive": positive, "negative": negative}
+
+
 def _translate_simple(text: Optional[str]) -> str:
     """Tradução EN-PT real via Helsinki-NLP/opus-mt-tc-big-en-pt (cache LRU)."""
     if not text:
@@ -297,6 +318,22 @@ def _translate_batch(texts: List[str]) -> List[str]:
     out = [""] * len(texts)
     for (i, _), d in zip(chunks, decoded):
         out[i] = d.strip()
+    return out
+
+
+def translate_titles(texts: List[str], *, chunk: int = 16) -> List[str]:
+    """Traduz uma lista de títulos EN→PT em lotes (a mesma via dos índices).
+
+    `_translate_batch` limita o lote a 16 textos; aqui os lotes são encadeados
+    para que uma lista maior fique **toda** traduzida (o painel em direto analisa
+    as manchetes com o léxico português, por isso a tradução não pode faltar).
+    """
+    if not texts:
+        return []
+    size = max(1, int(chunk or 16))
+    out: List[str] = []
+    for start in range(0, len(texts), size):
+        out.extend(_translate_batch(list(texts[start : start + size])))
     return out
 
 

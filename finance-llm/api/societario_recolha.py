@@ -544,6 +544,9 @@ def _run_job_inner(job: Dict[str, Any]) -> None:
     payload = job["payload"]
     progress = job["progress"]
     with_people = bool(payload.get("ingest", True))
+    # Uma recolha com janela de datas é **parcial**: indexar sem apagar os
+    # registos que ficaram fora da janela.
+    janela_ativa = bool(payload.get("data_ini") and payload.get("data_fim"))
     pausa_rate_limit = max(0.0, float(payload.get("rate_limit_pause") or 90.0))
     tentativas_rate_limit = max(0, min(int(payload.get("rate_limit_retries") or 2), 10))
     try:
@@ -655,7 +658,7 @@ def _run_job_inner(job: Dict[str, Any]) -> None:
                     written = write_export(nif, nome, items, criteria=alvos.get("filters"))
                     ficheiros += 1
                     if with_people:
-                        societario.ingest(items, replace_for_nif=nif)
+                        societario.ingest(items, replace_for_nif=nif, drop_stale=not janela_ativa)
                     detalhes.append({**written, "name": nome, "ingested": with_people})
                 except Exception as exc:  # noqa: BLE001
                     logger.exception("Falha a gravar o JSON de %s", nif)

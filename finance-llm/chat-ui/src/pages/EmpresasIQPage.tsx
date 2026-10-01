@@ -84,7 +84,6 @@ import {
   getCompanySocietarioPublicacoes,
   getCompanySocietarioPeople,
   generateCompanySocietarioTimeline,
-  collectSocietarioForNif,
   checkPeopleIndexed,
   ingestPeopleForCompany,
   analyzeContract,
@@ -111,6 +110,8 @@ import { Avatar } from "./SettingsPage";
 import { companiesIn, useWorkspace, type WorkspaceEntry } from "../workspace";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { getRecolhaJob, getRecolhaJobs, obterDadosEmpresa } from "../societarioRecolhaApi";
+import type { RecolhaJob } from "../societarioRecolhaApi";
 import { GraphCanvas } from "../components/graph/GraphCanvas";
 import { toStudioGraph, type GraphMetric, type StudioNode } from "../components/graph/graphStudio";
 import type {
@@ -5852,8 +5853,10 @@ export function EntityDetailPanel({
   const [analytics, setAnalytics] = useState<CompanyAnalyticsResponse | null>(null);
   const [societario, setSocietario] = useState<CompanySocietarioResponse | null>(null);
   const [societarioLoading, setSocietarioLoading] = useState(false);
-  const [societarioCollecting, setSocietarioCollecting] = useState(false);
+  const [societarioJob, setSocietarioJob] = useState<RecolhaJob | null>(null);
+  const societarioCollecting = societarioJob?.status === "running";
   const [societarioCollectError, setSocietarioCollectError] = useState<string | null>(null);
+  const [societarioCollectMessage, setSocietarioCollectMessage] = useState<string | null>(null);
   const [selectedPub, setSelectedPub] = useState<SocietarioPublicacao | null>(null);
   const [showAllSocietario, setShowAllSocietario] = useState(false);
   const [societarioPeople, setSocietarioPeople] = useState<SocietarioPerson[] | null>(null);
@@ -5947,6 +5950,135 @@ export function EntityDetailPanel({
       cancelled = true;
     };
   }, [nif]);
+
+  /**
+   * Relê as publicações e as pessoas do societário **sem** mexer nos estados de
+   * «a carregar» — serve para ir mostrando o que a recolha já gravou.
+   */
+  const refreshSocietarioSilently = useCallback(async () => {
+    try {
+      setSocietario(await getCompanySocietarioPublicacoes(nif));
+    } catch {
+      /* mantém o último estado conhecido */
+    }
+    try {
+      const resp = await getCompanySocietarioPeople(nif);
+      const lista = resp.people ?? null;
+      const assinatura = (xs: SocietarioPerson[] | null) =>
+        xs ? xs.map((p) => `${p.nif}:${p.roles?.length ?? 0}`).join("|") : "";
+      // Evita re-render (e nova validação no PessoasIQ) quando nada mudou.
+      setSocietarioPeople((atual) => (assinatura(atual) === assinatura(lista) ? atual : lista));
+    } catch {
+      /* mantém o último estado conhecido */
+    }
+  }, [nif]);
+
+  /**
+   * Segue o trabalho de recolha que corre **no servidor**. A cada 3 s lê o
+   * progresso e relê o índice, para os dados já guardados aparecerem na lista
+   * sem esperar pelo fim — e sem depender de a página estar aberta.
+   */
+  useEffect(() => {
+    const jobId = societarioJob?.job_id;
+    if (!jobId || societarioJob.status !== "running") return;
+    let cancelado = false;
+    const temporizador = window.setTimeout(async () => {
+      try {
+        const atual = await getRecolhaJob(jobId);
+        if (cancelado) return;
+        setSocietarioJob(atual);
+        await refreshSocietarioSilently();
+      } catch {
+        /* mantém o último estado conhecido */
+      }
+    }, 3000);
+    return () => {
+      cancelado = true;
+      window.clearTimeout(temporizador);
+    };
+  }, [societarioJob, refreshSocietarioSilently]);
+
+  // Ao abrir a ficha, retoma um trabalho desta empresa que já esteja a correr no
+  // servidor (a página pode ter sido fechada a meio).
+  useEffect(() => {
+    let cancelado = false;
+    setSocietarioJob(null);
+    setSocietarioCollectMessage(null);
+    setSocietarioCollectError(null);
+    getRecolhaJobs()
+      .then((res) => {
+        if (cancelado) return;
+        const meu = (res.items || []).find(
+          (j) => j.status === "running" && (j.payload?.nifs || []).includes(nif),
+        );
+        if (!meu) return;
+        setSocietarioJob(meu);
+        setSocietarioCollectMessage(
+          "Recolha a correr no servidor (iniciada numa visita anterior) — os dados vão aparecendo abaixo à medida que forem guardados.",
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelado = true;
+    };
+  }, [nif]);
+
+  /** Mensagem final do trabalho (ou o erro que o fez parar). */
+  useEffect(() => {
+    if (!societarioJob || societarioJob.status === "running") return;
+    const resultado = societarioJob.result;
+    const erros = resultado?.errors ?? [];
+    const publicacoes = resultado?.publications ?? 0;
+    if (societarioJob.status === "error") {
+      setSocietarioCollectMessage(null);
+      setSocietarioCollectError(societarioJob.error || "A recolha terminou com erro.");
+      return;
+    }
+    if (publicacoes > 0) {
+      setSocietarioCollectMessage(
+        `Recolha concluída: ${full(publicacoes)} publicação(ões) guardadas${resultado?.ingested ? " e indexadas" : ""} — já visíveis na lista abaixo.`,
+      );
+      if (erros.length) {
+        setSocietarioCollectError(`${erros.length} erro(s) durante a recolha: ${erros[0]?.error ?? ""}`);
+      }
+      return;
+    }
+    setSocietarioCollectMessage(null);
+    setSocietarioCollectError(
+      erros[0]?.error ||
+        resultado?.message ||
+        "Nenhuma publicação encontrada para esta entidade no portal do Ministério da Justiça.",
+    );
+  }, [societarioJob]);
+
+  /**
+   * Arranca a recolha **no servidor** (2captcha) e devolve logo o id do
+   * trabalho. O trabalho continua a correr mesmo que a página seja fechada; ao
+   * reabrir a ficha é retomado pelo efeito acima.
+   */
+  const iniciarRecolhaSocietaria = useCallback(async () => {
+    if (societarioJob?.status === "running") return;
+    setSocietarioCollectError(null);
+    setSocietarioCollectMessage("A arrancar a recolha no servidor…");
+    try {
+      const job = await obterDadosEmpresa(nif, {
+        with_details: true,
+        max_pages: 50,
+        min_interval: 4,
+        rate_limit_pause: 90,
+        ingest: true,
+      });
+      setSocietarioJob(job);
+      setSocietarioCollectMessage(
+        job.already_running
+          ? job.message || "Já existe uma recolha a correr no servidor — o progresso aparece aqui."
+          : "Recolha a correr no servidor — pode fechar a página, o trabalho continua. Os dados vão aparecendo abaixo à medida que forem guardados.",
+      );
+    } catch (err) {
+      setSocietarioCollectMessage(null);
+      setSocietarioCollectError(err instanceof Error ? err.message : String(err));
+    }
+  }, [nif, societarioJob?.status]);
 
   /**
    * Valida no PessoasIQ quais das pessoas do societário já têm ficha indexada.
@@ -6162,14 +6294,16 @@ export function EntityDetailPanel({
           <div className="min-w-0">
             <h3 className="font-semibold">Dados Societários</h3>
             <p className="text-xs text-muted-foreground">
-              {societarioLoading
-                ? "A carregar publicações do Ministério da Justiça..."
-                : societario && societario.total > 0
-                  ? `${societario.total} publicações de atos societários indexadas`
-                  : "Sem publicações societárias indexadas"}
+              {societarioCollecting
+                ? `A recolher no servidor… ${full(societarioJob?.progress?.publications ?? 0)} publicações guardadas`
+                : societarioLoading
+                  ? "A carregar publicações do Ministério da Justiça..."
+                  : societario && societario.total > 0
+                    ? `${societario.total} publicações de atos societários indexadas`
+                    : "Sem publicações societárias indexadas"}
             </p>
           </div>
-          {societario && societario.total > 0 ? (
+          {societario && societario.total > 0 && !societarioCollecting ? (
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -6204,25 +6338,22 @@ export function EntityDetailPanel({
                 )}
                 {peopleIndexIngesting ? "A extrair..." : "Extrair pessoas"}
               </button>
+              <button
+                type="button"
+                onClick={() => void iniciarRecolhaSocietaria()}
+                disabled={societarioCollecting}
+                title="Voltar a recolher as publicações no portal do Ministério da Justiça (corre no servidor, mesmo que feche a página)"
+                className="flex items-center gap-2 rounded-xl bg-rose-400/10 px-3 py-1.5 text-sm text-rose-300 border border-rose-400/20 hover:bg-rose-400/20 transition disabled:opacity-50"
+              >
+                <Download size={16} />
+                Atualizar dados
+              </button>
             </div>
           ) : (
             <button
               type="button"
               disabled={societarioCollecting}
-              onClick={() => {
-                setSocietarioCollecting(true);
-                setSocietarioCollectError(null);
-                collectSocietarioForNif(nif, { max_pages: 50, debug: true })
-                  .then((res) => {
-                    if (res.ingested > 0 || res.collected > 0) {
-                      getCompanySocietarioPublicacoes(nif).then(setSocietario);
-                    } else {
-                      setSocietarioCollectError(res.message || "Nenhuma publicação encontrada.");
-                    }
-                  })
-                  .catch((err) => setSocietarioCollectError(err instanceof Error ? err.message : String(err)))
-                  .finally(() => setSocietarioCollecting(false));
-              }}
+              onClick={() => void iniciarRecolhaSocietaria()}
               className="flex min-h-[40px] items-center gap-2 rounded-xl bg-rose-400/10 px-3 py-2 text-sm text-rose-300 border border-rose-400/20 hover:bg-rose-400/20 transition disabled:opacity-50"
             >
               {societarioCollecting ? (
@@ -6230,10 +6361,30 @@ export function EntityDetailPanel({
               ) : (
                 <Download size={18} />
               )}
-              {societarioCollecting ? "A indexar publicações…" : "Obter dados societários"}
+              {societarioCollecting
+                ? `A recolher… (${full(societarioJob?.progress?.publications ?? 0)} guardadas)`
+                : "Obter dados societários"}
             </button>
           )}
         </div>
+
+        {societarioCollectMessage && (
+          <p className="mb-4 flex items-start gap-2 rounded-lg border border-teal-400/20 bg-teal-400/10 px-3 py-2 text-xs text-teal-200">
+            {societarioCollecting && <Loader2 size={14} className="mt-0.5 shrink-0 animate-spin" />}
+            <span>
+              {societarioCollectMessage}
+              {societarioCollecting && societarioJob?.progress && (
+                <span className="text-teal-300/80">
+                  {" "}· {societarioJob.progress.phase || "a recolher"} ·{" "}
+                  {full(societarioJob.progress.entities_done ?? 0)}/{full(societarioJob.progress.entities_total ?? 0)} entidades
+                  {societarioJob.progress.current
+                    ? ` · ${societarioJob.progress.current.name || societarioJob.progress.current.nif}`
+                    : ""}
+                </span>
+              )}
+            </span>
+          </p>
+        )}
 
         {societarioCollectError && (
           <p className="mb-4 rounded-lg bg-rose-400/10 px-3 py-2 text-xs text-rose-300 border border-rose-400/20">
@@ -6307,7 +6458,7 @@ export function EntityDetailPanel({
               ))}
             </div>
           </div>
-        ) : societario && societario.total > 0 ? (
+        ) : societario && societario.total > 0 && !societarioCollecting ? (
           <p className="mb-5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
             Sem pessoas extraídas destas publicações. Use{" "}
             <strong className="font-medium text-blue-300">Extrair pessoas</strong> para criar/atualizar as
