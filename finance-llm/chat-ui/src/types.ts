@@ -707,6 +707,8 @@ export interface ContractAnalyticsFilters {
   entity?: string;
   nif?: string;
   cpv_code?: string;
+  procedure_type?: string;
+  contract_type?: string;
   region?: string;
   min_price?: number;
   max_price?: number;
@@ -884,6 +886,8 @@ export interface ContractRegionalRow {
 export interface ContractRegionalResponse {
   total_contracts: number;
   total_value?: number;
+  /** Regiões distintas no universo filtrado (exato; `regions` é truncado). */
+  region_count?: number;
   regions: ContractRegionalRow[];
   error?: string;
 }

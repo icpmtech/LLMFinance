@@ -1006,6 +1006,7 @@ class ContractRegionalRow(BaseModel):
 class ContractRegionalResponse(BaseModel):
     total_contracts: int = 0
     total_value: Optional[float] = None
+    region_count: int = 0
     regions: List[ContractRegionalRow] = []
     error: Optional[str] = None
 

@@ -64,6 +64,8 @@ import {
   AreaChart,
   Legend,
   type PieLabel,
+  type PieSectorDataItem,
+  type MouseHandlerDataParam,
 } from "recharts";
 import type { Formatter as RechartsFormatter } from "recharts/types/component/DefaultTooltipContent";
 import {
@@ -117,6 +119,7 @@ import type {
   CompanyDetail,
   CompanySocietarioResponse,
   CompanySearchResponse,
+  ContractAnalyticsFilters,
   ContractAnalyticsResponse,
   ContractAnalyzeRequest,
   ContractAnalyzeResponse,
@@ -4802,57 +4805,538 @@ function ContractAIAnalysis({
 
 // --- ANALYSIS ---
 
+/** Campos do formulário de filtros do separador «Análise e Relatórios». */
+type AnalysisFilterDraft = {
+  q: string;
+  year: number | "";
+  entity: string;
+  nif: string;
+  cpvCode: string;
+  procedureType: string;
+  contractType: string;
+  region: string;
+  minPrice: string;
+  maxPrice: string;
+  startDate: string;
+  endDate: string;
+  /** Dimensão das listas de entidades/CPV (top N). */
+  topN: number;
+};
+
+const EMPTY_ANALYSIS_DRAFT: AnalysisFilterDraft = {
+  q: "",
+  year: "",
+  entity: "",
+  nif: "",
+  cpvCode: "",
+  procedureType: "",
+  contractType: "",
+  region: "",
+  minPrice: "",
+  maxPrice: "",
+  startDate: "",
+  endDate: "",
+  topN: 10,
+};
+
+/** Filtro base (sem restrições) — o mesmo universo que a página carrega ao abrir. */
+const DEFAULT_ANALYSIS_FILTERS: ContractAnalyticsFilters = { top_entities: 10, top_cpv: 10 };
+
+/** Dimensões oferecidas no seletor «Top N» das listas. */
+const ANALYSIS_TOP_OPTIONS = [5, 10, 20, 50];
+
+const ANALYSIS_INPUT_CLASS =
+  "w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none transition focus:border-teal-400/50";
+
+function buildAnalysisFilters(draft: AnalysisFilterDraft): ContractAnalyticsFilters {
+  const f: ContractAnalyticsFilters = { top_entities: draft.topN, top_cpv: draft.topN };
+  if (draft.q.trim()) f.q = draft.q.trim();
+  if (draft.year !== "") f.year = draft.year;
+  if (draft.entity.trim()) f.entity = draft.entity.trim();
+  if (draft.nif.trim()) f.nif = draft.nif.trim();
+  if (draft.cpvCode.trim()) f.cpv_code = draft.cpvCode.trim();
+  if (draft.procedureType.trim()) f.procedure_type = draft.procedureType.trim();
+  if (draft.contractType.trim()) f.contract_type = draft.contractType.trim();
+  if (draft.region.trim()) f.region = draft.region.trim();
+  if (draft.minPrice.trim() && !Number.isNaN(Number(draft.minPrice))) f.min_price = Number(draft.minPrice);
+  if (draft.maxPrice.trim() && !Number.isNaN(Number(draft.maxPrice))) f.max_price = Number(draft.maxPrice);
+  if (draft.startDate) f.start_date = draft.startDate;
+  if (draft.endDate) f.end_date = draft.endDate;
+  return f;
+}
+
+/** «2026-03» → «03/2026» (eixo dos meses). */
+function monthLabel(key: string): string {
+  const [year, month] = key.split("-");
+  return month && year ? `${month}/${year}` : key;
+}
+
+/** Escreve a chave composta para a linha de opções filtradas. */
+function filterChipLabel(filters: ContractAnalyticsFilters): { key: keyof ContractAnalyticsFilters; label: string }[] {
+  const chips: { key: keyof ContractAnalyticsFilters; label: string }[] = [];
+  if (filters.q) chips.push({ key: "q", label: `Texto: ${filters.q}` });
+  if (filters.year !== undefined) chips.push({ key: "year", label: `Ano: ${filters.year}` });
+  if (filters.entity) chips.push({ key: "entity", label: `Entidade: ${filters.entity}` });
+  if (filters.nif) chips.push({ key: "nif", label: `NIF: ${filters.nif}` });
+  if (filters.cpv_code) chips.push({ key: "cpv_code", label: `CPV: ${filters.cpv_code}` });
+  if (filters.procedure_type) chips.push({ key: "procedure_type", label: `Procedimento: ${filters.procedure_type}` });
+  if (filters.contract_type) chips.push({ key: "contract_type", label: `Tipo: ${filters.contract_type}` });
+  if (filters.region) chips.push({ key: "region", label: `Região: ${filters.region}` });
+  if (filters.min_price !== undefined) chips.push({ key: "min_price", label: `Mín.: ${money(filters.min_price)}` });
+  if (filters.max_price !== undefined) chips.push({ key: "max_price", label: `Máx.: ${money(filters.max_price)}` });
+  if (filters.start_date) chips.push({ key: "start_date", label: `Desde: ${filters.start_date}` });
+  if (filters.end_date) chips.push({ key: "end_date", label: `Até: ${filters.end_date}` });
+  return chips;
+}
+
 function AnalysisSection({
-  analytics,
-  regional,
+  analytics: seedAnalytics,
+  regional: seedRegional,
   onEntity,
 }: {
   analytics: ContractAnalyticsResponse | null;
   regional: ContractRegionalResponse | null;
   onEntity: (_nif: string) => void;
 }) {
+  const [analytics, setAnalytics] = useState<ContractAnalyticsResponse | null>(seedAnalytics);
+  const [regional, setRegional] = useState<ContractRegionalResponse | null>(seedRegional);
+  const [filters, setFilters] = useState<ContractAnalyticsFilters>(DEFAULT_ANALYSIS_FILTERS);
+  const [draft, setDraft] = useState<AnalysisFilterDraft>(EMPTY_ANALYSIS_DRAFT);
+  const [years, setYears] = useState<number[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // O snapshot da página já cobre o filtro base: evita repetir o pedido ao montar.
+  const skipInitialFetch = useRef(Boolean(seedAnalytics));
+  const debouncedFilters = useDebounce(filters, 400);
+
+  // Anos indexados disponíveis para o filtro temporal.
+  useEffect(() => {
+    getContractYears()
+      .then((res) => setYears(res.available ?? []))
+      .catch(() => setYears([]));
+  }, []);
+
+  // Lista de regiões do filtro: vem do snapshot sem filtros para não encolher com a pesquisa.
+  const regionOptions = useMemo(() => {
+    const keys = (seedRegional?.regions ?? []).map((region) => region.key);
+    return Array.from(new Set(keys)).sort((a, b) => a.localeCompare(b, "pt"));
+  }, [seedRegional]);
+
+  // Tipos de procedimento/contrato para os filtros. As opções vêm do snapshot sem
+  // filtros — a resposta filtrada só traria os tipos já escolhidos.
+  const procedureOptions = useMemo(
+    () => (seedAnalytics?.procedure_types ?? []).map((row) => row.key).filter((key) => key && key !== "N/A"),
+    [seedAnalytics],
+  );
+  const contractTypeOptions = useMemo(
+    () => (seedAnalytics?.contract_types ?? []).map((row) => row.key).filter((key) => key && key !== "N/A"),
+    [seedAnalytics],
+  );
+
+  // O agregado regional recebe todos os filtros *excepto* a própria região: assim a
+  // lista mantém-se navegável (facetas com contagens do contexto atual) em vez de
+  // colapsar numa única linha depois de se escolher uma região.
+  const regionalFilters = useMemo(
+    () => ({ ...debouncedFilters, region: undefined }),
+    [debouncedFilters],
+  );
+
+  // Cada alteração de filtro volta a consultar a API — os números são dinâmicos.
+  useEffect(() => {
+    if (skipInitialFetch.current) {
+      skipInitialFetch.current = false;
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    Promise.all([
+      getContractAnalytics(debouncedFilters),
+      getContractRegionalAnalytics(debouncedFilters.year, regionalFilters),
+    ])
+      .then(([nextAnalytics, nextRegional]) => {
+        if (cancelled) return;
+        setAnalytics(nextAnalytics);
+        setRegional(nextRegional);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Erro ao carregar a análise");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedFilters, regionalFilters]);
+
   const byYear = useMemo(
     () => [...(analytics?.by_year ?? [])].sort((a, b) => (a.key < b.key ? -1 : 1)),
     [analytics],
   );
+  const byMonth = useMemo(
+    () =>
+      [...(analytics?.by_month ?? [])]
+        .sort((a, b) => (a.key < b.key ? -1 : 1))
+        .map((row) => ({ ...row, label: monthLabel(row.key) })),
+    [analytics],
+  );
   const topEntities = analytics?.top_entities ?? [];
   const topCpv = analytics?.top_cpv ?? [];
+  const procedureTypes = analytics?.procedure_types ?? [];
   const contractTypes = analytics?.contract_types ?? [];
+  const valueDistribution = analytics?.value_distribution ?? [];
+  const yearsSpan = useMemo(() => {
+    if (byYear.length === 0) return null;
+    const first = byYear[0].key;
+    const last = byYear[byYear.length - 1].key;
+    return first === last ? first : `${first}–${last}`;
+  }, [byYear]);
+  const regionalRegions = useMemo(
+    () =>
+      [...(regional?.regions ?? [])]
+        .sort((a, b) => (b.total_value || 0) - (a.total_value || 0))
+        .slice(0, 8),
+    [regional],
+  );
+
+  const applyFilters = (next: AnalysisFilterDraft) => {
+    setDraft(next);
+    setFilters(buildAnalysisFilters(next));
+  };
+
+  const clearFilters = () => {
+    setDraft(EMPTY_ANALYSIS_DRAFT);
+    setFilters(DEFAULT_ANALYSIS_FILTERS);
+  };
+
+  const removeFilter = (key: keyof ContractAnalyticsFilters) => {
+    const next: AnalysisFilterDraft = { ...draft };
+    switch (key) {
+      case "q": next.q = ""; break;
+      case "year": next.year = ""; break;
+      case "entity": next.entity = ""; break;
+      case "nif": next.nif = ""; break;
+      case "cpv_code": next.cpvCode = ""; break;
+      case "procedure_type": next.procedureType = ""; break;
+      case "contract_type": next.contractType = ""; break;
+      case "region": next.region = ""; break;
+      case "min_price": next.minPrice = ""; break;
+      case "max_price": next.maxPrice = ""; break;
+      case "start_date": next.startDate = ""; break;
+      case "end_date": next.endDate = ""; break;
+      default: break;
+    }
+    applyFilters(next);
+  };
+
+  const activeChips = useMemo(() => filterChipLabel(filters), [filters]);
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-2xl font-bold">Análise de Contratos</h2>
-        <p className="text-sm text-muted-foreground">
-          Métricas agregadas e distribuições do universo indexado
-        </p>
+      <div className="flex flex-col gap-3 @2xl:flex-row @2xl:items-start @2xl:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-2xl font-bold">Análise de Contratos</h2>
+          <p className="text-sm text-muted-foreground">
+            {activeChips.length > 0 ? (
+              <>
+                Métricas dos <span className="text-foreground">{full(analytics?.total_contracts)}</span> contratos que
+                correspondem aos filtros aplicados
+              </>
+            ) : (
+              "Métricas agregadas e distribuições do universo indexado"
+            )}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {loading && <Loader2 size={16} className="animate-spin text-teal-300" />}
+          <button
+            type="button"
+            onClick={() => setShowFilters((s) => !s)}
+            aria-expanded={showFilters}
+            className={`glass-card flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40 ${
+              showFilters || activeChips.length > 0
+                ? "bg-teal-400/10 text-teal-200 ring-1 ring-teal-400/30"
+                : "hover:bg-white/5"
+            }`}
+          >
+            <Filter size={16} />
+            Filtros
+            {activeChips.length > 0 && (
+              <span className="rounded-full bg-teal-400/20 px-1.5 text-[11px] font-semibold text-teal-100">
+                {activeChips.length}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
+
+      {showFilters && (
+        <Card className="fade-in">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 className="flex items-center gap-2 font-semibold">
+              <Filter size={18} className="text-teal-300" /> Filtros da análise
+            </h3>
+            <span className="hidden text-xs text-muted-foreground @2xl:block">
+              Os mesmos parâmetros usados na pesquisa de contratos
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-3 @lg:grid-cols-2 @5xl:grid-cols-4">
+            <label className="@lg:col-span-2 @5xl:col-span-4">
+              <span className="mb-1 block text-xs text-muted-foreground">Texto livre</span>
+              <input
+                type="text"
+                value={draft.q}
+                onChange={(e) => setDraft((d) => ({ ...d, q: e.target.value }))}
+                placeholder="Objeto, entidades, descrição…"
+                className={ANALYSIS_INPUT_CLASS}
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-xs text-muted-foreground">Entidade</span>
+              <input
+                type="text"
+                value={draft.entity}
+                onChange={(e) => setDraft((d) => ({ ...d, entity: e.target.value }))}
+                placeholder="Adjudicante ou adjudicatário"
+                className={ANALYSIS_INPUT_CLASS}
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-xs text-muted-foreground">NIF</span>
+              <input
+                type="text"
+                value={draft.nif}
+                onChange={(e) => setDraft((d) => ({ ...d, nif: e.target.value }))}
+                placeholder="NIF da entidade"
+                className={ANALYSIS_INPUT_CLASS}
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-xs text-muted-foreground">Código CPV</span>
+              <input
+                type="text"
+                value={draft.cpvCode}
+                onChange={(e) => setDraft((d) => ({ ...d, cpvCode: e.target.value }))}
+                placeholder="ex.: 45233"
+                className={ANALYSIS_INPUT_CLASS}
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-xs text-muted-foreground">Tipo de procedimento</span>
+              <select
+                value={draft.procedureType}
+                onChange={(e) => setDraft((d) => ({ ...d, procedureType: e.target.value }))}
+                className={ANALYSIS_INPUT_CLASS}
+              >
+                <option value="">Todos os procedimentos</option>
+                {procedureOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-xs text-muted-foreground">Tipo de contrato</span>
+              <select
+                value={draft.contractType}
+                onChange={(e) => setDraft((d) => ({ ...d, contractType: e.target.value }))}
+                className={ANALYSIS_INPUT_CLASS}
+              >
+                <option value="">Todos os contratos</option>
+                {contractTypeOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-xs text-muted-foreground">Região</span>
+              <select
+                value={draft.region}
+                onChange={(e) => setDraft((d) => ({ ...d, region: e.target.value }))}
+                className={ANALYSIS_INPUT_CLASS}
+              >
+                <option value="">Todas as regiões</option>
+                {regionOptions.map((region) => (
+                  <option key={region} value={region}>
+                    {region}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-xs text-muted-foreground">Ano</span>
+              <select
+                value={draft.year === "" ? "" : String(draft.year)}
+                onChange={(e) => setDraft((d) => ({ ...d, year: e.target.value === "" ? "" : Number(e.target.value) }))}
+                className={ANALYSIS_INPUT_CLASS}
+              >
+                <option value="">Todos os anos</option>
+                {years.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-xs text-muted-foreground">Dimensão das listas (Top N)</span>
+              <select
+                value={String(draft.topN)}
+                onChange={(e) => setDraft((d) => ({ ...d, topN: Number(e.target.value) }))}
+                className={ANALYSIS_INPUT_CLASS}
+              >
+                {ANALYSIS_TOP_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    Top {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-xs text-muted-foreground">Preço mínimo €</span>
+              <input
+                type="number"
+                min={0}
+                value={draft.minPrice}
+                onChange={(e) => setDraft((d) => ({ ...d, minPrice: e.target.value }))}
+                placeholder="ex.: 100000"
+                className={ANALYSIS_INPUT_CLASS}
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-xs text-muted-foreground">Preço máximo €</span>
+              <input
+                type="number"
+                min={0}
+                value={draft.maxPrice}
+                onChange={(e) => setDraft((d) => ({ ...d, maxPrice: e.target.value }))}
+                placeholder="ex.: 5000000"
+                className={ANALYSIS_INPUT_CLASS}
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-xs text-muted-foreground">Publicado desde</span>
+              <input
+                type="date"
+                value={draft.startDate}
+                onChange={(e) => setDraft((d) => ({ ...d, startDate: e.target.value }))}
+                className={ANALYSIS_INPUT_CLASS}
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-xs text-muted-foreground">Publicado até</span>
+              <input
+                type="date"
+                value={draft.endDate}
+                onChange={(e) => setDraft((d) => ({ ...d, endDate: e.target.value }))}
+                className={ANALYSIS_INPUT_CLASS}
+              />
+            </label>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => applyFilters(draft)}
+              className="glass-card rounded-xl bg-primary/10 px-4 py-2 text-sm text-primary ring-1 ring-primary/20 transition hover:bg-primary/15"
+            >
+              Aplicar filtros
+            </button>
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="glass-card rounded-xl px-4 py-2 text-sm transition hover:bg-white/5"
+            >
+              Limpar filtros
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowFilters(false)}
+              className="ml-auto text-xs text-muted-foreground transition hover:text-foreground"
+            >
+              Ocultar
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {activeChips.length > 0 && (
+        <div className="glass-card flex flex-wrap items-center gap-2 rounded-2xl px-4 py-3 text-sm">
+          <span className="text-muted-foreground">Filtros ativos:</span>
+          {activeChips.map((chip) => (
+            <button
+              key={chip.key}
+              type="button"
+              onClick={() => removeFilter(chip.key)}
+              title="Remover filtro"
+              className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs transition hover:bg-white/10"
+            >
+              {chip.label}
+              <X size={12} />
+            </button>
+          ))}
+          <button type="button" onClick={clearFilters} className="ml-auto text-xs text-primary hover:underline">
+            Limpar tudo
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-2xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+          {error}
+        </div>
+      )}
 
       <div className="grid gap-4 @xl:grid-cols-2 @5xl:grid-cols-4">
         <Card glow="teal">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider">Valor Total Adjudicado</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Valor Total Adjudicado</p>
           <p className="mt-2 text-2xl font-bold stat-value text-glow-teal">{money(analytics?.total_value)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">em {full(analytics?.total_contracts)} contratos</p>
         </Card>
         <Card glow="blue">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider">Nº de Contratos</p>
-          <p className="mt-2 text-2xl font-bold stat-value text-glow-blue">{full(analytics?.total_contracts)}</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Valor Médio por Contrato</p>
+          <p className="mt-2 text-2xl font-bold stat-value text-glow-blue">{money(analytics?.avg_value)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Maior: {money(analytics?.max_value)}</p>
         </Card>
         <Card glow="amber">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider">Entidades no Grafo</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Entidades em Destaque</p>
           <p className="mt-2 text-2xl font-bold stat-value text-glow-amber">{full(topEntities.length)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Top {filters.top_entities ?? 10} por valor adjudicado</p>
         </Card>
         <Card glow="violet">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider">Top Entidades Distintas</p>
-          <p className="mt-2 text-2xl font-bold stat-value text-glow-violet">{full(topEntities.length)}</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Regiões com Contratos</p>
+          <p className="mt-2 text-2xl font-bold stat-value text-glow-violet">{full(regional?.region_count ?? regional?.regions.length ?? 0)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{yearsSpan ? `NUTS · período ${yearsSpan}` : "Distribuição territorial (NUTS)"}</p>
         </Card>
       </div>
 
       <div className="grid gap-6 @4xl:grid-cols-2">
         <Card>
-          <h3 className="font-semibold mb-4">Evolução do Valor Adjudicado</h3>
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold">Evolução do Valor Adjudicado</h3>
+              <p className="text-xs text-muted-foreground">Clique num ano para filtrar a análise</p>
+            </div>
+            <Badge color="teal">Ano</Badge>
+          </div>
           <div className="h-60 overflow-hidden @3xl:h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={byYear}>
+              <LineChart
+                data={byYear}
+                className="cursor-pointer"
+                onClick={(state: MouseHandlerDataParam) => {
+                  const label = state.activeLabel;
+                  if (label === undefined || label === null) return;
+                  const value = Number(label);
+                  if (Number.isFinite(value)) {
+                    applyFilters({ ...draft, year: draft.year === value ? "" : value });
+                  }
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                 <XAxis dataKey="key" stroke="rgba(255,255,255,0.3)" fontSize={12} />
                 <YAxis
@@ -4905,7 +5389,58 @@ function AnalysisSection({
         </Card>
 
         <Card>
-          <h3 className="font-semibold mb-4">Por Tipo de Contrato</h3>
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold">Contratos por Mês</h3>
+              <p className="text-xs text-muted-foreground">Publicações mensais no universo filtrado</p>
+            </div>
+            <Badge color="blue">Mês</Badge>
+          </div>
+          <div className="h-60 overflow-hidden @3xl:h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={byMonth}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis
+                  dataKey="label"
+                  stroke="rgba(255,255,255,0.3)"
+                  fontSize={11}
+                  minTickGap={26}
+                  angle={-45}
+                  textAnchor="end"
+                  height={56}
+                />
+                <YAxis stroke="rgba(255,255,255,0.3)" fontSize={12} tickFormatter={(v) => compact(v)} />
+                <Tooltip
+                  contentStyle={{
+                    background: "rgba(7,21,27,0.95)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    borderRadius: 12,
+                  }}
+                  formatter={countFormatter}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="count"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Contratos"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 @2xl:grid-cols-2 @6xl:grid-cols-3">
+        <Card>
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold">Por Tipo de Contrato</h3>
+              <p className="text-xs text-muted-foreground">Clique numa fatia para filtrar</p>
+            </div>
+            <Badge color="teal">Tipo</Badge>
+          </div>
           <div className="h-60 overflow-hidden @3xl:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <RePieChart>
@@ -4918,6 +5453,10 @@ function AnalysisSection({
                   paddingAngle={3}
                   labelLine={false}
                   label={percentPieLabel}
+                  onClick={(entry: PieSectorDataItem) => {
+                    const code = String(entry?.payload?.key ?? entry?.name ?? "");
+                    if (code) applyFilters({ ...draft, contractType: draft.contractType === code ? "" : code });
+                  }}
                 >
                   {contractTypes.slice(0, 6).map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
@@ -4932,6 +5471,82 @@ function AnalysisSection({
                   formatter={countFormatter}
                 />
               </RePieChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold">Tipos de Procedimento</h3>
+              <p className="text-xs text-muted-foreground">Clique numa fatia para filtrar</p>
+            </div>
+            <Badge color="violet">Procedimento</Badge>
+          </div>
+          <div className="h-60 overflow-hidden @3xl:h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <RePieChart>
+                <Pie
+                  data={procedureTypes.slice(0, 6)}
+                  dataKey="count"
+                  nameKey="key"
+                  innerRadius={50}
+                  outerRadius={85}
+                  paddingAngle={3}
+                  labelLine={false}
+                  label={percentPieLabel}
+                  onClick={(entry: PieSectorDataItem) => {
+                    const code = String(entry?.payload?.key ?? entry?.name ?? "");
+                    if (code) applyFilters({ ...draft, procedureType: draft.procedureType === code ? "" : code });
+                  }}
+                >
+                  {procedureTypes.slice(0, 6).map((_, i) => (
+                    <Cell key={i} fill={COLORS[(i + 2) % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    background: "rgba(7,21,27,0.95)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    borderRadius: 12,
+                  }}
+                  formatter={countFormatter}
+                />
+              </RePieChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold">Distribuição de Valores</h3>
+              <p className="text-xs text-muted-foreground">Contratos por escalão de preço</p>
+            </div>
+            <Badge color="amber">EUR</Badge>
+          </div>
+          <div className="h-60 overflow-hidden @3xl:h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={valueDistribution}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis
+                  dataKey="key"
+                  stroke="rgba(255,255,255,0.3)"
+                  fontSize={11}
+                  minTickGap={12}
+                  tickFormatter={(v) => compact(Number(String(v).split(" - ")[0]))}
+                />
+                <YAxis stroke="rgba(255,255,255,0.3)" fontSize={12} tickFormatter={(v) => compact(v)} />
+                <Tooltip
+                  contentStyle={{
+                    background: "rgba(7,21,27,0.95)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    borderRadius: 12,
+                  }}
+                  formatter={countFormatter}
+                />
+                <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Contratos" />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </Card>
@@ -4960,7 +5575,7 @@ function AnalysisSection({
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h3 className="font-semibold">CPV Mais Frequentes</h3>
-              <p className="text-xs text-muted-foreground">Nº de contratos por categoria</p>
+              <p className="text-xs text-muted-foreground">Nº de contratos por categoria · clique para filtrar</p>
             </div>
             <Badge color="amber">Nº</Badge>
           </div>
@@ -4973,25 +5588,51 @@ function AnalysisSection({
               value: row.count || 0,
               display: full(row.count),
             }))}
+            onSelect={(row) => {
+              const code = row.code || row.key;
+              applyFilters({ ...draft, cpvCode: draft.cpvCode === code ? "" : code });
+            }}
           />
         </Card>
 
         <Card>
-          <h3 className="font-semibold mb-4">Regiões ativas</h3>
-          <div className="space-y-3 max-h-[320px] overflow-auto pr-1">
-            {(regional?.regions ?? [])
-              .sort((a, b) => (b.total_value || 0) - (a.total_value || 0))
-              .slice(0, 8)
-              .map((region) => (
-                <div
-                  key={region.key}
-                  className="flex items-center justify-between rounded-xl bg-white/[0.03] px-3 py-2.5 border border-white/5"
-                >
-                  <span className="text-sm">{region.key}</span>
-                  <span className="text-xs text-muted-foreground">{region.count} contratos</span>
-                </div>
-              ))}
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="font-semibold">Regiões ativas</h3>
+              <p className="text-xs text-muted-foreground">Clique para filtrar a análise</p>
+            </div>
+            <Badge color="blue">Regiões</Badge>
           </div>
+          {regionalRegions.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Sem dados para os filtros aplicados.</p>
+          ) : (
+            <div className="space-y-3 max-h-[320px] overflow-auto pr-1">
+              {regionalRegions.map((region) => {
+                const active = filters.region === region.key;
+                return (
+                  <button
+                    key={region.key}
+                    type="button"
+                    onClick={() => applyFilters({ ...draft, region: active ? "" : region.key })}
+                    aria-pressed={active}
+                    className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40 ${
+                      active
+                        ? "border-teal-400/40 bg-teal-400/10"
+                        : "border-white/5 bg-white/[0.03] hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    <span className="min-w-0 truncate text-sm">{region.key}</span>
+                    <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+                      {full(region.count)} · {money(region.total_value)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Contagens do contexto atual: uma região escolhida não se auto-filtra, para a lista continuar navegável.
+          </p>
         </Card>
       </div>
     </div>
@@ -6774,7 +7415,7 @@ export default function EmpresasIQPage() {
     setError(null);
     try {
       const [a, r, s] = await Promise.all([
-        getContractAnalytics({ top_entities: 10, top_cpv: 8 }),
+        getContractAnalytics({ top_entities: 10, top_cpv: 10 }),
         getContractRegionalAnalytics(),
         getContractStatus(),
       ]);

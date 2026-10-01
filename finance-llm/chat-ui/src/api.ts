@@ -737,6 +737,8 @@ export async function getContractAnalytics(
     entity,
     nif,
     cpv_code,
+    procedure_type,
+    contract_type,
     region,
     min_price,
     max_price,
@@ -751,6 +753,8 @@ export async function getContractAnalytics(
   if (entity) params.append("entity", entity);
   if (nif) params.append("nif", nif);
   if (cpv_code) params.append("cpv_code", cpv_code);
+  if (procedure_type) params.append("procedure_type", procedure_type);
+  if (contract_type) params.append("contract_type", contract_type);
   if (region) params.append("region", region);
   if (min_price !== undefined) params.append("min_price", String(min_price));
   if (max_price !== undefined) params.append("max_price", String(max_price));
@@ -807,9 +811,30 @@ export async function downloadContractReport(
   return res.blob();
 }
 
-export async function getContractRegionalAnalytics(year?: number): Promise<ContractRegionalResponse> {
-  const params = new URLSearchParams({ size: "30" });
-  if (year !== undefined) params.set("year", String(year));
+/**
+ * Agregado regional (NUTS). O `year` continua a ser o 1º parâmetro para não
+ * quebrar as chamadas existentes; `filters` acrescenta o resto dos filtros da
+ * análise, para que a distribuição regional acompanhe a pesquisa.
+ */
+export async function getContractRegionalAnalytics(
+  year?: number,
+  filters: ContractAnalyticsFilters = {},
+  size = 30,
+): Promise<ContractRegionalResponse> {
+  const params = new URLSearchParams({ size: String(size) });
+  const effectiveYear = year ?? filters.year;
+  if (effectiveYear !== undefined) params.set("year", String(effectiveYear));
+  if (filters.q) params.set("q", filters.q);
+  if (filters.entity) params.set("entity", filters.entity);
+  if (filters.nif) params.set("nif", filters.nif);
+  if (filters.cpv_code) params.set("cpv_code", filters.cpv_code);
+  if (filters.procedure_type) params.set("procedure_type", filters.procedure_type);
+  if (filters.contract_type) params.set("contract_type", filters.contract_type);
+  if (filters.region) params.set("region", filters.region);
+  if (filters.min_price !== undefined) params.set("min_price", String(filters.min_price));
+  if (filters.max_price !== undefined) params.set("max_price", String(filters.max_price));
+  if (filters.start_date) params.set("start_date", filters.start_date);
+  if (filters.end_date) params.set("end_date", filters.end_date);
   const res = await fetch(`${API_BASE}/contracts/analytics/regional?${params}`);
   if (!res.ok) throw new Error(`Erro ao obter mapa regional: ${res.status}`);
   return res.json();

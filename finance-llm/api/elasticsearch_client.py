@@ -14,7 +14,7 @@ import time
 import unicodedata
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from elasticsearch import Elasticsearch, NotFoundError
 from elasticsearch.helpers import bulk
@@ -3463,12 +3463,48 @@ def _resolve_agg_target(client: Elasticsearch, field: str) -> Dict[str, Any]:
     return resolved
 
 
+def _contract_type_filters(
+    client: Elasticsearch,
+    procedure_type: Optional[str],
+    contract_type: Optional[str],
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Filtros `term` por tipo de procedimento/contrato, com os runtime mappings.
+
+    O campo real só é conhecido depois de `_resolve_agg_target` (keyword,
+    `.keyword` ou campo de execução), por isso o filtro não pode viver em
+    `_build_contract_query`. Devolve `(filters, runtime_mappings)`.
+    """
+    filters: List[Dict[str, Any]] = []
+    runtime: Dict[str, Any] = {}
+    if not procedure_type and not contract_type:
+        return filters, runtime
+    procedure_agg = _resolve_agg_target(client, "tipoprocedimento")
+    contract_agg = _resolve_agg_target(client, "tipoContrato")
+    for resolved in (procedure_agg, contract_agg):
+        if resolved.get("runtime"):
+            runtime.update(resolved["runtime"])
+    if procedure_type:
+        filters.append({"term": {procedure_agg["field"]: procedure_type}})
+    if contract_type:
+        filters.append({"term": {contract_agg["field"]: contract_type}})
+    return filters, runtime
+
+
+def _and_filters(query: Dict[str, Any], extra: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Acrescenta filtros `filter` a uma query já construída."""
+    if not extra:
+        return query
+    return {"bool": {"must": [query], "filter": extra}}
+
+
 def get_contract_analytics(
     q: Optional[str] = None,
     year: Optional[int] = None,
     entity: Optional[str] = None,
     nif: Optional[str] = None,
     cpv_code: Optional[str] = None,
+    procedure_type: Optional[str] = None,
+    contract_type: Optional[str] = None,
     region: Optional[str] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
@@ -3495,6 +3531,12 @@ def get_contract_analytics(
     for resolved in (procedure_agg, contract_agg):
         if resolved.get("runtime"):
             runtime_mappings.update(resolved["runtime"])
+
+    # Os filtros por tipo só podem ser montados depois de o campo estar resolvido:
+    # entram como `filter` sobre a query base, junto dos respectivos runtime mappings.
+    type_filters, type_runtime = _contract_type_filters(client, procedure_type, contract_type)
+    runtime_mappings.update(type_runtime)
+    base_query = _and_filters(base_query, type_filters)
 
     analytics_body: Dict[str, Any] = {
         "size": 0,
@@ -4778,38 +4820,71 @@ def get_contract_by_id(idcontrato: str, es: Optional[Elasticsearch] = None) -> D
         return {"error": str(exc)}
 
 
-def get_contract_regional_analytics(year: Optional[int] = None, size: int = 30, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
-    """Agrega volume e valor contratual por NUTS."""
+def get_contract_regional_analytics(
+    q: Optional[str] = None,
+    year: Optional[int] = None,
+    entity: Optional[str] = None,
+    nif: Optional[str] = None,
+    cpv_code: Optional[str] = None,
+    procedure_type: Optional[str] = None,
+    contract_type: Optional[str] = None,
+    region: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    size: int = 30,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Agrega volume e valor contratual por NUTS, com os mesmos filtros da análise.
+
+    Aceitava apenas `year`, o que desalinhava a distribuição regional do resto do
+    dashboard (uma pesquisa por CPV ou entidade não mexia nas regiões). Passou a
+    usar `_build_contract_query`, pelo que responde a todos os filtros.
+    """
     client = es or get_es_client()
     if not client:
         return {"error": "Elasticsearch indisponível", "regions": []}
-    query: Dict[str, Any] = {"match_all": {}}
-    if year:
-        query = {"term": {"Ano": year}}
+    query = _build_contract_query(
+        q, year, entity, nif, region=region, cpv_code=cpv_code,
+        min_price=min_price, max_price=max_price, start_date=start_date, end_date=end_date,
+    )
+    type_filters, runtime_mappings = _contract_type_filters(client, procedure_type, contract_type)
+    query = _and_filters(query, type_filters)
     try:
-        response = client.search(
-            index=CONTRACTS_INDEX,
-            body={
-                "track_total_hits": True,
-                "size": 0,
-                "query": query,
-                "aggs": {
-                    "regions": {
-                        "terms": {"field": "NUTs", "size": size, "missing": "Não especificado"},
-                        "aggs": {"total_value": {"sum": {"field": "precoContratual"}}},
-                    },
-                    "total_value": {"sum": {"field": "precoContratual"}},
+        body: Dict[str, Any] = {
+            "track_total_hits": True,
+            "size": 0,
+            "query": query,
+            "aggs": {
+                "regions": {
+                    "terms": {"field": "NUTs", "size": size, "missing": "Não especificado"},
+                    "aggs": {"total_value": {"sum": {"field": "precoContratual"}}},
                 },
+                # Contagem exata de regiões distintas: a lista é truncada por `size`,
+                # a cardinalidade não (alimenta o KPI «Regiões com Contratos»).
+                "region_count": {"cardinality": {"field": "NUTs"}},
+                "total_value": {"sum": {"field": "precoContratual"}},
             },
-        )
+        }
+        if runtime_mappings:
+            body["runtime_mappings"] = runtime_mappings
+        response = client.search(index=CONTRACTS_INDEX, body=body)
         aggs = response.get("aggregations", {})
+        regions = [
+            {"key": bucket["key"], "count": bucket["doc_count"], "total_value": bucket.get("total_value", {}).get("value")}
+            for bucket in aggs.get("regions", {}).get("buckets", [])
+        ]
+        distinct = int(aggs.get("region_count", {}).get("value") or 0)
+        # A cardinalidade conta apenas documentos com `NUTs`; os que não têm caem
+        # no grupo «Não especificado», que também é uma região da lista.
+        if any(row["key"] == "Não especificado" for row in regions):
+            distinct += 1
         return {
             "total_contracts": response.get("hits", {}).get("total", {}).get("value", 0),
             "total_value": aggs.get("total_value", {}).get("value"),
-            "regions": [
-                {"key": bucket["key"], "count": bucket["doc_count"], "total_value": bucket.get("total_value", {}).get("value")}
-                for bucket in aggs.get("regions", {}).get("buckets", [])
-            ],
+            "region_count": distinct,
+            "regions": regions,
         }
     except Exception as exc:
         return {"error": str(exc), "regions": []}

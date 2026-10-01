@@ -2245,6 +2245,8 @@ def contracts_analytics(
     entity: Optional[str] = Query(None),
     nif: Optional[str] = Query(None),
     cpv_code: Optional[str] = Query(None),
+    procedure_type: Optional[str] = Query(None, description="Tipo de procedimento (valor da agregação `procedure_types`)"),
+    contract_type: Optional[str] = Query(None, description="Tipo de contrato (valor da agregação `contract_types`)"),
     region: Optional[str] = Query(None, description="Região NUTS (código ou string completa)"),
     min_price: Optional[float] = Query(None),
     max_price: Optional[float] = Query(None),
@@ -2255,7 +2257,8 @@ def contracts_analytics(
 ):
     """Devolve analytics/aggregações para o dashboard de contratos."""
     res = get_contract_analytics(
-        q=q, year=year, entity=entity, nif=nif, cpv_code=cpv_code, region=region,
+        q=q, year=year, entity=entity, nif=nif, cpv_code=cpv_code,
+        procedure_type=procedure_type, contract_type=contract_type, region=region,
         min_price=min_price, max_price=max_price, start_date=start_date, end_date=end_date,
         top_entities=top_entities, top_cpv=top_cpv,
     )
@@ -2265,9 +2268,28 @@ def contracts_analytics(
 
 
 @app.get("/contracts/analytics/regional", response_model=ContractRegionalResponse)
-def contracts_regional_analytics(year: Optional[int] = Query(None), size: int = Query(30, ge=1, le=100)):
-    """Agrega contratos por região NUTS."""
-    result = get_contract_regional_analytics(year=year, size=size)
+def contracts_regional_analytics(
+    q: Optional[str] = Query(None),
+    year: Optional[int] = Query(None),
+    entity: Optional[str] = Query(None),
+    nif: Optional[str] = Query(None),
+    cpv_code: Optional[str] = Query(None),
+    procedure_type: Optional[str] = Query(None),
+    contract_type: Optional[str] = Query(None),
+    region: Optional[str] = Query(None),
+    min_price: Optional[float] = Query(None),
+    max_price: Optional[float] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    size: int = Query(30, ge=1, le=100),
+):
+    """Agrega contratos por região NUTS, aceitando os mesmos filtros da análise."""
+    result = get_contract_regional_analytics(
+        q=q, year=year, entity=entity, nif=nif, cpv_code=cpv_code,
+        procedure_type=procedure_type, contract_type=contract_type, region=region,
+        min_price=min_price, max_price=max_price, start_date=start_date, end_date=end_date,
+        size=size,
+    )
     if result.get("error"):
         raise HTTPException(status_code=502, detail=result["error"])
     return ContractRegionalResponse(**result)
