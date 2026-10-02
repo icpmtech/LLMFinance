@@ -109,6 +109,7 @@ export type AppView =
   | "office-dossies"
   | "cms"
   | "rss"
+  | "noticias"
   | "email"
   | "visualizador"
   | "visualizador-dashboards"

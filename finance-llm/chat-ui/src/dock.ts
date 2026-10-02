@@ -48,6 +48,7 @@ import {
   Plus,
   Rss,
   Scan,
+  ScrollText,
   Search,
   Settings,
   ShieldAlert,
@@ -214,6 +215,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: Rss,
     gradient: "from-orange-200 via-amber-500 to-rose-500",
     accent: "251,146,60",
+  },
+  {
+    id: "noticias",
+    label: "Notícias",
+    hint: "Recolher para o Elasticsearch e procurar por ticker, tema, fonte, tom e período",
+    icon: ScrollText,
+    gradient: "from-teal-200 via-cyan-400 to-blue-600",
+    accent: "34,211,238",
   },
   {
     id: "shop",

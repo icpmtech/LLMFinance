@@ -14,8 +14,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
+  BookOpen,
   Building2,
   CornerDownLeft,
+  Database,
   ExternalLink,
   FileSignature,
   Globe2,
@@ -66,12 +68,21 @@ const SCOPE_ICON: Record<string, React.ReactNode> = {
   entities: <Building2 size={14} />,
   trademarks: <Tag size={14} />,
   firmas: <Landmark size={14} />,
-  news: <Newspaper size={14} />,
+  pessoas: <Users size={14} />,
+  politicos: <Landmark size={14} />,
+  wikipedia: <BookOpen size={14} />,
+  news: <Database size={14} />,
+  imprensa: <Newspaper size={14} />,
   market: <LineChart size={14} />,
   crm: <Users size={14} />,
 };
 
 const EXAMPLES = ["EDP", "combustíveis", "Sonae", "AAPL", "Renfe"];
+
+/** Itens por âmbito em «Tudo» (uma lista por área, com «Ver todos»). */
+const ALL_PAGE_SIZE = 8;
+/** Itens quando a pesquisa está num âmbito só (a página é dessa área). */
+const SCOPE_PAGE_SIZE = 48;
 
 function openLabel(item: SearchItem): string | null {
   if (!item.open) return null;
@@ -106,6 +117,18 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
   const [query, setQuery] = useState(initialQuery);
   const [submitted, setSubmitted] = useState(initialQuery.trim());
   const [scope, setScope] = useState<SearchScopeId>("all");
+  /**
+   * Filtros ativos (faceta → valor), definidos no painel do âmbito: tipo de
+   * publicação nas redes sociais, partido nos políticos, jornal na imprensa…
+   */
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  /** Resultados já saltados no âmbito ativo (para «Carregar mais»). */
+  const [offset, setOffset] = useState(0);
+  /** A carregar a página seguinte (não confundir com uma pesquisa nova). */
+  const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  /** Evita disparar duas páginas ao mesmo tempo (o *scroll* chama depressa). */
+  const aCarregarMais = useRef(false);
   const [result, setResult] = useState<UnifiedSearchResult | null>(null);
   const [scopes, setScopes] = useState<SearchScope[]>([]);
   const [loading, setLoading] = useState(false);
@@ -123,32 +146,105 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
       .catch(() => setScopes([]));
   }, []);
 
-  const run = useCallback(async (term: string, nextScope: SearchScopeId) => {
-    const value = term.trim();
-    if (!value) return;
-    setLoading(true);
-    setError(null);
-    setShowSuggestions(false);
-    try {
-      const payload = await unifiedSearch({ q: value, scope: nextScope, size: 8 });
-      if (payload.error) {
-        setError(payload.error);
+  const run = useCallback(
+    async (term: string, nextScope: SearchScopeId, nextFilters: Record<string, string>) => {
+      const value = term.trim();
+      if (!value) return;
+      setLoading(true);
+      setError(null);
+      setShowSuggestions(false);
+      try {
+        const payload = await unifiedSearch({
+          q: value,
+          scope: nextScope,
+          // Num âmbito só a página é dessa área: mostra-se muito mais do que as
+          // 8 linhas por grupo do «Tudo», senão o contador dizia 22 e apareciam 8.
+          size: nextScope === "all" ? ALL_PAGE_SIZE : SCOPE_PAGE_SIZE,
+          filters: nextFilters,
+        });
+        if (payload.error) {
+          setError(payload.error);
+          setResult(null);
+        } else {
+          setResult(payload);
+          setOffset(0);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Falha na pesquisa.");
         setResult(null);
-      } else {
-        setResult(payload);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha na pesquisa.");
-      setResult(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!submitted) return;
-    void run(submitted, scope);
-  }, [submitted, scope, run]);
+    void run(submitted, scope, filters);
+  }, [submitted, scope, filters, run]);
+
+  /**
+   * Página seguinte do âmbito ativo: acrescenta ao que já está no ecrã (o
+   * contador continua a ser o total real do âmbito, não o que está à vista).
+   */
+  const loadMore = async () => {
+    if (!result || scope === "all" || aCarregarMais.current) return;
+    const proximo = offset + SCOPE_PAGE_SIZE;
+    aCarregarMais.current = true;
+    setLoadingMore(true);
+    try {
+      const payload = await unifiedSearch({
+        q: submitted,
+        scope,
+        size: SCOPE_PAGE_SIZE,
+        offset: proximo,
+        filters,
+      });
+      setResult((anterior) => {
+        if (!anterior) return payload;
+        return {
+          ...payload,
+          groups: payload.groups.map((group) => {
+            const antigo = anterior.groups.find((item) => item.scope === group.scope);
+            return { ...group, items: [...(antigo?.items ?? []), ...group.items] };
+          }),
+        };
+      });
+      setOffset(proximo);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao carregar mais.");
+    } finally {
+      setLoadingMore(false);
+      aCarregarMais.current = false;
+    }
+  };
+
+  /** Mudar de âmbito limpa os filtros (são o vocabulário daquele âmbito). */
+  const chooseScope = (nextScope: SearchScopeId) => {
+    setFilters({});
+    setScope(nextScope);
+  };
+
+  /**
+   * Aplica (ou retira) um filtro do âmbito: filtrar por uma fonte leva a
+   * pesquisa para o âmbito onde esse filtro existe — sem isso, clicar num jornal
+   * não mudava nada em «Tudo».
+   */
+  const applyFilter = (scopeId: SearchScopeId, name: string, value: string) => {
+    const ativo = filters[name] === value;
+    if (scopeId !== scope) {
+      setScope(scopeId);
+      setFilters(ativo ? {} : { [name]: value });
+      return;
+    }
+    setFilters((previous) => {
+      const next = { ...previous };
+      if (ativo) delete next[name];
+      else next[name] = value;
+      return next;
+    });
+  };
 
   // Sugestões (com atraso curto para não bater na API a cada tecla).
   useEffect(() => {
@@ -169,11 +265,13 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
     const value = (term ?? query).trim();
     if (!value) return;
     setQuery(value);
-    if (nextScope) setScope(nextScope);
+    if (nextScope && nextScope !== scope) {
+      chooseScope(nextScope);
+    }
     setHighlight(-1);
     setShowSuggestions(false);
     if (value === submitted && (nextScope ?? scope) === scope) {
-      void run(value, nextScope ?? scope);
+      void run(value, nextScope ?? scope, filters);
       return;
     }
     setSubmitted(value);
@@ -238,6 +336,53 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
     return result.groups.find((group) => group.scope === scopeId)?.total ?? 0;
   };
 
+  /** Cartões de filtros a mostrar: os do âmbito ativo (ou os principais, em «Tudo»). */
+  const filterCards = useMemo(() => {
+    const grupos = (result?.groups ?? []).filter((group) => (group.filters ?? []).some((f) => f.values.length));
+    const escolhidos = scope === "all" ? grupos.slice(0, 3) : grupos.filter((group) => group.scope === scope);
+    return escolhidos.map((group) => ({
+      group,
+      filters: (group.filters ?? []).filter((f) => f.values.length),
+    }));
+  }, [result, scope]);
+
+  /** Etiqueta legível de um valor filtrado (ex.: `fonte:jornal-…` → «Jornal Económico»). */
+  const filterLabel = (name: string, value: string): string => {
+    for (const group of result?.groups ?? []) {
+      for (const filter of group.filters ?? []) {
+        if (filter.name !== name) continue;
+        const found = filter.values.find((entry) => entry.key === value);
+        if (found) return found.label ?? found.key;
+      }
+    }
+    return value;
+  };
+
+  const activeFilters = Object.entries(filters);
+  /** Há mais resultados no âmbito ativo? (só aí faz sentido paginar) */
+  const haMais = scope !== "all" && (visibleGroups.some((group) => group.items.length < group.total));
+  const loadMoreRef = useRef(loadMore);
+  loadMoreRef.current = loadMore;
+
+  /**
+   * *Scroll* infinito: quando a sentinela do fundo entra no ecrã, carrega a
+   * página seguinte do âmbito ativo. O `rootMargin` adianta o pedido para o
+   * utilizador não ficar à espera, e o botão «Carregar mais» continua lá para
+   * teclado/leitor de ecrã.
+   */
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !haMais) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) void loadMoreRef.current();
+      },
+      { rootMargin: "240px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [haMais, offset, scope]);
+
   const scopeList: SearchScope[] = scopes.length
     ? scopes
     : [{ id: "all", label: "Tudo" }, ...(result?.scopes ?? [])];
@@ -263,7 +408,7 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
           onFocus={() => setShowSuggestions(true)}
           onBlur={() => window.setTimeout(() => setShowSuggestions(false), 150)}
           onKeyDown={onKeyDown}
-          placeholder="Pesquisar em tudo: recolha, contratos (PT/ES), empresas, marcas, firmas, notícias e mercado…"
+          placeholder="Pesquisar em tudo: recolha, contratos (PT/ES), empresas, marcas, firmas, notícias, imprensa e mercado…"
           aria-label="Pesquisar em todos os dados do IQ OS"
           className={`w-full bg-transparent outline-none placeholder:text-muted-foreground ${compact ? "text-sm" : "text-base"}`}
         />
@@ -327,7 +472,7 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
         <p className="mt-2 max-w-xl text-center text-sm text-muted-foreground">
           Uma caixa para tudo o que o IQ OS sabe: <strong className="font-medium text-foreground">recolha</strong> de sites,{" "}
           contratos públicos (Portugal e Espanha), entidades contratantes e empresas adjudicatárias de Espanha, empresas,
-          marcas, firmas, notícias, mercado e CRM.
+          marcas, firmas, notícias de mercado, imprensa recolhida, mercado e CRM.
         </p>
 
         <div className="mt-7 w-full">{searchBox(false)}</div>
@@ -337,7 +482,7 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
             <button
               key={entry.id}
               type="button"
-              onClick={() => setScope(entry.id)}
+              onClick={() => chooseScope(entry.id)}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] transition ${
                 scope === entry.id
                   ? "border-sky-400/40 bg-sky-400/10 text-sky-100"
@@ -390,7 +535,7 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
             <button
               key={entry.id}
               type="button"
-              onClick={() => setScope(entry.id)}
+              onClick={() => chooseScope(entry.id)}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] transition ${
                 scope === entry.id
                   ? "border-sky-400/40 bg-sky-400/10 text-sky-100"
@@ -414,6 +559,17 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
         ) : result ? (
           <>
             {numberFormat.format(result.total)} resultados em {result.took_ms} ms para «{result.query}»
+            {activeFilters.map(([name, value]) => (
+              <button
+                key={`${name}:${value}`}
+                type="button"
+                onClick={() => applyFilter(scope, name, value)}
+                className="inline-flex items-center gap-1 rounded-full border border-sky-400/40 bg-sky-400/10 px-2 py-0.5 text-[10px] text-sky-100"
+                title={`Retirar o filtro ${name}`}
+              >
+                {filterLabel(name, value)} <X size={10} />
+              </button>
+            ))}
           </>
         ) : null}
         {result?.groups?.length ? (
@@ -454,11 +610,27 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
               key={group.scope}
               group={group}
               view={view}
-              showHeader={scope === "all"}
-              onSeeAll={() => setScope(group.scope)}
+              showHeader
+              onSeeAll={() => chooseScope(group.scope)}
+              onLoadMore={scope === "all" ? undefined : loadMore}
+              loading={loadingMore}
               onOpenItem={openItem}
             />
           ))}
+
+          {/* Sentinela do *scroll* infinito: ao entrar no ecrã pede a página seguinte. */}
+          {haMais ? (
+            <div
+              ref={sentinelRef}
+              className="flex h-12 items-center justify-center gap-1.5 text-[11px] text-muted-foreground"
+            >
+              {loadingMore ? (
+                <>
+                  <Loader2 size={12} className="animate-spin" /> A carregar mais…
+                </>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <aside className="space-y-3">
@@ -471,7 +643,7 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
                   <li key={entry.id}>
                     <button
                       type="button"
-                      onClick={() => setScope(entry.id)}
+                      onClick={() => chooseScope(entry.id)}
                       title={entry.hint}
                       className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-[11px] hover:bg-white/5 ${
                         scope === entry.id ? "bg-white/10 text-foreground" : "text-muted-foreground"
@@ -489,24 +661,38 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
             </ul>
           </div>
 
-          {result?.facets?.sources?.length ? (
-            <div className="glass-card rounded-2xl p-4">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fontes da recolha</h2>
-              <div className="mt-2 flex flex-wrap gap-1">
-                {result.facets.sources.slice(0, 12).map((facet) => (
-                  <button
-                    key={facet.key}
-                    type="button"
-                    onClick={() => submit(facet.key, "scraped")}
-                    className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-white/10"
-                    title={`Pesquisar «${facet.key}» na recolha`}
-                  >
-                    {facet.key} · {facet.count}
-                  </button>
-                ))}
-              </div>
+          {filterCards.map(({ group, filters: groupFilters }) => (
+            <div key={group.scope} className="glass-card rounded-2xl p-4">
+              <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {SCOPE_ICON[group.scope] ?? <Search size={12} />} {group.label}
+              </h2>
+              {groupFilters.map((filter) => (
+                <div key={filter.name} className="mt-2">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70">{filter.label}</p>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {filter.values.slice(0, 12).map((value) => {
+                      const ativo = filters[filter.name] === value.key;
+                      return (
+                        <button
+                          key={value.key}
+                          type="button"
+                          onClick={() => applyFilter(group.scope, filter.name, value.key)}
+                          className={`rounded-full border px-2 py-0.5 text-[10px] transition ${
+                            ativo
+                              ? "border-sky-400/40 bg-sky-400/10 text-sky-100"
+                              : "border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10"
+                          }`}
+                          title={`${filter.label}: ${value.label ?? value.key}`}
+                        >
+                          {value.label ?? value.key} · {value.count}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
-          ) : null}
+          ))}
 
           {result?.facets?.tags?.length ? (
             <div className="glass-card rounded-2xl p-4">
@@ -518,8 +704,9 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
                   <button
                     key={facet.key}
                     type="button"
-                    onClick={() => submit(facet.key, "scraped")}
+                    onClick={() => submit(facet.key, "imprensa")}
                     className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-white/10"
+                    title={`Pesquisar «#${facet.key}» na imprensa`}
                   >
                     #{facet.key} · {facet.count}
                   </button>
@@ -530,8 +717,8 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
 
           <p className="px-1 text-[10px] leading-relaxed text-muted-foreground">
             A pesquisa cobre a recolha, os contratos públicos (Portugal e Espanha/PLACSP), as entidades de Espanha (quem
-            contrata e quem ganha), o cadastro de entidades, INPI, RNPC, notícias e mercado. O CRM só é incluído quando há
-            sessão, porque é privado por utilizador.
+            contrata e quem ganha), o cadastro de entidades, INPI, RNPC, notícias de mercado e imprensa recolhida dos
+            jornais. O CRM só é incluído quando há sessão, porque é privado por utilizador.
           </p>
         </aside>
       </div>
@@ -591,31 +778,54 @@ function ScopeResults({
   view,
   showHeader,
   onSeeAll,
+  onLoadMore,
+  loading,
   onOpenItem,
 }: {
   group: SearchGroup;
   view: ItemsView;
   showHeader: boolean;
   onSeeAll: () => void;
+  /** Página seguinte do âmbito (só quando a pesquisa está num âmbito só). */
+  onLoadMore?: () => void;
+  loading?: boolean;
   onOpenItem: (item: SearchItem) => void;
 }) {
   if (!group.items.length && !group.error) return null;
 
+  const faltam = Math.max(0, group.total - group.items.length);
+
   return (
     <section>
       {showHeader ? (
-        <div className="mb-2 flex items-center gap-2 px-1">
+        <div className="mb-2 flex flex-wrap items-center gap-2 px-1">
           <span className="text-muted-foreground">{SCOPE_ICON[group.scope] ?? <Search size={13} />}</span>
           <h2 className="text-sm font-semibold">{group.label}</h2>
           <span className="text-[11px] text-muted-foreground">{numberFormat.format(group.total)}</span>
-          {group.total > group.items.length ? (
-            <button
-              type="button"
-              onClick={onSeeAll}
-              className="ml-auto inline-flex items-center gap-1 text-[11px] text-sky-300 hover:underline"
-            >
-              Ver todos <ArrowRight size={11} />
-            </button>
+          {faltam > 0 ? (
+            <span className="text-[10px] text-muted-foreground/70">
+              — a mostrar {numberFormat.format(group.items.length)} de {numberFormat.format(group.total)}
+            </span>
+          ) : null}
+          {faltam > 0 ? (
+            onLoadMore ? (
+              <button
+                type="button"
+                onClick={onLoadMore}
+                disabled={loading}
+                className="ml-auto inline-flex items-center gap-1 text-[11px] text-sky-300 hover:underline disabled:opacity-50"
+              >
+                {loading ? <Loader2 size={11} className="animate-spin" /> : <ArrowRight size={11} />} Carregar mais
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onSeeAll}
+                className="ml-auto inline-flex items-center gap-1 text-[11px] text-sky-300 hover:underline"
+              >
+                Ver todos <ArrowRight size={11} />
+              </button>
+            )
           ) : null}
         </div>
       ) : null}

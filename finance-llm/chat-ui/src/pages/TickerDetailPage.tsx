@@ -51,6 +51,11 @@ import type {
 } from "../types";
 import { TradingViewChart, tradingViewSymbol } from "./RealtimeChartPage";
 import { TickerKpiCards } from "../components/TickerKpiCards";
+import {
+  addSentimentMarketFavourite,
+  getSentimentMarketWatchlist,
+  removeSentimentMarketFavourite,
+} from "../sentimentApi";
 
 type Tab = "overview" | "chart" | "analysis" | "forecast" | "sentiment";
 
@@ -150,6 +155,41 @@ export function TickerDetailPage({
   const [loadingForecast, setLoadingForecast] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aiQuestion, setAiQuestion] = useState("");
+  /* -------------------------------------------------------- favoritos */
+  const [isFavourite, setIsFavourite] = useState(false);
+  const [favBusy, setFavBusy] = useState(false);
+  const [favError, setFavError] = useState<string | null>(null);
+
+  /** A estrela tem de refletir o que está **guardado**, não o que se deseja. */
+  useEffect(() => {
+    let active = true;
+    getSentimentMarketWatchlist()
+      .then((payload) => {
+        if (active) setIsFavourite(payload.tickers.includes(ticker.toUpperCase()));
+      })
+      .catch(() => {
+        if (active) setIsFavourite(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [ticker]);
+
+  /** Guardar/retirar dos favoritos — a mesma lista que o painel do mercado usa. */
+  async function toggleFavourite() {
+    setFavBusy(true);
+    setFavError(null);
+    try {
+      const payload = isFavourite
+        ? await removeSentimentMarketFavourite(ticker)
+        : await addSentimentMarketFavourite(ticker);
+      setIsFavourite(payload.watchlist.includes(ticker.toUpperCase()));
+    } catch (err) {
+      setFavError(err instanceof Error ? err.message : "Não foi possível guardar o favorito.");
+    } finally {
+      setFavBusy(false);
+    }
+  }
 
   async function loadAll() {
     setLoading(true);
@@ -238,8 +278,17 @@ export function TickerDetailPage({
           <button onClick={loadAll} className="neumorphic-btn p-2 rounded-xl hover:text-white transition" title="Atualizar">
             <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
           </button>
-          <button className="neumorphic-btn p-2 rounded-xl hover:text-white transition" title="Favorito">
-            <Star size={18} />
+          <button
+            onClick={() => void toggleFavourite()}
+            disabled={favBusy}
+            className={`neumorphic-btn p-2 rounded-xl hover:text-white transition disabled:opacity-40 ${
+              isFavourite ? "text-amber-300" : ""
+            }`}
+            title={
+              isFavourite ? "Retirar dos favoritos" : "Guardar nos favoritos (aparece no painel do mercado)"
+            }
+          >
+            <Star size={18} style={{ fill: isFavourite ? "currentColor" : "none" }} />
           </button>
         </div>
       </header>
@@ -248,6 +297,13 @@ export function TickerDetailPage({
         <div className="mx-4 sm:mx-6 mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300 flex items-center gap-2 glow-accent">
           <AlertTriangle size={18} />
           {error}
+        </div>
+      )}
+
+      {favError && (
+        <div className="mx-4 sm:mx-6 mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200 flex items-center gap-2">
+          <AlertTriangle size={18} />
+          {favError}
         </div>
       )}
 

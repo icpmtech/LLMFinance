@@ -223,6 +223,7 @@ from api.proxy_routes import router as proxy_router
 from api.crm_routes import router as crm_router
 from api.crm_suite_routes import router as crm_suite_router
 from api.contratos_es_routes import router as contratos_es_router
+from api.contratos_fr_routes import router as contratos_fr_router
 from api.ontology_routes import router as ontology_router
 from api.ontology_workspace_routes import router as ontology_workspace_router
 from api.scraper_routes import router as scraper_router
@@ -237,6 +238,7 @@ from api.office_routes import router as office_router
 from api.cms_routes import router as cms_router
 from api.shop_routes import router as shop_router
 from api.rss_routes import router as rss_router
+from api.news_routes import router as news_router
 from api.email_routes import router as email_router
 from api.visualizador_routes import router as visualizador_router
 from api.researcher_routes import router as researcher_router
@@ -510,6 +512,7 @@ app.include_router(proxy_router)
 app.include_router(crm_suite_router)
 app.include_router(crm_router)
 app.include_router(contratos_es_router)
+app.include_router(contratos_fr_router)
 app.include_router(ontology_router)
 app.include_router(ontology_workspace_router)
 app.include_router(scraper_router)
@@ -527,6 +530,8 @@ app.include_router(cms_router)
 app.include_router(shop_router)
 # Leitor de RSS: fontes, artigos e digest em `/rss/*`.
 app.include_router(rss_router)
+# Notícias indexadas: recolha e pesquisa em `/news/*`.
+app.include_router(news_router)
 app.include_router(email_router)
 app.include_router(visualizador_router)
 app.include_router(researcher_router)
@@ -2762,10 +2767,20 @@ def contracts_export_pdf(req: ContractAnalyticsRequest = Body(...)):
 # chamado quando nenhuma delas corresponde. Pedidos que não aceitem HTML e
 # caminhos com extensão de ficheiro continuam a devolver 404.
 # ---------------------------------------------------------------------------
+# Só estes sufixos são mesmo recursos estáticos. Tudo o resto — incluindo nomes
+# com ponto, como `/tickers/CTT.LS` — é um endereço da SPA e recebe o `index.html`
+# (antes, o ponto de `CTT.LS` fazia o deep link devolver 404).
+_ASSET_SUFFIXES = {
+    ".js", ".mjs", ".cjs", ".css", ".map", ".json", ".png", ".jpg", ".jpeg", ".gif",
+    ".svg", ".webp", ".avif", ".ico", ".woff", ".woff2", ".ttf", ".otf", ".txt",
+    ".webmanifest", ".wasm", ".pdf", ".mp4", ".webm",
+}
+
+
 @app.get("/{full_path:path}")
 def serve_spa_deep_link(request: Request, full_path: str):
     """Devolve o `index.html` para endereços da interface abertos diretamente."""
-    if full_path and "." in Path(full_path).name:
+    if Path(full_path or "").suffix.lower() in _ASSET_SUFFIXES:
         raise HTTPException(status_code=404, detail="Not Found")
     if not _accepts_html(request):
         raise HTTPException(status_code=404, detail="Not Found")

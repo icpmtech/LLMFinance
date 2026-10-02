@@ -124,8 +124,8 @@ export const APP_MODULES: AppModule[] = [
   {
     id: "noticias",
     label: "Notícias e feeds",
-    hint: "Leitor de RSS: fontes, artigos, guardados e digest",
-    ids: ["rss"],
+    hint: "Leitor de RSS e índice de notícias: recolher e procurar por ticker, tema e tom",
+    ids: ["rss", "noticias"],
   },
   {
     id: "comercio",

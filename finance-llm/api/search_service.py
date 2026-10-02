@@ -2,9 +2,9 @@
 
 Uma pergunta, um resultado por área. O `unified_search` dispara em paralelo uma
 consulta por **âmbito** (recolha, contratos, contratos de Espanha, entidades de
-Espanha, empresas, marcas, firmas, notícias, mercado e CRM) e devolve grupos
-normalizados — cada item com título, subtítulo, excerto, data, etiquetas e
-(quando faz sentido) a vista interna que o abre.
+Espanha, empresas, marcas, firmas, notícias de mercado, imprensa recolhida,
+mercado e CRM) e devolve grupos normalizados — cada item com título, subtítulo,
+excerto, data, etiquetas e (quando faz sentido) a vista interna que o abre.
 
 Decisões importantes:
 
@@ -24,6 +24,8 @@ Decisões importantes:
 """
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import re
 import unicodedata
@@ -36,6 +38,8 @@ from elasticsearch import Elasticsearch
 
 from api.elasticsearch_client import (
     CRM_INDEX,
+    NON_NEWS_SOURCE_IDS,
+    NON_NEWS_SOURCE_PREFIXES,
     contratos_es_autocomplete,
     ensure_indices,
     get_es_client,
@@ -44,6 +48,7 @@ from api.elasticsearch_client import (
     search_contracts,
     search_entities,
     search_firmas,
+    search_people_faceted,
     search_scraped,
     search_social,
     search_trademarks,
@@ -57,18 +62,116 @@ PRICES_INDEX = "finance_prices"
 # Âmbitos mostrados na página. `all` não é um grupo: significa «todos».
 SCOPES: List[Dict[str, Any]] = [
     {"id": "scraped", "label": "Recolha", "hint": "Dados recolhidos de sites (scraping)"},
-    {"id": "social", "label": "Redes sociais", "hint": "Publicações de LinkedIn, TikTok, Reddit e Facebook"},
+    {"id": "social", "label": "Redes sociais", "hint": "Publicações de LinkedIn, TikTok, Reddit e Facebook — filtráveis por tipo e plataforma"},
     {"id": "contracts", "label": "Contratos", "hint": "Contratação pública (portal base)"},
     {"id": "contracts_es", "label": "Contratos ES", "hint": "Contratação pública de Espanha (PLACSP)"},
     {"id": "entities_es", "label": "Entidades ES", "hint": "Órgãos adjudicantes e empresas adjudicatárias de Espanha"},
     {"id": "entities", "label": "Empresas", "hint": "Cadastro de entidades"},
+    {"id": "pessoas", "label": "Pessoas", "hint": "Pessoas com ficha (CIRE, registo societário e política) — filtráveis por origem e fonte"},
+    {"id": "politicos", "label": "Políticos", "hint": "Políticos portugueses (Wikipédia e parlamento) — filtráveis por partido, círculo e cargo"},
+    {"id": "wikipedia", "label": "Wikipédia", "hint": "Enciclopédia livre (PT e EN), consultada em direto"},
     {"id": "trademarks", "label": "Marcas", "hint": "Marcas registadas (INPI)"},
     {"id": "firmas", "label": "Firmas", "hint": "Firmas e denominações (RNPC)"},
-    {"id": "news", "label": "Notícias", "hint": "Notícias de mercado por ticker"},
+    {"id": "news", "label": "Notícias Elastic", "hint": "Notícias de mercado no índice `finance_news` (por ativo e por tema)"},
+    {"id": "imprensa", "label": "Imprensa", "hint": "Notícias recolhidas dos jornais (SAPO, Lusa, Jornal Económico, Observador, ECO…)"},
     {"id": "market", "label": "Mercado", "hint": "Tickers e cotações indexadas"},
     {"id": "crm", "label": "CRM", "hint": "Contas, contactos e oportunidades", "session": True},
 ]
 SCOPE_IDS = [scope["id"] for scope in SCOPES]
+
+# Filtros (facetas) de cada âmbito: nome legível → campo do índice e etiqueta.
+# O âmbito de origem decide o vocabulário: pedir `partido` no âmbito das
+# notícias é ignorado, porque lá esse filtro não existe.
+SCOPE_FILTERS: Dict[str, Dict[str, Dict[str, str]]] = {
+    "social": {
+        "tipo": {"field": "kind", "label": "Tipo"},
+        "plataforma": {"field": "platform", "label": "Plataforma"},
+        "etiqueta": {"field": "tags", "label": "Etiqueta"},
+    },
+    "pessoas": {
+        "origem": {"field": "roles.role_org", "label": "Origem"},
+        "fonte": {"field": "source", "label": "Fonte"},
+    },
+    "politicos": {
+        "partido": {"field": "metadata.partido.keyword", "label": "Partido"},
+        "circulo": {"field": "metadata.circulo_eleitoral.keyword", "label": "Círculo eleitoral"},
+        "cargo": {"field": "metadata.office.keyword", "label": "Cargo"},
+        "fonte": {"field": "source", "label": "Fonte"},
+    },
+    "imprensa": {"fonte": {"field": "source_id", "label": "Jornal"}},
+    "scraped": {"fonte": {"field": "source_id", "label": "Fonte"}},
+    "wikipedia": {"fonte": {"field": "lang", "label": "Wikipédia"}},
+}
+
+#: Políticos: ficha da Wikipédia **ou** ficha do parlamento (as duas famílias que
+#: existem em `finance_people`, identificadas pelo `source`).
+POLITICOS_QUERY: Dict[str, Any] = {
+    "bool": {
+        "should": [
+            {"prefix": {"nif": "PT-WIKI-PT:"}},
+            {"prefix": {"nif": "PT-AR-BID:"}},
+            {"exists": {"field": "metadata.partido"}},
+        ],
+        "minimum_should_match": 1,
+    }
+}
+
+#: Nome apresentável de cada fonte de pessoas.
+PEOPLE_SOURCE_LABELS = {
+    "pt.wikipedia.org": "Wikipédia PT",
+    "parlamento.pt/deputados": "Parlamento",
+    "cire": "CIRE",
+    "societario": "Registo societário",
+    "publicacoes_mj": "Publicações do MJ",
+}
+
+
+def _parse_filters(raw: Optional[str]) -> Dict[str, str]:
+    """Filtros pedidos pela interface (`{"partido":"PS"}` ou `partido:PS`)."""
+    text = (raw or "").strip()
+    if not text:
+        return {}
+    if text.startswith("{"):
+        try:
+            parsed = json.loads(text)
+        except ValueError:
+            return {}
+        if isinstance(parsed, dict):
+            return {str(k): str(v) for k, v in parsed.items() if v not in (None, "")}
+        return {}
+    pairs: Dict[str, str] = {}
+    for chunk in text.split(","):
+        name, _, value = chunk.partition(":")
+        if name.strip() and value.strip():
+            pairs[name.strip()] = value.strip()
+    return pairs
+
+
+def _scope_filter_map(scope_id: str, filters: Optional[Dict[str, str]]) -> Dict[str, str]:
+    """Filtros de um âmbito traduzidos para os campos do índice (nome → valor)."""
+    spec = SCOPE_FILTERS.get(scope_id) or {}
+    resolved: Dict[str, str] = {}
+    for name, value in (filters or {}).items():
+        entry = spec.get(name)
+        if entry and str(value).strip():
+            resolved[entry["field"]] = str(value)
+    return resolved
+
+
+def _filter_panel(scope_id: str, facets: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """Painel de filtros do âmbito: nome, etiqueta e valores contados.
+
+    Cada valor leva `key` (o que se envia no filtro) e `label` (o que se lê no
+    ecrã), o que permite mostrar o nome do jornal e filtrar pelo `source_id`.
+    """
+    spec = SCOPE_FILTERS.get(scope_id) or {}
+    panel: List[Dict[str, Any]] = []
+    for name, values in (facets or {}).items():
+        entry = spec.get(name)
+        if not entry or not values:
+            continue
+        panel.append({"name": name, "label": entry["label"], "values": values[:12]})
+    return panel
 
 # Vista interna de cada âmbito, quando o resultado abre uma ficha dentro do IQ OS.
 CONTRATOS_ES_VIEW = "contratos-es"
@@ -264,8 +367,11 @@ def _scraped_values(data: Dict[str, Any]) -> Dict[str, Any]:
     return valores
 
 
-def _search_scraped_group(q: str, size: int, offset: int) -> Dict[str, Any]:
-    result = search_scraped(q=q or None, size=size, from_=offset, sort="relevance" if q else "recent")
+def _search_scraped_group(q: str, size: int, offset: int, filters: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    source = (filters or {}).get("fonte")
+    result = search_scraped(
+        q=q or None, size=size, from_=offset, sort="relevance" if q else "recent", source_id=source
+    )
     if result.get("error"):
         return _error_group("scraped", _label_for("scraped"), str(result["error"]))
     items = []
@@ -293,7 +399,18 @@ def _search_scraped_group(q: str, size: int, offset: int) -> Dict[str, Any]:
             )
         )
     total = int(result.get("total") or 0)
-    grupo = {**_group("scraped", _label_for("scraped"), items, total, 0), "facets": result.get("facets") or {}}
+    facets = result.get("facets") or {}
+    grupo = {**_group("scraped", _label_for("scraped"), items, total, 0), "facets": facets}
+    # Fonte escolhida no painel: mostra-se pelo nome legível, filtra-se pelo id.
+    grupo["filters"] = _filter_panel(
+        "scraped",
+        {
+            "fonte": [
+                {"key": entry.get("id") or entry["key"], "label": entry["key"], "count": entry["count"]}
+                for entry in (facets.get("publishers") or [])
+            ]
+        },
+    )
     # Sentimento do conjunto de resultados (não só da página): é o que permite
     # dizer o tom da pesquisa, e não apenas o de cada notícia.
     if result.get("sentiment"):
@@ -307,6 +424,17 @@ _SOCIAL_PLATFORM_LABELS = {
     "tiktok": "TikTok",
     "reddit": "Reddit",
     "facebook": "Facebook",
+}
+
+#: Nome apresentável de cada **tipo** de publicação social.
+_SOCIAL_KIND_LABELS = {
+    "post": "Publicação",
+    "video": "Vídeo",
+    "comment": "Comentário",
+    "profile": "Perfil",
+    "page": "Página",
+    "article": "Artigo",
+    "short": "Short",
 }
 
 
@@ -329,9 +457,22 @@ def _social_badges(hit: Dict[str, Any]) -> List[str]:
     return badges
 
 
-def _search_social_group(q: str, size: int, offset: int) -> Dict[str, Any]:
-    """Publicações recolhidas das redes sociais (âmbito «Redes sociais»)."""
-    result = search_social(q=q or None, size=size, from_=offset, sort="relevance" if q else "recent")
+def _search_social_group(q: str, size: int, offset: int, filters: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """Publicações recolhidas das redes sociais (âmbito «Redes sociais»).
+
+    Aceita os filtros do âmbito — **tipo** de publicação (`post`, `video`…),
+    plataforma e etiqueta — e devolve o painel com as contagens de cada um.
+    """
+    ativos = filters or {}
+    result = search_social(
+        q=q or None,
+        platform=ativos.get("plataforma"),
+        kinds=[ativos["tipo"]] if ativos.get("tipo") else None,
+        tags=[ativos["etiqueta"]] if ativos.get("etiqueta") else None,
+        size=size,
+        from_=offset,
+        sort="relevance" if q else "recent",
+    )
     if result.get("error"):
         return _error_group("social", _label_for("social"), str(result["error"]))
     items = []
@@ -370,7 +511,26 @@ def _search_social_group(q: str, size: int, offset: int) -> Dict[str, Any]:
             )
         )
     total = int(result.get("total") or 0)
-    grupo = {**_group("social", _label_for("social"), items, total, 0), "facets": result.get("facets") or {}}
+    facets = result.get("facets") or {}
+    grupo = {**_group("social", _label_for("social"), items, total, 0), "facets": facets}
+    grupo["filters"] = _filter_panel(
+        "social",
+        {
+            "tipo": [
+                {"key": b["key"], "label": _SOCIAL_KIND_LABELS.get(str(b["key"]), b["key"]), "count": b["count"]}
+                for b in (facets.get("kinds") or [])
+            ],
+            "plataforma": [
+                {
+                    "key": b["key"],
+                    "label": _SOCIAL_PLATFORM_LABELS.get(str(b["key"]), b["key"]),
+                    "count": b["count"],
+                }
+                for b in (facets.get("platforms") or [])
+            ],
+            "etiqueta": [{"key": b["key"], "count": b["count"]} for b in (facets.get("tags") or [])],
+        },
+    )
     if result.get("sentiment"):
         grupo["sentiment"] = result["sentiment"]
     return grupo
@@ -588,8 +748,12 @@ def _search_news_group(client: Elasticsearch, q: str, size: int, offset: int) ->
             "query": {
                 "bool": {
                     "should": [
-                        {"multi_match": {"query": q, "fields": ["title^4", "translated_title^3", "summary^2", "summary_pt^2", "topics^2", "entities.name^2", "publisher"], "lenient": True}},
+                        {"multi_match": {"query": q, "fields": ["title^4", "translated_title^3", "summary^2", "summary_pt^2", "topics^2", "entities.name^2", "publisher", "topic^3"], "operator": "and", "lenient": True}},
                         {"term": {"ticker": q.upper()}},
+                        # O tema com que a notícia foi recolhida (`topic`, em minúsculas na
+                        # escrita): sem isto, uma notícia recolhida por tema só aparecia
+                        # quando o termo calhava estar no título.
+                        {"term": {"topic": q.strip().lower()}},
                     ],
                     "minimum_should_match": 1,
                 }
@@ -606,21 +770,293 @@ def _search_news_group(client: Elasticsearch, q: str, size: int, offset: int) ->
     items = []
     for hit in hits.get("hits", []):
         row = hit.get("_source") or {}
+        ticker = str(row.get("ticker") or "").strip()
+        topic = str(row.get("topic") or "").strip()
+        # De onde vem a notícia: o ativo ou (sem ativo) o tema com que foi recolhida.
+        origin = ticker or (f"tema: {topic}" if topic else "")
+        badges = [
+            badge
+            for badge in [row.get("sentiment"), topic if not ticker else None, *(row.get("topics") or [])[:3]]
+            if badge
+        ]
         items.append(
             _item(
                 "news",
                 hit.get("_id") or row.get("url") or "",
                 row.get("translated_title") or row.get("title") or "(notícia)",
-                subtitle=" · ".join(filter(None, [row.get("publisher"), row.get("ticker")])),
+                subtitle=" · ".join(filter(None, [row.get("publisher"), origin])),
                 snippet=row.get("summary_pt") or row.get("translated_summary") or row.get("summary") or "",
                 url=row.get("url") or "",
                 date=row.get("published"),
-                badges=[row.get("sentiment"), *(row.get("topics") or [])[:3]],
-                open_view={"view": "ticker-detail", "arg": str(row.get("ticker"))} if row.get("ticker") else None,
+                badges=badges,
+                open_view={"view": "ticker-detail", "arg": ticker} if ticker else None,
                 score=hit.get("_score"),
             )
         )
-    return _group("news", _label_for("news"), items, total, 0)
+    market_total = total
+
+    # Só o índice `finance_news`: notícias de mercado por ativo e por tema. A
+    # imprensa recolhida dos jornais vive na **recolha** e tem âmbito próprio
+    # (`imprensa`), para não se misturarem duas coisas com origens diferentes.
+    return _group("news", _label_for("news"), items, market_total, 0)
+
+
+def _search_imprensa_group(q: str, size: int, offset: int, filters: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """Imprensa recolhida dos jornais (índice da recolha, sem cadastro).
+
+    É a outra metade das notícias do IQ OS: o índice `finance_scraped` tem
+    artigos da SAPO, Lusa, Jornal Económico, Observador, ECO, Dinheiro Vivo…
+    misturados com cadastro de empresas (`empresas-*`, `iberinform-*`) e dados de
+    ensaio (`tmp-*`), que ficam de fora — ver `NON_NEWS_SOURCE_*`. Os nomes dos
+    jornais estão em `source_name`; o subtítulo de cada item leva-o. O filtro
+    `fonte` limita a um jornal (é o que faz o clique numa faceta de fonte).
+    """
+    source = (filters or {}).get("fonte")
+    result = search_scraped(
+        q=q or None,
+        size=size,
+        from_=offset,
+        sort="relevance" if q else "recent",
+        source_id=source,
+        exclude_prefixes=NON_NEWS_SOURCE_PREFIXES,
+        exclude_ids=NON_NEWS_SOURCE_IDS,
+    )
+    if result.get("error"):
+        return _error_group("imprensa", _label_for("imprensa"), str(result["error"]))
+    items = []
+    for hit in result.get("items", []):
+        items.append(
+            _item(
+                "imprensa",
+                hit.get("item_id") or hit.get("url") or "",
+                hit.get("title") or "(notícia)",
+                subtitle=" · ".join(
+                    filter(None, [hit.get("source_name") or hit.get("source_id"), "recolha"])
+                ),
+                snippet=hit.get("summary") or hit.get("text") or "",
+                url=hit.get("url") or "",
+                date=hit.get("scraped_at"),
+                badges=[*(hit.get("tags") or [])[:3]],
+                sentiment={
+                    "label": hit.get("sentiment") or "",
+                    "polarity": hit.get("sentiment_score"),
+                    "engine": hit.get("sentiment_engine") or "",
+                }
+                if hit.get("sentiment")
+                else None,
+            )
+        )
+    # As facetas alimentam o painel lateral de fontes/jornais: o âmbito da
+    # imprensa traz as suas (sem cadastro) para que o painel continue a fazer
+    # sentido quando a pesquisa está limitada a esse âmbito.
+    facets = result.get("facets") or {}
+    grupo = {
+        **_group("imprensa", _label_for("imprensa"), items, int(result.get("total") or 0), 0),
+        "facets": facets,
+    }
+    grupo["filters"] = _filter_panel(
+        "imprensa",
+        {
+            "fonte": [
+                {"key": entry.get("id") or entry["key"], "label": entry["key"], "count": entry["count"]}
+                for entry in (facets.get("publishers") or [])
+            ]
+        },
+    )
+    return grupo
+
+
+def _people_subtitle(row: Dict[str, Any], scope_id: str) -> str:
+    """Subtítulo de uma ficha de pessoa: partido, círculo, cargos e fonte."""
+    meta = row.get("metadata") or {}
+    fonte = PEOPLE_SOURCE_LABELS.get(str(row.get("source") or ""), str(row.get("source") or ""))
+    if scope_id == "politicos":
+        return " · ".join(
+            part for part in (row.get("name") and fonte, meta.get("partido"), meta.get("circulo_eleitoral")) if part
+        )
+    papeis = [str(entry.get("role") or "") for entry in (row.get("roles") or []) if entry.get("role")]
+    cargo = papeis[0] if papeis else ""
+    return " · ".join(
+        part for part in (cargo, f"{int(row.get('roles_count') or 0)} cargos" if row.get("roles_count") else "", fonte) if part
+    )
+
+
+def _people_item(scope_id: str, row: Dict[str, Any]) -> Dict[str, Any]:
+    """Item da pesquisa para uma ficha de `finance_people`."""
+    meta = row.get("metadata") or {}
+    fonte = PEOPLE_SOURCE_LABELS.get(str(row.get("source") or ""), str(row.get("source") or ""))
+    url = meta.get("wiki_url") or meta.get("url_biografia") or ""
+    if scope_id == "politicos":
+        badges = [meta.get("partido"), meta.get("circulo_eleitoral"), fonte]
+        extra = {"partido": meta.get("partido") or "", "cargo": meta.get("office") or "", "fonte": fonte}
+    else:
+        etiquetas = [str(t) for t in (row.get("tags") or []) if t not in (None, "")]
+        badges = [*etiquetas[:2], fonte]
+        extra = {
+            "cargos": [
+                " ".join(part for part in (entry.get("role"), entry.get("company_name")) if part)
+                for entry in (row.get("roles") or [])[:6]
+            ]
+        }
+    return _item(
+        scope_id,
+        row.get("nif") or "",
+        row.get("name") or "(sem nome)",
+        subtitle=_people_subtitle(row, scope_id),
+        snippet=row.get("biography") or "",
+        url=url,
+        badges=badges,
+        image=meta.get("photo_url") or row.get("photo_url") or "",
+        extra=extra,
+        open_view={"view": "person-detail", "arg": str(row.get("nif") or "")},
+    )
+
+
+#: Campos que a pesquisa de políticos também varre além do nome: sem isto,
+#: procurar «deputado» ou «PS» não encontrava nenhum político.
+POLITICOS_MATCH_FIELDS = ["metadata.office", "metadata.partido", "metadata.circulo_eleitoral"]
+
+
+def _search_people_scope(
+    scope_id: str,
+    q: str,
+    size: int,
+    offset: int,
+    filters: Optional[Dict[str, str]] = None,
+    base_query: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Âmbitos «Pessoas» e «Políticos» (mesmo índice, universos diferentes)."""
+    spec = SCOPE_FILTERS[scope_id]
+    result = search_people_faceted(
+        q=q or None,
+        base_query=base_query,
+        match_fields=POLITICOS_MATCH_FIELDS if scope_id == "politicos" else None,
+        filters=_scope_filter_map(scope_id, filters),
+        facet_fields={name: entry["field"] for name, entry in spec.items()},
+        size=size,
+        from_=offset,
+        sort="relevance" if q else "name",
+    )
+    if result.get("error"):
+        return _error_group(scope_id, _label_for(scope_id), str(result["error"]))
+    items = [_people_item(scope_id, row) for row in (result.get("items") or [])]
+    grupo = _group(scope_id, _label_for(scope_id), items, int(result.get("total") or 0), 0)
+    facets = result.get("facets") or {}
+    # A fonte mostra-se pelo nome (o valor guardado é um domínio).
+    facets["fonte"] = [
+        {
+            "key": entry["key"],
+            "label": PEOPLE_SOURCE_LABELS.get(str(entry["key"]), str(entry["key"])),
+            "count": entry["count"],
+        }
+        for entry in (facets.get("fonte") or [])
+    ]
+    grupo["filters"] = _filter_panel(scope_id, facets)
+    return grupo
+
+
+def _search_pessoas_group(q: str, size: int, offset: int, filters: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """Pessoas com ficha (só pessoas: as empresas têm o âmbito «Empresas»)."""
+    return _search_people_scope(
+        "pessoas", q, size, offset, filters, base_query={"term": {"is_company": False}}
+    )
+
+
+def _search_politicos_group(q: str, size: int, offset: int, filters: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """Políticos portugueses: ficha da Wikipédia ou do parlamento, com filtros."""
+    return _search_people_scope("politicos", q, size, offset, filters, base_query=POLITICOS_QUERY)
+
+
+def _wikipedia_articles(term: str, langs: List[str], limit: int, offset: int) -> Dict[str, Any]:
+    """Artigos da Wikipédia (uma consulta por idioma, em paralelo).
+
+    Reutiliza as fontes da Pesquisa 360 (`search360_sources`), que já falam a
+    API do MediaWiki — o âmbito da Pesquisa total é só a cola. `asyncio.run`
+    aqui corre num *worker thread* da pesquisa, onde não há ciclo de eventos.
+    Devolve os artigos da página e o **total real** de cada idioma (`totalhits`)
+    e quantos já foram saltados, para a interface poder paginar e dizer o total.
+    """
+    from api.search360_sources import client as http_client
+    from api.search360_sources import wikipedia_search_with_total
+
+    async def run() -> List[Any]:
+        async with http_client() as http:
+            return await asyncio.gather(
+                *[
+                    wikipedia_search_with_total(http, term, lang=lang, limit=limit, offset=offset)
+                    for lang in langs
+                ],
+                return_exceptions=True,
+            )
+
+    respostas = asyncio.run(run())
+    artigos: List[Dict[str, Any]] = []
+    total = 0
+    for lang, resposta in zip(langs, respostas):
+        if isinstance(resposta, BaseException):
+            logger.info("Wikipédia (%s) indisponível: %s", lang, resposta)
+            continue
+        linhas, por_idioma = resposta
+        total += int(por_idioma or 0)
+        artigos.extend({"lang": lang, **row} for row in linhas)
+    return {"items": artigos, "total": total, "offset": offset}
+
+
+def _search_wikipedia_group(q: str, size: int, offset: int, filters: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """Enciclopédia: artigos da Wikipédia PT (e EN), consultados em direto.
+
+    Sem termo não se chama a API (não faz sentido listar a enciclopédia), e uma
+    falha de rede devolve o erro **do âmbito**, sem derrubar os outros grupos.
+    O `offset` vai ao `sroffset` do MediaWiki, pelo que o *scroll* infinito
+    continua a trazer artigos novos (e o total é o da enciclopédia, não o da
+    página).
+    """
+    if not q:
+        return _group("wikipedia", _label_for("wikipedia"), [], 0, 0)
+    fonte = (filters or {}).get("fonte")
+    langs = ["en"] if fonte == "en" else (["pt"] if fonte == "pt" else ["pt", "en"])
+    por_pagina = max(1, min(int(size), 50))
+    try:
+        resultado = _wikipedia_articles(q, langs, por_pagina, offset)
+    except Exception as exc:
+        return _error_group("wikipedia", _label_for("wikipedia"), f"Wikipédia: {exc}")
+    artigos = resultado["items"]
+    items = []
+    for artigo in artigos:
+        lang = str(artigo.get("lang") or "pt")
+        items.append(
+            _item(
+                "wikipedia",
+                artigo.get("id") or artigo.get("url") or "",
+                artigo.get("title") or "(artigo)",
+                subtitle=" · ".join(
+                    part
+                    for part in (
+                        "Wikipédia PT" if lang == "pt" else "Wikipedia EN",
+                        artigo.get("subtitle"),
+                    )
+                    if part
+                ),
+                snippet=artigo.get("snippet") or "",
+                url=artigo.get("url") or "",
+                date=artigo.get("date"),
+                badges=["Wikipédia", lang.upper()],
+                extra={"pageid": (artigo.get("data") or {}).get("pageid"), "idioma": lang},
+                score=artigo.get("score"),
+            )
+        )
+    # Contagens por idioma para o painel: o total de cada wiki e o que já veio.
+    contagens = [
+        {
+            "key": lang,
+            "label": "Wikipédia PT" if lang == "pt" else "Wikipedia EN",
+            "count": sum(1 for artigo in artigos if artigo.get("lang") == lang),
+        }
+        for lang in langs
+    ]
+    grupo = _group("wikipedia", _label_for("wikipedia"), items, int(resultado["total"]), 0)
+    grupo["filters"] = _filter_panel("wikipedia", {"fonte": contagens})
+    return grupo
 
 
 def _search_market_group(client: Elasticsearch, q: str, size: int, offset: int) -> Dict[str, Any]:
@@ -729,10 +1165,17 @@ def unified_search(
     scope: str = "all",
     size: int = 8,
     offset: int = 0,
+    filters: Optional[str] = None,
     session_scope: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Pesquisa por texto em todos os âmbitos (ou num só) e devolve grupos."""
+    """Pesquisa por texto em todos os âmbitos (ou num só) e devolve grupos.
+
+    `filters` são as facetas escolhidas na interface (`{"partido": "PS"}` ou
+    `partido:PS`): cada âmbito aplica só as que conhece (`SCOPE_FILTERS`), pelo
+    que um filtro de outra área é simplesmente ignorado.
+    """
     query = (q or "").strip()
+    filtros = _parse_filters(filters)
     size = max(1, min(int(size), 50))
     offset = max(0, int(offset))
     requested = [scope] if scope in SCOPE_IDS else list(SCOPE_IDS)
@@ -745,15 +1188,19 @@ def unified_search(
     ensure_indices(client)
 
     workers: Dict[str, Any] = {
-        "scraped": lambda: _search_scraped_group(query, size, offset),
-        "social": lambda: _search_social_group(query, size, offset),
+        "scraped": lambda: _search_scraped_group(query, size, offset, filtros),
+        "social": lambda: _search_social_group(query, size, offset, filtros),
         "contracts": lambda: _search_contracts_group(query, size, offset),
         "contracts_es": lambda: _search_contratos_es_group(query, size, offset),
         "entities_es": lambda: _search_entities_es_group(query, size, offset),
         "entities": lambda: _search_entities_group(query, size, offset),
+        "pessoas": lambda: _search_pessoas_group(query, size, offset, filtros),
+        "politicos": lambda: _search_politicos_group(query, size, offset, filtros),
+        "wikipedia": lambda: _search_wikipedia_group(query, size, offset, filtros),
         "trademarks": lambda: _search_trademarks_group(query, size, offset),
         "firmas": lambda: _search_firmas_group(query, size, offset),
         "news": lambda: _search_news_group(client, query, size, offset),
+        "imprensa": lambda: _search_imprensa_group(query, size, offset, filtros),
         "market": lambda: _search_market_group(client, query, size, offset),
         "crm": lambda: _search_crm_group(client, session_scope or {}, query, size, offset),
     }
@@ -785,11 +1232,19 @@ def unified_search(
         "scope": scope,
         "size": size,
         "offset": offset,
+        "filters": filtros,
         "took_ms": took_ms,
         "total": sum(g["total"] for g in groups),
         "groups": groups,
         "scopes": SCOPES,
-        "facets": next((g.get("facets") for g in groups if g["scope"] == "scraped" and g.get("facets")), {}),
+        "facets": next(
+            (
+                g.get("facets")
+                for g in groups
+                if g["scope"] in {"scraped", "imprensa"} and g.get("facets")
+            ),
+            {},
+        ),
     }
 
 

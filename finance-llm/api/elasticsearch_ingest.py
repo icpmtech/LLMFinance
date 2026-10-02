@@ -73,8 +73,10 @@ async def ingest_ticker_news(
     reconstruído e persistido.
     """
     news = await _run_in_thread(get_news, ticker)
-    if isinstance(news, dict) and "error" in news:
-        raise HTTPException(status_code=404, detail=news["error"])
+    # `get_news` devolve sempre a chave `error` (a `None` quando corre bem): o que
+    # interessa é se **tem** erro, não se a chave existe.
+    if isinstance(news, dict) and news.get("error"):
+        raise HTTPException(status_code=404, detail=str(news["error"]))
 
     items = news.get("news", []) if isinstance(news, dict) else list(news)
     if not items:

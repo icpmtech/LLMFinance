@@ -2,7 +2,7 @@
 import json
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -15,6 +15,13 @@ import yfinance as yf
 ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = ROOT / "data" / "raw"
 TICKERS_PATH = ROOT / "data" / "tickers_extended.json"
+
+# Notícias: endpoint de pesquisa do Yahoo (o `Ticker.news` do yfinance falha sem erro).
+YAHOO_SEARCH_URL = "https://query1.finance.yahoo.com/v1/finance/search"
+YAHOO_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/126.0 Safari/537.36"
+)
 
 
 def _load_tickers() -> List[str]:
@@ -424,24 +431,143 @@ def get_calendar(symbol: str) -> Dict:
 
 
 def get_news(symbol: str, max_items: int = 10) -> Dict:
-    """Obtém notícias recentes do Yahoo Finance."""
+    """Notícias recentes do Yahoo Finance.
+
+    Usa o endpoint de **pesquisa** do Yahoo (`/v1/finance/search`), que devolve as
+    mesmas notícias que o leitor do yfinance mas de forma estável: em 2026-10-01 o
+    `Ticker.news` do yfinance 1.7 passou a devolver sempre lista vazia (sem erro),
+    o que fazia o painel de mercado aparecer «sem leitura» sem explicação. O
+    leitor do yfinance fica como segunda via, para quando voltar a funcionar.
+    """
     ticker = _normalize_ticker(symbol)
+    items: List[Dict] = []
+    problems: List[str] = []
     try:
-        t = yf.Ticker(ticker)
-        raw = t.news or []
-        out = []
-        for n in raw[:max_items]:
-            content = n.get("content") or n
-            out.append({
-                "title": content.get("title") or content.get("summary"),
-                "publisher": _fmt_publisher(content.get("publisher", content.get("provider"))),
-                "published": content.get("pubDate") or content.get("published"),
-                "url": content.get("canonicalUrl", {}).get("url") if isinstance(content.get("canonicalUrl"), dict) else content.get("link"),
-                "summary": content.get("summary"),
-            })
-        return {"ticker": ticker, "news": out}
-    except Exception as e:
-        return {"ticker": ticker, "error": str(e)}
+        items = _yahoo_search_news(ticker, max_items)
+    except Exception as e:  # pragma: no cover - depende da rede
+        problems.append(f"pesquisa Yahoo: {e}")
+    if not items:
+        try:
+            raw = yf.Ticker(ticker).news or []
+            items = [_normalise_news_item(n) for n in raw[:max_items]]
+        except Exception as e:  # pragma: no cover - depende da rede
+            problems.append(f"yfinance: {e}")
+    items = [item for item in items if item.get("title")][:max_items]
+    return {
+        "ticker": ticker,
+        "news": items,
+        "error": None if items else (" | ".join(problems) or "sem notícias para este ticker"),
+    }
+
+
+def _normalise_news_item(raw: Dict) -> Dict:
+    """Normaliza uma notícia do Yahoo (formato antigo e novo) para o formato interno."""
+    content = raw.get("content") or raw
+    canonical = content.get("canonicalUrl")
+    url = canonical.get("url") if isinstance(canonical, dict) else content.get("link")
+    published = content.get("pubDate") or content.get("published")
+    stamp = content.get("providerPublishTime")
+    if not published and isinstance(stamp, (int, float)) and stamp > 0:
+        published = datetime.fromtimestamp(stamp, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    related = content.get("relatedTickers")
+    return {
+        "title": content.get("title") or content.get("summary"),
+        "publisher": _fmt_publisher(content.get("publisher", content.get("provider"))),
+        "published": published,
+        "url": url,
+        "summary": content.get("summary") or content.get("description"),
+        "related_tickers": [str(item) for item in related] if isinstance(related, list) else [],
+    }
+
+
+# Sufixos societários que só atrapalham a pesquisa de notícias por nome.
+_NEWS_NAME_SUFFIXES = {
+    "sa", "s.a.", "sas", "inc", "inc.", "corp", "corp.", "corporation", "plc", "ltd", "ltd.",
+    "limited", "nv", "n.v.", "se", "ag", "spa", "s.p.a.", "co", "co.", "company", "group",
+}
+
+
+def _clean_company_name(name: str) -> str:
+    """Nome da empresa limpo para servir de consulta (sem vírgulas nem sufixos legais)."""
+    text = re.sub(r"[^\w\s&.]", " ", str(name or "")).replace("-", " ")
+    tokens = text.split()
+    while tokens and tokens[-1].strip(".").lower() in _NEWS_NAME_SUFFIXES:
+        tokens.pop()
+    return " ".join(tokens).strip()
+
+
+def _yahoo_search(query: str, *, news_count: int, quotes_count: int) -> Dict:
+    """Chamada ao endpoint de pesquisa do Yahoo (devolve `news` e `quotes`)."""
+    response = requests.get(
+        YAHOO_SEARCH_URL,
+        params={
+            "q": query,
+            "newsCount": max(0, min(int(news_count), 30)),
+            "quotesCount": max(0, min(int(quotes_count), 10)),
+            "enableFuzzyQuery": "false",
+        },
+        headers={"User-Agent": YAHOO_USER_AGENT, "Accept": "application/json"},
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def _news_query_candidates(ticker: str, payload: Dict) -> List[str]:
+    """Consultas a tentar, por ordem: o símbolo e, depois, o nome da empresa.
+
+    O Yahoo não liga notícias a `EDP.LS` nem a `CTT.LS` (a consulta pelo símbolo
+    devolve zero), mas devolve-as pelo nome («EDP», «CTT Correios de Portugal»).
+    Sem isto, os tickers europeus ficavam sempre sem manchetes.
+    """
+    candidates = [ticker]
+    for quote in payload.get("quotes") or []:
+        if str(quote.get("symbol") or "").upper() != ticker.upper():
+            continue
+        name = _clean_company_name(quote.get("longname") or quote.get("shortname") or "")
+        if name and name.lower() not in {item.lower() for item in candidates}:
+            candidates.append(name)
+        head = " ".join(name.split()[:3])
+        if head and head.lower() not in {item.lower() for item in candidates}:
+            candidates.append(head)
+        break
+    return candidates
+
+
+def _yahoo_search_news(ticker: str, max_items: int) -> List[Dict]:
+    """Notícias do Yahoo pelo endpoint de pesquisa, com recurso ao nome da empresa.
+
+    As notícias que trazem o próprio ticker em `relatedTickers` passam à frente (são
+    as que falam mesmo deste ativo); as restantes ficam atrás, sem serem descartadas.
+    """
+    payload = _yahoo_search(ticker, news_count=max_items, quotes_count=3)
+    items = [_normalise_news_item(item) for item in (payload.get("news") or [])]
+    for query in _news_query_candidates(ticker, payload)[1:]:
+        if items:
+            break
+        found = _yahoo_search(query, news_count=max_items, quotes_count=1)
+        items = [_normalise_news_item(item) for item in (found.get("news") or [])]
+    base = ticker.split(".")[0].upper()
+
+    def rank(item: Dict) -> int:
+        related = {str(code).upper() for code in (item.get("related_tickers") or [])}
+        if ticker.upper() in related:
+            return 0
+        if base in related:
+            return 1
+        return 2
+
+    return sorted(items, key=rank)
+
+
+def search_news_terms(query: str, max_items: int = 20) -> List[Dict]:
+    """Notícias do Yahoo para um **termo livre** (tema, empresa, obra pública…).
+
+    Distingue-se do `get_news` por ticker: aqui não há símbolo nenhum, é a
+    pesquisa que o próprio Yahoo faz para a expressão dada.
+    """
+    payload = _yahoo_search(query, news_count=max(1, min(int(max_items), 30)), quotes_count=0)
+    return [_normalise_news_item(item) for item in (payload.get("news") or [])]
 
 
 def get_options(symbol: str) -> Dict:

@@ -276,11 +276,28 @@ def client() -> httpx.AsyncClient:
 # --------------------------------------------------------------------------
 # Enciclopédia: Wikipédia e Wikidata
 # --------------------------------------------------------------------------
-async def wikipedia_search(client: httpx.AsyncClient, term: str, *, lang: str = "pt", limit: int = 5) -> List[Dict[str, Any]]:
+async def wikipedia_search_with_total(
+    client: httpx.AsyncClient, term: str, *, lang: str = "pt", limit: int = 5, offset: int = 0
+) -> Tuple[List[Dict[str, Any]], int]:
+    """Pesquisa na Wikipédia e devolve `(artigos, total real de resultados)`.
+
+    O `totalhits` da API é o número que a interface pode mostrar como total da
+    enciclopédia (milhares), e `offset` é o `sroffset` do MediaWiki — sem ele a
+    paginação da Pesquisa total não tinha como avançar (`limit` só página o que
+    já foi pedido à API).
+    """
     source_id = f"wikipedia_{lang}"
     response = await client.get(
         f"https://{lang}.wikipedia.org/w/api.php",
-        params={"action": "query", "list": "search", "srsearch": term, "format": "json", "srlimit": limit, "srprop": "snippet|wordcount|timestamp"},
+        params={
+            "action": "query",
+            "list": "search",
+            "srsearch": term,
+            "format": "json",
+            "srlimit": limit,
+            "sroffset": max(0, int(offset)),
+            "srprop": "snippet|wordcount|timestamp",
+        },
     )
     response.raise_for_status()
     payload = response.json()
@@ -304,6 +321,12 @@ async def wikipedia_search(client: httpx.AsyncClient, term: str, *, lang: str = 
                 data={"pageid": hit.get("pageid"), "wordcount": hit.get("wordcount"), "lang": lang},
             )
         )
+    return results, int(total or 0)
+
+
+async def wikipedia_search(client: httpx.AsyncClient, term: str, *, lang: str = "pt", limit: int = 5) -> List[Dict[str, Any]]:
+    """Pesquisa na Wikipédia (só os artigos; ver `wikipedia_search_with_total`)."""
+    results, _ = await wikipedia_search_with_total(client, term, lang=lang, limit=limit)
     return results
 
 

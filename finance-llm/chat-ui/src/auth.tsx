@@ -10,6 +10,7 @@
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  ApiError,
   authApi,
   getToken,
   installAuthFetch,
@@ -67,11 +68,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(profile);
       applyPreferences(profile);
       setStatus("authenticated");
-    } catch {
-      // Token inválido/expirado ou sessão terminada noutro dispositivo.
-      setToken(null);
-      setUser(null);
-      setStatus("anonymous");
+    } catch (error) {
+      // Só se termina a sessão quando o **servidor** diz que o token não serve
+      // (revogado/expirado). Uma falha de rede — API a reiniciar, sem ligação —
+      // não apaga o token: era isso que desautenticava o utilizador em cada
+      // reinício do servidor, obrigando-o a entrar outra vez.
+      const status = error instanceof ApiError ? error.status : null;
+      if (status === 401 || status === 403) {
+        setToken(null);
+        setUser(null);
+        setStatus("anonymous");
+        return;
+      }
+      setStatus((current) => (current === "loading" ? "anonymous" : current));
     }
   }, [applyPreferences]);
 

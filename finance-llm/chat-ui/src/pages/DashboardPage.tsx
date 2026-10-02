@@ -43,6 +43,7 @@ import { getTickerHistory, searchYahooTickers } from "../api";
 import { useAuth } from "../auth";
 import {
   addSentimentMarketFavourite,
+  followSentimentMarketTicker,
   getSentimentMarketLive,
   getSentimentMarketWatchlist,
   removeSentimentMarketFavourite,
@@ -66,6 +67,9 @@ const INDEX_TICKERS = INDICES.map((item) => item.ticker);
 
 /** Intervalo da leitura automática (o Yahoo não serve dados em menos de um minuto). */
 const REFRESH_MS = 60_000;
+
+/** Janela da recolha da série de sentimento (o mesmo horizonte do agendador). */
+const COLLECT_DAYS = 3;
 
 const REFRESH_OPTIONS = [
   { id: 0, label: "Manual" },
@@ -114,6 +118,12 @@ function when(value: string | null | undefined): string {
   return parsed.toLocaleString("pt-PT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
+/** Dia de uma manchete (dd/mm) — para mostrar a janela do que foi lido. */
+function shortDay(day: string): string {
+  const [, month, date] = (day || "").split("-");
+  return month && date ? `${date}/${month}` : day;
+}
+
 function labelChip(label: string | null | undefined): string {
   if (label === "positivo") return "border-emerald-400/30 bg-emerald-400/10 text-emerald-300";
   if (label === "negativo") return "border-rose-400/30 bg-rose-400/10 text-rose-300";
@@ -158,12 +168,17 @@ export function DashboardPage({
   const [favBusy, setFavBusy] = useState<string | null>(null);
   const [favError, setFavError] = useState<string | null>(null);
   const [favNotice, setFavNotice] = useState<string | null>(null);
+  const [collecting, setCollecting] = useState(false);
+  const [collectProgress, setCollectProgress] = useState<string | null>(null);
+  const [collectError, setCollectError] = useState<string | null>(null);
+  const [collectNotice, setCollectNotice] = useState<string | null>(null);
 
-  /** Tickers à vista: os índices do topo + os favoritos guardados. */
+  /** Tickers à vista: os índices do topo + os favoritos guardados (sem repetições). */
   const liveTickers = useMemo(
-    () => [...INDEX_TICKERS, ...(favourites.length ? favourites : DEFAULT_FAVOURITES)],
+    () => Array.from(new Set([...INDEX_TICKERS, ...(favourites.length ? favourites : DEFAULT_FAVOURITES)])),
     [favourites],
   );
+  const favouriteSet = useMemo(() => new Set(favourites), [favourites]);
   const showingDefaults = favouritesReady && !favourites.length;
 
   /** Leitura completa ao Yahoo (o painel nunca mostra dados guardados). */
@@ -196,7 +211,7 @@ export function DashboardPage({
 
   const syncFavourites = useCallback(
     (payload: { watchlist: string[] }) => {
-      setFavourites(payload.watchlist.filter((code) => !INDEX_TICKERS.includes(code)));
+      setFavourites(payload.watchlist);
       void loadFavourites();
     },
     [loadFavourites],
@@ -249,6 +264,63 @@ export function DashboardPage({
     void loadFavourites();
   }, [loadFavourites]);
 
+  /**
+   * Recolher: vai ao Yahoo buscar **notícias e cotações** de cada favorito,
+   * indexa-as e constrói a série de sentimento dos últimos `COLLECT_DAYS` dias.
+   *
+   * É a ação pesada (uma a duas dezenas de segundos por ticker), por isso corre
+   * ticker a ticker com o progresso à vista. Agregar só o que já está indexado
+   * não servia: sem notícias indexadas na janela, devolvia zeros sem explicar porquê.
+   */
+  const collect = useCallback(async () => {
+    const codes = favourites.length ? favourites : DEFAULT_FAVOURITES;
+    setCollecting(true);
+    setCollectError(null);
+    setCollectNotice(null);
+    const failures: string[] = [];
+    let news = 0;
+    let documents = 0;
+    let prices = 0;
+    let done = 0;
+    try {
+      for (const [index, code] of codes.entries()) {
+        setCollectProgress(`${index + 1}/${codes.length} · ${code}`);
+        try {
+          const result = await followSentimentMarketTicker({
+            ticker: code,
+            ingest_news: true,
+            ingest_prices: true,
+            days: COLLECT_DAYS,
+          });
+          news += result.news?.indexed ?? 0;
+          documents += result.series?.documents ?? 0;
+          prices += result.prices?.points ?? 0;
+          done += 1;
+          if (result.errors?.length) failures.push(`${code}: ${result.errors[0]}`);
+        } catch (err) {
+          failures.push(`${code}: ${err instanceof Error ? err.message : "falhou"}`);
+        }
+      }
+      setCollectNotice(
+        `${done}/${codes.length} ticker(s) recolhidos · ${num(news, 0)} notícia(s) indexadas · ` +
+          `${num(documents, 0)} dia(s) de série · ${num(prices, 0)} cotações guardadas`,
+      );
+      if (failures.length) setCollectError(failures.slice(0, 3).join(" · "));
+      await load(true);
+    } catch (err) {
+      setCollectError(err instanceof Error ? err.message : "Falha na recolha do sentimento.");
+    } finally {
+      setCollecting(false);
+      setCollectProgress(null);
+    }
+  }, [favourites, load]);
+
+  useEffect(() => {
+    if (!collectNotice) return;
+    const timer = window.setTimeout(() => setCollectNotice(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [collectNotice]);
+
   useEffect(() => {
     if (!favNotice) return;
     const timer = window.setTimeout(() => setFavNotice(null), 5000);
@@ -289,9 +361,12 @@ export function DashboardPage({
   }, []);
 
   useEffect(() => {
+    // Só depois de saber os favoritos: sem isto o painel mostra a carteira
+    // sugerida durante uns segundos e só depois salta para a lista guardada.
+    if (!favouritesReady) return;
     void load();
     void loadSparks();
-  }, [load, loadSparks]);
+  }, [favouritesReady, load, loadSparks]);
 
   useEffect(() => {
     if (!refreshMs) return;
@@ -337,6 +412,18 @@ export function DashboardPage({
   const validation = live?.validation;
   const failed = validation?.failed ?? [];
   const erreurs = summary?.errors ?? [];
+
+  /** Idade das manchetes lidas: uma leitura pode ser «fresca» mas com notícias velhas. */
+  const headlines = useMemo(() => {
+    const days = (live?.news ?? [])
+      .map((item) => item.day)
+      .filter((day): day is string => Boolean(day))
+      .sort();
+    if (!days.length) return null;
+    const newest = days[days.length - 1];
+    const ageDays = Math.floor((Date.now() - new Date(`${newest}T00:00:00Z`).getTime()) / 86_400_000);
+    return { oldest: days[0], newest, ageDays, stale: ageDays > 3 };
+  }, [live]);
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground orbit-bg">
@@ -599,13 +686,16 @@ export function DashboardPage({
                 className={`glass-card gradient-border rounded-2xl p-5 ${glows[i % glows.length]} cursor-pointer hover:bg-white/[0.04] transition`}
                 onClick={() => handleSelect(item.ticker)}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <div className="text-xs text-muted-foreground uppercase tracking-wider">{quote?.ticker ?? item.label}</div>
-                  {quote?.verified ? (
-                    <span title="Confirmado no Yahoo Finance" className="text-emerald-400">
-                      <CheckCircle2 size={14} />
-                    </span>
-                  ) : null}
+                  <span className="flex items-center gap-1.5">
+                    <FavouriteMark active={favouriteSet.has(item.ticker)} />
+                    {quote?.verified ? (
+                      <span title="Confirmado no Yahoo Finance" className="text-emerald-400">
+                        <CheckCircle2 size={14} />
+                      </span>
+                    ) : null}
+                  </span>
                 </div>
                 <div className="flex items-end justify-between mt-2">
                   <div className="text-2xl md:text-3xl font-bold stat-value">{num(quote?.price)}</div>
@@ -716,6 +806,65 @@ export function DashboardPage({
                 (a tradução fina é opcional e muito mais lenta).
               </p>
             )}
+
+            {headlines ? (
+              <p className={`mt-2 text-[11px] ${headlines.stale ? "text-amber-200" : "text-muted-foreground"}`}>
+                Manchetes de {shortDay(headlines.oldest)} a {shortDay(headlines.newest)}
+                {headlines.stale
+                  ? ` — a mais recente tem ${headlines.ageDays} dia(s); para estes tickers o Yahoo ainda não tem notícias frescas`
+                  : ""}
+              </p>
+            ) : null}
+
+            {live && !(summary?.news ?? 0) ? (
+              <p className="mt-3 flex items-start gap-2 text-[11px] text-amber-200">
+                <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                <span>
+                  O Yahoo não devolveu manchetes nesta leitura — sem manchetes não há tom para ler.
+                  Experimenta <strong>Atualizar leitura</strong>.
+                </span>
+              </p>
+            ) : null}
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => void load()}
+                disabled={loading}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] hover:bg-white/10 disabled:opacity-40"
+                title="Reler as cotações e as manchetes agora"
+              >
+                <RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Atualizar leitura
+              </button>
+              <button
+                onClick={() => void collect()}
+                disabled={collecting || !user}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] hover:bg-white/10 disabled:opacity-40"
+                title={
+                  user
+                    ? `Trazer do Yahoo as notícias e as cotações dos favoritos e construir a série de ${COLLECT_DAYS} dias`
+                    : "Entra na plataforma para recolher"
+                }
+              >
+                {collecting ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                {collecting ? collectProgress ?? "A recolher…" : "Recolher"}
+              </button>
+              <span className="text-[10px] text-muted-foreground">
+                notícias + cotações + série de {COLLECT_DAYS} dias
+              </span>
+            </div>
+
+            {collectNotice ? (
+              <p className="mt-3 flex items-start gap-2 text-[11px] text-emerald-300">
+                <CheckCircle2 size={13} className="mt-0.5 shrink-0" />
+                {collectNotice}
+              </p>
+            ) : null}
+            {collectError ? (
+              <p className="mt-3 flex items-start gap-2 text-[11px] text-rose-300">
+                <XCircle size={13} className="mt-0.5 shrink-0" />
+                {collectError}
+              </p>
+            ) : null}
           </div>
 
           {/* Top movimentações (reais, ordenadas pela variação do dia) */}
@@ -740,7 +889,10 @@ export function DashboardPage({
                     {item.ticker.slice(0, 2)}
                   </div>
                   <div className="flex-1 text-left min-w-0">
-                    <div className="font-semibold group-hover:text-teal-300 transition truncate">{item.ticker}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold group-hover:text-teal-300 transition truncate">{item.ticker}</span>
+                      <FavouriteMark active={favouriteSet.has(item.ticker)} />
+                    </div>
                     <div className="text-xs text-muted-foreground">
                       {item.news_count} manchete(s) · tom{" "}
                       <span className={labelChip(item.label).includes("emerald") ? "text-emerald-300" : "text-muted-foreground"}>
@@ -781,7 +933,12 @@ export function DashboardPage({
             </div>
             <div className="space-y-3">
               {(live?.opportunities ?? []).map((item) => (
-                <OpportunityRow key={item.ticker} item={item} onSelect={handleSelect} />
+                <OpportunityRow
+                  key={item.ticker}
+                  item={item}
+                  isFavourite={favouriteSet.has(item.ticker)}
+                  onSelect={handleSelect}
+                />
               ))}
               {live && !live.opportunities.length ? (
                 <p className="text-xs text-muted-foreground">
@@ -821,6 +978,28 @@ export function DashboardPage({
                         className="text-xs font-semibold text-teal-400 hover:underline"
                       >
                         {item.ticker}
+                      </button>
+                      <button
+                        onClick={() =>
+                          favouriteSet.has(item.ticker)
+                            ? void removeFavourite(item.ticker)
+                            : void addFavourite(item.ticker)
+                        }
+                        disabled={!user || favBusy === item.ticker}
+                        title={
+                          !user
+                            ? "Entra na plataforma para guardar"
+                            : favouriteSet.has(item.ticker)
+                              ? "Retirar dos favoritos"
+                              : "Guardar nos favoritos"
+                        }
+                        className="rounded-full p-0.5 hover:bg-white/10 disabled:opacity-40"
+                      >
+                        {favBusy === item.ticker ? (
+                          <Loader2 size={11} className="animate-spin" />
+                        ) : (
+                          <FavouriteMark active={favouriteSet.has(item.ticker)} empty />
+                        )}
                       </button>
                       <span className="text-xs text-muted-foreground">{when(item.published) || item.source}</span>
                     </div>
@@ -960,12 +1139,27 @@ export function DashboardPage({
   );
 }
 
+/** Estrela de favorito (cheia quando o ticker está guardado). */
+function FavouriteMark({ active, empty = false }: { active: boolean; empty?: boolean }) {
+  if (!active && !empty) return null;
+  return (
+    <Star
+      size={11}
+      className={active ? "text-amber-300" : "text-muted-foreground"}
+      style={{ fill: active ? "currentColor" : "none" }}
+      aria-label={active ? "Favorito" : "Não é favorito"}
+    />
+  );
+}
+
 /** Oportunidade: desalinhamento entre o tom das manchetes e a variação do dia. */
 function OpportunityRow({
   item,
+  isFavourite,
   onSelect,
 }: {
   item: MarketLiveOpportunity;
+  isFavourite: boolean;
   onSelect: (ticker: string) => void;
 }) {
   const above = item.reading === "tom_acima_do_preco";
@@ -975,7 +1169,10 @@ function OpportunityRow({
       className="w-full text-left rounded-xl border border-white/5 bg-white/[0.03] p-3 hover:bg-white/[0.06] transition"
     >
       <div className="flex items-center justify-between">
-        <span className="font-semibold text-sm">{item.ticker}</span>
+        <span className="flex items-center gap-1.5 font-semibold text-sm">
+          {item.ticker}
+          <FavouriteMark active={isFavourite} />
+        </span>
         <span
           className={`text-[11px] px-2 py-0.5 rounded-full border ${
             above

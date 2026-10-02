@@ -111,6 +111,24 @@ export function installAuthFetch() {
 }
 
 /* ------------------------------------------------------------- pedidos */
+
+/**
+ * Erro de pedido à API com o estado HTTP.
+ *
+ * `status` é `null` quando nem houve resposta (rede em baixo, API a
+ * reiniciar). A distinção importa: uma falha de rede **não** significa que a
+ * sessão acabou, e por isso não deve apagar o token.
+ */
+export class ApiError extends Error {
+  readonly status: number | null;
+
+  constructor(message: string, status: number | null) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
@@ -119,7 +137,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
     });
   } catch {
-    throw new Error("Não foi possível contactar o servidor. Verifique se a API está a correr.");
+    throw new ApiError("Não foi possível contactar o servidor. Verifique se a API está a correr.", null);
   }
 
   const text = await response.text();
@@ -140,7 +158,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         : Array.isArray(detail) && detail.length
           ? String((detail[0] as { msg?: string })?.msg ?? "Dados inválidos.")
           : `Erro ${response.status}`;
-    throw new Error(message);
+    throw new ApiError(message, response.status);
   }
 
   return payload as T;

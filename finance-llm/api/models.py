@@ -894,6 +894,102 @@ class ContractReportRequest(ContractAnalyzeRequest):
     analysis: Optional[str] = None
 
 
+# --- Contratos franceses (DECP / data.gouv.fr) ------------------------------
+
+class ContratoFrTitulaire(BaseModel):
+    type_identifiant: Optional[str] = None
+    id: Optional[str] = None
+    nom: Optional[str] = None
+
+
+class ContratoFrCpv(BaseModel):
+    code: Optional[str] = None
+    nom: Optional[str] = None
+
+
+class ContratoFrImportRequest(BaseModel):
+    filename: Optional[str] = None
+    limit: Optional[int] = None
+    force: bool = False
+    index: bool = True
+
+
+class ContratoFrIngestRequest(BaseModel):
+    filename: Optional[str] = None
+    limit: Optional[int] = None
+    force: bool = False
+
+
+class ContratoFrImportResponse(BaseModel):
+    indexed_count: int = 0
+    total: int = 0
+    errors: int = 0
+    path: Optional[str] = None
+    seconds: Optional[float] = None
+    error: Optional[str] = None
+
+
+class ContratoFrSearchRequest(BaseModel):
+    q: Optional[str] = None
+    ano: Optional[int] = None
+    nature: Optional[str] = None
+    procedure: Optional[str] = None
+    acheteur: Optional[str] = None
+    acheteur_id: Optional[str] = None
+    adjudicatario: Optional[str] = None
+    adjudicatario_id: Optional[str] = None
+    cpv_code: Optional[str] = None
+    lieu_execution_code: Optional[str] = None
+    lieu_execution_type: Optional[str] = None
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    date_field: Optional[Literal["date_notification", "date_publication"]] = "date_publication"
+    size: int = 20
+    from_: int = Field(0, alias="from")
+    sort_by: Optional[Literal["relevance", "date_notification", "date_publication", "montant", "valor", "ano"]] = "date_publication"
+    sort_order: Optional[Literal["asc", "desc"]] = "desc"
+    with_facets: bool = True
+
+
+class ContratoFrAnalyticsRequest(BaseModel):
+    q: Optional[str] = None
+    ano: Optional[int] = None
+    nature: Optional[str] = None
+    procedure: Optional[str] = None
+    acheteur: Optional[str] = None
+    acheteur_id: Optional[str] = None
+    adjudicatario: Optional[str] = None
+    adjudicatario_id: Optional[str] = None
+    cpv_code: Optional[str] = None
+    lieu_execution_code: Optional[str] = None
+    lieu_execution_type: Optional[str] = None
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    date_field: Optional[Literal["date_notification", "date_publication"]] = "date_publication"
+    top_acheteurs: int = 10
+    top_adjudicatarios: int = 10
+    top_cpv: int = 10
+    value_buckets: int = 10
+
+
+class ContratoFrEntitySearchRequest(BaseModel):
+    q: Optional[str] = None
+    kind: Optional[Literal["acheteur", "adjudicatario"]] = None
+    ano: Optional[int] = None
+    min_count: int = 1
+    size: int = 20
+    from_: int = Field(0, alias="from")
+
+
+class ContratoFrAutocompleteRequest(BaseModel):
+    q: str
+    size: int = 10
+
+
 class ContractChatSource(BaseModel):
     idcontrato: Optional[str] = None
     objectoContrato: Optional[str] = None

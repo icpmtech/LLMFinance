@@ -21,6 +21,58 @@ from elasticsearch.helpers import bulk
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Pesquisa por texto: exigir **todos** os termos
+# ---------------------------------------------------------------------------
+# Um `multi_match` sem `operator` faz OR entre os termos, o que dá números
+# absurdos na Pesquisa total: «COVID-19» casava qualquer contrato com «19» no
+# número (33 972 resultados falsos) e «obras públicas» casava 2,2 milhões. Aqui os
+# termos passam a ter de coexistir; quando isso não devolve nada, a pesquisa é
+# repetida em OR para não perder resultados legítimos com vocabulário disperso.
+
+
+def _search_terms(q: Optional[str]) -> List[str]:
+    """Termos com pelo menos dois caracteres (o resto é pontuação: «COVID-19» → covid, 19)."""
+    return [term for term in re.split(r"[\s\-_/,.;:]+", str(q or "").strip()) if len(term) >= 2]
+
+
+def _is_multi_term(q: Optional[str]) -> bool:
+    return len(_search_terms(q)) > 1
+
+
+def _apply_text_operator(node: Any, operator: str) -> Any:
+    """Aplica `operator` a todos os `multi_match` da query, em profundidade."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "multi_match" and isinstance(value, dict):
+                value["operator"] = operator
+            else:
+                _apply_text_operator(value, operator)
+    elif isinstance(node, list):
+        for item in node:
+            _apply_text_operator(item, operator)
+    return node
+
+
+def _text_search(client: Elasticsearch, *, index: str, body: Dict[str, Any], q: Optional[str]) -> Dict[str, Any]:
+    """Executa a pesquisa exigindo todos os termos; repete em OR se não houver nada.
+
+    A segunda tentativa só acontece quando a primeira devolve **zero** — é o
+    compromisso entre precisão (não devolver 2 milhões por causa de uma palavra)
+    e cobertura (não devolver zero quando os termos existem mas dispersos).
+    """
+    if not _is_multi_term(q):
+        return client.search(index=index, body=body)
+    strict = _apply_text_operator(json.loads(json.dumps(body)), "and")
+    response = client.search(index=index, body=strict)
+    hits = response.get("hits") or {}
+    total = hits.get("total") or 0
+    total = total.get("value", 0) if isinstance(total, dict) else total
+    if total:
+        return response
+    return client.search(index=index, body=_apply_text_operator(json.loads(json.dumps(body)), "or"))
+
+
 ROOT = Path(__file__).resolve().parents[1]
 
 # Índice único para contratos públicos normalizados
@@ -31,6 +83,10 @@ CONTRACTS_INDEX = "contratos"
 # (expediente, CODICE/UBL) são diferentes, mas os dois partilham o mesmo tipo de
 # pesquisa por facetas. Alimentado por `collectors/contratos_es.py`.
 CONTRATOS_ES_INDEX = "contratos_es"
+
+# Contratos públicos de França (DECP / data.gouv.fr). Índice próprio para
+# manter identificadores, idioma e estrutura DECP separados de PT e ES.
+CONTRATOS_FR_INDEX = "contratos_fr"
 
 # Fontes do PLACSP indexadas na plataforma.
 CONTRATOS_ES_FONTES = ("licitaciones", "menores")
@@ -246,6 +302,19 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
         "analysis": {
             "analyzer": {
                 "es_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    CONTRATOS_FR_INDEX: {
+        # Textos em francês com acentos («marché», «forfaitaire»). `asciifolding`
+        # permite pesquisar sem acentos.
+        "analysis": {
+            "analyzer": {
+                "fr_folding": {
                     "type": "custom",
                     "tokenizer": "standard",
                     "filter": ["lowercase", "asciifolding"],
@@ -496,6 +565,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
     news_mappings = {
         "properties": {
             "ticker": {"type": "keyword"},
+            "topic": {"type": "keyword"},
             "title": {"type": "text"},
             "summary": {"type": "text"},
             "publisher": {"type": "keyword"},
@@ -747,6 +817,87 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "documentos": {"type": "keyword", "index": False},
             "es_menor": {"type": "boolean"},
             "search_text": {"type": "text", "analyzer": "es_folding", "search_analyzer": "es_folding"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    # Contratos de França (DECP / data.gouv.fr). Documento plano por registo,
+    # alinhado com Espanha para facilitar facetas e queries diretas.
+    contratos_fr_mappings = {
+        "properties": {
+            "doc_id": {"type": "keyword"},
+            "pais": {"type": "keyword"},
+            "fonte": {"type": "keyword"},
+            "filename": {"type": "keyword"},
+            "id": {"type": "keyword"},
+            "nature": {"type": "keyword"},
+            "objet": {
+                "type": "text",
+                "analyzer": "fr_folding",
+                "search_analyzer": "fr_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "code_cpv": {"type": "keyword"},
+            "cpv": {
+                "type": "nested",
+                "properties": {
+                    "code": {"type": "keyword"},
+                    "nom": {"type": "text", "analyzer": "fr_folding", "search_analyzer": "fr_folding"},
+                },
+            },
+            "procedure": {"type": "keyword"},
+            "ccag": {"type": "keyword"},
+            "offres_recues": {"type": "integer"},
+            "type_groupement": {"type": "keyword"},
+            "lieu_execution_code": {"type": "keyword"},
+            "lieu_execution_type": {"type": "keyword"},
+            "lieu_execution_nom": {"type": "keyword"},
+            "duree_mois": {"type": "integer"},
+            "date_notification": {"type": "date"},
+            "date_notification_raw": {"type": "keyword"},
+            "date_publication": {"type": "date"},
+            "date_publication_raw": {"type": "keyword"},
+            "montant": {"type": "float"},
+            "montant_estime": {"type": "float"},
+            "valor": {"type": "float"},
+            "forme_prix": {"type": "keyword"},
+            "acheteur_id": {"type": "keyword"},
+            "acheteur_nom": {
+                "type": "text",
+                "analyzer": "fr_folding",
+                "search_analyzer": "fr_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "adjudicatario_id": {"type": "keyword"},
+            "adjudicatario_type_identifiant": {"type": "keyword"},
+            "adjudicatario_nom": {
+                "type": "text",
+                "analyzer": "fr_folding",
+                "search_analyzer": "fr_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "titulaires": {
+                "type": "nested",
+                "properties": {
+                    "type_identifiant": {"type": "keyword"},
+                    "id": {"type": "keyword"},
+                    "nom": {"type": "text", "analyzer": "fr_folding", "search_analyzer": "fr_folding"},
+                },
+            },
+            "considerations_sociales": {"type": "keyword"},
+            "considerations_environnementales": {"type": "keyword"},
+            "modalites_execution": {"type": "keyword"},
+            "techniques": {"type": "keyword"},
+            "types_prix": {"type": "keyword"},
+            "source": {"type": "keyword"},
+            "taux_avance": {"type": "float"},
+            "origine_ue": {"type": "float"},
+            "origine_france": {"type": "float"},
+            "marche_innovant": {"type": "boolean"},
+            "attribution_avance": {"type": "boolean"},
+            "sous_traitance_declaree": {"type": "boolean"},
+            "ano": {"type": "integer"},
+            "search_text": {"type": "text", "analyzer": "fr_folding", "search_analyzer": "fr_folding"},
             "ingested_at": {"type": "date"},
         }
     }
@@ -1983,6 +2134,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (GLEIF_LEI_INDEX, gleif_lei_mappings),
         (CONTRACTS_INDEX, contracts_mappings),
         (CONTRATOS_ES_INDEX, contratos_es_mappings),
+        (CONTRATOS_FR_INDEX, contratos_fr_mappings),
         (TRADEMARKS_INDEX, trademarks_mappings),
         (FIRMAS_INDEX, firmas_mappings),
         (SOCIETARIO_INDEX, societario_mappings),
@@ -2140,13 +2292,19 @@ def index_price_points(ticker: str, points: List[Dict[str, Any]], period: str = 
         return {"ticker": ticker, "error": str(e), "indexed_count": 0, "total_points": len(actions)}
 
 
-def index_news_items(ticker: str, items: List[Dict[str, Any]], es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+def index_news_items(
+    ticker: str,
+    items: List[Dict[str, Any]],
+    es: Optional[Elasticsearch] = None,
+    topic: Optional[str] = None,
+) -> Dict[str, Any]:
     """Indexa notícias no Elasticsearch.
 
     Args:
-        ticker: símbolo normalizado do ticker.
+        ticker: símbolo normalizado do ticker ("" quando a recolha é por **tema**).
         items: lista de notícias com title, summary, publisher, published, url.
         es: cliente Elasticsearch opcional.
+        topic: termo de pesquisa livre que trouxe a notícia (ex.: «obras públicas»).
 
     Returns:
         dict com ticker, indexed_count, total_items.
@@ -2157,17 +2315,19 @@ def index_news_items(ticker: str, items: List[Dict[str, Any]], es: Optional[Elas
 
     ensure_indices(client)
     ticker = ticker.upper()
+    topic = _topic_key(topic)
     actions = []
     for i, item in enumerate(items):
         published = item.get("published") or item.get("pubDate")
         if published and isinstance(published, datetime):
             published = published.isoformat()
-        doc_id = f"{ticker}-{_news_id(item, i)}"
+        doc_id = _news_doc_id(ticker, topic, item, i)
         doc = {
             "_op_type": "index",
             "_index": "finance_news",
             "_id": doc_id,
             "ticker": ticker,
+            "topic": topic,
             "title": item.get("title") or item.get("summary"),
             "summary": item.get("summary") or item.get("title"),
             "publisher": item.get("publisher") or item.get("provider"),
@@ -2179,13 +2339,52 @@ def index_news_items(ticker: str, items: List[Dict[str, Any]], es: Optional[Elas
         actions.append(doc)
 
     if not actions:
-        return {"ticker": ticker, "indexed_count": 0, "total_items": 0}
+        return {"ticker": ticker, "indexed_count": 0, "total_items": 0,
+                "topic": topic, "errors": 0}
 
     try:
         success, errors = bulk(client, actions, raise_on_error=False, refresh=True)
-        return {"ticker": ticker, "indexed_count": success, "total_items": len(actions), "errors": len(errors)}
+        return {
+            "ticker": ticker,
+            "topic": topic,
+            "indexed_count": success,
+            "total_items": len(actions),
+            "errors": len(errors),
+        }
     except Exception as e:
-        return {"ticker": ticker, "error": str(e), "indexed_count": 0, "total_items": len(actions)}
+        return {"ticker": ticker, "topic": topic, "error": str(e), "indexed_count": 0, "total_items": len(actions)}
+
+
+def _slug(value: Any) -> str:
+    """Texto simples para compor identificadores (sem acentos, só minúsculas e hífenes)."""
+    import re
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", str(value or "").strip().lower())
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    return re.sub(r"[^a-z0-9]+", "-", text).strip("-")[:60] or "sem-tema"
+
+
+def _topic_key(topic: Optional[str]) -> Optional[str]:
+    """Chave do tema: minúsculas e sem espaços nas pontas.
+
+    Normalizar na **escrita** é o que permite à pesquisa casar o tema por igualdade
+    exata (`term`) sem depender de analisadores nem de `case_insensitive`, que nem
+    todas as versões do Elasticsearch suportam.
+    """
+    text = str(topic or "").strip().lower()
+    return text or None
+
+
+def _news_doc_id(ticker: str, topic: Optional[str], item: Dict[str, Any], index: int) -> str:
+    """Id do documento de notícia — o **mesmo** na indexação e na análise.
+
+    Ticker vazio significa recolha por tema (a notícia não é de nenhum ativo):
+    nesse caso o prefixo é o tema, para duas recolhas não colidirem.
+    """
+    code = str(ticker or "").upper()
+    label = code or (f"tema-{_slug(topic)}" if topic else "noticias")
+    return f"{label}-{_news_id(item, index)}"
 
 
 def _news_id(item: Dict[str, Any], index: int) -> str:
@@ -2260,6 +2459,9 @@ def search_news(
                 "query": q,
                 "fields": ["title^2", "summary", "publisher"],
                 "type": "best_fields",
+                # Sem isto, uma pesquisa de duas palavras devolvia notícias que
+                # casavam só uma delas.
+                "operator": "and",
             }
         })
 
@@ -2291,31 +2493,292 @@ def search_news(
         return {"ticker": ticker.upper(), "error": str(e), "items": []}
 
 
+def _news_terms(aggregations: Dict[str, Any], name: str) -> List[Dict[str, Any]]:
+    """Buckets de uma agregação de termos, sem chaves vazias (notícias só por tema)."""
+    buckets = ((aggregations.get(name) or {}).get("buckets")) or []
+    return [
+        {"value": bucket.get("key"), "count": int(bucket.get("doc_count") or 0)}
+        for bucket in buckets
+        if bucket.get("key") not in (None, "")
+    ]
+
+
+# Campos por onde a pesquisa livre procura (o `^n` é o peso de cada um).
+NEWS_SEARCH_FIELDS = [
+    "title^3",
+    "translated_title^3",
+    "summary^2",
+    "summary_pt^2",
+    "translated_summary",
+    "publisher^2",
+    "topics^2",
+    "entities.name^2",
+]
+
+
+def search_all_news(
+    q: Optional[str] = None,
+    tickers: Optional[List[str]] = None,
+    publisher: Optional[str] = None,
+    topic: Optional[str] = None,
+    sentiment: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    analyzed: Optional[bool] = None,
+    sort: str = "recent",
+    page: int = 1,
+    size: int = 20,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa nas notícias indexadas — **todas**, não só as de um ticker.
+
+    Devolve a página pedida e as facetas (tickers, fontes, sentimentos, temas e
+    dias) calculadas sobre o **mesmo** conjunto filtrado, para os números dos
+    filtros corresponderem sempre ao que está à vista. `sort` aceita `recent`
+    (mais recentes), `oldest` e `relevance` (só faz sentido com `q`).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0, "facets": {}, "page": 1, "pages": 0}
+
+    must: List[Dict[str, Any]] = []
+    filters: List[Dict[str, Any]] = []
+    if q:
+        # Os termos têm de coexistir (AND) — mas o **tema exato** conta como
+        # resultado válido: é o que faz uma notícia recolhida por tema aparecer
+        # mesmo quando o título não repete as palavras do tema.
+        must.append(
+            {
+                "bool": {
+                    "should": [
+                        {
+                            "multi_match": {
+                                "query": q,
+                                "fields": NEWS_SEARCH_FIELDS,
+                                "type": "best_fields",
+                                "operator": "and",
+                                "lenient": True,
+                            }
+                        },
+                        # O `boost` vai **dentro** do valor: um `term` não aceita
+                        # chaves irmãs (`found [topic] and [boost]` → 400).
+                        {"term": {"topic": {"value": str(q).strip().lower(), "boost": 4}}},
+                    ],
+                    "minimum_should_match": 1,
+                }
+            }
+        )
+    codes = [str(code).strip().upper() for code in (tickers or []) if str(code).strip()]
+    if codes:
+        filters.append({"terms": {"ticker": codes}})
+    if topic:
+        filters.append({"term": {"topic": topic}})
+    if publisher:
+        filters.append({"term": {"publisher": publisher}})
+    if sentiment:
+        filters.append({"term": {"sentiment": sentiment}})
+    window: Dict[str, Any] = {}
+    if start_date:
+        window["gte"] = str(start_date)[:10]
+    if end_date:
+        window["lte"] = f"{str(end_date)[:10]}T23:59:59"
+    if window:
+        filters.append({"range": {"published": window}})
+    if analyzed is True:
+        filters.append({"exists": {"field": "analyzed_at"}})
+    elif analyzed is False:
+        filters.append({"bool": {"must_not": [{"exists": {"field": "analyzed_at"}}]}})
+
+    query: Dict[str, Any] = {"match_all": {}}
+    if must or filters:
+        query = {"bool": {}}
+        if must:
+            query["bool"]["must"] = must
+        if filters:
+            query["bool"]["filter"] = filters
+
+    safe_page = max(1, int(page or 1))
+    safe_size = max(1, min(int(size or 20), 100))
+    if sort == "oldest":
+        ordering: List[Any] = [{"published": {"order": "asc"}}]
+    elif sort == "relevance" and q:
+        ordering = [{"_score": {"order": "desc"}}, {"published": {"order": "desc"}}]
+    else:
+        ordering = [{"published": {"order": "desc"}}, "_score"]
+
+    aggs = {
+        "tickers": {"terms": {"field": "ticker", "size": 40}},
+        "publishers": {"terms": {"field": "publisher", "size": 40}},
+        "sentiments": {"terms": {"field": "sentiment", "size": 10}},
+        "topics": {"terms": {"field": "topic", "size": 30}},
+        "labels": {"terms": {"field": "topics", "size": 25}},
+        "by_day": {
+            "date_histogram": {
+                "field": "published",
+                "calendar_interval": "day",
+                "format": "yyyy-MM-dd",
+                "min_doc_count": 1,
+            }
+        },
+    }
+
+    try:
+        resp = client.search(
+            index="finance_news",
+            body={
+                "query": query,
+                "sort": ordering,
+                "from": (safe_page - 1) * safe_size,
+                "size": safe_size,
+                "track_total_hits": True,
+                "aggs": aggs,
+            },
+        )
+    except Exception as exc:
+        return {
+            "error": str(exc),
+            "items": [],
+            "total": 0,
+            "facets": {},
+            "page": safe_page,
+            "size": safe_size,
+            "pages": 0,
+        }
+
+    hits = resp.get("hits") or {}
+    items: List[Dict[str, Any]] = []
+    for hit in hits.get("hits") or []:
+        source = dict(hit.get("_source") or {})
+        source["id"] = hit.get("_id")
+        source["score"] = hit.get("_score")
+        items.append(source)
+    total = int(((hits.get("total") or {}).get("value")) or 0)
+    aggregations = resp.get("aggregations") or {}
+    facets = {
+        "tickers": _news_terms(aggregations, "tickers"),
+        "publishers": _news_terms(aggregations, "publishers"),
+        "sentiments": _news_terms(aggregations, "sentiments"),
+        "topics": _news_terms(aggregations, "topics"),
+        "labels": _news_terms(aggregations, "labels"),
+        "days": [
+            {"value": bucket.get("key_as_string"), "count": int(bucket.get("doc_count") or 0)}
+            for bucket in (((aggregations.get("by_day") or {}).get("buckets")) or [])
+        ],
+    }
+    return {
+        "total": total,
+        "page": safe_page,
+        "size": safe_size,
+        "pages": (total + safe_size - 1) // safe_size if safe_size else 0,
+        "items": items,
+        "facets": facets,
+    }
+
+
+def news_stats(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Panorama do índice de notícias: volume, tickers, fontes, janela e análise.
+
+    É o que o módulo mostra no cabeçalho — quantas notícias há, de quando, de
+    quantos tickers/fontes e quantas já passaram pelo NLP.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "documents": 0, "index": "finance_news"}
+    try:
+        resp = client.search(
+            index="finance_news",
+            body={
+                "size": 0,
+                "track_total_hits": True,
+                "aggs": {
+                    "tickers": {"cardinality": {"field": "ticker", "precision_threshold": 5000}},
+                    "publishers": {"cardinality": {"field": "publisher", "precision_threshold": 5000}},
+                    "topics": {"terms": {"field": "topic", "size": 20}},
+                    "analyzed": {"filter": {"exists": {"field": "analyzed_at"}}},
+                    "with_sentiment": {"filter": {"terms": {"sentiment": ["positivo", "negativo", "neutro"]}}},
+                    "sentiments": {"terms": {"field": "sentiment", "size": 10}},
+                    "first_published": {"min": {"field": "published"}},
+                    "last_published": {"max": {"field": "published"}},
+                    "last_ingest": {"max": {"field": "ingested_at"}},
+                    "top_tickers": {"terms": {"field": "ticker", "size": 12}},
+                    "top_publishers": {"terms": {"field": "publisher", "size": 12}},
+                },
+            },
+        )
+    except Exception as exc:
+        return {"error": str(exc), "documents": 0, "index": "finance_news"}
+
+    hits = resp.get("hits") or {}
+    aggregations = resp.get("aggregations") or {}
+    documents = int(((hits.get("total") or {}).get("value")) or 0)
+
+    def _cardinality(name: str) -> int:
+        return int(((aggregations.get(name) or {}).get("value")) or 0)
+
+    def _moment(name: str) -> Optional[str]:
+        value = (aggregations.get(name) or {}).get("value_as_string")
+        if value:
+            return value
+        raw = (aggregations.get(name) or {}).get("value")
+        if raw is None:
+            return None
+        try:
+            return datetime.utcfromtimestamp(float(raw) / 1000).isoformat() + "Z"
+        except (TypeError, ValueError, OSError):
+            return None
+
+    analyzed = int(((aggregations.get("analyzed") or {}).get("doc_count")) or 0)
+    with_sentiment = int(((aggregations.get("with_sentiment") or {}).get("doc_count")) or 0)
+    return {
+        "index": "finance_news",
+        "documents": documents,
+        "tickers": _cardinality("tickers"),
+        "publishers": _cardinality("publishers"),
+        "analyzed": analyzed,
+        "analyzed_share": round(analyzed / documents, 4) if documents else None,
+        "with_sentiment": with_sentiment,
+        "sentiments": _news_terms(aggregations, "sentiments"),
+        "topics": _news_terms(aggregations, "topics"),
+        "top_tickers": _news_terms(aggregations, "top_tickers"),
+        "top_publishers": _news_terms(aggregations, "top_publishers"),
+        "first_published": _moment("first_published"),
+        "last_published": _moment("last_published"),
+        "last_ingest": _moment("last_ingest"),
+    }
+
+
 def index_analyzed_news_items(
     ticker: str,
     items: List[Dict[str, Any]],
     analyses: List[Any],
     es: Optional[Elasticsearch] = None,
+    topic: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Indexa notícias enriquecidas com análise NLP no Elasticsearch."""
+    """Indexa notícias enriquecidas com análise NLP no Elasticsearch.
+
+    Usa o **mesmo** id que o `index_news_items` (`_news_doc_id`), senão a análise
+    criava um segundo documento em vez de completar o primeiro.
+    """
     client = es or get_es_client()
     if not client:
         return {"ticker": ticker, "error": "Elasticsearch indisponível", "indexed_count": 0}
 
     ensure_indices(client)
     ticker = ticker.upper()
+    topic = _topic_key(topic)
     actions = []
     now = _today()
     for i, (item, analysis) in enumerate(zip(items, analyses)):
         published = item.get("published") or item.get("pubDate")
         if published and isinstance(published, datetime):
             published = published.isoformat()
-        doc_id = f"{ticker}-{_news_id(item, i)}"
+        doc_id = _news_doc_id(ticker, topic, item, i)
         doc = {
             "_op_type": "index",
             "_index": "finance_news",
             "_id": doc_id,
             "ticker": ticker,
+            "topic": topic,
             "title": item.get("title") or item.get("summary"),
             "summary": item.get("summary") or item.get("title"),
             "publisher": item.get("publisher") or item.get("provider"),
@@ -3069,17 +3532,15 @@ def search_contracts(
     sort = _build_contract_sort(sort_by, sort_order)
 
     try:
-        resp = client.search(
-            index=CONTRACTS_INDEX,
-            body={
-                "query": query,
-                "sort": sort,
-                "from": from_,
-                "size": size,
-                "track_scores": True,
-                "track_total_hits": True,
-            },
-        )
+        body = {
+            "query": query,
+            "sort": sort,
+            "from": from_,
+            "size": size,
+            "track_scores": True,
+            "track_total_hits": True,
+        }
+        resp = _text_search(client, index=CONTRACTS_INDEX, body=body, q=q)
         items = []
         for hit in resp["hits"]["hits"]:
             source = hit["_source"]
@@ -7510,13 +7971,15 @@ def search_entities(
         if term:
             # Combina: NIF exato, nome exato (frase) e correspondência incremental
             # por prefixo (edge-ngram), para que "SONAE" encontre "SONAECOM".
+            # O prefixo também exige todos os termos: sem isso, «COVID-19» trazia
+            # «1996 Ponto Infinito» e «MAN 1964 Architects» (casavam só o «19»).
             text_query = {
                 "bool": {
                     "should": [
                         {"term": {"nif": term}},
                         {"match_phrase": {"name": {"query": term, "boost": 5}}},
                         {"multi_match": {"query": term, "fields": ["name^3"], "operator": "and", "boost": 3}},
-                        {"match": {"name.autocomplete": {"query": term, "boost": 1}}},
+                        {"match": {"name.autocomplete": {"query": term, "operator": "and", "boost": 1}}},
                     ],
                     "minimum_should_match": 1,
                 }
@@ -8002,6 +8465,35 @@ def index_scraped_items(
         return {"error": str(exc), "indexed_count": 0, "error_count": len(actions)}
 
 
+#: Fontes do índice da recolha que **não são notícias**: cadastro de empresas e
+#: registos Iberinform (fichas com dezenas de campos cada) e dados de ensaio.
+#: Ficam de fora quando a recolha é usada como **fonte de notícias**; o resto do
+#: índice é imprensa (SAPO, Lusa, Jornal Económico, Observador, ECO, …).
+NON_NEWS_SOURCE_PREFIXES: Tuple[str, ...] = ("empresas-", "iberinform-", "tmp-")
+NON_NEWS_SOURCE_IDS: Tuple[str, ...] = ("quotes-demo", "padroes-empresa")
+
+
+def _news_source_exclusions(
+    exclude_prefixes: Optional[Iterable[str]] = None,
+    exclude_ids: Optional[Iterable[str]] = None,
+) -> List[Dict[str, Any]]:
+    """Cláusulas `must_not` que afastam da recolha o que não é notícia.
+
+    Usa-se `prefix` em `source_id` (o id da fonte de recolha, ex. `sapo-e47529`)
+    porque é aí que se distingue cadastro de imprensa — os artigos não têm
+    nenhum campo que os marque como notícia.
+    """
+    clauses: List[Dict[str, Any]] = []
+    for prefix in exclude_prefixes or []:
+        prefix = str(prefix).strip()
+        if prefix:
+            clauses.append({"prefix": {"source_id": prefix}})
+    ids = [str(item).strip() for item in (exclude_ids or []) if str(item).strip()]
+    if ids:
+        clauses.append({"terms": {"source_id": ids}})
+    return clauses
+
+
 def _scraped_query(
     q: Optional[str] = None,
     source_id: Optional[str] = None,
@@ -8009,6 +8501,8 @@ def _scraped_query(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     sentiments: Optional[List[str]] = None,
+    exclude_prefixes: Optional[Iterable[str]] = None,
+    exclude_ids: Optional[Iterable[str]] = None,
 ) -> Dict[str, Any]:
     """Constrói a query de pesquisa de itens recolhidos."""
     must: List[Dict[str, Any]] = []
@@ -8044,7 +8538,45 @@ def _scraped_query(
     bool_query: Dict[str, Any] = {"must": must or [{"match_all": {}}]}
     if filters:
         bool_query["filter"] = filters
+    exclusions = _news_source_exclusions(exclude_prefixes, exclude_ids)
+    if exclusions:
+        bool_query["must_not"] = exclusions
     return {"bool": bool_query}
+
+
+#: Letras base → formas acentuadas possíveis (português e espanhol).
+_ACCENT_VARIANTS = {
+    "a": "aàáâãä",
+    "c": "cç",
+    "e": "eèéêë",
+    "i": "iìíîï",
+    "n": "nñ",
+    "o": "oòóôõö",
+    "u": "uùúûü",
+}
+
+
+def _accent_fold_terms(q: str) -> Optional[str]:
+    """Versão da pesquisa tolerante a acentos, para quem escreve sem eles.
+
+    O analisador padrão do Elasticsearch **não** dobra acentos: «obras publicas»
+    não encontra «obras públicas» e a pesquisa devolvia zero. Aqui cada letra que
+    possa vir acentuada passa a `?` («publicas» → «publ?c?s»), que casa as duas
+    formas sem obrigar a reindexar com um analisador novo. Devolve `None` quando
+    a pesquisa já tem acentos ou não há nada a variar (nesse caso não se repete).
+    """
+    if not q or any(ord(char) > 127 for char in q):
+        return None
+    changed = False
+    terms: List[str] = []
+    for token in q.split():
+        letters = list(token)
+        for index, char in enumerate(letters):
+            if _ACCENT_VARIANTS.get(char.lower()):
+                letters[index] = "?"
+                changed = True
+        terms.append("".join(letters))
+    return " ".join(terms) if changed else None
 
 
 def _sentiment_summary(aggs: Dict[str, Any], total: int) -> Dict[str, Any]:
@@ -8083,9 +8615,16 @@ def search_scraped(
     size: int = 20,
     from_: int = 0,
     sort: str = "recent",
+    exclude_prefixes: Optional[Iterable[str]] = None,
+    exclude_ids: Optional[Iterable[str]] = None,
     es: Optional[Elasticsearch] = None,
 ) -> Dict[str, Any]:
-    """Pesquisa itens recolhidos, com facetas por fonte, etiqueta, dia e sentimento."""
+    """Pesquisa itens recolhidos, com facetas por fonte, etiqueta, dia e sentimento.
+
+    `exclude_prefixes`/`exclude_ids` deixam de fora fontes que não interessam ao
+    chamador: na Pesquisa total usa-se para separar imprensa de cadastro de
+    empresas (`empresas-*`, `iberinform-*`) e de dados de ensaio (`tmp-*`).
+    """
     client = es or get_es_client()
     if not client:
         return {"error": "Elasticsearch indisponível", "total": 0, "items": [], "facets": {}}
@@ -8103,11 +8642,20 @@ def search_scraped(
     body: Dict[str, Any] = {
         "size": max(0, min(int(size), 200)),
         "from": max(0, int(from_)),
-        "query": _scraped_query(q, source_id, tags, date_from, date_to, sentiments),
+        "query": _scraped_query(
+            q, source_id, tags, date_from, date_to, sentiments, exclude_prefixes, exclude_ids
+        ),
         "sort": sort_spec,
         "track_total_hits": True,
         "aggs": {
             "sources": {"terms": {"field": "source_id", "size": 50}},
+            # Nome legível do jornal (`source_id` é um slug do tipo
+            # `jornal-econ-mico-2e59cd`, ilegível na interface). Cada bucket
+            # leva o id da fonte para se poder filtrar por ela.
+            "publishers": {
+                "terms": {"field": "source_name", "size": 50},
+                "aggs": {"ids": {"terms": {"field": "source_id", "size": 1}}},
+            },
             "tags": {"terms": {"field": "tags", "size": 50}},
             "days": {"date_histogram": {"field": "scraped_at", "calendar_interval": "day", "min_doc_count": 0}},
             # Sentimento do conjunto de resultados (não só da página).
@@ -8125,17 +8673,37 @@ def search_scraped(
         if not q:
             return {"error": str(exc), "total": 0, "items": [], "facets": {}}
         fallback = dict(body)
-        fallback["query"] = _scraped_query(None, source_id, tags, date_from, date_to, sentiments)
+        # A repetição tem de manter as exclusões: sem elas, uma pesquisa que
+        # falha por causa de `data.*` voltava a trazer cadastro como notícia.
+        fallback["query"] = _scraped_query(
+            None, source_id, tags, date_from, date_to, sentiments, exclude_prefixes, exclude_ids
+        )
         fallback["query"] = {
             "bool": {
                 "must": [{"multi_match": {"query": q, "fields": ["title", "summary", "text"], "lenient": True}}],
                 "filter": fallback["query"]["bool"].get("filter", []),
+                "must_not": fallback["query"]["bool"].get("must_not", []),
             }
         }
         try:
             resp = client.search(index=SCRAPED_INDEX, body=fallback)
         except Exception as inner:
             return {"error": str(inner), "total": 0, "items": [], "facets": {}}
+
+    # Última tentativa, tolerante a acentos: quem escreve «obras publicas» não
+    # encontrava «obras públicas» (o analisador padrão não dobra acentos). Só
+    # corre quando a pesquisa normal não devolveu nada.
+    if q and not resp.get("hits", {}).get("hits"):
+        folded = _accent_fold_terms(q)
+        if folded and folded != q:
+            retry = dict(body)
+            retry["query"] = _scraped_query(
+                folded, source_id, tags, date_from, date_to, sentiments, exclude_prefixes, exclude_ids
+            )
+            try:
+                resp = client.search(index=SCRAPED_INDEX, body=retry)
+            except Exception as exc:  # pragma: no cover - salvaguarda
+                logger.debug("Segunda tentativa da recolha (sem acentos) falhou: %s", exc)
 
     aggs = resp.get("aggregations", {}) or {}
     total = resp.get("hits", {}).get("total", 0)
@@ -8146,6 +8714,18 @@ def search_scraped(
         "facets": {
             "sources": [
                 {"key": b["key"], "count": b["doc_count"]} for b in aggs.get("sources", {}).get("buckets", [])
+            ],
+            "publishers": [
+                {
+                    "key": b["key"],
+                    "count": b["doc_count"],
+                    "id": next(
+                        (sub["key"] for sub in b.get("ids", {}).get("buckets", []) if sub.get("key")),
+                        "",
+                    ),
+                }
+                for b in aggs.get("publishers", {}).get("buckets", [])
+                if b.get("key")
             ],
             "tags": [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("tags", {}).get("buckets", [])],
             "days": [
@@ -8595,6 +9175,7 @@ def _social_query(
     date_to: Optional[str] = None,
     sentiments: Optional[List[str]] = None,
     person_nif: Optional[str] = None,
+    kinds: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Constrói a query de pesquisa de publicações sociais."""
     must: List[Dict[str, Any]] = []
@@ -8619,6 +9200,11 @@ def _social_query(
         filters.append({"term": {"person_nif": str(person_nif)}})
     if tags:
         filters.append({"terms": {"tags": tags}})
+    # Tipo de publicação (`post`, `video`, `comment`, `profile`…): é o que
+    # permite filtrar as redes **por tipo**, não só por plataforma.
+    tipos = [str(k).strip().lower() for k in (kinds or []) if str(k).strip()]
+    if tipos:
+        filters.append({"terms": {"kind": tipos}})
     etiquetas = [str(s).strip().lower() for s in (sentiments or []) if str(s).strip()]
     if etiquetas:
         filters.append({"terms": {"sentiment": etiquetas}})
@@ -8663,12 +9249,13 @@ def search_social(
     date_to: Optional[str] = None,
     sentiments: Optional[List[str]] = None,
     person_nif: Optional[str] = None,
+    kinds: Optional[List[str]] = None,
     size: int = 20,
     from_: int = 0,
     sort: str = "recent",
     es: Optional[Elasticsearch] = None,
 ) -> Dict[str, Any]:
-    """Pesquisa publicações sociais, com facetas por plataforma, canal, etiqueta e dia."""
+    """Pesquisa publicações sociais, com facetas por tipo, plataforma, canal e etiqueta."""
     client = es or get_es_client()
     if not client:
         return {"error": "Elasticsearch indisponível", "total": 0, "items": [], "facets": {}}
@@ -8690,11 +9277,13 @@ def search_social(
     body: Dict[str, Any] = {
         "size": max(0, min(int(size), 200)),
         "from": max(0, int(from_)),
-        "query": _social_query(q, platform, channel_id, tags, date_from, date_to, sentiments, person_nif),
+        "query": _social_query(q, platform, channel_id, tags, date_from, date_to, sentiments, person_nif, kinds),
         "sort": sort_spec,
         "track_total_hits": True,
         "aggs": {
             "platforms": {"terms": {"field": "platform", "size": 20}},
+            # Tipo de publicação: o painel de filtros das redes sociais é por aqui.
+            "kinds": {"terms": {"field": "kind", "size": 20}},
             "channels": {"terms": {"field": "channel_id", "size": 50}},
             "tags": {"terms": {"field": "tags", "size": 50}},
             "days": {"date_histogram": {"field": "collected_at", "calendar_interval": "day", "min_doc_count": 0}},
@@ -8713,7 +9302,7 @@ def search_social(
         fallback["query"] = {
             "bool": {
                 "must": [{"multi_match": {"query": q, "fields": ["title", "text", "author"], "lenient": True}}],
-                "filter": _social_query(None, platform, channel_id, tags, date_from, date_to, sentiments, person_nif)["bool"].get("filter", []),
+                "filter": _social_query(None, platform, channel_id, tags, date_from, date_to, sentiments, person_nif, kinds)["bool"].get("filter", []),
             }
         }
         try:
@@ -8731,6 +9320,7 @@ def search_social(
             "platforms": [
                 {"key": b["key"], "count": b["doc_count"]} for b in aggs.get("platforms", {}).get("buckets", [])
             ],
+            "kinds": [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("kinds", {}).get("buckets", [])],
             "channels": [
                 {"key": b["key"], "count": b["doc_count"]} for b in aggs.get("channels", {}).get("buckets", [])
             ],
@@ -9214,7 +9804,7 @@ def search_contratos_es(
         body["aggs"] = _contratos_es_aggs()
 
     try:
-        resp = client.search(index=CONTRATOS_ES_INDEX, body=body)
+        resp = _text_search(client, index=CONTRATOS_ES_INDEX, body=body, q=q)
         items = []
         for hit in resp["hits"]["hits"]:
             source = hit["_source"]
@@ -9718,6 +10308,814 @@ def get_contratos_es_analytics(
             "top_cpv": cpv_rows,
             "procedure_types": [{"key": b["key"], "count": b["doc_count"]} for b in aggs["procedure_types"]["buckets"]],
             "contract_types": [{"key": b["key"], "count": b["doc_count"]} for b in aggs["contract_types"]["buckets"]],
+            "year": ano,
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+# --- Contratos públicos de França (DECP / data.gouv.fr) ------------------
+# Documentos produzidos por `collectors/contratos_fr.py`. Índice plano com os
+# mesmos princípios do PLACSP: um documento por registo DECP, facetas diretas
+# por campos simples e suporte a nested apenas para CPV e titulaires.
+
+CONTRATOS_FR_FACET_FIELDS: Dict[str, str] = {
+    "ano": "ano",
+    "nature": "nature",
+    "procedure": "procedure",
+    "forme_prix": "forme_prix",
+    "lieu_execution_type": "lieu_execution_type",
+    "acheteur": "acheteur_nom.keyword",
+    "adjudicatario": "adjudicatario_nom.keyword",
+}
+
+
+def index_contratos_fr(
+    docs: List[Dict[str, Any]],
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa documentos de contratos de França no índice `contratos_fr`."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed_count": 0}
+
+    ensure_indices(client)
+    actions = []
+    for doc in docs:
+        doc_id = str(doc.get("doc_id") or "")
+        if not doc_id:
+            continue
+        actions.append({"_op_type": "index", "_index": CONTRATOS_FR_INDEX, "_id": doc_id, **doc})
+
+    if not actions:
+        return {"indexed_count": 0, "total": 0}
+
+    try:
+        success, errors = bulk(client, actions, raise_on_error=False, refresh=False)
+        return {"indexed_count": success, "total": len(actions), "errors": len(errors)}
+    except Exception as exc:
+        return {"error": str(exc), "indexed_count": 0, "total": len(actions)}
+
+
+def bulk_index_contratos_fr_from_jsonl(
+    jsonl_path: Path,
+    chunk_size: int = 2000,
+    max_records: Optional[int] = None,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa um JSONL de contratos de França em blocos (bulk)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed_count": 0}
+
+    ensure_indices(client)
+    total = success_total = error_total = 0
+    chunk: List[Dict[str, Any]] = []
+    resolved = Path(jsonl_path)
+    started = time.time()
+
+    try:
+        with open(resolved, "r", encoding="utf-8") as fh:
+            for line in fh:
+                if max_records and total >= max_records:
+                    break
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    chunk.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+                total += 1
+                if len(chunk) >= chunk_size:
+                    res = index_contratos_fr(chunk, client)
+                    success_total += res.get("indexed_count", 0)
+                    error_total += res.get("errors", 0) or (len(chunk) if res.get("error") else 0)
+                    chunk = []
+                    if total % (chunk_size * 10) == 0:
+                        rate = total / max(time.time() - started, 1e-6)
+                        print(f"[contratos_fr] {total:,} docs · {rate:,.0f} docs/s", flush=True)
+        if chunk:
+            res = index_contratos_fr(chunk, client)
+            success_total += res.get("indexed_count", 0)
+            error_total += res.get("errors", 0) or (len(chunk) if res.get("error") else 0)
+        client.indices.refresh(index=CONTRATOS_FR_INDEX)
+        return {
+            "indexed_count": success_total,
+            "total": total,
+            "errors": error_total,
+            "seconds": round(time.time() - started, 1),
+        }
+    except Exception as exc:
+        return {"error": str(exc), "indexed_count": success_total, "total": total}
+
+
+def contratos_fr_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Volumetria do índice `contratos_fr`."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "total": 0, "years": [], "natures": []}
+
+    ensure_indices(client)
+    try:
+        if not client.indices.exists(index=CONTRATOS_FR_INDEX):
+            return {"total": 0, "years": [], "natures": [], "available": False}
+        total = client.count(index=CONTRATOS_FR_INDEX).get("count", 0)
+        resp = client.search(
+            index=CONTRATOS_FR_INDEX,
+            body={
+                "size": 0,
+                "aggs": {
+                    "years": {"terms": {"field": "ano", "size": 40, "order": {"_key": "desc"}}},
+                    "natures": {"terms": {"field": "nature", "size": 10}},
+                },
+            },
+        )
+        aggs = resp.get("aggregations", {})
+        years = [
+            {"year": b["key"], "count": b["doc_count"]}
+            for b in aggs.get("years", {}).get("buckets", [])
+            if isinstance(b["key"], int)
+        ]
+        natures = [{"nature": b["key"], "count": b["doc_count"]} for b in aggs.get("natures", {}).get("buckets", [])]
+        return {
+            "available": True,
+            "total": total,
+            "years": [y["year"] for y in years],
+            "years_detail": years,
+            "natures": natures,
+        }
+    except Exception as exc:
+        return {"error": str(exc), "total": 0, "years": [], "natures": []}
+
+
+def contratos_fr_years_available() -> List[int]:
+    """Anos com JSONL normalizado em `data/processed/contratos-franca`."""
+    years: set[int] = set()
+    for path in (ROOT / "data" / "processed" / "contratos-franca").glob("*.jsonl"):
+        match = re.search(r"_(\d{4})_\d{2}\.jsonl$", path.name)
+        if match:
+            years.add(int(match.group(1)))
+    return sorted(years)
+
+
+def _build_contratos_fr_query(
+    q: Optional[str] = None,
+    ano: Optional[int] = None,
+    nature: Optional[str] = None,
+    procedure: Optional[str] = None,
+    acheteur: Optional[str] = None,
+    acheteur_id: Optional[str] = None,
+    adjudicatario: Optional[str] = None,
+    adjudicatario_id: Optional[str] = None,
+    cpv_code: Optional[str] = None,
+    lieu_execution_code: Optional[str] = None,
+    lieu_execution_type: Optional[str] = None,
+    min_value: Optional[float] = None,
+    max_value: Optional[float] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    date_field: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Constrói a query de pesquisa de contratos de França."""
+    must: List[Dict[str, Any]] = []
+    filters: List[Dict[str, Any]] = []
+
+    if q and q.strip():
+        text = q.strip()
+        must.append(
+            {
+                "bool": {
+                    "should": [
+                        {"multi_match": {"query": text, "fields": ["objet^3", "adjudicatario_nom^2", "acheteur_nom^2", "search_text"], "type": "best_fields"}},
+                        {"multi_match": {"query": text, "fields": ["objet^4", "search_text"], "type": "phrase", "boost": 2}},
+                    ],
+                    "minimum_should_match": 1,
+                }
+            }
+        )
+
+    if ano is not None:
+        filters.append({"term": {"ano": ano}})
+    if nature:
+        filters.append({"term": {"nature": nature}})
+    if procedure:
+        filters.append({"term": {"procedure": procedure}})
+    if acheteur_id:
+        filters.append({"term": {"acheteur_id": acheteur_id}})
+    if acheteur:
+        filters.append(
+            {
+                "bool": {
+                    "should": [
+                        {"match_phrase": {"acheteur_nom": acheteur}},
+                        {"term": {"acheteur_nom.keyword": acheteur}},
+                    ],
+                    "minimum_should_match": 1,
+                }
+            }
+        )
+    if adjudicatario_id:
+        filters.append({"term": {"adjudicatario_id": adjudicatario_id}})
+    if adjudicatario:
+        filters.append(
+            {
+                "bool": {
+                    "should": [
+                        {"match_phrase": {"adjudicatario_nom": adjudicatario}},
+                        {"term": {"adjudicatario_nom.keyword": adjudicatario}},
+                        {"nested": {"path": "titulaires", "query": {"match_phrase": {"titulaires.nom": adjudicatario}}}},
+                    ],
+                    "minimum_should_match": 1,
+                }
+            }
+        )
+    if cpv_code:
+        code = cpv_code.strip()
+        filters.append(
+            {
+                "nested": {
+                    "path": "cpv",
+                    "query": (
+                        {"term": {"cpv.code": code}}
+                        if re.fullmatch(r"\d{8}(-\d)?", code)
+                        else {"prefix": {"cpv.code": code}}
+                    ),
+                }
+            }
+        )
+    if lieu_execution_code:
+        filters.append({"term": {"lieu_execution_code": lieu_execution_code}})
+    if lieu_execution_type:
+        filters.append({"term": {"lieu_execution_type": lieu_execution_type}})
+
+    if min_value is not None or max_value is not None:
+        rng: Dict[str, Any] = {k: v for k, v in (("gte", min_value), ("lte", max_value)) if v is not None}
+        filters.append(
+            {
+                "bool": {
+                    "should": [
+                        {"range": {"montant": rng}},
+                        {
+                            "bool": {
+                                "must": [
+                                    {"bool": {"must_not": {"exists": {"field": "montant"}}}},
+                                    {"range": {"montant_estime": rng}},
+                                ]
+                            }
+                        },
+                    ],
+                    "minimum_should_match": 1,
+                }
+            }
+        )
+
+    field = date_field if date_field in ("date_notification", "date_publication") else "date_publication"
+    date_range = {k: v for k, v in (("gte", start_date), ("lte", end_date)) if v}
+    if date_range:
+        filters.append({"range": {field: date_range}})
+
+    return {"bool": {"must": must, "filter": filters}}
+
+
+def _contratos_fr_sort(sort_by: Optional[str], sort_order: Optional[str]) -> List[Any]:
+    order = sort_order if sort_order in ("asc", "desc") else "desc"
+    if sort_by in ("montant", "montant_estime", "valor"):
+        return [{sort_by: {"order": order, "missing": "_last", "unmapped_type": "float"}}, "_score"]
+    if sort_by in ("date_notification", "date_publication"):
+        return [{sort_by: {"order": order, "missing": "_last", "unmapped_type": "date"}}, "_score"]
+    if sort_by == "ano":
+        return [{"ano": {"order": order, "missing": "_last", "unmapped_type": "integer"}}, "_score"]
+    if sort_by == "relevancia":
+        return ["_score", {"date_publication": {"order": "desc"}}]
+    return [{"date_publication": {"order": "desc", "missing": "_last"}}, "_score"]
+
+
+def _contratos_fr_aggs(cpv_size: int = 15, terms_size: int = 15) -> Dict[str, Any]:
+    """Facetas usadas pela página de pesquisa francesa."""
+    aggs: Dict[str, Any] = {
+        name: {"terms": {"field": field, "size": terms_size}} for name, field in CONTRATOS_FR_FACET_FIELDS.items()
+    }
+    aggs["anos"] = {"terms": {"field": "ano", "size": 40, "order": {"_key": "desc"}}}
+    aggs["cpv_codes"] = {
+        "nested": {"path": "cpv"},
+        "aggs": {
+            "codes": {
+                "terms": {"field": "cpv.code", "size": cpv_size},
+                "aggs": {"nom": {"top_hits": {"size": 1, "_source": ["cpv.code", "cpv.nom"]}}},
+            }
+        },
+    }
+    aggs["valor"] = {
+        "filter": {"exists": {"field": "montant"}},
+        "aggs": {"sum": {"sum": {"field": "montant"}}, "avg": {"avg": {"field": "montant"}}},
+    }
+    aggs["valor_estime"] = {
+        "filter": {"exists": {"field": "montant_estime"}},
+        "aggs": {"sum": {"sum": {"field": "montant_estime"}}},
+    }
+    return aggs
+
+
+def search_contratos_fr(
+    q: Optional[str] = None,
+    ano: Optional[int] = None,
+    nature: Optional[str] = None,
+    procedure: Optional[str] = None,
+    acheteur: Optional[str] = None,
+    acheteur_id: Optional[str] = None,
+    adjudicatario: Optional[str] = None,
+    adjudicatario_id: Optional[str] = None,
+    cpv_code: Optional[str] = None,
+    lieu_execution_code: Optional[str] = None,
+    lieu_execution_type: Optional[str] = None,
+    min_value: Optional[float] = None,
+    max_value: Optional[float] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    date_field: Optional[str] = None,
+    size: int = 20,
+    from_: int = 0,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = None,
+    with_facets: bool = True,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa contratos de França com filtros e facetas."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": []}
+
+    query = _build_contratos_fr_query(
+        q=q,
+        ano=ano,
+        nature=nature,
+        procedure=procedure,
+        acheteur=acheteur,
+        acheteur_id=acheteur_id,
+        adjudicatario=adjudicatario,
+        adjudicatario_id=adjudicatario_id,
+        cpv_code=cpv_code,
+        lieu_execution_code=lieu_execution_code,
+        lieu_execution_type=lieu_execution_type,
+        min_value=min_value,
+        max_value=max_value,
+        start_date=start_date,
+        end_date=end_date,
+        date_field=date_field,
+    )
+    body: Dict[str, Any] = {
+        "query": query,
+        "sort": _contratos_fr_sort(sort_by, sort_order),
+        "from": max(from_, 0),
+        "size": size,
+        "track_total_hits": True,
+    }
+    if with_facets:
+        body["aggs"] = _contratos_fr_aggs()
+
+    try:
+        resp = client.search(index=CONTRATOS_FR_INDEX, body=body)
+        items = []
+        for hit in resp["hits"]["hits"]:
+            source = hit["_source"]
+            source["score"] = hit.get("_score")
+            source["doc_id"] = hit.get("_id")
+            items.append(source)
+
+        result: Dict[str, Any] = {
+            "query": q,
+            "total": resp["hits"]["total"]["value"],
+            "items": items,
+            "from": from_,
+            "size": size,
+        }
+        if with_facets:
+            aggs = resp.get("aggregations", {})
+            facets: Dict[str, List[Dict[str, Any]]] = {}
+            for name in CONTRATOS_FR_FACET_FIELDS:
+                buckets = aggs.get(name, {}).get("buckets", [])
+                if isinstance(buckets, dict):
+                    buckets = buckets.get("codes", {}).get("buckets", [])
+                facets[name] = [{"value": b["key"], "count": b["doc_count"]} for b in buckets]
+            facets["cpv"] = []
+            for bucket in aggs.get("cpv_codes", {}).get("codes", {}).get("buckets", []):
+                facets["cpv"].append(
+                    {
+                        "value": bucket["key"],
+                        "count": bucket["doc_count"],
+                        "label": _cpv_label_from_bucket(bucket, bucket["key"]),
+                    }
+                )
+            result["facets"] = facets
+            result["stats"] = {
+                "valor_sum": aggs.get("valor", {}).get("sum", {}).get("value"),
+                "valor_avg": aggs.get("valor", {}).get("avg", {}).get("value"),
+                "valor_docs": aggs.get("valor", {}).get("doc_count"),
+                "valor_estime_sum": aggs.get("valor_estime", {}).get("sum", {}).get("value"),
+                "valor_estime_docs": aggs.get("valor_estime", {}).get("doc_count"),
+            }
+        return result
+    except Exception as exc:
+        return {"error": str(exc), "items": []}
+
+
+def contratos_fr_autocomplete(q: str, size: int = 10, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Sugestões de compradores, adjudicatários, objetos e CPV para França."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "suggestions": []}
+
+    text = (q or "").strip()
+    if len(text) < 2:
+        return {"suggestions": []}
+
+    try:
+        resp = client.search(
+            index=CONTRATOS_FR_INDEX,
+            body={
+                "size": 0,
+                "query": {
+                    "bool": {
+                        "should": [
+                            {"match_phrase_prefix": {"acheteur_nom": text}},
+                            {"match_phrase_prefix": {"adjudicatario_nom": text}},
+                            {"match_phrase_prefix": {"objet": text}},
+                        ],
+                        "minimum_should_match": 1,
+                    }
+                },
+                "aggs": {
+                    "acheteurs": {"terms": {"field": "acheteur_nom.keyword", "size": size}},
+                    "adjudicatarios": {"terms": {"field": "adjudicatario_nom.keyword", "size": size}},
+                    "cpv_codes": {
+                        "nested": {"path": "cpv"},
+                        "aggs": {
+                            "codes": {
+                                "terms": {
+                                    "field": "cpv.code",
+                                    "size": size,
+                                    **({"include": f"{text}.*"} if text.isdigit() else {}),
+                                }
+                            }
+                        },
+                    },
+                },
+            },
+        )
+        aggs = resp.get("aggregations", {})
+        suggestions: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        for kind, key in (("acheteur", "acheteurs"), ("adjudicatario", "adjudicatarios")):
+            for bucket in aggs.get(key, {}).get("buckets", []):
+                if bucket["key"] and bucket["key"] not in seen:
+                    seen.add(bucket["key"])
+                    suggestions.append({"text": bucket["key"], "type": kind, "count": bucket["doc_count"]})
+        for bucket in aggs.get("cpv_codes", {}).get("codes", {}).get("buckets", []):
+            if bucket["key"] and bucket["key"] not in seen:
+                seen.add(bucket["key"])
+                suggestions.append({"text": bucket["key"], "type": "cpv", "count": bucket["doc_count"]})
+        return {"suggestions": suggestions[: size * 2]}
+    except Exception as exc:
+        return {"error": str(exc), "suggestions": []}
+
+
+CONTRATOS_FR_ENTITY_FIELDS: Dict[str, Dict[str, str]] = {
+    "acheteur": {"field": "acheteur_nom.keyword", "label": "Acheteur public"},
+    "adjudicatario": {"field": "adjudicatario_nom.keyword", "label": "Titulaire"},
+}
+
+
+CONTRATOS_FR_ENTITY_SAMPLE_FIELDS = [
+    "acheteur_id",
+    "adjudicatario_type_identifiant",
+    "lieu_execution_code",
+    "lieu_execution_type",
+]
+
+
+def _contratos_fr_entity_filter(field: str, text: str) -> Dict[str, Any]:
+    source = field[: -len(".keyword")] if field.endswith(".keyword") else field
+    if not text:
+        return {"match_all": {}}
+    return {
+        "bool": {
+            "should": [
+                {"match_phrase": {source: text}},
+                {"match_phrase_prefix": {source: text}},
+            ],
+            "minimum_should_match": 1,
+        }
+    }
+
+
+def search_contratos_fr_entities(
+    q: Optional[str] = None,
+    *,
+    kind: Optional[str] = None,
+    ano: Optional[int] = None,
+    min_count: int = 1,
+    size: int = 20,
+    from_: int = 0,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Entidades de França (acheteurs e titulaires) por nome."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": []}
+
+    text = (q or "").strip()
+    selected = []
+    if kind:
+        selected = [kind] if kind in CONTRATOS_FR_ENTITY_FIELDS else []
+    if not selected:
+        selected = list(CONTRATOS_FR_ENTITY_FIELDS.keys())
+
+    all_items: List[Dict[str, Any]] = []
+    for k in selected:
+        cfg = CONTRATOS_FR_ENTITY_FIELDS[k]
+        filters: List[Dict[str, Any]] = [_contratos_fr_entity_filter(cfg["field"], text)]
+        if ano is not None:
+            filters.append({"term": {"ano": ano}})
+
+        agg_body = {
+            "size": 0,
+            "query": {"bool": {"filter": filters}},
+            "aggs": {
+                "entities": {
+                    "terms": {"field": cfg["field"], "size": from_ + size, "min_doc_count": min_count},
+                    "aggs": {
+                        "total_value": {"sum": {"field": "valor"}},
+                        "avg_value": {"avg": {"field": "valor"}},
+                        "max_value": {"max": {"field": "valor"}},
+                        "sample": {"top_hits": {"size": 1, "_source": CONTRATOS_FR_ENTITY_SAMPLE_FIELDS}},
+                        "last_year": {"max": {"field": "ano"}},
+                    },
+                }
+            },
+        }
+
+        try:
+            resp = client.search(index=CONTRATOS_FR_INDEX, body=agg_body)
+        except Exception as exc:
+            return {"error": str(exc), "items": []}
+
+        buckets = resp.get("aggregations", {}).get("entities", {}).get("buckets", [])
+        for bucket in buckets[from_: from_ + size]:
+            sample = (bucket.get("sample", {}).get("hits", {}).get("hits", []) or [{}])[0].get("_source", {})
+            all_items.append(
+                {
+                    "type": k,
+                    "label": cfg["label"],
+                    "name": bucket["key"],
+                    "count": bucket["doc_count"],
+                    "total_value": bucket.get("total_value", {}).get("value"),
+                    "avg_value": bucket.get("avg_value", {}).get("value"),
+                    "max_value": bucket.get("max_value", {}).get("value"),
+                    "last_year": bucket.get("last_year", {}).get("value"),
+                    "id": sample.get("acheteur_id") if k == "acheteur" else sample.get("adjudicatario_id"),
+                    "id_type": sample.get("adjudicatario_type_identifiant"),
+                    "lieu_execution_code": sample.get("lieu_execution_code"),
+                    "lieu_execution_type": sample.get("lieu_execution_type"),
+                }
+            )
+
+    all_items.sort(key=lambda x: (x["total_value"] or 0), reverse=True)
+    return {
+        "total": len(all_items),
+        "items": all_items[:size],
+        "query": q,
+        "kind": kind,
+        "from": from_,
+        "size": size,
+    }
+
+
+def get_contrato_fr(doc_id: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Devolve um contrato francês pelo `doc_id` do índice."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    try:
+        resp = client.get(index=CONTRATOS_FR_INDEX, id=doc_id)
+        source = resp.get("_source", {})
+        source["doc_id"] = resp.get("_id")
+        return source
+    except NotFoundError:
+        return {"error": "Contrato não encontrado"}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def _contratos_fr_value_source(field: str = "montant") -> Dict[str, Any]:
+    """Fonte de valores francesa: usa `montant` e, se ausente, `montant_estime`."""
+    return {
+        "script": {
+            "source": f"""
+                double v = doc['{field}'].size() != 0 ? doc['{field}'].value : 0.0;
+                if (v == 0.0 && doc['montant_estime'].size() != 0) {{
+                    v = doc['montant_estime'].value;
+                }}
+                return v;
+            """,
+        }
+    }
+
+
+def _top_hit_cpv_fr_name(top_hits: Dict[str, Any], code: str) -> str:
+    hits = top_hits.get("hits", {}).get("hits", [])
+    if not hits:
+        return code
+    source = hits[0].get("_source") or {}
+    cpvs = source.get("cpv")
+    if isinstance(cpvs, list):
+        for entry in cpvs:
+            if isinstance(entry, dict) and entry.get("code") == code and entry.get("nom"):
+                return entry["nom"]
+    if isinstance(source, dict) and source.get("nom"):
+        return source["nom"]
+    return code
+
+
+def get_contratos_fr_analytics(
+    q: Optional[str] = None,
+    ano: Optional[int] = None,
+    nature: Optional[str] = None,
+    procedure: Optional[str] = None,
+    acheteur: Optional[str] = None,
+    acheteur_id: Optional[str] = None,
+    adjudicatario: Optional[str] = None,
+    adjudicatario_id: Optional[str] = None,
+    cpv_code: Optional[str] = None,
+    lieu_execution_code: Optional[str] = None,
+    lieu_execution_type: Optional[str] = None,
+    min_value: Optional[float] = None,
+    max_value: Optional[float] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    date_field: Optional[str] = None,
+    top_acheteurs: int = 10,
+    top_adjudicatarios: int = 10,
+    top_cpv: int = 10,
+    value_buckets: int = 10,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Dashboard/analytics de contratos de França."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    base_query = _build_contratos_fr_query(
+        q=q,
+        ano=ano,
+        nature=nature,
+        procedure=procedure,
+        acheteur=acheteur,
+        acheteur_id=acheteur_id,
+        adjudicatario=adjudicatario,
+        adjudicatario_id=adjudicatario_id,
+        cpv_code=cpv_code,
+        lieu_execution_code=lieu_execution_code,
+        lieu_execution_type=lieu_execution_type,
+        min_value=min_value,
+        max_value=max_value,
+        start_date=start_date,
+        end_date=end_date,
+        date_field=date_field,
+    )
+
+    value_source = _contratos_fr_value_source("montant")
+
+    analytics_body: Dict[str, Any] = {
+        "size": 0,
+        "track_total_hits": True,
+        "query": base_query,
+        "aggs": {
+            "total_value": {"sum": value_source},
+            "avg_value": {"avg": value_source},
+            "max_value": {"max": value_source},
+            "by_year": {
+                "terms": {"field": "ano", "size": 50, "order": {"_key": "desc"}},
+                "aggs": {"total_value": {"sum": value_source}},
+            },
+            "by_month": {
+                "date_histogram": {
+                    "field": "date_publication",
+                    "calendar_interval": "month",
+                    "format": "yyyy-MM",
+                    "min_doc_count": 1,
+                    "missing": "2000-01",
+                }
+            },
+            "value_distribution": {
+                "histogram": {
+                    "script": value_source["script"],
+                    "interval": 100000,
+                    "min_doc_count": 1,
+                }
+            },
+            "top_acheteurs": {
+                "terms": {
+                    "field": "acheteur_nom.keyword",
+                    "size": top_acheteurs,
+                    "order": {"total_value": "desc"},
+                },
+                "aggs": {"total_value": {"sum": value_source}},
+            },
+            "top_adjudicatarios": {
+                "terms": {
+                    "field": "adjudicatario_nom.keyword",
+                    "size": top_adjudicatarios,
+                    "order": {"total_value": "desc"},
+                },
+                "aggs": {"total_value": {"sum": value_source}},
+            },
+            "top_cpv": {
+                "nested": {"path": "cpv"},
+                "aggs": {
+                    "codes": {
+                        "terms": {"field": "cpv.code", "size": top_cpv, "order": {"total_value": "desc"}},
+                        "aggs": {
+                            "nom": {"top_hits": {"size": 1, "_source": ["cpv.code", "cpv.nom"]}},
+                            "total_value": {
+                                "reverse_nested": {},
+                                "aggs": {"value": {"sum": value_source}},
+                            },
+                        },
+                    }
+                },
+            },
+            "procedures": {
+                "terms": {"field": "procedure", "size": 20, "missing": "N/A"}
+            },
+            "formes_prix": {
+                "terms": {"field": "forme_prix", "size": 20, "missing": "N/A"}
+            },
+        },
+    }
+
+    try:
+        resp = client.search(index=CONTRATOS_FR_INDEX, body=analytics_body)
+        aggs = resp["aggregations"]
+
+        def fmt_money(v):
+            return round(v, 2) if v is not None else None
+
+        def read_value(bucket_total_value: Dict[str, Any]) -> Optional[float]:
+            value = bucket_total_value.get("value", {})
+            return value.get("value") if isinstance(value, dict) else value
+
+        acheteur_rows = []
+        for b in aggs.get("top_acheteurs", {}).get("buckets", []):
+            acheteur_rows.append({
+                "key": b["key"],
+                "count": b["doc_count"],
+                "total_value": fmt_money(read_value(b.get("total_value", {}))),
+                "description": b["key"],
+            })
+
+        adjudicatario_rows = []
+        for b in aggs.get("top_adjudicatarios", {}).get("buckets", []):
+            adjudicatario_rows.append({
+                "key": b["key"],
+                "count": b["doc_count"],
+                "total_value": fmt_money(read_value(b.get("total_value", {}))),
+                "description": b["key"],
+            })
+
+        cpv_rows = []
+        for b in aggs.get("top_cpv", {}).get("codes", {}).get("buckets", []):
+            cpv_rows.append({
+                "key": b["key"],
+                "count": b["doc_count"],
+                "total_value": fmt_money(read_value(b.get("total_value", {}))),
+                "description": _top_hit_cpv_fr_name(b.get("nom"), b["key"]),
+            })
+
+        value_distribution = []
+        for b in aggs.get("value_distribution", {}).get("buckets", []):
+            if b.get("key") is None or b["key"] < 0:
+                continue
+            value_distribution.append({
+                "key": f"{int(b['key'])} - {int(b['key']) + 100000}",
+                "count": b["doc_count"],
+            })
+            if len(value_distribution) >= value_buckets:
+                break
+
+        return {
+            "total_contracts": resp["hits"]["total"]["value"],
+            "total_value": fmt_money(aggs["total_value"].get("value")),
+            "avg_value": fmt_money(aggs["avg_value"].get("value")),
+            "max_value": fmt_money(aggs["max_value"].get("value")),
+            "by_year": [{"key": str(b["key"]), "count": b["doc_count"], "total_value": fmt_money(read_value(b.get("total_value", {})))} for b in aggs["by_year"]["buckets"]],
+            "by_month": [{"key": b["key_as_string"], "count": b["doc_count"]} for b in aggs["by_month"]["buckets"]],
+            "value_distribution": value_distribution,
+            "top_entities": acheteur_rows + adjudicatario_rows,
+            "top_cpv": cpv_rows,
+            "procedures": [{"key": b["key"], "count": b["doc_count"]} for b in aggs["procedures"]["buckets"]],
+            "formes_prix": [{"key": b["key"], "count": b["doc_count"]} for b in aggs["formes_prix"]["buckets"]],
             "year": ano,
         }
     except Exception as exc:
@@ -12237,6 +13635,135 @@ def search_people(
         }
     except Exception as exc:
         return {"error": str(exc), "items": [], "total": 0}
+
+
+def _people_facet_agg(field: str, size: int = 12) -> Dict[str, Any]:
+    """Agregação para uma faceta de pessoas (campos `roles.*` são `nested`).
+
+    Nos `nested` conta-se **pessoas** e não cargos: um `reverse_nested` sobe ao
+    documento, senão «CIRE» aparecia com 31 118 (o número de papéis) em vez dos
+    milhares de pessoas com esse papel — e o filtro devolve pessoas.
+    """
+    if field.startswith("roles."):
+        return {
+            "nested": {"path": "roles"},
+            "aggs": {"values": {"terms": {"field": field, "size": size}, "aggs": {"pessoas": {"reverse_nested": {}}}}},
+        }
+    return {"terms": {"field": field, "size": size}}
+
+
+def _people_facet_values(agg: Dict[str, Any], field: str) -> List[Dict[str, Any]]:
+    """Valores de uma faceta, desembrulhando a agregação `nested` quando existe."""
+    buckets = agg.get("values", {}).get("buckets", []) if field.startswith("roles.") else agg.get("buckets", [])
+    return [
+        {
+            "key": b["key"],
+            "count": int((b.get("pessoas") or {}).get("doc_count") or b["doc_count"]),
+        }
+        for b in buckets
+        if b.get("key") not in (None, "")
+    ]
+
+
+def _people_filter_clause(field: str, value: str) -> Dict[str, Any]:
+    """Cláusula de filtro por um campo de pessoas (com `nested` em `roles.*`)."""
+    if field.startswith("roles."):
+        return {"nested": {"path": "roles", "query": {"term": {field: value}}}}
+    return {"term": {field: value}}
+
+
+def search_people_faceted(
+    q: Optional[str] = None,
+    *,
+    base_query: Optional[Dict[str, Any]] = None,
+    match_fields: Optional[List[str]] = None,
+    filters: Optional[Dict[str, str]] = None,
+    facet_fields: Optional[Dict[str, str]] = None,
+    size: int = 20,
+    from_: int = 0,
+    sort: str = "relevance",
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa `finance_people` com filtros por campo e facetas contadas.
+
+    Serve os âmbitos **Pessoas** e **Políticos** da Pesquisa total:
+
+    - `base_query` restringe o universo (ex.: só políticos com ficha);
+    - `match_fields` acrescenta campos ao texto pesquisado (cargo, partido,
+      círculo) — sem eles, «deputado» não encontrava ninguém, porque a pesquisa
+      de pessoas só olha ao nome;
+    - `filters` aplica as facetas escolhidas (`{campo_es: valor}`);
+    - `facet_fields` (`{nome: campo_es}`) devolve as contagens para o painel de
+      filtros — incluindo os `nested` de `roles.*` (cargos, origem CIRE).
+
+    As facetas são contadas **sobre o resultado filtrado**, para os números
+    acompanharem sempre o que está no ecrã.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "total": 0, "items": [], "facets": {}}
+    ensure_indices(client)
+
+    must: List[Dict[str, Any]] = []
+    if q:
+        # Mesma afinidade de `search_people`: frase/palavras do nome, `nif` exato
+        # e o analisador de autocompletar. Sem `operator: and` nos `match`, uma
+        # pesquisa por nome próprio devolvia quase todo o índice.
+        should: List[Dict[str, Any]] = [
+            {"term": {"nif": str(q)}},
+            {"match_phrase": {"name": {"query": q, "boost": 6}}},
+            {"match": {"name": {"query": q, "operator": "and", "boost": 3}}},
+            {"match": {"name.autocomplete": {"query": q, "operator": "and"}}},
+        ]
+        for field in match_fields or []:
+            should.append({"match": {field: {"query": q, "operator": "and"}}})
+        must.append({"bool": {"should": should, "minimum_should_match": 1}})
+    if base_query:
+        must.append(base_query)
+    clause_filters: List[Dict[str, Any]] = [
+        _people_filter_clause(field, str(value))
+        for field, value in (filters or {}).items()
+        if field and value
+    ]
+
+    bool_query: Dict[str, Any] = {"must": must or [{"match_all": {}}]}
+    if clause_filters:
+        bool_query["filter"] = clause_filters
+
+    if sort == "name":
+        sort_spec: List[Any] = [{"name.keyword": {"order": "asc"}}]
+    elif q and sort == "relevance":
+        sort_spec = [{"_score": {"order": "desc"}}, {"name.keyword": {"order": "asc"}}]
+    else:
+        sort_spec = [{"name.keyword": {"order": "asc"}}]
+
+    body: Dict[str, Any] = {
+        "query": {"bool": bool_query},
+        "from": max(0, int(from_)),
+        "size": max(1, min(int(size), 200)),
+        "sort": sort_spec,
+        "track_total_hits": True,
+        "aggs": {
+            name: _people_facet_agg(field, 12) for name, field in (facet_fields or {}).items() if field
+        },
+    }
+    try:
+        resp = client.search(index=PEOPLE_INDEX, body=body)
+    except Exception as exc:
+        return {"error": str(exc), "total": 0, "items": [], "facets": {}}
+
+    total = resp.get("hits", {}).get("total", 0)
+    total_value = total.get("value", 0) if isinstance(total, dict) else total
+    aggs = resp.get("aggregations", {}) or {}
+    return {
+        "total": int(total_value or 0),
+        "items": [hit.get("_source") or {} for hit in resp.get("hits", {}).get("hits", [])],
+        "facets": {
+            name: _people_facet_values(aggs.get(name) or {}, field)
+            for name, field in (facet_fields or {}).items()
+            if field
+        },
+    }
 
 
 def people_autocomplete(

@@ -103,6 +103,7 @@ import EmailPage from "./pages/EmailPage";
 import CmsPage from "./pages/CmsPage";
 import ShopPage from "./pages/ShopPage";
 import RssPage from "./pages/RssPage";
+import NewsPage from "./pages/NewsPage";
 import CompareWindow from "./pages/CompareWindow";
 import { ContractDetailWindow, EntityDetailWindow, QuickLookWindow } from "./components/DetailWindow";
 import EntityContractsWindow from "./pages/EntityContractsWindow";
@@ -148,6 +149,7 @@ type AppView =
   | "cms"
   | "shop"
   | "rss"
+  | "noticias"
   | "contracts-list"
   | "contracts-map"
   | "region-detail"
@@ -328,6 +330,7 @@ function pathForView(
     return current.startsWith("/rss") ? current : "/rss";
   }
   if (view === "email") return "/email";
+  if (view === "noticias") return "/noticias";
   if (view === "contracts-list") return "/contracts-list";
   if (view === "company-detail" && company) return `/companies/${company}`;
   return "/";
@@ -476,6 +479,7 @@ export default function App() {
       return section === "grafico" ? "ticker-chart" : "ticker-detail";
     }
     if (path === "/elastic") return "elastic";
+    if (path === "/noticias") return "noticias";
     if (path === "/search") return "search";
     if (path === "/pesquisa") return "pesquisa";
     if (path === "/sentimento") return "sentimento";
@@ -644,6 +648,7 @@ export default function App() {
       else if (path === "/cms" || path.startsWith("/cms/")) next = "cms";
       else if (path === "/shop" || path.startsWith("/shop/")) next = "shop";
       else if (path === "/rss" || path.startsWith("/rss/")) next = "rss";
+      else if (path === "/noticias" || path.startsWith("/noticias/")) next = "noticias";
       else if (path === "/iframe-pages") next = "iframe-pages";
       else if (iframeViewFromPath(path)) next = iframeViewFromPath(path) as AppView;
       else if (crmSectionFromPath(path)) next = CRM_SECTION_VIEWS[crmSectionFromPath(path) as CrmSection] as AppView;
@@ -1252,6 +1257,7 @@ export default function App() {
     if (target === "cms") return <CmsPage />;
     if (target === "shop") return <ShopPage />;
     if (target === "rss") return <RssPage />;
+    if (target === "noticias") return <NewsPage />;
     if (target === "trading") return <TradingPage />;
     if (target === "tickers") return <TickerPage onSwitchView={() => setViewAndHistory("dashboard")} />;
     if (target === "rag") return <RagPage onSwitchView={() => setViewAndHistory("dashboard")} />;
