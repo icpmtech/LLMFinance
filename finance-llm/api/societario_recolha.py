@@ -506,6 +506,13 @@ def start_job(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "entities_total": 0,
                 "publications": 0,
                 "files": 0,
+                # Progresso **dentro** da entidade em curso: uma entidade grande
+                # demora minutos só a ler as páginas, e sem estes números o
+                # trabalho parecia parado.
+                "publications_live": 0,
+                "pages_read": 0,
+                "saved_total": 0,
+                "last_activity": _now(),
                 "current": None,
             },
             "result": None,
@@ -596,10 +603,58 @@ def _run_job_inner(job: Dict[str, Any]) -> None:
 
             Devolve ``(items, erro, limitado)``: o rate-limit é uma condição
             externa e transitória, por isso não se mistura com os erros de dados.
+
+            Durante a recolha, o progresso do trabalho é atualizado **dentro** da
+            entidade (páginas lidas, publicações encontradas e detalhes abertos) e
+            cada página é gravada no JSON logo que chega: uma entidade grande
+            demora minutos e antes disso o trabalho parecia parado, sem nada na
+            pasta de exportação.
             """
             for tentativa in range(tentativas_rate_limit + 1):
                 recolhidas: List[Dict[str, Any]] = []
                 bloqueado = False
+
+                def reportar(evento: Dict[str, Any]) -> None:
+                    progress["last_activity"] = _now()
+                    progress["current"] = {"nif": nif, "name": nome, **evento}
+                    etapa = evento.get("stage")
+                    if etapa == "lista":
+                        progress["phase"] = (
+                            f"a ler a lista (página {evento.get('pages_read')} · "
+                            f"{evento.get('publications')} publicações)"
+                        )
+                    elif etapa == "detalhes":
+                        progress["phase"] = (
+                            f"a abrir os detalhes ({evento.get('details_done')}/"
+                            f"{evento.get('details_total')} publicações)"
+                        )
+                    elif evento.get("message"):
+                        progress["phase"] = str(evento["message"])
+                    if "publications" in evento:
+                        progress["publications_live"] = int(evento.get("publications") or 0)
+                    if "pages_read" in evento:
+                        # Os eventos dos detalhes não trazem páginas: não se apaga
+                        # o que já se sabia (a UI mostrava «0 páginas» a meio).
+                        progress["pages_read"] = int(evento.get("pages_read") or 0)
+
+                def guardar_pagina(paginas: List[Any], numero: int) -> None:
+                    """Grava já a página lida (o `write_export` junta por `pub_id`)."""
+                    items = [pub.to_dict() for pub in paginas]
+                    if not items:
+                        return
+                    try:
+                        escrito = write_export(nif, nome, items, criteria=alvos.get("filters"))
+                        progress["files"] = max(int(progress.get("files") or 0), 1)
+                        progress["saved_total"] = int(escrito.get("total") or 0)
+                        progress["current"] = {
+                            "nif": nif,
+                            "name": nome,
+                            "saved": progress["saved_total"],
+                            "page": numero,
+                        }
+                    except Exception:  # noqa: BLE001 - gravar a meio não pode parar a recolha
+                        logger.exception("Falha a gravar a página %s de %s", numero, nif)
+
                 for janela in janelas:
                     criteria: Dict[str, Any] = {"nif": nif, "tipo": str(payload.get("tipo") or "0")}
                     if janela[0] and janela[1]:
@@ -612,6 +667,8 @@ def _run_job_inner(job: Dict[str, Any]) -> None:
                         publications = client.collect(
                             with_details=bool(payload.get("with_details", True)),
                             max_pages=int(payload.get("max_pages") or 50),
+                            on_progress=reportar,
+                            on_page=None if payload.get("ingest") is False else guardar_pagina,
                             **display,
                         )
                     except RateLimitedError as exc:

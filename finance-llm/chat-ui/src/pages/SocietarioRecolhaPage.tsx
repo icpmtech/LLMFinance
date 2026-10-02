@@ -90,6 +90,18 @@ function tamanho(bytes?: number | null): string {
   return `${bytes} B`;
 }
 
+/** Há quanto tempo (texto curto) — usado no «último sinal de vida» do trabalho. */
+function haQuanto(iso?: string | null): string {
+  if (!iso) return "—";
+  const instante = new Date(iso).getTime();
+  if (Number.isNaN(instante)) return iso;
+  const segundos = Math.max(0, Math.round((Date.now() - instante) / 1000));
+  if (segundos < 60) return `há ${segundos}s`;
+  const minutos = Math.round(segundos / 60);
+  if (minutos < 60) return `há ${minutos} min`;
+  return `há ${Math.round(minutos / 60)} h`;
+}
+
 function ProgressoRecolha({ job }: { job: RecolhaJob }) {
   const progresso = job.progress || {};
   const total = progresso.entities_total || 0;
@@ -108,9 +120,17 @@ function ProgressoRecolha({ job }: { job: RecolhaJob }) {
         </span>
         <span>{formatNumber(progresso.publications || 0)} publicações</span>
         <span>{formatNumber(progresso.files || 0)} ficheiros</span>
+        {job.status === "running" && (progresso.publications_live || 0) > 0 && (
+          <span className="text-teal-200">
+            agora: {formatNumber(progresso.publications_live || 0)} publicações encontradas
+            {progresso.pages_read ? ` em ${formatNumber(progresso.pages_read)} página(s)` : ""}
+            {progresso.saved_total ? ` · ${formatNumber(progresso.saved_total)} já gravadas` : ""}
+          </span>
+        )}
         {progresso.current && (
           <span className="truncate">
             agora: {progresso.current.name || progresso.current.nif}
+            {progresso.current.page ? ` · página ${progresso.current.page}` : ""}
           </span>
         )}
       </div>
@@ -120,6 +140,16 @@ function ProgressoRecolha({ job }: { job: RecolhaJob }) {
           style={{ width: `${Math.max(3, Math.min(100, pct))}%` }}
         />
       </div>
+      {job.status === "running" &&
+        (progresso.publications || 0) === 0 &&
+        (progresso.saved_total || 0) === 0 && (
+        <p className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-[11.5px] leading-relaxed text-muted-foreground">
+          Ainda nada guardado: a pesquisa do portal exige reCAPTCHA e, com o detalhe ligado, o portal abre uma página
+          por publicação. Cada <span className="text-foreground">página da grelha</span> já é gravada no JSON da
+          entidade assim que é lida, por isso o número abaixo cresce enquanto a entidade está a ser recolhida.
+          {progresso.last_activity ? ` Último sinal de vida: ${haQuanto(progresso.last_activity)}.` : ""}
+        </p>
+      )}
       {job.error && <EmptyState tone="warn">{job.error}</EmptyState>}
       {job.result?.message && <EmptyState>{job.result.message}</EmptyState>}
       {job.result && !job.result.message && (

@@ -111,7 +111,15 @@ export interface RecolhaProgresso {
   entities_total?: number;
   publications?: number;
   files?: number;
-  current?: { nif: string; name?: string | null } | null;
+  /** Publicações já encontradas na entidade em curso (antes de acabar). */
+  publications_live?: number;
+  /** Páginas da grelha já lidas na entidade em curso. */
+  pages_read?: number;
+  /** Registos já gravados no JSON da entidade em curso. */
+  saved_total?: number;
+  /** Instante do último sinal de vida do trabalho (ISO). */
+  last_activity?: string | null;
+  current?: { nif: string; name?: string | null; saved?: number; page?: number } | null;
 }
 
 export interface RecolhaJob {

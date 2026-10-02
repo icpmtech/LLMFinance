@@ -45,7 +45,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from html import unescape
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import requests
 
@@ -603,16 +603,32 @@ class PublicacoesMjClient:
         result_html: Optional[str] = None,
         with_details: bool = True,
         max_pages: int = 50,
+        on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_page: Optional[Callable[[List[PublicacaoMJ], int], None]] = None,
         **criteria: Any,
     ) -> List[PublicacaoMJ]:
         """Recolhe todas as publicações de um critério (ex.: ``nif="500273170"``).
 
         Pode partir de um token de captcha (``recaptcha_token`` + ``form_html``) ou
         de uma página de resultados já pesquisada (``result_html``).
+
+        ``on_progress`` (opcional) é chamado com um dicionário a cada etapa — serve
+        para quem espera (trabalhos em segundo plano) mostrar o que está a acontecer:
+        uma entidade grande demora minutos só a ler as páginas, e sem isto o
+        progresso parecia parado. ``on_page`` é chamado com as publicações de cada
+        página logo que são lidas, para gravar resultados à medida.
         """
         nif = criteria.get("nif")
         entidade = criteria.get("entidade")
         tipo = str(criteria.get("tipo") or "0")
+
+        def avisar(**evento: Any) -> None:
+            if on_progress is None:
+                return
+            try:
+                on_progress(evento)
+            except Exception:  # noqa: BLE001 - o progresso nunca pode estragar a recolha
+                logger.debug("Falha a reportar o progresso da recolha", exc_info=True)
 
         # Cada página da grelha é guardada com o respetivo HTML: os postbacks
         # «Conteudo$N» referem-se a uma linha *daquela* página.
@@ -623,6 +639,7 @@ class PublicacoesMjClient:
             current = result_html
             page_rows.append(self.parse_results(current, search_nif=nif, search_term=entidade, tipo=tipo))
         elif recaptcha_token:
+            avisar(stage="pesquisa", message="a pesquisar no portal (com captcha)")
             rows, current = self.search(
                 form_html or self.fetch_form(), recaptcha_token=recaptcha_token, **criteria
             )
@@ -630,6 +647,13 @@ class PublicacoesMjClient:
         else:
             raise ValueError("Indique `recaptcha_token` (com `form_html`) ou `result_html`.")
         page_states.append(current)
+        if on_page is not None and page_rows[0]:
+            try:
+                on_page(page_rows[0], 1)
+            except Exception:  # noqa: BLE001
+                logger.debug("Falha a gravar a primeira página", exc_info=True)
+        lidas = len(page_rows[0])
+        avisar(stage="lista", page=1, pages_read=1, publications=lidas)
 
         # --- paginação ---
         pages = 1
@@ -640,12 +664,22 @@ class PublicacoesMjClient:
             page_rows.append(rows)
             page_states.append(current)
             pages += 1
+            lidas += len(rows)
+            if on_page is not None:
+                try:
+                    on_page(rows, pages)
+                except Exception:  # noqa: BLE001
+                    logger.debug("Falha a gravar a página %s", pages, exc_info=True)
+            avisar(stage="lista", page=pages, pages_read=pages, publications=lidas)
 
         collected: List[PublicacaoMJ] = [row for page in page_rows for row in page]
         if not with_details:
+            avisar(stage="lista", pages_read=pages, publications=len(collected), done=True)
             return collected
 
         # --- detalhe de cada publicação ---
+        total = len(collected)
+        feitos = 0
         for page_index, rows in enumerate(page_rows):
             state = page_states[page_index]
             for row in rows:
@@ -657,6 +691,9 @@ class PublicacoesMjClient:
                     row.detail_fetched = True
                 except Exception as exc:  # o detalhe é opcional
                     logger.warning("Falha no detalhe da publicação %s: %s", row.pub_id, exc)
+                feitos += 1
+                avisar(stage="detalhes", details_done=feitos, details_total=total, publications=total)
+        avisar(stage="detalhes", details_done=feitos, details_total=total, publications=total, done=True)
         return collected
 
 
