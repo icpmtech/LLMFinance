@@ -122,7 +122,6 @@ export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard }: Contr
   const [importError, setImportError] = useState<string | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const pollRef = useRef<number | null>(null);
 
   const buildRequest = useCallback(
     (offset: number): ContratoFrSearchRequest => ({

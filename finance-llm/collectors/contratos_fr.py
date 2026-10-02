@@ -413,6 +413,7 @@ def build_jsonl(
                 doc = normalize_record(raw, filename)
                 if not doc:
                     continue
+                doc = enrich_record_with_sirene(doc)
                 out.write(json.dumps(doc, ensure_ascii=False) + "\n")
                 count += 1
                 sections[section] = sections.get(section, 0) + 1
@@ -447,6 +448,52 @@ def build_jsonl(
         "meta": meta,
         "seconds": round(time.time() - started, 1),
     }
+
+
+def enrich_record_with_sirene(doc: Dict[str, Any], cache: bool = True) -> Dict[str, Any]:
+    """Preenche `acheteur_nom` / `adjudicatario_nom` em falta via API Sirene."""
+    from collectors import sirene
+
+    to_fetch: List[str] = []
+    if not doc.get("acheteur_nom") and doc.get("acheteur_id"):
+        to_fetch.append(str(doc["acheteur_id"]))
+    if not doc.get("adjudicatario_nom") and doc.get("adjudicatario_id"):
+        to_fetch.append(str(doc["adjudicatario_id"]))
+
+    if not to_fetch:
+        return doc
+
+    # Evitar bloquear todo o lote com pedidos um a um; agrupamos e depois aplicamos.
+    names = sirene.batch_enrich(to_fetch, cache=cache, delay=0.03)
+
+    if not doc.get("acheteur_nom") and doc.get("acheteur_id"):
+        name = names.get(str(doc["acheteur_id"]))
+        if name:
+            doc["acheteur_nom"] = name
+            doc["sirene_acheteur_enriched"] = True
+
+    if not doc.get("adjudicatario_nom") and doc.get("adjudicatario_id"):
+        name = names.get(str(doc["adjudicatario_id"]))
+        if name:
+            doc["adjudicatario_nom"] = name
+            doc["sirene_adjudicatario_enriched"] = True
+
+    # Recompor search_text se algum nome foi alterado.
+    if doc.get("sirene_acheteur_enriched") or doc.get("sirene_adjudicatario_enriched"):
+        titulaires = doc.get("titulaires") or []
+        doc["search_text"] = "\n".join(
+            [
+                doc.get("objet", ""),
+                doc.get("acheteur_nom", ""),
+                doc.get("adjudicatario_nom", ""),
+                " ".join(t.get("nom", "") for t in titulaires),
+                doc.get("procedure", ""),
+                doc.get("forme_prix", ""),
+                doc.get("code_cpv", ""),
+                doc.get("lieu_execution_nom", ""),
+            ]
+        )
+    return doc
 
 
 def available_jsonl() -> List[Path]:

@@ -119,14 +119,25 @@ export interface RecolhaProgresso {
   saved_total?: number;
   /** Instante do último sinal de vida do trabalho (ISO). */
   last_activity?: string | null;
-  current?: { nif: string; name?: string | null; saved?: number; page?: number } | null;
+  current?: {
+    nif: string;
+    name?: string | null;
+    saved?: number;
+    page?: number;
+    stage?: string;
+    details_done?: number;
+    details_total?: number;
+    publications?: number;
+    pages_read?: number;
+  } | null;
 }
 
 export interface RecolhaJob {
   job_id: string;
-  status: "running" | "done" | "error" | string;
+  status: "running" | "paused" | "stopped" | "done" | "error" | string;
   started_at?: string | null;
   finished_at?: string | null;
+  stop_requested?: boolean;
   payload?: RecolhaJobRequest;
   progress?: RecolhaProgresso;
   result?: {
@@ -221,9 +232,13 @@ export interface RecolhaPublicacaoResumo {
   pub_id?: string;
   data_publicacao?: string | null;
   acto?: string | null;
+  tipo?: string | null;
   tipo_label?: string | null;
   firma?: string | null;
   entidade?: string | null;
+  /** Presentes no ficheiro JSON (usados na pré-visualização da ficha). */
+  has_documento?: boolean;
+  documento_url?: string | null;
 }
 
 export interface RecolhaFicheiroConteudo {
@@ -324,6 +339,31 @@ export async function getRecolhaFicheiro(nif: string, limitItems = 20): Promise<
     { signal: AbortSignal.timeout(30000) },
   );
   return ler<RecolhaFicheiroConteudo>(res, "Erro ao ler o ficheiro exportado");
+}
+
+/** Pausa, retoma ou para um trabalho de recolha em curso (corre no servidor). */
+async function controlarRecolhaJob(
+  jobId: string,
+  acao: "pause" | "resume" | "stop",
+  contexto: string,
+): Promise<RecolhaJob> {
+  const res = await fetch(
+    `${API_BASE}/societario/recolha/jobs/${encodeURIComponent(jobId)}/${acao}`,
+    { method: "POST", credentials: "include", headers: JSON_HEADERS },
+  );
+  return ler<RecolhaJob>(res, contexto);
+}
+
+export function pausarRecolhaJob(jobId: string): Promise<RecolhaJob> {
+  return controlarRecolhaJob(jobId, "pause", "Erro ao pausar a recolha");
+}
+
+export function retomarRecolhaJob(jobId: string): Promise<RecolhaJob> {
+  return controlarRecolhaJob(jobId, "resume", "Erro ao retomar a recolha");
+}
+
+export function pararRecolhaJob(jobId: string): Promise<RecolhaJob> {
+  return controlarRecolhaJob(jobId, "stop", "Erro ao parar a recolha");
 }
 
 // --- escrita ---------------------------------------------------------------

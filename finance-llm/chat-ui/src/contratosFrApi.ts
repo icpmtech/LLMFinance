@@ -180,6 +180,7 @@ export type ContratoFrAnalyticsResponse = {
   top_cpv: ContratoFrAnalyticsRow[];
   procedures: ContratoFrAnalyticsRow[];
   formes_prix: ContratoFrAnalyticsRow[];
+  localizacao?: { types: ContratoFrAnalyticsRow[]; codes: ContratoFrAnalyticsRow[] } | null;
   year?: number | null;
   error?: string;
 };

@@ -48,6 +48,12 @@ _JOBS: Dict[str, Dict[str, Any]] = {}
 _JOBS_LOCK = threading.Lock()
 _JOBS_KEEP = 20
 _RUNNING = "running"
+_PAUSED = "paused"
+_STOPPED = "stopped"
+
+#: Controlo por trabalho (`Event` **setado** = pode correr; limpo = pausado).
+#: Fica fora de `_JOBS` porque um `Event` não é serializável em JSON.
+_CONTROL: Dict[str, threading.Event] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -478,21 +484,130 @@ def _prune_jobs() -> None:
         return
     antigos = sorted(_JOBS.values(), key=lambda job: str(job.get("started_at") or ""))
     for job in antigos[: len(_JOBS) - _JOBS_KEEP]:
-        if job.get("status") == _RUNNING:
+        if job.get("status") in (_RUNNING, _PAUSED):
             continue
         _JOBS.pop(str(job["job_id"]), None)
+        _CONTROL.pop(str(job["job_id"]), None)
+
+
+def _checkpoint(job: Dict[str, Any]) -> None:
+    """Ponto de controlo do trabalho: levanta se houver pedido de pausa ou paragem.
+
+    É chamado pelo callback de progresso do coletor, que o deixa subir — é assim
+    que uma pausa interrompe a leitura a meio de uma entidade grande (minutos) em
+    vez de esperar que acabe.
+    """
+    from collectors.publicacoes_mj import RecolhaParada, RecolhaPausada
+
+    if job.get("stop_requested"):
+        raise RecolhaParada("Pedido para parar a recolha.")
+    evento = _CONTROL.get(str(job.get("job_id")))
+    if evento is not None and not evento.is_set():
+        raise RecolhaPausada("Recolha pausada pelo utilizador.")
+
+
+def _aguardar_retoma(job: Dict[str, Any]) -> bool:
+    """Bloqueia enquanto o trabalho estiver pausado.
+
+    Devolve ``False`` se entretanto foi pedido para parar (para a thread sair em
+    vez de ficar presa à espera de uma retoma que não vem).
+    """
+    evento = _CONTROL.get(str(job.get("job_id")))
+    if evento is None:
+        return not job.get("stop_requested")
+    while not evento.wait(timeout=0.5):
+        if job.get("stop_requested"):
+            return False
+    return not job.get("stop_requested")
+
+
+def _terminar_por_pedido(
+    job: Dict[str, Any],
+    detalhes: List[Dict[str, Any]],
+    publicacoes: int,
+    ficheiros: int,
+    limitados: int,
+    erros: List[Dict[str, Any]],
+) -> None:
+    """Fecha o trabalho por pedido do utilizador, preservando o que já recolheu."""
+    job["status"] = _STOPPED
+    job["finished_at"] = _now()
+    job["progress"]["phase"] = "parado pelo utilizador"
+    job["result"] = {
+        "entities": int(job["progress"].get("entities_total") or 0),
+        "entities_with_publications": len(detalhes),
+        "publications": publicacoes,
+        "files": ficheiros,
+        "rate_limited": limitados,
+        "ingested": bool(job.get("payload", {}).get("ingest", True)),
+        "export_dir": str(export_dir()),
+        "details": detalhes,
+        "errors": erros,
+        "message": "Interrompido pelo utilizador — o que já estava recolhido ficou gravado.",
+    }
+    logger.info("Recolha %s parada pelo utilizador", job.get("job_id"))
+
+
+def pause_job(job_id: str) -> Optional[Dict[str, Any]]:
+    """Pede a pausa do trabalho (a thread para no próximo ponto de controlo)."""
+    with _JOBS_LOCK:
+        job = _JOBS.get(str(job_id))
+        if not job:
+            return None
+        if job.get("status") == _RUNNING:
+            job["status"] = _PAUSED
+            job["progress"]["phase"] = "pausado pelo utilizador"
+        evento = _CONTROL.get(str(job_id))
+    if evento is not None:
+        evento.clear()
+    return dict(job)
+
+
+def resume_job(job_id: str) -> Optional[Dict[str, Any]]:
+    """Retoma um trabalho pausado (a thread recomeça a entidade que ficou a meio)."""
+    with _JOBS_LOCK:
+        job = _JOBS.get(str(job_id))
+        if not job:
+            return None
+        retomavel = job.get("status") == _PAUSED
+        if retomavel:
+            job["status"] = _RUNNING
+            job["progress"]["phase"] = "a retomar"
+        evento = _CONTROL.get(str(job_id))
+    if evento is not None:
+        evento.set()
+    return dict(job)
+
+
+def stop_job(job_id: str) -> Optional[Dict[str, Any]]:
+    """Pede a paragem do trabalho (funciona também com o trabalho pausado)."""
+    with _JOBS_LOCK:
+        job = _JOBS.get(str(job_id))
+        if not job:
+            return None
+        if job.get("status") in (_RUNNING, _PAUSED):
+            job["stop_requested"] = True
+            job["progress"]["phase"] = "a parar…"
+        evento = _CONTROL.get(str(job_id))
+    if evento is not None:
+        evento.set()  # desbloqueia um trabalho que estivesse pausado
+    return dict(job)
 
 
 def start_job(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Arranca a recolha massiva em segundo plano e devolve o id do trabalho."""
     with _JOBS_LOCK:
-        running = [job for job in _JOBS.values() if job.get("status") == _RUNNING]
-        if running:
+        ativos = [job for job in _JOBS.values() if job.get("status") in (_RUNNING, _PAUSED)]
+        if ativos:
             return {
-                "job_id": running[0]["job_id"],
-                "status": _RUNNING,
+                "job_id": ativos[0]["job_id"],
+                "status": ativos[0].get("status") or _RUNNING,
                 "already_running": True,
-                "message": "Já existe uma recolha massiva a correr.",
+                "message": (
+                    "Existe uma recolha pausada — retome-a ou pare-a antes de arrancar outra."
+                    if ativos[0].get("status") == _PAUSED
+                    else "Já existe uma recolha massiva a correr."
+                ),
             }
         job: Dict[str, Any] = {
             "job_id": uuid.uuid4().hex[:12],
@@ -500,6 +615,7 @@ def start_job(payload: Dict[str, Any]) -> Dict[str, Any]:
             "started_at": _now(),
             "finished_at": None,
             "payload": payload,
+            "stop_requested": False,
             "progress": {
                 "phase": "a escolher os alvos",
                 "entities_done": 0,
@@ -519,6 +635,8 @@ def start_job(payload: Dict[str, Any]) -> Dict[str, Any]:
             "error": None,
         }
         _JOBS[job["job_id"]] = job
+        _CONTROL[job["job_id"]] = threading.Event()
+        _CONTROL[job["job_id"]].set()
         _prune_jobs()
 
     thread = threading.Thread(target=_run_job, args=(job,), name="societario-recolha", daemon=True)
@@ -545,7 +663,12 @@ def _run_job(job: Dict[str, Any]) -> None:
 
 def _run_job_inner(job: Dict[str, Any]) -> None:
     """Corre a recolha massiva e vai atualizando o progresso do trabalho."""
-    from collectors.publicacoes_mj import CaptchaRequiredError, RateLimitedError
+    from collectors.publicacoes_mj import (
+        CaptchaRequiredError,
+        RateLimitedError,
+        RecolhaParada,
+        RecolhaPausada,
+    )
     from collectors.publicacoes_mj_captcha import PublicacoesMjCaptchaClient
 
     payload = job["payload"]
@@ -615,6 +738,7 @@ def _run_job_inner(job: Dict[str, Any]) -> None:
                 bloqueado = False
 
                 def reportar(evento: Dict[str, Any]) -> None:
+                    _checkpoint(job)
                     progress["last_activity"] = _now()
                     progress["current"] = {"nif": nif, "name": nome, **evento}
                     etapa = evento.get("stage")
@@ -678,6 +802,8 @@ def _run_job_inner(job: Dict[str, Any]) -> None:
                         break
                     except CaptchaRequiredError as exc:
                         return [], f"captcha: {exc}", False
+                    except (RecolhaPausada, RecolhaParada):
+                        raise  # pedido do utilizador: sobe para o ciclo do trabalho
                     except Exception as exc:  # noqa: BLE001 - uma entidade má não trava o lote
                         logger.exception("Falha na recolha de %s", nif)
                         return [], str(exc), False
@@ -702,7 +828,26 @@ def _run_job_inner(job: Dict[str, Any]) -> None:
             if not nif:
                 continue
             progress["current"] = {"nif": nif, "name": nome}
-            items, erro, limitado = recolher_entidade(nif, nome)
+            items: List[Dict[str, Any]] = []
+            erro: Optional[str] = None
+            limitado = False
+            while True:
+                try:
+                    items, erro, limitado = recolher_entidade(nif, nome)
+                    break
+                except RecolhaPausada:
+                    job["status"] = _PAUSED
+                    progress["phase"] = "pausado pelo utilizador"
+                    logger.info("Recolha %s pausada em %s", job["job_id"], nif)
+                    if not _aguardar_retoma(job):
+                        _terminar_por_pedido(job, detalhes, publicacoes, ficheiros, limitados, erros)
+                        return
+                    job["status"] = _RUNNING
+                    progress["phase"] = "a retomar"
+                    logger.info("Recolha %s retomada em %s", job["job_id"], nif)
+                except RecolhaParada:
+                    _terminar_por_pedido(job, detalhes, publicacoes, ficheiros, limitados, erros)
+                    return
             if erro:
                 if limitado:
                     limitados += 1
@@ -744,7 +889,10 @@ def _run_job_inner(job: Dict[str, Any]) -> None:
         job["finished_at"] = _now()
         job["error"] = str(exc)
     finally:
-        progress["phase"] = "concluído" if job["status"] == "done" else "erro"
+        if job["status"] == "done":
+            progress["phase"] = "concluído"
+        elif job["status"] == "error":
+            progress["phase"] = "erro"
         progress["current"] = None
 
 

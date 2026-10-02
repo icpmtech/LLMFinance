@@ -40,6 +40,8 @@ import type {
   EntityIngestResponse,
   EntitySearchRequest,
   EntitySearchResponse,
+  EntityEnrichmentResponse,
+  EntityRelationsResponse,
   EntityRoleSummaryRequest,
   EntityRoleSummaryResponse,
   EntityStats,
@@ -1168,11 +1170,38 @@ export async function searchEntities(
   return res.json();
 }
 
+export async function enrichEntity(
+  nif: string,
+  payload: Record<string, unknown> = {},
+): Promise<EntityEnrichmentResponse> {
+  const res = await fetch(`${API_BASE}/entities/${encodeURIComponent(nif)}/enrich`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Falha ao enriquecer ${nif}: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
 export async function getEntityDetail(nif: string): Promise<EntityDetail> {
   const res = await fetch(`${API_BASE}/entities/${encodeURIComponent(nif)}`);
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Erro ao obter ficha da empresa: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Ontologia da entidade: relações guardadas em `finance_world_relations`. */
+export async function getEntityRelations(nif: string, size = 50): Promise<EntityRelationsResponse> {
+  const params = new URLSearchParams({ size: String(size) });
+  const res = await fetch(`${API_BASE}/entities/${encodeURIComponent(nif)}/relations?${params}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter relações da entidade: ${res.status} - ${text}`);
   }
   return res.json();
 }

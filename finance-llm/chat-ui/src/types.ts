@@ -1030,6 +1030,9 @@ export interface CompanyDetail extends CompanySummary {
   firmas?: FirmaItem[];
   firmas_total?: number;
   societario_timeline?: SocietarioTimelinePayload | null;
+  enrichment_web?: Record<string, unknown> | null;
+  enrichment_summary?: Record<string, unknown> | null;
+  enrichment_last_updated?: string | null;
 }
 
 export interface SocietarioTimelinePayload {
@@ -1647,6 +1650,37 @@ export interface CompanyEnrichmentResponse {
   error?: string;
 }
 
+export interface EntityEnrichmentRelation {
+  relation_type: string;
+  target?: string;
+  target_id?: string;
+  target_nif?: string;
+  target_country?: string;
+  source_evidence?: string;
+  confidence?: number;
+}
+
+export interface EntityEnrichmentReport {
+  pdf_path?: string;
+  public_url?: string;
+}
+
+export interface EntityEnrichmentResponse {
+  nif: string;
+  name?: string;
+  query?: string;
+  status?: string;
+  saved?: boolean;
+  enriched_at?: string;
+  fields_added: Record<string, unknown>;
+  source_count?: number;
+  relation_count?: number;
+  summary?: Record<string, unknown>;
+  report?: EntityEnrichmentReport;
+  message?: string;
+  error?: string;
+}
+
 // --- Publicações de atos societários (Ministério da Justiça) ---
 
 export interface SocietarioPublicacao {
@@ -1756,6 +1790,36 @@ export interface EntityDetail extends EntityItem {
   trademarks_total: number;
   firmas: FirmaItem[];
   firmas_total: number;
+  enrichment_web?: Record<string, unknown> | null;
+  enrichment_summary?: Record<string, unknown> | null;
+  enrichment_last_updated?: string | null;
+}
+
+/** Aresta de ontologia da entidade (`finance_world_relations`). */
+export interface EntityRelationItem {
+  relation_id?: string | null;
+  kind: string;
+  direction: "out" | "in";
+  source_ref?: string | null;
+  source_name?: string | null;
+  source_type?: string | null;
+  target_ref?: string | null;
+  target_name?: string | null;
+  target_type?: string | null;
+  other_ref?: string | null;
+  other_name?: string | null;
+  other_type?: string | null;
+  evidence: string[];
+  country?: string | null;
+  updated_at?: string | null;
+}
+
+export interface EntityRelationsResponse {
+  nif?: string | null;
+  total: number;
+  items: EntityRelationItem[];
+  by_kind: Record<string, number>;
+  error?: string | null;
 }
 
 export type EntitySortField =

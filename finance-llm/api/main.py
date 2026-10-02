@@ -105,9 +105,12 @@ from api.models import (
     ElasticTickerListResponse,
     EntityCountryStat,
     EntityDetailResponse,
+    EntityEnrichmentRequest,
+    EntityEnrichmentResponse,
     EntityIngestRequest,
     EntityIngestResponse,
     EntityItem,
+    EntityRelationsResponse,
     EntityRoleSummaryRequest,
     EntityRoleSummaryResponse,
     EntitySearchRequest,
@@ -302,6 +305,8 @@ from api.jarvis_routes import router as jarvis_router
 # fornecedores de IA que a plataforma já guardou, escrevendo no volume do
 # container (`config.yaml` + `.env`) e recriando-o.
 from api.hermes_agent_routes import router as hermes_agent_router
+# OSINT: pesquisa de usernames/emails com user-scanner, guardado em finance_osint.
+from api.osint_routes import router as osint_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -610,6 +615,20 @@ app.include_router(jarvis_router)
 # Motor do Hermes Agent (`/hermes-agent/*`): liga o container autónomo aos
 # fornecedores de IA da plataforma.
 app.include_router(hermes_agent_router)
+# OSINT: pesquisa de usernames/emails, scans guardados e grafo.
+app.include_router(osint_router)
+
+
+@app.get("/osint")
+def serve_osint_spa_page():
+    """Página do módulo OSINT."""
+    return spa_index_response()
+
+
+@app.get("/osint/{path:path}")
+def serve_osint_spa_page_deep(path: str):
+    """Deep links da página OSINT."""
+    return spa_index_response()
 
 
 # Cache curta de `user_id → email`, para o registo de pedidos identificar quem
@@ -848,10 +867,13 @@ def companies_detail(request: Request, nif: str, year: Optional[int] = Query(Non
     except Exception as exc:
         logging.getLogger(__name__).warning(f"Falha ao ler firmas de {nif}: {exc}")
 
-    # Enriquecimento: timeline societária gerada por IA guardada na ficha da entidade.
+    # Enriquecimento: timeline societária e web enrichment guardados na ficha da entidade.
     try:
         entity = get_entity_by_nif(nif)
         company["societario_timeline"] = entity.get("societario_timeline")
+        company["enrichment_web"] = entity.get("enrichment_web")
+        company["enrichment_summary"] = entity.get("enrichment_summary")
+        company["enrichment_last_updated"] = entity.get("enrichment_last_updated")
     except Exception as exc:
         logging.getLogger(__name__).warning(f"Falha ao ler timeline societária de {nif}: {exc}")
 
@@ -1341,6 +1363,25 @@ def entities_autocomplete(q: str = Query(..., min_length=1), size: int = Query(1
     }
 
 
+@app.post("/entities/{nif}/enrich", response_model=EntityEnrichmentResponse)
+async def entities_enrich(
+    nif: str,
+    payload: EntityEnrichmentRequest = Body(default_factory=EntityEnrichmentRequest),
+    session: Any = Depends(optional_session),
+):
+    """Enriquece a entidade com web, scraping e IA, guarda as fontes e as relações.
+
+    A sessão é usada só para resolver o fornecedor de IA do utilizador (o modelo
+    escolhido nas Configurações); sem ela a extração estruturada não corre.
+    """
+    from api.entity_enrichment_service import enrich_entity
+
+    result = await enrich_entity(nif=nif, payload=payload.model_dump(exclude_none=True), session=session)
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=result["error"])
+    return EntityEnrichmentResponse(**result)
+
+
 @app.get("/entities/{nif}", response_model=EntityDetailResponse)
 def entities_detail(nif: str):
     """Ficha da empresa do cadastro de entidades, com o enriquecimento já guardado."""
@@ -1366,6 +1407,15 @@ def entities_detail(nif: str):
 
     entity.pop("error", None)
     return EntityDetailResponse(**entity)
+
+
+@app.get("/entities/{nif}/relations", response_model=EntityRelationsResponse)
+def entities_relations(nif: str, size: int = 50):
+    """Ontologia da entidade: arestas guardadas em `finance_world_relations`."""
+    from api.elasticsearch_client import get_entity_relations
+
+    result = get_entity_relations(nif, size=size)
+    return EntityRelationsResponse(**result)
 
 
 # Servir a React SPA da chat-ui (build estático) — deve ser registrado DEPOIS das rotas de API

@@ -238,6 +238,19 @@ class RateLimitedError(RuntimeError):
     """
 
 
+class RecolhaPausada(RuntimeError):
+    """Pedido de pausa do trabalho de recolha.
+
+    É levantada pelo callback de progresso (`on_progress`) para interromper a
+    leitura a meio de uma entidade, em vez de esperar que ela acabe. O trabalho
+    em segundo plano apanha-a, marca-se como `paused` e espera pela retoma.
+    """
+
+
+class RecolhaParada(RuntimeError):
+    """Pedido para terminar o trabalho de recolha (paragem voluntária)."""
+
+
 def _debug_dir() -> str:
     """Diretório base para guardar páginas de debug da recolha MJ."""
     base = os.environ.get("MJ_DEBUG_DIR") or os.path.join(os.getcwd(), "debug_mj")
@@ -627,6 +640,10 @@ class PublicacoesMjClient:
                 return
             try:
                 on_progress(evento)
+            except (RecolhaPausada, RecolhaParada):
+                # Pedidos de pausa/paragem do trabalho: têm de subir, não podem
+                # ser tratados como uma falha de reporte de progresso.
+                raise
             except Exception:  # noqa: BLE001 - o progresso nunca pode estragar a recolha
                 logger.debug("Falha a reportar o progresso da recolha", exc_info=True)
 
@@ -650,6 +667,8 @@ class PublicacoesMjClient:
         if on_page is not None and page_rows[0]:
             try:
                 on_page(page_rows[0], 1)
+            except (RecolhaPausada, RecolhaParada):
+                raise
             except Exception:  # noqa: BLE001
                 logger.debug("Falha a gravar a primeira página", exc_info=True)
         lidas = len(page_rows[0])
@@ -668,6 +687,8 @@ class PublicacoesMjClient:
             if on_page is not None:
                 try:
                     on_page(rows, pages)
+                except (RecolhaPausada, RecolhaParada):
+                    raise
                 except Exception:  # noqa: BLE001
                     logger.debug("Falha a gravar a página %s", pages, exc_info=True)
             avisar(stage="lista", page=pages, pages_read=pages, publications=lidas)

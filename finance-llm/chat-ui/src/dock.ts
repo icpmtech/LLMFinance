@@ -415,6 +415,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "45,212,191",
   },
   {
+    id: "osint",
+    label: "OSINT",
+    hint: "Pesquisa de usernames e emails em plataformas com user-scanner",
+    icon: Scan,
+    gradient: "from-violet-200 via-fuchsia-500 to-rose-600",
+    accent: "217,70,239",
+  },
+  {
     id: "simulador",
     label: "Simulador IQ OS",
     hint: "Simulações de previsão por enxame de agentes com os dados do sistema, com resultados, relatório e elenco",
@@ -557,6 +565,22 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: BarChart3,
     gradient: "from-orange-200 via-amber-400 to-rose-500",
     accent: "251,191,36",
+  },
+  {
+    id: "contratos-fr",
+    label: "Contratos França",
+    hint: "Pesquisar contratos públicos de França (DECP)",
+    icon: Landmark,
+    gradient: "from-blue-200 via-indigo-400 to-purple-500",
+    accent: "99,102,241",
+  },
+  {
+    id: "contratos-fr-dashboard",
+    label: "Análise França",
+    hint: "Dashboard analítica dos contratos públicos de França",
+    icon: BarChart3,
+    gradient: "from-indigo-200 via-purple-400 to-pink-500",
+    accent: "139,92,246",
   },
   {
     id: "entities-search",

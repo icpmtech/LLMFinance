@@ -76,6 +76,12 @@ export const APP_MODULES: AppModule[] = [
     ids: ["contratos-es", "contratos-es-dashboard"],
   },
   {
+    id: "contratos-fr",
+    label: "Contratos de França",
+    hint: "Données Essentielles de la Commande Publique (DECP)",
+    ids: ["contratos-fr", "contratos-fr-dashboard"],
+  },
+  {
     id: "empresas",
     label: "Empresas",
     hint: "Risco, diretórios, fichas, adjudicantes e comparação de entidades",
@@ -113,7 +119,7 @@ export const APP_MODULES: AppModule[] = [
     id: "investigacao",
     label: "Investigação e IA",
     hint: "Pesquisa 360, Hermes, Jarvis, investigador, agentes e RAG",
-    ids: ["search360", "hermes", "jarvis", "researcher", "world", "world-rede", "padroes", "simulador", "mirofish", "agents", "rag"],
+    ids: ["search360", "hermes", "jarvis", "researcher", "world", "world-rede", "padroes", "osint", "simulador", "mirofish", "agents", "rag"],
   },
   {
     id: "conhecimento",

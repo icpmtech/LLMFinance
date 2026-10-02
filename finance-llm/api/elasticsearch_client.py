@@ -270,6 +270,9 @@ SIMULATIONS_INDEX = "finance_world_simulations"
 # Simulate→Evidence Report), com a auditoria completa e o relatório.
 INVESTIGATIONS_INDEX = "finance_world_investigations"
 
+# Resultados de pesquisa OSINT (username/email) via user-scanner.
+OSINT_INDEX = "finance_osint"
+
 # Definições (settings) específicas de determinados índices — nomeadamente
 # analisadores usados em subcampos de pesquisa por prefixo.
 INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
@@ -2137,6 +2140,30 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    osint_mappings = {
+        "properties": {
+            "target": {"type": "keyword", "ignore_above": 120},
+            "kind": {"type": "keyword"},
+            "category": {"type": "keyword", "ignore_above": 64},
+            "found": {"type": "integer"},
+            "total": {"type": "integer"},
+            "not_found": {"type": "integer"},
+            "errors": {"type": "integer"},
+            "duration_s": {"type": "float"},
+            "hits": {"type": "object", "enabled": False},
+            "graph": {"type": "object", "enabled": False},
+            "pivots": {"type": "object", "enabled": False},
+            "stats": {"type": "object", "enabled": False},
+            # Facetas pesquisáveis (o resto dos detalhes fica em `hits`, opaco).
+            "names": {"type": "keyword", "ignore_above": 120},
+            "emails": {"type": "keyword", "ignore_above": 160},
+            "sites": {"type": "keyword", "ignore_above": 64},
+            "pivot_sites": {"type": "keyword", "ignore_above": 64},
+            "scanned_at": {"type": "date"},
+            "user_id": {"type": "keyword", "ignore_above": 64},
+        }
+    }
+
     for name, mappings in [
         ("finance_prices", prices_mappings),
         ("finance_news", news_mappings),
@@ -2180,6 +2207,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (GLOBAL_PADROES_INDEX, global_padroes_mappings),
         (DEVEDORES_INDEX, devedores_mappings),
         (DEVEDORES_RECOLHAS_INDEX, devedores_recolhas_mappings),
+        (OSINT_INDEX, osint_mappings),
     ]:
         if not client.indices.exists(index=name):
             settings: Dict[str, Any] = {"number_of_shards": 1, "number_of_replicas": 0}
@@ -8162,6 +8190,72 @@ def save_entity_societario_timeline(
         return {"error": str(exc), "nif": nif}
 
 
+def get_entity_relations(nif: str, size: int = 50, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Relações de ontologia guardadas para uma entidade, nos dois sentidos.
+
+    Cada item vem normalizado: `direction` é `out` quando a entidade é a origem e
+    `in` quando é o alvo, e `other_*` aponta sempre para o outro lado da aresta
+    (é o que a ficha mostra, sem o consumidor ter de saber a direção).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"nif": nif, "total": 0, "items": [], "by_kind": {}, "error": "Elasticsearch indisponível"}
+
+    ensure_indices(client)
+
+    body = {
+        "query": {
+            "bool": {
+                "should": [{"term": {"source_ref": nif}}, {"term": {"target_ref": nif}}],
+                "minimum_should_match": 1,
+            }
+        },
+        "size": max(1, min(200, size)),
+    }
+    try:
+        resp = client.search(index=WORLD_RELATIONS_INDEX, body=body)
+    except Exception as exc:
+        return {"nif": nif, "total": 0, "items": [], "by_kind": {}, "error": str(exc)}
+
+    items: List[Dict[str, Any]] = []
+    by_kind: Dict[str, int] = {}
+    for hit in resp["hits"]["hits"]:
+        src = hit.get("_source") or {}
+        outgoing = str(src.get("source_ref") or "") == nif
+        kind = str(src.get("kind") or "related")
+        by_kind[kind] = by_kind.get(kind, 0) + 1
+        evidence = src.get("evidence")
+        if isinstance(evidence, str):
+            evidence = [evidence]
+        items.append({
+            "relation_id": src.get("relation_id") or hit.get("_id"),
+            "kind": kind,
+            "direction": "out" if outgoing else "in",
+            "source_ref": src.get("source_ref"),
+            "source_name": src.get("source_name"),
+            "source_type": src.get("source_type"),
+            "target_ref": src.get("target_ref"),
+            "target_name": src.get("target_name"),
+            "target_type": src.get("target_type"),
+            "other_ref": src.get("target_ref") if outgoing else src.get("source_ref"),
+            "other_name": src.get("target_name") if outgoing else src.get("source_name"),
+            "other_type": src.get("target_type") if outgoing else src.get("source_type"),
+            "evidence": evidence or [],
+            "country": src.get("country"),
+            "updated_at": src.get("updated_at"),
+        })
+
+    total = resp["hits"]["total"]
+    total_value = total.get("value") if isinstance(total, dict) else total
+    return {
+        "nif": nif,
+        "total": int(total_value or len(items)),
+        "items": items,
+        "by_kind": by_kind,
+        "error": None,
+    }
+
+
 def list_entity_countries(es: Optional[Elasticsearch] = None) -> List[Dict[str, Any]]:
     """Lista os países presentes no cadastro de entidades, com contagem."""
     client = es or get_es_client()
@@ -11238,6 +11332,13 @@ def get_contratos_fr_analytics(
             "formes_prix": {
                 "terms": {"field": "forme_prix", "size": 20, "missing": "N/A"}
             },
+            "lieu_execution_types": {
+                "terms": {"field": "lieu_execution_type", "size": 20, "missing": "N/A"}
+            },
+            "lieu_execution_codes": {
+                "terms": {"field": "lieu_execution_code", "size": 20, "missing": "N/A"},
+                "aggs": {"total_value": {"sum": value_source}},
+            },
         },
     }
 
@@ -11302,6 +11403,10 @@ def get_contratos_fr_analytics(
             "top_cpv": cpv_rows,
             "procedures": [{"key": b["key"], "count": b["doc_count"]} for b in aggs["procedures"]["buckets"]],
             "formes_prix": [{"key": b["key"], "count": b["doc_count"]} for b in aggs["formes_prix"]["buckets"]],
+            "localizacao": {
+                "types": [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("lieu_execution_types", {}).get("buckets", [])],
+                "codes": [{"key": b["key"], "count": b["doc_count"], "total_value": fmt_money(read_value(b.get("total_value", {})))} for b in aggs.get("lieu_execution_codes", {}).get("buckets", [])],
+            },
             "year": ano,
         }
     except Exception as exc:

@@ -104,7 +104,8 @@ def available_backend(session: Any, backend: Optional[str] = None) -> Dict[str, 
     if parsed.get("kind") != "cloud":
         return {"kind": "local", "provider": None, "model": None, "api_key": None, "backend": parsed.get("backend") or "gpt2"}
     api_key, origin = providers_service.resolve_key(user_id, parsed["provider"])
-    if not api_key:
+    # Fornecedores locais (Ollama) não precisam de chave: `key_optional` no catálogo.
+    if not api_key and not (parsed.get("spec") or {}).get("key_optional"):
         return {
             "kind": "unavailable",
             "provider": parsed["provider"],

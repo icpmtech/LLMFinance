@@ -30,6 +30,8 @@ import { ContractsMapPage } from "./pages/ContractsMapPage";
 import { ContractsSearchPage } from "./pages/ContractsSearchPage";
 import { ContractsEsSearchPage } from "./pages/ContractsEsSearchPage";
 import { ContractsEsDashboardPage } from "./pages/ContractsEsDashboardPage";
+import { ContractsFrSearchPage } from "./pages/ContractsFrSearchPage";
+import { ContractsFrDashboardPage } from "./pages/ContractsFrDashboardPage";
 import { CompanyDirectoryPage } from "./pages/CompanyDirectoryPage";
 import CompanyDetailPage from "./pages/CompanyDetailPage";
 import CompanyDashboardPage from "./pages/CompanyDashboardPage";
@@ -77,6 +79,7 @@ import CitacoesPage from "./pages/CitacoesPage";
 import ContribuintesPage from "./pages/ContribuintesPage";
 import WorldPage from "./pages/WorldPage";
 import PadroesPage from "./pages/PadroesPage";
+import OsintPage from "./pages/OsintPage";
 import MiroFishPage from "./pages/MiroFishPage";
 import SimuladorPage from "./pages/SimuladorPage";
 import RiscoPage from "./pages/RiscoPage";
@@ -155,6 +158,8 @@ type AppView =
   | "region-detail"
   | "contratos-es"
   | "contratos-es-dashboard"
+  | "contratos-fr"
+  | "contratos-fr-dashboard"
   | "companies-global"
   | "settings"
   | "cli"
@@ -167,6 +172,7 @@ type AppView =
   | "world"
   | "world-rede"
   | "padroes"
+  | "osint"
   | "mirofish"
   | "simulador"
   | "jarvis"
@@ -247,6 +253,8 @@ function pathForView(
   if (view === "contracts-search" || view === "contracts") return "/contracts/search";
   if (view === "contratos-es") return "/contratos-es";
   if (view === "contratos-es-dashboard") return "/contratos-es/dashboard";
+  if (view === "contratos-fr") return "/contratos-fr";
+  if (view === "contratos-fr-dashboard") return "/contratos-fr/dashboard";
   if (view === "companies-global") return "/empresas-global";
   if (view === "contracts-dashboard") return "/contracts/dashboard";
   if (view === "contracts-map") return "/contracts/map";
@@ -297,7 +305,9 @@ function pathForView(
   if (view === "contribuintes") return "/contribuintes";
   if (view === "world") return "/world";
   if (view === "world-rede") return "/world/rede";
+  if (view === "osint") return "/osint";
   if (view === "padroes") return "/padroes";
+  if (view === "osint") return "/osint";
   if (view === "mirofish") return "/mirofish";
   if (view === "simulador") return "/simulador";
   if (view === "risco") return "/empresas-risco";
@@ -488,6 +498,7 @@ export default function App() {
     if (path === "/contribuintes" || path.startsWith("/contribuintes/")) return "contribuintes";
     if (path === "/world/rede") return "world-rede";
     if (path === "/world" || path.startsWith("/world/")) return "world";
+    if (path === "/osint" || path.startsWith("/osint/")) return "osint";
     if (path === "/padroes" || path.startsWith("/padroes/")) return "padroes";
     if (path === "/mirofish" || path.startsWith("/mirofish/")) return "mirofish";
     if (path === "/simulador" || path.startsWith("/simulador/")) return "simulador";
@@ -502,6 +513,8 @@ export default function App() {
     if (path === "/contracts/search") return "contracts-search";
     if (path === "/contratos-es") return "contratos-es";
     if (path === "/contratos-es/dashboard") return "contratos-es-dashboard";
+    if (path === "/contratos-fr") return "contratos-fr";
+    if (path === "/contratos-fr/dashboard") return "contratos-fr-dashboard";
     if (path === "/contracts/dashboard") return "contracts-dashboard";
     if (path === "/contracts/map") return "contracts-map";
     if (path.startsWith("/gleif/regiao/")) {
@@ -603,6 +616,7 @@ export default function App() {
       else if (path === "/world/rede") next = "world-rede";
       else if (path === "/world" || path.startsWith("/world/")) next = "world";
       else if (path === "/padroes" || path.startsWith("/padroes/")) next = "padroes";
+      else if (path === "/osint" || path.startsWith("/osint/")) next = "osint";
       else if (path === "/mirofish" || path.startsWith("/mirofish/")) next = "mirofish";
       else if (path === "/simulador" || path.startsWith("/simulador/")) next = "simulador";
       else if (path === "/empresas-risco" || path.startsWith("/empresas-risco/")) next = "risco";
@@ -612,6 +626,8 @@ export default function App() {
       else if (path === "/contracts" || path === "/contracts/search") next = "contracts-search";
       else if (path === "/contratos-es") next = "contratos-es";
       else if (path === "/contratos-es/dashboard") next = "contratos-es-dashboard";
+      else if (path === "/contratos-fr") next = "contratos-fr";
+      else if (path === "/contratos-fr/dashboard") next = "contratos-fr-dashboard";
       else if (path === "/contracts/dashboard") next = "contracts-dashboard";
       else if (path === "/contracts/map") next = "contracts-map";
       else if (path.startsWith("/gleif/regiao/")) {
@@ -1294,6 +1310,7 @@ export default function App() {
     if (target === "contribuintes") return <ContribuintesPage />;
     if (target === "world" || target === "world-rede") return <WorldPage />;
     if (target === "padroes") return <PadroesPage />;
+    if (target === "osint") return <OsintPage />;
     if (target === "mirofish") return <MiroFishPage />;
     if (target === "simulador") return <SimuladorPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
     if (target === "risco") return <RiscoPage />;
@@ -1336,6 +1353,22 @@ export default function App() {
         <ContractsEsDashboardPage
           onSwitchView={() => setViewAndHistory("dashboard")}
           onSwitchSearch={() => setViewAndHistory("contratos-es")}
+        />
+      );
+    }
+    if (target === "contratos-fr") {
+      return (
+        <ContractsFrSearchPage
+          onSwitchView={() => setViewAndHistory("dashboard")}
+          onSwitchDashboard={() => setViewAndHistory("contratos-fr-dashboard")}
+        />
+      );
+    }
+    if (target === "contratos-fr-dashboard") {
+      return (
+        <ContractsFrDashboardPage
+          onSwitchView={() => setViewAndHistory("dashboard")}
+          onSwitchSearch={() => setViewAndHistory("contratos-fr")}
         />
       );
     }

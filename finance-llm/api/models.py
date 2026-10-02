@@ -976,6 +976,21 @@ class ContratoFrAnalyticsRequest(BaseModel):
     value_buckets: int = 10
 
 
+class ContratoFrSireneEnrichRequest(BaseModel):
+    """Pedido para enriquecer nomes de compradores/adjudicatários via API Sirene."""
+
+    identifiers: List[str] = Field(..., description="Lista de SIRET/SIREN a enriquecer")
+    cache: bool = True
+
+
+class ContratoFrSireneEnrichResponse(BaseModel):
+    """Resposta do enriquecimento Sirene: mapa id -> nome completo."""
+
+    enriched: Dict[str, Optional[str]]
+    missing: List[str]
+    errors: List[str]
+
+
 class ContratoFrEntitySearchRequest(BaseModel):
     q: Optional[str] = None
     kind: Optional[Literal["acheteur", "adjudicatario"]] = None
@@ -1096,6 +1111,8 @@ class ContractAnalyticsResponse(BaseModel):
     top_cpv: List[ContractAnalyticsRow] = []
     procedure_types: List[ContractAnalyticsRow] = []
     contract_types: List[ContractAnalyticsRow] = []
+    formes_prix: List[ContractAnalyticsRow] = []
+    localizacao: Optional[Dict[str, Any]] = None
     year: Optional[int] = None
     error: Optional[str] = None
 
@@ -1233,6 +1250,9 @@ class CompanyDetail(CompanySummary):
     firmas: List["FirmaItem"] = []
     firmas_total: int = 0
     societario_timeline: Optional[Dict[str, Any]] = None
+    enrichment_web: Optional[Dict[str, Any]] = None
+    enrichment_summary: Optional[Dict[str, Any]] = None
+    enrichment_last_updated: Optional[str] = None
 
 
 class CompanySearchRequest(BaseModel):
@@ -1515,6 +1535,60 @@ class CompanyEnrichmentResponse(BaseModel):
     error: Optional[str] = None
 
 
+class EntityEnrichmentRequest(BaseModel):
+    """Pedido de enriquecimento de uma entidade com web + scraping + IA."""
+
+    query: Optional[str] = Field(None, description="Termos extras para a pesquisa, em alternativa ao nome da entidade")
+    max_results: int = Field(default=6, ge=1, le=12, description="Máximo de resultados web a consultar")
+    max_pages: int = Field(default=3, ge=1, le=8, description="Máximo de páginas a raspar por entidade")
+    use_web: bool = Field(default=True, description="Pesquisar na web antes de raspar")
+    use_scraper: bool = Field(default=True, description="Raspar as páginas mais relevantes")
+    save_relations: bool = Field(default=True, description="Guardar relações no finance_world_relations")
+    generate_pdf: bool = Field(default=False, description="Gerar relatório PDF para a entidade")
+    include_sources: bool = Field(default=True, description="Incluir fontes e URLs no payload guardado")
+
+
+class EntityEnrichmentRelation(BaseModel):
+    """Relação gerada a partir do enriquecimento."""
+
+    kind: str
+    source_ref: str
+    source_name: Optional[str] = None
+    source_type: str = "empresa"
+    target_ref: str
+    target_name: Optional[str] = None
+    target_type: str = "entidade"
+    evidence: Optional[str] = None
+    country: Optional[str] = None
+
+
+class EntityEnrichmentReport(BaseModel):
+    """Resumo do relatório PDF e do processo de enriquecimento."""
+
+    generated: bool = False
+    path: Optional[str] = None
+    title: Optional[str] = None
+    size_bytes: Optional[int] = None
+
+
+class EntityEnrichmentResponse(BaseModel):
+    """Resultado do enriquecimento genérico de uma entidade."""
+
+    nif: Optional[str] = None
+    name: Optional[str] = None
+    query: Optional[str] = None
+    status: str = "ok"
+    saved: bool = False
+    enriched_at: Optional[str] = None
+    fields_added: Dict[str, Any] = Field(default_factory=dict)
+    source_count: int = 0
+    relation_count: int = 0
+    summary: Dict[str, Any] = Field(default_factory=dict)
+    report: Optional[EntityEnrichmentReport] = None
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
 # --- Cadastro de entidades do portal base (finance_entities) ---
 
 class EntityItem(BaseModel):
@@ -1534,17 +1608,51 @@ class EntityItem(BaseModel):
 
 
 class EntityDetailResponse(EntityItem):
-    """Ficha da entidade com o enriquecimento já guardado (marcas INPI + firmas RNPC)."""
+    """Ficha da entidade com o enriquecimento já guardado (marcas INPI + firmas RNPC + web)."""
 
     trademarks: List["TrademarkItem"] = []
     trademarks_total: int = 0
     firmas: List["FirmaItem"] = []
     firmas_total: int = 0
+    enrichment_web: Optional[Dict[str, Any]] = None
+    enrichment_summary: Optional[Dict[str, Any]] = None
+    enrichment_last_updated: Optional[str] = None
+    error: Optional[str] = None
+
+
+class EntityRelationItem(BaseModel):
+    """Uma aresta de ontologia da entidade (guardada em `finance_world_relations`)."""
+
+    relation_id: Optional[str] = None
+    kind: str = "related"
+    direction: Literal["out", "in"] = "out"
+    source_ref: Optional[str] = None
+    source_name: Optional[str] = None
+    source_type: Optional[str] = None
+    target_ref: Optional[str] = None
+    target_name: Optional[str] = None
+    target_type: Optional[str] = None
+    other_ref: Optional[str] = None
+    other_name: Optional[str] = None
+    other_type: Optional[str] = None
+    evidence: List[str] = []
+    country: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class EntityRelationsResponse(BaseModel):
+    """Ontologia da entidade: relações nos dois sentidos e contagem por tipo."""
+
+    nif: Optional[str] = None
+    total: int = 0
+    items: List[EntityRelationItem] = []
+    by_kind: Dict[str, int] = Field(default_factory=dict)
     error: Optional[str] = None
 
 
 class EntitySearchRequest(BaseModel):
     q: Optional[str] = Field(None, alias="query")
+
     country: Optional[str] = None
     only_with_nif: Optional[bool] = None
     min_contracts: Optional[int] = None
@@ -1605,6 +1713,151 @@ class EntityIngestResponse(BaseModel):
     errors: int = 0
     message: Optional[str] = None
     error: Optional[str] = None
+
+
+# --- OSINT (user-scanner) --------------------------------------------------
+
+class OsintScanRequest(BaseModel):
+    target: str = Field(..., min_length=1, max_length=120, description="Username ou email a pesquisar")
+    kind: Literal["username", "email"] = "username"
+    category: Optional[str] = Field(None, description="Categoria específica do user-scanner; vazio = todas")
+    full_scan: bool = Field(False, description="Se true, varre todas as plataformas (lento); senão usa uma categoria relevante")
+    save: bool = Field(True, description="Guardar resultado no índice finance_osint")
+
+
+class OsintProfileDetail(BaseModel):
+    """Perfil normalizado de um resultado (campos comuns a todos os sites)."""
+
+    display_name: Optional[str] = None
+    bio: Optional[str] = None
+    avatar: Optional[str] = None
+    followers: Optional[str] = None
+    joined: Optional[str] = None
+    links: List[str] = []
+    metrics: Dict[str, Any] = {}
+    fields: Dict[str, Any] = {}
+
+
+class OsintLeads(BaseModel):
+    """Pistas de contacto reveladas pela plataforma (emails e URLs)."""
+
+    emails: List[str] = []
+    urls: List[str] = []
+
+
+class OsintProfileHit(BaseModel):
+    status: str
+    site_name: str
+    category: str
+    url: Optional[str] = None
+    reason: Optional[str] = None
+    extra: Dict[str, Any] = {}
+    media: Dict[str, str] = {}
+    profile: OsintProfileDetail = Field(default_factory=OsintProfileDetail)
+    leads: OsintLeads = Field(default_factory=OsintLeads)
+    confidence: Optional[str] = None
+
+
+class OsintPivot(BaseModel):
+    """Conta cruzada: handle/ligação que o perfil expõe noutra plataforma."""
+
+    handle: Optional[str] = None
+    kind: Optional[str] = None
+    source_site: Optional[str] = None
+    source_key: Optional[str] = None
+    site: Optional[str] = None
+    url: Optional[str] = None
+
+
+class OsintStats(BaseModel):
+    """Agregados de um scan (para leitura rápida)."""
+
+    platforms_found: int = 0
+    platforms_with_name: int = 0
+    platforms_with_avatar: int = 0
+    names: List[str] = []
+    emails: List[str] = []
+    pivot_count: int = 0
+    pivot_sites: List[str] = []
+
+
+class OsintGraphNode(BaseModel):
+    id: str
+    label: str
+    group: str
+    url: Optional[str] = None
+    details: Optional[str] = None
+    avatar: Optional[str] = None
+    confidence: Optional[str] = None
+
+
+class OsintGraphEdge(BaseModel):
+    source: str
+    target: str
+    label: Optional[str] = None
+
+
+class OsintGraph(BaseModel):
+    nodes: List[OsintGraphNode] = []
+    edges: List[OsintGraphEdge] = []
+
+
+class OsintScanResponse(BaseModel):
+    target: str
+    kind: Literal["username", "email"]
+    total: int = 0
+    found: int = 0
+    not_found: int = 0
+    errors: int = 0
+    duration_s: Optional[float] = None
+    category: Optional[str] = None
+    hits: List[OsintProfileHit] = []
+    pivots: List[OsintPivot] = []
+    stats: OsintStats = Field(default_factory=OsintStats)
+    graph: OsintGraph = Field(default_factory=OsintGraph)
+    saved: bool = False
+    saved_id: Optional[str] = None
+    error: Optional[str] = None
+
+
+class OsintSearchRequest(BaseModel):
+    q: Optional[str] = None
+    kind: Optional[Literal["username", "email"]] = None
+    size: int = 20
+    from_: int = Field(0, alias="from")
+
+
+class OsintSearchItem(BaseModel):
+    id: str
+    target: str
+    kind: str
+    category: Optional[str] = None
+    found: int = 0
+    total: int = 0
+    scanned_at: Optional[str] = None
+    top_sites: List[str] = []
+    names: List[str] = []
+    emails: List[str] = []
+    pivots: int = 0
+    stats: Dict[str, Any] = {}
+
+
+class OsintSearchResponse(BaseModel):
+    total: int = 0
+    items: List[OsintSearchItem] = []
+    from_: int = Field(0, alias="from")
+    size: int = 20
+    error: Optional[str] = None
+
+
+class OsintSavedResult(BaseModel):
+    id: str
+    target: str
+    kind: str
+    scanned_at: str
+    total: int
+    found: int
+    hits: List[OsintProfileHit] = []
 
 
 # Resolver as referências antecipadas usadas em CompanyDetail / EntityDetailResponse.

@@ -35,12 +35,15 @@ import {
   Minimize2,
   Network,
   PanelLeftClose,
+  Pause,
+  Play,
   RefreshCw,
   Scan,
   Search,
   Settings,
   Shuffle,
   Sparkles,
+  Square,
   TrendingUp,
   Users,
   X,
@@ -89,6 +92,8 @@ import {
   analyzeContract,
   getContractDocument,
   downloadContractReport,
+  enrichEntity,
+  getEntityRelations,
 } from "../api";
 import {
   MAP_CENTER,
@@ -110,7 +115,7 @@ import { Avatar } from "./SettingsPage";
 import { companiesIn, useWorkspace, type WorkspaceEntry } from "../workspace";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { getRecolhaJob, getRecolhaJobs, obterDadosEmpresa } from "../societarioRecolhaApi";
+import { getRecolhaFicheiro, getRecolhaJob, getRecolhaJobs, obterDadosEmpresa, pararRecolhaJob, pausarRecolhaJob, retomarRecolhaJob } from "../societarioRecolhaApi";
 import type { RecolhaJob } from "../societarioRecolhaApi";
 import { GraphCanvas } from "../components/graph/GraphCanvas";
 import { toStudioGraph, type GraphMetric, type StudioNode } from "../components/graph/graphStudio";
@@ -137,6 +142,8 @@ import type {
   ContractSearchRequest,
   ContractParty,
   ContractPartyParsed,
+  EntityRelationItem,
+  EntityRelationsResponse,
   SocietarioPublicacao,
   SocietarioPerson,
   SocietarioPersonRole,
@@ -5837,16 +5844,338 @@ function AnalysisSection({
 
 // --- ENTITY DETAIL ---
 
+const asTextList = (value: unknown): string[] =>
+  Array.isArray(value) ? value.map((v) => String(v ?? "").trim()).filter(Boolean) : [];
+
+/**
+ * Cartão «Presença web & IA»: mostra o que a pesquisa web + scraper + IA
+ * guardaram na entidade (`enrichment_web`). Sem dados, não desenha nada.
+ */
+export function EntityEnrichmentCard({
+  data,
+  lastUpdated,
+}: {
+  data?: Record<string, unknown> | null;
+  lastUpdated?: string | null;
+}) {
+  const [showSources, setShowSources] = useState(false);
+  if (!data || typeof data !== "object") return null;
+
+  const description = String(data.description ?? "").trim();
+  const status = String(data.status ?? "").trim();
+  const country = String(data.country ?? "").trim();
+  const parent = String(data.parent_company ?? "").trim();
+  const addresses = asTextList(data.addresses);
+  const contacts = asTextList(data.contacts);
+  const brands = asTextList(data.brands);
+  const notes = asTextList(data.notes);
+  const sources = Array.isArray(data.sources) ? (data.sources as Record<string, unknown>[]) : [];
+  const related = Array.isArray(data.related_entities)
+    ? (data.related_entities as Record<string, unknown>[])
+    : [];
+  const enrichedAt = String(data.enriched_at ?? lastUpdated ?? "").trim();
+  const when = enrichedAt ? new Date(enrichedAt).toLocaleString("pt-PT") : "";
+
+  const chips = [
+    status && status !== "unknown" ? { label: `Estado: ${status}`, icon: Info } : null,
+    country ? { label: country, icon: MapPin } : null,
+    parent ? { label: `Grupo: ${parent}`, icon: Building2 } : null,
+  ].filter(Boolean) as { label: string; icon: React.ElementType }[];
+
+  const emptyEverything =
+    !description && chips.length === 0 && addresses.length === 0 && contacts.length === 0 && brands.length === 0;
+
+  return (
+    <Card>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="font-semibold flex items-center gap-2">
+            <Sparkles size={16} className="text-teal-300" /> Presença web &amp; IA
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            {sources.length > 0 ? `${sources.length} fontes` : "Sem fontes"}
+            {related.length > 0 ? ` · ${related.length} ${related.length === 1 ? "relação" : "relações"}` : ""}
+            {when ? ` · atualizado a ${when}` : ""}
+          </p>
+        </div>
+        {sources.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowSources((v) => !v)}
+            className="rounded-full glass-card px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition flex items-center gap-1"
+          >
+            {showSources ? <ChevronDown size={14} /> : <ChevronRight size={14} />} Fontes
+          </button>
+        )}
+      </div>
+
+      {description && <p className="text-sm text-foreground/90">{description}</p>}
+
+      {chips.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          {chips.map((chip) => {
+            const Icon = chip.icon;
+            return (
+              <span
+                key={chip.label}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-muted-foreground"
+              >
+                <Icon size={12} className="text-teal-300" /> {chip.label}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      {addresses.length > 0 && (
+        <div className="mt-3 text-sm">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Endereços</p>
+          <ul className="mt-1 space-y-1">
+            {addresses.map((item) => (
+              <li key={item} className="flex items-start gap-2 text-foreground/90">
+                <MapPin size={13} className="mt-0.5 shrink-0 text-teal-300" /> {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {(contacts.length > 0 || brands.length > 0) && (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {contacts.length > 0 && (
+            <div className="text-sm">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Contactos</p>
+              <ul className="mt-1 space-y-1">
+                {contacts.map((item) => (
+                  <li key={item} className="text-foreground/90">{item}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {brands.length > 0 && (
+            <div className="text-sm">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Marcas</p>
+              <ul className="mt-1 space-y-1">
+                {brands.map((item) => (
+                  <li key={item} className="text-foreground/90">{item}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {related.length > 0 && (
+        <div className="mt-3 text-sm">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Entidades relacionadas</p>
+          <ul className="mt-1 space-y-1">
+            {related.map((item, idx) => {
+              const name = String(item.name ?? "").trim();
+              const kind = String(item.kind ?? "").trim();
+              const evidence = String(item.evidence ?? "").trim();
+              if (!name) return null;
+              return (
+                <li key={`${name}-${idx}`} className="flex items-start gap-2 text-foreground/90">
+                  <Network size={13} className="mt-0.5 shrink-0 text-teal-300" />
+                  <span>
+                    {name}
+                    {kind ? <span className="text-muted-foreground"> · {kind}</span> : null}
+                    {evidence ? <span className="block text-xs text-muted-foreground">{evidence}</span> : null}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {notes.length > 0 && (
+        <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+          {notes.slice(0, 4).map((note) => (
+            <li key={note}>• {note}</li>
+          ))}
+        </ul>
+      )}
+
+      {showSources && sources.length > 0 && (
+        <ul className="mt-3 space-y-2 border-t border-white/10 pt-3 text-xs">
+          {sources.map((src, idx) => {
+            const url = String(src.url ?? "").trim();
+            const title = String(src.title ?? url).trim();
+            if (!url) return null;
+            return (
+              <li key={`${url}-${idx}`}>
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-teal-300 hover:underline break-all"
+                >
+                  {title || url}
+                </a>
+                {src.snippet ? (
+                  <span className="block text-muted-foreground">{(String(src.snippet) || "").slice(0, 180)}</span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {emptyEverything && (
+        <p className="mt-2 text-sm text-muted-foreground">
+          O enriquecimento ainda não devolveu campos estruturados (verifique nas Configurações se há um modelo de IA
+          configurado).
+        </p>
+      )}
+    </Card>
+  );
+}
+
+const RELATION_KIND_LABELS: Record<string, string> = {
+  parent_company: "Grupo / empresa-mãe",
+  subsidiary: "Subsidiária",
+  division: "Divisão",
+  related: "Relacionada",
+  supplier: "Fornecedor",
+  customer: "Cliente",
+  shareholder: "Sócio",
+  partner: "Parceiro",
+  person: "Pessoa",
+};
+
+const relationKindLabel = (kind: string) => RELATION_KIND_LABELS[kind] || kind.replace(/_/g, " ");
+
+const shortLabel = (value: string, max = 22) =>
+  value.length > max ? `${value.slice(0, max - 1)}…` : value;
+
+/**
+ * Cartão «Ontologia & relações»: as arestas guardadas em `finance_world_relations`,
+ * com um mini-mapa radial (a entidade ao centro) e a lista com o tipo e a evidência.
+ */
+export function EntityOntologyCard({
+  data,
+  centerName,
+  onOpenEntity,
+}: {
+  data?: EntityRelationsResponse | null;
+  centerName?: string | null;
+  onOpenEntity?: (nif: string) => void;
+}) {
+  const items = data?.items ?? [];
+  if (items.length === 0) return null;
+
+  const center = shortLabel(centerName || data?.nif || "Entidade", 20);
+  const orbiting = items.slice(0, 8);
+  const cx = 160;
+  const cy = 112;
+  const r = 84;
+  const total = orbiting.length || 1;
+
+  return (
+    <Card>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="font-semibold flex items-center gap-2">
+            <Network size={16} className="text-teal-300" /> Ontologia &amp; relações
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            {items.length} {items.length === 1 ? "relação guardada" : "relações guardadas"} em finance_world_relations
+          </p>
+        </div>
+        {Object.keys(data?.by_kind ?? {}).length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            {Object.entries(data?.by_kind ?? {}).map(([kind, count]) => (
+              <span
+                key={kind}
+                className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-muted-foreground"
+              >
+                {relationKindLabel(kind)} · {count}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="overflow-x-auto">
+        <svg viewBox="0 0 320 224" className="mx-auto h-auto w-full max-w-md" role="img" aria-label="Mapa de relações">
+          {orbiting.map((rel, idx) => {
+            const angle = (-90 + (360 / total) * idx) * (Math.PI / 180);
+            const x = cx + r * Math.cos(angle);
+            const y = cy + r * Math.sin(angle);
+            return (
+              <g key={rel.relation_id || `${rel.kind}-${idx}`}>
+                <line x1={cx} y1={cy} x2={x} y2={y} stroke="rgba(45,212,191,0.45)" strokeWidth="1.2" />
+                <circle cx={x} cy={y} r="7" fill="#0d3b36" stroke="#2dd4bf" strokeWidth="1.2" />
+                <text
+                  x={x}
+                  y={y + (y > cy ? 20 : -12)}
+                  textAnchor="middle"
+                  fontSize="9"
+                  fill="rgba(226,232,240,0.85)"
+                >
+                  {shortLabel(rel.other_name || rel.other_ref || "—", 18)}
+                </text>
+              </g>
+            );
+          })}
+          <circle cx={cx} cy={cy} r="30" fill="rgba(45,212,191,0.16)" stroke="#2dd4bf" strokeWidth="1.6" />
+          <text x={cx} y={cy + 3} textAnchor="middle" fontSize="10" fill="#e2e8f0" fontWeight="600">
+            {center}
+          </text>
+        </svg>
+      </div>
+
+      <ul className="mt-3 space-y-2 border-t border-white/10 pt-3 text-sm">
+        {items.map((rel: EntityRelationItem, idx) => {
+          const name = rel.other_name || rel.other_ref || "—";
+          const nif = (rel.other_ref || "").trim();
+          const linkable = onOpenEntity && /^\d{9}$/.test(nif);
+          return (
+            <li key={rel.relation_id || `${rel.kind}-${idx}`} className="flex items-start gap-2">
+              <span className="mt-0.5 shrink-0 text-xs text-teal-300">{rel.direction === "out" ? "→" : "←"}</span>
+              <div className="min-w-0">
+                <p className="text-foreground/90">
+                  {linkable ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenEntity?.(nif)}
+                      className="text-left hover:underline"
+                    >
+                      {name}
+                    </button>
+                  ) : (
+                    name
+                  )}
+                  <span className="ml-2 text-xs text-muted-foreground">{relationKindLabel(rel.kind)}</span>
+                  {/^\d{9}$/.test(nif) && <span className="ml-2 text-xs text-muted-foreground">NIF {nif}</span>}
+                </p>
+                {(rel.evidence ?? []).slice(0, 2).map((text, i) => (
+                  <p key={i} className="text-xs text-muted-foreground">
+                    {String(text).slice(0, 200)}
+                  </p>
+                ))}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
 export function EntityDetailPanel({
   nif,
   onBack,
   onContract,
   onAllContracts,
+  onEntity,
 }: {
   nif: string;
   onBack: () => void;
   onContract: (id: string) => void;
   onAllContracts?: (nif: string, name?: string) => void;
+  onEntity?: (nif: string) => void;
 }) {
   const [company, setCompany] = useState<CompanyDetail | null>(null);
   const [contracts, setContracts] = useState<CompanyContractsResponse | null>(null);
@@ -5854,9 +6183,14 @@ export function EntityDetailPanel({
   const [societario, setSocietario] = useState<CompanySocietarioResponse | null>(null);
   const [societarioLoading, setSocietarioLoading] = useState(false);
   const [societarioJob, setSocietarioJob] = useState<RecolhaJob | null>(null);
-  const societarioCollecting = societarioJob?.status === "running";
+  const societarioAtivo = societarioJob?.status === "running" || societarioJob?.status === "paused";
+  const societarioCollecting = societarioAtivo;
+  const societarioPausado = societarioJob?.status === "paused";
+  const [aControlarSocietario, setAControlarSocietario] = useState(false);
   const [societarioCollectError, setSocietarioCollectError] = useState<string | null>(null);
   const [societarioCollectMessage, setSocietarioCollectMessage] = useState<string | null>(null);
+  /** Publicações já gravadas no JSON da entidade (aparecem antes de estarem indexadas). */
+  const [societarioJson, setSocietarioJson] = useState<SocietarioPublicacao[]>([]);
   const [selectedPub, setSelectedPub] = useState<SocietarioPublicacao | null>(null);
   const [showAllSocietario, setShowAllSocietario] = useState(false);
   const [societarioPeople, setSocietarioPeople] = useState<SocietarioPerson[] | null>(null);
@@ -5870,6 +6204,10 @@ export function EntityDetailPanel({
   const [timelinePersisted, setTimelinePersisted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [enriching, setEnriching] = useState(false);
+  const [enrichMessage, setEnrichMessage] = useState<string | null>(null);
+  const [enrichError, setEnrichError] = useState<string | null>(null);
+  const [relations, setRelations] = useState<EntityRelationsResponse | null>(null);
   const { recordVisit } = useWorkspace();
 
   useEffect(() => {
@@ -5901,6 +6239,24 @@ export function EntityDetailPanel({
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [nif]);
+
+  // Ontologia da entidade (arestas em finance_world_relations), em segundo plano.
+  useEffect(() => {
+    let cancelled = false;
+    setRelations(null);
+    getEntityRelations(nif)
+      .then((r) => {
+        if (!cancelled) setRelations(r);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        // eslint-disable-next-line no-console
+        console.warn("Falha a carregar relações da entidade", nif, err);
       });
     return () => {
       cancelled = true;
@@ -5952,6 +6308,19 @@ export function EntityDetailPanel({
   }, [nif]);
 
   /**
+   * Lê o JSON exportado da entidade: é onde a recolha grava cada página **assim
+   * que a lê**, por isso mostra dados antes de eles estarem indexados.
+   */
+  const recarregarJsonSocietario = useCallback(async () => {
+    try {
+      const ficheiro = await getRecolhaFicheiro(nif, 200);
+      setSocietarioJson((ficheiro.items ?? []) as unknown as SocietarioPublicacao[]);
+    } catch {
+      /* ainda não há ficheiro para esta entidade */
+    }
+  }, [nif]);
+
+  /**
    * Relê as publicações e as pessoas do societário **sem** mexer nos estados de
    * «a carregar» — serve para ir mostrando o que a recolha já gravou.
    */
@@ -5980,14 +6349,19 @@ export function EntityDetailPanel({
    */
   useEffect(() => {
     const jobId = societarioJob?.job_id;
-    if (!jobId || societarioJob.status !== "running") return;
+    const ativo = societarioJob?.status === "running" || societarioJob?.status === "paused";
+    if (!jobId || !ativo) return;
     let cancelado = false;
     const temporizador = window.setTimeout(async () => {
       try {
         const atual = await getRecolhaJob(jobId);
         if (cancelado) return;
         setSocietarioJob(atual);
-        await refreshSocietarioSilently();
+        if (atual.status === "running") {
+          await refreshSocietarioSilently();
+          // O índice só recebe a entidade no fim: mostra já o que está no JSON.
+          if (!(societario?.items?.length)) void recarregarJsonSocietario();
+        }
       } catch {
         /* mantém o último estado conhecido */
       }
@@ -5996,7 +6370,7 @@ export function EntityDetailPanel({
       cancelado = true;
       window.clearTimeout(temporizador);
     };
-  }, [societarioJob, refreshSocietarioSilently]);
+  }, [societarioJob, refreshSocietarioSilently, recarregarJsonSocietario, societario?.items?.length]);
 
   // Ao abrir a ficha, retoma um trabalho desta empresa que já esteja a correr no
   // servidor (a página pode ter sido fechada a meio).
@@ -6005,6 +6379,7 @@ export function EntityDetailPanel({
     setSocietarioJob(null);
     setSocietarioCollectMessage(null);
     setSocietarioCollectError(null);
+    setSocietarioJson([]);
     getRecolhaJobs()
       .then((res) => {
         if (cancelado) return;
@@ -6013,6 +6388,7 @@ export function EntityDetailPanel({
         );
         if (!meu) return;
         setSocietarioJob(meu);
+        void recarregarJsonSocietario();
         setSocietarioCollectMessage(
           "Recolha a correr no servidor (iniciada numa visita anterior) — os dados vão aparecendo abaixo à medida que forem guardados.",
         );
@@ -6021,17 +6397,25 @@ export function EntityDetailPanel({
     return () => {
       cancelado = true;
     };
-  }, [nif]);
+  }, [nif, recarregarJsonSocietario]);
 
   /** Mensagem final do trabalho (ou o erro que o fez parar). */
   useEffect(() => {
-    if (!societarioJob || societarioJob.status === "running") return;
+    if (!societarioJob || societarioJob.status === "running" || societarioJob.status === "paused") return;
     const resultado = societarioJob.result;
     const erros = resultado?.errors ?? [];
     const publicacoes = resultado?.publications ?? 0;
     if (societarioJob.status === "error") {
       setSocietarioCollectMessage(null);
       setSocietarioCollectError(societarioJob.error || "A recolha terminou com erro.");
+      return;
+    }
+    if (societarioJob.status === "stopped") {
+      setSocietarioCollectError(null);
+      setSocietarioCollectMessage(
+        resultado?.message ||
+          `Recolha parada pelo utilizador — ${full(publicacoes)} publicação(ões) guardadas ficaram no JSON.`,
+      );
       return;
     }
     if (publicacoes > 0) {
@@ -6057,7 +6441,7 @@ export function EntityDetailPanel({
    * reabrir a ficha é retomado pelo efeito acima.
    */
   const iniciarRecolhaSocietaria = useCallback(async () => {
-    if (societarioJob?.status === "running") return;
+    if (societarioAtivo) return;
     setSocietarioCollectError(null);
     setSocietarioCollectMessage("A arrancar a recolha no servidor…");
     try {
@@ -6079,6 +6463,26 @@ export function EntityDetailPanel({
       setSocietarioCollectError(err instanceof Error ? err.message : String(err));
     }
   }, [nif, societarioJob?.status]);
+
+  /** Pausa, retoma ou para o trabalho de recolha em curso (corre no servidor). */
+  const controlarSocietario = useCallback(
+    async (acao: "pause" | "resume" | "stop") => {
+      const jobId = societarioJob?.job_id;
+      if (!jobId) return;
+      setAControlarSocietario(true);
+      try {
+        const funcao =
+          acao === "pause" ? pausarRecolhaJob : acao === "resume" ? retomarRecolhaJob : pararRecolhaJob;
+        setSocietarioJob(await funcao(jobId));
+        setSocietarioCollectError(null);
+      } catch (err) {
+        setSocietarioCollectError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setAControlarSocietario(false);
+      }
+    },
+    [societarioJob?.job_id],
+  );
 
   /**
    * Valida no PessoasIQ quais das pessoas do societário já têm ficha indexada.
@@ -6155,6 +6559,45 @@ export function EntityDetailPanel({
     });
   }, [company, nif, recordVisit]);
 
+  /**
+   * Enriquece a entidade (pesquisa web + scraper + IA + relações + PDF).
+   * Tem de ficar depois de TODOS os hooks: os `return` de carregamento/erro
+   * abaixo saltam-na, e um `useCallback` a seguir a um `return` condicional
+   * muda a contagem de hooks entre renders (React #310).
+   */
+  const handleEnrich = useCallback(async () => {
+    setEnriching(true);
+    setEnrichError(null);
+    setEnrichMessage("A enriquecer entidade com pesquisa web e IA…");
+    try {
+      const result = await enrichEntity(nif, {
+        use_web: true,
+        use_scraper: true,
+        save_relations: true,
+        generate_pdf: true,
+      });
+      const added = result.fields_added ?? {};
+      const fieldCount = Object.keys(added).length;
+      setEnrichMessage(
+        result.message || `Enriquecimento concluído — ${fieldCount} campos, ${result.source_count ?? 0} fontes, ${result.relation_count ?? 0} relações.`
+      );
+      // Recarrega a ficha para mostrar os dados novos.
+      const d = await getCompanyDetail(nif);
+      setCompany(d);
+      // As relações novas só aparecem depois de recarregar a ontologia.
+      try {
+        setRelations(await getEntityRelations(nif));
+      } catch {
+        /* mantém-se a ontologia já carregada */
+      }
+    } catch (err) {
+      setEnrichError(err instanceof Error ? err.message : "Erro ao enriquecer entidade");
+      setEnrichMessage(null);
+    } finally {
+      setEnriching(false);
+    }
+  }, [nif]);
+
   if (loading) return <Loading />;
   if (error || !company) {
     return (
@@ -6171,6 +6614,16 @@ export function EntityDetailPanel({
   const yearly = analytics?.by_year ?? [];
   const yearlyMax = Math.max(...yearly.map((r) => r.total_value || 0), 1);
 
+  // O índice só recebe a entidade no fim da recolha; até lá, a tabela mostra o
+  // que já está gravado no JSON (a recolha grava cada página assim que a lê).
+  const publicacoesIndice = societario?.items ?? [];
+  const mostrarJson = publicacoesIndice.length === 0 && societarioJson.length > 0;
+  const publicacoesVisiveis = mostrarJson ? societarioJson : publicacoesIndice;
+  const totalPublicacoes = mostrarJson ? societarioJson.length : societario?.total ?? publicacoesIndice.length;
+  // O JSON guarda o código do tipo (o rótulo só é calculado na indexação).
+  const rotuloTipo = (pub: SocietarioPublicacao) =>
+    pub.tipo_label || (String(pub.tipo) === "0" ? "Todos os actos" : pub.tipo) || "—";
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
@@ -6180,22 +6633,45 @@ export function EntityDetailPanel({
         >
           <ArrowUpRight size={16} className="rotate-[-135deg]" /> Voltar
         </button>
-        <FavoriteButton
-          kind="entity"
-          id={nif}
-          label={company.name}
-          sublabel={`NIF ${nif}`}
-          variant="solid"
-        />
-        <CompareToggleButton kind="entity" id={nif} label={company.name} />
-        <SaveToFolderButton
-          kind="entity"
-          id={nif}
-          label={company.name}
-          sublabel={`NIF ${nif}`}
-          variant="solid"
-        />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleEnrich}
+            disabled={enriching}
+            className="px-3 py-1.5 rounded-full glass-card text-sm text-teal-300 hover:text-teal-200 transition flex items-center gap-2 disabled:opacity-60"
+          >
+            {enriching ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+            Enriquecer
+          </button>
+          <FavoriteButton
+            kind="entity"
+            id={nif}
+            label={company.name}
+            sublabel={`NIF ${nif}`}
+            variant="solid"
+          />
+          <CompareToggleButton kind="entity" id={nif} label={company.name} />
+          <SaveToFolderButton
+            kind="entity"
+            id={nif}
+            label={company.name}
+            sublabel={`NIF ${nif}`}
+            variant="solid"
+          />
+        </div>
       </div>
+
+      {enrichMessage && (
+        <div className="rounded-xl border border-teal-500/30 bg-teal-500/10 px-4 py-3 text-sm text-teal-200 flex items-center gap-2">
+          <Info size={16} />
+          {enrichMessage}
+        </div>
+      )}
+      {enrichError && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200 flex items-center gap-2">
+          <AlertCircle size={16} />
+          {enrichError}
+        </div>
+      )}
 
       <Card>
         <div className="flex items-center gap-4">
@@ -6232,6 +6708,10 @@ export function EntityDetailPanel({
           <p className="mt-2 text-2xl font-bold stat-value text-glow-rose">{money(analytics?.max_value)}</p>
         </Card>
       </div>
+
+      <EntityEnrichmentCard data={company.enrichment_web} lastUpdated={company.enrichment_last_updated} />
+
+      <EntityOntologyCard data={relations} centerName={company.name} onOpenEntity={onEntity} />
 
       <div className="grid gap-6 @3xl:grid-cols-2">
         <Card>
@@ -6294,13 +6774,15 @@ export function EntityDetailPanel({
           <div className="min-w-0">
             <h3 className="font-semibold">Dados Societários</h3>
             <p className="text-xs text-muted-foreground">
-              {societarioCollecting
-                ? `A recolher no servidor… ${full(societarioJob?.progress?.publications ?? 0)} publicações guardadas`
-                : societarioLoading
-                  ? "A carregar publicações do Ministério da Justiça..."
-                  : societario && societario.total > 0
-                    ? `${societario.total} publicações de atos societários indexadas`
-                    : "Sem publicações societárias indexadas"}
+              {societarioPausado
+                ? `Recolha pausada — ${full(societarioJob?.progress?.saved_total ?? 0)} publicações gravadas no JSON`
+                : societarioCollecting
+                  ? `A recolher no servidor… ${full(societarioJob?.progress?.saved_total ?? 0)} publicações gravadas no JSON`
+                  : societarioLoading
+                    ? "A carregar publicações do Ministério da Justiça..."
+                    : societario && societario.total > 0
+                      ? `${societario.total} publicações de atos societários indexadas`
+                      : "Sem publicações societárias indexadas"}
             </p>
           </div>
           {societario && societario.total > 0 && !societarioCollecting ? (
@@ -6361,29 +6843,79 @@ export function EntityDetailPanel({
               ) : (
                 <Download size={18} />
               )}
-              {societarioCollecting
-                ? `A recolher… (${full(societarioJob?.progress?.publications ?? 0)} guardadas)`
-                : "Obter dados societários"}
+              {societarioPausado
+                ? `Pausado (${full(societarioJob?.progress?.saved_total ?? 0)} gravadas)`
+                : societarioCollecting
+                  ? `A recolher… (${full(societarioJob?.progress?.saved_total ?? 0)} gravadas)`
+                  : "Obter dados societários"}
             </button>
           )}
         </div>
 
         {societarioCollectMessage && (
-          <p className="mb-4 flex items-start gap-2 rounded-lg border border-teal-400/20 bg-teal-400/10 px-3 py-2 text-xs text-teal-200">
+          <div className="mb-4 flex flex-wrap items-start gap-2 rounded-lg border border-teal-400/20 bg-teal-400/10 px-3 py-2 text-xs text-teal-200">
             {societarioCollecting && <Loader2 size={14} className="mt-0.5 shrink-0 animate-spin" />}
-            <span>
+            <span className="min-w-0 flex-1">
               {societarioCollectMessage}
-              {societarioCollecting && societarioJob?.progress && (
+              {societarioAtivo && societarioJob?.progress && (
                 <span className="text-teal-300/80">
-                  {" "}· {societarioJob.progress.phase || "a recolher"} ·{" "}
-                  {full(societarioJob.progress.entities_done ?? 0)}/{full(societarioJob.progress.entities_total ?? 0)} entidades
+                  {" "}· {societarioJob.progress.phase || "a recolher"}
+                  {" · encontradas: "}
+                  {full(societarioJob.progress.publications_live ?? 0)}
+                  {societarioJob.progress.pages_read
+                    ? ` em ${full(societarioJob.progress.pages_read)} página(s)`
+                    : ""}
+                  {" · gravadas no JSON: "}
+                  {full(societarioJob.progress.saved_total ?? 0)}
+                  {societarioJob.progress.current?.details_total
+                    ? ` · detalhes ${full(societarioJob.progress.current.details_done ?? 0)}/${full(
+                        societarioJob.progress.current.details_total,
+                      )}`
+                    : ""}
                   {societarioJob.progress.current
                     ? ` · ${societarioJob.progress.current.name || societarioJob.progress.current.nif}`
                     : ""}
                 </span>
               )}
             </span>
-          </p>
+            {societarioAtivo && societarioJob && (
+              <span className="flex shrink-0 items-center gap-1.5">
+                {societarioJob.status === "running" ? (
+                  <button
+                    type="button"
+                    onClick={() => void controlarSocietario("pause")}
+                    disabled={aControlarSocietario}
+                    title="Pausa a recolha no próximo ponto de controlo"
+                    className="flex items-center gap-1.5 rounded-lg border border-amber-400/25 bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-200 transition hover:bg-amber-400/20 disabled:opacity-40"
+                  >
+                    <Pause size={12} />
+                    Pausar
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void controlarSocietario("resume")}
+                    disabled={aControlarSocietario}
+                    title="Retoma a recolha (recomeça a entidade que ficou a meio)"
+                    className="flex items-center gap-1.5 rounded-lg border border-teal-400/25 bg-teal-400/10 px-2.5 py-1 text-[11px] text-teal-200 transition hover:bg-teal-400/20 disabled:opacity-40"
+                  >
+                    <Play size={12} />
+                    Retomar
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void controlarSocietario("stop")}
+                  disabled={aControlarSocietario}
+                  title="Para a recolha — o que já foi recolhido fica gravado no JSON"
+                  className="flex items-center gap-1.5 rounded-lg border border-rose-400/25 bg-rose-400/10 px-2.5 py-1 text-[11px] text-rose-200 transition hover:bg-rose-400/20 disabled:opacity-40"
+                >
+                  <Square size={12} />
+                  Parar
+                </button>
+              </span>
+            )}
+          </div>
         )}
 
         {societarioCollectError && (
@@ -6467,6 +6999,12 @@ export function EntityDetailPanel({
         ) : null}
 
         <div className="overflow-x-auto">
+          {mostrarJson && (
+            <p className="mb-3 rounded-lg border border-teal-400/20 bg-teal-400/10 px-3 py-2 text-xs text-teal-200">
+              {full(totalPublicacoes)} publicação(ões) já gravadas no JSON da entidade pela recolha em curso — a
+              indexação é feita no fim.
+            </p>
+          )}
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/10 text-left text-muted-foreground text-xs uppercase tracking-wider">
@@ -6478,7 +7016,7 @@ export function EntityDetailPanel({
               </tr>
             </thead>
             <tbody>
-              {(showAllSocietario ? (societario?.items ?? []) : (societario?.items ?? []).slice(0, 8)).map((pub, idx) => (
+              {(showAllSocietario ? publicacoesVisiveis : publicacoesVisiveis.slice(0, 8)).map((pub, idx) => (
                 <tr
                   key={pub.pub_id || idx}
                   className="border-b border-white/5 cursor-pointer hover:bg-white/[0.04]"
@@ -6486,7 +7024,7 @@ export function EntityDetailPanel({
                 >
                   <td className="py-2 pr-3 whitespace-nowrap">{pub.data_publicacao || "—"}</td>
                   <td className="py-2 pr-3 max-w-xs truncate" title={pub.acto}>{pub.acto || "—"}</td>
-                  <td className="py-2 pr-3">{pub.tipo_label || pub.tipo || "—"}</td>
+                  <td className="py-2 pr-3">{rotuloTipo(pub)}</td>
                   <td className="py-2 pr-3 max-w-xs truncate" title={pub.firma || pub.entidade}>
                     {pub.firma || pub.entidade || "—"}
                   </td>
@@ -6509,12 +7047,12 @@ export function EntityDetailPanel({
               ))}
             </tbody>
           </table>
-          {(societario?.items ?? []).length > 8 && (
+          {publicacoesVisiveis.length > 8 && (
             <div className="mt-3 flex items-center justify-between">
               <p className="text-xs text-muted-foreground">
                 {showAllSocietario
-                  ? `A mostrar todos os ${societario?.total ?? societario?.items?.length ?? 0} registos.`
-                  : `Mostrando 8 de ${societario?.total ?? societario?.items?.length ?? 0} publicações.`}
+                  ? `A mostrar todos os ${full(totalPublicacoes)} registos.`
+                  : `Mostrando 8 de ${full(totalPublicacoes)} publicações.`}
               </p>
               <button
                 type="button"
@@ -7961,6 +8499,7 @@ export default function EmpresasIQPage() {
                     onBack={closeDetail}
                     onContract={openContract}
                     onAllContracts={openAllContracts}
+                    onEntity={openEntity}
                   />
                 ) : detail.type === "entity-contracts" ? (
                   <div className="h-[70vh] min-h-[420px]">

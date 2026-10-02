@@ -23,8 +23,10 @@ import {
   FileJson,
   FolderOpen,
   Loader2,
+  Pause,
   Play,
   RefreshCw,
+  Square,
   Trash2,
 } from "lucide-react";
 
@@ -41,6 +43,9 @@ import {
   getRecolhaMeta,
   ingerirRecolhaExportacoes,
   obterDadosEmpresa,
+  pararRecolhaJob,
+  pausarRecolhaJob,
+  retomarRecolhaJob,
   startRecolhaJob,
 } from "../societarioRecolhaApi";
 import type {
@@ -102,29 +107,41 @@ function haQuanto(iso?: string | null): string {
   return `há ${Math.round(minutos / 60)} h`;
 }
 
+/** Rótulo, tom e «está ativo» do estado de um trabalho (inclui pausa e paragem). */
+function estadoJob(status: string): { tom: string; rotulo: string; ativo: boolean } {
+  if (status === "running") return { tom: "amber", rotulo: "a correr", ativo: true };
+  if (status === "paused") return { tom: "blue", rotulo: "pausado", ativo: true };
+  if (status === "stopped") return { tom: "neutral", rotulo: "parado", ativo: false };
+  if (status === "error") return { tom: "rose", rotulo: "com erro", ativo: false };
+  return { tom: "teal", rotulo: "concluído", ativo: false };
+}
+
 function ProgressoRecolha({ job }: { job: RecolhaJob }) {
   const progresso = job.progress || {};
   const total = progresso.entities_total || 0;
   const feitas = progresso.entities_done || 0;
-  const pct = total ? Math.round((feitas / total) * 100) : job.status === "running" ? 3 : 100;
+  const estado = estadoJob(job.status);
+  const ativo = estado.ativo;
+  const pct = total ? Math.round((feitas / total) * 100) : ativo ? 3 : 100;
   const erros = job.result?.errors || [];
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-        <Chip tone={job.status === "running" ? "amber" : job.status === "error" ? "rose" : "teal"}>
-          {job.status === "running" ? "a correr" : job.status === "error" ? "com erro" : "concluído"}
-        </Chip>
+        <Chip tone={estado.tom}>{estado.rotulo}</Chip>
         <span>{progresso.phase || "—"}</span>
         <span>
           {formatNumber(feitas)} / {formatNumber(total)} entidades
         </span>
         <span>{formatNumber(progresso.publications || 0)} publicações</span>
         <span>{formatNumber(progresso.files || 0)} ficheiros</span>
-        {job.status === "running" && (progresso.publications_live || 0) > 0 && (
+        {ativo && (
           <span className="text-teal-200">
-            agora: {formatNumber(progresso.publications_live || 0)} publicações encontradas
-            {progresso.pages_read ? ` em ${formatNumber(progresso.pages_read)} página(s)` : ""}
-            {progresso.saved_total ? ` · ${formatNumber(progresso.saved_total)} já gravadas` : ""}
+            encontradas: {formatNumber(progresso.publications_live || 0)}
+            {progresso.pages_read ? ` · ${formatNumber(progresso.pages_read)} página(s) lidas` : ""}
+            {` · gravadas no JSON: ${formatNumber(progresso.saved_total || 0)}`}
+            {progresso.current?.details_total
+              ? ` · detalhes ${formatNumber(progresso.current.details_done || 0)}/${formatNumber(progresso.current.details_total)}`
+              : ""}
           </span>
         )}
         {progresso.current && (
@@ -136,11 +153,17 @@ function ProgressoRecolha({ job }: { job: RecolhaJob }) {
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
         <div
-          className={`h-full rounded-full bg-gradient-to-r ${job.status === "error" ? "from-rose-400 to-rose-600" : "from-teal-300 to-teal-500"}`}
+          className={`h-full rounded-full bg-gradient-to-r ${
+            job.status === "error"
+              ? "from-rose-400 to-rose-600"
+              : job.status === "paused"
+                ? "from-amber-300 to-amber-500"
+                : "from-teal-300 to-teal-500"
+          }`}
           style={{ width: `${Math.max(3, Math.min(100, pct))}%` }}
         />
       </div>
-      {job.status === "running" &&
+      {ativo &&
         (progresso.publications || 0) === 0 &&
         (progresso.saved_total || 0) === 0 && (
         <p className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-[11.5px] leading-relaxed text-muted-foreground">
@@ -217,6 +240,7 @@ export default function SocietarioRecolhaPage() {
 
   const [job, setJob] = useState<RecolhaJob | null>(null);
   const [aArrancar, setAArrancar] = useState(false);
+  const [aControlar, setAControlar] = useState(false);
 
   // Ficheiros exportados
   const [exportacoes, setExportacoes] = useState<RecolhaExportacoes | null>(null);
@@ -334,27 +358,33 @@ export default function SocietarioRecolhaPage() {
   }, []);
 
   // Seguimento do trabalho de recolha, com atualização progressiva do que já
-  // ficou guardado (JSON/índice) enquanto o trabalho corre.
+  // ficou guardado (JSON/índice) enquanto o trabalho corre. Também segue um
+  // trabalho **pausado**, à espera da retoma ou da confirmação da paragem.
   useEffect(() => {
     const jobId = job?.job_id;
-    if (!jobId || job?.status !== "running") return;
+    const ativo = job?.status === "running" || job?.status === "paused";
+    if (!jobId || !ativo) return;
     let cancelado = false;
     const temporizador = window.setTimeout(async () => {
       try {
         const atual = await getRecolhaJob(jobId);
         if (cancelado) return;
         setJob(atual);
-        // Mostra já o que ficou guardado, sem esperar pelo fim do trabalho.
-        void carregarExportacoes();
-        if (fichaEmpresa) void recarregarFicha(fichaEmpresa.nif, { silent: true });
-        if (atual.status !== "running") {
+        if (atual.status === "running") {
+          // Mostra já o que ficou guardado, sem esperar pelo fim do trabalho.
+          void carregarExportacoes();
+          if (fichaEmpresa) void recarregarFicha(fichaEmpresa.nif, { silent: true });
+        } else if (atual.status !== "paused") {
+          void carregarExportacoes();
           if (empresa.trim() || excluirRecolhidas) void carregarAlvos();
           if (fichaEmpresa) {
             void recarregarFicha(fichaEmpresa.nif);
             setMensagemEmpresa(
               atual.status === "error"
                 ? atual.error || "A recolha terminou com erro."
-                : `Recolha concluída: ${formatNumber(atual.result?.publications ?? 0)} publicação(ões) guardadas${atual.result?.ingested ? " e indexadas" : ""}.`,
+                : atual.status === "stopped"
+                  ? atual.result?.message || "Recolha parada pelo utilizador."
+                  : `Recolha concluída: ${formatNumber(atual.result?.publications ?? 0)} publicação(ões) guardadas${atual.result?.ingested ? " e indexadas" : ""}.`,
             );
           }
         }
@@ -398,6 +428,25 @@ export default function SocietarioRecolhaPage() {
       }
     },
     [anoFim, anoIni, comDetalhe, empresa, excluirRecolhidas, indexarLogo, intervalo, maxEntidades, maxPaginas, minContratos, minValor, papel, pausaLimite],
+  );
+
+  /** Pausa, retoma ou para o trabalho em curso (corre sempre no servidor). */
+  const controlar = useCallback(
+    async (acao: "pause" | "resume" | "stop") => {
+      const jobId = job?.job_id;
+      if (!jobId) return;
+      setAControlar(true);
+      setErroGeral(null);
+      try {
+        const funcao = acao === "pause" ? pausarRecolhaJob : acao === "resume" ? retomarRecolhaJob : pararRecolhaJob;
+        setJob(await funcao(jobId));
+      } catch (exc) {
+        setErroGeral(exc instanceof Error ? exc.message : "Erro ao controlar a recolha");
+      } finally {
+        setAControlar(false);
+      }
+    },
+    [job?.job_id],
   );
 
   const indexar = useCallback(
@@ -1022,6 +1071,46 @@ export default function SocietarioRecolhaPage() {
               title="Trabalho de recolha"
               subtitle={`Trabalho ${job.job_id} · iniciado em ${formatDate(job.started_at)}`}
               icon={Play}
+              actions={
+                <div className="flex flex-wrap items-center gap-2">
+                  {job.status === "running" && (
+                    <button
+                      type="button"
+                      onClick={() => void controlar("pause")}
+                      disabled={aControlar}
+                      title="Pausa a recolha no próximo ponto de controlo (o trabalho fica à espera e pode ser retomado)"
+                      className="flex min-h-[40px] items-center gap-2 rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-xs text-amber-200 transition hover:bg-amber-400/20 disabled:opacity-40"
+                    >
+                      {aControlar ? <Loader2 size={14} className="animate-spin" /> : <Pause size={14} />}
+                      Pausar
+                    </button>
+                  )}
+                  {job.status === "paused" && (
+                    <button
+                      type="button"
+                      onClick={() => void controlar("resume")}
+                      disabled={aControlar}
+                      title="Retoma a recolha (recomeça a entidade que ficou a meio)"
+                      className="flex min-h-[40px] items-center gap-2 rounded-xl border border-teal-400/25 bg-teal-400/10 px-3 py-2 text-xs text-teal-200 transition hover:bg-teal-400/20 disabled:opacity-40"
+                    >
+                      {aControlar ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+                      Retomar
+                    </button>
+                  )}
+                  {(job.status === "running" || job.status === "paused") && (
+                    <button
+                      type="button"
+                      onClick={() => void controlar("stop")}
+                      disabled={aControlar}
+                      title="Para a recolha — o que já foi recolhido fica gravado no JSON"
+                      className="flex min-h-[40px] items-center gap-2 rounded-xl border border-rose-400/25 bg-rose-400/10 px-3 py-2 text-xs text-rose-200 transition hover:bg-rose-400/20 disabled:opacity-40"
+                    >
+                      <Square size={14} />
+                      Parar
+                    </button>
+                  )}
+                </div>
+              }
             >
               <ProgressoRecolha job={job} />
             </SectionCard>

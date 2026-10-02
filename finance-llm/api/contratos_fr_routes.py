@@ -42,6 +42,8 @@ from api.models import (
     ContratoFrImportResponse,
     ContratoFrIngestRequest,
     ContratoFrSearchRequest,
+    ContratoFrSireneEnrichRequest,
+    ContratoFrSireneEnrichResponse,
     ContractAnalyticsResponse,
 )
 
@@ -295,6 +297,17 @@ def contrato_fr_detail_endpoint(doc_id: str) -> Dict[str, Any]:
 
 
 # Endpoints adicionais compatíveis com os modelos reutilizados no esquema PT/ES.
+@router.post("/sirene/enrich")
+def contratos_fr_sirene_enrich_endpoint(req: ContratoFrSireneEnrichRequest) -> ContratoFrSireneEnrichResponse:
+    """Enriquece nomes a partir de SIRET/SIREN via API pública recherche-entreprises.api.gouv.fr."""
+    from collectors import sirene
+
+    result = sirene.batch_enrich(req.identifiers, cache=req.cache)
+    missing = [ident for ident, name in result.items() if not name]
+    errors: List[str] = []
+    return ContratoFrSireneEnrichResponse(enriched=result, missing=missing, errors=errors)
+
+
 @router.post("/ingest")
 def contratos_fr_ingest_endpoint(req: ContratoFrIngestRequest, session: Session) -> ContratoFrImportResponse:
     """Ingestão síncrona de um ficheiro DECP (normaliza e, opcionalmente, indexa)."""

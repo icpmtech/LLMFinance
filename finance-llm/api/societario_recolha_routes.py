@@ -241,6 +241,33 @@ def recolha_job(job_id: str, session: ReadSession = None) -> Dict[str, Any]:
     return job
 
 
+def _controlar(job_id: str, acao: str) -> Dict[str, Any]:
+    """Aplica pausa/retoma/paragem a um trabalho e devolve o estado atualizado."""
+    funcoes = {"pause": recolha.pause_job, "resume": recolha.resume_job, "stop": recolha.stop_job}
+    job = funcoes[acao](job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Trabalho de recolha não encontrado.")
+    return job
+
+
+@router.post("/jobs/{job_id}/pause")
+def recolha_pausar_job(job_id: str, session: Session) -> Dict[str, Any]:
+    """Pausa a recolha (a thread para no próximo ponto de controlo e espera)."""
+    return _controlar(job_id, "pause")
+
+
+@router.post("/jobs/{job_id}/resume")
+def recolha_retomar_job(job_id: str, session: Session) -> Dict[str, Any]:
+    """Retoma um trabalho pausado (recomeça a entidade que ficou a meio)."""
+    return _controlar(job_id, "resume")
+
+
+@router.post("/jobs/{job_id}/stop")
+def recolha_parar_job(job_id: str, session: Session) -> Dict[str, Any]:
+    """Para o trabalho, guardando o que já foi recolhido."""
+    return _controlar(job_id, "stop")
+
+
 @router.get("/exports")
 def recolha_exports(session: ReadSession = None) -> Dict[str, Any]:
     """Ficheiros JSON exportados (um por entidade) e volumetria total."""
