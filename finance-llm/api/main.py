@@ -2,10 +2,37 @@
 import asyncio
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, List, Optional
+
+
+def _carregar_env_do_projeto() -> None:
+    """Carrega `finance-llm/.env` para o ambiente do processo (sem sobrescrever).
+
+    As chaves de serviços pagos (2captcha, MiroFish…) vivem nesse ficheiro — que
+    está no `.gitignore` — e o processo só as via se o lançador as exportasse.
+    Reiniciar a API por outro caminho deixava-a **sem `TWOCAPTCHA_API_KEY`** e a
+    recolha societária falhava com «API key da 2captcha em falta». Passa a ser o
+    próprio backend a ler o ficheiro, seja qual for o lançador.
+    """
+    for caminho in (Path(__file__).resolve().parents[1] / ".env", Path(__file__).resolve().parents[2] / ".env"):
+        if not caminho.exists():
+            continue
+        for linha in caminho.read_text(encoding="utf-8", errors="ignore").splitlines():
+            limpa = linha.strip()
+            if not limpa or limpa.startswith("#") or "=" not in limpa:
+                continue
+            chave, _, valor = limpa.partition("=")
+            chave = chave.strip()
+            valor = valor.strip().strip("'\"")
+            if chave and valor and not os.environ.get(chave):
+                os.environ[chave] = valor
+
+
+_carregar_env_do_projeto()
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Body, Request, UploadFile, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -229,6 +256,8 @@ from api.ontology_workspace_routes import router as ontology_workspace_router
 from api.scraper_routes import router as scraper_router
 from api.social_routes import router as social_router
 from api.search_routes import router as search_router
+from api.search_workspace_routes import router as search_workspace_router
+from api.search_analysis_routes import router as search_analysis_router
 from api.sentiment_routes import router as sentiment_router
 from api.sentiment_market_routes import router as sentiment_market_router
 from api.search360_routes import router as search360_router
@@ -532,6 +561,10 @@ app.include_router(shop_router)
 app.include_router(rss_router)
 # Notícias indexadas: recolha e pesquisa em `/news/*`.
 app.include_router(news_router)
+# Portfólio da pesquisa: pesquisas guardadas e favoritos em `/search/portfolio|favorites`.
+app.include_router(search_workspace_router)
+# Análise de custos, ontologia e relatórios da pesquisa em `/search/analysis|graph|report`.
+app.include_router(search_analysis_router)
 app.include_router(email_router)
 app.include_router(visualizador_router)
 app.include_router(researcher_router)

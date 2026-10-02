@@ -1,10 +1,24 @@
 warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
-INFO:     Started server process [9348]
+INFO:     Started server process [24228]
 INFO:     Waiting for application startup.
 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  49%|####9     | 125/254 [00:00<00:00, 1248.52it/s]Loading weights: 100%|##########| 254/254 [00:00<00:00, 1559.52it/s]
 Ficheiro do RSS ilegível (Extra data: line 7874 column 2 (char 1192276)); a recomeçar.
 INFO:     Application startup complete.
-ERROR:    [Errno 10048] error while attempting to bind on address ('127.0.0.1', 8002): only one usage of each socket address (protocol/network address/port) is normally permitted
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
+INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
+Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  58%|#####8    | 148/254 [00:00<00:00, 1469.13it/s]Loading weights: 100%|##########| 254/254 [00:00<00:00, 907.38it/s] 
+INFO:     127.0.0.1:49692 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51319 - "GET /admin/service-keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51319 - "POST /admin/service-keys/twocaptcha_api_key/test HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51319 - "PUT /admin/service-keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51319 - "GET /admin/service-keys HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51319 - "POST /auth/logout HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60456 - "GET /admin?v=99200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60456 - "GET /assets/index-UPCA5WJ5.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58067 - "GET /assets/index-COKNgBHy.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52611 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54690 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58067 - "GET /assets/index-COKNgBHy.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60456 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58067 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52611 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60456 - "GET /admin/overview HTTP/1.1" 200 OK

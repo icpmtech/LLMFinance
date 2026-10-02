@@ -16,6 +16,9 @@ Só acessíveis a contas com o papel `admin`. Dão suporte à aplicação
 - `GET  /admin/sidebar-access`      — módulos da barra lateral escondidos por perfil
 - `PUT  /admin/sidebar-access`      — gravar essa matriz (perfil → módulos escondidos)
 - `POST /admin/sidebar-access/reset`— voltar a mostrar tudo a todos
+- `GET  /admin/service-keys`         — chaves de serviços externos (2captcha…), estado mascarado
+- `PUT  /admin/service-keys`         — gravar chaves (gravadas no Elasticsearch)
+- `POST /admin/service-keys/{id}/test`— testar uma chave junto do fornecedor (saldo da 2captcha)
 
 As ações de administração ficam elas próprias registadas como eventos de
 auditoria (origem `admin`).
@@ -32,6 +35,7 @@ from pydantic import BaseModel, Field
 
 from api import auth_service as auth
 from api import events_service as events
+from api import service_keys
 from api import sidebar_access
 from api.auth_routes import CurrentSession, require_session
 from api.elasticsearch_client import (
@@ -424,3 +428,65 @@ def admin_sidebar_access_reset(session: AdminSession) -> Dict[str, Any]:
         user_email=session.user.email,
     )
     return {**sidebar_access.overview(), "reposto": True}
+
+
+# ---------------------------------------------------------------------------
+# Chaves de serviços externos (2captcha…)
+# ---------------------------------------------------------------------------
+
+
+class ServiceKeysPayload(BaseModel):
+    """Chaves a gravar (um valor vazio remove a chave e volta ao fallback)."""
+
+    keys: Dict[str, str] = Field(default_factory=dict, description="id da chave → valor")
+
+
+@router.get("/service-keys")
+def admin_service_keys(session: AdminSession) -> Dict[str, Any]:
+    """Catálogo e estado (mascarado) das chaves de serviços externos."""
+    try:
+        return service_keys.estado()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.put("/service-keys")
+def admin_service_keys_save(payload: ServiceKeysPayload, session: AdminSession) -> Dict[str, Any]:
+    """Grava as chaves de serviços (só administradores; fica registado nos eventos)."""
+    try:
+        resultado = service_keys.guardar(payload.keys, utilizador=session.user.email)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    alteradas = ", ".join(resultado["alteradas"]) or "—"
+    removidas = ", ".join(resultado["removidas"]) or "—"
+    events.log_event(
+        "info",
+        "admin",
+        f"Chaves de serviços atualizadas (alteradas: {alteradas}; removidas: {removidas})",
+        data={"alteradas": resultado["alteradas"], "removidas": resultado["removidas"]},
+        user_id=session.user.id,
+        user_email=session.user.email,
+    )
+    return {**service_keys.estado(), "gravado": True, **resultado}
+
+
+@router.post("/service-keys/{key_id}/test")
+def admin_service_keys_test(key_id: str, session: AdminSession) -> Dict[str, Any]:
+    """Testa uma chave junto do fornecedor (a 2captcha devolve o saldo da conta)."""
+    try:
+        resultado = service_keys.testar(key_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    events.log_event(
+        "info" if resultado.get("ok") else "warning",
+        "admin",
+        f"Teste da chave {key_id}: {resultado.get('mensagem')}",
+        user_id=session.user.id,
+        user_email=session.user.email,
+    )
+    return resultado

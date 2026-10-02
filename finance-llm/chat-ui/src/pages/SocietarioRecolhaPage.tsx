@@ -1162,7 +1162,9 @@ export default function SocietarioRecolhaPage() {
               <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
                 <li>
                   A pesquisa do portal do Ministério da Justiça exige reCAPTCHA: a resolução automática usa a
-                  2captcha (variável <span className="font-mono">TWOCAPTCHA_API_KEY</span>).
+                  2captcha. A chave é gerida em <span className="font-mono">Administração → Chaves</span> (fica
+                  guardada no Elasticsearch); sem chave lá, usa a variável{" "}
+                  <span className="font-mono">TWOCAPTCHA_API_KEY</span> ou o <span className="font-mono">.env</span>.
                 </li>
                 <li>
                   Cada entidade gera <span className="font-mono">societario-&lt;NIF&gt;.json</span> em{" "}

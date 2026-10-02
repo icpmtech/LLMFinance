@@ -28,6 +28,7 @@ import {
   Database,
   FileText,
   Info,
+  KeyRound,
   Loader2,
   Pause,
   PanelLeft,
@@ -63,9 +64,10 @@ import {
 } from "../adminApi";
 import { useAuth } from "../auth";
 import { useWindowMode } from "../layout";
+import { AdminServiceKeysTab } from "./AdminServiceKeys";
 import { AdminSidebarAccessTab } from "./AdminSidebarAccess";
 
-type Tab = "overview" | "users" | "events" | "logs" | "sidebar";
+type Tab = "overview" | "users" | "events" | "logs" | "sidebar" | "keys";
 
 const LEVEL_STYLES: Record<string, { color: string; label: string; icon: typeof Info }> = {
   debug: { color: "bg-slate-500/15 text-slate-300 border-slate-400/20", label: "debug", icon: Bug },
@@ -1044,6 +1046,7 @@ export default function AdminPage() {
     { id: "users", label: "Utilizadores", icon: <UserCog size={13} /> },
     { id: "events", label: "Eventos", icon: <Activity size={13} /> },
     { id: "sidebar", label: "Menu lateral", icon: <PanelLeft size={13} /> },
+    { id: "keys", label: "Chaves", icon: <KeyRound size={13} /> },
     { id: "logs", label: "Ficheiros de log", icon: <FileText size={13} /> },
   ];
 
@@ -1100,6 +1103,7 @@ export default function AdminPage() {
         {tab === "users" && <UsersTab onError={setError} currentUserId={user?.id} />}
         {tab === "events" && <EventsTab onError={setError} />}
         {tab === "sidebar" && <AdminSidebarAccessTab onError={setError} />}
+        {tab === "keys" && <AdminServiceKeysTab onError={setError} />}
         {tab === "logs" && <LogsTab onError={setError} />}
       </div>
 

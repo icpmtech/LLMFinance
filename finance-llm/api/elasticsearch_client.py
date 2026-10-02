@@ -1353,10 +1353,21 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "entry_kind": {"type": "keyword"},
             "id": {"type": "keyword"},
             "folder_id": {"type": "keyword"},
+            # Dono do registo (email da sessão). Documentos antigos não têm este
+            # campo e continuam a ser mostrados a toda a gente.
+            "owner_id": {"type": "keyword"},
             "name": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
             "label": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
             "sublabel": {"type": "keyword"},
             "value": {"type": "float"},
+            "url": {"type": "keyword", "ignore_above": 1024},
+            # Pesquisa guardada no portfólio: consulta + âmbito + filtros.
+            "query": {"type": "keyword", "ignore_above": 512},
+            "scope": {"type": "keyword"},
+            "description": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "results_total": {"type": "long"},
+            "filters": {"type": "object", "enabled": False},
+            "open": {"type": "object", "enabled": False},
             "parties": {
                 "type": "nested",
                 "properties": {
@@ -1369,6 +1380,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "added_at": {"type": "date"},
             "created_at": {"type": "date"},
             "updated_at": {"type": "date"},
+            "last_run_at": {"type": "date"},
         }
     }
 
@@ -8180,7 +8192,56 @@ def _user_state_index() -> str:
     return USER_STATE_INDEX
 
 
-def list_favorites(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+#: Tipos de favorito aceites: os âmbitos da Pesquisa total, além das fichas que
+#: já existiam (`entity`, `contract`). Sem esta lista, favoritar um artigo de
+#: imprensa ou uma pessoa morria num 400.
+FAVORITE_KINDS = {
+    "entity",
+    "contract",
+    "contracts_es",
+    "entities_es",
+    "companies",
+    "pessoas",
+    "politicos",
+    "wikipedia",
+    "news",
+    "imprensa",
+    "scraped",
+    "social",
+    "trademarks",
+    "firmas",
+    "market",
+}
+
+
+def _owner_clause(owner: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Filtro por dono que **também** mostra os registos antigos (sem dono).
+
+    Sem isto, tudo o que foi guardado antes de existir `owner_id` desaparecia.
+    """
+    email = str(owner or "").strip()
+    if not email:
+        return None
+    return {
+        "bool": {
+            "should": [
+                {"term": {"owner_id": email}},
+                {"bool": {"must_not": {"exists": {"field": "owner_id"}}}},
+            ],
+            "minimum_should_match": 1,
+        }
+    }
+
+
+def _with_owner(query: Dict[str, Any], owner: Optional[str]) -> Dict[str, Any]:
+    """Junta o filtro de dono a uma query já existente."""
+    clause = _owner_clause(owner)
+    if not clause:
+        return query
+    return {"bool": {"must": [query, clause]}}
+
+
+def list_favorites(owner: Optional[str] = None, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
     """Lista os favoritos guardados no Elasticsearch (mais recentes primeiro)."""
     client = es or get_es_client()
     if not client:
@@ -8191,7 +8252,7 @@ def list_favorites(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
         resp = client.search(
             index=USER_STATE_INDEX,
             body={
-                "query": {"term": {"kind": "favorite"}},
+                "query": _with_owner({"term": {"kind": "favorite"}}, owner),
                 "size": 1000,
                 "sort": [{"added_at": {"order": "desc", "missing": "_last"}}],
             },
@@ -8200,7 +8261,7 @@ def list_favorites(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
         for hit in resp["hits"]["hits"]:
             src = hit["_source"]
             # No índice `kind` identifica o tipo de documento ("favorite"/"folder"/"history");
-            # na resposta o campo `kind` é o tipo de ficha ("entity"/"contract").
+            # na resposta o campo `kind` é o tipo de ficha ("entity"/"imprensa"/…).
             items.append(
                 {
                     "kind": src.get("entry_kind"),
@@ -8209,6 +8270,9 @@ def list_favorites(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
                     "sublabel": src.get("sublabel"),
                     "value": src.get("value"),
                     "parties": src.get("parties") or [],
+                    "url": src.get("url"),
+                    "open": src.get("open"),
+                    "owner_id": src.get("owner_id"),
                     "added_at": src.get("added_at"),
                     "doc_id": hit["_id"],
                 }
@@ -8218,8 +8282,13 @@ def list_favorites(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
         return {"error": str(exc), "items": []}
 
 
-def save_favorite(doc: Dict[str, Any], es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
-    """Guarda (ou substitui) um favorito. O id do documento é ``kind:id``."""
+def save_favorite(doc: Dict[str, Any], owner: Optional[str] = None, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Guarda (ou substitui) um favorito. O id do documento é ``kind:id``.
+
+    `kind` é o âmbito do resultado na Pesquisa total (`entity`/`contract` para as
+    fichas antigas, `imprensa`, `pessoas`, `politicos`, `wikipedia`, … para os
+    resultados da pesquisa) — ver `FAVORITE_KINDS`.
+    """
     client = es or get_es_client()
     if not client:
         return {"error": "Elasticsearch indisponível"}
@@ -8227,9 +8296,10 @@ def save_favorite(doc: Dict[str, Any], es: Optional[Elasticsearch] = None) -> Di
     ensure_indices(client)
     kind = str(doc.get("kind") or "").strip()
     item_id = str(doc.get("id") or "").strip()
-    if kind not in {"entity", "contract"} or not item_id:
-        return {"error": "Favorito inválido: precisa de kind ('entity'|'contract') e id"}
+    if kind not in FAVORITE_KINDS or not item_id:
+        return {"error": f"Favorito inválido: kind tem de ser um de {sorted(FAVORITE_KINDS)} e id não pode ser vazio"}
 
+    email = str(owner or doc.get("owner_id") or "").strip()
     source = {
         "kind": "favorite",
         "entry_kind": kind,
@@ -8238,8 +8308,12 @@ def save_favorite(doc: Dict[str, Any], es: Optional[Elasticsearch] = None) -> Di
         "sublabel": doc.get("sublabel"),
         "value": doc.get("value"),
         "parties": doc.get("parties") or [],
+        "url": doc.get("url"),
+        "open": doc.get("open"),
         "added_at": doc.get("added_at") or _today(),
     }
+    if email:
+        source["owner_id"] = email
     try:
         client.index(index=USER_STATE_INDEX, id=f"favorite:{kind}:{item_id}", document=source, refresh=True)
         return {"ok": True, "id": item_id, "kind": kind}
@@ -8256,6 +8330,118 @@ def delete_favorite(kind: str, item_id: str, es: Optional[Elasticsearch] = None)
     ensure_indices(client)
     try:
         client.delete(index=USER_STATE_INDEX, id=f"favorite:{kind}:{item_id}", ignore=[404], refresh=True)
+        return {"ok": True}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Portfólio: pesquisas guardadas (consulta + âmbito + filtros)
+# ---------------------------------------------------------------------------
+def _search_slug(name: str, query: str, scope: str, filters: Optional[Dict[str, Any]]) -> str:
+    """Id estável de uma pesquisa guardada (o mesmo pedido atualiza, não duplica)."""
+    import hashlib
+
+    raw = json.dumps(
+        {"name": (name or "").strip().lower(), "q": (query or "").strip().lower(), "scope": scope or "all", "filters": filters or {}},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def list_saved_searches(owner: Optional[str] = None, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Pesquisas guardadas no portfólio (mais recentes primeiro)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": []}
+
+    ensure_indices(client)
+    try:
+        resp = client.search(
+            index=USER_STATE_INDEX,
+            body={
+                "query": _with_owner({"term": {"kind": "search"}}, owner),
+                "size": 500,
+                "sort": [{"updated_at": {"order": "desc", "missing": "_last"}}],
+            },
+        )
+        items = []
+        for hit in resp["hits"]["hits"]:
+            src = hit["_source"]
+            items.append(
+                {
+                    "id": src.get("id") or hit["_id"],
+                    "name": src.get("name") or src.get("query") or "Pesquisa",
+                    "query": src.get("query") or "",
+                    "scope": src.get("scope") or "all",
+                    "filters": src.get("filters") or {},
+                    "description": src.get("description") or "",
+                    "results_total": src.get("results_total"),
+                    "owner_id": src.get("owner_id"),
+                    "created_at": src.get("created_at"),
+                    "last_run_at": src.get("last_run_at"),
+                    "doc_id": hit["_id"],
+                }
+            )
+        return {"items": items, "total": len(items)}
+    except Exception as exc:
+        return {"error": str(exc), "items": []}
+
+
+def save_search(doc: Dict[str, Any], owner: Optional[str] = None, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Guarda uma pesquisa no portfólio (consulta + âmbito + filtros).
+
+    Guarda-se **a pergunta**, não os resultados: refazer a pesquisa devolve o que
+    existe hoje. O `id` é derivado da consulta+âmbito+filtros+apelido, pelo que
+    guardar duas vezes o mesmo pedido atualiza a entrada em vez de duplicar.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    ensure_indices(client)
+    query = str(doc.get("query") or "").strip()
+    if not query:
+        return {"error": "Pesquisa inválida: falta o texto a pesquisar"}
+    scope = str(doc.get("scope") or "all").strip() or "all"
+    filters = doc.get("filters") or {}
+    name = str(doc.get("name") or query).strip()[:200]
+    search_id = str(doc.get("id") or "").strip() or _search_slug(name, query, scope, filters)
+    email = str(owner or doc.get("owner_id") or "").strip()
+    now = _today()
+
+    source: Dict[str, Any] = {
+        "kind": "search",
+        "id": search_id,
+        "name": name,
+        "query": query,
+        "scope": scope,
+        "filters": filters,
+        "description": doc.get("description") or "",
+        "results_total": doc.get("results_total"),
+        "created_at": doc.get("created_at") or now,
+        "updated_at": now,
+        "last_run_at": doc.get("last_run_at") or now,
+    }
+    if email:
+        source["owner_id"] = email
+    try:
+        client.index(index=USER_STATE_INDEX, id=f"search:{search_id}", document=source, refresh=True)
+        return {"ok": True, "id": search_id, "name": name}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def delete_search(search_id: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Remove uma pesquisa do portfólio."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    ensure_indices(client)
+    try:
+        client.delete(index=USER_STATE_INDEX, id=f"search:{search_id}", ignore=[404], refresh=True)
         return {"ok": True}
     except Exception as exc:
         return {"error": str(exc)}

@@ -126,7 +126,7 @@ PEOPLE_SOURCE_LABELS = {
 }
 
 
-def _parse_filters(raw: Optional[str]) -> Dict[str, str]:
+def parse_filters(raw: Optional[str]) -> Dict[str, str]:
     """Filtros pedidos pela interface (`{"partido":"PS"}` ou `partido:PS`)."""
     text = (raw or "").strip()
     if not text:
@@ -545,6 +545,8 @@ def _search_contracts_group(q: str, size: int, offset: int) -> Dict[str, Any]:
         adjudicantes = _party_names(row.get("adjudicantes"))
         adjudicatarios = _party_names(row.get("adjudicatarios"))
         preco = row.get("precoContratual")
+        parsed_adj = row.get("adjudicatarios") if isinstance(row.get("adjudicatarios"), dict) else {}
+        primeira_parte = (parsed_adj.get("parsed") or [{}])[0] if parsed_adj else {}
         items.append(
             _item(
                 "contracts",
@@ -554,7 +556,15 @@ def _search_contracts_group(q: str, size: int, offset: int) -> Dict[str, Any]:
                 snippet=row.get("descContrato") or row.get("objectoContrato") or "",
                 date=row.get("dataPublicacao") or row.get("dataCelebracaoContrato"),
                 badges=[row.get("Ano"), _flat(row.get("tipoContrato")), _flat(row.get("NUTs"))],
-                extra={"preco": preco, "cpv": _cpv_code(row.get("cpv"))},
+                # Nome e NIF da parte adjudicatária em campos próprios: é o que
+                # liga o contrato à empresa na ontologia da pesquisa (e permite
+                # abrir a ficha a partir do cartão).
+                extra={
+                    "preco": preco,
+                    "cpv": _cpv_code(row.get("cpv")),
+                    "adjudicatario": primeira_parte.get("nome") or (adjudicatarios[0] if adjudicatarios else None),
+                    "adjudicatario_nif": primeira_parte.get("nif"),
+                },
                 open_view={"view": "contract-detail", "arg": str(row.get("idcontrato") or "")},
                 score=row.get("score"),
             )
@@ -614,6 +624,9 @@ def _search_contratos_es_group(q: str, size: int, offset: int) -> Dict[str, Any]
                     "ano": row.get("ano"),
                     "fonte": row.get("fonte"),
                     "pais": "ES",
+                    # A parte adjudicatária, para a ontologia ligar contrato → empresa.
+                    "adjudicatario": row.get("adjudicatario_nombre"),
+                    "adjudicatario_nif": row.get("adjudicatario_nif"),
                 },
                 open_view={"view": CONTRATOS_ES_VIEW, "arg": str(row.get("doc_id") or "")},
                 score=row.get("score"),
@@ -1175,7 +1188,7 @@ def unified_search(
     que um filtro de outra área é simplesmente ignorado.
     """
     query = (q or "").strip()
-    filtros = _parse_filters(filters)
+    filtros = parse_filters(filters)
     size = max(1, min(int(size), 50))
     offset = max(0, int(offset))
     requested = [scope] if scope in SCOPE_IDS else list(SCOPE_IDS)

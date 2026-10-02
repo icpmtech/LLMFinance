@@ -18,21 +18,46 @@ import {
   Building2,
   CornerDownLeft,
   Database,
+  Download,
   ExternalLink,
   FileSignature,
+  FileSpreadsheet,
   Globe2,
   Handshake,
   Landmark,
   LineChart,
   Loader2,
+  Network,
   Newspaper,
   ScrollText,
   Search,
+  Send,
+  Share2,
+  Sparkles,
+  Star,
   Tag,
   Users,
   X,
 } from "lucide-react";
 import { CONTRATOS_ES_VIEW, openResult } from "../openResult";
+import { MermaidDiagram } from "../components/world/MermaidDiagram";
+import {
+  askSearchChat,
+  deleteFavorite,
+  deletePortfolio,
+  downloadSearchReport,
+  fetchFavoriteKeys,
+  fetchPortfolio,
+  getContractsAnalysis,
+  getSearchChatStatus,
+  getSearchGraph,
+  saveFavorite,
+  savePortfolio,
+  type ContractsAnalysis,
+  type SavedSearch,
+  type SearchChatSource,
+  type SearchGraph,
+} from "../searchWorkspaceApi";
 import { ItemsCollection, ItemsViewToggle, type DisplayItem, type ItemsView } from "../components/ItemsView";
 import {
   externalSearchUrl,
@@ -58,6 +83,13 @@ function scopeForSuggestion(scope: SearchScopeId): SearchScopeId {
 
 const numberFormat = new Intl.NumberFormat("pt-PT");
 const moneyFormat = new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+/** Valores grandes da análise (41,2 mM €) — a lista de contratos vê-se por extenso. */
+const compactMoney = new Intl.NumberFormat("pt-PT", {
+  notation: "compact",
+  style: "currency",
+  currency: "EUR",
+  maximumFractionDigits: 1,
+});
 
 const SCOPE_ICON: Record<string, React.ReactNode> = {
   scraped: <Globe2 size={14} />,
@@ -122,6 +154,29 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
    * publicação nas redes sociais, partido nos políticos, jornal na imprensa…
    */
   const [filters, setFilters] = useState<Record<string, string>>({});
+  /** Pesquisas guardadas no portfólio (do utilizador com sessão). */
+  const [portfolio, setPortfolio] = useState<SavedSearch[]>([]);
+  /** Chaves `kind:id` favoritadas, para marcar as estrelas sem um pedido por item. */
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  /** Sessão iniciada? Sem sessão não se guarda nada (e não se mostram as estrelas). */
+  const [canSave, setCanSave] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  /** Análise de contratos/custos e ontologia da pesquisa (carregadas a pedido). */
+  const [analysis, setAnalysis] = useState<ContractsAnalysis | null>(null);
+  const [graph, setGraph] = useState<SearchGraph | null>(null);
+  const [toolsLoading, setToolsLoading] = useState<"analysis" | "graph" | "pdf" | "excel" | "chat" | null>(null);
+  const [toolError, setToolError] = useState<string | null>(null);
+  /** Chat de IA sobre a pesquisa (pergunta → resposta, com as fontes citadas). */
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<
+    { role: "user" | "assistant"; content: string; sources?: SearchChatSource[] }[]
+  >([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatStatus, setChatStatus] = useState<{ available: boolean; provider?: string | null; model?: string | null; note?: string | null } | null>(
+    null,
+  );
   /** Resultados já saltados no âmbito ativo (para «Carregar mais»). */
   const [offset, setOffset] = useState(0);
   /** A carregar a página seguinte (não confundir com uma pesquisa nova). */
@@ -145,6 +200,184 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
       .then((payload) => setScopes(payload.items))
       .catch(() => setScopes([]));
   }, []);
+
+  /** Portfólio e favoritos: só existem com sessão (o 401 esconde as estrelas). */
+  useEffect(() => {
+    fetchFavoriteKeys()
+      .then((payload) => {
+        setFavorites(new Set(payload.keys));
+        setCanSave(true);
+      })
+      .catch(() => setCanSave(false));
+    fetchPortfolio()
+      .then((payload) => setPortfolio(payload.items))
+      .catch(() => setPortfolio([]));
+  }, []);
+
+  const toggleFavorite = async (item: SearchItem) => {
+    const key = `${item.scope}:${item.id}`;
+    const saved = favorites.has(key);
+    setFavorites((previous) => {
+      const next = new Set(previous);
+      if (saved) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+    try {
+      if (saved) await deleteFavorite(item.scope, item.id);
+      else
+        await saveFavorite({
+          kind: item.scope,
+          id: item.id,
+          label: item.title,
+          sublabel: item.subtitle,
+          url: item.url,
+          open: item.open ?? null,
+        });
+    } catch (err) {
+      // Reverter a estrela se o servidor recusou (sessão expirada, por exemplo).
+      setFavorites((previous) => {
+        const next = new Set(previous);
+        if (saved) next.add(key);
+        else next.delete(key);
+        return next;
+      });
+      setSaveNotice(err instanceof Error ? err.message : "Não foi possível guardar o favorito.");
+    }
+  };
+
+  const saveCurrentSearch = async () => {
+    if (!submitted) return;
+    setToolsLoading("analysis");
+    try {
+      const saved = await savePortfolio({
+        name: saveName.trim() || submitted,
+        query: submitted,
+        scope,
+        filters,
+        results_total: result?.total,
+      });
+      const payload = await fetchPortfolio();
+      setPortfolio(payload.items);
+      setSaveOpen(false);
+      setSaveName("");
+      setSaveNotice(`Guardado no portfólio: ${saved.name}`);
+    } catch (err) {
+      setSaveNotice(err instanceof Error ? err.message : "Falha ao guardar no portfólio.");
+    } finally {
+      setToolsLoading(null);
+    }
+  };
+
+  const removeSavedSearch = async (itemId: string) => {
+    try {
+      await deletePortfolio(itemId);
+      setPortfolio((previous) => previous.filter((entry) => entry.id !== itemId));
+    } catch (err) {
+      setSaveNotice(err instanceof Error ? err.message : "Falha ao retirar do portfólio.");
+    }
+  };
+
+  /** Abre uma pesquisa guardada: repõe consulta, âmbito e filtros e corre-a. */
+  const openSavedSearch = (saved: SavedSearch) => {
+    setSaveNotice(null);
+    setAnalysis(null);
+    setGraph(null);
+    setQuery(saved.query);
+    setFilters(saved.filters ?? {});
+    setScope((saved.scope as SearchScopeId) || "all");
+    setSubmitted(saved.query);
+  };
+
+  const loadAnalysis = async () => {
+    if (!submitted) return;
+    setToolsLoading("analysis");
+    setToolError(null);
+    try {
+      setAnalysis(await getContractsAnalysis({ q: submitted, top: 8 }));
+    } catch (err) {
+      setToolError(err instanceof Error ? err.message : "Falha na análise.");
+    } finally {
+      setToolsLoading(null);
+    }
+  };
+
+  const loadGraph = async () => {
+    if (!submitted) return;
+    setToolsLoading("graph");
+    setToolError(null);
+    try {
+      setGraph(await getSearchGraph({ q: submitted, scope, filters, size: 12 }));
+    } catch (err) {
+      setToolError(err instanceof Error ? err.message : "Falha ao construir a ontologia.");
+    } finally {
+      setToolsLoading(null);
+    }
+  };
+
+  const exportReport = async (format: "pdf" | "excel") => {
+    if (!submitted) return;
+    setToolsLoading(format);
+    setToolError(null);
+    try {
+      await downloadSearchReport(format, { q: submitted });
+    } catch (err) {
+      setToolError(err instanceof Error ? err.message : "Falha ao exportar.");
+    } finally {
+      setToolsLoading(null);
+    }
+  };
+
+  /** Abre o chat e pergunta ao fornecedor de IA qual vai responder (aviso prévio). */
+  const openChat = async () => {
+    setChatOpen(true);
+    setToolError(null);
+    if (!chatStatus) {
+      try {
+        setChatStatus(await getSearchChatStatus());
+      } catch {
+        setChatStatus({ available: false, note: "Não foi possível verificar o fornecedor de IA." });
+      }
+    }
+  };
+
+  /** Envia uma pergunta ao chat com a pesquisa (e o histórico) como contexto. */
+  const sendChat = async (pergunta: string) => {
+    const texto = pergunta.trim();
+    if (!texto || !submitted) return;
+    const historico = chatMessages.map((message) => ({ role: message.role, content: message.content }));
+    setChatMessages((previous) => [...previous, { role: "user", content: texto }]);
+    setChatInput("");
+    setToolsLoading("chat");
+    setToolError(null);
+    try {
+      const resposta = await askSearchChat({
+        q: submitted,
+        question: texto,
+        scope,
+        filters,
+        history: historico,
+      });
+      if (resposta.error) {
+        setChatMessages((previous) => [...previous, { role: "assistant", content: resposta.error as string }]);
+        return;
+      }
+      setChatMessages((previous) => [
+        ...previous,
+        { role: "assistant", content: resposta.answer ?? "(sem resposta)", sources: resposta.sources },
+      ]);
+      if (resposta.provider && !chatStatus?.available) {
+        setChatStatus({ available: true, provider: resposta.provider, model: resposta.model });
+      }
+    } catch (err) {
+      setChatMessages((previous) => [
+        ...previous,
+        { role: "assistant", content: err instanceof Error ? err.message : "Falha do chat." },
+      ]);
+    } finally {
+      setToolsLoading(null);
+    }
+  };
 
   const run = useCallback(
     async (term: string, nextScope: SearchScopeId, nextFilters: Record<string, string>) => {
@@ -570,6 +803,42 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
                 {filterLabel(name, value)} <X size={10} />
               </button>
             ))}
+            {canSave ? (
+              saveOpen ? (
+                <span className="inline-flex items-center gap-1">
+                  <input
+                    value={saveName}
+                    onChange={(event) => setSaveName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") void saveCurrentSearch();
+                      if (event.key === "Escape") setSaveOpen(false);
+                    }}
+                    placeholder="Nome no portfólio (ex.: Energia 2026)"
+                    autoFocus
+                    className="h-6 w-52 rounded-full border border-white/10 bg-white/5 px-2 text-[10px] text-foreground outline-none focus:border-sky-400/40"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void saveCurrentSearch()}
+                    className="rounded-full border border-sky-400/40 bg-sky-400/10 px-2 py-0.5 text-[10px] text-sky-100"
+                  >
+                    Guardar
+                  </button>
+                  <button type="button" onClick={() => setSaveOpen(false)} className="text-[10px] text-muted-foreground">
+                    cancelar
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setSaveOpen(true)}
+                  className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-white/10"
+                  title="Guardar esta pesquisa (consulta + âmbito + filtros) no portfólio"
+                >
+                  <Star size={10} /> Guardar no portfólio
+                </button>
+              )
+            ) : null}
           </>
         ) : null}
         {result?.groups?.length ? (
@@ -587,6 +856,27 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
 
       <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_290px]">
         <div className="min-w-0 space-y-5">
+          {toolError ? (
+            <div className="flex items-start gap-2 rounded-2xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-xs text-rose-100">
+              <AlertTriangle size={14} className="mt-0.5" /> {toolError}
+            </div>
+          ) : null}
+
+          {analysis ? <ContractsAnalysisPanel analysis={analysis} onClose={() => setAnalysis(null)} /> : null}
+          {graph ? <SearchGraphPanel graph={graph} onClose={() => setGraph(null)} /> : null}
+          {chatOpen ? (
+            <SearchChatPanel
+              messages={chatMessages}
+              input={chatInput}
+              onInput={setChatInput}
+              onSend={sendChat}
+              loading={toolsLoading === "chat"}
+              status={chatStatus}
+              query={submitted}
+              onClose={() => setChatOpen(false)}
+            />
+          ) : null}
+
           {allEmpty ? (
             <div className="glass-card rounded-2xl px-6 py-12 text-center">
               <Search size={26} className="mx-auto text-muted-foreground" />
@@ -614,6 +904,8 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
               onSeeAll={() => chooseScope(group.scope)}
               onLoadMore={scope === "all" ? undefined : loadMore}
               loading={loadingMore}
+              favoriteKeys={canSave ? favorites : undefined}
+              onToggleFavorite={canSave ? toggleFavorite : undefined}
               onOpenItem={openItem}
             />
           ))}
@@ -659,6 +951,109 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
                 );
               })}
             </ul>
+          </div>
+
+          {canSave ? (
+            <div className="glass-card rounded-2xl p-4">
+              <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <Star size={12} /> Portfólio
+              </h2>
+              {portfolio.length ? (
+                <ul className="mt-2 space-y-1">
+                  {portfolio.slice(0, 8).map((saved) => (
+                    <li key={saved.id} className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => openSavedSearch(saved)}
+                        className={`flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2 py-1 text-left text-[11px] hover:bg-white/5 ${
+                          saved.query === submitted && saved.scope === scope ? "bg-white/10 text-foreground" : "text-muted-foreground"
+                        }`}
+                        title={`${saved.query} · ${saved.scope}${saved.description ? ` · ${saved.description}` : ""}`}
+                      >
+                        <span className="truncate">{saved.name}</span>
+                        <span className="shrink-0 text-[10px] tabular-nums opacity-70">{saved.query}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void removeSavedSearch(saved.id)}
+                        className="rounded-full p-0.5 text-muted-foreground hover:bg-white/10 hover:text-rose-200"
+                        title="Retirar do portfólio"
+                      >
+                        <X size={11} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-[10px] text-muted-foreground">
+                  Guarde uma pesquisa para a repetir mais tarde (guarda a pergunta, não os resultados).
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          <div className="glass-card rounded-2xl p-4">
+            <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <Share2 size={12} /> Ferramentas da pesquisa
+            </h2>
+            <div className="mt-2 flex flex-col gap-1">
+              <button
+                type="button"
+                onClick={() => void loadAnalysis()}
+                disabled={toolsLoading !== null || !submitted}
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-left text-[11px] text-muted-foreground hover:bg-white/5 disabled:opacity-50"
+                title="Quanto valem os contratos encontrados, como se distribuem e quem está por trás"
+              >
+                {toolsLoading === "analysis" ? <Loader2 size={12} className="animate-spin" /> : <LineChart size={12} />}
+                Análise de contratos e custos
+              </button>
+              <button
+                type="button"
+                onClick={() => void loadGraph()}
+                disabled={toolsLoading !== null || !submitted}
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-left text-[11px] text-muted-foreground hover:bg-white/5 disabled:opacity-50"
+                title="Grafo do termo, dos resultados e das ligações reais entre eles"
+              >
+                {toolsLoading === "graph" ? <Loader2 size={12} className="animate-spin" /> : <Network size={12} />}
+                Ontologia da pesquisa
+              </button>
+              <button
+                type="button"
+                onClick={() => void openChat()}
+                disabled={!submitted}
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-left text-[11px] text-muted-foreground hover:bg-white/5 disabled:opacity-50"
+                title="Perguntar em linguagem natural sobre estes resultados (com citação das fontes)"
+              >
+                <Sparkles size={12} />
+                Chat AI sobre a pesquisa
+              </button>
+              <button
+                type="button"
+                onClick={() => void exportReport("pdf")}
+                disabled={toolsLoading !== null || !submitted}
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-left text-[11px] text-muted-foreground hover:bg-white/5 disabled:opacity-50"
+                title="Relatório com totais, séries e os contratos filtrados"
+              >
+                {toolsLoading === "pdf" ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                Relatório PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => void exportReport("excel")}
+                disabled={toolsLoading !== null || !submitted}
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-left text-[11px] text-muted-foreground hover:bg-white/5 disabled:opacity-50"
+                title="O mesmo relatório em Excel (uma folha por secção)"
+              >
+                {toolsLoading === "excel" ? <Loader2 size={12} className="animate-spin" /> : <FileSpreadsheet size={12} />}
+                Exportar Excel
+              </button>
+            </div>
+            {saveNotice ? <p className="mt-2 text-[10px] text-sky-200">{saveNotice}</p> : null}
+            {!canSave ? (
+              <p className="mt-2 text-[10px] text-muted-foreground">
+                Inicie sessão para guardar pesquisas, favoritar conteúdo e exportar relatórios.
+              </p>
+            ) : null}
           </div>
 
           {filterCards.map(({ group, filters: groupFilters }) => (
@@ -733,10 +1128,16 @@ export default function UnifiedSearchPage({ initialQuery = "", onOpenTicker, onO
  * existia (título, subtítulo, ligação, etiquetas, valores de `extra`) passa a
  * poder ver-se em cartões, lista ou imagens — com a imagem e os valores à vista.
  */
-function toDisplayItem(item: SearchItem, onOpenItem: (item: SearchItem) => void): DisplayItem {
+function toDisplayItem(
+  item: SearchItem,
+  onOpenItem: (item: SearchItem) => void,
+  favorite = false,
+  onToggleFavorite?: (item: SearchItem) => void,
+): DisplayItem {
   const label = openLabel(item);
   const rawMoney = item.extra?.preco ?? item.extra?.valor;
   const money = typeof rawMoney === "number" ? moneyFormat.format(rawMoney) : null;
+  const party = typeof item.extra?.adjudicatario === "string" ? item.extra.adjudicatario : null;
   return {
     id: `${item.scope}:${item.id}`,
     title: item.title,
@@ -750,6 +1151,22 @@ function toDisplayItem(item: SearchItem, onOpenItem: (item: SearchItem) => void)
     actions: (
       <>
         {money ? <Badge tone="money">{money}</Badge> : null}
+        {party ? <Badge>{party}</Badge> : null}
+        {onToggleFavorite ? (
+          <button
+            type="button"
+            onClick={() => onToggleFavorite(item)}
+            title={favorite ? "Retirar dos favoritos" : "Guardar nos favoritos"}
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] transition ${
+              favorite
+                ? "border-amber-400/40 bg-amber-400/15 text-amber-200"
+                : "border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10"
+            }`}
+          >
+            <Star size={10} className={favorite ? "fill-amber-300" : ""} />
+            {favorite ? "Favorito" : "Favoritar"}
+          </button>
+        ) : null}
         {label ? (
           <button
             type="button"
@@ -773,6 +1190,346 @@ function toDisplayItem(item: SearchItem, onOpenItem: (item: SearchItem) => void)
   };
 }
 
+/* ------------------------------------------------------ ferramentas da pesquisa */
+
+/** Valores da análise numa barra proporcional (o maior fica a 100%). */
+function Bar({ value, max, tone = "sky" }: { value: number; max: number; tone?: "sky" | "emerald" }) {
+  const width = max > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0;
+  const color = tone === "emerald" ? "bg-emerald-400/60" : "bg-sky-400/60";
+  return (
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+      <div className={`h-full rounded-full ${color}`} style={{ width: `${width}%` }} />
+    </div>
+  );
+}
+
+/**
+ * Análise de contratos e custos da pesquisa: quanto vale o que se encontrou, como
+ * se distribui por ano e por CPV, quem ganha e que empresas/pessoas estão ligadas
+ * (pelas fichas, por NIF).
+ */
+function ContractsAnalysisPanel({
+  analysis,
+  onClose,
+}: {
+  analysis: ContractsAnalysis;
+  onClose: () => void;
+}) {
+  const totals = analysis.totals;
+  const maxYear = Math.max(0, ...analysis.by_year.map((entry) => entry.total_value));
+  const maxCpv = Math.max(0, ...analysis.by_cpv.map((entry) => entry.total_value));
+  const maxAdj = Math.max(0, ...analysis.top_adjudicatarios.map((entry) => entry.total_value));
+
+  return (
+    <section className="glass-card rounded-2xl p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <LineChart size={14} className="text-sky-300" />
+        <h2 className="text-sm font-semibold">Contratos e custos · «{analysis.query}»</h2>
+        <span className="text-[11px] text-muted-foreground">
+          {numberFormat.format(totals.contracts)} contratos · {compactMoney.format(totals.value)}
+        </span>
+        <button type="button" onClick={onClose} className="ml-auto text-[11px] text-muted-foreground hover:text-foreground">
+          fechar
+        </button>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: "Valor total", value: compactMoney.format(totals.value) },
+          { label: "Portugal", value: `${numberFormat.format(totals.contracts_pt)} · ${compactMoney.format(totals.value_pt)}` },
+          { label: "Espanha", value: `${numberFormat.format(totals.contracts_es)} · ${compactMoney.format(totals.value_es)}` },
+          { label: "Valor médio", value: compactMoney.format(totals.avg_value) },
+        ].map((card) => (
+          <div key={card.label} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{card.label}</p>
+            <p className="mt-0.5 text-sm font-medium tabular-nums">{card.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        <div>
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Por ano</h3>
+          <ul className="mt-2 space-y-1.5">
+            {analysis.by_year.slice(-8).map((entry) => (
+              <li key={entry.key}>
+                <div className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="tabular-nums text-muted-foreground">{entry.key}</span>
+                  <span className="tabular-nums">{compactMoney.format(entry.total_value)}</span>
+                </div>
+                <Bar value={entry.total_value} max={maxYear} />
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Por CPV</h3>
+          <ul className="mt-2 space-y-1.5">
+            {analysis.by_cpv.slice(0, 6).map((entry) => (
+              <li key={entry.key} title={entry.description ?? ""}>
+                <div className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="truncate text-muted-foreground">{entry.description || entry.key}</span>
+                  <span className="tabular-nums">{compactMoney.format(entry.total_value)}</span>
+                </div>
+                <Bar value={entry.total_value} max={maxCpv} tone="emerald" />
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Maiores adjudicatários</h3>
+          <ul className="mt-2 space-y-1.5">
+            {analysis.top_adjudicatarios.slice(0, 6).map((entry) => (
+              <li key={`${entry.key}-${entry.description ?? ""}`}>
+                <div className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="truncate" title={`${entry.description ?? entry.key} · ${entry.count} contratos`}>
+                    {entry.description || entry.key}
+                  </span>
+                  <span className="shrink-0 tabular-nums">{compactMoney.format(entry.total_value)}</span>
+                </div>
+                <Bar value={entry.total_value} max={maxAdj} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {analysis.linked.companies.length ? (
+        <div className="mt-4">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Empresas associadas (ficha por NIF)
+          </h3>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead className="text-muted-foreground">
+                <tr>
+                  <th className="py-1 text-left font-medium">Empresa</th>
+                  <th className="py-1 text-left font-medium">NIF</th>
+                  <th className="py-1 text-right font-medium">Contratos (ficha)</th>
+                  <th className="py-1 text-right font-medium">Valor (ficha)</th>
+                  <th className="py-1 text-right font-medium">Nesta pesquisa</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analysis.linked.companies.map((company) => (
+                  <tr key={company.nif} className="border-t border-white/5">
+                    <td className="py-1 pr-2">{company.name}</td>
+                    <td className="py-1 pr-2 tabular-nums text-muted-foreground">{company.nif}</td>
+                    <td className="py-1 text-right tabular-nums">{company.contracts_total ?? "—"}</td>
+                    <td className="py-1 text-right tabular-nums">
+                      {company.total_value != null ? compactMoney.format(company.total_value) : "—"}
+                    </td>
+                    <td className="py-1 text-right tabular-nums">
+                      {company.contracts_in_search ?? 0} · {compactMoney.format(company.value_in_search ?? 0)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {analysis.linked.people.length ? (
+        <div className="mt-3">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Pessoas associadas</h3>
+          <div className="mt-2 flex flex-wrap gap-1">
+            {analysis.linked.people.map((person) => (
+              <span
+                key={person.nif}
+                className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-muted-foreground"
+                title={`${person.role ?? ""} · ${person.company_name ?? ""} · NIF ${person.nif}`}
+              >
+                {person.name}
+                {person.role ? ` · ${person.role}` : ""}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {analysis.caveats.length ? (
+        <ul className="mt-3 space-y-0.5 text-[10px] text-muted-foreground">
+          {analysis.caveats.map((note) => (
+            <li key={note}>· {note}</li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * Chat de IA sobre a pesquisa: as perguntas são respondidas com os resultados
+ * desta pesquisa como contexto (e citação das fontes). Sem fornecedor de IA com
+ * chave, mostra o motivo em vez de fingir uma resposta.
+ */
+function SearchChatPanel({
+  messages,
+  input,
+  onInput,
+  onSend,
+  loading,
+  status,
+  query,
+  onClose,
+}: {
+  messages: { role: "user" | "assistant"; content: string; sources?: SearchChatSource[] }[];
+  input: string;
+  onInput: (value: string) => void;
+  onSend: (question: string) => void;
+  loading: boolean;
+  status: { available: boolean; provider?: string | null; model?: string | null; note?: string | null } | null;
+  query: string;
+  onClose: () => void;
+}) {
+  const sugestoes = [
+    "Resume o que se encontra para esta pesquisa.",
+    "Quem são os maiores adjudicatários e quanto valem?",
+    "Que empresas e pessoas aparecem ligadas e porquê?",
+  ];
+  return (
+    <section className="glass-card rounded-2xl p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Sparkles size={14} className="text-amber-300" />
+        <h2 className="text-sm font-semibold">Chat AI · «{query}»</h2>
+        {status?.provider ? (
+          <span className="text-[11px] text-muted-foreground">
+            {status.provider}
+            {status.model ? ` · ${status.model}` : ""}
+          </span>
+        ) : null}
+        <button type="button" onClick={onClose} className="ml-auto text-[11px] text-muted-foreground hover:text-foreground">
+          fechar
+        </button>
+      </div>
+
+      {status && !status.available ? (
+        <p className="mt-2 flex items-start gap-2 rounded-xl border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-[11px] text-amber-200">
+          <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+          {status.note ?? "Sem fornecedor de IA configurado (Definições de IA → chave de API)."}
+        </p>
+      ) : null}
+
+      <div className="mt-3 max-h-[420px] space-y-3 overflow-y-auto pr-1">
+        {messages.length === 0 ? (
+          <div className="space-y-1">
+            <p className="text-[11px] text-muted-foreground">
+              O chat responde sobre os resultados desta pesquisa (e sobre os valores da análise de custos).
+            </p>
+            {sugestoes.map((sugestao) => (
+              <button
+                key={sugestao}
+                type="button"
+                onClick={() => onSend(sugestao)}
+                disabled={loading || !status?.available}
+                className="block w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-left text-[11px] text-muted-foreground hover:bg-white/10 disabled:opacity-50"
+              >
+                {sugestao}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {messages.map((message, index) => (
+          <div
+            key={`${message.role}-${index}`}
+            className={`rounded-2xl px-3 py-2 text-[12px] leading-relaxed ${
+              message.role === "user"
+                ? "ml-auto max-w-[85%] bg-sky-400/10 text-sky-50"
+                : "max-w-[92%] bg-white/5 text-foreground/90"
+            }`}
+          >
+            <p className="whitespace-pre-wrap">{message.content}</p>
+            {message.sources?.length ? (
+              <div className="mt-2 flex flex-wrap gap-1 border-t border-white/10 pt-2">
+                {message.sources.slice(0, 12).map((source) => (
+                  <span
+                    key={`${source.n}-${source.title}`}
+                    className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-muted-foreground"
+                    title={`${source.subtitle ?? ""}${source.value ? ` · ${moneyFormat.format(source.value)}` : ""}`}
+                  >
+                    ({source.n}) {source.title.slice(0, 46)}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ))}
+
+        {loading ? (
+          <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <Loader2 size={12} className="animate-spin" /> a pensar sobre os resultados…
+          </p>
+        ) : null}
+      </div>
+
+      <div className="mt-3 flex items-center gap-2">
+        <input
+          value={input}
+          onChange={(event) => onInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") onSend(input);
+          }}
+          autoComplete="off"
+          placeholder="Pergunte sobre estes resultados (ex.: quanto vale o maior contrato?)"
+          className="h-9 flex-1 rounded-full border border-white/10 bg-white/5 px-3 text-[12px] outline-none focus:border-sky-400/40"
+        />
+        <button
+          type="button"
+          onClick={() => onSend(input)}
+          disabled={loading || !input.trim() || !status?.available}
+          className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-sky-400 to-indigo-600 px-4 py-1.5 text-[11px] font-medium text-white disabled:opacity-50"
+        >
+          <Send size={11} /> Perguntar
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/** Ontologia da pesquisa: o termo, o que encontrou e as ligações reais entre eles. */
+function SearchGraphPanel({ graph, onClose }: { graph: SearchGraph; onClose: () => void }) {
+  return (
+    <section className="glass-card rounded-2xl p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Network size={14} className="text-fuchsia-300" />
+        <h2 className="text-sm font-semibold">Ontologia da pesquisa · «{graph.term}»</h2>
+        <span className="text-[11px] text-muted-foreground">
+          {numberFormat.format(graph.totals.nodes)} nós · {numberFormat.format(graph.totals.edges)} ligações
+        </span>
+        <button type="button" onClick={onClose} className="ml-auto text-[11px] text-muted-foreground hover:text-foreground">
+          fechar
+        </button>
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-1">
+        {Object.entries(graph.totals.by_type)
+          .filter(([, count]) => count)
+          .map(([type, count]) => (
+            <span key={type} className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-muted-foreground">
+              {graph.legend.find((entry) => entry.type === type)?.label ?? type} · {count}
+            </span>
+          ))}
+      </div>
+
+      <div className="mt-3">
+        <MermaidDiagram code={graph.mermaid} title={`Ontologia · ${graph.term}`} height={420} compact />
+      </div>
+
+      {graph.caveats?.length ? (
+        <ul className="mt-2 space-y-0.5 text-[10px] text-muted-foreground">
+          {graph.caveats.map((note) => (
+            <li key={note}>· {note}</li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
 function ScopeResults({
   group,
   view,
@@ -780,6 +1537,8 @@ function ScopeResults({
   onSeeAll,
   onLoadMore,
   loading,
+  favoriteKeys,
+  onToggleFavorite,
   onOpenItem,
 }: {
   group: SearchGroup;
@@ -789,6 +1548,9 @@ function ScopeResults({
   /** Página seguinte do âmbito (só quando a pesquisa está num âmbito só). */
   onLoadMore?: () => void;
   loading?: boolean;
+  /** Chaves `kind:id` já favoritadas (ausente quando não há sessão). */
+  favoriteKeys?: Set<string>;
+  onToggleFavorite?: (item: SearchItem) => void;
   onOpenItem: (item: SearchItem) => void;
 }) {
   if (!group.items.length && !group.error) return null;
@@ -837,7 +1599,14 @@ function ScopeResults({
       ) : null}
 
       <ItemsCollection
-        items={group.items.map((item) => toDisplayItem(item, onOpenItem))}
+        items={group.items.map((item) =>
+          toDisplayItem(
+            item,
+            onOpenItem,
+            Boolean(favoriteKeys?.has(`${item.scope}:${item.id}`)),
+            onToggleFavorite,
+          ),
+        )}
         view={view}
       />
     </section>

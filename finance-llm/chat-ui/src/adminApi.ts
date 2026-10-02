@@ -224,3 +224,57 @@ export function listAdminLogs(): Promise<{ files: LogFile[] }> {
 export function tailAdminLog(name: string, lines = 200): Promise<LogTail> {
   return request(`/admin/logs/${encodeURIComponent(name)}?lines=${lines}`);
 }
+
+/* ------------------------------------------------------- chaves de serviços */
+
+/** Chave de um serviço externo (2captcha…) com o estado mascarado. */
+export type ServiceKey = {
+  id: string;
+  label: string;
+  grupo: string;
+  descricao: string;
+  env: string[];
+  onde?: string;
+  secreto: boolean;
+  exemplo?: string;
+  testavel: boolean;
+  /** Já há valor (no índice, no ambiente ou no `.env`). */
+  definida: boolean;
+  /** `indice` | `ambiente` | `env_file` | `ausente`. */
+  origem: string;
+  variavel?: string | null;
+  valor_mascarado?: string | null;
+  erro?: string | null;
+};
+
+export type ServiceKeysState = {
+  index: string;
+  doc_id: string;
+  chaves: ServiceKey[];
+  atualizado_em?: string | null;
+  atualizado_por?: string | null;
+  notas?: string;
+  gravado?: boolean;
+  alteradas?: string[];
+  removidas?: string[];
+};
+
+export type ServiceKeyTest = { ok: boolean; mensagem: string; saldo?: string };
+
+export function getServiceKeys(): Promise<ServiceKeysState> {
+  return request<ServiceKeysState>("/admin/service-keys");
+}
+
+/** Grava as chaves no Elasticsearch (valor vazio remove a chave). */
+export function saveServiceKeys(keys: Record<string, string>): Promise<ServiceKeysState> {
+  return request<ServiceKeysState>("/admin/service-keys", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keys }),
+  });
+}
+
+/** Testa a chave junto do fornecedor (a 2captcha devolve o saldo da conta). */
+export function testServiceKey(keyId: string): Promise<ServiceKeyTest> {
+  return post<ServiceKeyTest>(`/admin/service-keys/${encodeURIComponent(keyId)}/test`);
+}
