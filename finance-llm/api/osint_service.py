@@ -79,10 +79,12 @@ CATEGORY_PRESETS: List[Dict[str, Any]] = [
     },
 ]
 
-# Quantas categorias correr ao mesmo tempo. Cada categoria faz muitos pedidos a
-# sites externos: subir demasiado provoca bloqueios por abuso (mais erros, menos
-# resultados), pelo que o ganho de tempo deixa de compensar.
-_MAX_PARALLEL_CATEGORIES = 3
+# Quantas categorias correr ao mesmo tempo. Medido em `dev`+`learning` (726
+# plataformas, container Docker): paralelo 54,9 s / 252 erros vs sequencial
+# 58,0 s / 216 erros. O paralelismo poupa ~5% do tempo mas aumenta 17% os erros
+# (os sites bloqueiam pedidos simultâneos do mesmo IP), e como «Found» só sai do
+# que respondeu bem, o sequencial dá mais resultados úteis. Fica em 1.
+_MAX_PARALLEL_CATEGORIES = 1
 
 
 def category_platform_counts(is_email: bool = False, es: Any = None) -> Dict[str, int]:
@@ -948,7 +950,14 @@ def _save_doc_id(target: str, kind: str) -> str:
 
 
 def save_scan(result: Dict[str, Any]) -> Dict[str, Any]:
-    """Guarda o resultado de um scan no índice finance_osint."""
+    """Guarda o resultado de um scan no índice finance_osint.
+
+    O id é estável por alvo, por isso o documento é actualizado — mas os perfis
+    **não** são substituídos às cegas: uma execução fraca (os sites bloqueiam de
+    forma intermitente, já se viu o mesmo alvo dar 8, 4 e 1 resultados seguidos)
+    apagaria o que já se tinha encontrado. Os perfis vistos em execuções
+    anteriores que agora não responderam ficam marcados com `stale`.
+    """
     es = get_es_client()
     if not es:
         return {"saved": False, "error": "Elasticsearch indisponível"}
@@ -959,25 +968,54 @@ def save_scan(result: Dict[str, Any]) -> Dict[str, Any]:
     doc_id = _save_doc_id(target, kind)
     hits = result.get("hits", [])
     pivots = result.get("pivots", [])
+
+    fresh_found = [h for h in hits if str(h.get("status", "")).lower() == "found"]
+    fresh_sites = {str(h.get("site_name")) for h in fresh_found}
+    carried: List[Dict[str, Any]] = []
+    try:
+        previous = es.get(index=OSINT_INDEX, id=doc_id).get("_source") or {}
+    except Exception:
+        previous = {}
+    for old in previous.get("hits") or []:
+        site = str(old.get("site_name"))
+        if str(old.get("status", "")).lower() != "found" or site in fresh_sites:
+            continue
+        # Não voltou a aparecer nesta execução: mantém-se, com o que já se sabia.
+        carried.append({**old, "stale": True, "last_seen": old.get("last_seen") or previous.get("scanned_at")})
+
+    merged_found = [{**h, "stale": False, "last_seen": _today()} for h in fresh_found] + carried
+    merged_sites = {str(h.get("site_name")) for h in merged_found}
+    merged = merged_found + [
+        h for h in hits if str(h.get("status", "")).lower() != "found"
+    ]
+
+    stats = dict(result.get("stats") or {})
+    stats["platforms_found"] = len(merged_found)
+    stats["found_this_run"] = len(fresh_found)
+    stats["carried_over"] = len(carried)
+    stats.setdefault("platforms_with_name", sum(1 for h in merged_found if (h.get("profile") or {}).get("display_name")))
+    stats.setdefault("platforms_with_avatar", sum(1 for h in merged_found if (h.get("profile") or {}).get("avatar")))
+
     doc = {
         "target": target,
         "kind": kind,
         "category": result.get("category"),
-        "found": result.get("found", 0),
+        "categories": result.get("categories") or [],
+        "found": len(merged_found),
         "total": result.get("total", 0),
         "not_found": result.get("not_found", 0),
         "errors": result.get("errors", 0),
         "duration_s": result.get("duration_s"),
-        "hits": hits,
+        "hits": merged,
         "pivots": pivots,
-        "stats": result.get("stats", {}),
-        "graph": result.get("graph", {}),
+        "stats": stats,
+        "graph": _build_graph(merged, target, kind, pivots),
         "scanned_at": _today(),
-        **_indexable_facets(hits, pivots),
+        **_indexable_facets(merged_found, pivots),
     }
     try:
         es.index(index=OSINT_INDEX, id=doc_id, document=doc, refresh=True)
-        return {"saved": True, "saved_id": doc_id}
+        return {"saved": True, "saved_id": doc_id, "carried_over": len(carried)}
     except Exception as exc:
         logger.warning("Falha ao guardar scan OSINT %s: %s", doc_id, exc)
         return {"saved": False, "error": str(exc)}

@@ -89,7 +89,13 @@ def _person_party(person: Dict[str, Any]) -> Optional[str]:
             return _normalize_party(person.get(key))
     metadata = person.get("metadata") or {}
     if isinstance(metadata, dict):
-        for candidate in (metadata.get("party"), metadata.get("partido")):
+        # Procura explicitamente as chaves portuguesas/inglesas comuns.
+        for candidate in (
+            metadata.get("party"),
+            metadata.get("partido"),
+            metadata.get("Partido"),
+            metadata.get("PARTIDO"),
+        ):
             if candidate:
                 return _normalize_party(candidate)
     # Tenta extrair de texto biográfico ou de notas.
@@ -658,9 +664,11 @@ async def enrich_politician(
             except Exception:
                 age = None
             if age is not None and age <= reuse_hours:
+                cached_party = previous.get("facts", {}).get("party")
                 return {
                     "nif": nif,
                     "name": previous.get("name"),
+                    "party": cached_party,
                     "cached": True,
                     "technical_profile": previous.get("facts", {}).get("technical_profile"),
                     "biographical_profile": previous.get("facts", {}).get("biographical_profile"),

@@ -7,9 +7,12 @@ Este documento explica como correr toda a solução IQ OS (Elasticsearch + backe
 - `Dockerfile.backend` — container Python 3.11 com FastAPI, uvicorn e dependências.
 - `Dockerfile.frontend` — build do React/Vite servido por nginx (build com `VITE_API_URL=/api`).
 - `Dockerfile.test` — imagem de testes (`iq-os-tests`): parte da imagem do backend e acrescenta `pytest`.
-- `docker-compose.yml` — orquestra `elasticsearch`, `backend`, `frontend`, `searxng` e `n8n` (núcleo) mais `mcp`, `tests`, `hermes-agent` e `mirofish` (por perfis).
-- `docker/nginx.conf` — nginx com SPA, proxy `/api/` e `/forecast/plot/` para o backend, uploads até 256 MB, SSE sem buffering e os **proxies de incorporação** dos iframes (portos 8891/8892/8893).
+- `docker-compose.yml` — orquestra `elasticsearch`, `backend`, `frontend`, `searxng` e `n8n` (núcleo) mais `mcp`, `tests`, `hermes-agent`, `mirofish` e `osif-*` (por perfis).
+- `docker/nginx.conf` — nginx com SPA, proxy `/api/` e `/forecast/plot/` para o backend, uploads até 256 MB, SSE sem buffering e os **proxies de incorporação** dos iframes (portos 8891/8892/8893/8894).
 - `docker/mirofish/Dockerfile` — imagem do MiroFish: parte da oficial `ghcr.io/666ghj/mirofish`, sobrepõe o código atual do repositório (a imagem publicada é anterior à internacionalização) e aplica dois ajustes: interface em **português** e base da API **relativa**.
+- `docker/osif/fetch.ps1` — obtém o código do OSINT Framework (OSIF) do upstream para `docker/osif/src` (clone local, fora do git).
+- `docker/osif/frontend.Dockerfile` + `docker/osif/frontend-nginx.conf` — build da SPA Vue do OSIF com um `default.conf` próprio (só estáticos; a API é proxied pelo nginx do IQ OS).
+- `docker/osif/README.md` — como o OSIF está montado, portas, chaves opcionais e como atualizar o upstream.
 - `docker/entrypoint.backend.sh` — cria as pastas de dados e arranca o uvicorn em `0.0.0.0:8000`.
 - `docker/smoke_test.py` — teste de fumo que percorre o OpenAPI e valida a API e a SPA.
 - `docker/searxng/settings.yml` — configuração do SearXNG (JSON ligado, limiter desligado).
@@ -26,6 +29,7 @@ Este documento explica como correr toda a solução IQ OS (Elasticsearch + backe
 | `tools`  | `mcp`                                        | Servidor MCP em HTTP (`http://127.0.0.1:8765/mcp`).          |
 | `agents` | `hermes-agent`                               | Agente Hermes: API OpenAI-compatível + dashboard web.        |
 | `mirofish` | `mirofish`                                 | Previsão por enxame de agentes: UI + API Flask do MiroFish.  |
+| `osif`   | `osif-postgres`, `osif-redis`, `osif-minio`, `osif-backend`, `osif-worker`, `osif-frontend` | OSINT Framework v2: casos, scans OSINT, grafo e evidências. |
 | `test`   | `tests`                                      | `pytest tests` + smoke test de todos os endpoints, em Docker. |
 
 ## Portas expostas
@@ -43,12 +47,16 @@ Este documento explica como correr toda a solução IQ OS (Elasticsearch + backe
 | Hermes Agent — dashboard       | `9119`    | http://127.0.0.1:8892 *(só via proxy)* |
 | MiroFish — API Flask           | `5001`    | http://127.0.0.1:5001      |
 | MiroFish — UI (proxy de iframe)| `3000`    | http://127.0.0.1:8893 *(só via proxy)* |
+| OSIF — SPA + API (proxy de iframe) | `8894` | http://127.0.0.1:8894      |
+| OSIF — API REST/WebSocket      | `6110`    | http://127.0.0.1:6110/api/docs |
+| OSIF — consola do MinIO        | `9111`    | http://127.0.0.1:9111      |
+| OSIF — PostgreSQL / Redis      | internos  | não publicados             |
 
-Os portos do host são configuráveis por variáveis (`ELASTICSEARCH_PORT`, `FINANCE_API_PORT`, `FINANCE_UI_PORT`, `IQOS_MCP_PORT`, `SEARXNG_PORT`, `N8N_PORT`, `N8N_EMBED_PORT`, `HERMES_API_PORT`, `HERMES_EMBED_PORT`, `MIROFISH_API_PORT`, `MIROFISH_EMBED_PORT`), com os valores por omissão acima.
+Os portos do host são configuráveis por variáveis (`ELASTICSEARCH_PORT`, `FINANCE_API_PORT`, `FINANCE_UI_PORT`, `IQOS_MCP_PORT`, `SEARXNG_PORT`, `N8N_PORT`, `N8N_EMBED_PORT`, `HERMES_API_PORT`, `HERMES_EMBED_PORT`, `MIROFISH_API_PORT`, `MIROFISH_EMBED_PORT`, `OSIF_EMBED_PORT`, `OSIF_API_PORT`, `OSIF_MINIO_CONSOLE_PORT`), com os valores por omissão acima.
 
-## Páginas iframe (Pesquisa, n8n, Hermes Agent, MiroFish)
+## Páginas iframe (Pesquisa, n8n, Hermes Agent, MiroFish, OSIF)
 
-A solução traz quatro aplicações externas **pré-instaladas** como páginas iframe da SPA (ver `chat-ui/src/iframePages.ts`) e abríveis pelo dock:
+A solução traz cinco aplicações externas **pré-instaladas** como páginas iframe da SPA (ver `chat-ui/src/iframePages.ts`) e abríveis pelo dock:
 
 | Página       | Iframe aponta para        | Notas                                                                 |
 |--------------|---------------------------|-----------------------------------------------------------------------|
@@ -56,10 +64,11 @@ A solução traz quatro aplicações externas **pré-instaladas** como páginas 
 | n8n          | `http://<host>:8891/`     | O n8n envia `X-Frame-Options: SAMEORIGIN`; o nginx retira-o.           |
 | Hermes Agent | `http://<host>:8892/`     | Dashboard do Hermes; também com os cabeçalhos retirados pelo nginx.    |
 | MiroFish     | `http://<host>:8893/`     | UI do MiroFish (perfil `mirofish`); o nginx serve a UI e `/api/`.       |
+| OSINT Framework (OSIF) | `http://<host>:8894/` | OSIF v2 (perfil `osif`); o nginx serve a SPA, `/api/`, `/ws/` e `/health`. |
 
-Porquê os portos 8891/8892/8893: uma app HTML que gera caminhos absolutos (`/assets/...`) não pode ser proxied num subcaminho sem reescrever o HTML, por isso cada app é replicada no **seu próprio porto** e o nginx apenas remove `X-Frame-Options` / `Content-Security-Policy`. O `iframePages.ts` usa o host do browser por omissão (funciona em `127.0.0.1` e a partir de outras máquinas), ou `VITE_SEARXNG_URL` / `VITE_N8N_URL` / `VITE_HERMES_URL` / `VITE_MIROFISH_URL` se definidos na build.
+Porquê os portos 8891/8892/8893/8894: uma app HTML que gera caminhos absolutos (`/assets/...`) não pode ser proxied num subcaminho sem reescrever o HTML, por isso cada app é replicada no **seu próprio porto** e o nginx apenas remove `X-Frame-Options` / `Content-Security-Policy`. O `iframePages.ts` usa o host do browser por omissão (funciona em `127.0.0.1` e a partir de outras máquinas), ou `VITE_SEARXNG_URL` / `VITE_N8N_URL` / `VITE_HERMES_URL` / `VITE_MIROFISH_URL` / `VITE_OSIF_URL` se definidos na build.
 
-As páginas são instaladas automaticamente na primeira utilização de cada browser (marcador `finance-llm-iframe-pages:seeded`) e podem ser editadas, desativadas ou removidas em **Páginas iframe**; o botão **Predefinidas** repõe as quatro (acrescentando só as que faltarem, sem tocar nas que já existem).
+As páginas são instaladas automaticamente na primeira utilização de cada browser (marcador `finance-llm-iframe-pages:seeded`) e podem ser editadas, desativadas ou removidas em **Páginas iframe**; o botão **Predefinidas** repõe as cinco (acrescentando só as que faltarem, sem tocar nas que já existem).
 
 ### Login do dashboard do Hermes: as mesmas contas do IQ OS
 
@@ -87,6 +96,7 @@ Abre um terminal na raiz do projeto (`C:\LLMFinance\finance-llm`) e corre:
 docker compose up --build -d                     # núcleo (+ SearXNG e n8n)
 docker compose --profile agents up -d            # + Hermes Agent
 docker compose --profile mirofish up -d          # + MiroFish
+docker compose --profile osif up -d --build       # + OSIF (OSINT Framework; ver secção 9)
 docker compose --profile tools up -d             # + servidor MCP
 ```
 
@@ -304,6 +314,37 @@ rebinding): o proxy do IQ OS envia `Host: localhost` (ver `docker/nginx.conf`), 
 abriria em `127.0.0.1` e responderia «Blocked request. This host is not allowed.» pelo IP da LAN ou
 por túnel.
 
+### 9. OSIF (OSINT Framework v2 — investigação OSINT)
+
+Integração do [fr4nc1stein/osint-framework](https://github.com/fr4nc1stein/osint-framework)
+(OSIF v2.0, AGPL-3.0) como app incorporada. É uma stack própria (PostgreSQL, Redis, MinIO,
+API FastAPI, worker `arq` e SPA Vue), por isso vive num perfil:
+
+```powershell
+# 1. Código do upstream (só na primeira vez; -Force para re-clonar/atualizar)
+powershell -ExecutionPolicy Bypass -File docker/osif/fetch.ps1
+
+# 2. Stack completa
+docker compose --profile osif up -d --build
+```
+
+- **UI + API pela SPA**: página iframe «OSINT Framework (OSIF)» (`http://127.0.0.1:8894`); a
+  mesma origem serve a SPA e a API (o nginx do IQ OS reencaminha `/api/`, `/ws/`, `/health` e
+  `/ready` para `osif-backend:6000`), por isso também serve para abrir a app diretamente no browser.
+- **API REST/WebSocket (direto)**: `http://127.0.0.1:6110/api/docs` (Swagger do OSIF);
+  `GET /health` → `{"status":"healthy",…}`.
+- **Consola do MinIO**: `http://127.0.0.1:9111` (`osif_minio` / `osif_minio_password`).
+- **Dados**: volumes `osif-postgres-data` (casos, grafo, scans), `osif-redis-data` (fila/cache)
+  e `osif-minio-data` (evidências).
+- **Chaves de APIs OSINT (opcionais)**: sem nenhuma funcionam `dns_records`, `subdomain_enum`,
+  `whois_lookup`, `ip_geolocation`, `urlscan_lookup` e `email_domain`. As restantes
+  (`shodan_lookup`, `virustotal_domain`, `abuseipdb`, `email_hunter`, `hibp_breach`) precisam de
+  `SHODAN_API_KEY`, `VIRUSTOTAL_API_KEY`, `ABUSEIPDB_API_KEY`, `TOMBA_API_KEY`/`TOMBA_SECRET_KEY`,
+  `HUNTER_API_KEY` ou `HIBP_API_KEY` no `.env` — ou de as guardar no separador *Integrations* da
+  própria app (ficam cifradas em PostgreSQL).
+- **Atualizar o upstream**: `docker/osif/fetch.ps1 -Force` e repetir o `up --build`.
+- Detalhes de arquitetura, portas e decisões em [`docker/osif/README.md`](../docker/osif/README.md).
+
 ## Volumes montados
 
 O `docker-compose.yml` monta as seguintes pastas do host no container backend:
@@ -320,6 +361,7 @@ Volumes nomeados (persistem em `docker compose down`, são apagados com `-v`):
 - `n8n-data` — base de dados, credenciais e workflows do n8n.
 - `hermes-data` — `/opt/data` do Hermes Agent (config, `.env`, sessões, memórias, skills).
 - `mirofish-uploads` — `/app/backend/uploads` do MiroFish (projetos, materiais-semente, relatórios e simulações).
+- `osif-postgres-data` / `osif-redis-data` / `osif-minio-data` — base de dados (casos, grafo, scans), fila/cache e evidências do OSIF.
 
 Montagens de configuração (do repositório para dentro dos containers, só leitura):
 
@@ -358,7 +400,12 @@ Isto permite que os dados e modelos persistam entre execuções dos containers e
 | `IQOS_API_URL` | `http://backend:8000` | API do IQ OS vista pelo container `hermes-agent`/`mcp`/`tests`. |
 | `HERMES_DASHBOARD_IQOS_SECRET` | vazio | Chave HMAC das sessões do dashboard (vazio = gerada por processo). |
 | `HERMES_API_KEY` | `iqos-hermes-api-key-…` | Chave da API OpenAI-compatível do Hermes. |
-| `VITE_SEARXNG_URL` / `VITE_N8N_URL` / `VITE_HERMES_URL` / `VITE_MIROFISH_URL` | vazio | URLs das páginas iframe na build; vazio = host do browser + porto por omissão. |
+| `VITE_SEARXNG_URL` / `VITE_N8N_URL` / `VITE_HERMES_URL` / `VITE_MIROFISH_URL` / `VITE_OSIF_URL` | vazio | URLs das páginas iframe na build; vazio = host do browser + porto por omissão. |
+| `OSIF_EMBED_PORT` | `8894` | Porto do proxy de incorporação do OSIF (SPA + `/api/` + `/ws/` na mesma origem). |
+| `OSIF_API_PORT` | `6110` | Porto do host para a API REST/WebSocket do OSIF (diagnóstico). |
+| `OSIF_MINIO_CONSOLE_PORT` | `9111` | Porto do host para a consola do MinIO do OSIF. |
+| `OSIF_DB_PASSWORD` / `OSIF_MINIO_USER` / `OSIF_MINIO_PASSWORD` / `OSIF_S3_BUCKET` / `OSIF_SECRET_KEY` | `osif` / `osif_minio` / `osif_minio_password` / `osif-evidence` / vazio | Credenciais internas do OSIF (PostgreSQL, MinIO e segredo das sessões). |
+| `SHODAN_API_KEY`, `VIRUSTOTAL_API_KEY`, `ABUSEIPDB_API_KEY`, `TOMBA_API_KEY`, `TOMBA_SECRET_KEY`, `HUNTER_API_KEY`, `HIBP_API_KEY`, `URLSCAN_API_KEY`, `CENSYS_APPID`, `CENSYS_SECRET` | vazio | Chaves das APIs OSINT (todas opcionais). Também se configuram no separador *Integrations* da própria app. |
 | `IQOS_MCP_PORT` | `8765` | Porto do host para o servidor MCP (perfil `tools`). |
 | `IQOS_API_TOKEN` / `IQOS_API_EMAIL` + `IQOS_API_PASSWORD` | vazio | Sessão para o MCP e para o smoke test cobrirem rotas autenticadas. |
 | `FINANCE_ES_URL` | `http://elasticsearch:9200` | Endereço do Elasticsearch **visto de dentro do container**. |

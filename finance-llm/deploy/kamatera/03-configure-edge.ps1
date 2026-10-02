@@ -1,26 +1,25 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-    Configura o edge do IQ OS na VM Kamatera e mostra o endereco publico.
+    Aplica o hostname da origem no edge da VM Kamatera e mostra o endereco publico.
 
 .DESCRIPTION
-    1. Le o hostname da origem de `origin-url.txt` (criado por 02-publish-origin.ps1).
-    2. Escreve `edge.env` (com finais de linha LF!).
-    3. Copia-o para /opt/iqos/edge/ na VM.
-    4. Arranca o compose (nginx + cloudflared quick tunnel).
-    5. Le o endereco publico *.trycloudflare.com do log do cloudflared.
+    Le `origin-url.txt` (criado por 02-publish-origin.ps1), envia o
+    `05-edge-up.sh` para a VM (por ssh + base64: nesta rede o `scp` fica preso) e
+    corre-o com o hostname. No fim le o endereco publico do tunel da VM.
+
+    Todas as ligacoes SSH sao repetidas: a rede para esta VM perde ligacoes de
+    forma intermitente (o SYN fica sem resposta), mas a VM esta saudavel.
 
 .EXAMPLE
     .\03-configure-edge.ps1
-    .\03-configure-edge.ps1 -SshHost 45.147.251.188 -SshKey "$env:USERPROFILE\.ssh\iqos_kamatera_ed25519"
 #>
 [CmdletBinding()]
 param(
     [string]$SshHost = '45.147.251.188',
     [string]$SshUser = 'root',
     [string]$SshKey = "$env:USERPROFILE\.ssh\iqos_kamatera_ed25519",
-    [string]$RemoteDir = '/opt/iqos/edge',
-    [int]$WaitSeconds = 60
+    [int]$Attempts = 40
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,35 +30,34 @@ if (-not (Test-Path $urlFile)) { throw "Falta $urlFile. Corre primeiro 02-publis
 $originHost = (Get-Content $urlFile -Raw).Trim()
 if ($originHost -notmatch '\.trycloudflare\.com$') { throw "Hostname de origem invalido: '$originHost'" }
 
-# edge.env tem de ir com LF (um \r colado ao valor entrava no nome do host).
-$envPath = Join-Path $here 'edge\edge.env'
-$content = "# Gerado por 03-configure-edge.ps1`nORIGIN_HOSTNAME=$originHost`n"
-[IO.File]::WriteAllText($envPath, $content)
-Write-Host "edge.env -> ORIGIN_HOSTNAME=$originHost"
-
-$sshArgs = @('-i', $SshKey, '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new')
-
-& scp @sshArgs $envPath "${SshUser}@${SshHost}:${RemoteDir}/edge.env"
-if ($LASTEXITCODE -ne 0) { throw 'scp de edge.env falhou' }
-Write-Host 'edge.env copiado para a VM'
-
-& ssh @sshArgs "${SshUser}@${SshHost}" "cd $RemoteDir && docker compose up -d --remove-orphans"
-if ($LASTEXITCODE -ne 0) { throw 'docker compose up falhou' }
-
-Write-Host "a aguardar o endereco publico (ate $WaitSeconds s)..."
-$public = $null
-$deadline = (Get-Date).AddSeconds($WaitSeconds)
-while ((Get-Date) -lt $deadline) {
-    Start-Sleep -Seconds 3
-    $logs = & ssh @sshArgs "${SshUser}@${SshHost}" "docker logs iqos-tunnel 2>&1 | tail -60" 2>$null
-    $m = [regex]::Match(($logs -join "`n"), 'https://[a-z0-9][a-z0-9-]*\.trycloudflare\.com')
-    if ($m.Success) { $public = $m.Value; break }
+function Invoke-VmSsh {
+    param([Parameter(Mandatory = $true)][string]$Command)
+    for ($i = 1; $i -le $Attempts; $i++) {
+        $out = & ssh -i $SshKey -o BatchMode=yes -o ConnectTimeout=8 -o LogLevel=ERROR "$SshUser@$SshHost" $Command 2>&1
+        if ($LASTEXITCODE -eq 0) { return ($out -join "`n") }
+        Start-Sleep -Seconds 2
+    }
+    throw "ssh falhou apos $Attempts tentativas"
 }
-if (-not $public) { throw "Nao encontrei o endereco publico nos logs do cloudflared. Ver: ssh ... 'docker logs iqos-tunnel'" }
 
-$publicHost = ([Uri]$public).Host
-$publicHost | Set-Content -Path (Join-Path $here 'public-url.txt') -Encoding ascii
+Write-Host "origem: $originHost"
 
+# 1) Enviar o script de arranque do edge (base64, sem scp).
+$setupLocal = Join-Path $here '05-edge-up.sh'
+$b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($setupLocal))
+$push = "printf %s '$b64' | base64 -d > /opt/iqos/05-edge-up.sh; sed -i 's/\r$//' /opt/iqos/05-edge-up.sh; wc -c /opt/iqos/05-edge-up.sh"
+Write-Host 'a enviar 05-edge-up.sh por ssh...'
+Write-Host (Invoke-VmSsh -Command $push)
+
+# 2) Aplicar o hostname e arrancar o edge.
+Write-Host 'a arrancar o edge...'
+Invoke-VmSsh -Command "bash /opt/iqos/05-edge-up.sh $originHost 2>&1 | tail -25" | Write-Host
+
+# 3) Ler o endereco publico do tunel da VM.
+$logs = Invoke-VmSsh -Command "docker logs iqos-tunnel 2>&1 | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | head -1"
+$m = [regex]::Match($logs, 'https://[a-z0-9][a-z0-9-]*\.trycloudflare\.com')
+if (-not $m.Success) { throw "Nao encontrei o endereco publico. Ver: ssh ... 'docker logs iqos-tunnel'" }
+
+$m.Value | Set-Content -Path (Join-Path $here 'public-url.txt') -Encoding ascii
 Write-Host ''
-Write-Host "==> Edge IQ OS publicado em: $public" -ForegroundColor Yellow
-Write-Host "==> (guardado em public-url.txt)" -ForegroundColor DarkGray
+Write-Host "==> Edge IQ OS publicado em: $($m.Value)" -ForegroundColor Yellow

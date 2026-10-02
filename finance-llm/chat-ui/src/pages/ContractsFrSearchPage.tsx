@@ -812,7 +812,7 @@ export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard, onSwitc
                               onClick={() => applyFacet(key, v.value)}
                               className="w-full text-left text-sm px-2 py-1 rounded hover:bg-white/5 flex justify-between"
                             >
-                              <span className="truncate" title={v.label ?? String(v.value)}>
+                              <span className="truncate cursor-help" title={v.label ?? String(v.value)}>
                                 {tr(v.label ?? String(v.value))}
                               </span>
                               <span className="text-muted-foreground text-xs">{v.count.toLocaleString("pt-PT")}</span>
@@ -990,10 +990,12 @@ export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard, onSwitc
                 <div key={docId} className="glass-card rounded-2xl p-4">
                   <div className="flex flex-col md:flex-row md:items-start gap-3">
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-sm leading-snug">{tr(item.objet) || "—"}</h3>
+                      <h3 className="font-medium text-sm leading-snug" title={item.objet ?? undefined}>
+                        {tr(item.objet) || "—"}
+                      </h3>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mt-2">
-                        <span title={item.nature}>{tr(item.nature) || "—"}</span>
-                        <span title={item.procedure}>{tr(item.procedure) || "—"}</span>
+                        <span title={item.nature ?? undefined}>{tr(item.nature) || "—"}</span>
+                        <span title={item.procedure ?? undefined}>{tr(item.procedure) || "—"}</span>
                         <span>Publicação: {formatDate(item.date_publication)}</span>
                         <span>Notificação: {formatDate(item.date_notification)}</span>
                         <span className="font-semibold text-foreground">{formatMoney(item.montant ?? item.valor)}</span>
@@ -1005,7 +1007,10 @@ export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard, onSwitc
                           </span>
                         )}
                         {item.forme_prix && (
-                          <span className="px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground text-xs" title={item.forme_prix}>
+                          <span
+                            className="px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground text-xs cursor-help"
+                            title={item.forme_prix}
+                          >
                             {tr(item.forme_prix)}
                           </span>
                         )}
@@ -1053,7 +1058,7 @@ export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard, onSwitc
                         </div>
                         <div>
                           <span className="text-xs text-muted-foreground">Local execução</span>
-                          <p>
+                          <p title={item.lieu_execution_type ?? undefined}>
                             {item.lieu_execution_code || "—"}{" "}
                             {item.lieu_execution_type ? `(${tr(item.lieu_execution_type)})` : ""}
                           </p>

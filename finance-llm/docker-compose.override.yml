@@ -1,6 +1,5 @@
 # Override temporário: usa a imagem existente mas sobrepõe o código atual do host.
 # Remove/renomeia este ficheiro quando fizer build de imagens frescas.
-version: "3.9"
 services:
   backend:
     volumes:

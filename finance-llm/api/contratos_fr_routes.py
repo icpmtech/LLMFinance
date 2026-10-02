@@ -26,7 +26,7 @@ from typing import Annotated, Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from api.auth_routes import CurrentSession, require_session
+from api.auth_routes import CurrentSession, optional_session, require_session
 from api.contratos_fr_map import get_contratos_fr_map
 from api.contratos_fr_translate import cache_status as traducao_status, translate_texts
 from api.elasticsearch_client import (
@@ -54,6 +54,7 @@ from api.models import (
 router = APIRouter(prefix="/contracts-fr", tags=["contratos-fr"])
 
 Session = Annotated[CurrentSession, Depends(require_session)]
+OptionalSession = Annotated[Optional[CurrentSession], Depends(optional_session)]
 
 MAX_JOBS = 20
 
@@ -228,13 +229,19 @@ def contratos_fr_map_endpoint(
 
 
 @router.post("/translate")
-def contratos_fr_translate_endpoint(payload: Dict[str, Any]) -> Dict[str, Any]:
+def contratos_fr_translate_endpoint(
+    payload: Dict[str, Any],
+    session: OptionalSession = None,
+) -> Dict[str, Any]:
     """Traduz textos de contratos de França (FR→PT) com o fornecedor de IA da plataforma.
 
     Corpo: `{"texts": ["..."], "provider": opcional, "model": opcional}`.
     Devolve `{translations: {original: tradução}, requested, cached, translated, failed, ai}`.
     O mesmo texto só é traduzido uma vez (cache persistente em
     `data/contratos-franca/traducao-pt.json`).
+
+    Se houver sessão, usa o provider/modelo predefinido do utilizador
+    (Definições → Fornecedores de IA); caso contrário usa a configuração global.
     """
     textos = payload.get("texts") if isinstance(payload, dict) else None
     if not isinstance(textos, list) or not textos:
@@ -242,8 +249,10 @@ def contratos_fr_translate_endpoint(payload: Dict[str, Any]) -> Dict[str, Any]:
     limpos = [str(item) for item in textos if isinstance(item, (str, int, float)) and str(item).strip()]
     if not limpos:
         raise HTTPException(status_code=422, detail="Nenhum texto utilizável em `texts`.")
+    user_id = session.user.id if session else None
     resultado = translate_texts(
         limpos[:200],
+        user_id=user_id,
         provider=(payload.get("provider") or None),
         model=(payload.get("model") or None),
     )

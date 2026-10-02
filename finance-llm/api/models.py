@@ -1785,6 +1785,10 @@ class OsintProfileHit(BaseModel):
     profile: OsintProfileDetail = Field(default_factory=OsintProfileDetail)
     leads: OsintLeads = Field(default_factory=OsintLeads)
     confidence: Optional[str] = None
+    # `True` quando o perfil veio de uma execução anterior e não voltou a
+    # responder nesta (os sites bloqueiam de forma intermitente).
+    stale: Optional[bool] = None
+    last_seen: Optional[str] = None
 
 
 class OsintPivot(BaseModel):
@@ -1813,6 +1817,9 @@ class OsintStats(BaseModel):
     related: List[str] = []
     aliases: List[str] = []
     people: List[str] = []
+    # Histórico entre execuções do mesmo alvo (o documento é actualizado).
+    found_this_run: Optional[int] = None
+    carried_over: Optional[int] = None
 
 
 class OsintGraphNode(BaseModel):

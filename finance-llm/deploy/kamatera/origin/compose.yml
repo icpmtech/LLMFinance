@@ -1,19 +1,42 @@
-# Origem local do IQ OS — servida como `http://127.0.0.1:4180` e publicada
-# atraves de um quick tunnel Cloudflare.
+# Origem local do IQ OS + tunel Cloudflare (quick tunnel).
 #
-# - `html` vem do build da SPA (`chat-ui/dist`), montado em modo leitura.
-# - `/api/` e enviado para o backend Python que corre no PC (porta 8002).
+# O servico `tunnel` publica a stack que corre no PC com TLS gratuito:
+#   https://<aleatorio>.trycloudflare.com  ->  http://host.docker.internal:4180
 #
-# Nao publica nada para a rede: so 127.0.0.1:4180 (o tunel e que sai).
+# Por omissao aponta para a stack completa (que serve 127.0.0.1:4180). Se
+# quiseres uma origem minima (so SPA + proxy /api, sem Elasticsearch), usa o
+# perfil `lite` — mas nesse caso para a stack primeiro, porque o porto 4180
+# colide:
+#
+#   docker compose -f deploy/kamatera/origin/compose.yml --profile lite up -d
+#
+# O tunel corre **em Docker** (e nao como processo solto): assim sobrevive ao
+# fecho do terminal e reinicia sozinho apos um reboot do PC.
+
 services:
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: iqos-origin-tunnel
+    restart: unless-stopped
+    # ORIGIN_TARGET permite apontar para outro porto/host.
+    command: ["tunnel", "--no-autoupdate", "--url", "${ORIGIN_TARGET:-http://host.docker.internal:4180}"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Origem minima: nginx com a SPA + proxy /api para o backend Python (8002).
+  # Nao arranca por omissao (perfil `lite`).
   origin:
+    profiles: ["lite"]
     image: nginx:alpine
     container_name: iqos-origin
     restart: unless-stopped
     environment:
-      # Backend Python que corre no host (fora do Docker).
       BACKEND_ORIGIN: "http://host.docker.internal:8002"
-      # Substituir apenas o host do backend no template.
       NGINX_ENVSUBST_FILTER: "^(BACKEND_ORIGIN)$"
     extra_hosts:
       - "host.docker.internal:host-gateway"

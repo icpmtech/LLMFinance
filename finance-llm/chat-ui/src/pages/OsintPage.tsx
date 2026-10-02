@@ -44,6 +44,8 @@ type OsintProfileHit = {
   profile?: OsintProfileDetail;
   leads?: OsintLeads;
   confidence?: string | null;
+  stale?: boolean | null;
+  last_seen?: string | null;
 };
 
 type OsintPivot = {
@@ -67,6 +69,8 @@ type OsintStats = {
   related?: string[];
   aliases?: string[];
   people?: string[];
+  found_this_run?: number | null;
+  carried_over?: number | null;
 };
 
 type OsintGraphNode = {
@@ -278,6 +282,13 @@ function ProfileCard({ hit }: { hit: OsintProfileHit }) {
           <div className="flex items-center gap-2">
             <span className="truncate font-medium">{profile.display_name || hit.site_name}</span>
             {confidence && <Badge className={`${confidence.className} text-[10px]`}>{confidence.label}</Badge>}
+            {hit.stale && (
+              <span
+                title={`Encontrado numa execução anterior (${hit.last_seen || "sem data"}) e que desta vez não respondeu`}
+              >
+                <Badge variant="outline" className="text-[10px]">anterior</Badge>
+              </span>
+            )}
           </div>
           <div className="truncate text-xs text-muted-foreground">
             {hit.site_name} · {hit.category}
@@ -477,7 +488,9 @@ export default function OsintPage() {
     return selected.reduce((sum, name) => sum + (platformCounts[name] || 0), 0);
   }, [isNif, fullScan, selected, platformCounts, defaultCategory]);
 
-  const estimateSeconds = Math.max(5, Math.round(plannedPlatforms / 26));
+  // As plataformas são verificadas uma a uma: medido em ~12/s, sem contas
+  // redondas (prometer 6 s para 151 plataformas e demorar 8 é pior que dizer 12).
+  const estimateSeconds = Math.max(5, Math.round(plannedPlatforms / 12));
 
   function toggleCategory(name: string) {
     setSelected((prev) => (prev.includes(name) ? prev.filter((c) => c !== name) : [...prev, name]));
@@ -885,6 +898,14 @@ export default function OsintPage() {
                         <Badge variant="secondary">{(result.stats.aliases || []).length} nomes alternativos</Badge>
                       )}
                     </div>
+                  )}
+
+                  {result.kind !== "nif" && (result.stats?.carried_over || 0) > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {(result.stats?.found_this_run || 0)} perfil(is) desta execução e{" "}
+                      <strong className="text-foreground">{result.stats?.carried_over}</strong> de execuções
+                      anteriores que agora não responderam (ficam marcados como «anterior»).
+                    </p>
                   )}
 
                   {foundHits.length === 0 ? (

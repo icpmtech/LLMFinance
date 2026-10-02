@@ -1,3 +1,0 @@
-﻿tentativa 1: TCP OK em 0.34s (peer=('45.147.251.188', 22))
-tentativa 2: TCP OK em 0.04s (peer=('45.147.251.188', 22))
-tentativa 3: TCP OK em 0.05s (peer=('45.147.251.188', 22))
