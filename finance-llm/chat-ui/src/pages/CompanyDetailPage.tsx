@@ -14,11 +14,12 @@ import {
   Briefcase,
   HandCoins,
   Activity,
+  Landmark,
   Tag,
 } from "lucide-react";
-import { getCompanyDetail, getCompanyContracts, getCompanyAnalytics } from "../api";
+import { getCompanyDetail, getCompanyContracts, getCompanyAnalytics, getCompanySocietarioPublicacoes } from "../api";
 import { SeeAllContractsButton } from "./EntityContractsWindow";
-import type { CompanyDetail, CompanyContractsResponse, CompanyAnalyticsResponse, ContractItem, ContractParty, ContractAnalyticsRow } from "../types";
+import type { CompanyDetail, CompanyContractsResponse, CompanyAnalyticsResponse, CompanySocietarioResponse, ContractItem, ContractParty, ContractAnalyticsRow } from "../types";
 
 interface CompanyDetailPageProps {
   nif: string;
@@ -73,6 +74,8 @@ export default function CompanyDetailPage({
   const [company, setCompany] = useState<CompanyDetail | null>(null);
   const [contracts, setContracts] = useState<CompanyContractsResponse | null>(null);
   const [analytics, setAnalytics] = useState<CompanyAnalyticsResponse | null>(null);
+  /** Publicações do Ministério da Justiça já indexadas (só se existirem no Elastic). */
+  const [societario, setSocietario] = useState<CompanySocietarioResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -109,6 +112,23 @@ export default function CompanyDetailPage({
   const cpvBreakdown = analytics?.by_cpv ?? [];
   const yearly = analytics?.by_year ?? [];
 
+  // O societário vive noutro índice e é opcional: falha ou ausência não travam a ficha.
+  useEffect(() => {
+    if (!nif) return;
+    let cancelled = false;
+    setSocietario(null);
+    getCompanySocietarioPublicacoes(nif, 0, 20)
+      .then((res) => {
+        if (!cancelled) setSocietario(res);
+      })
+      .catch(() => {
+        if (!cancelled) setSocietario(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [nif]);
+
   const firstYear = useMemo(() => {
     const years = [
       company?.adjudicante?.first_year,
@@ -124,6 +144,22 @@ export default function CompanyDetailPage({
     ].filter((y): y is number => typeof y === "number");
     return years.length ? Math.max(...years) : undefined;
   }, [company]);
+
+  /** Publicações do MJ, da mais recente para a mais antiga. */
+  const publicacoes = useMemo(
+    () =>
+      [...(societario?.items ?? [])].sort((a, b) =>
+        String(b.data_publicacao ?? "").localeCompare(String(a.data_publicacao ?? "")),
+      ),
+    [societario],
+  );
+
+  /**
+   * Identificação societária da publicação mais recente que a traz preenchida.
+   * Guarda-se também a data: um endereço de 2017 não é a sede de hoje, e o
+   * cartão diz de quando é.
+   */
+  const societarioDestaque = publicacoes.find((p) => p.natureza_juridica || p.sede || p.matricula_nipc);
 
   if (loading) {
     return (
@@ -397,6 +433,87 @@ export default function CompanyDetailPage({
         </div>
 
         {/* Contracts table */}
+        {/* Dados societários (publicações do Ministério da Justiça), só quando existem no Elastic */}
+        {societario && societario.total > 0 && (
+          <div className="glass-card gradient-border rounded-2xl p-5 md:p-6 mb-8">
+            <div className="flex flex-wrap items-center gap-3 mb-5">
+              <div className="p-2 rounded-xl bg-violet-500/15 border border-violet-400/20">
+                <Landmark size={20} className="text-violet-300" />
+              </div>
+              <h2 className="text-xl font-semibold">Dados societários</h2>
+              <span className="text-sm text-muted-foreground">
+                {societario.total} publicações de atos societários (Ministério da Justiça)
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+              {[
+                { label: "Natureza jurídica", value: societarioDestaque?.natureza_juridica },
+                { label: "Sede", value: societarioDestaque?.sede },
+                { label: "Matrícula / NIPC", value: societarioDestaque?.matricula_nipc },
+              ]
+                .filter((f) => f.value)
+                .map((f) => (
+                  <div key={f.label} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                    <p className="text-xs uppercase tracking-wider text-muted-foreground">{f.label}</p>
+                    <p className="mt-1 text-sm">{f.value}</p>
+                  </div>
+                ))}
+            </div>
+            {societarioDestaque?.data_publicacao && (
+              <p className="-mt-3 mb-4 text-xs text-muted-foreground">
+                Identificação da publicação de {formatDate(societarioDestaque.data_publicacao)}
+              </p>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-left text-muted-foreground">
+                    <th className="py-3 pr-4 font-medium">Data</th>
+                    <th className="py-3 pr-4 font-medium">Ato</th>
+                    <th className="py-3 pr-4 font-medium">Conservatória</th>
+                    <th className="py-3 pr-4 font-medium">Tipo</th>
+                    <th className="py-3 font-medium">Documento</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {publicacoes.slice(0, 10).map((pub) => (
+                    <tr key={pub.pub_id} className="border-b border-white/5 hover:bg-white/[0.04] transition">
+                      <td className="py-2.5 pr-4 whitespace-nowrap text-muted-foreground">{formatDate(pub.data_publicacao)}</td>
+                      <td className="py-2.5 pr-4 max-w-md" title={pub.acto || ""}>
+                        {pub.acto || "—"}
+                      </td>
+                      <td className="py-2.5 pr-4 text-muted-foreground">{pub.conservatoria || "—"}</td>
+                      <td className="py-2.5 pr-4 text-muted-foreground">{pub.tipo_label || pub.tipo || "—"}</td>
+                      <td className="py-2.5">
+                        {pub.documento_url ? (
+                          <a
+                            href={pub.documento_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-teal-300 hover:underline"
+                          >
+                            <ExternalLink size={13} /> PDF
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {societario.total > 10 && (
+              <p className="mt-4 text-xs text-muted-foreground">
+                A mostrar os 10 registos mais recentes de {societario.total}. A lista completa, a timeline por IA e as
+                pessoas extraídas estão na ficha do EmpresasIQ.
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="glass-card gradient-border rounded-2xl p-5 md:p-6">
           <div className="flex items-center gap-3 mb-5">
             <div className="p-2 rounded-xl bg-primary/15 border border-primary/20">

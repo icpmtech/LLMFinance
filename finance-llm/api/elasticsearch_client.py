@@ -14,7 +14,7 @@ import time
 import unicodedata
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 from elasticsearch import Elasticsearch, NotFoundError
 from elasticsearch.helpers import bulk
@@ -1335,6 +1335,8 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "as_adjudicatario_count": {"type": "integer"},
             "total_value": {"type": "float"},
             "as_adjudicante_value": {"type": "float"},
+            "cae_principal": {"type": "keyword"},
+            "caes_secundarios": {"type": "keyword"},
             "source": {"type": "keyword"},
             "ingested_at": {"type": "date"},
             "societario_timeline": {
@@ -2159,6 +2161,10 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "emails": {"type": "keyword", "ignore_above": 160},
             "sites": {"type": "keyword", "ignore_above": 64},
             "pivot_sites": {"type": "keyword", "ignore_above": 64},
+            "aliases": {"type": "keyword", "ignore_above": 160},
+            # Palavras normalizadas de nomes/aliases (permite procurar «johnson»
+            # sem escrever o nome completo).
+            "tokens": {"type": "keyword", "ignore_above": 64},
             "scanned_at": {"type": "date"},
             "user_id": {"type": "keyword", "ignore_above": 64},
         }
@@ -4378,6 +4384,24 @@ def get_company_by_nif(
                 names.append(role_summary["name"])
         name = names[0] if names else nif
 
+        cae_principal = None
+        caes_secundarios = None
+        try:
+            ids_res = client.search(
+                index=ENTITIES_INDEX,
+                body={
+                    "size": 1,
+                    "query": {"term": {"nif": nif}},
+                    "_source": ["nif", "cae_principal", "caes_secundarios"],
+                },
+            )
+            src = (ids_res.get("hits", {}).get("hits", [{}])[0] or {}).get("_source")
+            if src:
+                cae_principal = src.get("cae_principal") or None
+                caes_secundarios = src.get("caes_secundarios") or None
+        except Exception:
+            pass
+
         return {
             "nif": nif,
             "name": name,
@@ -4386,6 +4410,8 @@ def get_company_by_nif(
             "total_value": fmt_money(total_value) or 0.0,
             "adjudicante": adjudicante,
             "adjudicatario": adjudicatario,
+            "cae_principal": cae_principal,
+            "caes_secundarios": caes_secundarios,
         }
     except Exception as e:
         return {"error": str(e)}
@@ -4442,6 +4468,103 @@ def _company_name_query(q: Optional[str]) -> Optional[Dict[str, Any]]:
     }
 
 
+def _normalize_cae_codes(cae: Optional[str | list[str]]) -> List[str]:
+    """Converte um ou mais códigos CAE numa lista limpa de strings."""
+    if cae is None:
+        return []
+    if isinstance(cae, str):
+        values = [cae]
+    else:
+        values = list(cae)
+    codes: List[str] = []
+    for raw in values:
+        for part in str(raw).split(","):
+            code = part.strip()
+            if code:
+                codes.append(code)
+    return codes
+
+
+def _cae_code_clause(field: str, code: str) -> Dict[str, Any]:
+    """Cláusula ES para um código CAE completo (5 dígitos) ou parcial (prefix)."""
+    code = code.strip()
+    return (
+        {"term": {field: code}}
+        if re.fullmatch(r"\d{5}", code)
+        else {"prefix": {field: code}}
+    )
+
+
+def entity_nifs_for_cae(
+    cae: Optional[str | list[str]] = None,
+    limit: int = 2000,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """NIFs do cadastro de entidades com o(s) CAE indicado(s) (principal ou secundário).
+
+    O C.A.E. vive no **cadastro** de entidades, não nos contratos: para filtrar
+    as entidades derivadas de contratos por CAE é preciso esta passagem prévia.
+    Aceita um ou vários códigos (string, lista ou string separada por vírgulas).
+    Código completo (5 dígitos) → termo; parcial → prefixo (`464` cobre `46460`).
+    Trava a lista em `limit`; quando corta, o chamador é avisado (`truncated`).
+    """
+    client = es or get_es_client()
+    codes = _normalize_cae_codes(cae)
+    if not client or not codes:
+        return {"nifs": [], "truncated": False, "matched": 0, "codes": codes}
+
+    ensure_indices(client)
+
+    limites = max(1, min(10000, limit))
+
+    def _clauses_for_code(code: str) -> List[Dict[str, Any]]:
+        return [_cae_code_clause("cae_principal", code), _cae_code_clause("caes_secundarios", code)]
+
+    # Cada código CAE gera um grupo should[principal, secundarios]; os grupos
+    # são combinados com should de códigos (OR entre CAEs) porque um NIF pode
+    # ter qualquer um dos códigos selecionados.
+    code_shoulds: List[Dict[str, Any]] = []
+    for code in codes:
+        clauses = _clauses_for_code(code)
+        code_shoulds.append({"bool": {"should": clauses, "minimum_should_match": 1}})
+
+    try:
+        resp = client.search(
+            index=ENTITIES_INDEX,
+            body={
+                "size": limites,
+                "track_total_hits": True,
+                "_source": ["nif", "name"],
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {"bool": {"should": code_shoulds, "minimum_should_match": 1}}
+                        ]
+                    }
+                },
+            },
+        )
+    except Exception as exc:
+        return {"error": str(exc), "nifs": [], "truncated": False, "matched": 0, "codes": codes}
+
+    nifs: List[str] = []
+    vistos: set[str] = set()
+    for hit in resp.get("hits", {}).get("hits", []):
+        nif = str((hit.get("_source") or {}).get("nif") or "").strip()
+        if not nif or nif in vistos:
+            continue
+        vistos.add(nif)
+        nifs.append(nif)
+    total = resp.get("hits", {}).get("total", {})
+    total_valor = total.get("value") if isinstance(total, dict) else total
+    return {
+        "nifs": nifs,
+        "truncated": bool(total_valor and int(total_valor) > len(nifs)),
+        "matched": len(nifs),
+        "codes": codes,
+    }
+
+
 def search_companies(
     q: Optional[str] = None,
     role: Optional[str] = "all",
@@ -4450,14 +4573,21 @@ def search_companies(
     min_value: Optional[float] = None,
     max_value: Optional[float] = None,
     year: Optional[int] = None,
+    cpv: Optional[str] = None,
+    cae: Optional[str | list[str]] = None,
     size: int = 20,
     from_: int = 0,
     es: Optional[Elasticsearch] = None,
+    include_cae: bool = True,
 ) -> Dict[str, Any]:
     """Pesquisa entidades únicas derivadas dos contratos indexados.
 
     Utiliza duas agregações nested por NIF (adjudicantes/adjudicatarios) e depois
     combina os resultados em memória para devolver uma lista paginada de empresas.
+
+    `cpv` filtra pelos contratos dessa classificação; `cae` cruza primeiro com o
+    cadastro de entidades (é lá que o C.A.E. vive) e só considera contratos
+    desses NIF.
     """
     client = es or get_es_client()
     if not client:
@@ -4465,6 +4595,7 @@ def search_companies(
 
     ensure_indices(client)
 
+    notes: List[str] = []
     base_filters: List[Dict[str, Any]] = []
     if year:
         base_filters.append({"term": {"Ano": year}})
@@ -4473,6 +4604,50 @@ def search_companies(
     role_filter = _company_role_filter(role)
     if role_filter:
         base_filters.extend(role_filter)
+    if cpv:
+        code = cpv.strip()
+        if code:
+            base_filters.append({
+                "nested": {
+                    "path": "cpv",
+                    "query": (
+                        {"term": {"cpv.code": code}}
+                        if re.fullmatch(r"\d{8}(-\d)?", code)
+                        else {"prefix": {"cpv.code": code}}
+                    ),
+                }
+            })
+            notes.append(f"Contratos filtrados pelo CPV {code}.")
+    if cae:
+        resolvido = entity_nifs_for_cae(cae, es=client)
+        if resolvido.get("error"):
+            return {"error": resolvido["error"], "total": 0, "items": []}
+        nifs_cae = resolvido.get("nifs") or []
+        codes = resolvido.get("codes") or []
+        codes_text = ", ".join(codes)
+        if not nifs_cae:
+            return {
+                "query": q,
+                "total": 0,
+                "items": [],
+                "from": from_,
+                "size": size,
+                "notes": [f"Nenhuma entidade do cadastro com o CAE {codes_text}."],
+            }
+        base_filters.append({
+            "bool": {
+                "should": [
+                    {"nested": {"path": "adjudicantes.parsed", "query": {"terms": {"adjudicantes.parsed.nif": nifs_cae}}}},
+                    {"nested": {"path": "adjudicatarios.parsed", "query": {"terms": {"adjudicatarios.parsed.nif": nifs_cae}}}},
+                ],
+                "minimum_should_match": 1,
+            }
+        })
+        notes.append(
+            f"CAE {codes_text}: {len(nifs_cae)} entidades do cadastro com esse(s) CAE."
+        )
+        if resolvido.get("truncated"):
+            notes.append(f"A lista de entidades do CAE foi limitada a {len(nifs_cae)}.")
 
     name_query = _company_name_query(q)
 
@@ -4609,6 +4784,8 @@ def search_companies(
                         "total_value": 0.0,
                         "adjudicante": None,
                         "adjudicatario": None,
+                        "cae_principal": None,
+                        "caes_secundarios": None,
                     }
                 if not nif:
                     key = f"__no_nif__{name.lower().strip()}"
@@ -4621,6 +4798,8 @@ def search_companies(
                             "total_value": 0.0,
                             "adjudicante": None,
                             "adjudicatario": None,
+                            "cae_principal": None,
+                            "caes_secundarios": None,
                         }
 
                 entry = companies[nif if nif else key]
@@ -4636,10 +4815,40 @@ def search_companies(
                 entry["total_value"] = (entry["total_value"] or 0.0) + total_value
 
         items = sorted(companies.values(), key=lambda x: (x.get("total_value") or 0, x.get("contracts_total") or 0), reverse=True)
+        if cae and nifs_cae:
+            # Sem isto a pesquisa por CAE devolvia também as contrapartes dessas
+            # empresas (quem lhes comprou): o pedido é pelas entidades *com* o CAE.
+            permitidos = set(nifs_cae)
+            items = [item for item in items if (item.get("nif") or "") in permitidos]
         total = len(items)
         page = items[from_: from_ + size]
         for it in page:
             it["total_value"] = fmt_money(it["total_value"]) or 0.0
+
+        if include_cae:
+            nifs_to_enrich = [it["nif"] for it in page if it.get("nif")]
+            if nifs_to_enrich:
+                try:
+                    ids_res = client.search(
+                        index=ENTITIES_INDEX,
+                        body={
+                            "size": len(nifs_to_enrich),
+                            "query": {"terms": {"nif": nifs_to_enrich}},
+                            "_source": ["nif", "cae_principal", "caes_secundarios"],
+                        },
+                    )
+                    cae_by_nif: Dict[str, Dict[str, Any]] = {
+                        h["_source"].get("nif"): h["_source"]
+                        for h in ids_res.get("hits", {}).get("hits", [])
+                        if h.get("_source", {}).get("nif")
+                    }
+                    for it in page:
+                        src = cae_by_nif.get(it["nif"])
+                        if src:
+                            it["cae_principal"] = src.get("cae_principal") or None
+                            it["caes_secundarios"] = src.get("caes_secundarios") or None
+                except Exception:
+                    pass
 
         unique_adjudicantes = resp["aggregations"].get("unique_adjudicantes", {}).get("nifs", {}).get("value", 0)
         unique_adjudicatarios = resp["aggregations"].get("unique_adjudicatarios", {}).get("nifs", {}).get("value", 0)
@@ -4652,6 +4861,7 @@ def search_companies(
             "size": size,
             "unique_adjudicantes": int(unique_adjudicantes or 0),
             "unique_adjudicatarios": int(unique_adjudicatarios or 0),
+            "notes": notes,
         }
     except Exception as e:
         return {"query": q, "total": 0, "items": [], "error": str(e)}
@@ -7976,6 +8186,83 @@ def index_entities(
         return {"index": ENTITIES_INDEX, "error": str(exc), "indexed_count": indexed, "total": seen}
 
 
+def entity_nifs_for_cpv(
+    cpv_code: str,
+    limit: int = 3000,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Entidades que contrataram num CPV (aceita código completo ou parcial).
+
+    O CPV vive nos **contratos**, não no cadastro de entidades: para filtrar a
+    pesquisa de entidades por CPV é preciso primeiro descobrir quem contratou
+    nessa classificação. A lista entra depois num filtro `terms`, pelo que é
+    limitada (`limit`); quando o corte acontece, isso vai dito ao chamador
+    (`truncated`) para o resultado não ser lido como completo.
+    """
+    client = es or get_es_client()
+    code = (cpv_code or "").strip()
+    if not client or not code:
+        return {"nifs": [], "truncated": False, "matched": 0, "code": code}
+
+    cpv_query = (
+        {"term": {"cpv.code": code}}
+        if re.fullmatch(r"\d{8}(-\d)?", code)
+        else {"prefix": {"cpv.code": code}}
+    )
+    limites = max(1, min(10000, limit))
+
+    def _nested_path(path: str) -> Dict[str, Any]:
+        return {
+            "nested": {"path": path},
+            "aggs": {
+                "nifs": {
+                    "terms": {
+                        "field": f"{path}.nif",
+                        "size": limites,
+                        "order": {"valor": "desc"},
+                    },
+                    "aggs": {
+                        "valor": {
+                            "reverse_nested": {},
+                            "aggs": {"v": {"sum": {"field": "precoContratual"}}},
+                        }
+                    },
+                }
+            },
+        }
+
+    try:
+        resp = client.search(
+            index=CONTRACTS_INDEX,
+            body={
+                "size": 0,
+                "track_total_hits": False,
+                "query": {"nested": {"path": "cpv", "query": cpv_query, "score_mode": "none"}},
+                "aggs": {
+                    "adjudicatarios_cpv": _nested_path("adjudicatarios.parsed"),
+                    "adjudicantes_cpv": _nested_path("adjudicantes.parsed"),
+                },
+            },
+        )
+    except Exception as exc:
+        return {"error": str(exc), "nifs": [], "truncated": False, "matched": 0, "code": code}
+
+    nifs: List[str] = []
+    vistos: set[str] = set()
+    truncado = False
+    for nome in ("adjudicatarios_cpv", "adjudicantes_cpv"):
+        bucket_agg = (resp.get("aggregations") or {}).get(nome, {}).get("nifs", {})
+        if bucket_agg.get("sum_other_doc_count"):
+            truncado = True
+        for bucket in bucket_agg.get("buckets", []):
+            nif = str(bucket.get("key") or "").strip()
+            if not nif or nif in vistos:
+                continue
+            vistos.add(nif)
+            nifs.append(nif)
+    return {"nifs": nifs, "truncated": truncado, "matched": len(nifs), "code": code}
+
+
 def search_entities(
     q: Optional[str] = None,
     country: Optional[str] = None,
@@ -7985,6 +8272,8 @@ def search_entities(
     min_value: Optional[float] = None,
     max_value: Optional[float] = None,
     role: Optional[str] = "all",
+    cae: Optional[str | list[str]] = None,
+    cpv: Optional[str] = None,
     sort_by: Optional[str] = "total_value",
     sort_order: Optional[str] = "desc",
     size: int = 20,
@@ -7995,6 +8284,7 @@ def search_entities(
 
     ``role`` permite restringir a entidades que aparecem como adjudicante
     (``totAdjudicante``), adjudicatário (``totAdjudicatario``) ou ambos.
+    ``cae`` filtra pelo C.A.E. e ``cpv`` por classificação dos contratos.
     """
     client = es or get_es_client()
     if not client:
@@ -8004,6 +8294,7 @@ def search_entities(
 
     must: List[Dict[str, Any]] = []
     filters: List[Dict[str, Any]] = []
+    notes: List[str] = []
     text_query: Optional[Dict[str, Any]] = None
 
     if q:
@@ -8040,6 +8331,50 @@ def search_entities(
         filters.append({"range": {"as_adjudicante_count": {"gte": 1}}})
     elif role == "adjudicatario":
         filters.append({"range": {"as_adjudicatario_count": {"gte": 1}}})
+    if cae:
+        codes = _normalize_cae_codes(cae)
+        if codes:
+            code_shoulds: List[Dict[str, Any]] = []
+            for code in codes:
+                code_shoulds.extend([
+                    {"term": {"cae_principal": code}},
+                    {"term": {"caes_secundarios": code}},
+                ])
+                # Códigos parciais (menos de 5 dígitos) também fazem prefixo.
+                if not re.fullmatch(r"\d{5}", code):
+                    code_shoulds.extend([
+                        {"prefix": {"cae_principal": code}},
+                        {"prefix": {"caes_secundarios": code}},
+                    ])
+            filters.append({
+                "bool": {
+                    "should": code_shoulds,
+                    "minimum_should_match": 1,
+                }
+            })
+    if cpv:
+        resolvido = entity_nifs_for_cpv(cpv, es=client)
+        if resolvido.get("error"):
+            return {"error": resolvido["error"], "items": [], "total": 0}
+        nifs_cpv = resolvido.get("nifs") or []
+        if not nifs_cpv:
+            return {
+                "query": q,
+                "total": 0,
+                "items": [],
+                "from": from_,
+                "size": size,
+                "notes": [f"Nenhuma entidade com contratos no CPV {cpv.strip()}."],
+            }
+        filters.append({"terms": {"nif": nifs_cpv}})
+        notes.append(
+            f"CPV {resolvido.get('code')}: {len(nifs_cpv)} entidades com contratos "
+            "nessa classificação."
+        )
+        if resolvido.get("truncated"):
+            notes.append(
+                f"A lista de entidades do CPV foi limitada a {len(nifs_cpv)} (as maiores por valor)."
+            )
 
     query: Dict[str, Any]
     if text_query or filters:
@@ -8078,6 +8413,7 @@ def search_entities(
             "items": items,
             "from": from_,
             "size": size,
+            "notes": notes,
         }
     except Exception as exc:
         return {"error": str(exc), "items": [], "total": 0}
@@ -10825,7 +11161,10 @@ def _build_contratos_fr_query(
             }
         )
     if lieu_execution_code:
-        filters.append({"term": {"lieu_execution_code": lieu_execution_code}})
+        # Prefixo em vez de igualdade: um código de departamento («59») abrange os
+        # códigos postais/comunas que começam por ele («59000», «59350»), que é
+        # exatamente o que o mapa conta. Um código completo casa só ele próprio.
+        filters.append({"prefix": {"lieu_execution_code": lieu_execution_code.strip()}})
     if lieu_execution_type:
         filters.append({"term": {"lieu_execution_type": lieu_execution_type}})
 
@@ -10860,13 +11199,19 @@ def _build_contratos_fr_query(
 
 def _contratos_fr_sort(sort_by: Optional[str], sort_order: Optional[str]) -> List[Any]:
     order = sort_order if sort_order in ("asc", "desc") else "desc"
-    if sort_by in ("montant", "montant_estime", "valor"):
-        return [{sort_by: {"order": order, "missing": "_last", "unmapped_type": "float"}}, "_score"]
+    # A página de França chama «valor» ao montante; no índice do DECP o campo
+    # chama-se `montant` (o nome `valor` não existe lá e a ordenação ficava sem
+    # efeito, porque só se aplicava `unmapped_type`).
+    campo = "montant" if sort_by == "valor" else sort_by
+    if campo in ("montant", "montant_estime"):
+        return [{campo: {"order": order, "missing": "_last", "unmapped_type": "float"}}, "_score"]
     if sort_by in ("date_notification", "date_publication"):
         return [{sort_by: {"order": order, "missing": "_last", "unmapped_type": "date"}}, "_score"]
     if sort_by == "ano":
         return [{"ano": {"order": order, "missing": "_last", "unmapped_type": "integer"}}, "_score"]
-    if sort_by == "relevancia":
+    # Relevância: `relevance` é o nome canónico, `relevancia` o rótulo português
+    # que a interface usava.
+    if sort_by in ("relevance", "relevancia"):
         return ["_score", {"date_publication": {"order": "desc"}}]
     return [{"date_publication": {"order": "desc", "missing": "_last"}}, "_score"]
 

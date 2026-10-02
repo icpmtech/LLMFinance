@@ -1,0 +1,30 @@
+# Override temporário: usa a imagem existente mas sobrepõe o código atual do host.
+# Remove/renomeia este ficheiro quando fizer build de imagens frescas.
+version: "3.9"
+services:
+  backend:
+    volumes:
+      - ./api:/app/api:ro
+      - ./chat:/app/chat:ro
+      - ./chat-ui:/app/chat-ui:ro
+      - ./cli:/app/cli:ro
+      - ./collectors:/app/collectors:ro
+      - ./deploy:/app/deploy:ro
+      - ./forecasting:/app/forecasting:ro
+      - ./inference:/app/inference:ro
+      - ./processing:/app/processing:ro
+      - ./rag:/app/rag
+      - ./sentiment:/app/sentiment:ro
+      - ./server.py:/app/server.py:ro
+      - ./start.py:/app/start.py:ro
+      - ./requirements.txt:/app/requirements.txt:ro
+      - ./data:/app/data
+      - ./model:/app/model
+      - ./logs:/app/logs
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}

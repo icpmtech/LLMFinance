@@ -1,0 +1,13 @@
+﻿HTTP 200
+[
+ {
+  "id": 212556972,
+  "status": "complete",
+  "server": "iq-os-edge-01",
+  "description": "Reset",
+  "added": "2026-10-02 21:12:04",
+  "executed": "2026-10-02 21:12:04",
+  "completed": "2026-10-02 21:12:08",
+  "log": ""
+ }
+]

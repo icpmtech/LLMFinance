@@ -1,0 +1,35 @@
+# Origem local do IQ OS — servida como `http://127.0.0.1:4180` e publicada
+# atraves de um quick tunnel Cloudflare.
+#
+# - `html` vem do build da SPA (`chat-ui/dist`), montado em modo leitura.
+# - `/api/` e enviado para o backend Python que corre no PC (porta 8002).
+#
+# Nao publica nada para a rede: so 127.0.0.1:4180 (o tunel e que sai).
+services:
+  origin:
+    image: nginx:alpine
+    container_name: iqos-origin
+    restart: unless-stopped
+    environment:
+      # Backend Python que corre no host (fora do Docker).
+      BACKEND_ORIGIN: "http://host.docker.internal:8002"
+      # Substituir apenas o host do backend no template.
+      NGINX_ENVSUBST_FILTER: "^(BACKEND_ORIGIN)$"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:4180:80"
+    volumes:
+      - ./templates:/etc/nginx/templates:ro
+      - ../../../chat-ui/dist:/usr/share/nginx/html:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

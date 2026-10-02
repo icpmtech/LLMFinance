@@ -201,6 +201,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "14,165,233",
   },
   {
+    id: "docs",
+    label: "Documentos",
+    hint: "Documentos de referência (data/docs) e a classificação CAE-Rev.4 em markdown",
+    icon: Layers,
+    gradient: "from-amber-200 via-orange-500 to-rose-600",
+    accent: "245,158,11",
+  },
+  {
     id: "cms",
     label: "CMS",
     hint: "Site, páginas por blocos, blog e publicação",
@@ -581,6 +589,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: BarChart3,
     gradient: "from-indigo-200 via-purple-400 to-pink-500",
     accent: "139,92,246",
+  },
+  {
+    id: "contratos-fr-mapa",
+    label: "Mapa França",
+    hint: "Contratos de França (DECP) no mapa OpenStreetMap, por departamento e região",
+    icon: MapIcon,
+    gradient: "from-sky-200 via-blue-400 to-indigo-600",
+    accent: "59,130,246",
   },
   {
     id: "entities-search",

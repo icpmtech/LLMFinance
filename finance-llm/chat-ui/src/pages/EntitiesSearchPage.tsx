@@ -25,6 +25,7 @@ import {
   ingestEntities,
   enrichCompany,
 } from "../api";
+import { CaeMultiSelect, CaeDescription } from "../components/CaeMultiSelect";
 import type {
   EntityItem,
   EntityStats,
@@ -68,8 +69,46 @@ export function EntitiesSearchPage({ onSelectCompany, onSwitchDashboard }: Entit
   const [role, setRole] = useState<EntitySearchRequest["role"]>("all");
   const [minContracts, setMinContracts] = useState("");
   const [minValue, setMinValue] = useState("");
+  const [cae, setCae] = useState<string[]>([]);
+  const [cpv, setCpv] = useState("");
   const [sortBy, setSortBy] = useState<EntitySortField>("total_value");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+
+  // Sincronizar filtros com query string do URL (deep links).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("q")) setQuery(params.get("q") ?? "");
+    if (params.has("country")) setCountry(params.get("country") ?? "");
+    if (params.has("cae")) setCae((params.get("cae") ?? "").split(",").map((c) => c.trim()).filter(Boolean));
+    if (params.has("cpv")) setCpv(params.get("cpv") ?? "");
+    if (params.has("role")) setRole((params.get("role") as EntitySearchRequest["role"]) || "all");
+    if (params.has("sortBy")) setSortBy((params.get("sortBy") as EntitySortField) || "total_value");
+    if (params.has("sortOrder")) setSortOrder((params.get("sortOrder") as "asc" | "desc") || "desc");
+    if (params.has("onlyWithNif")) setOnlyWithNif(params.get("onlyWithNif") === "1");
+    if (params.has("minContracts")) setMinContracts(params.get("minContracts") ?? "");
+    if (params.has("minValue")) setMinValue(params.get("minValue") ?? "");
+  }, []);
+
+  // Atualizar a URL quando filtros mudam (mantém deep link funcional).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const setParam = (key: string, value: string | undefined | null) => {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    };
+    setParam("q", query.trim());
+    setParam("country", country);
+    setParam("cae", cae.join(","));
+    setParam("cpv", cpv.trim());
+    setParam("role", role === "all" ? undefined : role);
+    setParam("sortBy", sortBy);
+    setParam("sortOrder", sortOrder);
+    setParam("onlyWithNif", onlyWithNif ? "1" : undefined);
+    setParam("minContracts", minContracts);
+    setParam("minValue", minValue);
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, "", params.toString() ? newUrl : window.location.pathname);
+  }, [query, country, cae, cpv, role, sortBy, sortOrder, onlyWithNif, minContracts, minValue]);
 
   const size = 25;
   const [items, setItems] = useState<EntityItem[]>([]);
@@ -77,6 +116,8 @@ export function EntitiesSearchPage({ onSelectCompany, onSwitchDashboard }: Entit
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Avisos do backend sobre o filtro aplicado (ex.: CPV limitado). */
+  const [notes, setNotes] = useState<string[]>([]);
 
   const [stats, setStats] = useState<EntityStats | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -103,12 +144,14 @@ export function EntitiesSearchPage({ onSelectCompany, onSwitchDashboard }: Entit
       role: role || "all",
       min_contracts: minContracts ? parseInt(minContracts, 10) : undefined,
       min_value: minValue ? parseFloat(minValue) : undefined,
+      cae: cae.length ? cae : undefined,
+      cpv: cpv.trim() || undefined,
       sort_by: sortBy,
       sort_order: sortOrder,
       size,
       from: nextFrom,
     }),
-    [query, country, onlyWithNif, role, minContracts, minValue, sortBy, sortOrder],
+    [query, country, onlyWithNif, role, minContracts, minValue, cae, cpv, sortBy, sortOrder],
   );
 
   const doSearch = useCallback(
@@ -130,6 +173,7 @@ export function EntitiesSearchPage({ onSelectCompany, onSwitchDashboard }: Entit
         setItems((prev) => (resetFrom ? batch : [...prev, ...batch]));
         setTotal(data.total ?? 0);
         nextFromRef.current = nextFrom + batch.length;
+        setNotes((prev) => (resetFrom ? data.notes ?? [] : prev));
         if (data.error) setError(data.error);
       } catch (err) {
         if (reqId !== requestIdRef.current) return;
@@ -157,7 +201,7 @@ export function EntitiesSearchPage({ onSelectCompany, onSwitchDashboard }: Entit
   useEffect(() => {
     doSearch(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [country, onlyWithNif, role, sortBy, sortOrder]);
+  }, [country, onlyWithNif, role, sortBy, sortOrder, cae, cpv]);
 
   useEffect(() => {
     const el = loadMoreRef.current;
@@ -175,7 +219,7 @@ export function EntitiesSearchPage({ onSelectCompany, onSwitchDashboard }: Entit
     return () => observer.disconnect();
   }, [items.length, total, loading, loadingMore, doSearch]);
 
-  const activeFilters = [country, onlyWithNif, role !== "all", minContracts, minValue].filter(Boolean).length;
+  const activeFilters = [country, onlyWithNif, role !== "all", minContracts, minValue, cae.length, cpv].filter(Boolean).length;
 
   const clearFilters = () => {
     setQuery("");
@@ -184,6 +228,8 @@ export function EntitiesSearchPage({ onSelectCompany, onSwitchDashboard }: Entit
     setRole("all");
     setMinContracts("");
     setMinValue("");
+    setCae([]);
+    setCpv("");
     setSortBy("total_value");
     setSortOrder("desc");
   };
@@ -377,12 +423,32 @@ export function EntitiesSearchPage({ onSelectCompany, onSwitchDashboard }: Entit
             </select>
           </label>
           <label style={{ fontSize: ".8rem", display: "flex", flexDirection: "column", gap: ".25rem" }}>
+            CAE
+            <CaeMultiSelect
+              selected={cae}
+              onChange={setCae}
+              compact
+              placeholder="Código ou descrição…"
+            />
+          </label>
+          <label style={{ fontSize: ".8rem", display: "flex", flexDirection: "column", gap: ".25rem" }}>
             Mín. contratos
             <input type="number" min={0} value={minContracts} onChange={(e) => setMinContracts(e.target.value)} placeholder="ex.: 10" style={{ padding: ".45rem", borderRadius: 6, border: "1px solid rgba(148,163,184,.35)", background: "transparent", color: "inherit" }} />
           </label>
           <label style={{ fontSize: ".8rem", display: "flex", flexDirection: "column", gap: ".25rem" }}>
             Mín. valor (€)
             <input type="number" min={0} value={minValue} onChange={(e) => setMinValue(e.target.value)} placeholder="ex.: 1000000" style={{ padding: ".45rem", borderRadius: 6, border: "1px solid rgba(148,163,184,.35)", background: "transparent", color: "inherit" }} />
+          </label>
+          <label style={{ fontSize: ".8rem", display: "flex", flexDirection: "column", gap: ".25rem" }}>
+            CPV
+            <input
+              type="text"
+              value={cpv}
+              onChange={(e) => setCpv(e.target.value)}
+              placeholder="ex.: 33600000-6 ou 336"
+              title="Classificação CPV dos contratos da entidade; aceita código completo ou parcial (só entidades com contratos nesse CPV)."
+              style={{ padding: ".45rem", borderRadius: 6, border: "1px solid rgba(148,163,184,.35)", background: "transparent", color: "inherit" }}
+            />
           </label>
           <label style={{ fontSize: ".8rem", display: "flex", flexDirection: "column", gap: ".25rem" }}>
             Ordenar por
@@ -414,6 +480,13 @@ export function EntitiesSearchPage({ onSelectCompany, onSwitchDashboard }: Entit
       {error && (
         <div style={{ padding: ".7rem .85rem", borderRadius: 8, background: "rgba(239,68,68,.12)", border: "1px solid rgba(239,68,68,.35)", marginBottom: "1rem", fontSize: ".85rem" }}>
           {error}
+        </div>
+      )}
+      {notes.length > 0 && (
+        <div style={{ padding: ".6rem .85rem", borderRadius: 8, background: "rgba(45,212,191,.10)", border: "1px solid rgba(45,212,191,.30)", marginBottom: "1rem", fontSize: ".82rem" }}>
+          {notes.map((nota) => (
+            <div key={nota}>{nota}</div>
+          ))}
         </div>
       )}
 
@@ -467,6 +540,13 @@ export function EntitiesSearchPage({ onSelectCompany, onSwitchDashboard }: Entit
                       )}
                       {item.as_adjudicante_count > 0 && <span>adjudicante</span>}
                       {item.as_adjudicatario_count > 0 && <span>adjudicatário</span>}
+                      {item.cae_principal && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: ".2rem" }}>
+                          <Briefcase size={11} />
+                          CAE {item.cae_principal}
+                          <CaeDescription code={item.cae_principal} className="opacity-75" />
+                        </span>
+                      )}
                     </div>
                   </button>
                   <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
@@ -578,6 +658,14 @@ export function EntitiesSearchPage({ onSelectCompany, onSwitchDashboard }: Entit
                           <span>Valor como adjudicante: {formatPrice(detail.as_adjudicante_value)}</span>
                           <span>Contratos como adjudicante: {detail.as_adjudicante_count}</span>
                           <span>Contratos como adjudicatário: {detail.as_adjudicatario_count}</span>
+                          {detail.cae_principal && (
+                            <span>
+                              CAE principal: <b>{detail.cae_principal}</b>
+                              {(detail.caes_secundarios ?? []).length > 0 && (
+                                <span style={{ opacity: 0.7 }}> · secundários: {detail.caes_secundarios?.join(", ")}</span>
+                              )}
+                            </span>
+                          )}
                           <span style={{ display: "inline-flex", alignItems: "center", gap: ".3rem" }}>
                             <RefreshCw size={12} /> {detail.ingested_at?.slice(0, 19).replace("T", " ") ?? "—"}
                           </span>

@@ -1,54 +1,328 @@
 warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
-INFO:     Started server process [52032]
+INFO:     Started server process [46872]
 INFO:     Waiting for application startup.
-Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-Ficheiro do RSS ilegível (Extra data: line 7874 column 2 (char 1192276)); a recomeçar.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
-Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  64%|######4   | 163/254 [00:00<00:00, 1607.83it/s]Loading weights: 100%|##########| 254/254 [00:00<00:00, 1636.48it/s]
-INFO:     127.0.0.1:63745 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52826 - "GET /empresas-iq/500189412?v=1790954000000 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52826 - "GET /assets/index--M7GgmWm.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50760 - "GET /assets/index-CXIMBW-6.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61076 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60457 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:50760 - "GET /assets/index-CXIMBW-6.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52826 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61076 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50760 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61076 - "GET /workspace HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52826 - "GET /favorites HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64207 - "GET /contracts/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61076 - "GET /companies/500189412/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64207 - "GET /entities/500189412/relations?size=50 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52826 - "GET /companies/500189412/analytics?role=all HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61076 - "GET /societario/companies/500189412?from=0&size=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64207 - "GET /societario/companies/500189412/people HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56500 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52826 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50760 - "GET /companies/500189412 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56559 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56559 - "PUT /workspace/history HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64207 - "POST /people/exists HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50760 - "GET /empresas-iq/500189412?v=1790955000000 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50760 - "GET /assets/index-l0TRyxkM.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56831 - "GET /assets/index-Ct-HeQwp.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53101 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54228 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:50760 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53101 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56831 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62608 - "GET /contracts/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53101 - "GET /workspace HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50760 - "GET /favorites HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62608 - "GET /companies/500189412/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53101 - "GET /companies/500189412/analytics?role=all HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50760 - "GET /entities/500189412/relations?size=50 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59201 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62608 - "GET /societario/companies/500189412?from=0&size=100 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53101 - "GET /societario/companies/500189412/people HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56831 - "GET /companies/500189412 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52174 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50760 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50760 - "PUT /workspace/history HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53101 - "POST /people/exists HTTP/1.1" 200 OK
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  43%|####2     | 108/254 [00:00<00:00, 1075.01it/s]Loading weights: 100%|##########| 254/254 [00:00<00:00, 1503.97it/s]
+INFO:     127.0.0.1:51346 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51350 - "GET /contracts-fr/translate/status HTTP/1.1" 200 OK
+Agregação de empresas falhou: Connection timed out
+INFO:     127.0.0.1:52278 - "GET /contratos-fr?v=1791002000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52278 - "GET /assets/index-S295MHBt.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63384 - "GET /assets/index-BMblHDyf.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64134 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52613 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63384 - "GET /assets/index-BMblHDyf.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52278 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63384 - "GET /contracts-fr/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64134 - "POST /contracts-fr/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52278 - "GET /contracts-fr/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52278 - "POST /contracts-fr/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62400 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53226 - "GET /jarvis/meta HTTP/1.1" 200 OK
+[2026-10-02 22:00:05] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-02 22:00:05] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-02 22:00:32] WARNING: Attempt 1 failed: Failed to perform, curl: (35) BoringSSL SSL_connect: Connection closed abruptly (SSL_ERROR_SYSCALL; error queue empty) in connection to www.lusa.pt:443. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.. Retrying in 1 seconds...
+[2026-10-02 22:00:36] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-02 22:01:03] WARNING: Proxy 'None' failed (attempt 2) | Retrying in 1 seconds...
+[2026-10-02 22:01:17] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+INFO:     127.0.0.1:50763 - "GET /contracts-fr/map?date_field=date_publication HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50763 - "GET /contracts-fr/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /entities/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56499 - "POST /entities/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50763 - "POST /contracts-fr/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59676 - "GET /contracts-fr/status HTTP/1.1" 200 OK
+Tradução falhou (ollama): 
+INFO:     127.0.0.1:59063 - "POST /contracts-fr/translate HTTP/1.1" 200 OK
+Tradução falhou (ollama): 
+INFO:     127.0.0.1:58411 - "OPTIONS /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58411 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58411 - "OPTIONS /sentiment/market/watchlist HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58411 - "OPTIONS /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50762 - "OPTIONS /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50762 - "GET /sentiment/market/watchlist HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50762 - "OPTIONS /sentiment/market/live?news=5&translate=0&tickers=%5EGSPC,%5EIXIC,BTC-USD,NVDA,MSFT,CTT.LS,EDP.LS,MU HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56501 - "OPTIONS /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50762 - "OPTIONS /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56501 - "OPTIONS /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64986 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50762 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56501 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61272 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58411 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51265 - "OPTIONS /tickers/MU/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51265 - "OPTIONS /tickers/MU/history?period=1y HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65207 - "GET /sentiment/market/watchlist HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51265 - "OPTIONS /tickers/MU/technical?period=1y HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65207 - "OPTIONS /tickers/MU/recommendations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51265 - "OPTIONS /tickers/MU/news?max_items=8 HTTP/1.1" 200 OK
+$^IXIC: possibly delisted; no price data found  (period=1mo)
+$BTC-USD: possibly delisted; no price data found  (period=1mo)
+$^GSPC: possibly delisted; no price data found  (period=1mo)
+INFO:     127.0.0.1:52077 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59883 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50761 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51265 - "GET /tickers/MU/history?period=1y HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63542 - "GET /sentiment/market/live?news=5&translate=0&tickers=%5EGSPC,%5EIXIC,BTC-USD,NVDA,MSFT,CTT.LS,EDP.LS,MU HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65207 - "GET /tickers/MU/info HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52077 - "GET /tickers/MU/technical?period=1y HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50761 - "GET /tickers/MU/news?max_items=8 HTTP/1.1" 200 OK
+$^IXIC: possibly delisted; no price data found  (period=1y)
+$BTC-USD: possibly delisted; no price data found  (period=1y)
+$MSFT: possibly delisted; no price data found  (period=1y)
+$CTT.LS: possibly delisted; no price data found  (period=1y)
+INFO:     127.0.0.1:59883 - "GET /tickers/MU/recommendations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59883 - "OPTIONS /tickers/MU/technical/explain?period=1y HTTP/1.1" 200 OK
+$^IXIC: possibly delisted; no price data found  (period=5d)
+$BTC-USD: possibly delisted; no price data found  (period=5d)
+$MSFT: possibly delisted; no price data found  (period=5d)
+$CTT.LS: possibly delisted; no price data found  (period=5d)
+$MU: possibly delisted; no price data found  (period=1y)
+INFO:     127.0.0.1:59883 - "GET /tickers/MU/technical/explain?period=1y HTTP/1.1" 502 Bad Gateway
+INFO:     127.0.0.1:59883 - "OPTIONS /forecast HTTP/1.1" 200 OK
+$MU: possibly delisted; no price data found  (period=1y)
+INFO:     127.0.0.1:55097 - "GET /tickers/MU/history?period=1y HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65193 - "GET /sentiment/market/watchlist HTTP/1.1" 200 OK
+Tradução falhou (ollama): 
+$^IXIC: possibly delisted; no price data found  (period=1y)
+$^GSPC: possibly delisted; no price data found  (period=1y)
+$^GSPC: possibly delisted; no price data found  (period=1mo)
+$^IXIC: possibly delisted; no price data found  (period=1mo)
+$BTC-USD: possibly delisted; no price data found  (period=1y)
+$CTT.LS: possibly delisted; no price data found  (period=1y)
+$MSFT: possibly delisted; no price data found  (period=1y)
+$BTC-USD: possibly delisted; no price data found  (period=1mo)
+$NVDA: possibly delisted; no price data found  (period=1y)
+INFO:     127.0.0.1:65193 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 404 Not Found
+$^GSPC: possibly delisted; no price data found  (period=5d)
+$^IXIC: possibly delisted; no price data found  (period=5d)
+$BTC-USD: possibly delisted; no price data found  (period=5d)
+$NVDA: possibly delisted; no price data found  (period=5d)
+$CTT.LS: possibly delisted; no price data found  (period=5d)
+$MSFT: possibly delisted; no price data found  (period=5d)
+INFO:     127.0.0.1:56505 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56504 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65193 - "OPTIONS /tickers/search/yahoo?query=spcx HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59883 - "POST /forecast HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56505 - "OPTIONS /sentiment/market/watchlist HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56504 - "GET /tickers/search/yahoo?query=spcx HTTP/1.1" 200 OK
+$BTC-USD: possibly delisted; no price data found  (period=5d)
+$MSFT: possibly delisted; no price data found  (period=5d)
+$SPCX: possibly delisted; no price data found  (period=1y)
+INFO:     127.0.0.1:63542 - "GET /sentiment/market/live?news=5&translate=0&tickers=%5EGSPC,%5EIXIC,BTC-USD,NVDA,MSFT,CTT.LS,EDP.LS,MU HTTP/1.1" 200 OK
+$SPCX: possibly delisted; no price data found  (period=5d)
+$^GSPC: possibly delisted; no price data found  (period=1mo)
+$BTC-USD: possibly delisted; no price data found  (period=1mo)
+$^IXIC: possibly delisted; no price data found  (period=1mo)
+INFO:     127.0.0.1:54951 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53962 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61653 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 404 Not Found
+$^GSPC: possibly delisted; no price data found  (period=1y)
+$BTC-USD: possibly delisted; no price data found  (period=1y)
+$^IXIC: possibly delisted; no price data found  (period=1y)
+$NVDA: possibly delisted; no price data found  (period=1y)
+$CTT.LS: possibly delisted; no price data found  (period=1y)
+$MSFT: possibly delisted; no price data found  (period=1y)
+SPCX: Yahoo web request for share count failed
+INFO:     127.0.0.1:59883 - "POST /sentiment/market/watchlist HTTP/1.1" 422 Unprocessable Entity
+$^IXIC: possibly delisted; no price data found  (period=5d)
+$NVDA: possibly delisted; no price data found  (period=5d)
+$CTT.LS: possibly delisted; no price data found  (period=5d)
+$MSFT: possibly delisted; no price data found  (period=5d)
+$^GSPC: possibly delisted; no price data found  (period=1y)
+$MSFT: possibly delisted; no price data found  (period=1y)
+$CTT.LS: possibly delisted; no price data found  (period=1y)
+$^IXIC: possibly delisted; no price data found  (period=1y)
+$^GSPC: possibly delisted; no price data found  (period=5d)
+$BTC-USD: possibly delisted; no price data found  (period=1y)
+$NVDA: possibly delisted; no price data found  (period=1y)
+INFO:     127.0.0.1:64056 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55018 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55018 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 200 OK
+$^IXIC: possibly delisted; no price data found  (period=5d)
+$CTT.LS: possibly delisted; no price data found  (period=5d)
+$NVDA: possibly delisted; no price data found  (period=5d)
+$MSFT: possibly delisted; no price data found  (period=5d)
+$BTC-USD: possibly delisted; no price data found  (period=5d)
+$^GSPC: possibly delisted; no price data found  (period=5d)
+$^GSPC: possibly delisted; no price data found  (period=1y)
+$^IXIC: possibly delisted; no price data found  (period=1y)
+$BTC-USD: possibly delisted; no price data found  (period=1y)
+$NVDA: possibly delisted; no price data found  (period=1y)
+$CTT.LS: possibly delisted; no price data found  (period=1y)
+$MSFT: possibly delisted; no price data found  (period=1y)
+Cookie/crumb fetch failed (Timeout), continuing without crumb
+$^GSPC: possibly delisted; no price data found  (period=5d)
+INFO:     127.0.0.1:59347 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55097 - "GET /sentiment/market/live?news=5&translate=0&tickers=%5EGSPC,%5EIXIC,BTC-USD,NVDA,MSFT,CTT.LS,EDP.LS,MU HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59347 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59347 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+$CTT.LS: possibly delisted; no price data found  (period=5d)
+$MSFT: possibly delisted; no price data found  (period=5d)
+$BTC-USD: possibly delisted; no price data found  (period=5d)
+$^IXIC: possibly delisted; no price data found  (period=1mo)
+$NVDA: possibly delisted; no price data found  (period=5d)
+$^IXIC: possibly delisted; no price data found  (period=5d)
+$^IXIC: possibly delisted; no price data found  (period=1y)
+$^GSPC: possibly delisted; no price data found  (period=1y)
+$MSFT: possibly delisted; no price data found  (period=1y)
+$NVDA: possibly delisted; no price data found  (period=1y)
+$CTT.LS: possibly delisted; no price data found  (period=1y)
+$^IXIC: possibly delisted; no price data found  (period=1y)
+$MSFT: possibly delisted; no price data found  (period=1y)
+$^GSPC: possibly delisted; no price data found  (period=1y)
+$CTT.LS: possibly delisted; no price data found  (period=1y)
+$BTC-USD: possibly delisted; no price data found  (period=1y)
+$NVDA: possibly delisted; no price data found  (period=1y)
+$BTC-USD: possibly delisted; no price data found  (period=1y)
+$BTC-USD: possibly delisted; no price data found  (period=5d)
+INFO:     127.0.0.1:64410 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 404 Not Found
+$^IXIC: possibly delisted; no price data found  (period=5d)
+$NVDA: possibly delisted; no price data found  (period=5d)
+$MSFT: possibly delisted; no price data found  (period=5d)
+$^IXIC: possibly delisted; no price data found  (period=5d)
+$MSFT: possibly delisted; no price data found  (period=5d)
+$CTT.LS: possibly delisted; no price data found  (period=5d)
+$BTC-USD: possibly delisted; no price data found  (period=5d)
+$BTC-USD: possibly delisted; no price data found  (period=5d)
+$^GSPC: possibly delisted; no price data found  (period=5d)
+$CTT.LS: possibly delisted; no price data found  (period=5d)
+$NVDA: possibly delisted; no price data found  (period=5d)
+$^GSPC: possibly delisted; no price data found  (period=5d)
+$CTT.LS: possibly delisted; no price data found  (period=5d)
+$^IXIC: possibly delisted; no price data found  (period=5d)
+$^GSPC: possibly delisted; no price data found  (period=5d)
+$NVDA: possibly delisted; no price data found  (period=5d)
+$BTC-USD: possibly delisted; no price data found  (period=5d)
+$BTC-USD: possibly delisted; no price data found  (period=1mo)
+$MSFT: possibly delisted; no price data found  (period=5d)
+$MSFT: possibly delisted; no price data found  (period=5d)
+$^IXIC: possibly delisted; no price data found  (period=5d)
+$MU: possibly delisted; no price data found  (period=1y)
+$EDP.LS: possibly delisted; no price data found  (period=1y)
+INFO:     127.0.0.1:64410 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54951 - "GET /sentiment/market/live?news=5&translate=0&tickers=%5EGSPC,%5EIXIC,BTC-USD,NVDA,MSFT,CTT.LS,EDP.LS,MU HTTP/1.1" 200 OK
+$MU: possibly delisted; no price data found  (period=5d)
+$EDP.LS: possibly delisted; no price data found  (period=5d)
+Tradução falhou (ollama): 
+INFO:     127.0.0.1:53226 - "POST /contracts-fr/translate HTTP/1.1" 200 OK
+$^IXIC: possibly delisted; no price data found  (period=1mo)
+$^GSPC: possibly delisted; no price data found  (period=1mo)
+INFO:     127.0.0.1:64410 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54951 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 404 Not Found
+$^IXIC: possibly delisted; no price data found  (period=1mo)
+$BTC-USD: possibly delisted; no price data found  (period=1mo)
+$CTT.LS: possibly delisted; no price data found  (period=5d)
+INFO:     127.0.0.1:64410 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 404 Not Found
+$BTC-USD: possibly delisted; no price data found  (period=5d)
+$NVDA: possibly delisted; no price data found  (period=5d)
+$MSFT: possibly delisted; no price data found  (period=5d)
+$^IXIC: possibly delisted; no price data found  (period=5d)
+$EDP.LS: possibly delisted; no price data found  (period=1y)
+INFO:     127.0.0.1:54951 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 404 Not Found
+$MU: possibly delisted; no price data found  (period=1y)
+$EDP.LS: possibly delisted; no price data found  (period=5d)
+Cookie/crumb fetch failed (DNSError), continuing without crumb
+Cookie/crumb fetch failed (DNSError), continuing without crumb
+$^GSPC: possibly delisted; no price data found  (period=1y)
+Cookie/crumb fetch failed (DNSError), continuing without crumb
+$^IXIC: possibly delisted; no price data found  (period=1y)
+$BTC-USD: possibly delisted; no price data found  (period=1y)
+Cookie/crumb fetch failed (DNSError), continuing without crumb
+$NVDA: possibly delisted; no price data found  (period=1y)
+Cookie/crumb fetch failed (DNSError), continuing without crumb
+$MSFT: possibly delisted; no price data found  (period=1y)
+Cookie/crumb fetch failed (DNSError), continuing without crumb
+Cookie/crumb fetch failed (DNSError), continuing without crumb
+$CTT.LS: possibly delisted; no price data found  (period=1y)
+$MU: possibly delisted; no price data found  (period=5d)
+Cookie/crumb fetch failed (DNSError), continuing without crumb
+Cookie/crumb fetch failed (DNSError), continuing without crumb
+$CTT.LS: possibly delisted; no price data found  (period=5d)
+Cookie/crumb fetch failed (DNSError), continuing without crumb
+Cookie/crumb fetch failed (DNSError), continuing without crumb
+$NVDA: possibly delisted; no price data found  (period=5d)
+Cookie/crumb fetch failed (DNSError), continuing without crumb
+$BTC-USD: possibly delisted; no price data found  (period=5d)
+$NVDA: possibly delisted; no price data found  (period=5d)
+Cookie/crumb fetch failed (DNSError), continuing without crumb
+$BTC-USD: possibly delisted; no price data found  (period=5d)
+Cookie/crumb fetch failed (DNSError), continuing without crumb
+Cookie/crumb fetch failed (DNSError), continuing without crumb
+$^IXIC: possibly delisted; no price data found  (period=5d)
+Cookie/crumb fetch failed (DNSError), continuing without crumb
+$^GSPC: possibly delisted; no price data found  (period=5d)
+$MSFT: possibly delisted; no price data found  (period=5d)
+Cookie/crumb fetch failed (Timeout), continuing without crumb
+$CTT.LS: possibly delisted; no price data found  (period=5d)
+Cookie/crumb fetch failed (Timeout), continuing without crumb
+$^IXIC: possibly delisted; no price data found  (period=5d)
+Cookie/crumb fetch failed (Timeout), continuing without crumb
+$MSFT: possibly delisted; no price data found  (period=5d)
+Cookie/crumb fetch failed (Timeout), continuing without crumb
+$^GSPC: possibly delisted; no price data found  (period=5d)
+Cookie/crumb fetch failed (Timeout), continuing without crumb
+$^GSPC: possibly delisted; no price data found  (period=1mo)
+INFO:     127.0.0.1:51130 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59730 - "OPTIONS /sentiment/market/live?news=5&translate=0&tickers=%5EGSPC,%5EIXIC,BTC-USD,NVDA,MSFT,CTT.LS,EDP.LS,MU HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59730 - "OPTIONS /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59730 - "OPTIONS /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59730 - "OPTIONS /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59730 - "OPTIONS /sentiment/market/live?news=5&translate=0&tickers=%5EGSPC,%5EIXIC,BTC-USD,NVDA,MSFT,CTT.LS,EDP.LS,MU HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59730 - "OPTIONS /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59730 - "OPTIONS /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59730 - "OPTIONS /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+Cookie/crumb fetch failed (Timeout), continuing without crumb
+$EDP.LS: possibly delisted; no price data found  (period=5d)
+Cookie/crumb fetch failed (Timeout), continuing without crumb
+$^GSPC: possibly delisted; no price data found  (period=5d)
+$EDP.LS: possibly delisted; no price data found  (period=1y)
+$^IXIC: possibly delisted; no price data found  (period=5d)
+$MU: possibly delisted; no price data found  (period=1y)
+$NVDA: possibly delisted; no price data found  (period=5d)
+$MU: possibly delisted; no price data found  (period=5d)
+$MU: possibly delisted; no price data found  (period=1y)
+$MSFT: possibly delisted; no price data found  (period=5d)
+$CTT.LS: possibly delisted; no price data found  (period=5d)
+$EDP.LS: possibly delisted; no price data found  (period=1y)
+$BTC-USD: possibly delisted; no price data found  (period=5d)
+$^GSPC: possibly delisted; no price data found  (period=1mo)
+INFO:     127.0.0.1:59730 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56504 - "GET /sentiment/market/live?news=5&translate=0&tickers=%5EGSPC,%5EIXIC,BTC-USD,NVDA,MSFT,CTT.LS,EDP.LS,MU HTTP/1.1" 200 OK
+$MU: possibly delisted; no price data found  (period=5d)
+$EDP.LS: possibly delisted; no price data found  (period=5d)
+$MU: possibly delisted; no price data found  (period=5d)
+$EDP.LS: possibly delisted; no price data found  (period=5d)
+$BTC-USD: possibly delisted; no price data found  (period=1mo)
+$^IXIC: possibly delisted; no price data found  (period=1mo)
+INFO:     127.0.0.1:59730 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 404 Not Found
+$EDP.LS: possibly delisted; no price data found  (period=5d)
+INFO:     127.0.0.1:55099 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 404 Not Found
+$^GSPC: possibly delisted; no price data found  (period=1y)
+$^GSPC: possibly delisted; no price data found  (period=1y)
+$^IXIC: possibly delisted; no price data found  (period=1y)
+$BTC-USD: possibly delisted; no price data found  (period=1y)
+$NVDA: possibly delisted; no price data found  (period=1y)
+$MSFT: possibly delisted; no price data found  (period=1y)
+$BTC-USD: possibly delisted; no price data found  (period=1y)
+$CTT.LS: possibly delisted; no price data found  (period=1y)
+$MSFT: possibly delisted; no price data found  (period=1y)
+$^IXIC: possibly delisted; no price data found  (period=1y)
+$NVDA: possibly delisted; no price data found  (period=1y)
+$CTT.LS: possibly delisted; no price data found  (period=1y)
+$^GSPC: possibly delisted; no price data found  (period=5d)
+$^GSPC: possibly delisted; no price data found  (period=5d)
+$^IXIC: possibly delisted; no price data found  (period=5d)
+$BTC-USD: possibly delisted; no price data found  (period=5d)
+$NVDA: possibly delisted; no price data found  (period=5d)
+$MSFT: possibly delisted; no price data found  (period=5d)
+$BTC-USD: possibly delisted; no price data found  (period=5d)
+$MSFT: possibly delisted; no price data found  (period=5d)
+$^IXIC: possibly delisted; no price data found  (period=5d)
+$CTT.LS: possibly delisted; no price data found  (period=5d)
+$NVDA: possibly delisted; no price data found  (period=5d)
+$CTT.LS: possibly delisted; no price data found  (period=5d)

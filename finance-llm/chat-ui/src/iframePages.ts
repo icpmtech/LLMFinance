@@ -375,7 +375,7 @@ export function iframeDockApps(): DockApp[] {
 }
 
 // ---------------------------------------------------------------------------
-// Páginas predefinidas da solução (Pesquisa, n8n, Hermes Agent, MiroFish)
+// Páginas predefinidas da solução (Pesquisa, n8n, Hermes Agent, MiroFish, OSIF)
 // ---------------------------------------------------------------------------
 //
 // São serviços que o `docker-compose.yml` do IQ OS arranca em containers:
@@ -383,8 +383,9 @@ export function iframeDockApps(): DockApp[] {
 //   * n8n (automação/agentes) ......... http://<host>:8891  (proxy nginx de embed)
 //   * Hermes Agent (dashboard) ........ http://<host>:8892  (proxy nginx de embed)
 //   * MiroFish (previsão por enxame) .. http://<host>:8893  (proxy nginx de embed)
+//   * OSIF (OSINT Framework v2) ....... http://<host>:8894  (proxy nginx de embed)
 //
-// O n8n e o dashboard do Hermes enviam `X-Frame-Options`, por isso são
+// O n8n, o dashboard do Hermes e o OSIF enviam `X-Frame-Options`, por isso são
 // incorporados através do proxy de nginx que os retira (ver `docker/nginx.conf`).
 
 /**
@@ -445,6 +446,21 @@ export function defaultIframePages(): IframePageConfig[] {
       icon: "Fish",
       accent: "34,211,238",
       gradient: "from-cyan-300 via-cyan-500 to-cyan-700",
+      enabled: true,
+      createdAt: now,
+    },
+    {
+      // OSIF — OSINT Framework v2 (https://github.com/fr4nc1stein/osint-framework).
+      // Plataforma de investigação (casos, scans DNS/WHOIS/IP/Shodan/…, grafo,
+      // evidências). Perfil `osif` do compose; precisa do código do upstream em
+      // `docker/osif/src` (ver `docker/osif/README.md`). O nginx do IQ OS serve a
+      // app e a API no mesmo porto, por isso é esta origem que vai no iframe.
+      id: "iqos-osif",
+      title: "OSINT Framework (OSIF)",
+      url: supportServiceUrl(import.meta.env.VITE_OSIF_URL, 8894),
+      icon: "Telescope",
+      accent: "16,185,129",
+      gradient: "from-emerald-300 via-emerald-500 to-emerald-700",
       enabled: true,
       createdAt: now,
     },

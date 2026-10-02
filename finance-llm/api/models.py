@@ -2,7 +2,7 @@
 from __future__ import annotations
 from enum import Enum
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal, Dict, Any, TYPE_CHECKING
+from typing import List, Optional, Literal, Dict, Any, Sequence, TYPE_CHECKING
 
 
 class ChatMessage(BaseModel):
@@ -948,7 +948,20 @@ class ContratoFrSearchRequest(BaseModel):
     date_field: Optional[Literal["date_notification", "date_publication"]] = "date_publication"
     size: int = 20
     from_: int = Field(0, alias="from")
-    sort_by: Optional[Literal["relevance", "date_notification", "date_publication", "montant", "valor", "ano"]] = "date_publication"
+    # `relevance` é o valor canónico (igual às outras pesquisas); `relevancia`
+    # mantém-se aceite porque a interface já o enviava — e o modelo recusava-o
+    # com 422 (o `_contratos_fr_sort` até o conhecia). `valor` é o rótulo usado
+    # na página e mapeia para o campo `montant` do índice francês.
+    sort_by: Optional[Literal[
+        "relevance",
+        "relevancia",
+        "date_notification",
+        "date_publication",
+        "montant",
+        "montant_estime",
+        "valor",
+        "ano",
+    ]] = "date_publication"
     sort_order: Optional[Literal["asc", "desc"]] = "desc"
     with_facets: bool = True
 
@@ -1239,6 +1252,8 @@ class CompanySummary(BaseModel):
     total_value: float = 0.0
     adjudicante: Optional[CompanyRoleSummary] = None
     adjudicatario: Optional[CompanyRoleSummary] = None
+    cae_principal: Optional[str] = None
+    caes_secundarios: Optional[List[str]] = None
 
 
 class CompanyDetail(CompanySummary):
@@ -1263,6 +1278,8 @@ class CompanySearchRequest(BaseModel):
     min_value: Optional[float] = None
     max_value: Optional[float] = None
     year: Optional[int] = None
+    cae: Optional[str | list[str]] = None
+    cpv: Optional[str] = None
     size: int = 20
     from_: int = Field(0, alias="from")
 
@@ -1280,6 +1297,8 @@ class CompanySearchResponse(BaseModel):
     # limitada aos NIF mais relevantes por papel.
     unique_adjudicantes: int = 0
     unique_adjudicatarios: int = 0
+    #: Avisos do filtro (ex.: CPV sem entidades, lista do CAE limitada).
+    notes: List[str] = []
     error: Optional[str] = None
 
 
@@ -1602,6 +1621,8 @@ class EntityItem(BaseModel):
     as_adjudicatario_count: int = 0
     total_value: float = 0.0
     as_adjudicante_value: float = 0.0
+    cae_principal: Optional[str] = None
+    caes_secundarios: List[str] = []
     source: Optional[str] = None
     ingested_at: Optional[str] = None
     doc_id: Optional[str] = None
@@ -1660,6 +1681,8 @@ class EntitySearchRequest(BaseModel):
     min_value: Optional[float] = None
     max_value: Optional[float] = None
     role: Optional[Literal["all", "adjudicante", "adjudicatario"]] = "all"
+    cae: Optional[str | list[str]] = None
+    cpv: Optional[str] = None
     sort_by: Optional[Literal[
         "name", "contracts_count", "total_value",
         "as_adjudicante_value", "as_adjudicante_count", "as_adjudicatario_count",
@@ -1677,6 +1700,8 @@ class EntitySearchResponse(BaseModel):
     items: List[EntityItem] = []
     from_: int = Field(0, alias="from")
     size: int = 20
+    #: Avisos do filtro (ex.: o CPV cortou a lista de entidades consideradas).
+    notes: List[str] = []
     error: Optional[str] = None
 
     model_config = {"populate_by_name": True}
@@ -1718,10 +1743,14 @@ class EntityIngestResponse(BaseModel):
 # --- OSINT (user-scanner) --------------------------------------------------
 
 class OsintScanRequest(BaseModel):
-    target: str = Field(..., min_length=1, max_length=120, description="Username ou email a pesquisar")
-    kind: Literal["username", "email"] = "username"
-    category: Optional[str] = Field(None, description="Categoria específica do user-scanner; vazio = todas")
-    full_scan: bool = Field(False, description="Se true, varre todas as plataformas (lento); senão usa uma categoria relevante")
+    target: str = Field(..., min_length=1, max_length=120, description="Username, email ou NIF a pesquisar")
+    kind: Literal["username", "email", "nif"] = "username"
+    category: Optional[str] = Field(None, description="Categoria específica do user-scanner (forma antiga, uma só)")
+    categories: List[str] = Field(
+        default_factory=list,
+        description="Categorias a varrer em conjunto; vazio = recomendada para o tipo",
+    )
+    full_scan: bool = Field(False, description="Se true, varre todas as plataformas (lento)")
     save: bool = Field(True, description="Guardar resultado no índice finance_osint")
 
 
@@ -1779,6 +1808,11 @@ class OsintStats(BaseModel):
     emails: List[str] = []
     pivot_count: int = 0
     pivot_sites: List[str] = []
+    # Preenchidos apenas nos scans de NIF (dados internos).
+    nif_valid: Optional[bool] = None
+    related: List[str] = []
+    aliases: List[str] = []
+    people: List[str] = []
 
 
 class OsintGraphNode(BaseModel):
@@ -1804,13 +1838,15 @@ class OsintGraph(BaseModel):
 
 class OsintScanResponse(BaseModel):
     target: str
-    kind: Literal["username", "email"]
+    kind: Literal["username", "email", "nif"]
     total: int = 0
     found: int = 0
     not_found: int = 0
     errors: int = 0
     duration_s: Optional[float] = None
     category: Optional[str] = None
+    categories: List[str] = []
+    platforms_per_category: Dict[str, int] = {}
     hits: List[OsintProfileHit] = []
     pivots: List[OsintPivot] = []
     stats: OsintStats = Field(default_factory=OsintStats)
@@ -1822,7 +1858,7 @@ class OsintScanResponse(BaseModel):
 
 class OsintSearchRequest(BaseModel):
     q: Optional[str] = None
-    kind: Optional[Literal["username", "email"]] = None
+    kind: Optional[Literal["username", "email", "nif"]] = None
     size: int = 20
     from_: int = Field(0, alias="from")
 

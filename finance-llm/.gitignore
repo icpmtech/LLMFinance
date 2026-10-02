@@ -33,3 +33,6 @@ kronos_upstream/
 data/forecasting/*.png
 .vite/
 *.log
+# Código do OSINT Framework (OSIF): clone do upstream obtido com
+# `docker/osif/fetch.ps1` para as imagens do perfil `osif` do compose.
+docker/osif/src/

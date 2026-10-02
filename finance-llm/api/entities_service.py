@@ -12,6 +12,9 @@ Notas:
 - ``nifEntidade`` pode ser ``"-"`` (entidades estrangeiras ou antigas sem NIF).
 - Entidades sem NIF recebem um ``_id`` determinístico baseado no nome, para que
   reingestões sejam idempotentes.
+- CAE é enriquecido a partir do serviço ``collectors.cae_service`` (PNS/RNPC).
+  A ingestão em massa não chama o serviço automaticamente por questões de
+  performance; o enriquecimento faz-se sob demanda via ``enrich_entity_cae``.
 """
 from __future__ import annotations
 
@@ -142,8 +145,35 @@ def normalize_entity(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "as_adjudicatario_count": _as_int(raw.get("totAdjudicatario")),
         "total_value": round(_as_float(raw.get("totValorContratIni")), 2),
         "as_adjudicante_value": round(_as_float(raw.get("totAdjudicanteValorContratIni")), 2),
+        "cae_principal": None,
+        "caes_secundarios": [],
         "source": "entidades_gov_portal_base",
     }
+    return doc
+
+
+def enrich_entity_cae(doc: Dict[str, Any], min_interval: float = 0.5) -> Dict[str, Any]:
+    """Completa um documento de entidade com CAE recolhido do PNS/RNPC.
+
+    A função é segura: não levanta exceções e devolve o doc inalterado se a
+    recolha falhar.
+    """
+    from collectors.cae_service import collect_cae
+
+    name = doc.get("name")
+    nif = doc.get("nif")
+    if not name:
+        return doc
+    try:
+        result = collect_cae(name, nif=nif, save=False, min_interval=min_interval)
+        if result.get("cae_principal"):
+            doc["cae_principal"] = result["cae_principal"]
+        if result.get("caes_secundarios"):
+            doc["caes_secundarios"] = result["caes_secundarios"]
+        doc["cae_source"] = "pns_rnpc"
+        doc["cae_match"] = result.get("match")
+    except Exception as exc:
+        logger.warning("Falha ao enriquecer CAE de %s: %s", name, exc)
     return doc
 
 

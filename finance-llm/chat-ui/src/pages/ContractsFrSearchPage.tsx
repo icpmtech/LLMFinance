@@ -6,6 +6,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   BarChart3,
   ChevronDown,
   ChevronUp,
@@ -14,7 +15,9 @@ import {
   Filter,
   Frown,
   Landmark,
+  Languages,
   Loader2,
+  MapPin,
   RefreshCw,
   Search,
   X,
@@ -28,6 +31,7 @@ import {
   importContratosFr,
   searchContratosFr,
   takeContratosFrEntry,
+  translateContratosFr,
 } from "../contratosFrApi";
 import type {
   ContratoFrFacets,
@@ -43,6 +47,8 @@ import type {
 interface ContractsFrSearchPageProps {
   onSwitchView?: () => void;
   onSwitchDashboard?: () => void;
+  /** Abre a vista de mapa (OSM) com os mesmos filtros. */
+  onSwitchMap?: () => void;
 }
 
 function formatMoney(n?: number | null) {
@@ -78,7 +84,15 @@ const FACET_CONFIG: { key: keyof ContratoFrFacets; label: string; request: keyof
 
 const PAGE_SIZE = 20;
 
-export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard }: ContractsFrSearchPageProps) {
+/** Chave onde fica a escolha «traduzir com IA» (desligada por omissão). */
+const TRADUZIR_KEY = "finance-llm-contratos-fr-traduzir";
+
+/** Normaliza como o servidor normaliza (chave da cache de tradução). */
+function chaveTraducao(texto: string): string {
+  return texto.replace(/\s+/g, " ").trim();
+}
+
+export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard, onSwitchMap }: ContractsFrSearchPageProps) {
   const [entryRequest, setEntryRequest] = useState(() => takeContratosFrEntry());
   const [status, setStatus] = useState<ContratoFrStatus | null>(null);
   const [meta, setMeta] = useState<ContratoFrMeta | null>(null);
@@ -91,14 +105,14 @@ export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard }: Contr
   const [adjudicatario, setAdjudicatario] = useState(entryRequest?.adjudicatario ?? "");
   const [adjudicatarioId, setAdjudicatarioId] = useState("");
   const [cpv, setCpv] = useState("");
-  const [lieuExecutionCode, setLieuExecutionCode] = useState("");
-  const [lieuExecutionType, setLieuExecutionType] = useState("");
+  const [lieuExecutionCode, setLieuExecutionCode] = useState(entryRequest?.lieu_execution_code ?? "");
+  const [lieuExecutionType, setLieuExecutionType] = useState(entryRequest?.lieu_execution_type ?? "");
   const [minValue, setMinValue] = useState("");
   const [maxValue, setMaxValue] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [dateField, setDateField] = useState("date_publication");
-  const [sortBy, setSortBy] = useState("relevancia");
+  const [sortBy, setSortBy] = useState("relevance");
 
   const [results, setResults] = useState<ContratoFrItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -122,6 +136,30 @@ export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard }: Contr
   const [importError, setImportError] = useState<string | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  /* ------------------------------------------- tradução FR→PT a pedido (IA) */
+  const [traduzir, setTraduzir] = useState(() => {
+    try {
+      return typeof window !== "undefined" && window.localStorage.getItem(TRADUZIR_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [traducoes, setTraducoes] = useState<Record<string, string>>({});
+  const [aTraduzir, setATraduzir] = useState(false);
+  const [erroTraducao, setErroTraducao] = useState<string | null>(null);
+  const [iaTraducao, setIaTraducao] = useState<{ provider_label?: string; model?: string } | null>(null);
+  const traducoesRef = useRef<Record<string, string>>({});
+
+  /** Texto em português (ou o original, enquanto não houver tradução). */
+  const tr = useCallback(
+    (texto?: string | null): string => {
+      const valor = texto ?? "";
+      if (!valor) return "";
+      return traducoes[chaveTraducao(valor)] ?? valor;
+    },
+    [traducoes],
+  );
 
   const buildRequest = useCallback(
     (offset: number): ContratoFrSearchRequest => ({
@@ -250,13 +288,18 @@ export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard }: Contr
       setQuery(entry.q ?? "");
       setAcheteur(entry.acheteur ?? "");
       setAdjudicatario(entry.adjudicatario ?? "");
+      // Pedido vindo do mapa: filtra pelo local de execução (departamento/região).
+      setLieuExecutionCode(entry.lieu_execution_code ?? "");
+      setLieuExecutionType(entry.lieu_execution_type ?? "");
       if (!entry.doc) {
         void doSearch(true, {
           q: entry.q || undefined,
           acheteur: entry.acheteur || undefined,
           adjudicatario: entry.adjudicatario || undefined,
+          lieu_execution_code: entry.lieu_execution_code || undefined,
+          lieu_execution_type: entry.lieu_execution_type || undefined,
           date_field: "date_publication",
-          sort_by: "relevancia",
+          sort_by: "relevance",
           size: PAGE_SIZE,
           from: 0,
         });
@@ -406,6 +449,66 @@ export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard }: Contr
     return [pinnedDoc, ...results.filter((row) => (row.doc_id ?? "") !== (pinnedId ?? ""))];
   }, [pinnedDoc, results]);
 
+  /**
+   * Textos franceses que a página mostra: objeto/natureza/procedimento/forma de
+   * preço/tipo de local dos resultados e os rótulos das facetas correspondentes.
+   */
+  const textosParaTraduzir = useMemo(() => {
+    const conjunto = new Set<string>();
+    const juntar = (valor?: string | null) => {
+      const limpo = valor ? chaveTraducao(valor) : "";
+      if (limpo) conjunto.add(limpo);
+    };
+    for (const item of displayResults) {
+      juntar(item.objet);
+      juntar(item.nature);
+      juntar(item.procedure);
+      juntar(item.forme_prix);
+      juntar(item.lieu_execution_type);
+    }
+    for (const chave of ["nature", "procedure", "forme_prix", "lieu_execution_type"] as const) {
+      for (const valor of facets[chave] ?? []) juntar(String(valor.label ?? valor.value));
+    }
+    return [...conjunto];
+  }, [displayResults, facets]);
+
+  useEffect(() => {
+    if (!traduzir) return;
+    const emFalta = textosParaTraduzir.filter((texto) => !(texto in traducoesRef.current));
+    if (!emFalta.length) return;
+    let ativo = true;
+    setATraduzir(true);
+    setErroTraducao(null);
+    translateContratosFr(emFalta.slice(0, 150))
+      .then((resposta) => {
+        if (!ativo) return;
+        traducoesRef.current = { ...traducoesRef.current, ...(resposta.translations ?? {}) };
+        setTraducoes(traducoesRef.current);
+        setIaTraducao(resposta.ai ?? null);
+      })
+      .catch((err: unknown) => {
+        if (ativo) setErroTraducao(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (ativo) setATraduzir(false);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [traduzir, textosParaTraduzir]);
+
+  const alternarTraducao = () => {
+    setTraduzir((atual) => {
+      const proximo = !atual;
+      try {
+        window.localStorage.setItem(TRADUZIR_KEY, proximo ? "1" : "0");
+      } catch {
+        /* sem localStorage: a escolha vale só para esta sessão */
+      }
+      return proximo;
+    });
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 md:px-8 fade-in">
       <header className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -426,6 +529,16 @@ export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard }: Contr
             <RefreshCw size={15} /> Atualizar
           </button>
           <button
+            onClick={alternarTraducao}
+            title="Traduzir os textos franceses (objeto, natureza, procedimento) para português com o fornecedor de IA configurado"
+            className={`px-3 py-2 rounded-xl border transition text-sm flex items-center gap-2 ${
+              traduzir ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-200" : "border-border hover:bg-white/5"
+            }`}
+          >
+            {aTraduzir ? <Loader2 size={15} className="animate-spin" /> : <Languages size={15} />}
+            {traduzir ? "Traduzir (IA) · ligado" : "Traduzir (IA)"}
+          </button>
+          <button
             onClick={() => setImportOpen((v) => !v)}
             className="px-3 py-2 rounded-xl bg-secondary text-secondary-foreground hover:bg-accent transition text-sm flex items-center gap-2"
           >
@@ -439,6 +552,14 @@ export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard }: Contr
               Fechar
             </button>
           )}
+          {onSwitchMap && (
+            <button
+              onClick={onSwitchMap}
+              className="px-3 py-2 rounded-xl border border-border hover:bg-white/5 transition text-sm flex items-center gap-2"
+            >
+              <MapPin size={15} /> Mapa
+            </button>
+          )}
           {onSwitchDashboard && (
             <button
               onClick={onSwitchDashboard}
@@ -449,6 +570,21 @@ export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard }: Contr
           )}
         </div>
       </header>
+
+      {erroTraducao ? (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-xs text-amber-200">
+          <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+          <span className="flex-1">Tradução por IA indisponível: {erroTraducao}</span>
+        </div>
+      ) : traduzir ? (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-200/90">
+          {aTraduzir ? <Loader2 size={13} className="animate-spin" /> : <Languages size={13} />}
+          {aTraduzir
+            ? "A traduzir os textos franceses…"
+            : `Textos em português${iaTraducao?.provider_label ? ` (IA: ${iaTraducao.provider_label}${iaTraducao.model ? ` · ${iaTraducao.model}` : ""})` : ""}`}
+          <span className="text-emerald-200/60">· passe o rato para ver o texto original</span>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 isolation-auto">
         <div className="glass-card gradient-border rounded-2xl p-5 glow-blue relative z-0">
@@ -677,7 +813,7 @@ export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard }: Contr
                               className="w-full text-left text-sm px-2 py-1 rounded hover:bg-white/5 flex justify-between"
                             >
                               <span className="truncate" title={v.label ?? String(v.value)}>
-                                {v.label ?? String(v.value)}
+                                {tr(v.label ?? String(v.value))}
                               </span>
                               <span className="text-muted-foreground text-xs">{v.count.toLocaleString("pt-PT")}</span>
                             </button>
@@ -787,8 +923,8 @@ export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard }: Contr
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
                 >
-                  <option value="relevancia">Relevância</option>
-                  <option value="valor">Valor</option>
+                  <option value="relevance">Relevância</option>
+                  <option value="montant">Valor</option>
                   <option value="date_publication">Data publicação</option>
                   <option value="date_notification">Data notificação</option>
                 </select>
@@ -854,10 +990,10 @@ export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard }: Contr
                 <div key={docId} className="glass-card rounded-2xl p-4">
                   <div className="flex flex-col md:flex-row md:items-start gap-3">
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-sm leading-snug">{item.objet || "—"}</h3>
+                      <h3 className="font-medium text-sm leading-snug">{tr(item.objet) || "—"}</h3>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mt-2">
-                        <span>{item.nature || "—"}</span>
-                        <span>{item.procedure || "—"}</span>
+                        <span title={item.nature}>{tr(item.nature) || "—"}</span>
+                        <span title={item.procedure}>{tr(item.procedure) || "—"}</span>
                         <span>Publicação: {formatDate(item.date_publication)}</span>
                         <span>Notificação: {formatDate(item.date_notification)}</span>
                         <span className="font-semibold text-foreground">{formatMoney(item.montant ?? item.valor)}</span>
@@ -869,8 +1005,8 @@ export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard }: Contr
                           </span>
                         )}
                         {item.forme_prix && (
-                          <span className="px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground text-xs">
-                            {item.forme_prix}
+                          <span className="px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground text-xs" title={item.forme_prix}>
+                            {tr(item.forme_prix)}
                           </span>
                         )}
                       </div>
@@ -918,7 +1054,8 @@ export function ContractsFrSearchPage({ onSwitchView, onSwitchDashboard }: Contr
                         <div>
                           <span className="text-xs text-muted-foreground">Local execução</span>
                           <p>
-                            {item.lieu_execution_code || "—"} {item.lieu_execution_type ? `(${item.lieu_execution_type})` : ""}
+                            {item.lieu_execution_code || "—"}{" "}
+                            {item.lieu_execution_type ? `(${tr(item.lieu_execution_type)})` : ""}
                           </p>
                         </div>
                         <div>

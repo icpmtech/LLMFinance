@@ -31,6 +31,7 @@ import { ContractsSearchPage } from "./pages/ContractsSearchPage";
 import { ContractsEsSearchPage } from "./pages/ContractsEsSearchPage";
 import { ContractsEsDashboardPage } from "./pages/ContractsEsDashboardPage";
 import { ContractsFrSearchPage } from "./pages/ContractsFrSearchPage";
+import { ContractsFrMapPage } from "./pages/ContractsFrMapPage";
 import { ContractsFrDashboardPage } from "./pages/ContractsFrDashboardPage";
 import { CompanyDirectoryPage } from "./pages/CompanyDirectoryPage";
 import CompanyDetailPage from "./pages/CompanyDetailPage";
@@ -101,6 +102,7 @@ import OfficePage, {
   officeSectionForView,
   type OfficeSection,
 } from "./pages/OfficePage";
+import DocsPage from "./pages/DocsPage";
 import FinderPage from "./pages/FinderPage";
 import EmailPage from "./pages/EmailPage";
 import CmsPage from "./pages/CmsPage";
@@ -160,6 +162,7 @@ type AppView =
   | "contratos-es-dashboard"
   | "contratos-fr"
   | "contratos-fr-dashboard"
+  | "contratos-fr-mapa"
   | "companies-global"
   | "settings"
   | "cli"
@@ -255,6 +258,7 @@ function pathForView(
   if (view === "contratos-es-dashboard") return "/contratos-es/dashboard";
   if (view === "contratos-fr") return "/contratos-fr";
   if (view === "contratos-fr-dashboard") return "/contratos-fr/dashboard";
+  if (view === "contratos-fr-mapa") return "/contratos-fr/mapa";
   if (view === "companies-global") return "/empresas-global";
   if (view === "contracts-dashboard") return "/contracts/dashboard";
   if (view === "contracts-map") return "/contracts/map";
@@ -323,6 +327,9 @@ function pathForView(
   if (view === "search360-biblioteca") return "/search360/biblioteca";
   if (view === "office") return "/office";
   if (view === "office-dossies") return "/office/dossies";
+  // `/docs` é a documentação da API (Swagger): a página da plataforma vive em
+  // `/documentos`.
+  if (view === "docs") return "/documentos";
   if (view === "cms") {
     // A secção do CMS vive no caminho (`/cms/paginas`, `/cms/blog`, …) e é a
     // própria página que a gere; aqui mantém-se o caminho atual.
@@ -515,6 +522,7 @@ export default function App() {
     if (path === "/contratos-es/dashboard") return "contratos-es-dashboard";
     if (path === "/contratos-fr") return "contratos-fr";
     if (path === "/contratos-fr/dashboard") return "contratos-fr-dashboard";
+    if (path === "/contratos-fr/mapa") return "contratos-fr-mapa";
     if (path === "/contracts/dashboard") return "contracts-dashboard";
     if (path === "/contracts/map") return "contracts-map";
     if (path.startsWith("/gleif/regiao/")) {
@@ -557,6 +565,7 @@ export default function App() {
     if (path === "/visualizador") return "visualizador";
     if (path.startsWith("/visualizador/")) return "visualizador-dashboards";
     if (path === "/email" || path.startsWith("/email/")) return "email";
+    if (path === "/documentos" || path.startsWith("/documentos/")) return "docs";
     if (path === "/cms" || path.startsWith("/cms/")) return "cms";
     if (path === "/shop" || path.startsWith("/shop/")) return "shop";
     if (path === "/rss" || path.startsWith("/rss/")) return "rss";
@@ -628,6 +637,7 @@ export default function App() {
       else if (path === "/contratos-es/dashboard") next = "contratos-es-dashboard";
       else if (path === "/contratos-fr") next = "contratos-fr";
       else if (path === "/contratos-fr/dashboard") next = "contratos-fr-dashboard";
+      else if (path === "/contratos-fr/mapa") next = "contratos-fr-mapa";
       else if (path === "/contracts/dashboard") next = "contracts-dashboard";
       else if (path === "/contracts/map") next = "contracts-map";
       else if (path.startsWith("/gleif/regiao/")) {
@@ -661,6 +671,7 @@ export default function App() {
       else if (path === "/visualizador") next = "visualizador";
       else if (path.startsWith("/visualizador/")) next = "visualizador-dashboards";
       else if (path === "/email" || path.startsWith("/email/")) next = "email";
+      else if (path === "/documentos" || path.startsWith("/documentos/")) next = "docs";
       else if (path === "/cms" || path.startsWith("/cms/")) next = "cms";
       else if (path === "/shop" || path.startsWith("/shop/")) next = "shop";
       else if (path === "/rss" || path.startsWith("/rss/")) next = "rss";
@@ -1270,6 +1281,7 @@ export default function App() {
     if (target === "ticker-chart") return <RealtimeChartPage initialTicker={selectedTicker ?? undefined} />;
     if (target === "browser") return <BrowserPage onOpenInternal={handleSwitchView} onGlobalSearch={handleGlobalSearch} />;
     if (target === "email") return <EmailPage />;
+    if (target === "docs") return <DocsPage />;
     if (target === "cms") return <CmsPage />;
     if (target === "shop") return <ShopPage />;
     if (target === "rss") return <RssPage />;
@@ -1361,8 +1373,12 @@ export default function App() {
         <ContractsFrSearchPage
           onSwitchView={() => setViewAndHistory("dashboard")}
           onSwitchDashboard={() => setViewAndHistory("contratos-fr-dashboard")}
+          onSwitchMap={() => setViewAndHistory("contratos-fr-mapa")}
         />
       );
+    }
+    if (target === "contratos-fr-mapa") {
+      return <ContractsFrMapPage onOpenSearch={() => setViewAndHistory("contratos-fr")} />;
     }
     if (target === "contratos-fr-dashboard") {
       return (

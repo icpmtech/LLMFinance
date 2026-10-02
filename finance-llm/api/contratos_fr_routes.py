@@ -5,6 +5,8 @@ O índice Elasticsearch (`contratos_fr`) é alimentado por
 
 - `GET  /contracts-fr/status`             — volumetria indexada (total, anos, natures)
 - `GET  /contracts-fr/meta`               — ficheiros DECP disponíveis e JSONLs locais
+- `GET  /contracts-fr/map`                — contratos agregados por local de execução (mapa)
+- `POST /contracts-fr/translate`          — traduzir textos FR→PT com IA (cache persistente)
 - `POST /contracts-fr/search`             — pesquisa com filtros e facetas
 - `GET  /contracts-fr/autocomplete?q=`    — sugestões (acheteurs, adjudicatários, CPV)
 - `GET  /contracts-fr/entities?q=&kind=`  — entidades (acheteurs e titulaires)
@@ -25,6 +27,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from api.auth_routes import CurrentSession, require_session
+from api.contratos_fr_map import get_contratos_fr_map
+from api.contratos_fr_translate import cache_status as traducao_status, translate_texts
 from api.elasticsearch_client import (
     contratos_fr_autocomplete,
     contratos_fr_status,
@@ -173,6 +177,85 @@ def contratos_fr_analytics_endpoint(
     if res.get("error"):
         raise HTTPException(status_code=502, detail=res.get("error"))
     return ContractAnalyticsResponse(**res)
+
+
+@router.get("/map")
+def contratos_fr_map_endpoint(
+    q: Optional[str] = None,
+    ano: Optional[int] = None,
+    nature: Optional[str] = None,
+    procedure: Optional[str] = None,
+    acheteur: Optional[str] = None,
+    acheteur_id: Optional[str] = None,
+    adjudicatario: Optional[str] = None,
+    adjudicatario_id: Optional[str] = None,
+    cpv_code: Optional[str] = None,
+    lieu_execution_code: Optional[str] = None,
+    lieu_execution_type: Optional[str] = None,
+    min_value: Optional[float] = None,
+    max_value: Optional[float] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    date_field: Optional[str] = Query(None, description="date_notification | date_publication"),
+) -> Dict[str, Any]:
+    """Contratos de França agregados por local de execução, com posições no mapa.
+
+    Os filtros são os mesmos da pesquisa (`/contracts-fr/search`), para a vista de
+    mapa mostrar exatamente o mesmo conjunto. A agregação é exata: as parcelas
+    (departamento/região/país/sem posição) somam o total.
+    """
+    res = get_contratos_fr_map(
+        q=q,
+        ano=ano,
+        nature=nature,
+        procedure=procedure,
+        acheteur=acheteur,
+        acheteur_id=acheteur_id,
+        adjudicatario=adjudicatario,
+        adjudicatario_id=adjudicatario_id,
+        cpv_code=cpv_code,
+        lieu_execution_code=lieu_execution_code,
+        lieu_execution_type=lieu_execution_type,
+        min_value=min_value,
+        max_value=max_value,
+        start_date=start_date,
+        end_date=end_date,
+        date_field=date_field,
+    )
+    if res.get("error"):
+        raise HTTPException(status_code=502, detail=res.get("error"))
+    return res
+
+
+@router.post("/translate")
+def contratos_fr_translate_endpoint(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Traduz textos de contratos de França (FR→PT) com o fornecedor de IA da plataforma.
+
+    Corpo: `{"texts": ["..."], "provider": opcional, "model": opcional}`.
+    Devolve `{translations: {original: tradução}, requested, cached, translated, failed, ai}`.
+    O mesmo texto só é traduzido uma vez (cache persistente em
+    `data/contratos-franca/traducao-pt.json`).
+    """
+    textos = payload.get("texts") if isinstance(payload, dict) else None
+    if not isinstance(textos, list) or not textos:
+        raise HTTPException(status_code=422, detail="Envie `texts` com pelo menos um texto.")
+    limpos = [str(item) for item in textos if isinstance(item, (str, int, float)) and str(item).strip()]
+    if not limpos:
+        raise HTTPException(status_code=422, detail="Nenhum texto utilizável em `texts`.")
+    resultado = translate_texts(
+        limpos[:200],
+        provider=(payload.get("provider") or None),
+        model=(payload.get("model") or None),
+    )
+    if resultado.get("error"):
+        raise HTTPException(status_code=409, detail=resultado["error"])
+    return resultado
+
+
+@router.get("/translate/status")
+def contratos_fr_translate_status_endpoint() -> Dict[str, Any]:
+    """Estado da cache de tradução (nº de textos guardados e ficheiro)."""
+    return traducao_status()
 
 
 @router.post("/search")

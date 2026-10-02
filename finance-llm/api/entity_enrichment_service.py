@@ -74,7 +74,13 @@ def _local_ollama_model(timeout: int = 3) -> Optional[str]:
     return local[0] if local else None
 
 
-async def _ask_structured_fields(name: str, sources: List[Dict[str, Any]], nif: str, session: Any = None) -> Dict[str, Any]:
+async def _ask_structured_fields(
+    name: str,
+    sources: List[Dict[str, Any]],
+    nif: str,
+    session: Any = None,
+    page_texts: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     backend = available_backend(session)
     if backend.get("kind") != "cloud":
         # Sem fornecedor escolhido nas Configurações: tenta o Ollama local, se existir.
@@ -96,6 +102,8 @@ async def _ask_structured_fields(name: str, sources: List[Dict[str, Any]], nif: 
             "country": "Portugal",
             "status": "unknown",
             "description": "",
+            "cae": None,
+            "cae_description": None,
             "contacts": [],
             "addresses": [],
             "brands": [],
@@ -104,6 +112,9 @@ async def _ask_structured_fields(name: str, sources: List[Dict[str, Any]], nif: 
             "notes": [note],
         }
 
+    # O texto das páginas raspadas é a fonte mais rica (CAE, contactos, endereço);
+    # sem isto o modelo só via os snippets do motor de busca.
+    page_excerpt = "\n\n".join((page_texts or [])[:3])[:6000]
     prompt = f"""
     A partir das fontes abaixo, extrai um JSON válido com estes campos:
     - entity_name (string)
@@ -111,6 +122,8 @@ async def _ask_structured_fields(name: str, sources: List[Dict[str, Any]], nif: 
     - country (string)
     - status (string: active, unknown, inactive)
     - description (string)
+    - cae (string ou null: código CAE/CIRS, só o número, ex.: "21200")
+    - cae_description (string ou null: descrição da atividade económica do CAE)
     - contacts (lista de strings)
     - addresses (lista de strings)
     - brands (lista de strings)
@@ -119,11 +132,15 @@ async def _ask_structured_fields(name: str, sources: List[Dict[str, Any]], nif: 
     - notes (lista de strings)
 
     Atenção: não inventes dados. Se não houver informação explícita, usa [] ou null.
+    O CAE aparece em sites como Racius/eInforma sob «CAE» ou «Atividade principal».
 
     Empresa: {name}
     NIF: {nif}
     Fontes:
     {json.dumps(sources, ensure_ascii=False, indent=2)[:12000]}
+
+    Texto das páginas oficiais:
+    {page_excerpt}
     """
     raw = await ask_model(
         backend,
@@ -149,6 +166,8 @@ async def _ask_structured_fields(name: str, sources: List[Dict[str, Any]], nif: 
         "country": "Portugal",
         "status": "unknown",
         "description": "",
+        "cae": None,
+        "cae_description": None,
         "contacts": [],
         "addresses": [],
         "brands": [],
@@ -279,40 +298,328 @@ def _save_relations(nif: str, name: str, links: List[Dict[str, Any]]) -> int:
     return saved
 
 
+def _entity_report_blocks(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Secções do relatório: `{title, columns?, rows}` (o mesmo modelo dos outros relatórios)."""
+    blocks: List[Dict[str, Any]] = []
+
+    cae = str(payload.get("cae") or "").strip()
+    cae_desc = str(payload.get("cae_description") or "").strip()
+    identificacao = [
+        ["Estado", payload.get("status") or "N/D"],
+        ["CAE", (f"{cae} — {cae_desc}" if cae and cae_desc else cae or "N/D")],
+        ["País", payload.get("country") or "Portugal"],
+        ["Grupo / empresa-mãe", payload.get("parent_company") or "N/D"],
+    ]
+    if payload.get("contracts_total"):
+        identificacao.append(["Contratos indexados", f"{int(payload['contracts_total']):,}".replace(",", " ")])
+    if payload.get("contracts_total_value"):
+        identificacao.append(["Valor contratado", _fmt_money(payload.get("contracts_total_value"))])
+    if payload.get("enriched_at"):
+        identificacao.append(["Enriquecido em", str(payload.get("enriched_at"))])
+    blocks.append({"title": "Identificação", "rows": identificacao})
+
+    description = str(payload.get("description") or "").strip()
+    if description:
+        blocks.append({"title": "Atividade", "rows": [["Descrição", description]]})
+
+    cpv_rows = payload.get("cpv_rows") or []
+    if cpv_rows:
+        total = payload.get("contracts_total_value")
+        rows = []
+        for row in cpv_rows[:12]:
+            share = ""
+            value = row.get("total_value")
+            if isinstance(value, (int, float)) and isinstance(total, (int, float)) and total:
+                share = f" ({value / total * 100:.1f}%)"
+            rows.append([
+                str(row.get("key") or "—"),
+                str(row.get("description") or "—"),
+                _fmt_money(value) + share,
+                str(row.get("count") if row.get("count") is not None else ""),
+            ])
+        blocks.append({
+            "title": "CPV mais contratados",
+            "columns": ["Código", "Descrição", "Valor", "Nº"],
+            "rows": rows,
+        })
+
+    for title, key, columns in (
+        ("Endereços", "addresses", ["Endereço"]),
+        ("Contactos", "contacts", ["Contacto"]),
+        ("Marcas", "brands", ["Marca"]),
+    ):
+        values = payload.get(key) or []
+        if values:
+            blocks.append({"title": title, "columns": columns, "rows": [[str(v)] for v in values[:20]]})
+
+    related = payload.get("related_entities") or []
+    if related:
+        rows = []
+        for item in related[:20]:
+            if not isinstance(item, dict):
+                rows.append([str(item), "", ""])
+                continue
+            rows.append([
+                str(item.get("name") or "—"),
+                str(item.get("kind") or "—"),
+                str(item.get("evidence") or ""),
+            ])
+        blocks.append({
+            "title": "Entidades relacionadas (extração IA)",
+            "columns": ["Nome", "Tipo", "Evidência"],
+            "rows": rows,
+        })
+
+    relations = payload.get("relations") or []
+    if relations:
+        rows = []
+        for rel in relations[:25]:
+            rows.append([
+                "→" if rel.get("direction") == "out" else "←",
+                str(rel.get("other_name") or rel.get("other_ref") or "—"),
+                str(rel.get("kind") or "relacionada"),
+                " / ".join(str(e) for e in (rel.get("evidence") or []) if e),
+            ])
+        blocks.append({
+            "title": "Relações (ontologia)",
+            "columns": ["Sentido", "Entidade", "Tipo", "Evidência"],
+            "rows": rows,
+        })
+
+    sources = payload.get("sources") or []
+    if sources:
+        rows = [[str(s.get("title") or s.get("url") or "—"), str(s.get("url") or "")] for s in sources[:15]]
+        blocks.append({"title": "Fontes", "columns": ["Título", "URL"], "rows": rows})
+
+    return blocks
+
+
+def _fmt_money(value: Any) -> str:
+    if isinstance(value, (int, float)):
+        return f"{value:,.2f} €".replace(",", " ").replace(".", ",")
+    return "N/D"
+
+
 def _generate_pdf_report(nif: str, name: str, payload: Dict[str, Any]) -> Optional[str]:
+    """Relatório da entidade com o logótipo/dados do IQ OS no cabeçalho e rodapé em todas as páginas.
+
+    Usa o mesmo modelo de secções dos restantes relatórios da plataforma
+    (`contribuintes_report`), para que a marca seja consistente.
+    """
     try:
+        from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import mm
         from reportlab.pdfgen import canvas
+        from reportlab.platypus import (
+            Image as PdfImage,
+            KeepTogether,
+            Paragraph,
+            SimpleDocTemplate,
+            Spacer,
+            Table,
+            TableStyle,
+        )
     except Exception:
         return None
+
+    from api.contribuintes_report import BRAND, BRAND_TAGLINE, logo_path
 
     out_dir = Path(__file__).resolve().parents[1] / "data" / "reports"
     out_dir.mkdir(parents=True, exist_ok=True)
     file_name = f"entity_{nif}_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}.pdf"
     path = out_dir / file_name
 
-    c = canvas.Canvas(str(path), pagesize=A4)
-    c.setTitle(f"Relatório da entidade {name}")
-    c.setFont("Helvetica-Bold", 18)
-    c.drawString(50, 800, f"Entidade: {name}")
-    c.setFont("Helvetica", 11)
-    c.drawString(50, 780, f"NIF: {nif}")
-    y = 750
-    facts = payload.get("summary") or payload.get("facts") or {}
-    lines = [
-        f"País: {facts.get('country') or 'N/D'}",
-        f"Status: {facts.get('status') or 'N/D'}",
-        f"Parent company: {facts.get('parent_company') or 'N/D'}",
-        f"Fontes: {facts.get('source_count') or 0}",
-    ]
-    for line in lines:
-        if y < 80:
-            c.showPage()
-            y = 780
-        c.drawString(50, y, line[:120])
-        y -= 18
-    c.save()
+    brand_color = colors.HexColor("#0F766E")
+    dark = colors.HexColor("#0F172A")
+    muted = colors.HexColor("#64748B")
+    zebra = colors.HexColor("#F1F5F9")
+
+    base = getSampleStyleSheet()
+    title_style = ParagraphStyle("ent-title", parent=base["Title"], fontSize=16, leading=19, textColor=dark, alignment=0)
+    brand_style = ParagraphStyle("ent-brand", parent=base["Normal"], fontSize=10, leading=12, textColor=brand_color, fontName="Helvetica-Bold")
+    sub_style = ParagraphStyle("ent-sub", parent=base["Normal"], fontSize=9, leading=12, textColor=muted)
+    section_style = ParagraphStyle("ent-section", parent=base["Normal"], fontSize=11, leading=14, textColor=dark, fontName="Helvetica-Bold", spaceBefore=8, spaceAfter=4)
+    cell_style = ParagraphStyle("ent-cell", parent=base["Normal"], fontSize=8, leading=10, textColor=dark)
+    cell_muted = ParagraphStyle("ent-cell-muted", parent=cell_style, textColor=muted, fontName="Helvetica-Bold")
+
+    def paragraph(value: Any, style: Any = cell_style) -> Any:
+        text = str(value if value is not None else "")
+        escape = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        return Paragraph(escape or "—", style)
+
+    # --- Cabeçalho da primeira página: logótipo + dados da plataforma ---
+    story: List[Any] = []
+    logo = logo_path()
+    if logo:
+        try:
+            story.append(PdfImage(str(logo), width=13 * mm, height=13 * mm))
+            story.append(Spacer(1, 4))
+        except Exception as exc:  # pragma: no cover - depende do Pillow
+            logger.debug("Logótipo não embutido no relatório da entidade: %s", exc)
+    story.append(Paragraph(f"{BRAND} · {BRAND_TAGLINE}", brand_style))
+    story.append(Spacer(1, 2))
+    story.append(Paragraph("Relatório da entidade", title_style))
+    story.append(Paragraph(name, ParagraphStyle("ent-name", parent=base["Normal"], fontSize=13, leading=16, textColor=dark, fontName="Helvetica-Bold")))
+    story.append(Paragraph(f"NIF {nif}", sub_style))
+    generated = datetime.now(timezone.utc).strftime("%d/%m/%Y às %H:%M UTC")
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(f"Gerado pelo {BRAND} em {generated}", sub_style))
+    story.append(Spacer(1, 10))
+
+    table_style = TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), brand_color),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 8.5),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#CBD5E1")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, zebra]),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ])
+
+    for block in _entity_report_blocks(payload):
+        rows = block.get("rows") or []
+        if not rows:
+            continue
+        story.append(Paragraph(str(block["title"]), section_style))
+        columns = block.get("columns")
+        if columns:
+            data = [[paragraph(col, ParagraphStyle("h", parent=cell_style, textColor=colors.white, fontName="Helvetica-Bold")) for col in columns]]
+            data.extend([[paragraph(cell) for cell in row] for row in rows])
+            table = Table(data, colWidths=[None] * len(columns), repeatRows=1)
+        else:
+            data = [[paragraph("Campo", cell_muted), paragraph("Valor", cell_muted)]]
+            data.extend([[paragraph(label, cell_muted), paragraph(value)] for label, value in (r[:2] for r in rows)])
+            table = Table(data, colWidths=[45 * mm, None], repeatRows=1)
+        table.setStyle(table_style)
+        story.append(KeepTogether(table) if len(data) <= 14 else table)
+        story.append(Spacer(1, 8))
+
+    story.append(Paragraph(f"Fim do relatório — {BRAND} · {BRAND_TAGLINE}.", sub_style))
+
+    class _NumberedCanvas(canvas.Canvas):
+        """Marca do IQ OS em todas as páginas (cabeçalho de continuidade + rodapé)."""
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self._states: List[Dict[str, Any]] = []
+
+        def showPage(self) -> None:  # noqa: N802 (API do reportlab)
+            self._states.append(dict(self.__dict__))
+            self._startPage()
+
+        def save(self) -> None:
+            total = len(self._states)
+            for state in self._states:
+                self.__dict__.update(state)
+                self._marca(total)
+                super().showPage()
+            super().save()
+
+        def _logo(self, x: float, y: float, lado: float) -> float:
+            """Desenha o logótipo (se existir) e devolve o x a seguir a ele."""
+            if not logo:
+                return x
+            try:
+                self.drawImage(str(logo), x, y, width=lado, height=lado, mask="auto")
+                return x + lado + 3
+            except Exception:  # pragma: no cover - depende do Pillow
+                return x
+
+        def _marca(self, total: int) -> None:
+            """Logótipo + dados da plataforma no cabeçalho de cada página e no rodapé."""
+            self.saveState()
+            largura, altura = A4
+            numero = self.getPageNumber()
+            linha = colors.HexColor("#E2E8F0")
+
+            # A 1.ª página leva o cabeçalho completo na própria story; nas seguintes
+            # repete-se uma versão compacta, para o leitor não perder a identidade.
+            if numero > 1:
+                x = self._logo(18, altura - 40, 9 * mm)
+                self.setFont("Helvetica-Bold", 8.5)
+                self.setFillColor(brand_color)
+                self.drawString(x, altura - 32, f"{BRAND} · {BRAND_TAGLINE}")
+                self.setFont("Helvetica", 7.5)
+                self.setFillColor(muted)
+                self.drawString(x, altura - 41, f"Relatório da entidade {name} · NIF {nif}")
+                self.setStrokeColor(linha)
+                self.setLineWidth(0.5)
+                self.line(18, altura - 48, largura - 18, altura - 48)
+
+            # Rodapé (todas as páginas): marca + entidade + numeração.
+            self.setStrokeColor(linha)
+            self.setLineWidth(0.5)
+            self.line(18, 32, largura - 18, 32)
+            x_rodape = self._logo(18, 14, 7 * mm)
+            self.setFont("Helvetica", 7.5)
+            self.setFillColor(muted)
+            self.drawString(x_rodape, 21, f"{BRAND} — {BRAND_TAGLINE}")
+            self.drawCentredString(largura / 2, 21, f"Entidade {name} · NIF {nif}")
+            self.drawRightString(largura - 18, 21, f"Página {numero} de {total}")
+            self.restoreState()
+
+    document = SimpleDocTemplate(
+        str(path),
+        pagesize=A4,
+        leftMargin=18,
+        rightMargin=18,
+        topMargin=54,
+        bottomMargin=46,
+        title=f"Relatório da entidade {name} · {BRAND}",
+        author=BRAND,
+        subject=f"{BRAND} — {BRAND_TAGLINE}",
+    )
+    document.build(story, canvasmaker=_NumberedCanvas)
     return str(path)
+
+
+def build_entity_report_pdf(nif: str) -> Optional[str]:
+    """Gera o PDF da entidade com o que está guardado (enriquecimento + CPV dos contratos).
+
+    É este o relatório que a ficha descarrega: junta o enriquecimento web, a ontologia
+    e os CPV mais contratados, para o dossiê não sair pela metade.
+    """
+    from api.elasticsearch_client import (
+        ENTITIES_INDEX,
+        ensure_indices,
+        get_company_analytics,
+        get_entity_relations,
+    )
+
+    client = get_es_client(request_timeout=30)
+    payload: Dict[str, Any] = {}
+    name = nif
+    if client is not None:
+        try:
+            ensure_indices(client)
+            doc = client.get(index=ENTITIES_INDEX, id=f"{ENTITIES_INDEX}:{nif}")["_source"]
+            payload = dict(doc.get("enrichment_web") or {})
+            name = str(doc.get("name") or payload.get("entity_name") or nif)
+        except Exception as exc:
+            logger.warning("Relatório de %s: sem enriquecimento guardado (%s)", nif, exc)
+
+    try:
+        analytics = get_company_analytics(nif=nif)
+        cpv_rows = analytics.get("by_cpv") or []
+        if cpv_rows:
+            payload["cpv_rows"] = cpv_rows
+        if analytics.get("total_contracts"):
+            payload["contracts_total"] = analytics.get("total_contracts")
+            payload["contracts_total_value"] = analytics.get("total_value")
+    except Exception as exc:
+        logger.warning("Relatório de %s: falha ao ler CPV (%s)", nif, exc)
+
+    relations = get_entity_relations(nif)
+    if relations.get("items"):
+        payload["relations"] = relations["items"]
+
+    return _generate_pdf_report(nif, name, payload)
 
 
 async def enrich_entity(nif: str, payload: Optional[Dict[str, Any]] = None, session: Any = None) -> Dict[str, Any]:
@@ -364,12 +671,14 @@ async def enrich_entity(nif: str, payload: Optional[Dict[str, Any]] = None, sess
             except Exception as exc:
                 logger.warning("Falha ao raspar %s: %s", url, exc)
 
-    facts = await _ask_structured_fields(base_name or nif, search_results, nif, session=session)
+    facts = await _ask_structured_fields(base_name or nif, search_results, nif, session=session, page_texts=page_texts)
     facts.setdefault("entity_name", base_name or nif)
     facts.setdefault("nif", nif)
     facts.setdefault("country", "Portugal")
     facts.setdefault("status", "unknown")
     facts.setdefault("description", "")
+    facts.setdefault("cae", None)
+    facts.setdefault("cae_description", None)
     facts.setdefault("contacts", [])
     facts.setdefault("addresses", [])
     facts.setdefault("brands", [])
@@ -383,6 +692,8 @@ async def enrich_entity(nif: str, payload: Optional[Dict[str, Any]] = None, sess
         "country": facts.get("country") or "Portugal",
         "status": facts.get("status") or "unknown",
         "description": facts.get("description") or "",
+        "cae": facts.get("cae") or None,
+        "cae_description": facts.get("cae_description") or None,
         "contacts": facts.get("contacts") or [],
         "addresses": facts.get("addresses") or [],
         "brands": facts.get("brands") or [],
@@ -400,6 +711,8 @@ async def enrich_entity(nif: str, payload: Optional[Dict[str, Any]] = None, sess
     summary.update({
         "country": combined.get("country"),
         "status": combined.get("status"),
+        "cae": combined.get("cae"),
+        "cae_description": combined.get("cae_description"),
         "parent_company": combined.get("parent_company"),
         "contact_count": len(combined.get("contacts") or []),
         "address_count": len(combined.get("addresses") or []),
@@ -458,6 +771,8 @@ async def enrich_entity(nif: str, payload: Optional[Dict[str, Any]] = None, sess
         "country": combined.get("country"),
         "status": combined.get("status"),
         "description": combined.get("description"),
+        "cae": combined.get("cae"),
+        "cae_description": combined.get("cae_description"),
         "contacts_count": len(combined.get("contacts") or []),
         "addresses_count": len(combined.get("addresses") or []),
         "brands_count": len(combined.get("brands") or []),

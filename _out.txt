@@ -1,0 +1,5 @@
+﻿  -> compose.yml (1469 bytes)
+  -> edge.env.example (269 bytes)
+  -> offline.html (1634 bytes)
+  -> templates/default.conf.template (2089 bytes)
+a enviar 14 operacoes por ssh para root@45.147.251.188 ...

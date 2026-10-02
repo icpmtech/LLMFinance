@@ -1019,6 +1019,8 @@ export interface CompanySummary {
   total_value: number;
   adjudicante?: CompanyRoleSummary;
   adjudicatario?: CompanyRoleSummary;
+  cae_principal?: string | null;
+  caes_secundarios?: string[] | null;
 }
 
 export interface CompanyDetail extends CompanySummary {
@@ -1395,6 +1397,10 @@ export interface CompanySearchRequest {
   min_value?: number;
   max_value?: number;
   year?: number;
+  /** Um ou mais códigos CAE (separados por vírgula ou array). */
+  cae?: string | string[];
+  /** CPV dos contratos (código completo ou parcial, ex.: `33600000-6`). */
+  cpv?: string;
   size?: number;
   from?: number;
 }
@@ -1409,6 +1415,8 @@ export interface CompanySearchResponse {
   unique_adjudicantes?: number;
   /** NIF distintos de adjudicatários que correspondem aos filtros. */
   unique_adjudicatarios?: number;
+  /** Avisos do filtro (ex.: CPV sem entidades, lista do CAE limitada). */
+  notes?: string[];
   error?: string;
 }
 
@@ -1780,6 +1788,8 @@ export interface EntityItem {
   as_adjudicatario_count: number;
   total_value: number;
   as_adjudicante_value: number;
+  cae_principal?: string;
+  caes_secundarios?: string[];
   source?: string;
   ingested_at?: string;
   doc_id?: string;
@@ -1839,6 +1849,10 @@ export interface EntitySearchRequest {
   min_value?: number;
   max_value?: number;
   role?: "all" | "adjudicante" | "adjudicatario";
+  /** Um ou mais códigos CAE (separados por vírgula ou array). */
+  cae?: string | string[];
+  /** CPV dos contratos (código completo ou parcial, ex.: `33600000-6`). */
+  cpv?: string;
   sort_by?: EntitySortField;
   sort_order?: "asc" | "desc";
   size?: number;
@@ -1851,6 +1865,8 @@ export interface EntitySearchResponse {
   items: EntityItem[];
   from: number;
   size: number;
+  /** Avisos do filtro (ex.: o CPV limitou a lista de entidades consideradas). */
+  notes?: string[];
   error?: string;
 }
 

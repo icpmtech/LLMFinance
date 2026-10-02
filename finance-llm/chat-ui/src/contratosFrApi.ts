@@ -15,6 +15,9 @@ export type ContratosFrEntry = {
   acheteur?: string;
   adjudicatario?: string;
   q?: string;
+  /** Filtro de local de execução (usado pela vista de mapa para abrir a lista). */
+  lieu_execution_code?: string;
+  lieu_execution_type?: string;
 };
 
 /** Chave de `localStorage` onde fica o pedido pendente. */
@@ -255,6 +258,95 @@ export async function searchContratosFr(req: ContratoFrSearchRequest): Promise<C
     body: JSON.stringify(req),
   });
   return readJson<ContratoFrSearchResponse>(res, "Erro na pesquisa de contratos de França");
+}
+
+/* --------------------------------------------------------------- mapa (OSM) */
+
+export type ContratoFrMapRegion = {
+  code: string;
+  label: string;
+  /** `departamento` | `regiao` | `pais` (ausente em entradas sem posição). */
+  level?: string;
+  /** Como a posição foi obtida: `centroide`, `prefeitura`, `grupo-postal`, … */
+  precision?: string;
+  lat?: number;
+  lon?: number;
+  offshore?: boolean;
+  contracts: number;
+  value: number;
+  kind?: string;
+};
+
+export type ContratoFrMapResponse = {
+  total: number;
+  /** Soma de `montant` (com queda para `montant_estime`) do conjunto filtrado. */
+  value: number;
+  value_docs: number;
+  /** Contratos com valor indicativo do DECP (≥ 1 000 G€) que dominam a soma. */
+  value_outliers: { contracts: number; value: number };
+  regions: ContratoFrMapRegion[];
+  offshore: ContratoFrMapRegion[];
+  countries: ContratoFrMapRegion[];
+  not_plotted: ContratoFrMapRegion[];
+  levels: Record<string, number>;
+  warnings: string[];
+  error?: string;
+};
+
+export type ContratoFrMapFilters = {
+  q?: string;
+  ano?: number;
+  nature?: string;
+  procedure?: string;
+  acheteur?: string;
+  adjudicatario?: string;
+  cpv_code?: string;
+  lieu_execution_code?: string;
+  lieu_execution_type?: string;
+  min_value?: number;
+  max_value?: number;
+  start_date?: string;
+  end_date?: string;
+  date_field?: string;
+};
+
+/** Contratos agregados por local de execução (departamento/região), para o mapa. */
+export async function getContratosFrMap(filters: ContratoFrMapFilters = {}): Promise<ContratoFrMapResponse> {
+  const params = new URLSearchParams();
+  for (const [chave, valor] of Object.entries(filters)) {
+    if (valor === undefined || valor === null || valor === "") continue;
+    params.set(chave, String(valor));
+  }
+  const query = params.toString();
+  const res = await fetch(`${API_BASE}/contracts-fr/map${query ? `?${query}` : ""}`);
+  return readJson<ContratoFrMapResponse>(res, "Erro no mapa dos contratos de França");
+}
+
+/* ------------------------------------------------------- tradução (IA, FR→PT) */
+
+export type ContratoFrTranslationResponse = {
+  /** Mapa texto original → tradução (só o que foi traduzido com sucesso). */
+  translations: Record<string, string>;
+  requested: number;
+  cached: number;
+  translated: number;
+  failed: number;
+  ai?: { provider?: string; provider_label?: string; model?: string };
+  status?: { cached: number; path: string };
+  error?: string;
+};
+
+/**
+ * Traduz textos de contratos de França (FR→PT) com o fornecedor de IA da
+ * plataforma. O mesmo texto só é traduzido uma vez (cache no servidor).
+ */
+export async function translateContratosFr(texts: string[], options: { provider?: string; model?: string } = {}): Promise<ContratoFrTranslationResponse> {
+  const res = await fetch(`${API_BASE}/contracts-fr/translate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ texts, ...options }),
+  });
+  return readJson<ContratoFrTranslationResponse>(res, "Erro na tradução dos contratos de França");
 }
 
 /** Sugestões de acheteurs, adjudicatários e CPV. */

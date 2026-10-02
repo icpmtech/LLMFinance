@@ -1,0 +1,18 @@
+# O contexto deste build (`docker/osif/`) só precisa do frontend do OSIF.
+# Sem isto, o clone inteiro (backend, screenshots, banners, docs, .git) iria
+# para o contexto de build.
+src/.git
+src/.agent
+src/backend
+src/banners
+src/commands
+src/db
+src/docs
+src/modules
+src/screenshots
+src/static
+src/templates
+src/web
+**/node_modules
+**/dist
+**/__pycache__

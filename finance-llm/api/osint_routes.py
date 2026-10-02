@@ -37,7 +37,9 @@ from api.models import (
     OsintStats,
 )
 from api.osint_service import (
+    CATEGORY_PRESETS,
     DEFAULT_CATEGORY,
+    category_platform_counts,
     delete_saved_scan,
     get_saved_scan,
     save_scan,
@@ -57,10 +59,10 @@ Session = Annotated[CurrentSession, Depends(require_session)]
 
 @router.get("/categories")
 async def list_osint_categories(session: Session) -> Dict[str, Any]:
-    """Categorias de username/email do user-scanner e qual é a usada por defeito.
+    """Categorias de username/email do user-scanner, com contagens por categoria.
 
-    O UI usa `defaults` para rotular/ordenar a escolha, para não mostrar uma
-    categoria que não existe (era o caso de `global` no tipo email).
+    Inclui `platforms` (quantas plataformas cada categoria verifica), `defaults`
+    (categoria recomendada por tipo) e presets prontos a usar no UI.
     """
     username_categories = list(us_engine.load_categories(is_email=False).keys())
     email_categories = list(us_engine.load_categories(is_email=True).keys())
@@ -74,7 +76,15 @@ async def list_osint_categories(session: Session) -> Dict[str, Any]:
     return {
         "username": username_categories,
         "email": email_categories,
+        # `nif` não usa o user-scanner: o alvo é validado e cruzado com os
+        # dados internos (contribuintes, contratos, societário, CIRE…).
+        "nif": [],
         "defaults": defaults,
+        "platforms": {
+            "username": category_platform_counts(is_email=False),
+            "email": category_platform_counts(is_email=True),
+        },
+        "presets": CATEGORY_PRESETS,
     }
 
 
@@ -86,6 +96,7 @@ async def osint_scan(payload: OsintScanRequest, session: Session) -> OsintScanRe
             target=payload.target,
             kind=payload.kind,
             category=payload.category,
+            categories=payload.categories,
             full_scan=payload.full_scan,
         )
     except ValueError as exc:
@@ -107,6 +118,8 @@ async def osint_scan(payload: OsintScanRequest, session: Session) -> OsintScanRe
         errors=result["errors"],
         duration_s=result["duration_s"],
         category=result["category"],
+        categories=result.get("categories", []),
+        platforms_per_category=result.get("platforms_per_category", {}),
         hits=[OsintProfileHit(**h) for h in result["hits"]],
         pivots=[OsintPivot(**p) for p in result.get("pivots", [])],
         stats=OsintStats(**result.get("stats", {})),

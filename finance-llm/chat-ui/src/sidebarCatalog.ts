@@ -79,7 +79,7 @@ export const APP_MODULES: AppModule[] = [
     id: "contratos-fr",
     label: "Contratos de França",
     hint: "Données Essentielles de la Commande Publique (DECP)",
-    ids: ["contratos-fr", "contratos-fr-dashboard"],
+    ids: ["contratos-fr", "contratos-fr-dashboard", "contratos-fr-mapa"],
   },
   {
     id: "empresas",
@@ -124,8 +124,8 @@ export const APP_MODULES: AppModule[] = [
   {
     id: "conhecimento",
     label: "Conhecimento e conteúdos",
-    hint: "Office, email, visualizador, sentimento e ontologia",
-    ids: ["office", "email", "visualizador", "sentimento", "ontology"],
+    hint: "Office, documentos, email, visualizador, sentimento e ontologia",
+    ids: ["office", "docs", "email", "visualizador", "sentimento", "ontology"],
   },
   {
     id: "noticias",

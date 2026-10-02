@@ -108,6 +108,7 @@ export type AppView =
   | "jarvis"
   | "office"
   | "office-dossies"
+  | "docs"
   | "cms"
   | "rss"
   | "noticias"

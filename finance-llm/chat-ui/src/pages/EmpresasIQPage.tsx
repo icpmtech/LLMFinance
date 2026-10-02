@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   BarChart3,
+  Briefcase,
   Building2,
   CandlestickChart,
   Circle,
@@ -44,6 +45,7 @@ import {
   Shuffle,
   Sparkles,
   Square,
+  Tag,
   TrendingUp,
   Users,
   X,
@@ -92,6 +94,7 @@ import {
   analyzeContract,
   getContractDocument,
   downloadContractReport,
+  downloadEntityReport,
   enrichEntity,
   getEntityRelations,
 } from "../api";
@@ -112,6 +115,7 @@ import { useSidebarHidden, useSidebarWidth, useWindowMode, getWindowMode } from 
 import { openWindow } from "../windows";
 import { useAuth } from "../auth";
 import { Avatar } from "./SettingsPage";
+import { CaeMultiSelect } from "../components/CaeMultiSelect";
 import { companiesIn, useWorkspace, type WorkspaceEntry } from "../workspace";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -3424,6 +3428,8 @@ function EntitiesSection({
   onEntity: (_nif: string) => void;
 }) {
   const [q, setQ] = useState("");
+  const [cae, setCae] = useState<string[]>([]);
+  const [cpv, setCpv] = useState("");
   const [role, setRole] = useState<"all" | "adjudicante" | "adjudicatario">("all");
   const [data, setData] = useState<CompanySearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -3435,6 +3441,8 @@ function EntitiesSection({
       const res = await searchCompanies({
         q: q.trim() || undefined,
         role,
+        cae: cae.length ? cae : undefined,
+        cpv: cpv.trim() || undefined,
         size: 15,
         from: offset,
       });
@@ -3448,10 +3456,11 @@ function EntitiesSection({
     load(0);
     setFrom(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, role]);
+  }, [q, role, cae, cpv]);
 
   const companies = data?.items ?? [];
   const total = data?.total ?? 0;
+  const notes = data?.notes ?? [];
 
   return (
     <div className="space-y-5">
@@ -3464,8 +3473,16 @@ function EntitiesSection({
         </div>
       </div>
 
+      {notes.length > 0 && (
+        <div className="rounded-xl border border-teal-400/25 bg-teal-400/10 px-4 py-3 text-sm text-teal-100">
+          {notes.map((nota) => (
+            <div key={nota}>{nota}</div>
+          ))}
+        </div>
+      )}
+
       <Card>
-        <div className="grid gap-4 md:grid-cols-3 items-end">
+        <div className="grid gap-4 md:grid-cols-5 items-end">
           <div className="relative">
             <Search size={14} className="absolute left-3 top-2.5 text-muted-foreground" />
             <input
@@ -3473,6 +3490,24 @@ function EntitiesSection({
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && load(0)}
               placeholder="Nome, NIF..."
+              className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm outline-none focus:border-teal-400/50 focus:ring-1 focus:ring-teal-400/30"
+            />
+          </div>
+          <div className="relative">
+            <CaeMultiSelect
+              selected={cae}
+              onChange={setCae}
+              placeholder="CAE (ex: 46460)"
+              className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm outline-none focus:border-teal-400/50 focus:ring-1 focus:ring-teal-400/30"
+            />
+          </div>
+          <div className="relative">
+            <Tag size={14} className="absolute left-3 top-2.5 text-muted-foreground" />
+            <input
+              value={cpv}
+              onChange={(e) => setCpv(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && load(0)}
+              placeholder="CPV (ex: 33600000-6)"
               className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm outline-none focus:border-teal-400/50 focus:ring-1 focus:ring-teal-400/30"
             />
           </div>
@@ -3512,7 +3547,10 @@ function EntitiesSection({
                 </Badge>
               </div>
               <p className="mt-4 font-semibold line-clamp-2">{company.name}</p>
-              <p className="text-xs text-muted-foreground mt-1">NIF {company.nif || "—"}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                NIF {company.nif || "—"}
+                {company.cae_principal ? ` · CAE ${company.cae_principal}` : ""}
+              </p>
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <p className="text-xs text-muted-foreground">Contratos</p>
@@ -5864,6 +5902,8 @@ export function EntityEnrichmentCard({
   const description = String(data.description ?? "").trim();
   const status = String(data.status ?? "").trim();
   const country = String(data.country ?? "").trim();
+  const cae = String(data.cae ?? "").trim();
+  const caeDescription = String(data.cae_description ?? "").trim();
   const parent = String(data.parent_company ?? "").trim();
   const addresses = asTextList(data.addresses);
   const contacts = asTextList(data.contacts);
@@ -5879,6 +5919,7 @@ export function EntityEnrichmentCard({
   const chips = [
     status && status !== "unknown" ? { label: `Estado: ${status}`, icon: Info } : null,
     country ? { label: country, icon: MapPin } : null,
+    cae ? { label: `CAE ${cae}${caeDescription ? ` — ${caeDescription}` : ""}`, icon: Briefcase } : null,
     parent ? { label: `Grupo: ${parent}`, icon: Building2 } : null,
   ].filter(Boolean) as { label: string; icon: React.ElementType }[];
 
@@ -6208,6 +6249,7 @@ export function EntityDetailPanel({
   const [enrichMessage, setEnrichMessage] = useState<string | null>(null);
   const [enrichError, setEnrichError] = useState<string | null>(null);
   const [relations, setRelations] = useState<EntityRelationsResponse | null>(null);
+  const [aGerarRelatorio, setAGerarRelatorio] = useState(false);
   const { recordVisit } = useWorkspace();
 
   useEffect(() => {
@@ -6598,6 +6640,28 @@ export function EntityDetailPanel({
     }
   }, [nif]);
 
+  /** Descarrega o relatório PDF da entidade (enriquecimento + CPV + relações). */
+  const handleDownloadReport = useCallback(async () => {
+    setAGerarRelatorio(true);
+    setEnrichError(null);
+    try {
+      const blob = await downloadEntityReport(nif);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `entidade_${nif}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setEnrichMessage("Relatório PDF gerado e descarregado.");
+    } catch (err) {
+      setEnrichError(err instanceof Error ? err.message : "Erro ao gerar o relatório PDF");
+    } finally {
+      setAGerarRelatorio(false);
+    }
+  }, [nif]);
+
   if (loading) return <Loading />;
   if (error || !company) {
     return (
@@ -6613,6 +6677,8 @@ export function EntityDetailPanel({
   const allContracts = contracts?.items ?? [];
   const yearly = analytics?.by_year ?? [];
   const yearlyMax = Math.max(...yearly.map((r) => r.total_value || 0), 1);
+  const cpvRows = [...(analytics?.by_cpv ?? [])].sort((a, b) => (b.total_value || 0) - (a.total_value || 0));
+  const cpvMax = Math.max(...cpvRows.map((r) => r.total_value || 0), 1);
 
   // O índice só recebe a entidade no fim da recolha; até lá, a tabela mostra o
   // que já está gravado no JSON (a recolha grava cada página assim que a lê).
@@ -6641,6 +6707,15 @@ export function EntityDetailPanel({
           >
             {enriching ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
             Enriquecer
+          </button>
+          <button
+            onClick={handleDownloadReport}
+            disabled={aGerarRelatorio}
+            title="Descarregar o relatório PDF da entidade"
+            className="px-3 py-1.5 rounded-full glass-card text-sm text-teal-300 hover:text-teal-200 transition flex items-center gap-2 disabled:opacity-60"
+          >
+            {aGerarRelatorio ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            Relatório PDF
           </button>
           <FavoriteButton
             kind="entity"
@@ -6764,6 +6839,37 @@ export function EntityDetailPanel({
                 <MiniBar value={row.total_value || 0} max={yearlyMax} />
               </div>
             ))}
+          </div>
+        </Card>
+
+        <Card>
+          <div className="mb-4">
+            <h3 className="font-semibold">Atividade (CPV)</h3>
+            <p className="text-xs text-muted-foreground">
+              {cpvRows.length > 0
+                ? `${cpvRows.length} categorias nos contratos desta empresa`
+                : "Sem CPV nos contratos indexados"}
+            </p>
+          </div>
+          <div className="space-y-3">
+            {cpvRows.slice(0, 8).map((row) => {
+              const share = analytics?.total_value ? ((row.total_value || 0) / analytics.total_value) * 100 : null;
+              return (
+                <div key={row.key}>
+                  <div className="flex justify-between gap-3 text-sm mb-1">
+                    <span className="min-w-0 truncate" title={row.description || row.key}>
+                      <span className="text-teal-300">{row.key}</span>
+                      {row.description ? <span className="text-muted-foreground"> · {row.description}</span> : null}
+                    </span>
+                    <span className="shrink-0 text-muted-foreground">
+                      {money(row.total_value)}
+                      {share != null ? <span className="ml-2 text-xs">{share.toFixed(1)}%</span> : null}
+                    </span>
+                  </div>
+                  <MiniBar value={row.total_value || 0} max={cpvMax} />
+                </div>
+              );
+            })}
           </div>
         </Card>
       </div>

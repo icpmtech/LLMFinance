@@ -6,7 +6,7 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any, List, Optional
+from typing import Annotated, Any, List, Optional, Union
 
 
 def _carregar_env_do_projeto() -> None:
@@ -307,6 +307,10 @@ from api.jarvis_routes import router as jarvis_router
 from api.hermes_agent_routes import router as hermes_agent_router
 # OSINT: pesquisa de usernames/emails com user-scanner, guardado em finance_osint.
 from api.osint_routes import router as osint_router
+# Documentos de referência (pasta `data/docs`): listagem, ficheiros e a versão
+# markdown (ex.: o CAE-Rev.4 convertido do PDF).
+from api.docs_routes import router as docs_router
+from api.cae_routes import router as cae_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -617,6 +621,10 @@ app.include_router(jarvis_router)
 app.include_router(hermes_agent_router)
 # OSINT: pesquisa de usernames/emails, scans guardados e grafo.
 app.include_router(osint_router)
+# Documentos: ficheiros de `data/docs` e a respetiva versão markdown.
+app.include_router(docs_router)
+# Catálogo CAE: listagem e autocomplete.
+app.include_router(cae_router)
 
 
 @app.get("/osint")
@@ -737,6 +745,8 @@ def companies_search(req: CompanySearchRequest):
         min_value=req.min_value,
         max_value=req.max_value,
         year=req.year,
+        cpv=req.cpv,
+        cae=req.cae,
         size=req.size,
         from_=req.from_,
     )
@@ -750,6 +760,7 @@ def companies_search(req: CompanySearchRequest):
         size=req.size,
         unique_adjudicantes=res.get("unique_adjudicantes", 0),
         unique_adjudicatarios=res.get("unique_adjudicatarios", 0),
+        notes=res.get("notes", []),
     )
 
 
@@ -1273,6 +1284,8 @@ def entities_search_get(
     min_value: Optional[float] = Query(None, ge=0),
     max_value: Optional[float] = Query(None, ge=0),
     role: Optional[str] = Query("all", pattern="^(all|adjudicante|adjudicatario)$"),
+    cae: Optional[str | list[str]] = Query(None, description="Código CAE principal ou secundário (aceita vários separados por vírgula)"),
+    cpv: Optional[str] = Query(None, description="CPV dos contratos (código completo ou parcial, ex.: 33600000-6)"),
     sort_by: Optional[str] = Query(
         "total_value",
         pattern="^(name|contracts_count|total_value|as_adjudicante_value|as_adjudicante_count|as_adjudicatario_count)$",
@@ -1291,6 +1304,8 @@ def entities_search_get(
         min_value=min_value,
         max_value=max_value,
         role=role,
+        cae=cae,
+        cpv=cpv,
         sort_by=sort_by,
         sort_order=sort_order,
         size=size,
@@ -1304,6 +1319,7 @@ def entities_search_get(
         items=[EntityItem(**item) for item in res.get("items", [])],
         from_=res.get("from", 0),
         size=res.get("size", size),
+        notes=res.get("notes", []),
     )
 
 
@@ -1319,6 +1335,8 @@ def entities_search_post(req: EntitySearchRequest):
         min_value=req.min_value,
         max_value=req.max_value,
         role=req.role,
+        cae=req.cae,
+        cpv=req.cpv,
         sort_by=req.sort_by,
         sort_order=req.sort_order,
         size=req.size,
@@ -1332,6 +1350,7 @@ def entities_search_post(req: EntitySearchRequest):
         items=[EntityItem(**item) for item in res.get("items", [])],
         from_=res.get("from", 0),
         size=res.get("size", req.size),
+        notes=res.get("notes", []),
     )
 
 
@@ -1416,6 +1435,25 @@ def entities_relations(nif: str, size: int = 50):
 
     result = get_entity_relations(nif, size=size)
     return EntityRelationsResponse(**result)
+
+
+@app.get("/entities/{nif}/report.pdf")
+def entities_report_pdf(nif: str):
+    """Gera e descarrega o relatório PDF da entidade (enriquecimento + CPV + relações)."""
+    from api.entity_enrichment_service import build_entity_report_pdf
+    from pathlib import Path as _Path
+
+    try:
+        path = build_entity_report_pdf(nif)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar o relatório: {exc}")
+    if not path or not _Path(path).exists():
+        raise HTTPException(status_code=502, detail="Não foi possível gerar o relatório PDF.")
+    return FileResponse(
+        _Path(path),
+        media_type="application/pdf",
+        filename=f"entidade_{nif}.pdf",
+    )
 
 
 # Servir a React SPA da chat-ui (build estático) — deve ser registrado DEPOIS das rotas de API

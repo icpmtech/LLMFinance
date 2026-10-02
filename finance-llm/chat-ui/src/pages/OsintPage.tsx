@@ -13,12 +13,12 @@ import {
   TabsList,
   TabsTrigger,
 } from "../components/ui";
-import { Loader2, Search, Scan, Trash2, ExternalLink, Network, User, Mail } from "lucide-react";
+import { Loader2, Search, Scan, Trash2, ExternalLink, Network, User, Mail, Building2, Check } from "lucide-react";
 import { API_BASE } from "../api";
 import { GraphCanvas } from "../components/graph/GraphCanvas";
 import type { StudioGraph, StudioNode, StudioEdge } from "../components/graph/graphStudio";
 
-type OsintKind = "username" | "email";
+type OsintKind = "username" | "email" | "nif";
 
 type OsintProfileDetail = {
   display_name?: string | null;
@@ -63,6 +63,10 @@ type OsintStats = {
   emails?: string[];
   pivot_count?: number;
   pivot_sites?: string[];
+  nif_valid?: boolean | null;
+  related?: string[];
+  aliases?: string[];
+  people?: string[];
 };
 
 type OsintGraphNode = {
@@ -86,6 +90,8 @@ type OsintScanResponse = {
   errors: number;
   duration_s?: number | null;
   category?: string | null;
+  categories?: string[];
+  platforms_per_category?: Record<string, number>;
   hits: OsintProfileHit[];
   pivots?: OsintPivot[];
   stats?: OsintStats;
@@ -118,11 +124,34 @@ type OsintSearchResponse = {
   error?: string | null;
 };
 
+type OsintPreset = {
+  id: string;
+  label: string;
+  hint: string;
+  username: string[];
+  email: string[];
+};
+
 type OsintCategoriesResponse = {
   username: string[];
   email: string[];
+  nif?: string[];
   defaults?: Partial<Record<OsintKind, string | null>>;
+  platforms?: { username: Record<string, number>; email: Record<string, number> };
+  presets?: OsintPreset[];
 };
+
+/** Valida um NIF português (dígito de controlo, módulo 11). */
+function isValidNif(value: string): boolean {
+  const digits = (value || "").replace(/\D/g, "");
+  if (!/^\d{9}$/.test(digits) || "04".includes(digits[0])) return false;
+  const total = digits
+    .slice(0, 8)
+    .split("")
+    .reduce((sum, digit, index) => sum + Number(digit) * (9 - index), 0);
+  const check = 11 - (total % 11);
+  return (check >= 10 ? 0 : check) === Number(digits[8]);
+}
 
 const COLORS: Record<string, string> = {
   username: "#d946ef",
@@ -213,6 +242,16 @@ async function downloadReport(docId: string, format: "json" | "csv" | "pdf") {
   URL.revokeObjectURL(url);
 }
 
+/** Rótulo curto de uma ligação, tolerante a caminhos internos da app. */
+function linkLabel(link: string): string {
+  if (link.startsWith("/")) return "ficha interna";
+  try {
+    return new URL(link).hostname.replace(/^www\./, "");
+  } catch {
+    return link.slice(0, 24);
+  }
+}
+
 /** Cartão de um resultado: avatar, nome, bio, métricas, pistas e ligações. */
 function ProfileCard({ hit }: { hit: OsintProfileHit }) {
   const profile = hit.profile || {};
@@ -274,12 +313,12 @@ function ProfileCard({ hit }: { hit: OsintProfileHit }) {
       <div className="mt-auto flex flex-wrap gap-2 pt-1 text-xs">
         {hit.url && (
           <a href={hit.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
-            Perfil <ExternalLink size={12} />
+            {hit.url.startsWith("/") ? "Abrir ficha" : "Perfil"} <ExternalLink size={12} />
           </a>
         )}
         {(profile.links || []).slice(0, 3).map((link) => (
           <a key={link} href={link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-muted-foreground hover:underline">
-            {new URL(link).hostname.replace(/^www\./, "")} <ExternalLink size={11} />
+            {linkLabel(link)} <ExternalLink size={11} />
           </a>
         ))}
       </div>
@@ -290,16 +329,19 @@ function ProfileCard({ hit }: { hit: OsintProfileHit }) {
 /** Contas cruzadas: plataformas para onde o perfil aponta, mesmo sem scan. */
 function PivotList({ pivots }: { pivots: OsintPivot[] }) {
   if (!pivots.length) return null;
+  const isInternal = pivots.some((p) => p.kind === "alias");
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <Network size={16} /> Contas cruzadas ({pivots.length})
+          <Network size={16} /> {isInternal ? `Relacionados (${pivots.length})` : `Contas cruzadas (${pivots.length})`}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
         <p className="text-xs text-muted-foreground">
-          Ligações que os perfis encontrados expõem noutras plataformas — não foram pesquisadas, mas apontam para o mesmo alvo.
+          {pivots.some((p) => p.kind === "alias")
+            ? "Entidades ligadas, pessoas com cargos registados e nomes alternativos que o sistema associa a este alvo."
+            : "Ligações que os perfis encontrados expõem noutras plataformas — não foram pesquisadas, mas apontam para o mesmo alvo."}
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
           {pivots.map((pivot) => (
@@ -313,11 +355,11 @@ function PivotList({ pivots }: { pivots: OsintPivot[] }) {
               </div>
               {pivot.url ? (
                 <a href={pivot.url} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                  Abrir <ExternalLink size={11} />
+                  {pivot.url.startsWith("/") ? "Abrir ficha" : "Abrir"} <ExternalLink size={11} />
                 </a>
               ) : (
                 <div className="mt-1 text-[11px] text-muted-foreground">
-                  handle @{pivot.handle} — testar com um novo scan
+                  {pivot.handle ? `NIF ${pivot.handle} — ` : ""}testar com um novo scan
                 </div>
               )}
             </div>
@@ -371,9 +413,9 @@ function LeadsCard({ hits }: { hits: OsintProfileHit[] }) {
 export default function OsintPage() {
   const [target, setTarget] = useState("");
   const [kind, setKind] = useState<OsintKind>("username");
-  const [category, setCategory] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
   const [fullScan, setFullScan] = useState(false);
-  const [categories, setCategories] = useState<OsintCategoriesResponse>({ username: [], email: [] });
+  const [categories, setCategories] = useState<OsintCategoriesResponse>({ username: [], email: [], nif: [] });
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<OsintScanResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -384,6 +426,9 @@ export default function OsintPage() {
   const [activeTab, setActiveTab] = useState("scan");
   const [graph, setGraph] = useState<OsintGraph | null>(null);
   const [graphLoading, setGraphLoading] = useState(false);
+  // Filtro local dos resultados ("Todos", "Encontrados", "Sem perfil", "Erros").
+  const [hitFilter, setHitFilter] = useState<"found" | "missing" | "error" | "all">("found");
+  const [hitQuery, setHitQuery] = useState("");
 
   useEffect(() => {
     authFetch("/osint/categories")
@@ -392,11 +437,20 @@ export default function OsintPage() {
         setCategories({
           username: parsed.username ?? [],
           email: parsed.email ?? [],
+          nif: [],
           defaults: parsed.defaults,
+          platforms: parsed.platforms,
+          presets: parsed.presets,
         });
       })
-      .catch(() => setCategories({ username: [], email: [] }));
+      .catch(() => setCategories({ username: [], email: [], nif: [] }));
   }, []);
+
+  // Ao mudar de tipo, a seleção anterior deixa de fazer sentido.
+  useEffect(() => {
+    setSelected([]);
+    setFullScan(false);
+  }, [kind]);
 
   useEffect(() => {
     if (activeTab === "saved") loadSaved();
@@ -404,10 +458,41 @@ export default function OsintPage() {
   }, [activeTab]);
 
   const availableCategories = useMemo(() => categories[kind] || [], [categories, kind]);
+  const platformCounts = useMemo(
+    () => (kind === "email" ? categories.platforms?.email : categories.platforms?.username) || {},
+    [categories, kind],
+  );
   const defaultCategory = useMemo(
     () => categories.defaults?.[kind] || availableCategories[0] || null,
     [categories, kind, availableCategories],
   );
+  const isNif = kind === "nif";
+
+  // Quantas plataformas o scan escolhido vai verificar (aviso de custo antes de
+  // arrancar: 30 plataformas não é o mesmo que 573).
+  const plannedPlatforms = useMemo(() => {
+    if (isNif) return 0;
+    if (fullScan) return Object.values(platformCounts).reduce((sum, n) => sum + n, 0);
+    if (!selected.length) return platformCounts[defaultCategory || ""] || 0;
+    return selected.reduce((sum, name) => sum + (platformCounts[name] || 0), 0);
+  }, [isNif, fullScan, selected, platformCounts, defaultCategory]);
+
+  const estimateSeconds = Math.max(5, Math.round(plannedPlatforms / 26));
+
+  function toggleCategory(name: string) {
+    setSelected((prev) => (prev.includes(name) ? prev.filter((c) => c !== name) : [...prev, name]));
+  }
+
+  function applyPreset(preset: OsintPreset) {
+    const names = kind === "email" ? preset.email : preset.username;
+    if (!names.length) {
+      setFullScan(true);
+      setSelected([]);
+      return;
+    }
+    setFullScan(false);
+    setSelected(names.filter((name) => availableCategories.includes(name)));
+  }
 
   async function runScan(e?: React.FormEvent) {
     e?.preventDefault();
@@ -417,13 +502,21 @@ export default function OsintPage() {
       setError("Email inválido: escreva um endereço como nome@dominio.com");
       return;
     }
+    if (kind === "nif" && !isValidNif(value)) {
+      setError("NIF inválido: são 9 dígitos e o dígito de controlo tem de conferir (ex.: 500189412).");
+      return;
+    }
     setLoading(true);
     setError(null);
     setResult(null);
+    setHitFilter("found");
+    setHitQuery("");
     try {
       const payload: Record<string, unknown> = { target: value, kind };
-      if (category) payload.category = category;
-      payload.full_scan = fullScan;
+      if (!isNif) {
+        payload.categories = selected;
+        payload.full_scan = fullScan;
+      }
       const data = (await authFetch("/osint/scan", {
         method: "POST",
         body: JSON.stringify(payload),
@@ -475,7 +568,44 @@ export default function OsintPage() {
   }
 
   const foundHits = useMemo(() => (result?.hits || []).filter((h) => h.status.toLowerCase() === "found"), [result]);
+  const missingCount = useMemo(
+    () => (result?.hits || []).filter((h) => h.status.toLowerCase() === "not found").length,
+    [result],
+  );
+  const errorCount = useMemo(
+    () => (result?.hits || []).filter((h) => h.status.toLowerCase() === "error").length,
+    [result],
+  );
+  // Filtro local: estado + texto (plataforma/nome/categoria), para não obrigar a
+  // repetir o scan quando só se quer encontrar um cartão.
+  const filteredHits = useMemo(() => {
+    const hits = result?.hits || [];
+    const byStatus = hits.filter((h) => {
+      const status = h.status.toLowerCase();
+      if (hitFilter === "found") return status === "found";
+      if (hitFilter === "missing") return status === "not found";
+      if (hitFilter === "error") return status === "error";
+      return true;
+    });
+    const query = hitQuery.trim().toLowerCase();
+    if (!query) return byStatus;
+    return byStatus.filter((h) =>
+      [h.site_name, h.category, h.profile?.display_name, h.profile?.bio]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query)),
+    );
+  }, [result, hitFilter, hitQuery]);
   const graphData = useMemo(() => toStudioGraph(graph || result?.graph), [graph, result]);
+
+  async function exportCurrent(format: "json" | "csv" | "pdf") {
+    const docId = result?.saved_id;
+    if (!docId) return;
+    try {
+      await downloadReport(docId, format);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
@@ -508,62 +638,171 @@ export default function OsintPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <form onSubmit={runScan} className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-[1fr_auto_auto_auto] md:items-end">
+                <form onSubmit={runScan} className="space-y-5">
+                  <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
                     <div className="space-y-2">
                       <Label htmlFor="osint-target">Alvo</Label>
                       <Input
                         id="osint-target"
                         value={target}
                         onChange={(e) => setTarget(e.target.value)}
-                        placeholder={kind === "email" ? "nome@email.com" : "username"}
+                        placeholder={kind === "email" ? "nome@email.com" : kind === "nif" ? "500189412" : "username"}
+                        autoComplete="off"
                         required
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Tipo</Label>
-                      <div className="flex rounded-md border p-1">
-                        <button
-                          type="button"
-                          onClick={() => { setKind("username"); setCategory(""); }}
-                          className={`flex items-center gap-2 rounded px-3 py-2 text-sm ${kind === "username" ? "bg-primary text-primary-foreground" : ""}`}
-                        >
-                          <User size={14} /> Username
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setKind("email"); setCategory(""); }}
-                          className={`flex items-center gap-2 rounded px-3 py-2 text-sm ${kind === "email" ? "bg-primary text-primary-foreground" : ""}`}
-                        >
-                          <Mail size={14} /> Email
-                        </button>
+                      <Label>Tipo de alvo</Label>
+                      <div className="flex rounded-xl border p-1">
+                        {([
+                          { id: "username", label: "Username", icon: <User size={14} /> },
+                          { id: "email", label: "Email", icon: <Mail size={14} /> },
+                          { id: "nif", label: "NIF", icon: <Building2 size={14} /> },
+                        ] as const).map((option) => (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => setKind(option.id)}
+                            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
+                              kind === option.id ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {option.icon} {option.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="osint-category">Categoria</Label>
-                      <select
-                        id="osint-category"
-                        className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                      >
-                        <option value="">Padrão ({defaultCategory ?? "—"})</option>
-                        {availableCategories.map((c) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
+                  </div>
+
+                  {isNif ? (
+                    <p className="text-sm text-muted-foreground">
+                      O NIF é validado (dígito de controlo) e cruzado com os dados internos: contribuintes,
+                      contratos, societário, CIRE, cadastro e ontologia.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <Label>Categorias a varrer</Label>
+                        <div className="flex items-center gap-2 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => { setSelected([]); setFullScan(false); }}
+                            className={`rounded-full border px-2.5 py-1 transition ${!selected.length && !fullScan ? "border-primary bg-primary/10 text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                          >
+                            Recomendada ({defaultCategory ?? "—"})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setSelected([...availableCategories]); setFullScan(false); }}
+                            className={`rounded-full border px-2.5 py-1 transition ${selected.length === availableCategories.length && availableCategories.length > 0 ? "border-primary bg-primary/10 text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                          >
+                            Todas
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setSelected([]); setFullScan(false); }}
+                            className="rounded-full border px-2.5 py-1 text-muted-foreground transition hover:text-foreground"
+                          >
+                            Limpar
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5">
+                        {availableCategories.map((name) => {
+                          const isOn = selected.includes(name);
+                          const count = platformCounts[name];
+                          return (
+                            <button
+                              key={name}
+                              type="button"
+                              onClick={() => { setFullScan(false); toggleCategory(name); }}
+                              title={count ? `${count} plataformas` : undefined}
+                              className={`rounded-full border px-3 py-1 text-xs transition ${
+                                isOn
+                                  ? "border-violet-400 bg-violet-500/15 text-foreground"
+                                  : "border-border text-muted-foreground hover:border-violet-300 hover:text-foreground"
+                              }`}
+                            >
+                              {isOn && <Check size={11} className="mr-1 inline" />}
+                              {name}
+                              {count ? <span className="ml-1.5 opacity-60">{count}</span> : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {(categories.presets || []).length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Predefinições:</span>
+                          {(categories.presets || []).map((preset) => (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              onClick={() => applyPreset(preset)}
+                              title={preset.hint}
+                              className="rounded-full border border-dashed px-3 py-1 text-xs text-muted-foreground transition hover:border-violet-300 hover:text-foreground"
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <Button type="submit" disabled={loading || !target.trim()} className="gap-2">
-                      {loading ? <Loader2 size={16} className="animate-spin" /> : <Scan size={16} />}
-                      {fullScan ? "Scan completo" : "Scan"}
-                    </Button>
-                  </div>
-                  <div className="flex items-center gap-4 text-sm">
-                    <label className="flex items-center gap-2">
-                      <input type="checkbox" checked={fullScan} onChange={(e) => setFullScan(e.target.checked)} />
-                      Scan completo (todas as categorias — lento)
-                    </label>
-                  </div>
+                  )}
+
+                  {!isNif && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/40 px-4 py-3">
+                      <div className="text-xs text-muted-foreground">
+                        {fullScan ? (
+                          <span className="font-medium text-amber-600">
+                            Varredura completa: todas as {Object.keys(platformCounts).length} categorias.
+                          </span>
+                        ) : (
+                          <>
+                            Vai verificar{" "}
+                            <strong className="text-foreground">{plannedPlatforms.toLocaleString("pt-PT")}</strong>{" "}
+                            plataformas em{" "}
+                            <strong className="text-foreground">
+                              {(selected.length || (fullScan ? 0 : 1)) === 1
+                                ? "1 categoria"
+                                : `${selected.length} categorias`}
+                            </strong>
+                            {" · estimativa ~"}
+                            {estimateSeconds >= 60
+                              ? `${Math.round(estimateSeconds / 60)} min`
+                              : `${estimateSeconds} s`}
+                          </>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            checked={fullScan}
+                            onChange={(e) => {
+                              setFullScan(e.target.checked);
+                              if (e.target.checked) setSelected([]);
+                            }}
+                          />
+                          Todas as plataformas
+                        </label>
+                        <Button type="submit" disabled={loading || !target.trim()} className="gap-2">
+                          {loading ? <Loader2 size={16} className="animate-spin" /> : <Scan size={16} />}
+                          {loading ? "A pesquisar…" : "Pesquisar"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {isNif && (
+                    <div className="flex justify-end">
+                      <Button type="submit" disabled={loading || !target.trim()} className="gap-2">
+                        {loading ? <Loader2 size={16} className="animate-spin" /> : <Scan size={16} />}
+                        {loading ? "A recolher…" : "Recolher dados"}
+                      </Button>
+                    </div>
+                  )}
                 </form>
               </CardContent>
             </Card>
@@ -579,83 +818,164 @@ export default function OsintPage() {
                 <CardHeader>
                   <CardTitle className="text-base flex items-center justify-between">
                     <span className="flex items-center gap-2">
-                      {result.kind === "email" ? <Mail size={16} /> : <User size={16} />}
+                      {result.kind === "email" ? <Mail size={16} /> : result.kind === "nif" ? <Building2 size={16} /> : <User size={16} />}
                       {result.target}
                     </span>
                     <div className="flex gap-2 text-sm font-normal">
-                      <Badge variant="outline">{result.total} sites</Badge>
-                      <Badge className="bg-emerald-600">{result.found} encontrados</Badge>
-                      <Badge variant="secondary">{result.not_found} não encontrados</Badge>
+                      <Badge variant="outline">
+                        {result.kind === "nif" ? `${result.total} fontes internas` : `${result.total} sites`}
+                      </Badge>
+                      <Badge className="bg-emerald-600">{result.found} com dados</Badge>
+                      {result.kind !== "nif" && (
+                        <Badge variant="secondary">{result.not_found} não encontrados</Badge>
+                      )}
                       {result.errors > 0 && <Badge variant="danger">{result.errors} erros</Badge>}
                     </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="text-sm text-muted-foreground">
-                    Categoria: <strong>{result.category || "padrão"}</strong> · Duração: {result.duration_s ?? "—"} s · Guardado: {result.saved ? "sim" : "não"}
+                  <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+                    <span>
+                      {result.kind === "nif" ? (
+                        <>
+                          NIF validado: <strong>{result.stats?.nif_valid ? "sim" : "não"}</strong> ·
+                        </>
+                      ) : (
+                        <>
+                          Categorias:{" "}
+                          <strong>
+                            {(result.categories || []).length
+                              ? (result.categories || []).join(", ")
+                              : result.category || "completa"}
+                          </strong>{" "}
+                          ·
+                        </>
+                      )}{" "}
+                      Duração: {result.duration_s ?? "—"} s · Guardado: {result.saved ? "sim" : "não"}
+                    </span>
+                    {result.saved_id && (
+                      <span className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => exportCurrent("json")}>JSON</Button>
+                        <Button size="sm" variant="outline" onClick={() => exportCurrent("csv")}>CSV</Button>
+                        <Button size="sm" variant="outline" onClick={() => exportCurrent("pdf")}>PDF</Button>
+                      </span>
+                    )}
                   </div>
+
+                  {Object.keys(result.platforms_per_category || {}).length > 1 && (
+                    <div className="flex flex-wrap gap-1.5 text-[11px]">
+                      {Object.entries(result.platforms_per_category || {}).map(([name, count]) => (
+                        <span key={name} className="rounded-full border px-2 py-0.5 text-muted-foreground">
+                          {name}: {count}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {result.kind === "nif" && result.stats && (
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <Badge variant="outline">{result.stats.platforms_found} fontes com dados</Badge>
+                      {(result.stats.people || []).length > 0 && (
+                        <Badge className="bg-indigo-600">{(result.stats.people || []).length} pessoas</Badge>
+                      )}
+                      {(result.stats.related || []).length > 0 && (
+                        <Badge className="bg-fuchsia-600">{(result.stats.related || []).length} entidades ligadas</Badge>
+                      )}
+                      {(result.stats.aliases || []).length > 0 && (
+                        <Badge variant="secondary">{(result.stats.aliases || []).length} nomes alternativos</Badge>
+                      )}
+                    </div>
+                  )}
+
                   {foundHits.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nenhum perfil encontrado nesta pesquisa.</p>
+                    <p className="text-sm text-muted-foreground">
+                      Nenhum perfil encontrado nesta pesquisa.{(result.errors || 0) > 0 && (
+                        <span className="ml-1">
+                          Houve {result.errors} plataformas que não responderam — voltar a tentar pode dar mais resultados.
+                        </span>
+                      )}
+                    </p>
                   ) : (
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {foundHits.map((h) => (
-                        <Card key={h.site_name} className="p-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="font-medium">{h.site_name}</div>
-                            <Badge variant="outline" className="text-xs">{h.category}</Badge>
-                          </div>
-                          {h.url && (
-                            <a
-                              href={h.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                            >
-                              Abrir perfil <ExternalLink size={12} />
-                            </a>
-                          )}
-                          {h.reason && <p className="mt-2 text-xs text-muted-foreground">{h.reason}</p>}
-                        </Card>
+                        <ProfileCard key={h.site_name} hit={h} />
                       ))}
                     </div>
                   )}
                 </CardContent>
               </Card>
             )}
+
+            {result && <LeadsCard hits={foundHits} />}
+            {result && <PivotList pivots={result.pivots || []} />}
           </TabsContent>
 
           <TabsContent value="results" active={activeTab === "results"} className="space-y-4">
             {!result ? (
               <p className="text-sm text-muted-foreground">Ainda não foi executado nenhum scan.</p>
             ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Todos os resultados ({result.hits.length})</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {result.hits.map((h) => (
-                      <Card key={`${h.site_name}-${h.category}`} className="p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="font-medium">{h.site_name}</div>
-                          <Badge className={h.status.toLowerCase() === "found" ? "bg-emerald-600" : "bg-slate-500"}>{h.status}</Badge>
-                        </div>
-                        <div className="mt-1 text-xs text-muted-foreground">{h.category}</div>
-                        {h.url && (
-                          <a
-                            href={h.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                          >
-                            Abrir <ExternalLink size={12} />
-                          </a>
-                        )}
-                      </Card>
+              <>
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/40 px-4 py-3">
+                  <Input
+                    value={hitQuery}
+                    onChange={(e) => setHitQuery(e.target.value)}
+                    placeholder="Filtrar por plataforma, nome, categoria…"
+                    className="h-9 max-w-xs"
+                    autoComplete="off"
+                  />
+                  <div className="flex gap-1">
+                    {([
+                      { id: "found", label: `Encontrados (${foundHits.length})` },
+                      { id: "missing", label: `Sem perfil (${missingCount})` },
+                      { id: "error", label: `Erros (${errorCount})` },
+                      { id: "all", label: `Todos (${result.hits.length})` },
+                    ] as const).map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setHitFilter(option.id)}
+                        className={`rounded-full border px-3 py-1 text-xs transition ${
+                          hitFilter === option.id
+                            ? "border-violet-400 bg-violet-500/15 text-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    a mostrar {filteredHits.length}
+                  </span>
+                </div>
+
+                {filteredHits.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nada corresponde ao filtro.</p>
+                ) : hitFilter === "found" ? (
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {filteredHits.map((h) => <ProfileCard key={`found-${h.site_name}`} hit={h} />)}
+                  </div>
+                ) : (
+                  <Card>
+                    <CardContent className="space-y-1 pt-4 text-xs text-muted-foreground">
+                      {filteredHits.slice(0, 300).map((h) => (
+                        <div key={`${h.site_name}-${h.status}`} className="flex items-center justify-between gap-2">
+                          <span>{h.site_name} · {h.category}</span>
+                          <Badge variant={h.status.toLowerCase() === "error" ? "danger" : "secondary"} className="text-[10px]">
+                            {h.status}
+                          </Badge>
+                        </div>
+                      ))}
+                      {filteredHits.length > 300 && (
+                        <p className="pt-2">A mostrar 300 de {filteredHits.length}.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                <LeadsCard hits={result.hits} />
+                <PivotList pivots={result.pivots || []} />
+              </>
             )}
           </TabsContent>
 
@@ -698,8 +1018,14 @@ export default function OsintPage() {
               <CardContent>
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="space-y-2">
-                    <Label>Alvo / categoria / site</Label>
-                    <Input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder="username, categoria, site…" />
+                    <Label>Alvo / nome / email / site</Label>
+                    <Input
+                      value={searchQ}
+                      onChange={(e) => setSearchQ(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") loadSaved(); }}
+                      placeholder="username, empresa, email, plataforma…"
+                      autoComplete="off"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Tipo</Label>
@@ -707,11 +1033,17 @@ export default function OsintPage() {
                       <option value="">Todos</option>
                       <option value="username">Username</option>
                       <option value="email">Email</option>
+                      <option value="nif">NIF</option>
                     </select>
                   </div>
                   <Button onClick={loadSaved} disabled={searchLoading} className="gap-2">
                     {searchLoading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} Pesquisar
                   </Button>
+                  {searchResult && (
+                    <span className="pb-2 text-xs text-muted-foreground">
+                      {searchResult.total} resultado{searchResult.total === 1 ? "" : "s"}
+                    </span>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -738,13 +1070,30 @@ export default function OsintPage() {
                     </div>
                   </div>
                   <div className="mt-2 text-xs text-muted-foreground">{item.kind} · {item.category || "padrão"}</div>
-                  <div className="mt-2 flex gap-2 text-xs">
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
                     <Badge variant="outline">{item.total} sites</Badge>
                     <Badge className="bg-emerald-600">{item.found} encontrados</Badge>
+                    {(item.pivots || 0) > 0 && <Badge className="bg-fuchsia-600">{item.pivots} cruzadas</Badge>}
+                    {(item.emails || []).length > 0 && <Badge className="bg-sky-600">{(item.emails || []).length} emails</Badge>}
                   </div>
+                  {(item.names || []).length > 0 && (
+                    <div className="mt-2 text-xs">Nomes: <strong>{(item.names || []).slice(0, 3).join(", ")}</strong></div>
+                  )}
                   {item.top_sites.length > 0 && (
                     <div className="mt-2 text-xs text-muted-foreground">{item.top_sites.slice(0, 5).join(", ")}</div>
                   )}
+                  {(item.emails || []).length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {(item.emails || []).slice(0, 3).map((email) => (
+                        <Badge key={email} className="bg-sky-600 text-[10px]">{email}</Badge>
+                      ))}
+                    </div>
+                  )}
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    <Button size="sm" variant="outline" onClick={() => downloadReport(item.id, "json")}>JSON</Button>
+                    <Button size="sm" variant="outline" onClick={() => downloadReport(item.id, "csv")}>CSV</Button>
+                    <Button size="sm" variant="outline" onClick={() => downloadReport(item.id, "pdf")}>PDF</Button>
+                  </div>
                   {item.scanned_at && <div className="mt-2 text-[11px] text-muted-foreground">{new Date(item.scanned_at).toLocaleString("pt-PT")}</div>}
                 </Card>
               ))}

@@ -1080,7 +1080,16 @@ export async function chatContracts(
 export async function searchCompanies(
   request: CompanySearchRequest = {},
 ): Promise<CompanySearchResponse> {
-  const payload = { ...request, from: request.from ?? 0, size: request.size ?? 20 };
+  let caeValue = request.cae;
+  if (Array.isArray(caeValue)) {
+    caeValue = caeValue.join(",");
+  }
+  const payload = {
+    ...request,
+    cae: caeValue || undefined,
+    from: request.from ?? 0,
+    size: request.size ?? 20,
+  };
   const res = await fetch(`${API_BASE}/companies/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1157,7 +1166,16 @@ export async function getEntityRoleSummary(
 export async function searchEntities(
   request: EntitySearchRequest = {},
 ): Promise<EntitySearchResponse> {
-  const payload = { ...request, from: request.from ?? 0, size: request.size ?? 20 };
+  let caeValue = request.cae;
+  if (Array.isArray(caeValue)) {
+    caeValue = caeValue.join(",");
+  }
+  const payload = {
+    ...request,
+    cae: caeValue || undefined,
+    from: request.from ?? 0,
+    size: request.size ?? 20,
+  };
   const res = await fetch(`${API_BASE}/entities/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1204,6 +1222,16 @@ export async function getEntityRelations(nif: string, size = 50): Promise<Entity
     throw new Error(`Erro ao obter relações da entidade: ${res.status} - ${text}`);
   }
   return res.json();
+}
+
+/** Relatório PDF da entidade (enriquecimento web + CPV + relações). */
+export async function downloadEntityReport(nif: string): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/entities/${encodeURIComponent(nif)}/report.pdf`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao gerar o relatório PDF: ${res.status} - ${text}`);
+  }
+  return res.blob();
 }
 
 export async function getEntityStats(): Promise<EntityStats> {

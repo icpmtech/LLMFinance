@@ -3,6 +3,11 @@
 Integra a engine de username/email do user-scanner com o Elasticsearch do IQ OS,
 guardando cada pesquisa no índice ``finance_osint`` e devolvendo um grafo simples
 para visualização das plataformas encontradas.
+
+Além de usernames e emails, aceita **NIF** como alvo: nesse caso não há scan
+externo — o valor é validado (dígito de controlo) e cruzado com o que o próprio
+IQ OS já tem indexado (contribuintes, contratos, societário, CIRE, cadastro e
+ontologia), devolvendo-se tudo na mesma forma (`hits`/`pivots`/`graph`).
 """
 from __future__ import annotations
 
@@ -11,6 +16,7 @@ import hashlib
 import logging
 import re
 import time
+import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -35,11 +41,96 @@ DEFAULT_CATEGORY: Dict[str, str] = {
     "email": "crm",
 }
 
+# Tipos de alvo aceites. `nif` não usa o user-scanner: cruza os dados internos.
+OSINT_KINDS = ("username", "email", "nif")
+# Tipos em que o conceito de "categoria de plataformas" não se aplica.
+KINDS_WITHOUT_CATEGORY = ("nif",)
+
+# Presets de categorias para o UI: poupam escolher uma a uma e dão uma noção
+# do custo (cada categoria são dezenas/centenas de pedidos a sites externos).
+CATEGORY_PRESETS: List[Dict[str, Any]] = [
+    {
+        "id": "identidade",
+        "label": "Identidade",
+        "hint": "Perfis pessoais e redes sociais",
+        "username": ["social", "community", "creator", "dating"],
+        "email": ["social", "community", "creator"],
+    },
+    {
+        "id": "profissional",
+        "label": "Profissional / técnico",
+        "hint": "Repositórios, portefólios e redes de trabalho",
+        "username": ["dev", "learning", "finance"],
+        "email": ["dev", "jobs", "learning"],
+    },
+    {
+        "id": "comercio",
+        "label": "Compras e serviços",
+        "hint": "Lojas, viagens e serviços com conta de cliente",
+        "username": ["shopping", "music", "entertainment"],
+        "email": ["shopping", "travel", "music", "news"],
+    },
+    {
+        "id": "completo",
+        "label": "Todas as categorias",
+        "hint": "Varredura completa — demora vários minutos",
+        "username": [],
+        "email": [],
+    },
+]
+
+# Quantas categorias correr ao mesmo tempo. Cada categoria faz muitos pedidos a
+# sites externos: subir demasiado provoca bloqueios por abuso (mais erros, menos
+# resultados), pelo que o ganho de tempo deixa de compensar.
+_MAX_PARALLEL_CATEGORIES = 3
+
+
+def category_platform_counts(is_email: bool = False, es: Any = None) -> Dict[str, int]:
+    """Número de plataformas verificadas por cada categoria.
+
+    Serve para o UI mostrar o custo antes de lançar o scan: escolher uma
+    categoria de 400 plataformas não é o mesmo que escolher uma de 30.
+    """
+    counts: Dict[str, int] = {}
+    for name, path in us_engine.load_categories(is_email=is_email).items():
+        try:
+            counts[name] = len(us_engine.load_modules(path))
+        except Exception:  # pragma: no cover - depende da biblioteca
+            counts[name] = 0
+    return counts
+
 # Status numéricos do user-scanner -> label amigável
 STATUS_LABEL = {0: "Found", 1: "Not Found", 2: "Error", 3: "Skipped"}
 
 # Validação mínima de email (sem depender de libs extra).
 _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
+
+_NIF_RE = re.compile(r"^\d{9}$")
+
+
+def is_valid_nif(value: str) -> bool:
+    """Valida um NIF português: 9 dígitos com dígito de controlo (módulo 11).
+
+    O dígito de controlo é o último e resulta de somar os 8 primeiros dígitos
+    multiplicados por pesos decrescentes de 9 a 2; o resto da divisão por 11 dá
+    o dígito (0 quando o resto é 0 ou 1).
+    """
+    text = str(value or "").strip()
+    if not _NIF_RE.match(text):
+        return False
+    if text[0] in "04" or text[0] == "0":
+        # Primeiro dígito define o tipo de contribuinte (1/2/3/5/6/7/8/9).
+        return False
+    total = sum(int(digit) * weight for digit, weight in zip(text[:8], range(9, 1, -1)))
+    check = 11 - (total % 11)
+    if check >= 10:
+        check = 0
+    return check == int(text[8])
+
+
+def normalize_nif(value: str) -> str:
+    """NIF sem espaços nem pontuação (`500 189 412` → `500189412`)."""
+    return re.sub(r"\D", "", str(value or ""))
 
 # Cada site nomeia os campos à sua maneira (`name`, `fullname`, `display_name`,
 # `gravatar_username`…). Estas tabelas traduzem tudo para um perfil comum, para
@@ -319,24 +410,426 @@ def _build_graph(
     return {"nodes": nodes, "edges": edges}
 
 
-async def scan_target(target: str, kind: str, category: Optional[str] = None, full_scan: bool = False) -> Dict[str, Any]:
-    """Executa um scan user-scanner e devolve resultado normalizado + grafo."""
+async def _check_categories(names: List[str], target: str, *, is_email: bool) -> List[Any]:
+    """Corre várias categorias em paralelo, com um limite de concorrência.
+
+    Cada categoria faz dezenas/centenas de pedidos a sites externos; correr tudo
+    ao mesmo tempo faz os sites bloquear (mais erros e menos resultados), por
+    isso o limite é baixo e as falhas de uma categoria não abortam as outras.
+    """
+    semaphore = asyncio.Semaphore(_MAX_PARALLEL_CATEGORIES)
+
+    async def run(name: str) -> List[Any]:
+        async with semaphore:
+            try:
+                return await us_engine.check_category(name, target, is_email=is_email)
+            except Exception as exc:
+                logger.warning("Categoria OSINT '%s' falhou para %s: %s", name, target, exc)
+                return []
+
+    batches = await asyncio.gather(*(run(name) for name in names))
+    merged: List[Any] = []
+    for batch in batches:
+        merged.extend(batch)
+    return merged
+
+
+def _fmt_money(value: Any) -> Optional[str]:
+    """Formata um valor em euros de forma legível (M€/k€)."""
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return None
+    if amount >= 1_000_000:
+        return f"{amount / 1_000_000:.2f} M€"
+    if amount >= 1_000:
+        return f"{amount / 1_000:.1f} k€"
+    return f"{amount:.2f} €"
+
+
+def _nif_hit(
+    label: str,
+    *,
+    name: Optional[str],
+    metrics: Dict[str, Any],
+    fields: Dict[str, Any],
+    url: Optional[str] = None,
+    details: str = "",
+    emails: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Converte um bloco de dados internos num hit compatível com os do scanner."""
+    return {
+        "status": "Found",
+        "site_name": label,
+        "category": "Dados internos",
+        "url": url,
+        "reason": details or None,
+        "extra": fields,
+        "media": {},
+        "profile": {
+            "display_name": name,
+            "bio": details or None,
+            "avatar": None,
+            "followers": None,
+            "joined": None,
+            "links": [url] if url else [],
+            "metrics": {k: v for k, v in metrics.items() if v not in (None, "", 0)},
+            "fields": {k: v for k, v in fields.items() if isinstance(v, (str, int, float)) and v not in (None, "")},
+        },
+        "leads": {"emails": list(emails or []), "urls": [url] if url else []},
+        "confidence": "confirmed",
+    }
+
+
+def scan_nif(nif: str) -> Dict[str, Any]:
+    """Ficha de um NIF: validação + cruzamento com os dados internos do IQ OS.
+
+    Não faz scan externo. A ideia é aproveitar o que já está indexado
+    (contribuintes, contratos, societário, CIRE, cadastro, ontologia e pessoas)
+    para responder «o que sabemos sobre este NIF» num só pedido.
+    """
+    from api import contribuintes_service  # import tardio: evita ciclos
+
+    raw = str(nif or "").strip()
+    normalized = normalize_nif(raw)
+    if not _NIF_RE.match(normalized):
+        raise ValueError("NIF inválido: escreva 9 dígitos (ex.: 500189412).")
+    if not is_valid_nif(normalized):
+        raise ValueError(
+            f"NIF {normalized} inválido: o dígito de controlo não confere. "
+            "Confirme os 9 dígitos."
+        )
+
+    t0 = time.time()
+    hits: List[Dict[str, Any]] = []
+    pivots: List[Dict[str, Any]] = []
+    internal_url = f"/empresas-iq/{normalized}"
+
+    detail: Dict[str, Any] = {}
+    try:
+        detail = contribuintes_service.detail(normalized) or {}
+    except Exception as exc:  # pragma: no cover - depende do índice
+        logger.warning("Falha a ler contribuintes do NIF %s: %s", normalized, exc)
+        detail = {"error": str(exc)}
+
+    name = detail.get("name") if isinstance(detail, dict) else None
+    if detail.get("error"):
+        hits.append(_nif_hit(
+            "Contribuintes (IQ OS)",
+            name=None,
+            metrics={},
+            fields={"nif": normalized, "erro": detail["error"]},
+            details="Não há registo deste NIF no índice de contribuintes.",
+        ))
+
+    # -- uma entrada por fonte que contribuiu para o registo agregado ---------
+    for source in getattr(contribuintes_service, "SOURCES", []):
+        block = detail.get(f"src_{source['id']}")
+        if not isinstance(block, dict) or not block.get("count"):
+            continue
+        parts = block.get("parts") or {}
+        metrics: Dict[str, Any] = {"registos": block.get("count")}
+        if block.get("value"):
+            metrics["valor"] = _fmt_money(block.get("value"))
+        for role, data in list(parts.items())[:3]:
+            metrics[role] = data.get("count")
+        fields = {
+            "nif": normalized,
+            "nomes": block.get("names") or [],
+            "papeis": block.get("roles") or [],
+            "primeiro": (block.get("first") or "")[:10] or None,
+            "ultimo": (block.get("last") or "")[:10] or None,
+            "detalhe": block.get("detail") or {},
+        }
+        hits.append(_nif_hit(
+            str(block.get("label") or source["label"]),
+            name=name,
+            metrics=metrics,
+            fields=fields,
+            url=internal_url,
+            details=(
+                f"{block.get('count')} registo(s)"
+                + (f" · {_fmt_money(block.get('value'))}" if block.get("value") else "")
+                + (f" · papéis: {', '.join(block.get('roles') or [])}" if block.get("roles") else "")
+            ),
+        ))
+
+    # -- cadastro de entidades ------------------------------------------------
+    try:
+        from api.elasticsearch_client import get_entity_by_nif
+
+        entity = get_entity_by_nif(normalized) or {}
+        if entity and not entity.get("error"):
+            hits.append(_nif_hit(
+                "Cadastro · contratos agregados",
+                name=entity.get("name") or name,
+                metrics={
+                    "contratos": entity.get("contracts_count"),
+                    "valor": _fmt_money(entity.get("total_value")),
+                    "como adjudicatário": entity.get("as_adjudicatario_count"),
+                    "como adjudicante": entity.get("as_adjudicante_count"),
+                },
+                fields={
+                    "nif": normalized,
+                    "pais": entity.get("country"),
+                    "fonte": entity.get("source"),
+                },
+                url=internal_url,
+                details=f"{entity.get('country') or ''} · {entity.get('contracts_count') or 0} contratos".strip(" ·"),
+            ))
+    except Exception as exc:  # pragma: no cover
+        logger.debug("Cadastro de entidades indisponível para %s: %s", normalized, exc)
+
+    # -- relações de ontologia ------------------------------------------------
+    try:
+        from api.elasticsearch_client import get_entity_relations
+
+        relations = get_entity_relations(normalized) or {}
+        if relations.get("total"):
+            for item in (relations.get("items") or [])[:20]:
+                pivots.append({
+                    "handle": item.get("other_ref"),
+                    "kind": item.get("kind") or "relation",
+                    "source_site": "Ontologia",
+                    "source_key": item.get("kind"),
+                    "site": item.get("other_name") or item.get("other_ref"),
+                    "url": f"/empresas-iq/{item.get('other_ref')}" if item.get("other_ref") else None,
+                })
+            hits.append(_nif_hit(
+                "Relações (ontologia)",
+                name=name,
+                metrics={"relações": relations.get("total")},
+                fields={"por tipo": relations.get("by_kind") or {}},
+                url=internal_url,
+                details=", ".join(f"{k}: {v}" for k, v in (relations.get("by_kind") or {}).items()),
+            ))
+    except Exception as exc:  # pragma: no cover
+        logger.debug("Ontologia indisponível para %s: %s", normalized, exc)
+
+    # -- pessoas (quadro societário / intervenientes) -------------------------
+    try:
+        from api.elasticsearch_client import get_person_by_nif
+
+        person = get_person_by_nif(normalized) or {}
+        if person and not person.get("error"):
+            hits.append(_nif_hit(
+                "Quadro societário (pessoas)",
+                name=person.get("name") or name,
+                metrics={},
+                fields={"nif": normalized, "papeis": person.get("roles") or []},
+                details="Pessoa presente nas publicações societárias.",
+            ))
+    except Exception as exc:  # pragma: no cover
+        logger.debug("Pessoas indisponível para %s: %s", normalized, exc)
+
+    # -- dossiê detalhado (contratos, cargos, insolvências, sinais) -----------
+    dossier: Dict[str, Any] = {}
+    try:
+        from api import padroes_service
+
+        dossier = padroes_service.entity_dossier(normalized) or {}
+        if dossier.get("nome"):
+            name = dossier["nome"] or name
+        resumo = dossier.get("resumo") or {}
+        cargos = dossier.get("cargos_sociais") or []
+        insolvencias = dossier.get("insolvencias") or []
+        sinais = dossier.get("sinais") or []
+
+        if resumo or cargos or insolvencias:
+            lidos = len(dossier.get("contratos") or [])
+            total_contratos = dossier.get("contratos_total") or lidos
+            parcial = lidos < total_contratos
+            hits.append(_nif_hit(
+                "Dossiê de contratos",
+                name=name,
+                metrics={
+                    "contratos": total_contratos,
+                    "valor total": _fmt_money(resumo.get("valor_total")),
+                    "adjudicantes": resumo.get("adjudicantes_distintos"),
+                    "ajuste direto": (
+                        f"{float(resumo['taxa_ajuste_direto']) * 100:.0f}%"
+                        if resumo.get("taxa_ajuste_direto") is not None else None
+                    ),
+                },
+                fields={
+                    "nif": normalized,
+                    "anos": resumo.get("anos") or [],
+                    "desvio mediano": resumo.get("desvio_mediano"),
+                    "pais": dossier.get("pais"),
+                    "contratos_lidos": lidos,
+                    "amostra_parcial": parcial,
+                },
+                url=internal_url,
+                details=(
+                    f"{total_contratos} contratos"
+                    + (f" · {_fmt_money(resumo.get('valor_total'))}" if resumo.get("valor_total") else "")
+                    # Os valores/desvios são calculados sobre os contratos lidos,
+                    # não sobre o total: dizê-lo evita ler um número parcial como
+                    # se fosse o universo todo.
+                    + (f" · valores sobre amostra de {lidos}" if parcial else "")
+                ),
+            ))
+
+        for person in cargos[:20]:
+            pivots.append({
+                "handle": person.get("nif"),
+                "kind": "cargo",
+                "source_site": "Societário",
+                "source_key": (person.get("cargos") or [{}])[0].get("role"),
+                "site": person.get("nome"),
+                "url": f"/pessoas-iq/{person.get('nif')}" if person.get("nif") else None,
+            })
+
+        if insolvencias:
+            hits.append(_nif_hit(
+                "Insolvências · detalhe",
+                name=name,
+                metrics={"processos": dossier.get("insolvencias_total") or len(insolvencias)},
+                fields={
+                    "nif": normalized,
+                    "ultimos": [
+                        f"{item.get('data') or ''} {item.get('especie') or ''} {item.get('ato') or ''}".strip()
+                        for item in insolvencias[:5]
+                    ],
+                },
+                details=f"{dossier.get('insolvencias_total') or len(insolvencias)} processo(s) no CIRE",
+            ))
+
+        if sinais:
+            hits.append(_nif_hit(
+                "Sinais de risco",
+                name=name,
+                metrics={"sinais": len(sinais)},
+                fields={"sinais": [f"{s.get('padrao')}: {s.get('detalhe')}" for s in sinais]},
+                details="; ".join(str(s.get("detalhe")) for s in sinais[:3]),
+            ))
+    except Exception as exc:  # pragma: no cover - depende de muitos índices
+        logger.warning("Dossiê de contratos indisponível para %s: %s", normalized, exc)
+
+    # -- contas cruzadas: nomes alternativos também são pistas ---------------
+    for alt in (detail.get("names") or [])[:4]:
+        if name and str(alt).strip().lower() == str(name).strip().lower():
+            continue
+        pivots.append({
+            "handle": None,
+            "kind": "alias",
+            "source_site": "Contribuintes",
+            "source_key": "names",
+            "site": str(alt),
+            "url": None,
+        })
+
+    duration = round(time.time() - t0, 2)
+    stats = _stats_of(hits, pivots)
+    stats["nif_valid"] = True
+    stats["related"] = sorted({str(p.get("site")) for p in pivots if p.get("kind") in {"parent_company", "relation"} and p.get("site")})
+    stats["aliases"] = sorted({str(p.get("site")) for p in pivots if p.get("kind") == "alias" and p.get("site")})[:10]
+    stats["people"] = sorted({str(p.get("site")) for p in pivots if p.get("kind") == "cargo" and p.get("site")})[:20]
+    # Para um NIF não há "sites" de plataformas: o que interessa são entidades
+    # e pessoas relacionadas, que ficam em `related`/`people`.
+    stats["pivot_sites"] = []
+    stats["names"] = sorted({n for n in [name] if n} | set(stats.get("names") or []))
+
+    return {
+        "target": normalized,
+        "kind": "nif",
+        "total": len(hits),
+        "found": len(hits),
+        "not_found": 0,
+        "errors": 0,
+        "duration_s": duration,
+        "category": "dados internos",
+        "hits": hits,
+        "pivots": pivots,
+        "stats": stats,
+        "graph": _build_nif_graph(normalized, hits, pivots, name),
+    }
+
+
+def _build_nif_graph(
+    nif: str,
+    hits: List[Dict[str, Any]],
+    pivots: List[Dict[str, Any]],
+    name: Optional[str],
+) -> Dict[str, Any]:
+    """Grafo do NIF: entidade → fontes internas → pessoas/relações."""
+    label = name or nif
+    nodes: List[Dict[str, Any]] = [
+        {"id": nif, "label": label, "group": "nif", "url": f"/empresas-iq/{nif}",
+         "details": f"NIF {nif}", "avatar": None, "confidence": "confirmed"},
+    ]
+    edges: List[Dict[str, Any]] = []
+    for hit in hits:
+        node_id = f"src:{hit['site_name']}"
+        nodes.append({
+            "id": node_id,
+            "label": hit["site_name"],
+            "group": "fonte",
+            "url": hit.get("url"),
+            "details": hit.get("reason") or "",
+            "avatar": None,
+            "confidence": "confirmed",
+        })
+        edges.append({"source": nif, "target": node_id, "label": "consta em"})
+    for pivot in pivots:
+        site = pivot.get("site") or pivot.get("handle") or "?"
+        node_id = f"pv:{pivot.get('kind')}:{pivot.get('handle') or site}"
+        if any(n["id"] == node_id for n in nodes):
+            continue
+        nodes.append({
+            "id": node_id,
+            "label": str(site),
+            "group": "cross",
+            "url": pivot.get("url"),
+            "details": f"{pivot.get('kind')} via {pivot.get('source_site')}",
+            "avatar": None,
+            "confidence": "cross",
+        })
+        edges.append({"source": nif, "target": node_id, "label": str(pivot.get("kind") or "ligado a")})
+    return {"nodes": nodes, "edges": edges}
+
+
+async def scan_target(
+    target: str,
+    kind: str,
+    category: Optional[str] = None,
+    full_scan: bool = False,
+    categories: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Executa a recolha para o alvo e devolve resultado normalizado + grafo.
+
+    `username`/`email` vão ao user-scanner (uma ou **várias** categorias em
+    conjunto, com paralelismo limitado e deduplicação por plataforma); `nif` é
+    validado e cruzado com os dados internos (contribuintes, contratos,
+    societário, CIRE, cadastro, ontologia e pessoas).
+    """
     target = (target or "").strip()
     if not target:
-        raise ValueError("Alvo vazio: indique um username ou um email.")
+        raise ValueError("Alvo vazio: indique um username, um email ou um NIF.")
+    if kind == "nif":
+        # Recolha síncrona (várias pesquisas ao Elasticsearch): correr num thread
+        # para não bloquear o event loop do servidor.
+        return await asyncio.to_thread(scan_nif, target)
     if kind == "email" and not _EMAIL_RE.match(target):
         raise ValueError("Email inválido: escreva um endereço como nome@dominio.com.")
+    if kind not in OSINT_KINDS:
+        raise ValueError(f"Tipo de alvo '{kind}' não suportado. Use: {', '.join(OSINT_KINDS)}.")
     is_email = kind == "email"
-    categories = us_engine.load_categories(is_email=is_email)
+    available = us_engine.load_categories(is_email=is_email)
+    by_lower = {name.lower(): name for name in available}
 
-    chosen_category = None
-    if category:
-        chosen_category = next((c for c in categories if c.lower() == category.lower()), None)
-        if not chosen_category:
-            raise ValueError(f"Categoria '{category}' não encontrada. Disponíveis: {list(categories.keys())}")
-    elif not full_scan:
-        fallback = DEFAULT_CATEGORY.get(kind, list(categories.keys())[0] if categories else None)
-        if categories and fallback not in categories:
+    # Aceita `categories` (várias) e `category` (uma, compatibilidade).
+    requested: List[str] = []
+    for raw in list(categories or []) + ([category] if category else []):
+        name = by_lower.get(str(raw).strip().lower())
+        if not name:
+            raise ValueError(f"Categoria '{raw}' não encontrada. Disponíveis: {list(available.keys())}")
+        if name not in requested:
+            requested.append(name)
+
+    if not requested and not full_scan:
+        fallback = DEFAULT_CATEGORY.get(kind, next(iter(available), None))
+        if available and fallback not in available:
             # Não cair em silêncio numa categoria arbitrária: avisar no registo e
             # preferir uma categoria conhecida e razoável para email/social.
             logger.warning(
@@ -344,21 +837,40 @@ async def scan_target(target: str, kind: str, category: Optional[str] = None, fu
                 fallback,
                 kind,
             )
-        chosen_category = fallback if categories and fallback in categories else (list(categories.keys())[0] if categories else None)
+        chosen = fallback if available and fallback in available else next(iter(available), None)
+        if chosen:
+            requested = [chosen]
 
     t0 = time.time()
     raw_results: List[Any] = []
-    if full_scan or not chosen_category:
+    if full_scan:
         raw_results = await us_engine.check_all(target, is_email=is_email)
-    else:
-        raw_results = await us_engine.check_category(chosen_category, target, is_email=is_email)
+    elif len(requested) == 1:
+        raw_results = await us_engine.check_category(requested[0], target, is_email=is_email)
+    elif requested:
+        raw_results = await _check_categories(requested, target, is_email=is_email)
     duration = round(time.time() - t0, 2)
 
-    hits = [_result_to_hit(r) for r in raw_results]
-    scores = _confidence_of(raw_results)
+    # Deduplicação: a mesma plataforma pode aparecer em duas categorias; fica o
+    # primeiro resultado, porque a ordem de `raw_results` é estável — o que
+    # torna o resultado reprodutível entre execuções iguais.
+    seen: set = set()
+    unique: List[Any] = []
+    per_category: Dict[str, int] = {}
+    for item in raw_results:
+        site = str(getattr(item, "site_name", ""))
+        category_of = str(getattr(item, "category", "") or "?")
+        per_category[category_of] = per_category.get(category_of, 0) + 1
+        if site in seen:
+            continue
+        seen.add(site)
+        unique.append(item)
+
+    hits = [_result_to_hit(r) for r in unique]
+    scores = _confidence_of(unique)
     for hit in hits:
         hit["confidence"] = scores.get(hit["site_name"])
-    pivots = _pivots_of(raw_results)
+    pivots = _pivots_of(unique)
     found = sum(1 for h in hits if str(h["status"]).lower() == "found")
     not_found = sum(1 for h in hits if str(h["status"]).lower() == "not found")
     errors = sum(1 for h in hits if str(h["status"]).lower() == "error")
@@ -371,12 +883,31 @@ async def scan_target(target: str, kind: str, category: Optional[str] = None, fu
         "not_found": not_found,
         "errors": errors,
         "duration_s": duration,
-        "category": chosen_category,
+        "category": requested[0] if len(requested) == 1 else None,
+        "categories": requested,
+        "platforms_per_category": per_category,
         "hits": hits,
         "pivots": pivots,
         "stats": _stats_of(hits, pivots),
         "graph": _build_graph(hits, target, kind, pivots),
     }
+
+
+def _search_tokens(values: Iterable[Any]) -> List[str]:
+    """Palavras pesquisáveis a partir de nomes/aliases.
+
+    `names`/`pivot_sites` são keywords: só casam com o valor completo
+    («Johnson & Johnson»). Indexar as palavras (sem acentos e maiúsculas) é o que
+    permite encontrar um scan escrevendo apenas «johnson» ou «cilag».
+    """
+    tokens: set = set()
+    for value in values:
+        text = unicodedata.normalize("NFKD", str(value or ""))
+        text = "".join(ch for ch in text if not unicodedata.combining(ch)).lower()
+        for token in re.split(r"[^a-z0-9]+", text):
+            if len(token) >= 3:
+                tokens.add(token)
+    return sorted(tokens)[:80]
 
 
 def _indexable_facets(hits: List[Dict[str, Any]], pivots: List[Dict[str, Any]]) -> Dict[str, List[str]]:
@@ -398,11 +929,15 @@ def _indexable_facets(hits: List[Dict[str, Any]], pivots: List[Dict[str, Any]]) 
             emails.append(str(email).lower())
         if hit.get("site_name"):
             sites.append(str(hit["site_name"]).lower())
+    pivot_sites = sorted({str(p.get("site")) for p in pivots if p.get("site")})
+    aliases = sorted({str(p.get("site")) for p in pivots if p.get("kind") == "alias" and p.get("site")})
     return {
         "names": sorted(set(names)),
         "emails": sorted(set(emails)),
         "sites": sorted(set(sites)),
-        "pivot_sites": sorted({str(p.get("site")) for p in pivots if p.get("site")}),
+        "pivot_sites": pivot_sites,
+        "aliases": aliases,
+        "tokens": _search_tokens(list(names) + list(aliases) + list(pivot_sites)),
     }
 
 
@@ -474,6 +1009,7 @@ def search_saved_scans(q: Optional[str] = None, kind: Optional[str] = None, size
                 "query": q,
                 "fields": [
                     "target^3", "category", "names^2", "emails^2", "sites", "pivot_sites",
+                    "aliases^2", "tokens^2",
                     "hits.site_name", "hits.category",
                 ],
                 "operator": "and",
