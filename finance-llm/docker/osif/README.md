@@ -69,6 +69,11 @@ HIBP_API_KEY=
 
 - O upstream está fixado ao commit `e20dcee2abfaa57e51406fcd9155ba05d26f7c8b`
   (main, depois da tag `v2.0.0`). Atualizar = `fetch.ps1 -Force` + rebuild.
+- **Fins de linha**: o clone tem de ser feito com `core.autocrlf=false`
+  (o `fetch.ps1` já o faz). Com CRLF no Windows, o `docker-entrypoint.sh` do
+  backend falha no arranque com
+  `exec /usr/local/bin/docker-entrypoint.sh: no such file or directory`
+  (o shebang passa a `#!/bin/bash\r`) e o contentor fica em ciclo de reinícios.
 - O frontend é construído com um `default.conf` próprio (só estáticos) para não
   depender de `backend:6000` no arranque — ver `frontend-nginx.conf`.
 - O `console` (REPL estilo Metasploit) do upstream não é arrancado: precisa de

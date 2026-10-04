@@ -16,11 +16,13 @@ import { ArrowLeft, Building2, Euro, ExternalLink, FileText, Landmark, Loader2, 
 import { getContractRegionDetail, type RegionDetailEntity, type RegionDetailResponse, type RegionDetailRow } from "../contractsMapApi";
 import { getContractYears } from "../api";
 import { getContratosEsStatus } from "../contratosEsApi";
+import { getContratosFrStatus } from "../contratosFrApi";
 import { CONTRATOS_ES_VIEW, openResult } from "../openResult";
-import { LEVEL_LABELS, resolveIberiaRegion } from "../components/geo/iberia";
+import { LEVEL_LABELS as IBERIA_LEVEL_LABELS, resolveIberiaRegion } from "../components/geo/iberia";
+import { FRANCE_LEVEL_LABELS, resolveFranceRegion } from "../components/geo/france";
 
 interface RegionDetailWindowProps {
-  pais: "PT" | "ES";
+  pais: "PT" | "ES" | "FR";
   code: string;
   /** Ano do mapa (vazio = todos os anos). */
   ano?: number | null;
@@ -33,8 +35,8 @@ interface RegionDetailWindowProps {
   onOpenView?: (view: string, title?: string) => void;
 }
 
-const COUNTRY_LABELS: Record<"PT" | "ES", string> = { PT: "Portugal", ES: "Espanha" };
-const COUNTRY_COLORS: Record<"PT" | "ES", string> = { PT: "#10a37f", ES: "#f59e0b" };
+const COUNTRY_LABELS: Record<"PT" | "ES" | "FR", string> = { PT: "Portugal", ES: "Espanha", FR: "França" };
+const COUNTRY_COLORS: Record<"PT" | "ES" | "FR", string> = { PT: "#10a37f", ES: "#f59e0b", FR: "#3b82f6" };
 
 function formatNumber(value?: number | null) {
   if (value === undefined || value === null || Number.isNaN(value)) return "—";
@@ -193,23 +195,28 @@ export function RegionDetailWindow({ pais, code, ano, onClose, onOpenView }: Reg
   const [searchText, setSearchText] = useState("");
   const [search, setSearch] = useState<{ q?: string; cpv?: string }>({});
 
-  const region = useMemo(() => resolveIberiaRegion(pais, code), [pais, code]);
+  const region = useMemo(() => {
+    if (pais === "FR") return resolveFranceRegion(code);
+    return resolveIberiaRegion(pais, code);
+  }, [pais, code]);
   const title = region?.name ?? data?.code ?? code;
 
   useEffect(() => {
     setAnoLocal(ano ?? "");
   }, [ano]);
 
-  /** Anos indexados nos dois países (o ano do mapa é só a sugestão inicial). */
+  /** Anos indexados nos três países (o ano do mapa é só a sugestão inicial). */
   useEffect(() => {
     Promise.all([
       pais === "PT" ? getContractYears() : Promise.resolve(null),
       pais === "ES" ? getContratosEsStatus() : Promise.resolve(null),
+      pais === "FR" ? getContratosFrStatus() : Promise.resolve(null),
     ])
-      .then(([pt, es]) => {
+      .then(([pt, es, fr]) => {
         const all = new Set<number>();
         for (const row of pt?.indexed ?? []) all.add(row.year);
         for (const year of es?.years ?? []) all.add(year);
+        for (const year of fr?.years ?? []) all.add(year);
         setYears([...all].sort((a, b) => b - a));
       })
       .catch(() => setYears([]));
@@ -311,7 +318,7 @@ export function RegionDetailWindow({ pais, code, ano, onClose, onOpenView }: Reg
           <h1 className="truncate text-sm font-semibold leading-tight">{title} · contratos e entidades</h1>
           <p className="text-[11px] text-muted-foreground">
             {COUNTRY_LABELS[pais]}
-            {region ? ` · ${LEVEL_LABELS[region.level]}` : ""}
+            {region ? ` · ${pais === "FR" ? FRANCE_LEVEL_LABELS[region.level as keyof typeof FRANCE_LEVEL_LABELS] : IBERIA_LEVEL_LABELS[region.level as keyof typeof IBERIA_LEVEL_LABELS]}` : ""}
             {region?.approx ? " · posição aproximada no mapa" : ""}
           </p>
         </div>

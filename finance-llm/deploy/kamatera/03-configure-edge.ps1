@@ -33,8 +33,15 @@ if ($originHost -notmatch '\.trycloudflare\.com$') { throw "Hostname de origem i
 function Invoke-VmSsh {
     param([Parameter(Mandatory = $true)][string]$Command)
     for ($i = 1; $i -le $Attempts; $i++) {
+        # O ssh escreve os erros de ligacao em stderr; com ErrorActionPreference a
+        # Stop isso vira erro terminante em vez de dar nova tentativa.
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
         $out = & ssh -i $SshKey -o BatchMode=yes -o ConnectTimeout=8 -o LogLevel=ERROR "$SshUser@$SshHost" $Command 2>&1
-        if ($LASTEXITCODE -eq 0) { return ($out -join "`n") }
+        $rc = $LASTEXITCODE
+        $ErrorActionPreference = $prev
+        if ($rc -eq 0) { return ($out -join "`n") }
+        Write-Host ("  tentativa {0}/{1} falhou, a repetir..." -f $i, $Attempts) -ForegroundColor DarkGray
         Start-Sleep -Seconds 2
     }
     throw "ssh falhou apos $Attempts tentativas"

@@ -508,6 +508,51 @@ export function migrateDefaultIframePages(): IframePageConfig[] {
 }
 
 /**
+ * Páginas predefinidas acrescentadas à solução **depois** da primeira semente.
+ *
+ * A semente inicial (`installDefaultIframePages`) só corre para browsers que
+ * nunca tiveram páginas: quem já tinha a lista instalada não receberia as
+ * páginas novas. Cada entrada aqui é acrescentada **uma vez** por browser
+ * (marcador próprio, como o da semente), para que quem a apague não a volte a
+ * ver no arranque seguinte.
+ */
+const LATE_DEFAULT_PAGES: { id: string; marker: string }[] = [
+  // OSIF — OSINT Framework v2 (perfil `osif` do compose; ver docker/osif/README.md).
+  { id: "iqos-osif", marker: "finance-llm-iframe-pages:seeded:osif" },
+];
+
+function hasLateSeeded(marker: string): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return window.localStorage.getItem(marker) === "1";
+  } catch {
+    return true;
+  }
+}
+
+/** Acrescenta as páginas predefinidas tardias que ainda não existam (uma vez). */
+export function installLateDefaultIframePages(): IframePageConfig[] {
+  const defaults = defaultIframePages();
+  let next = cache;
+  let changed = false;
+  for (const { id, marker } of LATE_DEFAULT_PAGES) {
+    if (hasLateSeeded(marker)) continue;
+    const page = defaults.find((item) => item.id === id);
+    if (page && !next.some((item) => item.id === id)) {
+      next = [...next, page];
+      changed = true;
+    }
+    try {
+      window.localStorage.setItem(marker, "1");
+    } catch {
+      // Sem localStorage: mantém-se o comportamento em memória.
+    }
+  }
+  if (changed) commit(next);
+  return next;
+}
+
+/**
  * Sincroniza as páginas iframe vindas do servidor (preferências do utilizador)
  * com o cache local. Chamado pelo `AuthProvider` quando o perfil é carregado.
  *
@@ -522,6 +567,7 @@ export function syncIframePagesFromUser(pages?: unknown[] | null): void {
 
   if (!sanitized.length && !hasSeededDefaults()) {
     installDefaultIframePages();
+    installLateDefaultIframePages();
     return;
   }
   const local = readRaw();
@@ -529,10 +575,12 @@ export function syncIframePagesFromUser(pages?: unknown[] | null): void {
     // Títulos das predefinidas que entretanto mudaram de nome (ex.: «MiroFish» →
     // «Simulador IQ OS · Estúdio»).
     migrateDefaultIframePages();
+    installLateDefaultIframePages();
     return;
   }
   cache = sanitized;
   revision += 1;
   persistLocal(sanitized);
   window.dispatchEvent(new Event(CHANGE_EVENT));
+  installLateDefaultIframePages();
 }

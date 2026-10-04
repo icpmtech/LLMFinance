@@ -33,50 +33,68 @@ import {
 } from "lucide-react";
 import {
   getContractsIberiaMap,
+  type IberiaMapCountry,
   type IberiaMapRegion,
   type IberiaMapResponse,
 } from "../contractsMapApi";
 import { autocompleteContracts, getContractYears, searchContracts } from "../api";
 import { autocompleteContratosEs, getContratosEsStatus, searchContratosEs } from "../contratosEsApi";
+import { autocompleteContratosFr, getContratosFrStatus, searchContratosFr } from "../contratosFrApi";
 import type { ContractItem } from "../types";
 import {
   IBERIA_ISLANDS_VIEW,
   IBERIA_VIEW,
-  LEVEL_LABELS,
+  LEVEL_LABELS as IBERIA_LEVEL_LABELS,
   allIberiaRegions,
   foldIberiaText,
-  isOffshoreRegion,
+  isOffshoreRegion as isOffshoreIberiaRegion,
   resolveIberiaRegion,
   type IberiaRegion,
 } from "../components/geo/iberia";
+import {
+  FRANCE_ISLANDS_VIEW,
+  FRANCE_VIEW,
+  FRANCE_LEVEL_LABELS,
+  allFranceRegions,
+  isOffshoreFranceRegion,
+  resolveFranceRegion,
+  type FranceRegion,
+} from "../components/geo/france";
 import { TILE_SIZE, latToWorld, lonToWorld, worldToLat, worldToLon } from "../components/graph/geo";
 
-interface ContractsMapPageProps {
+  interface ContractsMapPageProps {
   onSwitchView: () => void;
-  /**
-   * Abre a ficha de uma região (contratos, entidades e métricas). O App decide
-   * se abre numa janela própria ou numa vista de página inteira.
-   */
-  onOpenRegionDetail?: (pais: "PT" | "ES", code: string, label: string, ano: number | null) => void;
+  onOpenRegionDetail?: (pais: IberiaMapCountry, code: string, label: string, ano: number | null) => void;
 }
 
 type Metric = "value" | "count";
 /** Filtros de pesquisa aplicados ao agregado do mapa. */
 type MapFilters = { q?: string; entidade?: string; cpv?: string };
 /** Sugestão escolhida na caixa de pesquisa. */
-type Suggestion = { text: string; kind: "entidade" | "cpv"; pais: "PT" | "ES"; count: number };
+type Suggestion = { text: string; kind: "entidade" | "cpv"; pais: CountryFilter; count: number };
 
-type CountryFilter = "all" | "PT" | "ES";
+type CountryFilter = "all" | "PT" | "ES" | "FR";
 
-const COUNTRY_COLORS: Record<"PT" | "ES", string> = { PT: "#10a37f", ES: "#f59e0b" };
-const COUNTRY_LABELS: Record<"PT" | "ES", string> = { PT: "Portugal", ES: "Espanha" };
+const COUNTRY_COLORS: Record<CountryFilter, string> = { all: "#64748b", PT: "#10a37f", ES: "#f59e0b", FR: "#3b82f6" };
+const COUNTRY_LABELS: Record<CountryFilter, string> = { all: "Ambos", PT: "Portugal", ES: "Espanha", FR: "França" };
+
+/** Região visualizável: ibérica ou francesa (garantimos pais em ambas). */
+type MapRegion = (IberiaRegion | FranceRegion) & { pais: "PT" | "ES" | "FR" };
+
+type MapRegionWithSource = MapRegion & { source?: "iberia" | "france" };
 
 /** Placed region: linha da API + posição resolvida no mapa. */
-type PlacedRegion = { row: IberiaMapRegion; region: IberiaRegion };
+type PlacedRegion = { row: IberiaMapRegion; region: MapRegion };
 
 function formatNumber(value?: number | null) {
   if (value === undefined || value === null || Number.isNaN(value)) return "—";
   return value.toLocaleString("pt-PT");
+}
+
+function levelLabel(region: { pais: "PT" | "ES" | "FR"; level: string } | MapRegion): string {
+  return region.pais === "FR"
+    ? FRANCE_LEVEL_LABELS[region.level as keyof typeof FRANCE_LEVEL_LABELS]
+    : IBERIA_LEVEL_LABELS[region.level as keyof typeof IBERIA_LEVEL_LABELS];
 }
 
 function formatEuro(value?: number | null) {
@@ -142,7 +160,7 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [selected, setSelected] = useState<{ pais: "PT" | "ES"; code: string } | null>(null);
+  const [selected, setSelected] = useState<{ pais: IberiaMapCountry; code: string } | null>(null);
   const [hovered, setHovered] = useState<PlacedRegion | null>(null);
   /** Menu de contexto do mapa (botão direito): sobre uma região ou no fundo. */
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entry: PlacedRegion | null } | null>(null);
@@ -240,14 +258,23 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
     return () => element.removeEventListener("wheel", onWheel);
   }, [zoomAt]);
 
-  const focusRegion = useCallback((region: IberiaRegion) => {
+  const focusRegion = useCallback((region: MapRegionWithSource) => {
     setCenter({ lat: region.lat, lon: region.lon });
-    setZoom(region.level === "distrito" || region.level === "nuts3" ? 8 : 6);
+    if (region.pais === "FR") {
+      setZoom(region.level === "departamento" ? 9 : 7);
+    } else {
+      setZoom(region.level === "distrito" || region.level === "nuts3" ? 8 : 6);
+    }
   }, []);
 
   const resetView = useCallback(() => {
     setCenter(IBERIA_VIEW.center);
     setZoom(IBERIA_VIEW.zoom);
+  }, []);
+
+  const resetFranceView = useCallback(() => {
+    setCenter(FRANCE_VIEW.center);
+    setZoom(FRANCE_VIEW.zoom);
   }, []);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -322,11 +349,12 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
   /* ------------------------------------------------------------- dados */
 
   useEffect(() => {
-    Promise.all([getContractYears(), getContratosEsStatus()])
-      .then(([pt, es]) => {
+    Promise.all([getContractYears(), getContratosEsStatus(), getContratosFrStatus()])
+      .then(([pt, es, fr]) => {
         const all = new Set<number>();
         for (const row of pt?.indexed ?? []) all.add(row.year);
         for (const year of es?.years ?? []) all.add(year);
+        for (const year of fr?.years ?? []) all.add(year);
         setYears([...all].sort((a, b) => b - a));
       })
       .catch(() => setYears([]));
@@ -357,24 +385,44 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
     void loadMap();
   }, [loadMap]);
 
+  const resolveRegion = useCallback((pais: IberiaMapCountry, code: string, level?: string): MapRegion | null => {
+    if (pais === "FR") {
+      const fr = resolveFranceRegion(code, level);
+      return fr ? { ...fr, pais: "FR" as const } : null;
+    }
+    return resolveIberiaRegion(pais, code);
+  }, []);
+
   /** Regiões com posição no mapa (as restantes ficam em "sem localização"). */
   const placed = useMemo<PlacedRegion[]>(() => {
     if (!data) return [];
     const rows: PlacedRegion[] = [];
     for (const row of data.regions) {
-      const region = resolveIberiaRegion(row.pais, row.code);
+      const region = resolveRegion(row.pais, row.code, row.level);
       if (region) rows.push({ row, region });
     }
     return rows;
-  }, [data]);
+  }, [data, resolveRegion]);
 
   const unplacedRows = useMemo(
-    () => (data ? data.regions.filter((row) => !resolveIberiaRegion(row.pais, row.code)) : []),
-    [data],
+    () => (data ? data.regions.filter((row) => !resolveRegion(row.pais, row.code, row.level)) : []),
+    [data, resolveRegion],
   );
 
-  const offshore = useMemo(() => placed.filter((entry) => isOffshoreRegion(entry.region)), [placed]);
-  const onMap = useMemo(() => placed.filter((entry) => !isOffshoreRegion(entry.region)), [placed]);
+  const offshore = useMemo(
+    () =>
+      placed.filter((entry) =>
+        entry.row.pais === "FR" ? isOffshoreFranceRegion(entry.region as FranceRegion) : isOffshoreIberiaRegion(entry.region),
+      ),
+    [placed],
+  );
+  const onMap = useMemo(
+    () =>
+      placed.filter((entry) =>
+        entry.row.pais === "FR" ? !isOffshoreFranceRegion(entry.region as FranceRegion) : !isOffshoreIberiaRegion(entry.region),
+      ),
+    [placed],
+  );
 
   const metricOf = useCallback(
     (row: IberiaMapRegion) => (metric === "value" ? row.total_value : row.count),
@@ -399,8 +447,10 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
       countries,
       PT: byCountry.PT ?? { total_contracts: 0, total_value: 0 },
       ES: byCountry.ES ?? { total_contracts: 0, total_value: 0 },
+      FR: byCountry.FR ?? { total_contracts: 0, total_value: 0 },
       unspecifiedPT: data?.unspecified?.PT ?? empty,
       unspecifiedES: data?.unspecified?.ES ?? empty,
+      unspecifiedFR: data?.unspecified?.FR ?? empty,
       other: data?.other_locations ?? empty,
     };
   }, [data]);
@@ -442,7 +492,7 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
           });
           if (!active) return;
           setRegionContracts((response.items ?? []).map(ptRegionContract));
-        } else {
+        } else if (selected.pais === "ES") {
           const response = await searchContratosEs({
             nuts: selected.code,
             ano: year,
@@ -459,6 +509,26 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
               title: item.objeto?.trim() || item.descripcion?.trim() || "Contrato sem objeto descrito",
               subtitle: [item.organo_nombre, item.adjudicatario_nombre].filter(Boolean).join(" → ") || "Sem entidades",
               value: item.valor_adjudicado ?? item.valor_base ?? null,
+              ano: item.ano ?? null,
+            })),
+          );
+        } else {
+          const response = await searchContratosFr({
+            lieu_execution_code: selected.code,
+            ano: year,
+            q: [filters.q, filters.entidade].filter(Boolean).join(" ") || undefined,
+            cpv_code: filters.cpv,
+            size: 6,
+            sort_by: "montant",
+            sort_order: "desc",
+          });
+          if (!active) return;
+          setRegionContracts(
+            (response.items ?? []).map((item, index) => ({
+              id: item.doc_id ?? item.uid ?? String(index),
+              title: item.objet?.trim() || "Contrato sem objeto descrito",
+              subtitle: [item.acheteur_nom, item.adjudicatario_nom].filter(Boolean).join(" → ") || "Sem entidades",
+              value: item.montant ?? item.montant_estime ?? null,
               ano: item.ano ?? null,
             })),
           );
@@ -481,9 +551,11 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
   const regionSuggestions = useMemo(() => {
     const text = foldIberiaText(searchText);
     if (text.length < 2) return [];
-    return allIberiaRegions()
+    const iberia: MapRegionWithSource[] = allIberiaRegions().map((r) => ({ ...r, source: "iberia" as const, pais: r.pais }));
+    const france: MapRegionWithSource[] = allFranceRegions().map((r) => ({ ...r, source: "france" as const, pais: "FR" as const }));
+    return [...iberia, ...france]
       .filter((region) => foldIberiaText(region.name).includes(text) || foldIberiaText(region.code).includes(text))
-      .slice(0, 5);
+      .slice(0, 6);
   }, [searchText]);
 
   /** Sugestões de entidades e CPV dos dois países (com atraso, para não martelar a API). */
@@ -498,9 +570,10 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
     setSuggestLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const [pt, es] = await Promise.all([
-          autocompleteContracts(text, 6).catch(() => null),
-          autocompleteContratosEs(text, 6).catch(() => null),
+        const [pt, es, fr] = await Promise.all([
+          autocompleteContracts(text, 4).catch(() => null),
+          autocompleteContratosEs(text, 4).catch(() => null),
+          autocompleteContratosFr(text, 4).catch(() => null),
         ]);
         if (!active) return;
         const rows: Suggestion[] = [];
@@ -509,6 +582,9 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
         }
         for (const item of es?.suggestions ?? []) {
           rows.push({ text: item.text, kind: item.type === "cpv" ? "cpv" : "entidade", pais: "ES", count: item.count ?? 0 });
+        }
+        for (const item of fr?.suggestions ?? []) {
+          rows.push({ text: item.text, kind: item.type === "cpv" ? "cpv" : "entidade", pais: "FR", count: item.count ?? 0 });
         }
         setSuggestions(rows.slice(0, 12));
       } catch {
@@ -541,8 +617,8 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
     setSuggestOpen(false);
   };
 
-  const goToRegion = (region: IberiaRegion) => {
-    setSelected({ pais: region.pais, code: region.code });
+  const goToRegion = (region: MapRegionWithSource) => {
+    setSelected({ pais: region.pais as IberiaMapCountry, code: region.code });
     focusRegion(region);
     setSearchText("");
     setSuggestOpen(false);
@@ -558,7 +634,7 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
     [filters],
   );
   const hasFilters = activeFilters.length > 0;
-  const matchedTotal = totals.PT.total_contracts + totals.ES.total_contracts;
+  const matchedTotal = totals.PT.total_contracts + totals.ES.total_contracts + totals.FR.total_contracts;
 
   const bubbleRadius = (value: number) => {
     const ratio = maxMetric > 0 ? Math.max(0, value) / maxMetric : 0;
@@ -586,9 +662,9 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
         <div className="flex items-center gap-2">
           <MapPin size={18} className="text-primary" />
           <div>
-            <h1 className="text-sm font-semibold leading-tight">Mapa de contratos · Portugal e Espanha</h1>
+            <h1 className="text-sm font-semibold leading-tight">Mapa de contratos · Portugal, Espanha e França</h1>
             <p className="text-[11px] text-muted-foreground">
-              Por distrito de execução (PT) e província/NUTS (ES)
+              Por distrito (PT), província/NUTS (ES) e departamento/região (FR)
             </p>
           </div>
         </div>
@@ -653,7 +729,8 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
                       <MapPin size={12} className="shrink-0 text-muted-foreground" />
                       <span className="truncate">{region.name}</span>
                       <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
-                        {COUNTRY_LABELS[region.pais]} · {LEVEL_LABELS[region.level]}
+                        {COUNTRY_LABELS[region.pais]} ·{" "}
+                        {levelLabel(region)}
                       </span>
                     </button>
                   ))}
@@ -706,7 +783,7 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 rounded-2xl glass-card p-1 text-xs">
-            {(["all", "PT", "ES"] as CountryFilter[]).map((candidate) => (
+            {(["all", "PT", "ES", "FR"] as CountryFilter[]).map((candidate) => (
               <button
                 key={candidate}
                 type="button"
@@ -716,7 +793,7 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
                   country === candidate ? "bg-primary/15 text-primary" : "hover:bg-white/5"
                 }`}
               >
-                {candidate === "all" ? "Ambos" : COUNTRY_LABELS[candidate]}
+                {candidate === "all" ? "Todos" : COUNTRY_LABELS[candidate]}
               </button>
             ))}
           </div>
@@ -800,7 +877,7 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
           ref={containerRef}
           tabIndex={0}
           role="application"
-          aria-label="Mapa de contratos de Portugal e Espanha: arraste para navegar, roda do rato para zoom, 0 para reenquadrar"
+          aria-label="Mapa de contratos de Portugal, Espanha e França: arraste para navegar, roda do rato para zoom, 0 para reenquadrar"
           onKeyDown={handleKeyDown}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -874,7 +951,7 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
           {loading && (
             <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-[#04121a]/70 text-xs text-muted-foreground">
               <Loader2 size={20} className="animate-spin" />
-              A agregar contratos de Portugal e Espanha…
+              A agregar contratos de Portugal, Espanha e França…
               <span className="text-[10px]">A primeira consulta pode demorar alguns segundos.</span>
             </div>
           )}
@@ -897,7 +974,7 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
                 <span className="h-2.5 w-2.5 rounded-full" style={{ background: COUNTRY_COLORS[spotlight.row.pais] }} />
                 <span className="text-sm font-medium">{spotlight.region.name}</span>
                 <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  {LEVEL_LABELS[spotlight.region.level]}
+                  {levelLabel(spotlight.region)}
                 </span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -907,7 +984,7 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
               {spotlight.region.approx && (
                 <p className="mt-1 flex items-start gap-1 text-[10px] text-amber-200">
                   <Info size={12} className="mt-0.5 shrink-0" />
-                  Posição aproximada: o dado só identifica {LEVEL_LABELS[spotlight.region.level].toLowerCase()}.
+                  Posição aproximada: o dado só identifica {levelLabel(spotlight.region).toLowerCase()}.
                 </p>
               )}
             </div>
@@ -942,6 +1019,15 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
                 <Crosshair size={15} />
               </button>
             </div>
+            <button
+              type="button"
+              onClick={resetFranceView}
+              className="rounded-xl bg-[#07151b]/90 px-2 py-1 text-[10px] text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+              aria-label="Reenquadrar França"
+              title="Reenquadrar França"
+            >
+              França
+            </button>
             <span className="rounded-full bg-[#07151b]/90 px-2 py-1 text-[10px] text-muted-foreground">Nível {zoom}</span>
           </div>
 
@@ -964,7 +1050,7 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
                       {contextMenu.entry.region.name}
                     </p>
                     <p className="mt-0.5 text-[10px] text-muted-foreground">
-                      {COUNTRY_LABELS[contextMenu.entry.row.pais]} · {LEVEL_LABELS[contextMenu.entry.region.level]} ·{" "}
+                      {COUNTRY_LABELS[contextMenu.entry.row.pais]} · {levelLabel(contextMenu.entry.region)} ·{" "}
                       {formatNumber(contextMenu.entry.row.count)} contratos ·{" "}
                       {formatCompactEuro(contextMenu.entry.row.total_value)}
                     </p>
@@ -1029,7 +1115,7 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
                     className="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition hover:bg-white/10"
                   >
                     <RotateCcw size={13} className="shrink-0" />
-                    Reenquadrar Portugal e Espanha
+                    Reenquadrar Península
                   </button>
                   <button
                     type="button"
@@ -1042,7 +1128,32 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
                     className="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition hover:bg-white/10"
                   >
                     <Globe2 size={13} className="shrink-0" />
-                    Ver ilhas (Açores, Madeira, Canárias)
+                    Ver ilhas ibéricas (Açores, Madeira, Canárias)
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      resetFranceView();
+                      setContextMenu(null);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition hover:bg-white/10"
+                  >
+                    <Globe2 size={13} className="shrink-0" />
+                    Ver França
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setCenter(FRANCE_ISLANDS_VIEW.center);
+                      setZoom(FRANCE_ISLANDS_VIEW.zoom);
+                      setContextMenu(null);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left text-xs transition hover:bg-white/10"
+                  >
+                    <Globe2 size={13} className="shrink-0" />
+                    Ver ilhas francesas (DOM/TOM)
                   </button>
                   {hasFilters && (
                     <button
@@ -1109,12 +1220,11 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
           ))}
 
           {/* Totais por país */}
-          <div className="grid grid-cols-2 gap-2">
-            {(["PT", "ES"] as const).map((code) => {
+          <div className="grid grid-cols-3 gap-2">
+            {(["PT", "ES", "FR"] as const).map((code) => {
               const row = totals[code];
-              const share = totals.PT.total_value + totals.ES.total_value > 0
-                ? (row.total_value / (totals.PT.total_value + totals.ES.total_value)) * 100
-                : 0;
+              const denominator = totals.PT.total_value + totals.ES.total_value + totals.FR.total_value;
+              const share = denominator > 0 ? (row.total_value / denominator) * 100 : 0;
               return (
                 <div key={code} className="rounded-2xl glass-card p-3">
                   <div className="flex items-center gap-2">
@@ -1126,7 +1236,7 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
                     <div className="h-full rounded-full" style={{ width: `${share}%`, background: COUNTRY_COLORS[code] }} />
                   </div>
-                  <p className="mt-1 text-[10px] text-muted-foreground">{share.toFixed(1)}% do valor da Península</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">{share.toFixed(1)}% do total</p>
                 </div>
               );
             })}
@@ -1184,7 +1294,7 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
                 <div className="min-w-0 flex-1">
                   <h2 className="truncate text-sm font-semibold">{selectedEntry.region.name}</h2>
                   <p className="text-[11px] text-muted-foreground">
-                    {COUNTRY_LABELS[selectedEntry.row.pais]} · {LEVEL_LABELS[selectedEntry.region.level]}
+                    {COUNTRY_LABELS[selectedEntry.row.pais]} · {levelLabel(selectedEntry.region)}
                     {selectedEntry.region.approx ? " · posição aproximada" : ""}
                   </p>
                 </div>
@@ -1315,27 +1425,29 @@ export function ContractsMapPage({ onSwitchView, onOpenRegionDetail }: Contracts
                   distrito de execução nos dados.
                 </li>
               )}
-              {totals.ES.total_contracts > 0 && (
+              {totals.FR.total_contracts > 0 && (
                 <li>
-                  Espanha · {formatNumber(totals.unspecifiedES.count)} contratos ({formatCompactEuro(totals.unspecifiedES.total_value)}) sem
-                  código de localização.
+                  França · {formatNumber(totals.unspecifiedFR.count)} contratos ({formatCompactEuro(totals.unspecifiedFR.total_value)}) sem
+                  departamento/região de execução nos dados.
                 </li>
               )}
               {totals.other.count > 0 && (
                 <li>
-                  {formatNumber(totals.other.count)} contratos de Espanha executados fora do país (
+                  {formatNumber(totals.other.count)} contratos executados fora do país de origem (
                   {formatCompactEuro(totals.other.total_value)}).
                 </li>
               )}
             </ul>
             <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-              Cada círculo é uma região administrativa (distrito em Portugal, província em Espanha) posicionada na sua
-              capital — os contratos publicados não trazem coordenadas. Círculos tracejados são regiões que o dado só
-              identifica ao nível de comunidade autónoma ou agrupamento NUTS. Portugal agrega por <code>localExecucao</code>{" "}
-              (o campo <code>NUTs</code> só existe em ~14% dos contratos); Espanha por <code>nuts</code>. A pesquisa do mapa
-              exige todos os termos (a pesquisa livre das outras páginas é mais permissiva) e aceita também o nome de uma
-              região, que aqui serve para saltar até ela. Em Portugal, um contrato com execução em vários distritos conta
-              em cada um deles — a ficha da região (botão direito sobre o círculo) dá o número exato de contratos.
+              Cada círculo é uma região administrativa (distrito em Portugal, província em Espanha, departamento em
+              França) posicionada na sua capital — os contratos publicados não trazem coordenadas. Círculos tracejados
+              são regiões que o dado só identifica ao nível de comunidade autónoma, região francesa ou agrupamento
+              NUTS. Portugal agrega por <code>localExecucao</code>{" "}
+              (o campo <code>NUTs</code> só existe em ~14% dos contratos); Espanha por <code>nuts</code>; França por{" "}
+              <code>lieu_execution_code</code> (departamento/região). A pesquisa do mapa exige todos os termos (a
+              pesquisa livre das outras páginas é mais permissiva) e aceita também o nome de uma região, que aqui
+              serve para saltar até ela. Em Portugal, um contrato com execução em vários distritos conta em cada um deles
+              — a ficha da região (botão direito sobre o círculo) dá o número exato de contratos.
             </p>
           </div>
         </aside>

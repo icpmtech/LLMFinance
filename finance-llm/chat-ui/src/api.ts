@@ -1432,6 +1432,8 @@ export async function searchPeople(
     source?: string;
     /** Partido político (sub-string, sem distinção de maiúsculas). */
     party?: string;
+    /** Tag a exigir no campo `tags` (ex.: `politica`, `deputados`). */
+    tag?: string;
     minRoles?: number;
     minCompanies?: number;
     sort?: "relevance" | "roles" | "recent" | "name";
@@ -1447,6 +1449,7 @@ export async function searchPeople(
   if (opts?.origin) params.set("origin", opts.origin);
   if (opts?.source) params.set("source", opts.source);
   if (opts?.party) params.set("party", opts.party);
+  if (opts?.tag) params.set("tag", opts.tag);
   if (opts?.minRoles) params.set("min_roles", String(opts.minRoles));
   if (opts?.minCompanies) params.set("min_companies", String(opts.minCompanies));
   if (opts?.sort) params.set("sort", opts.sort);

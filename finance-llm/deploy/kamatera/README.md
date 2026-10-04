@@ -134,7 +134,9 @@ ssh root@45.147.251.188 "cd /opt/iqos/edge && docker compose down"
 - VM: **6 USD/mes**. Quick tunnels Cloudflare: gratuitos. Sem portas publicas
   alem do SSH.
 - O PC nao pode adormecer (a origem cai):
-  `powercfg /change standby-timeout-ac 0`.
+  `powershell -File deploy\kamatera\00-keep-awake.ps1` — ja aplicado (suspensao,
+  hibernacao e desligar do ecra a "nunca", AC e DC, esquema Balanced).
+  Reverter com `-Restore`.
 - Um quick tunnel nao tem Cloudflare Access: quem tiver o endereco chega a
   aplicacao (a autenticacao por conta de utilizador do IQ OS continua ativa).
   Para um hostname fixo, usar `deploy/gcp/01-setup-tunnels.ps1` (tunel nomeado).

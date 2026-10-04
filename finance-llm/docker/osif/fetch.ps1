@@ -22,5 +22,9 @@ if (Test-Path (Join-Path $dest ".git")) {
     Remove-Item -Recurse -Force $dest
 }
 
-git clone --depth 1 --branch $Ref https://github.com/fr4nc1stein/osint-framework.git $dest
+# core.autocrlf=false: no Windows, o valor global (habitualmente "true") converte
+# os fins de linha em CRLF. O `docker-entrypoint.sh` do OSIF tem shebang
+# `#!/bin/bash` e, com CRLF, o contentor morre no arranque com
+# "exec /usr/local/bin/docker-entrypoint.sh: no such file or directory".
+git -c core.autocrlf=false -c core.eol=lf clone --depth 1 --branch $Ref https://github.com/fr4nc1stein/osint-framework.git $dest
 Write-Output "Clonado '$Ref' para $dest"

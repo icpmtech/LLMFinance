@@ -5856,6 +5856,80 @@ def _es_code_level(code: str) -> str:
     return "pais"
 
 
+# Campos pesquisáveis do mapa para França (DECP).
+_IBERIA_TEXT_FIELDS_FR = ["objet^4", "search_text", "acheteur_nom^2", "adjudicatario_nom^2"]
+
+
+def _iberia_map_france(
+    client: Elasticsearch,
+    ano: Optional[int],
+    q: Optional[str] = None,
+    entidade: Optional[str] = None,
+    cpv: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Contratos de França agregados por local de execução, no formato ibérico."""
+    from api.contratos_fr_map import get_contratos_fr_map
+
+    texto = " ".join(part.strip() for part in (q, entidade) if part and part.strip())
+    raw = get_contratos_fr_map(
+        q=texto or None,
+        ano=ano,
+        cpv_code=cpv,
+        es=client,
+    )
+    if raw.get("error"):
+        return {
+            "total_contracts": 0,
+            "total_value": 0.0,
+            "regions": [],
+            "unspecified": {"count": 0, "total_value": 0.0},
+            "other_locations": {"count": 0, "total_value": 0.0},
+            "warnings": [raw["error"]],
+        }
+
+    regions: List[Dict[str, Any]] = []
+    for item in raw.get("regions", []):
+        regions.append({
+            "pais": "FR",
+            "code": str(item["code"]),
+            "label": item["label"],
+            "level": item.get("level", "departamento"),
+            "count": int(item.get("contracts", 0)),
+            "total_value": round(float(item.get("value", 0.0)), 2),
+        })
+
+    # O módulo francês separa offshore; aqui juntamos tudo nas regiões e
+    # deixamos o frontend decidir o enquadramento, tal como para PT/ES.
+    for item in raw.get("offshore", []):
+        regions.append({
+            "pais": "FR",
+            "code": str(item["code"]),
+            "label": item["label"],
+            "level": item.get("level", "departamento"),
+            "count": int(item.get("contracts", 0)),
+            "total_value": round(float(item.get("value", 0.0)), 2),
+        })
+
+    not_plotted_count = 0
+    not_plotted_value = 0.0
+    for item in raw.get("not_plotted", []):
+        not_plotted_count += int(item.get("contracts", 0))
+        not_plotted_value += float(item.get("value", 0.0))
+    for item in raw.get("countries", []):
+        if item.get("code", "").upper() != "FR":
+            not_plotted_count += int(item.get("contracts", 0))
+            not_plotted_value += float(item.get("value", 0.0))
+
+    return {
+        "total_contracts": int(raw.get("total", 0)),
+        "total_value": round(float(raw.get("value", 0.0)), 2),
+        "regions": regions,
+        "unspecified": {"count": not_plotted_count, "total_value": round(not_plotted_value, 2)},
+        "other_locations": {"count": 0, "total_value": 0.0},
+        "warnings": raw.get("warnings", []),
+    }
+
+
 def _iberia_map_portugal(
     client: Elasticsearch,
     ano: Optional[int],
@@ -6040,6 +6114,8 @@ def get_contracts_iberia_map(
         selecao = "pt"
     elif selecao in ("es", "espanha", "spain"):
         selecao = "es"
+    elif selecao in ("fr", "franca", "france"):
+        selecao = "fr"
     else:
         selecao = "all"
 
@@ -6065,11 +6141,17 @@ def get_contracts_iberia_map(
             parts.append(("ES", _iberia_map_espanha(client, ano, q=q, entidade=entidade, cpv=cpv)))
         except Exception as exc:  # noqa: BLE001
             warnings.append(f"Espanha: {exc}")
+    if selecao in ("all", "fr"):
+        try:
+            parts.append(("FR", _iberia_map_france(client, ano, q=q, entidade=entidade, cpv=cpv)))
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(f"Fran\u00e7a: {exc}")
 
+    labels = {"PT": "Portugal", "ES": "Espanha", "FR": "Fran\u00e7a"}
     for code, part in parts:
         result["countries"].append({
             "code": code,
-            "label": "Portugal" if code == "PT" else "Espanha",
+            "label": labels[code],
             "total_contracts": part["total_contracts"],
             "total_value": part["total_value"],
         })
@@ -6077,6 +6159,8 @@ def get_contracts_iberia_map(
         result["unspecified"][code] = part["unspecified"]
         result["other_locations"]["count"] += part["other_locations"]["count"]
         result["other_locations"]["total_value"] += part["other_locations"]["total_value"]
+        if part.get("warnings"):
+            warnings.extend(part["warnings"])
 
     result["other_locations"]["total_value"] = round(result["other_locations"]["total_value"], 2)
     if warnings:
@@ -6540,6 +6624,231 @@ def _es_region_detail(
     }
 
 
+def _fr_region_detail(
+    client: Elasticsearch,
+    code: str,
+    level: str,
+    ano: Optional[int],
+    q: Optional[str],
+    cpv: Optional[str],
+    top_n: int,
+    contracts_size: int,
+) -> Dict[str, Any]:
+    """Ficha de uma região francesa: departamento, região ou país.
+
+    Usa a mesma base da pesquisa da página de França, filtrando por
+    `lieu_execution_code` e `lieu_execution_type`. O `level` diz se o código é
+    um departamento (`departamento`), uma região (`regiao`) ou o país (`pais`).
+    """
+    from api.contratos_fr_map import TIPOS_DEPARTAMENTO, TIPOS_PREFIXO
+
+    value_source = _contratos_fr_value_source("montant")
+
+    if level == "pais":
+        lieu_type = "Code pays"
+    elif level == "regiao":
+        lieu_type = "Code région"
+    else:
+        lieu_type = None
+
+    query = _build_contratos_fr_query(
+        q=q,
+        ano=ano,
+        cpv_code=cpv,
+        lieu_execution_code=code,
+        lieu_execution_type=lieu_type,
+    )
+    if level == "departamento":
+        text = " ".join(part.strip() for part in (q,) if part and part.strip())
+        must = query["bool"].get("must", [])
+        filters = [f for f in query["bool"].get("filter", [])]
+        # Código exato (Code département) OU prefixo dos tipos postais/comunais.
+        loc_filter = {
+            "bool": {
+                "should": [
+                    {
+                        "bool": {
+                            "filter": [
+                                {"term": {"lieu_execution_code": code}},
+                                {"terms": {"lieu_execution_type": list(TIPOS_DEPARTAMENTO)}},
+                            ]
+                        }
+                    },
+                    {
+                        "bool": {
+                            "filter": [
+                                {"terms": {"lieu_execution_type": list(TIPOS_PREFIXO)}},
+                                {"prefix": {"lieu_execution_code": code}},
+                            ]
+                        }
+                    },
+                ],
+                "minimum_should_match": 1,
+            }
+        }
+        filters = [f for f in filters if not (isinstance(f, dict) and f.get("prefix", {}).get("lieu_execution_code"))]
+        filters = [f for f in filters if not (isinstance(f, dict) and f.get("term", {}).get("lieu_execution_type"))]
+        query = {"bool": {"must": must, "filter": filters + [loc_filter]}}
+        if text:
+            query = _with_required(query, _iberia_text_query(text, _IBERIA_TEXT_FIELDS_FR))
+    elif q:
+        query = _with_required(query, _iberia_text_query(q, _IBERIA_TEXT_FIELDS_FR))
+
+    def with_value(agg: Dict[str, Any]) -> Dict[str, Any]:
+        return {**agg, "aggs": {"total_value": {"sum": value_source}}}
+
+    body: Dict[str, Any] = {
+        "size": 0,
+        "track_total_hits": True,
+        "query": query,
+        "aggs": {
+            "total_value": {"sum": value_source},
+            "avg_value": {"avg": value_source},
+            "max_value": {"max": value_source},
+            "by_year": {
+                "terms": {"field": "ano", "size": 50, "order": {"_key": "desc"}},
+                "aggs": {"total_value": {"sum": value_source}},
+            },
+            "top_acheteurs": {
+                "terms": {"field": "acheteur_nom.keyword", "size": top_n, "order": {"total_value": "desc"}},
+                "aggs": {"total_value": {"sum": value_source}},
+            },
+            "top_adjudicatarios": {
+                "terms": {"field": "adjudicatario_nom.keyword", "size": top_n, "order": {"total_value": "desc"}},
+                "aggs": {"total_value": {"sum": value_source}},
+            },
+            "top_cpv": {
+                "nested": {"path": "cpv"},
+                "aggs": {
+                    "codes": {
+                        "terms": {"field": "cpv.code", "size": top_n, "order": {"total_value": "desc"}},
+                        "aggs": {
+                            "nom": {"top_hits": {"size": 1, "_source": ["cpv.code", "cpv.nom"]}},
+                            "total_value": {"reverse_nested": {}, "aggs": {"value": {"sum": value_source}}},
+                        },
+                    }
+                },
+            },
+            "procedures": with_value({"terms": {"field": "procedure", "size": 10, "missing": "N/A"}}),
+            "natures": with_value({"terms": {"field": "nature", "size": 10, "missing": "N/A"}}),
+            "by_value_range": {
+                "histogram": {"script": value_source["script"], "interval": 100000, "min_doc_count": 1}
+            },
+            "top_contracts": {
+                "top_hits": {
+                    "size": contracts_size,
+                    "sort": [{"montant": {"order": "desc", "missing": "_last", "unmapped_type": "float"}}],
+                    "_source": [
+                        "objet",
+                        "acheteur_nom",
+                        "adjudicatario_nom",
+                        "montant",
+                        "montant_estime",
+                        "ano",
+                        "date_notification",
+                        "date_publication",
+                        "uid",
+                    ],
+                }
+            },
+        },
+    }
+
+    resp = client.search(index=CONTRATOS_FR_INDEX, body=body)
+    aggs = resp.get("aggregations", {}) or {}
+
+    def agg_value(bucket: Dict[str, Any]) -> float:
+        raw = (bucket or {}).get("total_value", {})
+        value = raw.get("value") if isinstance(raw, dict) else None
+        if isinstance(value, dict):
+            value = value.get("value")
+        return round(float(value or 0.0), 2)
+
+    def rows(agg_name: str) -> List[Dict[str, Any]]:
+        return [
+            {"key": str(b["key"]), "count": b["doc_count"], "total_value": agg_value(b)}
+            for b in (aggs.get(agg_name, {}) or {}).get("buckets", [])
+        ]
+
+    cpv_rows = []
+    for bucket in (aggs.get("top_cpv", {}) or {}).get("codes", {}).get("buckets", []):
+        cpv_rows.append({
+            "key": str(bucket.get("key")),
+            "count": bucket.get("doc_count", 0),
+            "total_value": agg_value(bucket),
+            "description": _top_hit_cpv_fr_name(bucket.get("nom"), bucket.get("key")),
+        })
+
+    value_ranges = []
+    for bucket in (aggs.get("by_value_range", {}) or {}).get("buckets", []):
+        start = bucket.get("key")
+        if start is None or start < 0 or len(value_ranges) >= 12:
+            continue
+        value_ranges.append({
+            "key": str(int(start)),
+            "count": bucket.get("doc_count", 0),
+            "total_value": agg_value(bucket),
+            "description": f"{int(start):,} – {int(start) + 100000:,} €".replace(",", " "),
+        })
+
+    top_value = float(aggs.get("total_value", {}).get("value") or 0.0)
+
+    def entity_rows(agg_name: str) -> List[Dict[str, Any]]:
+        out = []
+        for bucket in (aggs.get(agg_name, {}) or {}).get("buckets", []):
+            value = agg_value(bucket)
+            count = bucket.get("doc_count", 0)
+            name = str(bucket.get("key") or "")
+            out.append({
+                "nif": None,
+                "name": _unescape_label(name),
+                "count": count,
+                "total_value": value,
+                "avg_value": round(value / count, 2) if count else None,
+                "share": round(value / top_value, 4) if top_value > 0 else None,
+            })
+        return out
+
+    contract_rows = []
+    for hit in ((aggs.get("top_contracts", {}) or {}).get("hits", {}) or {}).get("hits", []):
+        source = hit.get("_source") or {}
+        value = source.get("montant")
+        contract_rows.append({
+            "doc_id": hit.get("_id") or source.get("uid"),
+            "title": source.get("objet") or "",
+            "awarder": _unescape_label(source.get("acheteur_nom")),
+            "supplier": _unescape_label(source.get("adjudicatario_nom")),
+            "value": value if value is not None else source.get("montant_estime"),
+            "ano": source.get("ano"),
+            "date": source.get("date_notification") or source.get("date_publication"),
+        })
+
+    return {
+        "pais": "FR",
+        "code": code,
+        "level": level,
+        "ano": ano,
+        "filters": {"q": q or None, "cpv": cpv or None},
+        "totals": {
+            "contracts": resp.get("hits", {}).get("total", {}).get("value", 0),
+            "value": round(top_value, 2),
+            "avg": round(float(aggs.get("avg_value", {}).get("value") or 0.0), 2) or None,
+            "max": round(float(aggs.get("max_value", {}).get("value") or 0.0), 2) or None,
+            "awarders": len((aggs.get("top_acheteurs", {}) or {}).get("buckets", [])),
+            "suppliers": len((aggs.get("top_adjudicatarios", {}) or {}).get("buckets", [])),
+        },
+        "by_year": rows("by_year"),
+        "by_cpv": cpv_rows,
+        "by_procedure": rows("procedures"),
+        "by_contract_type": rows("natures"),
+        "by_value_range": value_ranges,
+        "awarders": entity_rows("top_acheteurs"),
+        "suppliers": entity_rows("top_adjudicatarios"),
+        "contracts": contract_rows,
+        "error": None,
+    }
+
+
 def get_contract_region_detail(
     pais: str,
     code: str,
@@ -6548,13 +6857,19 @@ def get_contract_region_detail(
     cpv: Optional[str] = None,
     top_n: int = 12,
     contracts_size: int = 20,
+    level: Optional[str] = None,
     es: Optional[Elasticsearch] = None,
 ) -> Dict[str, Any]:
     """Contratos, entidades (adjudicantes e adjudicatárias) e métricas de uma região.
 
     `pais="PT"` espera o **distrito** de execução («Bragança»); `pais="ES"` espera o
-    **código NUTS** («ES300»). Alimenta a janela aberta no menu de contexto do mapa,
+    **código NUTS** («ES300»); `pais="FR"` espera o **código de departamento/região**
+    (ex.: «75» ou «11»). Alimenta a janela aberta no menu de contexto do mapa,
     onde `q` (texto) e `cpv` filtram métricas, entidades e contratos ao mesmo tempo.
+
+    Para França, o parâmetro `level` indica se o código é `departamento`, `regiao`
+    ou `pais` (necessário porque alguns códigos colidem entre regiões e
+    departamentos).
     """
     client = es or get_es_client(request_timeout=120)
     if not client:
@@ -6563,8 +6878,11 @@ def get_contract_region_detail(
     ensure_indices(client)
 
     try:
-        if (pais or "").strip().upper() == "ES":
+        pais_norm = (pais or "").strip().upper()
+        if pais_norm == "ES":
             return _es_region_detail(client, code, ano, q, cpv, top_n, contracts_size)
+        if pais_norm == "FR":
+            return _fr_region_detail(client, code, level or "departamento", ano, q, cpv, top_n, contracts_size)
         return _pt_region_detail(client, code, ano, q, cpv, top_n, contracts_size)
     except Exception as exc:  # pragma: no cover - dependente do cluster
         return {"error": str(exc)}
@@ -14127,6 +14445,7 @@ def search_people(
     origin: Optional[str] = None,
     source: Optional[str] = None,
     party: Optional[str] = None,
+    tag: Optional[str] = None,
     min_roles: Optional[int] = None,
     min_companies: Optional[int] = None,
     sort: str = "relevance",
@@ -14214,9 +14533,16 @@ def search_people(
             "bool": {
                 "should": [
                     {"wildcard": {"metadata.party": {"value": f"*{party}*", "case_insensitive": True}}},
+                    {"wildcard": {"metadata.partido": {"value": f"*{party}*", "case_insensitive": True}}},
                     {"wildcard": {"party": {"value": f"*{party}*", "case_insensitive": True}}},
                 ],
                 "minimum_should_match": 1,
+            }
+        })
+    if tag:
+        filters.append({
+            "terms": {
+                "tags.keyword": [tag] if isinstance(tag, str) else list(tag),
             }
         })
 

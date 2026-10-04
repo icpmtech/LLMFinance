@@ -1250,14 +1250,29 @@ def _enrich_with_detail(
             continue
         if index:
             time.sleep(delay)  # cortesia: uma pausa entre páginas
-        try:
-            page = _session_fetch(session, source["fetcher"], url, options)
-            if page is None:
-                stats["detail_errors"] = stats.get("detail_errors", 0) + 1
-                continue
-            text = _longest_node_text(page, detail["selector"], detail.get("type") or "css")[:max_chars]
-        except Exception as exc:
-            logger.debug("Texto integral de %s falhou: %s", url, exc)
+        text: Optional[str] = None
+        last_exc: Optional[Exception] = None
+        attempts = max(1, int(options.get("retries") or detail.get("retries") or 1))
+        for attempt in range(attempts):
+            try:
+                page = _session_fetch(session, source["fetcher"], url, options)
+                if page is not None:
+                    text = _longest_node_text(page, detail["selector"], detail.get("type") or "css")[:max_chars]
+                    if text:
+                        break
+            except Exception as exc:
+                last_exc = exc
+                if attempt < attempts - 1:
+                    retry_delay = float(options.get("retry_delay") or detail.get("retry_delay") or 1.0)
+                    logger.debug("Retentativa %d/%d para %s após %ss: %s", attempt + 1, attempts, url, retry_delay, exc)
+                    time.sleep(retry_delay)
+        if text:
+            item["text"] = text
+            item["detail"] = True
+            stats["detail_count"] = stats.get("detail_count", 0) + 1
+        else:
+            if last_exc:
+                logger.debug("Texto integral de %s falhou: %s", url, last_exc)
             stats["detail_errors"] = stats.get("detail_errors", 0) + 1
             continue
         if text:

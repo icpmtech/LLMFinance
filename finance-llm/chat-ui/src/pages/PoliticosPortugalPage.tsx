@@ -35,12 +35,14 @@ import type { PeopleGraphResponse, PeopleSearchResponse, Person, PoliticianProfi
 // Tipos e constantes
 // ---------------------------------------------------------------------------
 
-type SourceFilter = "all" | "parlamento" | "wikipedia";
+type SourceFilter = "all" | "deputados" | "wikipedia";
 type PoliticianSort = "relevance" | "name";
+
+const POLITICOS_TAG = "politicos-portugal";
 
 const SOURCE_OPTS: { key: SourceFilter; label: string; icon: React.ElementType }[] = [
   { key: "all", label: "Todas as fontes", icon: Users },
-  { key: "parlamento", label: "Deputados (Parlamento.pt)", icon: Landmark },
+  { key: "deputados", label: "Deputados (Parlamento/CNN/Público)", icon: Landmark },
   { key: "wikipedia", label: "Políticos (Wikipédia)", icon: Globe },
 ];
 
@@ -667,9 +669,14 @@ export default function PoliticosPortugalPage() {
       setError(null);
       hasSearchedRef.current = true;
       try {
-        const source = sourceFilter === "all" ? undefined : sourceFilter === "parlamento" ? "parlamento" : "wikipedia";
+        let extra: { source?: string; tag?: string } = { tag: POLITICOS_TAG };
+        if (sourceFilter === "deputados") {
+          extra = { tag: POLITICOS_TAG, source: "assembleia-republica" };
+        } else if (sourceFilter === "wikipedia") {
+          extra = { tag: POLITICOS_TAG, source: "wikipedia" };
+        }
         const resp = await searchPeople(term || undefined, {
-          source,
+          ...extra,
           party: party.trim() || undefined,
           sort: sort === "name" ? "name" : "relevance",
           size: PAGE_SIZE,

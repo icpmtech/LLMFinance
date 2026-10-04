@@ -8,15 +8,15 @@
  */
 import { API_BASE } from "./api";
 
-export type IberiaMapCountry = "PT" | "ES";
+export type IberiaMapCountry = "PT" | "ES" | "FR";
 
-/** Volume e valor de contratos numa região (distrito PT ou código NUTS ES). */
+/** Volume e valor de contratos numa região (distrito PT, código NUTS ES ou departamento/região FR). */
 export type IberiaMapRegion = {
   pais: IberiaMapCountry;
-  /** Distrito (ex.: «Lisboa») ou código NUTS espanhol (ex.: «ES300»). */
+  /** Distrito (ex.: «Lisboa»), código NUTS espanhol (ex.: «ES300») ou código INSEE FR. */
   code: string;
   label: string;
-  /** `distrito` | `nuts3` | `nuts2` | `nuts1` | `pais`. */
+  /** `distrito` | `nuts3` | `nuts2` | `nuts1` | `departamento` | `regiao` | `pais`. */
   level: string;
   count: number;
   total_value: number;
@@ -46,7 +46,7 @@ export type IberiaMapResponse = {
   regions: IberiaMapRegion[];
   /** Contratos sem geografia utilizável, por país. */
   unspecified: Partial<Record<IberiaMapCountry, IberiaMapTotals>>;
-  /** Contratos de Espanha executados fora de Espanha. */
+  /** Contratos executados fora do território nacional (Espanha/França). */
   other_locations: IberiaMapTotals;
   warnings?: string[];
   error?: string;
@@ -136,18 +136,20 @@ export type RegionDetailResponse = {
 };
 
 /**
- * Contratos, entidades e métricas de uma região (distrito PT ou província/NUTS ES).
- * `q` (texto) e `cpv` filtram métricas, entidades e contratos ao mesmo tempo —
- * é a pesquisa da janela aberta no menu de contexto do mapa.
+ * Contratos, entidades e métricas de uma região (distrito PT, província/NUTS ES ou
+ * departamento/região FR). `q` (texto) e `cpv` filtram métricas, entidades e
+ * contratos ao mesmo tempo — é a pesquisa da janela aberta no menu de contexto do mapa.
  */
 export async function getContractRegionDetail(params: {
   pais: IberiaMapCountry;
   code: string;
+  level?: "departamento" | "regiao" | "pais" | null;
   ano?: number | null;
   q?: string;
   cpv?: string;
 }): Promise<RegionDetailResponse> {
   const search = new URLSearchParams({ pais: params.pais, code: params.code });
+  if (params.level) search.set("level", params.level);
   if (params.ano) search.set("ano", String(params.ano));
   if (params.q) search.set("q", params.q);
   if (params.cpv) search.set("cpv", params.cpv);

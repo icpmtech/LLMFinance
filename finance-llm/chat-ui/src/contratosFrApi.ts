@@ -95,6 +95,7 @@ export type ContratoFrItem = {
   adjudicatario_id?: string;
   adjudicatario_type_identifiant?: string;
   adjudicatario_nom?: string;
+  uid?: string;
   titulaires?: ContratoFrTitulaire[];
   considerations_sociales?: string[];
   considerations_environnementales?: string[];

@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin
+import argparse
 
 # Garante que a raiz do projeto está no path para `api.*`
 ROOT = Path(__file__).resolve().parent
@@ -64,16 +65,7 @@ def build_people_doc(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     biografia = str(item.get("text") or "").strip()
     circulo = str(data.get("circulo") or "").strip()
 
-    # O template devolve o partido no campo errado (repete o círculo eleitoral).
-    # Extraímos a sigla do grupo parlamentar a partir da biografia.
     partido = str(data.get("partido") or "").strip()
-    partido_match = re.search(
-        r"Grupo\s+Parlamentar\s*/?\s*Partido\s*:\s*(.+?)(?:\s+Legislatura|\s+Círculo eleitoral|\s+Vídeobiografia|\s+Nome completo|\s+Data de nascimento|$)",
-        biografia,
-        re.IGNORECASE,
-    )
-    if partido_match:
-        partido = partido_match.group(1).strip()
 
     doc: Dict[str, Any] = {
         "nif": nif,
@@ -134,12 +126,28 @@ def download_photo(bid: str, session: Optional[Any], options: Dict[str, Any]) ->
     return None
 
 
-def collect_deputados(*, max_pages: int = 20, download_photos: bool = True) -> Dict[str, Any]:
+def collect_deputados(*, max_pages: int = 20, download_photos: bool = True, with_detail: bool = False) -> Dict[str, Any]:
     """Executa recolha completa e indexação."""
     ensure_dirs()
 
     source = build_source("parlamento-deputados", overrides={"pagination": {"max_pages": max_pages}})
+    # Aumentar timeout e retentativas para o Parlamento.pt, que é lento.
+    source.setdefault("options", {})
+    source["options"].setdefault("timeout", 120)
+    source["options"].setdefault("retries", 3)
+    source["options"].setdefault("retry_delay", 2.0)
+    # O detalhe (biografia) é lento e pode falhar; por defeito recolhe-se só a lista.
+    if with_detail:
+        source.setdefault("detail", {})
+        source["detail"]["enabled"] = True
+        source["detail"].setdefault("retries", 2)
+        source["detail"].setdefault("retry_delay", 1.0)
+        source["detail"].setdefault("timeout", 25)
+    else:
+        source.setdefault("detail", {})
+        source["detail"]["enabled"] = False
     logger.info("Fonte: %s (%s)", source["name"], source["url"])
+    logger.info("Detalhe (biografias): %s", "ligado" if with_detail else "desligado")
 
     items: List[Dict[str, Any]] = []
     stats: Dict[str, int] = {}
@@ -185,5 +193,16 @@ def collect_deputados(*, max_pages: int = 20, download_photos: bool = True) -> D
 
 
 if __name__ == "__main__":
-    summary = collect_deputados(max_pages=20, download_photos=True)
+    parser = argparse.ArgumentParser(description="Recolha manual de deputados do Parlamento.pt")
+    parser.add_argument("--max-pages", type=int, default=200, help="Máximo de páginas a percorrer (padrão: 200)")
+    parser.add_argument("--no-photos", action="store_true", help="Não descarregar fotos")
+    parser.add_argument("--with-detail", action="store_true", help="Tentar obter biografias (mais lento, pode falhar)")
+    parser.add_argument("--timeout", type=int, default=30, help="Timeout HTTP por pedido (padrão: 30s)")
+    parser.add_argument("--retries", type=int, default=2, help="Retentativas por URL (padrão: 2)")
+    args = parser.parse_args()
+    summary = collect_deputados(
+        max_pages=args.max_pages,
+        download_photos=not args.no_photos,
+        with_detail=args.with_detail,
+    )
     print(json.dumps(summary, ensure_ascii=False, indent=2))

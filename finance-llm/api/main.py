@@ -2425,17 +2425,19 @@ def contracts_regional_analytics(
 
 @app.get("/contracts/analytics/iberia-map")
 def contracts_iberia_map(
-    ano: Optional[int] = Query(None, description="Ano (Portugal usa `Ano`, Espanha usa `ano`)"),
-    pais: str = Query("all", description="all | pt | es"),
+    ano: Optional[int] = Query(None, description="Ano (Portugal usa `Ano`, Espanha e França usam `ano`)"),
+    pais: str = Query("all", description="all | pt | es | fr"),
     q: Optional[str] = Query(None, description="Texto livre (objeto, entidades, descrição)"),
     entidade: Optional[str] = Query(None, description="Nome de entidade (adjudicante ou adjudicatária)"),
     cpv: Optional[str] = Query(None, description="Código CPV (prefixo ou código completo)"),
 ):
-    """Volume e valor de contratos por região, para o mapa de Portugal e Espanha.
+    """Volume e valor de contratos por região, para o mapa de Portugal, Espanha e França.
 
     Portugal agrega por **distrito de execução** (`localExecucao`), Espanha por
-    **província/NUTS** (`nuts`). As coordenadas são resolvidas no frontend: os
-    contratos não trazem geografia própria, só a divisão administrativa.
+    **província/NUTS** (`nuts`) e França por **departamento/região** de execução
+    (`lieu_execution_code` / `lieu_execution_type`). As coordenadas são resolvidas
+    no frontend: os contratos não trazem geografia própria, só a divisão
+    administrativa.
 
     Aceita os filtros da pesquisa (`q`, `entidade`, `cpv`, `ano`), pelo que o mapa
     responde a «onde é que estes contratos foram executados?».
@@ -2448,8 +2450,9 @@ def contracts_iberia_map(
 
 @app.get("/contracts/region-detail")
 def contracts_region_detail(
-    code: str = Query(..., description="Distrito PT («Bragança») ou código NUTS ES («ES300»)"),
-    pais: str = Query("PT", description="PT | ES"),
+    code: str = Query(..., description="Distrito PT, código NUTS ES ou departamento/região FR"),
+    pais: str = Query("PT", description="PT | ES | FR"),
+    level: Optional[str] = Query(None, description="Para FR: departamento | regiao | pais (resolve colisões de código)"),
     ano: Optional[int] = Query(None, description="Ano (opcional)"),
     q: Optional[str] = Query(None, description="Pesquisa de texto na região (objeto, entidades)"),
     cpv: Optional[str] = Query(None, description="Código CPV (prefixo ou código completo)"),
@@ -2462,10 +2465,15 @@ def contracts_region_detail(
     volume e valor, distribuição por ano/CPV/procedimento/tipo/escalão, quem
     adjudica, quem executa e os maiores contratos da região — com a mesma
     pesquisa (`q`, `cpv`) aplicada a tudo.
+
+    Para França (`pais=FR`), use `level` para indicar se o código é um
+    departamento (`departamento`), região (`regiao`) ou país (`pais`); alguns
+    códigos colidem entre os dois níveis (ex.: «76» é Occitanie e Seine-Maritime).
     """
     res = get_contract_region_detail(
         pais=pais,
         code=code,
+        level=level,
         ano=ano,
         q=q,
         cpv=cpv,

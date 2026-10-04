@@ -930,11 +930,13 @@ export default function App() {
     setViewAndHistory("company-detail");
   };
 
-  /** Abre a ficha de uma região (menu de contexto do mapa): janela ou página. */
+  /** Abre a ficha de uma região (menu de contexto do mapa): janela ou página.
+   *  O componente de detalhe só suporta PT/ES; "FR" é normalizado para "PT". */
   const openRegionDetail = useCallback(
-    (pais: "PT" | "ES", code: string, label: string, ano: number | null) => {
-      const view = `region-detail:${pais}:${code}`;
-      rememberRegionDetail({ pais, code, label, ano });
+    (pais: "PT" | "ES" | "FR", code: string, label: string, ano: number | null) => {
+      const normalized = pais === "ES" ? "ES" : "PT";
+      const view = `region-detail:${normalized}:${code}`;
+      rememberRegionDetail({ pais: normalized, code, label, ano });
       if (windowMode && typeof window !== "undefined") {
         openWindow(view, workspaceEstimate(), {
           title: `${label} · contratos`,
