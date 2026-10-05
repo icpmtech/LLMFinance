@@ -11,7 +11,7 @@ Estado deste deploy (2026-10-02):
 | Preco | **6 USD/mes** (hourly: 0.008 USD/h) |
 | Docker | Engine 29.8.2 + Compose v5.6.0 |
 | Endereco publico | https://analog-chronicles-bag-transparency.trycloudflare.com |
-| Origem publica (PC) | https://generally-practices-expensive-operation.trycloudflare.com |
+| Origem publica (PC) | https://truck-poly-amount-remain.trycloudflare.com |
 
 Verificacao ponta-a-ponta (do PC, via internet):
 
@@ -60,6 +60,7 @@ modelos. A VM fica como **ponto de entrada publico com TLS gratuito**
 | `03-configure-edge.ps1` | PC | Envia o `05` para a VM e aplica o hostname da origem |
 | `04-verify.ps1` | PC | Verifica origem, edge e endereco publico |
 | `05-edge-up.sh` | VM | Swap + `edge.env` + `docker compose up` do edge |
+| `06-refresh-cloudflare.ps1` | PC | Renova os tuneis (recria se preciso) e reaplica a origem no edge |
 | `00-push-file.ps1` | PC | Envia um ficheiro para a VM (ssh + base64, sem scp) |
 | `origin/` | PC | tunel Cloudflare (+ nginx de origem minima, perfil `lite`) |
 | `edge/` | VM | nginx (reverse proxy) + cloudflared (quick tunnel publico) |
@@ -99,9 +100,16 @@ powershell -File deploy\kamatera\04-verify.ps1
   o handshake SSH parava no `SSH2_MSG_KEXINIT` sem erro. O `05-edge-up.sh` cria
   2 GB de swap (idempotente) e o problema nao voltou.
 - **O hostname do quick tunnel muda a cada recriacao do container.** Sempre que
-  o tunel de origem for recriado, correr o `03-configure-edge.ps1`.
-- **`$PSScriptRoot` nao pode ser usado no valor por omissao de um parametro**
-  (PowerShell 5.1). Resolver dentro do corpo do script.
+  o tunel de origem for recriado, correr o `03-configure-edge.ps1` (ou, de uma vez,
+  o `06-refresh-cloudflare.ps1`) .
+- **Um quick tunnel pode morrer com o container `Up`**: o Cloudflare reclama-o e os
+  logs repetem `ERR Register tunnel error ... "Unauthorized: Tunnel not found"`.
+  O endereco deixa de existir e o edge passa a servir a pagina offline. Remedio:
+  `06-refresh-cloudflare.ps1` (recria o tunel e reaplica a origem).
+- **O ssh pode bloquear-se no handshake** (KEXINIT sem resposta) e ficar pendurado
+  para sempre. Alem de `ConnectTimeout`, usar `ServerAliveInterval=5`,
+  `ServerAliveCountMax=2` e `-n` (nao encaminhar o stdin local): assim uma sessao
+  presa falha em ~10 s e o ciclo de retentativas avanca.
 - **`docker logs` escreve em stderr** e com `$ErrorActionPreference='Stop'` isso
   vira erro terminante. Baixar para `Continue` em volta da chamada (o logrus do
   cloudflared escreve o URL em stderr — e dai o `2>&1`).
@@ -115,12 +123,17 @@ powershell -File deploy\kamatera\04-verify.ps1
   `envsubst` do entrypoint limpa `$host`, `$remote_addr`, etc.
 - No proxy `/api/` -> `${BACKEND_ORIGIN}/` a **barra final e essencial**: e o que
   retira o prefixo `/api` (a stack faz o mesmo em `docker/nginx.conf`).
+- **`$PSScriptRoot` nao pode ser usado no valor por omissao de um parametro**
+  (PowerShell 5.1). Resolver dentro do corpo do script.
+- O envio de ficheiros em base64 dentro de um script (`powershell -File`) ficou
+  preso nesta rede; os ficheiros pequenos enviam-se com `00-push-file.ps1` e, para
+  o resto, corre-se o que ja esta na VM.
 
 ## Operacao
 
 ```bash
 # estado do edge
-ssh root@45.147.251.188 "docker ps; docker logs iqos-tunnel | tail -5"
+ssh -n root@45.147.251.188 "docker ps; docker logs iqos-tunnel | tail -5"
 
 # reiniciar o edge depois de mudar a origem
 ssh root@45.147.251.188 "bash /opt/iqos/05-edge-up.sh <novo-hostname>"

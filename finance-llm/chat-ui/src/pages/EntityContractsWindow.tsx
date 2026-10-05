@@ -418,22 +418,33 @@ export function SeeAllContractsButton({
   name,
   total,
   compact,
+  onOpen,
 }: {
   nif: string;
   name?: string;
   total?: number;
   compact?: boolean;
+  /**
+   * Ação própria de quem usa o botão. **Obrigatória dentro de uma ficha modal**:
+   * abrir uma janela do gestor de janelas deixava-a por baixo da modal (z-index
+   * maior), pelo que o clique parecia não fazer nada.
+   */
+  onOpen?: () => void;
 }) {
   const label = total && total > 0 ? `Ver todos (${total.toLocaleString("pt-PT")})` : "Ver todos";
   return (
     <button
       type="button"
-      onClick={() =>
+      onClick={() => {
+        if (onOpen) {
+          onOpen();
+          return;
+        }
         openWindow(`entity-contracts:${nif}`, undefined, {
           title: name ? `Contratos · ${name}` : "Contratos da entidade",
           rect: { width: 1100, height: 720 },
-        })
-      }
+        });
+      }}
       title="Abrir a lista completa de contratos desta entidade"
       className={[
         "inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] transition hover:bg-white/[0.1]",

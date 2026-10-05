@@ -27,5 +27,5 @@ $dir = $Dest -replace '/[^/]+$', ''
 
 $remote = "mkdir -p $dir; printf %s '$b64' | base64 -d > $Dest; sed -i 's/\r$//' $Dest; ls -l $Dest"
 
-& ssh -i $SshKey -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR "$SshUser@$SshHost" $remote
+& ssh -i $SshKey -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8 -o ServerAliveInterval=5 -o ServerAliveCountMax=2 -o LogLevel=ERROR "$SshUser@$SshHost" $remote
 if ($LASTEXITCODE -ne 0) { throw "ssh falhou (exit $LASTEXITCODE)" }

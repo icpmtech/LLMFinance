@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import {
   ArrowLeft,
+  ChevronRight,
+  Download,
+  FileSpreadsheet,
   Search,
   FileText,
   MessageSquare,
@@ -16,16 +19,25 @@ import {
 import {
   getContractStatus,
   getContractYears,
+  getContractAnalytics,
   searchContracts,
   autocompleteContracts,
   chatContracts,
+  exportContractsExcel,
+  exportContractsPdf,
   ingestContracts,
 } from "../api";
+import { openWindow } from "../windows";
+import { MiniMapaLocal, localTexto } from "../components/MiniMapaLocal";
 import type {
+  ContractAnalyticsFilters,
   ContractItem,
   ContractSearchRequest,
   ContractAutocompleteSuggestion,
 } from "../types";
+
+/** Limites do servidor para cada formato de exportação. */
+const EXPORT_LIMITS = { excel: 10000, pdf: 500 } as const;
 
 interface ContractsSearchPageProps {
   onSwitchView: () => void;
@@ -91,6 +103,9 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
   const [suggestions, setSuggestions] = useState<ContractAutocompleteSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  /** Exportação em curso (`excel`/`pdf`) e o aviso do que foi mesmo exportado. */
+  const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null);
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
@@ -99,6 +114,13 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
   const [chatAnswer, setChatAnswer] = useState<string | null>(null);
   const [chatSources, setChatSources] = useState<{ idcontrato?: string; objectoContrato?: string; adjudicante?: string; adjudicatario?: string; precoContratual?: number; score?: number }[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
+  /**
+   * Agregado (total e soma) do universo **filtrado** — inclui os contratos que não
+   * estão na página carregada. Sem isto, «Total valor dos resultados» mostrava só
+   * a soma das 20 linhas visíveis e «Total de contratos» mostrava o índice inteiro.
+   */
+  const [agregado, setAgregado] = useState<{ total_contracts: number; total_value?: number } | null>(null);
+  const [agregadoLoading, setAgregadoLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([getContractStatus(), getContractYears()])
@@ -123,11 +145,72 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
     from,
   });
 
+  /** Os mesmos filtros da pesquisa, sem paginação — é isto que os exports levam. */
+  const exportFilters = (): ContractAnalyticsFilters => ({
+    q: query.trim() || undefined,
+    year: year || undefined,
+    entity: entity.trim() || undefined,
+    nif: nif.trim() || undefined,
+    cpv_code: cpv.trim() || undefined,
+    min_price: minPrice ? parseFloat(minPrice) : undefined,
+    max_price: maxPrice ? parseFloat(maxPrice) : undefined,
+    start_date: startDate || undefined,
+    end_date: endDate || undefined,
+  });
+
+  /**
+   * Exporta a pesquisa atual. O ficheiro é truncado pelo servidor quando há mais
+   * resultados do que o limite, e o aviso diz exatamente isso.
+   */
+  const exportar = async (formato: "excel" | "pdf") => {
+    setExporting(formato);
+    setExportMsg("A preparar o ficheiro…");
+    try {
+      const blob = formato === "excel" ? await exportContractsExcel(exportFilters()) : await exportContractsPdf(exportFilters());
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = formato === "excel"
+        ? `contratos_pesquisa_${new Date().toISOString().slice(0, 10)}.xlsx`
+        : `contratos_pesquisa_${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      const limite = EXPORT_LIMITS[formato];
+      setExportMsg(
+        total > limite
+          ? `Descarregado (${formato === "excel" ? "Excel" : "PDF"}). A pesquisa tem ${total.toLocaleString("pt-PT")} contratos; o ficheiro leva os primeiros ${limite.toLocaleString("pt-PT")} (limite do servidor).`
+          : `Descarregado em ${formato === "excel" ? "Excel" : "PDF"} — ${total.toLocaleString("pt-PT")} contratos.`,
+      );
+    } catch (err) {
+      setExportMsg(null);
+      setError(err instanceof Error ? err.message : "Erro ao exportar");
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  /** Abre a ficha do contrato (mesma janela usada na lista de contratos da entidade). */
+  const abrirDetalhe = (id?: string) => {
+    if (!id) return;
+    openWindow(`contract-detail:${id}`, undefined, { title: "Ficha do contrato" });
+  };
+
   const doSearch = async (resetFrom = true) => {
     const nextFrom = resetFrom ? 0 : from;
     if (resetFrom) setLoading(true);
     else setLoadingMore(true);
     setError(null);
+    // Numa pesquisa nova (não na paginação) vai-se buscar o agregado dos filtros:
+    // dá o total de contratos e a soma dos valores de **todos** os que correspondem.
+    if (resetFrom) {
+      setAgregadoLoading(true);
+      getContractAnalytics(exportFilters())
+        .then((d) => setAgregado({ total_contracts: d.total_contracts ?? 0, total_value: d.total_value }))
+        .catch(() => setAgregado(null))
+        .finally(() => setAgregadoLoading(false));
+    }
     try {
       const req = buildRequest();
       req.from = nextFrom;
@@ -204,12 +287,19 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
 
   const indexedYears = useMemo(() => new Set(years?.indexed.map((y) => y.year) ?? []), [years]);
 
-  const activeFiltersCount = [year, entity, nif, cpv, minPrice, maxPrice, startDate, endDate].filter(Boolean).length;
+  const activeFiltersCount = [query.trim(), year, entity, nif, cpv, minPrice, maxPrice, startDate, endDate].filter(Boolean).length;
 
+  /** Soma dos valores da página carregada (usada só como recurso, se o agregado falhar). */
   const resultsTotalValue = useMemo(
     () => results.reduce((acc, c) => acc + (c.precoContratual || 0), 0),
     [results],
   );
+
+  /** Total de contratos que correspondem aos filtros (a página é só uma fatia). */
+  const totalFiltrado = agregado?.total_contracts ?? total;
+  /** Soma de todos os contratos filtrados; sem agregado, a da página é dita como tal. */
+  const valorTotal = agregado?.total_value;
+  const usouSoPagina = valorTotal === undefined && results.length > 0;
 
   const clearFilters = () => {
     setQuery("");
@@ -297,18 +387,37 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
           <div className="glass-card gradient-border rounded-2xl p-5 glow-teal">
             <p className="text-xs text-muted-foreground uppercase tracking-wider">Total de contratos</p>
             <p className="text-3xl font-bold stat-value text-glow-teal mt-1">
-              {status ? status.total.toLocaleString("pt-PT") : "—"}
+              {loading && agregadoLoading ? "…" : totalFiltrado.toLocaleString("pt-PT")}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {activeFiltersCount > 0
+                ? `com os filtros aplicados${status ? ` · de ${status.total.toLocaleString("pt-PT")} indexados` : ""}`
+                : status
+                  ? `${status.total.toLocaleString("pt-PT")} contratos indexados`
+                  : ""}
             </p>
           </div>
           <div className="glass-card gradient-border rounded-2xl p-5 glow-amber">
             <p className="text-xs text-muted-foreground uppercase tracking-wider">Total valor dos resultados</p>
             <p className="text-3xl font-bold stat-value text-glow-amber mt-1">
-              {formatPrice(resultsTotalValue)}
+              {agregadoLoading && valorTotal === undefined ? "…" : formatPrice(valorTotal ?? resultsTotalValue)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {agregadoLoading
+                ? `a somar os ${totalFiltrado.toLocaleString("pt-PT")} contratos filtrados…`
+                : usouSoPagina
+                  ? `soma das ${results.length} linhas visíveis (agregado indisponível)`
+                  : activeFiltersCount > 0
+                    ? `soma dos ${totalFiltrado.toLocaleString("pt-PT")} contratos que correspondem aos filtros`
+                    : "soma de todos os contratos indexados"}
             </p>
           </div>
           <div className="glass-card gradient-border rounded-2xl p-5 glow-blue">
             <p className="text-xs text-muted-foreground uppercase tracking-wider">Filtros ativos</p>
             <p className="text-3xl font-bold stat-value text-glow-blue mt-1">{activeFiltersCount}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {activeFiltersCount > 0 ? "pesquisa, ano, entidade, NIF, CPV, preço e datas" : "sem filtros — universo completo"}
+            </p>
           </div>
         </div>
 
@@ -561,11 +670,38 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
         </div>
 
         {results.length > 0 && (
-          <div className="mb-4 text-sm text-muted-foreground flex items-center justify-between">
+          <div className="mb-4 text-sm text-muted-foreground flex flex-wrap items-center justify-between gap-2">
             <span>
               A mostrar {results.length.toLocaleString("pt-PT")} de {total.toLocaleString("pt-PT")} resultado{total === 1 ? "" : "s"}
             </span>
+            <div className="flex items-center gap-2">
+              <span className="hidden sm:inline text-xs">Exportar a pesquisa:</span>
+              <button
+                type="button"
+                onClick={() => exportar("excel")}
+                disabled={exporting !== null}
+                title={`Exporta a pesquisa atual em Excel (até ${EXPORT_LIMITS.excel.toLocaleString("pt-PT")} contratos)`}
+                className="px-2.5 py-1.5 rounded-lg glass-card text-emerald-400 border border-emerald-400/20 hover:bg-emerald-400/10 transition disabled:opacity-50 flex items-center gap-1.5 text-xs"
+              >
+                {exporting === "excel" ? <Loader2 size={13} className="animate-spin" /> : <FileSpreadsheet size={13} />}
+                Excel
+              </button>
+              <button
+                type="button"
+                onClick={() => exportar("pdf")}
+                disabled={exporting !== null}
+                title={`Exporta a pesquisa atual em PDF (até ${EXPORT_LIMITS.pdf.toLocaleString("pt-PT")} contratos)`}
+                className="px-2.5 py-1.5 rounded-lg glass-card text-rose-400 border border-rose-400/20 hover:bg-rose-400/10 transition disabled:opacity-50 flex items-center gap-1.5 text-xs"
+              >
+                {exporting === "pdf" ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                PDF
+              </button>
+            </div>
           </div>
+        )}
+
+        {exportMsg && (
+          <p className="mb-4 text-xs text-teal-200 rounded-lg border border-teal-400/20 bg-teal-400/10 px-3 py-2">{exportMsg}</p>
         )}
 
         {!loading && results.length === 0 && !error && (
@@ -582,7 +718,17 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
           {results.map((c, i) => (
             <article
               key={`${c.idcontrato || i}-${i}`}
-              className="glass-card gradient-border rounded-2xl p-5 hover:-translate-y-1 hover:bg-white/[0.04] transition-all duration-300 fade-in"
+              role="button"
+              tabIndex={0}
+              onClick={() => abrirDetalhe(c.idcontrato)}
+              onKeyDown={(ev) => {
+                if (ev.key === "Enter" || ev.key === " ") {
+                  ev.preventDefault();
+                  abrirDetalhe(c.idcontrato);
+                }
+              }}
+              aria-label={`Abrir a ficha do contrato ${c.idcontrato || ""}`}
+              className="glass-card gradient-border rounded-2xl p-5 cursor-pointer hover:-translate-y-1 hover:bg-white/[0.04] hover:border-teal-400/30 transition-all duration-300 fade-in focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
               style={{ animationDelay: `${Math.min(i * 40, 600)}ms` }}
             >
               <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
@@ -601,7 +747,14 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
                   <div className="mt-2 text-sm space-y-1">
                     <p><span className="text-muted-foreground">Adjudicante:</span> {partyNames(c.adjudicantes)} {firstNif(c.adjudicantes) && `(${firstNif(c.adjudicantes)})`}</p>
                     <p><span className="text-muted-foreground">Adjudicatário:</span> {partyNames(c.adjudicatarios)}</p>
-                    {c.localExecucao && <p><span className="text-muted-foreground">Local:</span> {c.localExecucao}</p>}
+                    {localTexto(c.localExecucao) && (
+                      <div className="space-y-1.5">
+                        <p>
+                          <span className="text-muted-foreground">Local:</span> {localTexto(c.localExecucao)}
+                        </p>
+                        <MiniMapaLocal local={c.localExecucao} />
+                      </div>
+                    )}
                     {c.cpv && c.cpv.length > 0 && (
                       <p className="text-xs text-muted-foreground">
                         CPV: {c.cpv.map((x) => `${x.code} ${x.description}`).join("; ")}
@@ -613,6 +766,9 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
                   <div className="text-lg font-bold stat-value text-glow-amber">{formatPrice(c.precoContratual)}</div>
                   <div className="text-xs text-muted-foreground">
                     Publicação {formatDate(c.dataPublicacao)} · Celebração {formatDate(c.dataCelebracaoContrato)}
+                  </div>
+                  <div className="mt-2 inline-flex items-center gap-1 text-xs text-teal-300">
+                    Ver detalhe <ChevronRight size={13} />
                   </div>
                 </div>
               </div>

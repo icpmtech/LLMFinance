@@ -37,7 +37,9 @@ function Invoke-VmSsh {
         # Stop isso vira erro terminante em vez de dar nova tentativa.
         $prev = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
-        $out = & ssh -i $SshKey -o BatchMode=yes -o ConnectTimeout=8 -o LogLevel=ERROR "$SshUser@$SshHost" $Command 2>&1
+        $out = & ssh -i $SshKey -o BatchMode=yes -o ConnectTimeout=8 `
+            -o ServerAliveInterval=5 -o ServerAliveCountMax=2 `
+            -o LogLevel=ERROR "$SshUser@$SshHost" $Command 2>&1
         $rc = $LASTEXITCODE
         $ErrorActionPreference = $prev
         if ($rc -eq 0) { return ($out -join "`n") }

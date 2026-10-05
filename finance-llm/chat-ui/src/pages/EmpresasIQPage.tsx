@@ -6798,7 +6798,16 @@ export function EntityDetailPanel({
               </p>
             </div>
             {onAllContracts && (
-              <SeeAllContractsButton nif={nif} name={company.name} total={analytics?.total_contracts} compact />
+              <SeeAllContractsButton
+                nif={nif}
+                name={company.name}
+                total={analytics?.total_contracts}
+                compact
+                // Em modo página a ficha é uma modal (z-index alto): abrir uma
+                // janela do gestor deixava-a por baixo. `onAllContracts` decide —
+                // janela em modo janelas, painel dentro da própria modal em modo página.
+                onOpen={() => onAllContracts(nif, company.name)}
+              />
             )}
           </div>
           <div className="overflow-x-auto">

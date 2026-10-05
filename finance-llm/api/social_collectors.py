@@ -41,6 +41,7 @@ import warnings
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote_plus, urljoin, urlparse
+from xml.etree import ElementTree
 
 logger = logging.getLogger(__name__)
 
@@ -76,13 +77,20 @@ PLATFORMS: Dict[str, Dict[str, Any]] = {
                 "label": "Comunidade (subreddit)",
                 "target": "nome do subreddit (ex.: investimentos)",
                 "credentials": False,
-                "notes": "JSON público da listagem; alternativa HTML (`shreddit-post`) se o IP estiver bloqueado.",
+                "notes": (
+                    "Tenta a API OAuth (se configurada), o JSON público, o feed Atom (`/.rss`) e, em "
+                    "último recurso, o HTML (`shreddit-post`) — os IPs de servidor são recusados em "
+                    "alguns destes endereços."
+                ),
             },
             "search": {
                 "label": "Pesquisa por palavra-chave",
                 "target": "termo a pesquisar",
                 "credentials": True,
-                "notes": "A página de pesquisa bloqueia IPs de servidor; usa a API OAuth do Reddit.",
+                "notes": (
+                    "Usa a API OAuth do Reddit quando há credenciais; sem elas tenta o feed de "
+                    "pesquisa público (`/search.rss`)."
+                ),
             },
         },
         "credential_hint": (
@@ -737,6 +745,135 @@ def _reddit_html_posts(page: Any, target: str, kind: str) -> List[Dict[str, Any]
     return posts
 
 
+def _xml_local(tag: Any) -> str:
+    """Nome local de uma etiqueta XML (sem o espaço de nomes)."""
+    return str(tag or "").split("}")[-1].lower()
+
+
+def _reddit_atom_entries(text: str) -> List[Dict[str, Any]]:
+    """Entradas de um feed Atom (`/r/<sub>/.rss`) ou RSS do Reddit.
+
+    O feed público é servido a IPs a que o JSON responde 403 (bloqueio a
+    datacenter), por isso é a alternativa sem credenciais mais fiável.
+    """
+    try:
+        root = ElementTree.fromstring((text or "").strip())
+    except Exception:
+        return []
+
+    entries: List[Dict[str, Any]] = []
+    for node in root.iter():
+        if _xml_local(node.tag) not in ("entry", "item"):
+            continue
+        item: Dict[str, Any] = {"tags": []}
+        for child in node:
+            name = _xml_local(child.tag)
+            if name == "title":
+                item["title"] = child.text or ""
+            elif name == "link":
+                item["link"] = child.get("href") or (child.text or "")
+            elif name in ("id", "guid"):
+                item.setdefault("id", child.text or "")
+            elif name in ("updated", "published", "pubdate"):
+                item.setdefault("published", (child.text or "").strip())
+            elif name in ("content", "description", "summary"):
+                if not item.get("content"):
+                    item["content"] = child.text or ""
+            elif name == "author":
+                inner = next((sub.text or "" for sub in child if _xml_local(sub.tag) == "name"), "")
+                item["author"] = inner or (child.text or "")
+            elif name == "creator":  # dc:creator (RSS)
+                item["author"] = child.text or ""
+            elif name == "category":
+                # Atom do Reddit: `term="investimentos" label="r/investimentos"`.
+                # Guardam-se os dois (distintos) para se distinguir a comunidade do flair.
+                for value in (child.get("term"), child.get("label"), child.text):
+                    value = str(value or "").strip()
+                    if value and value not in item["tags"]:
+                        item["tags"].append(value)
+        entries.append(item)
+    return entries
+
+
+def _reddit_rss_posts(text: str, target: str, kind: str) -> List[Dict[str, Any]]:
+    """Publicações a partir do feed Atom público do Reddit."""
+    posts: List[Dict[str, Any]] = []
+    for entry in _reddit_atom_entries(text):
+        url = _clean(entry.get("link") or "", 1024)
+        raw_id = str(entry.get("id") or "")
+        post_id = raw_id.split("_")[-1] if raw_id.startswith("t") and "_" in raw_id else ""
+        labels = [str(t) for t in (entry.get("tags") or []) if t]
+        community = next((t for t in labels if t.startswith("r/")), "") or f"r/{target}"
+        flair = next((t for t in labels if not t.startswith("r/") and t.lower() != str(target).lower()), "")
+        posts.append(
+            _post(
+                platform="reddit",
+                kind=kind,
+                target=target,
+                post_id=post_id or _post_id_from_url(url),
+                url=url,
+                title=entry.get("title") or "",
+                text=_strip_tags(entry.get("content") or ""),
+                author=str(entry.get("author") or "").replace("/u/", ""),
+                community=community,
+                published_at=_clean(entry.get("published") or "", 40) or None,
+                tags=[t for t in ["reddit", target, flair] if t],
+                data={"source": "rss", "flair": flair},
+            )
+        )
+    return posts
+
+
+def _reddit_feed(
+    endpoints: Tuple[str, ...],
+    target: str,
+    kind: str,
+    notes: List[str],
+    options: Dict[str, Any],
+    *,
+    params: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """Percorre os feeds públicos do Reddit até um devolver entradas."""
+    headers = {
+        "User-Agent": _credential(options, "user_agent") or "IQOS/1.0 (pesquisa social)",
+        "Accept": "application/atom+xml,application/rss+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+    for endpoint in endpoints:
+        try:
+            feed = _http_get(
+                endpoint,
+                params=params,
+                headers=headers,
+                options=options,
+                expect_json=False,
+            )
+        except CollectorError as exc:
+            notes.append(f"{endpoint} → {exc}")
+            continue
+        posts = _reddit_rss_posts(feed, target, kind)
+        if posts:
+            notes.append(f"Recolha pelo feed público de {endpoint}.")
+            return posts
+        notes.append(f"{endpoint} não trouxe entradas.")
+    return []
+
+
+def _reddit_failure_detail(notes: List[str]) -> str:
+    """Resumo legível das tentativas falhadas (para a mensagem de erro)."""
+    reasons: List[str] = []
+    for note in notes:
+        if "→" not in note:
+            continue
+        endpoint, _, reason = note.partition("→")
+        endpoint = endpoint.strip().removeprefix("https://").rstrip("/")
+        reason = _clean(reason, 90)
+        if reason and reason not in reasons:
+            reasons.append(f"{endpoint}: {reason}")
+    if not reasons:
+        return ""
+    return "\n" + "\n".join(f"• {r}" for r in reasons[-4:])
+
+
 def collect_reddit(channel: Dict[str, Any], *, limit: int = DEFAULT_LIMIT) -> Dict[str, Any]:
     """Publicações de um subreddit ou resultados de uma pesquisa no Reddit."""
     target = str(channel.get("target") or "").strip().lstrip("/")
@@ -747,25 +884,72 @@ def collect_reddit(channel: Dict[str, Any], *, limit: int = DEFAULT_LIMIT) -> Di
     notes: List[str] = []
     limit = max(1, min(int(limit), MAX_LIMIT))
 
-    if kind == "search":
+    token = ""
+    try:
         token = _reddit_token(options)
-        if not token:
-            raise CollectorError(
-                "A pesquisa por palavra-chave no Reddit exige credenciais OAuth.",
-                status="credentials",
-                hint=PLATFORMS["reddit"]["credential_hint"],
-            )
-        payload = _http_get(
-            "https://oauth.reddit.com/search",
-            params={"q": target, "limit": limit, "sort": "relevance", "t": "month", "raw_json": 1},
-            headers={"Authorization": f"Bearer {token}"},
-            options=options,
-        )
-        return {"items": _reddit_json_posts(payload, target, kind)[:limit], "notes": notes}
+    except CollectorError as exc:
+        notes.append(f"Credenciais do Reddit ignoradas: {exc}")
 
-    # Subreddit: percorre as variantes públicas (JSON e HTML, domínio novo e
-    # antigo) — o Reddit bloqueia umas e serve outras conforme o IP e a altura.
+    if kind == "search":
+        if token:
+            try:
+                payload = _http_get(
+                    "https://oauth.reddit.com/search",
+                    params={"q": target, "limit": limit, "sort": "relevance", "t": "month", "raw_json": 1},
+                    headers={"Authorization": f"Bearer {token}"},
+                    options=options,
+                )
+            except CollectorError as exc:
+                notes.append(f"Pesquisa OAuth → {exc}")
+            else:
+                posts = _reddit_json_posts(payload, target, kind)
+                if posts:
+                    notes.append("Recolha pela API OAuth do Reddit.")
+                    return {"items": posts[:limit], "notes": notes}
+                notes.append("A pesquisa OAuth não devolveu publicações.")
+        else:
+            notes.append("Sem credenciais OAuth; a tentar o feed de pesquisa público.")
+
+        posts = _reddit_feed(
+            ("https://www.reddit.com/search.rss", "https://old.reddit.com/search.rss"),
+            target,
+            kind,
+            notes,
+            options,
+            params={"q": target, "sort": "relevance", "t": "month", "limit": limit},
+        )
+        if posts:
+            return {"items": posts[:limit], "notes": notes}
+
+        raise CollectorError(
+            f"A pesquisa no Reddit por «{target}» não devolveu publicações.",
+            status="credentials" if not token else "blocked",
+            hint=PLATFORMS["reddit"]["credential_hint"],
+        )
+
+    # Subreddit: OAuth (se configurado), variantes públicas JSON, feed Atom e,
+    # por fim, HTML — o Reddit bloqueia umas e serve outras conforme o IP e a
+    # altura.
     subreddit = target.split("/")[-1]
+
+    if token:
+        for path in (f"r/{subreddit}/hot", f"r/{subreddit}/new"):
+            try:
+                payload = _http_get(
+                    f"https://oauth.reddit.com/{path}",
+                    params={"limit": limit, "raw_json": 1},
+                    headers={"Authorization": f"Bearer {token}"},
+                    options=options,
+                )
+            except CollectorError as exc:
+                notes.append(f"oauth.reddit.com/{path} → {exc}")
+                continue
+            posts = _reddit_json_posts(payload, subreddit, kind)
+            if posts:
+                notes.append(f"Recolha pela API OAuth do Reddit ({path}).")
+                return {"items": posts[:limit], "notes": notes}
+            notes.append(f"oauth.reddit.com/{path} devolveu uma lista vazia.")
+
     json_endpoints = (
         f"https://www.reddit.com/r/{subreddit}/hot.json",
         f"https://old.reddit.com/r/{subreddit}/hot.json",
@@ -787,6 +971,22 @@ def collect_reddit(channel: Dict[str, Any], *, limit: int = DEFAULT_LIMIT) -> Di
             return {"items": posts[:limit], "notes": notes}
         notes.append(f"{endpoint} devolveu uma lista vazia.")
 
+    # Feed Atom público: é o endereço que continua a responder quando o JSON
+    # devolve 403 a IPs de datacenter (traz título, autor, data e o corpo).
+    posts = _reddit_feed(
+        (
+            f"https://www.reddit.com/r/{subreddit}/.rss",
+            f"https://old.reddit.com/r/{subreddit}/.rss",
+        ),
+        subreddit,
+        kind,
+        notes,
+        options,
+        params={"limit": limit},
+    )
+    if posts:
+        return {"items": posts[:limit], "notes": notes}
+
     html_endpoints = (
         f"https://www.reddit.com/r/{subreddit}/hot/",
         f"https://old.reddit.com/r/{subreddit}/hot/",
@@ -804,11 +1004,13 @@ def collect_reddit(channel: Dict[str, Any], *, limit: int = DEFAULT_LIMIT) -> Di
         notes.append(f"{endpoint} não trouxe cartões (`shreddit-post`).")
 
     raise CollectorError(
-        f"O Reddit não devolveu publicações de r/{subreddit} em nenhum dos endereços públicos.",
+        f"O Reddit não devolveu publicações de r/{subreddit} em nenhum dos endereços públicos."
+        + _reddit_failure_detail(notes),
         status="blocked",
         hint=(
-            "O Reddit bloqueia IPs de servidor. Configure um proxy residencial nas opções do canal "
-            "(`proxy`) ou use credenciais OAuth (`client_id`/`client_secret`) com a variante «pesquisa»."
+            "O Reddit bloqueia IPs de servidor (JSON, feed Atom e HTML). Configure um proxy "
+            "residencial nas opções do canal (`proxy`) ou credenciais OAuth "
+            "(`client_id`/`client_secret`, app do tipo «script»)."
         ),
     )
 

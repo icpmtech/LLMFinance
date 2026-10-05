@@ -1,0 +1,996 @@
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+INFO:     Started server process [13376]
+INFO:     Waiting for application startup.
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  19%|#9        | 49/254 [00:00<00:00, 487.86it/s]Loading weights:  56%|#####6    | 143/254 [00:00<00:00, 749.88it/s]Loading weights: 100%|##########| 254/254 [00:00<00:00, 991.12it/s]
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
+Agregação de empresas falhou: Connection timed out
+INFO:     127.0.0.1:57570 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57577 - "GET /contracts/analytics/iberia-map?pais=fr HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57596 - "GET /contracts/analytics/iberia-map?pais=fr HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57604 - "GET /contracts/analytics/iberia-map?pais=fr HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57613 - "GET /contracts/region-detail?pais=FR&code=75&level=departamento&ano=2023 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57618 - "GET /contracts/region-detail?pais=FR&code=75&level=regiao&ano=2023 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57624 - "GET /contracts/region-detail?pais=FR&code=75&level=departamento&ano=2023 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57632 - "GET /contracts/region-detail?pais=FR&code=75&level=departamento HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57637 - "GET /contracts/region-detail?pais=FR&code=75&level=regiao HTTP/1.1" 200 OK
+[2026-10-03 20:00:04] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-03 20:00:04] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-03 20:00:06] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-03 20:00:06] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+Ficheiro do RSS ilegível (Extra data: line 10683 column 2 (char 794686)); a recomeçar.
+[2026-10-03 21:00:02] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-03 21:00:02] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-03 21:00:03] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-03 21:00:03] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-03 22:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-03 22:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-03 22:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-03 22:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-03 23:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-03 23:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-03 23:00:01] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-03 23:00:01] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 00:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 00:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 00:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 00:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 00:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 00:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 00:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 00:00:02] INFO: Fetched (200) <GET https://observador.pt/seccao/economia/> (referer: https://www.google.com/)
+[2026-10-04 00:00:02] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 00:00:02] INFO: Fetched (200) <GET https://eco.sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 00:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 00:00:03] INFO: Fetched (200) <GET https://observador.pt/2026/10/03/diploma-que-reforca-acesso-dos-consumidores-a-garrafas-de-gas-entra-em-vigor/> (referer: https://www.google.com/)
+[2026-10-04 00:00:04] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/aie-diz-que-cerca-de-325-milhoes-de-barris-ja-foram-libertados-das-reservas-estrategicas-de-petroleo/> (referer: https://www.google.com/)
+[2026-10-04 00:00:04] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/prova-dos-9-salarios-subiram-mesmo-15-nos-ultimos-dois-anos-como-diz-montenegro/> (referer: https://www.google.com/)
+[2026-10-04 00:00:04] INFO: Fetched (200) <GET https://dinheirovivo.dn.pt/> (referer: https://www.google.com/)
+[2026-10-04 00:00:05] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/bcp-ja-executou-705-do-montante-maximo-previsto-do-programa-de-share-buyback/> (referer: https://www.google.com/)
+[2026-10-04 00:00:05] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/andre-ventura-assume-presidencia-da-comissao-de-inquerito-a-luis-neves/> (referer: https://www.google.com/)
+[2026-10-04 00:00:05] INFO: Fetched (200) <GET https://observador.pt/2026/10/03/greve-na-easyjet-com-total-adesao-e-cancelamentos-podem-chegar-a-90-diz-sindicato/> (referer: https://www.google.com/)
+[2026-10-04 00:00:06] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/presidente-da-republica-alerta-para-natalidade-e-despovoamento-na-inauguracao-de-creche-em-penamacor/> (referer: https://www.google.com/)
+[2026-10-04 00:00:06] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/empresarios-portugueses-no-brasil-esperam-menos-entraves-e-burocracias-do-proximo-pr/> (referer: https://www.google.com/)
+[2026-10-04 00:00:06] INFO: Fetched (200) <GET https://observador.pt/2026/10/03/combustiveis-podem-por-em-risco-sustentabilidade-do-transporte-aereo-de-emergencia/> (referer: https://www.google.com/)
+[2026-10-04 00:00:07] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/sobrelotacao-portugal-escapa-ao-padrao-mas-problema-agrava-se-nos-sub-30/> (referer: https://www.google.com/)
+[2026-10-04 00:00:07] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/greve-da-funcao-publica-fecha-escolas-e-pressiona-governo-antes-das-negociacoes-do-oe2027/> (referer: https://www.google.com/)
+[2026-10-04 00:00:07] INFO: Fetched (200) <GET https://observador.pt/2026/10/03/efeitos-muito-negativos-na-protecao-do-lobo-iberico-pesam-no-chumbo-ambiental-a-parque-eolico-do-paiva/> (referer: https://www.google.com/)
+[2026-10-04 00:00:08] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/governo-simplifica-licenciamento-de-combustiveis-e-reforca-acesso-a-garrafas-de-gas/> (referer: https://www.google.com/)
+[2026-10-04 00:00:09] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/montenegro-em-estrasburgo-com-orcamento-da-ue-discussao/> (referer: https://www.google.com/)
+[2026-10-04 00:00:09] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/proxima-sessao-do-parlamento-europeu-recebe-luis-montenegro-e-debate-orcamento-da-ue/> (referer: https://www.google.com/)
+[2026-10-04 00:00:09] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/litio-be-critica-tiques-de-autoritarismo-do-governo-no-processo-da-mina-em-boticas/> (referer: https://www.google.com/)
+[2026-10-04 00:00:10] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/wall-street-encerra-sessao-com-ganhos-ligeiros-com-o-abrandamento-do-mercado-de-trabalho-nos-eua/> (referer: https://www.google.com/)
+[2026-10-04 00:00:10] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/menzies-portugal-passa-de-prejuizos-a-lucros-com-queda-nas-provisoes/> (referer: https://www.google.com/)
+[2026-10-04 00:00:11] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/dona-da-cimpor-compra-grupo-ucraniano-de-cimento-ifcem/> (referer: https://www.google.com/)
+[2026-10-04 00:00:11] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/reserve-a-data-oe2027-em-debate-no-jornal-economico/> (referer: https://www.google.com/)
+[2026-10-04 00:00:11] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/lisboa-acolhe-hub-europeu-da-mitsubishi-fuso-fabrica-no-tramagal-continua-a-fazer-total-sentido/> (referer: https://www.google.com/)
+[2026-10-04 00:00:12] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/scope-melhora-rating-de-portugal-para-a-com-perspetiva-estavel/> (referer: https://www.google.com/)
+[2026-10-04 00:00:12] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/conversas-sem-guiao-com-ines-rocha-de-gouveia-presidente-da-fundacao-santander/> (referer: https://www.google.com/)
+[2026-10-04 00:00:13] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/%e2%9b%bdgoverno-volta-a-reduzir-desconto-do-isp-na-gasolina-e-no-gasoleo/> (referer: https://www.google.com/)
+[2026-10-04 00:00:13] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/opep-avalia-oferta-de-petroleo-apos-g7-anunciar-libertacao-de-reservas/> (referer: https://www.google.com/)
+[2026-10-04 00:00:14] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/processo-montepio-relacao-de-lisboa-manda-pronunciar-tomas-correia-e-mais-quatro-arguidos-por-crimes-financeiros/> (referer: https://www.google.com/)
+[2026-10-04 00:00:14] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/governo-aprovara-a-fusao-galp-moeve-se-salvaguardar-importancia-de-sines-diz-castro-almeida/> (referer: https://www.google.com/)
+[2026-10-04 00:00:15] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/certificados-de-aforro-pagam-25-com-a-euribor-semestral-nos-31/> (referer: https://www.google.com/)
+[2026-10-04 00:00:15] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/oe2027-chega-acusa-ps-de-irresponsabilidade-por-viabilizar-documento-sem-o-conhecer/> (referer: https://www.google.com/)
+[2026-10-04 00:00:16] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/trump-elogia-europa-pela-libertacao-do-gasoleo/> (referer: https://www.google.com/)
+[2026-10-04 00:00:16] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/lufthansa-e-air-france-klm-abrem-porta-a-futura-troca-de-acoes-na-tap/> (referer: https://www.google.com/)
+[2026-10-04 00:00:17] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/consumo-de-combustiveis-cai-103-em-agosto-e-precos-sobem-ate-64/> (referer: https://www.google.com/)
+[2026-10-04 00:00:17] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/falsos-sites-de-venda-de-bilhetes-para-jogos-de-portugal-fazem-disparar-reclamacoes/> (referer: https://www.google.com/)
+[2026-10-04 00:00:17] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/petrobras-anuncia-nova-descoberta-de-petroleo-na-costa-amazonica-do-brasil/> (referer: https://www.google.com/)
+[2026-10-04 00:00:18] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/combustiveis-podem-por-em-risco-sustentabilidade-do-transporte-aereo-de-emergencia/> (referer: https://www.google.com/)
+[2026-10-04 00:00:18] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/21/colocar-a-tecnologia-ao-servico-da-gestao-financeira/> (referer: https://www.google.com/)
+[2026-10-04 00:00:18] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/agricultores-de-serpa-exigem-ao-ministro-reuniao-sobre-dificuldades-no-setor/> (referer: https://www.google.com/)
+[2026-10-04 00:00:19] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/mercado-automovel-portugues-cresce-134-em-setembro-e-eletricos-ja-representam-quase-metade-das-matriculas-de-ligeiros-de-passageiros/> (referer: https://www.google.com/)
+[2026-10-04 00:00:20] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/scope-melhora-rating-de-portugal-para-a-com-perspetiva-estavel/> (referer: https://www.google.com/)
+[2026-10-04 00:00:20] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/consumo-de-combustiveis-cai-103-em-agosto-e-precos-sobem-ate-64-segundo-dados-da-dgeg/> (referer: https://www.google.com/)
+[2026-10-04 00:00:21] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/sporting-sad-delibera-em-ag-autorizacao-para-emitir-emprestimos-ate-150-milhoes/> (referer: https://www.google.com/)
+[2026-10-04 00:00:21] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/trump-usa-dependencia-da-europa-do-diesel-americano-para-impor-libertacao-de-reservas-e-baixar-preco/> (referer: https://www.google.com/)
+[2026-10-04 00:00:22] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/24/investor-talks-reune-mais-de-2-000-pessoas-em-portimao-e-prepara-regresso-em-2027/> (referer: https://www.google.com/)
+[2026-10-04 00:00:23] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/nao-preciso-de-conhecer-o-documento-pcp-confirma-voto-contra-oe2027-e-acusa-ps-de-proteger-o-chega/> (referer: https://www.google.com/)
+[2026-10-04 00:00:23] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/sbc-summit-vai-manter-apostas-e-gaming-em-lisboa-ate-2030/> (referer: https://www.google.com/)
+[2026-10-04 00:00:24] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/agente-da-openai-volta-a-infiltrar-se-num-site-do-governo-australiano-mais-de-100-entidades-alertadas-sobre-atividade-de-agentes/> (referer: https://www.google.com/)
+[2026-10-04 00:00:25] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/28/afinal-de-contas-a-nova-area-de-literacia-financeira-do-millennium-bcp/> (referer: https://www.google.com/)
+[2026-10-04 00:00:25] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/pcp-agenda-debate-com-o-governo-sobre-agravamento-das-condicoes-de-vida-para-dia-16-de-outubro/> (referer: https://www.google.com/)
+[2026-10-04 00:00:26] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/01/descer-isp-dos-combustiveis-ate-a-taxa-minima-custaria-15-mil-milhoes-de-euros/> (referer: https://www.google.com/)
+[2026-10-04 00:00:27] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/defice-alemao-sobe-68-no-primeiro-semestre-de-2026-e-chega-aos-98-800-milhoes-de-euros/> (referer: https://www.google.com/)
+[2026-10-04 00:00:27] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/30/portugal-arrisca-falhar-metas-de-despesa-em-2027-apesar-das-contas-equilibradas/> (referer: https://www.google.com/)
+[2026-10-04 00:00:28] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/ucrania-ataca-maior-deposito-de-combustivel-da-europa-e-refinarias-russas/> (referer: https://www.google.com/)
+[2026-10-04 00:00:28] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/01/juros-inflacao-e-guerra-como-o-contexto-internacional-condiciona-o-oe2027/> (referer: https://www.google.com/)
+[2026-10-04 00:00:29] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/greve-dos-tripulantes-da-easyjet-arranca-com-80-dos-voos-ja-cancelados/> (referer: https://www.google.com/)
+[2026-10-04 00:00:30] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/sindicato-diz-que-greve-dos-trabalhadores-da-saude-esta-com-60-de-adesao/> (referer: https://www.google.com/)
+[2026-10-04 01:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 01:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 01:00:01] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 01:00:01] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 02:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 02:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 02:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 02:00:03] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 03:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 03:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 03:00:01] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 03:00:01] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 04:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 04:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 04:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 04:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 05:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 05:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 05:00:01] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 05:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 06:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 06:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 06:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 06:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 06:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 06:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 06:00:02] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 06:00:02] INFO: Fetched (200) <GET https://eco.sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 06:00:03] INFO: Fetched (200) <GET https://observador.pt/seccao/economia/> (referer: https://www.google.com/)
+[2026-10-04 06:00:03] INFO: Fetched (200) <GET https://dinheirovivo.dn.pt/> (referer: https://www.google.com/)
+[2026-10-04 06:00:03] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 06:00:03] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 06:00:03] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/aie-diz-que-cerca-de-325-milhoes-de-barris-ja-foram-libertados-das-reservas-estrategicas-de-petroleo/> (referer: https://www.google.com/)
+[2026-10-04 06:00:04] INFO: Fetched (200) <GET https://eco.sapo.pt/especiais/portugal-e-brasil-uma-relacao-comercial-que-cresceu-mas-continua-desequilibrada/> (referer: https://www.google.com/)
+[2026-10-04 06:00:04] INFO: Fetched (200) <GET https://observador.pt/2026/10/03/diploma-que-reforca-acesso-dos-consumidores-a-garrafas-de-gas-entra-em-vigor/> (referer: https://www.google.com/)
+[2026-10-04 06:00:05] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/bcp-ja-executou-705-do-montante-maximo-previsto-do-programa-de-share-buyback/> (referer: https://www.google.com/)
+[2026-10-04 06:00:05] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/lula-ou-bolsonaro-jr-um-brasil-polarizado-decide-o-rumo-da-economia-e-do-pais-no-mundo/> (referer: https://www.google.com/)
+[2026-10-04 06:00:06] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/presidente-da-republica-alerta-para-natalidade-e-despovoamento-na-inauguracao-de-creche-em-penamacor/> (referer: https://www.google.com/)
+[2026-10-04 06:00:06] INFO: Fetched (200) <GET https://observador.pt/2026/10/03/greve-na-easyjet-com-total-adesao-e-cancelamentos-podem-chegar-a-90-diz-sindicato/> (referer: https://www.google.com/)
+[2026-10-04 06:00:06] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/prova-dos-9-salarios-subiram-mesmo-15-nos-ultimos-dois-anos-como-diz-montenegro/> (referer: https://www.google.com/)
+[2026-10-04 06:00:07] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/sobrelotacao-portugal-escapa-ao-padrao-mas-problema-agrava-se-nos-sub-30/> (referer: https://www.google.com/)
+[2026-10-04 06:00:07] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/andre-ventura-assume-presidencia-da-comissao-de-inquerito-a-luis-neves/> (referer: https://www.google.com/)
+[2026-10-04 06:00:08] INFO: Fetched (200) <GET https://observador.pt/2026/10/03/combustiveis-podem-por-em-risco-sustentabilidade-do-transporte-aereo-de-emergencia/> (referer: https://www.google.com/)
+[2026-10-04 06:00:08] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/governo-simplifica-licenciamento-de-combustiveis-e-reforca-acesso-a-garrafas-de-gas/> (referer: https://www.google.com/)
+[2026-10-04 06:00:09] INFO: Fetched (200) <GET https://eco.sapo.pt/reportagem/do-mar-ao-prato-matosinhos-quer-ser-destino-gastronomico-internacional/> (referer: https://www.google.com/)
+[2026-10-04 06:00:09] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/proxima-sessao-do-parlamento-europeu-recebe-luis-montenegro-e-debate-orcamento-da-ue/> (referer: https://www.google.com/)
+[2026-10-04 06:00:09] INFO: Fetched (200) <GET https://observador.pt/2026/10/03/efeitos-muito-negativos-na-protecao-do-lobo-iberico-pesam-no-chumbo-ambiental-a-parque-eolico-do-paiva/> (referer: https://www.google.com/)
+[2026-10-04 06:00:10] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/greve-da-funcao-publica-fecha-escolas-e-pressiona-governo-antes-das-negociacoes-do-oe2027/> (referer: https://www.google.com/)
+[2026-10-04 06:00:10] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/wall-street-encerra-sessao-com-ganhos-ligeiros-com-o-abrandamento-do-mercado-de-trabalho-nos-eua/> (referer: https://www.google.com/)
+[2026-10-04 06:00:11] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/litio-be-critica-tiques-de-autoritarismo-do-governo-no-processo-da-mina-em-boticas/> (referer: https://www.google.com/)
+[2026-10-04 06:00:11] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/montenegro-em-estrasburgo-com-orcamento-da-ue-discussao/> (referer: https://www.google.com/)
+[2026-10-04 06:00:11] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/reserve-a-data-oe2027-em-debate-no-jornal-economico/> (referer: https://www.google.com/)
+[2026-10-04 06:00:13] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/dona-da-cimpor-compra-grupo-ucraniano-de-cimento-ifcem/> (referer: https://www.google.com/)
+[2026-10-04 06:00:13] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/conversas-sem-guiao-com-ines-rocha-de-gouveia-presidente-da-fundacao-santander/> (referer: https://www.google.com/)
+[2026-10-04 06:00:13] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/menzies-portugal-passa-de-prejuizos-a-lucros-com-queda-nas-provisoes/> (referer: https://www.google.com/)
+[2026-10-04 06:00:14] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/opep-avalia-oferta-de-petroleo-apos-g7-anunciar-libertacao-de-reservas/> (referer: https://www.google.com/)
+[2026-10-04 06:00:14] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/scope-melhora-rating-de-portugal-para-a-com-perspetiva-estavel/> (referer: https://www.google.com/)
+[2026-10-04 06:00:14] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/lisboa-acolhe-hub-europeu-da-mitsubishi-fuso-fabrica-no-tramagal-continua-a-fazer-total-sentido/> (referer: https://www.google.com/)
+[2026-10-04 06:00:15] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/certificados-de-aforro-pagam-25-com-a-euribor-semestral-nos-31/> (referer: https://www.google.com/)
+[2026-10-04 06:00:15] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/%e2%9b%bdgoverno-volta-a-reduzir-desconto-do-isp-na-gasolina-e-no-gasoleo/> (referer: https://www.google.com/)
+[2026-10-04 06:00:16] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/processo-montepio-relacao-de-lisboa-manda-pronunciar-tomas-correia-e-mais-quatro-arguidos-por-crimes-financeiros/> (referer: https://www.google.com/)
+[2026-10-04 06:00:16] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/lufthansa-e-air-france-klm-abrem-porta-a-futura-troca-de-acoes-na-tap/> (referer: https://www.google.com/)
+[2026-10-04 06:00:16] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/governo-aprovara-a-fusao-galp-moeve-se-salvaguardar-importancia-de-sines-diz-castro-almeida/> (referer: https://www.google.com/)
+[2026-10-04 06:00:17] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/falsos-sites-de-venda-de-bilhetes-para-jogos-de-portugal-fazem-disparar-reclamacoes/> (referer: https://www.google.com/)
+[2026-10-04 06:00:18] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/oe2027-chega-acusa-ps-de-irresponsabilidade-por-viabilizar-documento-sem-o-conhecer/> (referer: https://www.google.com/)
+[2026-10-04 06:00:18] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/trump-elogia-europa-pela-libertacao-do-gasoleo/> (referer: https://www.google.com/)
+[2026-10-04 06:00:18] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/combustiveis-podem-por-em-risco-sustentabilidade-do-transporte-aereo-de-emergencia/> (referer: https://www.google.com/)
+[2026-10-04 06:00:19] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/petrobras-anuncia-nova-descoberta-de-petroleo-na-costa-amazonica-do-brasil/> (referer: https://www.google.com/)
+[2026-10-04 06:00:19] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/consumo-de-combustiveis-cai-103-em-agosto-e-precos-sobem-ate-64/> (referer: https://www.google.com/)
+[2026-10-04 06:00:19] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/mercado-automovel-portugues-cresce-134-em-setembro-e-eletricos-ja-representam-quase-metade-das-matriculas-de-ligeiros-de-passageiros/> (referer: https://www.google.com/)
+[2026-10-04 06:00:21] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/agricultores-de-serpa-exigem-ao-ministro-reuniao-sobre-dificuldades-no-setor/> (referer: https://www.google.com/)
+[2026-10-04 06:00:21] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/21/colocar-a-tecnologia-ao-servico-da-gestao-financeira/> (referer: https://www.google.com/)
+[2026-10-04 06:00:22] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/consumo-de-combustiveis-cai-103-em-agosto-e-precos-sobem-ate-64-segundo-dados-da-dgeg/> (referer: https://www.google.com/)
+[2026-10-04 06:00:22] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/scope-melhora-rating-de-portugal-para-a-com-perspetiva-estavel/> (referer: https://www.google.com/)
+[2026-10-04 06:00:25] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/sporting-sad-delibera-em-ag-autorizacao-para-emitir-emprestimos-ate-150-milhoes/> (referer: https://www.google.com/)
+[2026-10-04 06:00:25] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/trump-usa-dependencia-da-europa-do-diesel-americano-para-impor-libertacao-de-reservas-e-baixar-preco/> (referer: https://www.google.com/)
+[2026-10-04 06:00:26] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/24/investor-talks-reune-mais-de-2-000-pessoas-em-portimao-e-prepara-regresso-em-2027/> (referer: https://www.google.com/)
+[2026-10-04 06:00:27] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/nao-preciso-de-conhecer-o-documento-pcp-confirma-voto-contra-oe2027-e-acusa-ps-de-proteger-o-chega/> (referer: https://www.google.com/)
+[2026-10-04 06:00:28] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/sbc-summit-vai-manter-apostas-e-gaming-em-lisboa-ate-2030/> (referer: https://www.google.com/)
+[2026-10-04 06:00:28] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/agente-da-openai-volta-a-infiltrar-se-num-site-do-governo-australiano-mais-de-100-entidades-alertadas-sobre-atividade-de-agentes/> (referer: https://www.google.com/)
+[2026-10-04 06:00:29] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/28/afinal-de-contas-a-nova-area-de-literacia-financeira-do-millennium-bcp/> (referer: https://www.google.com/)
+[2026-10-04 06:00:29] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/pcp-agenda-debate-com-o-governo-sobre-agravamento-das-condicoes-de-vida-para-dia-16-de-outubro/> (referer: https://www.google.com/)
+[2026-10-04 06:00:30] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/01/descer-isp-dos-combustiveis-ate-a-taxa-minima-custaria-15-mil-milhoes-de-euros/> (referer: https://www.google.com/)
+[2026-10-04 06:00:31] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/defice-alemao-sobe-68-no-primeiro-semestre-de-2026-e-chega-aos-98-800-milhoes-de-euros/> (referer: https://www.google.com/)
+[2026-10-04 06:00:33] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/ucrania-ataca-maior-deposito-de-combustivel-da-europa-e-refinarias-russas/> (referer: https://www.google.com/)
+[2026-10-04 06:00:34] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/greve-dos-tripulantes-da-easyjet-arranca-com-80-dos-voos-ja-cancelados/> (referer: https://www.google.com/)
+[2026-10-04 06:00:38] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/sindicato-diz-que-greve-dos-trabalhadores-da-saude-esta-com-60-de-adesao/> (referer: https://www.google.com/)
+[2026-10-04 07:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 07:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 07:00:01] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 07:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 08:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 08:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 08:00:01] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 08:00:01] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 09:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 09:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 09:00:01] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 09:00:01] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 10:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 10:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 10:00:01] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 10:00:01] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 11:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 11:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 11:00:01] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 11:00:01] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+INFO:     127.0.0.1:59118 - "GET /contracts/map HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54433 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57789 - "GET /contracts/map HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56503 - "GET /contracts/map HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58215 - "OPTIONS /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58215 - "POST /auth/login HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:55377 - "GET /auth/users?limit=3 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56518 - "POST /auth/login HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:61049 - "POST /auth/login HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:61057 - "GET /auth/sessions HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:61057 - "GET /auth/stats HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:62870 - "POST /auth/register HTTP/1.1" 409 Conflict
+INFO:     127.0.0.1:62876 - "POST /auth/login HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:64950 - "POST /auth/login HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:53449 - "POST /auth/register HTTP/1.1" 201 Created
+INFO:     127.0.0.1:62150 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62150 - "OPTIONS /sentiment/market/watchlist HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51468 - "OPTIONS /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59683 - "OPTIONS /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62150 - "GET /sentiment/market/watchlist HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57393 - "OPTIONS /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59683 - "GET /sentiment/market/watchlist HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57393 - "OPTIONS /sentiment/market/live?news=5&translate=0&tickers=%5EGSPC,%5EIXIC,BTC-USD,NVDA,MSFT,CTT.LS,EDP.LS,MU,SPCX HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59683 - "OPTIONS /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62150 - "OPTIONS /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56507 - "OPTIONS /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59683 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59683 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50763 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51468 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62150 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51468 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56507 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51468 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59683 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57393 - "GET /sentiment/market/live?news=5&translate=0&tickers=%5EGSPC,%5EIXIC,BTC-USD,NVDA,MSFT,CTT.LS,EDP.LS,MU,SPCX HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59826 - "GET /contracts/map?v=3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58236 - "OPTIONS /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58236 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58236 - "OPTIONS /sentiment/market/watchlist HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58236 - "OPTIONS /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54944 - "OPTIONS /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59418 - "GET /sentiment/market/watchlist HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54944 - "OPTIONS /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54944 - "OPTIONS /sentiment/market/live?news=5&translate=0&tickers=%5EGSPC,%5EIXIC,BTC-USD,NVDA,MSFT,CTT.LS,EDP.LS,MU,SPCX HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49237 - "OPTIONS /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53183 - "OPTIONS /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54944 - "OPTIONS /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53183 - "GET /tickers/%5EGSPC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53183 - "GET /tickers/BTC-USD/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54944 - "GET /tickers/%5EIXIC/history?period=1mo HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58236 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59418 - "PATCH /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58311 - "OPTIONS /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58311 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58311 - "OPTIONS /contracts/years HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60025 - "OPTIONS /contracts-es/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64122 - "OPTIONS /contracts-fr/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63576 - "OPTIONS /contracts/analytics/iberia-map?pais=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58777 - "OPTIONS /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51198 - "OPTIONS /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58311 - "GET /contracts/years HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60025 - "GET /contracts-es/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63576 - "GET /contracts/analytics/iberia-map?pais=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64122 - "GET /contracts-fr/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58777 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51198 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57253 - "OPTIONS /contracts/analytics/iberia-map?pais=FR HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57253 - "GET /contracts/analytics/iberia-map?pais=FR HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61979 - "OPTIONS /contracts-fr/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61979 - "POST /contracts-fr/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57358 - "OPTIONS /contracts/region-detail?pais=FR&code=75&level=departamento HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57358 - "GET /contracts/region-detail?pais=FR&code=75&level=departamento HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57358 - "OPTIONS /contracts/search/fr?q=paris HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51174 - "GET /contracts/search/fr?q=paris HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51174 - "OPTIONS /contracts-fr/search?q=paris HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51174 - "GET /contracts-fr/search?q=paris HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51174 - "OPTIONS /contracts-fr?q=paris HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51191 - "GET /contracts-fr?q=paris HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51191 - "OPTIONS /contracts/fr/search?q=paris HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51174 - "GET /contracts/fr/search?q=paris HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51174 - "OPTIONS /api/contracts-fr/search?q=paris HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51191 - "GET /api/contracts-fr/search?q=paris HTTP/1.1" 404 Not Found
+[2026-10-04 12:00:02] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 12:00:02] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 12:00:02] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 12:00:02] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 12:00:02] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 12:00:02] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 12:00:03] INFO: Fetched (200) <GET https://observador.pt/seccao/economia/> (referer: https://www.google.com/)
+[2026-10-04 12:00:03] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 12:00:03] INFO: Fetched (200) <GET https://eco.sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 12:00:04] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 12:00:04] INFO: Fetched (200) <GET https://observador.pt/2026/10/04/aumento-nos-combustiveis-angustia-instituicoes-sociais-e-ameaca-continuidade-de-apoios/> (referer: https://www.google.com/)
+[2026-10-04 12:00:05] INFO: Fetched (200) <GET https://eco.sapo.pt/especiais/portugal-e-brasil-uma-relacao-comercial-que-cresceu-mas-continua-desequilibrada/> (referer: https://www.google.com/)
+[2026-10-04 12:00:05] INFO: Fetched (200) <GET https://dinheirovivo.dn.pt/> (referer: https://www.google.com/)
+[2026-10-04 12:00:05] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 12:00:05] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/aie-diz-que-cerca-de-325-milhoes-de-barris-ja-foram-libertados-das-reservas-estrategicas-de-petroleo/> (referer: https://www.google.com/)
+[2026-10-04 12:00:06] INFO: Fetched (200) <GET https://observador.pt/2026/10/03/diploma-que-reforca-acesso-dos-consumidores-a-garrafas-de-gas-entra-em-vigor/> (referer: https://www.google.com/)
+[2026-10-04 12:00:06] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/lula-ou-bolsonaro-jr-um-brasil-polarizado-decide-o-rumo-da-economia-e-do-pais-no-mundo/> (referer: https://www.google.com/)
+[2026-10-04 12:00:07] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/bcp-ja-executou-705-do-montante-maximo-previsto-do-programa-de-share-buyback/> (referer: https://www.google.com/)
+[2026-10-04 12:00:07] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/04/da-sede-as-regras-na-habitacao-de-centeno-a-compra-de-acoes-o-ano-acelerado-de-santos-pereira-no-banco-de-portugal/> (referer: https://www.google.com/)
+[2026-10-04 12:00:08] INFO: Fetched (200) <GET https://observador.pt/2026/10/03/greve-na-easyjet-com-total-adesao-e-cancelamentos-podem-chegar-a-90-diz-sindicato/> (referer: https://www.google.com/)
+[2026-10-04 12:00:08] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/presidente-da-republica-alerta-para-natalidade-e-despovoamento-na-inauguracao-de-creche-em-penamacor/> (referer: https://www.google.com/)
+[2026-10-04 12:00:09] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/prova-dos-9-salarios-subiram-mesmo-15-nos-ultimos-dois-anos-como-diz-montenegro/> (referer: https://www.google.com/)
+[2026-10-04 12:00:09] INFO: Fetched (200) <GET https://observador.pt/2026/10/03/combustiveis-podem-por-em-risco-sustentabilidade-do-transporte-aereo-de-emergencia/> (referer: https://www.google.com/)
+[2026-10-04 12:00:10] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/sobrelotacao-portugal-escapa-ao-padrao-mas-problema-agrava-se-nos-sub-30/> (referer: https://www.google.com/)
+[2026-10-04 12:00:12] INFO: Fetched (200) <GET https://eco.sapo.pt/reportagem/do-mar-ao-prato-matosinhos-quer-ser-destino-gastronomico-internacional/> (referer: https://www.google.com/)
+[2026-10-04 12:00:12] INFO: Fetched (200) <GET https://observador.pt/2026/10/03/efeitos-muito-negativos-na-protecao-do-lobo-iberico-pesam-no-chumbo-ambiental-a-parque-eolico-do-paiva/> (referer: https://www.google.com/)
+[2026-10-04 12:00:13] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/governo-simplifica-licenciamento-de-combustiveis-e-reforca-acesso-a-garrafas-de-gas/> (referer: https://www.google.com/)
+[2026-10-04 12:00:14] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/greve-da-funcao-publica-fecha-escolas-e-pressiona-governo-antes-das-negociacoes-do-oe2027/> (referer: https://www.google.com/)
+[2026-10-04 12:00:15] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/proxima-sessao-do-parlamento-europeu-recebe-luis-montenegro-e-debate-orcamento-da-ue/> (referer: https://www.google.com/)
+[2026-10-04 12:00:15] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/litio-be-critica-tiques-de-autoritarismo-do-governo-no-processo-da-mina-em-boticas/> (referer: https://www.google.com/)
+[2026-10-04 12:00:16] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/andre-ventura-assume-presidencia-da-comissao-de-inquerito-a-luis-neves/> (referer: https://www.google.com/)
+INFO:     127.0.0.1:52778 - "POST /contracts-fr/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64612 - "POST /contracts-fr/search HTTP/1.1" 200 OK
+[2026-10-04 12:00:19] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/wall-street-encerra-sessao-com-ganhos-ligeiros-com-o-abrandamento-do-mercado-de-trabalho-nos-eua/> (referer: https://www.google.com/)
+[2026-10-04 12:00:19] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/menzies-portugal-passa-de-prejuizos-a-lucros-com-queda-nas-provisoes/> (referer: https://www.google.com/)
+[2026-10-04 12:00:20] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/dona-da-cimpor-compra-grupo-ucraniano-de-cimento-ifcem/> (referer: https://www.google.com/)
+[2026-10-04 12:00:20] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/reserve-a-data-oe2027-em-debate-no-jornal-economico/> (referer: https://www.google.com/)
+[2026-10-04 12:00:21] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/lisboa-acolhe-hub-europeu-da-mitsubishi-fuso-fabrica-no-tramagal-continua-a-fazer-total-sentido/> (referer: https://www.google.com/)
+[2026-10-04 12:00:21] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/scope-melhora-rating-de-portugal-para-a-com-perspetiva-estavel/> (referer: https://www.google.com/)
+[2026-10-04 12:00:22] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/conversas-sem-guiao-com-ines-rocha-de-gouveia-presidente-da-fundacao-santander/> (referer: https://www.google.com/)
+[2026-10-04 12:00:22] INFO: Fetched (200) <GET https://eco.sapo.pt/especiais/atentados-fmi-petroleo-em-alta-e-a-genese-dos-dinossauros-poder-local-nasceu-ha-50-anos/> (referer: https://www.google.com/)
+[2026-10-04 12:00:23] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/processo-montepio-relacao-de-lisboa-manda-pronunciar-tomas-correia-e-mais-quatro-arguidos-por-crimes-financeiros/> (referer: https://www.google.com/)
+[2026-10-04 12:00:24] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/governo-aprovara-a-fusao-galp-moeve-se-salvaguardar-importancia-de-sines-diz-castro-almeida/> (referer: https://www.google.com/)
+INFO:     127.0.0.1:62347 - "POST /contracts-fr/search HTTP/1.1" 200 OK
+[2026-10-04 12:00:25] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/opep-avalia-oferta-de-petroleo-apos-g7-anunciar-libertacao-de-reservas/> (referer: https://www.google.com/)
+[2026-10-04 12:00:25] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/oe2027-chega-acusa-ps-de-irresponsabilidade-por-viabilizar-documento-sem-o-conhecer/> (referer: https://www.google.com/)
+[2026-10-04 12:00:25] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/trump-elogia-europa-pela-libertacao-do-gasoleo/> (referer: https://www.google.com/)
+[2026-10-04 12:00:27] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/certificados-de-aforro-pagam-25-com-a-euribor-semestral-nos-31/> (referer: https://www.google.com/)
+[2026-10-04 12:00:28] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/petrobras-anuncia-nova-descoberta-de-petroleo-na-costa-amazonica-do-brasil/> (referer: https://www.google.com/)
+[2026-10-04 12:00:28] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/consumo-de-combustiveis-cai-103-em-agosto-e-precos-sobem-ate-64/> (referer: https://www.google.com/)
+[2026-10-04 12:00:29] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/lufthansa-e-air-france-klm-abrem-porta-a-futura-troca-de-acoes-na-tap/> (referer: https://www.google.com/)
+[2026-10-04 12:00:30] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/agricultores-de-serpa-exigem-ao-ministro-reuniao-sobre-dificuldades-no-setor/> (referer: https://www.google.com/)
+[2026-10-04 12:00:30] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/21/colocar-a-tecnologia-ao-servico-da-gestao-financeira/> (referer: https://www.google.com/)
+[2026-10-04 12:00:31] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/falsos-sites-de-venda-de-bilhetes-para-jogos-de-portugal-fazem-disparar-reclamacoes/> (referer: https://www.google.com/)
+[2026-10-04 12:00:32] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/consumo-de-combustiveis-cai-103-em-agosto-e-precos-sobem-ate-64-segundo-dados-da-dgeg/> (referer: https://www.google.com/)
+[2026-10-04 12:00:32] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/scope-melhora-rating-de-portugal-para-a-com-perspetiva-estavel/> (referer: https://www.google.com/)
+[2026-10-04 12:00:34] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/trump-usa-dependencia-da-europa-do-diesel-americano-para-impor-libertacao-de-reservas-e-baixar-preco/> (referer: https://www.google.com/)
+[2026-10-04 12:00:34] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/sporting-sad-delibera-em-ag-autorizacao-para-emitir-emprestimos-ate-150-milhoes/> (referer: https://www.google.com/)
+[2026-10-04 12:00:35] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/24/investor-talks-reune-mais-de-2-000-pessoas-em-portimao-e-prepara-regresso-em-2027/> (referer: https://www.google.com/)
+[2026-10-04 12:00:35] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/nao-preciso-de-conhecer-o-documento-pcp-confirma-voto-contra-oe2027-e-acusa-ps-de-proteger-o-chega/> (referer: https://www.google.com/)
+[2026-10-04 12:00:37] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/sbc-summit-vai-manter-apostas-e-gaming-em-lisboa-ate-2030/> (referer: https://www.google.com/)
+[2026-10-04 12:00:37] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/agente-da-openai-volta-a-infiltrar-se-num-site-do-governo-australiano-mais-de-100-entidades-alertadas-sobre-atividade-de-agentes/> (referer: https://www.google.com/)
+[2026-10-04 12:00:37] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/combustiveis-podem-por-em-risco-sustentabilidade-do-transporte-aereo-de-emergencia/> (referer: https://www.google.com/)
+[2026-10-04 12:00:38] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/28/afinal-de-contas-a-nova-area-de-literacia-financeira-do-millennium-bcp/> (referer: https://www.google.com/)
+[2026-10-04 12:00:38] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/pcp-agenda-debate-com-o-governo-sobre-agravamento-das-condicoes-de-vida-para-dia-16-de-outubro/> (referer: https://www.google.com/)
+[2026-10-04 12:00:39] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/01/descer-isp-dos-combustiveis-ate-a-taxa-minima-custaria-15-mil-milhoes-de-euros/> (referer: https://www.google.com/)
+[2026-10-04 12:00:40] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/mercado-automovel-portugues-cresce-134-em-setembro-e-eletricos-ja-representam-quase-metade-das-matriculas-de-ligeiros-de-passageiros/> (referer: https://www.google.com/)
+[2026-10-04 12:00:40] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/defice-alemao-sobe-68-no-primeiro-semestre-de-2026-e-chega-aos-98-800-milhoes-de-euros/> (referer: https://www.google.com/)
+[2026-10-04 12:00:42] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/ucrania-ataca-maior-deposito-de-combustivel-da-europa-e-refinarias-russas/> (referer: https://www.google.com/)
+[2026-10-04 12:00:44] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/greve-dos-tripulantes-da-easyjet-arranca-com-80-dos-voos-ja-cancelados/> (referer: https://www.google.com/)
+INFO:     127.0.0.1:64295 - "GET /contracts/analytics/iberia-map?pais=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61367 - "OPTIONS /contracts/analytics/iberia-map?pais=PT HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61367 - "GET /contracts/analytics/iberia-map?pais=PT HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61367 - "OPTIONS /contracts/analytics/iberia-map?pais=ES HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56786 - "GET /contracts/analytics/iberia-map?pais=ES HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61279 - "OPTIONS /contracts/analytics/iberia-map?ano=2026&pais=ES HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61279 - "GET /contracts/analytics/iberia-map?ano=2026&pais=ES HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61279 - "OPTIONS /risco/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61488 - "GET /risco/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61488 - "OPTIONS /risco/sugestoes?q=cla&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58457 - "OPTIONS /risco/sugestoes?q=clara&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50989 - "OPTIONS /risco/sugestoes?q=clarane&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50989 - "GET /risco/sugestoes?q=clarane&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61488 - "GET /risco/sugestoes?q=cla&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58457 - "GET /risco/sugestoes?q=clara&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58457 - "OPTIONS /risco/sugestoes?q=claranet&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58457 - "OPTIONS /risco/pesquisa?q=claranet&ordenar=relevancia&size=8&from=0&detalhado=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61488 - "GET /risco/sugestoes?q=claranet&size=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50989 - "GET /risco/pesquisa?q=claranet&ordenar=relevancia&size=8&from=0&detalhado=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61488 - "GET /risco/pesquisa?q=claranet&ordenar=relevancia&size=8&from=0&detalhado=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53799 - "OPTIONS /risco/empresa/PT/510728189?detalhado=true&max_contratos=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53799 - "GET /risco/empresa/PT/510728189?detalhado=true&max_contratos=400 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53185 - "OPTIONS /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62969 - "OPTIONS /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58043 - "OPTIONS /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57617 - "OPTIONS /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58043 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50988 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62969 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53185 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 502 Bad Gateway
+INFO:     127.0.0.1:64460 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58786 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58402 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58402 - "OPTIONS /companies/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62789 - "OPTIONS /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "OPTIONS /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51917 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62789 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60431 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51870 - "PATCH /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51870 - "OPTIONS /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "OPTIONS /cae/autocomplete?q=A&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "GET /cae/autocomplete?q=A&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "OPTIONS /cae/autocomplete?q=Apl&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "GET /cae/autocomplete?q=Apl&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "OPTIONS /cae/autocomplete?q=Apli&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "GET /cae/autocomplete?q=Apli&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "OPTIONS /cae/autocomplete?q=Aplic&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "GET /cae/autocomplete?q=Aplic&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "OPTIONS /cae/autocomplete?q=Aplica&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "GET /cae/autocomplete?q=Aplica&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "GET /cae/autocomplete?q=Aplic&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "GET /cae/autocomplete?q=Apli&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51870 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51870 - "OPTIONS /cae/autocomplete?q=Ap&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "GET /cae/autocomplete?q=Ap&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "GET /cae/autocomplete?q=A&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "OPTIONS /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51870 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51870 - "OPTIONS /cae/autocomplete?q=S&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "GET /cae/autocomplete?q=S&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "OPTIONS /cae/autocomplete?q=So&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51870 - "GET /cae/autocomplete?q=So&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51870 - "OPTIONS /cae/autocomplete?q=Sof&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "GET /cae/autocomplete?q=Sof&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "GET /cae/autocomplete?q=So&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "OPTIONS /cae/autocomplete?q=te&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51870 - "GET /cae/autocomplete?q=te&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51870 - "OPTIONS /cae/autocomplete?q=tec&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "GET /cae/autocomplete?q=tec&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "OPTIONS /cae/autocomplete?q=tecn&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51870 - "GET /cae/autocomplete?q=tecn&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51870 - "OPTIONS /cae/autocomplete?q=tecno&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "GET /cae/autocomplete?q=tecno&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58402 - "POST /companies/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60431 - "POST /companies/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60431 - "GET /cae/autocomplete?q=tecn&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60431 - "OPTIONS /cae/autocomplete?q=t&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58402 - "GET /cae/autocomplete?q=t&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57950 - "POST /companies/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61242 - "POST /companies/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61240 - "POST /companies/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62957 - "POST /companies/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57950 - "POST /companies/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57950 - "OPTIONS /workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50868 - "OPTIONS /companies/510342191 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50868 - "OPTIONS /companies/510342191/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60795 - "OPTIONS /companies/510342191/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61108 - "OPTIONS /entities/510342191/relations?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50868 - "OPTIONS /societario/companies/510342191?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60795 - "OPTIONS /societario/companies/510342191/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61108 - "OPTIONS /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50868 - "GET /companies/510342191/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57950 - "GET /workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61108 - "GET /entities/510342191/relations?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50868 - "GET /societario/companies/510342191?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60795 - "GET /companies/510342191/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57950 - "GET /societario/companies/510342191/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61108 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62493 - "POST /companies/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /companies/510342191 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "OPTIONS /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62493 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57950 - "POST /companies/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57950 - "OPTIONS /cae/autocomplete?q=46460&limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62493 - "GET /cae/autocomplete?q=46460&limit=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64554 - "OPTIONS /societario/recolha/empresas/510342191/obter HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54677 - "POST /societario/recolha/empresas/510342191/obter HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56547 - "OPTIONS /societario/recolha/jobs/c25532ad14be HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56547 - "GET /societario/recolha/jobs/c25532ad14be HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56547 - "GET /societario/companies/510342191?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56547 - "GET /societario/companies/510342191/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56547 - "OPTIONS /societario/recolha/exports/510342191?limit_items=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52354 - "GET /societario/recolha/exports/510342191?limit_items=200 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56547 - "GET /societario/recolha/jobs/c25532ad14be HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55231 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60005 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55231 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61905 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61905 - "GET /companies/510342191/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60005 - "GET /workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57399 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61905 - "GET /companies/510342191/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52556 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60005 - "GET /entities/510342191/relations?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57399 - "GET /societario/companies/510342191?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61905 - "GET /societario/companies/510342191/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52556 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55231 - "GET /companies/510342191 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55231 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51007 - "GET /companies/510342191 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51007 - "GET /companies/510342191/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51007 - "GET /companies/510342191/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51007 - "GET /entities/510342191/relations?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51007 - "GET /societario/companies/510342191?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54223 - "GET /empresas-iq/510342191?v=1791112849948 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54223 - "GET /assets/index-B5VJYpgH.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59025 - "GET /assets/index-mY8kIFhU.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57397 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54223 - "GET /favicon-32.png HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54223 - "GET /favicon.svg HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59025 - "GET /sw.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:53389 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52874 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63536 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53389 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52874 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63536 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50777 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54837 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63536 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50989 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63536 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63536 - "GET /?v=1791112881058 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63536 - "GET /assets/index-B5VJYpgH.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51341 - "GET /assets/index-mY8kIFhU.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56875 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63536 - "GET /sw.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56502 - "GET /empresas-iq/510342191?v=1791112882410 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /assets/index-B5VJYpgH.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59514 - "GET /assets/index-mY8kIFhU.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63536 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56875 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59514 - "GET /sw.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56502 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63536 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59514 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56981 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59514 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55182 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56981 - "GET /companies/510342191/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56981 - "GET /entities/510342191/relations?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63536 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55182 - "GET /companies/510342191/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54313 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /societario/companies/510342191?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56981 - "GET /societario/companies/510342191/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63536 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55182 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54313 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59514 - "GET /companies/510342191 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59514 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61775 - "GET /empresas-iq/510342191?v=1791112914805 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61775 - "GET /assets/index-B5VJYpgH.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64603 - "GET /assets/index-mY8kIFhU.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50760 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64021 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64603 - "GET /sw.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61775 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64603 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64145 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62654 - "POST /contracts/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64997 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64997 - "GET /companies/510342191/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62654 - "GET /workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61775 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62654 - "GET /entities/510342191/relations?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64997 - "GET /companies/510342191/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64145 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61775 - "GET /societario/companies/510342191?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61775 - "POST /contracts/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62654 - "GET /societario/companies/510342191/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64603 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64145 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62358 - "GET /empresas-iq/510342191?nocache=1791112948750 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52892 - "GET /assets/index-mY8kIFhU.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62358 - "GET /assets/index-B5VJYpgH.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59883 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50794 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52892 - "GET /sw.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:62358 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50784 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59834 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58565 - "POST /contracts/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /companies/510342191/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62358 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58565 - "GET /workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62358 - "GET /entities/510342191/relations?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /companies/510342191/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58565 - "GET /societario/companies/510342191?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59834 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50784 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62358 - "GET /societario/companies/510342191/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58565 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60075 - "GET /companies/510342191 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /companies/510342191 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65210 - "GET /empresas-iq/510342191?x=1791112980970 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65210 - "GET /assets/index-B5VJYpgH.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62603 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59585 - "GET /assets/index-mY8kIFhU.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54541 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65210 - "GET /sw.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59585 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62603 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53984 - "POST /contracts/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65210 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59585 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50784 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59585 - "GET /companies/510342191/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65210 - "GET /workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59585 - "GET /entities/510342191/relations?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50784 - "GET /companies/510342191/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65210 - "GET /societario/companies/510342191?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62603 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59585 - "GET /societario/companies/510342191/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65210 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /companies/510342191 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53984 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50784 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65210 - "GET /companies/510342191 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65210 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56576 - "POST /companies/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54350 - "GET /companies/980245974/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55008 - "GET /societario/companies/980245974/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58555 - "GET /societario/companies/980245974?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55008 - "GET /?x=1791113411828 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55008 - "GET /assets/index-CQwLNBqx.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58555 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61797 - "GET /assets/index-mY8kIFhU.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58946 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55008 - "GET /sw.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58555 - "GET /contracts/search?x=1791113416517 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55008 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63805 - "GET /assets/index-mY8kIFhU.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58555 - "GET /assets/index-CQwLNBqx.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58946 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:63805 - "GET /assets/index-mY8kIFhU.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63805 - "GET /sw.js HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58555 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59152 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55008 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59152 - "GET /companies/980245974/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59152 - "GET /entities/980245974/relations?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58555 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55008 - "GET /companies/980245974/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60993 - "GET /workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57358 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60993 - "GET /contracts/years HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59152 - "GET /societario/companies/980245974?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58555 - "GET /societario/companies/980245974/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59152 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55008 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57611 - "GET /companies/980245974 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57358 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57611 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60993 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52055 - "GET /contracts/years HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60136 - "POST /contracts/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65417 - "GET /contracts/autocomplete?q=porto&size=8 HTTP/1.1" 502 Bad Gateway
+INFO:     127.0.0.1:58786 - "POST /contracts/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58786 - "POST /contracts/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52134 - "POST /contracts/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58786 - "POST /contracts/export/excel HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58834 - "GET /contracts/15610076 HTTP/1.1" 200 OK
+Peça ignorada: anfitrião não autorizado (community.vortal.biz)
+INFO:     127.0.0.1:58834 - "GET /contracts/15610076/document?fetch=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58786 - "POST /contracts/export/pdf HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58116 - "GET /companies/504223933/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53546 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53710 - "GET /companies/517392259/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59751 - "GET /companies/504223933 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63373 - "GET /companies/517392259 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63661 - "GET /contracts/15610076 HTTP/1.1" 200 OK
+Peça ignorada: anfitrião não autorizado (community.vortal.biz)
+INFO:     127.0.0.1:63661 - "GET /contracts/15610076/document?fetch=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56503 - "GET /companies/504223933/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60339 - "GET /companies/517392259/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61176 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51163 - "GET /companies/517392259 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55422 - "GET /companies/504223933 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52594 - "POST /contracts/export/excel HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52047 - "POST /contracts/export/pdf HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54153 - "GET /empresas-iq/510342191?x=1791113632498 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54153 - "GET /assets/index-CQwLNBqx.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58248 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51760 - "GET /assets/index-mY8kIFhU.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64602 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54153 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58248 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51760 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58248 - "GET /companies/980245974/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54153 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54064 - "GET /workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52614 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58248 - "GET /entities/980245974/relations?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51760 - "GET /companies/980245974/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58248 - "GET /contracts/years HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54064 - "GET /societario/companies/980245974/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54153 - "GET /societario/companies/980245974?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54153 - "GET /companies/510342191/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54153 - "GET /companies/510342191/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52614 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60492 - "GET /companies/980245974 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58248 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54153 - "GET /entities/510342191/relations?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60492 - "GET /societario/companies/510342191/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52614 - "GET /societario/companies/510342191?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51760 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58248 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54064 - "GET /companies/510342191 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60492 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54153 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54064 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54064 - "GET /contracts/autocomplete?q=72230000-6&size=8 HTTP/1.1" 502 Bad Gateway
+INFO:     127.0.0.1:54064 - "POST /contracts/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57407 - "GET /empresas-iq/510342191?y=1791113672026 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57407 - "GET /assets/index-CQwLNBqx.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50769 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /assets/index-mY8kIFhU.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51578 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57407 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50769 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50769 - "GET /companies/980245974/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57407 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53612 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59010 - "GET /workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50769 - "GET /entities/980245974/relations?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /companies/980245974/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50769 - "GET /contracts/years HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53612 - "GET /societario/companies/980245974/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57407 - "GET /societario/companies/980245974?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57407 - "GET /companies/510342191/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59010 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50769 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57407 - "GET /companies/510342191/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57407 - "GET /societario/companies/510342191/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59010 - "GET /entities/510342191/relations?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51144 - "GET /companies/980245974 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50769 - "GET /societario/companies/510342191?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50769 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53612 - "GET /companies/510342191 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57407 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53612 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60069 - "POST /contracts/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59290 - "GET /contracts/15609890 HTTP/1.1" 200 OK
+Peça ignorada: anfitrião não autorizado (community.vortal.biz)
+INFO:     127.0.0.1:59290 - "GET /contracts/15609890/document?fetch=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59728 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /companies/506788490/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49302 - "GET /companies/514024674/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55256 - "GET /companies/514024674 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50769 - "GET /companies/506788490 HTTP/1.1" 200 OK
+Peça ignorada: anfitrião não autorizado (community.vortal.biz)
+INFO:     127.0.0.1:50769 - "POST /contracts/15609890/report/pdf HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58838 - "GET /contracts/search?v=1791113936270 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58838 - "GET /assets/index-D19KUItk.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51556 - "GET /assets/index-DEMda8dX.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58223 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64033 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:58838 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58223 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51556 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58223 - "GET /companies/980245974/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58838 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52849 - "GET /workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62418 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58223 - "GET /entities/980245974/relations?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58223 - "GET /contracts/years HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51556 - "GET /companies/980245974/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58838 - "GET /societario/companies/980245974?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52849 - "GET /societario/companies/980245974/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58838 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62418 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62291 - "GET /companies/980245974 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62418 - "GET /contracts/autocomplete?q=porto&size=8 HTTP/1.1" 502 Bad Gateway
+INFO:     127.0.0.1:58223 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51556 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62291 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65299 - "POST /contracts/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65468 - "POST /contracts/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59457 - "GET /contracts/search?v=1791114150971 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59457 - "GET /assets/index-BTlCd68l.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60970 - "GET /assets/index-DEMda8dX.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63452 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64760 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:59457 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64285 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64285 - "GET /companies/980245974/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56498 - "GET /workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59457 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "GET /companies/980245974/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64735 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64285 - "GET /entities/980245974/relations?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64735 - "GET /contracts/years HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56498 - "GET /societario/companies/980245974?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59457 - "GET /societario/companies/980245974/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56498 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56498 - "POST /contracts/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56498 - "GET /contracts/autocomplete?q=porto&size=8 HTTP/1.1" 502 Bad Gateway
+INFO:     127.0.0.1:61385 - "GET /companies/980245974 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64735 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64285 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64285 - "PUT /workspace/history HTTP/1.1" 200 OK
+[2026-10-04 13:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 13:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 13:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 13:00:03] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 14:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 14:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 14:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 14:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 15:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 15:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 15:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 15:00:03] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 16:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 16:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 16:00:01] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 16:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 17:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 17:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 17:00:01] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 17:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 18:00:02] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 18:00:02] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 18:00:02] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 18:00:02] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 18:00:02] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 18:00:02] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 18:00:03] INFO: Fetched (200) <GET https://eco.sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 18:00:03] INFO: Fetched (200) <GET https://observador.pt/seccao/economia/> (referer: https://www.google.com/)
+[2026-10-04 18:00:03] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 18:00:04] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 18:00:04] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 18:00:05] INFO: Fetched (200) <GET https://dinheirovivo.dn.pt/> (referer: https://www.google.com/)
+[2026-10-04 18:00:05] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/lula-ou-bolsonaro-jr-um-brasil-polarizado-decide-o-rumo-da-economia-e-do-pais-no-mundo/> (referer: https://www.google.com/)
+[2026-10-04 18:00:05] INFO: Fetched (200) <GET https://observador.pt/2026/10/04/aumento-nos-combustiveis-angustia-instituicoes-sociais-e-ameaca-continuidade-de-apoios/> (referer: https://www.google.com/)
+[2026-10-04 18:00:06] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/aie-diz-que-cerca-de-325-milhoes-de-barris-ja-foram-libertados-das-reservas-estrategicas-de-petroleo/> (referer: https://www.google.com/)
+[2026-10-04 18:00:06] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/04/portugal-em-quarto-nos-destinos-para-reformados-estrangeiros/> (referer: https://www.google.com/)
+[2026-10-04 18:00:07] INFO: Fetched (200) <GET https://observador.pt/2026/10/03/diploma-que-reforca-acesso-dos-consumidores-a-garrafas-de-gas-entra-em-vigor/> (referer: https://www.google.com/)
+[2026-10-04 18:00:07] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/bcp-ja-executou-705-do-montante-maximo-previsto-do-programa-de-share-buyback/> (referer: https://www.google.com/)
+[2026-10-04 18:00:08] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/04/da-sede-as-regras-na-habitacao-de-centeno-a-compra-de-acoes-o-ano-acelerado-de-santos-pereira-no-banco-de-portugal/> (referer: https://www.google.com/)
+[2026-10-04 18:00:08] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/presidente-da-republica-alerta-para-natalidade-e-despovoamento-na-inauguracao-de-creche-em-penamacor/> (referer: https://www.google.com/)
+[2026-10-04 18:00:08] INFO: Fetched (200) <GET https://observador.pt/2026/10/03/greve-na-easyjet-com-total-adesao-e-cancelamentos-podem-chegar-a-90-diz-sindicato/> (referer: https://www.google.com/)
+[2026-10-04 18:00:09] INFO: Fetched (200) <GET https://eco.sapo.pt/reportagem/do-mar-ao-prato-matosinhos-quer-ser-destino-gastronomico-internacional/> (referer: https://www.google.com/)
+[2026-10-04 18:00:09] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/sobrelotacao-portugal-escapa-ao-padrao-mas-problema-agrava-se-nos-sub-30/> (referer: https://www.google.com/)
+[2026-10-04 18:00:10] INFO: Fetched (200) <GET https://observador.pt/2026/10/03/combustiveis-podem-por-em-risco-sustentabilidade-do-transporte-aereo-de-emergencia/> (referer: https://www.google.com/)
+[2026-10-04 18:00:11] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/greve-da-funcao-publica-fecha-escolas-e-pressiona-governo-antes-das-negociacoes-do-oe2027/> (referer: https://www.google.com/)
+[2026-10-04 18:00:11] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/governo-simplifica-licenciamento-de-combustiveis-e-reforca-acesso-a-garrafas-de-gas/> (referer: https://www.google.com/)
+[2026-10-04 18:00:12] INFO: Fetched (200) <GET https://observador.pt/2026/10/03/efeitos-muito-negativos-na-protecao-do-lobo-iberico-pesam-no-chumbo-ambiental-a-parque-eolico-do-paiva/> (referer: https://www.google.com/)
+[2026-10-04 18:00:12] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/andre-ventura-assume-presidencia-da-comissao-de-inquerito-a-luis-neves/> (referer: https://www.google.com/)
+[2026-10-04 18:00:12] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/proxima-sessao-do-parlamento-europeu-recebe-luis-montenegro-e-debate-orcamento-da-ue/> (referer: https://www.google.com/)
+[2026-10-04 18:00:13] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/prova-dos-9-salarios-subiram-mesmo-15-nos-ultimos-dois-anos-como-diz-montenegro/> (referer: https://www.google.com/)
+[2026-10-04 18:00:14] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/wall-street-encerra-sessao-com-ganhos-ligeiros-com-o-abrandamento-do-mercado-de-trabalho-nos-eua/> (referer: https://www.google.com/)
+[2026-10-04 18:00:14] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/litio-be-critica-tiques-de-autoritarismo-do-governo-no-processo-da-mina-em-boticas/> (referer: https://www.google.com/)
+[2026-10-04 18:00:15] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/reserve-a-data-oe2027-em-debate-no-jornal-economico/> (referer: https://www.google.com/)
+[2026-10-04 18:00:15] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/lisboa-acolhe-hub-europeu-da-mitsubishi-fuso-fabrica-no-tramagal-continua-a-fazer-total-sentido/> (referer: https://www.google.com/)
+[2026-10-04 18:00:15] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/dona-da-cimpor-compra-grupo-ucraniano-de-cimento-ifcem/> (referer: https://www.google.com/)
+[2026-10-04 18:00:17] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/conversas-sem-guiao-com-ines-rocha-de-gouveia-presidente-da-fundacao-santander/> (referer: https://www.google.com/)
+[2026-10-04 18:00:17] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/scope-melhora-rating-de-portugal-para-a-com-perspetiva-estavel/> (referer: https://www.google.com/)
+[2026-10-04 18:00:17] INFO: Fetched (200) <GET https://eco.sapo.pt/especiais/atentados-fmi-petroleo-em-alta-e-a-genese-dos-dinossauros-poder-local-nasceu-ha-50-anos/> (referer: https://www.google.com/)
+[2026-10-04 18:00:18] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/opep-avalia-oferta-de-petroleo-apos-g7-anunciar-libertacao-de-reservas/> (referer: https://www.google.com/)
+[2026-10-04 18:00:19] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/governo-aprovara-a-fusao-galp-moeve-se-salvaguardar-importancia-de-sines-diz-castro-almeida/> (referer: https://www.google.com/)
+[2026-10-04 18:00:19] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/processo-montepio-relacao-de-lisboa-manda-pronunciar-tomas-correia-e-mais-quatro-arguidos-por-crimes-financeiros/> (referer: https://www.google.com/)
+[2026-10-04 18:00:19] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/certificados-de-aforro-pagam-25-com-a-euribor-semestral-nos-31/> (referer: https://www.google.com/)
+[2026-10-04 18:00:20] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/03/trump-elogia-europa-pela-libertacao-do-gasoleo/> (referer: https://www.google.com/)
+[2026-10-04 18:00:20] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/lufthansa-e-air-france-klm-abrem-porta-a-futura-troca-de-acoes-na-tap/> (referer: https://www.google.com/)
+[2026-10-04 18:00:21] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/oe2027-chega-acusa-ps-de-irresponsabilidade-por-viabilizar-documento-sem-o-conhecer/> (referer: https://www.google.com/)
+[2026-10-04 18:00:22] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/consumo-de-combustiveis-cai-103-em-agosto-e-precos-sobem-ate-64/> (referer: https://www.google.com/)
+[2026-10-04 18:00:22] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/falsos-sites-de-venda-de-bilhetes-para-jogos-de-portugal-fazem-disparar-reclamacoes/> (referer: https://www.google.com/)
+[2026-10-04 18:00:23] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/petrobras-anuncia-nova-descoberta-de-petroleo-na-costa-amazonica-do-brasil/> (referer: https://www.google.com/)
+[2026-10-04 18:00:23] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/04/opep-mantem-inalterada-oferta-de-petroleo-para-novembro/> (referer: https://www.google.com/)
+[2026-10-04 18:00:25] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/combustiveis-podem-por-em-risco-sustentabilidade-do-transporte-aereo-de-emergencia/> (referer: https://www.google.com/)
+[2026-10-04 18:00:25] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/agricultores-de-serpa-exigem-ao-ministro-reuniao-sobre-dificuldades-no-setor/> (referer: https://www.google.com/)
+[2026-10-04 18:00:25] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/scope-melhora-rating-de-portugal-para-a-com-perspetiva-estavel/> (referer: https://www.google.com/)
+[2026-10-04 18:00:26] INFO: Fetched (200) <GET https://jornaleconomico.sapo.pt/noticias/mercado-automovel-portugues-cresce-134-em-setembro-e-eletricos-ja-representam-quase-metade-das-matriculas-de-ligeiros-de-passageiros/> (referer: https://www.google.com/)
+[2026-10-04 18:00:27] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/consumo-de-combustiveis-cai-103-em-agosto-e-precos-sobem-ate-64-segundo-dados-da-dgeg/> (referer: https://www.google.com/)
+[2026-10-04 18:00:27] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/sporting-sad-delibera-em-ag-autorizacao-para-emitir-emprestimos-ate-150-milhoes/> (referer: https://www.google.com/)
+[2026-10-04 18:00:28] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/trump-usa-dependencia-da-europa-do-diesel-americano-para-impor-libertacao-de-reservas-e-baixar-preco/> (referer: https://www.google.com/)
+[2026-10-04 18:00:29] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/24/investor-talks-reune-mais-de-2-000-pessoas-em-portimao-e-prepara-regresso-em-2027/> (referer: https://www.google.com/)
+[2026-10-04 18:00:30] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/nao-preciso-de-conhecer-o-documento-pcp-confirma-voto-contra-oe2027-e-acusa-ps-de-proteger-o-chega/> (referer: https://www.google.com/)
+[2026-10-04 18:00:30] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/02/sbc-summit-vai-manter-apostas-e-gaming-em-lisboa-ate-2030/> (referer: https://www.google.com/)
+[2026-10-04 18:00:31] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/agente-da-openai-volta-a-infiltrar-se-num-site-do-governo-australiano-mais-de-100-entidades-alertadas-sobre-atividade-de-agentes/> (referer: https://www.google.com/)
+[2026-10-04 18:00:31] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/28/afinal-de-contas-a-nova-area-de-literacia-financeira-do-millennium-bcp/> (referer: https://www.google.com/)
+[2026-10-04 18:00:33] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/pcp-agenda-debate-com-o-governo-sobre-agravamento-das-condicoes-de-vida-para-dia-16-de-outubro/> (referer: https://www.google.com/)
+[2026-10-04 18:00:33] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/10/01/descer-isp-dos-combustiveis-ate-a-taxa-minima-custaria-15-mil-milhoes-de-euros/> (referer: https://www.google.com/)
+[2026-10-04 18:00:34] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/defice-alemao-sobe-68-no-primeiro-semestre-de-2026-e-chega-aos-98-800-milhoes-de-euros/> (referer: https://www.google.com/)
+[2026-10-04 18:00:34] INFO: Fetched (200) <GET https://eco.sapo.pt/2026/09/30/portugal-arrisca-falhar-metas-de-despesa-em-2027-apesar-das-contas-equilibradas/> (referer: https://www.google.com/)
+[2026-10-04 18:00:35] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/ucrania-ataca-maior-deposito-de-combustivel-da-europa-e-refinarias-russas/> (referer: https://www.google.com/)
+[2026-10-04 18:00:37] INFO: Fetched (200) <GET https://observador.pt/2026/10/02/greve-dos-tripulantes-da-easyjet-arranca-com-80-dos-voos-ja-cancelados/> (referer: https://www.google.com/)
+[2026-10-04 19:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 19:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 19:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 19:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 20:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 20:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 20:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 20:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 21:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 21:00:01] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 21:00:02] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 21:00:02] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+[2026-10-04 22:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 22:00:00] WARNING: This logic is deprecated now, and have no effect; It will be removed with v0.3. Use `Fetcher.configure(impersonate=chrome)` instead before fetching
+[2026-10-04 22:00:01] INFO: Fetched (200) <GET https://sapo.pt/> (referer: https://www.google.com/)
+[2026-10-04 22:00:03] INFO: Fetched (200) <GET https://www.lusa.pt/> (referer: https://www.google.com/)
+INFO:     127.0.0.1:52512 - "POST /contracts/export/excel HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57941 - "GET /mirofish/diagnose HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57059 - "GET /mirofish/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50989 - "GET /mirofish/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53036 - "GET /mirofish/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53036 - "GET /mirofish/jobs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57153 - "GET /contracts/search?v=1791150057051 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57153 - "GET /assets/index-DI3RTV1N.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61663 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50989 - "GET /assets/index-DEMda8dX.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60754 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57153 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61663 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50989 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61663 - "GET /companies/980245974/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50761 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57153 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56671 - "GET /workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50989 - "GET /companies/980245974/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50989 - "GET /contracts/years HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61663 - "GET /entities/980245974/relations?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50761 - "GET /societario/companies/980245974?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57153 - "GET /societario/companies/980245974/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56671 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50989 - "GET /mirofish/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61663 - "GET /mirofish/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50761 - "GET /mirofish/diagnose HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50761 - "GET /contracts/autocomplete?q=porto&size=8 HTTP/1.1" 502 Bad Gateway
+INFO:     127.0.0.1:53674 - "GET /companies/980245974 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61663 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53674 - "POST /contracts/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61663 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56671 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50989 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50761 - "GET /contracts/analytics?q=porto&top_entities=8&top_cpv=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50761 - "GET /mirofish/diagnose HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64898 - "GET /contracts/analytics?q=porto HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57153 - "GET /mirofish/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64910 - "GET /mirofish/status HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:64910 - "GET /mirofish/meta HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:57153 - "GET /mirofish/jobs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64898 - "GET /contracts/analytics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64922 - "GET /mirofish/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64931 - "GET /mirofish/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /contracts/search?v=1791150254801 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /assets/index-BH-EqCvW.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53293 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57214 - "GET /assets/index-DEMda8dX.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53408 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56500 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53293 - "GET /contracts/analytics/regional?size=30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57214 - "GET /contracts/analytics?top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53293 - "GET /companies/980245974/contracts?role=all&from=0&size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50765 - "GET /workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /favorites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53293 - "GET /entities/980245974/relations?size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53293 - "GET /contracts/years HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57214 - "GET /companies/980245974/analytics?role=all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50765 - "GET /societario/companies/980245974/people HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /societario/companies/980245974?from=0&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53293 - "GET /mirofish/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /societario/recolha/jobs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53731 - "GET /companies/980245974 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50765 - "GET /mirofish/diagnose HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57214 - "GET /mirofish/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53731 - "GET /contracts/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50765 - "PUT /workspace/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50765 - "GET /contracts/autocomplete?q=porto&size=8 HTTP/1.1" 502 Bad Gateway
+INFO:     127.0.0.1:53293 - "GET /jarvis/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53731 - "GET /contracts/analytics?q=porto&top_entities=8&top_cpv=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57214 - "POST /contracts/search HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /mirofish/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56502 - "GET /mirofish/jobs?limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51350 - "GET /social/channels HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58128 - "GET /social/meta HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49668 - "GET /social/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63821 - "GET /social/status HTTP/1.1" 200 OK
+[2026-10-04 22:46:16] INFO: Fetched (200) <GET https://www.linkedin.com/company/microsoft/> (referer: https://www.google.com/)
+[2026-10-04 22:46:20] INFO: Fetched (200) <GET https://www.linkedin.com/company/microsoft/> (referer: https://www.google.com/)
+INFO:     127.0.0.1:49908 - "POST /social/channels/linkedin-microsoft/preview?limit=3 HTTP/1.1" 200 OK
+[2026-10-04 22:48:16] INFO: Fetched (403) <GET https://www.reddit.com/r/investimentos/hot/> (referer: https://www.google.com/)
+[2026-10-04 22:48:17] INFO: Fetched (200) <GET https://old.reddit.com/login/?reason=lor2&dest=https%3A%2F%2Fold.reddit.com%2Fr%2Finvestimentos%2Fhot%2F> (referer: https://www.google.com/)
+INFO:     127.0.0.1:52150 - "POST /social/channels/reddit-investimentos/preview?limit=3 HTTP/1.1" 200 OK
