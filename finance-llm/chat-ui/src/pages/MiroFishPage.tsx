@@ -24,6 +24,7 @@ import {
   Play,
   RefreshCw,
   Save,
+  Search,
   Sparkles,
   XCircle,
 } from "lucide-react";
@@ -34,6 +35,7 @@ import {
   type MiroFishDiagnose,
   type MiroFishJob,
   type MiroFishMeta,
+  type MiroFishSearchSourceResult,
   type MiroFishSeed,
   type MiroFishSettingsView,
   type MiroFishSource,
@@ -86,6 +88,9 @@ export default function MiroFishPage() {
   const [maxRounds, setMaxRounds] = useState("");
   const [platform, setPlatform] = useState("parallel");
   const [seed, setSeed] = useState<MiroFishSeed | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState<MiroFishSearchSourceResult[]>([]);
+  const [searchBusy, setSearchBusy] = useState(false);
   const [diagnose, setDiagnose] = useState<MiroFishDiagnose | null>(null);
   const [settings, setSettings] = useState<MiroFishSettingsView | null>(null);
   const [llmProvider, setLlmProvider] = useState("");
@@ -208,6 +213,45 @@ export default function MiroFishPage() {
     }),
     [params, requirement, source?.id, sourceId],
   );
+
+  const handleSearch = useCallback(async () => {
+    const term = searchTerm.trim();
+    if (!term) return;
+    setSearchBusy(true);
+    setError(null);
+    try {
+      const result = await mirofishApi.search({ term, limit: 12 });
+      setSearchResults((result.items || []).map((item) => ({ ...item, selected: true })));
+      setNotice(`${result.items?.length || 0} resultados para «${term}». Selecione-os abaixo e use como fonte de simulação.`);
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : String(exc));
+    } finally {
+      setSearchBusy(false);
+    }
+  }, [searchTerm]);
+
+  const selectedSearchItems = useMemo(() => searchResults.filter((item) => item.selected), [searchResults]);
+
+  const handleToggleSearchItem = useCallback((index: number) => {
+    setSearchResults((current) => current.map((item, i) => (i === index ? { ...item, selected: !item.selected } : item)));
+  }, []);
+
+  const handleUseSearchAsSource = useCallback(() => {
+    const selected = selectedSearchItems;
+    if (!selected.length) {
+      setError("Selecione pelo menos um resultado de pesquisa.");
+      return;
+    }
+    setSourceId("web_search");
+    setParams((current) => ({
+      ...current,
+      term: searchTerm.trim(),
+      limit: String(selected.length),
+      sources: selected.map((item) => item.source_id).join(","),
+    }));
+    setRequirement((current) => current || (source?.requirement ?? ""));
+    setNotice(`${selected.length} resultados selecionados como fonte de simulação. Pré-visualize a semente antes de simular.`);
+  }, [selectedSearchItems, searchTerm, source?.requirement]);
 
   const handlePreview = useCallback(
     () =>
@@ -537,8 +581,99 @@ export default function MiroFishPage() {
 
         <section className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
+            <Search size={16} className="text-cyan-400" /> Pesquisa como fonte de simulação
+          </h2>
+          <p className="text-xs text-zinc-400">
+            Pesquise um tema; os resultados ficam disponíveis para alimentar a semente do MiroFish. Escolha os
+            itens relevantes e depois clique em «Usar como fonte».
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-1 flex-col gap-1 text-xs text-zinc-400">
+              Termo
+              <input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void handleSearch();
+                  }
+                }}
+                placeholder="ex.: contratação pública hospitalar Portugal"
+                autoComplete="off"
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              />
+            </label>
+            <button
+              onClick={() => void handleSearch()}
+              disabled={searchBusy || !searchTerm.trim()}
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 transition hover:border-zinc-500 hover:text-white disabled:opacity-50"
+            >
+              {searchBusy ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+              Pesquisar
+            </button>
+          </div>
+
+          {searchResults.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-zinc-300">
+                  {searchResults.length} resultados · {selectedSearchItems.length} selecionados
+                </p>
+                <button
+                  onClick={() => void handleUseSearchAsSource()}
+                  disabled={!selectedSearchItems.length}
+                  className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-cyan-500 disabled:opacity-50"
+                >
+                  <Sparkles size={14} /> Usar como fonte
+                </button>
+              </div>
+              <div className="max-h-80 space-y-2 overflow-auto rounded-lg border border-zinc-800 bg-zinc-950/60 p-2">
+                {searchResults.map((item, index) => (
+                  <label
+                    key={`${item.source_id}-${item.title}-${index}`}
+                    className="flex cursor-pointer items-start gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 p-2 hover:border-zinc-700"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={Boolean(item.selected)}
+                      onChange={() => handleToggleSearchItem(index)}
+                      className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-900"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 text-sm text-zinc-200">
+                        {item.icon ? <span className="text-base">{item.icon}</span> : null}
+                        <span className="truncate font-medium">{item.title}</span>
+                      </div>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-zinc-400">{item.snippet || item.subtitle || "—"}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+                        <span className="rounded bg-zinc-800 px-1.5 py-0.5">{item.source_label || item.source_id}</span>
+                        {item.date ? <span>{item.date}</span> : null}
+                        {item.url ? (
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(event) => event.stopPropagation()}
+                            className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300"
+                          >
+                            <ExternalLink size={10} /> link
+                          </a>
+                        ) : null}
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
             <Sparkles size={16} className="text-cyan-400" /> 1. Fonte de dados
-          </h2>          <div className="flex flex-wrap gap-2">
+          </h2>
+          <div className="flex flex-wrap gap-2">
             {sources.map((item) => (
               <button
                 key={item.id}

@@ -103,6 +103,22 @@ export type MiroFishSeedRequest = {
   requirement?: string;
 };
 
+export type MiroFishSearchSourceResult = {
+  source_id: string;
+  source_label: string;
+  source_family?: string;
+  title: string;
+  subtitle?: string | null;
+  snippet?: string | null;
+  url?: string | null;
+  date?: string | null;
+  icon?: string;
+  badges?: string[];
+  score?: number;
+  selected?: boolean;
+  data?: Record<string, unknown>;
+};
+
 export type MiroFishSimulationRequest = MiroFishSeedRequest & {
   title?: string;
   project_name?: string;
@@ -514,6 +530,9 @@ export const mirofishApi = {
       withBody("POST", payload),
     ),
   simulate: (payload: MiroFishSimulationRequest) => request<MiroFishJob>("/mirofish/simulations", withBody("POST", payload)),
+  /** Pesquisa direta para selecionar fontes de simulação (Search360 / web). */
+  search: (payload: { term: string; sources?: string[]; limit?: number }) =>
+    request<{ term: string; items: MiroFishSearchSourceResult[]; stats: Record<string, unknown> }>("/search360/search", withBody("POST", payload)),
   settings: () => request<MiroFishSettingsView>("/mirofish/settings"),
   saveSettings: (payload: MiroFishSettingsPayload) => request<MiroFishApplyResult>("/mirofish/settings", withBody("PUT", payload)),
   applySettings: (recreate = true) =>

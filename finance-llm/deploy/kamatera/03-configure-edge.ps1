@@ -1,12 +1,12 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-    Aplica o hostname da origem no edge da VM Kamatera e mostra o endereco publico.
+    Aplica o hostname da origem no edge da VM Kamatera (dominio proprio sabemos.studio).
 
 .DESCRIPTION
     Le `origin-url.txt` (criado por 02-publish-origin.ps1), envia o
     `05-edge-up.sh` para a VM (por ssh + base64: nesta rede o `scp` fica preso) e
-    corre-o com o hostname. No fim le o endereco publico do tunel da VM.
+    corre-o com o hostname. No fim mostra o endereco publico fixo https://sabemos.studio.
 
     Todas as ligacoes SSH sao repetidas: a rede para esta VM perde ligacoes de
     forma intermitente (o SYN fica sem resposta), mas a VM esta saudavel.
@@ -58,15 +58,24 @@ $push = "printf %s '$b64' | base64 -d > /opt/iqos/05-edge-up.sh; sed -i 's/\r$//
 Write-Host 'a enviar 05-edge-up.sh por ssh...'
 Write-Host (Invoke-VmSsh -Command $push)
 
-# 2) Aplicar o hostname e arrancar o edge.
+# 2) Enviar o template do Caddyfile.
+$caddyLocal = Join-Path $here 'edge\Caddyfile.template'
+$caddyB64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($caddyLocal))
+$pushCaddy = "mkdir -p /opt/iqos/edge; printf %s '$caddyB64' | base64 -d > /opt/iqos/edge/Caddyfile.template; sed -i 's/\r$//' /opt/iqos/edge/Caddyfile.template; wc -c /opt/iqos/edge/Caddyfile.template"
+Write-Host 'a enviar Caddyfile.template por ssh...'
+Write-Host (Invoke-VmSsh -Command $pushCaddy)
+
+# 3) Enviar o compose do edge.
+$composeLocal = Join-Path $here 'edge\compose.yml'
+$composeB64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($composeLocal))
+$pushCompose = "printf %s '$composeB64' | base64 -d > /opt/iqos/edge/compose.yml; sed -i 's/\r$//' /opt/iqos/edge/compose.yml; wc -c /opt/iqos/edge/compose.yml"
+Write-Host 'a enviar compose.yml por ssh...'
+Write-Host (Invoke-VmSsh -Command $pushCompose)
+
+# 4) Aplicar o hostname e arrancar o edge.
 Write-Host 'a arrancar o edge...'
-Invoke-VmSsh -Command "bash /opt/iqos/05-edge-up.sh $originHost 2>&1 | tail -25" | Write-Host
+Invoke-VmSsh -Command "bash /opt/iqos/05-edge-up.sh $originHost 2&gt;&amp;1 | tail -25" | Write-Host
 
-# 3) Ler o endereco publico do tunel da VM.
-$logs = Invoke-VmSsh -Command "docker logs iqos-tunnel 2>&1 | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | head -1"
-$m = [regex]::Match($logs, 'https://[a-z0-9][a-z0-9-]*\.trycloudflare\.com')
-if (-not $m.Success) { throw "Nao encontrei o endereco publico. Ver: ssh ... 'docker logs iqos-tunnel'" }
-
-$m.Value | Set-Content -Path (Join-Path $here 'public-url.txt') -Encoding ascii
+'https://sabemos.studio' | Set-Content -Path (Join-Path $here 'public-url.txt') -Encoding ascii
 Write-Host ''
-Write-Host "==> Edge IQ OS publicado em: $($m.Value)" -ForegroundColor Yellow
+Write-Host "==> Edge IQ OS publicado em: https://sabemos.studio" -ForegroundColor Yellow

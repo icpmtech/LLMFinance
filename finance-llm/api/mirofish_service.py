@@ -286,6 +286,20 @@ def _num(value: Any, digits: int = 2) -> str:
     return text
 
 
+def _clean(text: Any, max_len: int = 400) -> str:
+    """Limpa um texto para Markdown: normaliza espaços e corta em max_len."""
+    if not text:
+        return ""
+    cleaned = re.sub(r"\s+", " ", str(text)).strip()
+    if len(cleaned) <= max_len:
+        return cleaned
+    # Corte inteligente: último espaço antes do limite; senão, corte rígido com "…".
+    cut = cleaned.rfind(" ", 0, max_len - 1)
+    if cut < max_len // 2:
+        cut = max_len - 1
+    return cleaned[:cut].rstrip() + "…"
+
+
 def _euro(value: Any) -> str:
     text = _num(value)
     return f"{text} €" if text != "—" else "—"
@@ -483,6 +497,39 @@ def _markdown_documento(document: Dict[str, Any]) -> str:
 
     content, _media, _name = export_document(document, "md")
     return str(content or "").strip() + "\n"
+
+
+def _markdown_web_search(results: Sequence[Dict[str, Any]], *, term: str, sources: Sequence[str], limit: int) -> str:
+    """Markdown a partir de resultados de pesquisa (web + Search360) para semente."""
+    lines: List[str] = [
+        f"# Resultados de pesquisa — {term}",
+        "",
+        "Documento-semente gerado pelo IQ OS a partir de uma pesquisa federada. "
+        "Cada entrada inclui fonte, título, resumo e ligação, para que os agentes do MiroFish "
+        "construam o grafo de conhecimento e simulem tendências a partir destas evidências.",
+        "",
+        f"- **Termo de pesquisa**: {term}",
+        f"- **Fontes consultadas**: {', '.join(sources) or 'todas'}",
+        f"- **Resultados incluídos**: {len(results)}",
+        "",
+        "## Resultados",
+        "",
+    ]
+    for idx, item in enumerate(results, start=1):
+        title = _clean(item.get("title") or "(sem título)", 220) or "(sem título)"
+        snippet = _clean(item.get("snippet") or item.get("body") or "", 800)
+        url = item.get("url") or item.get("href") or ""
+        source_label = item.get("source_label") or item.get("source_id") or "web"
+        date = item.get("date") or "—"
+        lines.append(f"### {idx}. {title}")
+        lines.append("")
+        lines.append(f"- **Fonte**: {source_label} · {date}")
+        if snippet:
+            lines.append(f"- **Resumo**: {snippet}")
+        if url:
+            lines.append(f"- **URL**: {url}")
+        lines.append("")
+    return "\n".join(lines).strip() + "\n"
 
 
 # --- 5. Panorama do sistema -------------------------------------------------
@@ -747,6 +794,20 @@ SOURCES: List[Dict[str, Any]] = [
             "Portugal a partir deste panorama, indicando os setores e as entidades mais expostas."
         ),
     },
+    {
+        "id": "web_search",
+        "label": "Pesquisa (web + plataforma)",
+        "hint": "Pesquisa um tema e usa os resultados como material-semente para a simulação.",
+        "params": [
+            {"name": "term", "label": "Termo de pesquisa", "type": "text", "required": True, "placeholder": "ex.: contratação pública hospitalar Portugal"},
+            {"name": "sources", "label": "Fontes", "type": "text", "placeholder": "ex.: web,wikipedia_pt,internal (vazio = todas)"},
+            {"name": "limit", "label": "Resultados", "type": "number", "default": 12, "min": 1, "max": 50},
+        ],
+        "requirement": (
+            "A partir destes resultados de pesquisa, simule a evolução do tema nos próximos 6 meses: "
+            "que atores vão ganhar ou perder influência, que narrativas vão emergir e que riscos são mais prováveis."
+        ),
+    },
 ]
 
 SOURCE_IDS = [source["id"] for source in SOURCES]
@@ -843,7 +904,7 @@ def source_by_id(source_id: str) -> Optional[Dict[str, Any]]:
     return next((source for source in SOURCES if source["id"] == source_id), None)
 
 
-def build_seed(source_id: str, params: Optional[Dict[str, Any]] = None, *, session: Any = None) -> Dict[str, Any]:
+async def build_seed(source_id: str, params: Optional[Dict[str, Any]] = None, *, session: Any = None) -> Dict[str, Any]:
     """Constrói o documento-semente (Markdown) a partir dos dados do sistema."""
     source = source_by_id(source_id)
     if source is None:
@@ -908,6 +969,37 @@ def build_seed(source_id: str, params: Optional[Dict[str, Any]] = None, *, sessi
         markdown = _markdown_documento(document)
         title = document.get("title") or document_id
         stats.update({"document_id": document_id, "words": document.get("words")})
+
+    elif source_id == "web_search":
+        term = str(params.get("term") or "").strip()
+        if not term:
+            raise MiroFishError("indique o termo de pesquisa")
+        from api import search360_service, tools
+
+        sources_input = str(params.get("sources") or "").strip()
+        sources_ids = [part.strip() for part in sources_input.split(",") if part.strip()] or None
+        limit = max(1, min(50, int(params.get("limit") or 12)))
+
+        # Tenta primeiro a pesquisa federada do Search360 (inclui web quando configurado).
+        try:
+            dossier = await search360_service.search(term, sources_ids=sources_ids, limit=limit, scope=None)
+            results = dossier.get("items") or []
+        except Exception as exc:
+            logger.warning("mirofish web_search: Search360 falhou (%s), a recuar para web_search directo", exc)
+            results = []
+
+        # Se não veio nada ou o utilizador pediu apenas web, recai para o motor de pesquisa web.
+        if not results and (sources_ids is None or "web" in sources_ids):
+            raw = tools.web_search(term, max_results=limit, source="auto")
+            results = [item for item in (raw or []) if not item.get("error")]
+
+        if not results:
+            raise MiroFishError(f"a pesquisa não devolveu resultados para: {term}")
+
+        sources_used = [item.get("source_id") or item.get("source") or "web" for item in results]
+        markdown = _markdown_web_search(results, term=term, sources=sorted(set(sources_used)), limit=len(results))
+        title = f"Pesquisa: {term}"
+        stats.update({"term": term, "results": len(results), "sources": sorted(set(sources_used))})
 
     else:  # sistema
         payload = _panorama(size=int(params.get("size") or 12))
@@ -1009,7 +1101,7 @@ def list_jobs(limit: int = 10) -> List[Dict[str, Any]]:
         return [dict(job) for job in jobs]
 
 
-def run_simulation(job_id: str, payload: Dict[str, Any], *, session: Any = None) -> None:
+async def run_simulation(job_id: str, payload: Dict[str, Any], *, session: Any = None) -> None:
     """Conduz a simulação completa (chamado numa thread pelo `start_simulation_job`)."""
     steps = payload.get("steps") or {}
     do_graph = bool(steps.get("graph", True))
@@ -1022,7 +1114,7 @@ def run_simulation(job_id: str, payload: Dict[str, Any], *, session: Any = None)
     result: Dict[str, Any] = {}
     try:
         _job_log(job_id, "A recolher dados do sistema e a compor o documento-semente…", step="seed", progress=5)
-        seed = build_seed(str(payload.get("source") or "sistema"), payload.get("params") or {}, session=session)
+        seed = await build_seed(str(payload.get("source") or "sistema"), payload.get("params") or {}, session=session)
         if not requirement:
             requirement = seed.get("suggested_requirement") or ""
         _job_log(job_id, f"Semente pronta: {seed['title']} ({seed['chars']} caracteres, {seed['words']} palavras).", progress=10)
@@ -1128,7 +1220,20 @@ def start_simulation_job(payload: Dict[str, Any], *, session: Any = None) -> Dic
     """Arranca a simulação em segundo plano e devolve o *job* criado."""
     title = str(payload.get("title") or payload.get("source") or "simulação")
     job = _job_new("simulation", payload, title=title)
-    thread = threading.Thread(target=run_simulation, args=(job["id"], payload), kwargs={"session": session}, daemon=True)
+
+    def _run_in_thread(job_id: str, payload: Dict[str, Any], session: Any) -> None:
+        # run_simulation contém chamadas async (build_seed); criamos o loop.
+        try:
+            asyncio.run(run_simulation(job_id, payload, session=session))
+        except Exception as exc:
+            logger.exception("mirofish: simulação falhou no arranque")
+            try:
+                _job_update(job_id, status="failed", error=f"{type(exc).__name__}: {exc}")
+                _job_log(job_id, f"Falhou: {type(exc).__name__}: {exc}", level="error")
+            except Exception:
+                pass
+
+    thread = threading.Thread(target=_run_in_thread, args=(job["id"], payload, session), daemon=True)
     thread.start()
     return job
 

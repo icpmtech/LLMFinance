@@ -10,7 +10,8 @@
     publico dos logs do container e escreve `origin-url.txt` (so o hostname).
 
     O hostname muda sempre que o container do tunel e recriado; nesse caso e
-    preciso voltar a aplicar o novo valor no edge da VM (05-edge-up.sh).
+    preciso voltar a aplicar o novo valor no edge da VM (03-configure-edge.ps1
+    ou 06-refresh-cloudflare.ps1).
 
 .EXAMPLE
     .\02-publish-origin.ps1

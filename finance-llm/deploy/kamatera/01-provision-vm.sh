@@ -34,3 +34,16 @@ docker --version
 docker compose version
 free -h
 df -h / | tail -1
+
+# Abrir portas 80 e 443 no UFW (se existir) e alertar sobre o firewall da Kamatera.
+if command -v ufw >/dev/null 2>&1; then
+    echo "==> a abrir portas 80/443 no UFW"
+    ufw allow 80/tcp  >/dev/null || true
+    ufw allow 443/tcp >/dev/null || true
+    ufw allow 443/udp >/dev/null || true
+    ufw reload >/dev/null || true
+fi
+
+echo ""
+echo "AVISO: verifica no painel da Kamatera se as portas 80 (TCP), 443 (TCP) e 443 (UDP)"
+echo "estao abertas no firewall do servidor. Sem isso o Let's Encrypt e o trafego HTTPS falham."

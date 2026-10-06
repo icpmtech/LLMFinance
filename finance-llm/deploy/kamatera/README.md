@@ -1,25 +1,25 @@
 # Deploy do IQ OS na Kamatera (VM mais economica)
 
-Estado deste deploy (2026-10-02):
+Estado deste deploy (2026-10-06):
 
 | Item | Valor |
 | --- | --- |
 | VM | `iq-os-edge-01` — Kamatera, datacenter `EU-MD` (Madrid) |
 | ID | `4b9ccce0-0cba-43ef-9574-9079e87184ad` |
-| IP | `45.147.251.188` (so SSH; o edge nao abre portas) |
+| IP | `45.147.251.188` (SSH + HTTP/HTTPS abertos) |
 | Recursos | 1 vCPU tipo A, 2 GB RAM, 20 GB NVMe, swap 2 GB |
 | Preco | **6 USD/mes** (hourly: 0.008 USD/h) |
 | Docker | Engine 29.8.2 + Compose v5.6.0 |
-| Endereco publico | https://analog-chronicles-bag-transparency.trycloudflare.com |
-| Origem publica (PC) | https://truck-poly-amount-remain.trycloudflare.com |
+| Dominio publico | https://sabemos.studio |
+| Origem publica (PC) | quick tunnel Cloudflare (ver `origin-url.txt`) |
 
 Verificacao ponta-a-ponta (do PC, via internet):
 
 ```
-/healthz       -> 200  0.99s   (nginx do edge)
-/              -> 200  0.75s   (SPA)
-/api/health    -> 200  0.78s   (backend FastAPI, atraves dos dois tuneis)
-/api/providers -> 401  1.01s   (guarda de autenticacao a funcionar)
+/healthz       -> 200  (Caddy no edge)
+/              -> 200  (SPA)
+/api/health    -> 200  (backend FastAPI, atraves do tunel de origem)
+/api/providers -> 401  (guarda de autenticacao a funcionar)
 ```
 
 ## Arquitetura
@@ -27,15 +27,15 @@ Verificacao ponta-a-ponta (do PC, via internet):
 ```
                           internet
                               |
-     https://analog-...-transparency.trycloudflare.com
+              https://sabemos.studio
                               |
               +-------------------------------+
               | VM Kamatera (EU-MD, 6 USD/mes)|
-              |   iqos-tunnel  (cloudflared)  |   sem portas publicas
-              |   iqos-edge    (nginx)        |   (o tunel e so de saida)
+              |   iqos-caddy   (Caddy)        |   portas 80/443
+              |     Let's Encrypt automatico  |
               +-------------------------------+
                               |
-     https://generally-...-operation.trycloudflare.com
+     https://<aleatorio>.trycloudflare.com
                               |
               +-------------------------------+
               | PC (stack IQ OS completa)     |
@@ -48,8 +48,8 @@ Verificacao ponta-a-ponta (do PC, via internet):
 
 Porque e que a stack **nao** corre na VM: a maquina mais barata da Kamatera tem
 1 vCPU / 2 GB / 20 GB, e a stack pede ~40 GB de dados + indices Elasticsearch +
-modelos. A VM fica como **ponto de entrada publico com TLS gratuito**
-(Cloudflare quick tunnel) e os dados ficam no PC.
+modelos. A VM fica como **ponto de entrada publico com TLS proprio**
+(Caddy + Let's Encrypt) e os dados ficam no PC.
 
 ## Ficheiros
 
@@ -59,11 +59,11 @@ modelos. A VM fica como **ponto de entrada publico com TLS gratuito**
 | `02-publish-origin.ps1` | PC | Sobe origem + tunel (Docker) e guarda `origin-url.txt` |
 | `03-configure-edge.ps1` | PC | Envia o `05` para a VM e aplica o hostname da origem |
 | `04-verify.ps1` | PC | Verifica origem, edge e endereco publico |
-| `05-edge-up.sh` | VM | Swap + `edge.env` + `docker compose up` do edge |
-| `06-refresh-cloudflare.ps1` | PC | Renova os tuneis (recria se preciso) e reaplica a origem no edge |
+| `05-edge-up.sh` | VM | Swap + `edge.env` + `Caddyfile` + `docker compose up` do edge |
+| `06-refresh-cloudflare.ps1` | PC | Renova o tunel de origem (se cair) e reaplica a origem no edge |
 | `00-push-file.ps1` | PC | Envia um ficheiro para a VM (ssh + base64, sem scp) |
 | `origin/` | PC | tunel Cloudflare (+ nginx de origem minima, perfil `lite`) |
-| `edge/` | VM | nginx (reverse proxy) + cloudflared (quick tunnel publico) |
+| `edge/` | VM | Caddy (HTTPS proprio) proxy para o quick tunnel de origem |
 
 ## Arranque (passo a passo)
 
@@ -72,17 +72,19 @@ cd C:\LLMFinance\finance-llm
 
 # 0. Stack local a servir 127.0.0.1:4180 (docker compose up -d na raiz)
 
-# 1. VM (uma vez): instalar Docker + swap
+# 1. VM (uma vez): instalar Docker + swap + abrir portas 80/443 no firewall Kamatera
 powershell -File deploy\kamatera\00-push-file.ps1 -Local deploy\kamatera\01-provision-vm.sh -Dest /opt/iqos/01-provision-vm.sh
 ssh -i "$env:USERPROFILE\.ssh\iqos_kamatera_ed25519" root@45.147.251.188 "bash /opt/iqos/01-provision-vm.sh"
 
-# 2. Publicar a origem local (tunel em Docker, sobrevive ao terminal)
+# 2. DNS: apontar @ e www para o IP da VM (45.147.251.188)
+
+# 3. Publicar a origem local (tunel em Docker, sobrevive ao terminal)
 powershell -File deploy\kamatera\02-publish-origin.ps1
 
-# 3. Aplicar no edge da VM
+# 4. Aplicar no edge da VM
 powershell -File deploy\kamatera\03-configure-edge.ps1
 
-# 4. Verificar
+# 5. Verificar
 powershell -File deploy\kamatera\04-verify.ps1
 ```
 
@@ -104,8 +106,11 @@ powershell -File deploy\kamatera\04-verify.ps1
   o `06-refresh-cloudflare.ps1`) .
 - **Um quick tunnel pode morrer com o container `Up`**: o Cloudflare reclama-o e os
   logs repetem `ERR Register tunnel error ... "Unauthorized: Tunnel not found"`.
-  O endereco deixa de existir e o edge passa a servir a pagina offline. Remedio:
+  O endereco deixa de existir e o edge passa a devolver 502. Remedio:
   `06-refresh-cloudflare.ps1` (recria o tunel e reaplica a origem).
+- **Agora o dominio proprio e servido pelo VM**, nao por um quick tunnel publico.
+  As portas 80/443 tem de estar abertas no firewall da Kamatera, senao o Let's
+  Encrypt e o trafego HTTPS falham.
 - **O ssh pode bloquear-se no handshake** (KEXINIT sem resposta) e ficar pendurado
   para sempre. Alem de `ConnectTimeout`, usar `ServerAliveInterval=5`,
   `ServerAliveCountMax=2` e `-n` (nao encaminhar o stdin local): assim uma sessao
@@ -144,15 +149,14 @@ ssh root@45.147.251.188 "cd /opt/iqos/edge && docker compose down"
 
 ## Custos e proximos passos
 
-- VM: **6 USD/mes**. Quick tunnels Cloudflare: gratuitos. Sem portas publicas
-  alem do SSH.
+- VM: **6 USD/mes**. Certificados Let's Encrypt: gratuitos. Quick tunnel de
+  origem: gratuito. Portas 80/443 abertas no firewall Kamatera.
 - O PC nao pode adormecer (a origem cai):
   `powershell -File deploy\kamatera\00-keep-awake.ps1` — ja aplicado (suspensao,
   hibernacao e desligar do ecra a "nunca", AC e DC, esquema Balanced).
   Reverter com `-Restore`.
-- Um quick tunnel nao tem Cloudflare Access: quem tiver o endereco chega a
-  aplicacao (a autenticacao por conta de utilizador do IQ OS continua ativa).
-  Para um hostname fixo, usar `deploy/gcp/01-setup-tunnels.ps1` (tunel nomeado).
+- A autenticacao continua a ser a do IQ OS; o dominio proprio nao acrescenta
+  Cloudflare Access.
 
 ### Subir a stack completa para a VM
 

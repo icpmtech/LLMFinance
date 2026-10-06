@@ -68,10 +68,11 @@ Write-Host "`n=== 4. Endereco publico (edge) ===" -ForegroundColor Cyan
 $publicFile = Join-Path $here 'public-url.txt'
 if (Test-Path $publicFile) {
     $public = (Get-Content $publicFile -Raw).Trim()
-    Test-Url 'edge /healthz' "https://$public/healthz"
-    Test-Url 'edge /' "https://$public/"
-    Test-Url 'edge /api/health' "https://$public/api/health"
-    Test-Url 'edge /api/providers (401)' "https://$public/api/providers" -Expect 401
-    Write-Host "`nAbrir: https://$public/" -ForegroundColor Yellow
+    if ($public -notmatch '^https?://') { $public = "https://$public" }
+    Test-Url 'edge /healthz' "$public/healthz"
+    Test-Url 'edge /' "$public/"
+    Test-Url 'edge /api/health' "$public/api/health"
+    Test-Url 'edge /api/providers (401)' "$public/api/providers" -Expect 401
+    Write-Host "`nAbrir: $public/" -ForegroundColor Yellow
 }
 else { Write-Host 'public-url.txt nao existe (corre 03-configure-edge.ps1)' -ForegroundColor DarkGray }

@@ -20,9 +20,16 @@ import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from user_scanner.core import confidence as us_confidence
-from user_scanner.core import engine as us_engine
-from user_scanner.core import pivots as us_pivots
+try:
+    from user_scanner.core import confidence as us_confidence
+    from user_scanner.core import engine as us_engine
+    from user_scanner.core import pivots as us_pivots
+    _USER_SCANNER_AVAILABLE = True
+except Exception:  # pragma: no cover - dependência opcional não instalada
+    us_confidence = None  # type: ignore
+    us_engine = None  # type: ignore
+    us_pivots = None  # type: ignore
+    _USER_SCANNER_AVAILABLE = False
 
 from api.elasticsearch_client import ensure_indices, get_es_client
 
@@ -93,6 +100,8 @@ def category_platform_counts(is_email: bool = False, es: Any = None) -> Dict[str
     Serve para o UI mostrar o custo antes de lançar o scan: escolher uma
     categoria de 400 plataformas não é o mesmo que escolher uma de 30.
     """
+    if not _USER_SCANNER_AVAILABLE or us_engine is None:
+        return {}
     counts: Dict[str, int] = {}
     for name, path in us_engine.load_categories(is_email=is_email).items():
         try:
@@ -256,6 +265,8 @@ def _confidence_of(raw_results: List[Any]) -> Dict[str, str]:
     que partilham identidade com as outras (mesmo nome/links) e quais são
     homónimos que só coincidem no handle.
     """
+    if not _USER_SCANNER_AVAILABLE or us_confidence is None:
+        return {}
     confirmed = [r for r in raw_results if str(getattr(r, "status", "")) == "Found"]
     if not confirmed:
         return {}
@@ -275,6 +286,8 @@ def _confidence_of(raw_results: List[Any]) -> Dict[str, str]:
 
 def _pivots_of(raw_results: List[Any]) -> List[Dict[str, Any]]:
     """Contas cruzadas: handles/links que apontam para outras plataformas."""
+    if not _USER_SCANNER_AVAILABLE or us_pivots is None:
+        return []
     try:
         extracted = us_pivots.select_pivots(us_pivots.extract_pivots(raw_results), "all")
     except Exception as exc:  # pragma: no cover - depende da biblioteca
@@ -817,6 +830,9 @@ async def scan_target(
     if kind not in OSINT_KINDS:
         raise ValueError(f"Tipo de alvo '{kind}' não suportado. Use: {', '.join(OSINT_KINDS)}.")
     is_email = kind == "email"
+    if not _USER_SCANNER_AVAILABLE or us_engine is None:
+        raise ValueError("Módulo OSINT externo (user_scanner) não está instalado neste ambiente.")
+
     available = us_engine.load_categories(is_email=is_email)
     by_lower = {name.lower(): name for name in available}
 

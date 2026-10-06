@@ -178,7 +178,7 @@ def diagnose(session: Session) -> Dict[str, Any]:
 async def build_seed(payload: SeedPayload, session: Session) -> Dict[str, Any]:
     """Compõe o documento-semente a partir dos dados do sistema (sem simular)."""
     try:
-        return await run_in_threadpool(service.build_seed, payload.source, payload.params, session=session)
+        return await service.build_seed(payload.source, payload.params, session=session)
     except service.MiroFishError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -187,7 +187,7 @@ async def build_seed(payload: SeedPayload, session: Session) -> Dict[str, Any]:
 async def save_seed_to_office(payload: SeedOfficePayload, session: Session) -> Dict[str, Any]:
     """Guarda a semente como documento do Office (para rever, editar ou partilhar)."""
     try:
-        seed = await run_in_threadpool(service.build_seed, payload.source, payload.params, session=session)
+        seed = await service.build_seed(payload.source, payload.params, session=session)
     except service.MiroFishError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

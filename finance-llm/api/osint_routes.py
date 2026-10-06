@@ -48,7 +48,13 @@ from api.osint_service import (
     scan_to_pdf,
     search_saved_scans,
 )
-from user_scanner.core import engine as us_engine
+
+try:
+    from user_scanner.core import engine as us_engine
+    _USER_SCANNER_AVAILABLE = True
+except Exception:  # pragma: no cover - dependência opcional não instalada
+    us_engine = None  # type: ignore
+    _USER_SCANNER_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +70,8 @@ async def list_osint_categories(session: Session) -> Dict[str, Any]:
     Inclui `platforms` (quantas plataformas cada categoria verifica), `defaults`
     (categoria recomendada por tipo) e presets prontos a usar no UI.
     """
+    if not _USER_SCANNER_AVAILABLE or us_engine is None:
+        return {"username": [], "email": [], "defaults": {}, "presets": {}, "counts": {}, "note": "user_scanner não está instalado"}
     username_categories = list(us_engine.load_categories(is_email=False).keys())
     email_categories = list(us_engine.load_categories(is_email=True).keys())
     defaults = {

@@ -1,24 +1,25 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-    Renova os tuneis Cloudflare do IQ OS e reaplica a origem no edge da Kamatera.
+    Renova o tunel de origem Cloudflare do IQ OS e reaplica a origem no edge da Kamatera.
 
 .DESCRIPTION
     Um quick tunnel pode morrer mesmo com o container `Up`: o Cloudflare reclama-o
     e os logs repetem
     `ERR Register tunnel error from server side error="Unauthorized: Tunnel not found"`.
-    O endereco aleatorio deixa de existir e o edge passa a servir a pagina offline.
+    O endereco aleatorio deixa de existir e o edge passa a devolver 502.
 
     Este script faz, por esta ordem:
       1. confirma que o tunel de origem (PC) responde; se nao, recria-o;
       2. atualiza `origin-url.txt` com o hostname em uso;
-      3. reaplica a origem no edge da VM e reinicia o nginx;
-      4. le o endereco publico do tunel da VM e guarda-o em `public-url.txt`;
+      3. reaplica a origem no edge da VM (Caddy + dominio proprio sabemos.studio);
+      4. guarda `https://sabemos.studio` em `public-url.txt`;
       5. testa tudo ponta-a-ponta.
 
-    Notas: o `05-edge-up.sh` tem de estar em `/opt/iqos/` na VM (envia-se com
-    `00-push-file.ps1`). As ligacoes SSH levam `-n` e sao repetidas — a rede para
-    esta VM perde ligacoes de forma intermitente.
+    Notas: o `05-edge-up.sh` e os ficheiros `edge/compose.yml` e
+    `edge/Caddyfile.template` tem de estar em `/opt/iqos/edge` na VM. As ligacoes
+    SSH levam `-n` e sao repetidas — a rede para esta VM perde ligacoes de forma
+    intermitente.
 
 .EXAMPLE
     .\06-refresh-cloudflare.ps1
@@ -101,18 +102,29 @@ if (-not $originHostname) {
 }
 $originHostname | Set-Content -Path $urlFile -Encoding ascii
 
-Write-Output '=== 2. Edge na VM ==='
-$remote = Invoke-Vm -Command "bash /opt/iqos/05-edge-up.sh $originHostname 2>&1 | tail -14"
+Write-Output '=== 2. Enviar ficheiros do edge para a VM ==='
+$caddyLocal = Join-Path $here 'edge\Caddyfile.template'
+$composeLocal = Join-Path $here 'edge\compose.yml'
+$caddyB64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($caddyLocal))
+$composeB64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($composeLocal))
+$pushEdge = @"
+mkdir -p /opt/iqos/edge
+printf %s '$caddyB64' | base64 -d > /opt/iqos/edge/Caddyfile.template
+printf %s '$composeB64' | base64 -d > /opt/iqos/edge/compose.yml
+sed -i 's/\r$//' /opt/iqos/edge/Caddyfile.template /opt/iqos/edge/compose.yml
+wc -c /opt/iqos/edge/Caddyfile.template /opt/iqos/edge/compose.yml
+"@
+Write-Output (Invoke-Vm -Command $pushEdge)
+
+Write-Output '=== 3. Edge na VM ==='
+$remote = Invoke-Vm -Command "bash /opt/iqos/05-edge-up.sh $originHostname 2>&1 | tail -20"
 Write-Output $remote
 
-Write-Output '=== 3. Endereco publico ==='
-$publicUrl = Invoke-Vm -Command "docker logs iqos-tunnel 2>&1 | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -1"
-$m = [regex]::Match($publicUrl, 'https://[a-z0-9][a-z0-9-]*\.trycloudflare\.com')
-if (-not $m.Success) { throw "Nao encontrei o endereco publico nos logs do tunel da VM." }
-$publicUrl = $m.Value
-$publicUrl | Set-Content -Path $publicFile -Encoding ascii
+Write-Output '=== 4. Endereco publico ==='
+'https://sabemos.studio' | Set-Content -Path $publicFile -Encoding ascii
+$publicUrl = 'https://sabemos.studio'
 
-Write-Output '=== 4. Verificacao ==='
+Write-Output '=== 5. Verificacao ==='
 foreach ($path in @('/healthz', '/', '/api/health', '/api/providers')) {
     $prev = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'

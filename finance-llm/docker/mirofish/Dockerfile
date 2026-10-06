@@ -9,7 +9,9 @@
 #   2. base da API **relativa** (senão a app só funciona em `localhost`);
 #   3. respostas do **LLM em português** (os prompts do upstream são em chinês e
 #      as personas/publicações saíam em chinês);
-#   4. mensagens do backend (progresso e erros) em português.
+#   4. mensagens do backend (progresso e erros) em português;
+#   5. **home page do IQ OS** (indicadores, gráficos e histórico de simulações);
+#   6. **apagar simulações e exportar para Excel/PDF** (`/api/iqos/*`).
 #
 # Porque é que o código é sobreposto
 # ----------------------------------
@@ -114,11 +116,11 @@ RUN set -eux; \
     grep -q '<html lang="zh">' "$f"; \
     sed -i 's#<html lang="zh">#<html lang="pt">#' "$f"; \
     sed -i "s#localStorage.getItem('locale') || 'zh'#localStorage.getItem('locale') || 'pt'#" "$f"; \
-    sed -i 's#<title>[^<]*</title>#<title>MiroFish - Prever Tudo</title>#' "$f"; \
-    sed -i 's#content="MiroFish - [^"]*"#content="MiroFish - Sistema de Simulação de Opinião em Redes Sociais"#' "$f"; \
+    sed -i 's#<title>[^<]*</title>#<title>IQ OS · Simulações</title>#' "$f"; \
+    sed -i 's#content="MiroFish - [^"]*"#content="IQ OS · Simulações — previsão por inteligência de enxame sobre os dados da plataforma"#' "$f"; \
     grep -q '<html lang="pt">' "$f"; \
-    grep -q "<title>MiroFish - Prever Tudo</title>" "$f"; \
-    grep -q "Simulação de Opinião" "$f"; \
+    grep -q "<title>IQ OS · Simulações</title>" "$f"; \
+    grep -q "inteligência de enxame" "$f"; \
     grep -q "localStorage.getItem('locale') || 'pt'" "$f"
 
 # ---------------------------------------------------------------------------
@@ -158,6 +160,80 @@ RUN set -eux; \
     grep -q "concluídos: {entity.name}" /app/backend/app/services/oasis_profile_generator.py; \
     ! grep -q '已完成 {current}/{total}' /app/backend/app/services/oasis_profile_generator.py; \
     rm -f /tmp/pt_language.py /tmp/pt_backend_strings.py
+
+# ---------------------------------------------------------------------------
+# 5c) Apagar simulações e exportar para Excel/PDF
+#
+# Duas partes: o módulo com as rotas novas (`app/api/iqos_export.py`) e o
+# registo do blueprint no `api/__init__.py` de cada app (`iqos_admin_patch.py`,
+# idempotente e com verificação no disco).
+#
+# As bibliotecas de exportação são instaladas **depois** do `uv sync` do passo 2
+# (que reinstala tudo do `uv.lock` e as removeria): `openpyxl` para o .xlsx e
+# `fpdf2` para os PDF (ambas pure Python, sem dependências de sistema).
+# O `import` no fim confirma que ficaram utilizáveis — sem isto, as rotas
+# responderiam 501 em vez de gerarem o ficheiro.
+# ---------------------------------------------------------------------------
+COPY backend/app/api/iqos_export.py /app/backend/app/api/iqos_export.py
+COPY iqos_admin_patch.py /tmp/iqos_admin_patch.py
+RUN set -eux; \
+    cd /app/backend; \
+    uv pip install --python /app/backend/.venv/bin/python openpyxl fpdf2; \
+    /app/backend/.venv/bin/python /tmp/iqos_admin_patch.py; \
+    grep -q "iqos_bp, url_prefix='/api/iqos'" /app/backend/app/__init__.py; \
+    grep -q "BRAND_LINE" /app/backend/app/api/iqos_export.py; \
+    grep -q "_brand_header" /app/backend/app/api/iqos_export.py; \
+    grep -q "_brand_footer" /app/backend/app/api/iqos_export.py; \
+    grep -q "_render(" /app/backend/app/api/iqos_export.py; \
+    /app/backend/.venv/bin/python -c "import openpyxl, fpdf; print('openpyxl', openpyxl.__version__)"; \
+    rm -f /tmp/iqos_admin_patch.py
+
+# ---------------------------------------------------------------------------
+# 5b) Home page do IQ OS
+#
+# A landing original do MiroFish (hero + formulário) é substituída por um painel
+# com indicadores, gráficos e o histórico de simulações em cartões e tabela,
+# mantendo a criação de uma nova simulação e acrescentando apagar, exportar
+# (Excel/PDF), tema claro/escuro e atualização manual ou automática. Só se
+# substitui a `Home.vue` e acrescentam-se os componentes novos — as restantes
+# views ficam intactas.
+#
+# Os `grep` confirmam que os ficheiros chegaram e que a home deixou de ser a
+# original: uma cópia que falhe não pode passar despercebida na build.
+#
+# O último `! grep` impede a regressão mais cara deste ecrã: os diálogos nativos
+# do browser **não existem** em webviews e iframes com `sandbox` (a app do IQ OS
+# incorpora esta página). A chamada lançava `prompt` não suportado, o Vue
+# registava apenas um erro de handler e o botão «Apagar» parecia não fazer nada.
+# A confirmação é um modal da própria aplicação (`deleteTarget`/`idMatches`).
+# (`grep` sobre o código, e não sobre a ideia: os comentários explicam o caso e
+# escrever aqui a chamada antiga faria o próprio teste falhar.)
+# ---------------------------------------------------------------------------
+COPY frontend/src/views/Home.vue /app/frontend/src/views/Home.vue
+COPY frontend/src/components/IqosCharts.vue /app/frontend/src/components/IqosCharts.vue
+COPY frontend/src/components/IqosHistory.vue /app/frontend/src/components/IqosHistory.vue
+COPY frontend/src/composables/useIqosTheme.js /app/frontend/src/composables/useIqosTheme.js
+COPY frontend/src/api/iqosAdmin.js /app/frontend/src/api/iqosAdmin.js
+RUN set -eux; \
+    grep -q "Simulações IQ OS" /app/frontend/src/views/Home.vue; \
+    grep -q "IqosCharts" /app/frontend/src/views/Home.vue; \
+    grep -q "IqosHistory" /app/frontend/src/views/Home.vue; \
+    grep -q "useIqosTheme" /app/frontend/src/views/Home.vue; \
+    grep -q "toggleTheme" /app/frontend/src/composables/useIqosTheme.js; \
+    grep -q "data-iqos-theme" /app/frontend/src/composables/useIqosTheme.js; \
+    grep -q "localStorage" /app/frontend/src/composables/useIqosTheme.js; \
+    grep -q "iqos-auto-refresh" /app/frontend/src/components/IqosHistory.vue; \
+    grep -q "emit('refresh')" /app/frontend/src/components/IqosHistory.vue; \
+    grep -q "lastUpdated" /app/frontend/src/components/IqosHistory.vue; \
+    grep -q "Estado das simulações" /app/frontend/src/components/IqosCharts.vue; \
+    grep -q "Histórico de simulações" /app/frontend/src/components/IqosHistory.vue; \
+    grep -q "iqosAdmin" /app/frontend/src/components/IqosHistory.vue; \
+    grep -q "api/iqos/export/simulations" /app/frontend/src/api/iqosAdmin.js; \
+    grep -q "api/iqos/simulations" /app/frontend/src/api/iqosAdmin.js; \
+    ! grep -q "hero-section" /app/frontend/src/views/Home.vue; \
+    grep -q "deleteTarget" /app/frontend/src/components/IqosHistory.vue; \
+    ! grep -q "window.prompt(" /app/frontend/src/components/IqosHistory.vue; \
+    ! grep -q "window.confirm(" /app/frontend/src/components/IqosHistory.vue
 
 # ---------------------------------------------------------------------------
 # 6) Frontend (Vite dev server, :3000) + backend (Flask, :5001) no mesmo

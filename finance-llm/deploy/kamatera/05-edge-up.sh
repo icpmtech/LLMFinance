@@ -1,4 +1,4 @@
-# Executado NA VM: prepara o host (swap) e arranca o edge (nginx + cloudflared).
+# Executado NA VM: prepara o host (swap) e arranca o edge (Caddy + dominio proprio).
 #
 # Uso:  bash /opt/iqos/05-edge-up.sh <hostname-da-origem>
 #   <hostname-da-origem> = o que o quick tunnel do PC publica, ex.:
@@ -34,14 +34,17 @@ fi
 # 2) edge.env (com LF; um \r colado ao valor entra no SNI e o proxy falha).
 printf 'ORIGIN_HOSTNAME=%s\n' "$ORIGIN_HOSTNAME" > /opt/iqos/edge/edge.env
 
-# 3) Arrancar o edge.
+# 3) Gerar Caddyfile a partir do template (substituir placeholder literalmente).
+sed "s|__ORIGIN_HOSTNAME__|$ORIGIN_HOSTNAME|g" /opt/iqos/edge/Caddyfile.template > /opt/iqos/edge/Caddyfile
+
+# 4) Arrancar o edge.
 cd /opt/iqos/edge
 docker compose up -d --remove-orphans
 
-echo "==> a aguardar o tunel publicar o endereco"
+echo "==> a aguardar o Caddy ficar saudavel"
 for _ in $(seq 1 20); do
     sleep 3
-    if docker logs iqos-tunnel 2>&1 | grep -qo 'https://[a-z0-9-]*\.trycloudflare\.com'; then
+    if docker exec iqos-caddy wget -q -O /dev/null http://127.0.0.1/healthz 2>/dev/null; then
         break
     fi
 done
@@ -51,7 +54,7 @@ echo "==> containers"
 docker ps --format 'table {{.Names}}\t{{.Status}}'
 echo
 echo "==> endereco publico"
-docker logs iqos-tunnel 2>&1 | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | head -1 || true
+echo "https://sabemos.studio"
 echo
 echo "==> recursos"
 free -h

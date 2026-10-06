@@ -1,30 +1,30 @@
-# Edge do IQ OS na Kamatera (VM mais barata: 1A / 2 GB / 20 GB, Madrid).
+# Edge do IQ OS na Kamatera com dominio proprio (sabemos.studio).
 #
-# Dois containers:
-#   edge   -> nginx que faz de reverse proxy para o hostname de origem (o quick
-#             tunnel do PC que corre a stack IQ OS). NAO publica portas.
-#   tunnel -> cloudflared em modo quick tunnel (sem conta), que expoe o nginx
-#             num endereco https://<aleatorio>.trycloudflare.com
+# Agora o proprio VM serve HTTPS (portas 80/443) via Caddy, com certificado
+# Let's Encrypt automatico. Ainda proxy para o quick tunnel do PC de origem,
+# mas o endereco publico e fixo: https://sabemos.studio
 #
-# Como nao ha portas publicadas, a firewall da VM pode ficar fechada (so SSH);
-# a ligacao e sempre feita de dentro para fora.
+# IMPORTANTE: as portas 80 e 443 devem estar abertas no firewall da Kamatera.
 services:
-  edge:
-    image: nginx:alpine
-    container_name: iqos-edge
+  caddy:
+    image: caddy:2-alpine
+    container_name: iqos-caddy
     restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
     env_file:
       - edge.env
-    environment:
-      NGINX_ENVSUBST_FILTER: "^(ORIGIN_HOSTNAME)$"
     volumes:
-      - ./templates:/etc/nginx/templates:ro
-      - ./offline.html:/usr/share/nginx/html/offline.html:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
       interval: 30s
       timeout: 5s
-      start_period: 5s
+      start_period: 10s
       retries: 3
     logging:
       driver: json-file
@@ -32,15 +32,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  tunnel:
-    image: cloudflare/cloudflared:latest
-    container_name: iqos-tunnel
-    restart: unless-stopped
-    command: ["tunnel", "--no-autoupdate", "--url", "http://edge:80"]
-    depends_on:
-      - edge
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+volumes:
+  caddy_data:
+  caddy_config:
