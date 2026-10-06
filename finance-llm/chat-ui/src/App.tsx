@@ -8,6 +8,7 @@ import { clearSidebarAccess, loadSidebarAccess } from "./sidebarAccess";
 import { getSidebarMode, setSidebarHidden, setSidebarMode, setWindowMode, useSidebarShortcut, useWindowMode } from "./layout";
 import { openWindow, closeWindow, restoreWindow, windowFor } from "./windows";
 import { useAuth } from "./auth";
+import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import SettingsPage from "./pages/SettingsPage";
 import CliPage from "./pages/CliPage";
@@ -182,7 +183,10 @@ type AppView =
   | "risco"
   | "societario"
   | "empresas-recolha"
-  | "iframe-pages";
+  | "iframe-pages"
+  | "landing"
+  | "login"
+  | "register";
 const COMPANY_DETAIL_KEY = "finance-llm-company-detail";
 const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
 /** Região de contratos aberta a partir do mapa (janela `region-detail`). */
@@ -241,6 +245,9 @@ function pathForView(
   ticker: string | null,
   region: RegionDetailTarget | null = null,
 ): string {
+  if (view === "landing") return "/";
+  if (view === "login") return "/login";
+  if (view === "register") return "/register";
   if (view === "chat") return "/chat";
   if (view === "browser") return "/browser";
   if (view === "dashboard") return "/dashboard";
@@ -481,6 +488,9 @@ export default function App() {
   const [view, setView] = useState<AppView>(() => {
     if (typeof window === "undefined") return "dashboard";
     const path = window.location.pathname.replace(/\/$/, "");
+    if (path === "" || path === "/") return "landing";
+    if (path === "/login") return "login";
+    if (path === "/register") return "register";
     if (path === "/chat") return "chat";
     if (path === "/rag") return "rag";
     if (path === "/browser") return "browser";
@@ -817,6 +827,10 @@ export default function App() {
   );
 
   const handleSwitchView = (v: string) => {
+    if (v === "landing" || v === "login" || v === "register") {
+      setViewAndHistory(v as AppView);
+      return;
+    }
     if (v === "tickers" || v === "tickers-old") {
       setViewAndHistory("tickers");
       return;
@@ -1096,10 +1110,17 @@ export default function App() {
   }
 
   if (authStatus === "anonymous") {
-    return <LoginPage />;
+    if (view === "landing") return <LandingPage />;
+    return <LoginPage initialMode={view === "register" ? "register" : "login"} />;
   }
 
   const renderView = (target: AppView) => {
+    // Páginas públicas só fazem sentido para utilizadores anónimos. Se um
+    // utilizador autenticado aceder a `/`, `/login` ou `/register`, mostra o
+    // dashboard.
+    if (target === "landing" || target === "login" || target === "register") {
+      return <DashboardPage onSwitchView={handleSwitchView} onSelectTicker={handleSelectTicker} />;
+    }
     if (target === "finder") return <FinderPage />;
     if (target === "compare") return <CompareWindow />;
     if (target.startsWith("company-detail:")) {

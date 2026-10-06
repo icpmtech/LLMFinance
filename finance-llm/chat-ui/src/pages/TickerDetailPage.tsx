@@ -17,6 +17,7 @@ import {
   MessageSquare,
   ChevronRight,
   Maximize2,
+  Languages,
 } from "lucide-react";
 import {
   Area,
@@ -56,6 +57,12 @@ import {
   getSentimentMarketWatchlist,
   removeSentimentMarketFavourite,
 } from "../sentimentApi";
+import { buildChatOptions, useProviders, type ProvidersCatalog } from "../providers";
+import type { ModelBackend } from "../types";
+import { sendChat } from "../sendChat";
+import { API_BASE } from "../api";
+
+const EMPTY_PROVIDERS: ProvidersCatalog = { providers: [], defaults: {} };
 
 type Tab = "overview" | "chart" | "analysis" | "forecast" | "sentiment";
 
@@ -68,6 +75,23 @@ function pct(n?: number | null) {
   if (n == null || Number.isNaN(n)) return "—";
   const sign = n > 0 ? "+" : "";
   return `${sign}${(n * 100).toFixed(2)}%`;
+}
+
+function splitIntoSentences(text: string, maxLength: number): string[] {
+  // Divide primeiro por pontos finais, ponto e vírgula ou quebras de linha.
+  const sentences = text.split(/(?<=[.!?;])\s+|\n+/).filter((s) => s.trim().length > 0);
+  const segments: string[] = [];
+  let current = "";
+  for (const sentence of sentences) {
+    if ((current + " " + sentence).trim().length > maxLength && current.trim().length > 0) {
+      segments.push(current.trim());
+      current = sentence;
+    } else {
+      current = current ? `${current} ${sentence}` : sentence;
+    }
+  }
+  if (current.trim().length > 0) segments.push(current.trim());
+  return segments.length > 0 ? segments : [text.slice(0, maxLength)];
 }
 
 function pctFromRatio(n?: number | null) {
@@ -155,6 +179,200 @@ export function TickerDetailPage({
   const [loadingForecast, setLoadingForecast] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aiQuestion, setAiQuestion] = useState("");
+
+  /* -------------------------------------------------------- tradução */
+  const [translatedSummary, setTranslatedSummary] = useState<string | null>(null);
+  const [translationError, setTranslationError] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const [translationBackend, setTranslationBackend] = useState<ModelBackend>(() => {
+    if (typeof window === "undefined") return "gpt2";
+    return (window.localStorage.getItem("finance-llm-translation-backend") ||
+      window.localStorage.getItem("finance-llm-backend") ||
+      "gpt2") as ModelBackend;
+  });
+  const { catalog: providersCatalog } = useProviders();
+  const [translationCatalog, setTranslationCatalog] = useState<ProvidersCatalog>(EMPTY_PROVIDERS);
+  useEffect(() => {
+    let active = true;
+    const token =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem("finance-llm-token") || ""
+        : "";
+    fetch(`${API_BASE}/providers`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((res) => (res.ok ? res.json() : EMPTY_PROVIDERS))
+      .then((data) => {
+        if (active) setTranslationCatalog(data as ProvidersCatalog);
+      })
+      .catch(() => {
+        if (active) setTranslationCatalog(providersCatalog);
+      });
+    return () => {
+      active = false;
+    };
+  }, [providersCatalog]);
+  const translationOptions = useMemo(() => {
+    const opts = buildChatOptions(translationCatalog);
+    // Se o backend preferido é um modelo cloud configurado mas não consta do catálogo
+    // padrão (ex.: glm-5.3), adiciona-o para permitir tradução com o modelo guardado.
+    if (translationBackend.startsWith("ollama-cloud:")) {
+      const provider = translationCatalog.providers.find((p) => p.id === "ollama-cloud");
+      if (provider?.configured) {
+        const model = translationBackend.split(":").slice(1).join(":");
+        if (model && !opts.some((o) => o.id === translationBackend)) {
+          opts.push({
+            id: translationBackend,
+            label: `${provider.label} · ${model}`,
+            group: "Ollama Cloud",
+            model,
+            provider: "ollama-cloud",
+            usable: true,
+            note: `URL ${provider.base_url}`,
+          });
+        }
+      }
+    }
+    return opts;
+  }, [translationCatalog, translationBackend]);
+  const [ollamaCloudModels, setOllamaCloudModels] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const cached = window.localStorage.getItem("ollama-cloud-models::ollama-cloud");
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [listingCloudModels, setListingCloudModels] = useState(false);
+  const currentTranslationOption = translationOptions.find((option) => option.id === translationBackend);
+  const selectedProvider = currentTranslationOption?.provider;
+  const isOllamaCloudSelected = selectedProvider === "ollama-cloud";
+  const ollamaCloudBaseUrl = useMemo(() => {
+    return translationCatalog.providers.find((p) => p.id === "ollama-cloud")?.base_url || "https://ollama.com";
+  }, [translationCatalog]);
+  const effectiveCloudModels = ollamaCloudModels.length > 0 ? ollamaCloudModels : undefined;
+  const effectiveTranslationOptions = useMemo(() => {
+    if (!effectiveCloudModels) return translationOptions;
+    return translationOptions.map((option) => {
+      if (option.provider !== "ollama-cloud") return option;
+      const available = effectiveCloudModels.includes(option.model);
+      return { ...option, usable: available && option.usable, note: available ? option.note : "não listado na cloud" };
+    });
+  }, [translationOptions, effectiveCloudModels]);
+
+  // Sincronizar back-end escolhido quando novos modelos cloud chegam: se o modelo
+  // atual deixou de existir no Ollama Cloud, passa a usar o primeiro disponível.
+  useEffect(() => {
+    if (!effectiveCloudModels || translationBackend !== "ollama-cloud") return;
+    const current = effectiveTranslationOptions.find((o) => o.id === translationBackend);
+    if (current?.usable) return;
+    const firstUsable = effectiveTranslationOptions.find((o) => o.provider === "ollama-cloud" && o.usable);
+    if (firstUsable) {
+      handleTranslationBackendChange(firstUsable.id as ModelBackend);
+    }
+  }, [effectiveCloudModels, translationBackend, effectiveTranslationOptions]);
+  const effectiveTranslationGroups = useMemo(() => {
+    const map = new Map<string, typeof effectiveTranslationOptions>();
+    for (const option of effectiveTranslationOptions) {
+      const list = map.get(option.group) ?? [];
+      list.push(option);
+      map.set(option.group, list);
+    }
+    return [...map.entries()];
+  }, [effectiveTranslationOptions]);
+
+  function getPreferredBackend(): string {
+    if (typeof window === "undefined") return "gpt2";
+    return (
+      window.localStorage.getItem("finance-llm-translation-backend") ||
+      window.localStorage.getItem("finance-llm-backend") ||
+      "gpt2"
+    );
+  }
+
+  function handleTranslationBackendChange(next: ModelBackend) {
+    setTranslationBackend(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("finance-llm-translation-backend", next);
+    }
+  }
+
+  async function listCloudModels() {
+    setListingCloudModels(true);
+    setTranslationError(null);
+    try {
+      const token =
+        typeof window !== "undefined" ? window.localStorage.getItem("finance-llm-token") || "" : "";
+      const params = new URLSearchParams();
+      params.set("url", ollamaCloudBaseUrl);
+      const res = await fetch(`${API_BASE}/providers/ollama-cloud/models?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error((await res.json()).detail || "Não foi possível listar modelos");
+      const data = await res.json();
+      const models = data.models || [];
+      setOllamaCloudModels(models);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("ollama-cloud-models::ollama-cloud", JSON.stringify(models));
+      }
+    } catch (err) {
+      setTranslationError(err instanceof Error ? err.message : "Erro ao listar modelos cloud");
+    } finally {
+      setListingCloudModels(false);
+    }
+  }
+
+  async function handleTranslateSummary() {
+    const sourceText = info?.summary || technicalSummary;
+    if (!sourceText) return;
+    setTranslating(true);
+    setTranslationError(null);
+    setTranslatedSummary(null);
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120000);
+      const backend = translationBackend || getPreferredBackend();
+
+      // Divide o resumo em segmentos de ~800 caracteres, respeitando frases.
+      const segments = splitIntoSentences(sourceText, 800);
+      let accumulated = "";
+      for (let i = 0; i < segments.length; i++) {
+        const segment = segments[i];
+        const result = await sendChat(
+          [
+            {
+              id: `translate-summary-${i}`,
+              role: "user",
+              content: `Traduza o seguinte texto para português de Portugal, mantendo o tom profissional e financeiro. Devolva APENAS a tradução, sem explicações:\n\n${segment}`,
+              timestamp: new Date().toISOString(),
+            },
+          ],
+          backend as ModelBackend,
+          controller.signal,
+        );
+        const reply = result.message?.content?.trim();
+        if (reply) {
+          accumulated += (accumulated ? " " : "") + reply;
+          // Atualiza o estado a cada segmento para o utilizador ver progresso.
+          setTranslatedSummary(accumulated);
+        }
+      }
+      clearTimeout(timeout);
+      setTranslatedSummary(accumulated);
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        setTranslationError("A tradução demorou demasiado tempo. Tente novamente.");
+      } else {
+        setTranslationError(err instanceof Error ? err.message : "Não foi possível traduzir o resumo.");
+      }
+    } finally {
+      setTranslating(false);
+    }
+  }
+
   /* -------------------------------------------------------- favoritos */
   const [isFavourite, setIsFavourite] = useState(false);
   const [favBusy, setFavBusy] = useState(false);
@@ -473,12 +691,77 @@ export function TickerDetailPage({
           <div className="space-y-6">
             <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-6">
             <div className="@4xl:col-span-2 glass-card gradient-border p-5">
-              <h3 className="font-semibold mb-4 flex items-center gap-2 text-white">
-                <BarChart3 size={18} className="text-blue-400" />
-                Visão Geral
-              </h3>
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <h3 className="font-semibold flex items-center gap-2 text-white">
+                  <BarChart3 size={18} className="text-blue-400" />
+                  Visão Geral
+                </h3>
+                {(info?.summary || technicalSummary) && (
+                  <button
+                    type="button"
+                    onClick={() => void handleTranslateSummary()}
+                    disabled={translating}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500/15 px-2.5 py-1.5 text-xs font-medium text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 disabled:opacity-60 transition"
+                    title="Traduzir resumo com IA"
+                  >
+                    {translating ? (
+                      <RefreshCw size={14} className="animate-spin" />
+                    ) : (
+                      <Languages size={14} />
+                    )}
+                    {translating ? "A traduzir..." : "Traduzir com IA"}
+                  </button>
+                )}
+              </div>
+              {translationError && (
+                <p className="rounded-lg bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-300 mb-3">
+                  ⚠️ {translationError}
+                </p>
+              )}
+              {effectiveTranslationOptions.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <label className="text-[11px] text-slate-400">Modelo de tradução:</label>
+                  <select
+                    value={translationBackend}
+                    onChange={(e) => handleTranslationBackendChange(e.target.value as ModelBackend)}
+                    disabled={translating}
+                    className="text-[11px] bg-slate-800/60 border border-white/10 rounded-md px-2 py-1 outline-none focus:border-teal-300/40 max-w-[280px]"
+                    title="Escolha o fornecedor de IA para tradução. Modelos cloud exigem chave em Definições → Fornecedores de IA."
+                  >
+                    {effectiveTranslationGroups.map(([group, items]) => (
+                      <optgroup key={group} label={group}>
+                        {items.map((option) => (
+                          <option key={option.id} value={option.id} disabled={!option.usable}>
+                            {option.label}
+                            {option.usable ? "" : " — sem chave"}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  {isOllamaCloudSelected && (
+                    <button
+                      type="button"
+                      onClick={() => void listCloudModels()}
+                      disabled={listingCloudModels}
+                      className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.05] px-2 py-1 text-[10px] text-slate-300 hover:bg-white/[0.1] disabled:opacity-50"
+                      title="Atualizar a lista de modelos do Ollama Cloud"
+                    >
+                      {listingCloudModels ? (
+                        <RefreshCw size={10} className="animate-spin" />
+                      ) : (
+                        <RefreshCw size={10} />
+                      )}
+                      Listar modelos
+                    </button>
+                  )}
+                  {currentTranslationOption?.note && (
+                    <span className="text-[10px] text-slate-500 truncate">{currentTranslationOption.note}</span>
+                  )}
+                </div>
+              )}
               <p className="text-sm text-slate-300 leading-relaxed">
-                {info?.summary || technicalSummary || "Sem descrição disponível para este ativo."}
+                {translatedSummary || info?.summary || technicalSummary || "Sem descrição disponível para este ativo."}
               </p>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 data-grid">

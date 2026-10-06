@@ -32,9 +32,9 @@ const HIGHLIGHTS = [
   { icon: ShieldCheck, title: "Conta segura", text: "Sessões auditáveis e terminação remota." },
 ];
 
-export function LoginPage() {
+export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
   const { login, register } = useAuth();
-  const [mode, setMode] = useState<Mode>("login");
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -55,6 +55,12 @@ export function LoginPage() {
   const switchMode = (next: Mode) => {
     setMode(next);
     setError(null);
+    if (typeof window !== "undefined") {
+      const path = next === "register" ? "/register" : "/login";
+      if (window.location.pathname !== path) {
+        window.history.replaceState({}, "", path);
+      }
+    }
   };
 
   const handleSubmit = async (event: React.FormEvent) => {

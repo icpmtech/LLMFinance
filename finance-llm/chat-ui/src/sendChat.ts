@@ -4,7 +4,8 @@ import type { Message, ModelBackend, ChatResponse, ChatRequest } from "./types";
 
 export async function sendChat(
     messages: Message[],
-    backend: ModelBackend = "gpt2"
+    backend: ModelBackend = "gpt2",
+    signal?: AbortSignal
 ): Promise<ChatResponse> {
     if (backend === "bloomberg") {
         const lastUser = [...messages].reverse().find((m) => m.role === "user");
@@ -33,8 +34,12 @@ export async function sendChat(
 
     const res = await fetch(`${API_BASE}/chat?backend=${backend}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+            "Content-Type": "application/json",
+        },
         body: JSON.stringify(body),
+        signal,
+        credentials: "include",
     });
 
     if (!res.ok) {
