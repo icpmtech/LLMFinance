@@ -1,27 +1,33 @@
 # Edge do IQ OS na Kamatera com dominio proprio (sabemos.studio).
 #
-# Agora o proprio VM serve HTTPS (portas 80/443) via Caddy, com certificado
-# Let's Encrypt automatico. Ainda proxy para o quick tunnel do PC de origem,
-# mas o endereco publico e fixo: https://sabemos.studio
+# O proprio VM serve HTTPS (portas 80/443) via Caddy, com certificado
+# Let's Encrypt automatico. O upstream e o PC, ligado por um **tunel SSH
+# reverso** que publica a stack em `127.0.0.1:8080` desta VM — ver
+# `deploy/kamatera/07-origin-tunnel.ps1`. Nao ha Cloudflare.
 #
-# IMPORTANTE: as portas 80 e 443 devem estar abertas no firewall da Kamatera.
+# IMPORTANTE:
+#   * `network_mode: host` e obrigatorio: o Caddy tem de falar com o
+#     `127.0.0.1:8080` da **VM** (o tunel SSH liga-se ao loopback), nao com o
+#     loopback do container.
+#   * as portas 80 e 443 tem de estar abertas no firewall da Kamatera.
 services:
   caddy:
     image: caddy:2-alpine
     container_name: iqos-caddy
     restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"   # HTTP/3
-    env_file:
-      - edge.env
+    # Partilha a rede do host: e o que permite chegar ao tunel SSH (127.0.0.1:8080).
+    network_mode: host
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Pagina mostrada quando o tunel de origem esta em baixo (ver handle_errors).
+      - ./offline.html:/srv/offline.html:ro
       - caddy_data:/data
       - caddy_config:/config
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
+      # A API de administracao do Caddy (so em localhost) confirma que a
+      # config esta carregada. Testar o site publico daria 308 (redirect
+      # http->https), o que fazia o container parecer unhealthy.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:2019/config/ || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 10s

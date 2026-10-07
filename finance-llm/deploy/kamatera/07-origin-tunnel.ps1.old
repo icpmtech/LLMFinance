@@ -1,0 +1,194 @@
+#requires -Version 5.1
+<#
+.SYNOPSIS
+    Tunel SSH reverso PC -> VM do edge. Substitui o quick tunnel do Cloudflare.
+
+.DESCRIPTION
+    Publica a stack local (127.0.0.1:4180) no loopback da VM Kamatera:
+
+        ssh -N -R 127.0.0.1:8080:127.0.0.1:4180 root@45.147.251.188
+
+    O Caddy do edge faz `reverse_proxy http://127.0.0.1:8080`, pelo que
+    https://sabemos.studio serve a SPA + API **sem Cloudflare** e com um
+    endereco que nunca muda (ao contrario do quick tunnel, que morria e
+    obrigava a propagar um hostname novo a cada queda).
+
+    O script corre em ciclo: se a ligacao cair (a rede para esta VM e
+    intermitente), volta a ligar sozinho. Com `-InstallTask` fica registado
+    como tarefa agendada do utilizador - arranca com a sessao e sobrevive a
+    reinicios do PC.
+
+.PARAMETER InstallTask
+    Instala o arranque automatico (pasta Startup do utilizador; tenta tambem
+    uma tarefa agendada) e arranca o tunel ja.
+
+.PARAMETER RemoveTask
+    Para o tunel e remove o arranque automatico.
+
+.EXAMPLE
+    .\07-origin-tunnel.ps1 -InstallTask     # instalar (recomendado)
+    .\07-origin-tunnel.ps1                  # correr em primeiro plano (depuracao)
+    .\07-origin-tunnel.ps1 -RemoveTask      # desinstalar
+#>
+[CmdletBinding()]
+param(
+    [string]$SshHost = '45.147.251.188',
+    [string]$SshUser = 'root',
+    [string]$SshKey = "$env:USERPROFILE\.ssh\iqos_kamatera_ed25519",
+    [int]$RemotePort = 8080,
+    [int]$LocalPort = 4180,
+    [int]$RetrySeconds = 5,
+    # Antes de cada (re)ligacao, libertar a porta remota se ficou presa numa
+    # sessao morta (o sshd so liberta o listen quando detecta o cliente morto).
+    [bool]$CleanRemotePort = $true,
+    [string]$LogFile = "$env:TEMP\iqos-origin-tunnel.log",
+    # LogLevel do ssh. `VERBOSE` escreve a negociacao toda - util para diagnostico.
+    [string]$SshLogLevel = 'ERROR',
+    [switch]$InstallTask,
+    [switch]$RemoveTask
+)
+
+$ErrorActionPreference = 'Continue'
+$TaskName = 'IQOS Origin Tunnel'
+$script = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) '07-origin-tunnel.ps1'
+$startupDir = [Environment]::GetFolderPath('Startup')
+$launcher = Join-Path $startupDir 'IQOS Origin Tunnel.cmd'
+
+function Write-Log {
+    param([string]$Message)
+    $line = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $Message"
+    Write-Host $line
+    try { Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue } catch { }
+}
+
+# O stderr do ssh vai para ficheiro (ver o comentario no loop).
+$sshLogFile = "$env:TEMP\iqos-origin-tunnel.ssh.log"
+
+if ($RemoveTask) {
+    Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+    if (Test-Path $launcher) { Remove-Item -Force $launcher }
+    Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" |
+        Where-Object { $_.CommandLine -like '*07-origin-tunnel*' } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Write-Host 'arranque automatico e tunel removidos'
+    return
+}
+
+if ($InstallTask) {
+    # 1. Arranque automatico com a sessao: um .cmd na pasta Startup do
+    #    utilizador. Ao contrario de uma tarefa agendada, nao precisa de
+    #    elevacao - que nesta maquina e negada (0x80070005).
+    $cmd = "@echo off`r`nrem Tunel SSH reverso PC -> VM do edge (sabemos.studio).`r`npowershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script`"`r`n"
+    Set-Content -Path $launcher -Value $cmd -Encoding ascii
+    Write-Host "arranque automatico instalado: $launcher"
+
+    # 2. Tarefa agendada (opcional, so se houver permissoes): e mais robusta
+    #    do que a pasta Startup, mas exige elevacao.
+    try {
+        $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
+            -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script`""
+        $trigger = New-ScheduledTaskTrigger -AtLogOn
+        $settings = New-ScheduledTaskSettingsSet `
+            -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
+            -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
+            -ExecutionTimeLimit ([TimeSpan]::Zero)
+        Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
+            -Settings $settings -Force -ErrorAction Stop | Out-Null
+        Write-Host "tarefa agendada '$TaskName' instalada"
+    }
+    catch {
+        Write-Host "sem permissoes para tarefa agendada; fica o arranque pela pasta Startup" -ForegroundColor DarkGray
+    }
+
+    # 3. Arrancar ja (sem bloquear este terminal).
+    Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden `
+        -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $script)
+    Write-Host 'tunel arrancado em segundo plano'
+    return
+}
+
+function Test-LocalPort {
+    param([int]$Port)
+    $client = New-Object Net.Sockets.TcpClient
+    try {
+        # O `ConnectAsync` sem await: o `Wait(ms)` devolve $false no timeout.
+        if (-not $client.ConnectAsync('127.0.0.1', $Port).Wait(2000)) { return $false }
+        return $client.Connected
+    }
+    catch { return $false }
+    finally { $client.Dispose() }
+}
+
+$sshArgs = @(
+    '-i', $SshKey,
+    '-N', '-T',
+    '-o', 'BatchMode=yes',
+    # Se a porta remota ja estiver ocupada (sessao anterior presa no servidor),
+    # sair de imediato em vez de ficar "ligado" sem tunel nenhum.
+    '-o', 'ExitOnForwardFailure=yes',
+    '-o', 'ConnectTimeout=10',
+    # Tolerar blackouts curtos da rede (a ligacao a esta VM oscila): 4 x 15 s = 60 s.
+    '-o', 'ServerAliveInterval=15',
+    '-o', 'ServerAliveCountMax=4',
+    '-o', 'TCPKeepAlive=yes',
+    '-o', 'StrictHostKeyChecking=accept-new',
+    '-o', "LogLevel=$SshLogLevel",
+    '-R', "127.0.0.1:${RemotePort}:127.0.0.1:${LocalPort}",
+    "$SshUser@$SshHost"
+)
+
+Write-Log "tunel: VM 127.0.0.1:$RemotePort  ->  PC 127.0.0.1:$LocalPort  ($SshUser@$SshHost)"
+
+# Uma so instancia: duas a lutar pela mesma porta remota nunca estabiliza.
+$mutex = New-Object Threading.Mutex($false, 'Global\IQOS-Origin-Tunnel')
+if (-not $mutex.WaitOne(0)) {
+    Write-Log 'ja existe uma instancia do tunel a correr - a sair'
+    return
+}
+
+# Comando corrido na VM antes de ligar: mata o sshd que ficou com a porta 8080
+# presa numa sessao anterior morta. Sem isto o `-R` falha com
+# "remote port forwarding failed for listen port 8080".
+$cleanCommand = 'pids=$(ss -ltnpH "sport = :' + $RemotePort + '" 2>/dev/null | grep -o "pid=[0-9]*" | cut -d= -f2); [ -n "$pids" ] && kill $pids 2>/dev/null; exit 0'
+
+while ($true) {
+    # 1. Sem a stack local a servir 4180 nao vale a pena abrir o tunel.
+    if (-not (Test-LocalPort -Port $LocalPort)) {
+        Write-Log "stack local nao responde em 127.0.0.1:$LocalPort - a esperar $RetrySeconds s"
+        Start-Sleep -Seconds $RetrySeconds
+        continue
+    }
+
+    # 2. (Re)abre o tunel.
+    #
+    #    O `ssh` corre como **processo separado**, com o stderr para ficheiro.
+    #    Invocar diretamente (`& ssh ... 2>&1 | ...`) fazia a sessao morrer ao
+    #    fim de ~30-45 s nesta maquina; assim a ligacao mantem-se (testado: 150 s).
+    Write-Log 'a ligar o tunel...'
+    Remove-Item $sshLogFile -Force -ErrorAction SilentlyContinue
+    $proc = Start-Process ssh -ArgumentList $sshArgs -PassThru -NoNewWindow `
+        -RedirectStandardError $sshLogFile
+    Write-Log "ssh pid $($proc.Id)"
+    $proc.WaitForExit()
+    $code = $proc.ExitCode
+
+    $text = (Get-Content $sshLogFile -Raw -ErrorAction SilentlyContinue)
+    if ($text) {
+        foreach ($line in ($text -split "`r?`n")) {
+            if ($line.Trim()) { Write-Log "  ssh: $($line.Trim())" }
+        }
+    }
+
+    # Se o sshd do servidor ficou com a porta presa numa sessao morta, o `-R`
+    # falha de imediato. Nesse caso (e so nesse) vale a pena matar o sshd
+    # orfao; fazer isto sempre arriscava derrubar um tunel saudavel.
+    if ($CleanRemotePort -and $text -match 'forwarding failed') {
+        Write-Log 'porta remota presa numa sessao morta - a libertar'
+        & ssh -i $SshKey -o BatchMode=yes -o ConnectTimeout=8 -o LogLevel=ERROR `
+            "$SshUser@$SshHost" $cleanCommand 2>&1 | Out-Null
+    }
+
+    Write-Log "tunel caiu (exit $code), a repetir em $RetrySeconds s"
+    Start-Sleep -Seconds $RetrySeconds
+}

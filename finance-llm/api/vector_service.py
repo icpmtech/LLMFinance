@@ -130,20 +130,38 @@ async def _encode_texts_async(texts: Sequence[str], model_name: str = DEFAULT_MO
     return await loop.run_in_executor(None, _encode_texts, texts, model_name)
 
 
+# Campos que os `text_fn` precisam de ler. Pedir o documento inteiro num índice de
+# milhões de contratos multiplica o tráfego e a memória sem necessidade.
+_SOURCE_FIELDS: Dict[str, List[str]] = {
+    CONTRACTS_INDEX: [
+        "objectoContrato",
+        "descContrato",
+        "fundamentacao",
+        "search_text",
+        "adjudicantes",
+        "adjudicatarios",
+        "cpv",
+    ],
+    ENTITIES_INDEX: ["name", "country"],
+}
+
+
 def _fetch_missing_embeddings(index: str, text_fn, batch_size: int = 64):
     """Yield batches de (doc_id, text) para documentos sem embedding."""
     es = get_es_client()
     if not es:
         return
+    scroll_id: Optional[str] = None
     try:
         resp = es.search(
             index=index,
             body={
                 "query": {"bool": {"must_not": {"exists": {"field": "embedding"}}}},
-                "_source": True,
+                "_source": _SOURCE_FIELDS.get(index, True),
+                "stored_fields": [],
                 "size": batch_size,
             },
-            scroll="2m",
+            scroll="5m",
         )
         scroll_id = resp.get("_scroll_id")
         while scroll_id and resp["hits"]["hits"]:
@@ -156,12 +174,16 @@ def _fetch_missing_embeddings(index: str, text_fn, batch_size: int = 64):
                     batch.append((hit["_id"], text))
             if batch:
                 yield batch
-            resp = es.scroll(scroll_id=scroll_id, scroll="2m")
+            resp = es.scroll(scroll_id=scroll_id, scroll="5m")
             scroll_id = resp.get("_scroll_id")
-        if scroll_id:
-            es.clear_scroll(scroll_id=scroll_id)
     except Exception as e:
         logger.error("Error fetching missing embeddings from %s: %s", index, e)
+    finally:
+        if scroll_id:
+            try:
+                es.clear_scroll(scroll_id=scroll_id)
+            except Exception:  # pragma: no cover - limpeza best-effort
+                pass
 
 
 def index_missing_embeddings(

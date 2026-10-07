@@ -6,7 +6,7 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any, List, Optional, Union
+from typing import Annotated, Any, Dict, List, Optional, Tuple, Union
 
 
 def _carregar_env_do_projeto() -> None:
@@ -47,6 +47,8 @@ from api.models import (
     ChatRequest,
     ChatResponse,
     ContractAnalyticsRequest,
+    TranslateRequest,
+    TranslateResponse,
     ContractAnalyticsResponse,
     ContractAnalyzeRequest,
     ContractAutocompleteResponse,
@@ -144,6 +146,7 @@ from api.models import (
     TickerHistoryResponse,
     TickerInfoResponse,
     TickerSearchResponse,
+    TickerTranslationResponse,
     TrademarkIngestRequest,
     TrademarkIngestResponse,
     TrademarkItem,
@@ -151,7 +154,8 @@ from api.models import (
     TrademarkSearchResponse,
     YahooSearchResult,
 )
-from api.agent import run_chat, stream_chat
+from api.agent import generate_answer, run_chat, stream_chat
+from api import cloud_chat, providers_service as providers
 from api.elasticsearch_ingest import (
     get_elastic_status,
     ingest_ticker_all,
@@ -193,9 +197,11 @@ from api.elasticsearch_client import (
     list_entity_countries,
     list_elastic_indices,
     list_favorites,
+    load_ticker_translation,
     save_favorite,
     save_folder,
     save_history,
+    save_ticker_translation,
     search_all_tickers,
     search_companies,
     get_company_analytics,
@@ -276,6 +282,7 @@ from api.visualizador_routes import router as visualizador_router
 from api.researcher_routes import router as researcher_router
 from api.vector_routes import router as vector_router
 from api.agent_routes import router as agent_router
+from api.deep_search_routes import router as deep_search_router
 from api.companies_global_routes import router as companies_global_router
 from api.societario_routes import router as societario_router
 # Recolha massiva de dados societários: alvos por ano de contrato/empresa,
@@ -577,6 +584,7 @@ app.include_router(search_analysis_router)
 app.include_router(email_router)
 app.include_router(visualizador_router)
 app.include_router(researcher_router)
+app.include_router(deep_search_router)
 app.include_router(vector_router)
 app.include_router(agent_router)
 app.include_router(companies_global_router)
@@ -1531,6 +1539,7 @@ def entities_report_pdf(nif: str):
 @app.get("/search360/grafo")
 @app.get("/search360/biblioteca")
 @app.get("/hermes")
+@app.get("/deep-search")
 @app.get("/office")
 @app.get("/office/documentos")
 @app.get("/office/dossies")
@@ -1668,6 +1677,106 @@ async def chat_stream_get(
             skill=skill["public"],
         ),
         media_type="text/event-stream",
+    )
+
+
+async def _translate_text(
+    text: str,
+    backend: str,
+    user_id: Optional[str],
+    user_email: Optional[str],
+    target_language: str = "pt-PT",
+    instruction: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Traduz um texto usando o backend de chat escolhido.
+
+    Usa sempre o caminho de chat completions (OpenAI-compatible ou Ollama nativo)
+    para evitar o contexto financeiro/especializado do agente de tickers.
+    """
+    parsed = providers.parse_backend(backend)
+    target = (target_language or "pt-PT").strip() or "pt-PT"
+    task = (
+        instruction
+        or f"Translate the following text into {target}. Return ONLY the translation, nothing else."
+    )
+    prompt = f"{task}\n\n```\n{text}\n```\n\nTranslation:"
+
+    if parsed["kind"] == "cloud":
+        spec = parsed.get("spec") or {}
+        api_key, _ = providers.resolve_key(user_id, parsed["provider"])
+        # Usa chave vazia quando o fornecedor a torna opcional (ex.: Ollama local).
+        if not api_key and spec.get("key_optional"):
+            api_key = ""
+        answer = await cloud_chat.complete_answer(
+            provider=parsed["provider"],
+            spec=spec,
+            model=parsed["model"],
+            messages=[{"role": "user", "content": prompt}],
+            api_key=api_key,
+            temperature=0.1,
+            max_tokens=max(512, min(4096, len(text) + 256)),
+        )
+        return {"translation": answer.strip(), "backend": backend, "model": f"{parsed['provider']}:{parsed['model']}"}
+
+    # Modelos locais da plataforma (gpt2, mistral, bloomberg) — tradução simples.
+    local_prompt = f"Translate the following text to {target}. Return ONLY the translation, no explanations:\n\n{text}"
+    answer = generate_answer({"question": local_prompt, "stock": None, "sources": [], "tools": []}, backend=backend)
+    return {"translation": answer.strip(), "backend": backend, "model": f"finance-llm-{backend}"}
+
+
+@app.post("/translate", response_model=TranslateResponse)
+async def translate(req: TranslateRequest, session: Any = Depends(optional_session)):
+    """Traduz um texto para o idioma indicado usando o backend de IA escolhido."""
+    user_id = getattr(getattr(session, "user", None), "id", None)
+    user_email = getattr(getattr(session, "user", None), "email", None)
+    try:
+        result = await _translate_text(
+            req.text,
+            req.backend,
+            user_id,
+            user_email,
+            target_language=req.target_language,
+            instruction=req.instruction,
+        )
+    except cloud_chat.CloudError as error:
+        raise HTTPException(status_code=502, detail=error.message) from error
+    except Exception as error:
+        logger.exception("Erro na tradução")
+        raise HTTPException(status_code=500, detail=f"Não foi possível traduzir: {error}") from error
+    response = TranslateResponse(**result)
+    # Guardar a tradução no Elastic quando vem de um ticker conhecido.
+    ticker = getattr(req, "ticker", None)
+    if ticker:
+        save_ticker_translation(
+            ticker,
+            original_text=req.text,
+            translated_text=response.translation,
+            target_language=req.target_language,
+            backend=response.backend,
+            model=response.model,
+        )
+    return response
+
+
+@app.get("/translate/{ticker}", response_model=TickerTranslationResponse)
+def get_ticker_translation(ticker: str):
+    """Devolve a tradução guardada de um resumo de ticker, se existir."""
+    try:
+        data = load_ticker_translation(ticker)
+    except Exception as error:
+        logger.exception("Erro ao carregar tradução guardada")
+        raise HTTPException(status_code=500, detail=f"Erro ao carregar tradução: {error}") from error
+    if not data:
+        raise HTTPException(status_code=404, detail="Não existe tradução guardada para este ticker")
+    return TickerTranslationResponse(
+        ticker=data.get("ticker", ticker.upper()),
+        original_text=data.get("original_text"),
+        translated_text=data.get("translated_text"),
+        target_language=data.get("target_language", "pt-PT"),
+        backend=data.get("backend", ""),
+        model=data.get("model", ""),
+        created_at=data.get("created_at"),
+        updated_at=data.get("updated_at"),
     )
 
 

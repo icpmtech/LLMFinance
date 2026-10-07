@@ -77,7 +77,7 @@ services:
     image: iq-os-backend:latest
     container_name: finance-llm-backend
     ports:
-      - "${FINANCE_API_PORT:-8003}:8000"
+      - "${FINANCE_API_PORT:-8002}:8000"
     volumes:
       - ./data:/app/data
       - ./model:/app/model

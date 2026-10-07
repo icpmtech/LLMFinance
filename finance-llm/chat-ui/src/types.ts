@@ -159,6 +159,32 @@ export interface ChatResponse {
   skill?: SkillRef | null;
 }
 
+export interface TranslateRequest {
+  text: string;
+  backend?: ModelBackend;
+  target_language?: string;
+  instruction?: string;
+  ticker?: string;
+}
+
+export interface TranslateResponse {
+  translation: string;
+  backend: string;
+  model: string;
+}
+
+export interface TickerTranslationResponse {
+  ticker: string;
+  original_text?: string;
+  translated_text?: string;
+  target_language?: string;
+  backend?: string;
+  model?: string;
+  created_at?: string;
+  updated_at?: string;
+  error?: string;
+}
+
 export interface YahooSearchResult {
   symbol: string;
   name?: string;

@@ -11,7 +11,7 @@ Estado deste deploy (2026-10-06):
 | Preco | **6 USD/mes** (hourly: 0.008 USD/h) |
 | Docker | Engine 29.8.2 + Compose v5.6.0 |
 | Dominio publico | https://sabemos.studio |
-| Origem publica (PC) | quick tunnel Cloudflare (ver `origin-url.txt`) |
+| Origem (PC) | **tunel SSH reverso** em Docker (`iqos-origin-tunnel`) |
 
 Verificacao ponta-a-ponta (do PC, via internet):
 
@@ -31,18 +31,20 @@ Verificacao ponta-a-ponta (do PC, via internet):
                               |
               +-------------------------------+
               | VM Kamatera (EU-MD, 6 USD/mes)|
-              |   iqos-caddy   (Caddy)        |   portas 80/443
+              |   iqos-caddy   (Caddy)        |   portas 80/443, network_mode: host
               |     Let's Encrypt automatico  |
+              |     reverse_proxy 127.0.0.1:8080
               +-------------------------------+
                               |
-     https://<aleatorio>.trycloudflare.com
+                 tunel SSH reverso (PC inicia)
+                 ssh -R 127.0.0.1:8080:127.0.0.1:4180
                               |
               +-------------------------------+
               | PC (stack IQ OS completa)     |
+              |   iqos-origin-tunnel (Docker) |   cliente ssh do tunel
               |   finance-llm-frontend :4180  |   nginx da stack (SPA + /api)
-              |   finance-llm-backend  :8003  |   FastAPI
+              |   finance-llm-backend  :8002  |   FastAPI
               |   finance-llm-elasticsearch   |
-              |   iqos-origin-tunnel  (cloudflared)
               +-------------------------------+
 ```
 
@@ -51,19 +53,24 @@ Porque e que a stack **nao** corre na VM: a maquina mais barata da Kamatera tem
 modelos. A VM fica como **ponto de entrada publico com TLS proprio**
 (Caddy + Let's Encrypt) e os dados ficam no PC.
 
+Porque e que **nao ha Cloudflare**: o quick tunnel era efemero (o hostname mudava
+e o tunel morria com o container `Up`, deixando o site em 502/Error 1033).
+O tunel SSH reverso nao tem terceiros pelo meio, tem um endereco fixo e o
+proprio container religa sozinho quando a ligacao cai.
+
 ## Ficheiros
 
 | Ficheiro | Onde corre | Para que serve |
 | --- | --- | --- |
 | `01-provision-vm.sh` | VM | Instala Docker Engine + Compose e cria 2 GB de swap |
-| `02-publish-origin.ps1` | PC | Sobe origem + tunel (Docker) e guarda `origin-url.txt` |
-| `03-configure-edge.ps1` | PC | Envia o `05` para a VM e aplica o hostname da origem |
-| `04-verify.ps1` | PC | Verifica origem, edge e endereco publico |
-| `05-edge-up.sh` | VM | Swap + `edge.env` + `Caddyfile` + `docker compose up` do edge |
-| `06-refresh-cloudflare.ps1` | PC | Renova o tunel de origem (se cair) e reaplica a origem no edge |
+| `03-configure-edge.ps1` | PC | Envia o `05` + `edge/Caddyfile` + `edge/compose.yml` para a VM e arranca o edge |
+| `04-verify.ps1` | PC | Verifica stack local, tunel SSH, containers do edge e endereco publico |
+| `05-edge-up.sh` | VM | Swap + afina o sshd + `docker compose up` do edge |
+| `07-origin-tunnel.ps1` | PC | Sobe/para o tunel SSH reverso (Docker) e instala o arranque automatico |
 | `00-push-file.ps1` | PC | Envia um ficheiro para a VM (ssh + base64, sem scp) |
-| `origin/` | PC | tunel Cloudflare (+ nginx de origem minima, perfil `lite`) |
-| `edge/` | VM | Caddy (HTTPS proprio) proxy para o quick tunnel de origem |
+| `00-keep-awake.ps1` | PC | Impede o PC de adormecer (a origem cai se ele dormir) |
+| `origin/` | PC | tunel SSH reverso: `Dockerfile`, `tunnel.sh`, `compose.yml` |
+| `edge/` | VM | Caddy (HTTPS proprio) `reverse_proxy` para `127.0.0.1:8080` + pagina offline |
 
 ## Arranque (passo a passo)
 
@@ -78,8 +85,8 @@ ssh -i "$env:USERPROFILE\.ssh\iqos_kamatera_ed25519" root@45.147.251.188 "bash /
 
 # 2. DNS: apontar @ e www para o IP da VM (45.147.251.188)
 
-# 3. Publicar a origem local (tunel em Docker, sobrevive ao terminal)
-powershell -File deploy\kamatera\02-publish-origin.ps1
+# 3. Publicar a origem local (tunel SSH reverso em Docker)
+powershell -File deploy\kamatera\07-origin-tunnel.ps1 -InstallTask
 
 # 4. Aplicar no edge da VM
 powershell -File deploy\kamatera\03-configure-edge.ps1
@@ -101,16 +108,39 @@ powershell -File deploy\kamatera\04-verify.ps1
 - **Sem swap a VM de 2 GB bloqueia o proprio sshd**: depois de instalar o Docker
   o handshake SSH parava no `SSH2_MSG_KEXINIT` sem erro. O `05-edge-up.sh` cria
   2 GB de swap (idempotente) e o problema nao voltou.
-- **O hostname do quick tunnel muda a cada recriacao do container.** Sempre que
-  o tunel de origem for recriado, correr o `03-configure-edge.ps1` (ou, de uma vez,
-  o `06-refresh-cloudflare.ps1`) .
-- **Um quick tunnel pode morrer com o container `Up`**: o Cloudflare reclama-o e os
-  logs repetem `ERR Register tunnel error ... "Unauthorized: Tunnel not found"`.
-  O endereco deixa de existir e o edge passa a devolver 502. Remedio:
-  `06-refresh-cloudflare.ps1` (recria o tunel e reaplica a origem).
-- **Agora o dominio proprio e servido pelo VM**, nao por um quick tunnel publico.
-  As portas 80/443 tem de estar abertas no firewall da Kamatera, senao o Let's
-  Encrypt e o trafego HTTPS falham.
+- **O hostname do quick tunnel mudava a cada recriacao** e o tunel morria com o
+  container `Up` (`Unauthorized: Tunnel not found`), deixando o site em 502
+  (Error 1033 no browser). Foi por isso que o Cloudflare foi **removido**: ver
+  a seccao do tunel SSH reverso abaixo.
+- **Um `ssh -N -R` lancado por PowerShell nao se aguenta**: morria ao fim de
+  7-45 s em silencio (sem mensagem no journal do sshd da VM), deixando o listen
+  8080 preso na VM e as religacoes a falhar com
+  `remote port forwarding failed for listen port 8080`. Curiosamente, uma sessao
+  `ssh` normal sobrevivia 150 s e uma `-R` isolada tambem — so com trafego real
+  e em contexto PowerShell e que caia. **Solucao: correr o tunel num container
+  Docker** (`origin/`), com o ciclo de religacao dentro do `tunnel.sh`.
+- **A porta remota do `-R` fica presa** se a sessao morrer sem FIN. O
+  `tunnel.sh` liberta-a na VM antes de religar, e o `05-edge-up.sh` afina o sshd
+  (`ClientAliveInterval 15` / `ClientAliveCountMax 3`) para o proprio servidor
+  largar clientes mortos em ~45 s.
+- **O Caddy do edge tem de correr com `network_mode: host`**: o tunel SSH
+  liga-se ao loopback **da VM**; com a bridge por omissao, `127.0.0.1` seria o
+  loopback do container e o proxy nunca chegava ao tunel.
+- **O healthcheck do Caddy nao pode testar o site publico**: um pedido a
+  `http://127.0.0.1/healthz` leva 308 (redirect http->https) e o container
+  ficava marcado `unhealthy` para sempre. Testar a API de administracao:
+  `wget -q -O /dev/null http://127.0.0.1:2019/config/`.
+- **Ficheiros `.sh`/`Dockerfile` criados no Windows vao com CRLF** e partem o
+  shell (um `\r` colado ao fim da linha estraga redirecoes). Normalizar com
+  `sed -i 's/\r$//'` no build ou no envio (`03-configure-edge.ps1`).
+- **Nao usar `—` nem acentos dentro de strings em `.ps1`**: o PowerShell 5.1 le
+  o ficheiro como CP1252, o 3.o byte do travessao (0x94) vira aspa e a string
+  fecha a meio. Em comentarios passa; em strings rebenta o script.
+- **Registar uma tarefa agendada exige elevacao** nesta maquina
+  (`Access is denied`, 0x80070005). O arranque automatico do tunel usa a pasta
+  `Startup` do utilizador, que nao precisa de permissoes.
+- **O dominio proprio e servido pelo VM** (Caddy + Let's Encrypt), nao por um
+  quick tunnel. As portas 80/443 tem de estar abertas no firewall da Kamatera.
 - **O ssh pode bloquear-se no handshake** (KEXINIT sem resposta) e ficar pendurado
   para sempre. Alem de `ConnectTimeout`, usar `ServerAliveInterval=5`,
   `ServerAliveCountMax=2` e `-n` (nao encaminhar o stdin local): assim uma sessao
@@ -122,8 +152,8 @@ powershell -File deploy\kamatera\04-verify.ps1
   ambos a correr: o nginx de origem fica no perfil `lite` e nao arranca por
   omissao.
 - **O tunel tem de correr em Docker** (e nao como processo solto do PowerShell):
-  um `Start-Process` morre quando o terminal que o lancou e fechado e o endereco
-  publico deixa de responder.
+  um `Start-Process` morre quando o terminal que o lancou e fechado — e, no caso
+  do `ssh -R`, morria mesmo com o terminal aberto.
 - `NGINX_ENVSUBST_FILTER` e obrigatorio nos templates do nginx, senao o
   `envsubst` do entrypoint limpa `$host`, `$remote_addr`, etc.
 - No proxy `/api/` -> `${BACKEND_ORIGIN}/` a **barra final e essencial**: e o que
@@ -137,20 +167,28 @@ powershell -File deploy\kamatera\04-verify.ps1
 ## Operacao
 
 ```bash
-# estado do edge
-ssh -n root@45.147.251.188 "docker ps; docker logs iqos-tunnel | tail -5"
+# estado do edge (VM) e do tunel (PC)
+ssh root@45.147.251.188 "docker ps; ss -ltn | grep 8080"
+docker logs --tail 20 iqos-origin-tunnel
 
-# reiniciar o edge depois de mudar a origem
-ssh root@45.147.251.188 "bash /opt/iqos/05-edge-up.sh <novo-hostname>"
+# reiniciar o edge depois de mudar a configuracao
+powershell -File deploy\kamatera\03-configure-edge.ps1
 
 # parar tudo no edge
 ssh root@45.147.251.188 "cd /opt/iqos/edge && docker compose down"
+
+# parar o tunel de origem (PC)
+powershell -File deploy\kamatera\07-origin-tunnel.ps1 -RemoveTask
 ```
+
+Se o site mostrar a pagina "temporariamente indisponivel", o tunel caiu: ver
+`docker logs iqos-origin-tunnel`. O container religa sozinho; se insistir,
+reconstruir com `07-origin-tunnel.ps1`.
 
 ## Custos e proximos passos
 
-- VM: **6 USD/mes**. Certificados Let's Encrypt: gratuitos. Quick tunnel de
-  origem: gratuito. Portas 80/443 abertas no firewall Kamatera.
+- VM: **6 USD/mes**. Certificados Let's Encrypt: gratuitos. Tunel SSH de origem:
+  gratuito e sem terceiros. Portas 80/443 abertas no firewall Kamatera.
 - O PC nao pode adormecer (a origem cai):
   `powershell -File deploy\kamatera\00-keep-awake.ps1` — ja aplicado (suspensao,
   hibernacao e desligar do ecra a "nunca", AC e DC, esquema Balanced).

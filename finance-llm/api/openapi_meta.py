@@ -81,7 +81,7 @@ CONTACT: Dict[str, Any] = {"name": "IQ OS", "url": "http://127.0.0.1:8002/docs"}
 LICENSE_INFO: Dict[str, Any] = {"name": "Proprietário — uso interno"}
 
 SERVERS: List[Dict[str, Any]] = [
-    {"url": "http://127.0.0.1:8002", "description": "Backend local (uvicorn)"},
+    {"url": "http://127.0.0.1:8002", "description": "Backend local (uvicorn / Docker)"},
     {"url": "http://127.0.0.1:8003", "description": "Backend local (porta alternativa)"},
 ]
 

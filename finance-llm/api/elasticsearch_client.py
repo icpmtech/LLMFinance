@@ -118,6 +118,9 @@ ENTITIES_INDEX = "finance_entities"
 # Evita depender do localStorage do browser, que se perde ao mudar de origem/porta ou ao limpar dados.
 USER_STATE_INDEX = "finance_user_state"
 
+# Índice para traduções de resumos de tickers (originais e traduzidos por IA).
+TICKER_TRANSLATIONS_INDEX = "finance_ticker_translations"
+
 # Índice de contas de utilizador (autenticação). O `_id` do documento é o email
 # normalizado, o que garante unicidade sem necessitar de transações.
 AUTH_USERS_INDEX = "finance_users"
@@ -2142,6 +2145,19 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    ticker_translations_mappings = {
+        "properties": {
+            "ticker": {"type": "keyword", "ignore_above": 32},
+            "original_text": {"type": "text", "index": False},
+            "translated_text": {"type": "text", "index": False},
+            "target_language": {"type": "keyword", "ignore_above": 16},
+            "backend": {"type": "keyword", "ignore_above": 120},
+            "model": {"type": "keyword", "ignore_above": 120},
+            "created_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
     osint_mappings = {
         "properties": {
             "target": {"type": "keyword", "ignore_above": 120},
@@ -2214,6 +2230,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (DEVEDORES_INDEX, devedores_mappings),
         (DEVEDORES_RECOLHAS_INDEX, devedores_recolhas_mappings),
         (OSINT_INDEX, osint_mappings),
+        (TICKER_TRANSLATIONS_INDEX, ticker_translations_mappings),
     ]:
         if not client.indices.exists(index=name):
             settings: Dict[str, Any] = {"number_of_shards": 1, "number_of_replicas": 0}
@@ -9304,6 +9321,64 @@ def save_history(items: List[Dict[str, Any]], es: Optional[Elasticsearch] = None
         return {"ok": True, "count": len(items)}
     except Exception as exc:
         return {"error": str(exc)}
+
+
+def save_ticker_translation(
+    ticker: str,
+    original_text: str,
+    translated_text: str,
+    target_language: str = "pt-PT",
+    backend: str = "",
+    model: str = "",
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Guarda ou atualiza a tradução de um resumo de ticker no Elasticsearch."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    ensure_indices(client)
+    now = _today()
+    source = {
+        "ticker": ticker.upper(),
+        "original_text": original_text,
+        "translated_text": translated_text,
+        "target_language": target_language,
+        "backend": backend,
+        "model": model,
+        "updated_at": now,
+    }
+    try:
+        # Verifica se já existe para preservar created_at original.
+        try:
+            resp = client.get(index=TICKER_TRANSLATIONS_INDEX, id=ticker.upper())
+            existing = resp.get("_source") or {}
+            source["created_at"] = existing.get("created_at") or now
+        except Exception:
+            source["created_at"] = now
+
+        client.index(
+            index=TICKER_TRANSLATIONS_INDEX,
+            id=ticker.upper(),
+            document=source,
+            refresh=True,
+        )
+        return {"ticker": ticker.upper(), "saved": True}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def load_ticker_translation(ticker: str, es: Optional[Elasticsearch] = None) -> Optional[Dict[str, Any]]:
+    """Carrega a tradução guardada de um ticker, se existir."""
+    client = es or get_es_client()
+    if not client:
+        return None
+    ensure_indices(client)
+    try:
+        resp = client.get(index=TICKER_TRANSLATIONS_INDEX, id=ticker.upper())
+        return resp.get("_source")
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------

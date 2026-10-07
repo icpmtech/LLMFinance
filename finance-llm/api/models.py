@@ -164,6 +164,32 @@ class ChatResponse(BaseModel):
     skill: Optional[SkillRef] = None
 
 
+class TranslateRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=8000)
+    backend: str = "gpt2"
+    target_language: str = "pt-PT"
+    instruction: Optional[str] = None
+    ticker: Optional[str] = None
+
+
+class TranslateResponse(BaseModel):
+    translation: str
+    backend: str
+    model: str
+
+
+class TickerTranslationResponse(BaseModel):
+    ticker: str
+    original_text: Optional[str] = None
+    translated_text: Optional[str] = None
+    target_language: str = "pt-PT"
+    backend: str = ""
+    model: str = ""
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    error: Optional[str] = None
+
+
 class ForecastRequest(BaseModel):
     ticker: str
     future_days: int = 5

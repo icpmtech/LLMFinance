@@ -121,6 +121,7 @@ export type AppView =
   | "cli"
   | "contracts-list"
   | "contratos-es"
+  | "deep-search"
   | "researcher";
 
 type NavItem = { id: AppView; label: string; icon: React.ReactNode; match?: AppView[]; keywords?: string; adminOnly?: boolean };

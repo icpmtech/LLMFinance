@@ -1,56 +1,32 @@
-# Origem local do IQ OS + tunel Cloudflare (quick tunnel).
+# Origem do IQ OS sem Cloudflare: tunel SSH reverso PC -> VM do edge.
 #
-# O servico `tunnel` publica a stack que corre no PC com TLS gratuito:
-#   https://<aleatorio>.trycloudflare.com  ->  http://host.docker.internal:4180
+# O container publica a stack que corre neste PC (127.0.0.1:4180) no loopback
+# da VM (`127.0.0.1:8080`); o Caddy dessa VM faz `reverse_proxy` para la, pelo
+# que https://sabemos.studio fica servido sem depender de tuneis efemeros.
 #
-# Por omissao aponta para a stack completa (que serve 127.0.0.1:4180). Se
-# quiseres uma origem minima (so SPA + proxy /api, sem Elasticsearch), usa o
-# perfil `lite` — mas nesse caso para a stack primeiro, porque o porto 4180
-# colide:
+# O `07-origin-tunnel.ps1` escreve o `.env` (caminho da chave) e arranca isto.
 #
-#   docker compose -f deploy/kamatera/origin/compose.yml --profile lite up -d
-#
-# O tunel corre **em Docker** (e nao como processo solto): assim sobrevive ao
-# fecho do terminal e reinicia sozinho apos um reboot do PC.
-
+#   docker compose -f deploy/kamatera/origin/compose.yml up -d
+#   docker compose -f deploy/kamatera/origin/compose.yml logs -f
 services:
   tunnel:
-    image: cloudflare/cloudflared:latest
+    build: .
+    image: iqos-origin-tunnel:latest
     container_name: iqos-origin-tunnel
     restart: unless-stopped
-    # ORIGIN_TARGET permite apontar para outro porto/host.
-    command: ["tunnel", "--no-autoupdate", "--url", "${ORIGIN_TARGET:-http://host.docker.internal:4180}"]
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # Origem minima: nginx com a SPA + proxy /api para o backend Python (8002).
-  # Nao arranca por omissao (perfil `lite`).
-  origin:
-    profiles: ["lite"]
-    image: nginx:alpine
-    container_name: iqos-origin
-    restart: unless-stopped
     environment:
-      BACKEND_ORIGIN: "http://host.docker.internal:8002"
-      NGINX_ENVSUBST_FILTER: "^(BACKEND_ORIGIN)$"
+      SSH_HOST: ${SSH_HOST:-45.147.251.188}
+      SSH_USER: ${SSH_USER:-root}
+      # Nome do ficheiro da chave dentro de SSH_KEY_DIR.
+      SSH_KEY_FILE: ${SSH_KEY_FILE:-iqos_kamatera_ed25519}
+      REMOTE_PORT: ${REMOTE_PORT:-8080}
+      # A stack do PC, vista de dentro do container.
+      LOCAL_TARGET: ${LOCAL_TARGET:-host.docker.internal:4180}
+      RETRY_SECONDS: ${RETRY_SECONDS:-5}
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    ports:
-      - "127.0.0.1:4180:80"
     volumes:
-      - ./templates:/etc/nginx/templates:ro
-      - ../../../chat-ui/dist:/usr/share/nginx/html:ro
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
-      interval: 30s
-      timeout: 5s
-      start_period: 5s
-      retries: 3
+      - ${SSH_KEY_DIR}:/key:ro
     logging:
       driver: json-file
       options:

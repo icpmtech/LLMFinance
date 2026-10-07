@@ -84,6 +84,7 @@ import PadroesPage from "./pages/PadroesPage";
 import OsintPage from "./pages/OsintPage";
 import MiroFishPage from "./pages/MiroFishPage";
 import SimuladorPage from "./pages/SimuladorPage";
+import DeepSearchPage from "./pages/DeepSearchPage";
 import RiscoPage from "./pages/RiscoPage";
 import SocietarioRecolhaPage from "./pages/SocietarioRecolhaPage";
 import EmpresasRecolhaPage from "./pages/EmpresasRecolhaPage";
@@ -179,6 +180,7 @@ type AppView =
   | "osint"
   | "mirofish"
   | "simulador"
+  | "deep-search"
   | "jarvis"
   | "risco"
   | "societario"
@@ -321,6 +323,7 @@ function pathForView(
   if (view === "osint") return "/osint";
   if (view === "mirofish") return "/mirofish";
   if (view === "simulador") return "/simulador";
+  if (view === "deep-search") return "/deep-search";
   if (view === "risco") return "/empresas-risco";
   if (view === "societario") return "/societario";
   if (view === "empresas-recolha") return "/empresas-recolha";
@@ -519,6 +522,7 @@ export default function App() {
     if (path === "/padroes" || path.startsWith("/padroes/")) return "padroes";
     if (path === "/mirofish" || path.startsWith("/mirofish/")) return "mirofish";
     if (path === "/simulador" || path.startsWith("/simulador/")) return "simulador";
+    if (path === "/deep-search" || path.startsWith("/deep-search/")) return "deep-search";
     if (path === "/empresas-risco" || path.startsWith("/empresas-risco/")) return "risco";
     if (path === "/societario" || path.startsWith("/societario/")) return "societario";
     if (path === "/empresas-recolha" || path.startsWith("/empresas-recolha/")) return "empresas-recolha";
@@ -638,6 +642,7 @@ export default function App() {
       else if (path === "/osint" || path.startsWith("/osint/")) next = "osint";
       else if (path === "/mirofish" || path.startsWith("/mirofish/")) next = "mirofish";
       else if (path === "/simulador" || path.startsWith("/simulador/")) next = "simulador";
+      else if (path === "/deep-search" || path.startsWith("/deep-search/")) next = "deep-search";
       else if (path === "/empresas-risco" || path.startsWith("/empresas-risco/")) next = "risco";
       else if (path === "/societario" || path.startsWith("/societario/")) next = "societario";
       else if (path === "/empresas-recolha" || path.startsWith("/empresas-recolha/")) next = "empresas-recolha";
@@ -1348,6 +1353,7 @@ export default function App() {
     if (target === "osint") return <OsintPage />;
     if (target === "mirofish") return <MiroFishPage />;
     if (target === "simulador") return <SimuladorPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
+    if (target === "deep-search") return <DeepSearchPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
     if (target === "risco") return <RiscoPage />;
     if (target === "societario") return <SocietarioRecolhaPage />;
     if (target === "empresas-recolha") return <EmpresasRecolhaPage />;

@@ -14,7 +14,8 @@ ficheiros em `finance_publicacoes_mj`.
 - `POST   /societario/recolha/jobs`              — arranca a recolha massiva (segundo plano)
 - `GET    /societario/recolha/jobs[/{id}]`       — progresso dos trabalhos
 - `GET    /societario/recolha/exports`           — ficheiros JSON exportados
-- `GET    /societario/recolha/exports/{nif}`     — pré-visualização de um ficheiro
+- `GET    /societario/recolha/exports/{nif}`     — pré-visualização de um ficheiro (200 com
+  `exists=false` quando ainda não há ficheiro: é o estado normal durante a recolha)
 - `POST   /societario/recolha/exports/ingest`    — indexar os JSON no Elasticsearch
 - `DELETE /societario/recolha/exports/{nif}`     — apagar um ficheiro exportado
 """
@@ -62,7 +63,10 @@ class RecolhaJobRequest(BaseModel):
     data_fim: Optional[str] = Field(None, description="Data final (AAAA-MM-DD)")
 
     # --- ritmo e captcha ---
-    min_interval: float = Field(1.0, ge=0, le=60, description="Intervalo mínimo entre pedidos ao portal (s)")
+    # 4 s é o intervalo por omissão do próprio cliente (`PublicacoesMjCaptchaClient`)
+    # e o que a UI envia. Com 1 s o portal do MJ passa a responder com a mensagem de
+    # throttling e a entidade só entra depois de gastar as tentativas todas.
+    min_interval: float = Field(4.0, ge=0, le=60, description="Intervalo mínimo entre pedidos ao portal (s)")
     rate_limit_pause: float = Field(
         90.0, ge=0, le=600, description="Pausa (s) quando o portal do MJ limita os pedidos, antes de tentar de novo"
     )
@@ -289,10 +293,22 @@ def recolha_ingest_exports(req: RecolhaIngestRequest, session: Session) -> Dict[
 
 @router.get("/exports/{nif}")
 def recolha_export(nif: str, limit_items: int = Query(20, ge=0, le=500), session: ReadSession = None) -> Dict[str, Any]:
-    """Pré-visualização do ficheiro exportado de uma entidade."""
-    res = recolha.read_export(nif, limit_items=limit_items)
-    if res.get("error"):
-        raise HTTPException(status_code=404, detail=res["error"])
+    """Pré-visualização do ficheiro exportado de uma entidade.
+
+    «Ainda não há ficheiro» **não é erro**: é o estado normal enquanto o trabalho
+    não gravou a primeira página — e a ficha da entidade consulta isto a cada 3 s
+    durante a recolha. Devolve-se 200 com `exists=false` e lista vazia (o 404
+    enchia os logs de «erro» em cada ciclo e escondia os NIFs realmente inválidos).
+    Só um ficheiro **ilegível** ou com formato inesperado continua a dar erro.
+    """
+    chave = str(nif or "").strip()
+    res = recolha.read_export(chave, limit_items=limit_items)
+    erro = str(res.get("error") or "")
+    if erro:
+        if erro.startswith("Sem ficheiro exportado"):
+            return {"nif": chave, "exists": False, "items": [], "items_total": 0, "error": None}
+        raise HTTPException(status_code=404, detail=erro)
+    res["exists"] = True
     return res
 
 

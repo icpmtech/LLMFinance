@@ -18,6 +18,7 @@ import {
   Boxes,
   Brain,
   Briefcase,
+  Binoculars,
   Building2,
   CalendarClock,
   CandlestickChart,
@@ -167,6 +168,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: BarChart3,
     gradient: "from-fuchsia-300 via-violet-500 to-indigo-600",
     accent: "139,92,246",
+  },
+  {
+    id: "deep-search",
+    label: "Pesquisa profunda",
+    hint: "Perplexity-like: pergunta e resposta do modelo com fontes citadas",
+    icon: Binoculars,
+    gradient: "from-cyan-300 via-teal-500 to-sky-600",
+    accent: "34,211,238",
   },
   {
     id: "search360",

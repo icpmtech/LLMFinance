@@ -1,12 +1,16 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-    Aplica o hostname da origem no edge da VM Kamatera (dominio proprio sabemos.studio).
+    Aplica a configuracao do edge na VM Kamatera (dominio proprio sabemos.studio).
 
 .DESCRIPTION
-    Le `origin-url.txt` (criado por 02-publish-origin.ps1), envia o
-    `05-edge-up.sh` para a VM (por ssh + base64: nesta rede o `scp` fica preso) e
-    corre-o com o hostname. No fim mostra o endereco publico fixo https://sabemos.studio.
+    Envia o `05-edge-up.sh`, o `edge/Caddyfile` e o `edge/compose.yml` para a VM
+    (por ssh + base64: nesta rede o `scp` fica preso) e corre o `05`, que arranca
+    o Caddy. No fim mostra o endereco publico fixo https://sabemos.studio.
+
+    O upstream do Caddy e `127.0.0.1:8080` da VM, onde o PC publica a stack pelo
+    tunel SSH reverso (`07-origin-tunnel.ps1`). Nao ha Cloudflare nem hostname
+    aleatorio para propagar - por isso este script ja nao le `origin-url.txt`.
 
     Todas as ligacoes SSH sao repetidas: a rede para esta VM perde ligacoes de
     forma intermitente (o SYN fica sem resposta), mas a VM esta saudavel.
@@ -24,11 +28,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$urlFile = Join-Path $here 'origin-url.txt'
-
-if (-not (Test-Path $urlFile)) { throw "Falta $urlFile. Corre primeiro 02-publish-origin.ps1." }
-$originHost = (Get-Content $urlFile -Raw).Trim()
-if ($originHost -notmatch '\.trycloudflare\.com$') { throw "Hostname de origem invalido: '$originHost'" }
 
 function Invoke-VmSsh {
     param([Parameter(Mandatory = $true)][string]$Command)
@@ -49,20 +48,20 @@ function Invoke-VmSsh {
     throw "ssh falhou apos $Attempts tentativas"
 }
 
-Write-Host "origem: $originHost"
+Write-Host "origem: tunel SSH reverso para 127.0.0.1:8080 na VM"
 
-# 1) Enviar o script de arranque do edge (base64, sem scp).
+# Enviar os ficheiros do edge (base64, sem scp).
 $setupLocal = Join-Path $here '05-edge-up.sh'
 $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($setupLocal))
 $push = "printf %s '$b64' | base64 -d > /opt/iqos/05-edge-up.sh; sed -i 's/\r$//' /opt/iqos/05-edge-up.sh; wc -c /opt/iqos/05-edge-up.sh"
 Write-Host 'a enviar 05-edge-up.sh por ssh...'
 Write-Host (Invoke-VmSsh -Command $push)
 
-# 2) Enviar o template do Caddyfile.
-$caddyLocal = Join-Path $here 'edge\Caddyfile.template'
+# O Caddyfile ja nao tem placeholders: e copiado tal e qual.
+$caddyLocal = Join-Path $here 'edge\Caddyfile'
 $caddyB64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($caddyLocal))
-$pushCaddy = "mkdir -p /opt/iqos/edge; printf %s '$caddyB64' | base64 -d > /opt/iqos/edge/Caddyfile.template; sed -i 's/\r$//' /opt/iqos/edge/Caddyfile.template; wc -c /opt/iqos/edge/Caddyfile.template"
-Write-Host 'a enviar Caddyfile.template por ssh...'
+$pushCaddy = "mkdir -p /opt/iqos/edge; printf %s '$caddyB64' | base64 -d > /opt/iqos/edge/Caddyfile; sed -i 's/\r$//' /opt/iqos/edge/Caddyfile; wc -c /opt/iqos/edge/Caddyfile"
+Write-Host 'a enviar Caddyfile por ssh...'
 Write-Host (Invoke-VmSsh -Command $pushCaddy)
 
 # 3) Enviar o compose do edge.
@@ -72,9 +71,9 @@ $pushCompose = "printf %s '$composeB64' | base64 -d > /opt/iqos/edge/compose.yml
 Write-Host 'a enviar compose.yml por ssh...'
 Write-Host (Invoke-VmSsh -Command $pushCompose)
 
-# 4) Aplicar o hostname e arrancar o edge.
+# 4) Arrancar o edge.
 Write-Host 'a arrancar o edge...'
-Invoke-VmSsh -Command "bash /opt/iqos/05-edge-up.sh $originHost 2&gt;&amp;1 | tail -25" | Write-Host
+Invoke-VmSsh -Command "bash /opt/iqos/05-edge-up.sh 2>&1 | tail -30" | Write-Host
 
 'https://sabemos.studio' | Set-Content -Path (Join-Path $here 'public-url.txt') -Encoding ascii
 Write-Host ''

@@ -1,16 +1,16 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-    Verifica o deploy do IQ OS na Kamatera: origem local, tuneis e edge publico.
+    Verifica o deploy do IQ OS na Kamatera: stack local, tunel SSH e edge publico.
 
 .DESCRIPTION
     Testa, pela ordem em que o trafego flui:
       1. stack/nginx local em 127.0.0.1:4180
-      2. quick tunnel da origem (PC)
+      2. tunel SSH reverso (PC -> VM), visto do lado da VM
       3. containers do edge na VM (por SSH, melhor esforco)
       4. endereco publico do edge
-    O `curl` e usado porque o `Invoke-WebRequest` do PS 5.1 nao gosta de hosts
-    *.trycloudflare.com resolvidos por DNS filtrado.
+    Usa `curl` porque o `Invoke-WebRequest` do PS 5.1 e mais fragil com TLS
+    e com DNS filtrado.
 
 .EXAMPLE
     .\04-verify.ps1
@@ -43,24 +43,32 @@ Test-Url 'SPA' 'http://127.0.0.1:4180/'
 Test-Url 'API /api/health' 'http://127.0.0.1:4180/api/health'
 Test-Url 'API /api/providers (401)' 'http://127.0.0.1:4180/api/providers' -Expect 401
 
-Write-Host "`n=== 2. Quick tunnel da origem (PC) ===" -ForegroundColor Cyan
-$originFile = Join-Path $here 'origin-url.txt'
-if (Test-Path $originFile) {
-    $origin = (Get-Content $originFile -Raw).Trim()
-    Test-Url 'origem /healthz' "https://$origin/healthz"
-    Test-Url 'origem /' "https://$origin/"
+Write-Host "`n=== 2. Tunel SSH reverso (PC -> VM) ===" -ForegroundColor Cyan
+$ok = $false
+for ($i = 1; $i -le $Attempts -and -not $ok; $i++) {
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    # Visto de dentro da VM: o tunel publica a stack local em 127.0.0.1:8080.
+    $out = & ssh -i $SshKey -o BatchMode=yes -o ConnectTimeout=8 -o LogLevel=ERROR "$SshUser@$SshHost" `
+        "curl -s -o /dev/null -w 'tunel 8080: %{http_code}\n' --max-time 20 http://127.0.0.1:8080/healthz" 2>&1
+    $rc = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    if ($rc -eq 0) { $ok = $true; ($out -join "`n") | Write-Host }
 }
-else { Write-Host 'origin-url.txt nao existe (corre 02-publish-origin.ps1)' -ForegroundColor DarkGray }
+if (-not $ok) {
+    Write-Host 'AVISO: nao cheguei a VM por SSH. No PC, arranca o 07-origin-tunnel.ps1.' -ForegroundColor Yellow
+}
 
 Write-Host "`n=== 3. Edge na VM (por SSH) ===" -ForegroundColor Cyan
 $ok = $false
 for ($i = 1; $i -le $Attempts -and -not $ok; $i++) {
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     $out = & ssh -i $SshKey -o BatchMode=yes -o ConnectTimeout=8 -o LogLevel=ERROR "$SshUser@$SshHost" `
-        "docker ps --format '{{.Names}} {{.Status}}'; sed -n 's/^ORIGIN_HOSTNAME=//p' /opt/iqos/edge/edge.env" 2>&1
-    if ($LASTEXITCODE -eq 0) {
-        $ok = $true
-        ($out -join "`n") | Write-Host
-    }
+        "docker ps --format '{{.Names}} {{.Status}}'" 2>&1
+    $rc = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    if ($rc -eq 0) { $ok = $true; ($out -join "`n") | Write-Host }
 }
 if (-not $ok) { Write-Host "nao consegui ligar por SSH apos $Attempts tentativas (rede instavel)" -ForegroundColor Yellow }
 

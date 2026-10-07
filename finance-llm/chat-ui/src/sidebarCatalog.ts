@@ -61,7 +61,7 @@ export const APP_MODULES: AppModule[] = [
     id: "visao-geral",
     label: "Visão geral",
     hint: "Dashboard, Finder, chat, browser e pesquisa",
-    ids: ["dashboard", "finder", "chat", "browser", "search", "pesquisa"],
+    ids: ["dashboard", "finder", "chat", "browser", "search", "pesquisa", "deep-search"],
   },
   {
     id: "contratos",

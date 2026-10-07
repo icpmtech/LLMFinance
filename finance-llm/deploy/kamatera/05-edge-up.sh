@@ -1,21 +1,11 @@
 # Executado NA VM: prepara o host (swap) e arranca o edge (Caddy + dominio proprio).
 #
-# Uso:  bash /opt/iqos/05-edge-up.sh <hostname-da-origem>
-#   <hostname-da-origem> = o que o quick tunnel do PC publica, ex.:
-#   uniprotkb-cents-kits-coupled.trycloudflare.com
+# Uso:  bash /opt/iqos/05-edge-up.sh
+#
+# O upstream do Caddy e `127.0.0.1:8080`, onde o PC publica a stack pelo
+# **tunel SSH reverso** (`07-origin-tunnel.ps1` no PC). Nao ha Cloudflare,
+# por isso nao ha hostname aleatorio nenhum para propagar.
 set -euo pipefail
-
-ORIGIN_HOSTNAME="${1:-}"
-if [ -z "$ORIGIN_HOSTNAME" ]; then
-    if [ -f /opt/iqos/edge/edge.env ]; then
-        ORIGIN_HOSTNAME="$(sed -n 's/^ORIGIN_HOSTNAME=//p' /opt/iqos/edge/edge.env | tr -d '\r')"
-    fi
-fi
-if [ -z "$ORIGIN_HOSTNAME" ]; then
-    echo "ERRO: falta o hostname da origem (argumento 1)" >&2
-    exit 1
-fi
-echo "==> origem: $ORIGIN_HOSTNAME"
 
 # 1) Swap de 2 GB. Sem isto a VM de 2 GB fica sem memoria quando o Docker
 #    arranca e o proprio sshd deixa de conseguir fazer fork (a sessao SSH
@@ -31,20 +21,26 @@ if ! swapon --show | grep -q '/swapfile'; then
     grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >>/etc/fstab
 fi
 
-# 2) edge.env (com LF; um \r colado ao valor entra no SNI e o proxy falha).
-printf 'ORIGIN_HOSTNAME=%s\n' "$ORIGIN_HOSTNAME" > /opt/iqos/edge/edge.env
+# 2) O tunel SSH reverso do PC (07-origin-tunnel.ps1) publica a stack em
+#    127.0.0.1:8080 desta VM. Se a sessao morrer sem FIN (WiFi/rede movel), o
+#    sshd mantem o listen preso e a religacao falha com
+#    "remote port forwarding failed for listen port 8080". Com estes valores o
+#    sshd deteta o cliente morto em ~45 s e liberta a porta sozinho.
+if ! grep -q '^ClientAliveInterval' /etc/ssh/sshd_config; then
+    echo "==> a afinar o sshd (ClientAliveInterval/ClientAliveCountMax)"
+    printf '\n# IQ OS: libertar tuneis SSH reversos de clientes mortos\nClientAliveInterval 15\nClientAliveCountMax 3\n' >>/etc/ssh/sshd_config
+    systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
+fi
 
-# 3) Gerar Caddyfile a partir do template (substituir placeholder literalmente).
-sed "s|__ORIGIN_HOSTNAME__|$ORIGIN_HOSTNAME|g" /opt/iqos/edge/Caddyfile.template > /opt/iqos/edge/Caddyfile
-
-# 4) Arrancar o edge.
+# 3) Arrancar o edge.
 cd /opt/iqos/edge
 docker compose up -d --remove-orphans
 
 echo "==> a aguardar o Caddy ficar saudavel"
 for _ in $(seq 1 20); do
     sleep 3
-    if docker exec iqos-caddy wget -q -O /dev/null http://127.0.0.1/healthz 2>/dev/null; then
+    # A API de administracao (localhost:2019) confirma que a config esta carregada.
+    if docker exec iqos-caddy wget -q -O /dev/null http://127.0.0.1:2019/config/ 2>/dev/null; then
         break
     fi
 done
@@ -52,6 +48,13 @@ done
 echo
 echo "==> containers"
 docker ps --format 'table {{.Names}}\t{{.Status}}'
+echo
+echo "==> tunel de origem (PC -> VM, 127.0.0.1:8080)"
+if timeout 5 bash -c '</dev/tcp/127.0.0.1/8080' 2>/dev/null; then
+    echo "OK: tunel SSH ativo"
+else
+    echo "AVISO: nada a escutar em 127.0.0.1:8080 — arranca o 07-origin-tunnel.ps1 no PC" >&2
+fi
 echo
 echo "==> endereco publico"
 echo "https://sabemos.studio"

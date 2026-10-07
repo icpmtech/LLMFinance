@@ -248,6 +248,8 @@ export interface RecolhaFicheiroConteudo {
   total?: number;
   items_total?: number;
   criteria?: Record<string, unknown> | null;
+  /** `false` quando ainda não há ficheiro exportado (recolha a decorrer). */
+  exists?: boolean;
   items: RecolhaPublicacaoResumo[];
 }
 

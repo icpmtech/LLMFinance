@@ -3,7 +3,7 @@
 services:
   backend:
     volumes:
-      - ./api:/app/api:ro
+      - ./api:/app/api:rw
       - ./chat:/app/chat:ro
       - ./chat-ui:/app/chat-ui:ro
       - ./cli:/app/cli:ro

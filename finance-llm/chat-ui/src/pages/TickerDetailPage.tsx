@@ -38,6 +38,8 @@ import {
   getTickerTechnical,
   getTickerTechnicalExplain,
   runForecast,
+  translateText,
+  getTickerTranslation,
 } from "../api";
 import type {
   ForecastPoint,
@@ -59,7 +61,6 @@ import {
 } from "../sentimentApi";
 import { buildChatOptions, useProviders, type ProvidersCatalog } from "../providers";
 import type { ModelBackend } from "../types";
-import { sendChat } from "../sendChat";
 import { API_BASE } from "../api";
 
 const EMPTY_PROVIDERS: ProvidersCatalog = { providers: [], defaults: {} };
@@ -75,23 +76,6 @@ function pct(n?: number | null) {
   if (n == null || Number.isNaN(n)) return "—";
   const sign = n > 0 ? "+" : "";
   return `${sign}${(n * 100).toFixed(2)}%`;
-}
-
-function splitIntoSentences(text: string, maxLength: number): string[] {
-  // Divide primeiro por pontos finais, ponto e vírgula ou quebras de linha.
-  const sentences = text.split(/(?<=[.!?;])\s+|\n+/).filter((s) => s.trim().length > 0);
-  const segments: string[] = [];
-  let current = "";
-  for (const sentence of sentences) {
-    if ((current + " " + sentence).trim().length > maxLength && current.trim().length > 0) {
-      segments.push(current.trim());
-      current = sentence;
-    } else {
-      current = current ? `${current} ${sentence}` : sentence;
-    }
-  }
-  if (current.trim().length > 0) segments.push(current.trim());
-  return segments.length > 0 ? segments : [text.slice(0, maxLength)];
 }
 
 function pctFromRatio(n?: number | null) {
@@ -182,8 +166,11 @@ export function TickerDetailPage({
 
   /* -------------------------------------------------------- tradução */
   const [translatedSummary, setTranslatedSummary] = useState<string | null>(null);
+  const [showTranslated, setShowTranslated] = useState(false);
+  const [hasTranslation, setHasTranslation] = useState(false);
   const [translationError, setTranslationError] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
+  const [loadingStoredTranslation, setLoadingStoredTranslation] = useState(false);
   const [translationBackend, setTranslationBackend] = useState<ModelBackend>(() => {
     if (typeof window === "undefined") return "gpt2";
     return (window.localStorage.getItem("finance-llm-translation-backend") ||
@@ -194,15 +181,7 @@ export function TickerDetailPage({
   const [translationCatalog, setTranslationCatalog] = useState<ProvidersCatalog>(EMPTY_PROVIDERS);
   useEffect(() => {
     let active = true;
-    const token =
-      typeof window !== "undefined"
-        ? window.localStorage.getItem("finance-llm-token") || ""
-        : "";
-    fetch(`${API_BASE}/providers`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
+    fetch(`${API_BASE}/providers`, { credentials: "include" })
       .then((res) => (res.ok ? res.json() : EMPTY_PROVIDERS))
       .then((data) => {
         if (active) setTranslationCatalog(data as ProvidersCatalog);
@@ -218,19 +197,33 @@ export function TickerDetailPage({
     const opts = buildChatOptions(translationCatalog);
     // Se o backend preferido é um modelo cloud configurado mas não consta do catálogo
     // padrão (ex.: glm-5.3), adiciona-o para permitir tradução com o modelo guardado.
-    if (translationBackend.startsWith("ollama-cloud:")) {
-      const provider = translationCatalog.providers.find((p) => p.id === "ollama-cloud");
-      if (provider?.configured) {
+    const ollamaCloud = translationCatalog.providers.find((p) => p.id === "ollama-cloud");
+    if (ollamaCloud?.configured) {
+      // Inclui o modelo guardado pelo utilizador mesmo que não conste do catálogo padrão.
+      const savedModel = ollamaCloud.default_model;
+      if (savedModel && !opts.some((o) => o.id === `ollama-cloud:${savedModel}`)) {
+        opts.push({
+          id: `ollama-cloud:${savedModel}`,
+          label: `${ollamaCloud.label} · ${savedModel}`,
+          group: "Ollama Cloud",
+          model: savedModel,
+          provider: "ollama-cloud",
+          usable: true,
+          note: `URL ${ollamaCloud.base_url}`,
+        });
+      }
+      // Mantém também o backend preferido se for diferente do guardado.
+      if (translationBackend.startsWith("ollama-cloud:")) {
         const model = translationBackend.split(":").slice(1).join(":");
-        if (model && !opts.some((o) => o.id === translationBackend)) {
+        if (model && model !== savedModel && !opts.some((o) => o.id === translationBackend)) {
           opts.push({
             id: translationBackend,
-            label: `${provider.label} · ${model}`,
+            label: `${ollamaCloud.label} · ${model}`,
             group: "Ollama Cloud",
             model,
             provider: "ollama-cloud",
             usable: true,
-            note: `URL ${provider.base_url}`,
+            note: `URL ${ollamaCloud.base_url}`,
           });
         }
       }
@@ -304,12 +297,10 @@ export function TickerDetailPage({
     setListingCloudModels(true);
     setTranslationError(null);
     try {
-      const token =
-        typeof window !== "undefined" ? window.localStorage.getItem("finance-llm-token") || "" : "";
       const params = new URLSearchParams();
       params.set("url", ollamaCloudBaseUrl);
       const res = await fetch(`${API_BASE}/providers/ollama-cloud/models?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
       });
       if (!res.ok) throw new Error((await res.json()).detail || "Não foi possível listar modelos");
       const data = await res.json();
@@ -330,38 +321,27 @@ export function TickerDetailPage({
     if (!sourceText) return;
     setTranslating(true);
     setTranslationError(null);
-    setTranslatedSummary(null);
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 120000);
+      const timeout = setTimeout(() => controller.abort(), 300000);
       const backend = translationBackend || getPreferredBackend();
 
-      // Divide o resumo em segmentos de ~800 caracteres, respeitando frases.
-      const segments = splitIntoSentences(sourceText, 800);
-      let accumulated = "";
-      for (let i = 0; i < segments.length; i++) {
-        const segment = segments[i];
-        const result = await sendChat(
-          [
-            {
-              id: `translate-summary-${i}`,
-              role: "user",
-              content: `Traduza o seguinte texto para português de Portugal, mantendo o tom profissional e financeiro. Devolva APENAS a tradução, sem explicações:\n\n${segment}`,
-              timestamp: new Date().toISOString(),
-            },
-          ],
-          backend as ModelBackend,
-          controller.signal,
-        );
-        const reply = result.message?.content?.trim();
-        if (reply) {
-          accumulated += (accumulated ? " " : "") + reply;
-          // Atualiza o estado a cada segmento para o utilizador ver progresso.
-          setTranslatedSummary(accumulated);
-        }
-      }
+      const result = await translateText(
+        {
+          text: sourceText,
+          backend,
+          target_language: "pt-PT",
+          ticker,
+        },
+        controller.signal,
+      );
       clearTimeout(timeout);
-      setTranslatedSummary(accumulated);
+      setTranslatedSummary(result.translation);
+      setHasTranslation(true);
+      setShowTranslated(true);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(`finance-llm-show-translated::${ticker.toUpperCase()}`, "true");
+      }
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
         setTranslationError("A tradução demorou demasiado tempo. Tente novamente.");
@@ -370,6 +350,13 @@ export function TickerDetailPage({
       }
     } finally {
       setTranslating(false);
+    }
+  }
+
+  function handleToggleTranslation(show: boolean) {
+    setShowTranslated(show);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(`finance-llm-show-translated::${ticker.toUpperCase()}`, String(show));
     }
   }
 
@@ -392,6 +379,7 @@ export function TickerDetailPage({
       active = false;
     };
   }, [ticker]);
+
 
   /** Guardar/retirar dos favoritos — a mesma lista que o painel do mercado usa. */
   async function toggleFavourite() {
@@ -447,8 +435,11 @@ export function TickerDetailPage({
     }
   }
 
+  // Carrega os dados do ticker quando a página abre e sempre que o ticker muda.
+  // Sem isto a página ficava presa em `loading=true` (só carregava no botão Atualizar).
   useEffect(() => {
     loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker]);
 
   const firstPrice = useMemo(() => history?.points?.[0]?.close ?? info?.price, [history, info]);
@@ -472,6 +463,45 @@ export function TickerDetailPage({
   const upside = targetMean && lastPrice ? (targetMean - lastPrice) / lastPrice : undefined;
 
   const technicalSummary = technicalExplain?.combined_signal || technicalExplain?.summary;
+  const sourceSummary = info?.summary || technicalSummary;
+  const currentSummary = showTranslated && translatedSummary
+    ? translatedSummary
+    : sourceSummary || "Sem descrição disponível para este ativo.";
+  const canToggleTranslation = hasTranslation && translatedSummary != null;
+
+  // Carrega tradução guardada quando o ticker ou o resumo original mudam.
+  useEffect(() => {
+    let active = true;
+    const sourceText = info?.summary || technicalSummary;
+    setLoadingStoredTranslation(true);
+    getTickerTranslation(ticker)
+      .then((stored) => {
+        if (!active) return;
+        if (stored?.translated_text && stored.original_text === sourceText) {
+          setTranslatedSummary(stored.translated_text);
+          setHasTranslation(true);
+          // Mantém preferência do utilizador se existir; caso contrário mostra traduzido.
+          const saved = typeof window !== "undefined"
+            ? window.localStorage.getItem(`finance-llm-show-translated::${ticker.toUpperCase()}`)
+            : null;
+          setShowTranslated(saved !== null ? saved === "true" : true);
+        } else {
+          setTranslatedSummary(null);
+          setHasTranslation(false);
+        }
+      })
+      .catch(() => {
+        // tradução guardada é opcional
+        setTranslatedSummary(null);
+        setHasTranslation(false);
+      })
+      .finally(() => {
+        if (active) setLoadingStoredTranslation(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [ticker, info?.summary, technicalSummary]);
 
   return (
     <div className="min-h-screen bg-[#0f1115] text-slate-300">
@@ -697,20 +727,46 @@ export function TickerDetailPage({
                   Visão Geral
                 </h3>
                 {(info?.summary || technicalSummary) && (
-                  <button
-                    type="button"
-                    onClick={() => void handleTranslateSummary()}
-                    disabled={translating}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500/15 px-2.5 py-1.5 text-xs font-medium text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 disabled:opacity-60 transition"
-                    title="Traduzir resumo com IA"
-                  >
-                    {translating ? (
-                      <RefreshCw size={14} className="animate-spin" />
-                    ) : (
-                      <Languages size={14} />
+                  <div className="flex items-center gap-2">
+                    {canToggleTranslation && (
+                      <div className="inline-flex items-center rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleTranslation(false)}
+                          className={`px-2 py-1 text-[11px] rounded-md transition ${
+                            !showTranslated ? "bg-slate-700 text-white" : "text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          Original
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleTranslation(true)}
+                          className={`px-2 py-1 text-[11px] rounded-md transition ${
+                            showTranslated ? "bg-blue-500/25 text-blue-200" : "text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          Traduzido
+                        </button>
+                      </div>
                     )}
-                    {translating ? "A traduzir..." : "Traduzir com IA"}
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleTranslateSummary()}
+                      disabled={translating || loadingStoredTranslation}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500/15 px-2.5 py-1.5 text-xs font-medium text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 disabled:opacity-60 transition"
+                      title={hasTranslation ? "Traduzir novamente com IA" : "Traduzir resumo com IA"}
+                    >
+                      {translating ? (
+                        <RefreshCw size={14} className="animate-spin" />
+                      ) : hasTranslation ? (
+                        <RefreshCw size={14} />
+                      ) : (
+                        <Languages size={14} />
+                      )}
+                      {translating ? "A traduzir..." : hasTranslation ? "Traduzir de novo" : "Traduzir com IA"}
+                    </button>
+                  </div>
                 )}
               </div>
               {translationError && (
@@ -761,7 +817,7 @@ export function TickerDetailPage({
                 </div>
               )}
               <p className="text-sm text-slate-300 leading-relaxed">
-                {translatedSummary || info?.summary || technicalSummary || "Sem descrição disponível para este ativo."}
+                {currentSummary}
               </p>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 data-grid">

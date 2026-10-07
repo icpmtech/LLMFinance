@@ -1,5 +1,7 @@
 export const API_BASE =
-  import.meta.env.VITE_API_URL || "http://127.0.0.1:8002";
+  (typeof window !== "undefined" && window.location.hostname === "localhost" && window.location.port === "4180"
+    ? "/api"
+    : import.meta.env.VITE_API_URL) || "http://127.0.0.1:8002";
 
 import type {
   Actions,
@@ -108,6 +110,9 @@ import type {
   ImportIngestRequest,
   ImportIngestResponse,
   ImportStatusResponse,
+  TranslateRequest,
+  TranslateResponse,
+  TickerTranslationResponse,
 } from "./types";
 
 export type { ContractAnalyticsResponse, ContractAnalyticsFilters, CompanySearchResponse, CompanyDetail, CompanyContractsResponse, CompanyAnalyticsResponse };
@@ -710,6 +715,43 @@ export async function streamRagAnswer(
       else if (parsed.token) onToken(parsed.token);
     }
   }
+}
+
+export async function translateText(
+  request: TranslateRequest,
+  signal?: AbortSignal,
+  timeoutMs = 300000,
+): Promise<TranslateResponse> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${API_BASE}/translate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+      credentials: "include",
+      signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Erro ao traduzir: ${res.status} - ${text}`);
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function getTickerTranslation(ticker: string): Promise<TickerTranslationResponse | null> {
+  const res = await fetch(`${API_BASE}/translate/${encodeURIComponent(ticker)}`, {
+    credentials: "include",
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao carregar tradução: ${res.status} - ${text}`);
+  }
+  return res.json();
 }
 
 export async function sendBloombergChat(

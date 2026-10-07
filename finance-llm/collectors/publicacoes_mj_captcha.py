@@ -15,6 +15,7 @@ resposta varia entre dezenas de segundos e alguns minutos, conforme a fila.
 """
 from __future__ import annotations
 
+import inspect
 import logging
 import os
 from pathlib import Path
@@ -133,25 +134,74 @@ class PublicacoesMjCaptchaClient(PublicacoesMjClient):
             self._set_debug_enabled(True)
 
     def _get_solver(self) -> Any:
-        """Importa a biblioteca twocaptcha só quando necessário (lazy)."""
-        if self._solver is None:
-            from twocaptcha import TwoCaptcha
+        """Importa a biblioteca twocaptcha só quando necessário (lazy).
 
-            self._solver = TwoCaptcha(
-                self.api_key,
-                sleep_time=5,
-            )
+        O pacote distribui-se como **`2captcha-python`** mas importa-se como
+        `twocaptcha`; sem ele instalado o erro nativo («No module named
+        'twocaptcha'») não dizia o que fazer — aqui dá-se a instrução.
+        """
+        if self._solver is None:
+            try:
+                from twocaptcha import TwoCaptcha
+            except ModuleNotFoundError as exc:  # dependência opcional
+                raise CaptchaRequiredError(
+                    "Pacote `2captcha-python` em falta (módulo `twocaptcha`). "
+                    "Instale com `pip install 2captcha-python` e reinicie o backend."
+                ) from exc
+
+            # O nome do intervalo de polling mudou entre versões do pacote
+            # (`sleep_time` em 1.x, `pollingInterval` em 2.x): passa-se o que a
+            # assinatura aceitar em vez de partir com `TypeError`.
+            params: Dict[str, Any] = {}
+            try:
+                assinatura = inspect.signature(TwoCaptcha.__init__)
+                if "pollingInterval" in assinatura.parameters:
+                    params["pollingInterval"] = 5
+                elif "sleep_time" in assinatura.parameters:
+                    params["sleep_time"] = 5
+            except (TypeError, ValueError):  # pragma: no cover - assinatura opaca
+                pass
+
+            self._solver = TwoCaptcha(self.api_key, **params)
         return self._solver
+
+    @staticmethod
+    def _extrair_token(resposta: Any) -> Optional[str]:
+        """Normaliza a resposta do solver (`str` ou dicionário com `code`)."""
+        if resposta is None:
+            return None
+        if isinstance(resposta, str):
+            return resposta.strip() or None
+        if isinstance(resposta, dict):
+            for chave in ("code", "token", "gRecaptchaResponse"):
+                valor = resposta.get(chave)
+                if valor:
+                    return str(valor).strip()
+        return None
+
+    def _resolver_com_solver(self, solver: Any, page_url: str) -> Optional[str]:
+        """Chama o solver tolerando as duas APIs conhecidas do pacote."""
+        if hasattr(solver, "solve_captcha"):
+            return self._extrair_token(
+                solver.solve_captcha(site_key=RECAPTCHA_SITEKEY, page_url=page_url)
+            )
+        if hasattr(solver, "recaptcha"):
+            return self._extrair_token(
+                solver.recaptcha(sitekey=RECAPTCHA_SITEKEY, url=page_url, version="v2")
+            )
+        raise CaptchaRequiredError(
+            "O solver da 2captcha instalado não expõe `solve_captcha` nem `recaptcha`; "
+            "atualize o pacote `2captcha-python`."
+        )
 
     def solve_recaptcha(self, page_url: str = PAGE) -> str:
         """Resolve o reCAPTCHA v2 do portal e devolve o token."""
         solver = self._get_solver()
         logger.info("A resolver reCAPTCHA via 2captcha para %s (sitekey=%s)", page_url, RECAPTCHA_SITEKEY)
         try:
-            token = solver.solve_captcha(
-                site_key=RECAPTCHA_SITEKEY,
-                page_url=page_url,
-            )
+            token = self._resolver_com_solver(solver, page_url)
+        except CaptchaRequiredError:
+            raise
         except Exception as exc:
             logger.exception("Falha ao resolver reCAPTCHA via 2captcha")
             raise CaptchaRequiredError(f"2captcha não conseguiu resolver o reCAPTCHA: {exc}") from exc
