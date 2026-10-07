@@ -372,8 +372,19 @@ def test_resolve_backend_com_modelo_explicito():
 @pytest.mark.parametrize(
     "question,expected",
     [
-        ("CLARANET II SOLUTIONS quanto contratos?", "CLARANET II SOLUTIONS contratos"),
-        ("Quem ganhou mais contratos na saúde em 2025?", "ganhou contratos saúde 2025"),
+        ("CLARANET II SOLUTIONS quanto contratos?", "CLARANET II SOLUTIONS"),
+        ("Quem ganhou mais contratos na saúde em 2025?", "saúde 2025"),
+        # Termos genéricos deste corpus (aparecem em quase todos os contratos):
+        # como a consulta exige todos os termos, mantê-los exclui os documentos
+        # certos. Medido: «Quantos contratos tem a CLARANET II SOLUTIONS e qual o
+        # valor total adjudicado?» atirava a entidade para 10.º lugar.
+        (
+            "Quantos contratos tem a CLARANET II SOLUTIONS e qual o valor total adjudicado?",
+            "CLARANET II SOLUTIONS",
+        ),
+        ("contratos de obras públicas", "obras públicas"),
+        # Só termos genéricos: recorre a eles em vez de devolver vazio.
+        ("valor total dos contratos", "valor total contratos"),
     ],
 )
 def test_keywords_limpam_a_pergunta(question, expected):
@@ -383,6 +394,16 @@ def test_keywords_limpam_a_pergunta(question, expected):
 def test_keywords_sem_termos_uteis():
     assert deep.keywords("quanto?") == ""
     assert deep.keywords("") == ""
+
+
+def test_keywords_recorre_aos_genericos_se_nada_sobrar():
+    """«quantos contratos?» não pode virar consulta vazia para o Elasticsearch."""
+    assert deep.keywords("quantos contratos?") == "contratos"
+
+
+def test_keywords_ignoram_termos_genericos_do_corpus():
+    assert "contratos" not in deep.keywords("contratos da CLARANET")
+    assert "valor" not in deep.keywords("valor dos contratos da CLARANET")
 
 
 def test_retrieve_usa_palavras_chave_na_consulta(monkeypatch):
@@ -396,7 +417,29 @@ def test_retrieve_usa_palavras_chave_na_consulta(monkeypatch):
 
     deep.retrieve("CLARANET II SOLUTIONS quanto contratos?", sources=["contracts"])
 
-    assert chamadas[0]["q"] == "CLARANET II SOLUTIONS contratos"
+    assert chamadas[0]["q"] == "CLARANET II SOLUTIONS"
+
+
+def test_consulta_vetorial_usa_palavras_chave(monkeypatch):
+    """A busca semântica tem de receber as palavras-chave, não a pergunta crua.
+
+    Medido: com a pergunta inteira, a vizinhança de «Quantos contratos tem a
+    CLARANET II SOLUTIONS e qual o valor total adjudicado?» devolvia
+    «Solresor i Sverige AB» em 1.º e a CLARANET em 10.º.
+    """
+    vistas = []
+
+    def vectors(index, query, top_k=20, **kwargs):
+        vistas.append(query)
+        return {"items": [_entity_row()], "total": 1}
+
+    monkeypatch.setattr(deep.vectors, "vector_search", vectors)
+    monkeypatch.setattr(deep, "vector_coverage", lambda refresh=False: _coverage(entities=(214123, 214123)))
+    monkeypatch.setattr(deep.search_service, "unified_search", _fake_unified([]))
+
+    deep.retrieve("Quantos contratos tem a CLARANET II SOLUTIONS e qual o valor total adjudicado?", max_sources=5)
+
+    assert vistas == ["CLARANET II SOLUTIONS"]
 
 
 def test_todos_os_ambitos_entram_por_omissao():

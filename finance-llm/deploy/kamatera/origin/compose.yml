@@ -17,8 +17,6 @@ services:
     environment:
       SSH_HOST: ${SSH_HOST:-45.147.251.188}
       SSH_USER: ${SSH_USER:-root}
-      # Nome do ficheiro da chave dentro de SSH_KEY_DIR.
-      SSH_KEY_FILE: ${SSH_KEY_FILE:-iqos_kamatera_ed25519}
       REMOTE_PORT: ${REMOTE_PORT:-8080}
       # A stack do PC, vista de dentro do container.
       LOCAL_TARGET: ${LOCAL_TARGET:-host.docker.internal:4180}
@@ -26,7 +24,11 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ${SSH_KEY_DIR}:/key:ro
+      # **So o ficheiro da chave**, nao a pasta `~/.ssh` inteira: o Docker
+      # Desktop mata o container quando o bind e uma pasta que o host altera
+      # (o proprio `ssh` escreve `known_hosts`), e o `restart: unless-stopped`
+      # nao cobre um kill vindo do daemon.
+      - ${SSH_KEY_PATH}:/key/id_ed25519:ro
     logging:
       driver: json-file
       options:

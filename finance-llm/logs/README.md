@@ -152,8 +152,8 @@ pediu. Numa máquina livre, o ritmo deve ser bastante melhor.
 
 > A estimativa do `-Acao estado` pode parecer muito melhor de vez em quando
 > (chegou a marcar 130 docs/s): as gravações saem todas juntas no fim de cada
-> lote e criam picos. O número a seguir é a média dos lotes completos, não uma
-> amostra de 30 s.
+> lote e criam picos. O valor a ter em conta é a média dos lotes completos, não
+> uma amostra de 30 s.
 
 ### Se for preciso acelerar
 
@@ -166,8 +166,8 @@ pediu. Numa máquina livre, o ritmo deve ser bastante melhor.
    `descContrato`, `fundamentacao` **e** `search_text` (este último é longo e
    repete informação). Encurtar muda o resultado da pesquisa — decisão de
    produto, não só de desempenho.
-4. **Ocupar a máquina toda fora de horas**: cada processo recebia ~0,8 núcleos
-   em vez de 2, porque as builds do Docker e o Elasticsearch estavam a consumir.
+4. **Correr com a máquina livre**: os números acima foram medidos com as builds
+   do Docker e o Elasticsearch a competir pelos mesmos núcleos.
 
 ## Monitorizar
 
@@ -214,4 +214,17 @@ escolhidos por semelhança e não só por palavras-chave.
 - **`run_in_terminal` pode remover o `cd` inicial** do comando — usar sempre
   caminhos absolutos.
 - **`Select-Object -Last N` acumula** o output: nada aparece até o comando
-  terminar. Para acompanhar em tempo r
+  terminar. Para acompanhar em tempo real, escrever para ficheiro com
+  `Tee-Object` ou registar em log.
+- **Container com código assado**: para o backfill isto é irrelevante (corre no
+  `.venv` do anfitrião), mas alterações ao `api/` exigem
+  `docker compose build backend` + `up -d --no-deps --force-recreate backend`.
+
+## Alternativa oficial
+
+Existe também o end-point `POST /elastic/vectors/index`
+(`api/vector_routes.py` → `api/vector_service.py::index_missing_embeddings`).
+Faz o mesmo, mas num **único processo** e sem pausa/retoma — foi medido a
+~15 docs/s. Serve para preencher casos pontuais (uma entidade, um punhado de
+documentos) ou para disparar a partir da UI; para os 2,25 M o caminho é este
+controlador.

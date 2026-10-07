@@ -22,7 +22,18 @@ class InferenceModel:
 
     def generate(self, prompt: str, max_new_tokens: int = 50, temperature: float = 0.8) -> str:
         prompt_with_bos = f"{self.tokenizer.bos_token}{prompt}"
-        encoded = self.tokenizer(prompt_with_bos, return_tensors="pt")
+        # Sem cortar, um prompt maior do que a janela do modelo rebenta nos
+        # `position_ids` («index out of range in self»). Corta-se pelo início: no
+        # prompt da Pesquisa profunda a pergunta e as regras estão no fim.
+        contexto = int(getattr(self.model.config, "max_position_embeddings", 4096))
+        max_new_tokens = max(1, min(max_new_tokens, contexto - 64))
+        self.tokenizer.truncation_side = "left"
+        encoded = self.tokenizer(
+            prompt_with_bos,
+            return_tensors="pt",
+            truncation=True,
+            max_length=max(1, contexto - max_new_tokens),
+        )
         input_len = encoded["input_ids"].shape[-1]
         encoded = encoded.to(self.device)
         with torch.no_grad():

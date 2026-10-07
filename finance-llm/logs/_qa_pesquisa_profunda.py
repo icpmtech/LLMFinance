@@ -1,19 +1,22 @@
-"""Verificação da «Pesquisa profunda» no que está **servido** (Docker).
+"""Verificação da «Pesquisa profunda» no que está **servido**.
 
 Valida pelo **conteúdo**, não pelo código HTTP: a SPA responde 200 a tudo
 (`@app.get("/{full_path:path}")`), por isso um 200 pode ser o `index.html`.
 
-Uso:  python logs/_qa_pesquisa_profunda.py            (backend 8002 + nginx 4180)
+Uso:
+    python logs/_qa_pesquisa_profunda.py                      (8002 + 4180)
+    QA_BACKEND=http://127.0.0.1:8011 python logs/_qa_pesquisa_profunda.py
 """
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 import httpx
 
-BACKEND = "http://127.0.0.1:8002"
-FRONTEND = "http://127.0.0.1:4180"
+BACKEND = os.environ.get("QA_BACKEND", "http://127.0.0.1:8002").rstrip("/")
+FRONTEND = os.environ.get("QA_FRONTEND", "http://127.0.0.1:4180").rstrip("/")
 HEADERS: dict = {}  # as rotas de leitura não exigem sessão
 
 FALHAS: list[str] = []
@@ -48,10 +51,15 @@ else:
     limites = meta.get("limits") or {}
     check("limites.unlimited == 0", limites.get("unlimited") == 0, str(limites.get("unlimited")))
     check("limites.citable_max", bool(limites.get("citable_max")), str(limites.get("citable_max")))
-    check("limites.max_sources >= 120", (limites.get("max_sources") or 0) >= 120, str(limites.get("max_sources")))
+    # `max_sources` é um objeto com default/min/max (não um número).
+    max_sources = limites.get("max_sources") or {}
+    check("limites.max_sources.max >= 120", (max_sources.get("max") or 0) >= 120, str(max_sources.get("max")))
+    por_ambito = limites.get("per_source") or {}
+    check("limites.per_source.max == 50", (por_ambito.get("max") or 0) == 50, str(por_ambito.get("max")))
     ambitos = meta.get("sources") or []
     check(f"{len(ambitos)} âmbitos servidos", len(ambitos) >= 15)
-    check("modos hybrid/text/vector", set(meta.get("modes") or []) >= {"hybrid", "text", "vector"})
+    modos = [m.get("id") for m in (meta.get("modes") or [])]
+    check("modos hybrid/text/vector", set(modos) >= {"hybrid", "text", "vector"}, str(modos))
 
 estado, sug, corpo = json_de(f"{BACKEND}/deep-search/suggest?q=CLARAN&limit=5")
 if sug is None:

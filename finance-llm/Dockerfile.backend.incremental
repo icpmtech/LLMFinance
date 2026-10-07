@@ -1,0 +1,19 @@
+# Atualização **incremental** do backend: reutiliza a imagem que já funciona
+# como base, para não reinstalar as dependências.
+#
+# Porque existe: o `Dockerfile.backend` faz `pip install -r requirements.txt`
+# sem versões fixas, e um rebuild a frio (cache das camadas invalidado) descarrega
+# vários GB — incluindo as bibliotecas CUDA da NVIDIA (`nvidia_cudnn_cu13` 553 MB,
+# `nvidia_nccl_cu13` 216 MB…) que um contentor **sem GPU** nunca usa. A imagem
+# ficava com 12,3 GB e a build levava dezenas de minutos, além do risco de
+# `pandas 3.x`/`transformers 5.x` quebrarem o código.
+#
+# Este ficheiro só substitui o **código**, mantendo as versões exatas que já
+# estavam validadas. Usar o `Dockerfile.backend` quando for mesmo preciso mexer
+# nas dependências.
+#
+#   docker build -f Dockerfile.backend.incremental -t iq-os-backend:latest .
+FROM iq-os-backend:antes-deep-search
+
+# WORKDIR (/app), ENTRYPOINT (/entrypoint.sh) e HEALTHCHECK vêm da base.
+COPY . .

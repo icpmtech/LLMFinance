@@ -21,9 +21,8 @@ mkdir -p /root/.ssh
 chmod 700 /root/.ssh
 
 # A chave entra por volume read-only; copiamos para garantir as permissoes
-# (o ssh recusa chaves legiveis por outros). O nome do ficheiro vem do
-# `SSH_KEY_FILE` porque a chave nao se chama `id_ed25519`.
-KEY_NAME="${SSH_KEY_FILE:-id_ed25519}"
+# (o ssh recusa chaves legiveis por outros).
+KEY_NAME="id_ed25519"
 KEY="/root/.ssh/$KEY_NAME"
 if [ ! -f "/key/$KEY_NAME" ]; then
     echo "[tunnel] ERRO: nao encontro a chave /key/$KEY_NAME" >&2

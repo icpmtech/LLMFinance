@@ -54,7 +54,7 @@ $startupDir = [Environment]::GetFolderPath('Startup')
 $launcher = Join-Path $startupDir 'IQOS Origin Tunnel.cmd'
 
 # `docker compose` precisa de caminhos com `/`, nao com `\`.
-$sshKeyDir = (Split-Path -Parent $SshKey).Replace('\', '/')
+$sshKeyPath = $SshKey.Replace('\', '/')
 
 function Invoke-Compose {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$ComposeArgs)
@@ -65,8 +65,7 @@ function Invoke-Compose {
 function Write-OriginEnv {
     $content = @(
         '# Gerado por 07-origin-tunnel.ps1 - nao editar a mao.',
-        "SSH_KEY_DIR=$sshKeyDir",
-        "SSH_KEY_FILE=$(Split-Path -Leaf $SshKey)",
+        "SSH_KEY_PATH=$sshKeyPath",
         "SSH_HOST=$SshHost",
         "SSH_USER=$SshUser",
         "REMOTE_PORT=$RemotePort",

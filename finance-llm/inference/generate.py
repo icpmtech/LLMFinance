@@ -21,7 +21,18 @@ class InferenceModel:
         self.model.eval()
 
     def generate(self, prompt: str, max_new_tokens: int = 40, temperature: float = 1.0) -> str:
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+        # O prompt pode ser maior do que a janela do modelo (a Pesquisa profunda
+        # chega a mandar 60 fontes). Sem cortar, os `position_ids` passam do
+        # limite e o PyTorch rebenta com «index out of range in self».
+        contexto = int(getattr(self.model.config, "max_position_embeddings", 1024))
+        max_new_tokens = max(1, min(max_new_tokens, contexto - 64))
+        limite = max(1, contexto - max_new_tokens)
+        # Corta pelo início: no prompt da Pesquisa profunda a pergunta e as
+        # regras estão no fim, e são a parte que não pode faltar.
+        self.tokenizer.truncation_side = "left"
+        inputs = self.tokenizer(
+            prompt, return_tensors="pt", truncation=True, max_length=limite
+        ).to(self.device)
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,

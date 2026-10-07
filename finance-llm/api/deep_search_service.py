@@ -303,26 +303,51 @@ QUESTION_STOPWORDS = frozenset(
     foi foram ha há isso isto ja já mais mas me mesmo meu minha muito na nas no nos o os ou
     para pela pelo por porque porquê qual quais quando quanta quantas quanto quantos que quem
     sao são se sem ser seu sua tem têm ter tinha tu um uma umas uns vai vou
+    consegue consegues diz dizer ganha ganham ganhou ganharam haja havia houve existe existem
+    pode podem podes recebeu receberam sabe sabes teve tiveram
     and de do em for how in many of on the to what with""".split()
 )
 
 
+#: Palavras que, **neste corpus**, aparecem em quase todos os documentos.
+#: O `_text_search` do cliente Elasticsearch exige todos os termos
+#: (`operator: and`), por isso mantê-las transforma a pergunta num filtro que
+#: exclui os documentos certos. Medido: «Quantos contratos tem a CLARANET II
+#: SOLUTIONS e qual o valor total adjudicado?» atirava a entidade CLARANET para
+#: 10.º lugar (a 1.ª era uma empresa sueca sem relação nenhuma) e reduzia a
+#: recuperação a 2 âmbitos; só «CLARANET II SOLUTIONS» a punha em 1.º lugar e
+#: devolvia contratos da própria CLARANET.
+CORPUS_GENERIC = frozenset(
+    """adjudicacao adjudicação adjudicado adjudicados adjudicante adjudicantes adjudicataria
+    adjudicataria adjudicatarias adjudicatario adjudicataria adjudicatario adjudicatarios
+    adjudicatária adjudicatárias adjudicatário adjudicatários ano anos contrato contratos
+    contratacao contratação contratual dado dados data datas euro euros informacao informação
+    lista listar montante mostrar numero número periodo período preco preço precos preços
+    quantia soma total totais valor valores""".split()
+)
+
+
 def keywords(question: str) -> str:
-    """Termos da pergunta, sem palavras interrogativas nem conectores.
+    """Termos da pergunta, sem palavras interrogativas nem termos genéricos.
 
     É esta a consulta do BM25: símbolos (`?`, `»`) e palavras de uma letra caem,
     porque só diluem o `match`.
     """
-    terms: List[str] = []
+    uteis: List[str] = []
+    genericos: List[str] = []
     for raw in re.split(r"[^0-9A-Za-zÀ-ÿ]+", question or ""):
         term = raw.strip()
         if len(term) < 2:
             continue
-        if _fold(term) in QUESTION_STOPWORDS:
+        chave = _fold(term)
+        if chave in QUESTION_STOPWORDS:
             continue
-        if term not in terms:
-            terms.append(term)
-    return " ".join(terms)
+        destino = genericos if chave in CORPUS_GENERIC else uteis
+        if term not in destino:
+            destino.append(term)
+    # Pergunta só com termos genéricos («quantos contratos?»): mais vale usá-los
+    # do que mandar uma consulta vazia para o Elasticsearch.
+    return " ".join(uteis or genericos)
 
 
 def _fold(value: str) -> str:
@@ -519,7 +544,14 @@ def retrieve(
                 )
                 continue
             try:
-                res = vectors.vector_search(index, query, top_k=per_source)
+                # `text_query` (palavras-chave) e nao `query` (pergunta crua): o
+                # embedding de «Quantos contratos tem a CLARANET II SOLUTIONS e
+                # qual o valor total adjudicado?» fica dominado pela frase
+                # interrogativa e os vizinhos deixam de ser a empresa — medido,
+                # a 1.ª entidade era «Solresor i Sverige AB» (sueca, sem
+                # relacao) e a CLARANET caia para 10.º lugar. Com as
+                # palavras-chave, a CLARANET fica em 1.º/2.º.
+                res = vectors.vector_search(index, text_query, top_k=per_source)
             except Exception as exc:  # noqa: BLE001 - modelo indisponível não pode derrubar a página
                 vector_error = f"{type(exc).__name__}: {exc}"
                 continue
@@ -674,6 +706,23 @@ def _no_sources_answer(question: str) -> str:
     )
 
 
+def _prompt_para_modelo_local(prompt: str, limite: int = 3000) -> str:
+    """Prompt que caiba na janela de um modelo local (o gpt2 tem 1024 tokens).
+
+    As fontes vêm primeiro e a pergunta/regras no fim: corta-se o **meio**, para
+    preservar os primeiros excertos (os mais relevantes) e, claro, a pergunta e
+    as regras. Sem isto, o prompt ultrapassa a janela e a geração rebenta.
+    """
+    if len(prompt) <= limite:
+        return prompt
+    marcador = "\n\n### Pergunta"
+    if marcador in prompt:
+        cauda = prompt[prompt.index(marcador) :]
+        cabeca = prompt[: max(1, limite - len(cauda))]
+        return cabeca + cauda
+    return prompt[-limite:]
+
+
 async def _stream_model(
     messages: List[Dict[str, str]],
     *,
@@ -712,13 +761,33 @@ async def _stream_model(
 
     model_name = str(backend.get("backend") or "gpt2")
     prompt = "\n\n".join(message.get("content", "") for message in messages)
+    # Uma janela pequena (o gpt2 tem 1024 tokens) não aguenta 60 fontes nem 1400
+    # tokens de resposta: corta-se o prompt e limita-se o que se pede ao modelo.
+    prompt = _prompt_para_modelo_local(prompt)
+    max_tokens = min(max_tokens, 400)
 
     def _generate() -> str:
         generator = get_inference_model(model_name)
         return generator.generate(prompt, max_new_tokens=max_tokens, temperature=temperature)
 
     text = await asyncio.to_thread(_generate)
-    for token in re.split(r"(\s+)", text or ""):
+    if not (text or "").strip():
+        # Um modelo local que devolve vazio (pesos em falta, contexto demasiado
+        # longo) ficava a pagina com uma resposta em branco e sem explicacao.
+        raise RuntimeError(
+            f"O modelo local «{model_name}» não devolveu texto. "
+            "Escolhe outro modelo ou configura um fornecedor com chave em Definições → Fornecedores de IA."
+        )
+    # O gerador devolve o prompt **mais** a continuação; sem isto a resposta
+    # começava por repetir a lista de fontes.
+    if text.startswith(prompt):
+        text = text[len(prompt) :]
+    if not text.strip():
+        raise RuntimeError(
+            f"O modelo local «{model_name}» não acrescentou nada à pergunta. "
+            "Escolhe outro modelo ou configura um fornecedor com chave em Definições → Fornecedores de IA."
+        )
+    for token in re.split(r"(\s+)", text):
         if token:
             yield token
 
@@ -812,6 +881,17 @@ async def stream_answer(
     except Exception as exc:  # noqa: BLE001 - erro do fornecedor/modelo
         logger.warning("Pesquisa profunda: falha do modelo %s: %s", resolved["label"], exc)
         message = f"⚠️ {exc}"
+        written.append(message)
+        yield f"data: {json.dumps({'token': message}, ensure_ascii=False)}\n\n"
+
+    if not "".join(written).strip():
+        # Rede de seguranca: mesmo com um fornecedor externo que devolva um
+        # fluxo vazio, o utilizador tem de perceber porque e que nao ha resposta.
+        logger.warning("Pesquisa profunda: %s nao devolveu texto", resolved["label"])
+        message = (
+            f"⚠️ O modelo «{resolved['label']}» não devolveu texto. "
+            "Escolhe outro modelo ou configura a chave em Definições → Fornecedores de IA."
+        )
         written.append(message)
         yield f"data: {json.dumps({'token': message}, ensure_ascii=False)}\n\n"
 

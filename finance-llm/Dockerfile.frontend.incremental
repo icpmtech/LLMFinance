@@ -1,0 +1,13 @@
+# Atualização **incremental** do frontend: reutiliza o nginx já configurado
+# (`docker/nginx.conf` e a estrutura da imagem) e copia o `dist` construído no
+# anfitrião, evitando o `npm ci` da build normal (que descarrega o `node_modules`
+# todo outra vez).
+#
+# O `dist` tem de ser construído com `VITE_API_URL=/api`, para o browser falar
+# com o nginx na mesma origem:
+#   $env:VITE_API_URL='/api'; npm --prefix chat-ui run build
+#
+#   docker build -f Dockerfile.frontend.incremental -t iq-os-frontend:latest .
+FROM iq-os-frontend:antes-deep-search
+
+COPY chat-ui/dist /usr/share/nginx/html
