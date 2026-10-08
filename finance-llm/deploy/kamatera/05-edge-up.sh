@@ -34,6 +34,8 @@ fi
 
 # 3) Arrancar o edge.
 cd /opt/iqos/edge
+# Pasta dos registos do formulario da landing (bind mount do servico `landing`).
+mkdir -p /opt/iqos/edge/data
 docker compose up -d --remove-orphans
 
 echo "==> a aguardar o Caddy ficar saudavel"

@@ -1,13 +1,15 @@
 # Caddy edge para sabemos.studio.
 #
-# O proprio VM serve HTTPS com certificado Let's Encrypt automatico.
-# O upstream e o tunel SSH reverso que o PC abre para esta VM:
+# Dois upstreams, ambos no loopback da VM (por isso o container corre com
+# `network_mode: host`):
 #
-#     ssh -N -R 127.0.0.1:8080:127.0.0.1:4180 root@45.147.251.188
+#   * `8090` — servico `landing`: pagina de apresentacao + formulario de registo.
+#     Fica no edge para funcionar **mesmo com a origem em baixo**.
+#   * `8080` — a origem (o PC), publicada por um tunel SSH reverso:
 #
-# (ver `07-origin-tunnel.ps1` no PC). Por isso o Caddy fala com
-# `127.0.0.1:8080` — e o container corre com `network_mode: host`, senao
-# `127.0.0.1` seria o loopback do container e nao o da VM.
+#         ssh -N -R 127.0.0.1:8080:127.0.0.1:4180 root@45.147.251.188
+#
+#     (ver `07-origin-tunnel.ps1` no PC).
 #
 # Nao ha Cloudflare: o unico ponto publico e este Caddy.
 
@@ -17,28 +19,40 @@ www.sabemos.studio {
 }
 
 sabemos.studio {
-    reverse_proxy http://127.0.0.1:8080 {
-        # Preserva o host publico (a SPA/API geram URLs absolutos a partir dele).
-        header_up Host {host}
-        header_up X-Real-IP {remote}
-        header_up X-Forwarded-For {remote}
-        header_up X-Forwarded-Proto {scheme}
-
-        # SSE (chat) e uploads longos: sem buffering, senao a resposta "corta".
-        flush_interval -1
+    handle /healthz {
+        respond "edge-ok" 200
     }
 
-    respond /healthz "edge-ok" 200
+    # Registo de interessados — no edge, para funcionar com a origem offline.
+    handle /api/public/* {
+        reverse_proxy http://127.0.0.1:8090
+    }
+
+    # Apresentacao: sempre acessivel, para poder ser partilhada.
+    handle /landing* {
+        reverse_proxy http://127.0.0.1:8090
+    }
+
+    handle {
+        reverse_proxy http://127.0.0.1:8080 {
+            # Preserva o host publico (a SPA/API geram URLs absolutos a partir dele).
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+
+            # SSE (chat) e uploads longos: sem buffering, senao a resposta "corta".
+            flush_interval -1
+        }
+    }
 
     # Se o tunel SSH cai, o upstream esta inacessivel. Em vez de um 502 cru
-    # (era o que o Cloudflare mostrava, como Error 1033), serve uma pagina
-    # propria que explica que a origem esta temporariamente offline.
+    # (era o que o Cloudflare mostrava, como Error 1033), serve a pagina de
+    # apresentacao com o formulario de contacto.
     handle_errors {
         @offline expression {err.status_code} in [502, 503, 504]
         handle @offline {
-            root * /srv
-            rewrite * /offline.html
-            file_server
+            reverse_proxy http://127.0.0.1:8090
         }
         respond "{err.status_code} {err.status_text}"
     }

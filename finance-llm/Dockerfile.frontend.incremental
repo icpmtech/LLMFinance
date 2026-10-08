@@ -7,7 +7,12 @@
 # com o nginx na mesma origem:
 #   $env:VITE_API_URL='/api'; npm --prefix chat-ui run build
 #
+# Copia-se de `_frontend_dist` e não de `chat-ui/dist` porque o `.dockerignore`
+# exclui `chat-ui/dist` do contexto da build (é preciso lá dentro para o build
+# normal, mas aqui vem já feito):
+#   Remove-Item -Recurse -Force _frontend_dist; Copy-Item -Recurse chat-ui\dist _frontend_dist
+#
 #   docker build -f Dockerfile.frontend.incremental -t iq-os-frontend:latest .
 FROM iq-os-frontend:antes-deep-search
 
-COPY chat-ui/dist /usr/share/nginx/html
+COPY _frontend_dist /usr/share/nginx/html

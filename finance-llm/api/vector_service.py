@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+from functools import lru_cache
 from typing import Any, Dict, List, Optional, Sequence
 
 from api.elasticsearch_client import CONTRACTS_INDEX, ENTITIES_INDEX, get_es_client
@@ -16,6 +17,10 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 EMBEDDING_DIM = 384  # all-MiniLM-L6-v2
+
+# Quantos candidatos o kNN examina por pesquisa, em múltiplos do `k` pedido.
+# Valores altos melhoram a recordação e custam tempo: 10× é generoso, 3-4× chega.
+NUM_CANDIDATES_FACTOR = 4
 
 # Cache global do modelo de embeddings (reutiliza lógica do RAG).
 _embed_model_cache: dict = {}
@@ -319,6 +324,18 @@ async def index_missing_embeddings_async(
     }
 
 
+@lru_cache(maxsize=512)
+def _query_embedding(query: str, model_name: str = DEFAULT_MODEL_NAME) -> tuple:
+    """Embedding de uma consulta, em cache.
+
+    O `vector_search` é chamado **uma vez por âmbito** com a mesma consulta: sem
+    isto, a mesma frase era codificada duas ou três vezes por pergunta. A chave
+    inclui o modelo porque mudar de modelo muda o espaço vetorial.
+    """
+    vetores = _encode_texts([_normalize_text(query)], model_name=model_name)
+    return tuple(vetores[0]) if vetores else ()
+
+
 def vector_search(
     index: str,
     query: str,
@@ -326,21 +343,25 @@ def vector_search(
     filters: Optional[Dict[str, Any]] = None,
     min_score: float = 0.0,
     model_name: str = DEFAULT_MODEL_NAME,
+    num_candidates_factor: int = NUM_CANDIDATES_FACTOR,
 ) -> Dict[str, Any]:
     """Pesquisa semântica kNN no Elasticsearch com filtros opcionais."""
     es = get_es_client()
     if not es:
         return {"error": "Elasticsearch indisponível", "items": []}
 
-    embedding = _encode_texts([_normalize_text(query)], model_name=model_name)
+    embedding = list(_query_embedding(query, model_name))
     if not embedding:
         return {"error": "Não foi possível gerar embedding", "items": []}
 
     knn_query: Dict[str, Any] = {
         "field": "embedding",
-        "query_vector": embedding[0],
+        "query_vector": embedding,
         "k": top_k,
-        "num_candidates": top_k * 10,
+        # Candidatos examinados por pesquisa. Era `top_k * 10` (500 com
+        # `per_source=50`): no HNSW, 3-4× o `k` já dá a mesma qualidade com muito
+        # menos trabalho. Ajustável por parâmetro (ver NUM_CANDIDATES_FACTOR).
+        "num_candidates": max(top_k * max(1, num_candidates_factor), 50),
     }
 
     bool_filter = []

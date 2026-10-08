@@ -1172,6 +1172,11 @@ def _search_crm_group(client: Elasticsearch, scope: Dict[str, Any], q: str, size
 
 
 # ------------------------------------------------------------------ pesquisa
+# Âmbitos pesquisados em paralelo. As pesquisas são de rede para o
+# Elasticsearch: 4 threads obrigavam 15 âmbitos a ~4 vagas sequenciais.
+SEARCH_WORKERS = 8
+
+
 def unified_search(
     q: str,
     *,
@@ -1220,7 +1225,12 @@ def unified_search(
 
     started = datetime.now()
     groups: List[Dict[str, Any]] = []
-    with ThreadPoolExecutor(max_workers=min(4, max(1, len(requested)))) as pool:
+    # Com 4 threads, 15 âmbitos faziam ~4 vagas sequenciais: o tempo total era
+    # `ceil(15/4) x âmbito mais lento`. Estas pesquisas são de rede para o
+    # Elasticsearch (o pool de pesquisa do ES tem ~21 threads numa máquina de
+    # 14 núcleos), por isso subir o paralelismo encurta a pesquisa sem a tornar
+    # mais pesada.
+    with ThreadPoolExecutor(max_workers=min(SEARCH_WORKERS, max(1, len(requested)))) as pool:
         futures = {}
         for scope_id in requested:
             label = _label_for(scope_id)

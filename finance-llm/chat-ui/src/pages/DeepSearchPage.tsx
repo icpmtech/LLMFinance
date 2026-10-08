@@ -33,12 +33,16 @@ import {
     type DeepSourcesEvent,
 } from "../deepSearchApi";
 
+// Cartões de fonte desenhados de início e em cada «mostrar mais». Com «sem
+// limite» a API devolve centenas de fontes: desenhá-las todas bloqueia a página.
+const CARTOES_INICIAIS = 24;
+const CARTOES_PASSO = 48;
+
 type ChatModelOption = {
     id: string;
     label: string;
     group: string;
-    usable: boolean;
-    note?: string | null;
+    usable: boolean;    note?: string | null;
     default?: boolean;
 };
 
@@ -80,6 +84,10 @@ export default function DeepSearchPage({ onNavigate }: Props) {
     const [cited, setCited] = useState<number[]>([]);
     const [retrieval, setRetrieval] = useState<DeepSourcesEvent | null>(null);
     const [followups, setFollowups] = useState<string[]>([]);
+    // Com «sem limite» a API chega a devolver 291 fontes. Desenhar todas de uma
+    // vez custa caro (centenas de cartões com texto) e ninguém lê as últimas:
+    // mostram-se as primeiras e um botão abre o resto.
+    const [cartoes, setCartoes] = useState(CARTOES_INICIAIS);
     const [acItems, setAcItems] = useState<DeepSuggestion[]>([]);
     const [acOpen, setAcOpen] = useState(false);
     const [acIndex, setAcIndex] = useState(-1);
@@ -151,6 +159,7 @@ export default function DeepSearchPage({ onNavigate }: Props) {
             setAnswering(true);
             setAnswer("");
             setSources([]);
+            setCartoes(CARTOES_INICIAIS);
             setError("");
             setTookMs(null);
             setCited([]);
@@ -475,7 +484,7 @@ export default function DeepSearchPage({ onNavigate }: Props) {
                                 </p>
                             )}
                             <div className="grid gap-2 sm:grid-cols-2">
-                                {sources.map((source) => {
+                                {sources.slice(0, cartoes).map((source) => {
                                     const clickable = Boolean(source.url) || Boolean(source.open?.arg);
                                     return (
                                         <button
@@ -514,6 +523,15 @@ export default function DeepSearchPage({ onNavigate }: Props) {
                                     );
                                 })}
                             </div>
+                            {sources.length > cartoes && (
+                                <button
+                                    type="button"
+                                    onClick={() => setCartoes((atual) => atual + CARTOES_PASSO)}
+                                    className="self-start rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11.5px] text-foreground/80 transition hover:border-teal-400/40 hover:text-foreground"
+                                >
+                                    Mostrar mais fontes ({sources.length - cartoes} por mostrar)
+                                </button>
+                            )}
                         </section>
                     )}
 

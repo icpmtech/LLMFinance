@@ -22,6 +22,7 @@ import json
 import logging
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, AsyncIterator, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from api import providers_service as providers
@@ -386,6 +387,71 @@ def _subtitle(item: Dict[str, Any]) -> str:
     return " · ".join(dict.fromkeys(parts))[:200]
 
 
+#: Campos do `extra` dos resultados que valem a pena levar ao modelo. Sem isto
+#: ele não vê **nenhum** valor de contrato: o preço vive no `extra` (o
+#: `_search_contracts_group` põe-no em `preco`) e o `_as_source` deitava-o fora,
+#: pelo que a resposta era «as fontes não indicam o valor de nenhum dos
+#: contratos» e a comparação de montantes era impossível.
+_META_KEYS = (
+    "preco",
+    "valor",
+    "contratos",
+    "cpv",
+    "adjudicante",
+    "adjudicatario",
+    "adjudicatario_nif",
+    "entidade",
+    "nif",
+    "sector",
+    "pais",
+)
+
+
+def _euros(valor: Any, *, zero: bool = False) -> str:
+    """Valor em euros legível («1 234 567 €», «1 234,56 €»).
+
+    `zero=True` para extremos estatísticos (o mínimo de um CPV é muitas vezes
+    0 € — há contratos sem preço contratual), onde mostrar «0 €» é informação.
+    """
+    try:
+        numero = float(valor)
+    except (TypeError, ValueError):
+        return ""
+    if numero < 0 or (numero == 0 and not zero):
+        return ""
+    if abs(numero - round(numero)) < 0.01:
+        return f"{round(numero):,}".replace(",", " ") + " €"
+    return f"{numero:,.2f}".replace(",", " ").replace(".", ",") + " €"
+
+
+def _meta(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Campos estruturados da fonte (valores, CPV, partes) que o modelo deve ver."""
+    extra = item.get("extra") or {}
+    if not isinstance(extra, dict):
+        return {}
+    return {chave: extra[chave] for chave in _META_KEYS if extra.get(chave) not in (None, "", [])}
+
+
+def _meta_linha(meta: Dict[str, Any]) -> str:
+    """Linha «valor · CPV · adjudicatário» para o modelo poder comparar montantes."""
+    partes: List[str] = []
+    preco = _euros(meta.get("preco"))
+    if preco:
+        partes.append(f"valor {preco}")
+    if meta.get("cpv"):
+        partes.append(f"CPV {meta['cpv']}")
+    if meta.get("adjudicatario"):
+        partes.append(f"adjudicatário {meta['adjudicatario']}")
+    if meta.get("adjudicante"):
+        partes.append(f"adjudicante {meta['adjudicante']}")
+    if meta.get("contratos") is not None:
+        partes.append(f"{meta['contratos']} contratos")
+    total = _euros(meta.get("valor"))
+    if total:
+        partes.append(f"total agregado {total}")
+    return " · ".join(partes)
+
+
 def _as_source(n: int, scope_id: str, item: Dict[str, Any], score: float) -> Dict[str, Any]:
     """Normaliza um resultado (BM25 ou kNN) numa fonte citável."""
     return {
@@ -396,6 +462,9 @@ def _as_source(n: int, scope_id: str, item: Dict[str, Any], score: float) -> Dic
         "title": str(item.get("title") or "").strip() or "(sem título)",
         "subtitle": _subtitle(item),
         "snippet": _snippet(item),
+        # Valores e códigos: a interface mostra-os e o prompt usa-os para
+        # comparar montantes (ver `_meta_linha` e `mercado_por_cpv`).
+        "meta": _meta(item),
         "url": str(item.get("url") or ""),
         "date": item.get("date"),
         "badges": [str(badge) for badge in (item.get("badges") or []) if badge][:4],
@@ -465,6 +534,109 @@ def _vector_item(scope_id: str, row: Dict[str, Any]) -> Optional[Dict[str, Any]]
     return None
 
 
+def mercado_por_cpv(cpvs: Iterable[Any], *, limite: int = 12) -> List[Dict[str, Any]]:
+    """Preços de referência de mercado para os CPV dos contratos encontrados.
+
+    É isto que permite «comparar com contratos semelhantes no mercado»: sem uma
+    referência **externa** ao lote encontrado, o modelo só compara os contratos
+    entre si — e, se as fontes não trouxerem valores, não compara nada. Uma
+    única agregação resolve todos os códigos: `cpv` é `nested` (com `code`
+    `keyword`) e o preço é `double` em `precoContratual`. `limite` é o número
+    máximo de códigos cobertos (os CPV distintos de uma resposta raramente
+    passam de uma dúzia).
+    """
+    codigos = [codigo for codigo in dict.fromkeys(str(c or "").strip() for c in cpvs) if codigo]
+    if not codigos:
+        return []
+    es = search_service.get_es_client()
+    if es is None:
+        return []
+
+    corpo = {
+        "size": 0,
+        "query": {"bool": {"filter": [{"exists": {"field": "precoContratual"}}]}},
+        "aggs": {
+            "cpv": {
+                "nested": {"path": "cpv"},
+                "aggs": {
+                    "codigos": {
+                        # `include` já limita aos nossos códigos: o `size` só tem
+                        # de ser grande o suficiente para não cortar nenhum.
+                        "terms": {
+                            "field": "cpv.code",
+                            "size": min(len(codigos), max(1, limite)),
+                            "include": codigos,
+                        },
+                        "aggs": {
+                            "contratos": {
+                                "reverse_nested": {},
+                                "aggs": {
+                                    "preco": {
+                                        "percentiles": {
+                                            "field": "precoContratual",
+                                            "percents": [25, 50, 75],
+                                        }
+                                    },
+                                    "minimo": {"min": {"field": "precoContratual"}},
+                                    "maximo": {"max": {"field": "precoContratual"}},
+                                },
+                            }
+                        },
+                    }
+                },
+            }
+        },
+    }
+    try:
+        resposta = es.search(index=vectors.CONTRACTS_INDEX, body=corpo, request_timeout=20)
+    except Exception as exc:  # noqa: BLE001 - a referência é um extra, nunca deve derrubar a resposta
+        logger.debug("Referência de mercado indisponível: %s", exc)
+        return []
+
+    baldes = (((resposta.get("aggregations") or {}).get("cpv") or {}).get("codigos") or {}).get("buckets") or []
+    referencias: List[Dict[str, Any]] = []
+    for balde in baldes:
+        grupo = balde.get("contratos") or {}
+        valores = (grupo.get("preco") or {}).get("values") or {}
+        mediana = _euros(valores.get("50.0"))
+        if not mediana:
+            continue
+        referencias.append(
+            {
+                "cpv": balde.get("key"),
+                "contratos": grupo.get("doc_count") or 0,
+                "minimo": _euros((grupo.get("minimo") or {}).get("value"), zero=True),
+                "p25": _euros(valores.get("25.0")),
+                "mediana": mediana,
+                "p75": _euros(valores.get("75.0")),
+                "maximo": _euros((grupo.get("maximo") or {}).get("value"), zero=True),
+            }
+        )
+    return referencias
+
+
+def _mercado_linha(ref: Dict[str, Any]) -> str:
+    """Uma linha de referência: «CPV X: N contratos · mediana … · p25 … · p75 …»."""
+    quantos = f"{int(ref.get('contratos') or 0):,}".replace(",", " ")
+    return (
+        f"- CPV {ref.get('cpv')}: {quantos} contratos adjudicados · "
+        f"mediana {ref.get('mediana')} · p25 {ref.get('p25')} · p75 {ref.get('p75')} · "
+        f"mínimo {ref.get('minimo')} · máximo {ref.get('maximo')}"
+    )
+
+
+def _mercado_bloco(referencias: Sequence[Dict[str, Any]]) -> str:
+    """Secção «Referência de mercado» que entra no prompt antes da pergunta."""
+    if not referencias:
+        return ""
+    linhas = [_mercado_linha(ref) for ref in referencias]
+    return (
+        "### Referência de mercado (preços adjudicados no mesmo CPV, todos os anos)\n"
+        + "\n".join(linhas)
+        + "\n\n"
+    )
+
+
 def retrieve(
     question: str,
     *,
@@ -507,7 +679,8 @@ def retrieve(
     # Cada lista é um ranking independente (uma por âmbito e por tipo de pesquisa);
     # fundem-se por posição, porque os scores de BM25 e de coseno não são comparáveis.
     ranked: Dict[str, List[Tuple[str, Dict[str, Any]]]] = {}
-    took_ms = 0
+    inicio = time.perf_counter()
+    es_took_ms = 0
     vector_error: Optional[str] = None
     vector_skipped: Dict[str, str] = {}
     text_query = keywords(query) or query
@@ -523,7 +696,7 @@ def retrieve(
                 "mode": mode,
                 "error": str(result["error"]),
             }
-        took_ms = int(result.get("took_ms") or 0)
+        es_took_ms = int(result.get("took_ms") or 0)
         groups = {group.get("scope"): group for group in result.get("groups") or []}
         for scope_id in chosen:
             items = [item for item in (groups.get(scope_id) or {}).get("items") or [] if isinstance(item, dict)]
@@ -532,6 +705,7 @@ def retrieve(
 
     if mode in ("hybrid", "vector"):
         coverage = (vector_coverage().get("scopes") or {})
+        pesquisaveis: List[Tuple[str, str]] = []
         for scope_id in chosen:
             index = VECTOR_INDEXES.get(scope_id)
             if not index:
@@ -543,17 +717,27 @@ def retrieve(
                     f"({info.get('percent') or 0}%)"
                 )
                 continue
-            try:
-                # `text_query` (palavras-chave) e nao `query` (pergunta crua): o
-                # embedding de «Quantos contratos tem a CLARANET II SOLUTIONS e
-                # qual o valor total adjudicado?» fica dominado pela frase
-                # interrogativa e os vizinhos deixam de ser a empresa — medido,
-                # a 1.ª entidade era «Solresor i Sverige AB» (sueca, sem
-                # relacao) e a CLARANET caia para 10.º lugar. Com as
-                # palavras-chave, a CLARANET fica em 1.º/2.º.
-                res = vectors.vector_search(index, text_query, top_k=per_source)
-            except Exception as exc:  # noqa: BLE001 - modelo indisponível não pode derrubar a página
-                vector_error = f"{type(exc).__name__}: {exc}"
+            pesquisaveis.append((scope_id, index))
+
+        # As pesquisas vetoriais são independentes entre âmbitos e o embedding da
+        # consulta já vem de cache, portanto fazem-se em paralelo (antes era uma
+        # a seguir à outra).
+        resultados: Dict[str, Dict[str, Any]] = {}
+        if pesquisaveis:
+            with ThreadPoolExecutor(max_workers=min(4, len(pesquisaveis))) as pool:
+                futuros = {
+                    pool.submit(vectors.vector_search, index, text_query, per_source): scope_id
+                    for scope_id, index in pesquisaveis
+                }
+                for futuro, scope_id in futuros.items():
+                    try:
+                        resultados[scope_id] = futuro.result(timeout=60)
+                    except Exception as exc:  # noqa: BLE001 - modelo indisponível não pode derrubar a página
+                        vector_error = f"{type(exc).__name__}: {exc}"
+
+        for scope_id, _index in pesquisaveis:
+            res = resultados.get(scope_id)
+            if not res:
                 continue
             if res.get("error"):
                 vector_error = str(res["error"])
@@ -574,7 +758,7 @@ def retrieve(
                 "mode": mode,
                 "error": str(result["error"]),
             }
-        took_ms = int(result.get("took_ms") or 0)
+        es_took_ms = int(result.get("took_ms") or 0)
         groups = {group.get("scope"): group for group in result.get("groups") or []}
         for scope_id in chosen:
             items = [item for item in (groups.get(scope_id) or {}).get("items") or [] if isinstance(item, dict)]
@@ -626,7 +810,11 @@ def retrieve(
         "text_query": text_query,
         "sources": picked,
         "searched": chosen,
-        "took_ms": took_ms,
+        # Tempo **total** da recuperação (é o que a página mostra como «a
+        # procurar»). `es_took_ms` é o que o Elasticsearch reporta para a
+        # pesquisa textual — antes, no modo «Semântica», este campo vinha 0.
+        "took_ms": max(es_took_ms, int((time.perf_counter() - inicio) * 1000)),
+        "es_took_ms": es_took_ms,
         "mode": mode,
         "citable_max": CITABLE_MAX,
         "unlimited": max_sources == 0,
@@ -664,25 +852,38 @@ def build_messages(
     question: str,
     sources: Sequence[Dict[str, Any]],
     history: Optional[Sequence[Dict[str, str]]] = None,
+    mercado: Optional[Sequence[Dict[str, Any]]] = None,
 ) -> List[Dict[str, str]]:
-    """Mensagens para o modelo: fontes numeradas + pergunta + histórico curto."""
+    """Mensagens para o modelo: fontes numeradas + pergunta + histórico curto.
+
+    Cada fonte leva o seu **valor** (€) e **CPV** na linha de detalhe — sem isso
+    o modelo não tinha por onde comparar montantes e respondia que as fontes não
+    indicavam valores. `mercado` acrescenta a referência de preços do CPV.
+    """
     blocks: List[str] = []
     for source in sources:
         head = f"[{source.get('n')}] {source.get('scope_label')} · {source.get('title')}"
-        meta = [part for part in (source.get("subtitle"), source.get("date"), source.get("url")) if part]
-        if meta:
-            head += "\n    " + " | ".join(str(part) for part in meta)
+        detalhe = [part for part in (source.get("subtitle"), source.get("date"), source.get("url")) if part]
+        if detalhe:
+            head += "\n    " + " | ".join(str(part) for part in detalhe)
+        linha = _meta_linha(source.get("meta") or {})
+        if linha:
+            head += "\n    " + linha
         body = source.get("snippet") or ""
         blocks.append(f"{head}\n    {body}" if body else head)
 
     context = "\n\n".join(blocks) if blocks else "(sem fontes)"
     prompt = (
         f"### Fontes\n{context}\n\n"
-        f"### Pergunta\n{question}\n\n"
+        + _mercado_bloco(list(mercado or ()))
+        + f"### Pergunta\n{question}\n\n"
         "### Regras de resposta\n"
         "- Responde em português de Portugal, de forma direta e factual.\n"
         "- Sustenta cada afirmação com a fonte numerada correspondente, no formato [1], [2]…\n"
         "- Usa apenas o que está nas fontes; se algo não estiver lá, di-lo em vez de supor.\n"
+        "- Quando as fontes trouxerem «valor», compara montantes em euros e diz qual é maior ou menor.\n"
+        "- Quando houver «Referência de mercado», compara os valores das fontes com a mediana/p75 desse CPV "
+        "e conclui se estão acima ou abaixo do habitual para aquele tipo de contrato.\n"
         "- Podes usar uma tabela ou bullets quando ajudar a comparar contratos, entidades ou valores.\n"
         "- Termina com uma secção curta «**Notas**» quando houver limitações dos dados (ex.: anos em falta).\n"
     )
@@ -846,6 +1047,7 @@ async def stream_answer(
             "sources": found,
             "searched": collected["searched"],
             "took_ms": collected["took_ms"],
+            "es_took_ms": collected.get("es_took_ms"),
             "model": resolved["label"],
             "mode": collected.get("mode") or DEFAULT_MODE,
             "text_lists": collected.get("text_lists"),
@@ -866,7 +1068,17 @@ async def stream_answer(
         yield sse("done", {"sources": [], "tools": [], "answer": text, "citations": [], "suggestions": list(EXAMPLES)})
         return
 
-    messages = build_messages(question, found[:CITABLE_MAX], history)
+    # Referência de mercado dos CPV encontrados: é o que permite comparar os
+    # valores das fontes com contratos semelhantes (e não apenas entre si).
+    cpvs = [(src.get("meta") or {}).get("cpv") for src in found[:CITABLE_MAX]]
+    mercado: List[Dict[str, Any]] = []
+    if any(cpvs):
+        try:
+            mercado = await asyncio.to_thread(mercado_por_cpv, cpvs)
+        except Exception as exc:  # noqa: BLE001 - a resposta não depende disto
+            logger.debug("Pesquisa profunda: referência de mercado falhou: %s", exc)
+
+    messages = build_messages(question, found[:CITABLE_MAX], history, mercado=mercado)
     written: List[str] = []
     try:
         async for chunk in _stream_model(
@@ -904,6 +1116,7 @@ async def stream_answer(
             "answer": answer,
             "citations": _cited_numbers(answer, len(found)),
             "suggestions": collected.get("suggestions") or [],
+            "mercado": mercado,
         },
     )
 
