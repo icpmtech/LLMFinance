@@ -14,6 +14,7 @@ traduzidos em mensagens legíveis em português.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any, AsyncIterator, Dict, List, Optional
@@ -22,8 +23,50 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-REQUEST_TIMEOUT = httpx.Timeout(connect=10.0, read=180.0, write=30.0, pool=10.0)
+# Tempos limite. O `connect` era 10 s e falhava de vez em quando a ligar a
+# `api.deepseek.com` (medido: 1 em 10 pedidos, aos 10,1 s, sem enviar um único
+# pedaço) — daí a mensagem «não respondeu a tempo», que na verdade queria dizer
+# «não consegui ligar». O `read` é generoso porque um modelo pode demorar a
+# produzir o primeiro pedaço.
+CONNECT_TIMEOUT = 20.0
+POOL_TIMEOUT = 30.0
+WRITE_TIMEOUT = 30.0
+READ_TIMEOUT = 180.0
+#: Tentativas totais quando a falha é de **ligação** e nada foi transmitido
+#: (repetir depois de já haver texto duplicaria a resposta).
+MAX_TENTATIVAS_LIGACAO = 3
+TENTATIVA_ESPERA = 0.8
+
+REQUEST_TIMEOUT = httpx.Timeout(
+    connect=CONNECT_TIMEOUT, read=READ_TIMEOUT, write=WRITE_TIMEOUT, pool=POOL_TIMEOUT
+)
 ANTHROPIC_VERSION = "2023-06-01"
+
+
+def _mensagem_de_timeout(erro: httpx.TimeoutException, label: str) -> str:
+    """Mensagem que diz **o que** falhou, não apenas que «não respondeu a tempo».
+
+    O `TimeoutException` do httpx cobre quatro situações muito diferentes; uma
+    mensagem única mandava o utilizador procurar o problema no sítio errado.
+    """
+    if isinstance(erro, httpx.ConnectTimeout):
+        return (
+            f"Não foi possível ligar a {label} (ligação não estabelecida em {CONNECT_TIMEOUT:.0f} s). "
+            "Confirme a ligação à Internet e tente novamente."
+        )
+    if isinstance(erro, httpx.PoolTimeout):
+        return f"{label} não aceitou a ligação a tempo ({POOL_TIMEOUT:.0f} s). Tente novamente daqui a pouco."
+    if isinstance(erro, httpx.WriteTimeout):
+        return f"A ligação a {label} ficou presa ao enviar o pedido ({WRITE_TIMEOUT:.0f} s). Tente novamente."
+    return (
+        f"{label} deixou de enviar dados durante {READ_TIMEOUT:.0f} s e o pedido foi interrompido. "
+        "Tente novamente ou escolha outro modelo."
+    )
+
+
+def _falha_de_ligacao(erro: Exception) -> bool:
+    """Falhas que valem a pena repetir: ainda não chegou nada do fornecedor."""
+    return isinstance(erro, (httpx.ConnectTimeout, httpx.PoolTimeout, httpx.ConnectError, httpx.WriteTimeout))
 
 
 class CloudError(RuntimeError):
@@ -34,6 +77,14 @@ class CloudError(RuntimeError):
         self.message = message
         self.status = status
         self.provider = provider
+
+
+class _FalhaDeTransporte(RuntimeError):
+    """Falha de rede/ligação numa tentativa (ver `stream_answer`).
+
+    Serve para o ciclo de tentativas distinguir «não chegou nada do fornecedor»
+    (vale a pena repetir) de um erro do próprio fornecedor (não vale).
+    """
 
 
 def _friendly_status(status: int, provider: str, body: str) -> str:
@@ -232,51 +283,74 @@ async def stream_answer(
         # Ollama Cloud pode exigir Bearer token se configurado.
         headers = {"content-type": "application/json", "authorization": f"Bearer {api_key}"}
 
-    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+    async def uma_vez() -> AsyncIterator[str]:
+        """Uma tentativa: abre a ligação e itera os pedaços."""
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+            try:
+                async with client.stream("POST", url, headers=headers, json=body) as response:
+                    if response.status_code >= 400:
+                        text = (await response.aread()).decode("utf-8", errors="replace")
+                        raise CloudError(
+                            _friendly_status(response.status_code, spec.get("label") or provider, text),
+                            status=response.status_code,
+                            provider=provider,
+                        )
+                    async for line in response.aiter_lines():
+                        if not line or not line:
+                            continue
+                        data = line.strip()
+                        if data == "[DONE]" or not data:
+                            continue
+                        # Ollama devolve NDJSON (linhas JSON, não SSE data:).
+                        if kind == "ollama":
+                            try:
+                                payload = json.loads(data)
+                            except json.JSONDecodeError:
+                                continue
+                            if payload.get("done"):
+                                continue
+                        else:
+                            if not line.startswith("data:"):
+                                continue
+                            data = line[5:].strip()
+                            if not data or data == "[DONE]":
+                                continue
+                            try:
+                                payload = json.loads(data)
+                            except json.JSONDecodeError:
+                                continue
+                        if isinstance(payload, dict) and payload.get("error"):
+                            error = payload["error"]
+                            message = error.get("message") if isinstance(error, dict) else str(error)
+                            raise CloudError(f"{spec.get('label') or provider}: {message}", provider=provider)
+                        chunk = extract(payload)
+                        if chunk:
+                            yield chunk
+            except httpx.HTTPError as error:
+                # Convertido depois, no ciclo de tentativas (que sabe se já houve texto).
+                raise _FalhaDeTransporte(str(error)) from error
+
+    label = spec.get("label") or provider
+    for tentativa in range(1, MAX_TENTATIVAS_LIGACAO + 1):
+        emitido = 0
         try:
-            async with client.stream("POST", url, headers=headers, json=body) as response:
-                if response.status_code >= 400:
-                    text = (await response.aread()).decode("utf-8", errors="replace")
-                    raise CloudError(
-                        _friendly_status(response.status_code, spec.get("label") or provider, text),
-                        status=response.status_code,
-                        provider=provider,
-                    )
-                async for line in response.aiter_lines():
-                    if not line or not line:
-                        continue
-                    data = line.strip()
-                    if data == "[DONE]" or not data:
-                        continue
-                    # Ollama devolve NDJSON (linhas JSON, não SSE data:).
-                    if kind == "ollama":
-                        try:
-                            payload = json.loads(data)
-                        except json.JSONDecodeError:
-                            continue
-                        if payload.get("done"):
-                            continue
-                    else:
-                        if not line.startswith("data:"):
-                            continue
-                        data = line[5:].strip()
-                        if not data or data == "[DONE]":
-                            continue
-                        try:
-                            payload = json.loads(data)
-                        except json.JSONDecodeError:
-                            continue
-                    if isinstance(payload, dict) and payload.get("error"):
-                        error = payload["error"]
-                        message = error.get("message") if isinstance(error, dict) else str(error)
-                        raise CloudError(f"{spec.get('label') or provider}: {message}", provider=provider)
-                    chunk = extract(payload)
-                    if chunk:
-                        yield chunk
-        except httpx.TimeoutException as error:
-            raise CloudError(f"{spec.get('label') or provider} não respondeu a tempo.", provider=provider) from error
-        except httpx.HTTPError as error:
-            raise CloudError(f"Falha de rede a contactar {spec.get('label') or provider}: {error}", provider=provider) from error
+            async for chunk in uma_vez():
+                emitido += 1
+                yield chunk
+            return
+        except _FalhaDeTransporte as envolucro:
+            causa = envolucro.__cause__ or envolucro
+            if isinstance(causa, httpx.TimeoutException):
+                mensagem = _mensagem_de_timeout(causa, label)
+            else:
+                mensagem = f"Falha de rede a contactar {label}: {causa}"
+            pode_repetir = emitido == 0 and _falha_de_ligacao(causa) and tentativa < MAX_TENTATIVAS_LIGACAO
+            if not pode_repetir:
+                raise CloudError(mensagem, provider=provider) from causa
+            logger.warning(
+                "%s: %s — a repetir (%d/%d)", label, mensagem, tentativa + 1, MAX_TENTATIVAS_LIGACAO
+            )
+            await asyncio.sleep(TENTATIVA_ESPERA * tentativa)
 
 
 async def complete_answer(
@@ -310,7 +384,7 @@ async def list_ollama_models(base_url: str, api_key: Optional[str] = None) -> Li
     headers: Dict[str, str] = {"content-type": "application/json"}
     if api_key:
         headers["authorization"] = f"Bearer {api_key}"
-    async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(connect=CONNECT_TIMEOUT, read=30.0, write=WRITE_TIMEOUT, pool=POOL_TIMEOUT)) as client:
         try:
             response = await client.get(url, headers=headers)
             if response.status_code >= 400:
@@ -324,7 +398,7 @@ async def list_ollama_models(base_url: str, api_key: Optional[str] = None) -> Li
             models = [str(m.get("name") or m.get("model")) for m in payload.get("models", []) if m]
             return sorted({m for m in models if m})
         except httpx.TimeoutException as error:
-            raise CloudError("Ollama (cloud) não respondeu a tempo ao listar modelos.", provider="ollama-cloud") from error
+            raise CloudError(_mensagem_de_timeout(error, "Ollama (cloud)"), provider="ollama-cloud") from error
         except httpx.HTTPError as error:
             raise CloudError(f"Falha de rede a contactar Ollama (cloud): {error}", provider="ollama-cloud") from error
 

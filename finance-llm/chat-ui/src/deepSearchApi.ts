@@ -14,12 +14,23 @@ export type DeepSourceMeta = {
     contratos?: number | null;
     cpv?: string | null;
     adjudicante?: string | number | null;
+    adjudicante_nif?: string | null;
     adjudicatario?: string | number | null;
     adjudicatario_nif?: string | null;
+    organo?: string | null;
     entidade?: string | null;
     nif?: string | null;
     sector?: string | null;
     pais?: string | null;
+    ano?: number | null;
+};
+
+/** Ligação a uma ficha (contrato ou empresa) a partir do cartão da fonte. */
+export type DeepSourceLink = {
+    label: string;
+    text: string;
+    view?: string;
+    arg: string;
 };
 
 export type DeepSource = {
@@ -38,6 +49,8 @@ export type DeepSource = {
     score?: number;
     /** Valores e códigos do contrato (é com isto que a resposta compara montantes). */
     meta?: DeepSourceMeta;
+    /** Contrato, entidade adjudicante e adjudicatário, com ligação às fichas. */
+    links?: DeepSourceLink[];
 };
 
 /** Preços praticados no mercado para um CPV (calculados pelo backend). */
@@ -89,11 +102,18 @@ export type DeepLimits = {
     citable_max: number;
 };
 
+/** Pergunta de exemplo, com o âmbito de dados que a sustenta. */
+export type DeepExample = {
+    text: string;
+    scope: string;
+    hint: string;
+};
+
 export type DeepMeta = {
     sources: DeepSourceOption[];
     modes: DeepMode[];
     default_mode: string;
-    examples: string[];
+    examples: DeepExample[];
     vector: DeepVectorInfo;
     defaults: { sources: string[]; provider: string; model: string; backend: string };
     limits: DeepLimits;
@@ -165,11 +185,24 @@ export type DeepAskHandlers = {
     onError?: (message: string) => void;
 };
 
-export const DEEP_EXAMPLES = [
-    "Quais os maiores contratos de 2025 na área da saúde?",
-    "Que empresas ganharam mais contratos com a Comunidade Intermunicipal da Região de Leiria?",
-    "Resume os contratos de videovigilância adjudicados no último ano e diz quem concorreu.",
-    "Que notícias recentes ligam a EDP a contratação pública?",
+/**
+ * Exemplos de recurso. O normal é vir do backend (`meta.examples`), construídos
+ * a partir dos dados que existem; esta lista só aparece se o Elasticsearch
+ * estiver inacessível.
+ */
+export const DEEP_EXAMPLES: DeepExample[] = [
+    { text: "Quais os maiores contratos de 2025 na área da saúde?", scope: "contracts", hint: "contratos" },
+    {
+        text: "Que empresas ganharam mais contratos com a Comunidade Intermunicipal da Região de Leiria?",
+        scope: "contracts",
+        hint: "contratos",
+    },
+    {
+        text: "Resume os contratos de videovigilância adjudicados no último ano e diz quem concorreu.",
+        scope: "contracts",
+        hint: "contratos",
+    },
+    { text: "Que notícias recentes ligam a EDP a contratação pública?", scope: "news", hint: "notícias" },
 ];
 
 async function readError(res: Response, fallback: string): Promise<string> {
@@ -186,6 +219,17 @@ export async function fetchDeepMeta(): Promise<DeepMeta> {
     const res = await fetch(`${API_BASE}/deep-search/meta`);
     if (!res.ok) throw new Error(await readError(res, `Erro ao carregar as fontes (${res.status}).`));
     return res.json();
+}
+
+/**
+ * Exemplos construídos a partir dos dados indexados (agregações no Elasticsearch,
+ * por isso é um pedido à parte: o `/meta` não pode esperar por ele).
+ */
+export async function fetchDeepExamples(limit = 8): Promise<DeepExample[]> {
+    const res = await fetch(`${API_BASE}/deep-search/examples?limit=${limit}`);
+    if (!res.ok) throw new Error(await readError(res, `Erro ao carregar os exemplos (${res.status}).`));
+    const data = (await res.json()) as { examples?: DeepExample[] };
+    return data.examples ?? [];
 }
 
 /** Só a recuperação (sem IA): útil para ver/refrescar as fontes. */

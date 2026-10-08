@@ -74,12 +74,15 @@ As páginas são instaladas automaticamente na primeira utilização de cada bro
 
 O dashboard do Hermes exige autenticação quando está ligado a `0.0.0.0`. Em vez de um par de credenciais próprio, a solução traz um **provider** (`docker/hermes/plugins/dashboard-auth-iqos`) que valida o email+palavra-passe em `POST /auth/login` da API do IQ OS: o formulário **«Sign in with IQ OS»** aceita as mesmas contas da plataforma (e o dashboard passa a mostrar `Logged in as … via iqos`).
 
+O mesmo provider aceita **single sign-on**: o utilizador reservado `iqos-sso` (com o *token* Bearer do IQ OS como palavra-passe) é validado em `GET /auth/me`, o que permite entrar no dashboard sem segundo formulário quando já há sessão na plataforma. Quem injeta esse pedido é o nginx do frontend (`docker/nginx.conf`, `location /hermes-agent/`), que serve também o dashboard **no subcaminho público** `/hermes-agent/` — necessário porque os cookies de sessão são `SameSite=Lax` e não são enviados num iframe cross-origin.
+
 ```powershell
 docker compose --profile agents up -d hermes-agent
 docker compose exec hermes-agent hermes plugins list   # dashboard-auth-iqos -> enabled
+docker compose exec frontend nginx -t                  # regras do subcaminho /hermes-agent/
 ```
 
-O porto `9119` **não** é publicado no host: o dashboard só é acessível pelo proxy de incorporação (`:8892`), que serve a SPA.
+O porto `9119` **não** é publicado no host: o dashboard é acessível pelo proxy de incorporação (`:8892`) e, no domínio público, por `https://<domínio>/hermes-agent/`. Detalhe das reescritas e do *single sign-on*: README → «Dashboard do Hermes Agent (subcaminho público e single sign-on)».
 
 ## Requisitos
 

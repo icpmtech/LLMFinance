@@ -8,6 +8,12 @@ endereço não-loopback. Em vez de um par fixo de credenciais
 plataforma** — as credenciais são validadas em `POST /auth/login` da API do IQ OS
 (e ficam na sessão auditada do IQ OS, como em qualquer outro início de sessão).
 
+*Single sign-on*: quando o `username` é `iqos-sso` (constante `SSO_USERNAME`), a
+`password` é interpretada como um **token Bearer do IQ OS** e validada em
+`GET /auth/me`. É assim que a página `/login` do dashboard entra sozinha quando o
+utilizador já tem sessão na plataforma — o script que faz o pedido é injetado
+pelo nginx do frontend (`docker/nginx.conf`, `location /hermes-agent/`).
+
 Instalação (já feita no `docker-compose.yml` do IQ OS):
 
     services:
@@ -71,6 +77,13 @@ _NO_OAUTH = (
     "O formulário de /login publica em /auth/password-login."
 )
 
+#: Utilizador reservado para o *single sign-on*: quando o formulário publica
+#: `username=<SSO_USERNAME>` e `password=<token Bearer do IQ OS>`, o provider
+#: valida o token em `GET {IQOS_API_URL}/auth/me` em vez de pedir credenciais.
+#: É o que a página `/login` usa (via script injetado pelo nginx) para entrar
+#: automaticamente com a sessão já aberta na plataforma.
+SSO_USERNAME = "iqos-sso"
+
 
 # --------------------------------------------------------------------------- tokens
 def _b64(raw: bytes) -> str:
@@ -130,7 +143,48 @@ class IQOSAuthProvider(DashboardAuthProvider):
 
     # ---- login com credenciais do IQ OS -----------------------------------
     def complete_password_login(self, *, username: str, password: str) -> Session:
+        if username.strip().lower() == SSO_USERNAME:
+            return self._mint_session(self._authenticate_token(password))
         return self._mint_session(self._authenticate(username, password))
+
+    def _authenticate_token(self, token: str) -> Dict[str, str]:
+        """Valida um token Bearer do IQ OS em `GET {IQOS_API_URL}/auth/me`.
+
+        É o caminho do *single sign-on*: a plataforma já autenticou o
+        utilizador, portanto basta confirmar que o token ainda é válido e
+        reutilizar a identidade devolvida.
+        """
+        token = token.strip()
+        if not token:
+            raise InvalidCredentialsError("token do IQ OS vazio")
+        request = urllib.request.Request(
+            f"{self._api_url}/auth/me",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self._timeout) as response:
+                data = json.loads(response.read().decode("utf-8") or "{}")
+        except urllib.error.HTTPError as error:
+            if error.code in (401, 403):
+                logger.info("%s: token de SSO recusado pelo IQ OS (HTTP %s)", _TAG, error.code)
+                raise InvalidCredentialsError("sessão do IQ OS inválida ou expirada") from error
+            raise ProviderError(f"o IQ OS respondeu HTTP {error.code} ao validar o token") from error
+        except Exception as error:  # rede, DNS, timeout
+            raise ProviderError(
+                f"não foi possível contactar o IQ OS em {self._api_url}/auth/me: {error}"
+            ) from error
+
+        user = data.get("user") or data
+        email = str(user.get("email") or "")
+        if not email:
+            raise InvalidCredentialsError("o IQ OS não devolveu uma conta para este token")
+        return {
+            "user_id": str(user.get("id") or email),
+            "email": email,
+            "display_name": str(user.get("name") or email),
+            "org_id": str(user.get("organization") or ""),
+        }
 
     def _authenticate(self, username: str, password: str) -> Dict[str, str]:
         """Valida as credenciais em `POST {IQOS_API_URL}/auth/login`."""

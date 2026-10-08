@@ -11,7 +11,7 @@ from api import deep_search_service as deep
 
 # --------------------------------------------------------------------- auxiliares
 
-def _item(scope: str, item_id: str, title: str, *, snippet: str = "", url: str = "", date=None, **extra):
+def _item(scope: str, item_id: str, title: str, *, snippet: str = "", url: str = "", date=None, open_view=None, **extra):
     return {
         "scope": scope,
         "id": item_id,
@@ -23,7 +23,7 @@ def _item(scope: str, item_id: str, title: str, *, snippet: str = "", url: str =
         "badges": [],
         "image": "",
         "extra": extra,
-        "open": None,
+        "open": open_view,
     }
 
 
@@ -37,6 +37,10 @@ def _isolate_vectors(monkeypatch):
     para vectores: quem quiser testar o kNN substitui `vector_coverage`/`vector_search`."""
     monkeypatch.setattr(deep, "vector_coverage", lambda refresh=False: {"scopes": {}})
     monkeypatch.setattr(deep.vectors, "vector_search", lambda *a, **k: {"items": [], "total": 0})
+    # Os exemplos dinâmicos fazem agregações no Elasticsearch: sem cliente, o
+    # `dynamic_examples` cai na lista fixa (que é o que os testes esperam).
+    monkeypatch.setattr(deep.search_service, "get_es_client", lambda *a, **k: None)
+    monkeypatch.setattr(deep, "_examples_cache", None)
 
 
 def _coverage(**scopes):
@@ -184,10 +188,230 @@ def test_source_catalog_tem_limites_e_predefinicoes():
     assert catalog["default_mode"] == "hybrid"
     assert catalog["sources"][ids.index("contracts")]["vector"] is True
     assert catalog["sources"][ids.index("imprensa")]["vector"] is False
-    # Perguntas de exemplo e «sem limite» vêm do catálogo (uma só verdade).
-    assert catalog["examples"] == deep.EXAMPLES
+    # Perguntas de exemplo (com âmbito) e «sem limite» vêm do catálogo.
+    exemplos = catalog["examples"]
+    assert [exemplo["text"] for exemplo in exemplos] == list(deep.EXAMPLES)
+    assert all(exemplo["scope"] and exemplo["hint"] for exemplo in exemplos)
     assert catalog["limits"]["unlimited"] == deep.UNLIMITED
     assert catalog["limits"]["citable_max"] == deep.CITABLE_MAX
+
+
+# --------------------------------------------------- exemplos dinâmicos e fichas
+
+class _EsExemplos:
+    """Elasticsearch falso: responde ao que cada construtor de exemplos pede."""
+
+    def __init__(self, respostas):
+        self.respostas = list(respostas)
+        self.pedidos = []
+
+    def search(self, **kwargs):
+        self.pedidos.append(kwargs)
+        return self.respostas.pop(0) if self.respostas else {}
+
+
+def _baldes(*pares):
+    return {"aggregations": {"partes": {"nomes": {"buckets": [{"key": k, "doc_count": d} for k, d in pares]}}}}
+
+
+def test_dynamic_examples_sem_elasticsearch_cai_na_lista_fixa(monkeypatch):
+    monkeypatch.setattr(deep, "_examples_cache", None)
+
+    exemplos = deep.dynamic_examples()
+
+    assert [e["text"] for e in exemplos] == list(deep.EXAMPLES)
+
+
+def test_exemplos_imediatos_nao_esperam_por_agregacoes(monkeypatch):
+    """O `/meta` não pode pagar os ~9 s das consultas: devolve o que já tem."""
+    monkeypatch.setattr(deep, "_examples_cache", None)
+    assert [e["text"] for e in deep.exemplos_imediatos()] == list(deep.EXAMPLES)
+
+    # Com a cache quente, o `/meta` já mostra os exemplos ricos.
+    monkeypatch.setattr(deep, "_examples_cache", (0.0, [deep._exemplo("rico", "news", "notícias")]))
+    assert [e["text"] for e in deep.exemplos_imediatos()] == ["rico"]
+
+
+def test_dynamic_examples_usam_os_dados(monkeypatch):
+    """Cada exemplo nasce de uma consulta — uma lista fixa promete o que não existe."""
+    monkeypatch.setattr(deep, "_examples_cache", None)
+    monkeypatch.setattr(
+        deep,
+        "_EXAMPLE_BUILDERS",
+        (
+            lambda es: [deep._exemplo("Quanto vale a ACME?", "contracts", "contratos")],
+            lambda es: deep._exemplo("CPV 30200000-1?", "contracts", "contratos"),
+            lambda es: [deep._exemplo("O que dizem sobre a EDP?", "news", "notícias")],
+            lambda es: [deep._exemplo("Quem é a ACME?", "entities", "empresas")],
+        ),
+    )
+    monkeypatch.setattr(deep.search_service, "get_es_client", lambda *a, **k: _EsExemplos([]))
+
+    exemplos = deep.dynamic_examples()
+
+    assert [e["text"] for e in exemplos] == [
+        "Quanto vale a ACME?",
+        "CPV 30200000-1?",
+        "O que dizem sobre a EDP?",
+        "Quem é a ACME?",
+    ]
+    assert {e["scope"] for e in exemplos} == {"contracts", "news", "entities"}
+
+
+def test_dynamic_examples_ficam_em_cache(monkeypatch):
+    monkeypatch.setattr(deep, "_examples_cache", None)
+    chamadas = []
+
+    def construtor(es):
+        chamadas.append(1)
+        return [deep._exemplo("x", "contracts", "contratos")]
+
+    monkeypatch.setattr(deep, "_EXAMPLE_BUILDERS", (construtor,))
+    monkeypatch.setattr(deep.search_service, "get_es_client", lambda *a, **k: _EsExemplos([]))
+
+    deep.dynamic_examples()
+    deep.dynamic_examples()
+
+    assert len(chamadas) == 1
+    # `refresh=True` volta a consultar (é o que a página faz ao recarregar).
+    deep.dynamic_examples(refresh=True)
+    assert len(chamadas) == 2
+
+
+def test_dynamic_examples_ignoram_construtor_que_falha(monkeypatch):
+    monkeypatch.setattr(deep, "_examples_cache", None)
+
+    def rebenta(es):
+        raise RuntimeError("agregação inválida")
+
+    monkeypatch.setattr(
+        deep,
+        "_EXAMPLE_BUILDERS",
+        (
+            rebenta,
+            lambda es: deep._exemplo("CPV", "contracts", "contratos"),
+            lambda es: [deep._exemplo("Notícia", "news", "notícias")],
+            lambda es: [deep._exemplo("Empresa", "entities", "empresas")],
+        ),
+    )
+    monkeypatch.setattr(deep.search_service, "get_es_client", lambda *a, **k: _EsExemplos([]))
+
+    exemplos = deep.dynamic_examples()
+
+    assert [e["text"] for e in exemplos] == ["CPV", "Notícia", "Empresa"]
+
+
+def test_exemplos_de_contratos_tiram_nomes_reais(monkeypatch):
+    """A empresa que mais recebeu e o organismo que mais contratou saem dos dados."""
+    respostas = [
+        {
+            "aggregations": {
+                "partes": {
+                    "nomes": {
+                        "buckets": [
+                            {"key": "PEQUENA LDA", "contrato": {"valor": {"value": 100.0}}},
+                            {"key": "GRANDE SA", "contrato": {"valor": {"value": 624938766.0}}},
+                        ]
+                    }
+                }
+            }
+        },
+        {"aggregations": {"partes": {"nomes": {"buckets": [{"key": "MUNICÍPIO DE LEIRIA"}]}}}},
+        {"aggregations": {"anos": {"buckets": [{"key": 2026}]}}},
+    ]
+
+    exemplos = deep._exemplos_de_contratos(_EsExemplos(respostas))
+
+    assert "GRANDE SA" in exemplos[0]["text"]
+    assert "624 938 766 €" in exemplos[0]["text"]
+    assert "MUNICÍPIO DE LEIRIA" in exemplos[1]["text"]
+    assert "2026" in exemplos[2]["text"]
+
+
+# ------------------------------------------------- ligações para as fichas
+
+def _contrato_completo(**extra):
+    return _item(
+        "contracts",
+        "12345",
+        "Licenças Adobe",
+        snippet="Licenciamento",
+        **extra,
+    )
+
+
+def test_ligacoes_do_contrato_abrem_as_tres_fichas():
+    """O cartão mostra «Contrato · Entidade adjudicante · Adjudicatário», todos com ligação."""
+    fonte = deep._as_source(
+        1,
+        "contracts",
+        _contrato_completo(
+            preco=15446.04,
+            cpv="48100000-9",
+            adjudicante="MUNICÍPIO DE LEIRIA",
+            adjudicante_nif="506606013",
+            adjudicatario="CLARANET II SOLUTIONS",
+            adjudicatario_nif="510728189",
+        ),
+        1.0,
+    )
+
+    ligacoes = fonte["links"]
+    assert [ligacao["label"] for ligacao in ligacoes] == ["Contrato", "Entidade adjudicante", "Adjudicatário"]
+    assert ligacoes[0]["arg"] == "12345" and ligacoes[0]["view"] == "contract-detail"
+    assert ligacoes[1]["arg"] == "506606013" and ligacoes[1]["view"] == "company-detail"
+    assert ligacoes[2]["text"] == "CLARANET II SOLUTIONS" and ligacoes[2]["arg"] == "510728189"
+
+
+def test_ligacoes_sem_nif_mostram_o_nome_sem_abrir_ficha():
+    fonte = deep._as_source(1, "contracts", _contrato_completo(adjudicante="CÂMARA SEM NIF"), 1.0)
+
+    ligacao = next(ligacao for ligacao in fonte["links"] if ligacao["label"] == "Entidade adjudicante")
+    assert ligacao["text"] == "CÂMARA SEM NIF"
+    assert ligacao["arg"] == "" and ligacao["view"] == ""
+
+
+def test_ligacoes_nao_confundem_contagens_de_empresa_com_nomes():
+    """Nas fichas de empresa, `adjudicante`/`adjudicatario` são contagens, não nomes."""
+    fonte = deep._as_source(
+        1,
+        "entities",
+        _item(
+            "entities",
+            "503504564",
+            "CLARANET II SOLUTIONS, S.A.",
+            contratos=3952,
+            valor=624938766,
+            adjudicante=0,
+            adjudicatario=1201,
+        ),
+        1.0,
+    )
+
+    # Nada de «adjudicatário 1201» a parecer um nome.
+    assert [ligacao["label"] for ligacao in fonte["links"]] == []
+    linha = deep._meta_linha(fonte["meta"])
+    assert "1 201 contratos como adjudicatário" in linha
+    assert "3 952 contratos" in linha
+
+
+def test_ligacoes_aproveitam_a_vista_do_resultado_quando_nao_ha_partes():
+    fonte = deep._as_source(
+        1,
+        "contracts_es",
+        _item(
+            "contracts_es",
+            "ES-1",
+            "Contrato de Espanha",
+            valor=1000,
+            organo="Ayuntamiento de Madrid",
+            open_view={"view": "contract-detail", "arg": "ES-1"},
+        ),
+        1.0,
+    )
+
+    assert "órgão Ayuntamiento de Madrid" in deep._meta_linha(fonte["meta"])
+    assert fonte["links"] == [{"label": "Contrato", "text": "Contrato de Espanha", "view": "contract-detail", "arg": "ES-1"}]
 
 
 # --------------------------------------------------------------------- prompt e citações

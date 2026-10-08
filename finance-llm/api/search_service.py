@@ -547,6 +547,8 @@ def _search_contracts_group(q: str, size: int, offset: int) -> Dict[str, Any]:
         preco = row.get("precoContratual")
         parsed_adj = row.get("adjudicatarios") if isinstance(row.get("adjudicatarios"), dict) else {}
         primeira_parte = (parsed_adj.get("parsed") or [{}])[0] if parsed_adj else {}
+        parsed_ent = row.get("adjudicantes") if isinstance(row.get("adjudicantes"), dict) else {}
+        entidade = (parsed_ent.get("parsed") or [{}])[0] if parsed_ent else {}
         items.append(
             _item(
                 "contracts",
@@ -556,12 +558,15 @@ def _search_contracts_group(q: str, size: int, offset: int) -> Dict[str, Any]:
                 snippet=row.get("descContrato") or row.get("objectoContrato") or "",
                 date=row.get("dataPublicacao") or row.get("dataCelebracaoContrato"),
                 badges=[row.get("Ano"), _flat(row.get("tipoContrato")), _flat(row.get("NUTs"))],
-                # Nome e NIF da parte adjudicatária em campos próprios: é o que
-                # liga o contrato à empresa na ontologia da pesquisa (e permite
-                # abrir a ficha a partir do cartão).
+                # Nome e NIF das partes em campos próprios: é o que liga o
+                # contrato à empresa na ontologia da pesquisa e o que permite
+                # abrir as fichas (contrato, adjudicante, adjudicatário) a partir
+                # do cartão da pesquisa profunda.
                 extra={
                     "preco": preco,
                     "cpv": _cpv_code(row.get("cpv")),
+                    "adjudicante": entidade.get("nome") or (adjudicantes[0] if adjudicantes else None),
+                    "adjudicante_nif": entidade.get("nif"),
                     "adjudicatario": primeira_parte.get("nome") or (adjudicatarios[0] if adjudicatarios else None),
                     "adjudicatario_nif": primeira_parte.get("nif"),
                 },
@@ -618,8 +623,6 @@ def _search_contratos_es_group(q: str, size: int, offset: int) -> Dict[str, Any]
                     "valor": valor if isinstance(valor, (int, float)) else None,
                     "valor_tipo": valor_tipo,
                     "organo": row.get("organo_nombre"),
-                    "adjudicatario": row.get("adjudicatario_nombre"),
-                    "adjudicatario_nif": row.get("adjudicatario_nif"),
                     "cpv": _cpv_code(row.get("cpv")),
                     "ano": row.get("ano"),
                     "fonte": row.get("fonte"),

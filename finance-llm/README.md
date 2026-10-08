@@ -139,7 +139,7 @@ docker compose --profile tools up -d mcp     # servidor MCP em HTTP (http://127.
 docker compose --profile test run --rm tests # pytest + smoke test de todos os endpoints, em Docker
 ```
 
-Quatro aplicações de apoio ficam pré-instaladas como **páginas iframe** na plataforma (dock → Pesquisa, n8n, Hermes Agent, MiroFish). O dashboard do Hermes entra com **as mesmas contas do IQ OS** (`docker/hermes/plugins/dashboard-auth-iqos`); o MiroFish é uma imagem própria derivada da oficial (`docker/mirofish/Dockerfile`).
+Quatro aplicações de apoio ficam pré-instaladas como **páginas iframe** na plataforma (dock → Pesquisa, n8n, Hermes Agent, MiroFish). O dashboard do Hermes entra com **as mesmas contas do IQ OS** — e, no domínio público, com **single sign-on** (sessão do IQ OS → sessão do dashboard, sem segundo formulário): ver [Dashboard do Hermes Agent](#dashboard-do-hermes-agent-subcaminho-público-e-single-sign-on). O MiroFish é uma imagem própria derivada da oficial (`docker/mirofish/Dockerfile`).
 
 ## Recolha de dados
 
@@ -1478,6 +1478,82 @@ Notas de implementação (`api/jarvis_gateway.py`, `api/jarvis_service.py`):
 - `JARVIS_VOICE` e `JARVIS_STT_MODEL` (ver `.env.example`) escolhem a voz e o modelo de
   transcrição; **sem `edge-tts`/`faster-whisper`** o Jarvis não perde funcionalidade — muda só
   quem sintetiza e transcreve.
+
+### Dashboard do Hermes Agent (subcaminho público e single sign-on)
+
+O dashboard do Hermes vive numa **imagem própria** (`hermes-agent`, porta interna `9119`) e o
+IQ OS mostra-o na página iframe **«Hermes Agent»** (`/iframe/iqos-hermes-agent`). Servi-lo por
+outro *origin* (porta/IP diferente) ou pelo túnel de outro domínio faz o login **não pegar**:
+os cookies de sessão são `SameSite=Lax`, portanto o browser não os envia dentro do iframe
+cross-origin — o utilizador autenticava-se e voltava sempre ao formulário.
+
+A solução é servir o dashboard **no mesmo domínio da SPA**, num subcaminho, e deixar o iframe
+apontar para lá:
+
+```mermaid
+flowchart LR
+  A["SPA (iframe /iframe/iqos-hermes-agent)"] --> B["https://sabemos.studio/hermes-agent/"]
+  B --> C["Caddy do edge: handle /hermes-agent/*"]
+  C --> D["túnel reverso (iqos-origin-tunnel)"]
+  D --> E["nginx do frontend (4180)"]
+  E -->|"rewrite + sub_filter"| F["hermes-agent:9119"]
+```
+
+- **edge** — `deploy/kamatera/edge/Caddyfile` encaminha `/hermes-agent/*` para o mesmo destino da
+  SPA, antes do `handle` por omissão;
+- **origem** — `docker/nginx.conf`, bloco `location /hermes-agent/`, faz `rewrite` do prefixo e
+  `proxy_pass http://$hermes_upstream` (variável de `resolver`, para não fixar o IP do container);
+- **SPA** — `chat-ui/src/iframePages.ts` (`supportServiceUrl`) constrói
+  `https://<domínio>/hermes-agent/` quando o domínio é `sabemos.studio`; nas instalações locais
+  mantém-se o proxy de incorporação na porta `8892`.
+
+Como o dashboard é uma SPA **Vite com caminhos absolutos**, o nginx reescreve a resposta
+(`sub_filter`) em vez de confiar só no `<base href>`:
+
+| O que a app emite | Porque falha sozinho | Reescrita |
+| --- | --- | --- |
+| `src="/assets/…"`, `href="/fonts/…"` | ignoram `<base href>` | prefixo `/hermes-agent/` |
+| `"assets/…"` no `__vite__mapDeps` e nos `import()` | o preload do Vite faz `'/' + dep` | idem |
+| `url(/assets/…woff2)` no CSS dos temas | idem, dentro do CSS | idem |
+| `fetch('/auth/password-login')`, `fetch('/api/…')` | caminhos absolutos | idem |
+| `window.__HERMES_BASE_PATH__=""` | é deste valor que a SPA tira o prefixo das chamadas `/api/` e o *basename* do router | passa a `"/hermes-agent"` |
+| `window.location.assign(data.next \|\| '/')` | atiraria o iframe para a raiz da SPA | passa a `/hermes-agent` + `next` |
+| `302 Location: http://host/login` | dentro de um iframe https o browser bloqueia (**mixed content**) | `proxy_redirect` repõe o esquema original (`X-Forwarded-Proto`, com *fallback* para o esquema da ligação) |
+
+Notas de implementação:
+
+- é preciso `proxy_set_header Accept-Encoding ""` — um upstream que devolve gzip não é
+  reescrevível pelo `sub_filter` (foi a causa de «as regras existem mas o bundle não muda»);
+- com `proxy_pass` a usar variável o prefixo da `location` **não** é removido: o
+  `rewrite ^/hermes-agent/(.*) /$1 break;` é obrigatório, senão o Hermes responde `302` para si
+  próprio e entra em ciclo;
+- o `sub_filter_types` fica em `*`, porque o mesmo filtro tem de tocar HTML, CSS, JS e JSON.
+
+#### Single sign-on
+
+Quem já tem sessão no IQ OS **não volta a escrever credenciais**: o nginx injeta na página
+`/login` do Hermes um script que lê o token da plataforma (`localStorage["finance-llm-token"]`,
+o mesmo *origin*) e publica em `/hermes-agent/auth/password-login` com
+`{provider:"iqos", username:"iqos-sso", password:<token>}`. O provider
+(`docker/hermes/plugins/dashboard-auth-iqos`) reconhece o utilizador reservado `iqos-sso` e troca
+o token por identidade em `GET {IQOS_API_URL}/auth/me` — sem palavra-passe, sem *crypto* novo e
+sem reviver credenciais: se o token estiver expirado devolve `401` e a página volta a mostrar o
+formulário normal (as contas do IQ OS continuam a funcionar como sempre). O script só corre uma
+vez por separador (marca em `sessionStorage`), para não haver ciclos de autenticação.
+
+O dashboard mostra quem entrou: em «Conta» aparece `via iqos` (`Logged in as … via iqos`).
+
+Como confirmar (com uma sessão válida do IQ OS):
+
+```
+curl -sI  https://sabemos.studio/hermes-agent/            # 302 para /hermes-agent/login (https)
+curl -s   https://sabemos.studio/hermes-agent/login       # <base href> + __HERMES_BASE_PATH__ + script de SSO
+docker compose exec frontend nginx -t                     # config válida
+```
+
+Ficheiros: `docker/nginx.conf` (bloco `/hermes-agent/`),
+`docker/hermes/plugins/dashboard-auth-iqos/__init__.py` (provider + SSO),
+`deploy/kamatera/edge/Caddyfile`, `chat-ui/src/iframePages.ts`.
 
 ### Motor do Hermes Agent (ligar o container aos fornecedores da plataforma)
 

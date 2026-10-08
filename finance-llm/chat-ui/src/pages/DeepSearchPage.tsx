@@ -25,8 +25,10 @@ import { API_BASE } from "../api";
 import {
     DEEP_EXAMPLES,
     askDeepSearch,
+    fetchDeepExamples,
     fetchDeepMeta,
     fetchDeepSuggestions,
+    type DeepExample,
     type DeepMarketRef,
     type DeepMeta,
     type DeepSource,
@@ -95,6 +97,7 @@ export default function DeepSearchPage({ onNavigate }: Props) {
     const [retrieval, setRetrieval] = useState<DeepSourcesEvent | null>(null);
     const [followups, setFollowups] = useState<string[]>([]);
     const [mercado, setMercado] = useState<DeepMarketRef[]>([]);
+    const [exemplosDinamicos, setExemplosDinamicos] = useState<DeepExample[] | null>(null);
     // Com «sem limite» a API chega a devolver 291 fontes. Desenhar todas de uma
     // vez custa caro (centenas de cartões com texto) e ninguém lê as últimas:
     // mostram-se as primeiras e um botão abre o resto.
@@ -119,6 +122,14 @@ export default function DeepSearchPage({ onNavigate }: Props) {
                 if (!backend && data.defaults.backend) setBackend(data.defaults.backend);
             })
             .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+
+        // Exemplos com dados reais: chegam depois do `/meta` (são agregações) e
+        // substituem os de recurso que já estão no ecrã.
+        fetchDeepExamples()
+            .then((items) => {
+                if (alive && items.length) setExemplosDinamicos(items);
+            })
+            .catch(() => undefined);
 
         fetch(`${API_BASE}/providers/chat-models`)
             .then((res) => (res.ok ? res.json() : { options: [] }))
@@ -159,6 +170,13 @@ export default function DeepSearchPage({ onNavigate }: Props) {
     }, [question, answering]);
 
     const chosenSources = useMemo(() => active ?? meta?.defaults.sources ?? [], [active, meta]);
+
+    // Exemplos: primeiro os que vierem no `/meta` (instantâneo), depois os
+    // construídos com os dados indexados; a lista fixa é a última rede.
+    const exemplos = useMemo(
+        () => exemplosDinamicos ?? meta?.examples ?? DEEP_EXAMPLES,
+        [exemplosDinamicos, meta],
+    );
 
     const ask = useCallback(
         (text?: string) => {
@@ -452,19 +470,30 @@ export default function DeepSearchPage({ onNavigate }: Props) {
 
                     {!answer && !answering && sources.length === 0 && !error && (
                         <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
-                            <p className="mb-3 text-[11px] uppercase tracking-wide text-muted-foreground">
+                            <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
                                 Exemplos de perguntas
                             </p>
+                            <p className="mb-3 text-[10.5px] text-muted-foreground">
+                                Construídos a partir dos dados indexados (contratos, empresas, imprensa e notícias) —
+                                mudam à medida que os dados mudam.
+                            </p>
                             <div className="grid gap-2 sm:grid-cols-2">
-                                {DEEP_EXAMPLES.map((example) => (
+                                {exemplos.map((example) => (
                                     <button
-                                        key={example}
+                                        key={example.text}
                                         type="button"
-                                        onClick={() => ask(example)}
+                                        onClick={() => ask(example.text)}
                                         className="flex items-start gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-left text-xs text-foreground/80 transition hover:border-teal-400/30 hover:text-foreground"
                                     >
                                         <Search size={14} className="mt-0.5 shrink-0 text-teal-300" />
-                                        {example}
+                                        <span className="flex min-w-0 flex-col gap-0.5">
+                                            <span>{example.text}</span>
+                                            {example.hint && (
+                                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                                    {example.hint}
+                                                </span>
+                                            )}
+                                        </span>
                                     </button>
                                 ))}
                             </div>
@@ -500,14 +529,15 @@ export default function DeepSearchPage({ onNavigate }: Props) {
                                 {sources.slice(0, cartoes).map((source) => {
                                     const clickable = Boolean(source.url) || Boolean(source.open?.arg);
                                     const valor = valorDaFonte(source);
+                                    const ligacoes = source.links ?? [];
                                     return (
-                                        <button
+                                        // Não é um <button>: dentro do cartão há ligações
+                                        // («Contrato», «Adjudicatário») que são botões.
+                                        <div
                                             key={`${source.scope}-${source.id}-${source.n}`}
                                             id={`fonte-${source.n}`}
-                                            type="button"
-                                            onClick={() => clickable && openSource(source)}
                                             className={`flex flex-col gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-left transition ${
-                                                clickable ? "hover:border-teal-400/40" : "cursor-default"
+                                                clickable ? "hover:border-teal-400/40" : ""
                                             }`}
                                         >
                                             <div className="flex items-center gap-2">
@@ -524,7 +554,15 @@ export default function DeepSearchPage({ onNavigate }: Props) {
                                                 )}
                                                 {clickable && <ExternalLink size={12} className="text-muted-foreground" />}
                                             </div>
-                                            <p className="line-clamp-2 text-xs font-medium text-foreground">{source.title}</p>
+                                            <button
+                                                type="button"
+                                                onClick={() => clickable && openSource(source)}
+                                                className={`text-left ${clickable ? "cursor-pointer" : "cursor-default"}`}
+                                            >
+                                                <span className="line-clamp-2 text-xs font-medium text-foreground">
+                                                    {source.title}
+                                                </span>
+                                            </button>
                                             {valor && (
                                                 <p className="text-[11.5px] font-semibold text-teal-200">
                                                     {valor}
@@ -543,7 +581,36 @@ export default function DeepSearchPage({ onNavigate }: Props) {
                                                     {source.snippet}
                                                 </p>
                                             )}
-                                        </button>
+                                            {ligacoes.length > 0 && (
+                                                <div className="mt-0.5 flex flex-col gap-0.5 border-t border-white/10 pt-1.5">
+                                                    {ligacoes.map((ligacao) => (
+                                                        <div
+                                                            key={`${ligacao.label}-${ligacao.arg || ligacao.text}`}
+                                                            className="flex items-baseline gap-1.5 text-[11px]"
+                                                        >
+                                                            <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                                                                {ligacao.label}
+                                                            </span>
+                                                            {ligacao.view && ligacao.arg && onNavigate ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        onNavigate(`${ligacao.view}:${ligacao.arg}`)
+                                                                    }
+                                                                    className="min-w-0 truncate text-left text-teal-200 underline decoration-dotted underline-offset-2 hover:text-teal-100"
+                                                                >
+                                                                    {ligacao.text || ligacao.arg}
+                                                                </button>
+                                                            ) : (
+                                                                <span className="min-w-0 truncate text-foreground/80">
+                                                                    {ligacao.text || ligacao.arg}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
                                     );
                                 })}
                             </div>

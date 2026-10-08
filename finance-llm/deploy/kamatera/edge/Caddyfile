@@ -11,6 +11,10 @@
 #
 #     (ver `07-origin-tunnel.ps1` no PC).
 #
+#   * `8082` — Hermes Agent (dashboard), publicado por um segundo tunel SSH reverso:
+#
+#         ssh -N -R 127.0.0.1:8082:127.0.0.1:8892 root@45.147.251.188
+#
 # Nao ha Cloudflare: o unico ponto publico e este Caddy.
 
 # Redireciona www para o apex.
@@ -31,6 +35,20 @@ sabemos.studio {
     # Apresentacao: sempre acessivel, para poder ser partilhada.
     handle /landing* {
         reverse_proxy http://127.0.0.1:8090
+    }
+
+    # Hermes Agent dashboard — iframe "Hermes Agent" da SPA. O dashboard é
+    # servido pelo próprio nginx da origem (127.0.0.1:8080) sob o subcaminho
+    # /hermes-agent/; o nginx reescreve caminhos absolutos e injeta <base href>
+    # para que a app funcione same-origin em https://sabemos.studio/hermes-agent/.
+    handle /hermes-agent/* {
+        reverse_proxy http://127.0.0.1:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+            flush_interval -1
+        }
     }
 
     handle {

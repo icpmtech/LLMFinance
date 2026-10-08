@@ -389,16 +389,37 @@ export function iframeDockApps(): DockApp[] {
 // incorporados através do proxy de nginx que os retira (ver `docker/nginx.conf`).
 
 /**
- * Constrói o URL de um serviço de apoio: usa `VITE_*_URL` quando definido na
- * build e, caso contrário, o mesmo host da SPA com a porta por omissão do
- * compose (funciona em `127.0.0.1` e a partir de outra máquina da rede).
+ * Constrói o URL de um serviço de apoio.
+ *
+ * 1. Usa `VITE_*_URL` quando definido na build (valor absoluto).
+ * 2. Se a SPA está num domínio público conhecido (ex.: sabemos.studio), serve
+ *    o serviço sob o mesmo domínio e HTTPS, evitando cookies cross-origin
+ *    (SameSite=Lax) e portas não expostas publicamente. Pode ser um subcaminho
+ *    (`publicPath`) ou uma porta pública dedicada (`publicPort`).
+ * 3. Caso contrário, recai no mesmo host da SPA com a porta por omissão do
+ *    compose (funciona em `127.0.0.1` e a partir de outra máquina da rede).
  */
-function supportServiceUrl(envValue: unknown, port: number): string {
+function supportServiceUrl(
+  envValue: unknown,
+  port: number,
+  publicPath?: string,
+  publicPort?: number
+): string {
   const configured = String(envValue || "").trim();
   if (configured) return configured;
-  const host =
-    typeof window !== "undefined" && window.location.hostname ? window.location.hostname : "127.0.0.1";
-  return `http://${host}:${port}/`;
+  if (typeof window === "undefined") return `http://127.0.0.1:${port}/`;
+
+  const { protocol, hostname } = window.location;
+  const isPublicDomain = hostname === "sabemos.studio" || hostname.endsWith(".sabemos.studio");
+
+  if (isPublicDomain && publicPort) {
+    return `${protocol}//${hostname}:${publicPort}/`;
+  }
+  if (isPublicDomain && publicPath) {
+    return `${protocol}//${hostname}${publicPath}`;
+  }
+
+  return `http://${hostname}:${port}/`;
 }
 
 /** Páginas iframe que a solução instala por omissão (totalmente editáveis). */
@@ -428,7 +449,10 @@ export function defaultIframePages(): IframePageConfig[] {
     {
       id: "iqos-hermes-agent",
       title: "Hermes Agent",
-      url: supportServiceUrl(import.meta.env.VITE_HERMES_URL, 8892),
+      // No domínio público o Hermes é servido sob a mesma origem no subcaminho
+      // /hermes-agent/ (reverse-proxy no nginx da origem e no Caddy do edge).
+      // Em local continua a usar o porto 8892 do proxy de incorporação.
+      url: supportServiceUrl(import.meta.env.VITE_HERMES_URL, 8892, "/hermes-agent/"),
       icon: "Bot",
       accent: "249,115,22",
       gradient: "from-orange-300 via-orange-500 to-orange-700",

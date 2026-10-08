@@ -93,6 +93,19 @@ def deep_search_suggest(
     return deep.suggest_terms(q, limit=limit, session_scope=_visibility(session))
 
 
+@router.get("/examples")
+def deep_search_examples(
+    limit: int = Query(8, ge=1, le=20, description="Número máximo de exemplos."),
+) -> Dict[str, Any]:
+    """Perguntas de exemplo construídas com os dados indexados.
+
+    Rota própria (e não dentro do `/meta`) porque implica agregações no
+    Elasticsearch — alguns segundos. A página desenha logo as sugestões de
+    recurso que vêm no `/meta` e substitui-as quando estas chegam.
+    """
+    return {"examples": deep.dynamic_examples()[:limit]}
+
+
 @router.get("/search")
 def deep_search_sources(
     q: str = Query(..., description="Pergunta ou termos a pesquisar."),

@@ -84,13 +84,22 @@ MIN_VECTOR_DOCS = 100
 
 RRF_K = 60
 
-#: Perguntas de exemplo (aparecem na página e quando uma busca não devolve nada).
+#: Perguntas de exemplo. A lista fixa só serve de **recurso**: o normal é
+#: `dynamic_examples()` construir exemplos com os dados que existem (empresas
+#: reais, anos com contratos, manchetes do dia), porque exemplos inventados
+#: levam a perguntas sem resposta.
 EXAMPLES: List[str] = [
     "Quais os maiores contratos de 2025 na área da saúde?",
     "Que empresas ganharam mais contratos com a Comunidade Intermunicipal da Região de Leiria?",
     "Resume os contratos de videovigilância adjudicados no último ano e diz quem concorreu.",
     "Que notícias recentes ligam a EDP a contratação pública?",
 ]
+
+#: Os exemplos dinâmicos são agregações/pesquisas no Elasticsearch: guardam-se
+#: para a página não pagar esse custo a cada `/deep-search/meta`.
+EXAMPLES_TTL = 900.0
+EXAMPLES_TIMEOUT = 8.0
+_examples_cache: Optional[Tuple[float, List[Dict[str, str]]]] = None
 
 #: A cobertura vectorial só muda quando corre a indexação: cache de 5 minutos
 #: evita repetir as contagens do Elasticsearch a cada `/deep-search/meta`.
@@ -274,7 +283,7 @@ def source_catalog() -> Dict[str, Any]:
         ],
         "modes": [{"id": mode["id"], "label": mode["label"], "hint": mode["hint"]} for mode in MODES],
         "default_mode": DEFAULT_MODE,
-        "examples": list(EXAMPLES),
+        "examples": exemplos_imediatos(),
         "vector": vector_coverage(),
         "defaults": list(DEFAULT_SOURCE_IDS),
         "limits": {
@@ -284,6 +293,327 @@ def source_catalog() -> Dict[str, Any]:
             "citable_max": CITABLE_MAX,
         },
     }
+
+
+# ----------------------------------------------------------- exemplos dinâmicos
+
+#: Índices usados só para construir exemplos: o `search_service` expõe os âmbitos
+#: de pesquisa, não os nomes dos índices por baixo.
+PEOPLE_INDEX = "finance_people"
+SCRAPED_INDEX = "finance_scraped"
+
+
+def _exemplo(texto: str, scope: str, hint: str) -> Dict[str, str]:
+    """Pergunta de exemplo, com o âmbito de dados que a sustenta."""
+    return {"text": texto, "scope": scope, "hint": hint}
+
+
+def _exemplos_fixos() -> List[Dict[str, str]]:
+    """A lista fixa no formato dos exemplos dinâmicos."""
+    return [_exemplo(texto, "contracts", "sugestão") for texto in EXAMPLES]
+
+
+def exemplos_imediatos() -> List[Dict[str, str]]:
+    """Exemplos para o `/meta` **sem esperar por agregações**.
+
+    `dynamic_examples()` chega a levar ~9 s (quatro consultas ao Elasticsearch):
+    se o `/meta` a chamasse, a página só aparecia depois disso. Assim devolve-se
+    logo a lista fixa (ou a dinâmica, se já estiver em cache) e a página pede os
+    exemplos ricos em paralelo a `/deep-search/examples`.
+    """
+    if _examples_cache:
+        return list(_examples_cache[1])
+    return _exemplos_fixos()
+
+
+def _primeiro_nome(es, index: str, *, sort: str, campos: Sequence[str]) -> Optional[Dict[str, Any]]:
+    """Documento do topo de uma ordenação (para tirar nomes reais dos índices)."""
+    resposta = es.search(
+        index=index,
+        body={"size": 1, "sort": [{sort: {"order": "desc", "missing": "_last"}}], "_source": list(campos)},
+        request_timeout=EXAMPLES_TIMEOUT,
+    )
+    hits = (resposta.get("hits") or {}).get("hits") or []
+    return (hits[0].get("_source") or {}) if hits else None
+
+
+def _exemplos_de_contratos(es) -> List[Dict[str, str]]:
+    """Três perguntas a partir do que os contratos dizem: quem, quanto e quando."""
+    exemplos: List[Dict[str, str]] = []
+
+    # Quem recebe mais dinheiro (adjudicatários são `nested` com `nome`/`nif`).
+    corpo = {
+        "size": 0,
+        "aggs": {
+            "partes": {
+                "nested": {"path": "adjudicatarios.parsed"},
+                "aggs": {
+                    "nomes": {
+                        "terms": {"field": "adjudicatarios.parsed.nome", "size": 8},
+                        "aggs": {
+                            "contrato": {
+                                "reverse_nested": {},
+                                "aggs": {"valor": {"sum": {"field": "precoContratual"}}},
+                            }
+                        },
+                    }
+                },
+            }
+        },
+    }
+    resposta = es.search(index=vectors.CONTRACTS_INDEX, body=corpo, request_timeout=EXAMPLES_TIMEOUT)
+    baldes = (((resposta.get("aggregations") or {}).get("partes") or {}).get("nomes") or {}).get("buckets") or []
+    candidatos = [
+        (balde, (balde.get("contrato") or {}).get("valor") or {})
+        for balde in baldes
+        if str(balde.get("key") or "").strip()
+    ]
+    if candidatos:
+        balde, valor = max(candidatos, key=lambda par: par[1].get("value") or 0)
+        nome = str(balde["key"]).strip()
+        total = _euros(valor.get("value"))
+        exemplos.append(
+            _exemplo(
+                f"Quanto vale, no total, a contratação pública adjudicada a {nome}"
+                + (f" ({total})" if total else "")
+                + " e quais os maiores contratos?",
+                "contracts",
+                "contratos",
+            )
+        )
+
+    # Quem contrata mais (organismos públicos).
+    corpo = {
+        "size": 0,
+        "aggs": {
+            "partes": {
+                "nested": {"path": "adjudicantes.parsed"},
+                "aggs": {"nomes": {"terms": {"field": "adjudicantes.parsed.nome", "size": 8}}},
+            }
+        },
+    }
+    resposta = es.search(index=vectors.CONTRACTS_INDEX, body=corpo, request_timeout=EXAMPLES_TIMEOUT)
+    baldes = (((resposta.get("aggregations") or {}).get("partes") or {}).get("nomes") or {}).get("buckets") or []
+    if baldes:
+        organismo = str(baldes[0].get("key") or "").strip()
+        if organismo:
+            exemplos.append(
+                _exemplo(
+                    f"Que empresas contrataram mais com {organismo} e em que áreas?",
+                    "contracts",
+                    "contratos",
+                )
+            )
+
+    # O ano mais recente com contratos: o «estado atual» da contratação.
+    resposta = es.search(
+        index=vectors.CONTRACTS_INDEX,
+        body={"size": 0, "aggs": {"anos": {"terms": {"field": "Ano", "size": 3, "order": {"_key": "desc"}}}}},
+        request_timeout=EXAMPLES_TIMEOUT,
+    )
+    baldes = ((resposta.get("aggregations") or {}).get("anos") or {}).get("buckets") or []
+    if baldes:
+        ano = baldes[0].get("key")
+        exemplos.append(
+            _exemplo(
+                f"Quais foram os maiores contratos de {ano} e quem os ganhou?",
+                "contracts",
+                "contratos",
+            )
+        )
+    return exemplos
+
+
+def _exemplo_cpv(es) -> Optional[Dict[str, str]]:
+    """Um tipo de contrato concreto (CPV) que exista mesmo nos dados."""
+    corpo = {
+        "size": 0,
+        "aggs": {
+            "cpv": {
+                "nested": {"path": "cpv"},
+                "aggs": {"codigos": {"terms": {"field": "cpv.code", "size": 12}}},
+            }
+        },
+    }
+    resposta = es.search(index=vectors.CONTRACTS_INDEX, body=corpo, request_timeout=EXAMPLES_TIMEOUT)
+    baldes = (((resposta.get("aggregations") or {}).get("cpv") or {}).get("codigos") or {}).get("buckets") or []
+    codigos = [str(balde.get("key") or "").strip() for balde in baldes if str(balde.get("key") or "").strip()]
+    if not codigos:
+        return None
+    codigo = codigos[0]
+
+    # A descrição do CPV só existe no `_source`: vai-se buscar a um contrato real.
+    descricao = ""
+    try:
+        detalhe = es.search(
+            index=vectors.CONTRACTS_INDEX,
+            body={
+                "size": 1,
+                "query": {"nested": {"path": "cpv", "query": {"term": {"cpv.code": codigo}}}},
+                "_source": ["cpv"],
+            },
+            request_timeout=EXAMPLES_TIMEOUT,
+        )
+        for doc in (detalhe.get("hits") or {}).get("hits") or []:
+            for entrada in ((doc.get("_source") or {}).get("cpv") or []):
+                if isinstance(entrada, dict) and str(entrada.get("code") or "") == codigo:
+                    descricao = str(entrada.get("description") or "").strip()
+                    break
+            if descricao:
+                break
+    except Exception:  # noqa: BLE001 - a descrição é um extra
+        descricao = ""
+
+    assunto = f"{descricao} (CPV {codigo})" if descricao else f"CPV {codigo}"
+    return _exemplo(
+        f"Quanto custa, tipicamente, um contrato de {assunto} e quem são os principais fornecedores?",
+        "contracts",
+        "contratos",
+    )
+
+
+def _exemplos_de_noticias(es) -> List[Dict[str, str]]:
+    """Manchetes e imprensa: um exemplo por cada metade das notícias do IQ OS."""
+    exemplos: List[Dict[str, str]] = []
+
+    # Notícias de mercado (`finance_news`): o ativo/tema da mais recente.
+    recente = _primeiro_nome(
+        es,
+        search_service.NEWS_INDEX,
+        sort="published",
+        campos=["ticker", "topic", "topics", "translated_title", "title", "publisher"],
+    )
+    if recente:
+        alvo = str(recente.get("ticker") or recente.get("topic") or (recente.get("topics") or [""])[0] or "").strip()
+        titulo = str(recente.get("translated_title") or recente.get("title") or "").strip()
+        if alvo:
+            exemplos.append(
+                _exemplo(
+                    f"O que dizem as notícias recentes sobre {alvo} e como se liga à contratação pública?",
+                    "news",
+                    "notícias",
+                )
+            )
+        elif titulo:
+            exemplos.append(_exemplo(f'Resume e contextualiza: "{titulo[:120]}".', "news", "notícias"))
+
+    # Imprensa recolhida dos jornais (`finance_scraped`): o jornal mais ativo.
+    try:
+        resposta = es.search(
+            index=SCRAPED_INDEX,
+            body={
+                "size": 0,
+                "query": {"bool": {"must_not": [{"prefix": {"source_id": prefixo}} for prefixo in ("empresas-", "iberinform-", "tmp-")]}},
+                "aggs": {"jornais": {"terms": {"field": "source_name", "size": 5}}},
+            },
+            request_timeout=EXAMPLES_TIMEOUT,
+        )
+        baldes = ((resposta.get("aggregations") or {}).get("jornais") or {}).get("buckets") or []
+        jornal = str(baldes[0].get("key") or "").strip() if baldes else ""
+    except Exception:  # noqa: BLE001
+        jornal = ""
+    if jornal:
+        exemplos.append(
+            _exemplo(
+                f"Resume o que o {jornal} noticiou recentemente sobre contratação pública e empresas.",
+                "imprensa",
+                "imprensa",
+            )
+        )
+    return exemplos
+
+
+def _exemplos_de_entidades(es) -> List[Dict[str, str]]:
+    """Empresas e pessoas do cadastro: perguntas sobre fichas que existem."""
+    exemplos: List[Dict[str, str]] = []
+
+    empresa = _primeiro_nome(
+        es,
+        vectors.ENTITIES_INDEX,
+        sort="total_value",
+        campos=["name", "nif", "contracts_count", "total_value", "country"],
+    )
+    if empresa and str(empresa.get("name") or "").strip():
+        nome = str(empresa["name"]).strip()
+        quantos = empresa.get("contracts_count")
+        total = _euros(empresa.get("total_value"))
+        detalhe = " · ".join(parte for parte in (f"{quantos} contratos" if quantos else "", total) if parte)
+        exemplos.append(
+            _exemplo(
+                f"Faz o retrato de {nome}" + (f" ({detalhe})" if detalhe else "") + ": contratos, valores e com quem contrata.",
+                "entities",
+                "empresas",
+            )
+        )
+
+    pessoa = _primeiro_nome(
+        es,
+        PEOPLE_INDEX,
+        sort="companies_count",
+        campos=["name", "name_keyword", "nif", "companies_count"],
+    )
+    if pessoa:
+        nome = str(pessoa.get("name") or pessoa.get("name_keyword") or "").strip()
+        if nome:
+            empresas = pessoa.get("companies_count")
+            exemplos.append(
+                _exemplo(
+                    f"Quem é {nome}"
+                    + (f" — {empresas} empresas ligadas —" if empresas else "")
+                    + " e que relação tem com a contratação pública?",
+                    "pessoas",
+                    "pessoas",
+                )
+            )
+    return exemplos
+
+
+#: Cada entrada é uma função que produz exemplos a partir de uma parte dos dados.
+#: Correm em paralelo: uma agregação lenta não pode atrasar as outras.
+_EXAMPLE_BUILDERS = (
+    _exemplos_de_contratos,
+    _exemplo_cpv,
+    _exemplos_de_noticias,
+    _exemplos_de_entidades,
+)
+
+
+def dynamic_examples(refresh: bool = False) -> List[Dict[str, str]]:
+    """Perguntas de exemplo construídas com os dados realmente indexados.
+
+    Uma lista fixa de exemplos é uma promessa que os dados podem não cumprir
+    («os maiores contratos de 2025 na área da saúde» pode dar zero fontes). Aqui
+    cada exemplo nasce de uma consulta — a empresa que mais recebeu, o ano mais
+    recente, a notícia do dia, o CPV mais frequente — e por isso tem sempre
+    resposta. Se o Elasticsearch não responder, cai na lista fixa (`EXAMPLES`).
+    """
+    global _examples_cache
+    now = time.time()
+    if not refresh and _examples_cache and now - _examples_cache[0] < EXAMPLES_TTL:
+        return list(_examples_cache[1])
+    es = search_service.get_es_client()
+    exemplos: List[Dict[str, str]] = []
+    if es is not None:
+        with ThreadPoolExecutor(max_workers=len(_EXAMPLE_BUILDERS)) as pool:
+            futuros = [pool.submit(builder, es) for builder in _EXAMPLE_BUILDERS]
+            for indice, futuro in enumerate(futuros):
+                try:
+                    resultado = futuro.result(timeout=EXAMPLES_TIMEOUT + 4)
+                except Exception as exc:  # noqa: BLE001 - um exemplo falhado não impede os outros
+                    logger.debug("Exemplos dinâmicos: construtor %d falhou: %s", indice, exc)
+                    continue
+                if isinstance(resultado, dict):
+                    exemplos.append(resultado)
+                else:
+                    exemplos.extend(resultado or [])
+
+    # Sem dados suficientes (ES em baixo ou índices vazios), a lista fixa é melhor
+    # do que uma página sem sugestões.
+    if len(exemplos) < 3:
+        exemplos = _exemplos_fixos()
+
+    _examples_cache = (now, list(exemplos))
+    return list(exemplos)
 
 
 def _clamp(value: Any, low: int, high: int, fallback: int) -> int:
@@ -398,12 +728,15 @@ _META_KEYS = (
     "contratos",
     "cpv",
     "adjudicante",
+    "adjudicante_nif",
     "adjudicatario",
     "adjudicatario_nif",
+    "organo",
     "entidade",
     "nif",
     "sector",
     "pais",
+    "ano",
 )
 
 
@@ -432,6 +765,12 @@ def _meta(item: Dict[str, Any]) -> Dict[str, Any]:
     return {chave: extra[chave] for chave in _META_KEYS if extra.get(chave) not in (None, "", [])}
 
 
+#: Rótulos das partes. O mesmo campo pode ser **nome** (contratos) ou **contagem**
+#: (fichas de empresa: quantos contratos teve como adjudicante/adjudicatário) —
+#: por isso a linha distingue os dois casos pelo tipo do valor.
+_PARTES = (("adjudicante", "adjudicante", "como adjudicante"), ("adjudicatario", "adjudicatário", "como adjudicatário"))
+
+
 def _meta_linha(meta: Dict[str, Any]) -> str:
     """Linha «valor · CPV · adjudicatário» para o modelo poder comparar montantes."""
     partes: List[str] = []
@@ -440,10 +779,15 @@ def _meta_linha(meta: Dict[str, Any]) -> str:
         partes.append(f"valor {preco}")
     if meta.get("cpv"):
         partes.append(f"CPV {meta['cpv']}")
-    if meta.get("adjudicatario"):
-        partes.append(f"adjudicatário {meta['adjudicatario']}")
-    if meta.get("adjudicante"):
-        partes.append(f"adjudicante {meta['adjudicante']}")
+    for chave, rotulo_nome, rotulo_contagem in _PARTES:
+        valor = meta.get(chave)
+        if isinstance(valor, str) and valor.strip():
+            partes.append(f"{rotulo_nome} {valor.strip()}")
+        elif isinstance(valor, (int, float)) and valor:
+            quantos = f"{int(valor):,}".replace(",", " ")
+            partes.append(f"{quantos} contratos {rotulo_contagem}")
+    if meta.get("organo"):
+        partes.append(f"órgão {meta['organo']}")
     if meta.get("contratos") is not None:
         quantos = f"{int(meta['contratos'] or 0):,}".replace(",", " ")
         partes.append(f"{quantos} contratos")
@@ -453,8 +797,66 @@ def _meta_linha(meta: Dict[str, Any]) -> str:
     return " · ".join(partes)
 
 
+def _links_ficha(meta: Dict[str, Any], item: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Ligações que abrem as fichas do contrato e das partes.
+
+    O cartão passa a mostrar «Contrato · Entidade adjudicante · Adjudicatário»
+    e cada um abre a ficha respectiva (o `onNavigate` da interface entende
+    `contract-detail:<idcontrato>` e `company-detail:<NIF>`). Só entram as
+    ligações com identificador: sem NIF não há ficha para abrir.
+    """
+    ligacoes: List[Dict[str, str]] = []
+
+    contrato = str(item.get("id") or "").strip()
+    if contrato and str(item.get("scope") or "") == "contracts":
+        ligacoes.append(
+            {"label": "Contrato", "text": contrato, "view": "contract-detail", "arg": contrato}
+        )
+
+    if isinstance(meta.get("adjudicante"), str) and meta["adjudicante"].strip():
+        nif = str(meta.get("adjudicante_nif") or "").strip()
+        ligacoes.append(
+            {
+                "label": "Entidade adjudicante",
+                "text": meta["adjudicante"].strip(),
+                "view": "company-detail" if nif else "",
+                "arg": nif,
+            }
+        )
+
+    if isinstance(meta.get("adjudicatario"), str) and meta["adjudicatario"].strip():
+        nif = str(meta.get("adjudicatario_nif") or "").strip()
+        ligacoes.append(
+            {
+                "label": "Adjudicatário",
+                "text": meta["adjudicatario"].strip(),
+                "view": "company-detail" if nif else "",
+                "arg": nif,
+            }
+        )
+
+    # Sem partes identificadas, aproveita-se a vista que o próprio resultado já
+    # declara (ficha de empresa, contrato de Espanha, …).
+    aberta = item.get("open") or {}
+    if (
+        not ligacoes
+        and aberta.get("view") in ("company-detail", "contract-detail")
+        and str(aberta.get("arg") or "").strip()
+    ):
+        ligacoes.append(
+            {
+                "label": "Empresa" if aberta["view"] == "company-detail" else "Contrato",
+                "text": str(item.get("title") or ""),
+                "view": str(aberta["view"]),
+                "arg": str(aberta["arg"]),
+            }
+        )
+    return ligacoes
+
+
 def _as_source(n: int, scope_id: str, item: Dict[str, Any], score: float) -> Dict[str, Any]:
     """Normaliza um resultado (BM25 ou kNN) numa fonte citável."""
+    meta = _meta(item)
     return {
         "n": n,
         "id": str(item.get("id") or ""),
@@ -465,7 +867,9 @@ def _as_source(n: int, scope_id: str, item: Dict[str, Any], score: float) -> Dic
         "snippet": _snippet(item),
         # Valores e códigos: a interface mostra-os e o prompt usa-os para
         # comparar montantes (ver `_meta_linha` e `mercado_por_cpv`).
-        "meta": _meta(item),
+        "meta": meta,
+        # Contrato, adjudicante e adjudicatário com ligação às fichas.
+        "links": _links_ficha(meta, item),
         "url": str(item.get("url") or ""),
         "date": item.get("date"),
         "badges": [str(badge) for badge in (item.get("badges") or []) if badge][:4],
@@ -491,6 +895,8 @@ def _vector_item(scope_id: str, row: Dict[str, Any]) -> Optional[Dict[str, Any]]
         adjudicatarios = search_service._party_names(row.get("adjudicatarios"))
         parsed_adj = row.get("adjudicatarios") if isinstance(row.get("adjudicatarios"), dict) else {}
         primeira = (parsed_adj.get("parsed") or [{}])[0] if parsed_adj else {}
+        parsed_ent = row.get("adjudicantes") if isinstance(row.get("adjudicantes"), dict) else {}
+        entidade = (parsed_ent.get("parsed") or [{}])[0] if parsed_ent else {}
         return item_fn(
             "contracts",
             row.get("idcontrato") or row.get("doc_id") or "",
@@ -506,6 +912,8 @@ def _vector_item(scope_id: str, row: Dict[str, Any]) -> Optional[Dict[str, Any]]
             extra={
                 "preco": row.get("precoContratual"),
                 "cpv": search_service._cpv_code(row.get("cpv")),
+                "adjudicante": entidade.get("nome") or (adjudicantes[0] if adjudicantes else None),
+                "adjudicante_nif": entidade.get("nif"),
                 "adjudicatario": primeira.get("nome") or (adjudicatarios[0] if adjudicatarios else None),
                 "adjudicatario_nif": primeira.get("nif"),
             },
