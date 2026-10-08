@@ -139,6 +139,82 @@ def clean_question(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()[:MAX_QUESTION_CHARS]
 
 
+#: Marcas de que a pergunta só se entende com o turno anterior.
+_FOLLOWUP_STARTS = (
+    "e ", "e?", "e o", "e a", "e os", "e as", "e em", "e de", "e para", "e quanto", "e quais",
+    "e qual", "entao", "então", "tambem", "também", "agora ", "dai", "daí",
+)
+_FOLLOWUP_WORDS = (
+    "desses", "dessas", "desse", "dessa", "disso", "disto", "deste", "desta", "esse", "essa",
+    "esses", "essas", "aqueles", "aquelas", "o mesmo", "a mesma", "os mesmos", "as mesmas",
+    "essa empresa", "essa entidade", "desse contrato",
+)
+#: Acima disto a pergunta tem assunto próprio — não precisa do turno anterior.
+MAX_FOLLOWUP_WORDS = 9
+
+
+def _is_followup(question: str, history: Optional[Sequence[Dict[str, Any]]]) -> bool:
+    """A pergunta (curta) só faz sentido com o turno anterior?
+
+    Sem isto, «e desses, quantos são de Portugal?» era planeada do zero: o Jarvis não
+    sabia a que «desses» se referia, criava uma skill nova e respondia que não tinha
+    acesso ao conjunto anterior.
+    """
+    if not history:
+        return False
+    text = _fold(question).strip()
+    if not text or len(text.split()) > MAX_FOLLOWUP_WORDS:
+        return False
+    if text.startswith(_FOLLOWUP_STARTS):
+        return True
+    return any(word in text for word in _FOLLOWUP_WORDS)
+
+
+def _last_turn(history: Optional[Sequence[Dict[str, Any]]]) -> Tuple[str, str]:
+    """(pergunta, resposta) do último turno com conteúdo."""
+    pergunta, resposta = "", ""
+    for turn in reversed(list(history or [])):
+        role = str(turn.get("role") or "").lower()
+        content = re.sub(r"\s+", " ", str(turn.get("content") or "")).strip()
+        if not content:
+            continue
+        if role == "user" and not pergunta:
+            pergunta = content[:400]
+        elif role == "assistant" and not resposta:
+            resposta = content[:600]
+        if pergunta and resposta:
+            break
+    return pergunta, resposta
+
+
+def _context_text(question: str, history: Optional[Sequence[Dict[str, Any]]]) -> str:
+    """A pergunta com o tema do turno anterior colado, quando a atual é um seguimento.
+
+    É este o texto que vai ao planeador e aos argumentos das ferramentas: «e desses,
+    quantos são de Portugal?» passa a levar «Mota-Engil» agarrado e a pesquisa volta ao
+    assunto certo. A pergunta original continua a ser a que se mostra ao utilizador.
+    """
+    if not _is_followup(question, history):
+        return question
+    anterior, _ = _last_turn(history)
+    if not anterior:
+        return question
+    return clean_question(f"{anterior} {question}")
+
+
+def _conversation_block(history: Optional[Sequence[Dict[str, Any]]], limit: int = 2) -> str:
+    """A conversa recente, em texto, para o planeador e para a resposta final."""
+    turns: List[str] = []
+    for turn in list(history or [])[-limit * 2 :]:
+        role = str(turn.get("role") or "").lower()
+        content = re.sub(r"\s+", " ", str(turn.get("content") or "")).strip()
+        if not content or role not in {"user", "assistant"}:
+            continue
+        quem = "Utilizador" if role == "user" else "Jarvis"
+        turns.append(f"{quem}: {content[:600]}")
+    return "\n".join(turns)
+
+
 def _fold(value: Any) -> str:
     text = unicodedata.normalize("NFD", str(value or ""))
     return "".join(char for char in text if unicodedata.category(char) != "Mn").lower()
@@ -231,6 +307,7 @@ async def _llm_plan(question: str, backend: Dict[str, Any]) -> Optional[Dict[str
         + json.dumps(catalog, ensure_ascii=False)
         + "\n\nAções que podes propor (JSON):\n"
         + json.dumps(actions_catalogue.planner_catalogue(), ensure_ascii=False)
+        + (f"\n\nConversa anterior (memória da sessão):\n{context}" if context else "")
         + f"\n\nPergunta do utilizador: {question}\n\nDevolve apenas o JSON do plano."
     )
     raw = await ontology_ai.ask_model(
@@ -274,11 +351,11 @@ async def _llm_plan(question: str, backend: Dict[str, Any]) -> Optional[Dict[str
     }
 
 
-async def plan(question: str, backend: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+async def plan(question: str, backend: Optional[Dict[str, Any]], context: str = "") -> Dict[str, Any]:
     """Plano do Jarvis: modelo quando há, palavras-chave quando não há."""
     if backend and backend.get("kind") == "cloud":
         try:
-            candidate = await _llm_plan(question, backend)
+            candidate = await _llm_plan(question, backend, context)
             if candidate:
                 return candidate
         except Exception as exc:
@@ -578,13 +655,20 @@ def _suggestions(question: str, results: Sequence[Dict[str, Any]]) -> List[str]:
     return out[:4]
 
 
-async def _compose(question: str, results: Sequence[Dict[str, Any]], backend: Optional[Dict[str, Any]], skill_block: str) -> str:
+async def _compose(
+    question: str,
+    results: Sequence[Dict[str, Any]],
+    backend: Optional[Dict[str, Any]],
+    skill_block: str,
+    context: str = "",
+) -> str:
     if backend and backend.get("kind") == "cloud":
         from api import ontology_ai  # noqa: PLC0415
 
         evidence = json.dumps(_evidence_from(results), ensure_ascii=False, default=str)
         prompt = (
             (skill_block + "\n\n" if skill_block else "")
+            + (f"Conversa anterior (memória da sessão):\n{context}\n\n" if context else "")
             + "Evidências recolhidas pelos gateways (JSON):\n"
             + evidence
             + f"\n\nPergunta do utilizador: {question}\n\nResponde como o Jarvis, para ser lido em voz alta."
@@ -1184,7 +1268,10 @@ def meta(session: Any = None, backend: Optional[str] = None) -> Dict[str, Any]:
         "agent": agent_state,
         "actions": actions_catalogue.catalogue(),
         "tools": gateway.catalog(),
-        "voice": {"stt": stt_status(), "tts": tts_status()},
+        # `wake` tem de vir aqui também: é do `meta` que a página tira a disponibilidade
+        # do botão da palavra de ativação (com só `stt`/`tts` o botão dizia
+        # «indisponível» mesmo com o `faster-whisper` instalado).
+        "voice": {"stt": stt_status(), "tts": tts_status(), "wake": wake_status()},
         "model": {
             "kind": resolved.get("kind"),
             "provider": resolved.get("provider"),

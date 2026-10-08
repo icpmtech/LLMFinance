@@ -353,6 +353,23 @@ async def lifespan(app: FastAPI):
             pass
     threading.Thread(target=_preload_ontology, daemon=True).start()
 
+    # Resumo agregado por papel (dashboards de entidades): o cálculo é pesado
+    # (~70 s por papel, rankings aninhados ordenados por valor) e por isso fica
+    # materializado em cache com TTL + serve-stale.
+    #
+    # O aquecimento no arranque é **opt-in**: o Elasticsearch deste ambiente tem
+    # 512 MB de heap e três destas agregações de rajada competem com a própria
+    # recuperação do cluster. Como a cache também é persistida em disco, o
+    # caminho normal (primeira abertura paga, seguintes instantâneas) não
+    # justifica esse risco. Ligar com ENTITY_ROLE_SUMMARY_WARMUP=1.
+    if os.getenv("ENTITY_ROLE_SUMMARY_WARMUP", "0") == "1":
+        try:
+            from api.elasticsearch_client import warm_entity_role_summaries
+
+            warm_entity_role_summaries()
+        except Exception:
+            pass
+
     # Pré-aquece o metamodelo de pesquisa 360 (índices internos e documentos):
     # a primeira pesquisa do utilizador já encontra tudo quente.
     try:
@@ -1476,6 +1493,7 @@ def entities_report_pdf(nif: str):
 @app.get("/contracts/dashboard")
 @app.get("/contracts/search")
 @app.get("/contracts/map")
+@app.get("/contracts/ecologicos")
 @app.get("/empresas-iq")
 @app.get("/pessoas-iq")
 @app.get("/pessoas-iq/politicos")
@@ -2408,6 +2426,7 @@ def contracts_search(req: ContractSearchRequest):
         max_price=req.max_price,
         start_date=req.start_date,
         end_date=req.end_date,
+        ecological=req.ecological,
         size=req.size,
         from_=req.from_,
         sort_by=req.sort_by,
@@ -2483,6 +2502,7 @@ def contracts_analytics(
     procedure_type: Optional[str] = Query(None, description="Tipo de procedimento (valor da agregação `procedure_types`)"),
     contract_type: Optional[str] = Query(None, description="Tipo de contrato (valor da agregação `contract_types`)"),
     role: Optional[str] = Query("all", pattern="^(all|adjudicante|adjudicatario)$", description="Papel da parte nos contratos"),
+    ecological: Optional[bool] = Query(None, description="Só contratos com contratação ecológica (`ContratEcologico = Sim`)"),
     region: Optional[str] = Query(None, description="Região NUTS (código ou string completa)"),
     min_price: Optional[float] = Query(None),
     max_price: Optional[float] = Query(None),
@@ -2496,7 +2516,7 @@ def contracts_analytics(
         q=q, year=year, entity=entity, nif=nif, cpv_code=cpv_code,
         procedure_type=procedure_type, contract_type=contract_type, role=role, region=region,
         min_price=min_price, max_price=max_price, start_date=start_date, end_date=end_date,
-        top_entities=top_entities, top_cpv=top_cpv,
+        top_entities=top_entities, top_cpv=top_cpv, ecological=ecological,
     )
     if res.get("error"):
         raise HTTPException(status_code=502, detail=res["error"])
@@ -2513,6 +2533,7 @@ def contracts_regional_analytics(
     procedure_type: Optional[str] = Query(None),
     contract_type: Optional[str] = Query(None),
     role: Optional[str] = Query("all", pattern="^(all|adjudicante|adjudicatario)$"),
+    ecological: Optional[bool] = Query(None),
     region: Optional[str] = Query(None),
     min_price: Optional[float] = Query(None),
     max_price: Optional[float] = Query(None),
@@ -2525,7 +2546,7 @@ def contracts_regional_analytics(
         q=q, year=year, entity=entity, nif=nif, cpv_code=cpv_code,
         procedure_type=procedure_type, contract_type=contract_type, role=role, region=region,
         min_price=min_price, max_price=max_price, start_date=start_date, end_date=end_date,
-        size=size,
+        ecological=ecological, size=size,
     )
     if result.get("error"):
         raise HTTPException(status_code=502, detail=result["error"])

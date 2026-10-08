@@ -675,6 +675,11 @@ def test_meta_descreve_capacidades_gateways_e_voz():
     assert {entry["id"] for entry in meta["gateways"]} == {"hermes", "agent", "mcp", "web"}
     assert meta["tools"] == gateway.catalog()
     assert "stt" in meta["voice"] and "tts" in meta["voice"]
+    # O bloco `wake` tem de vir no metamodelo: é dele que o botão da palavra de
+    # ativação tira a disponibilidade (sem ele a página dizia «indisponível»).
+    assert "wake" in meta["voice"]
+    assert meta["voice"]["wake"]["words"]
+    assert "model" in meta["voice"]["wake"]
     assert meta["agent"]["id"] == "agent"
     assert meta["limits"]["max_tools_per_plan"] == service.MAX_TOOLS_PER_PLAN
 

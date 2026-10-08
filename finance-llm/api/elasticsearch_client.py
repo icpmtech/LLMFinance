@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 import unicodedata
 from datetime import datetime
@@ -3580,6 +3581,7 @@ def search_contracts(
     max_price: Optional[float] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    ecological: Optional[bool] = None,
     size: int = 20,
     from_: int = 0,
     sort_by: Optional[str] = None,
@@ -3591,7 +3593,7 @@ def search_contracts(
     if not client:
         return {"error": "Elasticsearch indisponível", "items": []}
 
-    query = _build_contract_query(q, year, entity, nif, counterparty_nif, region, cpv_code, min_price, max_price, start_date, end_date)
+    query = _build_contract_query(q, year, entity, nif, counterparty_nif, region, cpv_code, min_price, max_price, start_date, end_date, ecological=ecological)
     sort = _build_contract_sort(sort_by, sort_order)
 
     try:
@@ -3803,6 +3805,7 @@ def _build_contract_query(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     role: Optional[str] = None,
+    ecological: Optional[bool] = None,
 ) -> Dict[str, Any]:
     must: List[Dict[str, Any]] = []
     filters: List[Dict[str, Any]] = []
@@ -3899,6 +3902,11 @@ def _build_contract_query(
                 "query": {"wildcard": {"cpv.code": f"{cpv_code}*"}},
             }
         })
+    if ecological:
+        # Contratação pública com critérios ecológicos (campo do portal BASE).
+        # `ContratEcologico` é `text` com subcampo `.keyword`: o termo tem de usar
+        # o subcampo, senão o Elasticsearch recusa (`fielddata disabled`).
+        filters.append({"term": {"ContratEcologico.keyword": "Sim"}})
 
     price_range = {}
     if min_price is not None:
@@ -4044,6 +4052,7 @@ def get_contract_analytics(
     top_entities: int = 8,
     top_cpv: int = 8,
     value_buckets: int = 7,
+    ecological: Optional[bool] = None,
     es: Optional[Elasticsearch] = None,
 ) -> Dict[str, Any]:
     """Devolve agregações analíticas para o dashboard de contratos."""
@@ -4054,7 +4063,7 @@ def get_contract_analytics(
     base_query = _build_contract_query(
         q, year, entity, nif, region=region, cpv_code=cpv_code,
         min_price=min_price, max_price=max_price, start_date=start_date, end_date=end_date,
-        role=role,
+        role=role, ecological=ecological,
     )
 
     procedure_agg = _resolve_agg_target(client, "tipoprocedimento")
@@ -4884,7 +4893,237 @@ def search_companies(
         return {"query": q, "total": 0, "items": [], "error": str(e)}
 
 
+# ---------------------------------------------------------------------------
+# Resumo agregado por papel (dashboards de entidades)
+# ---------------------------------------------------------------------------
+#
+# A agregação é intrinsecamente pesada: o ranking de entidades ordena um `terms`
+# **aninhado** por um `reverse_nested` + `sum`, o que obriga o Elasticsearch a
+# calcular o valor de **todos** os NIF (~11 mil adjudicantes, ~93 mil
+# adjudicatários) antes de escolher o topo. Medido neste índice: ~20 s para um só
+# papel e ~100 s para o resumo completo — mais do que o `request_timeout` de 30 s
+# do cliente, o que dava `502 Connection timed out` na página.
+#
+# A `request cache` do Elasticsearch não resolve (o índice é reescrito
+# continuamente pelas recolhas, e a cache é invalidada a cada refresh), por isso o
+# resultado é materializado aqui: quem pede recebe já o valor anterior — marcado
+# como `stale` — enquanto a versão nova é calculada em segundo plano.
+ENTITY_ROLE_SUMMARY_TTL = float(os.getenv("ENTITY_ROLE_SUMMARY_TTL", "1800"))
+ENTITY_ROLE_SUMMARY_TIMEOUT = int(os.getenv("ENTITY_ROLE_SUMMARY_TIMEOUT", "300"))
+#: O serviço é reiniciado com frequência (builds, deploys): guardar a cache em
+#: disco evita pagar a agregação outra vez a cada arranque.
+ENTITY_ROLE_SUMMARY_CACHE_FILE = ROOT / "logs" / "_cache_entity_role_summary.json"
+#: Idade máxima aceite do ficheiro — acima disto é preferível recalcular.
+ENTITY_ROLE_SUMMARY_MAX_AGE = float(os.getenv("ENTITY_ROLE_SUMMARY_MAX_AGE", str(7 * 86400)))
+_ENTITY_ROLE_SUMMARY_CACHE: Dict[Tuple[Any, ...], Tuple[float, Dict[str, Any]]] = {}
+_ENTITY_ROLE_SUMMARY_LOCK = threading.Lock()
+#: Constrói em curso, por chave — evita que o aquecimento e um pedido do
+#: utilizador disparem a mesma agregação (dezenas de segundos) em paralelo.
+_ENTITY_ROLE_SUMMARY_BUILDING: Dict[Tuple[Any, ...], threading.Event] = {}
+_ENTITY_ROLE_SUMMARY_MAX = 12
+#: O circuito de proteção do Elasticsearch é pequeno (~486 MB) e duas destas
+#: agregações ao mesmo tempo disparam um 429; os cálculos ficam em série.
+_ENTITY_ROLE_SUMMARY_BUILD_LOCK = threading.Lock()
+
+
+def _entity_role_summary_key(
+    role: Optional[str],
+    q: Optional[str],
+    year: Optional[int],
+    region: Optional[str],
+    min_value: Optional[float],
+    max_value: Optional[float],
+    min_contracts: int,
+    top_n: int,
+) -> Tuple[Any, ...]:
+    return (
+        role or "all",
+        (q or "").strip().lower(),
+        year,
+        region or "",
+        min_value,
+        max_value,
+        int(min_contracts),
+        int(top_n),
+    )
+
+
+def _entity_role_summary_cache_get(
+    key: Tuple[Any, ...],
+) -> Tuple[Optional[Dict[str, Any]], bool]:
+    """Devolve `(payload, stale)`. `stale` = existe mas passou o TTL."""
+    with _ENTITY_ROLE_SUMMARY_LOCK:
+        entry = _ENTITY_ROLE_SUMMARY_CACHE.get(key)
+    if not entry:
+        return None, False
+    stamp, payload = entry
+    return payload, (time.time() - stamp) > ENTITY_ROLE_SUMMARY_TTL
+
+
+def _entity_role_summary_cache_put(key: Tuple[Any, ...], payload: Dict[str, Any]) -> None:
+    with _ENTITY_ROLE_SUMMARY_LOCK:
+        if len(_ENTITY_ROLE_SUMMARY_CACHE) > _ENTITY_ROLE_SUMMARY_MAX:
+            _ENTITY_ROLE_SUMMARY_CACHE.clear()
+        _ENTITY_ROLE_SUMMARY_CACHE[key] = (time.time(), payload)
+    _entity_role_summary_cache_save()
+
+
+def _entity_role_summary_cache_save() -> None:
+    """Grava a cache em disco (falha em silêncio: é só uma otimização)."""
+    try:
+        with _ENTITY_ROLE_SUMMARY_LOCK:
+            entries = [
+                {"key": list(key), "at": stamp, "payload": payload}
+                for key, (stamp, payload) in _ENTITY_ROLE_SUMMARY_CACHE.items()
+            ]
+        ENTITY_ROLE_SUMMARY_CACHE_FILE.write_text(
+            json.dumps(entries, ensure_ascii=False), encoding="utf-8"
+        )
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.debug("Não foi possível gravar a cache do resumo por papel: %s", exc)
+
+
+def _entity_role_summary_cache_load() -> None:
+    """Recupera a cache do disco (chamado uma vez, no arranque)."""
+    if not ENTITY_ROLE_SUMMARY_CACHE_FILE.exists():
+        return
+    try:
+        entries = json.loads(ENTITY_ROLE_SUMMARY_CACHE_FILE.read_text(encoding="utf-8"))
+    except Exception as exc:  # pragma: no cover - ficheiro corrompido
+        logger.info("Cache do resumo por papel ilegível, a ignorar: %s", exc)
+        return
+    now = time.time()
+    loaded = 0
+    with _ENTITY_ROLE_SUMMARY_LOCK:
+        for entry in entries or []:
+            try:
+                key = tuple(entry["key"])
+                stamp = float(entry["at"])
+                payload = entry["payload"]
+            except Exception:
+                continue
+            if now - stamp > ENTITY_ROLE_SUMMARY_MAX_AGE:
+                continue
+            _ENTITY_ROLE_SUMMARY_CACHE[key] = (stamp, payload)
+            loaded += 1
+    if loaded:
+        logger.info("Resumo por papel: %d entradas recuperadas do disco", loaded)
+
+
+_entity_role_summary_cache_load()
+
+
+def _entity_role_summary_build(key: Tuple[Any, ...], params: Dict[str, Any]) -> Dict[str, Any]:
+    """Calcula o resumo uma única vez por chave (os concorrentes esperam)."""
+    with _ENTITY_ROLE_SUMMARY_LOCK:
+        event = _ENTITY_ROLE_SUMMARY_BUILDING.get(key)
+        leader = event is None
+        if leader:
+            event = threading.Event()
+            _ENTITY_ROLE_SUMMARY_BUILDING[key] = event
+    assert event is not None
+
+    if not leader:
+        # Já há um cálculo a decorrer para estes parâmetros: espera-se por ele.
+        event.wait(timeout=ENTITY_ROLE_SUMMARY_TIMEOUT)
+        payload, _ = _entity_role_summary_cache_get(key)
+        return payload if payload is not None else _compute_entity_role_summary(**params)
+
+    try:
+        with _ENTITY_ROLE_SUMMARY_BUILD_LOCK:
+            # Outro cálculo pode ter terminado enquanto esperávamos pela vez.
+            cached, _ = _entity_role_summary_cache_get(key)
+            if cached is not None:
+                return cached
+            payload = _compute_entity_role_summary(**params)
+        if payload and not payload.get("error"):
+            _entity_role_summary_cache_put(key, payload)
+        return payload
+    finally:
+        with _ENTITY_ROLE_SUMMARY_LOCK:
+            _ENTITY_ROLE_SUMMARY_BUILDING.pop(key, None)
+        event.set()
+
+
+def _entity_role_summary_refresh(key: Tuple[Any, ...], params: Dict[str, Any]) -> None:
+    """Recalcula em segundo plano, devolvendo o pedido imediatamente."""
+
+    def worker() -> None:
+        try:
+            _entity_role_summary_build(key, params)
+        except Exception as exc:  # nunca deve derrubar o serviço
+            logger.info("Reconstrução do resumo por papel falhou: %s", exc)
+
+    threading.Thread(target=worker, name="role-summary-refresh", daemon=True).start()
+
+
+def warm_entity_role_summaries(roles: Tuple[str, ...] = ("all", "adjudicante", "adjudicatario")) -> None:
+    """Materializa em segundo plano os resumos que as páginas abrem por omissão.
+
+    Sem isto, a primeira abertura do dashboard a seguir a um arranque pagaria os
+    ~100 s da agregação à espera do utilizador.
+    """
+
+    def worker() -> None:
+        for role in roles:
+            try:
+                get_entity_role_summary(role=role)
+            except Exception as exc:  # pragma: no cover - aquecimento
+                logger.info("Aquecimento do resumo %s falhou: %s", role, exc)
+
+    threading.Thread(target=worker, name="role-summary-warmup", daemon=True).start()
+
+
 def get_entity_role_summary(
+    role: Optional[str] = "all",
+    q: Optional[str] = None,
+    year: Optional[int] = None,
+    region: Optional[str] = None,
+    min_value: Optional[float] = None,
+    max_value: Optional[float] = None,
+    min_contracts: int = 1,
+    top_n: int = 25,
+    es: Optional[Elasticsearch] = None,
+    use_cache: bool = True,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """Resumo agregado do universo de entidades por papel (com cache).
+
+    O cálculo vive em `_compute_entity_role_summary` e leva dezenas de segundos;
+    aqui o resultado é servido da cache (TTL `ENTITY_ROLE_SUMMARY_TTL`). Se a
+    entrada já tiver passado o TTL, devolve-se a versão antiga **e** dispara-se a
+    reconstrução, para nenhum pedido ficar à espera da agregação.
+
+    `use_cache=False` (ou `force=True`) força o cálculo imediato — usado por
+    sondas/testes e para reconstruir quando se sabe que os dados mudaram.
+    """
+    params: Dict[str, Any] = {
+        "role": role,
+        "q": q,
+        "year": year,
+        "region": region,
+        "min_value": min_value,
+        "max_value": max_value,
+        "min_contracts": min_contracts,
+        "top_n": top_n,
+        "es": es,
+    }
+    if not use_cache:
+        return _compute_entity_role_summary(**params)
+
+    key = _entity_role_summary_key(role, q, year, region, min_value, max_value, min_contracts, top_n)
+    payload, stale = _entity_role_summary_cache_get(key)
+    if payload is not None and not force:
+        if stale:
+            # Reconstrói sem partilhar o cliente do pedido (pode ter timeout curto).
+            _entity_role_summary_refresh(key, {**params, "es": None})
+        return payload
+
+    result = _entity_role_summary_build(key, params)
+    return result
+
+
+def _compute_entity_role_summary(
     role: Optional[str] = "all",
     q: Optional[str] = None,
     year: Optional[int] = None,
@@ -4904,8 +5143,11 @@ def get_entity_role_summary(
 
     O parâmetro `role` aceita ``"adjudicante"``, ``"adjudicatario"`` ou
     ``"all"`` (empresas nos dois papéis, com a decomposição por papel).
+
+    Nota: chamar directamente salta a cache de `get_entity_role_summary` e paga os
+    ~100 s da agregação; é o que a reconstrução em segundo plano faz.
     """
-    client = es or get_es_client()
+    client = es or get_es_client(request_timeout=ENTITY_ROLE_SUMMARY_TIMEOUT)
     if not client:
         return {"error": "Elasticsearch indisponível", "role": role, "top_entities": []}
 
@@ -5037,10 +5279,21 @@ def get_entity_role_summary(
                     }
                 },
             },
-            "adjudicantes": _role_agg("adjudicantes"),
-            "adjudicatarios": _role_agg("adjudicatarios"),
         },
     }
+
+    # Só se pede o ranking do papel que vai ser consumido (`role_paths` mais
+    # abaixo): cada um custa dezenas de segundos, porque o `terms` aninhado tem
+    # de calcular o valor de todos os NIF antes de ordenar. Nos dashboards de
+    # «adjudicantes»/«adjudicatários» isto corta a consulta para metade.
+    if role in (None, "all"):
+        needed_role_aggs = ("adjudicantes", "adjudicatarios")
+    elif role == "adjudicante":
+        needed_role_aggs = ("adjudicantes",)
+    else:
+        needed_role_aggs = ("adjudicatarios",)
+    for name in needed_role_aggs:
+        body["aggs"][name] = _role_agg(name)
     if runtime_mappings:
         body["runtime_mappings"] = runtime_mappings
 
@@ -5616,6 +5869,7 @@ def get_contract_regional_analytics(
     max_price: Optional[float] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    ecological: Optional[bool] = None,
     size: int = 30,
     es: Optional[Elasticsearch] = None,
 ) -> Dict[str, Any]:
@@ -5631,7 +5885,7 @@ def get_contract_regional_analytics(
     query = _build_contract_query(
         q, year, entity, nif, region=region, cpv_code=cpv_code,
         min_price=min_price, max_price=max_price, start_date=start_date, end_date=end_date,
-        role=role,
+        role=role, ecological=ecological,
     )
     type_filters, runtime_mappings = _contract_type_filters(client, procedure_type, contract_type)
     query = _and_filters(query, type_filters)

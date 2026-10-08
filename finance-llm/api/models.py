@@ -846,6 +846,7 @@ class ContractSearchRequest(BaseModel):
     max_price: Optional[float] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+    ecological: Optional[bool] = None
     size: int = 20
     from_: int = Field(0, alias="from")
     sort_by: Optional[Literal["relevance", "dataPublicacao", "dataCelebracaoContrato", "precoContratual", "objectoContrato", "tipoContrato", "adjudicantes", "adjudicatarios"]] = "dataPublicacao"

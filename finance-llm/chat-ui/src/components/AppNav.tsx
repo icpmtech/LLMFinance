@@ -70,6 +70,7 @@ export type AppView =
   | "contracts"
   | "contracts-search"
   | "contracts-dashboard"
+  | "contracts-eco"
   | "companies"
   | "companies-search"
   | "companies-dashboard"

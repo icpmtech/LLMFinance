@@ -66,8 +66,8 @@ export const APP_MODULES: AppModule[] = [
   {
     id: "contratos",
     label: "Contratos públicos",
-    hint: "Pesquisa, análise e mapa da contratação pública",
-    ids: ["contracts-search", "contracts-dashboard", "contracts-map"],
+    hint: "Pesquisa, análise, mapa e contratação ecológica",
+    ids: ["contracts-search", "contracts-dashboard", "contracts-eco", "contracts-map"],
   },
   {
     id: "contratos-es",

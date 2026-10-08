@@ -28,6 +28,7 @@ import { GlobalSearchPage } from "./pages/GlobalSearchPage";
 // import { ContractsPage } from "./pages/ContractsPage"; // página legada, mantida no código mas não usada
 import { ContractsDashboardPage } from "./pages/ContractsDashboardPage";
 import { ContractsMapPage } from "./pages/ContractsMapPage";
+import { ContratosEcologicosPage } from "./pages/ContratosEcologicosPage";
 import { ContractsSearchPage } from "./pages/ContractsSearchPage";
 import { ContractsEsSearchPage } from "./pages/ContractsEsSearchPage";
 import { ContractsEsDashboardPage } from "./pages/ContractsEsDashboardPage";
@@ -158,6 +159,7 @@ type AppView =
   | "rss"
   | "noticias"
   | "contracts-list"
+  | "contracts-eco"
   | "contracts-map"
   | "region-detail"
   | "contratos-es"
@@ -270,6 +272,7 @@ function pathForView(
   if (view === "contratos-fr-mapa") return "/contratos-fr/mapa";
   if (view === "companies-global") return "/empresas-global";
   if (view === "contracts-dashboard") return "/contracts/dashboard";
+  if (view === "contracts-eco") return "/contracts/ecologicos";
   if (view === "contracts-map") return "/contracts/map";
   if (view === "region-detail") {
     return region ? `/contracts/region/${region.pais}/${encodeURIComponent(region.code)}` : "/contracts/map";
@@ -538,6 +541,7 @@ export default function App() {
     if (path === "/contratos-fr/dashboard") return "contratos-fr-dashboard";
     if (path === "/contratos-fr/mapa") return "contratos-fr-mapa";
     if (path === "/contracts/dashboard") return "contracts-dashboard";
+    if (path === "/contracts/ecologicos") return "contracts-eco";
     if (path === "/contracts/map") return "contracts-map";
     if (path.startsWith("/gleif/regiao/")) {
       const [, , , level, ...rest] = path.split("/");
@@ -654,6 +658,7 @@ export default function App() {
       else if (path === "/contratos-fr/dashboard") next = "contratos-fr-dashboard";
       else if (path === "/contratos-fr/mapa") next = "contratos-fr-mapa";
       else if (path === "/contracts/dashboard") next = "contracts-dashboard";
+      else if (path === "/contracts/ecologicos") next = "contracts-eco";
       else if (path === "/contracts/map") next = "contracts-map";
       else if (path.startsWith("/gleif/regiao/")) {
         const [, , , level, ...rest] = path.split("/");
@@ -864,6 +869,10 @@ export default function App() {
     }
     if (v === "contracts-dashboard") {
       setViewAndHistory("contracts-dashboard");
+      return;
+    }
+    if (v === "contracts-eco") {
+      setViewAndHistory("contracts-eco");
       return;
     }
     if (v === "contracts-map") {
@@ -1362,6 +1371,15 @@ export default function App() {
         <ContractsDashboardPage
           onSwitchView={() => setViewAndHistory("dashboard")}
           onSwitchSearch={() => setViewAndHistory("contracts-search")}
+        />
+      );
+    }
+    if (target === "contracts-eco") {
+      return (
+        <ContratosEcologicosPage
+          onSwitchView={() => setViewAndHistory("dashboard")}
+          onSwitchSearch={() => setViewAndHistory("contracts-search")}
+          onSwitchDashboard={() => setViewAndHistory("contracts-dashboard")}
         />
       );
     }

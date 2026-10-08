@@ -1,0 +1,42 @@
+﻿=== quem serve o 127.0.0.1:8002 no anfitriao (nao e o Docker) ===
+  ::1:8002 -> wslrelay (C:\Program Files\WSL\wslrelay.exe)
+  :::8002 -> com.docker.backend (C:\Users\pedro.mourao.martins\AppData\Local\Programs\DockerDesktop\resources\com.docker.backend.exe)
+  127.0.0.1:8002 -> python (C:\Users\pedro.mourao.martins\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\python.exe)
+
+=== a espera de o contentor ouvir o 8000 ===
+  19:31:45  health=starting
+  19:32:05  health=starting
+  19:32:26  health=starting
+  19:32:46  health=healthy
+
+=== estado final ===
+
+finance-llm-frontend | Up 3 minutes (healthy)
+finance-llm-backend | Up 3 minutes (healthy)
+
+=== endpoints pelo nginx (4180), como o browser usa ===
+  /api/deep-search/meta -> 200 em 0.2s (3523 car.)
+  /api/deep-search/examples?limit=8 -> 200 em 1.7s (1244 car.)
+     [contracts] Quanto vale, no total, a contrataÃ§Ã£o pÃºblica adjudicada a MEDTRONIC PORTUGAL (444 971 518,57 â?¬) e quais os maiores contratos?
+     [contracts] Que empresas contrataram mais com Instituto PortuguÃªs de Oncologia do Porto Francisco Gentil e em que Ã¡reas?
+     [contracts] Quais foram os maiores contratos de 2026 e quem os ganhou?
+     [contracts] Quanto custa, tipicamente, um contrato de Produtos farmacÃªuticos (CPV 33600000-6) e quem sÃ£o os principais fornecedores?
+     [news] O que dizem as notÃ­cias recentes sobre TV e como se liga Ã  contrataÃ§Ã£o pÃºblica?
+     [imprensa] Resume o que o SAPO â?? NotÃ­cias noticiou recentemente sobre contrataÃ§Ã£o pÃºblica e empresas.
+     [entities] Faz o retrato de Petrogal, S.A. (7752 contratos Â· 1 881 741 580,67 â?¬): contratos, valores e com quem contrata.
+     [pessoas] Quem Ã© Deolinda Ribas da Silva Albuquerque â?? 247 empresas ligadas â?? e que relaÃ§Ã£o tem com a contrataÃ§Ã£o pÃºblica?
+
+=== ligacoes das fichas (pelo nginx) ===
+  fontes: 2
+  [1] AquisiÃ§Ã£o de 2000 licenÃ§as do software Acrobat Professional ou equivalente.
+      Contrato -> contract-detail:15607661
+      Entidade adjudicante -> company-detail:600084779
+      AdjudicatÃ¡rio -> company-detail:509117660
+  [2] Fornecimento de licenÃ§a de software EES â?? Engineering Equation Solver - para o Departamento de Engenharia MecÃ¢nica do ISEP
+      Contrato -> contract-detail:15607116
+      Entidade adjudicante -> company-detail:501540709
+      AdjudicatÃ¡rio -> (sem ficha)
+
+=== fim ===
+
+

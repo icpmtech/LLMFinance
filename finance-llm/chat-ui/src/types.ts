@@ -721,6 +721,7 @@ export interface ContractSearchRequest {
   max_price?: number;
   start_date?: string;
   end_date?: string;
+  ecological?: boolean;
   size?: number;
   from?: number;
   sort_by?: "relevance" | "dataPublicacao" | "dataCelebracaoContrato" | "precoContratual" | "objectoContrato" | "tipoContrato" | "adjudicantes" | "adjudicatarios";
@@ -736,6 +737,8 @@ export interface ContractAnalyticsFilters {
   procedure_type?: string;
   contract_type?: string;
   role?: "all" | "adjudicante" | "adjudicatario";
+  /** Só contratos com contratação ecológica (`ContratEcologico = Sim`). */
+  ecological?: boolean;
   region?: string;
   min_price?: number;
   max_price?: number;

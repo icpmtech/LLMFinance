@@ -784,6 +784,7 @@ export async function getContractAnalytics(
     procedure_type,
     contract_type,
     role,
+    ecological,
     region,
     min_price,
     max_price,
@@ -801,6 +802,7 @@ export async function getContractAnalytics(
   if (procedure_type) params.append("procedure_type", procedure_type);
   if (contract_type) params.append("contract_type", contract_type);
   if (role && role !== "all") params.append("role", role);
+  if (ecological) params.append("ecological", "true");
   if (region) params.append("region", region);
   if (min_price !== undefined) params.append("min_price", String(min_price));
   if (max_price !== undefined) params.append("max_price", String(max_price));
@@ -877,6 +879,7 @@ export async function getContractRegionalAnalytics(
   if (filters.procedure_type) params.set("procedure_type", filters.procedure_type);
   if (filters.contract_type) params.set("contract_type", filters.contract_type);
   if (filters.role && filters.role !== "all") params.set("role", filters.role);
+  if (filters.ecological) params.set("ecological", "true");
   if (filters.region) params.set("region", filters.region);
   if (filters.min_price !== undefined) params.set("min_price", String(filters.min_price));
   if (filters.max_price !== undefined) params.set("max_price", String(filters.max_price));

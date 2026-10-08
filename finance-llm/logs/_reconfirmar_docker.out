@@ -1,0 +1,45 @@
+﻿=== 1. daemon ===
+daemon OK - versao 29.6.2
+
+=== 2. etiquetas ===
+
+iq-os-frontend:latest 9b96ba50d9e9 2026-10-08 19:20:21 +0100 BST
+iq-os-backend:latest c0ba402b3020 2026-10-08 18:33:17 +0100 BST
+iq-os-frontend:antes-jarvis-agent 9b3c52434bbc 2026-10-08 16:34:25 +0100 BST
+iq-os-backend:antes-jarvis-agent dbfe44fef011 2026-10-08 16:32:38 +0100 BST
+iq-os-frontend:comparar-valores f1fd8922529d 2026-10-08 14:48:29 +0100 BST
+iq-os-backend:comparar-valores 3b60bb673ab4 2026-10-08 14:45:22 +0100 BST
+iq-os-frontend:build-completo-2026-10-07 dace0640d3dd 2026-10-07 19:59:10 +0100 BST
+iq-os-backend:build-completo-2026-10-07 d0ff70f2b778 2026-10-07 18:57:52 +0100 BST
+iq-os-frontend:antes-deep-search fc0fcbb1a21c 2026-10-07 14:36:35 +0100 BST
+iq-os-backend:antes-deep-search 8f0d2f24b091 2026-10-07 14:27:35 +0100 BST
+
+=== 3. contentores: que imagem e que estado ===
+backend  a correr -> sha256:c0ba402b3020f3e12a08f2f90ec1b89ab3f11e86b4914f3c51ac37561c32d40a
+frontend a correr -> sha256:9b96ba50d9e9442487b7b5552ab859f9091445eaeb06b5754893ec464875e384
+etiqueta latest -> sha256:c0ba402b3020f3e12a08f2f90ec1b89ab3f11e86b4914f3c51ac37561c32d40a
+etiqueta latest -> sha256:9b96ba50d9e9442487b7b5552ab859f9091445eaeb06b5754893ec464875e384
+latest do backend == a correr? True
+
+=== 4. estado dos servicos ===
+finance-llm-frontend | Up 30 seconds (healthy) | iq-os-frontend:latest
+finance-llm-backend | Up 29 seconds (health: starting) | iq-os-backend:latest
+
+=== 5. a espera do /health (arranque demora minutos) ===
+backend /health 200
+
+=== 6. bundle servido pelo frontend ===
+assets/index-Cb3iZyQ9.js
+no dist local:
+index-Cb3iZyQ9.js
+
+=== 7. endpoints (via nginx, como o browser ve) ===
+meta falhou: The remote server returned an error: (502) Bad Gateway.
+exemplos falharam: The remote server returned an error: (502) Bad Gateway.
+
+=== 8. ligacoes das fichas num contrato ===
+busca falhou: The remote server returned an error: (502) Bad Gateway.
+
+=== fim ===
+
+
