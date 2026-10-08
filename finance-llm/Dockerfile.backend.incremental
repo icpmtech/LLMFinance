@@ -24,3 +24,12 @@ FROM ${BASE}
 
 # WORKDIR (/app), ENTRYPOINT (/entrypoint.sh) e HEALTHCHECK vêm da base.
 COPY . .
+
+# Dependências que o incremental tem de acrescentar à parte. São poucas e leves:
+# o `requirements.txt` já as traz, mas uma build a frio resolveria também
+# `pandas`/`transformers`/`numpy` **sem versões fixas** e mudaria o ambiente que
+# está validado — que é exatamente o que este ficheiro existe para evitar.
+# `edge-tts` dá ao Jarvis as vozes neurais pt-PT (`JARVIS_VOICE`) e o
+# `faster-whisper` a transcrição local — incluindo a **palavra de ativação**
+# (escuta contínua com o modelo `tiny`).
+RUN pip install --no-cache-dir "edge-tts>=6.1.0" "faster-whisper>=1.0.0"

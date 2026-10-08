@@ -40,6 +40,26 @@ export type JarvisVoiceEngine = {
   note: string;
 };
 
+/** Estado da palavra de ativação («wake word») — vem em `/jarvis/voice`. */
+export type JarvisWakeStatus = {
+  words: string[];
+  model: string;
+  engine?: string | null;
+  available: boolean;
+  note: string;
+};
+
+/** Resultado de um trecho da escuta contínua. */
+export type JarvisWakeResult = {
+  text: string;
+  active: boolean;
+  word?: string | null;
+  command: string;
+  engine?: string | null;
+  model?: string | null;
+  elapsed_ms?: number;
+};
+
 export type JarvisModelInfo = {
   kind: "cloud" | "local" | "unavailable" | string;
   provider?: string | null;
@@ -52,7 +72,7 @@ export type JarvisMeta = {
   gateways: JarvisGateway[];
   actions?: { destinations: JarvisAction[]; creations: JarvisAction[] };
   tools: JarvisTool[];
-  voice: { stt: JarvisVoiceEngine; tts: JarvisVoiceEngine };
+  voice: { stt: JarvisVoiceEngine; tts: JarvisVoiceEngine; wake?: JarvisWakeStatus };
   model: JarvisModelInfo;
   limits: { max_question_chars: number; max_tools_per_plan: number; max_actions_per_plan?: number; max_history: number };
 };
@@ -183,8 +203,8 @@ export function getJarvisMeta(backend?: string): Promise<JarvisMeta> {
   return request<JarvisMeta>(`/jarvis/meta${suffix}`);
 }
 
-export function getJarvisVoice(): Promise<{ stt: JarvisVoiceEngine; tts: JarvisVoiceEngine }> {
-  return request<{ stt: JarvisVoiceEngine; tts: JarvisVoiceEngine }>("/jarvis/voice");
+export function getJarvisVoice(): Promise<{ stt: JarvisVoiceEngine; tts: JarvisVoiceEngine; wake?: JarvisWakeStatus }> {
+  return request<{ stt: JarvisVoiceEngine; tts: JarvisVoiceEngine; wake?: JarvisWakeStatus }>("/jarvis/voice");
 }
 
 export function askJarvis(payload: JarvisAskPayload): Promise<JarvisAnswer> {
@@ -227,6 +247,33 @@ export async function transcribeJarvisAudio(blob: Blob, language = "pt"): Promis
     throw new Error(detail);
   }
   return (await response.json()) as { text: string; engine: string };
+}
+
+/**
+ * Trecho curto da escuta contínua → texto + se ouviu a palavra de ativação.
+ *
+ * O servidor transcreve localmente (`faster-whisper`, modelo pequeno) e devolve
+ * também o comando que veio atrás da palavra, para o caso de se dizer tudo de
+ * uma vez («Jarvis, quantos contratos tem a EDP?»).
+ */
+export async function wakeJarvisAudio(blob: Blob, language = "pt"): Promise<JarvisWakeResult> {
+  const form = new FormData();
+  form.append("audio", blob, blob.type.includes("wav") ? "jarvis.wav" : "jarvis.webm");
+  const response = await fetch(`${API_BASE}/jarvis/wake?language=${encodeURIComponent(language)}`, {
+    method: "POST",
+    body: form,
+  });
+  if (!response.ok) {
+    let detail = `${response.status}`;
+    try {
+      const payload = (await response.json()) as { detail?: unknown };
+      if (payload?.detail) detail = String(payload.detail);
+    } catch {
+      /* resposta sem JSON */
+    }
+    throw new Error(detail);
+  }
+  return (await response.json()) as JarvisWakeResult;
 }
 
 /** Executa uma criação em nome do utilizador (documento, dossiê, skill). */

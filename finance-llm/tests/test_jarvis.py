@@ -28,16 +28,16 @@ from api import jarvis_service as service  # noqa: E402
 # ---------------------------------------------------------------------------
 # Catálogo dos gateways
 # ---------------------------------------------------------------------------
-def test_catalogo_tem_os_tres_gateways():
+def test_catalogo_tem_os_quatro_gateways():
     ids = {item["id"] for item in gateway.GATEWAYS}
-    assert ids == {"hermes", "mcp", "web"}
+    assert ids == {"hermes", "agent", "mcp", "web"}
 
 
-def test_catalogo_publica_ferramentas_dos_tres_gateways():
+def test_catalogo_publica_ferramentas_dos_quatro_gateways():
     catalog = gateway.catalog()
     assert catalog, "o catálogo não pode estar vazio"
     por_gateway = {item["gateway"] for item in catalog}
-    assert por_gateway == {"hermes", "mcp", "web"}
+    assert por_gateway == {"hermes", "agent", "mcp", "web"}
     for item in catalog:
         assert item["id"], "todas as ferramentas precisam de identificador"
         assert item["label"], f"{item['id']} sem etiqueta"
@@ -52,7 +52,7 @@ def test_catalogo_filtra_por_gateway():
 
 def test_summary_conta_ferramentas_por_gateway():
     resumo = gateway.summary()
-    assert {entry["id"] for entry in resumo} == {"hermes", "mcp", "web"}
+    assert {entry["id"] for entry in resumo} == {"hermes", "agent", "mcp", "web"}
     assert all(entry["tools"] > 0 for entry in resumo), "nenhum gateway pode ficar sem ferramentas"
 
 
@@ -446,6 +446,48 @@ def test_factual_answer_desembrulha_o_envelope_do_mcp():
     assert "/contracts/search" not in texto, "o envelope do gateway não interessa à resposta"
 
 
+def test_factual_answer_da_a_resposta_do_agente_como_texto():
+    resultados = [
+        {
+            "tool": "agent.ask",
+            "gateway": "agent",
+            "label": "Delegar no Hermes Agent",
+            "ok": True,
+            "data": {
+                "answer": "A EDP tem 4751 contratos públicos.",
+                "model": "hermes-agent",
+                "usage": {"total_tokens": 10},
+                "tool_calls": 3,
+                "task": "quantos contratos tem a EDP?",
+            },
+        }
+    ]
+    texto = service._factual_answer("quantos contratos tem a EDP?", resultados)
+    assert "A EDP tem 4751 contratos públicos." in texto
+    # Nada de despejar o envelope do agente (modelo, tool_calls, task) como se
+    # fossem factos — era o que acontecia e tornava a resposta ilegível.
+    assert "tool_calls" not in texto
+    assert "model=" not in texto
+    assert "answer=" not in texto
+
+
+def test_factual_answer_sem_texto_do_agente_explica_e_nao_despeja():
+    texto = service._factual_answer(
+        "faz isto",
+        [
+            {
+                "tool": "agent.ask",
+                "gateway": "agent",
+                "label": "Delegar no Hermes Agent",
+                "ok": True,
+                "data": {"answer": "", "model": "hermes-agent"},
+            }
+        ],
+    )
+    assert "hermes-agent" in texto
+    assert "não devolveu texto" in texto
+
+
 def test_evidencia_para_o_modelo_nao_leva_o_envelope_do_mcp():
     evidencias = service._evidence_from(
         [
@@ -538,6 +580,73 @@ def test_transcribe_sem_audio_falha():
         service.transcribe(b"")
 
 
+# ---------------------------------------------------------------------------
+# Palavra de ativação (escuta contínua local)
+# ---------------------------------------------------------------------------
+def test_wake_status_publica_palavras_e_modelo():
+    estado = service.wake_status()
+    assert estado["words"], "tem de haver palavras de ativação"
+    assert estado["model"] == service.WAKE_MODEL
+    assert "engine" in estado and "note" in estado
+
+
+def test_wake_words_mais_longas_primeiro():
+    # «hey jarvis» tem de ser testado antes de «jarvis», senão o comando perdia o «hey».
+    comprimentos = [len(palavra) for palavra in service.WAKE_WORDS]
+    assert comprimentos == sorted(comprimentos, reverse=True)
+
+
+@pytest.mark.parametrize(
+    ("texto", "palavra", "comando"),
+    [
+        ("Jarvis, quantos contratos tem a EDP?", "jarvis", "quantos contratos tem a EDP"),
+        ("Jervis, quantos contratos tem a EDP?", "jarvis", "quantos contratos tem a EDP"),
+        ("hey jarvis abre as insolvências", "hey jarvis", "abre as insolvências"),
+        ("Apolo, qual é o maior contrato?", "apollo", "qual é o maior contrato"),
+        ("JARVIS", "jarvis", ""),
+        ("Olá, Jarvis", "olá jarvis", ""),
+    ],
+)
+def test_match_wake_aceita_variacoes(texto, palavra, comando):
+    resultado = service.match_wake(texto)
+    assert resultado["active"] is True, texto
+    assert resultado["word"] == palavra
+    assert resultado["command"] == comando
+
+
+@pytest.mark.parametrize(
+    "texto",
+    [
+        "boa tarde, tudo bem?",
+        "o jarvison disse aquilo",  # duas edições: não é a palavra
+        "o serviço público de saúde",
+        "há vários contratos",
+        "",
+    ],
+)
+def test_match_wake_recusa_o_que_nao_e_a_palavra(texto):
+    resultado = service.match_wake(texto)
+    assert resultado["active"] is False, texto
+    assert resultado["command"] == ""
+
+
+def test_transcribe_wake_usa_o_modelo_pequeno_com_prompt(monkeypatch):
+    chamadas: dict = {}
+
+    def falso_transcribe(data, **kwargs):
+        chamadas.update(kwargs)
+        return {"text": "Jarvis, abre as insolvências", "engine": "faster-whisper"}
+
+    monkeypatch.setattr(service, "transcribe", falso_transcribe)
+    resultado = service.transcribe_wake(b"audio")
+    assert resultado["active"] is True
+    assert resultado["command"] == "abre as insolvências"
+    assert chamadas["model"] == service.WAKE_MODEL
+    # O prompt é o que torna o `tiny` fiável: sem ele ouvia «Serviço».
+    assert chamadas["prompt"] == service.WAKE_PROMPT
+    assert "elapsed_ms" in resultado
+
+
 def test_tts_catalogo_de_vozes():
     estado = service.tts_status()
     assert estado["voices"], "tem de haver vozes listadas"
@@ -563,9 +672,10 @@ def test_meta_descreve_capacidades_gateways_e_voz():
     meta = service.meta()
     assert meta["about"]["name"] == "Jarvis"
     assert meta["about"]["capabilities"]
-    assert {entry["id"] for entry in meta["gateways"]} == {"hermes", "mcp", "web"}
+    assert {entry["id"] for entry in meta["gateways"]} == {"hermes", "agent", "mcp", "web"}
     assert meta["tools"] == gateway.catalog()
     assert "stt" in meta["voice"] and "tts" in meta["voice"]
+    assert meta["agent"]["id"] == "agent"
     assert meta["limits"]["max_tools_per_plan"] == service.MAX_TOOLS_PER_PLAN
 
 

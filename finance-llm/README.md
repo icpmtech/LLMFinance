@@ -1410,9 +1410,12 @@ Notas de implementação (`api/hermes_service.py`):
 Sem modelo configurado a resposta é factual — configure um fornecedor em **Definições →
 Fornecedores de IA** para ter a resposta redigida com citações.
 
-### Jarvis (assistente com voz)Aplicação **Jarvis** (`/jarvis`, `docs/jarvis.md`) — o assistente operacional que **fala e
+### Jarvis (assistente com voz)
+
+Aplicação **Jarvis** (`/jarvis`, `docs/jarvis.md`) — o assistente operacional que **fala e
 ouve**. Em vez de ir buscar os dados diretamente, fala com o sistema por **gateways**: o
-**Hermes** (investigação citada), o **MCP do sistema** (as operações curadas: contratos,
+**Hermes** (investigação citada), o **Hermes Agent** (delegação no agente autónomo: as
+skills dele e os 29 toolsets), o **MCP do sistema** (as operações curadas: contratos,
 empresas, mercado, RAG, ontologia, CRM…) e o **browser** (pesquisa e leitura de páginas
 externas, com extração de texto). Segue também a mesma biblioteca de **skills** do Hermes.
 
@@ -1445,8 +1448,9 @@ Voz, por ordem de preferência e sempre com degradação:
 
 - **ouvir** — `SpeechRecognition` do browser (Chrome/Edge); sem ele, grava com `MediaRecorder`
   e transcreve no servidor com `faster-whisper`;
-- **falar** — vozes do sistema (`speechSynthesis`); com **Voz do servidor** ligado e
-  `edge-tts` instalado, usa vozes neurais `pt-PT` de `/jarvis/speak`.
+- **falar** — vozes do sistema (`speechSynthesis`); com **Voz do servidor** ligado, usa as
+  vozes neurais `pt-PT` do `edge-tts` (`pt-PT-RaquelNeural` por omissão, `pt-PT-DuarteNeural`
+  como alternativa) através de `/jarvis/speak`.
 
 Endpoints (`api/jarvis_routes.py`):
 
@@ -1475,9 +1479,34 @@ Notas de implementação (`api/jarvis_gateway.py`, `api/jarvis_service.py`):
   proposta mais recente em vez de virar pergunta nova;
 - o Jarvis está exposto no próprio servidor MCP (`jarvis_meta`, `jarvis_tools`, `jarvis_voice`,
   `jarvis_ask`, `jarvis_speak`), pelo que outro agente lhe pode pedir uma resposta com voz;
-- `JARVIS_VOICE` e `JARVIS_STT_MODEL` (ver `.env.example`) escolhem a voz e o modelo de
-  transcrição; **sem `edge-tts`/`faster-whisper`** o Jarvis não perde funcionalidade — muda só
-  quem sintetiza e transcreve.
+- o gateway **`agent`** (`api/jarvis_agent.py`) liga o Jarvis ao **Hermes Agent** pela API
+  OpenAI-compatível do container: `agent.ask` delega a tarefa (o agente corre-a com as skills
+  e as ferramentas dele), `agent.skills` lista as skills instaladas (lidas do container com
+  `hermes skills list`, com `COLUMNS=200` para não vir truncado) e `agent.capabilities` lista
+  os 29 toolsets. O estado do agente aparece no `/jarvis/meta` e no Control Center. É lento por
+  natureza (a resposta de uma palavra do agente levou ~29 s, com o índice de skills no prompt),
+  por isso o plano só o escolhe para trabalho autónomo ou multi-passo — e sem o agente a correr
+  tudo degrada com uma falha legível em vez de rebentar;
+- **delegação como um assistente, não como um modelo solto**: cada `agent.ask` leva um *system
+  prompt* com a persona do IQ OS, **a data de hoje** (o pedido «hoje»/«esta semana» era o erro
+  mais comum), os endereços dos dados internos (`/search/unified` e o SearXNG do compose,
+  sem chave) e as regras de resposta (ler a skill, não inventar, citar, dividir o problema).
+  Levou também o **diálogo anterior** — o agente é sem estado e uma pergunta de seguimento
+  chegava-lhe sem contexto. A persona é configurável (`JARVIS_AGENT_PERSONA`);
+- **duas skills nossas no agente** (`docker/hermes/skills/iqos/`, montadas só de leitura em
+  `/opt/data/skills/iqos`): `pesquisa-total` (a pesquisa unificada da plataforma, com âmbitos,
+  contagens e citações) e `websearch` (web aberta pelo metasearch interno em JSON + leitura das
+  páginas). Acrescentar uma skill é criar a pasta no repositório e recriar o contentor. Sem elas
+  o agente responde com o que «sabe»; com elas consulta as nossas fontes — «quantos resultados
+  existem sobre a EDP?» devolveu as contagens reais por âmbito (4751 contratos, 2331 Wikipédia,
+  474 contratos de Espanha, …);
+- **se o Jarvis não tiver modelo para redigir** (modo factual) e a resposta vier de uma
+  delegação, mostra-se o texto do agente tal como ele o escreveu — antes despejava o envelope
+  da ferramenta (`answer=…; model=…; tool_calls=…`), que era ilegível;
+- `JARVIS_VOICE`, `JARVIS_STT_MODEL`, `JARVIS_WAKE_MODEL`, `JARVIS_AGENT_URL`,
+  `JARVIS_AGENT_KEY` e `JARVIS_AGENT_TIMEOUT` (ver `.env.example`) escolhem a voz, o modelo de
+  transcrição, a palavra de ativação e o acesso ao agente; **sem `edge-tts`/`faster-whisper`** o
+  Jarvis não perde funcionalidade — muda só quem sintetiza e transcreve.
 
 ### Dashboard do Hermes Agent (subcaminho público e single sign-on)
 

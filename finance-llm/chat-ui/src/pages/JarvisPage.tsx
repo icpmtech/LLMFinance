@@ -13,6 +13,7 @@ import {
   Aperture,
   Brain,
   ChevronDown,
+  Ear,
   Globe2,
   Orbit,
   RotateCcw,
@@ -82,6 +83,7 @@ export default function JarvisPage({ onNavigate }: { onNavigate?: (action: Jarvi
     language: "pt-PT",
     stt: meta?.voice.stt,
     tts: meta?.voice.tts,
+    wake: meta?.voice.wake,
     onTranscript: (text) => sendRef.current(text),
     onError: (message) => reportErrorRef.current(message),
   });
@@ -153,6 +155,13 @@ export default function JarvisPage({ onNavigate }: { onNavigate?: (action: Jarvi
       ? "modelo da conta"
       : "modo factual (sem modelo)";
 
+  // Os gateways vêm do `/jarvis/meta` (não de uma lista escrita à mão): quando
+  // entra um gateway novo, o cabeçalho acompanha sem se tocar no texto.
+  const gatewaysLabel = useMemo(() => {
+    const labels = (meta?.gateways || []).map((gateway) => gateway.label);
+    return labels.length ? labels.join(" · ") : "a ligar os gateways…";
+  }, [meta]);
+
   const toolsByGateway = useMemo(() => {
     const map = new Map<string, number>();
     for (const tool of meta?.tools || []) {
@@ -170,7 +179,7 @@ export default function JarvisPage({ onNavigate }: { onNavigate?: (action: Jarvi
         <div className="min-w-0">
           <h1 className="text-[13.5px] font-semibold leading-tight text-foreground">Jarvis</h1>
           <p className="truncate text-[11.5px] text-muted-foreground">
-            Hermes · MCP do sistema · browser · voz — {modelLabel}
+            {gatewaysLabel} · voz — {modelLabel}
           </p>
         </div>
 
@@ -218,6 +227,31 @@ export default function JarvisPage({ onNavigate }: { onNavigate?: (action: Jarvi
           >
             <Server size={13} />
             Voz do servidor
+          </button>
+
+          <button
+            type="button"
+            onClick={() => voice.toggleWake()}
+            disabled={!voice.wakeAvailable}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11.5px] transition disabled:opacity-40 ${
+              voice.wakeState !== "off"
+                ? "border-amber-400/30 bg-amber-400/10 text-amber-200 hover:bg-amber-400/15"
+                : "border-white/10 bg-white/[0.03] text-muted-foreground hover:bg-white/[0.07]"
+            }`}
+            title={
+              voice.wakeAvailable
+                ? `Escuta contínua local (faster-whisper ${meta?.voice.wake?.model ?? ""}): diga «${
+                    voice.wakeWords[0] ?? "Jarvis"
+                  }» para acordar o Jarvis`
+                : meta?.voice.wake?.note || "Palavra de ativação indisponível"
+            }
+          >
+            <Ear size={13} />
+            {voice.wakeState === "capturing"
+              ? "A ouvir o pedido…"
+              : voice.wakeState === "dormant"
+                ? `Diga «${voice.wakeWords[0] ?? "Jarvis"}»`
+                : "Palavra de ativação"}
           </button>
 
           {meta?.voice.tts.available && prefs.serverVoice ? (

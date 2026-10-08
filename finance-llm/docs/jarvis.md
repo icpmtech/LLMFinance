@@ -9,6 +9,7 @@ exatamente a soma do que os gateways expõem, e cada gateway pode ser testado
 | Gateway | O que dá | Como |
 | --- | --- | --- |
 | **Hermes** | Investigação citada sobre os dados da plataforma | `hermes_service.ask()` |
+| **Hermes Agent** | O agente autónomo do IQ OS: as **skills** dele e os **29 toolsets** (browser, terminal, ficheiros, código, visão, cron, …), mais as skills `pesquisa-total` e `websearch` | API OpenAI-compatível do container (`api/jarvis_agent.py`) |
 | **MCP do sistema** | As operações curadas do IQ OS (contratos, empresas, mercado, RAG, ontologia, CRM, …) | `mcp_server.catalog` |
 | **Browser** | Pesquisa e leitura de páginas externas | DuckDuckGo + `httpx`/`BeautifulSoup` |
 
@@ -112,15 +113,124 @@ Três formas de interagir, por ordem de preferência — todas degradam sem part
    (*faster-whisper*). Se nenhum estiver disponível, o microfone fica desativado
    e a página continua a funcionar por texto.
 2. **Falar (TTS).** Por omissão usa as vozes do sistema (`speechSynthesis`) —
-   instantâneo. Com **Voz do servidor** ligado (e `edge-tts` instalado), a
-   resposta vem de `/jarvis/speak` com vozes neurais `pt-PT`.
+   instantâneo. Com **Voz do servidor** ligado, a resposta vem de `/jarvis/speak`
+   com as vozes neurais `pt-PT` do `edge-tts` (`pt-PT-RaquelNeural` por omissão,
+   `pt-PT-DuarteNeural` como alternativa):
+
+   ```powershell
+   docker compose exec backend python -c "from api import jarvis_service as s; print(s.tts_status()['engine'])"   # edge-tts
+   curl.exe -s -X POST http://127.0.0.1:4180/api/jarvis/speak -H "Content-Type: application/json" -d '{"text":"bom dia","voice":"pt-PT-RaquelNeural"}' -o fala.mp3
+   ```
 3. **Painel de controlo**: profundidade da investigação (`rapida`/`profunda`,
    passada ao gateway do Hermes), «Falar» (ler as respostas), escolha da voz e a
    lista de ferramentas disponíveis.
 
 ---
 
-## 3. Rotas
+## 3. O gateway «Hermes Agent» — tudo o que o agente sabe fazer
+
+O container `hermes-agent` não é só o dashboard: é um **agente autónomo** com biblioteca de
+skills própria (investigação, web, devops, email, media, notas, produtividade, redes sociais,
+desenvolvimento, …) e **29 toolsets** — browser, terminal, ficheiros, execução de código,
+visão, geração de imagem/vídeo, tarefas, memória, pesquisa de sessões, cron, delegação, A2A, …
+A contagem exata de skills e categorias vem do `/jarvis/meta` (é lida ao container, não fixada
+no código).
+
+O gateway `agent` (`api/jarvis_agent.py`) liga o Jarvis a ele pela API OpenAI-compatível do
+container. Três ferramentas:
+
+| Ferramenta | O que faz | Custo |
+| --- | --- | --- |
+| `agent.ask` | **Delega** a tarefa: o agente executa-a com as skills e as ferramentas dele e devolve o resultado | alto (ciclo autónomo; segundos a minutos) |
+| `agent.skills` | Lista as skills instaladas (nome + categoria), com filtro | baixo (cache 5 min) |
+| `agent.capabilities` | As capacidades declaradas (toolsets), com destaque para as que interessam | baixo (cache 5 min) |
+
+### 3.1 Modo assistente (persona, data e diálogo)
+
+O agente é **sem estado**: cada delegação é um pedido isolado. Para ele responder como
+assistente — e não como modelo genérico — o `agent.ask` envia-lhe sempre um *system prompt*
+(`jarvis_agent.assistant_system()`) com:
+
+- a **persona** (assistente do IQ OS, português de Portugal, direto);
+- **que dia é hoje** (o erro mais comum em pedidos com «hoje», «esta semana», «quanto falta»);
+- os **dados que tem ao lado**, sem chave: a pesquisa total (`http://backend:8000/search/unified`)
+  e o metasearch interno (`http://searxng:8080/search?format=json`);
+- as **regras**: ler a skill antes de improvisar, não inventar, citar a fonte, dividir o
+  problema, usar as ferramentas em vez de desistir.
+
+E, a seguir ao *system prompt*, o **diálogo anterior** (`history`), para uma pergunta de
+seguimento («e desses, quantos são de Espanha?») chegar com contexto — o mesmo `history` que a
+interface já envia no `POST /jarvis/ask`. Cada turno é truncado a
+`JARVIS_AGENT_HISTORY_CHARS` (por omissão 4000 caracteres).
+
+A persona é configurável por `JARVIS_AGENT_PERSONA`.
+
+### 3.2 As skills do IQ OS
+
+O agente traz as skills dele (investigação, web, devops, …) e ainda **duas nossas**, que
+vivem no repositório e são montadas por cima do volume (só de leitura):
+
+| Skill | Para que serve |
+| --- | --- |
+| `pesquisa-total` | A pesquisa unificada da plataforma (`GET /search/unified`): âmbitos, contagens, como aprofundar e paginar, citações |
+| `websearch` | Web aberta: `web_search`/`web_extract` do agente e, em alternativa, o **SearXNG interno em JSON** (`http://searxng:8080/search?q=…&format=json`) |
+
+```
+docker/hermes/skills/iqos/<skill>/SKILL.md   →   /opt/data/skills/iqos/<skill>/SKILL.md (ro)
+```
+
+Acrescentar uma skill = criar a pasta no repositório e recriar o contentor
+(`docker compose --profile agents up -d --no-deps hermes-agent`); a lista aparece logo em
+`agent.skills` e no `hermes skills list` do dashboard.
+
+Porque é que as skills mudam o comportamento: sem elas o agente responde com o que o modelo
+«sabe»; com elas consulta as nossas fontes e cita-as. Verificado: «quantos resultados existem
+sobre a EDP?» devolveu as contagens reais por âmbito (4751 contratos, 2331 Wikipédia, 474
+contratos de Espanha, …) e uma pesquisa de notícias devolveu 3 notícias com URL e data lidos
+das páginas.
+
+```
+pergunta → skill → plano → [hermes.ask | agent.ask | mcp.* | web.*] → resposta → fala
+                            └─ o agente corre com as skills dele
+```
+
+O que importa saber:
+
+- **É delegação, não proxy de ferramentas.** O agente decide sozinho que skills seguir e que
+  toolsets usar; é por isso que este gateway dá «todas as capacidades» sem duplicar nada aqui.
+- **É caro e é lento**: o agente carrega o índice de skills no prompt (~14 mil tokens) e pode
+  correr vários passos. Medido: uma resposta de uma palavra levou ~29 s. O planeador só o
+  escolhe para trabalho autónomo/multi-passo — perguntas sobre dados da plataforma continuam a
+  ir pelo `hermes.ask` e pelo MCP.
+- **Uma pergunta sobre skills não é uma delegação**: «quais são as tuas skills?» vai para
+  `agent.skills` (por isso os verbos de delegação — *delega*, *autónomo*, *tarefa complexa* —
+  são as palavras que escolhem o `agent.ask`).
+- **Degrada sem partir**: sem o agente a correr, o `/jarvis/meta` mostra `available: false` com
+  o erro, e as ferramentas devolvem uma falha legível em vez de rebentar a resposta.
+- **As skills leem-se do container** (`hermes skills list`, via `docker exec`, como o painel
+  «Motor do Hermes Agent»): é a lista que o agente tem mesmo instalada. Sem `docker` acessível,
+  `agent.skills` devolve `available: false` — o resto do Jarvis continua a funcionar.
+- **`COLUMNS=200` é obrigatório** nessa leitura: com a largura por omissão, o CLI trunca os
+  nomes (`songwriting-and-ai-mus…`).
+
+Configuração (`.env`, com valores por omissão que já funcionam):
+
+```
+JARVIS_AGENT_URL=http://hermes-agent:8642   # fora do Docker: http://127.0.0.1:8642
+JARVIS_AGENT_KEY=…                          # = HERMES_API_KEY / API_SERVER_KEY do container
+JARVIS_AGENT_TIMEOUT=300                    # segundos que uma delegação pode demorar
+JARVIS_AGENT_PERSONA=…                       # persona do agente (vazio usa a do IQ OS)
+JARVIS_AGENT_HISTORY_CHARS=4000             # tecto por turno do diálogo enviado ao agente
+IQOS_API_BASE=http://backend:8000           # endereços citados no prompt do agente
+IQOS_SEARXNG_URL=http://searxng:8080
+```
+
+O estado do agente (disponível, versão, modelo, nº de skills e de capacidades) aparece no
+`/jarvis/meta` em `agent` e é o que o Control Center mostra no andar «Estado do sistema».
+
+---
+
+## 4. Rotas
 
 Todas em `api/jarvis_routes.py`. A sessão é opcional: sem ela o Jarvis responde,
 mas só com dados públicos (os dados de CRM ficam de fora).
@@ -128,7 +238,7 @@ mas só com dados públicos (os dados de CRM ficam de fora).
 | Rota | Para que serve |
 | --- | --- |
 | `GET /jarvis/meta` | capacidades, gateways, ferramentas, vozes e modelo disponível |
-| `GET /jarvis/tools` | catálogo das ferramentas (`?gateway=hermes\|mcp\|web`) |
+| `GET /jarvis/tools` | catálogo das ferramentas (`?gateway=hermes\|agent\|mcp\|web`) |
 | `GET /jarvis/actions` | catálogo das **ações** (destinos + criações) |
 | `POST /jarvis/actions/run` | executa uma criação em nome do utilizador |
 | `GET /jarvis/voice` | estado da voz (STT/TTS) e vozes disponíveis |

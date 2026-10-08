@@ -83,6 +83,13 @@ services:
       - ./model:/app/model
       - ./rag:/app/rag
       - ./logs:/app/logs
+      # Biblioteca de skills do Hermes Agent, só de leitura: o Jarvis lista-as no
+      # gateway `agent` sem precisar do `docker` (que um backend dentro de um
+      # container não tem). O volume é criado pelo perfil `agents`.
+      - hermes-data:/hermes-data:ro
+      # Modelos do `faster-whisper` (transcrição e palavra de ativação). Sem isto,
+      # cada recriação do container volta a descarregar o modelo do Hugging Face.
+      - whisper-cache:/root/.cache/huggingface
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONPATH=/app
@@ -93,6 +100,15 @@ services:
       # o backend usa `http://127.0.0.1:5001` (valor por omissão do módulo).
       - MIROFISH_URL=${MIROFISH_URL:-http://mirofish:5001}
       - MIROFISH_PUBLIC_URL=${MIROFISH_PUBLIC_URL:-}
+      # Jarvis: gateway «Hermes Agent» (agente autónomo com as skills dele).
+      # A API OpenAI-compatível do agente, vista de dentro do container pelo
+      # nome do serviço; fora do Docker o valor por omissão do módulo
+      # (`http://127.0.0.1:8642`) já responde.
+      - JARVIS_AGENT_URL=${JARVIS_AGENT_URL:-http://hermes-agent:8642}
+      - JARVIS_AGENT_KEY=${HERMES_API_KEY:-iqos-hermes-api-key-please-change}
+      # Voz da síntese (edge-tts): pt-PT-RaquelNeural / pt-PT-DuarteNeural.
+      - JARVIS_VOICE=${JARVIS_VOICE:-pt-PT-RaquelNeural}
+      - JARVIS_AGENT_TIMEOUT=${JARVIS_AGENT_TIMEOUT:-300}
       # Vazio => usa/reutiliza data/.auth_secret (sessões locais continuam válidas)
       - FINANCE_AUTH_SECRET=${FINANCE_AUTH_SECRET:-}
       - FRED_API_KEY=${FRED_API_KEY:-}
@@ -103,6 +119,11 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-}
+      # Palavra de ativação do Jarvis (escuta contínua com faster-whisper local).
+      - JARVIS_WAKE_WORDS=${JARVIS_WAKE_WORDS:-}
+      - JARVIS_WAKE_MODEL=${JARVIS_WAKE_MODEL:-tiny}
+      - JARVIS_STT_MODEL=${JARVIS_STT_MODEL:-small}
+      - JARVIS_VOICE=${JARVIS_VOICE:-pt-PT-RaquelNeural}
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -217,7 +238,15 @@ services:
       - ./docker/hermes/plugins/dashboard-auth-iqos:/opt/data/plugins/dashboard-auth-iqos:ro
       # Ativa esse plugin em cada arranque (o estado de ativação vive no volume).
       - ./docker/hermes/init/026-enable-iqos-plugin.sh:/etc/cont-init.d/026-enable-iqos-plugin.sh:ro
+      # Skills do IQ OS (versionadas no repositório, montadas por cima do volume):
+      # `pesquisa-total` (pesquisa unificada da plataforma) e `websearch` (SearXNG
+      # interno + leitura de páginas). Acrescentar aqui = acrescentar lá dentro.
+      - ./docker/hermes/skills/iqos:/opt/data/skills/iqos:ro
     environment:
+      # Endereços que as skills do IQ OS usam (rede interna do compose).
+      - IQOS_API_URL=${IQOS_API_URL:-http://backend:8000}
+      - IQOS_API_BASE=${IQOS_API_BASE:-http://backend:8000}
+      - IQOS_SEARXNG_URL=${IQOS_SEARXNG_URL:-http://searxng:8080}
       - HERMES_DASHBOARD=1
       - HERMES_DASHBOARD_HOST=0.0.0.0
       - HERMES_DASHBOARD_PORT=9119
@@ -518,6 +547,8 @@ volumes:
   searxng-cache:
   n8n-data:
   hermes-data:
+  # Modelos do faster-whisper (transcrição do Jarvis e palavra de ativação).
+  whisper-cache:
   mirofish-uploads:
   osif-postgres-data:
   osif-redis-data:

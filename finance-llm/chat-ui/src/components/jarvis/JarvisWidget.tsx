@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Aperture,
+  Bot,
   Brain,
   ChevronDown,
   Globe2,
@@ -338,7 +339,15 @@ export default function JarvisWidget({
                 {(meta?.gateways || []).map((gateway) => (
                   <StatusCell
                     key={gateway.id}
-                    icon={gateway.id === "hermes" ? Brain : gateway.id === "web" ? Globe2 : Server}
+                    icon={
+                      gateway.id === "hermes"
+                        ? Brain
+                        : gateway.id === "agent"
+                          ? Bot
+                          : gateway.id === "web"
+                            ? Globe2
+                            : Server
+                    }
                     label={gateway.label}
                     value={`${gateway.tools}`}
                   />

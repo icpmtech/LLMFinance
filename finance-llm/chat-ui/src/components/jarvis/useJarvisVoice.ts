@@ -19,7 +19,13 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { speakJarvis, transcribeJarvisAudio, type JarvisVoiceEngine } from "../../jarvisApi";
+import {
+  speakJarvis,
+  transcribeJarvisAudio,
+  wakeJarvisAudio,
+  type JarvisVoiceEngine,
+  type JarvisWakeStatus,
+} from "../../jarvisApi";
 
 /* ----------------------------------------------------------- Web Speech API */
 
@@ -49,10 +55,33 @@ function speechRecognitionCtor(): SpeechRecognitionCtor | null {
 
 /* -------------------------------------------------------------------- hook */
 
+/**
+ * Modo de escuta contínua (palavra de ativação).
+ *
+ * - `off` — desligado;
+ * - `dormant` — a ouvir, à espera da palavra de ativação (transcrição local, por
+ *   trechos curtos, com o modelo pequeno);
+ * - `capturing` — a palavra foi ouvida e está a gravar o pedido até haver
+ *   silêncio, para depois transcrever com o modelo completo.
+ */
+export type JarvisWakeState = "off" | "dormant" | "capturing";
+
+//: Duração de cada trecho enviado a transcrever. Curto = latência baixa; longo =
+//: menos pedidos. 1,5 s dá ~0,8 s de atraso entre falar e a órbita acordar.
+const WAKE_CHUNK_MS = 1500;
+//: Trechos seguidos sem voz que fecham o pedido.
+const WAKE_SILENCE_CHUNKS = 2;
+//: Teto para um pedido ditado (evita gravar para sempre se houver ruído).
+const WAKE_MAX_COMMAND_MS = 15000;
+//: Abaixo disto considera-se silêncio (o nível vem do analisador, 0–1).
+const WAKE_MIN_LEVEL = 0.05;
+
 export type UseJarvisVoiceOptions = {
   language?: string;
   stt?: JarvisVoiceEngine | null;
   tts?: JarvisVoiceEngine | null;
+  /** Palavra de ativação publicada pelo servidor (`/jarvis/voice`). */
+  wake?: JarvisWakeStatus | null;
   onTranscript: (text: string) => void;
   onError?: (message: string) => void;
   /** Chamado quando a fala começa e termina (para a órbita e a UI). */
@@ -63,6 +92,7 @@ export function useJarvisVoice({
   language = "pt-PT",
   stt,
   tts,
+  wake,
   onTranscript,
   onError,
   onSpeakingChange,
@@ -71,6 +101,8 @@ export function useJarvisVoice({
   const [speaking, setSpeaking] = useState(false);
   const [level, setLevel] = useState(0);
   const [draft, setDraft] = useState("");
+  const [wakeState, setWakeState] = useState<JarvisWakeState>("off");
+  const [wakeWord, setWakeWord] = useState<string | null>(null);
 
   const onTranscriptRef = useRef(onTranscript);
   const onErrorRef = useRef(onError);
@@ -88,6 +120,14 @@ export function useJarvisVoice({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const speakingRafRef = useRef<number | null>(null);
   const modeRef = useRef<"recognition" | "recorder" | null>(null);
+  // Escuta contínua (palavra de ativação)
+  const levelRef = useRef(0);
+  const wakeStateRef = useRef<JarvisWakeState>("off");
+  const wakeRecorderRef = useRef<MediaRecorder | null>(null);
+  const wakeChunksRef = useRef<Blob[]>([]);
+  const wakeSilenceRef = useRef(0);
+  const wakeBusyRef = useRef(false);
+  const wakeTimerRef = useRef<number | null>(null);
 
   const recognitionSupported = useMemo(() => speechRecognitionCtor() !== null, []);
   const recorderSupported = useMemo(
@@ -114,7 +154,9 @@ export function useJarvisVoice({
         let sum = 0;
         for (let i = 0; i < data.length; i += 1) sum += data[i];
         const average = sum / data.length / 255;
-        setLevel(Math.min(1, average * 2.6));
+        const value = Math.min(1, average * 2.6);
+        levelRef.current = value;
+        setLevel(value);
         levelRafRef.current = window.requestAnimationFrame(tick);
       };
       stopLevelLoop();
@@ -371,13 +413,186 @@ export function useJarvisVoice({
     }
   }, [language, listening, openMicStream, recorderSupported, releaseStream, serverStt, stopLevelLoop, stopSpeaking]);
 
+  /* ------------------------------------------------- palavra de ativação */
+
+  const wakeWords = wake?.words ?? [];
+  const wakeAvailable = Boolean(wake?.available) && recorderSupported;
+
+  /** Bipe curto de confirmação: diz «acordei» sem gastar uma síntese de voz. */
+  const wakeBeep = useCallback(() => {
+    const context = audioContextRef.current;
+    if (!context) return;
+    try {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.frequency.value = 880;
+      gain.gain.value = 0.06;
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.12);
+    } catch {
+      /* sem bipe: a órbita e o texto continuam a indicar o estado */
+    }
+  }, []);
+
+  const clearWakeTimer = useCallback(() => {
+    if (wakeTimerRef.current !== null) {
+      window.clearTimeout(wakeTimerRef.current);
+      wakeTimerRef.current = null;
+    }
+  }, []);
+
+  const backToDormant = useCallback(() => {
+    clearWakeTimer();
+    wakeChunksRef.current = [];
+    wakeSilenceRef.current = 0;
+    wakeStateRef.current = "dormant";
+    setWakeState("dormant");
+    setWakeWord(null);
+    setDraft("");
+  }, [clearWakeTimer]);
+
+  const stopWake = useCallback(() => {
+    clearWakeTimer();
+    wakeStateRef.current = "off";
+    setWakeState("off");
+    setWakeWord(null);
+    const recorder = wakeRecorderRef.current;
+    wakeRecorderRef.current = null;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    wakeChunksRef.current = [];
+    releaseStream();
+    setLevel(0);
+  }, [clearWakeTimer, releaseStream]);
+
+  /** Fecha o pedido ditado: transcreve tudo com o modelo completo e pergunta. */
+  const finishWakeCommand = useCallback(
+    async (blob: Blob) => {
+      const state = wakeStateRef.current;
+      if (state === "off") return;
+      backToDormant();
+      releaseStream();
+      if (!blob.size) {
+        // Disse só a palavra de ativação: fica à espera do pedido seguinte.
+        return;
+      }
+      try {
+        const result = await transcribeJarvisAudio(blob, language.slice(0, 2));
+        const text = result.text.trim();
+        if (text) {
+          setDraft(text);
+          onTranscriptRef.current(text);
+        } else {
+          onErrorRef.current?.("Não percebi o pedido depois da palavra de ativação.");
+        }
+      } catch (error) {
+        onErrorRef.current?.(error instanceof Error ? error.message : "Falha na transcrição.");
+      }
+    },
+    [backToDormant, language, releaseStream],
+  );
+
+  const startWake = useCallback(async () => {
+    if (!wakeAvailable) {
+      onErrorRef.current?.(
+        wake?.available
+          ? "Este browser não consegue gravar áudio para a palavra de ativação."
+          : "A palavra de ativação precisa de transcrição no servidor (`faster-whisper`).",
+      );
+      return;
+    }
+    stop();
+    stopSpeaking();
+    try {
+      const stream = await openMicStream();
+      const recorder = new MediaRecorder(stream);
+      wakeRecorderRef.current = recorder;
+      backToDormant();
+
+      recorder.ondataavailable = async (event: BlobEvent) => {
+        if (!event.data?.size) return;
+        const state = wakeStateRef.current;
+        if (state === "off" || wakeBusyRef.current) return;
+
+        if (state === "dormant") {
+          wakeBusyRef.current = true;
+          try {
+            const result = await wakeJarvisAudio(event.data, language.slice(0, 2));
+            if (!result.active) return;
+            setWakeWord(result.word ?? wakeWords[0] ?? null);
+            const command = (result.command || "").trim();
+            if (command.length >= 3) {
+              // Disse a palavra e o pedido de uma vez: não se perde o resto.
+              await finishWakeCommand(event.data);
+              return;
+            }
+            // Só a palavra: grava o pedido até haver silêncio.
+            wakeChunksRef.current = [];
+            wakeSilenceRef.current = 0;
+            wakeStateRef.current = "capturing";
+            setWakeState("capturing");
+            wakeBeep();
+            clearWakeTimer();
+            wakeTimerRef.current = window.setTimeout(() => {
+              const chunks = wakeChunksRef.current;
+              void finishWakeCommand(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }));
+            }, WAKE_MAX_COMMAND_MS);
+          } catch {
+            /* é um ciclo: um trecho falhado não pode parar a escuta */
+          } finally {
+            wakeBusyRef.current = false;
+          }
+          return;
+        }
+
+        // A capturar o pedido: acumula e conta o silêncio.
+        wakeChunksRef.current.push(event.data);
+        if (levelRef.current < WAKE_MIN_LEVEL) wakeSilenceRef.current += 1;
+        else wakeSilenceRef.current = 0;
+        if (wakeSilenceRef.current >= WAKE_SILENCE_CHUNKS) {
+          const chunks = wakeChunksRef.current;
+          void finishWakeCommand(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }));
+        }
+      };
+
+      recorder.start(WAKE_CHUNK_MS);
+      wakeStateRef.current = "dormant";
+      setWakeState("dormant");
+    } catch (error) {
+      wakeStateRef.current = "off";
+      setWakeState("off");
+      onErrorRef.current?.(error instanceof Error ? error.message : "Não foi possível abrir o microfone.");
+    }
+  }, [
+    backToDormant,
+    clearWakeTimer,
+    finishWakeCommand,
+    language,
+    openMicStream,
+    stop,
+    stopSpeaking,
+    wake?.available,
+    wakeAvailable,
+    wakeBeep,
+    wakeWords,
+  ]);
+
+  const toggleWake = useCallback(() => {
+    if (wakeStateRef.current === "off") void startWake();
+    else stopWake();
+  }, [startWake, stopWake]);
+
   /* --------------------------------------------------------------- limpeza */
 
   useEffect(() => () => {
     stopLevelLoop();
     if (speakingRafRef.current !== null) window.cancelAnimationFrame(speakingRafRef.current);
+    if (wakeTimerRef.current !== null) window.clearTimeout(wakeTimerRef.current);
     recognitionRef.current?.abort();
     if (recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop();
+    if (wakeRecorderRef.current && wakeRecorderRef.current.state !== "inactive") {
+      wakeRecorderRef.current.stop();
+    }
     streamRef.current?.getTracks().forEach((track) => track.stop());
     if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
   }, [stopLevelLoop]);
@@ -405,6 +620,13 @@ export function useJarvisVoice({
     recognitionSupported,
     recorderSupported,
     serverStt,
+    // Palavra de ativação (escuta contínua local)
+    wakeState,
+    wakeWord,
+    wakeWords,
+    wakeAvailable,
+    toggleWake,
+    stopWake,
   } as const;
 }
 

@@ -56,6 +56,46 @@ SPEECH_MAX_CHARS = 900
 DEFAULT_VOICE = os.getenv("JARVIS_VOICE", "pt-PT-RaquelNeural")
 DEFAULT_STT_MODEL = os.getenv("JARVIS_STT_MODEL", "small")
 
+#: Palavras de ativação («wake words»). O modo de escuta contínua transcreve
+#: localmente com `faster-whisper` e só acorda quando ouve uma delas — o resto do
+#: áudio nunca chega a virar pergunta. Configurável por `JARVIS_WAKE_WORDS`
+#: (lista separada por vírgulas).
+DEFAULT_WAKE_WORDS: Tuple[str, ...] = (
+    "jarvis",
+    "hey jarvis",
+    "olá jarvis",
+    "apollo",
+    "hey hermes",
+)
+WAKE_WORDS: Tuple[str, ...] = tuple(
+    sorted(
+        {
+            word.strip().lower()
+            for chunk in (os.getenv("JARVIS_WAKE_WORDS") or "").split(",")
+            for word in [chunk]
+            if word.strip()
+        }
+        or DEFAULT_WAKE_WORDS,
+        key=len,
+        reverse=True,
+    )
+)
+
+#: Modelo usado **enquanto se espera** pela palavra de ativação. Tem de ser o mais
+#: rápido possível (`tiny` com `int8` chega para reconhecer duas palavras) — é
+#: isto que faz a latência ser baixa: o modelo corre localmente, por trechos
+#: curtos, sem enviar áudio para fora.
+WAKE_MODEL = os.getenv("JARVIS_WAKE_MODEL", "tiny")
+
+#: Enviesamento do descodificador para as palavras de ativação. **Sem isto o
+#: `tiny` não serve**: medido com fala sintética em pt-PT, ouvia «Serviço» em vez
+#: de «Jarvis» e acertava 1 em 4; com o prompt acerta 4 em 4 (e o `base`, que é
+#: ~50% mais lento, não melhora).
+WAKE_PROMPT = os.getenv(
+    "JARVIS_WAKE_PROMPT",
+    "Português de Portugal. " + ", ".join(DEFAULT_WAKE_WORDS) + ".",
+)
+
 # Palavras que sugerem que a pergunta precisa da web (e não só dos dados internos).
 _WEB_HINTS = ("web", "internet", "online", "site", "noticia de hoje", "o que se diz", "fora da plataforma")
 
@@ -65,7 +105,11 @@ SYSTEM_PLANNER = (
     "devolves APENAS um objeto JSON com o plano:\n"
     '{"tools": [{"tool": "<id>", "args": {...}}], "actions": [{"action": "<id>", "params": {}}], "reason": "<uma frase>"}\n'
     "Regras: usa no máximo 4 ferramentas; usa `hermes.ask` quando a pergunta for sobre dados, contratos, "
-    "empresas ou investigação; usa as ferramentas do gateway `mcp` para factos concretos do sistema; usa "
+    "empresas ou investigação; usa `agent.ask` (gateway `agent`) quando o pedido for trabalho autónomo ou "
+    "multi-passo que a plataforma não cobre (usar o browser do agente, mexer em ficheiros, escrever ou "
+    "executar código, investigar a fundo com métodos dele) — é lento, por isso só quando vale a pena; usa "
+    "`agent.skills`/`agent.capabilities` quando a pergunta for sobre o que o agente sabe fazer; usa as "
+    "ferramentas do gateway `mcp` para factos concretos do sistema; usa "
     "`web.search`/`web.research` só quando a pergunta pedir explicitamente informação externa ou da web.\n"
     "Nas `actions`, propõe **só** o que a pergunta pede explicitamente: um destino, quando o utilizador "
     "pede para ir a algum lado (ex.: «abre as insolvências»); uma criação, quando pede para guardar ou "
@@ -150,7 +194,8 @@ def _planner_catalog(limit: int = 34) -> List[Dict[str, str]]:
     promoted = [item for item in gateway.catalog() if item["gateway"] == "mcp" and item["id"] not in {"mcp.search", "mcp.call"}]
     web = [item for item in gateway.catalog() if item["gateway"] == "web" and item["id"] != "web.open"]
     hermes = [item for item in gateway.catalog() if item["gateway"] == "hermes"]
-    items = [*hermes, *promoted[: limit - 4], *web]
+    agent = [item for item in gateway.catalog() if item["gateway"] == "agent"]
+    items = [*hermes, *agent, *promoted[: limit - 8], *web]
     return [
         {"id": item["id"], "gateway": item["gateway"], "description": item["description"][:180]}
         for item in items
@@ -324,6 +369,18 @@ def _sources_from(results: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
                             "origin": "Hermes",
                         }
                     )
+        elif item.get("gateway") == "agent":
+            # O agente não devolve «fontes»: a citação é a delegação em si, com o
+            # modelo que a executou. Distinguir da origem «MCP» importa — é o que
+            # mostra ao utilizador *quem* fez o trabalho.
+            data = data if isinstance(data, dict) else {}
+            sources.append(
+                {
+                    "label": item.get("label") or item.get("tool"),
+                    "origin": "Hermes Agent",
+                    "note": (f"modelo {data.get('model')}" if data.get("model") else None),
+                }
+            )
         elif item.get("gateway") == "web":
             for row in data.get("results") or []:
                 if isinstance(row, dict) and row.get("url"):
@@ -353,17 +410,23 @@ def _factual_answer(question: str, results: Sequence[Dict[str, Any]]) -> str:
             "Configure um fornecedor em Definições → Fornecedores de IA para uma resposta redigida."
         )
     lines: List[str] = []
+    # Um agente (Hermes ou Hermes Agent) já redige: a resposta dele é a resposta, e
+    # não um par chave=valor para o utilizador descodificar.
+    delegado = False
     for item in results:
         label = item.get("label") or item.get("tool")
         if not item.get("ok"):
             lines.append(f"- {label}: não foi possível ({item.get('error')}).")
             continue
         data = item.get("data") or {}
-        if item.get("gateway") == "hermes":
+        gateway = item.get("gateway")
+        if gateway in {"hermes", "agent"}:
             answer = str(data.get("answer") or "").strip()
             if answer:
                 lines.append(answer)
+                delegado = True
                 continue
+        if gateway == "hermes":
             # O Hermes não redigiu (pergunta curta ou sem modelo): mostram-se as
             # evidências que recolheu, para a resposta não ficar vazia.
             titles = [
@@ -377,8 +440,17 @@ def _factual_answer(question: str, results: Sequence[Dict[str, Any]]) -> str:
                 + (f": {'; '.join(titles)}." if titles else ".")
             )
             continue
+        if gateway == "agent":
+            modelo = data.get("model") or "?"
+            lines.append(f"- {label}: o agente não devolveu texto (modelo {modelo}).")
+            continue
         lines.append(f"- {label}:")
         lines.append(_summarise_payload(_payload(item)))
+    if delegado:
+        return (
+            "O agente autónomo respondeu diretamente (o Jarvis não tem modelo de IA "
+            "configurado para redigir por cima):\n" + "\n".join(lines)
+        )
     return (
         "Sem modelo de IA configurado, apresento o que as ferramentas devolveram "
         "(modo factual, sem interpretação):\n" + "\n".join(lines)
@@ -859,8 +931,106 @@ def stt_status() -> Dict[str, Any]:
     }
 
 
-def transcribe(data: bytes, *, filename: str = "audio.webm", language: str = "pt") -> Dict[str, Any]:
-    """Transcreve áudio para texto (faster-whisper). Levanta `RuntimeError` sem motor."""
+def wake_status() -> Dict[str, Any]:
+    """Estado da palavra de ativação (vai no `/jarvis/voice`)."""
+    stt = stt_status()
+    return {
+        "words": list(WAKE_WORDS),
+        "model": WAKE_MODEL,
+        "engine": stt["engine"],
+        "available": bool(stt["available"]),
+        "note": (
+            f"Escuta contínua local: os trechos de áudio são transcritos com "
+            f"`faster-whisper` ({WAKE_MODEL}) e só a palavra de ativação acorda o Jarvis."
+            if stt["available"]
+            else "A palavra de ativação precisa de `faster-whisper` no servidor."
+        ),
+    }
+
+
+def _edit_distance_within(first: str, second: str, limit: int = 1) -> bool:
+    """`first` e `second` distam no máximo `limit` edições? (Levenshtein, com saída cedo).
+
+    Serve para aceitar as variações que um modelo pequeno produz ao ouvir a
+    palavra de ativação — medido: o `tiny` alterna entre «Jarvis» e «Jervis»
+    mesmo com o prompt de enviesamento.
+    """
+    if first == second:
+        return True
+    if abs(len(first) - len(second)) > limit:
+        return False
+    previous = list(range(len(second) + 1))
+    for row, char_a in enumerate(first, start=1):
+        current = [row]
+        for column, char_b in enumerate(second, start=1):
+            current.append(
+                min(
+                    previous[column] + 1,  # remover
+                    current[column - 1] + 1,  # inserir
+                    previous[column - 1] + (char_a != char_b),  # substituir
+                )
+            )
+        if min(current) > limit:
+            return False
+        previous = current
+    return previous[-1] <= limit
+
+
+#: Comprimento mínimo para a tolerância fonética. Abaixo disto as palavras são
+#: curtas de mais e aceitar uma edição começaria a casar com o que não é dito.
+_FUZZY_MIN_LENGTH = 5
+
+
+def _same_word(heard: str, expected: str) -> bool:
+    """Compara uma palavra ouvida com uma da palavra de ativação."""
+    if heard == expected:
+        return True
+    if len(heard) < _FUZZY_MIN_LENGTH or len(expected) < _FUZZY_MIN_LENGTH:
+        return False
+    return _edit_distance_within(heard, expected, 1)
+
+
+def match_wake(text: str) -> Dict[str, Any]:
+    """Procura a palavra de ativação no que foi transcrito.
+
+    Devolve `active` (ouviu-a), `word` (qual) e `command` — o que veio **depois**
+    dela na mesma frase, para o caso comum de se dizer tudo de uma vez:
+    «Jarvis, quantos contratos tem a EDP?» já traz o pedido.
+    """
+    raw = str(text or "").strip()
+    if not raw:
+        return {"active": False, "word": None, "command": ""}
+
+    words = raw.split()
+    # Compara-se palavra a palavra para poder cortar o **texto original** (com
+    # acentos): `_fold` encurta a string, por isso os índices não servem.
+    folded = [_fold(word).strip(".,;:!?¿¡") for word in words]
+    for wake in WAKE_WORDS:
+        target = _fold(wake).split()
+        span = len(target)
+        for index in range(len(folded) - span + 1):
+            window = folded[index : index + span]
+            if all(_same_word(heard, wanted) for heard, wanted in zip(window, target)):
+                command = " ".join(words[index + span :]).strip(" ,.;:!?—-\"")
+                return {"active": True, "word": wake, "command": command}
+    return {"active": False, "word": None, "command": ""}
+
+
+def transcribe(
+    data: bytes,
+    *,
+    filename: str = "audio.webm",
+    language: str = "pt",
+    model: Optional[str] = None,
+    prompt: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Transcreve áudio para texto (faster-whisper). Levanta `RuntimeError` sem motor.
+
+    `model` permite usar um modelo mais pequeno nos trechos da escuta contínua
+    (`transcribe_wake`) e o modelo completo quando já há uma pergunta. `prompt`
+    enviesa o descodificador (é o que torna o `tiny` fiável nas palavras de
+    ativação).
+    """
     try:
         from faster_whisper import WhisperModel  # type: ignore[import-not-found]
     except Exception as exc:  # pragma: no cover - depende do ambiente
@@ -876,20 +1046,45 @@ def transcribe(data: bytes, *, filename: str = "audio.webm", language: str = "pt
     os.close(handle)
     try:
         Path(path).write_bytes(data)
-        model = _whisper_model(WhisperModel, DEFAULT_STT_MODEL)
-        segments, info = model.transcribe(path, language=language or "pt", vad_filter=True)
+        chosen = (model or DEFAULT_STT_MODEL).strip() or DEFAULT_STT_MODEL
+        whisper = _whisper_model(WhisperModel, chosen)
+        segments, info = whisper.transcribe(
+            path,
+            language=language or "pt",
+            vad_filter=True,
+            initial_prompt=(prompt or None),
+        )
         text = " ".join(segment.text.strip() for segment in segments).strip()
         return {
             "text": text,
             "language": getattr(info, "language", language),
             "duration_seconds": round(float(getattr(info, "duration", 0.0) or 0.0), 2),
             "engine": "faster-whisper",
+            "model": chosen,
         }
     finally:
         try:
             os.unlink(path)
         except OSError:  # pragma: no cover
             pass
+
+
+def transcribe_wake(data: bytes, *, filename: str = "audio.webm", language: str = "pt") -> Dict[str, Any]:
+    """Transcreve um trecho curto e diz se ouviu a palavra de ativação.
+
+    É o que o modo de escuta contínua chama a cada trecho: modelo pequeno,
+    local, e nenhum áudio sai daqui — só volta texto (e, quando há palavra de
+    ativação, o comando que veio atrás dela).
+    """
+    started = time.perf_counter()
+    result = transcribe(
+        data, filename=filename, language=language, model=WAKE_MODEL, prompt=WAKE_PROMPT
+    )
+    match = match_wake(result.get("text") or "")
+    result.update(match)
+    result["elapsed_ms"] = round((time.perf_counter() - started) * 1000)
+    result["wake_words"] = list(WAKE_WORDS)
+    return result
 
 
 _MODEL_CACHE: Dict[str, Any] = {}
@@ -961,27 +1156,32 @@ async def synthesize(text: str, *, voice: Optional[str] = None, rate: str = "+0%
 # ---------------------------------------------------------------------------
 def meta(session: Any = None, backend: Optional[str] = None) -> Dict[str, Any]:
     """O que o Jarvis é e o que pode fazer (para a interface)."""
+    from api import jarvis_agent  # noqa: PLC0415
     from api import ontology_ai  # noqa: PLC0415
 
     resolved = ontology_ai.available_backend(session, backend)
+    agent_state = jarvis_agent.state()
     return {
         "about": {
             "name": NAME,
             "label": "Jarvis",
             "description": (
                 "Assistente operacional do IQ OS: investiga nos dados da plataforma através do Hermes, "
+                "delega trabalho autónomo no Hermes Agent (as skills dele e os 29 toolsets), "
                 "executa operações do servidor MCP do sistema, vai à web e fala consigo em voz alta."
             ),
             "greeting": GREETING,
             "capabilities": [
                 "Falar e ouvir (áudio → texto → resposta em voz)",
                 "Investigação citada via gateway do Hermes",
+                "Trabalho autónomo via Hermes Agent (skills + 29 toolsets: browser, terminal, ficheiros, código, visão, cron, …)",
                 "Operações do MCP do sistema (205 operações curadas)",
                 "Browser: pesquisa e leitura de páginas externas",
                 "Skills partilhadas com o Hermes e o Chat IA",
             ],
         },
         "gateways": gateway.summary(),
+        "agent": agent_state,
         "actions": actions_catalogue.catalogue(),
         "tools": gateway.catalog(),
         "voice": {"stt": stt_status(), "tts": tts_status()},

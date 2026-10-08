@@ -37,6 +37,7 @@ import {
   Landmark,
   LayoutDashboard,
   Layers,
+  Leaf,
   Mail,
   Map as MapIcon,
   MessageCircle,
@@ -196,7 +197,7 @@ export const DOCK_CATALOG: DockApp[] = [
   {
     id: "jarvis",
     label: "Jarvis",
-    hint: "Assistente com voz: Hermes, MCP do sistema e browser, por fala ou texto",
+    hint: "Assistente com voz: Hermes, Hermes Agent, MCP do sistema e browser, por fala ou texto",
     icon: Orbit,
     gradient: "from-sky-300 via-cyan-500 to-indigo-700",
     accent: "6,182,212",
@@ -558,6 +559,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: BarChart3,
     gradient: "from-orange-200 via-orange-400 to-rose-500",
     accent: "249,115,22",
+  },
+  {
+    id: "contracts-eco",
+    label: "Contratação Ecológica",
+    hint: "Procedimentos com critérios ecológicos e as suas peças",
+    icon: Leaf,
+    gradient: "from-lime-200 via-emerald-400 to-teal-600",
+    accent: "16,185,129",
   },
   {
     id: "contracts-map",

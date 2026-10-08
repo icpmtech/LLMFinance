@@ -9,6 +9,11 @@ Três gateways:
 - **`hermes`** — investigação citada do IQ OS. Delega em
   `api.hermes_service.ask()` (plano → recolha federada → resposta com `[n]`).
   É o gateway de *raciocínio sobre dados da plataforma*.
+- **`agent`** — o **Hermes Agent** autónomo do IQ OS (`api/jarvis_agent.py`).
+  Delega a tarefa no agente do container, que a executa com a **biblioteca de
+  skills dele** (58 skills em 12 categorias) e os **29 toolsets** que tem
+  (browser, terminal, ficheiros, execução de código, visão, imagem/vídeo,
+  memória, cron, delegação, A2A, …). É o gateway de *trabalho autónomo*.
 - **`mcp`** — o servidor MCP do sistema (`mcp_server.catalog`). Todas as
   operações curadas (`contratos_search`, `empresas_global_search`,
   `empresa_detail`, `search360_topic`, `ontology_ai_answer`, …) e o escape
@@ -47,6 +52,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 HERMES = "hermes"
+AGENT = "agent"
 MCP = "mcp"
 WEB = "web"
 
@@ -55,6 +61,15 @@ GATEWAYS: List[Dict[str, str]] = [
         "id": HERMES,
         "label": "Hermes",
         "description": "Investigação citada sobre os dados da plataforma (contratos, empresas, documentos, notícias).",
+    },
+    {
+        "id": AGENT,
+        "label": "Hermes Agent",
+        "description": (
+            "Agente autónomo do IQ OS: delega a tarefa e ele corre-a com as skills dele "
+            "(investigação, web, devops, email, media, notas, desenvolvimento, …) e os 29 "
+            "toolsets (browser, terminal, ficheiros, código, visão, cron, …)."
+        ),
     },
     {
         "id": MCP,
@@ -124,6 +139,79 @@ _HERMES_TOOLS: List[GatewayTool] = [
             "required": ["question"],
         },
         keywords=("investigar", "investigacao", "hermes", "pesquisar", "evidencia", "citacoes"),
+    ),
+]
+
+_AGENT_TOOLS: List[GatewayTool] = [
+    GatewayTool(
+        id="agent.ask",
+        gateway=AGENT,
+        label="Delegar no Hermes Agent",
+        description=(
+            "Entrega uma tarefa ao agente autónomo do IQ OS, que a executa com as **skills** "
+            "dele e as ferramentas que tem (browser, terminal, ficheiros, execução de código, "
+            "visão, cron, …) e devolve o resultado. Usar para trabalho autónomo ou multi-passo "
+            "que as ferramentas da plataforma não cobrem. Argumento: task (str). É lento "
+            "(pode levar minutos)."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "task": {
+                    "type": "string",
+                    "description": "Tarefa ou pergunta a entregar ao agente, com todo o contexto.",
+                }
+            },
+            "required": ["task"],
+        },
+        keywords=(
+            "agente",
+            "hermes agent",
+            "autónomo",
+            "autonomo",
+            "delegar",
+            "delega",
+            "tarefa complexa",
+            "multi-passo",
+            "automaticamente",
+            "por ti",
+        ),
+    ),
+    GatewayTool(
+        id="agent.skills",
+        gateway=AGENT,
+        label="Skills do Hermes Agent",
+        description=(
+            "Lista as skills instaladas no agente autónomo (nome e categoria), opcionalmente "
+            "filtradas. Serve para saber que métodos ele domina antes de lhe delegar algo. "
+            "Argumento: query (str)."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Filtro por nome ou categoria (opcional)."}
+            },
+            "required": ["query"],
+        },
+        keywords=("skills", "skill", "oque sabe", "métodos", "metodos", "biblioteca"),
+    ),
+    GatewayTool(
+        id="agent.capabilities",
+        gateway=AGENT,
+        label="Capacidades do Hermes Agent",
+        description=(
+            "As capacidades declaradas do agente (toolsets: browser, terminal, ficheiros, "
+            "código, visão, imagem, memória, cron, delegação, …), com destaque para as que "
+            "interessam ao pedido. Argumento: focus (str)."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "focus": {"type": "string", "description": "Área a destacar (ex.: browser, email)."}
+            },
+            "required": ["focus"],
+        },
+        keywords=("capacidades", "pode fazer", "toolsets", "ferramentas do agente"),
     ),
 ]
 
@@ -244,7 +332,9 @@ def _mcp_tool(operation: Any, label: str = "", keywords: Tuple[str, ...] = ()) -
 
 
 def _build_catalog() -> Dict[str, GatewayTool]:
-    tools: Dict[str, GatewayTool] = {tool.id: tool for tool in (*_HERMES_TOOLS, *_WEB_TOOLS)}
+    tools: Dict[str, GatewayTool] = {
+        tool.id: tool for tool in (*_HERMES_TOOLS, *_AGENT_TOOLS, *_WEB_TOOLS)
+    }
 
     try:
         from mcp_server import catalog as mcp_catalog
@@ -568,9 +658,32 @@ async def invoke(tool_id: str, args: Optional[Dict[str, Any]] = None, *, ctx: Op
             opened.append({**page, "snippet": row.get("snippet")})
         return {"query": query, "results": rows, "pages": opened}
 
+    async def _agent(name: str) -> Dict[str, Any]:
+        """Hermes Agent autónomo: delegação, skills e capacidades."""
+        from api import jarvis_agent  # noqa: PLC0415
+
+        if name == "agent.ask":
+            task = str(values.get("task") or "")
+            # O agente é sem estado: leva a persona (dia de hoje, dados ao lado, regras)
+            # e o diálogo anterior, para uma pergunta de seguimento não chegar órfã.
+            return await jarvis_agent.ask(
+                task,
+                system=jarvis_agent.assistant_system(task),
+                history=context.get("history") or [],
+            )
+        if name == "agent.skills":
+            return await asyncio.to_thread(
+                jarvis_agent.skills, query=str(values.get("query") or "")
+            )
+        return await asyncio.to_thread(
+            jarvis_agent.capabilities, focus=str(values.get("focus") or "")
+        )
+
     try:
         if tool_id == "hermes.ask":
             data = await _hermes()
+        elif tool_id.startswith("agent."):
+            data = await _agent(tool_id)
         elif tool_id.startswith("web."):
             data = await _web(tool_id)
         elif tool_id == "mcp.search":
@@ -696,6 +809,7 @@ _SEARCH_STOPWORDS = frozenset(
     a o as os um uma uns umas de da do das dos em no na nos nas por para com sem sobre que quais qual quem
     como onde quando quanto quantos quantas e ou é sao são ser estar tem têm ha há mais menos se ao aos à às
     pelo pela seus suas este esta esse essa isto aquilo me te lhe nos vos diz fala explica faz quero preciso
+    meu minha meus minhas teu tua teus tuas nosso nossa nossos nossas
     podes pode lista mostra indica dados informacao informação saber the of and for with in about is are what
     which who how many much please
     """.split()
@@ -770,6 +884,19 @@ def default_args(tool_id: str, question: str) -> Optional[Dict[str, Any]]:
     properties: Dict[str, Any] = (tool.parameters or {}).get("properties") or {}
     required: List[str] = (tool.parameters or {}).get("required") or []
 
+    # O agente autónomo come tudo com o pedido original: a tarefa é a pergunta
+    # inteira (ele próprio a decompõe) e os filtros de skills/capacidades levam as
+    # palavras distintivas da pergunta, para não estragar o filtro com verbos.
+    if tool.gateway == AGENT:
+        if "task" in properties:
+            return {"task": question}
+        terms = _search_terms(question) or question
+        if "query" in properties:
+            return {"query": terms}
+        if "focus" in properties:
+            return {"focus": terms}
+        return None
+
     # As pesquisas do MCP recebem palavras distintivas; as operações que
     # respondem com IA (RAG, ontologia, sentimento, investigador) precisam da
     # pergunta inteira, e o Hermes e a web também (é para isso que existem).
@@ -830,6 +957,7 @@ def status() -> Dict[str, Any]:
 
 
 __all__ = [
+    "AGENT",
     "GATEWAYS",
     "GatewayTool",
     "HERMES",

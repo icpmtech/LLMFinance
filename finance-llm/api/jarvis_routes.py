@@ -10,10 +10,11 @@ Rotas:
 - `GET  /jarvis/tools`             — catálogo de ferramentas dos gateways
 - `GET  /jarvis/actions`           — catálogo de ações (destinos da app e criações)
 - `POST /jarvis/actions/run`       — executa uma criação em nome do utilizador
-- `GET  /jarvis/voice`             — estado da voz (STT/TTS) e vozes disponíveis
+- `GET  /jarvis/voice`             — estado da voz (STT/TTS), palavra de ativação e vozes disponíveis
 - `POST /jarvis/ask`               — pergunta → resposta (com plano, passos e citações)
 - `POST /jarvis/ask/stream`        — o mesmo, em SSE (`passo`, `ferramenta`, `resposta`, `fim`)
 - `POST /jarvis/transcribe`        — áudio (multipart) → texto
+- `POST /jarvis/wake`              — trecho curto → texto + palavra de ativação (STT local)
 - `POST /jarvis/speak`             — texto → áudio (mp3)
 
 O `ask` aceita:
@@ -131,8 +132,12 @@ def tools(gateway_id: Optional[str] = Query(None, alias="gateway")) -> Dict[str,
 
 @router.get("/voice")
 def voice() -> Dict[str, Any]:
-    """Estado da voz: transcrição (STT), síntese (TTS) e vozes disponíveis."""
-    return {"stt": service.stt_status(), "tts": service.tts_status()}
+    """Estado da voz: transcrição (STT), síntese (TTS), palavra de ativação e vozes."""
+    return {
+        "stt": service.stt_status(),
+        "tts": service.tts_status(),
+        "wake": service.wake_status(),
+    }
 
 
 @router.get("/actions")
@@ -228,6 +233,32 @@ async def transcribe(
         return await run_in_threadpool(service.transcribe, data, filename=audio.filename or "audio.webm", language=language)
     except RuntimeError as exc:
         # 501: a interface deve cair para o reconhecimento de voz do browser.
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+
+
+@router.post("/wake")
+async def wake(
+    audio: UploadFile = File(..., description="Trecho curto de áudio da escuta contínua."),
+    language: str = Query("pt", description="Idioma esperado do áudio."),
+) -> Dict[str, Any]:
+    """Transcreve um trecho curto e diz se ouviu a palavra de ativação.
+
+    É o *wake word* local: o trecho é transcrito com `faster-whisper` (modelo
+    pequeno, `JARVIS_WAKE_MODEL`) e devolve-se texto + se a palavra foi dita +
+    o comando que veio atrás dela na mesma frase. Nada é respondido aqui — quem
+    decide perguntar é a interface.
+    """
+    data = await audio.read()
+    if not data:
+        raise HTTPException(status_code=422, detail="O áudio recebido está vazio.")
+    if len(data) > MAX_AUDIO_BYTES:
+        raise HTTPException(status_code=413, detail="O áudio excede o limite de 25 MB.")
+    try:
+        return await run_in_threadpool(
+            service.transcribe_wake, data, filename=audio.filename or "audio.webm", language=language
+        )
+    except RuntimeError as exc:
+        # 501: a interface cai para o reconhecimento de voz do browser.
         raise HTTPException(status_code=501, detail=str(exc)) from exc
 
 
