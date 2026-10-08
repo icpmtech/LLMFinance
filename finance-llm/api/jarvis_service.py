@@ -298,7 +298,7 @@ def _heuristic_plan(question: str) -> Dict[str, Any]:
     }
 
 
-async def _llm_plan(question: str, backend: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def _llm_plan(question: str, backend: Dict[str, Any], context: str = "") -> Optional[Dict[str, Any]]:
     from api import ontology_ai  # noqa: PLC0415
 
     catalog = _planner_catalog()
@@ -706,8 +706,15 @@ async def ask(
     if not clean:
         raise ValueError("Diga ou escreva a pergunta que quer fazer ao Jarvis.")
 
+    # Memória da sessão: um seguimento curto («e desses, quantos são de Portugal?»)
+    # leva o tema do turno anterior agarrado, para o plano e a pesquisa não caírem no vazio.
+    contextual = _context_text(clean, history)
+    conversa = _conversation_block(history)
+
     started = time.perf_counter()
     steps: List[Dict[str, Any]] = [_step("ouvir", f"Pergunta recebida: «{clean[:120]}»")]
+    if contextual != clean:
+        steps.append(_step("memoria", f"Contexto da conversa: «{contextual[:160]}»"))
 
     resolved = ontology_ai.available_backend(session, backend)
     steps.append(
@@ -726,7 +733,7 @@ async def ask(
     skill_mode = ""
     skill_block = ""
     try:
-        skill_result = await skills_service.for_request(clean, session=session, backend=backend)
+        skill_result = await skills_service.for_request(contextual, session=session, backend=backend)
         skill_block = skill_result.get("block") or ""
         skill = skill_result.get("raw")
         skill_public = skill_result.get("public")
@@ -744,8 +751,8 @@ async def ask(
         logger.info("Skill do Jarvis indisponível: %s", exc)
 
     # 1) Plano
-    chosen = await plan(clean, resolved)
-    calls = [_ensure_question_arg(call, clean) for call in chosen["tools"]]
+    chosen = await plan(contextual, resolved, conversa)
+    calls = [_ensure_question_arg(call, contextual) for call in chosen["tools"]]
     calls = [call for call in calls if not call.get("skip")]
     steps.append(
         _step(
@@ -784,7 +791,7 @@ async def ask(
         )
 
     # 3) Resposta
-    answer = await _compose(clean, results, resolved, skill_block)
+    answer = await _compose(clean, results, resolved, skill_block, conversa)
     steps.append(_step("responder", "Resposta pronta."))
 
     # 4) Ações propostas (navegar ou criar em nome do utilizador). Nunca se
@@ -866,6 +873,10 @@ async def stream(
         yield frame("erro", {"detail": "Diga ou escreva a pergunta que quer fazer ao Jarvis."})
         return
 
+    # Memória da sessão (igual ao `ask`): seguimento curto herda o tema anterior.
+    contextual = _context_text(clean, history)
+    conversa = _conversation_block(history)
+
     started = time.perf_counter()
     steps: List[Dict[str, Any]] = []
 
@@ -875,6 +886,8 @@ async def stream(
         return item
 
     yield frame("passo", step("ouvir", f"Pergunta recebida: «{clean[:120]}»"))
+    if contextual != clean:
+        yield frame("passo", step("memoria", f"Contexto da conversa: «{contextual[:160]}»"))
 
     resolved = ontology_ai.available_backend(session, backend)
     yield frame(
@@ -892,7 +905,7 @@ async def stream(
     skill_id: Optional[str] = None
     skill_mode = ""
     try:
-        skill_result = await skills_service.for_request(clean, session=session, backend=backend)
+        skill_result = await skills_service.for_request(contextual, session=session, backend=backend)
         skill_block = skill_result.get("block") or ""
         skill_public = skill_result.get("public")
         skill_id = skill_result.get("id")
@@ -906,8 +919,8 @@ async def stream(
     except Exception as exc:
         logger.info("Skill do Jarvis indisponível (stream): %s", exc)
 
-    chosen = await plan(clean, resolved)
-    calls = [_ensure_question_arg(call, clean) for call in chosen["tools"]]
+    chosen = await plan(contextual, resolved, conversa)
+    calls = [_ensure_question_arg(call, contextual) for call in chosen["tools"]]
     calls = [call for call in calls if not call.get("skip")]
     tools_label = ", ".join(call["tool"] for call in calls) if calls else "sem ferramentas"
     yield frame(
@@ -951,7 +964,7 @@ async def stream(
             {"tool": tool_id, "label": label, "state": "ok" if result.get("ok") else "falhou", "error": result.get("error")},
         )
 
-    answer = await _compose(clean, results, resolved, skill_block)
+    answer = await _compose(clean, results, resolved, skill_block, conversa)
     yield frame("passo", step("responder", "Resposta pronta."))
 
     # Ações propostas: nunca se executam aqui — a interface mostra-as e o

@@ -125,6 +125,38 @@ Três formas de interagir, por ordem de preferência — todas degradam sem part
    passada ao gateway do Hermes), «Falar» (ler as respostas), escolha da voz e a
    lista de ferramentas disponíveis.
 
+### Memória da sessão (perguntas de seguimento)
+
+A interface envia o diálogo anterior em `history` (no `POST /jarvis/ask` e no
+`/jarvis/ask/stream`). Durante muito tempo esse histórico **não era usado para
+nada** além de ser repassado às ferramentas: uma pergunta como «E desses, quantos
+são de Portugal?» era planeada do zero — o Jarvis não sabia a que «desses» se
+referia, criava uma skill nova e respondia que não tinha acesso ao conjunto
+anterior.
+
+Agora o histórico é memória a sério, em três pontos:
+
+| Onde | O que faz |
+| --- | --- |
+| `_context_text()` | Se a pergunta é **curta e anafórica** (`e …`, «desses», «essa empresa», ≤ 9 palavras), junta-lhe a pergunta anterior — «…Mota-Engil…» segue agarrado — e é **essa** pergunta que vai ao planeador, aos argumentos das ferramentas e ao `skills_service`. A pergunta original continua a ser a que se mostra e a que a resposta cita. |
+| `_conversation_block()` | Os últimos turnos vão para o **planeador** («Conversa anterior (memória da sessão)») e para a **resposta final**, para o modelo saber o que já foi dito. |
+| `_last_turn()` | Base dos dois anteriores: (pergunta, resposta) do último turno com conteúdo. |
+
+O passo `memoria` aparece no rasto («Contexto da conversa: «…»»), para se ver
+exatamente o que o Jarvis herdou. Medido, na mesma conversa:
+
+```
+Turno 1: «Delega no Hermes Agent: quantos resultados tem a Mota-Engil…?»
+         → 2393 no total (862 contratos PT, 1331 ES, 139 Wikipédia, …)
+Turno 2: «E desses, quantos são de Portugal?»
+         → antes: 52 s, skill nova e «não tenho acesso ao conjunto anterior»
+         → agora: 54 s, a mesma skill do turno 1 e a resposta certa (862 + o
+           resto dos âmbitos portugueses)
+```
+
+O agente (gateway `agent`) recebe o mesmo histórico — ver a secção 3.1 —, porque
+é sem estado e sem isso uma delegação de seguimento chegava-lhe órfã.
+
 ---
 
 ## 3. O gateway «Hermes Agent» — tudo o que o agente sabe fazer

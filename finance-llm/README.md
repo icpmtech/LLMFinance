@@ -1500,6 +1500,13 @@ Notas de implementação (`api/jarvis_gateway.py`, `api/jarvis_service.py`):
   o agente responde com o que «sabe»; com elas consulta as nossas fontes — «quantos resultados
   existem sobre a EDP?» devolveu as contagens reais por âmbito (4751 contratos, 2331 Wikipédia,
   474 contratos de Espanha, …);
+- **memória da sessão (`history`) usada a sério**: um seguimento curto e anafórico
+  («E desses, quantos são de Portugal?») era planeado do zero — criava uma skill nova e
+  respondia que não tinha acesso ao conjunto anterior. Agora `_context_text()` cola-lhe a
+  pergunta anterior (é essa que vai ao planeador e aos argumentos das ferramentas), e os
+  últimos turnos vão para o planeador e para a resposta final (`_conversation_block()`). O
+  passo `memoria` mostra no rasto o que foi herdado. Medido: antes 52 s + skill nova +
+  «não tenho acesso»; agora a mesma skill e a resposta certa;
 - **se o Jarvis não tiver modelo para redigir** (modo factual) e a resposta vier de uma
   delegação, mostra-se o texto do agente tal como ele o escreveu — antes despejava o envelope
   da ferramenta (`answer=…; model=…; tool_calls=…`), que era ilegível;

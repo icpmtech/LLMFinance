@@ -125,10 +125,41 @@ Os três serviços têm healthcheck: o backend só arranca depois de o Elasticse
 - Health check: http://127.0.0.1:8003/health
 - Elasticsearch: http://127.0.0.1:9200/_cluster/health
 
-### 4. Parar
+### 3.1 Republicar a interface (dois `dist` diferentes)
+
+Há **dois builds da SPA**, e não são o mesmo `dist`:
+
+| Pasta | Quem serve | Base da API |
+| --- | --- | --- |
+| `chat-ui/dist` | o **backend** (ao abrir o backend diretamente, ex.: `http://127.0.0.1:8002`) | `VITE_API_URL` vazio → cai no endereço absoluto `http://127.0.0.1:8002` |
+| `_frontend_dist` | o **nginx do frontend** (4180 e produção) | `VITE_API_URL=/api` (mesma origem) |
+
+(A `api.ts` escolhe `/api` automaticamente quando a página é servida em `localhost:4180`;
+fora daí usa `VITE_API_URL`, senão o valor absoluto.)
+
+Sintoma de se publicar o errado: a página abre mas as chamadas à API dão 404 — ou a
+interface fica **antiga** porque o `_frontend_dist` não foi atualizado.
 
 ```powershell
-docker compose down
+# 1) build para o nginx (o que se publica no frontend)
+$env:VITE_API_URL='/api'; npm --prefix chat-ui run build
+Remove-Item -Recurse -Force _frontend_dist; Copy-Item -Recurse chat-ui\dist _frontend_dist
+
+# 2) repor o build do backend (sem prefixo /api), para o UI servido pelo backend continuar bom
+$env:VITE_API_URL=''; npm --prefix chat-ui run build
+
+# 3) imagem do frontend + contentor
+docker build -f Dockerfile.frontend.incremental --build-arg BASE=iq-os-frontend:latest -t iq-os-frontend:latest .
+docker compose up -d --no-deps frontend
+
+# 4) confirmar o bundle servido (tem de ser o hash novo e trazer a UI nova)
+curl.exe -s http://127.0.0.1:4180/ | Select-String -Pattern 'assets/index-[^"]+\.js'
+docker compose exec -T frontend sh -c 'grep -c "Palavra de ativa" /usr/share/nginx/html/assets/index-*.js'
+```
+
+### 4. Parar
+
+```powershelldocker compose down
 ```
 
 Para remover também volumes e imagens:

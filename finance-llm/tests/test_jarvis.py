@@ -276,7 +276,7 @@ def duble_gateways(monkeypatch):
 
     monkeypatch.setattr(service.gateway, "invoke", fake_invoke)
 
-    async def fake_plan(question, backend):
+    async def fake_plan(question, backend, context=""):
         return {
             "tools": [
                 {"tool": "contratos_search", "args": {}},
@@ -337,7 +337,7 @@ def test_ask_em_modo_factual_sem_gateways(monkeypatch):
     async def fake_invoke(tool_id, args=None, *, ctx=None):
         return {"tool": tool_id, "gateway": "hermes", "label": "Investigar (Hermes)", "ok": True, "data": {"answer": None, "sources": [{"title": "Base.gov.pt"}]}}
 
-    async def fake_plan(question, backend):
+    async def fake_plan(question, backend, context=""):
         return {"tools": [{"tool": "hermes.ask", "args": {"question": question}}], "reason": "t", "source": "t"}
 
     async def fake_skills(question, **kwargs):
@@ -354,7 +354,7 @@ def test_ask_em_modo_factual_sem_gateways(monkeypatch):
 
 
 def test_ask_sem_ferramentas_explica_o_modo_factual(monkeypatch):
-    async def fake_plan(question, backend):
+    async def fake_plan(question, backend, context=""):
         return {"tools": [], "reason": "nada serve", "source": "t"}
 
     async def fake_skills(question, **kwargs):
@@ -372,7 +372,7 @@ def test_ask_marca_as_ferramentas_que_falham(monkeypatch):
     async def fake_invoke(tool_id, args=None, *, ctx=None):
         return {"tool": tool_id, "gateway": "mcp", "label": "Pesquisar", "ok": False, "error": "HTTP 500"}
 
-    async def fake_plan(question, backend):
+    async def fake_plan(question, backend, context=""):
         return {"tools": [{"tool": "contratos_search", "args": {}}], "reason": "t", "source": "t"}
 
     async def fake_skills(question, **kwargs):
@@ -689,3 +689,104 @@ def test_meta_sem_modelo_nao_mente_sobre_o_estado():
     assert meta["model"]["kind"] in {"cloud", "local", "unavailable"}
     if meta["model"]["kind"] != "cloud":
         assert not meta["model"]["model"]
+
+
+# ---------------------------------------------------------------------------
+# Memória da sessão (seguimentos)
+# ---------------------------------------------------------------------------
+HISTORICO = [
+    {"role": "user", "content": "Quantos resultados tem a Mota-Engil na pesquisa total, por âmbito?"},
+    {
+        "role": "assistant",
+        "content": "A pesquisa total devolve 2393 resultados: 862 contratos em Portugal e 1331 em Espanha.",
+    },
+]
+
+
+@pytest.mark.parametrize(
+    "pergunta",
+    [
+        "E desses, quantos são de Portugal?",
+        "e em Espanha?",
+        "Então e os contratos?",
+        "Quantos desses têm mais de um milhão?",
+        "E essa empresa tem insolvências?",
+    ],
+)
+def test_seguimentos_curtos_sao_reconhecidos(pergunta):
+    assert service._is_followup(pergunta, HISTORICO) is True
+
+
+@pytest.mark.parametrize(
+    "pergunta",
+    [
+        "Quais são os maiores contratos públicos de energia em 2025?",
+        "Compara as notícias de hoje sobre o BCE com os dados da plataforma",
+        "Espanha tem quantos contratos públicos de energia adjudicados em 2025 no total?",
+    ],
+)
+def test_perguntas_com_assunto_proprio_nao_sao_seguimentos(pergunta):
+    assert service._is_followup(pergunta, HISTORICO) is False
+
+
+def test_sem_historico_nunca_e_seguimento():
+    assert service._is_followup("E desses quantos são?", []) is False
+    assert service._is_followup("E desses quantos são?", None) is False
+
+
+def test_seguimento_herda_o_tema_do_turno_anterior():
+    texto = service._context_text("E desses, quantos são de Portugal?", HISTORICO)
+    assert "Mota-Engil" in texto, "o tema anterior tem de seguir agarrado ao seguimento"
+    assert "quantos são de Portugal" in texto
+
+
+def test_pergunta_com_assunto_nao_e_reescrita():
+    pergunta = "Quais são os maiores contratos públicos de energia em 2025?"
+    assert service._context_text(pergunta, HISTORICO) == pergunta
+
+
+def test_bloco_de_conversa_leva_os_ultimos_turnos():
+    bloco = service._conversation_block(HISTORICO + [{"role": "system", "content": "ignorar"}])
+    assert bloco.startswith("Utilizador: Quantos resultados tem a Mota-Engil")
+    assert "Jarvis: A pesquisa total devolve 2393" in bloco
+    assert "ignorar" not in bloco
+
+
+def test_ask_usa_o_contexto_no_plano_e_na_resposta(monkeypatch):
+    capturado: dict = {}
+
+    async def falso_plan(question, backend, context=""):
+        capturado["pergunta_do_plano"] = question
+        capturado["contexto_do_plano"] = context
+        return {"tools": [{"tool": "contratos_search", "args": {"query": "Mota-Engil"}}], "actions": [], "source": "teste"}
+
+    async def falso_compose(question, results, backend, skill_block, context=""):
+        capturado["pergunta_da_resposta"] = question
+        capturado["contexto_da_resposta"] = context
+        return "resposta de teste"
+
+    async def falso_invoke(tool_id, args=None, **kwargs):
+        return {"tool": tool_id, "gateway": "mcp", "ok": True, "data": {"total": 862}}
+
+    async def falso_for_request(*args, **kwargs):
+        return {"block": "", "public": None, "id": None, "mode": ""}
+
+    # O `ask` importa o `skills_service` lá dentro: o patch é no módulo verdadeiro.
+    from api import skills_service as mod_skills  # noqa: PLC0415
+
+    monkeypatch.setattr(service, "plan", falso_plan)
+    monkeypatch.setattr(service, "_compose", falso_compose)
+    monkeypatch.setattr(service.gateway, "invoke", falso_invoke)
+    monkeypatch.setattr(service.actions_catalogue, "propose", lambda *a, **k: [])
+    monkeypatch.setattr(mod_skills, "for_request", falso_for_request)
+
+    resultado = asyncio.run(service.ask("E desses, quantos são de Portugal?", history=HISTORICO))
+
+    # O plano recebe o tema herdado; a resposta mantém a pergunta original do utilizador.
+    assert "Mota-Engil" in capturado["pergunta_do_plano"]
+    assert "quantos são de Portugal" in capturado["pergunta_do_plano"]
+    assert capturado["pergunta_da_resposta"] == "E desses, quantos são de Portugal?"
+    assert "Mota-Engil" in capturado["contexto_da_resposta"]
+    assert resultado["answer"] == "resposta de teste"
+    passos = [item["label"] for item in resultado["steps"]]
+    assert any("Contexto da conversa" in label for label in passos)
