@@ -445,7 +445,8 @@ def _meta_linha(meta: Dict[str, Any]) -> str:
     if meta.get("adjudicante"):
         partes.append(f"adjudicante {meta['adjudicante']}")
     if meta.get("contratos") is not None:
-        partes.append(f"{meta['contratos']} contratos")
+        quantos = f"{int(meta['contratos'] or 0):,}".replace(",", " ")
+        partes.append(f"{quantos} contratos")
     total = _euros(meta.get("valor"))
     if total:
         partes.append(f"total agregado {total}")

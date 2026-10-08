@@ -27,6 +27,7 @@ import {
     askDeepSearch,
     fetchDeepMeta,
     fetchDeepSuggestions,
+    type DeepMarketRef,
     type DeepMeta,
     type DeepSource,
     type DeepSuggestion,
@@ -37,6 +38,15 @@ import {
 // limite» a API devolve centenas de fontes: desenhá-las todas bloqueia a página.
 const CARTOES_INICIAIS = 24;
 const CARTOES_PASSO = 48;
+
+/** Valor em euros à portuguesa («15 446,04 €»); vazio quando não há valor. */
+const euros = (value?: number | null) =>
+    typeof value === "number" && value > 0
+        ? new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR", maximumFractionDigits: 2 }).format(value)
+        : "";
+
+/** Valor a mostrar no cartão: o preço do contrato ou o total agregado da entidade. */
+const valorDaFonte = (source: DeepSource) => euros(source.meta?.preco) || euros(source.meta?.valor);
 
 type ChatModelOption = {
     id: string;
@@ -84,6 +94,7 @@ export default function DeepSearchPage({ onNavigate }: Props) {
     const [cited, setCited] = useState<number[]>([]);
     const [retrieval, setRetrieval] = useState<DeepSourcesEvent | null>(null);
     const [followups, setFollowups] = useState<string[]>([]);
+    const [mercado, setMercado] = useState<DeepMarketRef[]>([]);
     // Com «sem limite» a API chega a devolver 291 fontes. Desenhar todas de uma
     // vez custa caro (centenas de cartões com texto) e ninguém lê as últimas:
     // mostram-se as primeiras e um botão abre o resto.
@@ -165,6 +176,7 @@ export default function DeepSearchPage({ onNavigate }: Props) {
             setCited([]);
             setRetrieval(null);
             setFollowups([]);
+            setMercado([]);
             setAcOpen(false);
 
             stopRef.current = askDeepSearch(
@@ -196,6 +208,7 @@ export default function DeepSearchPage({ onNavigate }: Props) {
                         if (payload.sources?.length) setSources(payload.sources);
                         if (payload.citations) setCited(payload.citations);
                         setFollowups(payload.suggestions ?? []);
+                        setMercado(payload.mercado ?? []);
                     },
                     onError: (message) => {
                         setAnswering(false);
@@ -486,6 +499,7 @@ export default function DeepSearchPage({ onNavigate }: Props) {
                             <div className="grid gap-2 sm:grid-cols-2">
                                 {sources.slice(0, cartoes).map((source) => {
                                     const clickable = Boolean(source.url) || Boolean(source.open?.arg);
+                                    const valor = valorDaFonte(source);
                                     return (
                                         <button
                                             key={`${source.scope}-${source.id}-${source.n}`}
@@ -511,6 +525,16 @@ export default function DeepSearchPage({ onNavigate }: Props) {
                                                 {clickable && <ExternalLink size={12} className="text-muted-foreground" />}
                                             </div>
                                             <p className="line-clamp-2 text-xs font-medium text-foreground">{source.title}</p>
+                                            {valor && (
+                                                <p className="text-[11.5px] font-semibold text-teal-200">
+                                                    {valor}
+                                                    {source.meta?.cpv && (
+                                                        <span className="ml-1 font-normal text-muted-foreground">
+                                                            · CPV {source.meta.cpv}
+                                                        </span>
+                                                    )}
+                                                </p>
+                                            )}
                                             {source.subtitle && (
                                                 <p className="line-clamp-1 text-[11px] text-muted-foreground">{source.subtitle}</p>
                                             )}
@@ -532,6 +556,32 @@ export default function DeepSearchPage({ onNavigate }: Props) {
                                     Mostrar mais fontes ({sources.length - cartoes} por mostrar)
                                 </button>
                             )}
+                        </section>
+                    )}
+
+                    {mercado.length > 0 && (
+                        <section className="flex flex-col gap-2 rounded-2xl border border-teal-400/15 bg-teal-400/[0.04] p-4">
+                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                Referência de mercado · mesmo CPV, todos os anos
+                            </p>
+                            <div className="flex flex-col gap-1.5">
+                                {mercado.map((ref) => (
+                                    <div key={ref.cpv} className="flex flex-wrap items-baseline gap-x-3 text-[11.5px]">
+                                        <span className="font-medium text-foreground/90">CPV {ref.cpv}</span>
+                                        <span className="text-muted-foreground">
+                                            {ref.contratos.toLocaleString("pt-PT")} contratos adjudicados
+                                        </span>
+                                        <span className="font-medium text-teal-200">mediana {ref.mediana}</span>
+                                        <span className="text-muted-foreground">
+                                            p25 {ref.p25} · p75 {ref.p75} · máximo {ref.maximo}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="text-[10.5px] leading-relaxed text-muted-foreground">
+                                Preços adjudicados no Portal Base para o mesmo CPV. É a referência que a resposta usa
+                                para dizer se um destes contratos está acima ou abaixo do habitual.
+                            </p>
                         </section>
                     )}
 

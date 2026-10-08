@@ -13,7 +13,14 @@
 # nas dependências.
 #
 #   docker build -f Dockerfile.backend.incremental -t iq-os-backend:latest .
-FROM iq-os-backend:antes-deep-search
+#
+# A base é parametrizável para se poder assentar numa etiqueta concreta que já
+# esteja validada, em vez do `latest` (que pode ter sido reescrito por uma build
+# a frio com dependências não testadas). Tem de ser uma **etiqueta**: o Docker
+# não aceita um ID de imagem como `FROM`.
+#   docker build -f Dockerfile.backend.incremental --build-arg BASE=iq-os-backend:validada -t iq-os-backend:latest .
+ARG BASE=iq-os-backend:antes-deep-search
+FROM ${BASE}
 
 # WORKDIR (/app), ENTRYPOINT (/entrypoint.sh) e HEALTHCHECK vêm da base.
 COPY . .

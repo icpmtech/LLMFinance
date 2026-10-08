@@ -210,6 +210,217 @@ def test_build_messages_numera_fontes_e_inclui_historico():
     assert [m["content"] for m in messages[1:-1]] == ["Olá", "Bom dia"]
 
 
+# ------------------------------------- valores dos contratos e referência de mercado
+
+def _contrato(scope: str = "contracts", **extra):
+    return _item(scope, "C1", "Licenças Adobe", snippet="Licenciamento", **extra)
+
+
+def test_meta_leva_valores_e_cpv_do_extra():
+    """Regressão: o `_as_source` deitava fora o `extra` e o modelo não via valores."""
+    source = deep._as_source(1, "contracts", _contrato(preco=15446.04, cpv="48100000-9", adjudicatario="CLARANET"), 1.0)
+
+    assert source["meta"]["preco"] == 15446.04
+    assert source["meta"]["cpv"] == "48100000-9"
+    assert source["meta"]["adjudicatario"] == "CLARANET"
+
+
+def test_meta_ignora_campos_vazios():
+    assert deep._meta({"extra": {"preco": None, "cpv": "", "adjudicatario": [], "valor": 12}}) == {"valor": 12}
+    assert deep._meta({}) == {}
+    assert deep._meta({"extra": "não é dicionário"}) == {}
+
+
+@pytest.mark.parametrize(
+    "meta,esperado",
+    [
+        ({"preco": 15446.04, "cpv": "48100000-9"}, "valor 15 446,04 € · CPV 48100000-9"),
+        ({"preco": 1980}, "valor 1 980 €"),
+        ({"contratos": 3952, "valor": 624938766}, "3 952 contratos · total agregado 624 938 766 €"),
+        ({}, ""),
+        ({"preco": 0}, ""),
+    ],
+)
+def test_meta_linha_formata_valores(meta, esperado):
+    assert deep._meta_linha(meta) == esperado
+
+
+def test_euros_mostra_zero_para_extremos_estatisticos():
+    assert deep._euros(0) == ""
+    assert deep._euros(0, zero=True) == "0 €"
+    assert deep._euros(None) == ""
+    assert deep._euros("x") == ""
+    assert deep._euros(1234567) == "1 234 567 €"
+
+
+def test_build_messages_mostra_o_valor_de_cada_contrato():
+    """Sem isto o modelo respondia «as fontes não indicam o valor de nenhum contrato»."""
+    sources = [
+        deep._as_source(
+            1,
+            "contracts",
+            _contrato(preco=741.9, cpv="72268000-1", adjudicatario="CLARANET II SOLUTIONS"),
+            1.0,
+        )
+    ]
+
+    prompt = deep.build_messages("Quanto custou?", sources)[-1]["content"]
+
+    assert "valor 741,90 €" in prompt
+    assert "CPV 72268000-1" in prompt
+
+
+def test_build_messages_inclui_referencia_de_mercado_e_regra_de_comparacao():
+    mercado = [
+        {
+            "cpv": "48100000-9",
+            "contratos": 2949,
+            "minimo": "0 €",
+            "p25": "6 005,83 €",
+            "mediana": "15 925,14 €",
+            "p75": "45 199,16 €",
+            "maximo": "21 845 466 €",
+        }
+    ]
+    sources = [deep._as_source(1, "contracts", _contrato(preco=15446.04, cpv="48100000-9"), 1.0)]
+
+    prompt = deep.build_messages("Quanto custou?", sources, None, mercado=mercado)[-1]["content"]
+
+    assert "### Referência de mercado" in prompt
+    assert "mediana 15 925,14 €" in prompt
+    assert "2 949 contratos" in prompt
+    # A referência entra antes da pergunta e a regra manda comparar com ela.
+    assert prompt.index("Referência de mercado") < prompt.index("### Pergunta")
+    assert "compara os valores das fontes com a mediana" in prompt
+
+
+def test_build_messages_sem_mercado_nao_inventa_seccao():
+    prompt = deep.build_messages("Quanto custou?", [deep._as_source(1, "contracts", _contrato(preco=1.0), 1.0)])[-1]["content"]
+
+    # A regra menciona sempre a secção (é condicional), mas ela não pode aparecer.
+    assert "### Referência de mercado" not in prompt
+
+
+def test_mercado_por_cpv_sem_codigos_nao_toca_no_elasticsearch(monkeypatch):
+    monkeypatch.setattr(deep.search_service, "get_es_client", lambda: pytest.fail("não devia consultar o ES"))
+
+    assert deep.mercado_por_cpv([]) == []
+    assert deep.mercado_por_cpv([None, "", "  "]) == []
+
+
+def test_mercado_por_cpv_le_a_agregacao(monkeypatch):
+    """A agregação é `nested` sobre `cpv` com `reverse_nested` para os preços."""
+    chamadas = []
+
+    class _Es:
+        def search(self, **kwargs):
+            chamadas.append(kwargs)
+            return {
+                "aggregations": {
+                    "cpv": {
+                        "codigos": {
+                            "buckets": [
+                                {
+                                    "key": "48100000-9",
+                                    "contratos": {
+                                        "doc_count": 2949,
+                                        "preco": {"values": {"25.0": 6005.83, "50.0": 15925.14, "75.0": 45199.16}},
+                                        "minimo": {"value": 0.0},
+                                        "maximo": {"value": 21845466.0},
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+
+    monkeypatch.setattr(deep.search_service, "get_es_client", lambda: _Es())
+
+    resultado = deep.mercado_por_cpv(["48100000-9", "48100000-9", None])
+
+    assert resultado == [
+        {
+            "cpv": "48100000-9",
+            "contratos": 2949,
+            "minimo": "0 €",
+            "p25": "6 005,83 €",
+            "mediana": "15 925,14 €",
+            "p75": "45 199,16 €",
+            "maximo": "21 845 466 €",
+        }
+    ]
+    corpo = chamadas[0]["body"]
+    assert corpo["aggs"]["cpv"]["nested"] == {"path": "cpv"}
+    assert corpo["aggs"]["cpv"]["aggs"]["codigos"]["terms"]["include"] == ["48100000-9"]
+    assert chamadas[0]["index"] == deep.vectors.CONTRACTS_INDEX
+
+
+def test_mercado_por_cpv_ignora_cpv_sem_precos(monkeypatch):
+    class _Es:
+        def search(self, **kwargs):
+            return {
+                "aggregations": {
+                    "cpv": {
+                        "codigos": {
+                            "buckets": [
+                                {
+                                    "key": "99999999-9",
+                                    "contratos": {
+                                        "doc_count": 0,
+                                        "preco": {"values": {"50.0": None}},
+                                        "minimo": {"value": None},
+                                        "maximo": {"value": None},
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+
+    monkeypatch.setattr(deep.search_service, "get_es_client", lambda: _Es())
+
+    assert deep.mercado_por_cpv(["99999999-9"]) == []
+
+
+def test_mercado_por_cpv_nao_derruba_a_resposta(monkeypatch):
+    class _Es:
+        def search(self, **kwargs):
+            raise RuntimeError("Elasticsearch indisponível")
+
+    monkeypatch.setattr(deep.search_service, "get_es_client", lambda: _Es())
+
+    assert deep.mercado_por_cpv(["48100000-9"]) == []
+
+
+def test_stream_answer_junta_a_referencia_de_mercado(monkeypatch):
+    """A referência de mercado tem de ser calculada a partir dos CPV das fontes."""
+    source = deep._as_source(1, "contracts", _contrato(preco=15446.04, cpv="48100000-9"), 1.0)
+    pedidos = []
+
+    def fake_mercado(cpvs, **kwargs):
+        pedidos.append([c for c in cpvs if c])
+        return [{"cpv": "48100000-9", "contratos": 2949, "mediana": "15 925,14 €"}]
+
+    prompt_visto = {}
+
+    async def fake_model(messages, **kwargs):
+        prompt_visto["prompt"] = messages[-1]["content"]
+        yield "ok [1]"
+
+    monkeypatch.setattr(deep, "retrieve", _stub_retrieve([source]))
+    monkeypatch.setattr(deep, "mercado_por_cpv", fake_mercado)
+    monkeypatch.setattr(deep, "_stream_model", fake_model)
+
+    events = _events(asyncio.run(_collect(deep.stream_answer("Quanto custou?"))))
+
+    assert pedidos == [["48100000-9"]]
+    assert "### Referência de mercado" in prompt_visto["prompt"]
+    done = [data for event, data in events if event == "done"][-1]
+    assert done["mercado"] == [{"cpv": "48100000-9", "contratos": 2949, "mediana": "15 925,14 €"}]
+
+
 def test_citacoes_extraidas_da_resposta():
     answer = "A CIMRL adjudicou [1] e o valor consta em [2, 3]. Uma nota solta [9] fica de fora."
 

@@ -8,6 +8,20 @@
  */
 import { API_BASE } from "./api";
 
+export type DeepSourceMeta = {
+    preco?: number | null;
+    valor?: number | null;
+    contratos?: number | null;
+    cpv?: string | null;
+    adjudicante?: string | number | null;
+    adjudicatario?: string | number | null;
+    adjudicatario_nif?: string | null;
+    entidade?: string | null;
+    nif?: string | null;
+    sector?: string | null;
+    pais?: string | null;
+};
+
 export type DeepSource = {
     n: number;
     id: string;
@@ -22,6 +36,19 @@ export type DeepSource = {
     image: string;
     open?: { view?: string; arg?: string; mode?: string } | null;
     score?: number;
+    /** Valores e códigos do contrato (é com isto que a resposta compara montantes). */
+    meta?: DeepSourceMeta;
+};
+
+/** Preços praticados no mercado para um CPV (calculados pelo backend). */
+export type DeepMarketRef = {
+    cpv: string;
+    contratos: number;
+    minimo?: string;
+    p25?: string;
+    mediana: string;
+    p75?: string;
+    maximo?: string;
 };
 
 export type DeepSourceOption = {
@@ -128,7 +155,13 @@ export type DeepAskHandlers = {
     onSources?: (payload: DeepSourcesEvent) => void;
     onMeta?: (payload: { model: string; backend: string; kind?: string }) => void;
     onToken?: (token: string) => void;
-    onDone?: (payload: { sources: DeepSource[]; answer: string; citations: number[]; suggestions?: string[] }) => void;
+    onDone?: (payload: {
+        sources: DeepSource[];
+        answer: string;
+        citations: number[];
+        suggestions?: string[];
+        mercado?: DeepMarketRef[];
+    }) => void;
     onError?: (message: string) => void;
 };
 
