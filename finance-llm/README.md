@@ -1555,6 +1555,23 @@ Ficheiros: `docker/nginx.conf` (bloco `/hermes-agent/`),
 `docker/hermes/plugins/dashboard-auth-iqos/__init__.py` (provider + SSO),
 `deploy/kamatera/edge/Caddyfile`, `chat-ui/src/iframePages.ts`.
 
+#### Operação: reiniciar o container do Hermes
+
+Duas coisas a saber antes de um `docker compose restart hermes-agent` (ou `up -d` que o recrie):
+
+- **A chave das sessões tem de ser estável.** Se `HERMES_DASHBOARD_IQOS_SECRET` estiver vazia no
+  `.env`, o provider gera uma chave **por processo** e cada reinício invalida todas as sessões
+  abertas: a página começa a levar `401` (`/api/auth/me`, `/api/auth/ws-ticket`) e não volta
+  sozinha. Com a chave preenchida, `POST /hermes-agent/api/auth/ws-ticket` continua a responder
+  `200` com os *cookies* antigos — verificado antes e depois de um restart real.
+- **O WebSocket do gateway não reconecta sozinho.** `/api/ws`, `/api/pty` e `/api/events` morrem
+  com o container; o dashboard mostra então «Lost connection to the Hermes dashboard server … click
+  **Reconnect now**» e, se o aviso não aparecer, um **reload da página** repõe tudo (o SSO volta a
+  autenticar sem pedir credenciais). Durante o restart o nginx devolve `502` — é esperado.
+
+Ambos os casos foram validados com Playwright (página aberta no Chat → `restart` do container →
+reload → os três sockets voltam a abrir e o dashboard continua autenticado).
+
 ### Motor do Hermes Agent (ligar o container aos fornecedores da plataforma)
 
 O **Hermes Agent** (`docker/profile agents`, dashboard na página iframe «Hermes Agent») é um

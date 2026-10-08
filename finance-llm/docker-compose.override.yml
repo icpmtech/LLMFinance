@@ -20,6 +20,13 @@ services:
       - ./data:/app/data
       - ./model:/app/model
       - ./logs:/app/logs
+      # `exports/` (JSON societários e outros) e `debug_mj/` (HTML de diagnóstico)
+      # não estavam montados: viviam só na camada do container e perdiam-se a cada
+      # `docker compose up` que o recriasse (verificado a 2026-10-08 — o JSON do NIF
+      # 514024674 desapareceu assim). Os ficheiros do container eram idênticos aos do
+      # host antes de montar, por isso não se escondeu nada.
+      - ./exports:/app/exports
+      - ./debug_mj:/app/debug_mj
 
   frontend:
     build:

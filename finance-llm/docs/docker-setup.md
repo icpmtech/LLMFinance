@@ -84,6 +84,8 @@ docker compose exec frontend nginx -t                  # regras do subcaminho /h
 
 O porto `9119` **não** é publicado no host: o dashboard é acessível pelo proxy de incorporação (`:8892`) e, no domínio público, por `https://<domínio>/hermes-agent/`. Detalhe das reescritas e do *single sign-on*: README → «Dashboard do Hermes Agent (subcaminho público e single sign-on)».
 
+Preencher `HERMES_DASHBOARD_IQOS_SECRET` no `.env` (valor estável): vazia, o provider assina as sessões com uma chave gerada **por processo**, pelo que cada reinício do container obriga a todos a entrar de novo — e a página aberta fica a receber `401`.
+
 ## Requisitos
 
 - Docker Desktop ou Docker Engine + Compose.

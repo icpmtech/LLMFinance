@@ -21,6 +21,7 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
+import { TawkChat } from "../components/TawkChat";
 
 const CATEGORIES = [
   {
@@ -341,6 +342,9 @@ export function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* Apoio ao cliente (Tawk.to) — só na landing page pública. */}
+      <TawkChat />
     </div>
   );
 }
