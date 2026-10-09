@@ -10,16 +10,21 @@ de números escritos à mão.
 `test_entities_filters.py` — secção **EmpresasIQ › Entidades**:
 
 - lista inicial (cards) e total do universo iguais à pesquisa sem filtros;
-- pesquisa por nome (filtro enviado para `/companies/search` e entidades devolvidas);
+- pesquisa por nome/NIF: devolve apenas entidades que casam pelo **próprio** nome
+  (sem as contrapartes dos contratos), sem acentos e com os termos por qualquer
+  ordem; um NIF devolve uma única entidade;
+- botão «Pesquisar» do topo aplicado à lista de entidades;
 - paginação: a API confirma o offset recebido em `from` e a UI avança/recua 15
   entidades por página;
 - filtro por função (`adjudicante`/`adjudicatário`): devolve apenas entidades com
-  esse papel, com o total do papel e — quando o universo é maior do que a lista
-  agregada — a contagem distinta de NIF e o aviso de lista limitada;
+  esse papel, com o total do papel, o estado vazio quando não há
+  correspondências e — sem pesquisa por nome — o aviso de lista limitada;
 - limpar filtros devolve o universo inicial;
 - vistas de tabela e de mapa;
 - menu de contexto de uma região do mapa e painel de contratos dessa região;
-- exportação para Excel e para PDF (transferência de ficheiro com conteúdo).
+- exportação para Excel e para PDF (transferência de ficheiro com conteúdo). A
+  exportação para PDF é rasterizada no browser e pode demorar minutos numa
+  máquina carregada — o limite do teste é folgado por isso.
 
 ## Preparação
 

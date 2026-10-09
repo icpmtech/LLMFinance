@@ -4452,6 +4452,54 @@ def _company_role_filter(role: Optional[str]) -> Optional[List[Dict[str, Any]]]:
     return None
 
 
+def _entity_matches_query(name: Optional[str], nif: Optional[str], q: str) -> bool:
+    """A entidade casa com a pesquisa pelo **próprio** nome (tokens, por qualquer ordem) ou NIF.
+
+    A query de contratos (`_company_name_query`) encontra os contratos em que
+    *alguma* das partes casa com a pesquisa, mas a agregação por papel devolve
+    depois **todas** as entidades desses contratos — incluindo as contrapartes
+    (quem comprou à empresa procurada). O campo de pesquisa pede entidades, pelo
+    que a lista é limitada às que casam pelo seu nome; sem acentos e sem
+    distinguir maiúsculas, com cada termo a casar o início de uma palavra.
+    """
+    termo = (q or "").strip()
+    if not termo:
+        return True
+    if nif and termo == nif.strip():
+        return True
+    termos = [t for t in _searchable_name(termo).split() if t]
+    if not termos:
+        return False
+    palavras = _searchable_name(name or "").split()
+    return all(any(palavra.startswith(termo_) for palavra in palavras) for termo_ in termos)
+
+
+def _searchable_name(value: str) -> str:
+    """Nome comparável: sem acentos, minúsculas e pontuação reduzida a espaços."""
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    return re.sub(r"[^a-z0-9]+", " ", text.casefold()).strip()
+
+
+def _company_window_truncated(resp: Dict[str, Any], role: Optional[str] = None) -> bool:
+    """A agregação por papel devolveu menos NIF do que os que casaram os filtros?
+
+    O `terms` por papel devolve só os NIF de maior valor; `sum_other_doc_count`
+    positivo significa que a janela foi cortada (o papel pedido, se indicado).
+    """
+    if role == "adjudicante":
+        chaves: Tuple[str, ...] = ("adjudicantes",)
+    elif role == "adjudicatario":
+        chaves = ("adjudicatarios",)
+    else:
+        chaves = ("adjudicantes", "adjudicatarios")
+    for agg_key in chaves:
+        by_nif = resp.get("aggregations", {}).get(agg_key, {}).get("by_nif", {}) or {}
+        if int(by_nif.get("sum_other_doc_count", 0) or 0) > 0:
+            return True
+    return False
+
+
 def _company_name_query(q: Optional[str]) -> Optional[Dict[str, Any]]:
     """Query de texto para nome ou NIF de empresa em qualquer um dos papéis.
 
@@ -4677,6 +4725,11 @@ def search_companies(
 
     name_query = _company_name_query(q)
 
+    # A janela de cada papel (`terms`) devolve os NIF de maior valor. Numa
+    # pesquisa por nome o universo de contratos já vem estreitado pelo nome, pelo
+    # que se alarga a janela para caberem as entidades correspondentes.
+    role_terms_size = 5000 if name_query else 2000
+
     base_query: Dict[str, Any] = {"bool": {}}
     if base_filters:
         base_query["bool"]["filter"] = base_filters
@@ -4698,7 +4751,7 @@ def search_companies(
                             "by_nif": {
                                 "terms": {
                                     "field": "adjudicantes.parsed.nif",
-                                    "size": 2000,
+                                    "size": role_terms_size,
                                     "order": {"total_value": "desc"},
                                 },
                                 "aggs": {
@@ -4723,7 +4776,7 @@ def search_companies(
                             "by_nif": {
                                 "terms": {
                                     "field": "adjudicatarios.parsed.nif",
-                                    "size": 2000,
+                                    "size": role_terms_size,
                                     "order": {"total_value": "desc"},
                                 },
                                 "aggs": {
@@ -4852,6 +4905,14 @@ def search_companies(
             # os adjudicatários desses contratos (as contrapartes). O pedido é
             # pelas entidades que efetivamente têm esse papel.
             items = [item for item in items if item.get(role)]
+        if name_query:
+            # A pesquisa por nome página os *contratos*: a lista trazia também as
+            # contrapartes (quem comprou à empresa procurada). O campo pede
+            # entidades, pelo que fica só quem casa pelo próprio nome (ou NIF).
+            items = [
+                item for item in items
+                if _entity_matches_query(item.get("name"), item.get("nif"), q or "")
+            ]
         total = len(items)
         page = items[from_: from_ + size]
         for it in page:
@@ -4885,19 +4946,33 @@ def search_companies(
         unique_adjudicantes = resp["aggregations"].get("unique_adjudicantes", {}).get("nifs", {}).get("value", 0)
         unique_adjudicatarios = resp["aggregations"].get("unique_adjudicatarios", {}).get("nifs", {}).get("value", 0)
 
-        # As agregações por papel devolvem apenas os NIF de maior valor, pelo que
-        # a lista paginada pode ser mais curta do que o universo real: sem o
-        # aviso, o total parecia contradizer a contagem de NIF distintos.
-        distintos_do_papel = {
-            "adjudicante": int(unique_adjudicantes or 0),
-            "adjudicatario": int(unique_adjudicatarios or 0),
-        }.get(role or "")
-        if distintos_do_papel and distintos_do_papel > total:
-            etiqueta = "adjudicantes" if role == "adjudicante" else "adjudicatárias"
-            notes.append(
-                f"A lista mostra as {total} {etiqueta} de maior valor contratual; "
-                f"o universo filtrado tem {distintos_do_papel}."
-            )
+        if name_query:
+            # Com pesquisa por nome as agregações descrevem os contratos (incluem
+            # as contrapartes), pelo que as contagens passam a ser as das
+            # entidades correspondentes — as que a lista mostra.
+            unique_adjudicantes = sum(1 for item in items if item.get("adjudicante"))
+            unique_adjudicatarios = sum(1 for item in items if item.get("adjudicatario"))
+            # Nomes comuns (ex.: «construções») têm mais correspondências do que a
+            # janela por papel consegue devolver: avisa-se, sem afirmar quantas.
+            if _company_window_truncated(resp, role):
+                notes.append(
+                    f"A lista mostra as {total} entidades correspondentes de maior valor contratual; "
+                    "pode haver mais resultados com esse nome."
+                )
+        else:
+            # As agregações por papel devolvem apenas os NIF de maior valor, pelo
+            # que a lista paginada pode ser mais curta do que o universo real:
+            # sem o aviso, o total parecia contradizer a contagem de NIF distintos.
+            distintos_do_papel = {
+                "adjudicante": int(unique_adjudicantes or 0),
+                "adjudicatario": int(unique_adjudicatarios or 0),
+            }.get(role or "")
+            if distintos_do_papel and distintos_do_papel > total:
+                etiqueta = "adjudicantes" if role == "adjudicante" else "adjudicatárias"
+                notes.append(
+                    f"A lista mostra as {total} {etiqueta} de maior valor contratual; "
+                    f"o universo filtrado tem {distintos_do_papel}."
+                )
 
         return {
             "query": q,

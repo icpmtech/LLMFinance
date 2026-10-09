@@ -2872,12 +2872,14 @@ function Topbar({
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && onSearch()}
           placeholder="Pesquisar entidades, contratos, NIF, CPV, palavras-chave..."
+          data-testid="topbar-search-input"
           className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground focus:ring-0"
         />
       </label>
       <div className="flex items-center gap-2">
         <button
           onClick={onSearch}
+          data-testid="topbar-search-button"
           className="px-4 py-2 rounded-xl bg-teal-400/10 text-teal-300 border border-teal-400/20 text-sm hover:bg-teal-400/20 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
         >
           Pesquisar
@@ -3512,13 +3514,15 @@ async function exportEntitiesPdf(element: HTMLElement | null, filename = "entida
 }
 
 function EntitiesSection({
+  externalQuery = "",
   onEntity,
   onContract,
 }: {
+  externalQuery?: string;
   onEntity: (_nif: string) => void;
   onContract: (_id: string) => void;
 }) {
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(externalQuery);
   const [cae, setCae] = useState<string[]>([]);
   const [cpv, setCpv] = useState("");
   const [role, setRole] = useState<"all" | "adjudicante" | "adjudicatario">("all");
@@ -3569,6 +3573,12 @@ function EntitiesSection({
     load(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, role, cae, cpv]);
+
+  // Pesquisa submetida na barra do topo: aplica-se à lista de entidades (o
+  // separador tem os seus próprios filtros, e o campo local reflete-a).
+  useEffect(() => {
+    setQ(externalQuery);
+  }, [externalQuery]);
 
   useEffect(() => {
     if (viewMode !== "map") return;
@@ -3878,6 +3888,14 @@ function EntitiesSection({
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {loading && companies.length === 0 && <Loading />}
+            {!loading && companies.length === 0 && (
+              <div
+                data-testid="entities-empty"
+                className="col-span-full rounded-2xl border border-white/10 py-12 text-center text-muted-foreground"
+              >
+                Nenhuma entidade encontrada para os filtros aplicados.
+              </div>
+            )}
             {companies.map((company) => (
               <button
                 key={company.nif || company.normalized_name}
@@ -9204,6 +9222,7 @@ export default function EmpresasIQPage() {
   const [section, setSection] = useState<EmpresasIQSection>("dashboard");
   const { windowMode } = useWindowMode();
   const [q, setQ] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
   const [detail, setDetail] = useState<{ type: "entity" | "contract" | "entity-contracts"; id: string } | null>(null);
   const [detailClosing, setDetailClosing] = useState(false);
   const [analytics, setAnalytics] = useState<ContractAnalyticsResponse | null>(null);
@@ -9258,8 +9277,9 @@ export default function EmpresasIQPage() {
 
   const handleSearch = () => {
     if (section === "entities") {
-      // EntitiesSection already reacts to `q` via its own useEffect,
-      // but reloading guarantees fresh results aligned with the topbar query.
+      // A pesquisa do topo aplica-se à lista de entidades: guarda-se o termo
+      // submetido (e não o que se vai escrevendo) para não recarregar a cada tecla.
+      setSubmittedQuery(q.trim());
       return;
     }
     setSection("contracts");
@@ -9344,7 +9364,7 @@ export default function EmpresasIQPage() {
       case "contracts":
         return <ContractsSection onContract={openContract} onEntity={openEntity} />;
       case "entities":
-        return <EntitiesSection onEntity={openEntity} onContract={openContract} />;
+        return <EntitiesSection externalQuery={submittedQuery} onEntity={openEntity} onContract={openContract} />;
       case "graph":
         return <GraphSection onEntity={openEntity} onContract={openContract} onStudio={() => setSection("studio")} />;
       case "studio":
@@ -9358,7 +9378,7 @@ export default function EmpresasIQPage() {
       default:
         return null;
     }
-  }, [analytics, error, loading, regional, section, status]);
+  }, [analytics, error, loading, regional, section, status, submittedQuery]);
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground orbit-bg flex">

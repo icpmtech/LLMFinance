@@ -31,11 +31,17 @@ def _resposta(
     *,
     distintos_adjudicantes: int = 0,
     distintos_adjudicatarios: int = 0,
+    truncado_adjudicantes: int = 0,
+    truncado_adjudicatarios: int = 0,
 ) -> Dict[str, Any]:
     return {
         "aggregations": {
-            "adjudicantes": {"by_nif": {"buckets": adjudicantes}},
-            "adjudicatarios": {"by_nif": {"buckets": adjudicatarios}},
+            "adjudicantes": {
+                "by_nif": {"buckets": adjudicantes, "sum_other_doc_count": truncado_adjudicantes}
+            },
+            "adjudicatarios": {
+                "by_nif": {"buckets": adjudicatarios, "sum_other_doc_count": truncado_adjudicatarios}
+            },
             "unique_adjudicantes": {"nifs": {"value": distintos_adjudicantes or len(adjudicantes)}},
             "unique_adjudicatarios": {"nifs": {"value": distintos_adjudicatarios or len(adjudicatarios)}},
         }
@@ -161,3 +167,82 @@ def test_min_value_filtra_antes_do_papel(monkeypatch, sem_indices):
 
     assert [item["nif"] for item in res["items"]] == ["100000002", "100000001"]
     assert res["total"] == 2
+
+
+# ------------------------------------------------------- pesquisa por nome/NIF
+class _ESComBaldes:
+    """Cliente falso que devolve os baldes indicados e regista a query enviada."""
+
+    def __init__(self, resposta: Dict[str, Any]) -> None:
+        self.resposta = resposta
+        self.pedidos: List[Dict[str, Any]] = []
+
+    def search(self, **kwargs: Any) -> Dict[str, Any]:
+        self.pedidos.append(kwargs)
+        return self.resposta
+
+
+def test_pesquisa_por_nome_so_devolve_entidades_com_esse_nome(monkeypatch, sem_indices):
+    """A pesquisa por nome não pode devolver as contrapartes dos contratos."""
+    resposta = _resposta(BUCKETS_ADJUDICANTES, BUCKETS_ADJUDICATARIOS)
+    cliente = _ESComBaldes(resposta)
+    res = esc.search_companies(es=cliente, include_cae=False, q="empresa a")
+
+    assert [item["name"] for item in res["items"]] == ["Empresa A"]
+    assert res["total"] == 1
+    assert res["unique_adjudicantes"] == 1
+    assert res["unique_adjudicatarios"] == 0
+
+
+def test_pesquisa_por_nome_ignora_acentos_e_ordem(monkeypatch, sem_indices):
+    """A comparação é sem acentos e cada termo casa o início de uma palavra."""
+    bucket = _bucket("100000009", "CONSTRUÇÕES SÃO JOÃO, LDA", 4, 900.0)
+    resposta = _resposta([bucket], [])
+    cliente = _ESComBaldes(resposta)
+
+    assert esc.search_companies(es=cliente, include_cae=False, q="construcoes sao")["total"] == 1
+    assert esc.search_companies(es=cliente, include_cae=False, q="joao construcoes")["total"] == 1
+    assert esc.search_companies(es=cliente, include_cae=False, q="construcoes lisboa")["total"] == 0
+
+
+def test_pesquisa_por_nif_devolve_so_a_entidade(monkeypatch, sem_indices):
+    """Um NIF identifica uma entidade, não os contratos em que aparece."""
+    resposta = _resposta(BUCKETS_ADJUDICANTES, BUCKETS_ADJUDICATARIOS)
+    cliente = _ESComBaldes(resposta)
+    res = esc.search_companies(es=cliente, include_cae=False, q="100000003")
+
+    assert [item["name"] for item in res["items"]] == ["Empresa C"]
+    assert res["total"] == 1
+
+
+def test_pesquisa_por_nome_alarga_a_janela_dos_papeis(monkeypatch, sem_indices):
+    """Com pesquisa textual a janela por papel cresce (caberem as correspondências)."""
+    resposta = _resposta(BUCKETS_ADJUDICANTES, BUCKETS_ADJUDICATARIOS)
+    cliente = _ESComBaldes(resposta)
+
+    def janela(**kwargs: Any) -> int:
+        esc.search_companies(es=cliente, include_cae=False, **kwargs)
+        corpo = cliente.pedidos[-1]["body"]
+        return corpo["aggs"]["adjudicantes"]["aggs"]["by_nif"]["terms"]["size"]
+
+    assert janela(q="empresa") > janela()
+
+
+def test_pesquisa_por_nome_avisa_quando_a_janela_foi_cortada(monkeypatch, sem_indices):
+    """Nome comum: avisa que pode haver mais correspondências do que as listadas."""
+    resposta = _resposta(BUCKETS_ADJUDICANTES, BUCKETS_ADJUDICATARIOS, truncado_adjudicatarios=3000)
+    cliente = _ESComBaldes(resposta)
+
+    res = esc.search_companies(es=cliente, include_cae=False, q="empresa")
+
+    assert any("pode haver mais resultados" in nota for nota in res["notes"])
+
+
+def test_pesquisa_por_nome_sem_aviso_quando_a_janela_esta_completa(monkeypatch, sem_indices):
+    """Janela completa: nada a avisar."""
+    resposta = _resposta(BUCKETS_ADJUDICANTES, BUCKETS_ADJUDICATARIOS)
+    cliente = _ESComBaldes(resposta)
+
+    res = esc.search_companies(es=cliente, include_cae=False, q="empresa")
+
+    assert res["notes"] == []

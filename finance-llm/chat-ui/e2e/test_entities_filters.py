@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 import time
+import unicodedata
 
 import pytest
 
@@ -28,11 +29,24 @@ def _norm(text: str) -> str:
     return re.sub(r"[\u00a0\u202f]", " ", text).strip()
 
 
+def _searchable(value: str) -> str:
+    """Texto comparável: sem acentos, minúsculas e pontuação reduzida a espaços."""
+    texto = unicodedata.normalize("NFKD", value or "")
+    texto = "".join(char for char in texto if not unicodedata.combining(char))
+    return re.sub(r"[^a-z0-9]+", " ", texto.casefold()).strip()
+
+
+def _name_matches(name: str, query: str) -> bool:
+    """A entidade casa a pesquisa se cada termo iniciar uma palavra do nome."""
+    palavras = _searchable(name).split()
+    return all(any(palavra.startswith(termo) for palavra in palavras) for termo in _searchable(query).split())
+
+
 def _to_int(text: str) -> int:
     return int(re.sub(r"[^\d]", "", text))
 
 
-def _poll(read, predicate, timeout: float = 25.0, interval: float = 0.3, describe: str = "valor"):
+def _poll(read, predicate, timeout: float = 45.0, interval: float = 0.3, describe: str = "valor"):
     """Espera até `read()` satisfazer `predicate` (as listas recarregam por filtro)."""
     deadline = time.monotonic() + timeout
     last: object = None
@@ -51,7 +65,9 @@ def _poll(read, predicate, timeout: float = 25.0, interval: float = 0.3, describ
 def _open_entities(app):
     page = app("/empresas-iq")
     page.get_by_test_id("empresas-iq-tab-entities").click()
-    page.get_by_test_id("entities-summary").wait_for(timeout=25000)
+    # O primeiro carregamento do universo é pesado e a máquina pode estar ocupada
+    # (Elasticsearch frio, contentores acabados de arrancar): limite folgado.
+    page.get_by_test_id("entities-summary").wait_for(timeout=90000)
     return page
 
 
@@ -150,8 +166,8 @@ def test_search_api_echoes_the_requested_offset(app, api):
         assert response["from"] == offset, f"offset pedido {offset} não voltou na resposta"
 
 
-def test_name_search_filters_the_entity_list(app, api, tracked_requests):
-    """A pesquisa por nome chega à API e devolve exatamente as mesmas entidades."""
+def test_name_search_returns_only_entities_with_that_name(app, api, tracked_requests):
+    """A pesquisa por nome devolve entidades com esse nome — não as contrapartes."""
     page = _open_entities(app)
     unfiltered = api("/api/companies/search", DEFAULT_FILTERS)["total"]
 
@@ -169,48 +185,85 @@ def test_name_search_filters_the_entity_list(app, api, tracked_requests):
     assert _wait_summary(page, 1, PAGE_SIZE, total)[2] == total
 
     expected_names = {item["name"] for item in response["items"]}
-    actual_names = set(_card_names(page))
-    assert actual_names == expected_names
+    assert set(_card_names(page)) == expected_names
+    # Nem uma contraparte: todos os nomes mostrados casam a pesquisa.
+    assert all(_name_matches(name, "mota") for name in expected_names), sorted(expected_names)[:5]
+
+
+def test_topbar_search_filters_the_entity_list(app, api):
+    """O botão «Pesquisar» do topo aplica o termo à lista de entidades."""
+    page = _open_entities(app)
+
+    page.get_by_test_id("topbar-search-input").fill("mota")
+    page.get_by_test_id("topbar-search-button").click()
+
+    esperado = api("/api/companies/search", {**DEFAULT_FILTERS, "q": "mota"})
+    assert _wait_universe(page, esperado["total"]) == esperado["total"]
+    assert set(_card_names(page)) == {item["name"] for item in esperado["items"]}
+    # O campo de filtros do separador fica a refletir a pesquisa ativa.
+    assert page.get_by_test_id("entities-query").input_value() == "mota"
+
+
+def test_name_search_ignores_accents_and_words_order(app, api):
+    """A pesquisa casa sem acentos e com os termos por qualquer ordem."""
+    sem_acentos = api("/api/companies/search", {**DEFAULT_FILTERS, "q": "construcoes"})
+    invertido = api("/api/companies/search", {**DEFAULT_FILTERS, "q": "engil mota"})
+
+    assert sem_acentos["total"] > 0
+    assert all(_name_matches(item["name"], "construcoes") for item in sem_acentos["items"])
+    assert invertido["total"] > 0
+    assert all(_name_matches(item["name"], "engil mota") for item in invertido["items"])
+
+
+def test_name_search_by_nif_returns_the_entity(app, api):
+    """Pesquisar um NIF devolve essa entidade, não os contratos em que aparece."""
+    mota = api("/api/companies/search", {**DEFAULT_FILTERS, "q": "mota", "role": "adjudicatario"})
+    nif = next(item["nif"] for item in mota["items"] if item["nif"])
+
+    resposta = api("/api/companies/search", {**DEFAULT_FILTERS, "q": nif})
+
+    assert resposta["total"] == 1
+    assert resposta["items"][0]["nif"] == nif
 
 
 def test_role_filter_returns_only_entities_with_that_role(app, api, tracked_requests):
     """Filtrar por função devolve apenas entidades com esse papel, com o total certo."""
     page = _open_entities(app)
-    _search(page, "mota")
 
-    # Papel de adjudicante: só quem adjudica (a contagem distinta coincide com a lista).
-    adjudicante = api("/api/companies/search", {**DEFAULT_FILTERS, "q": "mota", "role": "adjudicante"})
-    assert adjudicante["total"] == adjudicante["unique_adjudicantes"], (
-        "para este universo a lista não devia estar truncada"
-    )
-    _pick_role(page, "adjudicante")
-    _wait_role(page, "adjudicante")
-    _poll(
-        lambda: tracked_requests[-1].get("role") if tracked_requests else None,
-        lambda value: value == "adjudicante",
-        describe="filtro role enviado para /companies/search",
-    )
-    assert _wait_universe(page, adjudicante["total"]) == adjudicante["total"]
-    assert set(_card_roles(page)) == {"Adjudicante"}
-
-    # Papel de adjudicatário: idem, apenas quem é adjudicatário.
+    # Nenhuma entidade chamada «mota» é adjudicante; são todas adjudicatárias.
     adjudicatario = api("/api/companies/search", {**DEFAULT_FILTERS, "q": "mota", "role": "adjudicatario"})
     assert adjudicatario["total"] == adjudicatario["unique_adjudicatarios"]
+    _search(page, "mota")
     _pick_role(page, "adjudicatario")
     _wait_role(page, "adjudicatario")
     _poll(
         lambda: tracked_requests[-1].get("role") if tracked_requests else None,
         lambda value: value == "adjudicatario",
-        describe="filtro role (adjudicatário) enviado para /companies/search",
+        describe="filtro role enviado para /companies/search",
     )
     assert _wait_universe(page, adjudicatario["total"]) == adjudicatario["total"]
-    assert set(_card_roles(page)) == {"Adjudicatário"}
+    assert set(_card_roles(page)) <= {"Adjudicatário", "Ambos"}
 
-    # Sem papel escolhido voltam os dois (e o total do universo é maior).
-    todos = api("/api/companies/search", {**DEFAULT_FILTERS, "q": "mota"})
+    # Com esse papel não há correspondências: a lista fica vazia (sem entidades
+    # de outro papel a preencher o ecrã).
+    vazio = api("/api/companies/search", {**DEFAULT_FILTERS, "q": "mota", "role": "adjudicante"})
+    assert vazio["total"] == 0
+    _pick_role(page, "adjudicante")
+    _wait_role(page, "adjudicante")
+    assert _wait_universe(page, 0) == 0
+    assert page.get_by_test_id("entities-empty").is_visible()
+    assert page.get_by_test_id("entity-card").count() == 0
+
+    adjudicante = api("/api/companies/search", {**DEFAULT_FILTERS, "q": "lisboa", "role": "adjudicante"})
+    _search(page, "lisboa")
+    assert _wait_universe(page, adjudicante["total"]) == adjudicante["total"]
+    # «Ambos» é legítimo: a entidade tem o papel pedido e também o outro.
+    assert set(_card_roles(page)) <= {"Adjudicante", "Ambos"}
+
+    # Sem papel escolhido voltam as entidades correspondentes de ambos os papéis.
     _pick_role(page, "all")
+    todos = api("/api/companies/search", {**DEFAULT_FILTERS, "q": "lisboa"})
     assert _wait_universe(page, todos["total"]) == todos["total"]
-    assert todos["total"] > adjudicante["total"] > adjudicatario["total"]
     assert set(_card_roles(page)) <= {"Adjudicante", "Adjudicatário", "Ambos"}
 
 
@@ -235,10 +288,10 @@ def test_clear_filters_restores_the_universe(app, api):
     """O botão de limpar filtros devolve a lista inicial."""
     page = _open_entities(app)
     unfiltered = api("/api/companies/search", DEFAULT_FILTERS)["total"]
-    filtered = api("/api/companies/search", {**DEFAULT_FILTERS, "q": "mota", "role": "adjudicante"})
+    filtered = api("/api/companies/search", {**DEFAULT_FILTERS, "q": "mota", "role": "adjudicatario"})
 
     _search(page, "mota")
-    _pick_role(page, "adjudicante")
+    _pick_role(page, "adjudicatario")
     _wait_summary(page, 1, PAGE_SIZE, filtered["total"])
 
     page.get_by_title("Limpar filtros").click()
@@ -306,15 +359,20 @@ def _contracts_total(panel) -> int:
 
 
 @pytest.mark.parametrize(
-    ("button_title", "extension"),
-    [("Exportar para Excel", ".xlsx"), ("Exportar para PDF", ".pdf")],
+    ("button_title", "extension", "timeout"),
+    [
+        ("Exportar para Excel", ".xlsx", 60_000),
+        # O PDF é rasterizado no browser (html2canvas + jsPDF): numa máquina
+        # carregada passa dos 90 s, pelo que o limite é folgado de propósito.
+        ("Exportar para PDF", ".pdf", 300_000),
+    ],
 )
-def test_entity_exports_download_files(app, button_title, extension):
+def test_entity_exports_download_files(app, button_title, extension, timeout):
     """As exportações de Excel e PDF geram um ficheiro com conteúdo."""
     page = _open_entities(app)
     page.get_by_test_id("entities-summary").wait_for(timeout=25000)
 
-    with page.expect_download(timeout=90000) as download_info:
+    with page.expect_download(timeout=timeout) as download_info:
         page.get_by_title(button_title).click()
 
     download = download_info.value

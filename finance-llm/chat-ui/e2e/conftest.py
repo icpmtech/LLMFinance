@@ -128,8 +128,11 @@ def app(page):
     """Página autenticada, com o banner de consentimento já removido."""
 
     def _open(path: str = "/empresas-iq"):
-        page.goto(f"{frontend_url()}{path}")
-        page.wait_for_load_state("networkidle", timeout=30000)
+        # Limites folgados: o bundle é grande e a máquina pode estar carregada
+        # (Elasticsearch + contentores + browser), pelo que os 30 s por omissão
+        # do Playwright não chegam para a primeira pintura nem para a rede parar.
+        page.goto(f"{frontend_url()}{path}", timeout=120_000)
+        page.wait_for_load_state("networkidle", timeout=90_000)
         page.evaluate(REMOVE_CONSENT_OVERLAYS)
         return page
 
@@ -150,6 +153,9 @@ def api(context, auth_token):
                 "Content-Type": "application/json",
             },
             data=json.dumps(payload) if payload is not None else None,
+            # As agregações de entidades/contratos são pesadas: numa máquina
+            # carregada passam folgadamente dos 30 s por omissão do Playwright.
+            timeout=180_000,
         )
         assert response.ok, f"{verb} {path} falhou com HTTP {response.status}"
         return response.json()
