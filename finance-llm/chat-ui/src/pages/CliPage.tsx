@@ -24,7 +24,7 @@ import {
 import { useAuth } from "../auth";
 import { getToken } from "../authApi";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8002";
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const HISTORY_KEY = "finance-llm-cli-history";
 const MAX_HISTORY = 60;
 

@@ -19,6 +19,10 @@
 
 * { box-sizing: border-box; }
 
+/* `hidden` tem de vencer os `display` das regras abaixo (senao o painel de
+   sucesso aparecia logo ao abrir a pagina). */
+[hidden] { display: none !important; }
+
 html { scroll-behavior: smooth; }
 
 body {
@@ -296,7 +300,9 @@ main { display: block; }
 .linha { display: grid; gap: 1rem; grid-template-columns: 1fr 1fr; }
 @media (max-width: 620px) { .linha { grid-template-columns: 1fr; } }
 
-.campo label { display: block; margin-bottom: .35rem; font-size: .84rem; color: var(--muted); }
+/* `:not(.chip)`: sem isto, esta regra (mais especifica) ganhava aos chips dos
+   interesses e cada um ocupava a largura toda, empilhado. */
+.campo label:not(.chip) { display: block; margin-bottom: .35rem; font-size: .84rem; color: var(--muted); }
 .campo label span { color: var(--accent); }
 
 input[type="text"], input[type="email"], textarea {

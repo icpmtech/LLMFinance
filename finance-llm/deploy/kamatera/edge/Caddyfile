@@ -37,6 +37,12 @@ sabemos.studio {
         reverse_proxy http://127.0.0.1:8090
     }
 
+    # Assets da apresentacao (CSS, JS e prints), num prefixo proprio para nao
+    # colidirem com a SPA quando a pagina e servida como pagina de erro.
+    handle /lp/* {
+        reverse_proxy http://127.0.0.1:8090
+    }
+
     # Hermes Agent dashboard — iframe "Hermes Agent" da SPA. O dashboard é
     # servido pelo próprio nginx da origem (127.0.0.1:8080) sob o subcaminho
     # /hermes-agent/; o nginx reescreve caminhos absolutos e injeta <base href>

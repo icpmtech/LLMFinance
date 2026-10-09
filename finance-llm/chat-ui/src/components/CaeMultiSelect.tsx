@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { X, Search, Check, ChevronDown, Briefcase } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8002";
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 export interface CaeEntry {
   code: string;

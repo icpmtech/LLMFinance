@@ -28,7 +28,8 @@ model/mistral-finance/checkpoints/
 model/gpt2-finance/checkpoints/
 model/mistral-finance/final/
 model/gpt2-finance/final/
-chat-ui/node_modules/
+# Pacotes Node (qualquer projeto sob finance-llm; ver tambem chat-ui/.gitignore).
+node_modules/
 kronos_upstream/
 data/forecasting/*.png
 .vite/

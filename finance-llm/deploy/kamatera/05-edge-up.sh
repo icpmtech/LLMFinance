@@ -36,7 +36,16 @@ fi
 cd /opt/iqos/edge
 # Pasta dos registos do formulario da landing (bind mount do servico `landing`).
 mkdir -p /opt/iqos/edge/data
-docker compose up -d --remove-orphans
+# `--build`: a landing e construida aqui (imagem minuscula), por isso uma
+# alteracao a pagina so entra com rebuild. O Caddy vem de imagem publica.
+docker compose up -d --build --remove-orphans
+
+# O Caddyfile entra por bind mount de um **unico ficheiro**. O Docker resolve o
+# caminho para um inode no arranque do container: se o ficheiro for substituido
+# (por exemplo com `sed -i`), o container continua a ver o inode antigo e um
+# `caddy reload` recarrega a config velha sem dar erro. Por isso aqui o Caddy e
+# recriado, que e o que volta a resolver o mount.
+docker compose up -d --force-recreate caddy
 
 echo "==> a aguardar o Caddy ficar saudavel"
 for _ in $(seq 1 20); do

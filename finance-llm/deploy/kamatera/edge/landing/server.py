@@ -167,12 +167,16 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {"total": len(_ler()), "registos": _ler()})
             return
 
+        # Os assets vivem sob `/lp/` para nao colidirem com a SPA (que ocupa
+        # `/` e `/assets/`): assim a mesma pagina funciona no endereco proprio
+        # (`/landing`) e como pagina de erro, seja qual for o caminho pedido.
         estaticos = {
             "/": ("index.html", "text/html; charset=utf-8"),
             "/landing": ("index.html", "text/html; charset=utf-8"),
+            "/landing/": ("index.html", "text/html; charset=utf-8"),
             "/index.html": ("index.html", "text/html; charset=utf-8"),
-            "/app.css": ("app.css", "text/css; charset=utf-8"),
-            "/app.js": ("app.js", "application/javascript; charset=utf-8"),
+            "/lp/app.css": ("app.css", "text/css; charset=utf-8"),
+            "/lp/app.js": ("app.js", "application/javascript; charset=utf-8"),
         }
         if rota in estaticos:
             nome, tipo = estaticos[rota]
@@ -180,7 +184,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         # Imagens dos prints (podem ser cacheadas: o nome nao muda).
-        if rota.startswith("/img/"):
+        if rota.startswith("/lp/img/"):
             nome = os.path.basename(rota)
             if not nome or not nome.endswith(".png"):
                 self._json(404, {"erro": "nao encontrado"})

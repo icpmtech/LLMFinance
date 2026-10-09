@@ -1,7 +1,18 @@
-export const API_BASE =
-  (typeof window !== "undefined" && window.location.hostname === "localhost" && window.location.port === "4180"
-    ? "/api"
-    : import.meta.env.VITE_API_URL) || "http://127.0.0.1:8002";
+/**
+ * Base da API.
+ *
+ * Por omissão é **relativa** (`/api`), para seguir a origem da página: assim o
+ * mesmo bundle funciona em `localhost:4180`, num IP da LAN, num túnel ou no
+ * domínio público (ex.: `https://sabemos.studio`).
+ *
+ * O antigo valor absoluto (`http://127.0.0.1:8002`) só servia a partir da
+ * própria máquina: visto de fora, o browser tentava ligar-se ao **seu** 127.0.0.1
+ * e a autenticação falhava com «Não foi possível contactar o servidor».
+ *
+ * `VITE_API_URL` continua a poder forçar um endereço absoluto (é o que o
+ * servidor de desenvolvimento do Vite usa, via `.env.local`).
+ */
+export const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 import type {
   Actions,

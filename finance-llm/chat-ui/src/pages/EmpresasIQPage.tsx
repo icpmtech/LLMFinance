@@ -2521,6 +2521,7 @@ function ModuleTabs({
               type="button"
               role="tab"
               aria-selected={active}
+              data-testid={`empresas-iq-tab-${item.id}`}
               onClick={() => onSectionChange(item.id)}
               title={item.label}
               className={[
@@ -3555,14 +3556,17 @@ function EntitiesSection({
         from: offset,
       });
       setData(res);
+      // Usa-se o offset pedido: a API devolve `from` a 0 mesmo quando a página
+      // vem deslocada, o que prendia a paginação na primeira página.
+      setFrom(offset);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    load(0);
     setFrom(0);
+    load(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, role, cae, cpv]);
 
@@ -3593,7 +3597,15 @@ function EntitiesSection({
   }, [viewMode, buildFilters]);
 
   const companies = data?.items ?? [];
+  // `total` é o comprimento da lista paginada; `unique_*` são contagens distintas
+  // por papel (podem ser menores que a lista, que inclui as contrapartes).
   const total = data?.total ?? 0;
+  const roleDistinct =
+    role === "adjudicante"
+      ? (data?.unique_adjudicantes ?? 0)
+      : role === "adjudicatario"
+        ? (data?.unique_adjudicatarios ?? 0)
+        : 0;
   const notes = data?.notes ?? [];
 
   const sortedCompanies = useMemo(() => {
@@ -3631,7 +3643,15 @@ function EntitiesSection({
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold">Entidades</h2>
-          <p className="text-sm text-muted-foreground">{full(total)} entidades no universo</p>
+          <p className="text-sm text-muted-foreground" data-testid="entities-total">
+            {full(total)} entidades no universo
+            {roleDistinct > 0 && role !== "all" && (
+              <span className="ml-1 text-xs">
+                ({full(roleDistinct)}{" "}
+                {role === "adjudicante" ? "adjudicantes distintos" : "adjudicatários distintos"})
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 rounded-2xl glass-card p-1">
@@ -3648,6 +3668,7 @@ function EntitiesSection({
                   type="button"
                   onClick={() => setViewMode(v.id)}
                   aria-pressed={active}
+                  data-testid={`entities-view-${v.id}`}
                   className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm transition ${
                     active ? "bg-primary/15 text-primary" : "hover:bg-white/5"
                   }`}
@@ -3695,6 +3716,7 @@ function EntitiesSection({
             e.preventDefault();
             load(0);
           }}
+          data-testid="entities-filters"
           className="grid gap-3 items-start sm:grid-cols-2 lg:grid-cols-5"
         >
           <label className="block">
@@ -3705,6 +3727,8 @@ function EntitiesSection({
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Nome, NIF..."
+                aria-label="Nome / NIF"
+                data-testid="entities-query"
                 className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm outline-none focus:border-teal-400/50 focus:ring-1 focus:ring-teal-400/30"
               />
             </div>
@@ -3738,6 +3762,8 @@ function EntitiesSection({
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as typeof role)}
+              aria-label="Função"
+              data-testid="entities-role"
               className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 px-3 text-sm outline-none focus:border-teal-400/50 focus:ring-1 focus:ring-teal-400/30"
             >
               <option value="all">Todas as funções</option>
@@ -3854,6 +3880,7 @@ function EntitiesSection({
               <button
                 key={company.nif || company.normalized_name}
                 onClick={() => company.nif && onEntity(company.nif)}
+                data-testid="entity-card"
                 className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50 rounded-xl"
               >
                 <Card className="hover:border-teal-400/30 transition group">
@@ -3863,7 +3890,9 @@ function EntitiesSection({
                     </div>
                     <Badge color={company.adjudicante ? "blue" : "teal"}>{entityRoleLabel(company)}</Badge>
                   </div>
-                  <p className="mt-4 font-semibold line-clamp-2">{company.name}</p>
+                  <p className="mt-4 font-semibold line-clamp-2" data-testid="entity-card-name">
+                    {company.name}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     NIF {company.nif || "—"}
                     {company.cae_principal ? ` · CAE ${company.cae_principal}` : ""}
@@ -3887,7 +3916,7 @@ function EntitiesSection({
 
       {!loading && companies.length > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <p>
+          <p data-testid="entities-summary">
             Mostrando {from + 1}–{from + companies.length} de {full(total)}
           </p>
           <div className="flex items-center gap-2">
@@ -3898,6 +3927,8 @@ function EntitiesSection({
                 setFrom(next);
                 load(next);
               }}
+              type="button"
+              aria-label="Página anterior"
               className="px-3 py-1.5 rounded-lg glass-card disabled:opacity-40 hover:bg-white/5"
             >
               Anterior
@@ -3909,6 +3940,8 @@ function EntitiesSection({
                 setFrom(next);
                 load(next);
               }}
+              type="button"
+              aria-label="Página seguinte"
               className="px-3 py-1.5 rounded-lg glass-card disabled:opacity-40 hover:bg-white/5"
             >
               Próximo

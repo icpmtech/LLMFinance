@@ -7,6 +7,12 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
+      // A SPA usa `/api` como base relativa (funciona em qualquer origem); no
+      // servidor de desenvolvimento o prefixo é encaminhado para o backend local.
+      '/api': {
+        target: 'http://127.0.0.1:8002',
+        changeOrigin: true,
+      },
       '/chat': {
         target: 'http://127.0.0.1:8002',
         changeOrigin: true,

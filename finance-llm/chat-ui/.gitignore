@@ -12,6 +12,15 @@ dist
 dist-ssr
 *.local
 
+# Testes end-to-end (Playwright): o venv local e as saidas dos ensaios nao
+# entram no repositorio — sao ~146 MB e regeneram-se com o README do e2e.
+e2e-venv/
+e2e/.venv/
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

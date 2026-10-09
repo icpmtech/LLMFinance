@@ -1,2 +1,26 @@
+# ------------------------------------------------------------------ Node/npm
+# Pacotes instalados — qualquer projeto, em qualquer profundidade. Nao entra
+# no repositorio: reconstroi-se com `npm ci` (o `package-lock.json` fica
+# versionado).
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+.yarn/cache
+.pnp.*
+
+# Logs de instalacao e execucao do npm/yarn/pnpm.
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Caches e saidas de build/teste (a SPA e construida na imagem Docker).
 .vite/
+.turbo/
+coverage/
+*.tsbuildinfo
+
+# ------------------------------------------------------------------ gerais
 *.log
