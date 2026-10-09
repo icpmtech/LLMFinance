@@ -93,6 +93,10 @@ def _open_map(page):
     return regions
 
 
+def _card_roles(page) -> list[str]:
+    return [_norm(role) for role in page.get_by_test_id("entity-card-role").all_inner_texts()]
+
+
 def _top_region(page) -> str | None:
     """Região cuja bolha está mesmo no topo (as bolhas do mapa sobrepõem-se)."""
     return page.evaluate(
@@ -139,6 +143,13 @@ def test_default_list_matches_elastic(app, api):
     assert len(_card_names(page)) == PAGE_SIZE
 
 
+def test_search_api_echoes_the_requested_offset(app, api):
+    """A API confirma o offset recebido (a paginação da UI depende deste eco)."""
+    for offset in (0, PAGE_SIZE, PAGE_SIZE * 3):
+        response = api("/api/companies/search", {"from": offset, "size": PAGE_SIZE})
+        assert response["from"] == offset, f"offset pedido {offset} não voltou na resposta"
+
+
 def test_name_search_filters_the_entity_list(app, api, tracked_requests):
     """A pesquisa por nome chega à API e devolve exatamente as mesmas entidades."""
     page = _open_entities(app)
@@ -162,12 +173,16 @@ def test_name_search_filters_the_entity_list(app, api, tracked_requests):
     assert actual_names == expected_names
 
 
-def test_role_filter_reports_distinct_counts_without_truncating_the_list(app, api, tracked_requests):
-    """Filtrar por função mostra a contagem distinta do papel sem truncar a lista."""
+def test_role_filter_returns_only_entities_with_that_role(app, api, tracked_requests):
+    """Filtrar por função devolve apenas entidades com esse papel, com o total certo."""
     page = _open_entities(app)
     _search(page, "mota")
 
+    # Papel de adjudicante: só quem adjudica (a contagem distinta coincide com a lista).
     adjudicante = api("/api/companies/search", {**DEFAULT_FILTERS, "q": "mota", "role": "adjudicante"})
+    assert adjudicante["total"] == adjudicante["unique_adjudicantes"], (
+        "para este universo a lista não devia estar truncada"
+    )
     _pick_role(page, "adjudicante")
     _wait_role(page, "adjudicante")
     _poll(
@@ -175,20 +190,12 @@ def test_role_filter_reports_distinct_counts_without_truncating_the_list(app, ap
         lambda value: value == "adjudicante",
         describe="filtro role enviado para /companies/search",
     )
-    _poll(
-        lambda: _universe(page),
-        lambda value: value == adjudicante["total"],
-        describe="total de entidades com papel de adjudicante",
-    )
-    _poll(
-        lambda: _norm(page.get_by_test_id("entities-total").inner_text()),
-        lambda text: f"{adjudicante['unique_adjudicantes']} adjudicantes distintos" in text,
-        describe="contagem distinta de adjudicantes",
-    )
-    # A paginação segue a lista devolvida (que inclui as contrapartes dos contratos).
-    assert _wait_summary(page, 1, PAGE_SIZE, adjudicante["total"])[2] == adjudicante["total"]
+    assert _wait_universe(page, adjudicante["total"]) == adjudicante["total"]
+    assert set(_card_roles(page)) == {"Adjudicante"}
 
+    # Papel de adjudicatário: idem, apenas quem é adjudicatário.
     adjudicatario = api("/api/companies/search", {**DEFAULT_FILTERS, "q": "mota", "role": "adjudicatario"})
+    assert adjudicatario["total"] == adjudicatario["unique_adjudicatarios"]
     _pick_role(page, "adjudicatario")
     _wait_role(page, "adjudicatario")
     _poll(
@@ -196,16 +203,15 @@ def test_role_filter_reports_distinct_counts_without_truncating_the_list(app, ap
         lambda value: value == "adjudicatario",
         describe="filtro role (adjudicatário) enviado para /companies/search",
     )
-    _poll(
-        lambda: _norm(page.get_by_test_id("entities-total").inner_text()),
-        lambda text: f"{adjudicatario['unique_adjudicatarios']} adjudicatários distintos" in text,
-        describe="contagem distinta de adjudicatários",
-    )
-    total = _wait_summary(page, 1, PAGE_SIZE, adjudicatario["total"])[2]
-    assert total == adjudicatario["total"]
-    assert total >= adjudicatario["unique_adjudicatarios"], (
-        "a lista devolvida deve estar acessível até ao fim, mesmo com menos NIF distintos que entidades"
-    )
+    assert _wait_universe(page, adjudicatario["total"]) == adjudicatario["total"]
+    assert set(_card_roles(page)) == {"Adjudicatário"}
+
+    # Sem papel escolhido voltam os dois (e o total do universo é maior).
+    todos = api("/api/companies/search", {**DEFAULT_FILTERS, "q": "mota"})
+    _pick_role(page, "all")
+    assert _wait_universe(page, todos["total"]) == todos["total"]
+    assert todos["total"] > adjudicante["total"] > adjudicatario["total"]
+    assert set(_card_roles(page)) <= {"Adjudicante", "Adjudicatário", "Ambos"}
 
 
 def test_pagination_walks_forward_and_back(app, api):

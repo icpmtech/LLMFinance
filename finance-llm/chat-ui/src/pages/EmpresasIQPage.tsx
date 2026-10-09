@@ -3645,7 +3645,10 @@ function EntitiesSection({
           <h2 className="text-2xl font-bold">Entidades</h2>
           <p className="text-sm text-muted-foreground" data-testid="entities-total">
             {full(total)} entidades no universo
-            {roleDistinct > 0 && role !== "all" ? (
+            {/* Com um papel escolhido a lista já é só desse papel: só se
+                acrescenta a contagem distinta quando ela diz algo de novo
+                (universo maior do que a lista devolvida). */}
+            {roleDistinct > 0 && role !== "all" && roleDistinct !== total ? (
               <span className="ml-1 text-xs">
                 · {full(roleDistinct)} {role === "adjudicante" ? "adjudicantes distintos" : "adjudicatários distintos"}
               </span>
@@ -3887,7 +3890,9 @@ function EntitiesSection({
                     <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-400/20 group-hover:bg-teal-400/10 group-hover:border-teal-400/30 transition">
                       <Building2 size={20} className="text-blue-400 group-hover:text-teal-300" />
                     </div>
-                    <Badge color={company.adjudicante ? "blue" : "teal"}>{entityRoleLabel(company)}</Badge>
+                    <Badge color={company.adjudicante ? "blue" : "teal"}>
+                      <span data-testid="entity-card-role">{entityRoleLabel(company)}</span>
+                    </Badge>
                   </div>
                   <p className="mt-4 font-semibold line-clamp-2" data-testid="entity-card-name">
                     {company.name}

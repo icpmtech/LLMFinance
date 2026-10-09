@@ -875,6 +875,11 @@ class ContractSearchResponse(BaseModel):
     size: int = 20
     error: Optional[str] = None
 
+    # Sem `populate_by_name` o Pydantic só aceita o alias `from` como entrada:
+    # as rotas que constroem a resposta com `from_=<offset>` eram ignoradas em
+    # silêncio (extra="ignore") e o cliente recebia sempre `from: 0`.
+    model_config = {"populate_by_name": True}
+
 
 class ContractAutocompleteResponse(BaseModel):
     query: Optional[str] = None
@@ -1319,6 +1324,7 @@ class CompanySearchResponse(BaseModel):
     items: List[CompanySummary] = []
     from_: int = Field(0, alias="from")
     size: int = 20
+
     # NIF distintos encontrados pelos filtros (contagens reais de adjudicantes e
     # adjudicatários). `total` refere-se apenas à lista de entidades devolvida,
     # limitada aos NIF mais relevantes por papel.
@@ -1327,6 +1333,8 @@ class CompanySearchResponse(BaseModel):
     #: Avisos do filtro (ex.: CPV sem entidades, lista do CAE limitada).
     notes: List[str] = []
     error: Optional[str] = None
+
+    model_config = {"populate_by_name": True}
 
 
 class CompanyContractsResponse(BaseModel):
@@ -1338,6 +1346,8 @@ class CompanyContractsResponse(BaseModel):
     from_: int = Field(0, alias="from")
     size: int = 20
     error: Optional[str] = None
+
+    model_config = {"populate_by_name": True}
 
 
 class CompanyAnalyticsRow(BaseModel):
@@ -1465,6 +1475,8 @@ class CompanyTrademarksResponse(BaseModel):
     size: int = 100
     error: Optional[str] = None
 
+    model_config = {"populate_by_name": True}
+
 
 class TrademarkSearchRequest(BaseModel):
     q: Optional[str] = None
@@ -1483,6 +1495,8 @@ class TrademarkSearchResponse(BaseModel):
     from_: int = Field(0, alias="from")
     size: int = 20
     error: Optional[str] = None
+
+    model_config = {"populate_by_name": True}
 
 
 class TrademarkIngestRequest(BaseModel):
@@ -1532,6 +1546,8 @@ class CompanyFirmasResponse(BaseModel):
     size: int = 100
     error: Optional[str] = None
 
+    model_config = {"populate_by_name": True}
+
 
 class FirmaSearchRequest(BaseModel):
     q: Optional[str] = None
@@ -1550,6 +1566,8 @@ class FirmaSearchResponse(BaseModel):
     from_: int = Field(0, alias="from")
     size: int = 20
     error: Optional[str] = None
+
+    model_config = {"populate_by_name": True}
 
 
 class FirmaIngestRequest(BaseModel):
@@ -1918,6 +1936,8 @@ class OsintSearchResponse(BaseModel):
     from_: int = Field(0, alias="from")
     size: int = 20
     error: Optional[str] = None
+
+    model_config = {"populate_by_name": True}
 
 
 class OsintSavedResult(BaseModel):

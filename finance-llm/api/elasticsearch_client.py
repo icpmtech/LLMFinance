@@ -4846,6 +4846,12 @@ def search_companies(
             # empresas (quem lhes comprou): o pedido é pelas entidades *com* o CAE.
             permitidos = set(nifs_cae)
             items = [item for item in items if (item.get("nif") or "") in permitidos]
+        if role in ("adjudicante", "adjudicatario"):
+            # `_company_role_filter` restringe os *contratos* considerados, mas a
+            # lista juntava os dois papéis: pedir «adjudicantes» devolvia também
+            # os adjudicatários desses contratos (as contrapartes). O pedido é
+            # pelas entidades que efetivamente têm esse papel.
+            items = [item for item in items if item.get(role)]
         total = len(items)
         page = items[from_: from_ + size]
         for it in page:
@@ -4878,6 +4884,20 @@ def search_companies(
 
         unique_adjudicantes = resp["aggregations"].get("unique_adjudicantes", {}).get("nifs", {}).get("value", 0)
         unique_adjudicatarios = resp["aggregations"].get("unique_adjudicatarios", {}).get("nifs", {}).get("value", 0)
+
+        # As agregações por papel devolvem apenas os NIF de maior valor, pelo que
+        # a lista paginada pode ser mais curta do que o universo real: sem o
+        # aviso, o total parecia contradizer a contagem de NIF distintos.
+        distintos_do_papel = {
+            "adjudicante": int(unique_adjudicantes or 0),
+            "adjudicatario": int(unique_adjudicatarios or 0),
+        }.get(role or "")
+        if distintos_do_papel and distintos_do_papel > total:
+            etiqueta = "adjudicantes" if role == "adjudicante" else "adjudicatárias"
+            notes.append(
+                f"A lista mostra as {total} {etiqueta} de maior valor contratual; "
+                f"o universo filtrado tem {distintos_do_papel}."
+            )
 
         return {
             "query": q,

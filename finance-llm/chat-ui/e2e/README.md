@@ -11,9 +11,12 @@ de números escritos à mão.
 
 - lista inicial (cards) e total do universo iguais à pesquisa sem filtros;
 - pesquisa por nome (filtro enviado para `/companies/search` e entidades devolvidas);
-- filtro por função (`adjudicante`/`adjudicatário`), incluindo a contagem distinta
-  de NIF e a paginação sobre a lista completa;
-- paginação (página seguinte/anterior) e limpeza de filtros;
+- paginação: a API confirma o offset recebido em `from` e a UI avança/recua 15
+  entidades por página;
+- filtro por função (`adjudicante`/`adjudicatário`): devolve apenas entidades com
+  esse papel, com o total do papel e — quando o universo é maior do que a lista
+  agregada — a contagem distinta de NIF e o aviso de lista limitada;
+- limpar filtros devolve o universo inicial;
 - vistas de tabela e de mapa;
 - menu de contexto de uma região do mapa e painel de contratos dessa região;
 - exportação para Excel e para PDF (transferência de ficheiro com conteúdo).
