@@ -54,17 +54,39 @@ _anos: Dict[str, Any] = {"ts": 0.0, "linhas": []}
 _trava = threading.Lock()
 
 
-def _contagens() -> Tuple[int, int]:
-    """(total, com_embedding). Duas contagens — é rápido."""
-    es = vs.get_es_client()
-    total = es.count(index=INDICE).get("count", 0)
-    com = es.count(index=INDICE, body={"query": {"exists": {"field": "embedding"}}}).get("count", 0)
-    return int(total), int(com)
+#: Última leitura que correu bem. Se o Elasticsearch cair (já aconteceu: o Docker
+#: reinicia e o processo do ES recusa ligações), a página continua a mostrar
+#: estes números com a hora da leitura, em vez de ficar em branco ou dar 500.
+_ultima: Dict[str, Any] = {"ts": 0.0, "total": None, "com": None, "erro": None}
+
+
+def _contagens() -> Tuple[int, int, bool, str | None]:
+    """(total, com_embedding, leitura_ok, erro). Duas contagens — é rápido.
+
+    Se o ES não responder (ou devolver `None` por falta de configuração), devolve
+    a última leitura boa e diz que está velha — nunca inventa números novos.
+    """
+    try:
+        es = vs.get_es_client()
+        if es is None:
+            raise RuntimeError("cliente do Elasticsearch indisponível")
+        total = es.count(index=INDICE).get("count", 0)
+        com = es.count(index=INDICE, body={"query": {"exists": {"field": "embedding"}}}).get("count", 0)
+    except Exception as erro:  # noqa: BLE001
+        _ultima["erro"] = f"{type(erro).__name__}: {erro}"
+        if _ultima["total"] is None:
+            raise
+        return int(_ultima["total"]), int(_ultima["com"] or 0), False, _ultima["erro"]
+    _ultima.update({"ts": time.time(), "total": int(total), "com": int(com), "erro": None})
+    return int(total), int(com), True, None
 
 
 def _por_ano() -> List[Dict[str, Any]]:
     """Documentos por ano, com e sem embedding (agregação, por isso é cacheada)."""
     es = vs.get_es_client()
+    if es is None:
+        # Mensagem legível no log em vez do críptico "NoneType has no attribute 'search'".
+        raise RuntimeError("Elasticsearch sem ligação")
     corpo = {
         "size": 0,
         "aggs": {
@@ -156,13 +178,16 @@ def _cauda_log(n: int = 10) -> List[str]:
 
 
 def _dados() -> Dict[str, Any]:
-    total, com = _contagens()
+    total, com, ok, erro = _contagens()
     agora = time.time()
-    with _trava:
-        _amostras.append((agora, com))
-        if len(_amostras) > MAX_AMOSTRAS:
-            del _amostras[: len(_amostras) - MAX_AMOSTRAS]
-    _guardar_amostras()
+    if ok:
+        # Só amostras de leituras reais: se o ES falhar, uma amostra com a mesma
+        # contagem faria o ritmo parecer 0 ("parado") quando é o ES que caiu.
+        with _trava:
+            _amostras.append((agora, com))
+            if len(_amostras) > MAX_AMOSTRAS:
+                del _amostras[: len(_amostras) - MAX_AMOSTRAS]
+        _guardar_amostras()
     ritmo = _ritmo()
     sem = total - com
     hora = ritmo.get("docs_s")
@@ -179,6 +204,11 @@ def _dados() -> Dict[str, Any]:
         "percent": round(100.0 * com / total, 2) if total else 0.0,
         "ritmo": ritmo,
         "pausa": PAUSA.exists(),
+        "es": {
+            "ok": ok,
+            "erro": erro,
+            "ts": datetime.fromtimestamp(_ultima["ts"]).isoformat(timespec="seconds") if _ultima["ts"] else None,
+        },
         "anos": anos,
         "anos_ts": datetime.fromtimestamp(anos_ts).isoformat(timespec="seconds") if anos_ts else None,
         "historico": [{"ts": ts, "com": c} for ts, c in _amostras[-120:]],
@@ -227,6 +257,8 @@ PAGINA = """<!doctype html>
   <div class="sub">Atualiza-se sozinha a cada 5 segundos. Fonte: contagens no Elasticsearch e ficheiros do backfill.</div>
   <div class="aviso" id="aviso">Foi pedida <b>pausa</b>: os processos acabam o lote em curso e saem. Para retomar:
     <code>backfill.ps1 -Acao continuar</code>.</div>
+  <div class="aviso" id="aviso-es"><b>Elasticsearch sem resposta</b>: os números abaixo são os da última leitura
+    (<span id="es-ts">–</span>). O backfill não consegue gravar enquanto isto durar — verificar o Docker.</div>
 
   <div class="grelha">
     <div class="cartao"><div class="rotulo">Com embedding</div><div class="valor" id="com">–</div><div class="nota" id="pct">–</div></div>
@@ -289,6 +321,9 @@ async function atualizar() {
     document.getElementById('eta').textContent = rt.eta_h ? comCasa(rt.eta_h) + ' h' : '–';
     document.getElementById('hora').textContent = d.ts || '';
     document.getElementById('aviso').className = 'aviso' + (d.pausa ? ' on' : '');
+    const es = d.es || {};
+    document.getElementById('es-ts').textContent = es.ts || '–';
+    document.getElementById('aviso-es').className = 'aviso' + (es.ok === false ? ' on' : '');
     document.getElementById('anos-ts').textContent = d.anos_ts ? '· atualizado ' + d.anos_ts : '';
     const corpo = document.querySelector('#tabela tbody');
     corpo.innerHTML = (d.anos || []).map(a => {
@@ -314,13 +349,18 @@ class Gestor(BaseHTTPRequestHandler):
     server_version = "BackfillPagina/1.0"
 
     def _responder(self, estado: int, corpo: bytes, tipo: str) -> None:
-        self.send_response(estado)
-        self.send_header("Content-Type", tipo)
-        self.send_header("Content-Length", str(len(corpo)))
-        # Sem cache: a página é para ver agora, não para guardar.
-        self.send_header("Cache-Control", "no-store, must-revalidate")
-        self.end_headers()
-        self.wfile.write(corpo)
+        try:
+            self.send_response(estado)
+            self.send_header("Content-Type", tipo)
+            self.send_header("Content-Length", str(len(corpo)))
+            # Sem cache: a página é para ver agora, não para guardar.
+            self.send_header("Cache-Control", "no-store, must-revalidate")
+            self.end_headers()
+            self.wfile.write(corpo)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            # O browser fecha ligações do ciclo de 5 s a meio da resposta — é normal
+            # e não deve encher o log com tracebacks (nem derrubar nada).
+            return
 
     def do_GET(self) -> None:  # noqa: N802 - API do http.server
         caminho = self.path.split("?")[0]

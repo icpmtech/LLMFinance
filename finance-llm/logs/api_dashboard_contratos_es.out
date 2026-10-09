@@ -1,91 +1,11 @@
 warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
-INFO:     Started server process [28516]
+INFO:     Started server process [30888]
 INFO:     Waiting for application startup.
 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  38%|###8      | 97/254 [00:00<00:00, 969.68it/s]Loading weights:  80%|#######9  | 202/254 [00:00<00:00, 1014.84it/s]Loading weights: 100%|##########| 254/254 [00:00<00:00, 1078.07it/s]
+Loading weights:   0%|          | 0/254 [00:00<?, ?it/s]Loading weights:  64%|######3   | 162/254 [00:00<00:00, 1603.92it/s]Loading weights: 100%|##########| 254/254 [00:00<00:00, 1779.89it/s]
 Ficheiro do RSS ilegível (Extra data: line 10683 column 2 (char 794686)); a recomeçar.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8002 (Press CTRL+C to quit)
-INFO:     127.0.0.1:61992 - "GET /contracts/ecologicos HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61993 - "GET /contracts/ecologicos HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62005 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51445 - "GET /contracts/ecologicos?v=202610082152 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62006 - "POST /auth/login HTTP/1.1" 503 Service Unavailable
-INFO:     127.0.0.1:51445 - "GET /assets/index-BNME4V88.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62251 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63122 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:61069 - "GET /assets/index-BzqEfoCs.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62006 - "GET /jarvis/voice HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62006 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61069 - "GET /favicon-32.png HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:51445 - "GET /sw.js HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:62251 - "GET /favicon.svg HTTP/1.1" 404 Not Found
-Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|##########| 103/103 [00:00<00:00, 1334.65it/s]
-INFO:     127.0.0.1:62006 - "POST /jarvis/ask HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62006 - "POST /jarvis/ask HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55496 - "POST /auth/login HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:55496 - "GET /jarvis/voice HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65264 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61183 - "GET /contracts/analytics/regional?size=60&ecological=true HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51258 - "POST /contracts/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65264 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51229 - "GET /contracts/analytics/regional?size=60 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65433 - "GET /contracts/analytics?ecological=true&top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55496 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51258 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61183 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57603 - "GET /contracts/analytics?top_entities=1&top_cpv=1 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57603 - "GET /contracts/ecologicos?v=202610082152 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57603 - "GET /assets/index-BNME4V88.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54273 - "GET /assets/index-BzqEfoCs.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:64043 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55251 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:54273 - "GET /assets/index-BzqEfoCs.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54273 - "GET /sw.js HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:57603 - "GET /auth/me HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:53723 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53723 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57170 - "GET /contracts/analytics/regional?size=60&ecological=true HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65230 - "GET /contracts/analytics/regional?size=60 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:62772 - "GET /contracts/analytics?top_entities=1&top_cpv=1 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57192 - "GET /contracts/analytics?ecological=true&top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49999 - "POST /contracts/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57170 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53723 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63109 - "GET /auth/me HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:56416 - "GET /contracts/7392833/document?fetch=true HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55496 - "POST /jarvis/ask HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55912 - "GET /contracts/10394037/document?fetch=true HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55496 - "POST /jarvis/ask HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65058 - "GET /contracts/ecologicos?v=202610082152 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65058 - "GET /assets/index-BNME4V88.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51247 - "GET /assets/index-BzqEfoCs.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56368 - "GET /assets/rolldown-runtime-Dd_uD5pT.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51247 - "GET /assets/index-BzqEfoCs.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63928 - "GET /manifest.webmanifest HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:51247 - "GET /sw.js HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:65058 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65058 - "GET /contracts/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56368 - "GET /contracts/analytics/regional?size=60 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50819 - "GET /contracts/analytics/regional?size=60&ecological=true HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63690 - "GET /contracts/analytics?ecological=true&top_entities=10&top_cpv=10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51247 - "GET /contracts/analytics?top_entities=1&top_cpv=1 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59585 - "POST /contracts/search HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56368 - "GET /auth/sidebar-access HTTP/1.1" 200 OK
-INFO:     127.0.0.1:65058 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51629 - "GET /jarvis/voice HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51629 - "GET /jarvis/meta HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60054 - "GET /contracts/7392833/document?fetch=true HTTP/1.1" 200 OK
-INFO:     127.0.0.1:61123 - "GET /contracts/10394037/document?fetch=true HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51629 - "POST /jarvis/ask HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49673 - "GET /contracts/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51629 - "POST /jarvis/ask HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50667 - "POST /companies/role-summary HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50669 - "POST /companies/role-summary HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51813 - "POST /companies/role-summary HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51819 - "POST /auth/logout HTTP/1.1" 200 OK
-forrtl: error (200): program aborting due to window-CLOSE event
-Image              PC                Routine            Line        Source             
-KERNELBASE.dll     00007FFCC831652D  Unknown               Unknown  Unknown
-KERNEL32.DLL       00007FFCC9D9CD87  Unknown               Unknown  Unknown
-ntdll.dll          00007FFCCAAACAEC  Unknown               Unknown  Unknown
+INFO:     127.0.0.1:59406 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55809 - "GET /entities/504615947/report-processos.pdf HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63795 - "GET /companies/504615947 HTTP/1.1" 502 Bad Gateway

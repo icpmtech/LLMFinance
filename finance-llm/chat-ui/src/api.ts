@@ -1279,6 +1279,16 @@ export async function downloadEntityReport(nif: string): Promise<Blob> {
   return res.blob();
 }
 
+/** Relatório de processos e dados da empresa (insolvências/PER, processos, fiscal, atos societários). */
+export async function downloadEntityProcessosReport(nif: string): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/entities/${encodeURIComponent(nif)}/report-processos.pdf`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao gerar o relatório de processos: ${res.status} - ${text}`);
+  }
+  return res.blob();
+}
+
 export async function getEntityStats(): Promise<EntityStats> {
   const res = await fetch(`${API_BASE}/entities/stats`);
   if (!res.ok) throw new Error(`Erro ao obter estatísticas de entidades: ${res.status}`);

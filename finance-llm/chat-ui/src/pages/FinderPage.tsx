@@ -63,7 +63,16 @@ import { type ContratosEsEntry, writeContratosEsEntry } from "../contratosEsApi"
 import { searchEsEntities, type CompaniesGlobalRow } from "../companiesGlobalApi";
 import { useWindowMode } from "../layout";
 import { useFavorites, type Favorite } from "../favorites";
+import { EntitySocietario } from "../components/EntitySocietario";
 import { openWindow } from "../windows";
+
+/** Tipo de favorito de um item do Finder (`null` quando não é favoritável). */
+function favoriteKindOf(item: FinderItem | null | undefined): "entity" | "contract" | null {
+  if (!item) return null;
+  if (item.kind === "entity") return "entity";
+  if (item.kind === "contract") return "contract";
+  return null;
+}
 import { openCompareWindow, useCompare, MAX_COMPARE } from "../compare";
 import {
   FINDER_LOCATIONS,
@@ -1432,7 +1441,9 @@ function QuickLook({
   onToggleFavorite: (entry: Omit<Favorite, "addedAt">) => void;
   onOpenInApp: (item: FinderItem) => void;
 }) {
-  const isFavorite = item.tags?.includes("Favorito") ?? false;
+  const { isFavorite } = useFavorites();
+  const favoriteKind = favoriteKindOf(item);
+  const marcado = favoriteKind ? isFavorite(favoriteKind, item.id) : false;
   const rows: [string, string][] = [
     ["Tipo", KIND_LABEL[item.kind]],
     ["Identificador", item.id],
@@ -1517,6 +1528,8 @@ function QuickLook({
           </div>
         )}
 
+        {item.kind === "entity" && <EntitySocietario nif={item.id} className="mt-4" />}
+
         <div className="mt-5 flex flex-wrap items-center gap-2">
           {(item.kind === "organo_es" || item.kind === "adjudicataria_es") && (
             <button
@@ -1541,8 +1554,8 @@ function QuickLook({
               }
               className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-3 py-1.5 text-[12px] transition hover:bg-white/[0.1]"
             >
-              {isFavorite ? <StarOff size={13} /> : <Star size={13} />}
-              {isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+              {marcado ? <StarOff size={13} /> : <Star size={13} />}
+              {marcado ? "Remover dos favoritos" : "Adicionar aos favoritos"}
             </button>
           )}
           <a
@@ -1573,7 +1586,9 @@ function InspectorPanel({
   onClose: () => void;
   onToggleFavorite: (entry: Omit<Favorite, "addedAt">) => void;
 }) {
-  const isFavorite = item?.tags?.includes("Favorito") ?? false;
+  const { isFavorite } = useFavorites();
+  const favoriteKind = favoriteKindOf(item);
+  const marcado = item && favoriteKind ? isFavorite(favoriteKind, item.id) : false;
   return (
     <aside className="hidden w-72 shrink-0 flex-col overflow-y-auto border-l border-white/8 bg-white/[0.02] p-3 md:flex lg:w-80">
       <div className="mb-2 flex items-center gap-2">
@@ -1633,8 +1648,8 @@ function InspectorPanel({
               }
               className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-3 py-1.5 text-[12px] transition hover:bg-white/[0.1]"
             >
-              {isFavorite ? <StarOff size={13} /> : <Star size={13} />}
-              {isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+              {marcado ? <StarOff size={13} /> : <Star size={13} />}
+              {marcado ? "Remover dos favoritos" : "Adicionar aos favoritos"}
             </button>
           )}
 
@@ -1687,7 +1702,9 @@ function ContextMenu({
   onToggleFavorite: (entry: Omit<Favorite, "addedAt">) => void;
   onCompare: (items: FinderItem[]) => void;
 }) {
-  const isFavorite = item.tags?.includes("Favorito") ?? false;
+  const { isFavorite } = useFavorites();
+  const favoriteKind = favoriteKindOf(item);
+  const marcado = favoriteKind ? isFavorite(favoriteKind, item.id) : false;
   const style = {
     left: Math.min(x, (typeof window === "undefined" ? x : window.innerWidth) - 220),
     top: Math.min(y, (typeof window === "undefined" ? y : window.innerHeight) - 260),
@@ -1698,8 +1715,8 @@ function ContextMenu({
   ];
   if (item.kind === "entity" || item.kind === "contract") {
     actions.push({
-      label: isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos",
-      icon: isFavorite ? StarOff : Star,
+      label: marcado ? "Remover dos favoritos" : "Adicionar aos favoritos",
+      icon: marcado ? StarOff : Star,
       run: () =>
         onToggleFavorite({
           kind: item.kind === "entity" ? "entity" : "contract",

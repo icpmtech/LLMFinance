@@ -1481,6 +1481,25 @@ def entities_report_pdf(nif: str):
     )
 
 
+@app.get("/entities/{nif}/report-processos.pdf")
+def entities_report_processos_pdf(nif: str):
+    """Relatório de processos e dados da empresa (insolvências/PER, processos, fiscal, atos societários)."""
+    from api.entity_enrichment_service import build_entity_processos_pdf
+    from pathlib import Path as _Path
+
+    try:
+        path = build_entity_processos_pdf(nif)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar o relatório de processos: {exc}")
+    if not path or not _Path(path).exists():
+        raise HTTPException(status_code=502, detail="Não foi possível gerar o relatório de processos.")
+    return FileResponse(
+        _Path(path),
+        media_type="application/pdf",
+        filename=f"processos_{nif}.pdf",
+    )
+
+
 # Servir a React SPA da chat-ui (build estático) — deve ser registrado DEPOIS das rotas de API
 # para que os endpoints JSON sejam resolvidos antes do catch-all da SPA.
 

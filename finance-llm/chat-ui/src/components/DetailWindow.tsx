@@ -30,6 +30,7 @@ import type { FinderItem, FinderKind } from "../finder";
 import { EntityDetailPanel, ContractDetailPanel, nifsFromParty, parseCompetitors } from "../pages/EmpresasIQPage";
 import { CompareButton } from "../pages/CompareWindow";
 import { SeeAllContractsButton } from "../pages/EntityContractsWindow";
+import { EntitySocietario } from "./EntitySocietario";
 import { openCompareWindow } from "../compare";
 import { closeWindow, openWindow, windowFor } from "../windows";
 
@@ -395,6 +396,9 @@ export function QuickLookWindow({ kind, id }: { kind: FinderKind; id: string }) 
           </div>
         </div>
       )}
+
+      {/* Pessoas e cargos + dados societários (publicações do MJ) */}
+      {item.kind === "entity" && <EntitySocietario nif={item.id} />}
 
       {/* Contratos associados */}
       {contracts.length > 0 && (
