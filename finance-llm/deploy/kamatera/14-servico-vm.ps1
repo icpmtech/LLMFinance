@@ -54,8 +54,7 @@ $SERVICOS = @{
         Sonda = '/'
         Extra = @(
             @{ Local = (Join-Path $raiz 'docker\searxng\settings.yml')
-               RemoteDir = "$BaseDir/searxng/etc"
-               RemoteFile = 'settings.yml' }
+               Remote = "$BaseDir/searxng/etc/settings.yml" }
         )
     }
     'n8n' = @{
@@ -63,8 +62,7 @@ $SERVICOS = @{
         Sonda = '/healthz'
         Extra = @(
             @{ Local = (Join-Path $raiz 'docker\n8n\LEIA-ME.md')
-               RemoteDir = "$BaseDir/n8n/files"
-               RemoteFile = 'LEIA-ME.md' }
+               Remote = "$BaseDir/n8n/files/LEIA-ME.md" }
         )
     }
     # A imagem deste e construida localmente: transferir primeiro com
@@ -72,6 +70,35 @@ $SERVICOS = @{
     'frontend' = @{
         Porta = 4180
         Sonda = '/'
+        Extra = @()
+    }
+    # Imagem publica (pull direto). O dashboard fica na 9119, que o compose local
+    # nao publica -- aqui valida-se a 8642 (API OpenAI-compatavel do gateway).
+    'hermes-agent' = @{
+        Porta = 8642
+        Sonda = '/health'
+        Extra = @(
+            @{ Local = (Join-Path $raiz 'docker\hermes\init\026-enable-iqos-plugin.sh')
+               Remote = "$BaseDir/hermes-agent/config/init/026-enable-iqos-plugin.sh" }
+            @{ Local = (Join-Path $raiz 'docker\hermes\plugins\dashboard-auth-iqos\plugin.yaml')
+               Remote = "$BaseDir/hermes-agent/config/plugins/dashboard-auth-iqos/plugin.yaml" }
+            @{ Local = (Join-Path $raiz 'docker\hermes\plugins\dashboard-auth-iqos\__init__.py')
+               Remote = "$BaseDir/hermes-agent/config/plugins/dashboard-auth-iqos/__init__.py" }
+            @{ Local = (Join-Path $raiz 'docker\hermes\skills\iqos\pesquisa-total\SKILL.md')
+               Remote = "$BaseDir/hermes-agent/config/skills/iqos/pesquisa-total/SKILL.md" }
+            @{ Local = (Join-Path $raiz 'docker\hermes\skills\iqos\pesquisa-profunda\SKILL.md')
+               Remote = "$BaseDir/hermes-agent/config/skills/iqos/pesquisa-profunda/SKILL.md" }
+            @{ Local = (Join-Path $raiz 'docker\hermes\skills\iqos\websearch\SKILL.md')
+               Remote = "$BaseDir/hermes-agent/config/skills/iqos/websearch/SKILL.md" }
+        )
+    }
+    # Stack autonoma de 6 contentores. As duas imagens construidas localmente
+    # sao pequenas -- transferir primeiro com:
+    #   .\15-imagem-vm.ps1 -Imagem iq-os-osif-backend:latest
+    #   .\15-imagem-vm.ps1 -Imagem iq-os-osif-frontend:latest
+    'osif' = @{
+        Porta = 6110
+        Sonda = '/health'
         Extra = @()
     }
 }
@@ -98,18 +125,21 @@ function Show-Vm {
 }
 
 function Send-VmFile {
-    param([Parameter(Mandatory)][string]$Local, [Parameter(Mandatory)][string]$RemoteDir,
-          [Parameter(Mandatory)][string]$RemoteFile)
+    param([Parameter(Mandatory)][string]$Local, [Parameter(Mandatory)][string]$Remote)
     if (-not (Test-Path $Local)) { throw "nao encontro $Local" }
-    # Por stdin: sem limite de tamanho e sem lutar com aspas dentro do comando.
+    # Caminho remoto sem espacos nem aspas: e o que permite nao ter de lutar com
+    # o PowerShell, que come as aspas dos comandos nativos.
+    if ($Remote -match '\s') { throw "caminho remoto com espacos nao suportado: $Remote" }
+    $pai = $Remote.Substring(0, $Remote.LastIndexOf('/'))
+    # Por stdin: sem limite de tamanho e sem aspas dentro do comando remoto.
     (Get-Content -Raw $Local) -replace "`r`n", "`n" | docker exec -i $TunnelContainer `
         ssh -i /root/.ssh/id_ed25519 -o BatchMode=yes -o ConnectTimeout=10 -o LogLevel=ERROR `
-        "$SshUser@$SshHost" "mkdir -p $RemoteDir && cat > $RemoteDir/$RemoteFile"
-    if ($LASTEXITCODE -ne 0) { throw "falhou o envio de $RemoteFile" }
+        "$SshUser@$SshHost" "mkdir -p $pai && cat > $Remote"
+    if ($LASTEXITCODE -ne 0) { throw "falhou o envio de $Remote" }
     # O PowerShell injecta CR ao escrever em pipeline nativa.
-    Invoke-Vm "sed -i 's/\r`$//' $RemoteDir/$RemoteFile" | Out-Null
-    $tam = (Invoke-Vm "wc -c < $RemoteDir/$RemoteFile").Output.Trim()
-    Write-Host "  $RemoteDir/$RemoteFile ($tam bytes)"
+    Invoke-Vm "sed -i 's/\r`$//' $Remote" | Out-Null
+    $tam = (Invoke-Vm "wc -c < $Remote").Output.Trim()
+    Write-Host "  $Remote  ($tam bytes)"
 }
 
 if ($Listar) {
@@ -154,12 +184,21 @@ Show-Vm 'free -m | sed -n 2p; df -h / | tail -1' | Out-Null
 
 Write-Host ''
 Write-Host '=== 1. A enviar ficheiros ===' -ForegroundColor Cyan
-Send-VmFile -Local $composeLocal -RemoteDir $remoteDir -RemoteFile 'compose.yml'
-foreach ($f in $cfg.Extra) { Send-VmFile -Local $f.Local -RemoteDir $f.RemoteDir -RemoteFile $f.RemoteFile }
+Send-VmFile -Local $composeLocal -Remote "$remoteDir/compose.yml"
+foreach ($f in $cfg.Extra) { Send-VmFile -Local $f.Local -Remote $f.Remote }
+# O `.env` do repositorio tem as chaves (Hermes, MiroFish, TwoCaptcha...). Vai
+# para o lado do compose, que e onde o `docker compose` o le para resolver os
+# `${...}`. Fica fora do git (ver .gitignore) e so existe no PC e na VM.
+$envLocal = Join-Path $raiz '.env'
+if (Test-Path $envLocal) { Send-VmFile -Local $envLocal -Remote "$remoteDir/.env" }
 
 Write-Host ''
 Write-Host '=== 2. A arrancar ===' -ForegroundColor Cyan
 Write-Host '  (projeto proprio: o edge, o ES e o tunel ficam intocados)'
+# Rede partilhada: os servicos migrados tem de se resolver por nome entre si
+# (o frontend precisa de ver o `backend`, o backend o `elasticsearch`). Como
+# cada um e um projeto composes separado, sem isto cada um ficaria na sua rede.
+Show-Vm 'docker network inspect iqos-net >/dev/null 2>&1 || docker network create iqos-net' | Out-Null
 Show-Vm "cd $remoteDir && docker compose up -d 2>&1" | Out-Null
 
 Write-Host ''

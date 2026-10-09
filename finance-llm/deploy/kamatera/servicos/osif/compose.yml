@@ -1,0 +1,164 @@
+# OSIF (OSINT Framework) na VM -- sexto servico a migrar.
+#
+# Stack autonoma de 6 contentores (postgres, redis, minio, backend, worker e a
+# SPA). Nao depende do backend principal do IQ OS, por isso e dos mais faceis de
+# migrar: as duas imagens construidas localmente sao pequenas (773 MB + 96,8 MB)
+# e o resto sao imagens publicas.
+#
+#     .\15-imagem-vm.ps1 -Imagem iq-os-osif-backend:latest
+#     .\15-imagem-vm.ps1 -Imagem iq-os-osif-frontend:latest
+#     .\14-servico-vm.ps1 -Nome osif
+#
+# Diferencas face ao perfil `osif` do `docker-compose.yml` da raiz:
+#
+#   1. `image:` em vez de `build:` -- as imagens ja vem construidas do PC. O
+#      contexto de build (`docker/osif/src/`) e um clone do upstream que nem
+#      esta no repositorio;
+#   2. a SPA passa a publicar a porta. No PC nao publica nada de proposito: e
+#      servida pelo proxy de incorporacao do nginx do IQ OS (8894). Aqui nao ha
+#      esse nginx, e sem isto nao se consegue validar;
+#   3. tudo em 127.0.0.1 e na rede `iqos-net`.
+#
+# O `x-osif-env` e a mesma ancora do compose da raiz, copiada para ca: este
+# ficheiro e um projeto `docker compose` independente e nao ve as ancoras do
+# outro.
+x-osif-env: &osif-env
+  DATABASE_URL: postgresql+asyncpg://osif:${OSIF_DB_PASSWORD:-osif}@osif-postgres:5432/osif
+  DATABASE_HOST: osif-postgres
+  DATABASE_PORT: "5432"
+  REDIS_HOST: osif-redis
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  EVIDENCE_STORAGE_BACKEND: s3
+  S3_ENDPOINT_URL: http://osif-minio:9000
+  S3_BUCKET: ${OSIF_S3_BUCKET:-osif-evidence}
+  S3_ACCESS_KEY: ${OSIF_MINIO_USER:-osif_minio}
+  S3_SECRET_KEY: ${OSIF_MINIO_PASSWORD:-osif_minio_password}
+  S3_REGION: us-east-1
+  S3_FORCE_PATH_STYLE: "true"
+  SECRET_KEY: ${OSIF_SECRET_KEY:-iq-os-osif-change-me}
+  # Chaves OSINT -- todas opcionais: sem elas funcionam dns_records,
+  # subdomain_enum, whois_lookup, ip_geolocation, urlscan_lookup e email_domain.
+  SHODAN_API_KEY: ${SHODAN_API_KEY:-}
+  VT_API: ${VIRUSTOTAL_API_KEY:-${VT_API:-}}
+  ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
+  TOMBA_API_KEY: ${TOMBA_API_KEY:-}
+  TOMBA_SECRET_KEY: ${TOMBA_SECRET_KEY:-}
+  HUNTER_API_KEY: ${HUNTER_API_KEY:-}
+  HIBP_API_KEY: ${HIBP_API_KEY:-}
+  URLSCAN_API_KEY: ${URLSCAN_API_KEY:-}
+  CENSYS_APPID: ${CENSYS_APPID:-}
+  CENSYS_SECRET: ${CENSYS_SECRET:-}
+
+services:
+  osif-postgres:
+    image: postgres:16-alpine
+    container_name: iqos-osif-postgres
+    environment:
+      POSTGRES_DB: osif
+      POSTGRES_USER: osif
+      POSTGRES_PASSWORD: ${OSIF_DB_PASSWORD:-osif}
+    volumes:
+      - osif-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U osif -d osif"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  osif-redis:
+    image: redis:7-alpine
+    container_name: iqos-osif-redis
+    volumes:
+      - osif-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # MinIO (S3) para as evidencias dos casos. A imagem do Bitnami cria os buckets
+  # por variavel de ambiente, o que dispensa o `minio-init` do upstream.
+  osif-minio:
+    image: bitnamilegacy/minio:latest
+    container_name: iqos-osif-minio
+    environment:
+      MINIO_ROOT_USER: ${OSIF_MINIO_USER:-osif_minio}
+      MINIO_ROOT_PASSWORD: ${OSIF_MINIO_PASSWORD:-osif_minio_password}
+      MINIO_DEFAULT_BUCKETS: ${OSIF_S3_BUCKET:-osif-evidence}
+    ports:
+      # So a consola (diagnostico); a API fica na rede interna.
+      - "127.0.0.1:${OSIF_MINIO_CONSOLE_PORT:-9111}:9001"
+    volumes:
+      - osif-minio-data:/bitnami/minio/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  osif-backend:
+    image: iq-os-osif-backend:latest
+    container_name: iqos-osif-backend
+    ports:
+      - "127.0.0.1:${OSIF_API_PORT:-6110}:6000"
+    environment:
+      <<: *osif-env
+      API_PORT: "6000"
+      DEBUG: ${OSIF_DEBUG:-false}
+      CORS_ORIGINS: '["http://127.0.0.1:4180","http://localhost:4180","http://127.0.0.1:8894","http://localhost:8894"]'
+    depends_on:
+      osif-postgres:
+        condition: service_healthy
+      osif-redis:
+        condition: service_healthy
+      osif-minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:6000/health', timeout=5)"]
+      interval: 20s
+      timeout: 10s
+      start_period: 60s
+      retries: 6
+    restart: unless-stopped
+
+  # Worker arq: e aqui que os modulos OSINT correm (o backend so os enfileira).
+  osif-worker:
+    image: iq-os-osif-backend:latest
+    container_name: iqos-osif-worker
+    command: ["arq", "app.tasks.worker.WorkerSettings"]
+    environment:
+      <<: *osif-env
+      WORKER_CONCURRENCY: ${OSIF_WORKER_CONCURRENCY:-4}
+      REQUEST_DELAY_MS: ${OSIF_REQUEST_DELAY_MS:-500}
+    depends_on:
+      osif-postgres:
+        condition: service_healthy
+      osif-redis:
+        condition: service_healthy
+      osif-backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # SPA do OSIF (Vue 3 compilado). O nginx dela so serve ficheiros estaticos --
+  # sem `proxy_pass`, por isso nao ha nome nenhum a resolver no arranque (ao
+  # contrario do frontend do IQ OS).
+  osif-frontend:
+    image: iq-os-osif-frontend:latest
+    container_name: iqos-osif-frontend
+    ports:
+      - "127.0.0.1:${OSIF_UI_PORT:-8894}:80"
+    restart: unless-stopped
+
+networks:
+  default:
+    name: iqos-net
+    external: true
+
+volumes:
+  osif-postgres-data:
+  osif-redis-data:
+  osif-minio-data:

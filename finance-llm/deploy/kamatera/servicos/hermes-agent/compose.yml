@@ -1,0 +1,77 @@
+# Hermes Agent (Nous Research) na VM -- quinto servico a migrar.
+#
+# Imagem **publica** (nousresearch/hermes-agent), por isso e um `pull` e nao uma
+# transferencia do PC -- um dos mais rapidos de migrar.
+#
+# Diferencas face ao servico local (`docker-compose.yml`, na raiz):
+#
+#   1. a porta do dashboard (9119) passa a ser publicada, mas so em 127.0.0.1.
+#      No PC nao e publicada de proposito: o acesso passa pelo proxy de
+#      incorporacao do nginx (porta 8892), que valida a sessao do IQ OS. Aqui nao
+#      ha nginx, e sem isto nao se consegue validar o dashboard;
+#   2. os ficheiros de configuracao vem de `config/` (o `14-servico-vm.ps1`
+#      copia-os de `docker/hermes/`), em vez de `./docker/hermes/...`;
+#   3. entra na rede `iqos-net`, para o `IQOS_SEARXNG_URL` resolver.
+#
+# O `IQOS_API_URL` continua a apontar para `http://backend:8000`, que ainda nao
+# existe nesta VM. Nao impede o arranque -- e um endereco usado em tempo de
+# execucao pelas skills, ao contrario do `proxy_pass` do nginx do frontend.
+# Quando o backend migrar para `iqos-net`, passa a funcionar sem alteracoes.
+#
+# As chaves (`HERMES_API_KEY`, `HERMES_DASHBOARD_IQOS_SECRET`) vem do `.env` que
+# o lancador envia ao lado deste ficheiro.
+services:
+  hermes-agent:
+    image: nousresearch/hermes-agent:latest
+    container_name: iqos-hermes-agent
+    # Dois argumentos distintos: `["gateway run"]` (um so) faz o dispatcher
+    # responder «'gateway run' is not a hermes command».
+    command: ["gateway", "run"]
+    ports:
+      - "127.0.0.1:${HERMES_API_PORT:-8642}:8642"
+      - "127.0.0.1:${HERMES_DASHBOARD_PORT_HOST:-9119}:9119"
+    volumes:
+      - hermes-data:/opt/data
+      # Provider de autenticacao do dashboard: valida o login nas contas do IQ OS.
+      - ./config/plugins/dashboard-auth-iqos:/opt/data/plugins/dashboard-auth-iqos:ro
+      # Ativa esse plugin em cada arranque (o estado vive no volume).
+      - ./config/init/026-enable-iqos-plugin.sh:/etc/cont-init.d/026-enable-iqos-plugin.sh:ro
+      # Skills do IQ OS, montadas por cima do volume.
+      - ./config/skills/iqos:/opt/data/skills/iqos:ro
+    environment:
+      - IQOS_API_URL=${IQOS_API_URL:-http://backend:8000}
+      - IQOS_API_BASE=${IQOS_API_BASE:-http://backend:8000}
+      - IQOS_SEARXNG_URL=${IQOS_SEARXNG_URL:-http://searxng:8080}
+      - HERMES_DASHBOARD=1
+      - HERMES_DASHBOARD_HOST=0.0.0.0
+      - HERMES_DASHBOARD_PORT=9119
+      - HERMES_DASHBOARD_IQOS_SECRET=${HERMES_DASHBOARD_IQOS_SECRET:-}
+      - API_SERVER_ENABLED=true
+      - API_SERVER_HOST=0.0.0.0
+      - API_SERVER_KEY=${HERMES_API_KEY:-iqos-hermes-api-key-please-change}
+      - API_SERVER_CORS_ORIGINS=*
+    shm_size: "1gb"
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          # O compose local pede "2.0". Esta VM tem **1 core**, e o Docker recusa
+          # um limite acima do numero de CPUs disponiveis:
+          #   range of CPUs is from 0.01 to 1.00, as there are only 1 CPUs available
+          # Nao e um limite efectivo num so core (nao ha nada a repartir), mas
+          # fica explicito. Subir se a VM ganhar mais cores.
+          cpus: "1.0"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  default:
+    name: iqos-net
+    external: true
+
+volumes:
+  hermes-data:

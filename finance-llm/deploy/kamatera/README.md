@@ -398,25 +398,58 @@ desse projeto: o Caddy, a landing, o ES e o tunel ficam intocados. O
 `docker ps` mostra o uptime de cada contentor, e e por ai que se prova que nada
 foi reiniciado.
 
-Feitos: **Elasticsearch**, **SearXNG**, **n8n**.
+Feitos: **Elasticsearch**, **SearXNG**, **n8n**, **frontend**.
 
-### O tecto e a RAM, nao o disco
+Ha servicos cuja imagem e construida localmente (frontend, backend, osif): esses
+precisam de ser transferidos antes de arrancar. O `15-imagem-vm.ps1` faz isso com
+`docker save` -> gzip -> ficheiro -> VM -> `docker load`. Nao usa pipelines do
+PowerShell para os dados, porque o PowerShell descaracteriza streams binarios ao
+passar por comandos nativos; a imagem vai a ficheiro e o redirecionamento e feito
+pelo `cmd.exe`. Nota: os layers do Docker ja vem comprimidos, por isso o gzip nao
+ganha nada (55,8 MB -> 55,7 MB no frontend).
 
-Sobraram 813 MB depois destes tres. Estimativa do que falta, por ordem de peso
-(medido no PC):
+### Rede partilhada
+
+Cada servico e um projeto composes proprio, logo **nao partilhariam rede** e nao
+se resolveriam por nome -- o frontend nao veria o `backend`, o backend nao veria
+o `elasticsearch`. Por isso todos entram numa rede externa `iqos-net`, criada
+pelo `14-servico-vm.ps1`:
+
+```yaml
+networks:
+  default:
+    name: iqos-net
+    external: true
+```
+
+Atencao a uma armadilha do frontend: o nginx tem `proxy_pass http://backend:8000`
+gravado na imagem e faz **`[emerg] host not found in upstream "backend"`** --
+recusa arrancar se o nome nao resolver. Enquanto o backend nao estiver na VM ha
+um `extra_hosts: backend:host-gateway` a dar-lhe um destino. **Quando o backend
+migrar para a rede `iqos-net`, essa linha tem de sair**, senao o nome fica preso
+ao gateway e nunca chega ao backend.
+
+### Recursos da VM
+
+A VM foi redimensionada **pelo painel** da Kamatera (a API nao serve para isto,
+ver acima): **8 GB de RAM** (7941 MB) e **148 GB de disco**. O CPU ficou em
+**1 core** -- `nproc` = 1. Isso nao aperta a RAM, mas o `backend` faz torch e
+scipy e vai notar.
+
+Com o swap em 17 MB (era 332 MB), a pressao de memoria desapareceu. Tudo cabe,
+por ordem de peso (medido no PC):
 
 | Servico | RAM | Imagem | Nota |
 |---|---|---|---|
-| frontend | 12 MB | 208 MB (construida) | precisa do `dist/` ou da imagem |
 | mcp | 20 MB | 13,7 GB | reusa a imagem do backend |
 | mirofish | 82 MB | 14,2 GB | imagem publica no ghcr |
 | osif (6 contentores) | 243 MB | 1,4 GB (construidas) | stack autonoma |
 | hermes-agent | 358 MB | 4,0 GB | imagem publica |
 | backend | 791 MB | 13,7 GB (construida) | precisa tambem de `data/` 37 GB + `model/` 3 GB |
 
-`backend` sozinho consumiria o que sobra; com `hermes-agent` nao cabe de forma
-nenhuma. **Subir a RAM para 8 GB no painel** (dentro do orcamento de 23 EUR)
-desbloqueia os dois -- e e a unica intervencao que falta antes deles.
+Somados dao 1506 MB, muito abaixo dos 6088 MB livres. O cuidado que fica e o CPU
+de 1 core a partilhar tudo -- e o `backend`, com torch e scipy, e o que mais o
+vai sentir.
 
 Nota: estas instancias **nao sao copias**. Os volumes comecam vazios (o n8n da
 VM nao tem fluxos, o searxng nao tem cache). E infraestrutura pronta a receber

@@ -50,5 +50,10 @@ services:
         max-size: "10m"
         max-file: "3"
 
+networks:
+  default:
+    name: iqos-net
+    external: true
+
 volumes:
   n8n-data:
