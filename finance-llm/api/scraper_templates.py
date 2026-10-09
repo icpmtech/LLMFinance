@@ -90,15 +90,30 @@ def _field(
     return field
 
 
-def _detail(selector: str, *, max_items: int = 20, delay: float = 0.6) -> Dict[str, Any]:
-    """Bloco do texto integral: o corpo do artigo na página de detalhe."""
-    return {
-        "enabled": bool(selector),
+def _detail(
+    selector: str,
+    *,
+    max_items: int = 20,
+    delay: float = 0.6,
+    pairs: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Bloco do detalhe: o corpo do artigo e/ou a ficha estruturada.
+
+    `selector` é o contentor do texto na página de detalhe. `pairs` traz os
+    pares chave/valor da ficha (diretórios de empresas), que ficam no item como
+    `data[ficha]` — permite ter **dados diferentes** por item sem um campo por
+    cada linha da ficha.
+    """
+    block: Dict[str, Any] = {
+        "enabled": bool(selector) or bool(pairs),
         "selector": selector,
         "max_items": max_items,
         "delay": delay,
         "max_chars": 20000,
     }
+    if pairs:
+        block["pairs"] = pairs
+    return block
 
 
 def _sentiment(*, max_items: int = 8, field: str = "text", engine: str = "auto", min_chars: int = 120) -> Dict[str, Any]:
@@ -542,6 +557,62 @@ TEMPLATES: List[Dict[str, Any]] = [
             "title_field": "nome",
             "summary_field": "nome",
             "detail": _detail("section.section-company-data", max_items=50, delay=1.2),
+        },
+    },
+    {
+        "id": "racius-diretorio",
+        "name": "Racius · Diretório de empresas (PT)",
+        "site": "racius.com",
+        "category": "Diretórios de empresas",
+        "description": "Diretório de empresas portuguesas do Racius: lista por pesquisa, com ficha detalhada (morada, forma jurídica, capital social, CAE…) de cada empresa.",
+        "tags": ["empresas", "racius", "diretorio", "nif", "ficha"],
+        "requires": "http",
+        "notes": "A lista é `a.results__col-link` (o cartão `article.results__entry` vem lá dentro, e é dele que saem o nome, o NIF e a localização). A página de resultados não publica ligações de paginação: a página é o parâmetro `page` do URL (`?q=<termo>&page=2`), pelo que a paginação usa `mode=query`. A ficha da empresa está em `li.detail__detail`, com o rótulo em `p.detail__key-info` e o valor em `p.t--d-blue`.",
+        "source": {
+            "name": "Racius · Diretório de empresas (PT)",
+            "description": "Recolha do diretório Racius por termo de pesquisa, com ficha detalhada de cada empresa.",
+            "url": "https://www.racius.com/pesquisa/empresas/?q=",
+            "enabled": False,
+            "fetcher": "http",
+            "list": {"selector": "a.results__col-link", "type": "css"},
+            "fields": [
+                _field("nome", "Nome", "p.results__name::text", max_length=400),
+                _field(
+                    "nif",
+                    "NIF",
+                    "p.results__activity::text",
+                    max_length=20,
+                    regex=r"(\d{9})",
+                ),
+                _field(
+                    "localizacao",
+                    "Localização",
+                    "div.results__col-location::text",
+                    max_length=200,
+                    regex=r"(?:ico-gps\s*)?([\s\S]+)",
+                ),
+                _field("url", "Ligação", "a.results__col-link::attr(href)", max_length=1024),
+            ],
+            "pagination": {"mode": "query", "param": "page", "start": 1, "max_pages": 5},
+            "options": {"impersonate": "chrome", "timeout": 30},
+            "schedule": {"cron": "0 4 * * 2", "timezone": "Europe/Lisbon"},
+            "respect_robots": True,
+            "tags": ["empresas", "racius", "diretorio"],
+            "id_fields": ["nif", "url"],
+            "title_field": "nome",
+            "summary_field": "nome",
+            "detail": _detail(
+                "",
+                max_items=50,
+                delay=1.0,
+                pairs={
+                    "enabled": True,
+                    "container": "li.detail__detail",
+                    "key_selector": "p.detail__key-info",
+                    "value_selector": "p.t--d-blue",
+                    "field": "ficha",
+                },
+            ),
         },
     },
 ]

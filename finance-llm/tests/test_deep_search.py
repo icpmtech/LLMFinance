@@ -1139,3 +1139,41 @@ def test_followups_vem_na_resposta_da_recuperacao(monkeypatch):
 @pytest.mark.parametrize("value,expected", [(1, deep.PER_SOURCE_MIN), (99, deep.PER_SOURCE_MAX), ("x", deep.PER_SOURCE_DEFAULT)])
 def test_limites_sao_aproximados(value, expected):
     assert deep._clamp(value, deep.PER_SOURCE_MIN, deep.PER_SOURCE_MAX, deep.PER_SOURCE_DEFAULT) == expected
+
+
+# --------------------------------------------------- âmbitos e fusão das fontes
+
+def test_todos_os_ambitos_do_deep_search_existem_na_pesquisa_unificada():
+    """Cada âmbito tem de existir na pesquisa unificada.
+
+    Um âmbito declarado aqui e desconhecido lá devolvia zero resultados **em
+    silêncio** (o `retrieve` só lê os grupos que pediu) — foi o que aconteceu ao
+    acrescentar âmbitos novos sem os registar nos dois lados.
+    """
+    from api import search_service
+
+    faltam = [scope for scope in deep.SOURCE_IDS if scope not in search_service.SCOPE_IDS]
+    assert faltam == [], f"âmbitos sem grupo na pesquisa unificada: {faltam}"
+
+
+def test_publicacoes_judiciais_tem_campos_e_indice():
+    """Os âmbitos judiciais procuram no índice certo e pelos campos do visado."""
+    from api import search_service
+
+    for scope in ("cire", "societario", "citacoes"):
+        assert scope in deep.SOURCE_IDS
+        assert search_service.JUDICIAL_INDEX[scope]
+        assert search_service.JUDICIAL_FIELDS[scope], scope
+    # O nome do visado é o que distingue a publicação: vem com boost e em 1.º.
+    assert search_service.JUDICIAL_FIELDS["cire"][0] == "insolvente^3"
+    assert search_service.JUDICIAL_FIELDS["citacoes"][0] == "citado^3"
+
+
+def test_nif_de_pessoa_coletiva_recusa_particulares():
+    """Só NIF de pessoa coletiva abre ficha de empresa (os particulares não a têm)."""
+    from api import search_service
+
+    assert search_service._nif_coletivo("500247196") == "500247196"
+    assert search_service._nif_coletivo("148642314") == ""
+    assert search_service._nif_coletivo("") == ""
+    assert search_service._nif_coletivo("PT-WIKI-PT:1") == ""

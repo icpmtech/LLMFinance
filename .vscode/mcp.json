@@ -8,7 +8,7 @@
       "env": {
         "IQOS_API_URL": "http://127.0.0.1:8002",
         "PYTHONUNBUFFERED": "1",
-        "IQOS_MCP_TAGS": "contratos,contratos-es,contratos-fr,empresas"
+        "IQOS_MCP_TAGS": "contratos,contratos-es,contratos-fr,empresas,deep-search,hermes"
       }
     }
   }

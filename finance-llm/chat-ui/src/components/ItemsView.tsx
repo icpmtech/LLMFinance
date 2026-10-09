@@ -124,14 +124,24 @@ export function ItemValues({
   dense?: boolean;
 }) {
   const image = itemImage(item);
-  const entries = Object.entries(valuesOf(item)).filter(([key, value]) => {
+  // Objetos aninhados (ex.: a ficha de uma empresa em `ficha`) não se mostram
+  // como JSON: abrem-se numa entrada por subcampo (`ficha · Morada`), senão os
+  // «dados diferentes» de cada item ficariam invisíveis.
+  const entries: [string, unknown][] = [];
+  for (const [key, value] of Object.entries(valuesOf(item))) {
     const name = key.toLowerCase();
-    if (name === "url" || name === "link" || name === "href" || name === "valores") return false;
-    if (value === null || value === undefined || value === "") return false;
-    if (isHttpUrl(value) && value === image) return false;
-    if (typeof value === "object" && !Array.isArray(value)) return false;
-    return true;
-  });
+    if (name === "url" || name === "link" || name === "href" || name === "valores") continue;
+    if (value === null || value === undefined || value === "") continue;
+    if (isHttpUrl(value) && value === image) continue;
+    if (typeof value === "object" && !Array.isArray(value)) {
+      for (const [subKey, subValue] of Object.entries(value as Record<string, unknown>)) {
+        if (subValue === null || subValue === undefined || subValue === "") continue;
+        entries.push([`${key} · ${subKey}`, subValue]);
+      }
+      continue;
+    }
+    entries.push([key, value]);
+  }
   if (!entries.length) return null;
   const shown = entries.slice(0, max);
   const hidden = entries.length - shown.length;

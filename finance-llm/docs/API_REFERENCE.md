@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **843 operações** em **39 grupos**.
+Versão `0.4.0` · **964 operações** em **39 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -53,6 +53,9 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | Método | Caminho | Resumo |
 | --- | --- | --- |
 | `GET` | `/` | Read Root |
+| `GET` | `/cae/autocomplete` | Autocomplete Cae |
+| `GET` | `/cae/list` | List Cae |
+| `GET` | `/cae/{code}` | Get Cae |
 | `POST` | `/chat` | Chat |
 | `POST` | `/chat/stream` | Chat Stream Post |
 | `GET` | `/chat/stream` | Chat Stream Get |
@@ -92,6 +95,27 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `POST` | `/citacoes/runs/{run_id}/documentos` | Citacoes Run Documentos |
 | `GET` | `/citacoes/search` | Citacoes Search |
 | `GET` | `/citacoes/status` | Citacoes Status Endpoint |
+| `GET` | `/contracts-fr/analytics` | Contratos Fr Analytics Endpoint |
+| `GET` | `/contracts-fr/autocomplete` | Contratos Fr Autocomplete Endpoint |
+| `GET` | `/contracts-fr/entities` | Contratos Fr Entities Endpoint |
+| `POST` | `/contracts-fr/import` | Contratos Fr Import Endpoint |
+| `GET` | `/contracts-fr/import/{job_id}` | Contratos Fr Import Status Endpoint |
+| `GET` | `/contracts-fr/imports` | Contratos Fr Imports Endpoint |
+| `POST` | `/contracts-fr/ingest` | Contratos Fr Ingest Endpoint |
+| `GET` | `/contracts-fr/map` | Contratos Fr Map Endpoint |
+| `GET` | `/contracts-fr/meta` | Contratos Fr Meta |
+| `POST` | `/contracts-fr/search` | Contratos Fr Search Endpoint |
+| `POST` | `/contracts-fr/sirene/enrich` | Contratos Fr Sirene Enrich Endpoint |
+| `GET` | `/contracts-fr/status` | Contratos Fr Status Endpoint |
+| `POST` | `/contracts-fr/translate` | Contratos Fr Translate Endpoint |
+| `GET` | `/contracts-fr/translate/status` | Contratos Fr Translate Status Endpoint |
+| `GET` | `/contracts-fr/{doc_id}` | Contrato Fr Detail Endpoint |
+| `GET` | `/deep-search` | Serve Spa Page |
+| `POST` | `/deep-search/ask` | Deep Search Ask |
+| `GET` | `/deep-search/examples` | Deep Search Examples |
+| `GET` | `/deep-search/meta` | Deep Search Meta |
+| `GET` | `/deep-search/search` | Deep Search Sources |
+| `GET` | `/deep-search/suggest` | Deep Search Suggest |
 | `POST` | `/devedores/collect` | Devedores Collect |
 | `GET` | `/devedores/devedor/{nif}` | Devedores Devedor |
 | `GET` | `/devedores/files` | Devedores Files |
@@ -103,6 +127,25 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/devedores/jobs/{job_id}` | Devedores Job |
 | `GET` | `/devedores/meta` | Devedores Meta |
 | `GET` | `/devedores/search` | Devedores Search |
+| `GET` | `/docs/document/{nome}` | Servir Documento |
+| `GET` | `/docs/documents` | Listar Documentos |
+| `GET` | `/docs/markdown/{nome}` | Ler Markdown |
+| `GET` | `/empresas-recolha` | Serve Empresas Recolha Spa Page |
+| `GET` | `/empresas-recolha/catalogo` | Recolha Catalogo |
+| `GET` | `/empresas-recolha/concelhos/{distrito}` | Recolha Concelhos |
+| `POST` | `/empresas-recolha/detail` | Recolha Detail |
+| `POST` | `/empresas-recolha/distrito` | Recolha Distrito Job |
+| `POST` | `/empresas-recolha/distrito/sync` | Recolha Distrito Sync |
+| `GET` | `/empresas-recolha/distrito/{distrito}/concelhos` | Recolha Concelhos Do Site |
+| `GET` | `/empresas-recolha/distrito/{distrito}/estado` | Recolha Distrito Estado |
+| `GET` | `/empresas-recolha/distritos` | Recolha Distritos |
+| `GET` | `/empresas-recolha/exports` | Recolha List Exports |
+| `GET` | `/empresas-recolha/exports/view` | Recolha Read Export |
+| `GET` | `/empresas-recolha/jobs` | Recolha List Jobs |
+| `POST` | `/empresas-recolha/jobs` | Recolha Start Job |
+| `GET` | `/empresas-recolha/jobs/{job_id}` | Recolha Get Job |
+| `GET` | `/empresas-recolha/meta` | Recolha Meta |
+| `POST` | `/empresas-recolha/sync` | Recolha Sync |
 | `GET` | `/empresas-risco` | Serve Spa Page |
 | `GET` | `/health` | Health |
 | `GET` | `/loja` | Loja Home |
@@ -149,8 +192,20 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `POST` | `/mirofish/settings/apply` | Apply Settings |
 | `POST` | `/mirofish/simulations` | Start Simulation |
 | `GET` | `/mirofish/status` | Status |
+| `POST` | `/news/collect` | News Collect |
+| `GET` | `/news/search` | News Search |
+| `GET` | `/news/stats` | News Index Stats |
 | `GET` | `/openapi/export` | Openapi Export |
 | `GET` | `/openapi/summary` | Openapi Summary |
+| `GET` | `/osint` | Serve Osint Spa Page |
+| `GET` | `/osint/categories` | List Osint Categories |
+| `GET` | `/osint/graph/{doc_id}` | Osint Graph |
+| `GET` | `/osint/report/{doc_id}` | Osint Report |
+| `GET` | `/osint/saved/{doc_id}` | Osint Saved Detail |
+| `DELETE` | `/osint/saved/{doc_id}` | Osint Delete Saved |
+| `POST` | `/osint/scan` | Osint Scan |
+| `POST` | `/osint/search` | Osint Search |
+| `GET` | `/osint/{path}` | Serve Osint Spa Page Deep |
 | `GET` | `/padroes/analysis` | Análise completa de padrões |
 | `GET` | `/padroes/anomalies` | Contratos sinalizados |
 | `POST` | `/padroes/cache/clear` | Limpar a cache de análises |
@@ -206,8 +261,41 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/people/{nif}` | People Detail Route |
 | `GET` | `/people/{nif}/360` | People 360 Route |
 | `GET` | `/people/{nif}/graph` | People Person Graph Route |
+| `POST` | `/people/{nif}/politician/enrich` | Politician Enrich Route |
+| `GET` | `/people/{nif}/politician/graph` | Politician Graph Route |
+| `GET` | `/people/{nif}/politician/party-news` | Politician Party News Route |
+| `GET` | `/people/{nif}/politician/profile` | Politician Profile Route |
 | `GET` | `/people/{nif}/social` | People Social Route |
 | `POST` | `/people/{nif}/social-collect` | People Social Collect Route |
+| `GET` | `/pessoas-iq` | Serve Spa Page |
+| `GET` | `/pessoas-iq/politicos` | Serve Spa Page |
+| `POST` | `/reports/admin/catalogue` | Reports Admin Save Package |
+| `DELETE` | `/reports/admin/catalogue/{package_id}` | Reports Admin Delete Package |
+| `GET` | `/reports/admin/export.csv` | Reports Admin Export |
+| `GET` | `/reports/admin/overview` | Reports Admin Overview |
+| `GET` | `/reports/admin/settings` | Reports Admin Settings |
+| `PUT` | `/reports/admin/settings` | Reports Admin Save Settings |
+| `GET` | `/reports/backoffice/export.csv` | Reports Backoffice Export |
+| `GET` | `/reports/backoffice/inbox` | Reports Backoffice Inbox |
+| `GET` | `/reports/backoffice/me` | Reports Backoffice Me |
+| `GET` | `/reports/backoffice/requests/{request_id}` | Reports Backoffice Request |
+| `PATCH` | `/reports/backoffice/requests/{request_id}` | Reports Backoffice Patch |
+| `POST` | `/reports/backoffice/requests/{request_id}/files` | Reports Backoffice Upload |
+| `POST` | `/reports/backoffice/requests/{request_id}/files/base64` | Reports Backoffice Upload Base64 |
+| `DELETE` | `/reports/backoffice/requests/{request_id}/files/{file_id}` | Reports Backoffice Remove File |
+| `POST` | `/reports/backoffice/requests/{request_id}/note` | Reports Backoffice Note |
+| `POST` | `/reports/backoffice/requests/{request_id}/payment` | Reports Backoffice Payment |
+| `GET` | `/reports/catalogue` | Reports Catalogue |
+| `GET` | `/reports/notifications` | Reports Notifications |
+| `POST` | `/reports/notifications/read` | Reports Notifications Read |
+| `POST` | `/reports/requests` | Reports Create Request |
+| `GET` | `/reports/requests` | Reports My Requests |
+| `GET` | `/reports/requests/{request_id}` | Reports Get Request |
+| `POST` | `/reports/requests/{request_id}/cancel` | Reports Cancel Request |
+| `GET` | `/reports/requests/{request_id}/files/{file_id}` | Reports Download |
+| `POST` | `/reports/requests/{request_id}/payment` | Reports Declare Payment |
+| `GET` | `/reports/requests/{request_id}/payment/status` | Reports Payment Status |
+| `GET` | `/reports/summary` | Reports Summary |
 | `POST` | `/risco/cache/clear` | Limpar a cache de risco |
 | `POST` | `/risco/comparar` | Comparar o risco de várias empresas |
 | `POST` | `/risco/empresa/ia` | Parecer de risco por IA (com recuo factual) |
@@ -216,6 +304,19 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/risco/meta` | Cartão do modelo de risco, features e fontes |
 | `GET` | `/risco/pesquisa` | Pesquisa de empresas com nível de risco |
 | `GET` | `/risco/sugestoes` | Sugestões de empresas para a caixa de pesquisa |
+| `GET` | `/search/analysis/contracts` | Contracts Analysis |
+| `POST` | `/search/chat` | Search Chat Ask |
+| `GET` | `/search/chat/status` | Search Chat Status |
+| `GET` | `/search/favorites` | Favorites List |
+| `POST` | `/search/favorites` | Favorites Save |
+| `GET` | `/search/favorites/check` | Favorites Check |
+| `DELETE` | `/search/favorites/{kind}/{item_id}` | Favorites Delete |
+| `GET` | `/search/graph` | Search Graph |
+| `GET` | `/search/portfolio` | Portfolio List |
+| `POST` | `/search/portfolio` | Portfolio Save |
+| `DELETE` | `/search/portfolio/{item_id}` | Portfolio Delete |
+| `POST` | `/search/report/excel` | Search Report Excel |
+| `POST` | `/search/report/pdf` | Search Report Pdf |
 | `GET` | `/shop/activity` | Shop Activity |
 | `GET` | `/shop/catalogue` | Shop Catalogue |
 | `POST` | `/shop/customers/{item_id}/crm` | Shop Customer Crm |
@@ -249,6 +350,8 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/social/execucoes` | Serve Spa Page |
 | `GET` | `/social/modelos` | Serve Spa Page |
 | `GET` | `/social/pesquisa` | Serve Spa Page |
+| `POST` | `/translate` | Translate |
+| `GET` | `/translate/{ticker}` | Get Ticker Translation |
 
 ## auth
 
@@ -281,6 +384,9 @@ Consola de administração: panorama geral, gestão de contas e sessões, visual
 | `GET` | `/admin/logs` | Admin Logs |
 | `GET` | `/admin/logs/{name}` | Admin Log Tail |
 | `GET` | `/admin/overview` | Admin Overview |
+| `GET` | `/admin/service-keys` | Admin Service Keys |
+| `PUT` | `/admin/service-keys` | Admin Service Keys Save |
+| `POST` | `/admin/service-keys/{key_id}/test` | Admin Service Keys Test |
 | `GET` | `/admin/sidebar-access` | Admin Sidebar Access |
 | `PUT` | `/admin/sidebar-access` | Admin Sidebar Access Save |
 | `POST` | `/admin/sidebar-access/reset` | Admin Sidebar Access Reset |
@@ -368,6 +474,7 @@ Contratos públicos portugueses (BASE.gov): pesquisa e ficha, analytics e agrega
 | `GET` | `/contracts/analytics/relations` | Contracts Relations |
 | `GET` | `/contracts/autocomplete` | Contracts Autocomplete Endpoint |
 | `POST` | `/contracts/chat` | Contracts Chat |
+| `GET` | `/contracts/ecologicos` | Serve Spa Page |
 | `POST` | `/contracts/export/excel` | Contracts Export Excel |
 | `POST` | `/contracts/export/pdf` | Contracts Export Pdf |
 | `POST` | `/contracts/ingest` | Contracts Ingest |
@@ -377,6 +484,8 @@ Contratos públicos portugueses (BASE.gov): pesquisa e ficha, analytics e agrega
 | `GET` | `/contracts/years` | Contracts Years |
 | `GET` | `/contracts/{idcontrato}` | Contract Detail |
 | `POST` | `/contracts/{idcontrato}/analyze` | Analyze Contract Endpoint |
+| `GET` | `/contracts/{idcontrato}/document` | Contract Document Endpoint |
+| `POST` | `/contracts/{idcontrato}/report/pdf` | Contract Report Pdf Endpoint |
 
 ## contratos-es
 
@@ -417,6 +526,10 @@ Cadastro de entidades e empresas: pesquisa (GET/POST), estatísticas, países, a
 | `POST` | `/entities/search` | Entities Search Post |
 | `GET` | `/entities/stats` | Entities Stats |
 | `GET` | `/entities/{nif}` | Entities Detail |
+| `POST` | `/entities/{nif}/enrich` | Entities Enrich |
+| `GET` | `/entities/{nif}/relations` | Entities Relations |
+| `GET` | `/entities/{nif}/report-processos.pdf` | Entities Report Processos Pdf |
+| `GET` | `/entities/{nif}/report.pdf` | Entities Report Pdf |
 | `POST` | `/firmas/ingest` | Firmas Ingest |
 | `GET` | `/firmas/search` | Firmas Search |
 | `POST` | `/firmas/search` | Firmas Search Post |
@@ -457,6 +570,9 @@ Publicações de atos societários (publicacoes.mj.pt): recolha assistida por en
 | `POST` | `/societario/recolha/jobs` | Recolha Start Job |
 | `GET` | `/societario/recolha/jobs` | Recolha Jobs |
 | `GET` | `/societario/recolha/jobs/{job_id}` | Recolha Job |
+| `POST` | `/societario/recolha/jobs/{job_id}/pause` | Recolha Pausar Job |
+| `POST` | `/societario/recolha/jobs/{job_id}/resume` | Recolha Retomar Job |
+| `POST` | `/societario/recolha/jobs/{job_id}/stop` | Recolha Parar Job |
 | `GET` | `/societario/recolha/meta` | Recolha Meta |
 | `GET` | `/societario/recolha/targets` | Recolha Targets |
 | `GET` | `/societario/recolha/years` | Recolha Years |
@@ -524,6 +640,7 @@ Jarvis: o assistente operacional com voz. Fala com o sistema por gateways (Herme
 | `GET` | `/jarvis/tools` | Tools |
 | `POST` | `/jarvis/transcribe` | Transcribe |
 | `GET` | `/jarvis/voice` | Voice |
+| `POST` | `/jarvis/wake` | Wake |
 
 ## hermes-agent
 
@@ -781,6 +898,7 @@ Análise de sentimento: fontes disponíveis, motores (léxico/neural), análise 
 | `POST` | `/sentiment/market/build` | Sentiment Market Build |
 | `GET` | `/sentiment/market/divergence` | Sentiment Market Divergence |
 | `GET` | `/sentiment/market/export` | Sentiment Market Export |
+| `GET` | `/sentiment/market/live` | Sentiment Market Live |
 | `GET` | `/sentiment/market/overview` | Sentiment Market Overview |
 | `GET` | `/sentiment/market/price/{ticker}` | Sentiment Market Price |
 | `POST` | `/sentiment/market/report/office` | Sentiment Market Report |
@@ -794,6 +912,9 @@ Análise de sentimento: fontes disponíveis, motores (léxico/neural), análise 
 | `GET` | `/sentiment/market/tickers` | Sentiment Market Tickers |
 | `POST` | `/sentiment/market/tickers` | Sentiment Market Follow |
 | `DELETE` | `/sentiment/market/tickers/{ticker}` | Sentiment Market Unfollow |
+| `GET` | `/sentiment/market/watchlist` | Sentiment Market Watchlist |
+| `POST` | `/sentiment/market/watchlist` | Sentiment Market Watchlist Add |
+| `DELETE` | `/sentiment/market/watchlist/{ticker}` | Sentiment Market Watchlist Remove |
 | `GET` | `/sentiment/meta` | Sentiment Meta |
 | `POST` | `/sentiment/save/dossier` | Save To Dossier |
 | `POST` | `/sentiment/save/office` | Save To Office |

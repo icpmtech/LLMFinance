@@ -48,7 +48,8 @@ Três camadas, para que **todo o sistema** esteja acessível:
 1. **Curadas** — uma ferramenta por operação relevante, com nome descritivo e
    assinatura tipada (ex.: `contratos_search`, `empresas_global_search`,
    `empresa_detail`, `hermes_ask`, `search360_topic`, `ontology_ai_answer`,
-   `visualizador_query`, `crm_deals`, `email_messages`, `scraper_search`).
+   `visualizador_query`, `crm_deals`, `email_messages`, `scraper_search`,
+   `deep_search_search`, `deep_search_ask`).
    Execute `--list-tools` para a lista completa, agrupada por módulo.
 2. **Genéricas** — cobrem o resto da API:
    * `iqos_modules` — módulos da plataforma e estado do serviço;

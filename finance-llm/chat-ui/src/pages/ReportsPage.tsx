@@ -35,6 +35,7 @@ import {
   X,
 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui";
+import { AdminReportsTab } from "./AdminReports";
 import {
   badgeVariant,
   bytes,
@@ -44,6 +45,7 @@ import {
   downloadReportFile,
   getMyReports,
   getReportPaymentStatus,
+  getReportsBackofficeMe,
   getReportsCatalogue,
   getReportsNotifications,
   getReportsSummary,
@@ -67,7 +69,9 @@ export default function ReportsPage() {
   const [notifications, setNotifications] = useState<ReportsNotification[]>([]);
   const [unread, setUnread] = useState(0);
   const [showBell, setShowBell] = useState(false);
-  const [tab, setTab] = useState<"pedir" | "meus">("pedir");
+  const [tab, setTab] = useState<"pedir" | "meus" | "backoffice">("pedir");
+  const [backofficeAllowed, setBackofficeAllowed] = useState(false);
+  const [backofficePending, setBackofficePending] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -117,6 +121,16 @@ export default function ReportsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /** Quem trata os pedidos vê aqui o backoffice (a área de Administração exige `admin`). */
+  useEffect(() => {
+    void getReportsBackofficeMe()
+      .then((me) => {
+        setBackofficeAllowed(Boolean(me.backoffice));
+        setBackofficePending(Number(me.stats?.pending_payment || 0) + Number(me.stats?.awaiting_confirm || 0));
+      })
+      .catch(() => setBackofficeAllowed(false));
+  }, []);
 
   /** Sondagem das notificações: é assim que o cliente é «avisado». */
   useEffect(() => {
@@ -309,7 +323,7 @@ export default function ReportsPage() {
         {error && <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
 
         {!loading && !error && (
-          <Tabs value={tab} onValueChange={(value) => setTab(value as "pedir" | "meus")} className="w-full">
+          <Tabs value={tab} onValueChange={(value) => setTab(value as "pedir" | "meus" | "backoffice")} className="w-full">
             <TabsList className="mb-4">
               <TabsTrigger value="pedir" active={tab === "pedir"} onClick={() => setTab("pedir")}>
                 Pedir relatório
@@ -317,6 +331,11 @@ export default function ReportsPage() {
               <TabsTrigger value="meus" active={tab === "meus"} onClick={() => setTab("meus")}>
                 Os meus relatórios {items.length > 0 ? `(${items.length})` : ""}
               </TabsTrigger>
+              {backofficeAllowed && (
+                <TabsTrigger value="backoffice" active={tab === "backoffice"} onClick={() => setTab("backoffice")}>
+                  Backoffice{backofficePending > 0 ? ` (${backofficePending})` : ""}
+                </TabsTrigger>
+              )}
             </TabsList>
 
             {/* ------------------------------------------------------ pedir */}
@@ -476,14 +495,14 @@ export default function ReportsPage() {
             {/* ------------------------------------------------------- meus */}
             <TabsContent value="meus" active={tab === "meus"} className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
-                <Button variant={filter === "" ? "default" : "outline"} size="sm" onClick={() => setFilter("")}>
+                <Button variant={filter === "" ? "primary" : "outline"} size="sm" onClick={() => setFilter("")}>
                   Todos ({items.length})
                 </Button>
                 {summary?.labels &&
                   Object.entries(summary.labels)
                     .filter(([key]) => (summary.by_status[key] || 0) > 0)
                     .map(([key, label]) => (
-                      <Button key={key} variant={filter === key ? "default" : "outline"} size="sm" onClick={() => setFilter(key)}>
+                      <Button key={key} variant={filter === key ? "primary" : "outline"} size="sm" onClick={() => setFilter(key)}>
                         {label} ({summary.by_status[key]})
                       </Button>
                     ))}
@@ -507,6 +526,17 @@ export default function ReportsPage() {
                 </div>
               )}
             </TabsContent>
+
+            {/* --------------------------------------------------- backoffice */}
+            {backofficeAllowed && (
+              <TabsContent value="backoffice" active={tab === "backoffice"} className="flex min-h-0 flex-col">
+                <AdminReportsTab
+                  onError={(message) => {
+                    if (message) notify(message, "error");
+                  }}
+                />
+              </TabsContent>
+            )}
           </Tabs>
         )}
       </main>

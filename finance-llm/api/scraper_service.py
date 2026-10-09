@@ -37,7 +37,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
-from urllib.parse import urljoin
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.robotparser import RobotFileParser
 
 from api.elasticsearch_client import (
@@ -100,17 +100,40 @@ _TEXT_SKIP_FIELDS = {
     "publicado",
 }
 
+#: Bloco `detail.pairs`: pares chave/valor da página de detalhe (ficha de
+#: empresa, tabela de especificações…). Sem ele, o detalhe só traz texto.
+DEFAULT_DETAIL_PAIRS = {
+    "enabled": False,
+    "container": "",
+    "key_selector": "",
+    "value_selector": "",
+    "field": "ficha",
+    "max_pairs": 60,
+}
+
+#: Modos de paginação: seguir uma ligação «seguinte» (`link`), avançar um
+#: parâmetro de query (`query`, ex.: `?page=2`) ou reenviar o formulário
+#: ASP.NET (`postback`, `__doPostBack`).
+PAGINATION_MODES = ("link", "query", "postback")
+
 _DEFAULTS = {
     "fetcher": "http",
     "list": {"selector": "", "type": "css"},
     "fields": [],
-    "pagination": {"selector": "", "type": "css", "attr": "href", "max_pages": 1},
+    "pagination": {"mode": "link", "selector": "", "type": "css", "attr": "href", "max_pages": 1},
     "options": {},
     "schedule": {"cron": "", "timezone": "Europe/Lisbon"},
     "respect_robots": True,
     "tags": [],
     "id_fields": [],
-    "detail": {"enabled": False, "selector": "", "max_items": 0, "delay": 0.5, "max_chars": 20000},
+    "detail": {
+        "enabled": False,
+        "selector": "",
+        "max_items": 0,
+        "delay": 0.5,
+        "max_chars": 20000,
+        "pairs": dict(DEFAULT_DETAIL_PAIRS),
+    },
     "sentiment": dict(scraper_sentiment.DEFAULT_CONFIG),
 }
 
@@ -299,9 +322,12 @@ def _normalize_selector(raw: Any, default_type: str = "css") -> Dict[str, Any]:
 def _normalize_pagination(raw: Any) -> Dict[str, Any]:
     """Normaliza o bloco `pagination`.
 
-    Dois modos:
+    Três modos:
 
-    - **Ligação** (`type` css/xpath/text): segue um `href` (o `.next a` clássico).
+    - **Ligação** (`link`, omissão): segue um `href` (o `.next a` clássico).
+    - **Query** (`mode="query"`): o site não publica ligações de paginação; a
+      página é um parâmetro do URL (`?page=2`). `param` é o nome do parâmetro e
+      `start` o número da primeira página.
     - **Postback** (`type="postback"`): muitos sites ASP.NET/SharePoint não têm
       endereço por página — o «seguinte» é um `javascript:__doPostBack(...)` que
       só funciona devolvendo o formulário (`__VIEWSTATE` e companhia) ao servidor.
@@ -319,13 +345,54 @@ def _normalize_pagination(raw: Any) -> Dict[str, Any]:
     hidden = raw.get("hidden_fields")
     if not isinstance(hidden, (list, tuple)):
         hidden = None
+    mode = str(raw.get("mode") or "link").strip().lower()
+    if mode not in PAGINATION_MODES:
+        mode = "link"
+    if postback:
+        mode = "postback"
+    try:
+        start = int(raw.get("start") if raw.get("start") is not None else 1)
+    except (TypeError, ValueError):
+        start = 1
+    if start < 0:
+        start = 0
     return {
+        "mode": mode,
         "selector": base["selector"],
         "type": "postback" if postback else base["type"],
         "attr": str(raw.get("attr") or "href").strip() or "href",
         "max_pages": max(1, min(int(raw.get("max_pages") or 1), 500)),
         "next_text": str(raw.get("next_text") or ">").strip(),
         "hidden_fields": [str(h).strip() for h in (hidden or []) if str(h).strip()],
+        "param": str(raw.get("param") or "page").strip() or "page",
+        "start": start,
+    }
+
+
+def _normalize_detail_pairs(raw: Any) -> Dict[str, Any]:
+    """Normaliza o bloco `detail.pairs` (pares chave/valor da página de detalhe).
+
+    Pensado para fichas de diretório: cada `container` (ex.: `li.detail__detail`)
+    tem um nó de rótulo (`key_selector`) e um de valor (`value_selector`); o
+    resultado junta-se num dicionário `{rótulo: valor}` guardado no item, no
+    campo `field` dos `data` (é o que permite ter **dados diferentes** por
+    empresa sem escrever um campo por cada linha da ficha).
+    """
+    raw = raw if isinstance(raw, dict) else {}
+    container = str(raw.get("container") or "").strip()
+    key_selector = str(raw.get("key_selector") or "").strip()
+    value_selector = str(raw.get("value_selector") or "").strip()
+    try:
+        max_pairs = int(raw.get("max_pairs") or 60)
+    except (TypeError, ValueError):
+        max_pairs = 60
+    return {
+        "enabled": bool(raw.get("enabled", False)) and bool(key_selector and value_selector),
+        "container": container,
+        "key_selector": key_selector,
+        "value_selector": value_selector,
+        "field": str(raw.get("field") or "ficha").strip() or "ficha",
+        "max_pairs": max(1, min(max_pairs, 500)),
     }
 
 
@@ -342,6 +409,10 @@ def _normalize_detail(raw: Any) -> Dict[str, Any]:
     `type` aceita os mesmos tipos de seletor dos campos (`css` por omissão,
     `xpath`, `text` ou `regex`): há corpos que só se isolam por posição
     (`//div[@class="col-xs-12" and div[@class="TextoRegular-Titulo"]]`).
+
+    `pairs` permite, além do texto, trazer a **ficha estruturada** da página de
+    detalhe (ver `_normalize_detail_pairs`). O bloco fica ligado se tiver
+    `selector` de texto **ou** pares válidos.
     """
     raw = raw if isinstance(raw, dict) else {}
     enabled = bool(raw.get("enabled", False))
@@ -363,13 +434,15 @@ def _normalize_detail(raw: Any) -> Dict[str, Any]:
         max_chars = int(raw.get("max_chars") or 20000)
     except (TypeError, ValueError):
         max_chars = 20000
+    pairs = _normalize_detail_pairs(raw.get("pairs"))
     return {
-        "enabled": enabled and bool(selector),
+        "enabled": enabled and (bool(selector) or pairs["enabled"]),
         "selector": selector,
         "type": kind,
         "max_items": max_items,
         "delay": max(0.0, min(delay, DETAIL_MAX_DELAY)),
         "max_chars": max(500, min(max_chars, 200000)),
+        "pairs": pairs,
     }
 
 
@@ -1141,6 +1214,24 @@ def _postback_form(page: Any, pagination: Dict[str, Any], target: str) -> Dict[s
     return data
 
 
+def _page_query_url(base: str, pagination: Dict[str, Any], page_number: int) -> str:
+    """URL da página `page_number` quando a paginação é um parâmetro de query.
+
+    `start` é o número da primeira página (1 na maioria dos sites, 0 em alguns):
+    com `start=1`, a página 2 é `?page=2`.
+    """
+    try:
+        start = int(pagination.get("start") if pagination.get("start") is not None else 1)
+    except (TypeError, ValueError):
+        start = 1
+    param = str(pagination.get("param") or "page")
+    value = start + max(0, page_number - 1)
+    parts = urlsplit(base)
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k != param]
+    query.append((param, str(value)))
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
 def _next_page_url(page: Any, source: Dict[str, Any], current_url: str) -> Optional[str]:
     pagination = source.get("pagination") or {}
     selector = pagination.get("selector") or ""
@@ -1192,7 +1283,8 @@ def _detail_targets(source: Dict[str, Any], items: List[Dict[str, Any]], used: i
     seguintes fiquem sem detalhe.
     """
     detail = source.get("detail") or {}
-    if not detail.get("enabled") or not detail.get("selector"):
+    pairs = detail.get("pairs") or {}
+    if not detail.get("enabled") or not (detail.get("selector") or pairs.get("enabled")):
         return []
     max_items = detail.get("max_items")
     if max_items in (None, ""):
@@ -1218,6 +1310,44 @@ def _detail_targets(source: Dict[str, Any], items: List[Dict[str, Any]], used: i
     return targets
 
 
+def _extract_pairs(page: Any, pairs: Dict[str, Any]) -> Dict[str, str]:
+    """Extrai os pares chave/valor de uma página de detalhe (ficha estruturada).
+
+    Cada `container` (ex.: `li.detail__detail`) pode ter um ou mais rótulos e
+    valores; dentro dele emparelham-se `.key_selector[i]` com `.value_selector[i]`.
+    Rótulos repetidos juntam-se com « · » (ex.: morada e localidade).
+    """
+    if not pairs.get("enabled"):
+        return {}
+    container = str(pairs.get("container") or "")
+    key_selector = str(pairs.get("key_selector") or "")
+    value_selector = str(pairs.get("value_selector") or "")
+    if not key_selector or not value_selector:
+        return {}
+    try:
+        max_pairs = max(1, int(pairs.get("max_pairs") or 60))
+    except (TypeError, ValueError):
+        max_pairs = 60
+    nodes = _select(page, container, "css") if container else [page]
+    out: Dict[str, str] = {}
+    for node in nodes:
+        keys = _select(node, key_selector, "css")
+        values = _select(node, value_selector, "css")
+        for key_node, value_node in zip(keys, values):
+            key = _clean_spaces(_node_text(key_node))
+            value = _clean_spaces(_node_text(value_node))
+            if not key or not value:
+                continue
+            if key in out:
+                if value not in out[key]:
+                    out[key] = f"{out[key]} · {value}"
+                continue
+            out[key] = value
+            if len(out) >= max_pairs:
+                return out
+    return out
+
+
 def _enrich_with_detail(
     source: Dict[str, Any],
     items: List[Dict[str, Any]],
@@ -1225,7 +1355,10 @@ def _enrich_with_detail(
     options: Dict[str, Any],
     stats: Dict[str, int],
 ) -> None:
-    """Vai a cada página de detalhe e guarda o corpo do artigo no item.
+    """Vai a cada página de detalhe e enriquece o item.
+
+    Traz o **corpo do artigo** (`detail.selector`) e/ou a **ficha estruturada**
+    (`detail.pairs`), conforme o que a fonte declarar.
 
     `max_items=0` significa "todos os itens de cada página" — o contador de
     itens usados de uma página não deve bloquear a página seguinte. Por isso,
@@ -1233,16 +1366,18 @@ def _enrich_with_detail(
     acumulado global (exceto pelo teto absoluto DETAIL_MAX_ITEMS).
 
     Falhas individuais nunca invalidam a recolha: contam-se e a lista segue sem
-    o texto integral desses itens.
+    o detalhe desses itens.
     """
     detail = source.get("detail") or {}
+    pairs_cfg = detail.get("pairs") or {}
     targets = _detail_targets(source, items, 0)
     if not targets:
-        logger.debug("Sem alvos de texto integral nesta página")
+        logger.debug("Sem alvos de detalhe nesta página")
         return
     user_agent = str(options.get("user_agent") or DEFAULT_USER_AGENT)
     delay = float(detail.get("delay") or 0.5)
     max_chars = int(detail.get("max_chars") or 20000)
+    pairs_field = str(pairs_cfg.get("field") or "ficha")
     for index, item in enumerate(targets):
         url = str(item.get("url"))
         if source.get("respect_robots", True) and not _robots_allows(url, user_agent):
@@ -1251,14 +1386,18 @@ def _enrich_with_detail(
         if index:
             time.sleep(delay)  # cortesia: uma pausa entre páginas
         text: Optional[str] = None
+        pairs: Dict[str, str] = {}
         last_exc: Optional[Exception] = None
         attempts = max(1, int(options.get("retries") or detail.get("retries") or 1))
         for attempt in range(attempts):
             try:
                 page = _session_fetch(session, source["fetcher"], url, options)
                 if page is not None:
-                    text = _longest_node_text(page, detail["selector"], detail.get("type") or "css")[:max_chars]
-                    if text:
+                    if detail.get("selector"):
+                        text = _longest_node_text(page, detail["selector"], detail.get("type") or "css")[:max_chars]
+                    if pairs_cfg.get("enabled"):
+                        pairs = _extract_pairs(page, pairs_cfg)
+                    if text or pairs:
                         break
             except Exception as exc:
                 last_exc = exc
@@ -1268,18 +1407,17 @@ def _enrich_with_detail(
                     time.sleep(retry_delay)
         if text:
             item["text"] = text
+        if pairs:
+            data = item.setdefault("data", {})
+            if isinstance(data, dict):
+                data[pairs_field] = pairs
+            stats["detail_pairs_count"] = stats.get("detail_pairs_count", 0) + 1
+        if text or pairs:
             item["detail"] = True
             stats["detail_count"] = stats.get("detail_count", 0) + 1
         else:
             if last_exc:
-                logger.debug("Texto integral de %s falhou: %s", url, last_exc)
-            stats["detail_errors"] = stats.get("detail_errors", 0) + 1
-            continue
-        if text:
-            item["text"] = text
-            item["detail"] = True
-            stats["detail_count"] = stats.get("detail_count", 0) + 1
-        else:
+                logger.debug("Detalhe de %s falhou: %s", url, last_exc)
             stats["detail_errors"] = stats.get("detail_errors", 0) + 1
 
 
@@ -1332,6 +1470,13 @@ def _walk_source(
                 if value:
                     counters[key] = counters.get(key, 0) + value
             yield page_number, page, items
+            if pagination.get("mode") == "query":
+                # Site sem ligação «seguinte»: a página é um parâmetro do URL
+                # (`?page=2`). Páginas sem itens novos indicam o fim da lista.
+                if page_number >= pages_limit or not items:
+                    break
+                url = _page_query_url(source["url"], pagination, page_number + 1)
+                continue
             next_url = _next_page_url(page, source, url)
             if not next_url:
                 break
@@ -1523,6 +1668,7 @@ def _execute_run(source: Dict[str, Any], meta: Dict[str, Any], user_id: Optional
             "detail_count": int(detail_stats.get("detail_count") or 0),
             "detail_errors": int(detail_stats.get("detail_errors") or 0),
             "detail_skipped": int(detail_stats.get("detail_skipped") or 0),
+            "detail_pairs_count": int(detail_stats.get("detail_pairs_count") or 0),
             "duplicates": int(detail_stats.get("duplicates") or 0),
             "sentiment_count": int(detail_stats.get("sentiment_count") or 0),
             "sentiment_errors": int(detail_stats.get("sentiment_errors") or 0),
@@ -1574,6 +1720,7 @@ def preview_source(payload: Dict[str, Any], *, limit: int = 5, max_pages: int = 
         "fields": [f["name"] for f in source["fields"]],
         "detail_count": int(detail_stats.get("detail_count") or 0),
         "detail_errors": int(detail_stats.get("detail_errors") or 0),
+        "detail_pairs_count": int(detail_stats.get("detail_pairs_count") or 0),
         "duplicates": int(detail_stats.get("duplicates") or 0),
     }
 

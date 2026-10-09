@@ -478,7 +478,7 @@ export default function ScraperPage({ section, onSectionChange }: ScraperPagePro
           <Kpi
             label="Itens indexados"
             value={numberFormat.format(stats.items_indexed)}
-            hint={stats.items_with_text ? `${numberFormat.format(stats.items_with_text)} com texto integral` : "pesquisáveis no Elasticsearch"}
+            hint={stats.items_with_text ? `${numberFormat.format(stats.items_with_text)} com detalhe` : "pesquisáveis no Elasticsearch"}
           />
           <Kpi label="Última recolha" value={formatDate(stats.last_run?.finished_at ?? stats.last_run?.started_at)} hint={stats.last_run?.source_name ?? "—"} />
         </div>
@@ -717,7 +717,7 @@ function TemplatesSection({
               <div className="mt-2 flex flex-wrap gap-1">
                 {template.detail ? (
                   <Pill className="border-emerald-400/30 bg-emerald-400/10 text-emerald-200">
-                    <FileJson size={10} /> texto integral
+                    <FileJson size={10} /> detalhe
                   </Pill>
                 ) : null}
                 {template.requires_browser ? (
@@ -754,7 +754,7 @@ function TemplatesSection({
                     <>
                       <p>
                         {result.total} itens na lista
-                        {result.detail_count ? ` · ${result.detail_count} com texto integral` : ""}
+                        {result.detail_count ? ` · ${result.detail_count} com detalhe` : ""}
                         {result.duplicates ? ` · ${result.duplicates} repetidos ignorados` : ""}
                       </p>
                       {result.items?.[0]?.title ? (
@@ -957,7 +957,7 @@ function SourcesSection({
                   {lastRun.detail_count ? (
                     <>
                       <span className="text-muted-foreground">·</span>
-                      <span>{numberFormat.format(lastRun.detail_count)} com texto integral</span>
+                      <span>{numberFormat.format(lastRun.detail_count)} com detalhe</span>
                     </>
                   ) : null}
                   {lastRun.duplicates ? (

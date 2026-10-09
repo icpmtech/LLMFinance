@@ -73,7 +73,10 @@ PERSONA = os.getenv(
 RULES = (
     "Regras:\n"
     "1. Tens skills próprias — lê a SKILL.md relevante antes de improvisar. Para dados "
-    "portugueses/espanhóis usa a skill `pesquisa-total`; para a web aberta, `websearch`.\n"
+    "portugueses/espanhóis usa a skill `pesquisa-total`; para perguntas que exigem "
+    "**resposta fundamentada com citações `[n]`** (insolvências, atos societários, "
+    "quanto vale um contrato), usa a skill `pesquisa-profunda`, que chama a Pesquisa "
+    "profunda do IQ OS; para a web aberta, `websearch`.\n"
     "2. Não inventes: números, datas, nomes e URL têm de vir de uma fonte que consultaste.\n"
     "3. Cita sempre a fonte (nome do âmbito/ficheiro e URL quando existir).\n"
     "4. Se a pergunta for ambígua ou faltar um dado essencial, faz uma pergunta curta em "
@@ -392,11 +395,19 @@ def assistant_system(task: str = "") -> str:
         "Dados que tens ao lado (rede interna, sem chave):",
         f"- Pesquisa total do IQ OS: `GET {api}/search/unified?q=<termo>&scope=all&size=5` "
         "(âmbitos: all, scraped, social, contracts, contracts_es, entities, entities_es, "
-        "pessoas, politicos, wikipedia, trademarks, firmas, news, imprensa, market, crm). "
+        "contribuintes, pessoas, cire, societario, citacoes, politicos, wikipedia, "
+        "trademarks, firmas, news, imprensa, market, crm). "
         "Resposta agrupada com contagens (`total`) e itens com `title`/`url`.",
+        f"- Pesquisa profunda do IQ OS (skill `pesquisa-profunda`): "
+        f"`GET {api}/deep-search/search?q=<pergunta>` devolve as fontes numeradas `[n]` "
+        f"(sem modelo) e `POST {api}/deep-search/ask` {{\"question\": …}} devolve a "
+        "resposta citada (SSE). Âmbitos: `contracts`, `entities`, `contribuintes`, `cire` "
+        "(insolvências), `societario` (atos societários), `citacoes`, `pessoas`, "
+        "`imprensa`, `scraped`, `wikipedia`, `trademarks`, `firmas`, `market`.",
         f"- Metasearch interno: `GET {searx}/search?q=<termo>&format=json` (SearXNG, JSON).",
         "- Plataforma: `" + api + "` (contratos, empresas, pessoas, contribuintes, "
-        "insolvências, mercado — ver a skill `pesquisa-total`).",
+        "insolvências, atos societários, citações edital, mercado — ver as skills "
+        "`pesquisa-total` e `pesquisa-profunda`).",
         "",
         RULES,
     ]

@@ -128,6 +128,12 @@ export const APP_MODULES: AppModule[] = [
     ids: ["office", "docs", "email", "visualizador", "sentimento", "ontology"],
   },
   {
+    id: "relatorios",
+    label: "Relatórios",
+    hint: "Relatórios corporativos, financeiros e de concorrência a pedido (pagamento MB Way)",
+    ids: ["reports"],
+  },
+  {
     id: "noticias",
     label: "Notícias e feeds",
     hint: "Leitor de RSS e índice de notícias: recolher e procurar por ticker, tema e tom",

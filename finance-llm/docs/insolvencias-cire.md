@@ -156,6 +156,12 @@ Campos principais: `referencia`, `data_publicacao`, `data_propositura`,
 Facetas devolvidas pela pesquisa: tipo, comarca, tribunal, espécie, ato, ano,
 mês e papel do interveniente.
 
+Este índice é também um âmbito da **Pesquisa total** (`/search/unified?scope=cire`)
+e da **Pesquisa profunda** (`sources=["cire"]` em `/deep-search/search` e
+`/deep-search/ask`): aí a pesquisa é feita por **relevância** (o nome do
+insolvente vale mais do que o acto) e não por data, para distinguir «insolvências
+da empresa X» de «insolvências mais recentes».
+
 ## Grafo (`/cire/graph`)
 
 A secção **Grafo** da página desenha a rede das insolvências a partir do índice.

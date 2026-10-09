@@ -41,10 +41,14 @@ SOURCES: List[Dict[str, Any]] = [
     {"id": "contracts", "label": "Contratos", "hint": "Contratação pública portuguesa (portal BASE)", "default": True, "weight": 1.0},
     {"id": "entities", "label": "Empresas", "hint": "Cadastro de entidades (NIF, CAE, contactos)", "default": True, "weight": 0.95},
     {"id": "contracts_es", "label": "Contratos ES", "hint": "Contratação pública de Espanha (PLACSP)", "default": True, "weight": 0.9},
+    {"id": "cire", "label": "Insolvências", "hint": "CIRE: insolvências, PER, PEAP e PEVE publicados no CITIUS", "default": True, "weight": 0.9},
     {"id": "pessoas", "label": "Pessoas", "hint": "Fichas de pessoas (CIRE, registo societário)", "default": True, "weight": 0.9},
+    {"id": "societario", "label": "Atos societários", "hint": "Publicações de atos de registo comercial e de fundações (publicacoes.mj.pt)", "default": True, "weight": 0.85},
     {"id": "imprensa", "label": "Imprensa", "hint": "Notícias recolhidas dos jornais", "default": True, "weight": 0.85},
     {"id": "scraped", "label": "Recolha", "hint": "Dados recolhidos de sites (scraping)", "default": True, "weight": 0.8},
     {"id": "entities_es", "label": "Entidades ES", "hint": "Órgãos adjudicantes e empresas de Espanha", "default": True, "weight": 0.8},
+    {"id": "citacoes", "label": "Citações Edital", "hint": "Citações e notificações editais do CITIUS", "default": True, "weight": 0.75},
+    {"id": "contribuintes", "label": "Contribuintes", "hint": "NIF/NIPC do sistema, papéis e valores por fonte", "default": True, "weight": 0.75},
     {"id": "news", "label": "Notícias", "hint": "Índice de notícias de mercado (`finance_news`)", "default": True, "weight": 0.75},
     {"id": "social", "label": "Redes sociais", "hint": "Publicações de LinkedIn, TikTok, Reddit e Facebook", "default": True, "weight": 0.7},
     {"id": "politicos", "label": "Políticos", "hint": "Políticos portugueses (Wikipédia e parlamento)", "default": True, "weight": 0.7},
@@ -111,6 +115,9 @@ PER_SOURCE_DEFAULT = 6
 PER_SOURCE_MIN, PER_SOURCE_MAX = 2, 50
 MAX_SOURCES_DEFAULT = 12
 MAX_SOURCES_MIN, MAX_SOURCES_MAX = 4, 120
+#: Mínimo de fontes garantido a cada âmbito quando o teto por âmbito aperta
+#: (`retrieve`): sem ele, um âmbito com dois resultados bons ficava de fora.
+MIN_PER_SCOPE = 2
 
 #: `max_sources = 0` significa «sem limite»: recolhe-se tudo o que cada âmbito
 #: devolver. O prompt do modelo recebe só as melhores `CITABLE_MAX` fontes (o
@@ -1198,6 +1205,12 @@ def retrieve(
     picked: List[Dict[str, Any]] = []
     seen_ids: set = set()
     seen_titles: set = set()
+    #: Teto por âmbito (só quando se procura em mais do que um): os contratos —
+    #: o âmbito com mais documentos e maior peso — ocupavam as `max_sources`
+    #: fontes todas e os âmbitos mais pequenos (insolvências, atos societários,
+    #: citações) nunca chegavam a ser citados.
+    quota = max(MIN_PER_SCOPE, -(-max_sources // 4)) if max_sources and len(chosen) > 1 else 0
+    por_ambito: Dict[str, int] = {}
     for entry in ordered:
         scope_id = entry["scope"]
         item = entry["item"]
@@ -1207,9 +1220,12 @@ def retrieve(
             continue
         if title_key and title_key in seen_titles:
             continue
+        if quota and por_ambito.get(scope_id, 0) >= quota:
+            continue
         seen_ids.add(identity)
         if title_key:
             seen_titles.add(title_key)
+        por_ambito[scope_id] = por_ambito.get(scope_id, 0) + 1
         picked.append(_as_source(len(picked) + 1, scope_id, item, entry["score"]))
         if max_sources and len(picked) >= max_sources:
             break

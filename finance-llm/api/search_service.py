@@ -37,9 +37,12 @@ from urllib.parse import quote_plus
 from elasticsearch import Elasticsearch
 
 from api.elasticsearch_client import (
+    CIRE_INDEX,
+    CITACOES_INDEX,
     CRM_INDEX,
     NON_NEWS_SOURCE_IDS,
     NON_NEWS_SOURCE_PREFIXES,
+    SOCIETARIO_INDEX,
     contratos_es_autocomplete,
     ensure_indices,
     get_es_client,
@@ -67,7 +70,11 @@ SCOPES: List[Dict[str, Any]] = [
     {"id": "contracts_es", "label": "Contratos ES", "hint": "Contratação pública de Espanha (PLACSP)"},
     {"id": "entities_es", "label": "Entidades ES", "hint": "Órgãos adjudicantes e empresas adjudicatárias de Espanha"},
     {"id": "entities", "label": "Empresas", "hint": "Cadastro de entidades"},
+    {"id": "contribuintes", "label": "Contribuintes", "hint": "NIF/NIPC do sistema, papéis e valores por fonte"},
     {"id": "pessoas", "label": "Pessoas", "hint": "Pessoas com ficha (CIRE, registo societário e política) — filtráveis por origem e fonte"},
+    {"id": "cire", "label": "Insolvências", "hint": "CIRE: insolvências, PER, PEAP e PEVE publicados no CITIUS"},
+    {"id": "societario", "label": "Atos societários", "hint": "Publicações de atos de registo comercial e de fundações (publicacoes.mj.pt)"},
+    {"id": "citacoes", "label": "Citações Edital", "hint": "Citações e notificações editais do CITIUS"},
     {"id": "politicos", "label": "Políticos", "hint": "Políticos portugueses (Wikipédia e parlamento) — filtráveis por partido, círculo e cargo"},
     {"id": "wikipedia", "label": "Wikipédia", "hint": "Enciclopédia livre (PT e EN), consultada em direto"},
     {"id": "trademarks", "label": "Marcas", "hint": "Marcas registadas (INPI)"},
@@ -308,6 +315,14 @@ def _flat(value: Any) -> Optional[str]:
     if isinstance(value, dict):
         return None
     return str(value)
+
+
+def _as_list(value: Any) -> List[str]:
+    """Valor (escalar ou lista) como lista de textos, sem entradas vazias."""
+    if value in (None, "", []):
+        return []
+    values = value if isinstance(value, list) else [value]
+    return [str(entry) for entry in values if str(entry).strip()]
 
 
 def _cpv_code(value: Any) -> Optional[str]:
@@ -705,6 +720,262 @@ def _search_entities_group(q: str, size: int, offset: int) -> Dict[str, Any]:
             )
         )
     return _group("entities", _label_for("entities"), items, result.get("total", 0), 0)
+
+
+#: Blocos agregados de um contribuinte (`campo do documento` → como se lê no resumo).
+#: O índice não guarda os registos das fontes: guarda, por fonte, quantos são.
+_CONTRIBUINTES_BLOCOS = (
+    ("contracts_count", "contratos"),
+    ("contratos_es_count", "contratos ES"),
+    ("entities_contracts_count", "contratos no cadastro"),
+    ("societario_count", "publicações societárias"),
+    ("cire_count", "publicações CIRE"),
+    ("devedores_count", "dívidas"),
+    ("people_roles_count", "cargos"),
+    ("firmas_count", "firmas"),
+    ("trademarks_count", "marcas"),
+)
+
+
+def _contribuintes_resumo(row: Dict[str, Any]) -> str:
+    """Resumo do contribuinte: quantos registos tem em cada fonte e o valor."""
+    partes: List[str] = []
+    for campo, rotulo in _CONTRIBUINTES_BLOCOS:
+        valor = row.get(campo)
+        if isinstance(valor, (int, float)) and valor:
+            partes.append(f"{int(valor):,}".replace(",", " ") + f" {rotulo}")
+    valor = row.get("contracts_value") or row.get("entities_value")
+    if isinstance(valor, (int, float)) and valor:
+        partes.append(f"{valor:,.2f}".replace(",", " ").replace(".", ",") + " €")
+    if not partes:
+        partes = [str(rotulo) for rotulo in (row.get("source_labels") or []) if rotulo]
+    return " · ".join(partes)
+
+
+def _search_contribuintes_group(q: str, size: int, offset: int) -> Dict[str, Any]:
+    from api import contribuintes_service as contribuintes  # evita ciclo no arranque
+
+    result = contribuintes.search(q=q or None, size=size, from_=offset, include_detail=False)
+    if result.get("error"):
+        return _error_group("contribuintes", _label_for("contribuintes"), str(result["error"]))
+    items = []
+    for row in result.get("items", []):
+        nif = str(row.get("nif") or "")
+        tipo = contribuintes.TYPE_LABELS.get(str(row.get("type") or ""), "")
+        items.append(
+            _item(
+                "contribuintes",
+                nif or row.get("name") or "",
+                row.get("name") or "(sem nome)",
+                subtitle=" · ".join(filter(None, [tipo, row.get("country")])),
+                snippet=_contribuintes_resumo(row),
+                date=row.get("last_seen"),
+                badges=[*_as_list(row.get("source_labels")), "NIF " + nif if nif else None],
+                extra={
+                    "nif": nif,
+                    "contratos": row.get("contracts_count"),
+                    "valor": row.get("contracts_value"),
+                    "pais": row.get("country"),
+                },
+                # Só as empresas (e não os contribuintes estrangeiros) têm ficha.
+                open_view={"view": "company-detail", "arg": nif} if nif and row.get("is_company") else None,
+            )
+        )
+    return _group("contribuintes", _label_for("contribuintes"), items, result.get("total", 0), 0)
+
+
+def _nif_do_interveniente(row: Dict[str, Any], nome: Any) -> str:
+    """NIF do interveniente com este nome (quem é o visado da publicação).
+
+    O CIRE e as citações guardam os intervenientes como lista de papéis; o NIF do
+    insolvente/citado é o que liga a publicação à ficha da empresa.
+    """
+    alvo = _fold(str(nome or ""))
+    if not alvo:
+        return ""
+    for entry in row.get("intervenientes") or []:
+        if not isinstance(entry, dict) or not entry.get("nif"):
+            continue
+        if _fold(str(entry.get("nome") or "")) == alvo:
+            return str(entry["nif"])
+    return ""
+
+
+def _nif_coletivo(nif: str) -> str:
+    """NIF de pessoa coletiva (5-9 inicial); os particulares não têm ficha de empresa."""
+    texto = re.sub(r"\D", "", nif or "")
+    return texto if len(texto) == 9 and texto[0] in "56789" else ""
+
+
+#: Campos de pesquisa das publicações judiciais (os mesmos das páginas dos
+#: módulos), com o **nome do visado** primeiro — é o que liga a pergunta ao
+#: processo. O `ato`/`especie` valem menos (são vocabulário de todos os registos).
+JUDICIAL_FIELDS: Dict[str, List[str]] = {
+    "cire": [
+        "insolvente^3",
+        "intervenientes.nome^3",
+        "referencia^3",
+        "processo^2",
+        "processo_numero^2",
+        "tribunal^2",
+        "ato^2",
+        "especie",
+    ],
+    "societario": ["entidade^3", "firma^3", "acto^2", "texto", "requerente"],
+    "citacoes": [
+        "citado^3",
+        "intervenientes.nome^3",
+        "referencia^3",
+        "processo^2",
+        "processo_numero^2",
+        "tribunal^2",
+        "ato^2",
+        "especie",
+    ],
+}
+JUDICIAL_INDEX: Dict[str, str] = {
+    "cire": CIRE_INDEX,
+    "societario": SOCIETARIO_INDEX,
+    "citacoes": CITACOES_INDEX,
+}
+#: Campos pesados que não entram no cartão da pesquisa (o texto integral do PDF).
+JUDICIAL_EXCLUDE: Dict[str, List[str]] = {"citacoes": ["texto", "documento_partes"]}
+
+
+def _search_judicial(scope_id: str, q: str, size: int, offset: int) -> Dict[str, Any]:
+    """Publicações judiciais (CIRE, atos societários, citações) **por relevância**.
+
+    As páginas destes módulos listam por data — nas publicações do dia é o que faz
+    sentido. Numa pesquisa por texto livre a ordem tem de ser a relevância: sem
+    isso, «Sicasal insolvências» devolvia as insolvências mais recentes de quem
+    quer que fosse (o termo distintivo é o nome, não o acto) e o processo da
+    Sicasal nunca aparecia. Os campos são os mesmos das páginas dos módulos; o
+    `_score` desempata por data.
+    """
+    client = get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+    query: Dict[str, Any] = (
+        {"multi_match": {"query": q, "fields": JUDICIAL_FIELDS[scope_id]}} if q else {"match_all": {}}
+    )
+    body: Dict[str, Any] = {
+        "query": query,
+        "from": max(0, offset),
+        "size": max(1, min(size, 50)),
+        "track_total_hits": True,
+        "sort": ["_score", {"data_publicacao": {"order": "desc", "missing": "_last"}}],
+    }
+    if JUDICIAL_EXCLUDE.get(scope_id):
+        body["_source"] = {"excludes": JUDICIAL_EXCLUDE[scope_id]}
+    try:
+        resp = client.search(index=JUDICIAL_INDEX[scope_id], body=body)
+    except Exception as exc:  # noqa: BLE001 - um âmbito em baixo não derruba a pesquisa
+        return {"error": str(exc), "items": [], "total": 0}
+    return {
+        "total": resp["hits"]["total"]["value"],
+        "items": [{**hit["_source"], "doc_id": hit["_id"]} for hit in resp["hits"]["hits"]],
+        "from": offset,
+        "size": size,
+        "query": q,
+    }
+
+
+def _search_cire_group(q: str, size: int, offset: int) -> Dict[str, Any]:
+    """Insolvências e revitalizações (CIRE): o visado é o insolvente/devedor."""
+    result = _search_judicial("cire", q, size, offset)
+    if result.get("error"):
+        return _error_group("cire", _label_for("cire"), str(result["error"]))
+    items = []
+    for row in result.get("items", []):
+        insolvente = row.get("insolvente") or ""
+        nif = _nif_coletivo(_nif_do_interveniente(row, insolvente))
+        items.append(
+            _item(
+                "cire",
+                row.get("pub_id") or row.get("referencia") or "",
+                insolvente or "(sem insolvente)",
+                subtitle=" · ".join(filter(None, [row.get("tipo"), row.get("tribunal_comarca")])),
+                snippet=" · ".join(
+                    filter(None, [row.get("ato"), row.get("especie"), row.get("processo_numero")])
+                ),
+                url=row.get("documento_url") or "",
+                date=row.get("data_publicacao"),
+                badges=[row.get("tipo"), row.get("especie"), row.get("tribunal_comarca")],
+                extra={
+                    "entidade": insolvente,
+                    "nif": nif,
+                    "publicacao": row.get("processo_numero"),
+                    "fonte": row.get("tribunal"),
+                },
+                open_view={"view": "company-detail", "arg": nif} if nif else None,
+            )
+        )
+    return _group("cire", _label_for("cire"), items, result.get("total", 0), 0)
+
+
+def _search_societario_group(q: str, size: int, offset: int) -> Dict[str, Any]:
+    """Atos societários publicados no MJ (registo comercial e fundações)."""
+    result = _search_judicial("societario", q, size, offset)
+    if result.get("error"):
+        return _error_group("societario", _label_for("societario"), str(result["error"]))
+    items = []
+    for row in result.get("items", []):
+        entidade = row.get("entidade") or row.get("firma") or ""
+        nif = _nif_coletivo(str(row.get("nif") or row.get("matricula_nipc") or ""))
+        items.append(
+            _item(
+                "societario",
+                row.get("pub_id") or "",
+                entidade or "(sem entidade)",
+                subtitle=" · ".join(
+                    filter(None, [row.get("acto"), row.get("concelho") or row.get("distrito")])
+                ),
+                snippet=" ".join(filter(None, [row.get("acto"), row.get("texto")])),
+                date=row.get("data_publicacao"),
+                badges=[row.get("tipo_label"), row.get("natureza_juridica"), row.get("distrito")],
+                extra={
+                    "entidade": entidade,
+                    "nif": nif,
+                    "publicacao": row.get("acto"),
+                    "fonte": row.get("tipo_label"),
+                },
+                open_view={"view": "company-detail", "arg": nif} if nif else None,
+            )
+        )
+    return _group("societario", _label_for("societario"), items, result.get("total", 0), 0)
+
+
+def _search_citacoes_group(q: str, size: int, offset: int) -> Dict[str, Any]:
+    """Citações e notificações editais do CITIUS (o citado é quem é chamado)."""
+    result = _search_judicial("citacoes", q, size, offset)
+    if result.get("error"):
+        return _error_group("citacoes", _label_for("citacoes"), str(result["error"]))
+    items = []
+    for row in result.get("items", []):
+        citado = row.get("citado") or ""
+        nif = _nif_coletivo(_nif_do_interveniente(row, citado))
+        items.append(
+            _item(
+                "citacoes",
+                row.get("pub_id") or row.get("referencia") or "",
+                citado or row.get("processo_numero") or "(sem citado)",
+                subtitle=" · ".join(
+                    filter(None, [row.get("tipo"), row.get("tribunal_comarca") or row.get("comarca_judicial")])
+                ),
+                snippet=" · ".join(filter(None, [row.get("ato"), row.get("especie")])),
+                url=row.get("documento_url") or "",
+                date=row.get("data_publicacao"),
+                badges=[row.get("tipo"), row.get("especie"), row.get("referencia")],
+                extra={
+                    "entidade": citado,
+                    "nif": nif,
+                    "publicacao": row.get("processo_numero"),
+                    "fonte": row.get("tribunal"),
+                },
+                open_view={"view": "company-detail", "arg": nif} if nif else None,
+            )
+        )
+    return _group("citacoes", _label_for("citacoes"), items, result.get("total", 0), 0)
 
 
 def _search_trademarks_group(q: str, size: int, offset: int) -> Dict[str, Any]:
@@ -1215,6 +1486,10 @@ def unified_search(
         "contracts_es": lambda: _search_contratos_es_group(query, size, offset),
         "entities_es": lambda: _search_entities_es_group(query, size, offset),
         "entities": lambda: _search_entities_group(query, size, offset),
+        "contribuintes": lambda: _search_contribuintes_group(query, size, offset),
+        "cire": lambda: _search_cire_group(query, size, offset),
+        "societario": lambda: _search_societario_group(query, size, offset),
+        "citacoes": lambda: _search_citacoes_group(query, size, offset),
         "pessoas": lambda: _search_pessoas_group(query, size, offset, filtros),
         "politicos": lambda: _search_politicos_group(query, size, offset, filtros),
         "wikipedia": lambda: _search_wikipedia_group(query, size, offset, filtros),

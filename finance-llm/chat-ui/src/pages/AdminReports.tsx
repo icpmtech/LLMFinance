@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  ArrowLeft,
   BadgeEuro,
   Bell,
   CheckCircle2,
@@ -65,6 +66,7 @@ export function AdminReportsTab({ onError }: { onError: (message: string | null)
   const [status, setStatus] = useState("");
   const [query, setQuery] = useState("");
   const [mine, setMine] = useState(false);
+  const [narrow, setNarrow] = useState(false);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -82,7 +84,12 @@ export function AdminReportsTab({ onError }: { onError: (message: string | null)
         setInbox(payload);
         setAllowed(true);
         onError(null);
-        setFocusId((current) => current ?? payload.items[0]?.id ?? null);
+        setFocusId((current) => {
+          // Mantém a ficha aberta se o pedido continuar na vista filtrada; em
+          // telemóvel não abre sozinha (esconderia a lista).
+          if (current && payload.items.some((item) => item.id === current)) return current;
+          return window.matchMedia("(max-width: 767px)").matches ? null : payload.items[0]?.id ?? null;
+        });
         // Aviso quando entram pedidos novos ou há pagamentos por confirmar.
         const pending = (payload.stats.pending_payment || 0) + (payload.stats.awaiting_confirm || 0);
         if (knownPending.current !== null && pending > knownPending.current) {
@@ -128,6 +135,15 @@ export function AdminReportsTab({ onError }: { onError: (message: string | null)
     const timer = window.setInterval(() => void loadInbox({ silent: true }), 30000);
     return () => window.clearInterval(timer);
   }, [allowed, loadInbox]);
+
+  /** Em telemóvel (uma coluna) só se mostra a lista **ou** a ficha do pedido. */
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 767px)");
+    const sync = () => setNarrow(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
 
   useEffect(() => {
     if (allowed === true) void loadInbox();
@@ -215,8 +231,8 @@ export function AdminReportsTab({ onError }: { onError: (message: string | null)
         )}
 
         {/* ------------------------------------------------------- pedidos */}
-        <TabsContent value="pedidos" active={tab === "pedidos"} className="mt-3 flex min-h-0 flex-1 gap-3">
-          <div className="flex w-[340px] shrink-0 flex-col gap-2">
+        <TabsContent value="pedidos" active={tab === "pedidos"} className="mt-3 flex min-h-0 flex-1 flex-col gap-3 md:flex-row">
+          <div className={`flex w-full shrink-0 flex-col gap-2 md:w-[340px] ${narrow && focus ? "hidden" : ""}`}>
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -290,7 +306,16 @@ export function AdminReportsTab({ onError }: { onError: (message: string | null)
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className={`min-h-0 flex-1 overflow-y-auto ${narrow && !focus ? "hidden" : ""}`}>
+            {narrow && focus && (
+              <button
+                type="button"
+                onClick={() => setFocusId(null)}
+                className="mb-2 flex items-center gap-1 rounded-lg border px-2 py-1 text-xs text-muted-foreground"
+              >
+                <ArrowLeft size={13} /> Voltar à lista
+              </button>
+            )}
             {focus ? (
               <RequestWorkbench
                 request={focus}

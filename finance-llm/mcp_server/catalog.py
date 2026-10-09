@@ -311,6 +311,18 @@ OPERATIONS: List[Operation] = _ops(
           Q("size", "int", "Resultados por âmbito", 8), Q("offset", "int", "Offset", 0)),
     _read("search_suggest", "GET", "/search/suggest", "Sugestões para autocompletar a pesquisa.", "search",
           RQ("q", "str", "Prefixo"), Q("limit", "int", "Sugestões", 8)),
+    # -- deep-search -----------------------------------------------------
+    _read("deep_search_meta", "GET", "/deep-search/meta", "Âmbitos, modos, limites e cobertura vectorial da pesquisa profunda.", "deep-search"),
+    _read("deep_search_examples", "GET", "/deep-search/examples", "Exemplos de perguntas construídos com os dados indexados.", "deep-search"),
+    _read("deep_search_search", "GET", "/deep-search/search",
+          "Fontes candidatas (retrieval puro, sem modelo) para uma pergunta, já numeradas [n].", "deep-search",
+          RQ("q", "str", "Pergunta"), Q("sources", "str", "Âmbitos separados por vírgula (vazio = todos)"),
+          Q("mode", "str", "hybrid | text | vector", "hybrid"), Q("per_source", "int", "Candidatos por âmbito", 6),
+          Q("max_sources", "int", "Máximo de fontes (0 = sem limite)", 12)),
+    _read("deep_search_suggest", "GET", "/deep-search/suggest", "Sugestões de termos a partir da pergunta.", "deep-search",
+          RQ("q", "str", "Pergunta"), Q("limit", "int", "Sugestões", 8)),
+    _write("deep_search_ask", "POST", "/deep-search/ask",
+           "Resposta fundamentada com citações [n] (SSE: primeiro as fontes, depois os tokens).", "deep-search", PAY()),
     # -- search360 -------------------------------------------------------
     _read("search360_meta", "GET", "/search360/meta", "Metamodelo: fontes, famílias, capacidades e índices.", "search360"),
     _read("search360_status", "GET", "/search360/status", "Diagnóstico das fontes e volumetria interna.", "search360"),

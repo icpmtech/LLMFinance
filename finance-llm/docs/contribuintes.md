@@ -9,6 +9,11 @@ Ao contrário dos restantes módulos, **não tem recolha própria**: é um índi
 *derivado*, reconstruído a partir das fontes que já existem — manualmente (botão
 na aplicação) ou por **cron** (sincronização automática).
 
+É também um âmbito da **Pesquisa total** (`/search/unified?scope=contribuintes`)
+e da **Pesquisa profunda** (`sources=["contribuintes"]`), onde aparece como o
+retrato do NIF: quantos registos tem em cada fonte (contratos, insolvências,
+atos societários…) e quanto vale em contratos.
+
 ## Fontes percorridas
 
 | Índice | O que dá | Campos agregados |

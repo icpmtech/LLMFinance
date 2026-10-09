@@ -239,8 +239,9 @@ services:
       # Ativa esse plugin em cada arranque (o estado de ativação vive no volume).
       - ./docker/hermes/init/026-enable-iqos-plugin.sh:/etc/cont-init.d/026-enable-iqos-plugin.sh:ro
       # Skills do IQ OS (versionadas no repositório, montadas por cima do volume):
-      # `pesquisa-total` (pesquisa unificada da plataforma) e `websearch` (SearXNG
-      # interno + leitura de páginas). Acrescentar aqui = acrescentar lá dentro.
+      # `pesquisa-total` (pesquisa unificada da plataforma), `pesquisa-profunda`
+      # (resposta citada com fontes) e `websearch` (SearXNG interno + leitura de
+      # páginas). Acrescentar aqui = acrescentar lá dentro.
       - ./docker/hermes/skills/iqos:/opt/data/skills/iqos:ro
     environment:
       # Endereços que as skills do IQ OS usam (rede interna do compose).

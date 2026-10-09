@@ -83,6 +83,7 @@ import ContribuintesPage from "./pages/ContribuintesPage";
 import WorldPage from "./pages/WorldPage";
 import PadroesPage from "./pages/PadroesPage";
 import OsintPage from "./pages/OsintPage";
+import ReportsPage from "./pages/ReportsPage";
 import MiroFishPage from "./pages/MiroFishPage";
 import SimuladorPage from "./pages/SimuladorPage";
 import DeepSearchPage from "./pages/DeepSearchPage";
@@ -180,6 +181,7 @@ type AppView =
   | "world-rede"
   | "padroes"
   | "osint"
+  | "reports"
   | "mirofish"
   | "simulador"
   | "deep-search"
@@ -322,6 +324,7 @@ function pathForView(
   if (view === "world") return "/world";
   if (view === "world-rede") return "/world/rede";
   if (view === "osint") return "/osint";
+  if (view === "reports") return "/reports";
   if (view === "padroes") return "/padroes";
   if (view === "osint") return "/osint";
   if (view === "mirofish") return "/mirofish";
@@ -522,6 +525,7 @@ export default function App() {
     if (path === "/world/rede") return "world-rede";
     if (path === "/world" || path.startsWith("/world/")) return "world";
     if (path === "/osint" || path.startsWith("/osint/")) return "osint";
+    if (path === "/reports" || path.startsWith("/reports/")) return "reports";
     if (path === "/padroes" || path.startsWith("/padroes/")) return "padroes";
     if (path === "/mirofish" || path.startsWith("/mirofish/")) return "mirofish";
     if (path === "/simulador" || path.startsWith("/simulador/")) return "simulador";
@@ -644,6 +648,7 @@ export default function App() {
       else if (path === "/world" || path.startsWith("/world/")) next = "world";
       else if (path === "/padroes" || path.startsWith("/padroes/")) next = "padroes";
       else if (path === "/osint" || path.startsWith("/osint/")) next = "osint";
+      else if (path === "/reports" || path.startsWith("/reports/")) next = "reports";
       else if (path === "/mirofish" || path.startsWith("/mirofish/")) next = "mirofish";
       else if (path === "/simulador" || path.startsWith("/simulador/")) next = "simulador";
       else if (path === "/deep-search" || path.startsWith("/deep-search/")) next = "deep-search";
@@ -1360,6 +1365,7 @@ export default function App() {
     if (target === "world" || target === "world-rede") return <WorldPage />;
     if (target === "padroes") return <PadroesPage />;
     if (target === "osint") return <OsintPage />;
+    if (target === "reports") return <ReportsPage />;
     if (target === "mirofish") return <MiroFishPage />;
     if (target === "simulador") return <SimuladorPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
     if (target === "deep-search") return <DeepSearchPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;

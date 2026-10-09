@@ -59,6 +59,7 @@ export type AppView =
   | "world-rede"
   | "padroes"
   | "osint"
+  | "reports"
   | "mirofish"
   | "simulador"
   | "risco"

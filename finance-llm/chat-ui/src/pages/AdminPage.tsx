@@ -33,6 +33,7 @@ import {
   Pause,
   PanelLeft,
   Play,
+  ReceiptText,
   RefreshCw,
   Search,
   Server,
@@ -66,8 +67,9 @@ import { useAuth } from "../auth";
 import { useWindowMode } from "../layout";
 import { AdminServiceKeysTab } from "./AdminServiceKeys";
 import { AdminSidebarAccessTab } from "./AdminSidebarAccess";
+import { AdminReportsTab } from "./AdminReports";
 
-type Tab = "overview" | "users" | "events" | "logs" | "sidebar" | "keys";
+type Tab = "overview" | "users" | "events" | "logs" | "sidebar" | "keys" | "reports";
 
 const LEVEL_STYLES: Record<string, { color: string; label: string; icon: typeof Info }> = {
   debug: { color: "bg-slate-500/15 text-slate-300 border-slate-400/20", label: "debug", icon: Bug },
@@ -1044,6 +1046,7 @@ export default function AdminPage() {
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "overview", label: "Visão geral", icon: <Server size={13} /> },
     { id: "users", label: "Utilizadores", icon: <UserCog size={13} /> },
+    { id: "reports", label: "Relatórios", icon: <ReceiptText size={13} /> },
     { id: "events", label: "Eventos", icon: <Activity size={13} /> },
     { id: "sidebar", label: "Menu lateral", icon: <PanelLeft size={13} /> },
     { id: "keys", label: "Chaves", icon: <KeyRound size={13} /> },
@@ -1101,6 +1104,7 @@ export default function AdminPage() {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
         {tab === "overview" && <OverviewTab overview={overview} onError={setError} />}
         {tab === "users" && <UsersTab onError={setError} currentUserId={user?.id} />}
+      {tab === "reports" && <AdminReportsTab onError={setError} />}
         {tab === "events" && <EventsTab onError={setError} />}
         {tab === "sidebar" && <AdminSidebarAccessTab onError={setError} />}
         {tab === "keys" && <AdminServiceKeysTab onError={setError} />}

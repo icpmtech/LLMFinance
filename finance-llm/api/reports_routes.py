@@ -23,6 +23,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import time
 from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
@@ -55,17 +56,47 @@ def _role(session: CurrentSession) -> str:
     return str(session.user.role or "member")
 
 
+_admin_cache: Dict[str, Any] = {"at": 0.0, "emails": []}
+_ADMIN_CACHE_SECONDS = 60
+
+
 def _admin_emails() -> List[str]:
-    """Emails das contas `admin` (para avisar de pedidos novos)."""
+    """Emails das contas `admin` (para avisar de pedidos novos).
+
+    Fica em cache 60 s e guarda a última lista boa: se o Elasticsearch falhar
+    (ou estiver a reiniciar), os pedidos novos continuam a avisar alguém em vez
+    de caírem para uma lista vazia.
+    """
+    now = time.time()
+    if _admin_cache["emails"] and now - float(_admin_cache["at"]) < _ADMIN_CACHE_SECONDS:
+        return list(_admin_cache["emails"])
     try:
-        return [
+        emails = [
             str(user.get("email") or "").lower()
             for user in auth.list_users(limit=200)
             if str(user.get("role") or "") in ADMIN_ROLES and user.get("email")
         ]
+        _admin_cache["emails"] = emails
+        _admin_cache["at"] = now
+        return list(emails)
     except Exception as exc:  # noqa: BLE001 - o ES pode estar em baixo
         logger.warning("Relatórios: não foi possível listar administradores (%s)", exc)
-        return []
+        return list(_admin_cache["emails"])
+
+
+def _request_or_404(request_id: str) -> Dict[str, Any]:
+    doc = store.get_request(request_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+    return doc
+
+
+def _ensure_owner(doc: Dict[str, Any], session: CurrentSession) -> None:
+    """Só o dono do pedido (ou o backoffice) pode mexer nele."""
+    email = _email(session)
+    mine = str((doc.get("requester") or {}).get("email") or "").lower() == email
+    if not mine and not store.is_backoffice(email, _role(session)):
+        raise HTTPException(status_code=403, detail="Este pedido não é seu.")
 
 
 def require_backoffice(session: Annotated[CurrentSession, Depends(require_session)]) -> CurrentSession:
@@ -277,9 +308,8 @@ def reports_get_request(request_id: str, session: ClienteSession) -> Dict[str, A
 @router.post("/requests/{request_id}/payment")
 def reports_declare_payment(request_id: str, payload: PaymentDeclare, session: ClienteSession) -> Dict[str, Any]:
     """Indica que o cliente pagou (ou pede o pagamento automático por MB Way)."""
-    doc = store.get_request(request_id)
-    if doc is None:
-        raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+    doc = _request_or_404(request_id)
+    _ensure_owner(doc, session)
     settings_data = store.settings()
     automatic: Dict[str, Any] = {"ok": False, "configured": False, "message": ""}
     if payload.method == "mbway" and payments.api_configured(settings_data):
@@ -338,6 +368,7 @@ def reports_payment_status(request_id: str, session: ClienteSession) -> Dict[str
 
 @router.post("/requests/{request_id}/cancel")
 def reports_cancel_request(request_id: str, session: ClienteSession, payload: Optional[NotePayload] = None) -> Dict[str, Any]:
+    _ensure_owner(_request_or_404(request_id), session)
     try:
         return store.cancel(request_id, {"email": _email(session), "name": _name(session)}, (payload.message if payload else ""))
     except ValueError as exc:

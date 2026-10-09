@@ -102,6 +102,11 @@ O `pub_id` é um SHA-1 de NIF + data + acto, pelo que **reingestões não duplic
 e uma nova recolha da mesma entidade remove os registos que já não existem
 (`replace_for_nif`).
 
+O índice (`finance_publicacoes_mj`) é também um âmbito da **Pesquisa total**
+(`/search/unified?scope=societario`) e da **Pesquisa profunda**
+(`sources=["societario"]`), onde a pesquisa é feita por **relevância** (a
+entidade primeiro) em vez da ordem por data usada na página do módulo.
+
 ## Fluxo do portal (para manutenção)
 
 1. `GET Pesquisa.aspx` → formulário com `__VIEWSTATE`/`__EVENTVALIDATION`.

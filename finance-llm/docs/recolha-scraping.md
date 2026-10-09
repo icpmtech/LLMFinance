@@ -74,6 +74,7 @@ template. Os seletores foram escritos e **validados contra as páginas reais** (
 | `expansion` | `expansion.com` | HTTP | sim |
 | `investing-mercados` | `investing.com/news/stock-market-news` | HTTP | não |
 | `iberinform-diretorio` | `iberinform.pt/diretorio/<distrito>/<concelho>` | HTTP | sim |
+| `racius-diretorio` | `racius.com/pesquisa/empresas/?q=<termo>` | HTTP | não (trás a **ficha** estruturada) |
 | `quotes-demo` | `quotes.toscrape.com` | HTTP | não (site de exemplo) |
 
 Como se cria uma fonte a partir de um template:
@@ -128,12 +129,66 @@ também o **corpo do artigo**:
 - Falhas individuais contam-se em `detail_errors` no `.meta.json` e não
 desligam a recolha; `detail_count` diz quantos itens trouxeram texto.
 
+#### Ficha estruturada (`detail.pairs`)
+
+Os diretórios de empresas não têm «corpo de artigo»: têm uma **ficha** com
+rótulos e valores (morada, forma jurídica, capital social, CAE…). O bloco
+`pairs` extrai-a como dicionário e guarda-a no item, no campo `data[ficha]` —
+é o que dá **dados diferentes** por empresa sem declarar um campo por cada
+linha da ficha:
+
+```json
+{
+  "detail": {
+    "enabled": true,
+    "selector": "",
+    "pairs": {
+      "enabled": true,
+      "container": "li.detail__detail",
+      "key_selector": "p.detail__key-info",
+      "value_selector": "p.t--d-blue",
+      "field": "ficha"
+    },
+    "max_items": 50,
+    "delay": 1.0
+  }
+}
+```
+
+- `container` é o nó de cada linha da ficha; dentro dele, o rótulo
+  (`key_selector`) emparelha com o valor (`value_selector`). Com
+  `container` vazio, os seletores correm sobre a página inteira.
+- Rótulos repetidos juntam-se com « · » e `max_pairs` limita o tamanho da ficha.
+- `selector` (texto) e `pairs` podem coexistir; o bloco fica ligado desde que
+  um dos dois esteja preenchido. As fichas vão para o índice `finance_scraped`
+  em `data.ficha` (o campo `data` é `flattened`, por isso qualquer rótulo é
+  pesquisável como `data.ficha.<rótulo>`).
+
+### Paginação por parâmetro de URL (`pagination.mode="query"`)
+
+Muitos sites não publicam uma ligação «página seguinte»: a página é um
+parâmetro do URL. Nesses casos usa-se o modo `query`, que avança o parâmetro
+até `max_pages` (e para quando uma página não traz itens novos):
+
+```json
+{
+  "pagination": {"mode": "query", "param": "page", "start": 1, "max_pages": 5}
+}
+```
+
+- `param` é o nome do parâmetro (omissão `page`) e `start` o número da primeira
+  página (1 na maioria, 0 em alguns sites). A página 2 de
+  `?q=galp` fica `?q=galp&page=2`.
+- Sem `mode` (ou com `link`), mantém-se o comportamento antigo: seguir o `href`
+  de um seletor; `type="postback"` continua a reenviar o formulário ASP.NET.
+
 ### Validação
 
 ```powershell
 c:\LLMFinance\.venv\Scripts\python.exe _test_scraper_templates.py           # todos
 c:\LLMFinance\.venv\Scripts\python.exe _test_scraper_templates.py eco publico-economia
-c:\LLMFinance\.venv\Scripts\python.exe _test_scraper_templates.py iberinform-diretorio
+c:\LLMFinance\.venv\Scripts\python.exe _test_scraper_templates.py racius-diretorio
+c:\LLMFinance\.venv\Scripts\python.exe -m pytest tests/test_scraper_racius.py
 ```
 
 O relatório (`_test_scraper_templates.txt` e `_test_scraper_templates.json`)
@@ -159,6 +214,30 @@ Ferramentas de apoio:
 
 Os relatórios das sondagens saem em `_probe_*.txt` (UTF-8: o console do Windows
 estraga os acentos).
+
+### Recolha autónoma do diretório do Racius
+
+A fonte `racius-diretorio` corre pela API (`POST /scraper/sources/racius-diretorio/run`).
+Para quem precisa de a correr **sem API nem sessão**, há o coletor
+`collectors/racius.py`: percorre a mesma lista, abre a ficha de cada empresa,
+grava **JSONL** em `data/racius/` e indexa num índice próprio, `finance_racius`,
+com os campos da ficha já normalizados (`forma_juridica`, `capital_social_eur`,
+`concelho`, `distrito`, …) e a ficha crua em `ficha` (`flattened`).
+
+```powershell
+c:\LLMFinance\.venv\Scripts\python.exe -m collectors.racius --q galp --pages 2
+c:\LLMFinance\.venv\Scripts\python.exe -m collectors.racius --q "" --pages 5 --limit 100
+c:\LLMFinance\.venv\Scripts\python.exe -m collectors.racius --q construcao --no-elastic
+```
+
+| Opção | Efeito |
+| --- | --- |
+| `--q` | Termo de pesquisa (vazio = todas as empresas) |
+| `--pages` | Páginas de resultados (15 empresas por página) |
+| `--limit` | Máximo de empresas a recolher |
+| `--no-detail` | Não abrir a ficha (só os dados da lista) |
+| `--delay` | Pausa entre pedidos de ficha (cortesia, omissão 0,8 s) |
+| `--no-elastic` | Só gravar o JSONL |
 
 **Sites que ficaram de fora:** os que bloqueiam HTTP simples com 403 depois de
 poucos pedidos (idealista/news, Expresso) precisariam do *fetcher* `stealth`, que
@@ -207,6 +286,12 @@ Notas:
   `stealth` (anti-bot/Cloudflare). Os dois últimos precisam de
   `scrapling install` para descarregar os browsers.
 - **Cron**: 5 campos (`minuto hora dia mês dia-semana`), validado antes de guardar.
+- **Paginação**: por omissão segue a ligação «seguinte» do seletor; com
+  `mode: "query"` avança um parâmetro do URL (`?page=2`) e com `type: "postback"`
+  reenvia o formulário ASP.NET — ver *Paginação por parâmetro de URL* acima.
+- **Detalhe**: `detail.selector` traz o texto da página de cada item e
+  `detail.pairs` traz a ficha rótulo/valor — ver *Texto integral* e *Ficha
+  estruturada* acima.
 - **`id_fields`**: campos que identificam um item. Se ficar vazio usa-se o `url`
   (ou todos os campos) — evita duplicados entre execuções.
 - **`respect_robots`**: quando ligado (omissão), o `robots.txt` do domínio é

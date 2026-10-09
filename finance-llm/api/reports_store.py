@@ -35,6 +35,7 @@ import base64
 import copy
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -449,7 +450,15 @@ def _log(store: Dict[str, Any], action: str, *, request: Optional[Dict[str, Any]
 # Configuração e catálogo
 # --------------------------------------------------------------------------
 def settings() -> Dict[str, Any]:
-    return copy.deepcopy(load()["settings"])
+    """Configuração efetiva (o `.env` serve de fallback para a chave da API)."""
+    data = copy.deepcopy(load()["settings"])
+    if not str(data.get("mbway_api_key") or "").strip():
+        # Em produção é mais prático pôr a chave no ambiente/`.env` do que a
+        # escrever pela interface; a interface continua a poder sobrepor-se.
+        env_key = os.getenv("MBWAY_API_KEY") or os.getenv("IFTHENPAY_MBWAY_KEY") or ""
+        if env_key.strip():
+            data["mbway_api_key"] = env_key.strip()
+    return data
 
 
 def public_settings() -> Dict[str, Any]:

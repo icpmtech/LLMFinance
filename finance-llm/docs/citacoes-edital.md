@@ -179,6 +179,11 @@ Dois cuidados que valem para qualquer recolha longa:
 
 ## Rotas
 
+Além das rotas do módulo, este índice é um âmbito da **Pesquisa total**
+(`/search/unified?scope=citacoes`) e da **Pesquisa profunda**
+(`sources=["citacoes"]`), onde a pesquisa é feita por **relevância** (o nome do
+citado primeiro) em vez da ordem por data usada na página.
+
 Leitura (pública)
 
 | Rota | Descrição |
