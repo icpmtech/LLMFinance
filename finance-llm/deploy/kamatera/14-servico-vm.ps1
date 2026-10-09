@@ -118,6 +118,13 @@ $SERVICOS = @{
         Sonda = '/health'
         Extra = @()
     }
+    # A peca central: sem ele o modo `vm` serve a SPA mas `/api` da 502.
+    # `data/`, `model/`, `rag/` e `logs/` ficam vazios de proposito.
+    'backend' = @{
+        Porta = 8000
+        Sonda = '/health'
+        Extra = @()
+    }
 }
 
 function Invoke-Vm {

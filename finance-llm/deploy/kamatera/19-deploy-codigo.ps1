@@ -196,6 +196,8 @@ foreach ($b in $construir) {
 Write-Host ''
 Write-Host '=== 5. A reiniciar os servicos afectados ===' -ForegroundColor Cyan
 Write-Host '  (so estes projetos: o edge, o ES e o tunel ficam intocados)'
+# A ordem importa: o `backend` primeiro, porque o `mcp` e um cliente dele.
+if ($fazerBackend) { Show-Vm "cd /opt/iqos/servicos/backend && docker compose up -d --force-recreate 2>&1 | tail -3" | Out-Null }
 if ($fazerBackend) { Show-Vm "cd /opt/iqos/servicos/mcp && docker compose up -d --force-recreate 2>&1 | tail -3" | Out-Null }
 if ($fazerFrontend) { Show-Vm "cd /opt/iqos/servicos/frontend && docker compose up -d --force-recreate 2>&1 | tail -3" | Out-Null }
 
@@ -204,6 +206,7 @@ Write-Host '=== 6. Validacao ===' -ForegroundColor Cyan
 $problemas = 0
 $sondas = @()
 if ($fazerFrontend) { $sondas += @{ Nome = 'frontend'; Url = 'http://127.0.0.1:4180/' } }
+if ($fazerBackend) { $sondas += @{ Nome = 'backend'; Url = 'http://127.0.0.1:8000/health' } }
 if ($fazerBackend) { $sondas += @{ Nome = 'mcp'; Url = 'http://127.0.0.1:8765/' } }
 foreach ($s in $sondas) {
     # Com repeticao: o contentor acabou de ser recriado, e um `curl` imediato da
