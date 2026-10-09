@@ -196,6 +196,16 @@ export function GraphCanvas({
   const dragMovedRef = useRef(false);
   const userMovedRef = useRef(false);
   const layoutVersionRef = useRef(layoutVersion);
+  /**
+   * Chave do último layout já simulado.
+   *
+   * O efeito de layout volta a correr sempre que o pai re-renderiza com um
+   * `graph` de identidade nova (o `layoutKey` resulta de `nodes`/`edges`). Sem
+   * esta guarda, cada re-render reiniciava a simulação e o `fitToView()` que se
+   * segue publicava `scale`/`offset` — que por serem objectos novos forçam novo
+   * render — e o ciclo só terminava quando o browser ficava sem resposta.
+   */
+  const laidOutKeyRef = useRef<string | null>(null);
   const lastPointerRef = useRef({ x: 0, y: 0 });
 
   const [scale, setScale] = useState(1);
@@ -549,8 +559,17 @@ export function GraphCanvas({
         Math.min(availableWidth / Math.max(maxX - minX, 1), availableHeight / Math.max(maxY - minY, 1)),
       ),
     );
-    setScale(nextScale);
-    setOffset({ x: -((minX + maxX) / 2) * nextScale, y: -((minY + maxY) / 2) * nextScale });
+    const nextOffsetX = -((minX + maxX) / 2) * nextScale;
+    const nextOffsetY = -((minY + maxY) / 2) * nextScale;
+    // Estado só se mudar: `fitToView` é chamado pelo `ResizeObserver` e por cada
+    // layout; publicar sempre destes objectos punha o componente a re-renderizar
+    // sem fim.
+    setScale((current) => (current === nextScale ? current : nextScale));
+    setOffset((current) =>
+      current.x === nextOffsetX && current.y === nextOffsetY
+        ? current
+        : { x: nextOffsetX, y: nextOffsetY },
+    );
   }, []);
 
   fitToViewRef.current = fitToView;
@@ -558,6 +577,13 @@ export function GraphCanvas({
   // Layout: determinístico (circular/hierárquico) ou simulação de forças.
   useEffect(() => {
     if (nodes.length === 0) return;
+    // Mesmo layout (mesmos nós e ligações): só falta desenhar. Sem esta guarda o
+    // efeito volta a correr a cada re-render do pai e a física nunca assenta.
+    if (laidOutKeyRef.current === layoutKey) {
+      draw();
+      return;
+    }
+    laidOutKeyRef.current = layoutKey;
     // "Recalcular layout" (layoutVersion) reinicia as posições: tem de ser feito AQUI,
     // antes de semear — um efeito separado correria depois do layout e deixaria o grafo vazio.
     if (layoutVersionRef.current !== layoutVersion) {
@@ -638,38 +664,74 @@ export function GraphCanvas({
         });
     });
 
+    /**
+     * Recoloca no anel uma posição não finita (NaN/±∞).
+     *
+     * É a rede de segurança do ciclo de forças: `Infinity` numa coordenada faz
+     * `Math.floor(x / CELL)` dar `Infinity` e o ciclo
+     * `for (let gx = cx - 1; gx <= cx + 1; gx++)` **nunca termina** —
+     * `Infinity + 1` continua a ser `Infinity` — bloqueando a thread principal
+     * sem forma de recuperar (a página fica sem resposta para sempre).
+     */
+    const sanear = (node: StudioNode, index: number): NodePosition => {
+      const current = positions.get(node.id);
+      if (
+        current &&
+        Number.isFinite(current.x) &&
+        Number.isFinite(current.y) &&
+        Number.isFinite(current.vx) &&
+        Number.isFinite(current.vy)
+      ) {
+        return current;
+      }
+      const ring = Math.max(140, Math.min(radiusBase, 140 + index * 6));
+      const angle = index * 2.399963229728653; // ângulo áureo: espalha sem repetir
+      const fixed: NodePosition = {
+        x: Math.cos(angle) * ring,
+        y: Math.sin(angle) * ring,
+        vx: 0,
+        vy: 0,
+      };
+      positions.set(node.id, fixed);
+      return fixed;
+    };
+
     const runStep = () => {
       const grid = new Map<string, StudioNode[]>();
-      nodes.forEach((node) => {
-        const p = positions.get(node.id);
-        if (!p) return;
+      nodes.forEach((node, index) => {
+        const p = sanear(node, index);
         const key = `${Math.floor(p.x / CELL)}:${Math.floor(p.y / CELL)}`;
         const bucket = grid.get(key) ?? [];
         bucket.push(node);
         grid.set(key, bucket);
       });
-      nodes.forEach((node) => {
-        const p = positions.get(node.id);
-        if (!p) return;
+      nodes.forEach((node, index) => {
+        const p = sanear(node, index);
         const cx = Math.floor(p.x / CELL);
         const cy = Math.floor(p.y / CELL);
-        for (let gx = cx - 1; gx <= cx + 1; gx++) {
-          for (let gy = cy - 1; gy <= cy + 1; gy++) {
-            const bucket = grid.get(`${gx}:${gy}`);
+        // Sem coordenadas finitas não há vizinhança a calcular (e o ciclo abaixo
+        // seria infinito).
+        if (!Number.isFinite(cx) || !Number.isFinite(cy)) return;
+        // Ciclo com contador fixo (`dx`/`dy`) e não `gx <= cx + 1`: com uma
+        // coordenada infinita, `gx++` nunca faria a condição falhar — o ciclo
+        // correria para sempre e a página ficava presa sem recuperação.
+        for (let dx = -1; dx <= 1; dx += 1) {
+          for (let dy = -1; dy <= 1; dy += 1) {
+            const bucket = grid.get(`${cx + dx}:${cy + dy}`);
             if (!bucket) continue;
             bucket.forEach((other) => {
               if (other.id <= node.id) return;
               const q = positions.get(other.id);
               if (!q) return;
-              const dx = p.x - q.x;
-              const dy = p.y - q.y;
-              const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+              const vx = p.x - q.x;
+              const vy = p.y - q.y;
+              const dist = Math.sqrt(vx * vx + vy * vy) || 1;
               if (dist > CELL * 3) return;
               const force = REPULSION / (dist * dist);
-              p.vx += (dx / dist) * force;
-              p.vy += (dy / dist) * force;
-              q.vx -= (dx / dist) * force;
-              q.vy -= (dy / dist) * force;
+              p.vx += (vx / dist) * force;
+              p.vy += (vy / dist) * force;
+              q.vx -= (vx / dist) * force;
+              q.vy -= (vy / dist) * force;
             });
           }
         }
@@ -690,9 +752,8 @@ export function GraphCanvas({
         b.vy -= fy;
       });
       let energy = 0;
-      nodes.forEach((node) => {
-        const p = positions.get(node.id);
-        if (!p) return;
+      nodes.forEach((node, index) => {
+        const p = sanear(node, index);
         p.vx = (p.vx - p.x * 0.003) * 0.88;
         p.vy = (p.vy - p.y * 0.003) * 0.88;
         p.x += p.vx;
@@ -804,16 +865,23 @@ export function GraphCanvas({
 
   const hitNode = (x: number, y: number) => {
     const positions = positionsRef.current;
+    // Folga em **píxeis de ecrã** (e não em unidades do grafo): com o grafo
+    // afastado (zoom a 30%), `node.radius + 5` em unidades dava menos de 2 px e
+    // acertar num nó era uma lotaria.
+    const folga = 12 / Math.max(scale, 0.3);
     return (
       frame.current.nodes.find((node) => {
         const p = positions.get(node.id);
-        return p ? Math.hypot(p.x - x, p.y - y) <= node.radius + 5 : false;
+        return p ? Math.hypot(p.x - x, p.y - y) <= node.radius + folga : false;
       }) ?? null
     );
   };
 
   const hitEdge = (x: number, y: number) => {
     const positions = positionsRef.current;
+    // Mesma folga dos nós (12 px de ecrã): a 8 px, clicar numa ligação fina era
+    // quase impossível, ainda mais com o grafo afastado.
+    const folga = 12 / Math.max(scale, 0.3);
     return (
       frame.current.edges.find((edge) => {
         const a = positions.get(edge.source);
@@ -823,7 +891,7 @@ export function GraphCanvas({
         const dy = b.y - a.y;
         const lengthSquared = dx * dx + dy * dy || 1;
         const projection = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / lengthSquared));
-        return Math.hypot(x - (a.x + projection * dx), y - (a.y + projection * dy)) <= 8 / Math.max(scale, 0.3);
+        return Math.hypot(x - (a.x + projection * dx), y - (a.y + projection * dy)) <= folga;
       }) ?? null
     );
   };

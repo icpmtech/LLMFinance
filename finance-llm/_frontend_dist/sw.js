@@ -14,14 +14,22 @@
  *
  * Ao alterar este ficheiro, incrementar `VERSION`.
  */
-const VERSION = "v4";
+const VERSION = "v5";
 /** Prefixos de cache do IQ OS (e o antigo, para limpar instalações anteriores). */
 const CACHE_PREFIXES = ["iq-os-", "finance-llm-"];
 const SHELL_CACHE = `iq-os-shell-${VERSION}`;
 const ASSET_CACHE = `iq-os-assets-${VERSION}`;
 
 /** Pedidos que nunca devem ser guardados (dados em tempo real). */
-const BYPASS = ["/api/", "/forecast/plot/"];
+const BYPASS = [
+  "/api/",
+  "/forecast/plot/",
+  // Landing / pagina de manutencao do edge: e servida pelo Caddy e nao pela
+  // SPA. Se entrar no cache, um deploy novo da pagina fica preso no browser do
+  // visitante (ja aconteceu: o `/lp/app.js` antigo foi servido de cache).
+  "/lp/",
+  "/landing",
+];
 
 const SHELL = [
   "/",

@@ -67,7 +67,7 @@ export const APP_MODULES: AppModule[] = [
     id: "contratos",
     label: "Contratos públicos",
     hint: "Pesquisa, análise, mapa e contratação ecológica",
-    ids: ["contracts-search", "contracts-dashboard", "contracts-eco", "contracts-map"],
+    ids: ["contracts-search", "contracts-dashboard", "contracts-eco", "contracts-map", "benchmark"],
   },
   {
     id: "contratos-es",
@@ -106,8 +106,8 @@ export const APP_MODULES: AppModule[] = [
   {
     id: "dados-publicos",
     label: "Dados públicos",
-    hint: "Insolvências, citações editais, contribuintes, societário e registos LEI",
-    ids: ["cire", "citacoes", "contribuintes", "societario", "gleif", "gleif-mapa", "gleif-ingestao"],
+    hint: "Insolvências, citações editais, contribuintes, societário, registos LEI e subvenções",
+    ids: ["cire", "citacoes", "contribuintes", "societario", "gleif", "gleif-mapa", "gleif-ingestao", "subvencoes"],
   },
   {
     id: "mercados",
@@ -149,7 +149,7 @@ export const APP_MODULES: AppModule[] = [
     id: "recolha",
     label: "Recolha de dados",
     hint: "Recolha de sites, templates, execuções, agenda e diretórios de empresas",
-    ids: ["scraper", "scraper-templates", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda", "empresas-recolha"],
+    ids: ["scraper", "scraper-templates", "scraper-execucoes", "scraper-pesquisa", "scraper-agenda", "racius", "empresas-recolha"],
   },
   {
     id: "social",

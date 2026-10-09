@@ -238,7 +238,7 @@ DEFAULT_CATALOGUE: List[Dict[str, Any]] = [
         "features": [
             "Todos os relatórios anteriores",
             "Informação do balanço últimos 3 anos",
-            "Rating Rácius",
+            "Rating IQ OS (risco de crédito)",
             "Setores de Atividade",
             "Quota do Mercado",
             "Receitas/Despesas/Lucros ou Prejuízos",

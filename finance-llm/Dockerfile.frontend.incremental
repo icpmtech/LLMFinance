@@ -13,6 +13,12 @@
 #   Remove-Item -Recurse -Force _frontend_dist; Copy-Item -Recurse chat-ui\dist _frontend_dist
 #
 #   docker build -f Dockerfile.frontend.incremental -t iq-os-frontend:latest .
-FROM iq-os-frontend:antes-deep-search
+#
+# A base é parametrizável (como no backend) para se poder assentar na etiqueta
+# que já está validada, em vez de uma base antiga quando o resto do sistema já
+# andou para a frente:
+#   docker build -f Dockerfile.frontend.incremental --build-arg BASE=iq-os-frontend:latest -t iq-os-frontend:ontologia .
+ARG BASE=iq-os-frontend:antes-deep-search
+FROM ${BASE}
 
 COPY _frontend_dist /usr/share/nginx/html

@@ -591,6 +591,20 @@ TEMPLATES: List[Dict[str, Any]] = [
                     max_length=200,
                     regex=r"(?:ico-gps\s*)?([\s\S]+)",
                 ),
+                _field(
+                    "concelho",
+                    "Concelho",
+                    "div.results__col-location::text",
+                    max_length=120,
+                    regex=r"(?:ico-gps\s*)?([^,]+)",
+                ),
+                _field(
+                    "distrito",
+                    "Distrito",
+                    "div.results__col-location::text",
+                    max_length=120,
+                    regex=r",\s*([^,]+)\s*$",
+                ),
                 _field("url", "Ligação", "a.results__col-link::attr(href)", max_length=1024),
             ],
             "pagination": {"mode": "query", "param": "page", "start": 1, "max_pages": 5},
@@ -601,6 +615,7 @@ TEMPLATES: List[Dict[str, Any]] = [
             "id_fields": ["nif", "url"],
             "title_field": "nome",
             "summary_field": "nome",
+            "sink_index": "finance_racius",
             "detail": _detail(
                 "",
                 max_items=50,
@@ -611,6 +626,16 @@ TEMPLATES: List[Dict[str, Any]] = [
                     "key_selector": "p.detail__key-info",
                     "value_selector": "p.t--d-blue",
                     "field": "ficha",
+                    "fields": {
+                        "Morada": "morada",
+                        "Forma Jurídica": "forma_juridica",
+                        # O texto original fica na `ficha`; aqui interessa o
+                        # número, para filtrar/ordenar por capital social.
+                        "Capital Social": {"field": "capital_social_eur", "cast": "float"},
+                        "Atividade": "atividade",
+                        "Acerca da Empresa": "acerca",
+                        "CAE": "cae",
+                    },
                 },
             ),
         },

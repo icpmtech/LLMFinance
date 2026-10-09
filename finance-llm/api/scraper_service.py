@@ -44,6 +44,7 @@ from api.elasticsearch_client import (
     ROOT,
     delete_scraped_source,
     get_es_client,
+    index_directory_items,
     index_scraped_items,
     scraped_status,
     search_scraped,
@@ -126,6 +127,9 @@ _DEFAULTS = {
     "respect_robots": True,
     "tags": [],
     "id_fields": [],
+    #: Índice de diretório extra (fichas de empresas): além do `finance_scraped`,
+    #: os itens são indexados com campos de topo tipados (facetas/filtros).
+    "sink_index": "",
     "detail": {
         "enabled": False,
         "selector": "",
@@ -299,6 +303,7 @@ def normalize_source(payload: Dict[str, Any], existing: Optional[Dict[str, Any]]
 
     merged["detail"] = _normalize_detail(merged.get("detail"))
     merged["sentiment"] = scraper_sentiment.normalize_config(merged.get("sentiment"))
+    merged["sink_index"] = str(merged.get("sink_index") or "").strip()
 
     for key in ("title_field", "summary_field", "text_field", "tags_field"):
         value = str(merged.get(key) or "").strip()
@@ -377,6 +382,12 @@ def _normalize_detail_pairs(raw: Any) -> Dict[str, Any]:
     resultado junta-se num dicionário `{rótulo: valor}` guardado no item, no
     campo `field` dos `data` (é o que permite ter **dados diferentes** por
     empresa sem escrever um campo por cada linha da ficha).
+
+    `fields` dá nome e tipo aos rótulos que interessam fixar
+    (`{"Capital Social": {"field": "capital_social_eur", "cast": "float"}}`):
+    esses valores passam a viver em campos próprios dos `data`, filtráveis e
+    facetáveis no índice de diretório — sem eles, a ficha ficaria só num
+    `flattened` de rótulos variáveis.
     """
     raw = raw if isinstance(raw, dict) else {}
     container = str(raw.get("container") or "").strip()
@@ -386,6 +397,19 @@ def _normalize_detail_pairs(raw: Any) -> Dict[str, Any]:
         max_pairs = int(raw.get("max_pairs") or 60)
     except (TypeError, ValueError):
         max_pairs = 60
+    fields: Dict[str, Dict[str, str]] = {}
+    raw_fields = raw.get("fields")
+    for label, spec in (raw_fields.items() if isinstance(raw_fields, dict) else []):
+        name = ""
+        cast = "text"
+        if isinstance(spec, str):
+            name = spec.strip()
+        elif isinstance(spec, dict):
+            name = str(spec.get("field") or spec.get("name") or "").strip()
+            cast = str(spec.get("cast") or "text").strip().lower()
+        label = str(label or "").strip()
+        if label and name:
+            fields[label] = {"field": name, "cast": cast}
     return {
         "enabled": bool(raw.get("enabled", False)) and bool(key_selector and value_selector),
         "container": container,
@@ -393,6 +417,7 @@ def _normalize_detail_pairs(raw: Any) -> Dict[str, Any]:
         "value_selector": value_selector,
         "field": str(raw.get("field") or "ficha").strip() or "ficha",
         "max_pairs": max(1, min(max_pairs, 500)),
+        "fields": fields,
     }
 
 
@@ -1411,6 +1436,15 @@ def _enrich_with_detail(
             data = item.setdefault("data", {})
             if isinstance(data, dict):
                 data[pairs_field] = pairs
+                # Rótulos com nome/tipo fixos passam a campos próprios (é o que
+                # dá facetas e filtros ao índice de diretório).
+                for label, spec in (pairs_cfg.get("fields") or {}).items():
+                    raw_value = pairs.get(label)
+                    if raw_value in (None, ""):
+                        continue
+                    value = _cast(raw_value, {"cast": spec.get("cast") or "text"})
+                    if value not in (None, ""):
+                        data[spec["field"]] = value
             stats["detail_pairs_count"] = stats.get("detail_pairs_count", 0) + 1
         if text or pairs:
             item["detail"] = True
@@ -1655,6 +1689,25 @@ def _execute_run(source: Dict[str, Any], meta: Dict[str, Any], user_id: Optional
         except Exception as exc:
             errors.append(f"Indexação falhou: {exc}")
 
+    sink_index = str(source.get("sink_index") or "").strip()
+    sink = {"indexed_count": 0, "error_count": 0}
+    if items and sink_index:
+        try:
+            pairs_field = str(((source.get("detail") or {}).get("pairs") or {}).get("field") or "ficha")
+            sink = index_directory_items(
+                sink_index,
+                source_id=source["id"],
+                source_name=source["name"],
+                run_id=meta["run_id"],
+                items=items,
+                trigger=meta.get("trigger") or "manual",
+                flattened_fields=(pairs_field,),
+            )
+            if sink.get("error"):
+                errors.append(f"Índice de diretório: {sink['error']}")
+        except Exception as exc:
+            errors.append(f"Índice de diretório falhou: {exc}")
+
     finished = _now()
     meta.update(
         {
@@ -1664,6 +1717,8 @@ def _execute_run(source: Dict[str, Any], meta: Dict[str, Any], user_id: Optional
             "items_count": len(items),
             "indexed_count": int(indexed.get("indexed_count") or 0),
             "error_count": int(indexed.get("error_count") or 0) + (1 if indexed.get("error") else 0),
+            "sink_index": sink_index,
+            "sink_indexed_count": int(sink.get("indexed_count") or 0),
             "pages": pages,
             "detail_count": int(detail_stats.get("detail_count") or 0),
             "detail_errors": int(detail_stats.get("detail_errors") or 0),

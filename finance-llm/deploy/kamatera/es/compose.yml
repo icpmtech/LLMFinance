@@ -1,0 +1,49 @@
+# Elasticsearch na VM do edge -- espelho do ES local.
+#
+# Objetivo: replica dos indices do PC, para poder migrar a stack aos poucos sem
+# nunca tocar no que esta a correr. Este projeto e independente do `edge/`
+# (Caddy + landing): `docker compose up` aqui so mexe no `iqos-elasticsearch`.
+#
+#   imagem ....... docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+#                 (a mesma versao do stack local -- ver docker-compose.yml)
+#   configuracao . igual a local: single-node, sem seguranca
+#   rede ......... host, mas so em 127.0.0.1: nao fica exposto a Internet
+#   dados ........ volume nomeado `es-data`
+#
+# Como a rede e `host`, o ES ve o loopback da VM -- e e por la que chega o
+# encaminhamento do tunel reverso (127.0.0.1:9201 -> ES do PC), usado pelo
+# `reindex` com `source.remote`.
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: iqos-elasticsearch
+    network_mode: host
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      # Bind so no loopback: com `network_mode: host` o valor por omissao
+      # (0.0.0.0) deixaria o cluster aberto na Internet.
+      - network.host=127.0.0.1
+      - http.port=9200
+      # Igual ao local. A VM tem 2 GB, por isso este heap e o teto pratico.
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      # Sem isto o `reindex` com `source.remote` e recusado.
+      - reindex.remote.whitelist=127.0.0.1:9201
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS 'http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=5s' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  # Nomeado pelo projeto (`es_es-data`). Fica fora do caminho do `edge/`.
+  es-data:

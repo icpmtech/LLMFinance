@@ -198,22 +198,169 @@ reconstruir com `07-origin-tunnel.ps1`.
 
 ### Subir a stack completa para a VM
 
-1. Redimensionar pela API (sem reinstalar):
+**Nao cabe na VM atual** — mas a diferenca e sobretudo de **disco**, nao de RAM.
+Medido com `docker stats`, `/sys/fs/cgroup/memory.stat` e `memory.peak`:
+
+| Recurso | Stack IQ OS | VM `iq-os-edge-01` | Falta |
+|---|---|---|---|
+| RAM real (anon, sem cache) | **2,6 GB** | 2 GB | 0,6 GB |
+| Disco | **120 GB** (tudo) | 20 GB | 100 GB |
+| vCPU | picos curtos no `backend` | 1 tipo A (sem garantia) | — |
+
+**Cuidado com o `docker stats`:** para o Elasticsearch reportava 5,8 a 8,5 GB,
+mas apenas **880 MB sao memoria real** (`anon`) — o resto e cache de ficheiros do
+indice Lucene (31 GB), que o kernel liberta quando precisa. Dimensionar a VM com
+esse numero da uma maquina 4x maior do que o necessario.
+
+RAM real por contentor (`anon`): `elasticsearch` 880 MB, `backend` 791 MB,
+`n8n` 206 MB, `searxng` 33 MB, `frontend` 12 MB -> **nucleo = 1,9 GB**.
+Perfis opcionais: `hermes-agent` 358 MB, `osif` 243 MB, `mirofish` 82 MB,
+`mcp` 20 MB -> **stack completa = 2,6 GB**. A maquina ainda leva ~0,4 GB
+(Ubuntu + dockerd), ou seja **~3 GB no total**.
+
+Disco: `data/` 37 GB + volume do Elasticsearch 31 GB (derivado, pode ser
+reconstruido) + `model/` 3 GB + cache whisper 1 GB + imagens **38 GB**
+(so `iq-os-backend` sao 13,7 GB e o `mirofish` outros 14,2 GB). O script
+`08-custo-vm.ps1` recalcula tudo isto.
+
+Nota: no PC o `es-data` ocupa 31 GB e o Elasticsearch usa 6,4 GB de cache para
+o percorrer. Com pouca RAM a cache encolhe e as pesquisas em segmentos frios
+passam a ler do NVMe — mais lentas, nao avariadas.
+
+1. Redimensionar pela API (sem reinstalar). Recomendado: **2 vCPU tipo A /
+   8 GB RAM / 150 GB** — cabe tudo com folga e sobra RAM para cache do indice.
+   O minimo absoluto para o nucleo e **4 GB / 120 GB**:
    ```bash
    curl -H "AuthClientId: $ID" -H "AuthSecret: $SECRET" -X PUT \
      -d 'ram=8192' https://cloudcli.cloudwm.com/service/server/<id>/ram
    curl -H "AuthClientId: $ID" -H "AuthSecret: $SECRET" -X PUT \
-     -d 'cpu=2B'   https://cloudcli.cloudwm.com/service/server/<id>/cpu
+     -d 'cpu=2A'   https://cloudcli.cloudwm.com/service/server/<id>/cpu
    curl -H "AuthClientId: $ID" -H "AuthSecret: $SECRET" -X PUT \
-     -d 'size=100&index=0&provision=1' \
+     -d 'size=150&index=0&provision=1' \
      https://cloudcli.cloudwm.com/service/server/<id>/disk
    ```
-   Minimo realista: **8 GB RAM / 100 GB** (data/ 36 GB + model/ 3 GB + imagem do
-   backend ~11 GB). Nota: o tipo `A` (o mais barato) nao garante CPU.
-2. Copiar o repositorio (sem `data/`, `model/`, `logs/`) para `/opt/iqos` e
+   Nota: o tipo `A` (o mais barato) **nao garante CPU** — `2A` = 2 cores de
+   burst, nao 2 cores dedicados. Para CPU garantida usa `2B`, que custa ~4,5x
+   mais por vCPU. Cada `PUT` e assincrono: acompanhar com
+   `GET /service/queue?id=<id>`, e confirmar no fim com
+   `POST /service/server/info {"name":"iq-os-edge-01"}`.
+2. Antes de redimensionar o disco, largar espaco: o `docker builder cache` local
+   tem 42 GB e ha imagens de backups antigos (88 GB no total, 50 imagens).
+   No PC, so a stack IQ OS usa ~38 GB de imagens. A 120 GB, largar o `mirofish`
+   (14 GB de imagem, perfil opcional) ou nao copiar o indice do ES da a folga
+   necessaria.
+3. Copiar o repositorio (sem `data/`, `model/`, `logs/`) para `/opt/iqos` e
    `docker compose up -d --build`.
-3. Apontar o edge para a propria maquina: `ORIGIN_TARGET=http://host.docker.internal:4180`
-   (ou usar a stack nativamente e dispensar o edge).
+4. O `data/` (37 GB) tem de ser copiado a parte; o `scp` desta rede encrava.
+   O indice do Elasticsearch (31 GB) e derivado: mais vale reconstrui-lo na VM
+   do que copia-lo.
+5. Apontar o edge para a propria maquina: `ORIGIN_TARGET=http://host.docker.internal:4180`
+   (ou usar a stack nativamente e dispensar o edge + o tunel).
+
+### Custo: manter o PC ligado vs mudar para a VM
+
+O custo de deixar o PC ligado 24/7 (assumindo 0,20 EUR/kWh) e **8,8 EUR/mes a
+60 W**, **13,1 EUR/mes a 90 W**, **19,0 EUR/mes a 130 W** — ou seja, entre
+**105 e 228 EUR/ano**. E frequentemente mais caro do que a propria VM.
+
+Estimativa de custo Kamatera em USD (taxas derivadas de dois pontos publicos:
+VM atual 1A/2GB/20GB = 6,00 USD/mes, e a calculadora do site da 1B/512MB/5GB =
+10,00 USD/mes; disco a 0,05 USD/GB/mes, 5 TB de trafego incluidas):
+
+| Configuracao | Tipo | vCPU/RAM/Disco | USD/mes | USD/ano |
+|---|---|---|---|---|
+| Atual no PC (so o edge na VM) | A | 1 / 2 GB / 20 GB | 6 | 72 |
+| So o nucleo, apertado | A | 2 / 8 GB / 120 GB | ~22 | ~264 |
+| **Recomendado: tudo** | A | 2 / 8 GB / 150 GB | ~24 | ~282 |
+| Tudo, 4 cores | A | 4 / 8 GB / 150 GB | ~28 | ~330 |
+| Tudo, folgado | A | 4 / 12 GB / 200 GB | ~36 | ~432 |
+| Tudo, CPU dedicada | B | 4 / 8 GB / 150 GB | ~56 | ~672 |
+
+**Estimativa.** A Kamatera nao tem endpoint de orcamento. As taxas usadas
+(vCPU tipo A 2,00 / tipo B 9,00 USD; RAM 1,50 USD/GB; disco 0,05 USD/GB)
+reproduzem exatamente os dois pontos publicos conhecidos — 1A/2GB/20GB = 6,00 e
+1B/512MB/5GB = 10,00 USD/mes — mas a divisao entre vCPU e RAM dentro de cada
+tipo e inferida. Define `KAMATERA_CLIENT_ID` e `KAMATERA_SECRET` no ambiente e
+corre `deploy\kamatera\08-custo-vm.ps1` para ler o preco real do servidor atual.
+
+#### Da com 22 USD/mes? Da — mas nao e uma decisao de dinheiro
+
+**Tecnicamente da.** Com 2 vCPU / 8 GB / 120 GB a stack completa cabe: 2,6 GB
+de containers + 0,4 GB de sistema deixa ~5 GB para cache do indice. O que se
+perde em relacao ao PC e a cache: aqui o Elasticsearch tem 6,4 GB de cache para
+o indice de 31 GB, na VM seriam ~5 GB. Pesquisas em segmentos frios passam a ler
+do NVMe — mais lentas, mas funcionam.
+
+**Nao da** se copiares o indice (31 GB) sem largar o `mirofish` (14 GB): nesse
+caso os 120 GB ficam sem folga nenhuma. Ou se reconstroi o indice, ou se larga
+o `mirofish`, ou se sobem os 30 GB de disco extra (+1,50 USD/mes).
+
+**O dinheiro fica ela por ela.** Deixar o PC ligado 24/7 custa 8,8 a 19,0 EUR/mes
+de luz (60-130 W a 0,20 EUR/kWh) mais os 6 USD/mes da VM que ja pagas: ~19 EUR/mes.
+A VM de 24 USD fica em ~22 EUR/mes. Praticamente o mesmo.
+
+O que se compra com os 22-24 USD nao e poupanca: e **nao depender de a maquina de
+casa estar ligada**, e poder desligar o PC sem o site cair. Se o PC fica ligado
+de qualquer maneira, o hibrido atual e o mais barato e este trabalho nao vale a
+pena.
+
+Ressalvas antes de decidir: o tipo `A` e **CPU de burst** (nao garantida) — um
+forecast com torch em 2 cores partilhados sera visivelmente mais lento; e ja ha
+swap em uso no PC (`n8n` 107 MB, `searxng` 75 MB, `mirofish` 190 MB, ES 331 MB),
+portanto o PC tambem nao esta folgado.
+
+## Espelho do Elasticsearch na VM
+
+O `iqos-elasticsearch` corre na VM com a **mesma imagem que o stack local**
+(`docker.elastic.co/elasticsearch/elasticsearch:8.11.0`), ao lado do edge e sem
+tocar em nada: o Caddy, a landing, o tunel e o ES do PC ficam como estavam.
+
+```powershell
+.\11-es-vm.ps1        # instala (vm.max_map_count, compose) e arranca o ES
+.\11-es-vm.ps1 -Logs  # segue o log
+```
+
+- escuta **so em 127.0.0.1:9200** (`network.host=127.0.0.1` + `network_mode: host`),
+  por isso nao fica exposto a Internet;
+- o tunel reverso (`origin/tunnel.sh`) encaminha tambem `127.0.0.1:9201` para o
+  ES do PC, e o `reindex.remote.whitelist` do container aponta para la;
+- o ES local e apenas **lido** -- nada no PC muda.
+
+Com o ES a correr a VM fica em 1180 MB usados e 786 MB livres. Como a VM tem
+**2 GB**, este espelho e o maximo que cabe; subir a RAM faz-se so no painel.
+
+### Migrar os indices
+
+```powershell
+.\12-es-migrar.ps1 -MaxGB 3 -Dry     # ver o plano, sem escrever nada
+.\12-es-migrar.ps1 -MaxGB 3          # migrar (ordem: do leve para o pesado)
+.\12-es-migrar.ps1 -MaxGB 3 -Force   # refazer os que ja existam
+```
+
+Primeira passagem: **45 indices, 3,5 M documentos, contagens a bater indice a
+indice**. Ficaram de fora `contratos` (20,1 GB) e `contratos_es` (4,8 GB) -- com
+100 GB de disco ainda nao cabem com folga.
+
+Correccao: para o **espelho do Elasticsearch** eles cabem -- os 82 GB livres
+chegam (o espelho completo fica em ~31 GB de indice + 8 GB de sistema + 3 GB de
+imagens). O que os torna pesados e o tempo, nao o disco: passam horas pelo
+upload de casa.
+
+```powershell
+.\12-es-migrar.ps1 -MaxGB 21    # inclui contratos e contratos_es
+```
+
+Os ~120 GB de que se falava na analise de custos eram para a **stack inteira**
+(os 37 GB de `data/` + 3 GB de `model/` + 38 GB de imagens), nao para o ES.
+
+### Armadilhas (todas com sintomas enganadores)
+
+| Sintoma | Causa real |
+|---|---|
+| ES devolve **500** ao criar o indice: `"mappings" is null` | o `GET /<indice>` devolve `{"<indice>": {mappings, settings}}`; ler `.mappings` na raiz da `null` |
+| ES devolve **400** ao `_reindex`: `doesn't support slices > 1` | copia a partir de origem remota e sempre um so fluxo |
+| `migrar.sh: Illegal option -o pipefail` | `/bin/sh` no Ubuntu e dash -- e preciso chamar `bash` |
+| `$'\r': command not found` | o PowerShell injecta CR ao escrever em pipeline nativa, mesmo depois de um `-replace`; limpar com `sed` na VM |
 
 ## API Kamatera (para referencia)
 
@@ -234,6 +381,16 @@ GET    /service/servers                                  # listar
 POST   /service/server/info    {"name": "..."}           # detalhes + precos
 GET    /service/queue?id=<id>                            # estado de um comando
 POST   /service/server/reboot  {"id": "..."}
-PUT    /service/server/<id>/ram|cpu|disk                 # redimensionar
 DELETE /service/server/<id>/terminate                    # terminar
 ```
+
+**As rotas de escrita nao existem no `cloudcli`.** Testado com credenciais
+validas: `PUT /service/server/<id>/disk` no `cloudcli` devolve **404**, e no host
+`console.kamatera.com` a mesma rota devolve 500/400 -- a assinatura dos
+parametros e outra. O `cloudcli` serve leitura (`/servers`, `/server/info`,
+`/queue`); o redimensionamento faz-se **pelo painel**, que e mais simples e
+nao precisa de credenciais no PC.
+
+Nota util: quando o disco cresce pelo painel, a Kamatera **cresce tambem a
+particao e o sistema de ficheiros** -- nao foi preciso `growpart`/`resize2fs`.
+Cresceu de 20 GB para 100 GB com o `/` a acompanhar.

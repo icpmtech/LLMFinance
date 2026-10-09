@@ -381,6 +381,31 @@ docker compose --profile osif up -d --build
 - **Atualizar o upstream**: `docker/osif/fetch.ps1 -Force` e repetir o `up --build`.
 - Detalhes de arquitetura, portas e decisões em [`docker/osif/README.md`](../docker/osif/README.md).
 
+### 10. Subvenções públicas (listagens anuais da IGF)
+
+O módulo **Subvenções públicas** (`/subvencoes/*`) lê os `.ods` anuais da IGF
+que estejam em `data/subvencoes` — **um ficheiro por ano** ou **uma subpasta por
+ano** (ver `docs/subvencoes.md`). Como `./data` é montado em `/app/data`, a
+mesma pasta é lida do anfitrião e de dentro do contentor.
+
+Consequência prática, aprendida à custa de um painel enganador: os metadados da
+leitura (`data/subvencoes/_manifest.json`) guardam o **nome** do JSONL
+normalizado, nunca um caminho absoluto — um caminho `C:\…` gravado a partir do
+anfitrião não existe em `/app/…`, e o painel do Docker mostrava «0 registos ·
+0,00 € · 1 por ler» para ficheiros já lidos e indexados.
+
+Se o painel aparecer sem dados mas o índice tiver documentos
+(`finance_subvencoes`), verificar:
+
+```powershell
+curl.exe -s http://127.0.0.1:4180/api/subvencoes/meta          # lidos/registos por ano
+curl.exe -s http://127.0.0.1:4180/api/subvencoes/lotes         # o que está lido e indexado
+docker exec finance-llm-backend ls -la /app/data/subvencoes/_normalized
+```
+
+`GET /subvencoes/amostra/{ano}` lê do disco e **não** precisa do Elasticsearch —
+serve para separar «problema de leitura» de «problema de índice».
+
 ## Volumes montados
 
 O `docker-compose.yml` monta as seguintes pastas do host no container backend:

@@ -18,6 +18,10 @@ services:
       SSH_HOST: ${SSH_HOST:-45.147.251.188}
       SSH_USER: ${SSH_USER:-root}
       REMOTE_PORT: ${REMOTE_PORT:-8080}
+      # Encaminhamento do Elasticsearch local, para o ES da VM poder fazer
+      # `reindex` com `source.remote` sem o ES do PC ficar exposto.
+      REMOTE_ES_PORT: ${REMOTE_ES_PORT:-9201}
+      LOCAL_ES_TARGET: ${LOCAL_ES_TARGET:-host.docker.internal:9200}
       # A stack do PC, vista de dentro do container.
       LOCAL_TARGET: ${LOCAL_TARGET:-host.docker.internal:4180}
       RETRY_SECONDS: ${RETRY_SECONDS:-5}

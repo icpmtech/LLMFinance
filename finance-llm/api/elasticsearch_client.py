@@ -230,6 +230,20 @@ DEVEDORES_INDEX = "finance_devedores"
 # cada dado e quando foi recolhido.
 DEVEDORES_RECOLHAS_INDEX = "finance_devedores_recolhas"
 
+# Subvenções e outros benefícios públicos (Lei n.º 64/2013, de 27/08). Um
+# documento por **linha do ficheiro de origem**: quem deu (`entidade`), quem
+# recebeu (`beneficiario`), quanto (`montante`), quando foi decidido
+# (`data_decisao`) e com que fundamento legal (`tipo_ato`/`numero_ato`/
+# `data_ato`). Alimentado por `api/subvencoes_service.py`, que lê os `.ods`
+# publicados pela IGF na pasta `data/subvencoes` (um ficheiro por ano, ou uma
+# subpasta por ano) e normaliza-os para JSONL antes de indexar.
+SUBVENCOES_INDEX = "finance_subvencoes"
+
+# Um documento por **ficheiro lido**: ano, caminho, tamanho, `sha256`, folha,
+# número de linhas/registos e o total transferido — para a página poder mostrar
+# o que já foi lido e de onde veio cada registo.
+SUBVENCOES_LOTES_INDEX = "finance_subvencoes_lotes"
+
 # ---------------------------------------------------------------------------
 # «World Model» — o estado do mundo da contratação pública, materializado.
 #
@@ -521,6 +535,19 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
     DEVEDORES_INDEX: {
         # Os nomes vêm em maiúsculas e com acentos («JOSÉ»); `world_folding` deixa
         # que uma pesquisa sem acentos («JOSE») os encontre.
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    SUBVENCOES_INDEX: {
+        # Entidades e beneficiários vêm em maiúsculas e com acentos («MUNICÍPIO
+        # DE ALMADA»); `world_folding` deixa que «municipio de almada» os encontre.
         "analysis": {
             "analyzer": {
                 "world_folding": {
@@ -2078,6 +2105,82 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    # Subvenções públicas: uma linha do ficheiro da IGF por documento. O valor
+    # transferido é o único número publicado por linha; o `fundamento_legal`
+    # combina o tipo de ato com o número e a data (o `.ods` traz-nos em três
+    # colunas, sob um único cabeçalho «FUNDAMENTO LEGAL»).
+    subvencoes_mappings = {
+        "properties": {
+            # `<ano>:<nº da linha no ficheiro>` — reindexar o mesmo ficheiro
+            # sobrepõe-se em vez de duplicar.
+            "doc_id": {"type": "keyword"},
+            # Ano da **listagem** (o ficheiro), não o da decisão: o mesmo apoio
+            # aparece em várias listagens anuais (o ficheiro de 2025 repete
+            # decisões de 2022), e interessa poder ver as duas versões.
+            "ano": {"type": "integer"},
+            "linha": {"type": "integer"},
+            "ficheiro": {"type": "keyword", "ignore_above": 512},
+            "folha": {"type": "keyword"},
+            "nif_entidade": {"type": "keyword"},
+            "entidade": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "nif_beneficiario": {"type": "keyword"},
+            "beneficiario": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            # Deduzido do prefixo do NIF (`1`/`2`/`3` pessoa singular, `5`/`7`
+            # pessoa coletiva, `6` entidade pública, `8` empresário em nome
+            # individual, `9` outros).
+            "beneficiario_tipo": {"type": "keyword"},
+            # Verdadeiro quando o NIF(B) traz a letra «E» (beneficiário
+            # estrangeiro, ver nota b) do cabeçalho do ficheiro).
+            "beneficiario_estrangeiro": {"type": "boolean"},
+            "montante": {"type": "double"},
+            "data_decisao": {"type": "date"},
+            "ano_decisao": {"type": "integer"},
+            "finalidade": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+            },
+            "tipo_ato": {"type": "keyword"},
+            "numero_ato": {"type": "keyword"},
+            "data_ato": {"type": "date"},
+            "fundamento_legal": {"type": "keyword", "ignore_above": 512},
+            "lido_em": {"type": "date"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    subvencoes_lotes_mappings = {
+        "properties": {
+            "lote_id": {"type": "keyword"},
+            "ano": {"type": "integer"},
+            "ficheiro": {"type": "keyword", "ignore_above": 512},
+            "rel_path": {"type": "keyword", "ignore_above": 512},
+            "folha": {"type": "keyword"},
+            "bytes": {"type": "long"},
+            "sha256": {"type": "keyword"},
+            "modificado_em": {"type": "date"},
+            "linhas": {"type": "long"},
+            "registos": {"type": "long"},
+            "ignoradas": {"type": "long"},
+            "montante_total": {"type": "double"},
+            "primeira_decisao": {"type": "date"},
+            "ultima_decisao": {"type": "date"},
+            "jsonl_path": {"type": "keyword", "index": False},
+            "lido_em": {"type": "date"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
     analises_empresa_mappings = {
         "properties": {
             "doc_id": {"type": "keyword"},
@@ -2230,6 +2333,8 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (GLOBAL_PADROES_INDEX, global_padroes_mappings),
         (DEVEDORES_INDEX, devedores_mappings),
         (DEVEDORES_RECOLHAS_INDEX, devedores_recolhas_mappings),
+        (SUBVENCOES_INDEX, subvencoes_mappings),
+        (SUBVENCOES_LOTES_INDEX, subvencoes_lotes_mappings),
         (OSINT_INDEX, osint_mappings),
         (TICKER_TRANSLATIONS_INDEX, ticker_translations_mappings),
     ]:
@@ -9823,11 +9928,242 @@ def index_scraped_items(
         return {"error": str(exc), "indexed_count": 0, "error_count": len(actions)}
 
 
+#: Índice de diretório: campos textuais (pesquisa livre + subcampo `keyword`) e
+#: campos exatos (facetas/filtros). O resto do documento entra por *dynamic
+#: mapping* e as fichas estruturadas ficam em `flattened`.
+DIRECTORY_TEXT_FIELDS: Tuple[str, ...] = (
+    "nome",
+    "title",
+    "localizacao",
+    "morada",
+    "atividade",
+    "acerca",
+    "summary",
+)
+DIRECTORY_KEYWORD_FIELDS: Tuple[str, ...] = (
+    "nif",
+    "concelho",
+    "distrito",
+    "forma_juridica",
+    "cae",
+    "estado",
+    "constituicao",
+    "telefone",
+    "email",
+    "site",
+    "url",
+)
+DIRECTORY_NUMERIC_FIELDS: Tuple[str, ...] = ("capital_social_eur",)
+
+
+def directory_index_mapping(flattened_fields: Iterable[str] = ()) -> Dict[str, Any]:
+    """Mapeamento de um índice de diretório (fichas de empresas, cadastros)."""
+    properties: Dict[str, Any] = {
+        "source_id": {"type": "keyword"},
+        "source_name": {"type": "keyword"},
+        "run_id": {"type": "keyword"},
+        "item_id": {"type": "keyword"},
+        "url": {"type": "keyword"},
+        "scraped_at": {"type": "date"},
+        "trigger": {"type": "keyword"},
+        "data": {"type": "flattened"},
+    }
+    for name in DIRECTORY_TEXT_FIELDS:
+        properties[name] = {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}}
+    for name in DIRECTORY_KEYWORD_FIELDS:
+        properties[name] = {"type": "keyword"}
+    for name in DIRECTORY_NUMERIC_FIELDS:
+        properties[name] = {"type": "double"}
+    for name in ("ficha", *(flattened_fields or ())):
+        properties[str(name)] = {"type": "flattened"}
+    return {"dynamic": True, "properties": properties}
+
+
+def ensure_directory_index(
+    client: Elasticsearch, index: str, flattened_fields: Iterable[str] = ()
+) -> None:
+    """Cria o índice de diretório se ainda não existir (não altera o existente)."""
+    if client.indices.exists(index=index):
+        return
+    client.indices.create(
+        index=index,
+        settings={"number_of_shards": 1, "number_of_replicas": 0},
+        mappings=directory_index_mapping(flattened_fields),
+    )
+
+
+def index_directory_items(
+    index: str,
+    *,
+    source_id: str,
+    source_name: str,
+    run_id: str,
+    items: List[Dict[str, Any]],
+    trigger: str = "manual",
+    flattened_fields: Iterable[str] = (),
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa os itens de uma recolha num **índice de diretório** (fichas).
+
+    Ao contrário de `finance_scraped` — onde os campos variáveis ficam todos em
+    `data` (`flattened`, só pesquisável por texto — aqui os campos escalares
+    sobem a campos de topo, com tipo próprio: é o que permite **facetas**
+    (`distrito`, `concelho`, `forma_juridica`…) e filtros numéricos
+    (`capital_social_eur`). As fichas rótulo/valor mantêm-se intactas, em
+    `flattened`, para não multiplicar o mapeamento por cada rótulo da ficha.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed_count": 0, "error_count": 0}
+
+    ensure_directory_index(client, index, flattened_fields)
+    now = _today()
+    actions: List[Dict[str, Any]] = []
+    for item in items or []:
+        item_id = str(item.get("item_id") or "").strip()
+        if not item_id:
+            continue
+        data = item.get("data") if isinstance(item.get("data"), dict) else {}
+        doc: Dict[str, Any] = {
+            "source_id": source_id,
+            "source_name": source_name or source_id,
+            "run_id": run_id,
+            "item_id": item_id,
+            "url": str(item.get("url") or "")[:1024],
+            "title": str(item.get("title") or "")[:1024],
+            "scraped_at": str(item.get("scraped_at") or now),
+            "trigger": trigger or "manual",
+            "data": _clean_flattened(data) or {},
+        }
+        for name, value in data.items():
+            cleaned = _clean_flattened(value)
+            if cleaned is None or (isinstance(cleaned, (list, dict)) and not cleaned):
+                continue
+            doc[str(name)] = cleaned
+        actions.append({"_index": index, "_id": item_id, "_source": doc})
+
+    if not actions:
+        return {"indexed_count": 0, "error_count": 0}
+    try:
+        success, errors = bulk(client, actions, raise_on_error=False, stats_only=False, refresh=True)
+        error_list = errors if isinstance(errors, list) else []
+        if error_list:
+            logger.warning("Diretório %s: %s de %s itens falharam na indexação", index, len(error_list), len(actions))
+        return {
+            "indexed_count": int(success),
+            "error_count": len(error_list),
+            "errors": [str(e.get("index", {}).get("error", e))[:300] for e in error_list[:5]],
+        }
+    except Exception as exc:
+        return {"error": str(exc), "indexed_count": 0, "error_count": len(actions)}
+
+
+def _directory_field(name: str, *, exact: bool) -> str:
+    """Nome do campo a usar numa faceta/filtro (`nome` → `nome.keyword`)."""
+    if not exact:
+        return name
+    return f"{name}.keyword" if name in DIRECTORY_TEXT_FIELDS else name
+
+
+def search_directory(
+    index: str,
+    *,
+    q: Optional[str] = None,
+    filters: Optional[Dict[str, Any]] = None,
+    min_capital: Optional[float] = None,
+    max_capital: Optional[float] = None,
+    sort: str = "relevance",
+    size: int = 20,
+    offset: int = 0,
+    facet_fields: Iterable[str] = (),
+    facet_size: int = 25,
+    search_fields: Optional[Iterable[str]] = None,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa num índice de diretório, com filtros exatos e facetas.
+
+    `filters` são igualdades exatas nos campos (`{"distrito": "Lisboa"}`) e
+    `facet_fields` devolve a contagem por valor (para os dropdowns da UI).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "total": 0, "items": [], "facets": {}}
+
+    must: List[Dict[str, Any]] = []
+    term = (q or "").strip()
+    if term:
+        fields = list(search_fields or ("nome^3", "title^2", "nif", "morada", "atividade", "acerca", "localizacao", "data.*"))
+        must.append({"query_string": {"query": term, "fields": fields, "default_operator": "and"}})
+    for name, value in (filters or {}).items():
+        if value in (None, "", []):
+            continue
+        if isinstance(value, (list, tuple, set)):
+            values = [v for v in value if v not in (None, "")]
+            if values:
+                must.append({"terms": {_directory_field(str(name), exact=True): values}})
+            continue
+        must.append({"term": {_directory_field(str(name), exact=True): value}})
+    capital_range: Dict[str, float] = {}
+    if min_capital is not None:
+        capital_range["gte"] = float(min_capital)
+    if max_capital is not None:
+        capital_range["lte"] = float(max_capital)
+    if capital_range:
+        must.append({"range": {"capital_social_eur": capital_range}})
+
+    query: Dict[str, Any] = {"bool": {"must": must or [{"match_all": {}}]}}
+    sort_spec: List[Dict[str, Any]]
+    if sort == "recent":
+        sort_spec = [{"scraped_at": "desc"}, {"_score": "desc"}]
+    elif sort == "oldest":
+        sort_spec = [{"scraped_at": "asc"}]
+    elif sort == "nome":
+        sort_spec = [{"nome.keyword": "asc"}, {"_score": "desc"}]
+    elif sort == "capital":
+        sort_spec = [{"capital_social_eur": "desc"}, {"_score": "desc"}]
+    else:
+        sort_spec = ["_score", {"scraped_at": "desc"}]
+
+    aggs: Dict[str, Any] = {}
+    for name in facet_fields or ():
+        aggs[str(name)] = {"terms": {"field": _directory_field(str(name), exact=True), "size": facet_size}}
+
+    body: Dict[str, Any] = {
+        "query": query,
+        "sort": sort_spec,
+        "size": max(1, min(int(size), 200)),
+        "from": max(0, int(offset)),
+        "track_total_hits": True,
+    }
+    if aggs:
+        body["aggs"] = aggs
+    try:
+        resp = client.search(index=index, body=body, ignore_unavailable=True)
+    except Exception as exc:
+        return {"error": str(exc), "total": 0, "items": [], "facets": {}}
+
+    hits = resp.get("hits", {})
+    total = hits.get("total", {})
+    items = [{**hit.get("_source", {}), "item_id": hit.get("_id")} for hit in hits.get("hits", [])]
+    facets: Dict[str, List[Dict[str, Any]]] = {}
+    for name, agg in (resp.get("aggregations") or {}).items():
+        facets[name] = [
+            {"value": bucket.get("key"), "count": bucket.get("doc_count")}
+            for bucket in agg.get("buckets", [])
+        ]
+    return {
+        "total": total.get("value", 0) if isinstance(total, dict) else total,
+        "items": items,
+        "facets": facets,
+    }
+
+
+
 #: Fontes do índice da recolha que **não são notícias**: cadastro de empresas e
-#: registos Iberinform (fichas com dezenas de campos cada) e dados de ensaio.
-#: Ficam de fora quando a recolha é usada como **fonte de notícias**; o resto do
-#: índice é imprensa (SAPO, Lusa, Jornal Económico, Observador, ECO, …).
-NON_NEWS_SOURCE_PREFIXES: Tuple[str, ...] = ("empresas-", "iberinform-", "tmp-")
+#: registos Iberinform/Racius (fichas com dezenas de campos cada) e dados de
+#: ensaio. Ficam de fora quando a recolha é usada como **fonte de notícias**; o
+#: resto do índice é imprensa (SAPO, Lusa, Jornal Económico, Observador, ECO, …).
+NON_NEWS_SOURCE_PREFIXES: Tuple[str, ...] = ("empresas-", "iberinform-", "racius-", "tmp-")
 NON_NEWS_SOURCE_IDS: Tuple[str, ...] = ("quotes-demo", "padroes-empresa")
 
 

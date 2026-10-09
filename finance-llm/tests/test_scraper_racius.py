@@ -140,12 +140,39 @@ def test_template_racius_define_lista_campos_e_ficha():
     source = templates.build_source("racius-diretorio")
     assert source["url"].startswith("https://www.racius.com/pesquisa/empresas/")
     assert source["list"]["selector"] == "a.results__col-link"
-    assert [f["name"] for f in source["fields"]] == ["nome", "nif", "localizacao", "url"]
+    assert [f["name"] for f in source["fields"]] == [
+        "nome",
+        "nif",
+        "localizacao",
+        "concelho",
+        "distrito",
+        "url",
+    ]
     assert source["pagination"]["mode"] == "query"
     assert source["pagination"]["param"] == "page"
     assert source["id_fields"] == ["nif", "url"]
     assert source["detail"]["enabled"] is True
-    assert source["detail"]["pairs"]["field"] == "ficha"
+    pairs = source["detail"]["pairs"]
+    assert pairs["field"] == "ficha"
+    # A ficha alimenta o índice de diretório (facetas e filtros).
+    assert source["sink_index"] == "finance_racius"
+    assert pairs["fields"]["Forma Jurídica"] == {"field": "forma_juridica", "cast": "text"}
+    assert pairs["fields"]["Capital Social"] == {"field": "capital_social_eur", "cast": "float"}
+
+
+def test_normalizacao_dos_rotulos_da_ficha():
+    pairs = scraper._normalize_detail_pairs(
+        {
+            "enabled": True,
+            "key_selector": "p.k",
+            "value_selector": "p.v",
+            "fields": {"Morada": "morada", "Capital Social": {"field": "capital_social_eur", "cast": "float"}, "": "ignorar"},
+        }
+    )
+    assert pairs["fields"] == {
+        "Morada": {"field": "morada", "cast": "text"},
+        "Capital Social": {"field": "capital_social_eur", "cast": "float"},
+    }
 
 
 def test_extracao_da_lista_com_os_campos_do_template():
@@ -158,3 +185,26 @@ def test_extracao_da_lista_com_os_campos_do_template():
     assert data["url"] == "https://www.racius.com/empresa-exemplo-lda/"
     assert "ico-gps" not in data["localizacao"]
     assert data["localizacao"] == "Santarem, Santarem"
+    # O distrito/concelho alimentam as facetas da página do diretório.
+    assert data["concelho"] == "Santarem"
+    assert data["distrito"] == "Santarem"
+
+
+def test_pares_normalizados_entram_no_item_como_campos_proprios():
+    detail = scraper._normalize_detail(
+        {
+            "enabled": True,
+            "selector": "",
+            "pairs": {
+                "enabled": True,
+                "container": "li.detail__detail",
+                "key_selector": "p.detail__key-info",
+                "value_selector": "p.t--d-blue",
+                "fields": {"Capital Social": {"field": "capital_social_eur", "cast": "float"}},
+            },
+        }
+    )
+    pairs = scraper._extract_pairs(_page(DETAIL_HTML), detail["pairs"])
+    assert pairs["Capital Social"] == "1000"
+    # `cast: float` converte para número (é o que se filtra/ordena no índice).
+    assert scraper._cast(pairs["Capital Social"], {"cast": "float"}) == 1000.0

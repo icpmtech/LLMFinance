@@ -1,8 +1,16 @@
 """Rotas da **Pesquisa profunda** (`/deep-search/*`) — resposta citada sobre os dados.
 
-- `GET  /deep-search/meta`    — âmbitos disponíveis, limites e modelo predefinido
-- `GET  /deep-search/search`  — só a recuperação de fontes (JSON, sem IA)
-- `POST /deep-search/ask`     — resposta do modelo em SSE (tokens + fontes citadas)
+- `GET  /deep-search/meta`      — âmbitos disponíveis, limites e modelo predefinido
+- `GET  /deep-search/examples`  — perguntas de exemplo construídas com os dados
+- `GET  /deep-search/search`    — só a recuperação de fontes (JSON, sem IA)
+- `POST /deep-search/ask`       — resposta do modelo em SSE (tokens + fontes citadas)
+- `POST /deep-search/ontology`  — ontologia (objectos e relações) das fontes
+- `POST /deep-search/analogies` — contratos semelhantes no mercado
+- `POST /deep-search/analysis`  — interpretação da ontologia e das analogias (IA ou Hermes)
+
+Estas três últimas recebem as **fontes já recuperadas** (as mesmas que a página
+mostrou no evento `sources`), para não se repetir a recuperação — que é a parte
+lenta da pesquisa profunda.
 
 A leitura usa os mesmos índices da «Pesquisa total» (`search_service`), por isso
 o âmbito **CRM** só entra quando há sessão (dados privados por utilizador).
@@ -10,12 +18,14 @@ o âmbito **CRM** só entra quando há sessão (dados privados por utilizador).
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Any, Dict, List, Optional, Sequence
+from typing import Annotated, Any, Dict, List, Literal, Optional, Sequence
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from api import deep_search_analysis as analysis
+from api import deep_search_analogies as analogies
 from api import deep_search_service as deep
 from api.auth_routes import CurrentSession, optional_session
 
@@ -55,6 +65,31 @@ def _parse_sources(raw: Optional[str]) -> Optional[List[str]]:
     if not raw:
         return None
     return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+class DeepSourcesPayload(BaseModel):
+    """Fontes já recuperadas (as que a página recebeu no evento `sources`)."""
+
+    sources: List[Dict[str, Any]] = Field(default_factory=list, description="Fontes numeradas devolvidas por `/deep-search/ask`.")
+    enrich: bool = Field(True, description="Consultar o cadastro de entidades para o nome oficial e o CAE.")
+
+
+class DeepAnalogiesPayload(DeepSourcesPayload):
+    """Analogias para os contratos que estão nas fontes."""
+
+    contracts: int = Field(analogies.CONTRATOS_PADRAO, ge=1, le=6, description="Contratos da resposta a comparar.")
+    similar: int = Field(analogies.SEMELHANTES_PADRAO, ge=1, le=analogies.SEMELHANTES_MAX, description="Semelhantes por contrato.")
+
+
+class DeepAnalysisPayload(DeepSourcesPayload):
+    """Pedido de interpretação da ontologia e das analogias."""
+
+    question: str = Field(..., description="Pergunta original, para o texto não perder o contexto.")
+    ontology: Optional[Dict[str, Any]] = Field(None, description="Ontologia já calculada (evita recalculá-la).")
+    analogies: Optional[Dict[str, Any]] = Field(None, description="Analogias já calculadas (evita repetir o kNN).")
+    engine: Literal["modelo", "hermes"] = Field("modelo", description="Quem analisa: o modelo escolhido ou o agente Hermes.")
+    backend: str = Field("", description="Backend/modelo (ex.: `deepseek:deepseek-chat`). Vazio = predefinição do utilizador.")
+    depth: str = Field("profunda", description="Profundidade da recolha do Hermes: rapida | profunda.")
 
 
 @router.get("/meta")
@@ -124,6 +159,49 @@ def deep_search_sources(
         session_scope=_visibility(session),
         mode=mode,
     )
+
+
+@router.post("/analysis")
+async def deep_search_analysis(payload: DeepAnalysisPayload, session: Session = None) -> Dict[str, Any]:
+    """Interpreta a ontologia e as analogias — pelo modelo escolhido ou pelo Hermes.
+
+    A ontologia é recalculada aqui se não vier no pedido (é barata); as analogias
+    só se calculam se faltarem, porque implicam kNN no Elasticsearch.
+    """
+    user_id = getattr(getattr(session, "user", None), "id", None)
+    ontologia = payload.ontology or (
+        analysis.ontologia_das_fontes(payload.sources, enriquecer=payload.enrich) if payload.sources else None
+    )
+    analogias_calculadas = payload.analogies
+    if analogias_calculadas is None and payload.sources:
+        analogias_calculadas = analogies.analogias(payload.sources)
+    return await analysis.analisar(
+        payload.question,
+        ontologia=ontologia,
+        analogias=analogias_calculadas,
+        sources=payload.sources,
+        motor=payload.engine,
+        backend=payload.backend,
+        user_id=user_id,
+        session=session,
+        depth=payload.depth,
+    )
+
+
+@router.post("/ontology")
+def deep_search_ontology(payload: DeepSourcesPayload) -> Dict[str, Any]:
+    """Ontologia das fontes: objectos (contratos, empresas, CPV, anos) e relações.
+
+    Sai no mesmo envelope do grafo de contratos (`build_contract_graph`), para a
+    interface reutilizar o mesmo desenho, mais `legend`, `totals` e `mermaid`.
+    """
+    return analysis.ontologia_das_fontes(payload.sources, enriquecer=payload.enrich)
+
+
+@router.post("/analogies")
+def deep_search_analogies(payload: DeepAnalogiesPayload) -> Dict[str, Any]:
+    """Contratos semelhantes do mercado para os contratos que estão nas fontes."""
+    return analogies.analogias(payload.sources, contratos=payload.contracts, semelhantes=payload.similar)
 
 
 @router.post("/ask")

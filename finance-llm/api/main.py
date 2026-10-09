@@ -263,6 +263,7 @@ from api.contratos_fr_routes import router as contratos_fr_router
 from api.ontology_routes import router as ontology_router
 from api.ontology_workspace_routes import router as ontology_workspace_router
 from api.scraper_routes import router as scraper_router
+from api.racius_routes import router as racius_router
 from api.social_routes import router as social_router
 from api.search_routes import router as search_router
 from api.search_workspace_routes import router as search_workspace_router
@@ -320,6 +321,13 @@ from api.docs_routes import router as docs_router
 from api.cae_routes import router as cae_router
 # Relatórios a pedido: catálogo, pedidos, pagamento por MB Way e backoffice.
 from api.reports_routes import router as reports_router
+# Subvenções públicas (Lei n.º 64/2013, de 27/08): lê os `.ods` anuais da IGF
+# guardados em `data/subvencoes` (um ficheiro por ano, ou uma subpasta por ano),
+# indexa-os em `finance_subvencoes` e dá-lhes pesquisa, painel e exportação.
+from api.subvencoes_routes import router as subvencoes_router
+# Benchmark de preços e concorrência por empresa + CPV: preço de referência do
+# segmento, concorrentes, historial de contrapartes e oportunidades.
+from api.benchmark_routes import router as benchmark_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -553,7 +561,7 @@ app.add_middleware(
 # Vale o mesmo para a **gestão da loja** (`/shop/*`): sem isto o backoffice
 # mostrava listas e o tema da vitrine desatualizados. O leitor de RSS segue a
 # mesma regra: as listas de artigos e o estado da recolha têm de estar frescos.
-_NO_STORE_PREFIXES = ("/docs", "/redoc", "/openapi", "/shop", "/rss", "/sentiment/market", "/reports")
+_NO_STORE_PREFIXES = ("/docs", "/redoc", "/openapi", "/shop", "/rss", "/sentiment/market", "/reports", "/subvencoes")
 
 
 @app.middleware("http")
@@ -580,6 +588,7 @@ app.include_router(contratos_fr_router)
 app.include_router(ontology_router)
 app.include_router(ontology_workspace_router)
 app.include_router(scraper_router)
+app.include_router(racius_router)
 app.include_router(social_router)
 app.include_router(search_router)
 app.include_router(sentiment_router)
@@ -655,6 +664,15 @@ app.include_router(cae_router)
 # Relatórios a pedido: área do cliente (`/reports/*`), backoffice de produção
 # (`/reports/backoffice/*`) e configuração na administração (`/reports/admin/*`).
 app.include_router(reports_router)
+app.include_router(subvencoes_router)
+app.include_router(benchmark_router)
+
+
+@app.get("/benchmark")
+@app.get("/benchmark/{path:path}")
+def serve_benchmark_spa_page(path: str = ""):
+    """Página do módulo **Benchmark de preços e concorrência** (SPA)."""
+    return spa_index_response()
 
 
 @app.get("/osint")

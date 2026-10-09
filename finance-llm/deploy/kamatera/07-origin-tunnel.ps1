@@ -40,6 +40,10 @@ param(
     [string]$SshKey = "$env:USERPROFILE\.ssh\iqos_kamatera_ed25519",
     [int]$RemotePort = 8080,
     [int]$LocalPort = 4180,
+    # Encaminhamento extra para o Elasticsearch: o ES da VM puxa os indices por
+    # `reindex` com `source.remote`, apontando a 127.0.0.1:$RemoteEsPort.
+    [int]$RemoteEsPort = 9201,
+    [int]$LocalEsPort = 9200,
     [switch]$InstallTask,
     [switch]$RemoveTask,
     [switch]$Logs
@@ -70,6 +74,8 @@ function Write-OriginEnv {
         "SSH_USER=$SshUser",
         "REMOTE_PORT=$RemotePort",
         "LOCAL_TARGET=host.docker.internal:$LocalPort",
+        "REMOTE_ES_PORT=$RemoteEsPort",
+        "LOCAL_ES_TARGET=host.docker.internal:$LocalEsPort",
         'RETRY_SECONDS=5'
     ) -join "`n"
     Set-Content -Path $envFile -Value ($content + "`n") -Encoding ascii

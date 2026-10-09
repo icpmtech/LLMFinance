@@ -70,6 +70,7 @@ import ScraperPage, {
   scraperSectionForView,
   type ScraperSection,
 } from "./pages/ScraperPage";
+import RaciusPage from "./pages/RaciusPage";
 import SocialPage, {
   SOCIAL_SECTION_VIEWS,
   socialSectionForView,
@@ -84,6 +85,8 @@ import WorldPage from "./pages/WorldPage";
 import PadroesPage from "./pages/PadroesPage";
 import OsintPage from "./pages/OsintPage";
 import ReportsPage from "./pages/ReportsPage";
+import SubvencoesPage from "./pages/SubvencoesPage";
+import BenchmarkPage from "./pages/BenchmarkPage";
 import MiroFishPage from "./pages/MiroFishPage";
 import SimuladorPage from "./pages/SimuladorPage";
 import DeepSearchPage from "./pages/DeepSearchPage";
@@ -182,6 +185,8 @@ type AppView =
   | "padroes"
   | "osint"
   | "reports"
+  | "subvencoes"
+  | "benchmark"
   | "mirofish"
   | "simulador"
   | "deep-search"
@@ -310,6 +315,7 @@ function pathForView(
   if (view === "scraper-execucoes") return "/scraper/execucoes";
   if (view === "scraper-pesquisa") return "/scraper/pesquisa";
   if (view === "scraper-agenda") return "/scraper/agenda";
+  if (view === "racius") return "/racius";
   if (view === "social") return "/social";
   if (view === "social-canais") return "/social/canais";
   if (view === "social-execucoes") return "/social/execucoes";
@@ -325,6 +331,8 @@ function pathForView(
   if (view === "world-rede") return "/world/rede";
   if (view === "osint") return "/osint";
   if (view === "reports") return "/reports";
+  if (view === "subvencoes") return "/subvencoes";
+  if (view === "benchmark") return "/benchmark";
   if (view === "padroes") return "/padroes";
   if (view === "osint") return "/osint";
   if (view === "mirofish") return "/mirofish";
@@ -526,6 +534,8 @@ export default function App() {
     if (path === "/world" || path.startsWith("/world/")) return "world";
     if (path === "/osint" || path.startsWith("/osint/")) return "osint";
     if (path === "/reports" || path.startsWith("/reports/")) return "reports";
+    if (path === "/subvencoes" || path.startsWith("/subvencoes/")) return "subvencoes";
+    if (path === "/benchmark" || path.startsWith("/benchmark/")) return "benchmark";
     if (path === "/padroes" || path.startsWith("/padroes/")) return "padroes";
     if (path === "/mirofish" || path.startsWith("/mirofish/")) return "mirofish";
     if (path === "/simulador" || path.startsWith("/simulador/")) return "simulador";
@@ -592,6 +602,7 @@ export default function App() {
     if (path === "/shop" || path.startsWith("/shop/")) return "shop";
     if (path === "/rss" || path.startsWith("/rss/")) return "rss";
     if (path === "/iframe-pages") return "iframe-pages";
+    if (path === "/racius") return "racius";
     const iframeView = iframeViewFromPath(path);
     if (iframeView) return iframeView as AppView;
     {
@@ -649,6 +660,8 @@ export default function App() {
       else if (path === "/padroes" || path.startsWith("/padroes/")) next = "padroes";
       else if (path === "/osint" || path.startsWith("/osint/")) next = "osint";
       else if (path === "/reports" || path.startsWith("/reports/")) next = "reports";
+      else if (path === "/subvencoes" || path.startsWith("/subvencoes/")) next = "subvencoes";
+      else if (path === "/benchmark" || path.startsWith("/benchmark/")) next = "benchmark";
       else if (path === "/mirofish" || path.startsWith("/mirofish/")) next = "mirofish";
       else if (path === "/simulador" || path.startsWith("/simulador/")) next = "simulador";
       else if (path === "/deep-search" || path.startsWith("/deep-search/")) next = "deep-search";
@@ -702,6 +715,7 @@ export default function App() {
       else if (path === "/rss" || path.startsWith("/rss/")) next = "rss";
       else if (path === "/noticias" || path.startsWith("/noticias/")) next = "noticias";
       else if (path === "/iframe-pages") next = "iframe-pages";
+      else if (path === "/racius") next = "racius";
       else if (iframeViewFromPath(path)) next = iframeViewFromPath(path) as AppView;
       else if (crmSectionFromPath(path)) next = CRM_SECTION_VIEWS[crmSectionFromPath(path) as CrmSection] as AppView;
       else if (scraperSectionFromPath(path)) next = SCRAPER_SECTION_VIEWS[scraperSectionFromPath(path) as ScraperSection] as AppView;
@@ -1141,6 +1155,7 @@ export default function App() {
       return <DashboardPage onSwitchView={handleSwitchView} onSelectTicker={handleSelectTicker} />;
     }
     if (target === "finder") return <FinderPage />;
+    if (target === "racius") return <RaciusPage />;
     if (target === "compare") return <CompareWindow />;
     if (target.startsWith("company-detail:")) {
       return <EntityDetailWindow nif={target.slice("company-detail:".length)} />;
@@ -1366,6 +1381,8 @@ export default function App() {
     if (target === "padroes") return <PadroesPage />;
     if (target === "osint") return <OsintPage />;
     if (target === "reports") return <ReportsPage />;
+    if (target === "subvencoes") return <SubvencoesPage />;
+    if (target === "benchmark") return <BenchmarkPage onSwitchView={() => setViewAndHistory("contracts-search")} />;
     if (target === "mirofish") return <MiroFishPage />;
     if (target === "simulador") return <SimuladorPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
     if (target === "deep-search") return <DeepSearchPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;

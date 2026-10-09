@@ -74,7 +74,7 @@ template. Os seletores foram escritos e **validados contra as páginas reais** (
 | `expansion` | `expansion.com` | HTTP | sim |
 | `investing-mercados` | `investing.com/news/stock-market-news` | HTTP | não |
 | `iberinform-diretorio` | `iberinform.pt/diretorio/<distrito>/<concelho>` | HTTP | sim |
-| `racius-diretorio` | `racius.com/pesquisa/empresas/?q=<termo>` | HTTP | não (trás a **ficha** estruturada) |
+| `racius-diretorio` | `racius.com/pesquisa/empresas/?q=<termo>` | HTTP | não (trás a **ficha** estruturada, com `sink_index`) |
 | `quotes-demo` | `quotes.toscrape.com` | HTTP | não (site de exemplo) |
 
 Como se cria uma fonte a partir de um template:
@@ -163,6 +163,33 @@ linha da ficha:
   um dos dois esteja preenchido. As fichas vão para o índice `finance_scraped`
   em `data.ficha` (o campo `data` é `flattened`, por isso qualquer rótulo é
   pesquisável como `data.ficha.<rótulo>`).
+- `fields` dá **nome e tipo** aos rótulos que interessam fixar
+  (`{"Capital Social": {"field": "capital_social_eur", "cast": "float"}}`).
+  Esses valores passam a ser campos próprios dos `data` (a par da ficha crua),
+  o que os torna filtráveis e facetáveis — sem isto, a ficha ficaria só num
+  `flattened` de rótulos variáveis.
+
+### Índice de diretório (`sink_index`)
+
+Um diretório precisa de **facetas** (`distrito`, `forma jurídica`…) e filtros
+numéricos (capital social), que o `finance_scraped` não dá: aí os campos
+variáveis vivem em `data`, um `flattened` só pesquisável por texto. Com
+`sink_index`, a recolha passa a alimentar **também** um índice próprio, com um
+mapeamento de diretório (campos escalares a campos de topo tipados; fichas
+estruturadas em `flattened`, para não multiplicar o mapeamento):
+
+```json
+{ "sink_index": "finance_racius" }
+```
+
+Os itens ficam gravados nos dois sítios: `finance_scraped` (a pesquisa geral da
+recolha e o RAG) e o índice de diretório (facetas e filtros). O `_id` é o mesmo
+`item_id`, pelo que repetir a recolha **atualiza** o documento.
+
+Quem usa isto: a fonte `racius-diretorio` (índice `finance_racius`) e a página
+**Diretório · Racius** (`/racius`), que pesquisa empresas por texto — nome,
+NIF, morada, atividade — e filtra por distrito, concelho, forma jurídica e
+capital social, com a ficha completa de cada empresa.
 
 ### Paginação por parâmetro de URL (`pagination.mode="query"`)
 

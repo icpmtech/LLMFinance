@@ -21,9 +21,9 @@ Notas:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
-import os
 import re
 import sys
 import time
@@ -40,6 +40,8 @@ sys.path.insert(0, str(ROOT))
 LIST_URL = "https://www.racius.com/pesquisa/empresas/"
 BASE_URL = "https://www.racius.com"
 INDEX = "finance_racius"
+#: Fonte do módulo de recolha do IQ OS que alimenta o mesmo índice.
+SOURCE_ID = "racius-diretorio"
 SINK_DIR = ROOT / "data" / "racius"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -214,57 +216,49 @@ def write_jsonl(items: Iterable[Dict[str, Any]], path: Path) -> int:
 
 
 def ensure_index(client: Any) -> None:
-    """Cria `finance_racius` com um mapeamento que acomoda fichas heterogéneas."""
-    if client.indices.exists(index=INDEX):
-        return
-    client.indices.create(
-        index=INDEX,
-        settings={"number_of_shards": 1, "number_of_replicas": 0},
-        mappings={
-            "properties": {
-                "nome": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
-                "nif": {"type": "keyword"},
-                "localizacao": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
-                "concelho": {"type": "keyword"},
-                "distrito": {"type": "keyword"},
-                "url": {"type": "keyword"},
-                "morada": {"type": "text"},
-                "forma_juridica": {"type": "keyword"},
-                "capital_social": {"type": "text"},
-                "capital_social_eur": {"type": "double"},
-                "atividade": {"type": "text"},
-                "cae": {"type": "keyword"},
-                "estado": {"type": "keyword"},
-                "constituicao": {"type": "keyword"},
-                "telefone": {"type": "keyword"},
-                "email": {"type": "keyword"},
-                "site": {"type": "keyword"},
-                "acerca": {"type": "text"},
-                # Rótulos que não constam de `LABELS` ficam pesquisáveis em `ficha.*`.
-                "ficha": {"type": "flattened"},
-                "scraped_at": {"type": "date"},
-            }
-        },
-    )
+    """Cria `finance_racius` com o mapeamento partilhado dos diretórios."""
+    from api.elasticsearch_client import ensure_directory_index
+
+    ensure_directory_index(client, INDEX, ("ficha",))
 
 
 def index_items(items: List[Dict[str, Any]]) -> Dict[str, Any]:
-    from elasticsearch import Elasticsearch
-    from elasticsearch.helpers import bulk
+    """Indexa as empresas no índice de diretório `finance_racius`.
 
-    es_url = os.getenv("ELASTICSEARCH_URL", "http://127.0.0.1:9200")
-    client = Elasticsearch(es_url, request_timeout=60)
-    ensure_index(client)
+    Usa o indexador do IQ OS (`index_directory_items`), para os documentos
+    ficarem com a mesma forma quer venham deste script quer da recolha da API.
+    """
+    from api.elasticsearch_client import index_directory_items
 
-    def actions() -> Iterator[Dict[str, Any]]:
-        for item in items:
-            key = item.get("nif") or item.get("url") or item.get("nome")
-            doc = dict(item)
-            doc.setdefault("scraped_at", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
-            yield {"_index": INDEX, "_id": str(key), "_source": doc}
+    return index_directory_items(
+        INDEX,
+        source_id=SOURCE_ID,
+        source_name="Racius · Diretório de empresas (PT)",
+        run_id=time.strftime("%Y%m%dT%H%M%S", time.gmtime()),
+        items=[_as_item(doc) for doc in items],
+        trigger="script",
+        flattened_fields=("ficha",),
+    )
 
-    success, errors = bulk(client, actions(), raise_on_error=False, stats_only=False, refresh=True)
-    return {"indexed_count": success, "error_count": len(errors) if isinstance(errors, list) else 0}
+
+def _as_item(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Converte uma empresa no item da recolha (`data` + `item_id`).
+
+    O `item_id` segue a mesma fórmula do motor de recolha
+    (`<fonte>::<campo>=<valor>::…`, com `id_fields: ["nif", "url"]`), para o
+    mesmo NIF recolhido pela API e por este script **atualizar** o mesmo
+    documento em vez de o duplicar.
+    """
+    body = {k: v for k, v in doc.items() if k not in ("item_id", "scraped_at")}
+    parts = [f"{key}={doc[key]}" for key in ("nif", "url") if doc.get(key) not in (None, "")]
+    digest = hashlib.sha1(f"{SOURCE_ID}::{'::'.join(parts)}".encode("utf-8")).hexdigest()[:24]
+    return {
+        "item_id": f"{SOURCE_ID}:{digest}",
+        "title": doc.get("nome") or "",
+        "url": doc.get("url") or "",
+        "scraped_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "data": body,
+    }
 
 
 def main() -> int:

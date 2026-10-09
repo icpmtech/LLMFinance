@@ -37,7 +37,10 @@ data/forecasting/*.png
 # Código do OSINT Framework (OSIF): clone do upstream obtido com
 # `docker/osif/fetch.ps1` para as imagens do perfil `osif` do compose.
 docker/osif/src/
-
+# Credenciais da API Kamatera usadas por `deploy/kamatera/10-redimensionar-vm.ps1`.
+# O `.env` do compose nao as cobre (aquele padrao so apanha ficheiros chamados
+# exatamente `.env`), por isso esta linha e obrigatoria.
+deploy/kamatera/.kamatera.env
 # Contratos de Espanha (PLACSP): os ZIP anuais são dados re-descarregáveis
 # (25 ficheiros, ~9,4 GB) e ficam só em disco — o GitHub rejeita ficheiros
 # acima de 100 MiB. As listas de códigos `codigos/*.gc` são pequenas e ficam
