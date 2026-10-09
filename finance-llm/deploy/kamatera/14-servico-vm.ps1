@@ -109,6 +109,15 @@ $SERVICOS = @{
         Sonda = '/'
         Extra = @()
     }
+    # Imagem construida localmente sobre a publica `ghcr.io/666ghj/mirofish`,
+    # com codigo proprio por cima -- transferir primeiro com
+    # `15-imagem-vm.ps1 -Imagem iq-os-mirofish:latest`.
+    # O backend recusa arrancar sem `LLM_API_KEY` e `ZEP_API_KEY`; vem no `.env`.
+    'mirofish' = @{
+        Porta = 5001
+        Sonda = '/health'
+        Extra = @()
+    }
 }
 
 function Invoke-Vm {

@@ -32,3 +32,19 @@ logs
 *.err
 _docker_es_*.json
 es_up.txt
+# Lixo que estava a entrar no contexto e a inflacionar as camadas de codigo.
+# Cada `COPY . .` ia a ~300 MB por causa disto; um so destes ficheiros alterado
+# obriga a reenviar a camada toda, o que inviabiliza deploy continuo.
+# Medido antes de excluir: debug_mj 75 MB, chat-ui/e2e-venv 125 MB,
+# exports 20 MB, _frontend_dist 20 MB.
+debug_mj
+exports
+_frontend_dist
+chat-ui/e2e-venv
+chat-ui/e2e/.venv
+chat-ui/playwright-report
+chat-ui/test-results
+chat-ui/blob-report
+chat-ui/playwright/.cache
+**/.pytest_cache
+**/__pycache__

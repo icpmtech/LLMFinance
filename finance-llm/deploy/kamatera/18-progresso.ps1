@@ -26,8 +26,10 @@ param(
     [string]$TunnelContainer = 'iqos-origin-tunnel',
     # Caminho base remoto: os blocos sao `$RemoteBase.000`, `.001`, ...
     [string]$RemoteBase = '/tmp/iqos-imagem.tar.gz',
-    # Onde o 15-imagem-vm.ps1 escreve o progresso.
-    [string]$Log = "$env:TEMP\iqos-backend-img2.log",
+    # Onde o 15-imagem-vm.ps1 escreve o progresso. Vazio = o log de transferencia
+    # mais recente em $env:TEMP (assim serve para qualquer imagem, nao so a que
+    # estava em curso quando isto foi escrito).
+    [string]$Log = '',
     # Ficheiro local do tar: e o tamanho dele que da o total a enviar.
     [string]$TarLocal = "$env:TEMP\iqos-imagem.tar.gz",
     [int]$IntervaloSegundos = 15,
@@ -39,7 +41,15 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$stateFile = Join-Path $env:TEMP 'iqos-progresso.state'
+
+if (-not $Log) {
+    $cand = Get-ChildItem "$env:TEMP\iqos-*img*.log" -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending
+    $Log = if ($cand) { $cand[0].FullName } else { Join-Path $env:TEMP 'iqos-backend-img2.log' }
+}
+# Estado por transferencia: os contadores de uma imagem nao servem para outra, e
+# um estado partilhado daria velocidades absurdas ao trocar de ficheiro.
+$stateFile = Join-Path $env:TEMP ('iqos-progresso-{0}.state' -f [IO.Path]::GetFileNameWithoutExtension($Log))
 
 function Invoke-Vm {
     param([Parameter(Mandatory)][string]$RemoteCommand)
@@ -121,7 +131,10 @@ function Mostrar {
     Write-Host '=== Progresso da transferencia ===' -ForegroundColor Cyan
     Write-Host "  fase: $fase" -ForegroundColor DarkGray
 
-    if ($total -le 0 -and $rec -le 0) {
+    # So dizer "nada em curso" quando nao ha fase conhecida. No inicio do
+    # `docker save` o ficheiro ainda nao existe, e a mensagem dava a ideia de que
+    # a transferencia nao tinha arrancado quando estava a correr bem.
+    if ($total -le 0 -and $rec -le 0 -and $fase -eq '?') {
         Write-Host '  Nada em curso: nem tar local, nem blocos na VM.' -ForegroundColor DarkGray
         return
     }

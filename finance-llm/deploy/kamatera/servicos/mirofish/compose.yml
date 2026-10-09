@@ -1,0 +1,72 @@
+# MiroFish na VM -- oitavo servico a migrar.
+#
+# Motor de previsao por inteligencia de enxame. A imagem local
+# (`iq-os-mirofish:latest`) parte da oficial `ghcr.io/666ghj/mirofish` e
+# **sobrepoe-lhe o codigo actual do projecto** (interface em portugues, base da
+# API relativa, home page do IQ OS...), por isso nao serve puxar a imagem
+# publica: tem de ser transferida a que ja esta construida no PC.
+#
+#     .\15-imagem-vm.ps1 -Imagem iq-os-mirofish:latest
+#     .\14-servico-vm.ps1 -Nome mirofish
+#
+# Diferencas face ao perfil `mirofish` do `docker-compose.yml` da raiz:
+#
+#   1. `image:` em vez de `build:` -- o contexto de build (`.docker/mirofish`)
+#      depende da imagem base e de um tarball do upstream; reconstruir na VM
+#      seria muito mais lento do que transferir;
+#   2. porta presa a 127.0.0.1;
+#   3. entra na rede `iqos-net`.
+#
+# O backend **recusa arrancar sem chaves**: o `run.py` valida `LLM_API_KEY` e
+# `ZEP_API_KEY` e sai com codigo 1. Ambas estao definidas no `.env` do projecto,
+# que o `14-servico-vm.ps1` envia para o lado deste ficheiro -- sem isso o
+# contentor entrava num ciclo de reinicios.
+services:
+  mirofish:
+    image: iq-os-mirofish:latest
+    container_name: iqos-mirofish
+    ports:
+      # API Flask. A SPA do Vite (3000) nao e publicada, tal como no PC: e
+      # servida pelo proxy de incorporacao do nginx (MIROFISH_EMBED_PORT).
+      - "127.0.0.1:${MIROFISH_API_PORT:-5001}:5001"
+    volumes:
+      # Projetos, materiais-semente, relatorios e simulacoes.
+      - mirofish-uploads:/app/backend/uploads
+    environment:
+      - TZ=Europe/Lisbon
+      # LLM (formato OpenAI). Vazio => o backend recusa arrancar.
+      - LLM_API_KEY=${MIROFISH_LLM_API_KEY:-${OPENAI_API_KEY:-}}
+      - LLM_BASE_URL=${MIROFISH_LLM_BASE_URL:-${OPENAI_BASE_URL:-}}
+      - LLM_MODEL_NAME=${MIROFISH_LLM_MODEL_NAME:-${OPENAI_MODEL:-}}
+      # Memoria de longo prazo dos agentes (Zep Cloud). Vazio => nao arranca.
+      - ZEP_API_KEY=${MIROFISH_ZEP_API_KEY:-${ZEP_API_KEY:-}}
+      # Acelerador opcional (2.o modelo para tarefas de volume); vazio = desligado.
+      - LLM_BOOST_API_KEY=${MIROFISH_LLM_BOOST_API_KEY:-}
+      - LLM_BOOST_BASE_URL=${MIROFISH_LLM_BOOST_BASE_URL:-}
+      - LLM_BOOST_MODEL_NAME=${MIROFISH_LLM_BOOST_MODEL_NAME:-}
+      # Rondas de simulacao por omissao. Cada ronda chama o LLM por cada agente,
+      # por isso o README do upstream sugere menos de 40 nas primeiras tentativas.
+      - OASIS_DEFAULT_MAX_ROUNDS=${MIROFISH_MAX_ROUNDS:-10}
+      # Idioma das respostas. Os prompts do upstream sao em chines e, sem isto,
+      # as personas e as publicacoes dos agentes saem em chines.
+      - MIROFISH_REPLY_LANGUAGE=${MIROFISH_REPLY_LANGUAGE:-pt-PT}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  default:
+    name: iqos-net
+    external: true
+
+volumes:
+  mirofish-uploads:
