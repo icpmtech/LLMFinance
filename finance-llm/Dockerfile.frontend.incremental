@@ -14,7 +14,23 @@
 ## ATENÃ‡ÃƒO: o `Remove-Item` **nÃ£o** Ã© opcional. O `Copy-Item -Recurse` para uma
 # pasta que jÃ¡ existe cria `_frontend_dist\dist` em vez de substituir o conteÃºdo,
 # e o `index.html` antigo (com o bundle antigo) fica no lugar â€” a build passa,
-# o contentor sobe e a pÃ¡gina serve cÃ³digo velho. Confirmar sempre o hash:
+# o contentor sobe e a pÃ¡gina serve cÃ³digo velho. Confirmar sempre o hash.
+#
+# AINDA MAIS IMPORTANTE: `_frontend_dist` estÃ¡ no `.dockerignore` (para tirar
+# 20 MB ao contexto), pelo que este `COPY` **falha ou nÃ£o copia nada**. O caminho
+# fiÃ¡vel Ã© construir a partir de um contexto temporÃ¡rio (sem `.dockerignore`),
+# copiando o `dist` jÃ¡ construÃdo:
+#
+#   $ctx = Join-Path $env:TEMP 'iqos-spa-ctx'
+#   Remove-Item -Recurse -Force $ctx -ErrorAction SilentlyContinue
+#   New-Item -ItemType Directory -Path $ctx | Out-Null
+#   Copy-Item -Recurse chat-ui\dist (Join-Path $ctx 'html')
+#   Set-Content -Path (Join-Path $ctx 'Dockerfile') -Encoding ascii -Value @(
+#     'FROM iq-os-frontend:latest', 'COPY html /usr/share/nginx/html')
+#   docker build -f (Join-Path $ctx 'Dockerfile') -t iq-os-frontend:latest $ctx
+#   docker compose stop frontend; docker compose up -d --no-build --no-deps frontend
+#
+# E confirmar o que ficou dentro da imagem:
 #   docker run --rm --entrypoint sh iq-os-frontend:latest -c "grep -o 'assets/index-[A-Za-z0-9_-]*\.js' /usr/share/nginx/html/index.html"
 ##   docker build -f Dockerfile.frontend.incremental -t iq-os-frontend:latest .
 #

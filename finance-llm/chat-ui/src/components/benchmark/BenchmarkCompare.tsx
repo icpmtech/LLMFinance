@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
 import {
   BadgeEuro,
   Building2,
+  Grid3X3,
   Handshake,
   Info,
   Scale,
@@ -126,38 +127,48 @@ export default function BenchmarkCompare({ meta }: { meta: BenchmarkMeta | null 
 
   const remover = (indice: number) => setSelecionadas((atuais) => atuais.filter((_, i) => i !== indice));
 
-  const comparar = useCallback(async () => {
-    if (selecionadas.length < 2) {
-      setErro("Escolha pelo menos duas empresas para comparar.");
-      return;
-    }
-    setACarregar(true);
-    setErro(null);
-    try {
-      const resultado = await compareBenchmarkEntities({
-        entities: selecionadas.map((empresa) => ({ nif: empresa.nif || undefined, name: empresa.name })),
-        role,
-        cpv_code: cpv || undefined,
-        year_from: anoDe === "" ? undefined : Number(anoDe),
-        year_to: anoAte === "" ? undefined : Number(anoAte),
-        region: regiao.trim() || undefined,
-        top,
-      });
-      setDados(resultado);
-      setSegmento({
-        role,
-        cpv: cpv || undefined,
-        anoDe,
-        anoAte,
-        regiao: regiao.trim() || undefined,
-      });
-    } catch (err) {
-      setDados(null);
-      setErro(err instanceof Error ? err.message : String(err));
-    } finally {
-      setACarregar(false);
-    }
-  }, [selecionadas, role, cpv, anoDe, anoAte, regiao, top]);
+  const comparar = useCallback(
+    async (override?: { cpv_code?: string }) => {
+      if (selecionadas.length < 2) {
+        setErro("Escolha pelo menos duas empresas para comparar.");
+        return;
+      }
+      const codigoCpv = override?.cpv_code ?? cpv;
+      setACarregar(true);
+      setErro(null);
+      try {
+        const resultado = await compareBenchmarkEntities({
+          entities: selecionadas.map((empresa) => ({ nif: empresa.nif || undefined, name: empresa.name })),
+          role,
+          cpv_code: codigoCpv || undefined,
+          year_from: anoDe === "" ? undefined : Number(anoDe),
+          year_to: anoAte === "" ? undefined : Number(anoAte),
+          region: regiao.trim() || undefined,
+          top,
+        });
+        setDados(resultado);
+        setSegmento({
+          role,
+          cpv: codigoCpv || undefined,
+          anoDe,
+          anoAte,
+          regiao: regiao.trim() || undefined,
+        });
+      } catch (err) {
+        setDados(null);
+        setErro(err instanceof Error ? err.message : String(err));
+      } finally {
+        setACarregar(false);
+      }
+    },
+    [selecionadas, role, cpv, anoDe, anoAte, regiao, top],
+  );
+
+  /** Escolher um CPV a partir do perfil de uma empresa ou dos CPV em comum. */
+  const analisarCpv = (codigo: string) => {
+    setCpv(codigo);
+    void comparar({ cpv_code: codigo });
+  };
 
   const alternarPapel = (proximo: BenchmarkRole) => {
     setRole(proximo);
@@ -382,22 +393,28 @@ export default function BenchmarkCompare({ meta }: { meta: BenchmarkMeta | null 
                           {linha.top_cpv.length === 0 ? (
                             <span className="text-xs text-muted-foreground">—</span>
                           ) : (
-                            <div className="flex max-w-[13rem] flex-wrap gap-1">
-                              {linha.top_cpv.slice(0, 2).map((cpv) => (
-                                <span
+                            <div className="flex max-w-[15rem] flex-wrap gap-1">
+                              {linha.top_cpv.slice(0, 3).map((cpv) => (
+                                <button
                                   key={cpv.code}
-                                  className="rounded-full border border-border px-2 py-0.5 text-xs tabular-nums"
-                                  title={`${cpv.code} ${cpv.description || ""} · ${num(cpv.count)} contratos`}
+                                  type="button"
+                                  onClick={() => analisarCpv(cpv.code)}
+                                  className={`rounded-full border px-2 py-0.5 text-xs tabular-nums transition hover:bg-accent ${
+                                    segmento?.cpv && (cpv.code === segmento.cpv || cpv.code.startsWith(segmento.cpv))
+                                      ? "border-sky-400/50 text-sky-200"
+                                      : "border-border"
+                                  }`}
+                                  title={`${cpv.code} ${cpv.description || ""} · ${num(cpv.count)} contratos · ${moneyShort(cpv.value)}\n(clique para analisar este segmento)`}
                                 >
                                   {cpv.code} <span className="text-muted-foreground">{num(cpv.count)}</span>
-                                </span>
+                                </button>
                               ))}
-                              {linha.top_cpv.length > 2 ? (
+                              {linha.top_cpv.length > 3 ? (
                                 <span
                                   className="px-1 text-xs text-muted-foreground"
-                                  title={linha.top_cpv.slice(2).map((c) => `${c.code} (${num(c.count)})`).join("\n")}
+                                  title={linha.top_cpv.slice(3).map((c) => `${c.code} (${num(c.count)})`).join("\n")}
                                 >
-                                  +{linha.top_cpv.length - 2}
+                                  +{linha.top_cpv.length - 3}
                                 </span>
                               ) : null}
                             </div>
@@ -501,6 +518,44 @@ export default function BenchmarkCompare({ meta }: { meta: BenchmarkMeta | null 
                         <span className="shrink-0 text-sm font-medium tabular-nums">{moneyShort(item.value)}</span>
                       </div>
                       <p className="truncate text-xs text-muted-foreground" title={item.companies.join(" · ")}>
+                        {item.companies.join(" · ")}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {dados.shared_cpvs.length > 0 ? (
+            <Card>
+              <CardHeader className="flex flex-row items-center gap-2 pb-2">
+                <Grid3X3 size={16} className="text-muted-foreground" />
+                <CardTitle className="text-sm">CPV em comum</CardTitle>
+                <span className="ml-auto text-xs text-muted-foreground">clique para analisar o segmento</span>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <ul className="divide-y divide-border/60">
+                  {dados.shared_cpvs.map((item) => (
+                    <li key={item.code} className="py-2">
+                      <button
+                        type="button"
+                        className="flex w-full items-baseline gap-3 text-left transition hover:text-foreground"
+                        onClick={() => analisarCpv(item.code)}
+                        title={`Analisar o segmento ${item.code}`}
+                      >
+                        <span className="w-28 shrink-0 text-sm font-medium tabular-nums">{item.code}</span>
+                        <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+                          {item.description || "—"}
+                        </span>
+                        <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
+                          {num(item.companies_total)} empresas
+                        </span>
+                        <span className="w-28 shrink-0 text-right text-sm font-medium tabular-nums">
+                          {moneyShort(item.value)}
+                        </span>
+                      </button>
+                      <p className="truncate pl-28 text-xs text-muted-foreground" title={item.companies.join(" · ")}>
                         {item.companies.join(" · ")}
                       </p>
                     </li>

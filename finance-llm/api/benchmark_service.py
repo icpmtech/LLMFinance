@@ -61,6 +61,8 @@ MAX_COMPARE = 10
 _BUYERS_CANDIDATES = 20
 #: Quantos compradores se mostram por empresa na comparação.
 _BUYERS_SHOW = 5
+#: Quantos CPV se mostram por empresa na comparação.
+_CPV_SHOW = 8
 
 #: Tolerância do índice de preço para dizer «na linha do mercado».
 _PRICE_TOLERANCE = 0.1
@@ -179,6 +181,41 @@ def _rows(agg: Optional[Dict[str, Any]], top: int, total_value: float) -> List[D
             round(100.0 * (row.get("value") or 0.0) / total_value, 2) if total_value else None
         )
     return rows[:top]
+
+
+def _entity_cpv_agg(size: int) -> Dict[str, Any]:
+    """Nested `terms` por código CPV, com descrição legível e valor somado."""
+    return {
+        "nested": {"path": "cpv"},
+        "aggs": {
+            "top": {
+                "terms": {"field": "cpv.code", "size": size, "order": {"_count": "desc"}},
+                "aggs": {
+                    "description": {"top_hits": {"size": 1, "_source": True}},
+                    "value": {
+                        "reverse_nested": {},
+                        "aggs": {"sum": {"sum": {"field": "precoContratual"}}},
+                    },
+                },
+            }
+        },
+    }
+
+
+def _cpv_rows(agg: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Converte os buckets de um perfil de CPV em linhas `{code, description, count, value}`."""
+    rows: List[Dict[str, Any]] = []
+    for item in (((agg or {}).get("top") or {}).get("buckets")) or []:
+        value = (((item.get("value") or {}).get("sum")) or {}).get("value")
+        rows.append(
+            {
+                "code": str(item.get("key")),
+                "description": _cpv_description_from_hits(item.get("description"), item.get("key")),
+                "count": int(item.get("doc_count") or 0),
+                "value": round(float(value), 2) if value is not None else None,
+            }
+        )
+    return rows
 
 
 def _stats(agg: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -631,21 +668,7 @@ def benchmark_compare(
                     },
                     "last": {"max": {"field": "dataCelebracaoContrato"}},
                     # CPV em que cada empresa atua dentro do segmento.
-                    "top_cpv": {
-                        "nested": {"path": "cpv"},
-                        "aggs": {
-                            "top": {
-                                "terms": {"field": "cpv.code", "size": 5, "order": {"_count": "desc"}},
-                                "aggs": {
-                                    "description": {"top_hits": {"size": 1, "_source": True}},
-                                    "value": {
-                                        "reverse_nested": {},
-                                        "aggs": {"sum": {"sum": {"field": "precoContratual"}}},
-                                    },
-                                },
-                            }
-                        },
-                    },
+                    "top_cpv": _entity_cpv_agg(_CPV_SHOW),
                     # Quem compra a cada empresa (contrapartes do segmento).
                     "buyers": _role_rank_agg(counterpart_path, _BUYERS_CANDIDATES),
                     "buyers_total": {
@@ -668,6 +691,33 @@ def benchmark_compare(
     market_pct = _percentiles((aggs.get("market_priced") or {}).get("percentiles"))
     market_total_value = market_stats.get("sum") or 0.0
     market_median = market_pct.get("p50")
+
+    # Perfil de CPV de cada empresa. Com um CPV escolhido, a pesquisa principal só
+    # devolveria esse CPV (é o filtro do segmento), pelo que o perfil vem de uma
+    # pesquisa própria **sem** o filtro de CPV — assim vê-se em que áreas cada
+    # empresa atua e pode escolher-se o CPV a partir daí.
+    perfil_cpv: Dict[str, List[Dict[str, Any]]] = {}
+    if cpv_code:
+        filtros_perfil = _segment_filters(None, year_from, year_to, region)
+        try:
+            resp_perfil = client.search(
+                index=CONTRACTS_INDEX,
+                body={
+                    "size": 0,
+                    "query": ({"bool": {"filter": filtros_perfil}} if filtros_perfil else {"match_all": {}}),
+                    "aggs": {
+                        "entities": {
+                            "filters": {"filters": named_filters, "other_bucket": False},
+                            "aggs": {"top_cpv": _entity_cpv_agg(_CPV_SHOW)},
+                        }
+                    },
+                },
+            )
+            buckets_perfil = ((resp_perfil.get("aggregations") or {}).get("entities") or {}).get("buckets") or {}
+            for chave, bucket_perfil in buckets_perfil.items():
+                perfil_cpv[chave] = _cpv_rows(bucket_perfil.get("top_cpv"))
+        except Exception as exc:  # pragma: no cover - perfil é complementar
+            logger.warning("Perfil de CPV das empresas falhou: %s", exc)
 
     peers = _rows(aggs.get("peers"), _CANDIDATES, market_total_value)
     por_nif = {row["nif"]: row for row in peers}
@@ -694,17 +744,9 @@ def benchmark_compare(
         )
         posicao = por_nif.get(nif) if nif else None
 
-        cpvs: List[Dict[str, Any]] = []
-        for item in (((bucket.get("top_cpv") or {}).get("top") or {}).get("buckets")) or []:
-            valor_cpv = (((item.get("value") or {}).get("sum")) or {}).get("value")
-            cpvs.append(
-                {
-                    "code": str(item.get("key")),
-                    "description": _cpv_description_from_hits(item.get("description"), item.get("key")),
-                    "count": int(item.get("doc_count") or 0),
-                    "value": round(float(valor_cpv), 2) if valor_cpv is not None else None,
-                }
-            )
+        # Com CPV escolhido usa-se o perfil (fora do filtro de CPV); sem CPV, os
+        # CPV do próprio segmento já são o perfil da empresa.
+        cpvs = perfil_cpv.get(chave) or _cpv_rows(bucket.get("top_cpv"))
 
         compradores = _rows(bucket.get("buyers"), _BUYERS_CANDIDATES, valor)
 
@@ -773,6 +815,31 @@ def benchmark_compare(
     ]
     compradores_comuns.sort(key=lambda item: (item["companies_total"], item["value"]), reverse=True)
 
+    # CPV em comum: classificações em que duas ou mais das empresas comparadas
+    # atuam (mesma lógica dos compradores em comum) — é onde competem de facto.
+    cpvs_comuns: Dict[str, Dict[str, Any]] = {}
+    for linha in linhas:
+        for cpv in linha["top_cpv"]:
+            registo = cpvs_comuns.setdefault(
+                cpv["code"],
+                {
+                    "code": cpv["code"],
+                    "description": cpv.get("description") or "",
+                    "companies": [],
+                    "value": 0.0,
+                    "count": 0,
+                },
+            )
+            registo["companies"].append(linha["name"])
+            registo["value"] = round(float(registo["value"]) + float(cpv.get("value") or 0.0), 2)
+            registo["count"] += int(cpv.get("count") or 0)
+    cpvs_em_comum = [
+        {**registo, "companies_total": len(registo["companies"])}
+        for registo in cpvs_comuns.values()
+        if len(registo["companies"]) >= 2
+    ]
+    cpvs_em_comum.sort(key=lambda item: (item["companies_total"], item["value"]), reverse=True)
+
     notes: List[str] = []
     notes.append(f"Segmento: {('CPV ' + cpv_code) if cpv_code else 'todo o mercado filtrado'}.")
     notes.append("Percentis aproximados (TDigest do Elasticsearch) sobre valores positivos.")
@@ -784,6 +851,11 @@ def benchmark_compare(
         f"Os «compradores em comum» são calculados sobre os {_BUYERS_CANDIDATES} maiores compradores de "
         "cada empresa (não sobre a lista completa)."
     )
+    if cpv_code:
+        notes.append(
+            "Com um CPV escolhido, a lista «CPV principais» de cada empresa vem de fora do filtro de CPV "
+            "(é o perfil da empresa no período), para se escolher o segmento a partir dela."
+        )
     ausentes = [linha["name"] for linha in linhas if not linha["present"]]
     if ausentes:
         notes.append("Sem contratos no segmento: " + ", ".join(ausentes) + ".")
@@ -807,6 +879,7 @@ def benchmark_compare(
         "entities": linhas,
         "ranking": ranking,
         "shared_buyers": compradores_comuns,
+        "shared_cpvs": cpvs_em_comum,
         "notes": notes,
     }
 

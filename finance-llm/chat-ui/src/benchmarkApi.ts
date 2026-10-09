@@ -198,6 +198,16 @@ export interface BenchmarkSharedBuyer {
   value: number;
 }
 
+/** CPV em que atuam duas ou mais das empresas comparadas. */
+export interface BenchmarkSharedCpv {
+  code: string;
+  description: string;
+  companies: string[];
+  companies_total: number;
+  value: number;
+  count: number;
+}
+
 export interface BenchmarkCompareResponse {
   role: BenchmarkRole;
   reference: {
@@ -216,6 +226,8 @@ export interface BenchmarkCompareResponse {
   ranking: (BenchmarkRow & { selected?: boolean; label?: string | null })[];
   /** Contrapartes comuns a duas ou mais empresas comparadas. */
   shared_buyers: BenchmarkSharedBuyer[];
+  /** CPV em que atuam duas ou mais empresas comparadas. */
+  shared_cpvs: BenchmarkSharedCpv[];
   notes: string[];
   error?: string;
 }

@@ -46,6 +46,9 @@ param(
 
     # Salta o `npm run build` e reutiliza o `_frontend_dist` que ja exista.
     [switch]$SemBuild,
+    # Limpa a cache de build no fim. A cache acelera builds repetidos, mas cresce
+    # ~GB por deploy com o driver `docker` do buildkit.
+    [switch]$LimparCache,
     [switch]$Planear
 )
 
@@ -95,8 +98,16 @@ if ($fazerFrontend -and -not $SemBuild) {
     try {
         # `VITE_API_URL=/api`: o browser tem de falar com o nginx na mesma origem.
         $env:VITE_API_URL = '/api'
-        npm --prefix chat-ui run build 2>&1 | Select-String -Pattern 'built in|error TS' | Select-Object -First 5 | ForEach-Object { Write-Host "  $_" }
-        if ($LASTEXITCODE -ne 0) { throw 'a build do frontend falhou' }
+        # `npm` escreve avisos no stderr e, com ErrorActionPreference 'Stop', o
+        # PowerShell transforma isso em erro fatal -- dava exit 1 numa build que
+        # estava a correr bem (o aviso era o INEFFECTIVE_DYNAMIC_IMPORT do rolldown).
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            npm --prefix chat-ui run build 2>&1 | Select-String -Pattern 'built in|built in|error TS' | Select-Object -First 5 | ForEach-Object { Write-Host "  $_" }
+            $rc = $LASTEXITCODE
+        } finally { $ErrorActionPreference = $prevEap }
+        if ($rc -ne 0) { throw "a build do frontend falhou (exit $rc)" }
         # O `.dockerignore` exclui `chat-ui/dist`, por isso copia-se para um nome
         # que fica no contexto. O `Remove-Item` nao e opcional: `Copy-Item
         # -Recurse` para uma pasta existente cria `_frontend_dist\dist`.
@@ -163,17 +174,22 @@ Show-Vm "rm -rf $RemoteDir/src && mkdir -p $RemoteDir/src && tar -xzf $RemoteDir
 
 $construir = @()
 if ($fazerBackend) {
-    $construir += "docker build -f Dockerfile.backend.incremental --build-arg BASE=iq-os-backend:latest -t iq-os-backend:latest $RemoteDir/src"
+    $construir += @{ Nome = 'backend'; Dockerfile = 'Dockerfile.backend.incremental'; Alvo = 'iq-os-backend:latest' }
 }
 if ($fazerFrontend) {
-    $construir += "docker build -f Dockerfile.frontend.incremental --build-arg BASE=iq-os-frontend:latest -t iq-os-frontend:latest $RemoteDir/src"
+    $construir += @{ Nome = 'frontend'; Dockerfile = 'Dockerfile.frontend.incremental'; Alvo = 'iq-os-frontend:latest' }
 }
-foreach ($cmd in $construir) {
-    $nome = if ($cmd -match 'backend') { 'backend' } else { 'frontend' }
-    Write-Host "  a construir: $nome"
-    $r = Invoke-Vm "$cmd 2>&1 | tail -14"
-    $r.Output -split "`n" | Where-Object { $_ } | ForEach-Object { Write-Host "    $_" }
-    if ($r.ExitCode -ne 0) { throw "a build do $nome falhou" }
+foreach ($b in $construir) {
+    Write-Host "  a construir: $($b.Nome)"
+    # `cd` para o contexto **antes** do `-f`: o `-f` e relativo ao directorio
+    # actual, nao ao contexto -- sem isto o Docker procura o Dockerfile em /root
+    # e falha com "open Dockerfile...: no such file or directory".
+    #
+    # Sem `| tail` de proposito: o codigo de saida viria do `tail` e uma build
+    # falhada passava por boa. Corta-se a saida do lado de ca.
+    $r = Invoke-Vm "cd $RemoteDir/src && docker build -f ./$($b.Dockerfile) --build-arg BASE=$($b.Alvo) -t $($b.Alvo) . 2>&1"
+    ($r.Output -split "`n" | Where-Object { $_ } | Select-Object -Last 14) | ForEach-Object { Write-Host "    $_" }
+    if ($r.ExitCode -ne 0) { throw "a build do $($b.Nome) falhou (exit $($r.ExitCode))" }
 }
 
 # --- 5. Reiniciar -----------------------------------------------------------
@@ -185,16 +201,41 @@ if ($fazerFrontend) { Show-Vm "cd /opt/iqos/servicos/frontend && docker compose 
 
 Write-Host ''
 Write-Host '=== 6. Validacao ===' -ForegroundColor Cyan
+$problemas = 0
 $sondas = @()
 if ($fazerFrontend) { $sondas += @{ Nome = 'frontend'; Url = 'http://127.0.0.1:4180/' } }
 if ($fazerBackend) { $sondas += @{ Nome = 'mcp'; Url = 'http://127.0.0.1:8765/' } }
 foreach ($s in $sondas) {
-    $codigo = (Invoke-Vm "curl -s -o /dev/null -m 8 -w %{http_code} $($s.Url)").Output.Trim()
+    # Com repeticao: o contentor acabou de ser recriado, e um `curl` imediato da
+    # 000 -- o que fez um deploy que correu bem parecer falhado.
+    $codigo = '000'
+    for ($i = 1; $i -le 12; $i++) {
+        $codigo = (Invoke-Vm "curl -s -o /dev/null -m 8 -w %{http_code} $($s.Url)").Output.Trim()
+        if ($codigo -match '^[234]') { break }
+        Start-Sleep -Seconds 5
+    }
     $ok = $codigo -match '^[234]'
-    Write-Host ("  {0,-10} {1}  HTTP {2}" -f $s.Nome, $(if ($ok) { 'ok  ' } else { 'FALHA' }), $codigo) -ForegroundColor $(if ($ok) { 'Green' } else { 'Red' })
+    if (-not $ok) { $problemas++ }
+    Write-Host ("  {0,-10} {1}  HTTP {2}" -f $s.Nome, $(if ($ok) { 'ok   ' } else { 'FALHA' }), $codigo) -ForegroundColor $(if ($ok) { 'Green' } else { 'Red' })
 }
 Show-Vm 'df -h / | tail -1' | Out-Null
+
+# A cache de build cresce a cada deploy (o driver `docker` do buildkit guarda
+# snapshots). Depois de um deploy vi-a ir de 89 MB para 13,8 GB. Nao e erro, mas
+# enche o disco sem avisar.
+$cache = (Invoke-Vm "docker system df --format '{{.Type}} {{.Size}}' | grep -i build").Output.Trim()
+if ($cache) { Write-Host "  $cache" -ForegroundColor DarkGray }
+if ($LimparCache) {
+    Write-Host '  a limpar a cache de build...' -ForegroundColor DarkGray
+    Show-Vm 'docker builder prune -af 2>&1 | tail -2' | Out-Null
+}
+
 Write-Host ''
-Write-Host 'Deploy concluido.' -ForegroundColor Green
+if ($problemas -eq 0) {
+    Write-Host 'Deploy concluido.' -ForegroundColor Green
+} else {
+    Write-Host "Deploy com $problemas servico(s) sem resposta." -ForegroundColor Red
+}
 Write-Host ''
 Remove-Item $pkg -Force -ErrorAction SilentlyContinue
+if ($problemas -gt 0) { exit 1 }

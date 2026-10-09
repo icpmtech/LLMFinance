@@ -35,11 +35,9 @@ es_up.txt
 # Lixo que estava a entrar no contexto e a inflacionar as camadas de codigo.
 # Cada `COPY . .` ia a ~300 MB por causa disto; um so destes ficheiros alterado
 # obriga a reenviar a camada toda, o que inviabiliza deploy continuo.
-# Medido antes de excluir: debug_mj 75 MB, chat-ui/e2e-venv 125 MB,
-# exports 20 MB, _frontend_dist 20 MB.
+# Medido antes de excluir: debug_mj 75 MB, chat-ui/e2e-venv 125 MB, exports 20 MB.
 debug_mj
 exports
-_frontend_dist
 chat-ui/e2e-venv
 chat-ui/e2e/.venv
 chat-ui/playwright-report
@@ -48,3 +46,10 @@ chat-ui/blob-report
 chat-ui/playwright/.cache
 **/.pytest_cache
 **/__pycache__
+
+# ATENCAO: `_frontend_dist` **nao** pode entrar aqui. O
+# `Dockerfile.frontend.incremental` faz `COPY _frontend_dist`, e um ficheiro
+# excluido do contexto faz a build falhar com
+#   CopyIgnoredFile: Attempting to Copy file "_frontend_dist" that is excluded
+# Sao ~20 MB no contexto do backend, mas e o que permite ao frontend construir
+# sem repetir o `npm ci`.
