@@ -19,6 +19,10 @@ services:
     image: caddy:2-alpine
     container_name: iqos-caddy
     restart: unless-stopped
+    environment:
+      # De onde o site e servido. Ver o cabecalho do Caddyfile; muda-se com
+      # `17-origem.ps1`. Por omissao, o PC (pelo tunel SSH reverso).
+      ORIGEM_UPSTREAM: ${ORIGEM_UPSTREAM:-127.0.0.1:8080}
     # Partilha a rede do host: e o que permite chegar ao tunel SSH (127.0.0.1:8080).
     network_mode: host
     volumes:

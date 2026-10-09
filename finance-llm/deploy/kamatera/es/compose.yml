@@ -7,28 +7,44 @@
 #   imagem ....... docker.elastic.co/elasticsearch/elasticsearch:8.11.0
 #                 (a mesma versao do stack local -- ver docker-compose.yml)
 #   configuracao . igual a local: single-node, sem seguranca
-#   rede ......... host, mas so em 127.0.0.1: nao fica exposto a Internet
-#   dados ........ volume nomeado `es-data`
+#   rede ......... `iqos-net` (bridge), publicando **so em 127.0.0.1:9200**
+#   dados ........ volume nomeado `es_es-data`
 #
-# Como a rede e `host`, o ES ve o loopback da VM -- e e por la que chega o
-# encaminhamento do tunel reverso (127.0.0.1:9201 -> ES do PC), usado pelo
-# `reindex` com `source.remote`.
+# Porque bridge e nao `network_mode: host`
+# ----------------------------------------
+# Esteve em host networking para conseguir alcancar o `127.0.0.1:9201`, onde o
+# tunel reverso publica o ES do PC (usado pelo `reindex` com `source.remote`).
+# Mas isso tornava-o **invisivel para os outros contentores**: um contentor numa
+# rede bridge nao chega ao loopback do host, e `host.docker.internal` resolve
+# para o gateway da bridge -- onde o ES nao escuta. O backend precisa de
+# `http://elasticsearch:9200` resolvido por nome, e nao havia maneira de o dar.
+#
+# Com bridge, o nome `elasticsearch` resolve na `iqos-net`. O que se perde: o ES
+# deixa de alcancar o `127.0.0.1:9201` do tunel, portanto **uma re-sincronizacao
+# de indices ja nao corre sozinha**. Opcoes:
+#   - correr o reindex a partir do PC, empurrando com `elasticdump` por um tunel
+#     de ida (`ssh -L`), que nao precisa de o ES sair para lado nenhum;
+#   - ou pôr o ES em host networking temporariamente so durante a sincronizacao.
+# A migracao inicial ja esta feita e validada, por isso isto so custa quando for
+# preciso trazer indices novos.
+#
+# Nota de seguranca: esta VM **nao tem firewall** (`ufw` inativo, `iptables` sem
+# regras). A unica coisa que impede um servico de ficar publico e estar preso a
+# 127.0.0.1. E o que a publicacao abaixo garante.
 services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
     container_name: iqos-elasticsearch
-    network_mode: host
+    ports:
+      # `127.0.0.1:` a frente e obrigatorio: sem ele o Docker publicaria em
+      # 0.0.0.0 e, sem firewall, o cluster ficaria aberto a Internet.
+      - "127.0.0.1:${ELASTICSEARCH_PORT:-9200}:9200"
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      # Bind so no loopback: com `network_mode: host` o valor por omissao
-      # (0.0.0.0) deixaria o cluster aberto na Internet.
-      - network.host=127.0.0.1
-      - http.port=9200
-      # Igual ao local. A VM tem 2 GB, por isso este heap e o teto pratico.
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
-      # Sem isto o `reindex` com `source.remote` e recusado.
-      - reindex.remote.whitelist=127.0.0.1:9201
+      # Mantido para o caso de se voltar a sincronizar em host networking.
+      - reindex.remote.whitelist=127.0.0.1:9201,host.docker.internal:9201
     volumes:
       - es-data:/usr/share/elasticsearch/data
     healthcheck:
@@ -44,6 +60,12 @@ services:
         max-size: "10m"
         max-file: "3"
 
+networks:
+  default:
+    name: iqos-net
+    external: true
+
 volumes:
-  # Nomeado pelo projeto (`es_es-data`). Fica fora do caminho do `edge/`.
+  # Nomeado pelo projeto (`es_es-data`). Mantem-se entre recriacoes do contentor,
+  # por isso mudar a rede nao perde os indices.
   es-data:

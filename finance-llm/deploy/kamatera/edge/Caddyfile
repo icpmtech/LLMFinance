@@ -11,6 +11,14 @@
 #
 #     (ver `07-origin-tunnel.ps1` no PC).
 #
+#     Qual e a origem e **configuravel**, para se poder servir o site a partir da
+#     propria VM em vez do PC:
+#
+#         ORIGEM_UPSTREAM=127.0.0.1:8080   -> o PC (pelo tunel)   [por omissao]
+#         ORIGEM_UPSTREAM=127.0.0.1:4180   -> a SPA desta VM
+#
+#     Muda-se com `17-origem.ps1` (escreve o `edge/.env` e recria o Caddy).
+#
 #   * `8082` — Hermes Agent (dashboard), publicado por um segundo tunel SSH reverso:
 #
 #         ssh -N -R 127.0.0.1:8082:127.0.0.1:8892 root@45.147.251.188
@@ -48,7 +56,7 @@ sabemos.studio {
     # /hermes-agent/; o nginx reescreve caminhos absolutos e injeta <base href>
     # para que a app funcione same-origin em https://sabemos.studio/hermes-agent/.
     handle /hermes-agent/* {
-        reverse_proxy http://127.0.0.1:8080 {
+        reverse_proxy http://{$ORIGEM_UPSTREAM:127.0.0.1:8080} {
             header_up Host {host}
             header_up X-Real-IP {remote}
             header_up X-Forwarded-For {remote}
@@ -58,7 +66,7 @@ sabemos.studio {
     }
 
     handle {
-        reverse_proxy http://127.0.0.1:8080 {
+        reverse_proxy http://{$ORIGEM_UPSTREAM:127.0.0.1:8080} {
             # Preserva o host publico (a SPA/API geram URLs absolutos a partir dele).
             header_up Host {host}
             header_up X-Real-IP {remote}

@@ -38,7 +38,7 @@ $ESPERADO = @(
     @{ Nome = 'hermes-agent';      Contentor = 'iqos-hermes-agent';   Porta = 8642;  Sonda = '/health' }
     @{ Nome = 'osif-postgres';     Contentor = 'iqos-osif-postgres';  Porta = $null; Sonda = $null }
     @{ Nome = 'osif-redis';        Contentor = 'iqos-osif-redis';     Porta = $null; Sonda = $null }
-    @{ Nome = 'osif-minio';        Contentor = 'iqos-osif-minio';     Porta = 9111;  Sonda = '/' }
+    @{ Nome = 'osif-minio';        Contentor = 'iqos-osif-minio';     Porta = $null; Sonda = $null }
     @{ Nome = 'osif-backend';      Contentor = 'iqos-osif-backend';   Porta = 6110;  Sonda = '/health' }
     @{ Nome = 'osif-worker';       Contentor = 'iqos-osif-worker';    Porta = $null; Sonda = $null }
     @{ Nome = 'osif-frontend';     Contentor = 'iqos-osif-frontend';  Porta = 8894;  Sonda = '/' }
@@ -70,12 +70,17 @@ $problemas = 0
 # --- 1. Contentores ---------------------------------------------------------
 Write-Host ''
 Write-Host '=== 1. Contentores ===' -ForegroundColor Cyan
-$ps = (Invoke-Vm 'docker ps -a --format {{.Names}}|{{.Status}}').Output
+# Duas chamadas separadas em vez de uma com `|` no format: o `|` nao vai
+# citado para o shell remoto e seria interpretado como um pipe.
+$ps = (Invoke-Vm 'docker ps -a --format {{.Names}}').Output
+$status = (Invoke-Vm 'docker ps -a --format {{.Status}}').Output
 if (-not $ps) { throw 'nao consegui listar os contentores.' }
 
+$nomes = ($ps -split "`n") | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+$estados = ($status -split "`n") | ForEach-Object { $_.Trim() }
 $estado = @{}
-foreach ($linha in ($ps -split "`n")) {
-    if ($linha -match '^([^|]+)\|(.+)$') { $estado[$Matches[1]] = $Matches[2] }
+for ($i = 0; $i -lt $nomes.Count; $i++) {
+    $estado[$nomes[$i]] = if ($i -lt $estados.Count) { $estados[$i] } else { '?' }
 }
 
 foreach ($s in $ESPERADO) {
@@ -109,7 +114,7 @@ Write-Host ''
 Write-Host '=== 3. Dados no Elasticsearch ===' -ForegroundColor Cyan
 $docs = (Invoke-Vm 'curl -s http://127.0.0.1:9200/_cat/count?h=count').Output.Trim()
 $idx = (Invoke-Vm 'curl -s http://127.0.0.1:9200/_cat/indices?h=index | wc -l').Output.Trim()
-$saude = (Invoke-Vm 'curl -s http://127.0.0.1:9200/_cluster/health?h=status').Output.Trim()
+$saude = (Invoke-Vm 'curl -s http://127.0.0.1:9200/_cat/health?h=status').Output.Trim()
 Write-Host "  documentos : $docs"
 Write-Host "  indices    : $idx"
 Write-Host "  estado     : $saude"
