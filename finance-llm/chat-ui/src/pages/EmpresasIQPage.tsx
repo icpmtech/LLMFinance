@@ -16,12 +16,14 @@ import {
   Download,
   FileSearch,
   FileText,
+  FileSpreadsheet,
   Filter,
   FolderHeart,
   FolderOpen,
   FolderPlus,
   GitBranch,
   GitCompare,
+  Grid3x3,
   HandCoins,
   Heart,
   History,
@@ -29,6 +31,7 @@ import {
   LayoutDashboard,
   List,
   Loader2,
+  Map as MapIcon,
   MapPin,
   Maximize2,
   Menu,
@@ -45,6 +48,7 @@ import {
   Shuffle,
   Sparkles,
   Square,
+  Table as TableIcon,
   Tag,
   TrendingUp,
   Users,
@@ -52,6 +56,9 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+import * as XLSX from "xlsx";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 import {
   ResponsiveContainer,
   XAxis,
@@ -95,6 +102,7 @@ import {
   getContractDocument,
   downloadContractReport,
   downloadEntityReport,
+  downloadEntityProcessosReport,
   enrichEntity,
   getEntityRelations,
 } from "../api";
@@ -151,6 +159,7 @@ import type {
   SocietarioPublicacao,
   SocietarioPerson,
   SocietarioPersonRole,
+  CompanySummary,
 } from "../types";
 
 type EmpresasIQSection =
@@ -3422,6 +3431,46 @@ function ContractsSection({
 
 // --- ENTITIES ---
 
+type EntityViewMode = "cards" | "table" | "map";
+
+function entityRoleLabel(company: CompanySummary) {
+  if (company.adjudicante && company.adjudicatario) return "Ambos";
+  if (company.adjudicante) return "Adjudicante";
+  if (company.adjudicatario) return "Adjudicatário";
+  return "—";
+}
+
+function exportEntitiesExcel(companies: CompanySummary[], filename = "entidades") {
+  const rows = companies.map((c) => ({
+    NIF: c.nif || "—",
+    Nome: c.name,
+    "Nome normalizado": c.normalized_name || "",
+    Papel: entityRoleLabel(c),
+    "CAE principal": c.cae_principal || "",
+    Contratos: c.contracts_total,
+    "Valor total": c.total_value,
+    "Valor adjudicante": c.adjudicante?.total_value ?? 0,
+    "Valor adjudicatário": c.adjudicatario?.total_value ?? 0,
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Entidades");
+  XLSX.writeFile(wb, `${filename}.xlsx`);
+}
+
+async function exportEntitiesPdf(element: HTMLElement | null, filename = "entidades") {
+  if (!element) return;
+  const canvas = await html2canvas(element, {
+    backgroundColor: "#07151b",
+    scale: 2,
+    useCORS: true,
+  });
+  const imgData = canvas.toDataURL("image/png");
+  const pdf = new jsPDF({ orientation: "landscape", unit: "px", format: [canvas.width, canvas.height] });
+  pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
+  pdf.save(`${filename}.pdf`);
+}
+
 function EntitiesSection({
   onEntity,
 }: {
@@ -3434,6 +3483,23 @@ function EntitiesSection({
   const [data, setData] = useState<CompanySearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [from, setFrom] = useState(0);
+  const [viewMode, setViewMode] = useState<EntityViewMode>("cards");
+  const [sortKey, setSortKey] = useState<"name" | "contracts_total" | "total_value">("total_value");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [mapData, setMapData] = useState<ContractRegionalResponse | null>(null);
+  const [mapLoading, setMapLoading] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const exportRef = useRef<HTMLDivElement | null>(null);
+
+  const buildFilters = useCallback(
+    () => ({
+      q: q.trim() || undefined,
+      role,
+      cae: cae.length ? cae : undefined,
+      cpv: cpv.trim() || undefined,
+    }),
+    [q, role, cae, cpv],
+  );
 
   const load = async (offset = 0) => {
     setLoading(true);
@@ -3458,18 +3524,118 @@ function EntitiesSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, role, cae, cpv]);
 
+  useEffect(() => {
+    if (viewMode !== "map") return;
+    const filters = buildFilters();
+    let cancelled = false;
+    setMapLoading(true);
+    setMapError(null);
+    getContractRegionalAnalytics(undefined, {
+      q: filters.q,
+      entity: filters.q && /^\d{9}$/.test(filters.q) ? filters.q : undefined,
+      cpv_code: filters.cpv,
+      role: filters.role,
+    })
+      .then((res) => {
+        if (!cancelled) setMapData(res);
+      })
+      .catch((err) => {
+        if (!cancelled) setMapError(err instanceof Error ? err.message : "Erro ao carregar mapa");
+      })
+      .finally(() => {
+        if (!cancelled) setMapLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [viewMode, buildFilters]);
+
   const companies = data?.items ?? [];
   const total = data?.total ?? 0;
   const notes = data?.notes ?? [];
+
+  const sortedCompanies = useMemo(() => {
+    const list = [...companies];
+    list.sort((a, b) => {
+      const aVal = a[sortKey] ?? 0;
+      const bVal = b[sortKey] ?? 0;
+      if (typeof aVal === "string" && typeof bVal === "string") {
+        return sortOrder === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      return sortOrder === "asc" ? Number(aVal) - Number(bVal) : Number(bVal) - Number(aVal);
+    });
+    return list;
+  }, [companies, sortKey, sortOrder]);
+
+  const toggleSort = (key: typeof sortKey) => {
+    if (sortKey === key) {
+      setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortOrder("desc");
+    }
+  };
+
+  const handleExportExcel = () => {
+    exportEntitiesExcel(companies, `entidades_${new Date().toISOString().slice(0, 10)}`);
+  };
+
+  const handleExportPdf = async () => {
+    await exportEntitiesPdf(exportRef.current, `entidades_${new Date().toISOString().slice(0, 10)}`);
+  };
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold">Entidades</h2>
-          <p className="text-sm text-muted-foreground">
-            {full(total)} entidades no universo
-          </p>
+          <p className="text-sm text-muted-foreground">{full(total)} entidades no universo</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded-2xl glass-card p-1">
+            {([
+              { id: "cards", label: "Cards", icon: Grid3x3 },
+              { id: "table", label: "Tabela", icon: TableIcon },
+              { id: "map", label: "Mapa", icon: MapIcon },
+            ] as { id: EntityViewMode; label: string; icon: React.ElementType }[]).map((v) => {
+              const Icon = v.icon;
+              const active = viewMode === v.id;
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => setViewMode(v.id)}
+                  aria-pressed={active}
+                  className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm transition ${
+                    active ? "bg-primary/15 text-primary" : "hover:bg-white/5"
+                  }`}
+                >
+                  <Icon size={15} />
+                  {v.label}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            disabled={companies.length === 0}
+            title="Exportar para Excel"
+            className="flex items-center gap-2 rounded-xl glass-card px-3 py-1.5 text-sm transition hover:bg-white/5 disabled:opacity-40"
+          >
+            <FileSpreadsheet size={16} className="text-emerald-400" />
+            Excel
+          </button>
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            disabled={companies.length === 0}
+            title="Exportar para PDF"
+            className="flex items-center gap-2 rounded-xl glass-card px-3 py-1.5 text-sm transition hover:bg-white/5 disabled:opacity-40"
+          >
+            <FileText size={16} className="text-rose-400" />
+            PDF
+          </button>
         </div>
       </div>
 
@@ -3529,41 +3695,103 @@ function EntitiesSection({
         </div>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {loading && companies.length === 0 && <Loading />}
-        {companies.map((company) => (
-          <button
-            key={company.nif || company.normalized_name}
-            onClick={() => company.nif && onEntity(company.nif)}
-            className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50 rounded-xl"
-          >
-            <Card className="hover:border-teal-400/30 transition group">
-              <div className="flex items-start justify-between">
-                <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-400/20 group-hover:bg-teal-400/10 group-hover:border-teal-400/30 transition">
-                  <Building2 size={20} className="text-blue-400 group-hover:text-teal-300" />
-                </div>
-                <Badge color={company.adjudicante ? "blue" : "teal"}>
-                  {company.adjudicante ? "Adjudicante" : "Adjudicatário"}
-                </Badge>
-              </div>
-              <p className="mt-4 font-semibold line-clamp-2">{company.name}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                NIF {company.nif || "—"}
-                {company.cae_principal ? ` · CAE ${company.cae_principal}` : ""}
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-xs text-muted-foreground">Contratos</p>
-                  <p className="font-semibold">{full(company.contracts_total)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Valor total</p>
-                  <p className="font-semibold text-amber-400">{money(company.total_value)}</p>
-                </div>
-              </div>
-            </Card>
-          </button>
-        ))}
+      <div ref={exportRef}>
+        {viewMode === "map" ? (
+          <EntitiesMapPanel data={mapData} loading={mapLoading} error={mapError} />
+        ) : viewMode === "table" ? (
+          <div className="overflow-x-auto rounded-2xl border border-white/10">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-[#07151b]/95 text-left text-xs uppercase tracking-wider text-muted-foreground backdrop-blur-sm">
+                <tr className="border-b border-white/10">
+                  <th className="px-4 py-3 font-medium">Entidade</th>
+                  <th className="px-4 py-3 font-medium">NIF</th>
+                  <th className="px-4 py-3 font-medium">Papel</th>
+                  <th className="px-4 py-3 font-medium">CAE</th>
+                  <th
+                    className="px-4 py-3 font-medium text-right cursor-pointer select-none"
+                    onClick={() => toggleSort("contracts_total")}
+                  >
+                    Contratos {sortKey === "contracts_total" && (sortOrder === "asc" ? "↑" : "↓")}
+                  </th>
+                  <th
+                    className="px-4 py-3 font-medium text-right cursor-pointer select-none"
+                    onClick={() => toggleSort("total_value")}
+                  >
+                    Valor total {sortKey === "total_value" && (sortOrder === "asc" ? "↑" : "↓")}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && companies.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                      <Loader2 size={24} className="mx-auto animate-spin mb-2" />
+                      A carregar entidades…
+                    </td>
+                  </tr>
+                )}
+                {sortedCompanies.map((company) => (
+                  <tr
+                    key={company.nif || company.normalized_name}
+                    onClick={() => company.nif && onEntity(company.nif)}
+                    className="border-b border-white/5 hover:bg-white/[0.04] cursor-pointer transition"
+                  >
+                    <td className="px-4 py-3 font-medium">{company.name}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{company.nif || "—"}</td>
+                    <td className="px-4 py-3">
+                      <Badge color={company.adjudicante ? "blue" : "teal"}>{entityRoleLabel(company)}</Badge>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{company.cae_principal || "—"}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{full(company.contracts_total)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-amber-400">{money(company.total_value)}</td>
+                  </tr>
+                ))}
+                {!loading && companies.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                      Nenhuma entidade encontrada.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {loading && companies.length === 0 && <Loading />}
+            {companies.map((company) => (
+              <button
+                key={company.nif || company.normalized_name}
+                onClick={() => company.nif && onEntity(company.nif)}
+                className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50 rounded-xl"
+              >
+                <Card className="hover:border-teal-400/30 transition group">
+                  <div className="flex items-start justify-between">
+                    <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-400/20 group-hover:bg-teal-400/10 group-hover:border-teal-400/30 transition">
+                      <Building2 size={20} className="text-blue-400 group-hover:text-teal-300" />
+                    </div>
+                    <Badge color={company.adjudicante ? "blue" : "teal"}>{entityRoleLabel(company)}</Badge>
+                  </div>
+                  <p className="mt-4 font-semibold line-clamp-2">{company.name}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    NIF {company.nif || "—"}
+                    {company.cae_principal ? ` · CAE ${company.cae_principal}` : ""}
+                  </p>
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Contratos</p>
+                      <p className="font-semibold">{full(company.contracts_total)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Valor total</p>
+                      <p className="font-semibold text-amber-400">{money(company.total_value)}</p>
+                    </div>
+                  </div>
+                </Card>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {!loading && companies.length > 0 && (
@@ -3598,6 +3826,190 @@ function EntitiesSection({
         </div>
       )}
     </div>
+  );
+}
+
+function EntitiesMapPanel({
+  data,
+  loading,
+  error,
+}: {
+  data: ContractRegionalResponse | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [size, setSize] = useState({ width: 800, height: 420 });
+  const [zoom, setZoom] = useState(6);
+  const [center, setCenter] = useState(MAP_CENTER);
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const measure = () => {
+      const rect = wrapper.getBoundingClientRect();
+      setSize({ width: rect.width, height: rect.height });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(wrapper);
+    return () => observer.disconnect();
+  }, []);
+
+  const regions = useMemo(() => {
+    const list = [...(data?.regions ?? [])].sort((a, b) => (b.total_value || 0) - (a.total_value || 0));
+    return list.slice(0, 50);
+  }, [data]);
+
+  const placed = useMemo(() => {
+    return regions
+      .map((row) => {
+        const place = lookupPlace(row.key, row.key);
+        if (!place) return null;
+        return { row, place };
+      })
+      .filter(Boolean) as { row: ContractRegionalRow; place: { lat: number; lon: number; exact?: boolean } }[];
+  }, [regions]);
+
+  const maxMetric = useMemo(
+    () => Math.max(1, ...placed.map((entry) => entry.row.total_value || 0)),
+    [placed],
+  );
+
+  const projection = useMemo(() => {
+    const width = size.width || 800;
+    const height = size.height || 420;
+    const centerX = lonToWorld(center.lon, zoom);
+    const centerY = latToWorld(center.lat, zoom);
+    const worldTiles = 2 ** zoom;
+
+    const firstTileX = Math.floor((centerX - width / 2) / TILE_SIZE);
+    const lastTileX = Math.floor((centerX + width / 2) / TILE_SIZE);
+    const firstTileY = Math.max(0, Math.floor((centerY - height / 2) / TILE_SIZE));
+    const lastTileY = Math.min(worldTiles - 1, Math.floor((centerY + height / 2) / TILE_SIZE));
+
+    const tiles: { key: string; url: string; left: number; top: number }[] = [];
+    for (let tileY = firstTileY; tileY <= lastTileY; tileY++) {
+      for (let tileX = firstTileX; tileX <= lastTileX; tileX++) {
+        const wrappedX = ((tileX % worldTiles) + worldTiles) % worldTiles;
+        tiles.push({
+          key: `${zoom}/${wrappedX}/${tileY}`,
+          url: `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${tileY}.png`,
+          left: width / 2 + (tileX * TILE_SIZE - centerX),
+          top: height / 2 + (tileY * TILE_SIZE - centerY),
+        });
+      }
+    }
+
+    return {
+      tiles,
+      project: (lat: number, lon: number) => ({
+        left: width / 2 + (lonToWorld(lon, zoom) - centerX),
+        top: height / 2 + (latToWorld(lat, zoom) - centerY),
+      }),
+    };
+  }, [center.lat, center.lon, size.height, size.width, zoom]);
+
+  const bubbleRadius = (value: number) => {
+    const ratio = maxMetric > 0 ? Math.max(0, value) / maxMetric : 0;
+    return 8 + 36 * Math.sqrt(ratio);
+  };
+
+  if (loading) {
+    return (
+      <Card className="h-[420px] flex items-center justify-center">
+        <Loader2 size={32} className="animate-spin text-teal-300" />
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="h-[420px] flex items-center justify-center text-rose-300">
+        <p>{error}</p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#07151b]/80">
+        <div className="flex items-center gap-2">
+          <MapPin size={16} className="text-teal-300" />
+          <h3 className="font-semibold">Mapa de atividade contratual</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.min(10, z + 1))}
+            className="rounded-lg border border-white/10 bg-white/[0.04] p-1.5 text-muted-foreground hover:text-foreground"
+          >
+            <ZoomIn size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.max(4, z - 1))}
+            className="rounded-lg border border-white/10 bg-white/[0.04] p-1.5 text-muted-foreground hover:text-foreground"
+          >
+            <ZoomOut size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setCenter(MAP_CENTER);
+              setZoom(6);
+            }}
+            className="rounded-lg border border-white/10 bg-white/[0.04] p-1.5 text-muted-foreground hover:text-foreground"
+          >
+            <Crosshair size={14} />
+          </button>
+        </div>
+      </div>
+      <div ref={wrapperRef} className="relative h-[420px] w-full overflow-hidden bg-[#0a1f29]">
+        {projection.tiles.map((tile) => (
+          <img
+            key={tile.key}
+            src={tile.url}
+            alt=""
+            draggable={false}
+            decoding="async"
+            className="pointer-events-none absolute opacity-70"
+            style={{ left: tile.left, top: tile.top, width: TILE_SIZE, height: TILE_SIZE }}
+          />
+        ))}
+        <div className="absolute inset-0">
+          {placed.map(({ row, place }) => {
+            const point = projection.project(place.lat, place.lon);
+            const radius = bubbleRadius(row.total_value || 0);
+            return (
+              <div
+                key={row.key}
+                className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+                style={{ left: point.left, top: point.top, zIndex: 10 }}
+                title={`${row.key}: ${full(row.count)} contratos · ${money(row.total_value)}`}
+              >
+                <span
+                  className="rounded-full border-2 border-teal-400/60 bg-teal-400/40 shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
+                  style={{ width: radius * 2, height: radius * 2 }}
+                />
+                <span className="mt-0.5 whitespace-nowrap rounded bg-[#07151b]/85 px-1.5 py-0.5 text-[10px] text-white/90">
+                  {row.key.length > 16 ? `${row.key.slice(0, 14)}…` : row.key}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        {placed.length === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
+            <MapIcon size={32} className="mb-2 opacity-40" />
+            <p className="text-sm">Sem dados regionais para os filtros aplicados.</p>
+          </div>
+        )}
+        <div className="absolute left-3 top-3 z-20 rounded-full bg-[#07151b]/85 px-3 py-1 text-[10px] text-muted-foreground">
+          {placed.length} regiões · © OpenStreetMap
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -6250,6 +6662,7 @@ export function EntityDetailPanel({
   const [enrichError, setEnrichError] = useState<string | null>(null);
   const [relations, setRelations] = useState<EntityRelationsResponse | null>(null);
   const [aGerarRelatorio, setAGerarRelatorio] = useState(false);
+  const [aGerarProcessos, setAGerarProcessos] = useState(false);
   const { recordVisit } = useWorkspace();
 
   useEffect(() => {
@@ -6662,6 +7075,32 @@ export function EntityDetailPanel({
     }
   }, [nif]);
 
+  /**
+   * Descarrega o **relatório de processos** da entidade (modelo «Relatório de
+   * Processos»): indicadores, insolvências/PER, processos judiciais, situação
+   * fiscal e contributiva, atos societários e contratos.
+   */
+  const handleDownloadProcessosReport = useCallback(async () => {
+    setAGerarProcessos(true);
+    setEnrichError(null);
+    try {
+      const blob = await downloadEntityProcessosReport(nif);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `processos_${nif}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setEnrichMessage("Relatório de processos gerado e descarregado.");
+    } catch (err) {
+      setEnrichError(err instanceof Error ? err.message : "Erro ao gerar o relatório de processos");
+    } finally {
+      setAGerarProcessos(false);
+    }
+  }, [nif]);
+
   if (loading) return <Loading />;
   if (error || !company) {
     return (
@@ -6716,6 +7155,15 @@ export function EntityDetailPanel({
           >
             {aGerarRelatorio ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
             Relatório PDF
+          </button>
+          <button
+            onClick={handleDownloadProcessosReport}
+            disabled={aGerarProcessos}
+            title="Relatório de processos: insolvências/PER, processos judiciais, situação fiscal e atos societários"
+            className="px-3 py-1.5 rounded-full glass-card text-sm text-sky-300 hover:text-sky-200 transition flex items-center gap-2 disabled:opacity-60"
+          >
+            {aGerarProcessos ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+            Relatório de processos
           </button>
           <FavoriteButton
             kind="entity"
