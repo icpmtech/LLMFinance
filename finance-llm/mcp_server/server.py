@@ -178,10 +178,35 @@ def _annotations(op: Operation) -> ToolAnnotations:
     )
 
 
+def _selected_operations() -> List[Operation]:
+    """Operações do catálogo a expor, filtradas por ``IQOS_MCP_TAGS``.
+
+    Sem a variável (ou com ``*``) expõe o catálogo completo. Com uma lista de
+    grupos separados por vírgula (ex.: ``contratos,contratos-fr,empresas``)
+    expõe apenas essas operações.
+
+    O filtro existe porque os clientes (Copilot/DeepSeek) limitam o número de
+    funções por pedido (128 no DeepSeek) e o catálogo completo tem 219 — a
+    lista inteira provoca o erro «supports at most 128 functions».
+    """
+    raw = os.environ.get("IQOS_MCP_TAGS", "").strip()
+    if not raw or raw == "*":
+        return list(OPERATIONS)
+    wanted = {tag.strip().lower() for tag in raw.split(",") if tag.strip()}
+    unknown = wanted - {tag.lower() for tag in TAGS}
+    if unknown:
+        LOGGER.warning(
+            "IQOS_MCP_TAGS: grupos desconhecidos %s (válidos: %s)",
+            sorted(unknown),
+            sorted(TAGS),
+        )
+    return [op for op in OPERATIONS if op.tag.lower() in wanted]
+
+
 def register_catalog_tools() -> int:
-    """Regista uma ferramenta MCP por cada operação do catálogo."""
+    """Regista uma ferramenta MCP por cada operação selecionada do catálogo."""
     registered = 0
-    for op in OPERATIONS:
+    for op in _selected_operations():
         server.add_tool(
             _make_tool(op),
             name=op.name,
@@ -439,8 +464,13 @@ sinais de risco. Cita sempre o número de contratos e o valor total.
 def build_server() -> MCPServer:
     """Regista as ferramentas do catálogo e devolve o servidor pronto."""
     count = register_catalog_tools()
-    LOGGER.info("Servidor MCP do IQ OS: %d ferramentas curadas + 4 genéricas.", count)
+    tags = os.environ.get("IQOS_MCP_TAGS", "").strip() or "*"
+    LOGGER.info(
+        "Servidor MCP do IQ OS: %d ferramentas curadas + 4 genéricas (grupos: %s).",
+        count,
+        tags,
+    )
     return server
 
 
-__all__ = ["server", "build_server", "get_client", "register_catalog_tools"]
+__all__ = ["server", "build_server", "get_client", "register_catalog_tools", "_selected_operations"]

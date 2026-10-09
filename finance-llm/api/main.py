@@ -318,6 +318,8 @@ from api.osint_routes import router as osint_router
 # markdown (ex.: o CAE-Rev.4 convertido do PDF).
 from api.docs_routes import router as docs_router
 from api.cae_routes import router as cae_router
+# Relatórios a pedido: catálogo, pedidos, pagamento por MB Way e backoffice.
+from api.reports_routes import router as reports_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -551,7 +553,7 @@ app.add_middleware(
 # Vale o mesmo para a **gestão da loja** (`/shop/*`): sem isto o backoffice
 # mostrava listas e o tema da vitrine desatualizados. O leitor de RSS segue a
 # mesma regra: as listas de artigos e o estado da recolha têm de estar frescos.
-_NO_STORE_PREFIXES = ("/docs", "/redoc", "/openapi", "/shop", "/rss", "/sentiment/market")
+_NO_STORE_PREFIXES = ("/docs", "/redoc", "/openapi", "/shop", "/rss", "/sentiment/market", "/reports")
 
 
 @app.middleware("http")
@@ -650,6 +652,9 @@ app.include_router(osint_router)
 app.include_router(docs_router)
 # Catálogo CAE: listagem e autocomplete.
 app.include_router(cae_router)
+# Relatórios a pedido: área do cliente (`/reports/*`), backoffice de produção
+# (`/reports/backoffice/*`) e configuração na administração (`/reports/admin/*`).
+app.include_router(reports_router)
 
 
 @app.get("/osint")

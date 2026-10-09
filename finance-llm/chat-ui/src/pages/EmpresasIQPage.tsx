@@ -3645,12 +3645,11 @@ function EntitiesSection({
           <h2 className="text-2xl font-bold">Entidades</h2>
           <p className="text-sm text-muted-foreground" data-testid="entities-total">
             {full(total)} entidades no universo
-            {roleDistinct > 0 && role !== "all" && (
+            {roleDistinct > 0 && role !== "all" ? (
               <span className="ml-1 text-xs">
-                ({full(roleDistinct)}{" "}
-                {role === "adjudicante" ? "adjudicantes distintos" : "adjudicatários distintos"})
+                · {full(roleDistinct)} {role === "adjudicante" ? "adjudicantes distintos" : "adjudicatários distintos"}
               </span>
-            )}
+            ) : null}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

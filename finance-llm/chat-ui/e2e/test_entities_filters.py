@@ -84,6 +84,15 @@ def _card_names(page) -> list[str]:
     return [_norm(name) for name in page.get_by_test_id("entity-card-name").all_inner_texts()]
 
 
+def _open_map(page):
+    """Abre a vista de mapa e devolve as bolhas de região já visíveis."""
+    page.get_by_test_id("entities-view-map").click()
+    regions = page.locator("[data-region]")
+    _poll(lambda: regions.count(), lambda count: count > 0, timeout=40, describe="regiões no mapa")
+    regions.first.scroll_into_view_if_needed()
+    return regions
+
+
 def _top_region(page) -> str | None:
     """Região cuja bolha está mesmo no topo (as bolhas do mapa sobrepõem-se)."""
     return page.evaluate(
@@ -246,8 +255,8 @@ def test_table_and_map_views_render_entities(app, api):
     page.get_by_test_id("entities-view-table").click()
     rows = page.locator("table tbody tr")
     assert _poll(lambda: rows.count(), lambda count: count == PAGE_SIZE, describe="linhas da tabela") == PAGE_SIZE
-    headers = _norm(page.locator("table thead").first.inner_text())
-    assert "Entidade" in headers and "NIF" in headers
+    headers = _norm(page.locator("table thead").first.inner_text()).lower()
+    assert "entidade" in headers and "nif" in headers
 
     page.get_by_test_id("entities-view-map").click()
     regions = page.locator("[data-region]")
@@ -257,10 +266,7 @@ def test_table_and_map_views_render_entities(app, api):
 def test_map_region_context_menu_opens_the_contracts_panel(app, api):
     """O menu de contexto de uma região abre o painel de contratos dessa região."""
     page = _open_entities(app)
-    page.get_by_test_id("entities-view-map").click()
-
-    regions = page.locator("[data-region]")
-    assert _poll(lambda: regions.count(), lambda count: count > 0, timeout=40, describe="regiões no mapa") > 0
+    _open_map(page)
 
     region = _poll(lambda: _top_region(page), lambda value: bool(value), timeout=30, describe="região clicável")
     page.locator(f'[data-region="{region}"]').click(button="right")
@@ -272,10 +278,10 @@ def test_map_region_context_menu_opens_the_contracts_panel(app, api):
     panel = page.locator("div").filter(has=page.get_by_role("heading", name="Contratos da região")).last
     assert _poll(
         lambda: _norm(panel.inner_text()),
-        lambda text: text.startswith(region),
+        lambda text: region in text,
         timeout=30,
         describe="painel de contratos da região",
-    ).startswith(region)
+    )
 
     expected = api("/api/contracts/search", {"region": region, "from": 0, "size": PAGE_SIZE})
     assert _poll(

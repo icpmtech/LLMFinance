@@ -7,12 +7,9 @@
       "cwd": "c:/LLMFinance/finance-llm",
       "env": {
         "IQOS_API_URL": "http://127.0.0.1:8002",
-        "PYTHONUNBUFFERED": "1"
+        "PYTHONUNBUFFERED": "1",
+        "IQOS_MCP_TAGS": "contratos,contratos-es,contratos-fr,empresas"
       }
-    },
-    "iqos-http": {
-      "type": "http",
-      "url": "http://127.0.0.1:8765/mcp"
     }
   }
 }
