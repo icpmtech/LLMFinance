@@ -3690,51 +3690,85 @@ function EntitiesSection({
       )}
 
       <Card>
-        <div className="grid gap-4 md:grid-cols-5 items-end">
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-2.5 text-muted-foreground" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && load(0)}
-              placeholder="Nome, NIF..."
-              className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm outline-none focus:border-teal-400/50 focus:ring-1 focus:ring-teal-400/30"
-            />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            load(0);
+          }}
+          className="grid gap-3 items-start sm:grid-cols-2 lg:grid-cols-5"
+        >
+          <label className="block">
+            <span className="mb-1.5 block text-xs text-muted-foreground">Nome / NIF</span>
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Nome, NIF..."
+                className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm outline-none focus:border-teal-400/50 focus:ring-1 focus:ring-teal-400/30"
+              />
+            </div>
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-xs text-muted-foreground">CAE</span>
+            <div className="relative">
+              <Briefcase size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" />
+              <CaeMultiSelect
+                selected={cae}
+                onChange={setCae}
+                placeholder="CAE (ex: 46460)"
+                className="w-full rounded-xl border border-white/10 bg-white/[0.04] pl-9 pr-3 text-sm"
+              />
+            </div>
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-xs text-muted-foreground">CPV</span>
+            <div className="relative">
+              <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={cpv}
+                onChange={(e) => setCpv(e.target.value)}
+                placeholder="CPV (ex: 33600000-6)"
+                className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm outline-none focus:border-teal-400/50 focus:ring-1 focus:ring-teal-400/30"
+              />
+            </div>
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-xs text-muted-foreground">Função</span>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as typeof role)}
+              className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 px-3 text-sm outline-none focus:border-teal-400/50 focus:ring-1 focus:ring-teal-400/30"
+            >
+              <option value="all">Todas as funções</option>
+              <option value="adjudicante">Adjudicante</option>
+              <option value="adjudicatario">Adjudicatário</option>
+            </select>
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 rounded-xl bg-teal-400/10 text-teal-300 border border-teal-400/20 text-sm hover:bg-teal-400/20 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
+            >
+              Pesquisar
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setQ("");
+                setCae([]);
+                setCpv("");
+                setRole("all");
+                setFrom(0);
+                load(0);
+              }}
+              className="px-3 py-2 rounded-xl glass-card text-sm text-muted-foreground hover:text-foreground transition"
+              title="Limpar filtros"
+            >
+              <X size={16} />
+            </button>
           </div>
-          <div className="relative">
-            <CaeMultiSelect
-              selected={cae}
-              onChange={setCae}
-              placeholder="CAE (ex: 46460)"
-              className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm outline-none focus:border-teal-400/50 focus:ring-1 focus:ring-teal-400/30"
-            />
-          </div>
-          <div className="relative">
-            <Tag size={14} className="absolute left-3 top-2.5 text-muted-foreground" />
-            <input
-              value={cpv}
-              onChange={(e) => setCpv(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && load(0)}
-              placeholder="CPV (ex: 33600000-6)"
-              className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm outline-none focus:border-teal-400/50 focus:ring-1 focus:ring-teal-400/30"
-            />
-          </div>
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value as typeof role)}
-            className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 px-3 text-sm outline-none focus:border-teal-400/50 focus:ring-1 focus:ring-teal-400/30"
-          >
-            <option value="all">Todas as funções</option>
-            <option value="adjudicante">Adjudicante</option>
-            <option value="adjudicatario">Adjudicatário</option>
-          </select>
-          <button
-            onClick={() => load(0)}
-            className="px-4 py-2 rounded-xl bg-teal-400/10 text-teal-300 border border-teal-400/20 text-sm hover:bg-teal-400/20 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50"
-          >
-            Pesquisar
-          </button>
-        </div>
+        </form>
       </Card>
 
       {selectedRegion && (
@@ -9186,6 +9220,11 @@ export default function EmpresasIQPage() {
   }, [detail]);
 
   const handleSearch = () => {
+    if (section === "entities") {
+      // EntitiesSection already reacts to `q` via its own useEffect,
+      // but reloading guarantees fresh results aligned with the topbar query.
+      return;
+    }
     setSection("contracts");
     // global search could set a shared filter here
   };
