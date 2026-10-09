@@ -101,6 +101,14 @@ $SERVICOS = @{
         Sonda = '/health'
         Extra = @()
     }
+    # Nao tem imagem propria: reusa `iq-os-backend:latest`, por isso essa imagem
+    # tem de estar na VM primeiro. Sonda por socket (o endpoint e JSON-RPC e um
+    # GET simples daria 405).
+    'mcp' = @{
+        Porta = 8765
+        Sonda = '/'
+        Extra = @()
+    }
 }
 
 function Invoke-Vm {
@@ -138,8 +146,15 @@ function Send-VmFile {
     if ($LASTEXITCODE -ne 0) { throw "falhou o envio de $Remote" }
     # O PowerShell injecta CR ao escrever em pipeline nativa.
     Invoke-Vm "sed -i 's/\r`$//' $Remote" | Out-Null
+    # **Bit de execucao.** Sem isto um script de init (`/etc/cont-init.d/*.sh`) e
+    # ignorado em silencio pelo s6 -- foi o que deixou o dashboard do Hermes sem
+    # o plugin de autenticacao, e sem provider ele recusa ligar-se a 0.0.0.0.
+    if ($Remote -match '\.sh$') {
+        Invoke-Vm "chmod +x $Remote" | Out-Null
+    }
     $tam = (Invoke-Vm "wc -c < $Remote").Output.Trim()
-    Write-Host "  $Remote  ($tam bytes)"
+    $perms = (Invoke-Vm "stat -c %A $Remote").Output.Trim()
+    Write-Host "  $Remote  ($tam bytes, $perms)"
 }
 
 if ($Listar) {

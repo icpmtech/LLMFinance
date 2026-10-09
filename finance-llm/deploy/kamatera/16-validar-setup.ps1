@@ -36,6 +36,8 @@ $ESPERADO = @(
     @{ Nome = 'n8n';               Contentor = 'iqos-n8n';            Porta = 5678;  Sonda = '/healthz' }
     @{ Nome = 'frontend (SPA)';    Contentor = 'iqos-frontend';       Porta = 4180;  Sonda = '/' }
     @{ Nome = 'hermes-agent';      Contentor = 'iqos-hermes-agent';   Porta = 8642;  Sonda = '/health' }
+    @{ Nome = 'hermes dashboard';  Contentor = 'iqos-hermes-agent';   Porta = 9119;  Sonda = '/' }
+    @{ Nome = 'mcp';               Contentor = 'iqos-mcp';            Porta = 8765;  Sonda = '/' }
     @{ Nome = 'osif-postgres';     Contentor = 'iqos-osif-postgres';  Porta = $null; Sonda = $null }
     @{ Nome = 'osif-redis';        Contentor = 'iqos-osif-redis';     Porta = $null; Sonda = $null }
     @{ Nome = 'osif-minio';        Contentor = 'iqos-osif-minio';     Porta = $null; Sonda = $null }
@@ -45,7 +47,7 @@ $ESPERADO = @(
 )
 
 # Portas que NAO devem estar abertas a Internet.
-$NAO_EXPOR = @(9200, 9300, 8090, 8888, 5678, 4180, 8642, 9119, 6110, 9111, 8894, 5001)
+$NAO_EXPOR = @(9200, 9300, 8090, 8888, 5678, 4180, 8642, 9119, 6110, 9111, 8894, 8765, 5001)
 
 function Invoke-Vm {
     param([Parameter(Mandatory)][string]$RemoteCommand)

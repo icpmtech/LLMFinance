@@ -9,8 +9,10 @@
  * 2. **Concorrência** — quem são os pares (mesmo papel) e em que posição fica;
  * 3. **Historial** — as contrapartes com quem a empresa já contratou;
  * 4. **Oportunidades** — contrapartes do segmento com que nunca contratou.
+ *
+ * O separador **Comparar** junta até `MAX_COMPARE` empresas no mesmo segmento.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   ArrowRight,
@@ -23,25 +25,23 @@ import {
   Loader2,
   RefreshCw,
   Scale,
-  Search,
   ShoppingCart,
   Target,
   TrendingUp,
   Trophy,
   Users,
-  X,
 } from "lucide-react";
 
 import { Button } from "../components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { Label } from "../components/ui/Label";
-import { searchCompanies } from "../api";
+import { Tabs, TabsList, TabsTrigger } from "../components/ui/Tabs";
+import BenchmarkCompare from "../components/benchmark/BenchmarkCompare";
+import { CpvAutocomplete, EmpresaAutocomplete } from "../components/benchmark/BenchmarkPickers";
 import {
-  getBenchmarkCpv,
   getBenchmarkEntity,
   getBenchmarkMeta,
-  type BenchmarkCpv,
   type BenchmarkMeta,
   type BenchmarkResponse,
   type BenchmarkRole,
@@ -50,6 +50,9 @@ import {
 import type { CompanySummary } from "../types";
 
 const PAGE_MAX_YEARS = 12;
+
+/** Modos da página: análise de uma empresa ou comparação de várias. */
+type Modo = "empresa" | "comparar";
 
 function money(value?: number | null): string {
   if (value === undefined || value === null) return "—";
@@ -216,22 +219,16 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
   const [erro, setErro] = useState<string | null>(null);
 
   const [entidade, setEntidade] = useState<CompanySummary | null>(null);
-  const [entidadeTexto, setEntidadeTexto] = useState("");
-  const [sugestoes, setSugestoes] = useState<CompanySummary[]>([]);
-  const [aProcurar, setAProcurar] = useState(false);
+  const [modo, setModo] = useState<Modo>("empresa");
 
   const [role, setRole] = useState<BenchmarkRole>("adjudicatario");
   const [cpv, setCpv] = useState("");
-  const [cpvTexto, setCpvTexto] = useState("");
-  const [cpvOpcoes, setCpvOpcoes] = useState<BenchmarkCpv[]>([]);
-  const [mostrarCpv, setMostrarCpv] = useState(false);
   const [anoDe, setAnoDe] = useState<number | "">("");
   const [anoAte, setAnoAte] = useState<number | "">("");
   const [regiao, setRegiao] = useState("");
 
   const [dados, setDados] = useState<BenchmarkResponse | null>(null);
   const [aCarregar, setACarregar] = useState(false);
-  const sugestoesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     getBenchmarkMeta()
@@ -246,63 +243,8 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
       .catch((err: unknown) => setErro(err instanceof Error ? err.message : String(err)));
   }, []);
 
-  /* ------------------------------------------------ entidade (autocomplete) */
-  useEffect(() => {
-    const termo = entidadeTexto.trim();
-    if (entidade || termo.length < 2) {
-      setSugestoes([]);
-      return;
-    }
-    let ativo = true;
-    const timer = setTimeout(() => {
-      setAProcurar(true);
-      searchCompanies({ q: termo, size: 8 })
-        .then((resposta) => {
-          if (ativo) setSugestoes(resposta.items ?? []);
-        })
-        .catch(() => {
-          if (ativo) setSugestoes([]);
-        })
-        .finally(() => {
-          if (ativo) setAProcurar(false);
-        });
-    }, 250);
-    return () => {
-      ativo = false;
-      clearTimeout(timer);
-    };
-  }, [entidadeTexto, entidade]);
-
-  /* --------------------------------------------------------------- CPV (autocomplete) */
-  useEffect(() => {
-    const termo = cpvTexto.trim();
-    if (termo.length < 2) {
-      setCpvOpcoes([]);
-      return;
-    }
-    let ativo = true;
-    const timer = setTimeout(() => {
-      getBenchmarkCpv(termo, 10)
-        .then((resposta) => {
-          if (ativo) {
-            setCpvOpcoes(resposta.items ?? []);
-            setMostrarCpv(true);
-          }
-        })
-        .catch(() => {
-          if (ativo) setCpvOpcoes([]);
-        });
-    }, 250);
-    return () => {
-      ativo = false;
-      clearTimeout(timer);
-    };
-  }, [cpvTexto]);
-
   const escolherEntidade = useCallback((empresa: CompanySummary) => {
     setEntidade(empresa);
-    setEntidadeTexto(empresa.name);
-    setSugestoes([]);
     const vendas = empresa.adjudicatario?.contracts_count ?? 0;
     const compras = empresa.adjudicante?.contracts_count ?? 0;
     setRole(vendas >= compras ? "adjudicatario" : "adjudicante");
@@ -347,18 +289,12 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
 
   const escolherCpv = (codigo: string) => {
     setCpv(codigo);
-    setCpvTexto("");
-    setCpvOpcoes([]);
-    setMostrarCpv(false);
-    void analisar({ cpv_code: codigo });
+    if (codigo) void analisar({ cpv_code: codigo });
   };
 
   const limpar = () => {
     setEntidade(null);
-    setEntidadeTexto("");
-    setSugestoes([]);
     setCpv("");
-    setCpvTexto("");
     setDados(null);
     setErro(null);
   };
@@ -384,6 +320,9 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
           <Button variant="outline" size="md" icon={<RefreshCw size={15} />} onClick={() => void analisar()} disabled={!entidade}>
             Atualizar
           </Button>
+          <Button variant="outline" size="md" onClick={limpar} disabled={!entidade && !dados}>
+            Limpar
+          </Button>
           {onSwitchView ? (
             <Button variant="outline" size="md" onClick={onSwitchView}>
               Fechar
@@ -392,7 +331,22 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
         </div>
       </header>
 
-      {/* ------------------------------------------------------ configurador */}
+      <Tabs value={modo} className="mb-6">
+        <TabsList>
+          <TabsTrigger value="empresa" active={modo === "empresa"} onClick={() => setModo("empresa")}>
+            Uma empresa
+          </TabsTrigger>
+          <TabsTrigger value="comparar" active={modo === "comparar"} onClick={() => setModo("comparar")}>
+            Comparar até 10
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {modo === "comparar" ? (
+        <BenchmarkCompare meta={meta} />
+      ) : (
+        <>
+          {/* -------------------------------------------------- configurador */}
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-sm">
@@ -402,54 +356,12 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             {/* entidade */}
-            <div className="relative">
-              <Label htmlFor="benchmark-entidade">Entidade do sistema</Label>
-              <div className="relative mt-1">
-                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="benchmark-entidade"
-                  autoComplete="off"
-                  className="pl-9"
-                  placeholder="Nome ou NIF da empresa…"
-                  value={entidadeTexto}
-                  onChange={(e) => {
-                    setEntidadeTexto(e.target.value);
-                    setEntidade(null);
-                  }}
-                />
-                {aProcurar ? (
-                  <Loader2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
-                ) : entidadeTexto ? (
-                  <button
-                    type="button"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    onClick={limpar}
-                    aria-label="Limpar"
-                  >
-                    <X size={15} />
-                  </button>
-                ) : null}
-              </div>
-              {sugestoes.length > 0 ? (
-                <div ref={sugestoesRef} className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-border bg-background shadow-xl">
-                  {sugestoes.map((empresa) => (
-                    <button
-                      key={`${empresa.nif}-${empresa.name}`}
-                      type="button"
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
-                      onClick={() => escolherEntidade(empresa)}
-                    >
-                      <Building2 size={14} className="shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate">{empresa.name}</span>
-                      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                        {empresa.nif ? `${empresa.nif} · ` : ""}
-                        {num(empresa.contracts_total)} contr.
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
+            <EmpresaAutocomplete
+              id="benchmark-entidade"
+              value={entidade}
+              onSelect={escolherEntidade}
+              onClear={() => setEntidade(null)}
+            />
 
             {/* papel */}
             <div>
@@ -477,49 +389,7 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
             </div>
 
             {/* CPV */}
-            <div className="relative">
-              <Label htmlFor="benchmark-cpv">CPV do segmento (opcional)</Label>
-              <div className="relative mt-1">
-                <Input
-                  id="benchmark-cpv"
-                  autoComplete="off"
-                  placeholder="ex.: 90511000 ou 90511"
-                  value={cpvTexto || cpv}
-                  onChange={(e) => {
-                    setCpv("");
-                    setCpvTexto(e.target.value);
-                  }}
-                />
-                {cpv ? (
-                  <button
-                    type="button"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    onClick={() => {
-                      setCpv("");
-                      setCpvTexto("");
-                    }}
-                    aria-label="Limpar CPV"
-                  >
-                    <X size={15} />
-                  </button>
-                ) : null}
-              </div>
-              {mostrarCpv && cpvOpcoes.length > 0 ? (
-                <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-border bg-background shadow-xl">
-                  {cpvOpcoes.map((opcao) => (
-                    <button
-                      key={opcao.code}
-                      type="button"
-                      className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm hover:bg-accent"
-                      onClick={() => escolherCpv(opcao.code)}
-                    >
-                      <span className="font-medium">{opcao.code}</span>
-                      <span className="line-clamp-2 text-xs text-muted-foreground">{opcao.description || "—"}</span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
+            <CpvAutocomplete id="benchmark-cpv" value={cpv} onChange={escolherCpv} />
           </div>
 
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -784,6 +654,8 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
           ) : null}
         </div>
       ) : null}
+        </>
+      )}
     </div>
   );
 }

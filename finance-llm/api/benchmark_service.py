@@ -53,6 +53,18 @@ _CANDIDATES = 50
 #: Percentis do preço de referência.
 _PERCENTS = [10, 25, 50, 75, 90]
 
+#: Máximo de empresas comparáveis de uma vez.
+MAX_COMPARE = 10
+
+#: Quantos compradores/vendedores se recolhem por empresa na comparação (os
+#: maiores por valor); serve para a lista e para os compradores em comum.
+_BUYERS_CANDIDATES = 20
+#: Quantos compradores se mostram por empresa na comparação.
+_BUYERS_SHOW = 5
+
+#: Tolerância do índice de preço para dizer «na linha do mercado».
+_PRICE_TOLERANCE = 0.1
+
 #: Timeout das pesquisas (o segmento sem CPV varre 2,2 M contratos).
 _REQUEST_TIMEOUT = 120
 
@@ -526,6 +538,277 @@ def _hit_counterpart(source: Dict[str, Any], counterpart_path: str) -> Optional[
         elif isinstance(parsed, list):
             names.extend([str(item.get("nome")) for item in parsed if isinstance(item, dict) and item.get("nome")])
     return "; ".join(names) or None
+
+
+def _price_position(index: Optional[float]) -> Optional[str]:
+    """Leitura do índice de preço: abaixo / na linha / acima do mercado."""
+    if index is None:
+        return None
+    if index < 1 - _PRICE_TOLERANCE:
+        return "abaixo"
+    if index > 1 + _PRICE_TOLERANCE:
+        return "acima"
+    return "na linha"
+
+
+def benchmark_compare(
+    *,
+    entities: List[Dict[str, Any]],
+    role: str = "adjudicatario",
+    cpv_code: Optional[str] = None,
+    year_from: Optional[int] = None,
+    year_to: Optional[int] = None,
+    region: Optional[str] = None,
+    top: int = 10,
+    es: Any = None,
+) -> Dict[str, Any]:
+    """Compara até `MAX_COMPARE` entidades no mesmo segmento (papel + CPV + anos).
+
+    Uma só pesquisa: o preço de referência do mercado é calculado uma vez e cada
+    entidade é um `filter` com nome próprio (`e0`…`e9`) dentro de uma agregação
+    `filters`, o que dá a cada uma os seus indicadores sem repetir o mercado.
+    """
+    role = role if role in ROLES else "adjudicatario"
+    limpos: List[Dict[str, Any]] = []
+    for item in entities or []:
+        if not isinstance(item, dict):
+            continue
+        nif = str(item.get("nif") or "").strip()
+        nome = str(item.get("name") or "").strip()
+        if nif or nome:
+            limpos.append({"nif": nif or None, "name": nome or None})
+    if not limpos:
+        return {"error": "Indique pelo menos uma entidade para comparar."}
+    if len(limpos) > MAX_COMPARE:
+        return {"error": f"Só é possível comparar até {MAX_COMPARE} empresas de cada vez."}
+
+    client = es or get_es_client(request_timeout=_REQUEST_TIMEOUT)
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    role_path = _ROLE_PATH[role]
+    counterpart_path = _ROLE_PATH[_counterpart_role(role)]
+    filters = _segment_filters(cpv_code, year_from, year_to, region)
+    query: Dict[str, Any] = {"bool": {"filter": filters}} if filters else {"match_all": {}}
+
+    top = max(1, min(int(top or 10), 50))
+    positive_price = {"range": {"precoContratual": {"gt": 0}}}
+
+    chaves = [f"e{index}" for index in range(len(limpos))]
+    named_filters = {
+        chave: _entity_filter(role, nif=entidade.get("nif"), name=entidade.get("name"))
+        for chave, entidade in zip(chaves, limpos)
+    }
+
+    body: Dict[str, Any] = {
+        "size": 0,
+        "track_total_hits": True,
+        "query": query,
+        "aggs": {
+            "market_value": {"stats": {"field": "precoContratual"}},
+            "market_priced": {
+                "filter": positive_price,
+                "aggs": {
+                    "stats": {"stats": {"field": "precoContratual"}},
+                    "percentiles": {"percentiles": {"field": "precoContratual", "percents": [25, 50, 75]}},
+                },
+            },
+            "market_peers": {
+                "nested": {"path": role_path},
+                "aggs": {"value": {"cardinality": {"field": f"{role_path}.nif"}}},
+            },
+            # Ranking do segmento: dá a posição de cada empresa comparada.
+            "peers": _role_rank_agg(role_path, _CANDIDATES),
+            # Uma «coluna» por entidade, com os indicadores do segmento.
+            "entities": {
+                "filters": {"filters": named_filters, "other_bucket": False},
+                "aggs": {
+                    "name": {"top_hits": {"size": 1, "_source": True}},
+                    "stats": {"stats": {"field": "precoContratual"}},
+                    "priced": {
+                        "filter": positive_price,
+                        "aggs": {"percentiles": {"percentiles": {"field": "precoContratual", "percents": [25, 50, 75]}}},
+                    },
+                    "last": {"max": {"field": "dataCelebracaoContrato"}},
+                    # CPV em que cada empresa atua dentro do segmento.
+                    "top_cpv": {
+                        "nested": {"path": "cpv"},
+                        "aggs": {
+                            "top": {
+                                "terms": {"field": "cpv.code", "size": 5, "order": {"_count": "desc"}},
+                                "aggs": {
+                                    "description": {"top_hits": {"size": 1, "_source": True}},
+                                    "value": {
+                                        "reverse_nested": {},
+                                        "aggs": {"sum": {"sum": {"field": "precoContratual"}}},
+                                    },
+                                },
+                            }
+                        },
+                    },
+                    # Quem compra a cada empresa (contrapartes do segmento).
+                    "buyers": _role_rank_agg(counterpart_path, _BUYERS_CANDIDATES),
+                    "buyers_total": {
+                        "nested": {"path": counterpart_path},
+                        "aggs": {"value": {"cardinality": {"field": f"{counterpart_path}.nif"}}},
+                    },
+                },
+            },
+        },
+    }
+
+    try:
+        resp = client.search(index=CONTRACTS_INDEX, body=body)
+    except Exception as exc:  # pragma: no cover - erro de cluster
+        logger.warning("Comparação de benchmark falhou: %s", exc)
+        return {"error": str(exc)}
+
+    aggs = resp.get("aggregations") or {}
+    market_stats = _stats((aggs.get("market_priced") or {}).get("stats"))
+    market_pct = _percentiles((aggs.get("market_priced") or {}).get("percentiles"))
+    market_total_value = market_stats.get("sum") or 0.0
+    market_median = market_pct.get("p50")
+
+    peers = _rows(aggs.get("peers"), _CANDIDATES, market_total_value)
+    por_nif = {row["nif"]: row for row in peers}
+    selecionados = {entidade["nif"] for entidade in limpos if entidade.get("nif")}
+    # Nome por NIF, para o ranking poder marcar as empresas comparadas.
+    nome_por_nif = {entidade["nif"]: entidade["name"] for entidade in limpos if entidade.get("nif")}
+
+    buckets = ((aggs.get("entities") or {}).get("buckets")) or {}
+    linhas: List[Dict[str, Any]] = []
+    for index, (chave, entidade) in enumerate(zip(chaves, limpos)):
+        bucket = buckets.get(chave) or {}
+        stats = _stats(bucket.get("stats"))
+        pct = _percentiles((bucket.get("priced") or {}).get("percentiles"))
+        valor = stats.get("sum") or 0.0
+        mediana = pct.get("p50")
+        indice = round(mediana / market_median, 3) if mediana and market_median else None
+        nif = entidade.get("nif") or ""
+        nome = (
+            _entity_hit_name(bucket.get("name"), role_path)
+            or _entity_hit_name(bucket.get("name"), counterpart_path)
+            or entidade.get("name")
+            or nif
+            or f"Empresa {index + 1}"
+        )
+        posicao = por_nif.get(nif) if nif else None
+
+        cpvs: List[Dict[str, Any]] = []
+        for item in (((bucket.get("top_cpv") or {}).get("top") or {}).get("buckets")) or []:
+            valor_cpv = (((item.get("value") or {}).get("sum")) or {}).get("value")
+            cpvs.append(
+                {
+                    "code": str(item.get("key")),
+                    "description": _cpv_description_from_hits(item.get("description"), item.get("key")),
+                    "count": int(item.get("doc_count") or 0),
+                    "value": round(float(valor_cpv), 2) if valor_cpv is not None else None,
+                }
+            )
+
+        compradores = _rows(bucket.get("buyers"), _BUYERS_CANDIDATES, valor)
+
+        linhas.append(
+            {
+                "nif": nif or None,
+                "name": nome,
+                "contracts": stats.get("count") or 0,
+                "total_value": round(float(valor), 2),
+                "avg_value": stats.get("avg"),
+                "median_value": mediana,
+                "p25": pct.get("p25"),
+                "p75": pct.get("p75"),
+                "share_pct": round(100.0 * valor / market_total_value, 2) if market_total_value else None,
+                "count_share_pct": (
+                    round(100.0 * (stats.get("count") or 0) / (market_stats.get("count") or 1), 2)
+                    if market_stats.get("count")
+                    else None
+                ),
+                "rank": posicao.get("rank") if posicao else None,
+                "price_index": indice,
+                "price_position": _price_position(indice),
+                "last_date": ((bucket.get("last") or {}).get("value_as_string")) or None,
+                "present": bool(stats.get("count") or 0),
+                "top_cpv": cpvs,
+                "buyers": compradores[:_BUYERS_SHOW],
+                "buyers_total": _cardinality(bucket.get("buyers_total")),
+            }
+        )
+
+    linhas.sort(key=lambda linha: (linha.get("total_value") or 0.0), reverse=True)
+    for posicao, linha in enumerate(linhas):
+        linha["order"] = posicao + 1
+
+    # Ranking do segmento: o top pedido, mais as empresas comparadas que fiquem
+    # fora dele (senão a sua posição não aparecia em lado nenhum).
+    ranking: List[Dict[str, Any]] = [
+        {**row, "selected": row["nif"] in selecionados, "label": nome_por_nif.get(row["nif"])}
+        for row in peers[:top]
+    ]
+    ja_listadas = {row["nif"] for row in ranking}
+    extras = [
+        {**por_nif[nif], "selected": True, "label": nome_por_nif.get(nif)}
+        for nif in selecionados - ja_listadas
+        if nif in por_nif
+    ]
+    if extras:
+        ranking = sorted([*ranking, *extras], key=lambda row: row.get("rank") or 0)
+
+    # Compradores em comum: contrapartes que aparecem em duas ou mais das
+    # empresas comparadas (calculado sobre os maiores compradores de cada uma,
+    # que é o que a agregação trouxe).
+    comuns: Dict[str, Dict[str, Any]] = {}
+    for linha in linhas:
+        for comprador in linha["buyers"]:
+            registo = comuns.setdefault(
+                comprador["nif"],
+                {"nif": comprador["nif"], "name": comprador["name"], "companies": [], "value": 0.0},
+            )
+            registo["companies"].append(linha["name"])
+            registo["value"] = round(float(registo["value"]) + float(comprador.get("value") or 0.0), 2)
+    compradores_comuns = [
+        {**registo, "companies_total": len(registo["companies"])}
+        for registo in comuns.values()
+        if len(registo["companies"]) >= 2
+    ]
+    compradores_comuns.sort(key=lambda item: (item["companies_total"], item["value"]), reverse=True)
+
+    notes: List[str] = []
+    notes.append(f"Segmento: {('CPV ' + cpv_code) if cpv_code else 'todo o mercado filtrado'}.")
+    notes.append("Percentis aproximados (TDigest do Elasticsearch) sobre valores positivos.")
+    notes.append(
+        "A posição é por valor contratual; sem CPV, o mercado tem milhões de contratos e a posição só "
+        "aparece para quem está entre os maiores."
+    )
+    notes.append(
+        f"Os «compradores em comum» são calculados sobre os {_BUYERS_CANDIDATES} maiores compradores de "
+        "cada empresa (não sobre a lista completa)."
+    )
+    ausentes = [linha["name"] for linha in linhas if not linha["present"]]
+    if ausentes:
+        notes.append("Sem contratos no segmento: " + ", ".join(ausentes) + ".")
+
+    return {
+        "role": role,
+        "counterpart_role": _counterpart_role(role),
+        "reference": {
+            "scope": "mercado",
+            "contracts": market_stats.get("count") or 0,
+            "total_value": round(float(market_total_value), 2),
+            "avg": market_stats.get("avg"),
+            "median": market_median,
+            "p25": market_pct.get("p25"),
+            "p75": market_pct.get("p75"),
+        },
+        "market": {
+            "contracts": ((resp.get("hits") or {}).get("total") or {}).get("value", 0),
+            "peers": _cardinality(aggs.get("market_peers")),
+        },
+        "entities": linhas,
+        "ranking": ranking,
+        "shared_buyers": compradores_comuns,
+        "notes": notes,
+    }
 
 
 def top_cpv(q: Optional[str] = None, size: int = 20, es: Any = None) -> Dict[str, Any]:

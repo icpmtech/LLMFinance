@@ -11,8 +11,12 @@
 # exclui `chat-ui/dist` do contexto da build (é preciso lá dentro para o build
 # normal, mas aqui vem já feito):
 #   Remove-Item -Recurse -Force _frontend_dist; Copy-Item -Recurse chat-ui\dist _frontend_dist
-#
-#   docker build -f Dockerfile.frontend.incremental -t iq-os-frontend:latest .
+## ATENÃ‡ÃƒO: o `Remove-Item` **nÃ£o** Ã© opcional. O `Copy-Item -Recurse` para uma
+# pasta que jÃ¡ existe cria `_frontend_dist\dist` em vez de substituir o conteÃºdo,
+# e o `index.html` antigo (com o bundle antigo) fica no lugar â€” a build passa,
+# o contentor sobe e a pÃ¡gina serve cÃ³digo velho. Confirmar sempre o hash:
+#   docker run --rm --entrypoint sh iq-os-frontend:latest -c "grep -o 'assets/index-[A-Za-z0-9_-]*\.js' /usr/share/nginx/html/index.html"
+##   docker build -f Dockerfile.frontend.incremental -t iq-os-frontend:latest .
 #
 # A base é parametrizável (como no backend) para se poder assentar na etiqueta
 # que já está validada, em vez de uma base antiga quando o resto do sistema já
