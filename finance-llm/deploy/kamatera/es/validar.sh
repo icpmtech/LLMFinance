@@ -43,8 +43,11 @@ printf "  inicializando       : %s\n" "$(echo "$sh" | jq -r .initializing_shards
 echo
 
 # --- 3. Comparacao indice a indice ------------------------------------------
-curl -fsS -m 30 "$DEST/_cat/indices?h=index&s=index:asc" | grep -v '^$' > /tmp/iqos-dest.txt
-curl -fsS -m 30 "$SOURCE/_cat/indices?h=index&s=index:asc" | grep -v '^$' > /tmp/iqos-src.txt
+# `LC_ALL=C sort`: o `_cat/indices` ordena pela collation do cluster, que nao e
+# a mesma que a do `comm`. Sem isto o `comm` avisa "not in sorted order" (e o
+# resultado deixa de ser fiavel).
+curl -fsS -m 30 "$DEST/_cat/indices?h=index"   | grep -v '^$' | LC_ALL=C sort > /tmp/iqos-dest.txt
+curl -fsS -m 30 "$SOURCE/_cat/indices?h=index" | grep -v '^$' | LC_ALL=C sort > /tmp/iqos-src.txt
 
 echo "=== Indice a indice ==="
 printf "  %-32s %10s %10s  %s\n" INDICE ORIGEM DESTINO MAPEAMENTO

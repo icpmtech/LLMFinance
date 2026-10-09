@@ -1,0 +1,43 @@
+# SearXNG na VM -- segundo servico a migrar, a seguir ao Elasticsearch.
+#
+# Espelha o servico local (`docker-compose.yml`, na raiz do finance-llm), com
+# duas diferencas deliberadas:
+#
+#   1. a porta fica presa ao loopback, nao em 0.0.0.0. Um motor de busca interno
+#      nao tem razao nenhuma para estar exposto a Internet;
+#   2. tem limite de memoria. A VM tem 2 GB e o Elasticsearch ja ocupa a maior
+#      parte -- sem limite, um pico do searxng atirava o ES para swap.
+#
+# A configuracao (`etc/settings.yml`) e uma copia de `docker/searxng/settings.yml`
+# do repositorio; o `14-servico-vm.ps1` envia-a.
+services:
+  searxng:
+    image: searxng/searxng:latest
+    container_name: iqos-searxng
+    ports:
+      - "127.0.0.1:${SEARXNG_PORT:-8888}:8080"
+    volumes:
+      - ./etc:/etc/searxng:rw
+      - searxng-cache:/var/cache/searxng
+    environment:
+      - SEARXNG_BASE_URL=http://127.0.0.1:${SEARXNG_PORT:-8888}/
+      - SEARXNG_SETTINGS_PATH=/etc/searxng/settings.yml
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  searxng-cache:

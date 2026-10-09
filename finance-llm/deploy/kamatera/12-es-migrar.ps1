@@ -34,7 +34,10 @@ param(
     [string]$RemoteDir = '/opt/iqos/es',
     [double]$MaxGB = 3,
     [switch]$Dry,
-    [switch]$Force
+    [switch]$Force,
+    # So os indices cuja contagem diverge da origem. E o modo para realinhar o
+    # espelho depois de o sistema ter escrito coisas novas.
+    [switch]$Sync
 )
 
 $ErrorActionPreference = 'Stop'
@@ -80,7 +83,7 @@ $crs = (Invoke-VmRaw "grep -c `$'\r' $RemoteDir/migrar.sh || true").Trim()
 Write-Host "  $RemoteDir/migrar.sh ($tamanho bytes, linhas com CR: $crs)"
 if ($crs -ne '0') { throw "o ficheiro ainda tem $crs linhas com CR." }
 
-$env_remoto = "SOURCE=http://127.0.0.1:9201 DEST=http://127.0.0.1:9200 MAX_MB=$([int]($MaxGB * 1024)) DRY=$(if ($Dry) { 1 } else { 0 }) FORCE=$(if ($Force) { 1 } else { 0 })"
+$env_remoto = "SOURCE=http://127.0.0.1:9201 DEST=http://127.0.0.1:9200 MAX_MB=$([int]($MaxGB * 1024)) DRY=$(if ($Dry) { 1 } else { 0 }) FORCE=$(if ($Force) { 1 } else { 0 }) SYNC=$(if ($Sync) { 1 } else { 0 })"
 
 Write-Host ''
 if ($Dry) {
@@ -88,7 +91,7 @@ if ($Dry) {
 } else {
     Write-Host '=== A migrar ===' -ForegroundColor Cyan
 }
-Write-Host "  MAX_GB=$MaxGB  DRY=$(if ($Dry) { 1 } else { 0 })  FORCE=$(if ($Force) { 1 } else { 0 })"
+Write-Host "  MAX_GB=$MaxGB  DRY=$(if ($Dry) { 1 } else { 0 })  FORCE=$(if ($Force) { 1 } else { 0 })  SYNC=$(if ($Sync) { 1 } else { 0 })"
 Write-Host ''
 
 # `bash` e obrigatorio: o /bin/sh do Ubuntu e dash e nao tem `pipefail` nem

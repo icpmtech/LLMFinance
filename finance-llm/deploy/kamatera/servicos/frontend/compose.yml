@@ -1,0 +1,43 @@
+# Frontend (SPA) na VM -- quarto servico a migrar.
+#
+# A imagem `iq-os-frontend:latest` e construida localmente, por isso tem de ser
+# transferida com o `15-imagem-vm.ps1` antes de arrancar isto:
+#
+#     .\15-imagem-vm.ps1 -Imagem iq-os-frontend:latest
+#     .\14-servico-vm.ps1 -Nome frontend
+#
+# Duas diferencas face ao servico local (`docker-compose.yml`, na raiz):
+#
+#   1. **sem `depends_on: backend`**. No PC o frontend espera que o backend fique
+#      saudavel; aqui o backend ainda nao existe, e com essa dependencia o
+#      contentor nem arrancava. A SPA serve-se; as chamadas a /api e que falham
+#      enquanto o backend nao estiver la.
+#   2. porta presa a 127.0.0.1 e limite de memoria.
+#
+# As portas 8891-8894 do compose local servem os iframes (n8n, hermes, mirofish,
+# osif) atraves do `docker/nginx.conf`. Aqui ficam de fora: sem esses servicos
+# ligados seriam proxies para o vazio. Acrescentam-se quando eles migrarem.
+services:
+  frontend:
+    image: iq-os-frontend:latest
+    container_name: iqos-frontend
+    ports:
+      - "127.0.0.1:${FINANCE_UI_PORT:-4180}:80"
+    environment:
+      - TZ=Europe/Lisbon
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -362,6 +362,66 @@ Os ~120 GB de que se falava na analise de custos eram para a **stack inteira**
 | `migrar.sh: Illegal option -o pipefail` | `/bin/sh` no Ubuntu e dash -- e preciso chamar `bash` |
 | `$'\r': command not found` | o PowerShell injecta CR ao escrever em pipeline nativa, mesmo depois de um `-replace`; limpar com `sed` na VM |
 
+### Validar
+
+```powershell
+.\13-es-validar.ps1    # so leitura: contagens + mapeamentos, indice a indice
+```
+
+Resultado: **43 dos 45 indices batem certo** -- contagem *e* mapeamento. Os
+outros dois divergem por **escrita nova na origem**, nao por perda de dados:
+
+| Indice | Destino | Origem | Documento mais recente |
+|---|---|---|---|
+| `finance_events` | 5397 | 5408 | destino `16:23:32Z` / origem `21:10:47Z` |
+| `finance_scraped` | 42350 | 42529 | idem |
+
+O destino tem exactamente o que foi copiado; o PC continuou a escrever depois.
+E o esperado num espelho pontual de um sistema vivo -- para manter o espelho
+alinhado e preciso re-sincronizar, e como os dois indices tem campo de data
+(`timestamp` e `data`), da para fazer por incremento em vez de recopiar tudo.
+
+## Migrar os restantes servicos
+
+Um de cada vez, cada um como projeto Docker proprio em
+`/opt/iqos/servicos/<nome>`, com a porta presa a 127.0.0.1:
+
+```powershell
+.\14-servico-vm.ps1 -Listar            # que servicos existem
+.\14-servico-vm.ps1 -Nome searxng      # migra e valida
+.\14-servico-vm.ps1 -Nome n8n -Logs    # segue o log
+.\14-servico-vm.ps1 -Nome n8n -Parar   # para
+```
+
+Cada servico e um projeto Docker separado, por isso `up` so mexe nos contentores
+desse projeto: o Caddy, a landing, o ES e o tunel ficam intocados. O
+`docker ps` mostra o uptime de cada contentor, e e por ai que se prova que nada
+foi reiniciado.
+
+Feitos: **Elasticsearch**, **SearXNG**, **n8n**.
+
+### O tecto e a RAM, nao o disco
+
+Sobraram 813 MB depois destes tres. Estimativa do que falta, por ordem de peso
+(medido no PC):
+
+| Servico | RAM | Imagem | Nota |
+|---|---|---|---|
+| frontend | 12 MB | 208 MB (construida) | precisa do `dist/` ou da imagem |
+| mcp | 20 MB | 13,7 GB | reusa a imagem do backend |
+| mirofish | 82 MB | 14,2 GB | imagem publica no ghcr |
+| osif (6 contentores) | 243 MB | 1,4 GB (construidas) | stack autonoma |
+| hermes-agent | 358 MB | 4,0 GB | imagem publica |
+| backend | 791 MB | 13,7 GB (construida) | precisa tambem de `data/` 37 GB + `model/` 3 GB |
+
+`backend` sozinho consumiria o que sobra; com `hermes-agent` nao cabe de forma
+nenhuma. **Subir a RAM para 8 GB no painel** (dentro do orcamento de 23 EUR)
+desbloqueia os dois -- e e a unica intervencao que falta antes deles.
+
+Nota: estas instancias **nao sao copias**. Os volumes comecam vazios (o n8n da
+VM nao tem fluxos, o searxng nao tem cache). E infraestrutura pronta a receber
+dados, nao um clone do que corre no PC.
+
 ## API Kamatera (para referencia)
 
 Base: `https://cloudcli.cloudwm.com/service` (a consola usa

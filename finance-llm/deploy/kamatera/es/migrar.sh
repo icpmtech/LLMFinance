@@ -9,6 +9,8 @@
 #   MAX_MB=3072                    ignora indices maiores que isto (MB inteiros)
 #   DRY=1                          so mostra o plano, nao escreve nada
 #   FORCE=1                        refaz indices que ja existam no destino
+#   SYNC=1                         so os indices cuja contagem diverge da origem
+#                                  (implica FORCE; e o modo para realinhar)
 #
 # Ordem: do mais leve para o mais pesado -- e o que permite comecar já, e o que
 # deixa para o fim o `contratos` (20 GB), que so cabe depois de crescer o disco.
@@ -19,14 +21,20 @@ DEST="${DEST:-http://127.0.0.1:9200}"
 MAX_MB="${MAX_MB:-3072}"
 DRY="${DRY:-0}"
 FORCE="${FORCE:-0}"
+SYNC="${SYNC:-0}"
 
 MAX_BYTES=$(( MAX_MB * 1024 * 1024 ))
+
+# Em modo sincronizacao o objetivo e trazer indices ja copiados de volta ao
+# alinhamento, por isso refazer e implicito.
+if [ "$SYNC" = "1" ]; then FORCE=1; fi
 
 command -v jq >/dev/null || { echo "falta o jq nesta maquina"; exit 1; }
 
 echo "origem  : $SOURCE"
 echo "destino : $DEST"
 echo "limite  : ${MAX_MB} MB por indice"
+[ "$SYNC" = "1" ] && echo "modo    : sincronizacao (so o que divergir)"
 echo
 
 if ! curl -fsS -m 15 "$SOURCE" >/dev/null; then
@@ -39,21 +47,42 @@ if ! curl -fsS -m 15 "$DEST" >/dev/null; then
     exit 1
 fi
 
-# `bytes=b` da o tamanho do primario em bytes, para comparar com o limite.
-PLANO=$(curl -fsS "$SOURCE/_cat/indices?h=index,pri.store.size&bytes=b&s=pri.store.size:asc" \
-        | awk -v max="$MAX_BYTES" 'NF==2 && $2+0 <= max { printf "%s %s\n", $1, $2 }')
-
-TOTAL=$(echo "$PLANO" | grep -c . || true)
-echo "indices dentro do limite: $TOTAL"
+if [ "$SYNC" = "1" ]; then
+    # Percorre os indices que JA existem no destino e compara as contagens. A
+    # copia e a mesma do modo normal -- muda so a escolha do que copiar.
+    # As contagens vao como 3.o/4.o campo da linha (e nao para stderr): assim
+    # aparecem ao lado do indice, em vez de fora de ordem.
+    PLANO=$(
+        curl -fsS "$DEST/_cat/indices?h=index" | grep -v '^$' | LC_ALL=C sort \
+        | while read -r idx; do
+            o=$(curl -fsS -m 60 "$SOURCE/$idx/_count" 2>/dev/null | jq -r '.count // "?"')
+            d=$(curl -fsS -m 60 "$DEST/$idx/_count"   2>/dev/null | jq -r '.count // "?"')
+            if [ "$o" != "$d" ]; then
+                bytes=$(curl -fsS -m 30 "$SOURCE/_cat/indices/$idx?h=pri.store.size&bytes=b" 2>/dev/null | tr -d ' ')
+                echo "$idx ${bytes:-0} $o $d"
+            fi
+        done
+    )
+    TOTAL=$(echo "$PLANO" | grep -c . || true)
+    echo "indices desalinhados: $TOTAL"
+else
+    # `bytes=b` da o tamanho do primario em bytes, para comparar com o limite.
+    PLANO=$(curl -fsS "$SOURCE/_cat/indices?h=index,pri.store.size&bytes=b&s=pri.store.size:asc" \
+            | awk -v max="$MAX_BYTES" 'NF==2 && $2+0 <= max { printf "%s %s\n", $1, $2 }')
+    TOTAL=$(echo "$PLANO" | grep -c . || true)
+    echo "indices dentro do limite: $TOTAL"
+fi
 echo
 
 feitos=0
 saltados=0
 falhados=0
 
-while read -r idx bytes; do
+while read -r idx bytes src_n dst_n; do
     [ -z "${idx:-}" ] && continue
     mb=$(( bytes / 1024 / 1024 ))
+    # Em modo sincronizacao vale a pena ver quanto diverge antes de recopiar.
+    [ -n "${src_n:-}" ] && echo "  (origem $src_n / destino $dst_n)"
 
     if curl -fsS -o /dev/null -m 10 -I "$DEST/$idx" 2>/dev/null; then
         if [ "$FORCE" != "1" ]; then

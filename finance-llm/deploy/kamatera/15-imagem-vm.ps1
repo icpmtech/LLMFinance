@@ -1,0 +1,109 @@
+#requires -Version 5.1
+<#
+.SYNOPSIS
+    Transfere uma imagem Docker do PC para a VM do edge e carrega-a la.
+
+.DESCRIPTION
+    `docker save` -> gzip -> ficheiro -> VM -> `docker load`.
+
+    Nao usa pipelines do PowerShell para os dados: o PowerShell descaracteriza
+    streams binarios ao passar por comandos nativos (converte para texto e
+    estraga o tar). Por isso a imagem vai a ficheiro e o redirecionamento e
+    feito pelo `cmd.exe`, que copia bytes a serio.
+
+    Nao toca em nada do que esta a correr: so escreve um ficheiro temporario em
+    /tmp na VM e faz `docker load` (que acrescenta uma imagem, sem mexer nas
+    que existem).
+
+.EXAMPLE
+    .\15-imagem-vm.ps1 -Imagem iq-os-frontend:latest
+    .\15-imagem-vm.ps1 -Imagem iq-os-backend:latest -Manter
+#>
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory)][string]$Imagem,
+    [string]$SshHost = '45.147.251.188',
+    [string]$SshUser = 'root',
+    [string]$TunnelContainer = 'iqos-origin-tunnel',
+    [string]$RemoteTar = '/tmp/iqos-imagem.tar.gz',
+    # Por omissao apaga o tar da VM no fim (liberta o espaco).
+    [switch]$Manter
+)
+
+$ErrorActionPreference = 'Stop'
+
+function Invoke-Vm {
+    param([Parameter(Mandatory)][string]$RemoteCommand)
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $out = docker exec $TunnelContainer ssh -i /root/.ssh/id_ed25519 -o BatchMode=yes `
+            -o ConnectTimeout=10 -o LogLevel=ERROR "$SshUser@$SshHost" $RemoteCommand 2>&1
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+    return @{ ExitCode = $code; Output = (($out | Out-String).TrimEnd()) }
+}
+
+# A imagem tem de existir localmente.
+$exists = (docker images --format '{{.Repository}}:{{.Tag}}' | Where-Object { $_ -eq $Imagem })
+if (-not $exists) { throw "nao ha imagem local '$Imagem' (usa docker images para veres as que existem)." }
+
+$tar = Join-Path $env:TEMP 'iqos-imagem.tar'
+$gz = "$tar.gz"
+
+Write-Host ''
+Write-Host "=== 1. Exportar $Imagem ===" -ForegroundColor Cyan
+foreach ($f in @($tar, $gz)) { if (Test-Path $f) { Remove-Item $f -Force } }
+docker save -o $tar $Imagem
+if ($LASTEXITCODE -ne 0) { throw 'docker save falhou' }
+$tamTar = (Get-Item $tar).Length
+Write-Host ("  tar : {0,8:N1} MB" -f ($tamTar / 1MB))
+
+Write-Host ''
+Write-Host '=== 2. Comprimir ===' -ForegroundColor Cyan
+# GZipStream do .NET: o `Compress-Archive` produz ZIP, que o `docker load` nao aceita.
+$entrada = [IO.File]::OpenRead($tar)
+$saida = [IO.File]::Create($gz)
+$gzip = New-Object IO.Compression.GZipStream($saida, [IO.Compression.CompressionLevel]::Fastest)
+try { $entrada.CopyTo($gzip) } finally { $gzip.Dispose(); $entrada.Dispose(); $saida.Dispose() }
+$tamGz = (Get-Item $gz).Length
+Write-Host ("  gz  : {0,8:N1} MB  ({1:N0}% do tar)" -f ($tamGz / 1MB), (100 * $tamGz / $tamTar))
+
+Write-Host ''
+Write-Host '=== 3. Enviar para a VM ===' -ForegroundColor Cyan
+Write-Host "  -> $RemoteTar"
+# O `cmd.exe` faz o redireccionamento binario; o PowerShell nao serve para isto.
+$linha = 'docker exec -i {0} ssh -i /root/.ssh/id_ed25519 -o BatchMode=yes -o LogLevel=ERROR {1}@{2} "cat > {3}" < "{4}"' -f `
+    $TunnelContainer, $SshUser, $SshHost, $RemoteTar, $gz
+cmd.exe /c $linha
+if ($LASTEXITCODE -ne 0) { throw 'envio falhou' }
+$tamVm = (Invoke-Vm "wc -c < $RemoteTar").Output.Trim()
+Write-Host ("  na VM: {0:N1} MB" -f ([double]$tamVm / 1MB))
+if ([double]$tamVm -ne $tamGz) {
+    throw "o ficheiro chegou incompleto: $tamVm bytes na VM, $tamGz no PC."
+}
+
+Write-Host ''
+Write-Host '=== 4. Carregar na VM ===' -ForegroundColor Cyan
+$r = Invoke-Vm "docker load -i $RemoteTar 2>&1"
+$r.Output -split "`n" | ForEach-Object { Write-Host "  $_" }
+if ($r.ExitCode -ne 0) { throw 'docker load falhou' }
+
+if (-not $Manter) {
+    Invoke-Vm "rm -f $RemoteTar" | Out-Null
+    Write-Host "  (tar temporario removido da VM)"
+}
+
+Write-Host ''
+Write-Host '=== 5. Confirmar ===' -ForegroundColor Cyan
+$r = Invoke-Vm "docker images --format '{{.Repository}}:{{.Tag}} {{.Size}}' | grep -F '$Imagem'"
+$r.Output -split "`n" | Where-Object { $_ } | ForEach-Object { Write-Host "  $_" }
+Write-Host ''
+Invoke-Vm 'df -h / | tail -1' | ForEach-Object { $_.Output -split "`n" | ForEach-Object { Write-Host "  $_" } }
+Write-Host ''
+
+Remove-Item $tar, $gz -Force -ErrorAction SilentlyContinue
+Write-Host 'Imagem disponivel na VM.' -ForegroundColor Green
+Write-Host ''
