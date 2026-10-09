@@ -3460,21 +3460,62 @@ function exportEntitiesExcel(companies: CompanySummary[], filename = "entidades"
 
 async function exportEntitiesPdf(element: HTMLElement | null, filename = "entidades") {
   if (!element) return;
-  const canvas = await html2canvas(element, {
-    backgroundColor: "#07151b",
-    scale: 2,
-    useCORS: true,
+  // Clone the element so we can sanitize CSS for html2canvas without affecting the UI.
+  const clone = element.cloneNode(true) as HTMLElement;
+  const wrapper = document.createElement("div");
+  wrapper.style.position = "fixed";
+  wrapper.style.left = "-9999px";
+  wrapper.style.top = "0";
+  wrapper.style.width = `${element.offsetWidth}px`;
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+
+  // html2canvas does not support oklab color-mix; replace any remaining instances.
+  const unsupported = wrapper.querySelectorAll("*");
+  unsupported.forEach((node) => {
+    const el = node as HTMLElement;
+    const styles = window.getComputedStyle(el);
+    Array.from(styles).forEach((prop) => {
+      const value = styles.getPropertyValue(prop);
+      if (value.includes("oklab") || value.includes("oklch")) {
+        el.style.setProperty(prop, "transparent", "important");
+      }
+    });
   });
-  const imgData = canvas.toDataURL("image/png");
-  const pdf = new jsPDF({ orientation: "landscape", unit: "px", format: [canvas.width, canvas.height] });
-  pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
-  pdf.save(`${filename}.pdf`);
+
+  try {
+    const canvas = await html2canvas(wrapper, {
+      backgroundColor: "#07151b",
+      scale: 2,
+      useCORS: true,
+      onclone: (clonedDoc) => {
+        clonedDoc.querySelectorAll("*").forEach((node) => {
+          const el = node as HTMLElement;
+          const styles = window.getComputedStyle(el);
+          Array.from(styles).forEach((prop) => {
+            const value = styles.getPropertyValue(prop);
+            if (value.includes("oklab") || value.includes("oklch")) {
+              el.style.setProperty(prop, "transparent", "important");
+            }
+          });
+        });
+      },
+    });
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF({ orientation: "landscape", unit: "px", format: [canvas.width, canvas.height] });
+    pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
+    pdf.save(`${filename}.pdf`);
+  } finally {
+    document.body.removeChild(wrapper);
+  }
 }
 
 function EntitiesSection({
   onEntity,
+  onContract,
 }: {
   onEntity: (_nif: string) => void;
+  onContract: (_id: string) => void;
 }) {
   const [q, setQ] = useState("");
   const [cae, setCae] = useState<string[]>([]);
@@ -3489,6 +3530,7 @@ function EntitiesSection({
   const [mapData, setMapData] = useState<ContractRegionalResponse | null>(null);
   const [mapLoading, setMapLoading] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
   const exportRef = useRef<HTMLDivElement | null>(null);
 
   const buildFilters = useCallback(
@@ -3695,9 +3737,24 @@ function EntitiesSection({
         </div>
       </Card>
 
+      {selectedRegion && (
+        <RegionContractsPanel
+          region={selectedRegion}
+          baseFilters={buildFilters()}
+          onClose={() => setSelectedRegion(null)}
+          onContract={onContract}
+          onEntity={onEntity}
+        />
+      )}
+
       <div ref={exportRef}>
         {viewMode === "map" ? (
-          <EntitiesMapPanel data={mapData} loading={mapLoading} error={mapError} />
+          <EntitiesMapPanel
+            data={mapData}
+            loading={mapLoading}
+            error={mapError}
+            onRegionContracts={(region) => setSelectedRegion(region)}
+          />
         ) : viewMode === "table" ? (
           <div className="overflow-x-auto rounded-2xl border border-white/10">
             <table className="w-full text-sm">
@@ -3833,15 +3890,18 @@ function EntitiesMapPanel({
   data,
   loading,
   error,
+  onRegionContracts,
 }: {
   data: ContractRegionalResponse | null;
   loading: boolean;
   error: string | null;
+  onRegionContracts?: (_region: string) => void;
 }) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ width: 800, height: 420 });
   const [zoom, setZoom] = useState(6);
   const [center, setCenter] = useState(MAP_CENTER);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; row: ContractRegionalRow } | null>(null);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -3855,6 +3915,17 @@ function EntitiesMapPanel({
     observer.observe(wrapper);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    document.addEventListener("click", close, { once: true });
+    document.addEventListener("keydown", (e) => e.key === "Escape" && close(), { once: true });
+    return () => {
+      document.removeEventListener("click", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [contextMenu]);
 
   const regions = useMemo(() => {
     const list = [...(data?.regions ?? [])].sort((a, b) => (b.total_value || 0) - (a.total_value || 0));
@@ -3915,6 +3986,13 @@ function EntitiesMapPanel({
     return 8 + 36 * Math.sqrt(ratio);
   };
 
+  const handleContextMenu = (e: React.MouseEvent, row: ContractRegionalRow) => {
+    e.preventDefault();
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setContextMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, row });
+  };
+
   if (loading) {
     return (
       <Card className="h-[420px] flex items-center justify-center">
@@ -3965,7 +4043,11 @@ function EntitiesMapPanel({
           </button>
         </div>
       </div>
-      <div ref={wrapperRef} className="relative h-[420px] w-full overflow-hidden bg-[#0a1f29]">
+      <div
+        ref={wrapperRef}
+        className="relative h-[420px] w-full overflow-hidden bg-[#0a1f29]"
+        onContextMenu={(e) => e.preventDefault()}
+      >
         {projection.tiles.map((tile) => (
           <img
             key={tile.key}
@@ -3984,9 +4066,11 @@ function EntitiesMapPanel({
             return (
               <div
                 key={row.key}
-                className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+                className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center cursor-context-menu"
                 style={{ left: point.left, top: point.top, zIndex: 10 }}
                 title={`${row.key}: ${full(row.count)} contratos · ${money(row.total_value)}`}
+                onContextMenu={(e) => handleContextMenu(e, row)}
+                data-region={row.key}
               >
                 <span
                   className="rounded-full border-2 border-teal-400/60 bg-teal-400/40 shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
@@ -4008,7 +4092,207 @@ function EntitiesMapPanel({
         <div className="absolute left-3 top-3 z-20 rounded-full bg-[#07151b]/85 px-3 py-1 text-[10px] text-muted-foreground">
           {placed.length} regiões · © OpenStreetMap
         </div>
+        {contextMenu && (
+          <div
+            className="absolute z-30 min-w-[180px] rounded-xl border border-white/10 bg-[#0b1215]/95 p-1 shadow-xl backdrop-blur-sm"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <div className="px-3 py-2 text-xs text-muted-foreground border-b border-white/10">
+              {contextMenu.row.key}
+              <div className="text-[10px]">
+                {full(contextMenu.row.count)} contratos · {money(contextMenu.row.total_value)}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                onRegionContracts?.(contextMenu.row.key);
+                setContextMenu(null);
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-left hover:bg-white/10"
+            >
+              <FileSearch size={14} className="text-teal-300" />
+              Ver contratos da região
+            </button>
+          </div>
+        )}
       </div>
+    </Card>
+  );
+}
+
+function RegionContractsPanel({
+  region,
+  baseFilters,
+  onClose,
+  onContract,
+  onEntity,
+}: {
+  region: string;
+  baseFilters: { q?: string; role?: "all" | "adjudicante" | "adjudicatario"; cae?: string[]; cpv?: string };
+  onClose: () => void;
+  onContract: (_id: string) => void;
+  onEntity: (_nif: string) => void;
+}) {
+  const [data, setData] = useState<ContractSearchResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [from, setFrom] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFrom(0);
+  }, [region, baseFilters.q, baseFilters.role, baseFilters.cae, baseFilters.cpv]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    searchContracts({
+      q: baseFilters.q,
+      region,
+      cpv_code: baseFilters.cpv,
+      size: 15,
+      from,
+      sort_by: "precoContratual",
+      sort_order: "desc",
+    })
+      .then((res) => {
+        if (!cancelled) setData(res);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(errMsg(err, "Erro ao carregar contratos"));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [region, baseFilters.q, baseFilters.role, baseFilters.cae, baseFilters.cpv, from]);
+
+  const contracts = data?.items ?? [];
+  const total = data?.total ?? 0;
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <MapPin size={16} className="text-teal-300" />
+          <div>
+            <h3 className="font-semibold">Contratos da região</h3>
+            <p className="text-xs text-muted-foreground">{region} · {full(total)} contratos</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg border border-white/10 bg-white/[0.04] p-1.5 text-muted-foreground hover:text-foreground"
+        >
+          <X size={14} />
+        </button>
+      </div>
+
+      {loading && contracts.length === 0 && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 size={24} className="animate-spin text-teal-300" />
+        </div>
+      )}
+
+      {error && <div className="px-4 py-6 text-center text-rose-300">{error}</div>}
+
+      {!loading && contracts.length === 0 && !error && (
+        <div className="px-4 py-6 text-center text-muted-foreground">Nenhum contrato encontrado para esta região.</div>
+      )}
+
+      {contracts.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-[#07151b]/95 text-left text-xs uppercase tracking-wider text-muted-foreground backdrop-blur-sm">
+              <tr className="border-b border-white/10">
+                <th className="px-4 py-3 font-medium">Nº Contrato</th>
+                <th className="px-4 py-3 font-medium">Objeto</th>
+                <th className="px-4 py-3 font-medium">Adjudicante</th>
+                <th className="px-4 py-3 font-medium">Adjudicatário</th>
+                <th className="px-4 py-3 font-medium">Data</th>
+                <th className="px-4 py-3 font-medium text-right">Valor (€)</th>
+                <th className="px-4 py-3 font-medium">Tipo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {contracts.map((c, idx) => {
+                const adjSource = nifFromParty(c.adjudicantes);
+                const adjTarget = nifFromParty(c.adjudicatarios);
+                return (
+                  <tr key={c.idcontrato || c.doc_id || idx} className="border-b border-white/5 hover:bg-white/[0.04]">
+                    <td className="px-4 py-3 font-medium text-teal-300">
+                      <button
+                        onClick={() => c.idcontrato && onContract(c.idcontrato)}
+                        className="hover:underline text-left"
+                      >
+                        {c.idcontrato || "—"}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 max-w-xs">
+                      <span className="line-clamp-2">{c.objectoContrato || "—"}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => adjSource && onEntity(adjSource)}
+                        className="text-left hover:text-teal-300 transition line-clamp-2"
+                        title={partyNames(c.adjudicantes)}
+                      >
+                        {partyNames(c.adjudicantes)}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => adjTarget && onEntity(adjTarget)}
+                        className="text-left hover:text-teal-300 transition line-clamp-2"
+                        title={partyNames(c.adjudicatarios)}
+                      >
+                        {partyNames(c.adjudicatarios)}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                      {fmtDate(c.dataPublicacao || c.dataCelebracaoContrato)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium tabular-nums">
+                      {money(c.precoContratual ?? c.PrecoTotalEfetivo)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge color="blue">{c.tipoContrato || "—"}</Badge>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {contracts.length > 0 && (
+        <div className="flex items-center justify-between px-4 py-3 text-sm text-muted-foreground">
+          <p>
+            Mostrando {from + 1}–{from + contracts.length} de {full(total)}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={from === 0}
+              onClick={() => setFrom((f) => Math.max(0, f - 15))}
+              className="px-3 py-1.5 rounded-lg glass-card disabled:opacity-40 hover:bg-white/5"
+            >
+              Anterior
+            </button>
+            <button
+              disabled={from + contracts.length >= total}
+              onClick={() => setFrom((f) => f + 15)}
+              className="px-3 py-1.5 rounded-lg glass-card disabled:opacity-40 hover:bg-white/5"
+            >
+              Próximo
+            </button>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
@@ -8984,7 +9268,7 @@ export default function EmpresasIQPage() {
       case "contracts":
         return <ContractsSection onContract={openContract} onEntity={openEntity} />;
       case "entities":
-        return <EntitiesSection onEntity={openEntity} />;
+        return <EntitiesSection onEntity={openEntity} onContract={openContract} />;
       case "graph":
         return <GraphSection onEntity={openEntity} onContract={openContract} onStudio={() => setSection("studio")} />;
       case "studio":
