@@ -264,6 +264,10 @@ _cache_perfis: Dict[str, Any] = {"marca": None, "dados": None}
 _cache_config: Dict[str, Any] = {"marca": None, "valores": None}
 #: Instante (monotónico) até ao qual a IA fica de fora, por ser demasiado lenta.
 _ia_bloqueada_ate: float = 0.0
+#: Instante (monotónico) até ao qual a pesquisa web fica de fora, por não responder.
+_pesquisa_bloqueada_ate: float = 0.0
+#: Quanto tempo se fica sem tentar a pesquisa depois de uma falha.
+PESQUISA_COOLDOWN = 300.0
 
 
 # ---------------------------------------------------------------------------
@@ -512,7 +516,15 @@ def _atributos(tag: str) -> Dict[str, str]:
 # Candidatos: pesquisa web e heurística
 # ---------------------------------------------------------------------------
 def _pesquisa_web(pergunta: str, quantos: int = 8) -> List[Dict[str, str]]:
-    """Pesquisa no mecânico web da plataforma (SearXNG e afins)."""
+    """Pesquisa no mécânico web da plataforma (SearXNG e afins).
+
+    Se o motor não responder, fica de fora uns minutos: sem isto, cada empresa
+    pagava três consultas a expirar (45 s) antes de se perceber que a pesquisa
+    estava em baixo.
+    """
+    global _pesquisa_bloqueada_ate
+    if time.monotonic() < _pesquisa_bloqueada_ate:
+        return []
     try:
         from api.tools import web_search
     except Exception:  # noqa: BLE001
@@ -521,6 +533,7 @@ def _pesquisa_web(pergunta: str, quantos: int = 8) -> List[Dict[str, str]]:
         resultados = web_search(pergunta, max_results=quantos) or []
     except Exception as exc:  # noqa: BLE001
         logger.info("Pesquisa web falhou (%s): %s", pergunta, exc)
+        _pesquisa_bloqueada_ate = time.monotonic() + PESQUISA_COOLDOWN
         return []
     limpos: List[Dict[str, str]] = []
     for item in resultados:
@@ -544,10 +557,10 @@ def _dominios_da_pesquisa(nome: str, pais: str, nif: Optional[str]) -> List[Dict
     """Resultados da pesquisa colapsados por domínio (o melhor de cada site)."""
     idioma = (PAISES.get(pais) or {}).get("idioma", "pt")
     perguntas = [f'"{nome}" site oficial', f'{nome} {idioma} site oficial empresa']
-    if nif:
-        perguntas.append(f'"{nome}" {nif}')
     vistos: Dict[str, Dict[str, str]] = {}
-    for pergunta in perguntas:
+    for indice, pergunta in enumerate(perguntas):
+        if indice and len(vistos) >= 5:
+            break
         for item in _pesquisa_web(pergunta, 8):
             host = _dominio(item["url"])
             if not host:
@@ -568,15 +581,21 @@ def _dominios_da_pesquisa(nome: str, pais: str, nif: Optional[str]) -> List[Dict
 
 
 def _candidatos_heuristica(nome: str, pais: str) -> List[Dict[str, str]]:
-    """Domínios prováveis a partir do nome (usados quando a pesquisa não ajuda)."""
+    """Domínios prováveis a partir do nome.
+
+    A ordem importa: a primeira palavra é, de longe, o melhor palpite
+    (`ROCHE FARMACÊUTICA E QUÍMICA` → `roche.pt`), seguida do nome todo sem
+    espaços e com hífenes, e por fim as iniciais (`MERCK SHARP & DOHME` → `msd`).
+    O domínio sem `www` vem primeiro porque é o que os sites institucionais
+    costumam usar (o `www` pode nem existir).
+    """
     palavras = palavras_chave(nome)
     if not palavras:
         return []
-    bases: List[str] = []
+    bases: List[str] = [palavras[0]]
     if len(palavras) >= 2:
         bases.append("".join(palavras[:3]))
         bases.append("-".join(palavras[:3]))
-    bases.append(palavras[0])
     if len(palavras) >= 3:
         bases.append("".join(p[0] for p in palavras[:4]))
     tld = (PAISES.get(pais) or {}).get("tld", "pt")
@@ -589,11 +608,10 @@ def _candidatos_heuristica(nome: str, pais: str) -> List[Dict[str, str]]:
             continue
         vistos.add(base)
         for sufixo in sufixos:
-            url = f"https://www.{base}.{sufixo}"
-            saida.append({"url": url, "titulo": "", "resumo": "", "origem": "heuristica"})
-            if len(saida) >= 6:
-                return saida
-    return saida
+            saida.append({"url": f"https://{base}.{sufixo}", "titulo": "", "resumo": "", "origem": "heuristica"})
+        for sufixo in sufixos:
+            saida.append({"url": f"https://www.{base}.{sufixo}", "titulo": "", "resumo": "", "origem": "heuristica"})
+    return saida[:8]
 
 
 # ---------------------------------------------------------------------------
@@ -667,21 +685,70 @@ def _sinal_pais(url: str, html: str, pais: str) -> float:
     return pontos
 
 
+#: Sinais de que o domínio não tem site em funcionamento (hospedagem suspensa,
+#: domínio à venda, parqueado). Sem isto, `unidade.pt/cgi-sys/suspendedpage.cgi`
+#: foi aceite como site de uma unidade de saúde.
+_SINAIS_PAGINA_MORTA = (
+    "suspendedpage",
+    "cgi-sys",
+    "account suspended",
+    "conta suspensa",
+    "this site is temporarily unavailable",
+    "site em manutencao",
+    "domain for sale",
+    "this domain is for sale",
+    "dominio a venda",
+    "domain parking",
+    "parked by",
+    "buy this domain",
+    "default web site page",
+    "apache2 debian default page",
+    "welcome to nginx",
+    "index of /",
+    "under construction",
+    "em construcao",
+)
+
+
+def _pagina_morta(url: str, html: str, texto: str) -> bool:
+    """A página existe mas não tem site lá dentro (domínio parqueado/suspenso)."""
+    alvo = f"{url.lower()} {texto[:1500]}"
+    if any(sinal in alvo for sinal in _SINAIS_PAGINA_MORTA):
+        return True
+    # Páginas de hospedagem costumam ser minúsculas e não ter marca nenhuma.
+    return len(texto) < 400 and not re.search(r"<h1", html or "", re.IGNORECASE)
+
+
 def _pontuar(url: str, html: str, nome: str, nif: Optional[str], *, origem: str, pais: str = "pt") -> float:
-    """Confiança (0 a 1) de que `url` é o site oficial da empresa."""
+    """Confiança (0 a 1) de que `url` é o site oficial da empresa.
+
+    A evidência mais forte é o **NIF na página**; a seguir vem o **nome no
+    domínio/título**. O nome que aparece só no corpo da página vale pouco: é o
+    caso típico das associações, diretórios e notícias que falam da empresa —
+    foi assim que o site de uma associação (`apecs.pt`) ganhou à Janssen e um
+    site brasileiro (`axyo.com.br`) ganhou à Roche. Sem uma segunda prova (título
+    ou domínio), o nome no texto não conta.
+    """
     if not html:
         return 0.0
     texto = slug(_texto_visivel(html))
     titulo = slug(_titulo_do_html(html))
     pontos = 0.0
     digitos_nif = _SO_DIGITOS.sub("", str(nif or ""))
+    nif_na_pagina = False
     if len(digitos_nif) >= 6:
         compacto = _SO_DIGITOS.sub(" ", html)
         if digitos_nif in compacto:
             pontos += 0.55
+            nif_na_pagina = True
         elif digitos_nif[:6] in compacto:
             pontos += 0.15
     palavras = palavras_chave(nome)
+    no_titulo = 0
+    base = _base_do_dominio(url)
+    marca = _marca(nome)
+    # Quanto o domínio se parece com o nome (0 a 1) — a prova estrutural.
+    parecenca = _parecenca(base, palavras)
     if palavras:
         no_titulo = sum(1 for p in palavras if p in titulo)
         no_texto = sum(1 for p in palavras if p in texto)
@@ -690,38 +757,66 @@ def _pontuar(url: str, html: str, nome: str, nif: Optional[str], *, origem: str,
         elif no_titulo >= 1:
             pontos += 0.22
         elif no_texto == len(palavras):
-            pontos += 0.22
+            # Nome todo no texto, mas fora do título e do domínio: só conta se o
+            # domínio der alguma confirmação (senão seria um terceiro a falar da
+            # empresa).
+            pontos += 0.22 if parecenca else 0.02
         elif no_texto >= max(1, len(palavras) // 2):
-            pontos += 0.12
-    base = _base_do_dominio(url)
-    marca = _marca(nome)
+            pontos += 0.12 if parecenca else 0.0
+        if no_titulo == 0 and not parecenca:
+            # Página de terceiros que apenas menciona a empresa.
+            pontos -= 0.12
     if base and marca:
         if base == marca:
-            pontos += 0.2
+            pontos += 0.35
         elif marca.startswith(base) or base.startswith(marca) or marca in base or base in marca:
-            pontos += 0.14
+            pontos += 0.24
         else:
-            distancia = _parecenca(base, palavras)
-            pontos += 0.14 * distancia
+            pontos += 0.22 * parecenca
     if _e_agregador(url):
         pontos -= 0.6
+    if _pagina_morta(url, html, texto):
+        # Domínio estacionado, conta suspensa ou página de venda de domínio.
+        pontos -= 0.9
     pontos += _sinal_pais(url, html, pais)
     if origem == "heuristica":
         pontos -= 0.03
     # Um site que só tem "resultados 1 de 10" ou está em construção não serve.
     if len(texto) < 120:
         pontos -= 0.15
+    # Um site que só tem "resultados 1 de 10" ou está em construção não serve.
+    if len(texto) < 120:
+        pontos -= 0.15
+    # Prova estrutural: o domínio tem de vir do nome, ou o nome completo tem de
+    # estar no título, ou o NIF tem de estar na página. Sem nenhuma das três, o
+    # teto fica abaixo do limiar de aceitação — é o que trava as páginas de
+    # terceiros que apenas mencionam a empresa (associações, notícias,
+    # diretórios que não estão na lista de agregadores).
+    corroborado = bool(parecenca) or (bool(palavras) and no_titulo >= len(palavras)) or nif_na_pagina
+    if not corroborado:
+        pontos = min(pontos, 0.25)
     return max(0.0, min(1.0, pontos))
 
 
 def _parecenca(base: str, palavras: Sequence[str]) -> float:
-    """0 a 1: quanto do domínio (sem hífens) vem das palavras do nome."""
+    """0 a 1: quanto do domínio (sem hífens) vem das palavras do nome.
+
+    Um nome inteiro dentro do domínio (`roche`, `gilead`) ou as **iniciais** das
+    palavras (`Merck Sharp & Dohme` → `msd`) são prova forte; só o arranque do
+    nome é prova fraca.
+    """
     if not base or not palavras:
         return 0.0
     marca = "".join(palavras)
+    iniciais = "".join(p[0] for p in palavras if p)
+    if base == iniciais:
+        return 1.0
+    if len(iniciais) >= 2 and base.startswith(iniciais):
+        # `MSD` dentro de `msdsaude`, `EDP` dentro de `edpcomercial`.
+        return 0.8
     for palavra in palavras:
         if len(palavra) >= 4 and palavra in base:
-            return 0.7
+            return 1.0
     if marca[:3] and marca[:3] in base:
         return 0.35
     return 0.0
@@ -1176,12 +1271,28 @@ def _processar(
 ) -> Dict[str, Any]:
     """Resolve site e logótipo de **uma** empresa (sem cache)."""
     cfg = config()
-    candidatos: List[Dict[str, str]] = []
+    da_pesquisa: List[Dict[str, str]] = []
     if usar_pesquisa and cfg.get("usar_pesquisa", True):
-        candidatos.extend(_dominios_da_pesquisa(nome, pais, nif))
-    confiaveis = [item for item in candidatos if not _e_agregador(item["url"])]
-    if not confiaveis:
-        candidatos.extend(_candidatos_heuristica(nome, pais))
+        da_pesquisa = _dominios_da_pesquisa(nome, pais, nif)
+    # A heurística do nome entra **sempre** e com dois lugares reservados: os
+    # resultados da pesquisa podem ser todos de terceiros que falam da empresa
+    # (associações, notícias, diretórios que não estão na lista de agregadores)
+    # e, sem isto, nunca chegava a ser testado o domínio óbvio — foi assim que a
+    # Roche ficou com um site brasileiro que a menciona. O total de páginas
+    # abertas por empresa mantém-se.
+    candidatos = [
+        *[item for item in da_pesquisa if not _e_agregador(item["url"])][:2],
+        *_candidatos_heuristica(nome, pais)[:3],
+        *da_pesquisa[:3],
+    ]
+    unicos: List[Dict[str, str]] = []
+    vistos: set[str] = set()
+    for item in candidatos:
+        if item["url"] in vistos:
+            continue
+        vistos.add(item["url"])
+        unicos.append(item)
+    candidatos = unicos
 
     avaliados = _avaliar_candidatos(candidatos, nome, nif, pais=pais)
 
@@ -1213,7 +1324,7 @@ def _processar(
                     escolhido["origem"] = "ia"
 
     # Só se aceita um site com alguma evidência: evitamos marcar o site errado.
-    if escolhido and escolhido["pontos"] < 0.22 and not (ia and ia.get("confianca", 0) >= 0.7):
+    if escolhido and escolhido["pontos"] < 0.3 and not (ia and ia.get("confianca", 0) >= 0.7):
         escolhido = None
 
     perfil: Dict[str, Any] = {

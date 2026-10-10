@@ -13,6 +13,8 @@ export type ContextMenuItem = {
   hint?: string;
   danger?: boolean;
   disabled?: boolean;
+  /** Opção que não se aplica nesta vista (não é desenhada). */
+  hidden?: boolean;
   onSelect: () => void;
 };
 
@@ -62,8 +64,9 @@ export function useContextMenu() {
 
 export function ContextMenu({ menu }: { menu: ContextMenuState }) {
   if (!menu) return null;
+  const itens = menu.items.filter((item) => !item.hidden);
   const largura = 300;
-  const altura = 60 + menu.items.length * 34;
+  const altura = 60 + itens.length * 34;
   return (
     <div
       role="menu"
@@ -80,7 +83,7 @@ export function ContextMenu({ menu }: { menu: ContextMenuState }) {
           <div className="my-1 h-px bg-white/10" />
         </>
       ) : null}
-      {menu.items.map((item) => (
+      {itens.map((item) => (
         <button
           key={item.id}
           type="button"

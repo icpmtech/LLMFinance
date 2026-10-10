@@ -40,5 +40,20 @@
 #   docker build -f Dockerfile.frontend.incremental --build-arg BASE=iq-os-frontend:latest -t iq-os-frontend:ontologia .
 ARG BASE=iq-os-frontend:antes-deep-search
 FROM ${BASE}
-
+# `rm -rf` antes do `COPY`, e nao um `COPY` sozinho.
+#
+# O `COPY` de uma pasta para outra que ja existe **sobrepoe** ficheiros com o
+# mesmo nome; nao apaga o que la estava. Como o Vite poe um hash de conteudo no
+# nome de cada bundle (`index-7LThi53Z.js`), o nome muda a cada build e o
+# anterior fica para tras.
+#
+# Medido depois de 15 deploys incrementais: **15 bundles `index-*.js` dentro da
+# imagem, contra 1 no `_frontend_dist`. A pagina era servida certa (o novo
+# `index.html` aponta para o novo bundle) mas a imagem engordava a cada deploy, e
+# ficava ambigua para quem a inspeccionasse -- "qual destes esta a ser servido?"
+#
+# O `COPY` leva so `_frontend_dist`, que o `19-deploy-codigo.ps1` reconstroi de
+# raiz antes de empacotar. Limpar primeiro torna a imagem funcao do que se
+# construiu agora, e nao da soma de tudo o que ja se construiu.
+RUN rm -rf /usr/share/nginx/html
 COPY _frontend_dist /usr/share/nginx/html

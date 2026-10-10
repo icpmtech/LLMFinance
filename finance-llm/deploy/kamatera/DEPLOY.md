@@ -46,8 +46,16 @@ RUN pip install --no-cache-dir "edge-tts>=6.1.0" "faster-whisper>=1.0.0"
 # Dockerfile.frontend.incremental
 ARG BASE=iq-os-frontend:antes-deep-search
 FROM ${BASE}
+RUN rm -rf /usr/share/nginx/html
 COPY _frontend_dist /usr/share/nginx/html
 ```
+
+O `rm -rf` antes do `COPY` **nao** e decorativo. O `COPY` de uma pasta para outra
+que ja existe sobrepoe os ficheiros com o mesmo nome mas nao apaga o resto, e o
+Vite poe um hash de conteudo no nome de cada bundle -- logo o nome muda a cada
+build e o anterior fica para tras. Depois de 15 deploys estavam **15 bundles
+dentro da imagem, contra 1 no `_frontend_dist`**. A pagina era sempre servida
+certa, mas a imagem engordava sem razao a cada publicacao.
 
 Assentam na imagem que **já está validada na VM** e substituem só o código. As
 versões de `pandas`, `transformers` e `numpy` ficam exactamente as que estavam a
@@ -129,10 +137,12 @@ de espera sem explicação.
 substitui. Ao fim de muitas dezenas de deploys a imagem fica maior do que
 precisa. Um rebuild completo de vez em quando resolve.
 
-**Um `COPY` de uma pasta para outra que já existe não apaga o que lá estava.**
-O `COPY _frontend_dist /usr/share/nginx/html` sobrepõe ficheiros com o mesmo
-nome, mas deixa os bundles antigos de builds anteriores dentro da imagem. Não
-parte nada (o `index.html` aponta para o novo), mas engorda.
+Medido: a imagem do frontend passou de **279 MB para 337 MB** em ~5 deploys
+(~11 MB por deploy), e a árvore visível tinha um só bundle — ou seja, o
+crescimento é das camadas, não dos ficheiros. O `rm -rf` que o
+`Dockerfile.frontend.incremental` faz corrige a árvore visível (15 bundles
+acumulados, antes), mas **não** impede este crescimento. Só um rebuild completo
+a partir de `Dockerfile.frontend` o reinicia.
 
 **A porta do backend é 8002, não 8000.** O contentor escuta na 8000, mas a VM
 publica-o em `127.0.0.1:8002` (herdado do `FINANCE_API_PORT` do `.env` do PC

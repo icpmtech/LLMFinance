@@ -1,21 +1,29 @@
 /**
- * **Benchmark do comprador** — `/benchmark/comprador`.
+ * **Grafo de relações do benchmark** — `/benchmark/comprador` e `/benchmark/vendedor`.
  *
- * A leitura de quem compra: à volta da entidade ficam os fornecedores do
- * segmento, com as **forças e fraquezas** de cada relação (dependência do
- * fornecedor face a este comprador, preço face à mediana do mercado, número de
- * clientes, CPV cobertos), o **segundo anel** de compradores que usam os mesmos
- * fornecedores e a **geografia** das compras.
+ * O mesmo desenho radial visto dos dois lados, com a prop `perspectiva`:
+ *
+ * - **comprador** (`/benchmark/comprador`) — a entidade compra: primeiro anel de
+ *   **fornecedores** (dependência desse fornecedor face a este comprador, preço
+ *   face à mediana, clientes que tem, CPV cobertos) e segundo anel de
+ *   **clientes em comum** (quem mais lhe compra);
+ * - **vendedor** (`/benchmark/vendedor`) — a entidade vende: primeiro anel de
+ *   **compradores** (peso de cada um no meu volume, a minha quota nas compras
+ *   dele, o meu preço face à mediana, quantos fornecedores lhe vendem) e segundo
+ *   anel de **concorrentes** que vendem a esses mesmos compradores.
  *
  * Três formas de olhar para os mesmos dados, todas navegáveis:
  *
- * - **grafo** radial (comprador → fornecedores → clientes comuns);
- * - **mapa OSM** com as regiões onde a compra acontece;
- * - **tabela** dos fornecedores, com os sinais escritos por extenso.
+ * - **grafo** radial (entidade → primeiro anel → segundo anel);
+ * - **mapa OSM** com as regiões onde a coisa acontece (compra ou venda);
+ * - **tabela** do primeiro anel, com os sinais escritos por extenso.
  *
- * Clique num nó/linha/região para ver os detalhes à direita; **botão direito**
- * abre o menu de contexto com as ações (benchmark da empresa, ficha, ontologia,
- * mapa de contratos, copiar identificador).
+ * Cada empresa aparece com o seu **site e logótipo** (`/empresas/perfil`), para
+ * se reconhecer a marca no grafo e nas listas. Clique num nó/linha/região para
+ * ver os detalhes à direita; **botão direito** abre o menu de contexto com as
+ * ações (benchmark da empresa, ficha, ontologia, mapa de contratos, copiar
+ * identificador). Os rótulos vêm do servidor (`labels`), para o mesmo componente
+ * servir as duas leituras.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -299,6 +307,18 @@ export default function BenchmarkBuyerPage({
     void navigator.clipboard?.writeText(texto);
   };
 
+  // Saltar para a mesma empresa lida do outro lado da mesa: quem vende vê-se
+  // como comprador (e vice-versa) com os mesmos filtros.
+  const alternarPerspetiva = () => {
+    const params = new URLSearchParams({ pais });
+    const nif = dados?.buyer.nif || comprador?.nif || "";
+    const nome = dados?.buyer.name || comprador?.name || "";
+    if (nif) params.set("nif", nif);
+    if (nome) params.set("name", nome);
+    if (cpv.trim()) params.set("cpv", cpv.trim());
+    window.location.assign(`${vendedor ? "/benchmark/comprador" : "/benchmark/vendedor"}?${params.toString()}`);
+  };
+
   const itensDoFornecedor = (fornecedor: BenchmarkBuyerSupplier): ContextMenuItem[] => [
     {
       id: "detalhes",
@@ -380,15 +400,14 @@ export default function BenchmarkBuyerPage({
     },
     {
       id: "contratos",
-      label: vendedor ? "Ver os contratos deste comprador neste CPV" : "Ver contratos deste comprador neste CPV",
+      label: "Ver contratos deste comprador neste CPV",
       icon: <FileText size={13} />,
       disabled: !cpv.trim(),
+      // Na página do vendedor o segmento é o meu: a leitura do comprador não
+      // faz sentido aqui, por isso a opção só aparece a quem compra.
+      hidden: vendedor,
       onSelect: () => {
         fechar();
-        if (vendedor) {
-          abrirBenchmarkDaEmpresa(dados?.buyer.nif, dados?.buyer.name, "adjudicatario");
-          return;
-        }
         abrirComprador(dados?.buyer.nif, dados?.buyer.name);
       },
     },
@@ -411,6 +430,14 @@ export default function BenchmarkBuyerPage({
               Atualizar
             </Button>
           ) : null}
+          <Button
+            variant="outline"
+            size="md"
+            icon={vendedor ? <ShoppingCart size={15} /> : <HandCoins size={15} />}
+            onClick={alternarPerspetiva}
+          >
+            {vendedor ? "Ver do lado de quem compra" : "Ver do lado de quem vende"}
+          </Button>
           {onSwitchView ? (
             <Button variant="outline" size="md" onClick={onSwitchView}>
               Fechar

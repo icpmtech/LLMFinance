@@ -28,7 +28,10 @@ export default function EmpresaLogo({
   titulo?: string;
 }) {
   const [falhou, setFalhou] = useState(false);
-  const fonte = urlLogoAbsoluto(logoUrl) || (nif ? `/api/empresas/perfil/${nif}/logo` : null);
+  // O URL vem já do perfil (a rota devolve 404 quando não há logótipo): não se
+  // adivinha `/empresas/perfil/<nif>/logo` a partir do NIF, para não encher a
+  // rede de pedidos que falham em cada linha da lista.
+  const fonte = urlLogoAbsoluto(logoUrl);
   const usarImagem = Boolean(fonte) && !falhou;
 
   // Nova empresa (ou novo URL) volta a tentar a imagem.

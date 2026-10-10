@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Search,
   Building2,
@@ -26,6 +26,8 @@ import {
   enrichCompany,
 } from "../api";
 import { CaeMultiSelect, CaeDescription } from "../components/CaeMultiSelect";
+import EmpresaLogo from "../components/benchmark/EmpresaLogo";
+import { siteDe, usePerfisEmpresas } from "../components/benchmark/usePerfisEmpresas";
 import type {
   EntityItem,
   EntityStats,
@@ -73,6 +75,8 @@ export function EntitiesSearchPage({ onSelectCompany, onSwitchDashboard }: Entit
   const [cpv, setCpv] = useState("");
   const [sortBy, setSortBy] = useState<EntitySortField>("total_value");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  /** Logótipo e site de cada empresa na lista (módulo `/empresas/perfil`). */
+  const [mostrarMarcas, setMostrarMarcas] = useState(true);
 
   // Sincronizar filtros com query string do URL (deep links).
   useEffect(() => {
@@ -220,6 +224,33 @@ export function EntitiesSearchPage({ onSelectCompany, onSwitchDashboard }: Entit
   }, [items.length, total, loading, loadingMore, doSearch]);
 
   const activeFilters = [country, onlyWithNif, role !== "all", minContracts, minValue, cae.length, cpv].filter(Boolean).length;
+
+  // Marcas das empresas listadas: o logótipo e o site oficial vêm do módulo
+  // `/empresas/perfil` (pesquisa web + IA + logótipo normalizado). A cache do
+  // servidor responde logo às que já são conhecidas; as restantes são
+  // resolvidas em lotes pequenos, por isso as imagens aparecem à medida que
+  // chegam em vez de bloquear a lista.
+  const alvosMarcas = useMemo(
+    () =>
+      items
+        .filter((item) => item.nif)
+        .map((item) => {
+          const pais = (item.country || "PT").slice(0, 2).toLowerCase();
+          return {
+            nif: item.nif as string,
+            nome: item.name,
+            pais: (pais === "es" || pais === "fr" ? pais : "pt") as "pt" | "es" | "fr",
+          };
+        }),
+    [items],
+  );
+  const {
+    perfis,
+    aResolver: marcasAResolver,
+    progresso: progressoMarcas,
+    erro: erroMarcas,
+    repetir: repetirMarcas,
+  } = usePerfisEmpresas(alvosMarcas, { ativo: mostrarMarcas });
 
   const clearFilters = () => {
     setQuery("");
@@ -469,6 +500,13 @@ export function EntitiesSearchPage({ onSelectCompany, onSwitchDashboard }: Entit
             <input type="checkbox" checked={onlyWithNif} onChange={(e) => setOnlyWithNif(e.target.checked)} />
             Apenas com NIF válido
           </label>
+          <label
+            style={{ fontSize: ".8rem", display: "flex", alignItems: "center", gap: ".4rem", alignSelf: "end", paddingBottom: ".45rem" }}
+            title="Mostrar o logótipo e o site oficial de cada empresa (identificados por pesquisa web + IA)"
+          >
+            <input type="checkbox" checked={mostrarMarcas} onChange={(e) => setMostrarMarcas(e.target.checked)} />
+            Logótipos e sites
+          </label>
           <button type="button" onClick={clearFilters} style={{ alignSelf: "end", padding: ".45rem .8rem", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", gap: ".35rem", justifyContent: "center" }}>
             <X size={14} />
             Limpar
@@ -495,9 +533,30 @@ export function EntitiesSearchPage({ onSelectCompany, onSwitchDashboard }: Entit
           {loading ? "A pesquisar…" : `${total.toLocaleString("pt-PT")} empresas`}
           {items.length > 0 && !loading && ` · a mostrar ${items.length}`}
         </span>
-        <span style={{ display: "flex", alignItems: "center", gap: ".3rem" }}>
-          <ArrowUpDown size={13} />
-          {SORT_OPTIONS.find((o) => o.value === sortBy)?.label} ({sortOrder === "desc" ? "↓" : "↑"})
+        <span style={{ display: "flex", alignItems: "center", gap: ".6rem" }}>
+          {mostrarMarcas && progressoMarcas.total > 0 ? (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: ".3rem", opacity: 0.9 }}>
+              {marcasAResolver > 0 ? (
+                <>
+                  <Loader2 size={12} className="spin" />
+                  a identificar marcas ({progressoMarcas.concluidos}/{progressoMarcas.total})
+                </>
+              ) : (
+                <>
+                  <Globe size={12} />
+                  marcas {Object.values(perfis).filter((p) => p.logo_url).length}/{progressoMarcas.total}
+                  <button type="button" onClick={repetirMarcas} style={{ padding: ".15rem .45rem", borderRadius: 6, cursor: "pointer", fontSize: ".75rem" }}>
+                    repetir
+                  </button>
+                </>
+              )}
+              {erroMarcas ? <span style={{ opacity: 0.7 }} title={erroMarcas}>· sem acesso à pesquisa</span> : null}
+            </span>
+          ) : null}
+          <span style={{ display: "flex", alignItems: "center", gap: ".3rem" }}>
+            <ArrowUpDown size={13} />
+            {SORT_OPTIONS.find((o) => o.value === sortBy)?.label} ({sortOrder === "desc" ? "↓" : "↑"})
+          </span>
         </span>
       </div>
 
@@ -518,9 +577,20 @@ export function EntitiesSearchPage({ onSelectCompany, onSwitchDashboard }: Entit
             const isOpen = expandedNif === key;
             const detail = item.nif ? details[item.nif] : undefined;
             const enrich = item.nif ? enrichResult[item.nif] : undefined;
+            const site = mostrarMarcas ? siteDe(perfis, { nif: item.nif, nome: item.name }) : null;
+            const perfil = item.nif ? perfis[item.nif] : undefined;
             return (
               <div key={key} style={{ border: "1px solid rgba(148,163,184,.25)", borderRadius: 10, overflow: "hidden" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: ".75rem", padding: ".7rem .85rem", flexWrap: "wrap" }}>
+                  {mostrarMarcas ? (
+                    <EmpresaLogo
+                      nome={item.name}
+                      nif={item.nif}
+                      logoUrl={perfil?.logo_url}
+                      size={38}
+                      titulo={site ? `${item.name} · ${site}` : item.name}
+                    />
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => toggleRow(item)}
@@ -547,6 +617,20 @@ export function EntitiesSearchPage({ onSelectCompany, onSwitchDashboard }: Entit
                           <CaeDescription code={item.cae_principal} className="opacity-75" />
                         </span>
                       )}
+                      {site ? (
+                        <a
+                          href={site}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(evento) => evento.stopPropagation()}
+                          title={`Site oficial: ${site}`}
+                          style={{ display: "inline-flex", alignItems: "center", gap: ".2rem", color: "inherit", textDecoration: "underline" }}
+                        >
+                          <Globe size={11} />
+                          {site.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}
+                        </a>
+                      ) : null}
+                      {mostrarMarcas && !site && item.nif && marcasAResolver > 0 ? <span style={{ opacity: 0.7 }}>· a procurar site…</span> : null}
                     </div>
                   </button>
                   <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
