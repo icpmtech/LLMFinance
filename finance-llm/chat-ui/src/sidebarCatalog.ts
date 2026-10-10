@@ -67,7 +67,7 @@ export const APP_MODULES: AppModule[] = [
     id: "contratos",
     label: "Contratos públicos",
     hint: "Pesquisa, análise, mapa e contratação ecológica",
-    ids: ["contracts-search", "contracts-dashboard", "contracts-eco", "contracts-map", "benchmark"],
+    ids: ["contracts-search", "contracts-dashboard", "contracts-eco", "contracts-map"],
   },
   {
     id: "contratos-es",
@@ -80,6 +80,12 @@ export const APP_MODULES: AppModule[] = [
     label: "Contratos de França",
     hint: "Données Essentielles de la Commande Publique (DECP)",
     ids: ["contratos-fr", "contratos-fr-dashboard", "contratos-fr-mapa"],
+  },
+  {
+    id: "benchmark",
+    label: "Benchmark",
+    hint: "Preço de referência, concorrência e oportunidades — Portugal, Espanha e França",
+    ids: ["benchmark", "benchmark-pt", "benchmark-es", "benchmark-fr"],
   },
   {
     id: "empresas",

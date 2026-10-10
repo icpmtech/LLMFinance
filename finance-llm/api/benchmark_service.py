@@ -32,21 +32,17 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from api.elasticsearch_client import (
-    CONTRACTS_INDEX,
     _cpv_description_from_hits,
-    _region_filter,
     _top_hit_name,
     get_es_client,
 )
+from api import benchmark_countries as bc
 
 logger = logging.getLogger(__name__)
 
 #: Papel da entidade **no contrato**: `adjudicatario` = vende (fornecedor);
 #: `adjudicante` = compra (entidade pública / comprador).
-ROLES = ("adjudicatario", "adjudicante")
-
-#: Caminho nested onde vive cada papel.
-_ROLE_PATH = {"adjudicante": "adjudicantes.parsed", "adjudicatario": "adjudicatarios.parsed"}
+ROLES = (bc.SUPPLIER, bc.BUYER)
 
 #: Quantos candidatos se recolhem em cada ranking (ordenado por valor).
 _CANDIDATES = 50
@@ -67,157 +63,50 @@ _CPV_SHOW = 8
 #: Tolerância do índice de preço para dizer «na linha do mercado».
 _PRICE_TOLERANCE = 0.1
 
-#: Timeout das pesquisas (o segmento sem CPV varre 2,2 M contratos).
+#: Timeout das pesquisas (o segmento sem CPV varre milhões de contratos).
 _REQUEST_TIMEOUT = 120
 
 
 def _counterpart_role(role: str) -> str:
     """O papel da contraparte (quem está do outro lado do contrato)."""
-    return "adjudicante" if role == "adjudicatario" else "adjudicatario"
-
-
-def _cpv_filter(cpv_code: Optional[str]) -> Optional[Dict[str, Any]]:
-    """Filtro pelo CPV (prefixo: `90511000` casa `90511000-2`)."""
-    code = (cpv_code or "").strip()
-    if not code:
-        return None
-    return {"nested": {"path": "cpv", "query": {"prefix": {"cpv.code": code}}}}
-
-
-def _entity_filter(
-    role: str,
-    nif: Optional[str] = None,
-    name: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Filtro nested que identifica a entidade no seu papel (por NIF ou nome)."""
-    path = _ROLE_PATH[role]
-    code = (nif or "").strip()
-    if code:
-        query: Dict[str, Any] = {"term": {f"{path}.nif": code}}
-    else:
-        query = {"match": {f"{path}.nome": (name or "").strip()}}
-    return {"nested": {"path": path, "query": query}}
+    return bc.BUYER if role == bc.SUPPLIER else bc.SUPPLIER
 
 
 def _segment_filters(
+    country: Optional[str],
     cpv_code: Optional[str],
     year_from: Optional[int],
     year_to: Optional[int],
     region: Optional[str],
 ) -> List[Dict[str, Any]]:
-    """Filtros do segmento de mercado (CPV + anos + região)."""
-    filters: List[Dict[str, Any]] = []
-    cpv = _cpv_filter(cpv_code)
+    """Filtros do segmento de mercado (CPV + anos + região), no dialeto do país."""
+    filtros: List[Dict[str, Any]] = []
+    cpv = bc.cpv_filter(country, cpv_code)
     if cpv:
-        filters.append(cpv)
-    year_range: Dict[str, Any] = {}
-    if year_from is not None:
-        year_range["gte"] = int(year_from)
-    if year_to is not None:
-        year_range["lte"] = int(year_to)
-    if year_range:
-        filters.append({"range": {"Ano": year_range}})
-    if region:
-        region_filter = _region_filter(region)
-        if region_filter:
-            filters.append(region_filter)
-    return filters
+        filtros.append(cpv)
+    anos = bc.year_filter(country, year_from, year_to)
+    if anos:
+        filtros.append(anos)
+    regiao = bc.region_filter(country, region)
+    if regiao:
+        filtros.append(regiao)
+    return filtros
 
 
-def _role_rank_agg(path: str, size: int) -> Dict[str, Any]:
-    """Nested `terms` por NIF de um papel, ordenado pelo valor somado.
-
-    A ordenação usa o caminho `value>sum` (métrica dentro de `reverse_nested`),
-    pelo que o ranking é por **valor** e não por nº de contratos.
-    """
-    return {
-        "nested": {"path": path},
-        "aggs": {
-            "top": {
-                "terms": {
-                    "field": f"{path}.nif",
-                    "size": size,
-                    "order": {"value>sum": "desc"},
-                },
-                "aggs": {
-                    "name": {"top_hits": {"size": 1, "_source": True}},
-                    "value": {
-                        "reverse_nested": {},
-                        "aggs": {
-                            "sum": {"sum": {"field": "precoContratual"}},
-                            "last": {"max": {"field": "dataCelebracaoContrato"}},
-                        },
-                    },
-                },
-            }
-        },
-    }
+def _rows(
+    agg: Optional[Dict[str, Any]],
+    top: int,
+    total_value: float,
+    country: Optional[str] = "pt",
+    role: str = bc.SUPPLIER,
+) -> List[Dict[str, Any]]:
+    """Linhas de um ranking de entidades (nested em PT/FR, plano em ES)."""
+    return bc.rank_rows(country, role, agg, top, total_value)
 
 
-def _rows(agg: Optional[Dict[str, Any]], top: int, total_value: float) -> List[Dict[str, Any]]:
-    """Converte os buckets de um ranking em linhas ordenadas por valor."""
-    buckets = (((agg or {}).get("top") or {}).get("buckets")) or []
-    rows: List[Dict[str, Any]] = []
-    for bucket in buckets:
-        key = bucket.get("key")
-        if not key:
-            continue
-        value_bucket = bucket.get("value") or {}
-        value = (value_bucket.get("sum") or {}).get("value")
-        last_bucket = value_bucket.get("last") or {}
-        rows.append(
-            {
-                "nif": str(key),
-                "name": _top_hit_name(bucket.get("name")) or str(key),
-                "count": int(bucket.get("doc_count") or 0),
-                "value": round(float(value), 2) if value is not None else None,
-                "last_date": last_bucket.get("value_as_string") or None,
-            }
-        )
-    rows.sort(key=lambda row: (row.get("value") or 0.0, row.get("count") or 0), reverse=True)
-    for index, row in enumerate(rows):
-        row["rank"] = index + 1
-        row["share_pct"] = (
-            round(100.0 * (row.get("value") or 0.0) / total_value, 2) if total_value else None
-        )
-    return rows[:top]
-
-
-def _entity_cpv_agg(size: int) -> Dict[str, Any]:
-    """Nested `terms` por código CPV, com descrição legível e valor somado."""
-    return {
-        "nested": {"path": "cpv"},
-        "aggs": {
-            "top": {
-                "terms": {"field": "cpv.code", "size": size, "order": {"_count": "desc"}},
-                "aggs": {
-                    "description": {"top_hits": {"size": 1, "_source": True}},
-                    "value": {
-                        "reverse_nested": {},
-                        "aggs": {"sum": {"sum": {"field": "precoContratual"}}},
-                    },
-                },
-            }
-        },
-    }
-
-
-def _cpv_rows(agg: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Converte os buckets de um perfil de CPV em linhas `{code, description, count, value}`."""
-    rows: List[Dict[str, Any]] = []
-    for item in (((agg or {}).get("top") or {}).get("buckets")) or []:
-        value = (((item.get("value") or {}).get("sum")) or {}).get("value")
-        rows.append(
-            {
-                "code": str(item.get("key")),
-                "description": _cpv_description_from_hits(item.get("description"), item.get("key")),
-                "count": int(item.get("doc_count") or 0),
-                "value": round(float(value), 2) if value is not None else None,
-            }
-        )
-    return rows
-
-
+def _entity_cpv_agg(country: Optional[str], size: int) -> Dict[str, Any]:
+    """Perfil de CPV de uma entidade (nested `terms`, com descrição e valor)."""
+    return bc.cpv_agg(country, size)
 def _stats(agg: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """`count/sum/avg/min/max` de uma agregação `stats`, arredondada."""
     data = agg or {}
@@ -244,38 +133,13 @@ def _cardinality(agg: Optional[Dict[str, Any]]) -> int:
     return int((((agg or {}).get("value")) or {}).get("value") or 0)
 
 
-def _entity_hit_name(agg: Optional[Dict[str, Any]], role_path: str) -> str:
+def _entity_hit_name(agg: Optional[Dict[str, Any]], country: Optional[str], role: str) -> str:
     """Nome da entidade a partir de `top_hits` sobre o documento do contrato."""
     hits = (((agg or {}).get("hits")) or {}).get("hits") or []
     for hit in hits:
-        nome = _party_name(hit.get("_source"), role_path)
+        nome = bc.nome_da_entidade(hit.get("_source"), country, role)
         if nome:
             return nome
-    return ""
-
-
-def _party_name(source: Optional[Dict[str, Any]], role_path: str) -> str:
-    """Nome da entidade no seu papel, lido do documento do contrato.
-
-    Os `top_hits` sobre o documento pai trazem o `_source` completo, onde a parte
-    vive em `adjudicantes`/`adjudicatarios` → `parsed` → `{nif, nome}`.
-    """
-    root = role_path.split(".")[0]
-    parties = (source or {}).get(root)
-    if isinstance(parties, dict):
-        parties = [parties]
-    if not isinstance(parties, list):
-        return ""
-    for party in parties:
-        parsed = party.get("parsed") if isinstance(party, dict) else None
-        if isinstance(parsed, dict):
-            nome = parsed.get("nome")
-            if nome:
-                return str(nome).strip()
-        elif isinstance(parsed, list):
-            for item in parsed:
-                if isinstance(item, dict) and item.get("nome"):
-                    return str(item["nome"]).strip()
     return ""
 
 
@@ -284,6 +148,7 @@ def benchmark_entity(
     nif: Optional[str] = None,
     name: Optional[str] = None,
     role: str = "adjudicatario",
+    country: str = "pt",
     cpv_code: Optional[str] = None,
     year_from: Optional[int] = None,
     year_to: Optional[int] = None,
@@ -291,7 +156,10 @@ def benchmark_entity(
     top: int = 12,
     es: Any = None,
 ) -> Dict[str, Any]:
-    """Benchmark de preços, concorrência e oportunidades de uma entidade + CPV."""
+    """Benchmark de preços, concorrência e oportunidades de uma entidade + CPV.
+
+    `country` escolhe o índice e o dialeto dos campos (`pt`, `es`, `fr`).
+    """
     role = role if role in ROLES else "adjudicatario"
     if not (nif or (name or "").strip()):
         return {"error": "Indique a entidade (NIF ou nome)."}
@@ -300,93 +168,75 @@ def benchmark_entity(
     if not client:
         return {"error": "Elasticsearch indisponível"}
 
-    entity_role_path = _ROLE_PATH[role]
-    counterpart_path = _ROLE_PATH[_counterpart_role(role)]
-    entity_filter = _entity_filter(role, nif=nif, name=name)
-    filters = _segment_filters(cpv_code, year_from, year_to, region)
+    country = bc.country_key(country)
+    dialeto = bc.dialect(country)
+    counterpart_role = _counterpart_role(role)
+    entity_filter = bc.entity_filter(country, role, nif=nif, name=name)
+    filters = _segment_filters(country, cpv_code, year_from, year_to, region)
     query: Dict[str, Any] = {"bool": {"filter": filters}} if filters else {"match_all": {}}
 
     top = max(1, min(int(top or 12), 50))
     candidates = max(_CANDIDATES, top)
 
-    positive_price = {"range": {"precoContratual": {"gt": 0}}}
+    valor_campo = dialeto["valor_campo"]
+    # Só valores utilizáveis: positivos e abaixo do teto de sanidade do país.
+    positivo = {"bool": {"filter": bc.value_filters(country)}}
+    recente = dialeto["recent"]
 
     body: Dict[str, Any] = {
         "size": 0,
         "track_total_hits": True,
         "query": query,
         "aggs": {
-            # --- preço de referência do mercado (só valores positivos) ---
-            "market_value": {"stats": {"field": "precoContratual"}},
+            # --- preço de referência do mercado (só valores utilizáveis) ---
+            "market_value": {"stats": {"field": valor_campo}},
             "market_priced": {
-                "filter": positive_price,
+                "filter": positivo,
                 "aggs": {
-                    "stats": {"stats": {"field": "precoContratual"}},
-                    "percentiles": {"percentiles": {"field": "precoContratual", "percents": _PERCENTS}},
+                    "stats": {"stats": {"field": valor_campo}},
+                    "percentiles": {"percentiles": {"field": valor_campo, "percents": _PERCENTS}},
                 },
             },
             # --- dimensão do mercado ---
-            "market_peers": {
-                "nested": {"path": entity_role_path},
-                "aggs": {"value": {"cardinality": {"field": f"{entity_role_path}.nif"}}},
-            },
-            "market_counterparts": {
-                "nested": {"path": counterpart_path},
-                "aggs": {"value": {"cardinality": {"field": f"{counterpart_path}.nif"}}},
-            },
+            "market_peers": bc.cardinality_agg(country, role),
+            "market_counterparts": bc.cardinality_agg(country, counterpart_role),
             # --- concorrência: pares (mesmo papel) por valor contratado ---
-            "peers": _role_rank_agg(entity_role_path, candidates),
+            "peers": bc.rank_agg(country, role, candidates),
             # --- mercado: contrapartes mais fortes do segmento ---
-            "counterparts": _role_rank_agg(counterpart_path, max(top * 2, 40)),
+            "counterparts": bc.rank_agg(country, counterpart_role, max(top * 2, 40)),
             # --- a empresa no segmento ---
             "entity": {
                 "filter": entity_filter,
                 "aggs": {
                     "name": {"top_hits": {"size": 1, "_source": True}},
-                    "stats": {"stats": {"field": "precoContratual"}},
+                    "stats": {"stats": {"field": valor_campo}},
                     "priced": {
-                        "filter": positive_price,
+                        "filter": positivo,
                         "aggs": {
-                            "percentiles": {
-                                "percentiles": {"field": "precoContratual", "percents": [25, 50, 75]}
-                            }
+                            "percentiles": {"percentiles": {"field": valor_campo, "percents": [25, 50, 75]}}
                         },
                     },
-                    "last": {"max": {"field": "dataCelebracaoContrato"}},
+                    "last": {"max": {"field": dialeto["data"]}},
                     "by_year": {
-                        "terms": {"field": "Ano", "size": 40, "order": {"_key": "desc"}},
-                        "aggs": {"value": {"sum": {"field": "precoContratual"}}},
+                        "terms": {"field": dialeto["ano"], "size": 40, "order": {"_key": "desc"}},
+                        "aggs": {"value": bc.value_sum(country)},
                     },
-                    "cpv": {
-                        "nested": {"path": "cpv"},
-                        "aggs": {
-                            "top": {
-                                "terms": {"field": "cpv.code", "size": 12, "order": {"_count": "desc"}},
-                                "aggs": {
-                                    "description": {"top_hits": {"size": 1, "_source": True}},
-                                    "value": {
-                                        "reverse_nested": {},
-                                        "aggs": {"sum": {"sum": {"field": "precoContratual"}}},
-                                    },
-                                },
-                            }
-                        },
-                    },
+                    "cpv": bc.cpv_agg(country, 12),
                     # Historial: contrapartes com quem a empresa já contratou neste segmento.
-                    "counterparts": _role_rank_agg(counterpart_path, max(top * 2, 40)),
+                    "counterparts": bc.rank_agg(country, counterpart_role, max(top * 2, 40)),
                     "recent": {
                         "top_hits": {
                             "size": 8,
-                            "sort": [{"dataCelebracaoContrato": {"order": "desc", "missing": "_last"}}],
+                            "sort": [{recente["data"]: {"order": "desc", "missing": "_last"}}],
                             "_source": [
-                                "idcontrato",
-                                "objectoContrato",
-                                "precoContratual",
-                                "dataCelebracaoContrato",
-                                "dataPublicacao",
-                                "tipoprocedimento",
-                                "adjudicantes",
-                                "adjudicatarios",
+                                recente["id"],
+                                recente["objeto"],
+                                recente["valor"],
+                                recente["data"],
+                                recente["data2"],
+                                recente["proc"],
+                                bc.party(country, role)["nested"].split(".")[0] if bc.is_nested(country, role) else bc.party(country, role)["nome"],
+                                bc.party(country, counterpart_role)["nested"].split(".")[0] if bc.is_nested(country, counterpart_role) else bc.party(country, counterpart_role)["nome"],
                             ],
                         }
                     },
@@ -395,15 +245,15 @@ def benchmark_entity(
             # --- oportunidades: contrapartes do segmento que a empresa nunca serviu ---
             "opportunities": {
                 "filter": {"bool": {"must_not": [entity_filter]}},
-                "aggs": {"top": _role_rank_agg(counterpart_path, max(top * 2, 40))},
+                "aggs": {"rank": bc.rank_agg(country, counterpart_role, max(top * 2, 40))},
             },
         },
     }
 
     try:
-        resp = client.search(index=CONTRACTS_INDEX, body=body)
+        resp = client.search(index=dialeto["index"], body=body)
     except Exception as exc:  # pragma: no cover - erro de cluster
-        logger.warning("Benchmark falhou: %s", exc)
+        logger.warning("Benchmark falhou (%s): %s", country, exc)
         return {"error": str(exc)}
 
     aggs = resp.get("aggregations") or {}
@@ -415,14 +265,10 @@ def benchmark_entity(
     entity_agg = aggs.get("entity") or {}
     entity_stats = _stats(entity_agg.get("stats"))
     entity_priced_pct = _percentiles((entity_agg.get("priced") or {}).get("percentiles"))
-    entity_name = (
-        _entity_hit_name(entity_agg.get("name"), entity_role_path)
-        or _entity_hit_name(entity_agg.get("name"), counterpart_path)
-        or (name or "")
-    )
+    entity_name = _entity_hit_name(entity_agg.get("name"), country, role) or (name or "")
     entity_total_value = entity_stats.get("sum") or 0.0
 
-    peers = _rows(aggs.get("peers"), candidates, market_total_value)
+    peers = _rows(aggs.get("peers"), candidates, market_total_value, country, role)
     entity_nif = (nif or "").strip()
     entity_rank: Optional[int] = None
     if entity_nif:
@@ -432,19 +278,26 @@ def benchmark_entity(
                 break
     peer_rows = peers[:top]
 
-    counterparts = _rows(aggs.get("counterparts"), top, market_total_value)
-    history = _rows(entity_agg.get("counterparts"), top, entity_total_value)
+    counterparts = _rows(aggs.get("counterparts"), top, market_total_value, country, counterpart_role)
+    history = _rows(entity_agg.get("counterparts"), top, entity_total_value, country, counterpart_role)
     known_nifs = {row["nif"] for row in history}
 
-    roles_label = "vende (adjudicatário)" if role == "adjudicatario" else "compra (adjudicante)"
+    vende = role == bc.SUPPLIER
+    roles_label = f"vende ({bc.ROLE_LABELS[country][bc.SUPPLIER]})" if vende else f"compra ({bc.ROLE_LABELS[country][bc.BUYER]})"
     why_opportunity = (
         "Compra este CPV e nunca contratou com a empresa"
-        if role == "adjudicatario"
+        if vende
         else "Vende este CPV e nunca contratou com a empresa"
     )
     opportunities = [
         {**row, "why": why_opportunity}
-        for row in _rows((aggs.get("opportunities") or {}).get("top"), max(top * 2, 40), market_total_value)
+        for row in _rows(
+            (aggs.get("opportunities") or {}).get("rank"),
+            max(top * 2, 40),
+            market_total_value,
+            country,
+            counterpart_role,
+        )
         if row["nif"] not in known_nifs and row["nif"] != entity_nif
     ][:top]
 
@@ -463,17 +316,7 @@ def benchmark_entity(
     if market_total_value:
         value_share = round(100.0 * entity_total_value / market_total_value, 2)
 
-    cpv_rows: List[Dict[str, Any]] = []
-    for bucket in (((entity_agg.get("cpv") or {}).get("top") or {}).get("buckets")) or []:
-        value = (((bucket.get("value") or {}).get("sum")) or {}).get("value")
-        cpv_rows.append(
-            {
-                "code": str(bucket.get("key")),
-                "description": _cpv_description_from_hits(bucket.get("description"), bucket.get("key")),
-                "count": int(bucket.get("doc_count") or 0),
-                "value": round(float(value), 2) if value is not None else None,
-            }
-        )
+    cpv_rows = bc.cpv_rows(country, entity_agg.get("cpv"))
 
     by_year = [
         {
@@ -489,21 +332,28 @@ def benchmark_entity(
         source = hit.get("_source") or {}
         recent.append(
             {
-                "idcontrato": source.get("idcontrato"),
-                "objecto": source.get("objectoContrato"),
-                "value": source.get("precoContratual"),
-                "date": source.get("dataCelebracaoContrato") or source.get("dataPublicacao"),
-                "counterpart": _hit_counterpart(source, counterpart_path),
+                "idcontrato": source.get(recente["id"]),
+                "objecto": source.get(recente["objeto"]),
+                "value": source.get(recente["valor"]),
+                "date": source.get(recente["data"]) or source.get(recente["data2"]),
+                "procedure": source.get(recente["proc"]),
+                "counterpart": bc.nome_da_entidade(source, country, counterpart_role),
             }
         )
 
     notes: List[str] = []
+    notes.append(f"País: {dialeto['label']} (índice `{dialeto['index']}`).")
     if cpv_code:
         notes.append(f"Segmento: contratos com CPV {cpv_code}.")
     else:
         notes.append("Sem CPV selecionado: o preço de referência refere-se ao total do mercado filtrado.")
     notes.append("Percentis aproximados (TDigest do Elasticsearch) sobre valores positivos.")
     notes.append("Os rankings são por valor contratual; as listas mostram as maiores posições do segmento.")
+    if country == "fr":
+        notes.append(
+            "Em França os compradores são identificados pelo SIRET (o campo do nome está vazio nos dados) "
+            "e os titulares pelo par `titulaires.id`/`titulaires.nom`."
+        )
     if entity_nif and entity_rank is None:
         notes.append(
             f"A empresa não está entre as {candidates} entidades de maior valor no segmento "
@@ -514,6 +364,8 @@ def benchmark_entity(
 
     return {
         "role": role,
+        "country": country,
+        "country_label": dialeto["label"],
         "entity": {
             "nif": entity_nif or None,
             "name": entity_name,
@@ -546,8 +398,8 @@ def benchmark_entity(
         },
         "market": {
             "contracts": ((resp.get("hits") or {}).get("total") or {}).get("value", 0),
-            "peers": _cardinality(aggs.get("market_peers")),
-            "counterparts": _cardinality(aggs.get("market_counterparts")),
+            "peers": bc.cardinality_value(aggs.get("market_peers")),
+            "counterparts": bc.cardinality_value(aggs.get("market_counterparts")),
         },
         "competitors": peer_rows,
         "counterparties": counterparts,
@@ -555,26 +407,6 @@ def benchmark_entity(
         "opportunities": opportunities,
         "notes": notes,
     }
-
-
-def _hit_counterpart(source: Dict[str, Any], counterpart_path: str) -> Optional[str]:
-    """Nome da contraparte de um contrato (para o historial recente)."""
-    root = counterpart_path.split(".")[0]
-    parties = source.get(root)
-    if isinstance(parties, dict):
-        parties = [parties]
-    if not isinstance(parties, list):
-        return None
-    names: List[str] = []
-    for party in parties:
-        parsed = party.get("parsed") if isinstance(party, dict) else None
-        if isinstance(parsed, dict):
-            name = parsed.get("nome")
-            if name:
-                names.append(str(name))
-        elif isinstance(parsed, list):
-            names.extend([str(item.get("nome")) for item in parsed if isinstance(item, dict) and item.get("nome")])
-    return "; ".join(names) or None
 
 
 def _price_position(index: Optional[float]) -> Optional[str]:
@@ -592,6 +424,7 @@ def benchmark_compare(
     *,
     entities: List[Dict[str, Any]],
     role: str = "adjudicatario",
+    country: str = "pt",
     cpv_code: Optional[str] = None,
     year_from: Optional[int] = None,
     year_to: Optional[int] = None,
@@ -604,8 +437,11 @@ def benchmark_compare(
     Uma só pesquisa: o preço de referência do mercado é calculado uma vez e cada
     entidade é um `filter` com nome próprio (`e0`…`e9`) dentro de uma agregação
     `filters`, o que dá a cada uma os seus indicadores sem repetir o mercado.
+    `country` escolhe o índice e o dialeto dos campos.
     """
     role = role if role in ROLES else "adjudicatario"
+    country = bc.country_key(country)
+    dialeto = bc.dialect(country)
     limpos: List[Dict[str, Any]] = []
     for item in entities or []:
         if not isinstance(item, dict):
@@ -623,17 +459,17 @@ def benchmark_compare(
     if not client:
         return {"error": "Elasticsearch indisponível"}
 
-    role_path = _ROLE_PATH[role]
-    counterpart_path = _ROLE_PATH[_counterpart_role(role)]
-    filters = _segment_filters(cpv_code, year_from, year_to, region)
+    counterpart_role = _counterpart_role(role)
+    filters = _segment_filters(country, cpv_code, year_from, year_to, region)
     query: Dict[str, Any] = {"bool": {"filter": filters}} if filters else {"match_all": {}}
 
     top = max(1, min(int(top or 10), 50))
-    positive_price = {"range": {"precoContratual": {"gt": 0}}}
+    valor_campo = dialeto["valor_campo"]
+    positivo = {"bool": {"filter": bc.value_filters(country)}}
 
     chaves = [f"e{index}" for index in range(len(limpos))]
     named_filters = {
-        chave: _entity_filter(role, nif=entidade.get("nif"), name=entidade.get("name"))
+        chave: bc.entity_filter(country, role, nif=entidade.get("nif"), name=entidade.get("name"))
         for chave, entidade in zip(chaves, limpos)
     }
 
@@ -642,48 +478,42 @@ def benchmark_compare(
         "track_total_hits": True,
         "query": query,
         "aggs": {
-            "market_value": {"stats": {"field": "precoContratual"}},
+            "market_value": {"stats": {"field": valor_campo}},
             "market_priced": {
-                "filter": positive_price,
+                "filter": positivo,
                 "aggs": {
-                    "stats": {"stats": {"field": "precoContratual"}},
-                    "percentiles": {"percentiles": {"field": "precoContratual", "percents": [25, 50, 75]}},
+                    "stats": {"stats": {"field": valor_campo}},
+                    "percentiles": {"percentiles": {"field": valor_campo, "percents": [25, 50, 75]}},
                 },
             },
-            "market_peers": {
-                "nested": {"path": role_path},
-                "aggs": {"value": {"cardinality": {"field": f"{role_path}.nif"}}},
-            },
+            "market_peers": bc.cardinality_agg(country, role),
             # Ranking do segmento: dá a posição de cada empresa comparada.
-            "peers": _role_rank_agg(role_path, _CANDIDATES),
+            "peers": bc.rank_agg(country, role, _CANDIDATES),
             # Uma «coluna» por entidade, com os indicadores do segmento.
             "entities": {
                 "filters": {"filters": named_filters, "other_bucket": False},
                 "aggs": {
                     "name": {"top_hits": {"size": 1, "_source": True}},
-                    "stats": {"stats": {"field": "precoContratual"}},
+                    "stats": {"stats": {"field": valor_campo}},
                     "priced": {
-                        "filter": positive_price,
-                        "aggs": {"percentiles": {"percentiles": {"field": "precoContratual", "percents": [25, 50, 75]}}},
+                        "filter": positivo,
+                        "aggs": {"percentiles": {"percentiles": {"field": valor_campo, "percents": [25, 50, 75]}}},
                     },
-                    "last": {"max": {"field": "dataCelebracaoContrato"}},
+                    "last": {"max": {"field": dialeto["data"]}},
                     # CPV em que cada empresa atua dentro do segmento.
-                    "top_cpv": _entity_cpv_agg(_CPV_SHOW),
+                    "top_cpv": bc.cpv_agg(country, _CPV_SHOW),
                     # Quem compra a cada empresa (contrapartes do segmento).
-                    "buyers": _role_rank_agg(counterpart_path, _BUYERS_CANDIDATES),
-                    "buyers_total": {
-                        "nested": {"path": counterpart_path},
-                        "aggs": {"value": {"cardinality": {"field": f"{counterpart_path}.nif"}}},
-                    },
+                    "buyers": bc.rank_agg(country, counterpart_role, _BUYERS_CANDIDATES),
+                    "buyers_total": bc.cardinality_agg(country, counterpart_role),
                 },
             },
         },
     }
 
     try:
-        resp = client.search(index=CONTRACTS_INDEX, body=body)
+        resp = client.search(index=dialeto["index"], body=body)
     except Exception as exc:  # pragma: no cover - erro de cluster
-        logger.warning("Comparação de benchmark falhou: %s", exc)
+        logger.warning("Comparação de benchmark falhou (%s): %s", country, exc)
         return {"error": str(exc)}
 
     aggs = resp.get("aggregations") or {}
@@ -698,28 +528,28 @@ def benchmark_compare(
     # empresa atua e pode escolher-se o CPV a partir daí.
     perfil_cpv: Dict[str, List[Dict[str, Any]]] = {}
     if cpv_code:
-        filtros_perfil = _segment_filters(None, year_from, year_to, region)
+        filtros_perfil = _segment_filters(country, None, year_from, year_to, region)
         try:
             resp_perfil = client.search(
-                index=CONTRACTS_INDEX,
+                index=dialeto["index"],
                 body={
                     "size": 0,
                     "query": ({"bool": {"filter": filtros_perfil}} if filtros_perfil else {"match_all": {}}),
                     "aggs": {
                         "entities": {
                             "filters": {"filters": named_filters, "other_bucket": False},
-                            "aggs": {"top_cpv": _entity_cpv_agg(_CPV_SHOW)},
+                            "aggs": {"top_cpv": bc.cpv_agg(country, _CPV_SHOW)},
                         }
                     },
                 },
             )
             buckets_perfil = ((resp_perfil.get("aggregations") or {}).get("entities") or {}).get("buckets") or {}
             for chave, bucket_perfil in buckets_perfil.items():
-                perfil_cpv[chave] = _cpv_rows(bucket_perfil.get("top_cpv"))
+                perfil_cpv[chave] = bc.cpv_rows(country, bucket_perfil.get("top_cpv"))
         except Exception as exc:  # pragma: no cover - perfil é complementar
             logger.warning("Perfil de CPV das empresas falhou: %s", exc)
 
-    peers = _rows(aggs.get("peers"), _CANDIDATES, market_total_value)
+    peers = _rows(aggs.get("peers"), _CANDIDATES, market_total_value, country, role)
     por_nif = {row["nif"]: row for row in peers}
     selecionados = {entidade["nif"] for entidade in limpos if entidade.get("nif")}
     # Nome por NIF, para o ranking poder marcar as empresas comparadas.
@@ -736,8 +566,8 @@ def benchmark_compare(
         indice = round(mediana / market_median, 3) if mediana and market_median else None
         nif = entidade.get("nif") or ""
         nome = (
-            _entity_hit_name(bucket.get("name"), role_path)
-            or _entity_hit_name(bucket.get("name"), counterpart_path)
+            _entity_hit_name(bucket.get("name"), country, role)
+            or _entity_hit_name(bucket.get("name"), country, counterpart_role)
             or entidade.get("name")
             or nif
             or f"Empresa {index + 1}"
@@ -746,9 +576,9 @@ def benchmark_compare(
 
         # Com CPV escolhido usa-se o perfil (fora do filtro de CPV); sem CPV, os
         # CPV do próprio segmento já são o perfil da empresa.
-        cpvs = perfil_cpv.get(chave) or _cpv_rows(bucket.get("top_cpv"))
+        cpvs = perfil_cpv.get(chave) or bc.cpv_rows(country, bucket.get("top_cpv"))
 
-        compradores = _rows(bucket.get("buyers"), _BUYERS_CANDIDATES, valor)
+        compradores = _rows(bucket.get("buyers"), _BUYERS_CANDIDATES, valor, country, counterpart_role)
 
         linhas.append(
             {
@@ -773,7 +603,7 @@ def benchmark_compare(
                 "present": bool(stats.get("count") or 0),
                 "top_cpv": cpvs,
                 "buyers": compradores[:_BUYERS_SHOW],
-                "buyers_total": _cardinality(bucket.get("buyers_total")),
+                "buyers_total": bc.cardinality_value(bucket.get("buyers_total")),
             }
         )
 
@@ -841,6 +671,7 @@ def benchmark_compare(
     cpvs_em_comum.sort(key=lambda item: (item["companies_total"], item["value"]), reverse=True)
 
     notes: List[str] = []
+    notes.append(f"País: {dialeto['label']} (índice `{dialeto['index']}`).")
     notes.append(f"Segmento: {('CPV ' + cpv_code) if cpv_code else 'todo o mercado filtrado'}.")
     notes.append("Percentis aproximados (TDigest do Elasticsearch) sobre valores positivos.")
     notes.append(
@@ -851,6 +682,11 @@ def benchmark_compare(
         f"Os «compradores em comum» são calculados sobre os {_BUYERS_CANDIDATES} maiores compradores de "
         "cada empresa (não sobre a lista completa)."
     )
+    if country == "fr":
+        notes.append(
+            "Em França os compradores são identificados pelo SIRET (o campo do nome está vazio nos dados) "
+            "e os titulares pelo par `titulaires.id`/`titulaires.nom`."
+        )
     if cpv_code:
         notes.append(
             "Com um CPV escolhido, a lista «CPV principais» de cada empresa vem de fora do filtro de CPV "
@@ -862,7 +698,9 @@ def benchmark_compare(
 
     return {
         "role": role,
-        "counterpart_role": _counterpart_role(role),
+        "country": country,
+        "country_label": dialeto["label"],
+        "counterpart_role": counterpart_role,
         "reference": {
             "scope": "mercado",
             "contracts": market_stats.get("count") or 0,
@@ -874,7 +712,7 @@ def benchmark_compare(
         },
         "market": {
             "contracts": ((resp.get("hits") or {}).get("total") or {}).get("value", 0),
-            "peers": _cardinality(aggs.get("market_peers")),
+            "peers": bc.cardinality_value(aggs.get("market_peers")),
         },
         "entities": linhas,
         "ranking": ranking,
@@ -884,75 +722,193 @@ def benchmark_compare(
     }
 
 
-def top_cpv(q: Optional[str] = None, size: int = 20, es: Any = None) -> Dict[str, Any]:
-    """CPV mais usados no índice (para o seletor da página), com descrição."""
+# --------------------------------------------------------- «tudo», por CPV
+
+def _codigo_cpv_base(codigo: str) -> str:
+    """Normaliza um CPV para comparar entre países (PT usa `33600000-6`, ES/FR `33600000`)."""
+    return (codigo or "").split("-")[0].strip()[:8]
+
+
+def benchmark_by_cpv(
+    *,
+    countries: Optional[List[str]] = None,
+    cpv_code: Optional[str] = None,
+    year_from: Optional[int] = None,
+    year_to: Optional[int] = None,
+    top: int = 40,
+    es: Any = None,
+) -> Dict[str, Any]:
+    """Quadro de CPV com o volume e o preço de cada país (página «Portugal+Espanha+França»).
+
+    Faz uma pesquisa por país (cada índice tem o seu dialeto) e junta as linhas
+    pelo **código CPV normalizado** (os oito dígitos, sem o dígito de controlo),
+    devolvendo por CPV o total e a parcela de cada país.
+    """
+    client = es or get_es_client(request_timeout=_REQUEST_TIMEOUT)
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    escolhidos = [bc.country_key(c) for c in (countries or list(bc.COUNTRIES))]
+    escolhidos = [c for c in bc.COUNTRIES if c in escolhidos] or list(bc.COUNTRIES)
+    top = max(1, min(int(top or 40), 200))
+
+    linhas: Dict[str, Dict[str, Any]] = {}
+    por_pais: Dict[str, Dict[str, Any]] = {}
+    for pais in escolhidos:
+        dialeto = bc.dialect(pais)
+        filtros = [f for f in (bc.cpv_filter(pais, cpv_code), bc.year_filter(pais, year_from, year_to)) if f]
+        try:
+            resp = client.search(
+                index=dialeto["index"],
+                body={
+                    "size": 0,
+                    "track_total_hits": True,
+                    "query": ({"bool": {"filter": filtros}} if filtros else {"match_all": {}}),
+                    "aggs": {
+                        "cpv": bc.cpv_agg(pais, top, com_mediana=True),
+                        "priced": {
+                            "filter": {"bool": {"filter": bc.value_filters(pais)}},
+                            "aggs": {
+                                "stats": {"stats": {"field": dialeto["valor_campo"]}},
+                                "percentiles": {
+                                    "percentiles": {
+                                        "field": dialeto["valor_campo"],
+                                        "percents": [50],
+                                    }
+                                },
+                            },
+                        },
+                    },
+                },
+            )
+        except Exception as exc:  # pragma: no cover - erro de cluster
+            logger.warning("Benchmark por CPV falhou (%s): %s", pais, exc)
+            return {"error": str(exc)}
+
+        aggs = resp.get("aggregations") or {}
+        precos = _stats((aggs.get("priced") or {}).get("stats"))
+        percentis = _percentiles((aggs.get("priced") or {}).get("percentiles"))
+        por_pais[pais] = {
+            "country": pais,
+            "label": dialeto["label"],
+            "short": dialeto["short"],
+            "index": dialeto["index"],
+            "contracts": ((resp.get("hits") or {}).get("total") or {}).get("value", 0),
+            "priced_contracts": precos.get("count") or 0,
+            "total_value": precos.get("sum") or 0.0,
+            "median": percentis.get("p50"),
+        }
+        for linha in bc.cpv_rows(pais, aggs.get("cpv")):
+            base = _codigo_cpv_base(linha["code"])
+            if not base:
+                continue
+            registo = linhas.setdefault(
+                base,
+                {
+                    "code": base,
+                    "description": "",
+                    "example": linha["code"],
+                    "contracts": 0,
+                    "value": 0.0,
+                    "by_country": {},
+                },
+            )
+            if not registo["description"] and linha.get("description"):
+                registo["description"] = linha["description"]
+            registo["contracts"] += linha["count"]
+            registo["value"] = round(float(registo["value"]) + float(linha.get("value") or 0.0), 2)
+            registo["by_country"][pais] = {
+                "contracts": linha["count"],
+                "value": linha.get("value"),
+                "median": linha.get("median"),
+            }
+
+    rows = sorted(linhas.values(), key=lambda item: (item["value"], item["contracts"]), reverse=True)[:top]
+    for posicao, row in enumerate(rows):
+        row["rank"] = posicao + 1
+
+    return {
+        "countries": [por_pais[p] for p in escolhidos],
+        "cpv_filter": cpv_code,
+        "items": rows,
+        "notes": [
+            "Uma pesquisa por país; as linhas juntam os CPV pelo código base (oito dígitos, sem o dígito de controlo).",
+            "O valor e a mediana de cada país usam o campo de valor do respetivo índice e ignoram valores "
+            "negativos e sentinelas (Portugal/ Espanha/ França têm tetos diferentes).",
+        ],
+    }
+
+
+def top_cpv(
+    q: Optional[str] = None,
+    size: int = 20,
+    country: str = "pt",
+    es: Any = None,
+) -> Dict[str, Any]:
+    """CPV mais usados no país (para o seletor da página), com descrição."""
     client = es or get_es_client()
     if not client:
         return {"error": "Elasticsearch indisponível", "items": []}
 
-    terms: Dict[str, Any] = {
-        "terms": {
-            "field": "cpv.code",
-            "size": max(1, min(int(size or 20), 100)),
-            "order": {"_count": "desc"},
-        }
-    }
-    code = (q or "").strip()
-    if code:
-        terms["terms"]["include"] = f"{code}.*"
+    country = bc.country_key(country)
+    dialeto = bc.dialect(country)
+    limpo = max(1, min(int(size or 20), 100))
+    filtro = bc.cpv_filter(country, (q or "").strip() or None)
 
-    body = {
+    body: Dict[str, Any] = {
         "size": 0,
-        "query": {"match_all": {}},
-        "aggs": {
-            "cpv": {
-                "nested": {"path": "cpv"},
-                "aggs": {
-                    "codes": {
-                        **terms,
-                        "aggs": {
-                            "description": {"top_hits": {"size": 1, "_source": True}},
-                            "value": {
-                                "reverse_nested": {},
-                                "aggs": {"sum": {"sum": {"field": "precoContratual"}}},
-                            },
-                        },
-                    }
-                },
-            }
-        },
+        "query": filtro or {"match_all": {}},
+        "aggs": {"cpv": bc.cpv_agg(country, limpo)},
     }
     try:
-        resp = client.search(index=CONTRACTS_INDEX, body=body)
+        resp = client.search(index=dialeto["index"], body=body)
     except Exception as exc:  # pragma: no cover
         return {"error": str(exc), "items": []}
 
-    items: List[Dict[str, Any]] = []
-    for bucket in ((((resp.get("aggregations") or {}).get("cpv") or {}).get("codes") or {}).get("buckets")) or []:
-        value = (((bucket.get("value") or {}).get("sum")) or {}).get("value")
-        items.append(
-            {
-                "code": str(bucket.get("key")),
-                "description": _cpv_description_from_hits(bucket.get("description"), bucket.get("key")),
-                "count": int(bucket.get("doc_count") or 0),
-                "value": round(float(value), 2) if value is not None else None,
-            }
-        )
-    return {"query": q, "items": items}
+    return {
+        "country": country,
+        "query": q,
+        "items": bc.cpv_rows(country, (resp.get("aggregations") or {}).get("cpv")),
+    }
 
 
-def benchmark_meta(es: Any = None) -> Dict[str, Any]:
-    """Volumetria do índice de contratos e anos disponíveis."""
+def benchmark_meta(country: Optional[str] = None, es: Any = None) -> Dict[str, Any]:
+    """Volumetria e anos disponíveis. Sem país, devolve o resumo dos três."""
     client = es or get_es_client()
     if not client:
-        return {"error": "Elasticsearch indisponível", "total": 0, "years": []}
-    try:
-        total = client.count(index=CONTRACTS_INDEX).get("count", 0)
-        resp = client.search(
-            index=CONTRACTS_INDEX,
-            body={"size": 0, "aggs": {"years": {"terms": {"field": "Ano", "size": 50, "order": {"_key": "desc"}}}}},
+        return {"error": "Elasticsearch indisponível", "countries": []}
+
+    paises = list(bc.COUNTRIES) if not country or bc.country_key(country) == "all" else [bc.country_key(country)]
+    resumo: List[Dict[str, Any]] = []
+    for pais in paises:
+        dialeto = bc.dialect(pais)
+        try:
+            total = client.count(index=dialeto["index"]).get("count", 0)
+            resp = client.search(index=dialeto["index"], body={"size": 0, "aggs": {"years": bc.ano_agg(pais)}})
+            anos = [int(bucket["key"]) for bucket in resp["aggregations"]["years"]["buckets"]]
+        except Exception as exc:  # pragma: no cover
+            logger.warning("Meta do benchmark falhou (%s): %s", pais, exc)
+            total, anos = 0, []
+        resumo.append(
+            {
+                "country": pais,
+                "label": dialeto["label"],
+                "short": dialeto["short"],
+                "index": dialeto["index"],
+                "total": total,
+                "years": anos,
+                "roles": [bc.SUPPLIER, bc.BUYER],
+                "role_labels": bc.ROLE_LABELS[pais],
+            }
         )
-        years = [int(bucket["key"]) for bucket in resp["aggregations"]["years"]["buckets"]]
-        return {"total": total, "years": years, "roles": list(ROLES)}
-    except Exception as exc:  # pragma: no cover
-        return {"error": str(exc), "total": 0, "years": []}
+
+    if len(resumo) == 1:
+        return {**resumo[0], "countries": resumo}
+    return {
+        "country": "all",
+        "label": "Portugal, Espanha e França",
+        "countries": resumo,
+        "total": sum(item["total"] for item in resumo),
+        "years": sorted({ano for item in resumo for ano in item["years"]}, reverse=True),
+        "roles": [bc.SUPPLIER, bc.BUYER],
+    }

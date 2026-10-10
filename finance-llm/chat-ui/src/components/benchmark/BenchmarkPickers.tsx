@@ -1,47 +1,60 @@
 /**
  * Seletoras partilhadas pelo módulo **Benchmark**: entidade do sistema (uma ou
- * várias, até `MAX_COMPARE`) e código CPV.
+ * várias, até `MAX_COMPARE`), código CPV e ano.
  *
- * Vivem aqui para a análise de uma empresa e a comparação de várias usarem os
- * mesmos controlos (autocomplete com `AbortController`-like guardas para não
- * aceitar respostas fora de ordem).
+ * A pesquisa de entidades é **por país**: Portugal usa o diretório
+ * `/companies/search`; Espanha os órgãos adjudicantes/empresas adjudicatárias de
+ * `/contracts-es/entities`; França os acheteurs/titulaires de
+ * `/contracts-fr/entities`. O papel escolhido decide que lado do mercado se
+ * procura (quem compra ou quem vende).
  */
 import { useEffect, useRef, useState } from "react";
 import { Building2, Loader2, Search, X } from "lucide-react";
 
-import { searchCompanies } from "../../api";
-import { getBenchmarkCpv, type BenchmarkCpv } from "../../benchmarkApi";
+import { getBenchmarkCpv, searchBenchmarkEntities } from "../../benchmarkApi";
+import type { BenchmarkCpv, BenchmarkCountry, BenchmarkRole } from "../../benchmarkApi";
 import { Input } from "../ui/Input";
 import { Label } from "../ui/Label";
-import type { CompanySummary } from "../../types";
+
+/** Entidade escolhida no seletor (forma comum aos três países). */
+export type EmpresaBenchmark = {
+  /** NIF (PT), NIF/DIR3 (ES) ou SIRET (FR). */
+  nif: string;
+  name: string;
+  contracts: number;
+  total_value?: number | null;
+};
 
 interface EmpresaAutocompleteProps {
+  country: BenchmarkCountry;
+  role: BenchmarkRole;
   /** Empresa escolhida (quando existe, o campo mostra o nome dela). */
-  value?: CompanySummary | null;
-  onSelect: (empresa: CompanySummary) => void;
+  value?: EmpresaBenchmark | null;
+  onSelect: (empresa: EmpresaBenchmark) => void;
   onClear?: () => void;
   label?: string;
   placeholder?: string;
   /** Limpa o texto depois de escolher (modo «adicionar à lista»). */
   limparAposEscolher?: boolean;
-  /** Sugestões por baixo do campo (modo «uma empresa») ou por cima (lista). */
   id?: string;
 }
 
-/** Campo de pesquisa de empresas do sistema (`/companies/search`). */
+/** Campo de pesquisa de entidades do país, no papel escolhido. */
 export function EmpresaAutocomplete({
+  country,
+  role,
   value,
   onSelect,
   onClear,
   label = "Entidade do sistema",
-  placeholder = "Nome ou NIF da empresa…",
+  placeholder = "Nome, NIF ou SIRET…",
   limparAposEscolher = false,
   id,
 }: EmpresaAutocompleteProps) {
   const [texto, setTexto] = useState(value?.name ?? "");
-  const [sugestoes, setSugestoes] = useState<CompanySummary[]>([]);
+  const [sugestoes, setSugestoes] = useState<EmpresaBenchmark[]>([]);
   const [aProcurar, setAProcurar] = useState(false);
-  const anterior = useRef<CompanySummary | null>(null);
+  const anterior = useRef<EmpresaBenchmark | null>(null);
 
   // O valor externo manda: escolher preenche o campo; limpar fora daqui
   // esvazia-o (sem tocar no que o utilizador está a escrever).
@@ -64,9 +77,9 @@ export function EmpresaAutocomplete({
     let ativo = true;
     const timer = setTimeout(() => {
       setAProcurar(true);
-      searchCompanies({ q: termo, size: 8 })
-        .then((resposta) => {
-          if (ativo) setSugestoes(resposta.items ?? []);
+      searchBenchmarkEntities(country, role, termo, 8)
+        .then((itens) => {
+          if (ativo) setSugestoes(itens.filter((item) => item.name));
         })
         .catch(() => {
           if (ativo) setSugestoes([]);
@@ -79,7 +92,7 @@ export function EmpresaAutocomplete({
       ativo = false;
       clearTimeout(timer);
     };
-  }, [texto, value]);
+  }, [texto, value, country, role]);
 
   return (
     <div className="relative">
@@ -130,8 +143,8 @@ export function EmpresaAutocomplete({
               <Building2 size={14} className="shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate">{empresa.name}</span>
               <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                {empresa.nif ? `${empresa.nif} · ` : ""}
-                {empresa.contracts_total.toLocaleString("pt-PT")} contr.
+                {empresa.nif && empresa.nif !== empresa.name ? `${empresa.nif} · ` : ""}
+                {empresa.contracts.toLocaleString("pt-PT")} contr.
               </span>
             </button>
           ))}
@@ -144,15 +157,17 @@ export function EmpresaAutocomplete({
 interface CpvAutocompleteProps {
   value: string;
   onChange: (codigo: string) => void;
+  country: BenchmarkCountry;
   label?: string;
   placeholder?: string;
   id?: string;
 }
 
-/** Campo de pesquisa de CPV (sugestões com descrição e volume). */
+/** Campo de pesquisa de CPV do país (sugestões com descrição e volume). */
 export function CpvAutocomplete({
   value,
   onChange,
+  country,
   label = "CPV do segmento (opcional)",
   placeholder = "ex.: 90511000 ou 90511",
   id,
@@ -168,7 +183,7 @@ export function CpvAutocomplete({
     }
     let ativo = true;
     const timer = setTimeout(() => {
-      getBenchmarkCpv(termo, 10)
+      getBenchmarkCpv(termo, 10, country)
         .then((resposta) => {
           if (ativo) setOpcoes(resposta.items ?? []);
         })
@@ -180,7 +195,7 @@ export function CpvAutocomplete({
       ativo = false;
       clearTimeout(timer);
     };
-  }, [texto]);
+  }, [texto, country]);
 
   return (
     <div className="relative">
@@ -224,7 +239,9 @@ export function CpvAutocomplete({
               }}
             >
               <span className="font-medium">{opcao.code}</span>
-              <span className="line-clamp-2 text-xs text-muted-foreground">{opcao.description || "—"}</span>
+              <span className="line-clamp-2 text-xs text-muted-foreground">
+                {opcao.description || "—"} · {opcao.count.toLocaleString("pt-PT")} contratos
+              </span>
             </button>
           ))}
         </div>

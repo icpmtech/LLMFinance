@@ -52,6 +52,21 @@ services:
       - hermes-data:/hermes-data:ro
       # Modelos do faster-whisper: sem isto, cada recriacao volta a descarregar.
       - whisper-cache:/root/.cache/huggingface
+      # Binares do Chromium para o Playwright/Scrapling.
+      #
+      # `playwright` (o pacote Python) vem de `scrapling[fetchers]`, mas os
+      # **browsers** so chegam com `scrapling install` -- sao ~170 MB que o
+      # Dockerfile nunca descarrega. Sem este volume, o `scrapling install`
+      # escreve na camada de escrita do contentor e desaparece na recriacao
+      # seguinte, e o sintoma so aparece quando alguem usa um template que
+      # precisa de JavaScript:
+      #   Executable doesn't exist at /root/.cache/ms-playwright/chromium-NNNN/...
+      #
+      # Nota, porque a licao do `rag/` aqui nao se aplica: montar por cima de
+      # codigo da imagem e que e errado. Este caminho nao existe na imagem (so
+      # tem `pip` dentro de `/root/.cache`), logo o volume nao tapa nada.
+      # Confirmar com `docker run --rm --entrypoint ls iq-os-backend:latest /root/.cache`.
+      - playwright-cache:/root/.cache/ms-playwright
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONPATH=/app
@@ -101,3 +116,7 @@ volumes:
     external: true
     name: hermes-agent_hermes-data
   whisper-cache:
+  # Navegadores do Playwright. Enche-se uma vez com
+  #   docker exec iqos-backend python -m playwright install --with-deps chromium
+  # e depois sobrevive a recriacoes do contentor.
+  playwright-cache:

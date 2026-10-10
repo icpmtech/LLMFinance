@@ -9,6 +9,31 @@ import { API_BASE } from "./api";
 
 export type BenchmarkRole = "adjudicatario" | "adjudicante";
 
+/** País dos dados: `all` é o quadro conjunto (por CPV). */
+export type BenchmarkCountry = "pt" | "es" | "fr";
+export type BenchmarkScope = BenchmarkCountry | "all";
+
+export interface BenchmarkCountryInfo {
+  country: BenchmarkCountry;
+  label: string;
+  short: string;
+  index: string;
+  total: number;
+  years: number[];
+  roles: string[];
+  role_labels?: Record<string, string>;
+}
+
+export interface BenchmarkMetaAll {
+  country: BenchmarkScope;
+  label: string;
+  total: number;
+  years: number[];
+  roles: string[];
+  countries: BenchmarkCountryInfo[];
+  error?: string;
+}
+
 export interface BenchmarkMeta {
   total: number;
   years: number[];
@@ -104,6 +129,7 @@ export interface BenchmarkQuery {
   nif?: string;
   name?: string;
   role?: BenchmarkRole;
+  country?: BenchmarkCountry;
   cpv_code?: string;
   year_from?: number;
   year_to?: number;
@@ -112,15 +138,19 @@ export interface BenchmarkQuery {
 }
 
 /** Volumetria do índice de contratos e anos disponíveis. */
-export async function getBenchmarkMeta(): Promise<BenchmarkMeta> {
-  const res = await fetch(`${API_BASE}/benchmark/meta`);
+export async function getBenchmarkMeta(country: BenchmarkScope = "pt"): Promise<BenchmarkMetaAll> {
+  const res = await fetch(`${API_BASE}/benchmark/meta?country=${country}`);
   if (!res.ok) throw new Error(`Erro ao obter o estado do benchmark: ${res.status}`);
   return res.json();
 }
 
-/** CPV mais usados no índice (para escolher o segmento). */
-export async function getBenchmarkCpv(q?: string, size = 20): Promise<BenchmarkCpvResponse> {
-  const params = new URLSearchParams({ size: String(size) });
+/** CPV mais usados no país (para escolher o segmento). */
+export async function getBenchmarkCpv(
+  q?: string,
+  size = 20,
+  country: BenchmarkCountry = "pt",
+): Promise<BenchmarkCpvResponse> {
+  const params = new URLSearchParams({ size: String(size), country });
   if (q) params.set("q", q);
   const res = await fetch(`${API_BASE}/benchmark/cpv?${params}`);
   if (!res.ok) throw new Error(`Erro ao obter CPV: ${res.status}`);
@@ -155,6 +185,7 @@ export interface BenchmarkCompareEntity {
 export interface BenchmarkCompareRequest {
   entities: BenchmarkCompareEntity[];
   role?: BenchmarkRole;
+  country?: BenchmarkCountry;
   cpv_code?: string;
   year_from?: number;
   year_to?: number;
@@ -210,6 +241,8 @@ export interface BenchmarkSharedCpv {
 
 export interface BenchmarkCompareResponse {
   role: BenchmarkRole;
+  country?: BenchmarkCountry;
+  country_label?: string;
   reference: {
     scope: string;
     contracts: number;
@@ -246,4 +279,106 @@ export async function compareBenchmarkEntities(
     throw new Error(text || `Erro na comparação: ${res.status}`);
   }
   return res.json();
+}
+
+/* ------------------------------------------- quadro conjunto, por CPV */
+
+/** Parcela de um CPV num país (contratos, valor e mediana). */
+export interface BenchmarkByCpvCell {
+  contracts: number;
+  value?: number | null;
+  median?: number | null;
+}
+
+export interface BenchmarkByCpvRow {
+  rank: number;
+  code: string;
+  description: string;
+  example: string;
+  contracts: number;
+  value: number;
+  by_country: Record<string, BenchmarkByCpvCell>;
+}
+
+export interface BenchmarkByCpvResponse {
+  countries: {
+    country: BenchmarkCountry;
+    label: string;
+    short: string;
+    index: string;
+    contracts: number;
+    priced_contracts: number;
+    total_value: number;
+    median?: number | null;
+  }[];
+  cpv_filter?: string | null;
+  items: BenchmarkByCpvRow[];
+  notes: string[];
+  error?: string;
+}
+
+/** Quadro por CPV com o volume e o preço de cada país (página conjunta). */
+export async function getBenchmarkByCpv(params: {
+  countries?: BenchmarkCountry[];
+  cpv_code?: string;
+  year_from?: number;
+  year_to?: number;
+  top?: number;
+} = {}): Promise<BenchmarkByCpvResponse> {
+  const search = new URLSearchParams();
+  if (params.countries?.length) search.set("countries", params.countries.join(","));
+  if (params.cpv_code) search.set("cpv_code", params.cpv_code);
+  if (params.year_from !== undefined) search.set("year_from", String(params.year_from));
+  if (params.year_to !== undefined) search.set("year_to", String(params.year_to));
+  if (params.top !== undefined) search.set("top", String(params.top));
+  const res = await fetch(`${API_BASE}/benchmark/by-cpv?${search}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Erro no quadro por CPV: ${res.status}`);
+  }
+  return res.json();
+}
+
+/** Pesquisa de entidades por país (para o seletor, conforme o papel). */
+export async function searchBenchmarkEntities(
+  country: BenchmarkCountry,
+  role: BenchmarkRole,
+  q: string,
+  size = 8,
+): Promise<{ nif: string; name: string; contracts: number; total_value?: number | null }[]> {
+  if (country === "pt") {
+    const { searchCompanies } = await import("./api");
+    const resposta = await searchCompanies({ q, size });
+    return (resposta.items ?? []).map((item) => ({
+      nif: item.nif ?? "",
+      name: item.name,
+      contracts: item.contracts_total,
+      total_value: item.total_value,
+    }));
+  }
+  if (country === "es") {
+    const kind = role === "adjudicante" ? "organo" : "adjudicatario";
+    const params = new URLSearchParams({ q, kind, size: String(size) });
+    const res = await fetch(`${API_BASE}/contracts-es/entities?${params}`);
+    if (!res.ok) throw new Error(`Erro ao procurar entidades: ${res.status}`);
+    const dados: { items?: any[] } = await res.json();
+    return (dados.items ?? []).map((item) => ({
+      nif: item.nif || item.organo_id || "",
+      name: item.name,
+      contracts: item.count ?? 0,
+      total_value: item.total_value,
+    }));
+  }
+  const kind = role === "adjudicante" ? "acheteur" : "adjudicatario";
+  const params = new URLSearchParams({ q, kind, size: String(size) });
+  const res = await fetch(`${API_BASE}/contracts-fr/entities?${params}`);
+  if (!res.ok) throw new Error(`Erro ao procurar entidades: ${res.status}`);
+  const dados: { items?: any[] } = await res.json();
+  return (dados.items ?? []).map((item) => ({
+    // Em França o DECP carregado não traz nomes: a entidade é o SIRET.
+    nif: item.nif || item.name || "",
+    name: item.name,
+    contracts: item.count ?? 0,
+    total_value: item.total_value,
+  }));
 }

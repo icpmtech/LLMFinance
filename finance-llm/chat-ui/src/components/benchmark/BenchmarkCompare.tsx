@@ -31,11 +31,11 @@ import {
   MAX_COMPARE,
   compareBenchmarkEntities,
   type BenchmarkCompareResponse,
-  type BenchmarkMeta,
+  type BenchmarkCountry,
+  type BenchmarkMetaAll,
   type BenchmarkRole,
 } from "../../benchmarkApi";
-import { CpvAutocomplete, EmpresaAutocomplete, SeletorAno } from "./BenchmarkPickers";
-import type { CompanySummary } from "../../types";
+import { CpvAutocomplete, EmpresaAutocomplete, SeletorAno, type EmpresaBenchmark } from "./BenchmarkPickers";
 
 const MAX_ANOS = 12;
 
@@ -67,7 +67,6 @@ function pct(value?: number | null, digits = 2): string {
 function chaveEmpresa(empresa: { nif?: string; name: string }): string {
   return empresa.nif ? `nif:${empresa.nif}` : `nome:${empresa.name.toLowerCase()}`;
 }
-
 /** Cor da célula do índice de preço (abaixo é bom para quem compra, é critério). */
 function corPosicao(posicao?: string | null): string {
   if (posicao === "abaixo") return "text-emerald-300";
@@ -98,8 +97,8 @@ function descricaoSegmento(segmento: Segmento | null): string {
   return partes.join(" · ");
 }
 
-export default function BenchmarkCompare({ meta }: { meta: BenchmarkMeta | null }) {
-  const [selecionadas, setSelecionadas] = useState<CompanySummary[]>([]);
+export default function BenchmarkCompare({ meta, country }: { meta: BenchmarkMetaAll | null; country: BenchmarkCountry }) {
+  const [selecionadas, setSelecionadas] = useState<EmpresaBenchmark[]>([]);
   const [role, setRole] = useState<BenchmarkRole>("adjudicatario");
   const [cpv, setCpv] = useState("");
   const [anoDe, setAnoDe] = useState<number | "">("");
@@ -116,7 +115,7 @@ export default function BenchmarkCompare({ meta }: { meta: BenchmarkMeta | null 
   const vender = role === "adjudicatario";
   const cheio = selecionadas.length >= MAX_COMPARE;
 
-  const juntar = useCallback((empresa: CompanySummary) => {
+  const juntar = useCallback((empresa: EmpresaBenchmark) => {
     setSelecionadas((atuais) => {
       const chave = chaveEmpresa({ nif: empresa.nif, name: empresa.name });
       if (atuais.some((item) => chaveEmpresa({ nif: item.nif, name: item.name }) === chave)) return atuais;
@@ -140,6 +139,7 @@ export default function BenchmarkCompare({ meta }: { meta: BenchmarkMeta | null 
         const resultado = await compareBenchmarkEntities({
           entities: selecionadas.map((empresa) => ({ nif: empresa.nif || undefined, name: empresa.name })),
           role,
+          country,
           cpv_code: codigoCpv || undefined,
           year_from: anoDe === "" ? undefined : Number(anoDe),
           year_to: anoAte === "" ? undefined : Number(anoAte),
@@ -161,7 +161,7 @@ export default function BenchmarkCompare({ meta }: { meta: BenchmarkMeta | null 
         setACarregar(false);
       }
     },
-    [selecionadas, role, cpv, anoDe, anoAte, regiao, top],
+    [selecionadas, role, cpv, anoDe, anoAte, regiao, top, country],
   );
 
   /** Escolher um CPV a partir do perfil de uma empresa ou dos CPV em comum. */
@@ -191,8 +191,10 @@ export default function BenchmarkCompare({ meta }: { meta: BenchmarkMeta | null 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <EmpresaAutocomplete
               id="benchmark-compare-entidade"
+              country={country}
+              role={role}
               label="Adicionar empresa"
-              placeholder={cheio ? "Limite de 10 empresas atingido" : "Nome ou NIF da empresa…"}
+              placeholder={cheio ? "Limite de 10 empresas atingido" : "Nome, NIF ou SIRET…"}
               onSelect={juntar}
               limparAposEscolher
             />
@@ -219,7 +221,7 @@ export default function BenchmarkCompare({ meta }: { meta: BenchmarkMeta | null 
                 </button>
               </div>
             </div>
-            <CpvAutocomplete id="benchmark-compare-cpv" value={cpv} onChange={setCpv} />
+            <CpvAutocomplete id="benchmark-compare-cpv" country={country} value={cpv} onChange={setCpv} />
           </div>
 
           {selecionadas.length > 0 ? (
@@ -232,8 +234,8 @@ export default function BenchmarkCompare({ meta }: { meta: BenchmarkMeta | null 
                   <Building2 size={12} className="shrink-0 text-muted-foreground" />
                   <span className="truncate font-medium">{empresa.name}</span>
                   <span className="shrink-0 tabular-nums text-muted-foreground">
-                    {empresa.nif ? `${empresa.nif} · ` : ""}
-                    {num(empresa.contracts_total)} contr.
+                    {empresa.nif && empresa.nif !== empresa.name ? `${empresa.nif} · ` : ""}
+                    {num(empresa.contracts)} contr.
                   </span>
                   <button
                     type="button"

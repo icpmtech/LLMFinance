@@ -1,14 +1,17 @@
 """Rotas do módulo **Benchmark de preços e concorrência** (`/benchmark/*`).
 
 Dá a uma entidade do sistema (empresa que vende ao Estado ou entidade que
-compra), e opcionalmente um CPV, a leitura do mercado em que se move:
+compra), e opcionalmente um CPV, a leitura do mercado em que se move. Funciona
+em **Portugal, Espanha e França** — o parâmetro `country` escolhe o índice:
 
-- `GET /benchmark/meta`    — volumetria do índice de contratos e anos
-- `GET /benchmark/cpv`     — CPV mais usados (seletor), com descrição
-- `GET /benchmark/entity`  — preço de referência, concorrência, historial e oportunidades
-- `POST /benchmark/compare`— comparação de **até 10 empresas** no mesmo segmento
+- `GET  /benchmark/meta`    — países, volumetria e anos disponíveis
+- `GET  /benchmark/cpv`     — CPV mais usados de um país (seletor), com descrição
+- `GET  /benchmark/entity`  — preço de referência, concorrência, historial e oportunidades
+- `POST /benchmark/compare` — comparação de **até 10 empresas** no mesmo segmento
+- `GET  /benchmark/by-cpv`  — quadro por CPV com o volume/preço de cada país
 
-`/benchmark/entity` aceita a entidade por `nif` (preferido) ou `name`, o papel
+`country` aceita `pt`, `es`, `fr` ou `all` (meta); `/benchmark/entity` e
+`/benchmark/compare` usam `nif` (NIF/DIR3/SIRET) ou `name`, o papel
 (`adjudicatario` = vende, `adjudicante` = compra), o `cpv_code` e a janela de
 anos. Todos os valores são em euros.
 """
@@ -42,17 +45,20 @@ class BenchmarkCompareRequest(BaseModel):
         "adjudicatario",
         description="Papel comum a todas: `adjudicatario` (vendem) ou `adjudicante` (compram)",
     )
+    country: str = Field("pt", description="País dos dados: `pt`, `es` ou `fr`")
     cpv_code: Optional[str] = Field(None, description="Código CPV do segmento (prefixo aceite)")
     year_from: Optional[int] = Field(None, description="Ano inicial (inclusive)")
     year_to: Optional[int] = Field(None, description="Ano final (inclusive)")
-    region: Optional[str] = Field(None, description="Região/NUTS ou distrito português")
+    region: Optional[str] = Field(None, description="Região/NUTS ou distrito (conforme o país)")
     top: int = Field(10, ge=1, le=50, description="Quantas posições mostrar no ranking do segmento")
 
 
 @router.get("/meta")
-def benchmark_meta() -> Dict[str, Any]:
-    """Volumetria do índice `contratos` e anos disponíveis."""
-    resultado = benchmark.benchmark_meta()
+def benchmark_meta(
+    country: str = Query("all", description="`pt`, `es`, `fr` ou `all` (resumo dos três)"),
+) -> Dict[str, Any]:
+    """Países disponíveis, volumetria de cada índice e anos com contratos."""
+    resultado = benchmark.benchmark_meta(country=country)
     if resultado.get("error"):
         raise HTTPException(status_code=503, detail=str(resultado["error"]))
     return resultado
@@ -62,26 +68,52 @@ def benchmark_meta() -> Dict[str, Any]:
 def benchmark_cpv(
     q: Optional[str] = Query(None, description="Prefixo do código CPV (ex.: `90511`)"),
     size: int = Query(20, ge=1, le=100, description="Quantos CPV devolver"),
+    country: str = Query("pt", description="`pt`, `es` ou `fr`"),
 ) -> Dict[str, Any]:
-    """CPV mais usados no índice (para escolher o segmento)."""
-    resultado = benchmark.top_cpv(q=q, size=size)
+    """CPV mais usados no país (para escolher o segmento)."""
+    resultado = benchmark.top_cpv(q=q, size=size, country=country)
     if resultado.get("error"):
         raise HTTPException(status_code=503, detail=str(resultado["error"]))
     return resultado
 
 
+@router.get("/by-cpv")
+def benchmark_by_cpv(
+    countries: Optional[str] = Query(
+        None, description="Países separados por vírgula (`pt,es,fr`); por omissão, os três"
+    ),
+    cpv_code: Optional[str] = Query(None, description="Prefixo de CPV a filtrar"),
+    year_from: Optional[int] = Query(None, description="Ano inicial (inclusive)"),
+    year_to: Optional[int] = Query(None, description="Ano final (inclusive)"),
+    top: int = Query(40, ge=1, le=200, description="Quantos CPV devolver (por valor)"),
+) -> Dict[str, Any]:
+    """Quadro por CPV: contratos, valor e mediana de cada país, e o total."""
+    escolhidos = [c.strip() for c in (countries or "").split(",") if c.strip()]
+    resultado = benchmark.benchmark_by_cpv(
+        countries=escolhidos or None,
+        cpv_code=cpv_code,
+        year_from=year_from,
+        year_to=year_to,
+        top=top,
+    )
+    if resultado.get("error"):
+        raise HTTPException(status_code=502, detail=str(resultado["error"]))
+    return resultado
+
+
 @router.get("/entity")
 def benchmark_entity(
-    nif: Optional[str] = Query(None, description="NIF da entidade (preferido)"),
-    name: Optional[str] = Query(None, description="Nome da entidade (usado quando não há NIF)"),
+    nif: Optional[str] = Query(None, description="NIF/DIR3/SIRET da entidade (preferido)"),
+    name: Optional[str] = Query(None, description="Nome da entidade (usado quando não há identificador)"),
     role: str = Query(
         "adjudicatario",
         description="Papel da entidade: `adjudicatario` (vende) ou `adjudicante` (compra)",
     ),
+    country: str = Query("pt", description="País dos dados: `pt`, `es` ou `fr`"),
     cpv_code: Optional[str] = Query(None, description="Código CPV do segmento (prefixo aceite)"),
     year_from: Optional[int] = Query(None, description="Ano inicial (inclusive)"),
     year_to: Optional[int] = Query(None, description="Ano final (inclusive)"),
-    region: Optional[str] = Query(None, description="Região/NUTS ou distrito português"),
+    region: Optional[str] = Query(None, description="Região/NUTS ou distrito (conforme o país)"),
     top: int = Query(12, ge=1, le=50, description="Quantas linhas por tabela"),
 ) -> Dict[str, Any]:
     """Benchmark de preços, concorrência, historial e oportunidades."""
@@ -91,6 +123,7 @@ def benchmark_entity(
         nif=nif,
         name=name,
         role=role,
+        country=country,
         cpv_code=cpv_code,
         year_from=year_from,
         year_to=year_to,
@@ -126,6 +159,7 @@ def benchmark_compare_endpoint(req: BenchmarkCompareRequest) -> Dict[str, Any]:
     resultado = benchmark.benchmark_compare(
         entities=entidades,
         role=req.role,
+        country=req.country,
         cpv_code=req.cpv_code,
         year_from=req.year_from,
         year_to=req.year_to,

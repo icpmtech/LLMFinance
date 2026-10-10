@@ -11,6 +11,9 @@
  * 4. **Oportunidades** — contrapartes do segmento com que nunca contratou.
  *
  * O separador **Comparar** junta até `MAX_COMPARE` empresas no mesmo segmento.
+ * A página é **por país** (`pt`/`es`/`fr`); com o âmbito `all` mostra antes o
+ * quadro conjunto por CPV (`BenchmarkByCpv`), porque os mercados não se
+ * comparam empresa a empresa entre países.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
@@ -37,17 +40,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card"
 import { Input } from "../components/ui/Input";
 import { Label } from "../components/ui/Label";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/Tabs";
+import BenchmarkByCpv from "../components/benchmark/BenchmarkByCpv";
 import BenchmarkCompare from "../components/benchmark/BenchmarkCompare";
-import { CpvAutocomplete, EmpresaAutocomplete } from "../components/benchmark/BenchmarkPickers";
+import { CpvAutocomplete, EmpresaAutocomplete, type EmpresaBenchmark } from "../components/benchmark/BenchmarkPickers";
 import {
   getBenchmarkEntity,
   getBenchmarkMeta,
-  type BenchmarkMeta,
+  type BenchmarkCountry,
+  type BenchmarkMetaAll,
   type BenchmarkResponse,
   type BenchmarkRole,
   type BenchmarkRow,
+  type BenchmarkScope,
 } from "../benchmarkApi";
-import type { CompanySummary } from "../types";
 
 const PAGE_MAX_YEARS = 12;
 
@@ -214,11 +219,18 @@ function ReguaPreco({ dados }: { dados: BenchmarkResponse }) {
   );
 }
 
-export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => void }) {
-  const [meta, setMeta] = useState<BenchmarkMeta | null>(null);
+export default function BenchmarkPage({
+  scope = "pt",
+  onSwitchView,
+}: {
+  /** País da página (`pt`/`es`/`fr`) ou `all` para o quadro conjunto por CPV. */
+  scope?: BenchmarkScope;
+  onSwitchView?: () => void;
+}) {
+  const [meta, setMeta] = useState<BenchmarkMetaAll | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  const [entidade, setEntidade] = useState<CompanySummary | null>(null);
+  const [entidade, setEntidade] = useState<EmpresaBenchmark | null>(null);
   const [modo, setModo] = useState<Modo>("empresa");
 
   const [role, setRole] = useState<BenchmarkRole>("adjudicatario");
@@ -230,8 +242,15 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
   const [dados, setDados] = useState<BenchmarkResponse | null>(null);
   const [aCarregar, setACarregar] = useState(false);
 
+  const soPais = scope !== "all";
+  const pais: BenchmarkCountry = scope === "all" ? "pt" : scope;
+  const infoPais = useMemo(
+    () => meta?.countries?.find((item) => item.country === pais) ?? null,
+    [meta, pais],
+  );
+
   useEffect(() => {
-    getBenchmarkMeta()
+    getBenchmarkMeta(scope)
       .then((resultado) => {
         setMeta(resultado);
         const anos = (resultado.years ?? []).slice(0, PAGE_MAX_YEARS);
@@ -239,20 +258,25 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
           setAnoDe(Math.min(...anos));
           setAnoAte(Math.max(...anos));
         }
+        // CPV vindo do quadro conjunto (`?cpv=33600000`).
+        const daUrl = new URLSearchParams(window.location.search).get("cpv");
+        if (daUrl) {
+          setCpv(daUrl);
+          void analisar({ cpv_code: daUrl });
+        }
       })
       .catch((err: unknown) => setErro(err instanceof Error ? err.message : String(err)));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope]);
 
-  const escolherEntidade = useCallback((empresa: CompanySummary) => {
+  const escolherEntidade = useCallback((empresa: EmpresaBenchmark) => {
     setEntidade(empresa);
-    const vendas = empresa.adjudicatario?.contracts_count ?? 0;
-    const compras = empresa.adjudicante?.contracts_count ?? 0;
-    setRole(vendas >= compras ? "adjudicatario" : "adjudicante");
   }, []);
 
   const analisar = useCallback(
-    async (override?: { role?: BenchmarkRole; cpv_code?: string }) => {
-      if (!entidade) {
+    async (override?: { role?: BenchmarkRole; cpv_code?: string; entidade?: EmpresaBenchmark | null }) => {
+      const alvo = override?.entidade ?? entidade;
+      if (!alvo) {
         setErro("Escolha primeiro uma entidade do sistema.");
         return;
       }
@@ -262,9 +286,10 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
       setErro(null);
       try {
         const resultado = await getBenchmarkEntity({
-          nif: entidade.nif || undefined,
-          name: entidade.name,
+          nif: alvo.nif || undefined,
+          name: alvo.name,
           role: papel,
+          country: pais,
           cpv_code: codigoCpv || undefined,
           year_from: anoDe === "" ? undefined : Number(anoDe),
           year_to: anoAte === "" ? undefined : Number(anoAte),
@@ -279,7 +304,7 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
         setACarregar(false);
       }
     },
-    [entidade, role, cpv, anoDe, anoAte, regiao],
+    [entidade, role, cpv, anoDe, anoAte, regiao, pais],
   );
 
   const alternarPapel = (proximo: BenchmarkRole) => {
@@ -310,19 +335,25 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
             <Scale size={22} className="text-sky-400" />
-            Benchmark de preços e concorrência
+            Benchmark {soPais ? `· ${infoPais?.label ?? ""}` : "· Portugal, Espanha e França"}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Preço de referência por CPV, concorrentes, historial de contrapartes e oportunidades de uma entidade do sistema.
+            {soPais
+              ? `Preço de referência por CPV, concorrentes, historial de contrapartes e oportunidades — ${infoPais?.label ?? ""}${infoPais ? ` (${num(infoPais.total)} contratos)` : ""}.`
+              : "Quadro conjunto dos trÍs países por CPV: volume, valor e preço mediano de cada mercado."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="md" icon={<RefreshCw size={15} />} onClick={() => void analisar()} disabled={!entidade}>
-            Atualizar
-          </Button>
-          <Button variant="outline" size="md" onClick={limpar} disabled={!entidade && !dados}>
-            Limpar
-          </Button>
+          {soPais ? (
+            <>
+              <Button variant="outline" size="md" icon={<RefreshCw size={15} />} onClick={() => void analisar()} disabled={!entidade}>
+                Atualizar
+              </Button>
+              <Button variant="outline" size="md" onClick={limpar} disabled={!entidade && !dados}>
+                Limpar
+              </Button>
+            </>
+          ) : null}
           {onSwitchView ? (
             <Button variant="outline" size="md" onClick={onSwitchView}>
               Fechar
@@ -331,6 +362,10 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
         </div>
       </header>
 
+      {!soPais ? (
+        <BenchmarkByCpv meta={meta} />
+      ) : (
+        <>
       <Tabs value={modo} className="mb-6">
         <TabsList>
           <TabsTrigger value="empresa" active={modo === "empresa"} onClick={() => setModo("empresa")}>
@@ -343,7 +378,7 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
       </Tabs>
 
       {modo === "comparar" ? (
-        <BenchmarkCompare meta={meta} />
+        <BenchmarkCompare meta={meta} country={pais} />
       ) : (
         <>
           {/* -------------------------------------------------- configurador */}
@@ -358,6 +393,8 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
             {/* entidade */}
             <EmpresaAutocomplete
               id="benchmark-entidade"
+              country={pais}
+              role={role}
               value={entidade}
               onSelect={escolherEntidade}
               onClear={() => setEntidade(null)}
@@ -389,7 +426,7 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
             </div>
 
             {/* CPV */}
-            <CpvAutocomplete id="benchmark-cpv" value={cpv} onChange={escolherCpv} />
+            <CpvAutocomplete id="benchmark-cpv" country={pais} value={cpv} onChange={escolherCpv} />
           </div>
 
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -445,8 +482,9 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
           {entidade ? (
             <p className="text-xs text-muted-foreground">
               {entidade.name}
-              {entidade.nif ? ` · NIF ${entidade.nif}` : ""} · {num(entidade.contracts_total)} contratos no total ·{" "}
-              {moneyShort(entidade.total_value)}
+              {entidade.nif && entidade.nif !== entidade.name ? ` · ${entidade.nif}` : ""} ·{" "}
+              {num(entidade.contracts)} contratos no total
+              {entidade.total_value ? ` · ${moneyShort(entidade.total_value)}` : ""}
               {cpv ? ` · segmento CPV ${cpv}` : " · sem CPV (todo o mercado filtrado)"}
             </p>
           ) : null}
@@ -654,6 +692,8 @@ export default function BenchmarkPage({ onSwitchView }: { onSwitchView?: () => v
           ) : null}
         </div>
       ) : null}
+        </>
+      )}
         </>
       )}
     </div>
