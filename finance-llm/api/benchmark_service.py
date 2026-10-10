@@ -143,6 +143,60 @@ def _entity_hit_name(agg: Optional[Dict[str, Any]], country: Optional[str], role
     return ""
 
 
+def search_entities(
+    *,
+    q: Optional[str] = None,
+    role: str = "adjudicatario",
+    country: str = "pt",
+    size: int = 8,
+    es: Any = None,
+) -> Dict[str, Any]:
+    """Entidades de um país no papel pedido (para os seletores da página).
+
+    Devolve `{nif, name, contracts, total_value}` por entidade — a mesma forma
+    nos três países, para o seletor não ter de conhecer os dialetos. Em França
+    os dados não têm nomes: a pesquisa é por SIRET e o `name` devolve o próprio
+    identificador.
+    """
+    client = es or get_es_client(request_timeout=_REQUEST_TIMEOUT)
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": []}
+
+    role = role if role in ROLES else bc.SUPPLIER
+    country = bc.country_key(country)
+    texto = (q or "").strip()
+    if len(texto) < 2:
+        return {"country": country, "role": role, "query": q, "items": [], "total": 0}
+
+    size = max(1, min(int(size or 8), 25))
+    dialeto = bc.dialect(country)
+    try:
+        resp = client.search(
+            index=dialeto["index"],
+            body={
+                "size": 0,
+                "track_total_hits": True,
+                "query": {"bool": {"filter": [bc.entity_search_filter(country, role, texto)]}},
+                "aggs": {"entidades": bc.rank_agg(country, role, size)},
+            },
+        )
+    except Exception as exc:  # pragma: no cover - depende do cluster
+        logger.warning("Pesquisa de entidades falhou (%s, %s): %s", country, role, exc)
+        return {"error": str(exc), "items": []}
+
+    linhas = bc.rank_rows(country, role, resp.get("aggregations", {}).get("entidades"), size, None)
+    itens = [
+        {
+            "nif": linha["nif"],
+            "name": linha["name"],
+            "contracts": linha["count"],
+            "total_value": (linha.get("value") or 0.0) or None,
+        }
+        for linha in linhas
+    ]
+    return {"country": country, "role": role, "query": q, "items": itens, "total": len(itens)}
+
+
 def benchmark_entity(
     *,
     nif: Optional[str] = None,
@@ -878,7 +932,7 @@ def benchmark_meta(country: Optional[str] = None, es: Any = None) -> Dict[str, A
     if not client:
         return {"error": "Elasticsearch indisponível", "countries": []}
 
-    paises = list(bc.COUNTRIES) if not country or bc.country_key(country) == "all" else [bc.country_key(country)]
+    paises = list(bc.COUNTRIES) if bc.is_all(country) else [bc.country_key(country)]
     resumo: List[Dict[str, Any]] = []
     for pais in paises:
         dialeto = bc.dialect(pais)

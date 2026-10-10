@@ -47,6 +47,16 @@ chat-ui/playwright/.cache
 **/.pytest_cache
 **/__pycache__
 
+# Partes NDJSON comprimidas da migracao de contratos, criadas pelo
+# `deploy/kamatera/es/migrar_contratos.ps1` (156 ficheiros de ~80 MB, **10,7 GB**).
+#
+# Sao dados de migracao, ja importados no Elasticsearch, e a imagem nao precisa
+# de nada deles. Sem esta linha o contexto de build passa de ~12 MB para 10,7 GB
+# -- o deploy continuo deixa de ser viavel e o `tar` fica minutos a escrever um
+# ficheiro que depois atravessa a ligacao. Foi o que aconteceu hoje: um
+# `19-deploy-codigo.ps1` chegou a 7,4 GB de contexto antes de ser travado.
+deploy/kamatera/es/_export
+
 # ATENCAO: `_frontend_dist` **nao** pode entrar aqui. O
 # `Dockerfile.frontend.incremental` faz `COPY _frontend_dist`, e um ficheiro
 # excluido do contexto faz a build falhar com

@@ -124,12 +124,21 @@ Write-Host '=== 2. A empacotar o contexto de build ===' -ForegroundColor Cyan
 foreach ($f in @($pkg, $tar)) { if (Test-Path $f) { Remove-Item $f -Force } }
 
 # As mesmas exclusoes do `.dockerignore`. O `tar` do Windows aceita `--exclude`.
+#
+# ATENCAO: sao **duas listas** -- esta e a do `.dockerignore` -- e tem de ser
+# mantidas em sincronia. Ja divergiram: as partes da migracao de contratos
+# (`deploy/kamatera/es/_export`, 10,7 GB em 156 ficheiros) entraram no contexto e
+# um deploy chegou a 7,4 GB de tar antes de ser travado. A salvaguarda de tamanho
+# logo abaixo existe para que a divergencia seguinte seja ruidosa, e nao uma
+# espera de meia hora sem explicacao.
 $excl = @(
     '--exclude=./data', '--exclude=./model', '--exclude=./training',
     '--exclude=./logs', '--exclude=./kronos_upstream', '--exclude=./debug_mj',
     '--exclude=./exports', '--exclude=./.git', '--exclude=*/.git',
     '--exclude=*node_modules', '--exclude=*e2e-venv', '--exclude=*.venv',
-    '--exclude=*__pycache__', '--exclude=*.pytest_cache', '--exclude=./chat-ui/dist'
+    '--exclude=*__pycache__', '--exclude=*.pytest_cache', '--exclude=./chat-ui/dist',
+    # Partes NDJSON da migracao de contratos: sao dados, nao codigo.
+    '--exclude=./deploy/kamatera/es/_export'
 )
 Push-Location $raiz
 try {
@@ -139,6 +148,30 @@ try {
 } finally { Pop-Location }
 $tamPkg = (Get-Item $pkg).Length
 Write-Host ("  contexto: {0:N1} MB" -f ($tamPkg / 1MB))
+
+# Salvaguarda de tamanho. O contexto normal sao ~12 MB; acima de 150 MB e quase
+# de certeza um ficheiro de dados que escapou a lista -- e o sintoma, sem isto, e
+# um `tar` de minutos, um envio de GB e um deploy que parece pendurado. Falhar
+# aqui, nomeando os suspeitos, poupa a investigacao toda.
+$limiteMb = 150
+if ($tamPkg -gt ($limiteMb * 1MB)) {
+    Write-Host ''
+    Write-Host ("  ERRO: contexto de {0:N1} MB (limite {1} MB)." -f ($tamPkg / 1MB), $limiteMb) -ForegroundColor Red
+    Write-Host '  Pastas grandes que costumam escapar-- confirmar contra o .dockerignore:' -ForegroundColor Red
+    foreach ($suspeito in @('deploy\kamatera\es\_export', 'deploy\kamatera\_export',
+                            'exports', 'debug_mj', 'data', 'model', 'logs')) {
+        $p = Join-Path $raiz $suspeito
+        if (Test-Path $p) {
+            $t = (Get-ChildItem $p -Recurse -File -ErrorAction SilentlyContinue |
+                Measure-Object Length -Sum).Sum
+            if ($t -gt 20MB) {
+                Write-Host ("      {0,8:N1} MB  {1}" -f ($t / 1MB), $suspeito) -ForegroundColor Red
+            }
+        }
+    }
+    Remove-Item $pkg -Force -ErrorAction SilentlyContinue
+    throw ("contexto demasiado grande: {0:N1} MB" -f ($tamPkg / 1MB))
+}
 
 if ($Planear) {
     Write-Host ''

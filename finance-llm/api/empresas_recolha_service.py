@@ -474,7 +474,14 @@ def _ligacoes_diretoria(page: Any, prefixo: str) -> List[Dict[str, Any]]:
     """
     base = f"/diretorio/{prefixo}" if prefixo else "/diretorio"
     padrao = re.compile(rf"^{re.escape(base)}/([a-z0-9\-]+)/?$", re.I)
+    # O site usa dois formatos para a contagem:
+    #   «Empresas de Évora (7.453)»            -- número entre parênteses
+    #   «Angra do Heroísmo\n4.574 Empresas»    -- número antes da palavra
+    # O segundo aparece nas páginas dos Açores. Sem o tratar, o nome do distrito
+    # ficava com o `\n` e com a contagem colados («Angra do Heroísmo 4.574
+    # Empresas», como a UI mostrava) e `empresas` vinha sempre `None`.
     contagem = re.compile(r"\(([\d\.\s\u00a0]+)\)\s*$")
+    contagem_sufixo = re.compile(r"([\d\.\s\u00a0]+)\s*empresas?\s*$", re.I)
     vistos: Dict[str, Dict[str, Any]] = {}
     for node in page.css("a"):
         href = str(node.attrib.get("href") or "").strip()
@@ -486,11 +493,13 @@ def _ligacoes_diretoria(page: Any, prefixo: str) -> List[Dict[str, Any]]:
             continue
         texto = (node.get_all_text(strip=True) or "").strip()
         empresas: Optional[int] = None
-        achado = contagem.search(texto)
+        achado = contagem.search(texto) or contagem_sufixo.search(texto)
         if achado:
             digitos = re.sub(r"[^\d]", "", achado.group(1))
             empresas = int(digitos) if digitos else None
-            texto = contagem.sub("", texto).strip()
+            # Cortar pelo inicio da contagem remove tambem o `\n` que a separa
+            # do nome, nos dois formatos.
+            texto = texto[: achado.start()].strip()
         # «Empresas de Évora» → «Évora»
         nome = re.sub(r"^\s*empresas?\s+de\s+", "", texto, flags=re.I).strip() or slug.replace("-", " ").title()
         vistos[slug] = {"slug": slug, "nome": nome, "empresas": empresas}
@@ -516,7 +525,17 @@ def concelhos_do_site(distrito: str) -> List[str]:
 
 def concelhos_com_nome_do_site(distrito: str) -> List[Dict[str, Any]]:
     """Concelhos de um distrito, com slug, nome visível e n.º de empresas."""
-    distrito_slug = _slugify(distrito)
+    # `_slug_url`, NAO `_slugify`: este prefixo vai ser comparado com o `href`
+    # publicado pelo site, que usa hífenes (`/diretorio/angra-do-heroismo/<c>`).
+    # Com `_slugify` o prefixo ficava `angra_do_heroismo` e não casava com
+    # ligação nenhuma -- a função devolvia 0 concelhos, o `run_district_sync`
+    # não corria o ciclo uma única vez e o trabalho fechava com estado **done**
+    # e 0 empresas. A UI mostrava isso como uma recolha concluída.
+    #
+    # Só se notava em distritos de nome composto (Angra do Heroísmo, Ponta
+    # Delgada, Castelo Branco, Viana do Castelo, Vila Real): nos de uma palavra
+    # os dois slugs coincidem e nunca falhava.
+    distrito_slug = _slug_url(distrito)
     url = _distrito_url(distrito)
     page = _fetch_html(url)
     if page is None:
@@ -640,6 +659,30 @@ def run_district_sync(
     """
     distrito = distrito.strip()
     nomes = [c.strip().lower() for c in (concelhos or []) if c.strip()] or concelhos_do_site(distrito)
+
+    if not nomes:
+        # Zero concelhos nunca e um resultado legitimo. Sem esta guarda o ciclo
+        # seguinte nao corria uma unica vez, a funcao devolvia `ok` e o trabalho
+        # aparecia como **done** na UI com 0 empresas -- indistinguivel de uma
+        # recolha bem sucedida de um distrito pequeno.
+        #
+        # Foi exatamente por aqui que passou um bug de slug (`_slugify` em vez de
+        # `_slug_url` no prefixo de comparacao das ligacoes): 5 distritos de nome
+        # composto -- angra-do-heroismo, castelo-branco, ponta-delgada,
+        # viana-do-castelo, vila-real -- recolhiam zero, 47 concelhos e ~80 mil
+        # empresas, sem um unico erro em lado nenhum. Levantar aqui faz o trabalho
+        # ficar com estado `error` (apanhado em `start_district_job`) e a mensagem
+        # diz qual distrito e por que motivo.
+        #
+        # Nota: uma falha de rede NAO cai aqui -- `concelhos_com_nome_do_site`
+        # levanta `RuntimeError` quando a pagina nao responde. Chegar aqui com a
+        # lista vazia significa que a pagina respondeu e nao tinha as ligacoes.
+        raise ValueError(
+            f"nenhum concelho encontrado para {distrito!r}: a pagina do diretorio "
+            f"respondeu mas nao devolveu ligacoes da forma "
+            f"'/diretorio/<distrito>/<concelho>'"
+        )
+
     manifest = read_manifest(distrito)
     estado: Dict[str, Any] = manifest.setdefault("concelhos", {})
 

@@ -258,12 +258,11 @@ export default function BenchmarkPage({
           setAnoDe(Math.min(...anos));
           setAnoAte(Math.max(...anos));
         }
-        // CPV vindo do quadro conjunto (`?cpv=33600000`).
+        // CPV vindo do quadro conjunto (`?cpv=33600000`): fica no filtro à
+        // espera de uma entidade — sem entidade não há análise a fazer, por isso
+        // não se dispara nenhum pedido (nem se mostra erro).
         const daUrl = new URLSearchParams(window.location.search).get("cpv");
-        if (daUrl) {
-          setCpv(daUrl);
-          void analisar({ cpv_code: daUrl });
-        }
+        if (daUrl) setCpv(daUrl);
       })
       .catch((err: unknown) => setErro(err instanceof Error ? err.message : String(err)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -340,7 +339,7 @@ export default function BenchmarkPage({
           <p className="text-sm text-muted-foreground">
             {soPais
               ? `Preço de referência por CPV, concorrentes, historial de contrapartes e oportunidades — ${infoPais?.label ?? ""}${infoPais ? ` (${num(infoPais.total)} contratos)` : ""}.`
-              : "Quadro conjunto dos trÍs países por CPV: volume, valor e preço mediano de cada mercado."}
+              : "Quadro conjunto dos três países por CPV: volume, valor e preço mediano de cada mercado."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

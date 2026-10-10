@@ -339,46 +339,27 @@ export async function getBenchmarkByCpv(params: {
   return res.json();
 }
 
-/** Pesquisa de entidades por país (para o seletor, conforme o papel). */
+/** Pesquisa de entidades por país (para o seletor, conforme o papel).
+ *
+ * Usa o próprio módulo do benchmark (`/benchmark/entities`): assim os três
+ * países respondem na mesma forma — e em França, onde o DECP não traz nomes, a
+ * pesquisa é por SIRET (o campo `name` devolve o identificador).
+ */
 export async function searchBenchmarkEntities(
   country: BenchmarkCountry,
   role: BenchmarkRole,
   q: string,
   size = 8,
 ): Promise<{ nif: string; name: string; contracts: number; total_value?: number | null }[]> {
-  if (country === "pt") {
-    const { searchCompanies } = await import("./api");
-    const resposta = await searchCompanies({ q, size });
-    return (resposta.items ?? []).map((item) => ({
-      nif: item.nif ?? "",
-      name: item.name,
-      contracts: item.contracts_total,
-      total_value: item.total_value,
-    }));
-  }
-  if (country === "es") {
-    const kind = role === "adjudicante" ? "organo" : "adjudicatario";
-    const params = new URLSearchParams({ q, kind, size: String(size) });
-    const res = await fetch(`${API_BASE}/contracts-es/entities?${params}`);
-    if (!res.ok) throw new Error(`Erro ao procurar entidades: ${res.status}`);
-    const dados: { items?: any[] } = await res.json();
-    return (dados.items ?? []).map((item) => ({
-      nif: item.nif || item.organo_id || "",
-      name: item.name,
-      contracts: item.count ?? 0,
-      total_value: item.total_value,
-    }));
-  }
-  const kind = role === "adjudicante" ? "acheteur" : "adjudicatario";
-  const params = new URLSearchParams({ q, kind, size: String(size) });
-  const res = await fetch(`${API_BASE}/contracts-fr/entities?${params}`);
+  const params = new URLSearchParams({ q, role, country, size: String(size) });
+  const res = await fetch(`${API_BASE}/benchmark/entities?${params}`);
   if (!res.ok) throw new Error(`Erro ao procurar entidades: ${res.status}`);
-  const dados: { items?: any[] } = await res.json();
+  const dados: { items?: { nif?: string; name?: string; contracts?: number; total_value?: number | null }[] } =
+    await res.json();
   return (dados.items ?? []).map((item) => ({
-    // Em França o DECP carregado não traz nomes: a entidade é o SIRET.
-    nif: item.nif || item.name || "",
-    name: item.name,
-    contracts: item.count ?? 0,
-    total_value: item.total_value,
+    nif: item.nif ?? "",
+    name: item.name ?? item.nif ?? "",
+    contracts: item.contracts ?? 0,
+    total_value: item.total_value ?? null,
   }));
 }

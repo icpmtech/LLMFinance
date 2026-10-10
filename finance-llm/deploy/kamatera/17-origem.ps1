@@ -10,13 +10,12 @@
       pc  -> 127.0.0.1:8080   a stack do PC, publicada pelo tunel SSH reverso
       vm  -> 127.0.0.1:4180   a SPA que corre nesta VM
 
-    Escreve o `edge/.env` na VM e recria so o contentor do Caddy. O tunel, os
-    servicos migrados e o stack do PC nao sao tocados.
+    Actualiza `ORIGEM_UPSTREAM` no `edge/.env` da VM e recria so o contentor do
+    Caddy. O tunel, os servicos migrados e o stack do PC nao sao tocados.
 
-    ATENCAO ao modo `vm`: a VM ainda **nao tem backend**. A SPA serve-se e os
-    ficheiros estaticos carregam, mas `/api/...` da 502 e o `handle_errors` do
-    Caddy mostra a pagina de apresentacao. Para o site ficar completo a partir da
-    VM falta migrar o backend (e os 37 GB de `data/`).
+    O `.env` e actualizado por leitura-modificacao-escrita, e nao reescrito de
+    raiz: guarda tambem o `MONITOR_PASSWORD` do painel de monitorizacao. Ver a
+    nota junto ao comando que o escreve.
 
 .EXAMPLE
     .\17-origem.ps1                    # ver qual esta activo
@@ -113,7 +112,17 @@ if ($Modo -eq 'vm') {
 }
 
 # O `.env` fica ao lado do compose, que e onde o `docker compose` o le.
-Show-Vm "printf 'ORIGEM_UPSTREAM=$novo\n' > $EdgeDir/.env && cat $EdgeDir/.env" | Out-Null
+#
+# Leitura-modificacao-escrita, e nao uma escrita cega. O `.env` do edge ja nao
+# guarda so isto: guarda tambem o `MONITOR_PASSWORD` do painel de estado. Com o
+# `>` de antes, mudar de origem apagava o resto do ficheiro sem avisar, e o
+# sintoma aparecia muito depois e noutro sitio -- um painel que deixava de
+# aceitar a password para sempre, sem nada nos logs a ligar as duas coisas.
+#
+# `grep` sem aspas a volta do padrao, `echo` em vez de `printf` e `; ` em vez de
+# `&&`: atravessar PowerShell -> ssh -> bash come aspas e tratava o `\n` do
+# printf como texto. Assim nao ha um unico caracter que possa ser comido.
+Show-Vm "cd $EdgeDir; touch .env; grep -v ^ORIGEM_UPSTREAM= .env > .env.novo; echo ORIGEM_UPSTREAM=$novo >> .env.novo; mv .env.novo .env; cat .env" | Out-Null
 
 Write-Host ''
 Write-Host '=== A recriar o Caddy ===' -ForegroundColor Cyan

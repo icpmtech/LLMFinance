@@ -67,13 +67,15 @@ DIALECTS: Dict[str, Dict[str, Any]] = {
             "nested": "adjudicantes.parsed",
             "id": "adjudicantes.parsed.nif",
             "nome": "adjudicantes.parsed.nome",
-            "nome_kw": "adjudicantes.parsed.nome.keyword",
+            "nome_tipo": "keyword",
+            "nome_kw": "adjudicantes.parsed.nome",
         },
         "supplier": {
             "nested": "adjudicatarios.parsed",
             "id": "adjudicatarios.parsed.nif",
             "nome": "adjudicatarios.parsed.nome",
-            "nome_kw": "adjudicatarios.parsed.nome.keyword",
+            "nome_tipo": "keyword",
+            "nome_kw": "adjudicatarios.parsed.nome",
         },
         "valor_campo": "precoContratual",
         "valor_soma_corpo": {"field": "precoContratual"},
@@ -99,12 +101,14 @@ DIALECTS: Dict[str, Dict[str, Any]] = {
             "nested": None,
             "id": "organo_id",
             "nome": "organo_nombre",
+            "nome_tipo": "text",
             "nome_kw": "organo_nombre.keyword",
         },
         "supplier": {
             "nested": None,
             "id": "adjudicatario_nif",
             "nome": "adjudicatario_nombre",
+            "nome_tipo": "text",
             "nome_kw": "adjudicatario_nombre.keyword",
         },
         "valor_campo": "valor_adjudicado",
@@ -131,12 +135,14 @@ DIALECTS: Dict[str, Dict[str, Any]] = {
             "nested": None,
             "id": "acheteur_id",
             "nome": "acheteur_nom",
+            "nome_tipo": "text",
             "nome_kw": "acheteur_nom.keyword",
         },
         "supplier": {
             "nested": "titulaires",
             "id": "titulaires.id",
             "nome": "titulaires.nom",
+            "nome_tipo": "text",
             "nome_kw": None,
         },
         "valor_campo": "valor",
@@ -176,6 +182,11 @@ def country_key(country: Optional[str]) -> str:
     """Chave normalizada do país (`pt`/`es`/`fr`)."""
     chave = (country or "pt").strip().lower()
     return chave if chave in DIALECTS else "pt"
+
+
+def is_all(country: Optional[str]) -> bool:
+    """`all` (ou ausente/`*`) significa «os três países»."""
+    return (country or "").strip().lower() in ("", "all", "*", "todos")
 
 
 def party(country: Optional[str], role: str) -> Dict[str, Any]:
@@ -225,35 +236,83 @@ def entity_filter(
     return consulta
 
 
-def rank_agg(country: Optional[str], role: str, size: int) -> Dict[str, Any]:
+def entity_search_filter(country: Optional[str], role: str, q: Optional[str]) -> Dict[str, Any]:
+    """Filtro de pesquisa livre de entidades (nome ou identificador).
+
+    Escreve-se um nome (`BRAUN`) ou um identificador (`504293753`); o filtro
+    tenta os dois caminhos no campo próprio do país. O tipo do campo de nome
+    decide o operador: em PT o nome é `keyword` (não aceita
+    `match_phrase_prefix`) e procura-se com `wildcard` sem distinguir
+    maiúsculas; em ES/FR é `text` e usa-se `match_phrase_prefix`. Em França não
+    há nomes nos dados (só SIRET), por isso aí vale sempre o identificador.
+    """
+    spec = party(country, role)
+    texto = (q or "").strip()
+    if not texto:
+        return {"match_all": {}}
+    digitos = "".join(carater for carater in texto if carater.isdigit())
+    should: List[Dict[str, Any]] = []
+    if spec.get("nome"):
+        if (spec.get("nome_tipo") or "text") == "keyword":
+            should.append(
+                {
+                    "wildcard": {
+                        spec["nome"]: {"value": f"*{texto}*", "case_insensitive": True},
+                    }
+                }
+            )
+        else:
+            should.append({"match_phrase_prefix": {spec["nome"]: texto}})
+    if digitos:
+        should.append({"prefix": {spec["id"]: digitos}})
+    if not should:
+        should.append({"match_phrase_prefix": {spec["id"]: texto}})
+    consulta = {"bool": {"should": should, "minimum_should_match": 1}}
+    nested = spec.get("nested")
+    if nested:
+        return {"nested": {"path": nested, "query": consulta}}
+    return consulta
+
+
+def rank_agg(
+    country: Optional[str],
+    role: str,
+    size: int,
+    *,
+    filtro: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Ranking das entidades de um papel, por valor contratado.
 
     Em PT/FR a parte é `nested` (o valor soma-se com `reverse_nested` e a ordem
     usa `value>sum`); em ES os campos são planos (ordem por `value`).
+
+    `filtro` (opcional) restringe as entidades contadas **dentro** da parte —
+    é o que faz uma pesquisa por nome devolver a entidade procurada e não todos
+    os co-contratantes dos contratos em que ela aparece.
     """
     spec = party(country, role)
     nested = spec.get("nested")
     dialeto = dialect(country)
     if nested:
-        return {
-            "nested": {"path": nested},
-            "aggs": {
-                "top": {
-                    "terms": {"field": spec["id"], "size": size, "order": {"value>sum": "desc"}},
-                    "aggs": {
-                        "nome": {"top_hits": {"size": 1, "_source": True}},
-                        "value": {
-                            "reverse_nested": {},
-                            "aggs": {
-                                "sum": {"sum": dialeto["valor_soma_corpo"]},
-                                "last": {"max": {"field": dialeto["data"]}},
-                            },
+        interno: Dict[str, Any] = {
+            "top": {
+                "terms": {"field": spec["id"], "size": size, "order": {"value>sum": "desc"}},
+                "aggs": {
+                    "nome": {"top_hits": {"size": 1, "_source": True}},
+                    "value": {
+                        "reverse_nested": {},
+                        "aggs": {
+                            "sum": {"sum": dialeto["valor_soma_corpo"]},
+                            "last": {"max": {"field": dialeto["data"]}},
                         },
                     },
-                }
-            },
+                },
+            }
         }
-    return {
+        if filtro:
+            return {"nested": {"path": nested}, "aggs": {"alvo": {"filter": filtro, "aggs": interno}}}
+        return {"nested": {"path": nested}, "aggs": interno}
+    termos = {
         "terms": {"field": spec["id"], "size": size, "order": {"value": "desc"}},
         "aggs": {
             "nome": {"top_hits": {"size": 1, "_source": True}},
@@ -261,6 +320,25 @@ def rank_agg(country: Optional[str], role: str, size: int) -> Dict[str, Any]:
             "last": {"max": {"field": dialeto["data"]}},
         },
     }
+    if filtro:
+        return {"filter": filtro, "aggs": {"top": termos}}
+    return termos
+
+
+def _rank_buckets(agg: Optional[Dict[str, Any]], nested: bool) -> List[Dict[str, Any]]:
+    """Buckets do ranking, tolerando uma camada de filtro à frente do `terms`."""
+    if not isinstance(agg, dict):
+        return []
+    if nested and isinstance(agg.get("top"), dict):
+        return agg["top"].get("buckets") or []
+    if not nested and agg.get("buckets") is not None:
+        return agg.get("buckets") or []
+    for valor in agg.values():
+        if isinstance(valor, dict):
+            achado = _rank_buckets(valor, nested)
+            if achado:
+                return achado
+    return []
 
 
 def rank_rows(
@@ -277,8 +355,10 @@ def rank_rows(
     """
     if not agg:
         return []
-    nested = "top" in agg
-    buckets = (((agg.get("top") or {}).get("buckets")) if nested else agg.get("buckets")) or []
+    # A forma dos buckets segue o dialeto (e não o corpo da agregação, que pode
+    # ter uma camada de filtro à frente do `terms`).
+    nested = is_nested(country, role)
+    buckets = _rank_buckets(agg, nested)
     rows: List[Dict[str, Any]] = []
     for bucket in buckets:
         chave = bucket.get("key")

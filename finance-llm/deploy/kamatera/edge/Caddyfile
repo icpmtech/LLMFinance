@@ -51,6 +51,21 @@ sabemos.studio {
         reverse_proxy http://127.0.0.1:8090
     }
 
+    # Mini portal de monitorizacao: servicos, imagens e estado da maquina.
+    #
+    # Servico proprio (`iqos-monitor`), **independente da aplicacao**. Nao passa
+    # pelo `ORIGEM_UPSTREAM` de proposito: se passa-se, ficaria dependente do
+    # tunel SSH e do backend, e ficaria em branco exactamente quando e preciso
+    # saber o que se passou. Tem login de administrador proprio; a password vem
+    # de `MONITOR_PASSWORD` no `edge/.env`.
+    #
+    # Espera o caminho completo (`/monitor/...`) — o servidor e que o desmonta,
+    # via `BASE_PATH`, e redirecciona `/monitor` para `/monitor/` para os
+    # caminhos relativos do HTML resolverem dentro do prefixo.
+    handle /monitor* {
+        reverse_proxy http://127.0.0.1:8091
+    }
+
     # Hermes Agent dashboard — iframe "Hermes Agent" da SPA. O dashboard é
     # servido pelo próprio nginx da origem (127.0.0.1:8080) sob o subcaminho
     # /hermes-agent/; o nginx reescreve caminhos absolutos e injeta <base href>

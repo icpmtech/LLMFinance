@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Sem `noindex` no robots: este painel nao deve aparecer em lado nenhum. -->
+<meta name="robots" content="noindex, nofollow">
+<title>Estado do sistema — IQ OS</title>
+<link rel="stylesheet" href="app.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+
+<!-- ---------------------------------------------------------------- entrada -->
+<main id="entrada" class="entrada">
+    <form id="form-entrada" class="cartao" autocomplete="off">
+        <h1>Estado do sistema</h1>
+        <p class="sub">Painel de administração — serviços e imagens do servidor.</p>
+
+        <label for="password">Password de administrador</label>
+        <input id="password" name="password" type="password" required
+               autocomplete="current-password" autofocus>
+        <button type="submit" id="botao-entrar">Entrar</button>
+        <p id="erro-entrada" class="erro" role="alert" hidden></p>
+    </form>
+</main>
+
+<!-- ---------------------------------------------------------------- painel -->
+<main id="painel" hidden>
+
+    <header class="topo">
+        <div>
+            <h1>Estado do sistema</h1>
+            <p class="sub" id="contexto">a carregar…</p>
+        </div>
+        <div class="topo-acoes">
+            <span id="atualizado" class="marca"></span>
+            <button id="botao-atualizar" type="button" class="secundario">Atualizar</button>
+            <button id="botao-sair" type="button" class="secundario">Sair</button>
+        </div>
+    </header>
+
+    <p id="aviso" class="aviso" role="alert" hidden></p>
+
+    <!-- Cartoes de resumo da maquina -->
+    <section class="cartoes" id="cartoes" aria-label="Máquina"></section>
+
+    <!-- Servicos -->
+    <section class="bloco">
+        <div class="bloco-topo">
+            <h2>Serviços</h2>
+            <span class="contagem" id="contagem-servicos"></span>
+        </div>
+        <div class="tabela-envolvente">
+            <table id="tabela-servicos">
+                <thead>
+                    <tr>
+                        <th>Contentor</th>
+                        <th>Imagem</th>
+                        <th>Estado</th>
+                        <th>Saúde</th>
+                        <th>No ar há</th>
+                        <th>Reinícios</th>
+                        <th>Portas / sonda</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Imagens -->
+    <section class="bloco">
+        <div class="bloco-topo">
+            <h2>Imagens</h2>
+            <span class="contagem" id="contagem-imagens"></span>
+        </div>
+        <div class="tabela-envolvente">
+            <table id="tabela-imagens">
+                <thead>
+                    <tr>
+                        <th>Imagem</th>
+                        <th>Tamanho</th>
+                        <th>Criada</th>
+                        <th>Contentores</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </section>
+
+    <footer class="rodape">
+        <span>Os dados vêm do socket do Docker e de <code>/proc</code> desta máquina.</span>
+        <span>Este painel não depende da aplicação — funciona com ela em baixo.</span>
+    </footer>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

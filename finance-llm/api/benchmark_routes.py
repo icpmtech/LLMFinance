@@ -6,6 +6,7 @@ em **Portugal, Espanha e França** — o parâmetro `country` escolhe o índice:
 
 - `GET  /benchmark/meta`    — países, volumetria e anos disponíveis
 - `GET  /benchmark/cpv`     — CPV mais usados de um país (seletor), com descrição
+- `GET  /benchmark/entities`— entidades de um país no papel pedido (seletor)
 - `GET  /benchmark/entity`  — preço de referência, concorrência, historial e oportunidades
 - `POST /benchmark/compare` — comparação de **até 10 empresas** no mesmo segmento
 - `GET  /benchmark/by-cpv`  — quadro por CPV com o volume/preço de cada país
@@ -72,6 +73,23 @@ def benchmark_cpv(
 ) -> Dict[str, Any]:
     """CPV mais usados no país (para escolher o segmento)."""
     resultado = benchmark.top_cpv(q=q, size=size, country=country)
+    if resultado.get("error"):
+        raise HTTPException(status_code=503, detail=str(resultado["error"]))
+    return resultado
+
+
+@router.get("/entities")
+def benchmark_entities(
+    q: str = Query(..., min_length=2, description="Nome ou identificador (NIF/DIR3/SIRET) da entidade"),
+    role: str = Query(
+        "adjudicatario",
+        description="Papel da entidade: `adjudicatario` (vende) ou `adjudicante` (compra)",
+    ),
+    country: str = Query("pt", description="País dos dados: `pt`, `es` ou `fr`"),
+    size: int = Query(8, ge=1, le=25, description="Quantas entidades devolver"),
+) -> Dict[str, Any]:
+    """Entidades do país no papel pedido (seletor da página do benchmark)."""
+    resultado = benchmark.search_entities(q=q, role=role, country=country, size=size)
     if resultado.get("error"):
         raise HTTPException(status_code=503, detail=str(resultado["error"]))
     return resultado

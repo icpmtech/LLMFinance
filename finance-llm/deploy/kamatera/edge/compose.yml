@@ -66,6 +66,45 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Mini portal de monitorizacao: servicos, imagens e estado da maquina.
+  #
+  # Existe **fora da solucao** de proposito. Um painel que precisasse do backend,
+  # do frontend ou do Elasticsearch para se desenhar ficava em branco exactamente
+  # quando faz falta -- e o sintoma confundir-se-ia com o problema. Este fala
+  # directamente com o socket do Docker, por isso mostra o estado real mesmo com
+  # a aplicacao toda em baixo.
+  monitor:
+    build: ./monitor
+    image: iqos-monitor:latest
+    container_name: iqos-monitor
+    restart: unless-stopped
+    # Rede do anfitriao: e o que permite sondar os servicos no `127.0.0.1:<porta>`
+    # onde estao publicados (o `landing`, em bridge, nao os ve).
+    #
+    # Consequencia a ter em conta: com `network_mode: host` o `ports:` **nao se
+    # aplica**. Quem decide o que fica exposto e o `MONITOR_BIND` do servidor, que
+    # por omissao e `127.0.0.1` -- obrigatorio nesta VM, que nao tem firewall e
+    # onde um bind a `0.0.0.0` deixaria o socket do Docker atras de um login.
+    network_mode: host
+    environment:
+      PORT: "8091"
+      BASE_PATH: /monitor
+      MONITOR_BIND: 127.0.0.1
+      # Sem isto o servidor recusa arrancar -- um painel sem password mostraria
+      # o estado interno do servidor a quem passasse. Ver `edge/.env`.
+      MONITOR_PASSWORD: ${MONITOR_PASSWORD:-}
+    volumes:
+      # So de leitura. E o que permite saber o estado real dos contentores e das
+      # imagens sem passar por nenhum servico da solucao -- que e o ponto do
+      # painel. E, ao mesmo tempo, o poder de um root no anfitriao: por isso o
+      # painel exige login e nao tem nenhum caminho de escrita.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   caddy_data:
   caddy_config:
