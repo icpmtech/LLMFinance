@@ -9685,7 +9685,7 @@ export default function EmpresasIQPage() {
                   />
                 ) : detail.type === "entity-contracts" ? (
                   <div className="h-[70vh] min-h-[420px]">
-                    <EntityContractsPanel nif={detail.id} onBack={closeDetail} />
+                    <EntityContractsPanel nif={detail.id} onBack={closeDetail} onOpenContract={openContract} />
                   </div>
                 ) : (
                   <ContractDetailPanel id={detail.id} onBack={closeDetail} onEntity={openEntity} />

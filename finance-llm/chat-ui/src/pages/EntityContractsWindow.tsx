@@ -65,7 +65,20 @@ function contractDate(contract: ContractItem): string {
 
 /* --------------------------------------------------------------- painel */
 
-export function EntityContractsPanel({ nif, onBack }: { nif: string; onBack?: () => void }) {
+export function EntityContractsPanel({
+  nif,
+  onBack,
+  onOpenContract,
+}: {
+  nif: string;
+  onBack?: () => void;
+  /**
+   * Abertura da ficha do contrato decidida por quem usa o painel: janela em modo
+   * janelas, modal em modo página (onde não há gestor de janelas). Sem isto,
+   * abre uma janela — o comportamento do painel em modo janelas.
+   */
+  onOpenContract?: (id: string) => void;
+}) {
   const [name, setName] = useState("");
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -210,7 +223,12 @@ export function EntityContractsPanel({ nif, onBack }: { nif: string; onBack?: ()
 
   const openContract = (contract: ContractItem) => {
     const id = String(contract.idcontrato ?? "");
-    if (id) openWindow(`contract-detail:${id}`, undefined, { title: "Ficha do contrato" });
+    if (!id) return;
+    if (onOpenContract) {
+      onOpenContract(id);
+      return;
+    }
+    openWindow(`contract-detail:${id}`, undefined, { title: "Ficha do contrato" });
   };
 
   return (
