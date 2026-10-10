@@ -97,8 +97,18 @@ if ($emUso -eq $novo) {
 Write-Host ''
 Write-Host "=== A mudar para '$Modo' ($novo) ===" -ForegroundColor Cyan
 if ($Modo -eq 'vm') {
-    Write-Host '  AVISO: a VM ainda nao tem backend -- /api dara 502 e o Caddy' -ForegroundColor Yellow
-    Write-Host '         mostrara a pagina de apresentacao no lugar dos dados.' -ForegroundColor Yellow
+    # Sonda a serio em vez de um aviso fixo. A mensagem estatica envelheceu mal:
+    # continuou a dizer que a VM nao tinha backend muito depois de o ter, e
+    # levava a desconfiar de um modo `vm` que ja estava bom.
+    $saude = (Invoke-Vm 'curl -s -o /dev/null -m 8 -w %{http_code} http://127.0.0.1:8002/health').Output
+    if ($saude -match '^2') {
+        Write-Host '  backend da VM responde: a VM serve a SPA e o /api.' -ForegroundColor Green
+    } else {
+        Write-Host "  AVISO: o backend da VM nao respondeu na 8002 (obtido '$saude')." -ForegroundColor Yellow
+        Write-Host '         A SPA sera servida mas o /api dara 502 e o Caddy mostrara a' -ForegroundColor Yellow
+        Write-Host '         pagina de apresentacao no lugar dos dados.' -ForegroundColor Yellow
+        Write-Host '         Por: .\14-servico-vm.ps1 -Nome backend' -ForegroundColor Yellow
+    }
     Write-Host ''
 }
 

@@ -119,9 +119,12 @@ $SERVICOS = @{
         Extra = @()
     }
     # A peca central: sem ele o modo `vm` serve a SPA mas `/api` da 502.
-    # `data/`, `model/`, `rag/` e `logs/` ficam vazios de proposito.
+    # `data/`, `model/` e `logs/` ficam vazios de proposito. O `rag/` **nao**
+    # pode ser montado: e codigo dentro da imagem, e tapá-lo mata o arranque.
     'backend' = @{
-        Porta = 8000
+        # Fixa em 8002 no `compose.yml`, e nao herdada do `FINANCE_API_PORT`
+        # do `.env` do PC. Ver o cabecalho desse ficheiro.
+        Porta = 8002
         Sonda = '/health'
         Extra = @()
     }

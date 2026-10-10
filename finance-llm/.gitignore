@@ -41,6 +41,12 @@ docker/osif/src/
 # O `.env` do compose nao as cobre (aquele padrao so apanha ficheiros chamados
 # exatamente `.env`), por isso esta linha e obrigatoria.
 deploy/kamatera/.kamatera.env
+# Partes NDJSON comprimidas da migracao de `contratos`/`contratos_es`, criadas
+# pelo `deploy/kamatera/es/migrar_contratos.ps1` (~9,4 GB, ~40-116 ficheiros por
+# indice, 80 MB cada). Sao intermedias e re-geraveis a partir do Elasticsearch de
+# origem. Um ficheiro de 84 MB faz o GitHub rejeitar o push, por isso esta linha
+# e a diferenca entre um `git add .` inocente e um push partido.
+deploy/kamatera/es/_export/
 # Contratos de Espanha (PLACSP): os ZIP anuais são dados re-descarregáveis
 # (25 ficheiros, ~9,4 GB) e ficam só em disco — o GitHub rejeita ficheiros
 # acima de 100 MiB. As listas de códigos `codigos/*.gc` são pequenas e ficam

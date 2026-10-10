@@ -151,4 +151,26 @@ Write-Host ''
 Show-Vm 'df -h / | tail -1; free -m | sed -n 2p' | Out-Null
 Write-Host ''
 Write-Host '  O ES escuta so em 127.0.0.1:9200 (nao esta exposto a Internet).' -ForegroundColor DarkGray
+
+# === 7. Reiniciar o backend ==-
+#
+# Obrigatorio, e o motivo e subtil: o cliente do Elasticsearch do backend guarda
+# ligacoes em pool. Quando o ES e recriado o processo antigo desaparece, mas os
+# sockets do backend ficam a apontar para um destino que ja nao existe -- e, como
+# nao ha RST, a leitura fica presa ate ao `request_timeout` do cliente (30 s).
+#
+# O sintoma e um `502 {"detail": "Connection timed out"}` so em **alguns**
+# endpoints: os que apanham a ligacao morta do pool. Os outros respondem 200, e e
+# isso que faz o problema parecer aleatorio. Aconteceu a serio: depois de subir o
+# heap de 512m para 2g, o dashboard de contratos ficou em 502 enquanto
+# `/contracts/analytics/regional`, `/contracts/search` e `/benchmark/*` davam 200.
+Write-Host ''
+Write-Host '=== 7. Reiniciar o backend (pool de ligacoes para o ES antigo) ===' -ForegroundColor Cyan
+$backendVivo = (Invoke-Vm 'docker ps -q -f name=iqos-backend').Output
+if ($backendVivo) {
+    Invoke-Vm 'docker restart iqos-backend' | Out-Null
+    Write-Host '  iqos-backend reiniciado -- as ligacoes mortas foram descartadas' -ForegroundColor Green
+} else {
+    Write-Host '  iqos-backend nao esta a correr: nada a reiniciar' -ForegroundColor DarkGray
+}
 Write-Host ''

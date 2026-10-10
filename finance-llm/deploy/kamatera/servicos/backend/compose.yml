@@ -26,15 +26,28 @@ services:
     image: iq-os-backend:latest
     container_name: iqos-backend
     ports:
-      - "127.0.0.1:${FINANCE_API_PORT:-8000}:8000"
+      # Porta **fixa**, de proposito. O `14-servico-vm.ps1` copia o `.env` do PC
+      # para aqui, e nesse `.env` esta `FINANCE_API_PORT=8002`. Com a
+      # interpolacao `${FINANCE_API_PORT:-8000}` o contentor ficava na 8002
+      # enquanto a sonda do script perguntava pela 8000 -- e o backend, que
+      # estava bom, era dado como morto.
+      # A porta do anfitriao da VM e uma decisao de instalacao: nao deve vir do
+      # portatil de desenvolvimento.
+      - "127.0.0.1:8002:8000"
     extra_hosts:
       # O Ollama corre no anfitriao por omissao (OLLAMA_URL abaixo).
       - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/app/data
       - ./model:/app/model
-      - ./rag:/app/rag
       - ./logs:/app/logs
+      # ATENCAO: **nao** montar `./rag:/app/rag`. O `rag/` parece uma pasta de
+      # dados mas e um **pacote Python que vive dentro da imagem**; montar por
+      # cima uma pasta vazia tapa o codigo e o backend morre no arranque com
+      #   ModuleNotFoundError: No module named 'rag.chat'
+      # (o `api/rag_service.py` faz `from rag.chat.rag_engine import RagEngine`).
+      # No compose da raiz isto nao acontece porque la a pasta tem os ficheiros.
+      #
       # Biblioteca de skills do Hermes, so de leitura.
       - hermes-data:/hermes-data:ro
       # Modelos do faster-whisper: sem isto, cada recriacao volta a descarregar.

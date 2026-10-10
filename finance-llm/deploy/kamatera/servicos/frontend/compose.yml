@@ -11,12 +11,14 @@
 #   1. **sem `depends_on: backend`** -- aqui o backend ainda nao existe, e com
 #      essa dependencia o contentor nem arrancava;
 #   2. porta presa a 127.0.0.1 e limite de memoria;
-#   3. **`extra_hosts: backend:host-gateway`**. O nginx tem
-#      `proxy_pass http://backend:8000` gravado na imagem e faz `[emerg] host not
-#      found in upstream "backend"` -- recusa arrancar se o nome nao resolver.
-#      Esta linha da-lhe um destino para o nome existir. Quando o backend for
-#      migrado para esta VM e entrar na rede `iqos-net`, **remover esta linha**,
-#      senao o nome fica preso ao gateway e nunca chega ao backend.
+#   3. **sem `extra_hosts`**. O nginx tem `proxy_pass http://backend:8000`
+#      gravado na imagem e faz `[emerg] host not found in upstream "backend"`
+#      -- recusava arrancar enquanto o backend nao existia. Dava-se-lhe um
+#      destino com `extra_hosts: backend:host-gateway`. Agora que o backend esta
+#      migrado e na `iqos-net`, essa linha **tinha de sair**: as entradas de
+#      `/etc/hosts` ganham ao DNS do Docker, por isso `backend` ficava preso ao
+#      gateway -- o anfitriao da VM, onde nada escuta na 8000 -- e todo o
+#      `/api` dava 502. Na mesma rede, o nome resolve para o contentor.
 #
 # As portas 8891-8894 do compose local servem os iframes (n8n, hermes, mirofish,
 # osif) via `docker/nginx.conf`. Ficam de fora: sem esses servicos ligados seriam
@@ -27,8 +29,6 @@ services:
     container_name: iqos-frontend
     ports:
       - "127.0.0.1:${FINANCE_UI_PORT:-4180}:80"
-    extra_hosts:
-      - "backend:host-gateway"
     environment:
       - TZ=Europe/Lisbon
     deploy:

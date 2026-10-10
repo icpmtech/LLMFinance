@@ -42,9 +42,19 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      # **Aumentado de 512m para 2g em 2026-10-10.** Os 512m eram da VM de 2 GB;
+      # com 8 GB de RAM e uma indexacao de 32 GB a entrar, meio giga e um garrote
+      # silencioso: o `indices.memory.index_buffer_size` vale 10% do heap, logo
+      # 51 MB de buffer. Medido, o `_bulk` andava a 9,5 MB/s -- e ha muito heap
+      # livre para gastar (a VM usa ~3,2 GB com tudo a correr).
+      - ES_JAVA_OPTS=-Xms2g -Xmx2g
       # Mantido para o caso de se voltar a sincronizar em host networking.
       - reindex.remote.whitelist=127.0.0.1:9201,host.docker.internal:9201
+    ulimits:
+      # Sem isto, o mlock falha e o JVM avisa que nao conseguiu travar a memoria.
+      memlock:
+        soft: -1
+        hard: -1
     volumes:
       - es-data:/usr/share/elasticsearch/data
     healthcheck:
