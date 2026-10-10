@@ -493,10 +493,11 @@ export interface BenchmarkCrossShared {
 
 export interface BenchmarkCrossResponse {
   role: BenchmarkRole;
+  counterparty_label: string;
+  cpv_filter?: string | null;
   companies: BenchmarkCrossCompany[];
   shared_cpvs: BenchmarkCrossShared[];
   shared_counterparties: BenchmarkCrossShared[];
-  counterparty_label: string;
   notes: string[];
   error?: string;
 }
@@ -511,6 +512,69 @@ export async function compareBenchmarkCross(payload: BenchmarkCrossRequest): Pro
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || `Erro no cruzamento: ${res.status}`);
+  }
+  return res.json();
+}
+
+/* ------------------------------------------------ relatório PDF (pago) */
+
+/** Âmbito do relatório: uma empresa, o quadro por CPV ou o cruzamento. */
+export type BenchmarkReportMode = "empresa" | "mercado" | "cruzar";
+
+export interface BenchmarkReportParams {
+  mode: BenchmarkReportMode;
+  country?: BenchmarkCountry;
+  nif?: string;
+  name?: string;
+  role?: BenchmarkRole;
+  cpv_code?: string;
+  year_from?: number;
+  year_to?: number;
+  region?: string;
+  countries?: BenchmarkCountry[];
+  top?: number;
+  entities?: { country: BenchmarkCountry; nif?: string; name?: string }[];
+  notes?: string;
+}
+
+export interface BenchmarkReportOrder {
+  id: string;
+  reference: string;
+  status: string;
+  package_title: string;
+  amounts: { subtotal: number; vat: number; total: number; vat_rate?: number };
+  payment: { method: string; status: string; mbway_phone?: string; provider_request_id?: string };
+  files: { id: string; name: string; size: number; uploaded_at: string }[];
+  history?: { id: string; message: string; at: string }[];
+  targets_label?: string;
+}
+
+export interface BenchmarkReportResponse {
+  request: BenchmarkReportOrder;
+  package: { id: string; title: string; price: number; delivery_days?: number; features?: string[] };
+  report: { mode: BenchmarkReportMode; title: string; subtitle: string };
+  settings: { mbway_number: string; mbway_enabled: boolean; mbway_api: boolean; payment_instructions: string };
+  automatic: { ok: boolean; configured: boolean; message?: string; request_id?: string };
+}
+
+/** Pede o relatório PDF do benchmark (preço definido no backoffice). */
+export async function requestBenchmarkReport(
+  payload: BenchmarkReportParams & { mbway_phone?: string },
+): Promise<BenchmarkReportResponse> {
+  const res = await fetch(`${API_BASE}/benchmark/report`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    let detalhe = `${res.status}`;
+    try {
+      const corpo = (await res.json()) as { detail?: string };
+      if (corpo?.detail) detalhe = corpo.detail;
+    } catch {
+      /* resposta sem JSON */
+    }
+    throw new Error(detalhe);
   }
   return res.json();
 }

@@ -43,6 +43,7 @@ import { Tabs, TabsList, TabsTrigger } from "../components/ui/Tabs";
 import BenchmarkByCpv from "../components/benchmark/BenchmarkByCpv";
 import BenchmarkCompare from "../components/benchmark/BenchmarkCompare";
 import { CpvAutocomplete, EmpresaAutocomplete, type EmpresaBenchmark } from "../components/benchmark/BenchmarkPickers";
+import BenchmarkReportCard from "../components/benchmark/BenchmarkReportCard";
 import {
   getBenchmarkEntity,
   getBenchmarkMeta,
@@ -689,6 +690,25 @@ export default function BenchmarkPage({
               </ul>
             </div>
           ) : null}
+
+          <BenchmarkReportCard
+            pronto={Boolean(entidade)}
+            aviso="Escolha a entidade para poder pedir o relatório em PDF."
+            resumo={`${infoPais?.label ?? ""}${cpv ? ` · CPV ${cpv}` : " · todo o mercado"} · ${
+              vender ? "quem vende" : "quem compra"
+            }`}
+            params={{
+              mode: "empresa",
+              country: pais,
+              nif: entidade?.nif || undefined,
+              name: entidade?.name || undefined,
+              role,
+              cpv_code: cpv.trim() || undefined,
+              year_from: anoDe === "" ? undefined : Number(anoDe),
+              year_to: anoAte === "" ? undefined : Number(anoAte),
+              region: regiao.trim() || undefined,
+            }}
+          />
         </div>
       ) : null}
         </>

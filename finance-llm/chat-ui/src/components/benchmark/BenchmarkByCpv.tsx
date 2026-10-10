@@ -23,6 +23,7 @@ import {
   type BenchmarkRole,
 } from "../../benchmarkApi";
 import { SeletorAno } from "./BenchmarkPickers";
+import BenchmarkReportCard from "./BenchmarkReportCard";
 
 const MAX_ANOS = 12;
 const PAISES_ORDEM: BenchmarkCountry[] = ["pt", "es", "fr"];
@@ -473,6 +474,20 @@ export default function BenchmarkByCpv({ meta }: { meta: BenchmarkMetaAll | null
               )}
             </CardContent>
           </Card>
+
+          <BenchmarkReportCard
+            pronto={Boolean(dados.items.length)}
+            aviso="Sem dados suficientes para gerar o relatório."
+            resumo={`${paises.map((pais) => ROTULO_PAIS[pais]).join(", ")}${cpvFiltro ? ` · CPV ${cpvFiltro}` : " · todos os CPV"}`}
+            params={{
+              mode: "mercado",
+              countries: paises,
+              cpv_code: cpvFiltro.trim() || undefined,
+              year_from: anoDe === "" ? undefined : Number(anoDe),
+              year_to: anoAte === "" ? undefined : Number(anoAte),
+              top,
+            }}
+          />
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Card>

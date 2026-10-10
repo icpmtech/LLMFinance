@@ -46,6 +46,7 @@ import {
   type BenchmarkRole,
 } from "../../benchmarkApi";
 import { EmpresaAutocomplete, SeletorAno, type EmpresaBenchmark } from "./BenchmarkPickers";
+import BenchmarkReportCard from "./BenchmarkReportCard";
 
 const MAX_ANOS = 12;
 const PAISES_ORDEM: BenchmarkCountry[] = ["pt", "es", "fr"];
@@ -626,6 +627,26 @@ export default function BenchmarkCross({ onOpenCountry }: { onOpenCountry?: (pai
               </CardContent>
             </Card>
           </div>
+
+          {/* ------------------------------------------------- relatório PDF */}
+          <BenchmarkReportCard
+            pronto={dados.companies.length >= 2}
+            resumo={`${dados.companies.map((empresa) => empresa.short).join(" · ")}${
+              dados.cpv_filter ? ` · CPV ${dados.cpv_filter}` : " · todo o mercado"
+            }`}
+            params={{
+              mode: "cruzar",
+              role: dados.role,
+              cpv_code: dados.cpv_filter || undefined,
+              year_from: anoDe === "" ? undefined : Number(anoDe),
+              year_to: anoAte === "" ? undefined : Number(anoAte),
+              entities: dados.companies.map((empresa) => ({
+                country: empresa.country,
+                nif: empresa.nif || undefined,
+                name: empresa.name || undefined,
+              })),
+            }}
+          />
 
           {/* ----------------------------------------------------------- notas */}
           <Card>
