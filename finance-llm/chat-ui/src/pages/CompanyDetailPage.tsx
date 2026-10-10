@@ -1,8 +1,9 @@
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import {
   ArrowLeft,
   Loader2,
   Frown,
+  ChevronDown,
   FileText,
   TrendingUp,
   Euro,
@@ -36,7 +37,14 @@ import EmpresaLogo from "../components/benchmark/EmpresaLogo";
 import { siteDe, usePerfisEmpresas } from "../components/benchmark/usePerfisEmpresas";
 import { EntityEnrichmentCard } from "./EmpresasIQPage";
 import { obterDadosEmpresa } from "../societarioRecolhaApi";
-import type { CompanyDetail, CompanyContractsResponse, CompanyAnalyticsResponse, CompanySocietarioResponse, ContractItem, ContractParty, ContractAnalyticsRow } from "../types";
+import { useWindowMode } from "../layout";
+import type { CompanyDetail, CompanyAnalyticsResponse, CompanySocietarioResponse, ContractItem, ContractParty, ContractAnalyticsRow } from "../types";
+
+/** Contratos por página na ficha (o «carregar mais» pede a página seguinte). */
+const PAGINA_CONTRATOS = 20;
+
+/** Papel da entidade no contrato: filtro da lista da ficha. */
+type PapelContrato = "all" | "adjudicante" | "adjudicatario";
 
 interface CompanyDetailPageProps {
   nif: string;
@@ -48,6 +56,31 @@ interface CompanyDetailPageProps {
 function formatPrice(n?: number) {
   if (n === undefined || n === null) return "—";
   return n.toLocaleString("pt-PT", { style: "currency", currency: "EUR" });
+}
+
+/** Contagens com separador de milhares («7 238»). */
+function formatCount(n?: number | null) {
+  if (n === undefined || n === null || !Number.isFinite(n)) return "—";
+  return n.toLocaleString("pt-PT");
+}
+
+/**
+ * Valores grandes em forma curta («1,8 mil M €»): há totais de milhares de
+ * milhões de euros e o número por extenso estoura os cartões e as células.
+ * O valor exato fica no `title` (e por baixo, quando abreviado).
+ */
+function formatCompactPrice(n?: number | null) {
+  if (n === undefined || n === null || !Number.isFinite(n)) return "—";
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return `${(n / 1e9).toLocaleString("pt-PT", { maximumFractionDigits: 1 })} mil M €`;
+  if (abs >= 1e6) return `${(n / 1e6).toLocaleString("pt-PT", { maximumFractionDigits: 1 })} M €`;
+  if (abs >= 1e3) return `${(n / 1e3).toLocaleString("pt-PT", { maximumFractionDigits: 1 })} mil €`;
+  return formatPrice(n);
+}
+
+/** True quando vale a pena mostrar o valor exato por baixo do abreviado. */
+function abreviado(n?: number | null) {
+  return typeof n === "number" && Number.isFinite(n) && Math.abs(n) >= 1_000_000;
 }
 
 function formatDate(d?: string) {
@@ -89,7 +122,16 @@ export default function CompanyDetailPage({
   onViewContract,
 }: CompanyDetailPageProps) {
   const [company, setCompany] = useState<CompanyDetail | null>(null);
-  const [contracts, setContracts] = useState<CompanyContractsResponse | null>(null);
+  /**
+   * Contratos da entidade: a ficha abre com os 20 mais recentes e cresce a pedido
+   * (`PAGINA_CONTRATOS` de cada vez) até ao total — ver todos não obriga a abrir
+   * outra janela, que no modo página (telemóvel) nem sequer existe.
+   */
+  const [contratos, setContratos] = useState<ContractItem[]>([]);
+  const [contratosTotal, setContratosTotal] = useState(0);
+  const [contratosRole, setContratosRole] = useState<PapelContrato>("all");
+  const [aCarregarContratos, setACarregarContratos] = useState(false);
+  const [erroContratos, setErroContratos] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<CompanyAnalyticsResponse | null>(null);
   /** Publicações do Ministério da Justiça já indexadas (só se existirem no Elastic). */
   const [societario, setSocietario] = useState<CompanySocietarioResponse | null>(null);
@@ -115,13 +157,49 @@ export default function CompanyDetailPage({
   });
   const siteEmpresa = siteDe(perfis, { nif, nome: company?.name }) ?? company?.perfil?.site ?? null;
   const perfilEmpresa = perfis[nif] ?? company?.perfil ?? undefined;
+  /** O gestor de janelas só existe no modo janelas: no modo página a lista é inline. */
+  const { windowMode } = useWindowMode();
+
+  /**
+   * Lê uma página de contratos do servidor. `de > 0` acrescenta à lista em vez de
+   * substituir; os repetidos (a paginação do Elasticsearch pode repetir empates
+   * de ordenação) são descartados.
+   */
+  const carregarContratos = useCallback(
+    async (role: PapelContrato, de: number, tamanho = PAGINA_CONTRATOS) => {
+      setACarregarContratos(true);
+      setErroContratos(null);
+      try {
+        const resposta = await getCompanyContracts(nif, role, de, Math.min(100, tamanho));
+        setContratosTotal(resposta.total ?? 0);
+        setContratos((anterior) => {
+          const base = de > 0 ? anterior : [];
+          const vistos = new Set(base.map((item) => item.idcontrato || item.doc_id).filter(Boolean));
+          const novos = (resposta.items ?? []).filter((item) => {
+            const chave = item.idcontrato || item.doc_id;
+            if (!chave) return true;
+            if (vistos.has(chave)) return false;
+            vistos.add(chave);
+            return true;
+          });
+          return [...base, ...novos];
+        });
+      } catch (err) {
+        setErroContratos(err instanceof Error ? err.message : "Erro ao carregar os contratos");
+      } finally {
+        setACarregarContratos(false);
+      }
+    },
+    [nif],
+  );
 
   /** Recarrega a ficha (e o societário) depois de uma ação. */
   const recarregar = async () => {
-    const [d, c, a] = await Promise.all([getCompanyDetail(nif), getCompanyContracts(nif), getCompanyAnalytics(nif)]);
+    const [d, a] = await Promise.all([getCompanyDetail(nif), getCompanyAnalytics(nif)]);
     setCompany(d);
-    setContracts(c);
     setAnalytics(a);
+    setContratosRole("all");
+    await carregarContratos("all", 0);
     try {
       setSocietario(await getCompanySocietarioPublicacoes(nif, 0, 20));
     } catch {
@@ -216,11 +294,10 @@ export default function CompanyDetailPage({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    Promise.all([getCompanyDetail(nif), getCompanyContracts(nif), getCompanyAnalytics(nif)])
-      .then(([d, c, a]) => {
+    Promise.all([getCompanyDetail(nif), getCompanyAnalytics(nif)])
+      .then(([d, a]) => {
         if (cancelled) return;
         setCompany(d);
-        setContracts(c);
         setAnalytics(a);
       })
       .catch((err) => {
@@ -235,10 +312,23 @@ export default function CompanyDetailPage({
     };
   }, [nif]);
 
-  const allContracts = contracts?.items ?? [];
+  /* Lista de contratos: primeira página e recarga sempre que muda o papel filtrado. */
+  useEffect(() => {
+    if (!nif) return;
+    setContratos([]);
+    setContratosTotal(0);
+    void carregarContratos(contratosRole, 0);
+  }, [nif, contratosRole, carregarContratos]);
+
   const relatedEntities = analytics?.top_partners ?? [];
   const cpvBreakdown = analytics?.by_cpv ?? [];
   const yearly = analytics?.by_year ?? [];
+
+  /** Contratos por papel (para o filtro) e quantos ainda faltam carregar. */
+  const contratosAdjudicante = company?.adjudicante?.contracts_count ?? 0;
+  const contratosAdjudicatario = company?.adjudicatario?.contracts_count ?? 0;
+  const temAmbosPapeis = contratosAdjudicante > 0 && contratosAdjudicatario > 0;
+  const faltamContratos = Math.max(0, contratosTotal - contratos.length);
 
   // O societário vive noutro índice e é opcional: falha ou ausência não travam a ficha.
   useEffect(() => {
@@ -442,37 +532,57 @@ export default function CompanyDetailPage({
 
         {/* Stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="glass-card gradient-border rounded-2xl p-5 glow-teal">
+          <div className="glass-card gradient-border rounded-2xl p-5 glow-teal min-w-0">
             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
               <FileText size={16} className="text-teal-400" />
               Total de contratos
             </div>
-            <p className="text-3xl font-bold stat-value text-glow-teal">{company.contracts_total ?? 0}</p>
+            <p className="text-3xl font-bold stat-value text-glow-teal tabular-nums" title={String(company.contracts_total ?? 0)}>
+              {formatCount(company.contracts_total)}
+            </p>
           </div>
-          <div className="glass-card gradient-border rounded-2xl p-5 glow-amber">
+          <div className="glass-card gradient-border rounded-2xl p-5 glow-amber min-w-0">
             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
               <Euro size={16} className="text-amber-400" />
               Valor total
             </div>
-            <p className="text-2xl md:text-3xl font-bold stat-value text-glow-amber">{formatPrice(company.total_value)}</p>
+            <p
+              className="text-2xl md:text-3xl font-bold stat-value text-glow-amber tabular-nums leading-tight break-words"
+              title={formatPrice(company.total_value)}
+            >
+              {formatCompactPrice(company.total_value)}
+            </p>
+            {abreviado(company.total_value) && (
+              <p className="mt-1 text-[11px] text-muted-foreground tabular-nums break-all">
+                {formatPrice(company.total_value)}
+              </p>
+            )}
           </div>
-          <div className="glass-card gradient-border rounded-2xl p-5 glow-blue">
+          <div className="glass-card gradient-border rounded-2xl p-5 glow-blue min-w-0">
             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
               <Calendar size={16} className="text-blue-400" />
               Período
             </div>
-            <p className="text-3xl font-bold stat-value text-glow-blue">
+            <p className="text-3xl font-bold stat-value text-glow-blue tabular-nums">
               {firstYear ?? "—"} — {lastYear ?? "—"}
             </p>
           </div>
-          <div className="glass-card gradient-border rounded-2xl p-5 glow-rose">
+          <div className="glass-card gradient-border rounded-2xl p-5 glow-rose min-w-0">
             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
               <Activity size={16} className="text-rose-400" />
               Média / contrato
             </div>
-            <p className="text-2xl md:text-3xl font-bold stat-value text-glow-rose">
-              {formatPrice(analytics?.avg_value)}
+            <p
+              className="text-2xl md:text-3xl font-bold stat-value text-glow-rose tabular-nums leading-tight break-words"
+              title={formatPrice(analytics?.avg_value)}
+            >
+              {formatCompactPrice(analytics?.avg_value)}
             </p>
+            {abreviado(analytics?.avg_value) && (
+              <p className="mt-1 text-[11px] text-muted-foreground tabular-nums break-all">
+                {formatPrice(analytics?.avg_value)}
+              </p>
+            )}
           </div>
         </div>
 
@@ -487,13 +597,23 @@ export default function CompanyDetailPage({
                 <h2 className="text-xl font-semibold">Como Adjudicante</h2>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="glass-card rounded-xl p-4">
+                <div className="glass-card rounded-xl p-4 min-w-0">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider">Contratos</p>
-                  <p className="text-2xl font-bold stat-value mt-1">{company.adjudicante.contracts_count}</p>
+                  <p className="text-2xl font-bold stat-value mt-1 tabular-nums">{formatCount(company.adjudicante.contracts_count)}</p>
                 </div>
-                <div className="glass-card rounded-xl p-4">
+                <div className="glass-card rounded-xl p-4 min-w-0">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider">Valor total</p>
-                  <p className="text-xl font-bold stat-value text-glow-amber mt-1">{formatPrice(company.adjudicante.total_value)}</p>
+                  <p
+                    className="text-xl font-bold stat-value text-glow-amber mt-1 tabular-nums leading-tight break-words"
+                    title={formatPrice(company.adjudicante.total_value)}
+                  >
+                    {formatCompactPrice(company.adjudicante.total_value)}
+                  </p>
+                  {abreviado(company.adjudicante.total_value) && (
+                    <p className="mt-1 text-[10.5px] text-muted-foreground tabular-nums break-all">
+                      {formatPrice(company.adjudicante.total_value)}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -507,13 +627,23 @@ export default function CompanyDetailPage({
                 <h2 className="text-xl font-semibold">Como Adjudicatário</h2>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="glass-card rounded-xl p-4">
+                <div className="glass-card rounded-xl p-4 min-w-0">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider">Contratos</p>
-                  <p className="text-2xl font-bold stat-value mt-1">{company.adjudicatario.contracts_count}</p>
+                  <p className="text-2xl font-bold stat-value mt-1 tabular-nums">{formatCount(company.adjudicatario.contracts_count)}</p>
                 </div>
-                <div className="glass-card rounded-xl p-4">
+                <div className="glass-card rounded-xl p-4 min-w-0">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider">Valor total</p>
-                  <p className="text-xl font-bold stat-value text-glow-amber mt-1">{formatPrice(company.adjudicatario.total_value)}</p>
+                  <p
+                    className="text-xl font-bold stat-value text-glow-amber mt-1 tabular-nums leading-tight break-words"
+                    title={formatPrice(company.adjudicatario.total_value)}
+                  >
+                    {formatCompactPrice(company.adjudicatario.total_value)}
+                  </p>
+                  {abreviado(company.adjudicatario.total_value) && (
+                    <p className="mt-1 text-[10.5px] text-muted-foreground tabular-nums break-all">
+                      {formatPrice(company.adjudicatario.total_value)}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -588,8 +718,10 @@ export default function CompanyDetailPage({
                     <div className="flex items-center justify-between text-sm mb-1">
                       <span className="font-medium">{row.key}</span>
                       <div className="text-right">
-                        <span className="font-medium">{formatPrice(row.total_value)}</span>
-                        <span className="text-xs text-muted-foreground ml-2">{row.count} contratos</span>
+                        <span className="font-medium tabular-nums" title={formatPrice(row.total_value)}>
+                          {formatCompactPrice(row.total_value)}
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-2">{formatCount(row.count)}</span>
                       </div>
                     </div>
                     <MiniBar value={row.total_value || 0} max={yearlyMax} color="bg-teal-400" />
@@ -611,8 +743,10 @@ export default function CompanyDetailPage({
                     <div className="flex items-center justify-between text-sm mb-1 gap-3">
                       <span className="truncate" title={row.description || row.key}>{row.description || row.key}</span>
                       <div className="text-right shrink-0">
-                        <span className="font-medium">{formatPrice(row.total_value)}</span>
-                        <span className="text-xs text-muted-foreground ml-2">{row.count}</span>
+                        <span className="font-medium tabular-nums" title={formatPrice(row.total_value)}>
+                          {formatCompactPrice(row.total_value)}
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-2">{formatCount(row.count)}</span>
                       </div>
                     </div>
                     <MiniBar value={row.total_value || 0} max={cpvMax} color="bg-amber-400" />
@@ -632,7 +766,7 @@ export default function CompanyDetailPage({
                 {relatedEntities.slice(0, 20).map((entity, i) => (
                   <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5 text-sm">
                     <span className="truncate max-w-[70%]" title={entity.description || entity.key}>{entity.description || entity.key}</span>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">{entity.count} contratos</span>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">{formatCount(entity.count)} contratos</span>
                   </div>
                 ))}
               </div>
@@ -756,16 +890,75 @@ export default function CompanyDetailPage({
         )}
 
         <div className="glass-card gradient-border rounded-2xl p-5 md:p-6">
-          <div className="flex items-center gap-3 mb-5">
+          <div className="flex flex-wrap items-center gap-3 mb-5">
             <div className="p-2 rounded-xl bg-primary/15 border border-primary/20">
               <FileText size={20} className="text-primary" />
             </div>
             <h2 className="text-xl font-semibold">Contratos recentes</h2>
-            <span className="ml-auto text-sm text-muted-foreground">{allContracts.length} visíveis</span>
-            <SeeAllContractsButton nif={nif} name={company.name} total={company.contracts_total} compact />
+            <span className="text-sm text-muted-foreground">
+              {contratos.length.toLocaleString("pt-PT")} de {contratosTotal.toLocaleString("pt-PT")}
+              {contratosTotal > 0 ? " visíveis" : ""}
+            </span>
+            {temAmbosPapeis && (
+              <div className="flex items-center gap-0.5 rounded-xl border border-white/10 bg-white/[0.04] p-0.5 text-[11.5px]">
+                {(
+                  [
+                    { valor: "all" as PapelContrato, texto: `Todos (${formatCount(company?.contracts_total)})` },
+                    { valor: "adjudicatario" as PapelContrato, texto: `Adjudicatário (${formatCount(contratosAdjudicatario)})` },
+                    { valor: "adjudicante" as PapelContrato, texto: `Adjudicante (${formatCount(contratosAdjudicante)})` },
+                  ]
+                ).map((papel) => (
+                  <button
+                    key={papel.valor}
+                    type="button"
+                    onClick={() => setContratosRole(papel.valor)}
+                    className={`rounded-lg px-2 py-1 transition ${
+                      contratosRole === papel.valor
+                        ? "bg-white/[0.12] text-foreground"
+                        : "text-muted-foreground hover:bg-white/[0.07]"
+                    }`}
+                  >
+                    {papel.texto}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="ml-auto flex items-center gap-2">
+              {faltamContratos > 0 && (
+                <button
+                  type="button"
+                  onClick={() => carregarContratos(contratosRole, contratos.length)}
+                  disabled={aCarregarContratos}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-2 py-1 text-[11.5px] transition hover:bg-white/[0.1] disabled:opacity-40"
+                  title="Carregar os 20 contratos seguintes"
+                >
+                  {aCarregarContratos ? <Loader2 size={12} className="animate-spin" /> : <ChevronDown size={12} />}
+                  Mais {Math.min(PAGINA_CONTRATOS, faltamContratos)}
+                </button>
+              )}
+              {windowMode && (
+                <SeeAllContractsButton
+                  nif={nif}
+                  name={company.name}
+                  total={contratosTotal || company.contracts_total}
+                  compact
+                />
+              )}
+            </div>
           </div>
-          {allContracts.length === 0 ? (
-            <p className="text-muted-foreground">Sem contratos registados para esta entidade.</p>
+          {erroContratos && (
+            <p className="mb-3 rounded-lg border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">
+              {erroContratos}
+            </p>
+          )}
+          {contratos.length === 0 ? (
+            <p className="text-muted-foreground">
+              {aCarregarContratos
+                ? "A carregar contratos…"
+                : contratosRole === "all"
+                  ? "Sem contratos registados para esta entidade."
+                  : "Sem contratos para este papel."}
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -780,7 +973,7 @@ export default function CompanyDetailPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {allContracts.map((c, idx) => (
+                  {contratos.map((c, idx) => (
                     <tr
                       key={c.idcontrato || c.doc_id || idx}
                       className="border-b border-white/5 hover:bg-white/[0.04] transition"
@@ -797,7 +990,9 @@ export default function CompanyDetailPage({
                       <td className="py-3 pr-4 whitespace-nowrap text-muted-foreground">
                         {formatDate(c.dataPublicacao || c.dataCelebracaoContrato)}
                       </td>
-                      <td className="py-3 pr-4 font-medium text-glow-amber">{formatPrice(contractValue(c))}</td>
+                      <td className="py-3 pr-4 font-medium text-glow-amber whitespace-nowrap tabular-nums" title={formatPrice(contractValue(c))}>
+                        {formatCompactPrice(contractValue(c))}
+                      </td>
                       <td className="py-3">
                         {onViewContract && c.idcontrato && (
                           <button
@@ -813,6 +1008,43 @@ export default function CompanyDetailPage({
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+          {contratos.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-[12px] text-muted-foreground">
+              <span>
+                A mostrar {contratos.length.toLocaleString("pt-PT")} de {contratosTotal.toLocaleString("pt-PT")} contratos
+                {contratosRole === "adjudicante"
+                  ? " como adjudicante"
+                  : contratosRole === "adjudicatario"
+                    ? " como adjudicatário"
+                    : ""}
+                .
+              </span>
+              {faltamContratos > 0 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => carregarContratos(contratosRole, contratos.length)}
+                    disabled={aCarregarContratos}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-1 transition hover:bg-white/[0.1] disabled:opacity-40"
+                  >
+                    {aCarregarContratos ? <Loader2 size={12} className="animate-spin" /> : <ChevronDown size={12} />}
+                    Carregar mais {Math.min(PAGINA_CONTRATOS, faltamContratos)}
+                  </button>
+                  {faltamContratos > PAGINA_CONTRATOS && (
+                    <button
+                      type="button"
+                      onClick={() => carregarContratos(contratosRole, contratos.length, 100)}
+                      disabled={aCarregarContratos}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-1 transition hover:bg-white/[0.1] disabled:opacity-40"
+                      title="Carregar de 100 em 100"
+                    >
+                      Mais 100
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
