@@ -7209,8 +7209,9 @@ export function EntityDetailPanel({
     useMemo(() => [{ nif, nome: company?.name }], [nif, company?.name]),
     { ativo: Boolean(nif) },
   );
-  const siteEmpresa = siteDe(perfis, { nif, nome: company?.name });
-  const perfilEmpresa = perfis[nif];
+  const siteEmpresa = siteDe(perfis, { nif, nome: company?.name }) ?? company?.perfil?.site ?? null;
+  /** O perfil guardado na ficha serve de ponto de partida (site e logótipo imediatos). */
+  const perfilEmpresa = perfis[nif] ?? company?.perfil ?? undefined;
 
   useEffect(() => {
     let cancelled = false;

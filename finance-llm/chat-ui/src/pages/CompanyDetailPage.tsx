@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import {
   ArrowLeft,
-  Building2,
   Loader2,
   Frown,
   FileText,
@@ -16,9 +15,27 @@ import {
   Activity,
   Landmark,
   Tag,
+  Globe,
+  Sparkles,
+  Download,
+  AlertCircle,
+  Info,
 } from "lucide-react";
-import { getCompanyDetail, getCompanyContracts, getCompanyAnalytics, getCompanySocietarioPublicacoes } from "../api";
+import {
+  getCompanyDetail,
+  getCompanyContracts,
+  getCompanyAnalytics,
+  getCompanySocietarioPublicacoes,
+  enrichEntity,
+  downloadEntityReport,
+  downloadEntityProcessosReport,
+  downloadEntityDossie,
+} from "../api";
 import { SeeAllContractsButton } from "./EntityContractsWindow";
+import EmpresaLogo from "../components/benchmark/EmpresaLogo";
+import { siteDe, usePerfisEmpresas } from "../components/benchmark/usePerfisEmpresas";
+import { EntityEnrichmentCard } from "./EmpresasIQPage";
+import { obterDadosEmpresa } from "../societarioRecolhaApi";
 import type { CompanyDetail, CompanyContractsResponse, CompanyAnalyticsResponse, CompanySocietarioResponse, ContractItem, ContractParty, ContractAnalyticsRow } from "../types";
 
 interface CompanyDetailPageProps {
@@ -78,6 +95,117 @@ export default function CompanyDetailPage({
   const [societario, setSocietario] = useState<CompanySocietarioResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Ações da ficha: enriquecer (web + IA), gerar relatórios, obter societário. */
+  const [aEnriquecer, setAEnriquecer] = useState(false);
+  const [aGerar, setAGerar] = useState<null | "relatorio" | "processos" | "dossie">(null);
+  const [aObterSocietario, setAObterSocietario] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [erroAcao, setErroAcao] = useState<string | null>(null);
+
+  /**
+   * Marca da empresa (site e logótipo), do módulo `/empresas/perfil`: a cache do
+   * servidor responde logo; se ainda não houver perfil, procura em segundo plano.
+   */
+  const {
+    perfis,
+    aResolver: marcaAResolver,
+    repetir: repetirMarca,
+  } = usePerfisEmpresas(useMemo(() => [{ nif, nome: company?.name }], [nif, company?.name]), {
+    ativo: Boolean(nif),
+  });
+  const siteEmpresa = siteDe(perfis, { nif, nome: company?.name }) ?? company?.perfil?.site ?? null;
+  const perfilEmpresa = perfis[nif] ?? company?.perfil ?? undefined;
+
+  /** Recarrega a ficha (e o societário) depois de uma ação. */
+  const recarregar = async () => {
+    const [d, c, a] = await Promise.all([getCompanyDetail(nif), getCompanyContracts(nif), getCompanyAnalytics(nif)]);
+    setCompany(d);
+    setContracts(c);
+    setAnalytics(a);
+    try {
+      setSocietario(await getCompanySocietarioPublicacoes(nif, 0, 20));
+    } catch {
+      setSocietario(null);
+    }
+    repetirMarca();
+  };
+
+  /** Pesquisa web + IA: descrição, contactos, morada, dimensão, CAE, site e logótipo. */
+  const handleEnriquecer = async () => {
+    setAEnriquecer(true);
+    setErroAcao(null);
+    setAviso("A enriquecer com pesquisa web e IA — site, contactos, morada e atividade…");
+    try {
+      const resultado = await enrichEntity(nif, { use_web: true, use_scraper: true, save_relations: true });
+      const campos = Object.keys(resultado.fields_added ?? {}).length;
+      setAviso(
+        resultado.message ||
+          `Enriquecimento concluído — ${campos} campos, ${resultado.source_count ?? 0} fontes, ${resultado.relation_count ?? 0} relações.`,
+      );
+      await recarregar();
+    } catch (err) {
+      setErroAcao(err instanceof Error ? err.message : "Erro ao enriquecer a ficha");
+      setAviso(null);
+    } finally {
+      setAEnriquecer(false);
+    }
+  };
+
+  /** Descarrega um dos relatórios da entidade (dossiê, ficha ou processos). */
+  const descarregar = async (tipo: "relatorio" | "processos" | "dossie") => {
+    setAGerar(tipo);
+    setErroAcao(null);
+    try {
+      const blob =
+        tipo === "dossie"
+          ? await downloadEntityDossie(nif)
+          : tipo === "processos"
+            ? await downloadEntityProcessosReport(nif)
+            : await downloadEntityReport(nif);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${tipo}_${nif}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setAviso(`PDF gerado e descarregado (${tipo === "dossie" ? "dossiê da empresa" : tipo === "processos" ? "processos e risco" : "ficha"}).`);
+    } catch (err) {
+      setErroAcao(err instanceof Error ? err.message : "Erro ao gerar o PDF");
+    } finally {
+      setAGerar(null);
+    }
+  };
+
+  /**
+   * Recolhe os dados societários (publicações do Ministério da Justiça) quando a
+   * ficha ainda não os tem. A recolha corre no servidor; a lista aparece quando
+   * estiver indexada, por isso recarrega-se algumas vezes em vez de esperar.
+   */
+  const obterSocietario = async () => {
+    setAObterSocietario(true);
+    setErroAcao(null);
+    setAviso("A recolher publicações societárias no portal do Ministério da Justiça…");
+    try {
+      await obterDadosEmpresa(nif);
+      for (let tentativa = 0; tentativa < 6; tentativa += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+        const resposta = await getCompanySocietarioPublicacoes(nif, 0, 20).catch(() => null);
+        if (resposta && resposta.total > 0) {
+          setSocietario(resposta);
+          setAviso(`${resposta.total} publicações societárias recolhidas.`);
+          return;
+        }
+      }
+      setAviso("Recolha iniciada. As publicações aparecem aqui assim que ficarem indexadas (pode levar alguns minutos).");
+    } catch (err) {
+      setErroAcao(err instanceof Error ? err.message : "Erro ao obter os dados societários");
+      setAviso(null);
+    } finally {
+      setAObterSocietario(false);
+    }
+  };
 
   useEffect(() => {
     if (!nif) {
@@ -214,12 +342,69 @@ export default function CompanyDetailPage({
           )}
         </div>
 
+        {/* Ações: enriquecer (web + IA) e relatórios da empresa */}
+        <div className="flex flex-wrap items-center gap-2 mb-6">
+          <button
+            onClick={handleEnriquecer}
+            disabled={aEnriquecer}
+            title="Pesquisa web + IA: descrição, contactos, morada, dimensão, CAE, site e logótipo"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full glass-card text-sm text-teal-300 hover:text-teal-200 transition disabled:opacity-60"
+          >
+            {aEnriquecer ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+            Enriquecer ficha
+          </button>
+          <button
+            onClick={() => descarregar("dossie")}
+            disabled={aGerar !== null}
+            title="Dossiê completo: identidade digital, ficha (web + IA), risco com CIRE, processos, atos societários e contratos"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full glass-card text-sm text-amber-300 hover:text-amber-200 transition disabled:opacity-60"
+          >
+            {aGerar === "dossie" ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+            Dossiê da empresa
+          </button>
+          <button
+            onClick={() => descarregar("processos")}
+            disabled={aGerar !== null}
+            title="Relatório de processos e risco: insolvências/PER (CIRE), processos judiciais, situação fiscal e atos societários"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full glass-card text-sm text-sky-300 hover:text-sky-200 transition disabled:opacity-60"
+          >
+            {aGerar === "processos" ? <Loader2 size={16} className="animate-spin" /> : <AlertCircle size={16} />}
+            Processos e risco
+          </button>
+          <button
+            onClick={() => descarregar("relatorio")}
+            disabled={aGerar !== null}
+            title="Relatório PDF da ficha (enriquecimento, CPV e relações)"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full glass-card text-sm text-muted-foreground hover:text-foreground transition disabled:opacity-60"
+          >
+            {aGerar === "relatorio" ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            Relatório PDF
+          </button>
+        </div>
+
+        {aviso && (
+          <div className="mb-4 flex items-center gap-2 rounded-xl border border-teal-500/30 bg-teal-500/10 px-4 py-3 text-sm text-teal-200">
+            <Info size={16} />
+            {aviso}
+          </div>
+        )}
+        {erroAcao && (
+          <div className="mb-4 flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+            <AlertCircle size={16} />
+            {erroAcao}
+          </div>
+        )}
+
         {/* Entity hero */}
         <div className="glass-card gradient-border rounded-3xl p-6 md:p-8 mb-8 fade-in">
           <div className="flex flex-col md:flex-row md:items-center gap-5">
-            <div className="shrink-0 p-4 rounded-3xl bg-gradient-to-br from-teal-500/20 via-blue-500/15 to-rose-500/10 border border-white/10 glow-teal">
-              <Building2 size={44} className="text-teal-300" />
-            </div>
+            <EmpresaLogo
+              nome={company.name}
+              nif={nif}
+              logoUrl={perfilEmpresa?.logo_url}
+              size={88}
+              titulo={siteEmpresa ? `${company.name} · ${siteEmpresa}` : company.name}
+            />
             <div className="flex-1 min-w-0">
               <h1 className="text-2xl md:text-4xl font-bold leading-tight mb-1">{company.name}</h1>
               <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
@@ -227,6 +412,29 @@ export default function CompanyDetailPage({
                 {company.normalized_name && company.normalized_name !== company.name && (
                   <span>{company.normalized_name}</span>
                 )}
+                {siteEmpresa ? (
+                  <a
+                    href={siteEmpresa}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-sky-300 hover:text-sky-200 transition"
+                    title={`Site oficial: ${siteEmpresa}`}
+                  >
+                    <Globe size={13} />
+                    {siteEmpresa.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}
+                  </a>
+                ) : (
+                  <span className="inline-flex items-center gap-1">
+                    <Globe size={13} />
+                    {marcaAResolver > 0 ? "à procura do site…" : "sem site identificado — use «Enriquecer ficha»"}
+                  </span>
+                )}
+                {perfilEmpresa?.site && perfilEmpresa?.confianca !== undefined ? (
+                  <span className="text-[11px] opacity-70" title={perfilEmpresa.motivo ?? undefined}>
+                    confiança {Math.round((perfilEmpresa.confianca || 0) * 100)}%
+                    {perfilEmpresa.origem ? ` · ${perfilEmpresa.origem}` : ""}
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
@@ -433,7 +641,40 @@ export default function CompanyDetailPage({
         </div>
 
         {/* Contracts table */}
-        {/* Dados societários (publicações do Ministério da Justiça), só quando existem no Elastic */}
+        {/* Ficha recolhida por web + IA: descrição, contactos, morada, dimensão, atividade */}
+        <div className="mb-8">
+          <EntityEnrichmentCard data={company.enrichment_web} lastUpdated={company.enrichment_last_updated} />
+          {!company.enrichment_web ? (
+            <div className="glass-card gradient-border rounded-2xl p-5 text-sm text-muted-foreground">
+              Ainda não há ficha recolhida por IA para esta empresa. Use <strong className="font-medium text-teal-300">Enriquecer ficha</strong> para
+              procurar descrição, contactos, morada, dimensão, CAE, site e logótipo.
+            </div>
+          ) : null}
+        </div>
+
+        {/* Dados societários (publicações do Ministério da Justiça) */}
+        {!societario || societario.total === 0 ? (
+          <div className="glass-card gradient-border rounded-2xl p-5 md:p-6 mb-8 flex flex-wrap items-center gap-3">
+            <div className="p-2 rounded-xl bg-violet-500/15 border border-violet-400/20">
+              <Landmark size={20} className="text-violet-300" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-semibold">Dados societários</h2>
+              <p className="text-xs text-muted-foreground">
+                Sem publicações de atos societários (Ministério da Justiça) para esta empresa. A recolha é feita no
+                portal público e fica guardada na ficha.
+              </p>
+            </div>
+            <button
+              onClick={obterSocietario}
+              disabled={aObterSocietario}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full glass-card text-sm text-violet-300 hover:text-violet-200 transition disabled:opacity-60"
+            >
+              {aObterSocietario ? <Loader2 size={16} className="animate-spin" /> : <Landmark size={16} />}
+              {aObterSocietario ? "A recolher…" : "Obter dados societários"}
+            </button>
+          </div>
+        ) : null}
         {societario && societario.total > 0 && (
           <div className="glass-card gradient-border rounded-2xl p-5 md:p-6 mb-8">
             <div className="flex flex-wrap items-center gap-3 mb-5">
@@ -508,7 +749,7 @@ export default function CompanyDetailPage({
             {societario.total > 10 && (
               <p className="mt-4 text-xs text-muted-foreground">
                 A mostrar os 10 registos mais recentes de {societario.total}. A lista completa, a timeline por IA e as
-                pessoas extraídas estão na ficha do EmpresasIQ.
+                pessoas extraídas estão na ficha do EmpresasIQ (e no dossiê da empresa).
               </p>
             )}
           </div>

@@ -1064,6 +1064,19 @@ export interface CompanyDetail extends CompanySummary {
   enrichment_web?: Record<string, unknown> | null;
   enrichment_summary?: Record<string, unknown> | null;
   enrichment_last_updated?: string | null;
+  /** Site oficial e logótipo (módulo `empresas_perfil`), já guardados no servidor. */
+  perfil?: {
+    nif?: string | null;
+    nome?: string | null;
+    site?: string | null;
+    dominio?: string | null;
+    confianca?: number;
+    origem?: string | null;
+    motivo?: string | null;
+    tem_logo?: boolean;
+    logo_url?: string | null;
+    atualizado?: string | null;
+  } | null;
 }
 
 export interface SocietarioTimelinePayload {
