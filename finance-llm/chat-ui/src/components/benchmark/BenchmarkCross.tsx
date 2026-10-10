@@ -46,7 +46,10 @@ import {
   type BenchmarkRole,
 } from "../../benchmarkApi";
 import { EmpresaAutocomplete, SeletorAno, type EmpresaBenchmark } from "./BenchmarkPickers";
+import EmpresaLogo from "./EmpresaLogo";
 import BenchmarkReportCard from "./BenchmarkReportCard";
+import { limparNome } from "./texto";
+import { siteDe, usePerfisEmpresas } from "./usePerfisEmpresas";
 
 const MAX_ANOS = 12;
 const PAISES_ORDEM: BenchmarkCountry[] = ["pt", "es", "fr"];
@@ -169,6 +172,21 @@ export default function BenchmarkCross({ onOpenCountry }: { onOpenCountry?: (pai
   const anos = useMemo(() => (meta?.years ?? []).slice(0, MAX_ANOS), [meta]);
   const vender = role === "adjudicatario";
   const escolhidas = linhas.filter((linha) => linha.empresa);
+
+  // Sites e logótipos das empresas cruzadas: as marcas ajudam a reconhecer a
+  // mesma empresa em países diferentes (cache do servidor + resolução em lotes).
+  const { perfis } = usePerfisEmpresas(
+    useMemo(
+      () =>
+        (dados?.companies ?? []).map((empresa) => ({
+          nif: empresa.nif,
+          nome: empresa.name,
+          pais: empresa.country,
+        })),
+      [dados],
+    ),
+    { ativo: Boolean(dados) },
+  );
 
   useEffect(() => {
     getBenchmarkMeta("all")
@@ -399,9 +417,27 @@ export default function BenchmarkCross({ onOpenCountry }: { onOpenCountry?: (pai
                 <Card key={`${empresa.country}-${empresa.nif}`} className="min-w-0">
                   <CardHeader className="pb-2">
                     <CardTitle className="flex items-center gap-2 text-sm">
+                      <EmpresaLogo
+                        nome={empresa.name}
+                        nif={empresa.nif}
+                        logoUrl={perfis[empresa.nif || ""]?.logo_url}
+                        size={30}
+                      />
                       <span className={`text-xs font-semibold ${COR_PAIS[empresa.country]}`}>{empresa.short}</span>
-                      <span className="min-w-0 truncate" title={empresa.name}>
-                        {empresa.name}
+                      <span className="min-w-0">
+                        <span className="block truncate" title={limparNome(empresa.name)}>
+                          {limparNome(empresa.name)}
+                        </span>
+                        {siteDe(perfis, empresa) ? (
+                          <a
+                            href={siteDe(perfis, empresa) as string}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block truncate text-[11px] font-normal text-sky-400 hover:underline"
+                          >
+                            {siteDe(perfis, empresa)?.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}
+                          </a>
+                        ) : null}
                       </span>
                     </CardTitle>
                   </CardHeader>
@@ -484,8 +520,16 @@ export default function BenchmarkCross({ onOpenCountry }: { onOpenCountry?: (pai
                         {dados.companies.map((empresa) => (
                           <th key={`${empresa.country}-${empresa.nif}`} className="py-2 pr-3 text-right">
                             <span className={COR_PAIS[empresa.country]}>{empresa.short}</span>
-                            <span className="block max-w-[10rem] truncate font-normal normal-case text-muted-foreground">
-                              {empresa.name}
+                            <span className="flex items-center justify-end gap-1.5 font-normal normal-case text-muted-foreground">
+                              <EmpresaLogo
+                                nome={empresa.name}
+                                nif={empresa.nif}
+                                logoUrl={perfis[empresa.nif || ""]?.logo_url}
+                                size={18}
+                              />
+                              <span className="max-w-[10rem] truncate" title={limparNome(empresa.name)}>
+                                {limparNome(empresa.name)}
+                              </span>
                             </span>
                           </th>
                         ))}

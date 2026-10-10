@@ -45,6 +45,7 @@ import BenchmarkCompare from "../components/benchmark/BenchmarkCompare";
 import { CpvAutocomplete, EmpresaAutocomplete, type EmpresaBenchmark } from "../components/benchmark/BenchmarkPickers";
 import BenchmarkReportCard from "../components/benchmark/BenchmarkReportCard";
 import BenchmarkInsights from "../components/benchmark/BenchmarkInsights";
+import BenchmarkPriceRisk from "../components/benchmark/BenchmarkPriceRisk";
 import {
   getBenchmarkEntity,
   getBenchmarkMeta,
@@ -54,6 +55,7 @@ import {
   type BenchmarkRole,
   type BenchmarkRow,
   type BenchmarkScope,
+  type BenchmarkQuery,
 } from "../benchmarkApi";
 
 const PAGE_MAX_YEARS = 12;
@@ -260,11 +262,22 @@ export default function BenchmarkPage({
           setAnoDe(Math.min(...anos));
           setAnoAte(Math.max(...anos));
         }
-        // CPV vindo do quadro conjunto (`?cpv=33600000`): fica no filtro à
-        // espera de uma entidade — sem entidade não há análise a fazer, por isso
-        // não se dispara nenhum pedido (nem se mostra erro).
-        const daUrl = new URLSearchParams(window.location.search).get("cpv");
+        // Parâmetros vindos de outra página (`?nif=`, `?name=`, `?role=` e
+        // `?cpv=`): com uma entidade, a análise arranca logo — é o que permite
+        // saltar do grafo do comprador para o benchmark da empresa.
+        const params = new URLSearchParams(window.location.search);
+        const daUrl = params.get("cpv");
         if (daUrl) setCpv(daUrl);
+        const nifUrl = params.get("nif") || "";
+        const nomeUrl = params.get("name") || "";
+        const papelUrl = params.get("role");
+        const papel: BenchmarkRole = papelUrl === "adjudicante" ? "adjudicante" : "adjudicatario";
+        if (papelUrl) setRole(papel);
+        if (nifUrl || nomeUrl) {
+          const alvo: EmpresaBenchmark = { nif: nifUrl, name: nomeUrl || nifUrl, contracts: 0 };
+          setEntidade(alvo);
+          void analisar({ entidade: alvo, role: papel, cpv_code: daUrl || "" });
+        }
       })
       .catch((err: unknown) => setErro(err instanceof Error ? err.message : String(err)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -329,6 +342,24 @@ export default function BenchmarkPage({
   const vender = role === "adjudicatario";
   const rotuloContraparte = vender ? "Compradores" : "Fornecedores";
   const rotuloConcorrente = vender ? "Fornecedores concorrentes" : "Entidades compradoras";
+
+  /** Âmbito que está no ecrã — é o que os cartões de análise usam para pedir dados. */
+  const consultaAtual = useMemo<BenchmarkQuery | null>(
+    () =>
+      dados && entidade
+        ? {
+            nif: entidade.nif || undefined,
+            name: entidade.name,
+            role,
+            country: pais,
+            cpv_code: cpv.trim() || undefined,
+            year_from: anoDe === "" ? undefined : Number(anoDe),
+            year_to: anoAte === "" ? undefined : Number(anoAte),
+            region: regiao.trim() || undefined,
+          }
+        : null,
+    [dados, entidade, role, pais, cpv, anoDe, anoAte, regiao],
+  );
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 md:px-8 fade-in">
@@ -692,24 +723,11 @@ export default function BenchmarkPage({
             </div>
           ) : null}
 
+          {/* preço por CPV e ano — como me comparo com o mercado e a concorrência */}
+          <BenchmarkPriceRisk ativo={Boolean(dados)} query={consultaAtual} />
+
           {/* anomalias, concentração e oportunidades — só depois da análise */}
-          <BenchmarkInsights
-            ativo={Boolean(dados)}
-            query={
-              dados && entidade
-                ? {
-                    nif: entidade.nif || undefined,
-                    name: entidade.name,
-                    role,
-                    country: pais,
-                    cpv_code: cpv.trim() || undefined,
-                    year_from: anoDe === "" ? undefined : Number(anoDe),
-                    year_to: anoAte === "" ? undefined : Number(anoAte),
-                    region: regiao.trim() || undefined,
-                  }
-                : null
-            }
-          />
+          <BenchmarkInsights ativo={Boolean(dados)} query={consultaAtual} />
 
           <BenchmarkReportCard
             pronto={Boolean(entidade)}

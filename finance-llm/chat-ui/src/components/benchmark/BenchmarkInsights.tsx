@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/Card";
+import EmpresaLogo from "./EmpresaLogo";
+import { usePerfisEmpresas } from "./usePerfisEmpresas";
 import {
   getBenchmarkAnomalies,
   getBenchmarkGaps,
@@ -32,6 +34,7 @@ import {
   type BenchmarkGapsResponse,
   type BenchmarkQuery,
 } from "../../benchmarkApi";
+import { limparNome } from "./texto";
 
 function money(value?: number | null): string {
   if (value === undefined || value === null) return "—";
@@ -72,6 +75,23 @@ export default function BenchmarkInsights({ query, ativo }: { query: BenchmarkQu
   const [erro, setErro] = useState<string | null>(null);
 
   const chave = useMemo(() => (query ? JSON.stringify(query) : ""), [query]);
+
+  // Concorrentes que já vendem nestes CPV: traz-se a marca de cada um (cache do
+  // servidor primeiro; os que faltam são resolvidos em segundo plano).
+  const concorrentes = useMemo(() => {
+    const mapa = new Map<string, { nif?: string | null; nome?: string | null }>();
+    for (const lacuna of lacunas?.gaps ?? []) {
+      for (const concorrente of lacuna.competition ?? []) {
+        const identificador = concorrente.nif || concorrente.name;
+        if (identificador && !mapa.has(identificador)) {
+          mapa.set(identificador, { nif: concorrente.nif, nome: concorrente.name });
+        }
+      }
+    }
+    return Array.from(mapa.values()).slice(0, 12);
+  }, [lacunas]);
+
+  const { perfis } = usePerfisEmpresas(concorrentes, { ativo, pais: query?.country ?? "pt" });
 
   useEffect(() => {
     if (!ativo || !query) {
@@ -284,15 +304,24 @@ export default function BenchmarkInsights({ query, ativo }: { query: BenchmarkQu
                       <span className="flex items-center gap-1">
                         <TrendingUp size={12} /> já vendem ali:
                         {linha.competition.slice(0, 2).map((concorrente) => (
-                          <span key={concorrente.nif} className="rounded-full border border-border px-2 py-0.5">
-                            {concorrente.name?.slice(0, 26) || concorrente.nif}
+                          <span
+                            key={concorrente.nif}
+                            className="inline-flex items-center gap-1 rounded-full border border-border pl-0.5 pr-2 py-0.5"
+                          >
+                            <EmpresaLogo
+                              nome={concorrente.name}
+                              nif={concorrente.nif}
+                              logoUrl={perfis[concorrente.nif]?.logo_url}
+                              size={16}
+                            />
+                            {limparNome(concorrente.name).slice(0, 26) || concorrente.nif}
                           </span>
                         ))}
                       </span>
                       <span className="truncate">
                         {linha.buyers
                           .slice(0, 2)
-                          .map((comprador) => `${comprador.name?.slice(0, 24) || comprador.nif} (${num(comprador.count)})`)
+                          .map((comprador) => `${limparNome(comprador.name).slice(0, 24) || comprador.nif} (${num(comprador.count)})`)
                           .join(" · ")}
                       </span>
                     </div>

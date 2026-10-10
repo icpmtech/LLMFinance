@@ -627,6 +627,207 @@ export async function getBenchmarkGaps(
   return res.json();
 }
 
+/* ------------------------------------- grafo do comprador (fornecedores) */
+
+export interface BenchmarkBuyerSupplier {
+  nif: string;
+  name: string;
+  contracts: number;
+  value: number;
+  share_pct?: number | null;
+  price_index?: number | null;
+  median?: number | null;
+  client_count: number;
+  dependency_pct?: number | null;
+  cpvs_here: number;
+  cpvs_market: number;
+  last_date?: string | null;
+  status: string;
+  strengths: string[];
+  weaknesses: string[];
+  score: number;
+  rank?: number | null;
+  market_value?: number | null;
+}
+
+export interface BenchmarkBuyerClient {
+  nif: string;
+  name: string;
+  contracts: number;
+  value?: number | null;
+  share_pct?: number | null;
+}
+
+export interface BenchmarkBuyerRegion {
+  code: string;
+  contracts: number;
+  value: number;
+}
+
+export interface BenchmarkOntology {
+  perspectiva?: BenchmarkPerspectiva;
+  object_types: { id: string; label: string; shape: string; fields: string[] }[];
+  link_types: { id: string; label: string; from: string; to: string; weight: string; fields: string[] }[];
+}
+
+/** De que lado se lê o grafo: quem compra ou quem vende. */
+export type BenchmarkPerspectiva = "comprador" | "vendedor";
+
+/**
+ * Rótulos dos elementos do grafo.
+ *
+ * O grafo é o mesmo desenho nas duas páginas (comprador e vendedor): aqui diz-se
+ * o que é o nó central, o primeiro anel (`ring1`) e o segundo (`ring2`), e como
+ * se chamam as métricas. No grafo do vendedor, `suppliers` são os **compradores**
+ * e `clients` são os **concorrentes**.
+ */
+export interface BenchmarkGraphLabels {
+  entity: string;
+  ring1: string;
+  ring2: string;
+  ring1_one: string;
+  ring2_one: string;
+  share: string;
+  dependency: string;
+  count: string;
+  counterpart: string;
+  price: string;
+  ring2_hint: string;
+  regions_hint: string;
+}
+
+export interface BenchmarkBuyerGraphResponse {
+  perspectiva?: BenchmarkPerspectiva;
+  labels?: BenchmarkGraphLabels;
+  role: BenchmarkRole;
+  country: BenchmarkCountry;
+  country_label: string;
+  segment: { cpv_code?: string | null; year_from?: number | null; year_to?: number | null; region?: string | null };
+  buyer: {
+    nif?: string | null;
+    name: string;
+    contracts: number;
+    total_value?: number | null;
+    median?: number | null;
+    share_pct?: number | null;
+    market_median?: number | null;
+    market_p90?: number | null;
+    top_cpv: BenchmarkCpv[];
+  };
+  reference: BenchmarkReference;
+  suppliers: BenchmarkBuyerSupplier[];
+  alternatives: { nif?: string | null; name: string; contracts: number; value?: number | null; share_pct?: number | null }[];
+  clients: BenchmarkBuyerClient[];
+  regions: BenchmarkBuyerRegion[];
+  ontology: BenchmarkOntology;
+  notes: string[];
+  error?: string;
+}
+
+/** Grafo do comprador: fornecedores (forças/fraquezas), clientes comuns e regiões. */
+export async function getBenchmarkBuyerGraph(
+  params: BenchmarkQuery & { top_suppliers?: number; top_clients?: number },
+): Promise<BenchmarkBuyerGraphResponse> {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    search.set(key, String(value));
+  }
+  const res = await fetch(`${API_BASE}/benchmark/buyer-graph?${search}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Erro no grafo do comprador: ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Grafo do **vendedor**: a quem vendo, com quem disputo e onde vendo.
+ *
+ * Mesma forma de resposta do grafo do comprador (e por isso as duas páginas
+ * partilham o desenho): o nó central é o vendedor, `suppliers` são os seus
+ * **compradores** e `clients` são os **concorrentes** que vendem aos mesmos
+ * compradores.
+ */
+export async function getBenchmarkSellerGraph(
+  params: BenchmarkQuery & { top_buyers?: number; top_competitors?: number },
+): Promise<BenchmarkBuyerGraphResponse> {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    search.set(key, String(value));
+  }
+  const res = await fetch(`${API_BASE}/benchmark/seller-graph?${search}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Erro no grafo do vendedor: ${res.status}`);
+  }
+  return res.json();
+}
+
+/* ------------------------------ preço por CPV e ano (eu vs concorrência) */
+
+export interface BenchmarkPriceRiskYear {
+  year: string;
+  entity_contracts: number;
+  entity_avg?: number | null;
+  market_contracts: number;
+  market_avg?: number | null;
+  ratio?: number | null;
+  risk: string;
+}
+
+export interface BenchmarkPriceRiskCpv {
+  code: string;
+  description?: string | null;
+  contracts: number;
+  value: number;
+  avg?: number | null;
+  median?: number | null;
+  market_contracts: number;
+  market_value: number;
+  market_avg?: number | null;
+  market_median?: number | null;
+  ratio?: number | null;
+  ratio_median?: number | null;
+  share_pct?: number | null;
+  suppliers: number;
+  competitors: BenchmarkRow[];
+  years: BenchmarkPriceRiskYear[];
+  risk: string;
+  risk_reason: string;
+}
+
+export interface BenchmarkPriceRiskResponse {
+  role: BenchmarkRole;
+  country: BenchmarkCountry;
+  country_label: string;
+  segment: { cpv_code?: string | null; year_from?: number | null; year_to?: number | null; region?: string | null };
+  entity: { nif?: string | null; name: string; contracts: number; total_value: number; avg?: number | null };
+  reference: { scope: string; contracts: number; avg?: number | null; median?: number | null };
+  items: BenchmarkPriceRiskCpv[];
+  summary: { risk_level: string; items: BenchmarkAnomalyItem[] };
+  notes: string[];
+  error?: string;
+}
+
+/** Preço por CPV e ano face à média do mercado, com risco explicado. */
+export async function getBenchmarkPriceRisk(
+  params: BenchmarkQuery & { top_cpvs?: number; top_years?: number },
+): Promise<BenchmarkPriceRiskResponse> {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    search.set(key, String(value));
+  }
+  const res = await fetch(`${API_BASE}/benchmark/price-risk?${search}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Erro no risco de preço: ${res.status}`);
+  }
+  return res.json();
+}
+
 /* ------------------------------------------------ relatório PDF (pago) */
 /** Âmbito do relatório: uma empresa, o quadro por CPV ou o cruzamento. */
 export type BenchmarkReportMode = "empresa" | "mercado" | "cruzar";

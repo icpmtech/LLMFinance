@@ -218,6 +218,20 @@ def build(params: Dict[str, Any], *, es: Any = None) -> Dict[str, Any]:
                 )
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Sem oportunidades no relatório: %s", exc)
+            try:
+                resultado["price_risk"] = bench.benchmark_price_risk(
+                    nif=params.get("nif") or None,
+                    name=params.get("name") or None,
+                    role=params["role"],
+                    country=params.get("country") or "pt",
+                    cpv_code=params.get("cpv_code") or None,
+                    year_from=params.get("year_from"),
+                    year_to=params.get("year_to"),
+                    region=params.get("region") or None,
+                    es=es,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Sem risco de preço no relatório: %s", exc)
     elif modo == "cruzar":
         resultado = bench.benchmark_cross(
             entities=params.get("entities") or [],
@@ -440,6 +454,7 @@ def sections(
                 ],
             }
         )
+        secoes.extend(_seccoes_preco_por_cpv(dados.get("price_risk")))
         secoes.extend(_seccoes_anomalias(dados.get("anomalies")))
         secoes.extend(_seccoes_oportunidades(dados.get("gaps")))
     elif modo == "mercado":
@@ -627,6 +642,84 @@ def _seccao_cpvs(titulo_seccao: str, cpvs: Sequence[Dict[str, Any]]) -> Dict[str
             for item in list(cpvs)[:MAX_CPV]
         ],
     }
+
+
+def _seccoes_preco_por_cpv(risco: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Preço por CPV e ano (eu vs média do mercado) com o risco de cada CPV."""
+    if not risco or risco.get("error") or not risco.get("items"):
+        return []
+    secoes: List[Dict[str, Any]] = []
+    achados = (risco.get("summary") or {}).get("items") or []
+    if achados:
+        secoes.append(
+            {
+                "title": "Risco de preço (resumo)",
+                "columns": ["Severidade", "Leitura", "Detalhe"],
+                "rows": [
+                    [str(item.get("severity") or "info"), str(item.get("title") or ""), str(item.get("detail") or "")]
+                    for item in achados
+                ],
+            }
+        )
+    linhas: List[List[str]] = []
+    for item in risco["items"]:
+        serie = " / ".join(
+            f"{ano['year']}:{ano['ratio']:.2f}×" if ano.get("ratio") else f"{ano['year']}:—"
+            for ano in (item.get("years") or [])[:6]
+        )
+        linhas.append(
+            [
+                item.get("code") or "—",
+                _texto(item.get("description"), 56) or "—",
+                f"{_contratos(item.get('contracts'))} de {_contratos(item.get('market_contracts'))}",
+                _moeda(item.get("avg")),
+                _moeda(item.get("market_avg")),
+                f"{item['ratio']:.2f}×" if item.get("ratio") else "—",
+                _pct(item.get("share_pct")),
+                _contratos(item.get("suppliers")),
+                serie,
+                f"{item.get('risk')} — {_texto(item.get('risk_reason'), 90)}",
+            ]
+        )
+    secoes.append(
+        {
+            "title": "Preço por CPV e ano (empresa vs mercado)",
+            "columns": [
+                "CPV",
+                "Descrição",
+                "Contratos",
+                "Média empresa",
+                "Média mercado",
+                "Rácio",
+                "Quota",
+                "Concorrentes",
+                "Série por ano",
+                "Risco",
+            ],
+            "rows": linhas,
+        }
+    )
+    concorrentes: List[List[str]] = []
+    for item in risco["items"]:
+        for posicao, linha in enumerate(item.get("competitors") or []):
+            concorrentes.append(
+                [
+                    item.get("code") or "—",
+                    str(posicao + 1),
+                    _texto(linha.get("name") or linha.get("nif"), 50) or "—",
+                    _contratos(linha.get("count")),
+                    _moeda(linha.get("value")),
+                ]
+            )
+    if concorrentes:
+        secoes.append(
+            {
+                "title": "Maiores concorrentes por CPV",
+                "columns": ["CPV", "#", "Entidade", "Contratos", "Valor"],
+                "rows": concorrentes,
+            }
+        )
+    return secoes
 
 
 def _seccoes_anomalias(anomalias: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:

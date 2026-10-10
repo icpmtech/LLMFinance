@@ -24,6 +24,7 @@ import {
 } from "../../benchmarkApi";
 import { SeletorAno } from "./BenchmarkPickers";
 import BenchmarkReportCard from "./BenchmarkReportCard";
+import { limparNome } from "./texto";
 
 const MAX_ANOS = 12;
 const PAISES_ORDEM: BenchmarkCountry[] = ["pt", "es", "fr"];
@@ -420,8 +421,8 @@ export default function BenchmarkByCpv({ meta }: { meta: BenchmarkMetaAll | null
                             <span className={`text-xs font-semibold ${COR_PAIS[linha.country]}`}>{linha.short}</span>
                           </td>
                           <td className="py-2 pr-3">
-                            <p className="max-w-[22rem] truncate font-medium" title={linha.name}>
-                              {linha.name}
+                            <p className="max-w-[22rem] truncate font-medium" title={limparNome(linha.name)}>
+                              {limparNome(linha.name)}
                             </p>
                             <p className="text-xs text-muted-foreground tabular-nums">
                               {linha.nif !== linha.name ? `${linha.nif} · ` : ""}#{linha.rank ?? "—"} em{" "}

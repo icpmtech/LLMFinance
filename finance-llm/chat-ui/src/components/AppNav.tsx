@@ -66,6 +66,8 @@ export type AppView =
   | "benchmark-es"
   | "benchmark-fr"
   | "benchmark-cross"
+  | "benchmark-buyer"
+  | "benchmark-seller"
   | "mirofish"
   | "simulador"
   | "risco"

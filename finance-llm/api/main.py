@@ -291,6 +291,9 @@ from api.societario_routes import router as societario_router
 from api.societario_recolha_routes import router as societario_recolha_router
 # Recolha massiva de empresas a partir de diretórios web (ex.: Iberinform.pt).
 from api.empresas_recolha_routes import router as empresas_recolha_router
+# Sites oficiais e logótipos das empresas: descoberta por pesquisa web + IA,
+# extração do logótipo do site e cache local (marca as empresas no benchmark).
+from api.empresas_perfil_routes import router as empresas_perfil_router
 from api.cire_routes import router as cire_router
 from api.citacoes_routes import router as citacoes_router
 from api.people_routes import router as people_router
@@ -619,6 +622,7 @@ app.include_router(companies_global_router)
 app.include_router(societario_router)
 app.include_router(societario_recolha_router)
 app.include_router(empresas_recolha_router)
+app.include_router(empresas_perfil_router)
 
 
 @app.get("/societario")

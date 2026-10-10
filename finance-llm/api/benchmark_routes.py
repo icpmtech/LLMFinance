@@ -370,6 +370,121 @@ def benchmark_gaps(
     return resultado
 
 
+@router.get("/buyer-graph")
+def benchmark_buyer_graph(
+    nif: Optional[str] = Query(None, description="NIF/DIR3/SIRET do comprador (preferido)"),
+    name: Optional[str] = Query(None, description="Nome do comprador (usado quando não há identificador)"),
+    country: str = Query("pt", description="País dos dados: `pt`, `es` ou `fr`"),
+    cpv_code: Optional[str] = Query(None, description="CPV do segmento (prefixo aceite)"),
+    year_from: Optional[int] = Query(None, description="Ano inicial (inclusive)"),
+    year_to: Optional[int] = Query(None, description="Ano final (inclusive)"),
+    region: Optional[str] = Query(None, description="Região/NUTS ou distrito (conforme o país)"),
+    top_suppliers: int = Query(12, ge=2, le=24, description="Fornecedores no grafo"),
+    top_clients: int = Query(8, ge=2, le=20, description="Clientes (segundo anel) no grafo"),
+) -> Dict[str, Any]:
+    """Grafo do **comprador**: fornecedores com forças/fraquezas, clientes comuns e regiões.
+
+    É a leitura de quem compra: dependência de cada fornecedor (quanto pesa este
+    comprador na carteira dele), preço face à mediana do mercado, número de
+    clientes (alternativas que ele tem), CPV que cobre e regiões onde a compra
+    acontece — mais o segundo anel de compradores que usam os mesmos fornecedores.
+    """
+    if not (nif or (name or "").strip()):
+        raise HTTPException(status_code=422, detail="Indique o comprador por `nif` ou `name`.")
+    resultado = benchmark.benchmark_buyer_graph(
+        nif=nif,
+        name=name,
+        country=country,
+        cpv_code=cpv_code,
+        year_from=year_from,
+        year_to=year_to,
+        region=region,
+        top_suppliers=top_suppliers,
+        top_clients=top_clients,
+    )
+    if resultado.get("error"):
+        raise HTTPException(status_code=502, detail=str(resultado["error"]))
+    return resultado
+
+
+@router.get("/seller-graph")
+def benchmark_seller_graph(
+    nif: Optional[str] = Query(None, description="NIF/DIR3/SIRET do vendedor (preferido)"),
+    name: Optional[str] = Query(None, description="Nome do vendedor (usado quando não há identificador)"),
+    country: str = Query("pt", description="País dos dados: `pt`, `es` ou `fr`"),
+    cpv_code: Optional[str] = Query(None, description="CPV do segmento (prefixo aceite)"),
+    year_from: Optional[int] = Query(None, description="Ano inicial (inclusive)"),
+    year_to: Optional[int] = Query(None, description="Ano final (inclusive)"),
+    region: Optional[str] = Query(None, description="Região/NUTS ou distrito (conforme o país)"),
+    top_buyers: int = Query(12, ge=2, le=24, description="Compradores no grafo (primeiro anel)"),
+    top_competitors: int = Query(8, ge=2, le=24, description="Concorrentes no grafo (segundo anel)"),
+) -> Dict[str, Any]:
+    """Grafo do **vendedor**: a quem vende, com quem disputa e onde vende.
+
+    É o espelho de `/benchmark/buyer-graph` do lado de quem vende: o nó central é
+    a empresa adjudicatária, o primeiro anel são os **compradores** (com o peso de
+    cada um no meu volume, a minha quota nas compras dele, o meu preço face à
+    mediana e as forças/fraquezas de cada relação) e o segundo anel são os
+    **concorrentes** que também vendem a esses compradores. Acrescenta as regiões
+    onde já vendeu e as oportunidades (compradores que compram o meu CPV e nunca
+    me compraram).
+    """
+    if not (nif or (name or "").strip()):
+        raise HTTPException(status_code=422, detail="Indique o vendedor por `nif` ou `name`.")
+    resultado = benchmark.benchmark_seller_graph(
+        nif=nif,
+        name=name,
+        country=country,
+        cpv_code=cpv_code,
+        year_from=year_from,
+        year_to=year_to,
+        region=region,
+        top_buyers=top_buyers,
+        top_competitors=top_competitors,
+    )
+    if resultado.get("error"):
+        raise HTTPException(status_code=502, detail=str(resultado["error"]))
+    return resultado
+
+
+@router.get("/price-risk")
+def benchmark_price_risk(
+    nif: Optional[str] = Query(None, description="NIF/DIR3/SIRET da entidade (preferido)"),
+    name: Optional[str] = Query(None, description="Nome da entidade (usado quando não há identificador)"),
+    role: str = Query("adjudicatario", description="`adjudicatario` (vende) ou `adjudicante` (compra)"),
+    country: str = Query("pt", description="País dos dados: `pt`, `es` ou `fr`"),
+    cpv_code: Optional[str] = Query(None, description="CPV do segmento (prefixo aceite)"),
+    year_from: Optional[int] = Query(None, description="Ano inicial (inclusive)"),
+    year_to: Optional[int] = Query(None, description="Ano final (inclusive)"),
+    region: Optional[str] = Query(None, description="Região/NUTS ou distrito (conforme o país)"),
+    top_cpvs: int = Query(8, ge=1, le=20, description="Quantos CPV do perfil analisar"),
+    top_years: int = Query(8, ge=1, le=15, description="Quantos anos por CPV"),
+) -> Dict[str, Any]:
+    """Preço **por CPV e por ano** face à média do mercado, com risco explicado.
+
+    Devolve, por CPV: média/mediana da entidade e do mercado, rácio, quota de
+    valor, número de concorrentes (e os três maiores), a série ano a ano com a
+    leitura de cada ano e um `risk` (`alto`/`médio`/`baixo`) com o motivo.
+    """
+    if not (nif or (name or "").strip()):
+        raise HTTPException(status_code=422, detail="Indique a entidade por `nif` ou `name`.")
+    resultado = benchmark.benchmark_price_risk(
+        nif=nif,
+        name=name,
+        role=role,
+        country=country,
+        cpv_code=cpv_code,
+        year_from=year_from,
+        year_to=year_to,
+        region=region,
+        top_cpvs=top_cpvs,
+        top_years=top_years,
+    )
+    if resultado.get("error"):
+        raise HTTPException(status_code=502, detail=str(resultado["error"]))
+    return resultado
+
+
 @router.get("/entity")
 def benchmark_entity(
     nif: Optional[str] = Query(None, description="NIF/DIR3/SIRET da entidade (preferido)"),
