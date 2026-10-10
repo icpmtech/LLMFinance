@@ -636,6 +636,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "99,102,241",
   },
   {
+    id: "benchmark-cross",
+    label: "Benchmark · Entre países",
+    hint: "Cruzar empresas de Portugal, Espanha e França pelo CPV: CPV e compradores em comum, com grafo",
+    icon: GitCompare,
+    gradient: "from-fuchsia-200 via-purple-500 to-indigo-700",
+    accent: "168,85,247",
+  },
+  {
     id: "contratos-es",
     label: "Contratos Espanha",
     hint: "Pesquisar contratos públicos de Espanha (PLACSP)",
@@ -845,6 +853,7 @@ const DEFAULT_ITEMS = [
   "benchmark-pt",
   "benchmark-es",
   "benchmark-fr",
+  "benchmark-cross",
   "entities-search",
   "gleif",
   "empresas-recolha",

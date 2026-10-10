@@ -236,10 +236,10 @@ def entity_filter(
     return consulta
 
 
-def entity_search_filter(country: Optional[str], role: str, q: Optional[str]) -> Dict[str, Any]:
-    """Filtro de pesquisa livre de entidades (nome ou identificador).
+def entity_search_query(country: Optional[str], role: str, q: Optional[str]) -> Dict[str, Any]:
+    """Consulta de pesquisa de entidades, **sem** a camada `nested`.
 
-    Escreve-se um nome (`BRAUN`) ou um identificador (`504293753`); o filtro
+    Escreve-se um nome (`BRAUN`) ou um identificador (`504293753`); a consulta
     tenta os dois caminhos no campo próprio do país. O tipo do campo de nome
     decide o operador: em PT o nome é `keyword` (não aceita
     `match_phrase_prefix`) e procura-se com `wildcard` sem distinguir
@@ -267,9 +267,14 @@ def entity_search_filter(country: Optional[str], role: str, q: Optional[str]) ->
         should.append({"prefix": {spec["id"]: digitos}})
     if not should:
         should.append({"match_phrase_prefix": {spec["id"]: texto}})
-    consulta = {"bool": {"should": should, "minimum_should_match": 1}}
-    nested = spec.get("nested")
-    if nested:
+    return {"bool": {"should": should, "minimum_should_match": 1}}
+
+
+def entity_search_filter(country: Optional[str], role: str, q: Optional[str]) -> Dict[str, Any]:
+    """Pesquisa de entidades ao nível do **documento** (com `nested` se for o caso)."""
+    consulta = entity_search_query(country, role, q)
+    nested = party(country, role).get("nested")
+    if nested and "match_all" not in consulta:
         return {"nested": {"path": nested, "query": consulta}}
     return consulta
 
@@ -280,6 +285,7 @@ def rank_agg(
     size: int,
     *,
     filtro: Optional[Dict[str, Any]] = None,
+    cpv_size: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Ranking das entidades de um papel, por valor contratado.
 
@@ -288,24 +294,39 @@ def rank_agg(
 
     `filtro` (opcional) restringe as entidades contadas **dentro** da parte —
     é o que faz uma pesquisa por nome devolver a entidade procurada e não todos
-    os co-contratantes dos contratos em que ela aparece.
+    os co-contratantes dos contratos em que ela aparece. Com `cpv_size`, cada
+    entidade traz também os seus CPV principais (ver `entity_cpv_rows`).
     """
     spec = party(country, role)
     nested = spec.get("nested")
     dialeto = dialect(country)
+    # O valor de cada entidade é somado sobre os documentos limpos (positivos e
+    # abaixo do teto do país): sem isto, um valor sentinela isolado (há um em
+    # França, 99 999 999 999 999 €) punha uma entidade no topo do ranking.
+    limpo = {"bool": {"filter": value_filters(country)}}
+    valor_nested: Dict[str, Any] = {
+        "reverse_nested": {},
+        "aggs": {
+            "limpo": {
+                "filter": limpo,
+                "aggs": {
+                    "sum": {"sum": dialeto["valor_soma_corpo"]},
+                    "last": {"max": {"field": dialeto["data"]}},
+                },
+            }
+        },
+    }
+    extra: Dict[str, Any] = {}
+    if cpv_size:
+        extra["cpvs"] = entity_cpv_agg(country, role, cpv_size)
     if nested:
         interno: Dict[str, Any] = {
             "top": {
-                "terms": {"field": spec["id"], "size": size, "order": {"value>sum": "desc"}},
+                "terms": {"field": spec["id"], "size": size, "order": {"value>limpo>sum": "desc"}},
                 "aggs": {
                     "nome": {"top_hits": {"size": 1, "_source": True}},
-                    "value": {
-                        "reverse_nested": {},
-                        "aggs": {
-                            "sum": {"sum": dialeto["valor_soma_corpo"]},
-                            "last": {"max": {"field": dialeto["data"]}},
-                        },
-                    },
+                    "value": valor_nested,
+                    **extra,
                 },
             }
         }
@@ -313,16 +334,43 @@ def rank_agg(
             return {"nested": {"path": nested}, "aggs": {"alvo": {"filter": filtro, "aggs": interno}}}
         return {"nested": {"path": nested}, "aggs": interno}
     termos = {
-        "terms": {"field": spec["id"], "size": size, "order": {"value": "desc"}},
+        "terms": {"field": spec["id"], "size": size, "order": {"value>sum": "desc"}},
         "aggs": {
             "nome": {"top_hits": {"size": 1, "_source": True}},
-            "value": {"sum": dialeto["valor_soma_corpo"]},
-            "last": {"max": {"field": dialeto["data"]}},
+            "value": {
+                "filter": limpo,
+                "aggs": {
+                    "sum": {"sum": dialeto["valor_soma_corpo"]},
+                    "last": {"max": {"field": dialeto["data"]}},
+                },
+            },
+            **extra,
         },
     }
     if filtro:
         return {"filter": filtro, "aggs": {"top": termos}}
     return termos
+
+
+def valor_do_bucket(
+    country: Optional[str],
+    role: str,
+    bucket: Dict[str, Any],
+) -> tuple[Optional[float], Dict[str, Any]]:
+    """Valor somado e última data de um bucket do ranking.
+
+    Tolera a camada de filtro de valores (`limpo`) que `rank_agg` acrescenta,
+    seja no ramo nested (dentro de `value`) ou no plano (dentro do bucket).
+    """
+    dados = ((bucket or {}).get("value") or {}) if is_nested(country, role) else (bucket or {})
+    if "sum" not in dados:
+        for valor in dados.values():
+            if isinstance(valor, dict) and "sum" in valor:
+                dados = valor
+                break
+    soma = (dados.get("sum") or {}).get("value")
+    ultima = dados.get("last") or {}
+    return soma, ultima
 
 
 def _rank_buckets(agg: Optional[Dict[str, Any]], nested: bool) -> List[Dict[str, Any]]:
@@ -364,21 +412,17 @@ def rank_rows(
         chave = bucket.get("key")
         if not chave:
             continue
-        if nested:
-            valor = (((bucket.get("value") or {}).get("sum")) or {}).get("value")
-            ultima = ((bucket.get("value") or {}).get("last")) or {}
-        else:
-            valor = (bucket.get("value") or {}).get("value")
-            ultima = bucket.get("last") or {}
-        rows.append(
-            {
-                "nif": str(chave),
-                "name": rank_row_name(country, role, bucket) or str(chave),
-                "count": int(bucket.get("doc_count") or 0),
-                "value": round(float(valor), 2) if valor is not None else None,
-                "last_date": ultima.get("value_as_string") or None,
-            }
-        )
+        valor, ultima = valor_do_bucket(country, role, bucket)
+        linha = {
+            "nif": str(chave),
+            "name": rank_row_name(country, role, bucket) or str(chave),
+            "count": int(bucket.get("doc_count") or 0),
+            "value": round(float(valor), 2) if valor is not None else None,
+            "last_date": ultima.get("value_as_string") or None,
+        }
+        if bucket.get("cpvs"):
+            linha["cpvs"] = entity_cpv_rows(country, role, bucket)
+        rows.append(linha)
     rows.sort(key=lambda row: (row.get("value") or 0.0, row.get("count") or 0), reverse=True)
     for posicao, row in enumerate(rows):
         row["rank"] = posicao + 1
@@ -495,11 +539,12 @@ def cpv_agg(country: Optional[str], size: int, *, com_mediana: bool = False) -> 
 def cpv_rows(country: Optional[str], agg: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Linhas `{code, description, count, value, median}` de um perfil de CPV."""
     spec = dialect(country)["cpv"]
-    rows: List[Dict[str, Any]] = []
-    for item in (((agg or {}).get("top") or {}).get("buckets")) or []:
+    linhas: List[Dict[str, Any]] = []
+    raiz = _cpv_top((agg or {}).get("top"))
+    for item in ((raiz or {}).get("buckets")) or []:
         valor = (((item.get("value") or {}).get("sum")) or {}).get("value")
         mediana = ((((item.get("value") or {}).get("pc")) or {}).get("values") or {}).get("50.0")
-        rows.append(
+        linhas.append(
             {
                 "code": str(item.get("key")),
                 "description": _cpv_descricao(item.get("description"), item.get("key"), spec["descricao"]),
@@ -508,7 +553,42 @@ def cpv_rows(country: Optional[str], agg: Optional[Dict[str, Any]]) -> List[Dict
                 "median": round(float(mediana), 2) if mediana is not None else None,
             }
         )
-    return rows
+    return linhas
+
+
+def _cpv_top(agg: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Agregação `top` dos CPV, tolerando uma camada de filtro à frente."""
+    if not isinstance(agg, dict):
+        return None
+    if agg.get("buckets") is not None:
+        return agg
+    for valor in agg.values():
+        if isinstance(valor, dict):
+            achado = _cpv_top(valor)
+            if achado is not None:
+                return achado
+    return None
+
+
+def entity_cpv_agg(country: Optional[str], role: str, size: int) -> Dict[str, Any]:
+    """Perfil de CPV **dentro de um bucket de entidade**.
+
+    Em PT/FR a entidade é `nested`, por isso é preciso voltar ao documento
+    (`reverse_nested`) antes de entrar no `cpv` (também ele `nested`); em ES os
+    campos da entidade são planos e basta a agregação de CPV.
+    """
+    interno = {"lista": cpv_agg(country, size)}
+    if is_nested(country, role):
+        return {"reverse_nested": {}, "aggs": interno}
+    return interno["lista"]
+
+
+def entity_cpv_rows(country: Optional[str], role: str, bucket: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """CPV de um bucket de entidade (lê o que `entity_cpv_agg` escreveu)."""
+    dados = (bucket or {}).get("cpvs") or {}
+    if is_nested(country, role):
+        return cpv_rows(country, dados.get("lista"))
+    return cpv_rows(country, dados)
 
 
 def _cpv_descricao(agg: Optional[Dict[str, Any]], code: Any, chave: str) -> str:

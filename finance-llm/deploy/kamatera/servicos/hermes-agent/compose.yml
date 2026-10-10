@@ -22,7 +22,33 @@
 # o lancador envia ao lado deste ficheiro.
 services:
   hermes-agent:
-    image: nousresearch/hermes-agent:latest
+    # Fixado ao build que funciona, e nao a `latest`.
+    #
+    # A migracao fez `docker pull nousresearch/hermes-agent:latest` e trouxe um
+    # build de 2026-10-08. Nesse build o `api_server` **nao arranca**:
+    #
+    #   WARNING gateway.run: API Server: aiohttp not installed
+    #   WARNING gateway.run: No adapter available for api_server
+    #
+    # ...e nada escuta na 8642 dentro do contentor (a sonda da `8642` pelo
+    # anfitriao acaba em `000`, e o painel de estado mostra "sem resposta").
+    #
+    # A mensagem e **enganadora**: o `aiohttp` esta instalado (3.14.3, no venv
+    # `/opt/hermes/.venv`) e `check_api_server_requirements()` devolve `True`
+    # quando chamada a mao. O problema esta no arranque, nao no pacote. E e
+    # deterministico: reproduz-se em todos os arranques, com data nova.
+    #
+    # Isto nao e cosmetico. O Jarvis fala com o agente por aqui
+    # (`JARVIS_AGENT_URL=http://hermes-agent:8642`), por isso o build novo deixa
+    # a integracao morta.
+    #
+    # O PC, com o build de 2026-09-24, responde `200` em `:8642/health`. Fixar
+    # ao mesmo digest devolve a paridade com o ambiente onde isto foi validado.
+    #
+    # NOTA: e um contorno, nao uma correccao. O build novo tem um problema a
+    # serio ou passou a exigir configuracao que ainda nao descobrimos. Vale a
+    # pena reportar a montante e rever este `pin` de vez em quando.
+    image: nousresearch/hermes-agent@sha256:ce71252af3acfa2dd4207ad5b0df8af1aaa8b7633a54def987493e1bcdb8ed3f
     container_name: iqos-hermes-agent
     # Dois argumentos distintos: `["gateway run"]` (um so) faz o dispatcher
     # responder «'gateway run' is not a hermes command».

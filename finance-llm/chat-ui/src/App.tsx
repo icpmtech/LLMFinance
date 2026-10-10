@@ -87,6 +87,7 @@ import OsintPage from "./pages/OsintPage";
 import ReportsPage from "./pages/ReportsPage";
 import SubvencoesPage from "./pages/SubvencoesPage";
 import BenchmarkPage from "./pages/BenchmarkPage";
+import BenchmarkCrossPage from "./pages/BenchmarkCrossPage";
 import MiroFishPage from "./pages/MiroFishPage";
 import SimuladorPage from "./pages/SimuladorPage";
 import DeepSearchPage from "./pages/DeepSearchPage";
@@ -190,6 +191,7 @@ type AppView =
   | "benchmark-pt"
   | "benchmark-es"
   | "benchmark-fr"
+  | "benchmark-cross"
   | "mirofish"
   | "simulador"
   | "deep-search"
@@ -339,6 +341,7 @@ function pathForView(
   if (view === "benchmark-pt") return "/benchmark/portugal";
   if (view === "benchmark-es") return "/benchmark/espanha";
   if (view === "benchmark-fr") return "/benchmark/franca";
+  if (view === "benchmark-cross") return "/benchmark/cruzar";
   if (view === "padroes") return "/padroes";
   if (view === "osint") return "/osint";
   if (view === "mirofish") return "/mirofish";
@@ -544,6 +547,7 @@ export default function App() {
     if (path === "/benchmark/portugal") return "benchmark-pt";
     if (path === "/benchmark/espanha") return "benchmark-es";
     if (path === "/benchmark/franca") return "benchmark-fr";
+    if (path === "/benchmark/cruzar") return "benchmark-cross";
     if (path === "/benchmark" || path.startsWith("/benchmark/")) return "benchmark";
     if (path === "/padroes" || path.startsWith("/padroes/")) return "padroes";
     if (path === "/mirofish" || path.startsWith("/mirofish/")) return "mirofish";
@@ -673,6 +677,7 @@ export default function App() {
       else if (path === "/benchmark/portugal") next = "benchmark-pt";
       else if (path === "/benchmark/espanha") next = "benchmark-es";
       else if (path === "/benchmark/franca") next = "benchmark-fr";
+      else if (path === "/benchmark/cruzar") next = "benchmark-cross";
       else if (path === "/benchmark" || path.startsWith("/benchmark/")) next = "benchmark";
       else if (path === "/mirofish" || path.startsWith("/mirofish/")) next = "mirofish";
       else if (path === "/simulador" || path.startsWith("/simulador/")) next = "simulador";
@@ -1401,6 +1406,8 @@ export default function App() {
       return <BenchmarkPage scope="es" onSwitchView={() => setViewAndHistory("contratos-es")} />;
     if (target === "benchmark-fr")
       return <BenchmarkPage scope="fr" onSwitchView={() => setViewAndHistory("contratos-fr")} />;
+    if (target === "benchmark-cross")
+      return <BenchmarkCrossPage onSwitchView={() => setViewAndHistory("contracts-search")} />;
     if (target === "mirofish") return <MiroFishPage />;
     if (target === "simulador") return <SimuladorPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
     if (target === "deep-search") return <DeepSearchPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;

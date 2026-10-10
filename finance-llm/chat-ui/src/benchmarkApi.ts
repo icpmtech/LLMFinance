@@ -363,3 +363,154 @@ export async function searchBenchmarkEntities(
     total_value: item.total_value ?? null,
   }));
 }
+
+/* ------------------------------------------------- empresas e os seus CPV */
+
+/** CPV onde uma entidade atua (com volume e valor). */
+export interface BenchmarkEntityCpv {
+  code: string;
+  description?: string | null;
+  count: number;
+  value?: number | null;
+  median?: number | null;
+}
+
+export interface BenchmarkByEntityCountry {
+  country: BenchmarkCountry;
+  label: string;
+  short: string;
+  index?: string;
+  contracts?: number;
+  total_value?: number | null;
+  entities?: number;
+  error?: string;
+}
+
+export interface BenchmarkByEntityRow {
+  country: BenchmarkCountry;
+  country_label: string;
+  short: string;
+  rank?: number | null;
+  nif: string;
+  name: string;
+  contracts: number;
+  value?: number | null;
+  share_pct?: number | null;
+  last_date?: string | null;
+  cpvs: BenchmarkEntityCpv[];
+}
+
+export interface BenchmarkByEntityResponse {
+  country: BenchmarkScope;
+  role: BenchmarkRole;
+  countries: BenchmarkByEntityCountry[];
+  items: BenchmarkByEntityRow[];
+  notes: string[];
+  error?: string;
+}
+
+/** Empresas (ou compradores) de cada país, com os CPV onde cada uma atua. */
+export async function getBenchmarkByEntity(
+  params: {
+    countries?: BenchmarkCountry[];
+    role?: BenchmarkRole;
+    cpv_code?: string;
+    year_from?: number;
+    year_to?: number;
+    size?: number;
+    cpv_size?: number;
+  } = {},
+): Promise<BenchmarkByEntityResponse> {
+  const search = new URLSearchParams();
+  if (params.countries?.length) search.set("countries", params.countries.join(","));
+  if (params.role) search.set("role", params.role);
+  if (params.cpv_code) search.set("cpv_code", params.cpv_code);
+  if (params.year_from !== undefined) search.set("year_from", String(params.year_from));
+  if (params.year_to !== undefined) search.set("year_to", String(params.year_to));
+  if (params.size !== undefined) search.set("size", String(params.size));
+  if (params.cpv_size !== undefined) search.set("cpv_size", String(params.cpv_size));
+  const res = await fetch(`${API_BASE}/benchmark/by-entity?${search}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Erro no quadro de empresas: ${res.status}`);
+  }
+  return res.json();
+}
+
+/* ------------------------------------- cruzar empresas de países diferentes */
+
+/** Máximo de empresas cruzadas de uma vez (igual ao limite do servidor). */
+export const MAX_CROSS = 6;
+
+export interface BenchmarkCrossEntity {
+  /** País dos dados da empresa (cada empresa pode vir de um país diferente). */
+  country: BenchmarkCountry;
+  nif?: string;
+  name?: string;
+}
+
+export interface BenchmarkCrossRequest {
+  entities: BenchmarkCrossEntity[];
+  role?: BenchmarkRole;
+  cpv_code?: string;
+  year_from?: number;
+  year_to?: number;
+  top?: number;
+}
+
+/** Uma empresa no cruzamento (com o preço comparado ao seu próprio mercado). */
+export interface BenchmarkCrossCompany {
+  country: BenchmarkCountry;
+  country_label: string;
+  short: string;
+  nif?: string | null;
+  name: string;
+  present: boolean;
+  contracts: number;
+  total_value: number;
+  median?: number | null;
+  price_index?: number | null;
+  rank?: number | null;
+  share_pct?: number | null;
+  market: { contracts: number; median?: number | null; label: string };
+  cpvs: BenchmarkCpv[];
+  counterparties: BenchmarkRow[];
+  recent?: BenchmarkRecentContract[];
+  error?: string;
+}
+
+/** CPV (ou contraparte) onde pelo menos duas das empresas cruzadas coincidem. */
+export interface BenchmarkCrossShared {
+  code?: string;
+  description?: string | null;
+  nif?: string;
+  name?: string;
+  companies: { nif?: string | null; name: string; short: string; count: number; value?: number | null }[];
+  companies_count: number;
+  contracts: number;
+  value: number;
+}
+
+export interface BenchmarkCrossResponse {
+  role: BenchmarkRole;
+  companies: BenchmarkCrossCompany[];
+  shared_cpvs: BenchmarkCrossShared[];
+  shared_counterparties: BenchmarkCrossShared[];
+  counterparty_label: string;
+  notes: string[];
+  error?: string;
+}
+
+/** Cruza empresas de países diferentes: preços, CPV e contrapartes em comum. */
+export async function compareBenchmarkCross(payload: BenchmarkCrossRequest): Promise<BenchmarkCrossResponse> {
+  const res = await fetch(`${API_BASE}/benchmark/cross`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Erro no cruzamento: ${res.status}`);
+  }
+  return res.json();
+}

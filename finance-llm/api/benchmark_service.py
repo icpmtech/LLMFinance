@@ -29,7 +29,8 @@ Decisões que interessam:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Dict, List, Optional, Tuple
 
 from api.elasticsearch_client import (
     _cpv_description_from_hits,
@@ -170,6 +171,12 @@ def search_entities(
 
     size = max(1, min(int(size or 8), 25))
     dialeto = bc.dialect(country)
+    # No ranking só contam as entidades que casam com a pesquisa: em PT/FR a
+    # parte é `nested` e, sem este filtro interno, uma empresa que partilha
+    # contratos com a procurada aparecia na lista.
+    filtro_ranking = None
+    if bc.is_nested(country, role):
+        filtro_ranking = bc.entity_search_query(country, role, texto)
     try:
         resp = client.search(
             index=dialeto["index"],
@@ -177,7 +184,7 @@ def search_entities(
                 "size": 0,
                 "track_total_hits": True,
                 "query": {"bool": {"filter": [bc.entity_search_filter(country, role, texto)]}},
-                "aggs": {"entidades": bc.rank_agg(country, role, size)},
+                "aggs": {"entidades": bc.rank_agg(country, role, size, filtro=filtro_ranking)},
             },
         )
     except Exception as exc:  # pragma: no cover - depende do cluster
@@ -195,6 +202,118 @@ def search_entities(
         for linha in linhas
     ]
     return {"country": country, "role": role, "query": q, "items": itens, "total": len(itens)}
+
+
+def top_entities(
+    *,
+    countries: Optional[List[str]] = None,
+    role: str = "adjudicatario",
+    cpv_code: Optional[str] = None,
+    year_from: Optional[int] = None,
+    year_to: Optional[int] = None,
+    size: int = 10,
+    cpv_size: int = 6,
+    es: Any = None,
+) -> Dict[str, Any]:
+    """Empresas (ou compradores) de cada país, com os seus CPV principais.
+
+    Serve o quadro «Tudo» do benchmark: aí não se comparam empresas de países
+    diferentes (os mercados não são comparáveis um a um), mas mostra-se quem
+    domina cada mercado e **em que CPV** — a lista sai agrupada por país, para
+    não dar a ler uma hierarquia que não existe.
+    """
+    client = es or get_es_client(request_timeout=_REQUEST_TIMEOUT)
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    role = role if role in ROLES else bc.SUPPLIER
+    escolhidos = [bc.country_key(c) for c in (countries or list(bc.COUNTRIES))]
+    escolhidos = [c for c in bc.COUNTRIES if c in escolhidos] or list(bc.COUNTRIES)
+    size = max(1, min(int(size or 10), 30))
+    cpv_size = max(1, min(int(cpv_size or 6), 20))
+
+    resumo: List[Dict[str, Any]] = []
+    itens: List[Dict[str, Any]] = []
+    for pais in escolhidos:
+        dialeto = bc.dialect(pais)
+        filtros = [
+            filtro
+            for filtro in (bc.cpv_filter(pais, cpv_code), bc.year_filter(pais, year_from, year_to))
+            if filtro
+        ]
+        try:
+            corpo: Dict[str, Any] = {
+                "size": 0,
+                "track_total_hits": True,
+                "query": ({"bool": {"filter": filtros}} if filtros else {"match_all": {}}),
+                "aggs": {
+                    "entidades": bc.rank_agg(pais, role, size, cpv_size=cpv_size),
+                    "valor": {
+                        "filter": {"bool": {"filter": bc.value_filters(pais)}},
+                        "aggs": {"soma": bc.value_sum(pais)},
+                    },
+                },
+            }
+            resp = client.search(index=dialeto["index"], body=corpo)
+        except Exception as exc:  # pragma: no cover - depende do cluster
+            logger.warning("Empresas por CPV falhou (%s, %s): %s", pais, role, exc)
+            resumo.append({"country": pais, "label": dialeto["label"], "short": dialeto["short"], "error": str(exc)})
+            continue
+
+        mercado = ((resp.get("aggregations", {}).get("valor") or {}).get("soma") or {}).get("value")
+        contratos = int(((resp.get("hits", {}).get("total") or {}).get("value")) or 0)
+        linhas = bc.rank_rows(pais, role, resp.get("aggregations", {}).get("entidades"), size, mercado)
+        resumo.append(
+            {
+                "country": pais,
+                "label": dialeto["label"],
+                "short": dialeto["short"],
+                "index": dialeto["index"],
+                "contracts": contratos,
+                "total_value": round(float(mercado), 2) if mercado else None,
+                "entities": len(linhas),
+            }
+        )
+        for linha in linhas:
+            itens.append(
+                {
+                    "country": pais,
+                    "country_label": dialeto["label"],
+                    "short": dialeto["short"],
+                    "rank": linha.get("rank"),
+                    "nif": linha.get("nif"),
+                    "name": linha.get("name"),
+                    "contracts": linha.get("count"),
+                    "value": linha.get("value"),
+                    "share_pct": linha.get("share_pct"),
+                    "last_date": linha.get("last_date"),
+                    "cpvs": linha.get("cpvs") or [],
+                }
+            )
+
+    notas: List[str] = []
+    if role == bc.SUPPLIER:
+        notas.append(
+            "Só entidades com contratos no segmento filtrado: a lista mostra quem vende "
+            "em cada mercado, não quem vendeu sempre."
+        )
+    else:
+        notas.append(
+            "Só entidades com contratos no segmento filtrado: a lista mostra quem compra "
+            "em cada mercado, não quem comprou sempre."
+        )
+    if "fr" in escolhidos:
+        notas.append(
+            "Em França o DECP não traz nomes de entidades: identifica-se cada uma pelo SIRET."
+        )
+
+    return {
+        "country": "all" if len(escolhidos) > 1 else escolhidos[0],
+        "role": role,
+        "countries": resumo,
+        "items": itens,
+        "notes": notas,
+    }
 
 
 def benchmark_entity(
@@ -773,6 +892,235 @@ def benchmark_compare(
         "shared_buyers": compradores_comuns,
         "shared_cpvs": cpvs_em_comum,
         "notes": notes,
+    }
+
+
+# ------------------------------------------------- cruzar países (empresa × CPV)
+
+#: Máximo de empresas cruzadas de uma vez (a página mostra até este número).
+MAX_CROSS = 6
+#: Contrapartes por empresa consideradas no cruzamento.
+_CROSS_HISTORY = 25
+#: CPV por empresa considerados no cruzamento.
+_CROSS_CPV = 12
+#: Contratos recentes por empresa mostrados no cruzamento.
+_CROSS_RECENT = 6
+
+
+def _normalizar_cpvs(cpvs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Junta os CPV de uma empresa na chave comum aos três países.
+
+    Portugal grava o CPV com dígito de controlo (`33600000-6`) e Espanha/França
+    sem ele (`33600000`); sem esta normalização o mesmo CPV não se cruzava entre
+    países. Repetições dentro da mesma empresa somam-se.
+    """
+    juntos: Dict[str, Dict[str, Any]] = {}
+    for cpv in cpvs or []:
+        base = _codigo_cpv_base(str(cpv.get("code") or ""))
+        if not base:
+            continue
+        registo = juntos.setdefault(
+            base,
+            {
+                "code": base,
+                "description": cpv.get("description") or "",
+                "count": 0,
+                "value": 0.0,
+                "median": cpv.get("median"),
+            },
+        )
+        if not registo["description"] and cpv.get("description"):
+            registo["description"] = cpv["description"]
+        registo["count"] += int(cpv.get("count") or 0)
+        registo["value"] = round(float(registo["value"]) + float(cpv.get("value") or 0.0), 2)
+    return list(juntos.values())
+
+
+def _cruzar_itens(
+    itens_por_empresa: List[tuple],
+    chave: str,
+    min_companies: int,
+) -> List[Dict[str, Any]]:
+    """Itens (CPV ou contrapartes) presentes em pelo menos `min_companies` empresas.
+
+    Recebe pares `(empresa, itens)` e devolve, por identificador, as empresas que
+    o têm — com o volume e o valor de cada uma. É o que sustenta a leitura «onde
+    é que estas empresas se cruzam».
+    """
+    agregado: Dict[str, Dict[str, Any]] = {}
+    for empresa, itens in itens_por_empresa:
+        for item in itens or []:
+            ident = str(item.get(chave) or "").strip()
+            if not ident:
+                continue
+            registo = agregado.setdefault(
+                ident,
+                {
+                    chave: ident,
+                    "description": item.get("description"),
+                    "name": item.get("name"),
+                    "companies": [],
+                    "contracts": 0,
+                    "value": 0.0,
+                },
+            )
+            if not registo.get("description") and item.get("description"):
+                registo["description"] = item.get("description")
+            if not registo.get("name") and item.get("name"):
+                registo["name"] = item.get("name")
+            registo["companies"].append(
+                {
+                    "nif": empresa.get("nif"),
+                    "name": empresa.get("name"),
+                    "short": empresa.get("short"),
+                    "count": int(item.get("count") or 0),
+                    "value": round(float(item.get("value") or 0.0), 2) if item.get("value") is not None else None,
+                }
+            )
+            registo["contracts"] += int(item.get("count") or 0)
+            registo["value"] = round(float(registo["value"]) + float(item.get("value") or 0.0), 2)
+
+    comuns = [registo for registo in agregado.values() if len(registo["companies"]) >= min_companies]
+    for registo in comuns:
+        registo["companies_count"] = len(registo["companies"])
+        registo["companies"].sort(key=lambda linha: (linha.get("count") or 0), reverse=True)
+    comuns.sort(key=lambda item: (item["companies_count"], item["contracts"]), reverse=True)
+    return comuns
+
+
+def benchmark_cross(
+    *,
+    entities: List[Dict[str, Any]],
+    role: str = "adjudicatario",
+    cpv_code: Optional[str] = None,
+    year_from: Optional[int] = None,
+    year_to: Optional[int] = None,
+    min_companies: int = 2,
+    top: int = 0,
+    es: Any = None,
+) -> Dict[str, Any]:
+    """Cruza empresas de países diferentes: preços, CPV e contrapartes em comum.
+
+    Cada empresa é analisada **no seu próprio mercado** (índice e dialeto do seu
+    país) e a comparação entre países faz-se pelo **CPV** — a única classificação
+    comum aos três registos. Os preços não se comparam diretamente entre países
+    (mercados, moedas de reporte e práticas de contratação diferentes): o que se
+    compara é a posição de cada empresa **dentro** do seu mercado (índice de
+    preço e quota) e depois o que têm em comum (CPV e contrapartes).
+    """
+    alvos = [
+        alvo
+        for alvo in (entities or [])
+        if (alvo or {}).get("nif") or str((alvo or {}).get("name") or "").strip()
+    ]
+    if len(alvos) < 2:
+        return {"error": "Escolha pelo menos duas empresas (de países diferentes, se quiser)."}
+    if len(alvos) > MAX_CROSS:
+        alvos = alvos[:MAX_CROSS]
+    role = role if role in ROLES else bc.SUPPLIER
+    min_companies = max(2, min(int(min_companies or 2), len(alvos)))
+    historico = max(_CROSS_HISTORY, int(top or 0) * 2)
+
+    def _analisar(alvo: Dict[str, Any]) -> Dict[str, Any]:
+        return benchmark_entity(
+            nif=alvo.get("nif"),
+            name=alvo.get("name"),
+            role=role,
+            country=alvo.get("country") or "pt",
+            cpv_code=cpv_code,
+            year_from=year_from,
+            year_to=year_to,
+            top=historico,
+            es=es,
+        )
+
+    with ThreadPoolExecutor(max_workers=min(4, len(alvos))) as pool:
+        resultados = list(pool.map(_analisar, alvos))
+
+    empresas: List[Dict[str, Any]] = []
+    for alvo, dados in zip(alvos, resultados):
+        pais = bc.country_key(alvo.get("country"))
+        dialeto = bc.dialect(pais)
+        if dados.get("error"):
+            empresas.append(
+                {
+                    "country": pais,
+                    "country_label": dialeto["label"],
+                    "short": dialeto["short"],
+                    "nif": alvo.get("nif"),
+                    "name": alvo.get("name") or alvo.get("nif") or "",
+                    "present": False,
+                    "contracts": 0,
+                    "total_value": 0.0,
+                    "market": {"contracts": 0, "median": None, "label": dialeto["label"]},
+                    "cpvs": [],
+                    "counterparties": [],
+                    "error": str(dados.get("error")),
+                }
+            )
+            continue
+        entidade = dados.get("entity") or {}
+        referencia = dados.get("reference") or {}
+        empresas.append(
+            {
+                "country": pais,
+                "country_label": dados.get("country_label") or dialeto["label"],
+                "short": dialeto["short"],
+                "nif": entidade.get("nif") or alvo.get("nif"),
+                "name": entidade.get("name") or alvo.get("name") or alvo.get("nif") or "",
+                "present": bool(entidade.get("present")),
+                "contracts": int(entidade.get("contracts") or 0),
+                "total_value": float(entidade.get("total_value") or 0.0),
+                "median": entidade.get("median_value"),
+                "price_index": entidade.get("price_index"),
+                "rank": entidade.get("rank"),
+                "share_pct": entidade.get("share_pct"),
+                "market": {
+                    "contracts": int(referencia.get("contracts") or 0),
+                    "median": referencia.get("median"),
+                    "label": dados.get("country_label") or dialeto["label"],
+                },
+                "cpvs": (entidade.get("top_cpv") or [])[:_CROSS_CPV],
+                "counterparties": (dados.get("history") or [])[:historico],
+                "recent": (entidade.get("recent") or [])[:_CROSS_RECENT],
+            }
+        )
+
+    pares_cpv = [(empresa, _normalizar_cpvs(empresa["cpvs"])) for empresa in empresas]
+    pares_contraparte = [(empresa, empresa["counterparties"]) for empresa in empresas]
+    cpvs_comuns = _cruzar_itens(pares_cpv, "code", min_companies)
+    contrapartes_comuns = _cruzar_itens(pares_contraparte, "nif", min_companies)
+
+    counterpart_role = _counterpart_role(role)
+    nome_contraparte = "Compradores" if role == bc.SUPPLIER else "Fornecedores"
+    notas: List[str] = [
+        "Cada empresa é analisada no mercado do seu país; a comparação entre países faz-se pelo CPV.",
+        "Os preços não se comparam diretamente entre países — compare-se o índice de preço "
+        "(mediana da empresa ÷ mediana do mercado dela) e a quota de valor.",
+        (
+            f"As contrapartes em comum são os compradores que contrataram duas ou mais destas "
+            f"empresas; o cálculo usa as {historico} maiores contrapartes de cada uma (não a lista completa)."
+            if role == bc.SUPPLIER
+            else f"As contrapartes em comum são os fornecedores de duas ou mais destas empresas; "
+            f"o cálculo usa as {historico} maiores contrapartes de cada uma (não a lista completa)."
+        ),
+        "Os CPV por empresa são os mais usados por ela no período (não o universo todo).",
+    ]
+    if any(empresa["country"] == "fr" for empresa in empresas):
+        notas.append("Em França o DECP não traz nomes: as entidades são identificadas pelo SIRET.")
+    ausentes = [empresa["name"] for empresa in empresas if not empresa["present"]]
+    if ausentes:
+        notas.append("Sem contratos no segmento: " + ", ".join(ausentes) + ".")
+
+    return {
+        "role": role,
+        "counterpart_role": counterpart_role,
+        "counterparty_label": nome_contraparte,
+        "cpv_filter": cpv_code or None,
+        "companies": empresas,
+        "shared_cpvs": cpvs_comuns,
+        "shared_counterparties": contrapartes_comuns,
+        "notes": notas,
     }
 
 

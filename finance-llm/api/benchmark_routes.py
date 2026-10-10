@@ -10,6 +10,8 @@ em **Portugal, Espanha e França** — o parâmetro `country` escolhe o índice:
 - `GET  /benchmark/entity`  — preço de referência, concorrência, historial e oportunidades
 - `POST /benchmark/compare` — comparação de **até 10 empresas** no mesmo segmento
 - `GET  /benchmark/by-cpv`  — quadro por CPV com o volume/preço de cada país
+- `GET  /benchmark/by-entity`— empresas (ou compradores) de cada país e os seus CPV
+- `POST /benchmark/cross`   — empresas de países diferentes: CPV e contrapartes em comum
 
 `country` aceita `pt`, `es`, `fr` ou `all` (meta); `/benchmark/entity` e
 `/benchmark/compare` usam `nif` (NIF/DIR3/SIRET) ou `name`, o papel
@@ -52,6 +54,28 @@ class BenchmarkCompareRequest(BaseModel):
     year_to: Optional[int] = Field(None, description="Ano final (inclusive)")
     region: Optional[str] = Field(None, description="Região/NUTS ou distrito (conforme o país)")
     top: int = Field(10, ge=1, le=50, description="Quantas posições mostrar no ranking do segmento")
+
+
+class BenchmarkCrossEntity(BaseModel):
+    """Uma empresa a cruzar, com o país dos seus dados."""
+
+    country: str = Field("pt", description="País dos dados desta empresa: `pt`, `es` ou `fr`")
+    nif: Optional[str] = Field(None, description="NIF/DIR3/SIRET da entidade (preferido)")
+    name: Optional[str] = Field(None, description="Nome da entidade (usado quando não há identificador)")
+
+
+class BenchmarkCrossRequest(BaseModel):
+    """Cruzamento de empresas de países diferentes (até 6)."""
+
+    entities: list[BenchmarkCrossEntity] = Field(..., description="Empresas a cruzar (2 a 6)")
+    role: str = Field(
+        "adjudicatario",
+        description="Papel comum a todas: `adjudicatario` (vendem) ou `adjudicante` (compram)",
+    )
+    cpv_code: Optional[str] = Field(None, description="Código CPV do segmento (prefixo aceite)")
+    year_from: Optional[int] = Field(None, description="Ano inicial (inclusive)")
+    year_to: Optional[int] = Field(None, description="Ano final (inclusive)")
+    top: int = Field(0, ge=0, le=50, description="Quantas contrapartes por empresa considerar no cruzamento")
 
 
 @router.get("/meta")
@@ -113,6 +137,60 @@ def benchmark_by_cpv(
         year_from=year_from,
         year_to=year_to,
         top=top,
+    )
+    if resultado.get("error"):
+        raise HTTPException(status_code=502, detail=str(resultado["error"]))
+    return resultado
+
+
+@router.get("/by-entity")
+def benchmark_by_entity(
+    countries: Optional[str] = Query(
+        None, description="Países separados por vírgula (`pt,es,fr`); por omissão, os três"
+    ),
+    role: str = Query(
+        "adjudicatario",
+        description="`adjudicatario` (quem vende) ou `adjudicante` (quem compra) — igual nos três países",
+    ),
+    cpv_code: Optional[str] = Query(None, description="Prefixo de CPV a filtrar"),
+    year_from: Optional[int] = Query(None, description="Ano inicial (inclusive)"),
+    year_to: Optional[int] = Query(None, description="Ano final (inclusive)"),
+    size: int = Query(10, ge=1, le=30, description="Quantas entidades por país"),
+    cpv_size: int = Query(6, ge=1, le=20, description="Quantos CPV principais por entidade"),
+) -> Dict[str, Any]:
+    """Empresas (ou compradores) de cada país, com os CPV onde cada uma atua."""
+    escolhidos = [c.strip() for c in (countries or "").split(",") if c.strip()]
+    resultado = benchmark.top_entities(
+        countries=escolhidos or None,
+        role=role,
+        cpv_code=cpv_code,
+        year_from=year_from,
+        year_to=year_to,
+        size=size,
+        cpv_size=cpv_size,
+    )
+    if resultado.get("error"):
+        raise HTTPException(status_code=502, detail=str(resultado["error"]))
+    return resultado
+
+
+@router.post("/cross")
+def benchmark_cross_endpoint(req: BenchmarkCrossRequest) -> Dict[str, Any]:
+    """Cruza empresas de países diferentes: preços, CPV e contrapartes em comum.
+
+    Cada empresa é analisada no mercado do seu país (cada uma tem o seu
+    `country`); a comparação entre países faz-se pelo **CPV** — a classificação
+    comum aos três registos — e pelas contrapartes que partilham.
+    """
+    if len(req.entities) < 2:
+        raise HTTPException(status_code=422, detail="Indique pelo menos duas empresas.")
+    resultado = benchmark.benchmark_cross(
+        entities=[alvo.model_dump() for alvo in req.entities],
+        role=req.role,
+        cpv_code=req.cpv_code,
+        year_from=req.year_from,
+        year_to=req.year_to,
+        top=req.top,
     )
     if resultado.get("error"):
         raise HTTPException(status_code=502, detail=str(resultado["error"]))

@@ -85,7 +85,7 @@ export const APP_MODULES: AppModule[] = [
     id: "benchmark",
     label: "Benchmark",
     hint: "Preço de referência, concorrência e oportunidades — Portugal, Espanha e França",
-    ids: ["benchmark", "benchmark-pt", "benchmark-es", "benchmark-fr"],
+    ids: ["benchmark", "benchmark-pt", "benchmark-es", "benchmark-fr", "benchmark-cross"],
   },
   {
     id: "empresas",

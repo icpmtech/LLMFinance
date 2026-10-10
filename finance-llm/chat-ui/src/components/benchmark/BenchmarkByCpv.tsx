@@ -7,13 +7,21 @@
  * que geografia — e daí saltar para a página do país com esse CPV.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Globe2, Loader2, MapPin, RefreshCw, Scale, Target } from "lucide-react";
+import { AlertTriangle, Briefcase, Building2, Globe2, Loader2, MapPin, RefreshCw, Scale, ShoppingCart, Target } from "lucide-react";
 
 import { Button } from "../ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/Card";
 import { Input } from "../ui/Input";
 import { Label } from "../ui/Label";
-import { getBenchmarkByCpv, type BenchmarkByCpvResponse, type BenchmarkCountry, type BenchmarkMetaAll } from "../../benchmarkApi";
+import {
+  getBenchmarkByCpv,
+  getBenchmarkByEntity,
+  type BenchmarkByCpvResponse,
+  type BenchmarkByEntityResponse,
+  type BenchmarkCountry,
+  type BenchmarkMetaAll,
+  type BenchmarkRole,
+} from "../../benchmarkApi";
 import { SeletorAno } from "./BenchmarkPickers";
 
 const MAX_ANOS = 12;
@@ -92,7 +100,39 @@ export default function BenchmarkByCpv({ meta }: { meta: BenchmarkMetaAll | null
   const [aCarregar, setACarregar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
+  // Empresas (e os seus CPV) — a lista muda de papel com um clique.
+  const [papel, setPapel] = useState<BenchmarkRole>("adjudicatario");
+  const [empresas, setEmpresas] = useState<BenchmarkByEntityResponse | null>(null);
+  const [aCarregarEmpresas, setACarregarEmpresas] = useState(false);
+
   const anos = useMemo(() => (meta?.years ?? []).slice(0, MAX_ANOS), [meta]);
+
+  const carregarEmpresas = useCallback(
+    async (override?: { role?: BenchmarkRole; cpv_code?: string; anoDe?: number | ""; anoAte?: number | "" }) => {
+      const de = override?.anoDe ?? anoDe;
+      const ate = override?.anoAte ?? anoAte;
+      const papelAtual = override?.role ?? papel;
+      setACarregarEmpresas(true);
+      try {
+        const resultado = await getBenchmarkByEntity({
+          countries: paises,
+          role: papelAtual,
+          cpv_code: override?.cpv_code ?? cpvFiltro.trim() ?? undefined,
+          year_from: de === "" ? undefined : Number(de),
+          year_to: ate === "" ? undefined : Number(ate),
+          size: 8,
+          cpv_size: 5,
+        });
+        setEmpresas(resultado);
+      } catch (err) {
+        setEmpresas(null);
+        setErro(err instanceof Error ? err.message : String(err));
+      } finally {
+        setACarregarEmpresas(false);
+      }
+    },
+    [paises, papel, cpvFiltro, anoDe, anoAte],
+  );
 
   const carregar = useCallback(
     async (override?: { cpv_code?: string; anoDe?: number | ""; anoAte?: number | "" }) => {
@@ -104,6 +144,7 @@ export default function BenchmarkByCpv({ meta }: { meta: BenchmarkMetaAll | null
       const ate = override?.anoAte ?? anoAte;
       setACarregar(true);
       setErro(null);
+      void carregarEmpresas(override);
       try {
         const resultado = await getBenchmarkByCpv({
           countries: paises,
@@ -312,6 +353,124 @@ export default function BenchmarkByCpv({ meta }: { meta: BenchmarkMetaAll | null
                   </tbody>
                 </table>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* -------------------------------------------- empresas e os seus CPV */}
+          <Card>
+            <CardHeader className="flex flex-wrap items-center gap-2 pb-2">
+              <Briefcase size={16} className="text-muted-foreground" />
+              <CardTitle className="text-sm">Empresas e os seus CPV</CardTitle>
+              {aCarregarEmpresas ? <Loader2 size={14} className="animate-spin text-muted-foreground" /> : null}
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (papel === "adjudicatario") return;
+                    setPapel("adjudicatario");
+                    void carregarEmpresas({ role: "adjudicatario" });
+                  }}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition ${
+                    papel === "adjudicatario"
+                      ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-200"
+                      : "border-border text-muted-foreground hover:bg-accent"
+                  }`}
+                >
+                  <ShoppingCart size={13} /> Vendem
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (papel === "adjudicante") return;
+                    setPapel("adjudicante");
+                    void carregarEmpresas({ role: "adjudicante" });
+                  }}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition ${
+                    papel === "adjudicante"
+                      ? "border-sky-400/40 bg-sky-400/10 text-sky-200"
+                      : "border-border text-muted-foreground hover:bg-accent"
+                  }`}
+                >
+                  <Building2 size={13} /> Compram
+                </button>
+                <span className="text-xs text-muted-foreground">
+                  clique num CPV para o isolar nos dois quadros
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {empresas?.items?.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[900px] text-sm">
+                    <thead>
+                      <tr className="border-b border-border/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="py-2 pr-3">País</th>
+                        <th className="py-2 pr-3">Empresa</th>
+                        <th className="py-2 pr-3 text-right">Contratos</th>
+                        <th className="py-2 pr-3 text-right">Valor</th>
+                        <th className="py-2 pr-3 text-right">Quota</th>
+                        <th className="py-2">CPV principais</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {empresas.items.map((linha) => (
+                        <tr key={`${linha.country}-${linha.nif}`} className="border-b border-border/40 align-top">
+                          <td className="py-2 pr-3">
+                            <span className={`text-xs font-semibold ${COR_PAIS[linha.country]}`}>{linha.short}</span>
+                          </td>
+                          <td className="py-2 pr-3">
+                            <p className="max-w-[22rem] truncate font-medium" title={linha.name}>
+                              {linha.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground tabular-nums">
+                              {linha.nif !== linha.name ? `${linha.nif} · ` : ""}#{linha.rank ?? "—"} em{" "}
+                              {linha.country_label}
+                            </p>
+                          </td>
+                          <td className="py-2 pr-3 text-right tabular-nums">{num(linha.contracts)}</td>
+                          <td className="py-2 pr-3 text-right tabular-nums">{moneyShort(linha.value)}</td>
+                          <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">
+                            {linha.share_pct !== null && linha.share_pct !== undefined
+                              ? `${linha.share_pct.toLocaleString("pt-PT", { maximumFractionDigits: 2 })} %`
+                              : "—"}
+                          </td>
+                          <td className="py-2">
+                            <div className="flex flex-wrap gap-1.5">
+                              {linha.cpvs.map((cpv) => (
+                                <button
+                                  key={cpv.code}
+                                  type="button"
+                                  title={cpv.description || cpv.code}
+                                  onClick={() => {
+                                    setCpvFiltro(cpv.code);
+                                    void carregar({ cpv_code: cpv.code });
+                                  }}
+                                  className="rounded-full border border-border px-2 py-0.5 text-xs transition hover:border-sky-400/40 hover:bg-sky-400/10 hover:text-sky-200"
+                                >
+                                  <span className="tabular-nums">{cpv.code}</span>
+                                  <span className="ml-1 text-muted-foreground">{num(cpv.count)}</span>
+                                </button>
+                              ))}
+                              {linha.cpvs.length ? null : <span className="text-xs text-muted-foreground/60">—</span>}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {empresas.items.some((linha) => linha.cpvs.some((cpv) => cpv.description)) ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Os números nas fichas de CPV são contratos dessa empresa nessa classificação.
+                    </p>
+                  ) : null}
+                </div>
+              ) : aCarregarEmpresas ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">A juntar as empresas…</p>
+              ) : (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  Sem empresas para estes filtros. Aumente a janela de anos ou retire o CPV.
+                </p>
+              )}
             </CardContent>
           </Card>
 
