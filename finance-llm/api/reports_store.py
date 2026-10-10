@@ -247,6 +247,31 @@ DEFAULT_CATALOGUE: List[Dict[str, Any]] = [
             "Cerca de 50 Rácios em Comparação",
         ],
     },
+    {
+        # Relatório automático: é calculado a partir do benchmark (preços,
+        # concorrência e oportunidades) e entregue em PDF logo após o pagamento,
+        # sem passar pela equipa. O preço é editável no backoffice.
+        "id": "benchmark",
+        "code": "BENCH",
+        "title": "Relatório de Benchmark",
+        "subtitle": "Preços, concorrência e oportunidades",
+        "note": "PDF gerado automaticamente após o pagamento",
+        "price": 14.9,
+        "list_price": 0.0,
+        "badge": "AUTOMÁTICO",
+        "auto": "benchmark",
+        "max_targets": 6,
+        "delivery_days": 1,
+        "active": True,
+        "features": [
+            "Preço de referência do segmento (mediana, quartis, média)",
+            "A empresa no mercado (índice de preço, posição e quota)",
+            "Concorrentes e contrapartes do segmento",
+            "Historial, oportunidades e contratos recentes",
+            "Perfil de CPV da empresa",
+            "Portugal, Espanha e França — incluindo o cruzamento entre países",
+        ],
+    },
 ]
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
@@ -381,6 +406,13 @@ def _read_store() -> Dict[str, Any]:
     catalogue = raw.get("catalogue")
     if isinstance(catalogue, list) and catalogue:
         store["catalogue"] = [item for item in catalogue if isinstance(item, dict)]
+        # Pacotes novos (ex.: o relatório de benchmark) entram no catálogo de quem
+        # já tinha o ficheiro gravado: só se acrescenta o que falta, para não
+        # reescrever preços/edições feitas no backoffice.
+        existentes = {str(item.get("id") or "") for item in store["catalogue"]}
+        for item in DEFAULT_CATALOGUE:
+            if str(item.get("id") or "") not in existentes:
+                store["catalogue"].append(copy.deepcopy(item))
     return store
 
 
@@ -882,6 +914,13 @@ def create_request(requester: Dict[str, Any], payload: Dict[str, Any]) -> Dict[s
         email = _email(requester.get("email"))
         if not email:
             raise ValueError("Sessão sem email; volte a entrar.")
+        # Relatórios automáticos (benchmark): os parâmetros ficam no pedido, para
+        # o PDF poder ser gerado — agora ou mais tarde — com o mesmo âmbito.
+        benchmark: Dict[str, Any] = {}
+        if str(item.get("auto") or ""):
+            benchmark = payload.get("benchmark") or {}
+            if payload.get("benchmark") is not None and not isinstance(payload.get("benchmark"), dict):
+                raise ValueError("Parâmetros de relatório inválidos.")
         reference = _next_reference(store)
         request = {
             "id": _new_id("rep"),
@@ -893,6 +932,7 @@ def create_request(requester: Dict[str, Any], payload: Dict[str, Any]) -> Dict[s
             "package_features": item.get("features") or [],
             "delivery_days": int(item.get("delivery_days") or settings_data.get("default_delivery_days") or 2),
             "targets": targets,
+            "benchmark": benchmark,
             "notes": notes,
             "requester": {
                 "email": email,
@@ -932,7 +972,13 @@ def create_request(requester: Dict[str, Any], payload: Dict[str, Any]) -> Dict[s
             request=request,
         )
         _write_store(store)
-        return request_view(request, include_internal=True)
+        view = request_view(request, include_internal=True)
+    # Um pedido automático e grátis não passa pelo pagamento: produz-se já.
+    if free and str(item.get("auto") or ""):
+        produzido = _produzir_automatico(str(request["id"]))
+        if produzido is not None:
+            return produzido
+    return view
 
 
 def request_reference_hint(store: Dict[str, Any]) -> str:
@@ -1085,7 +1131,11 @@ def set_payment_result(
     amount: Any = None,
     automatic: bool = False,
 ) -> Dict[str, Any]:
-    """Confirma ou rejeita o pagamento (backoffice) e avança o estado do pedido."""
+    """Confirma ou rejeita o pagamento (backoffice) e avança o estado do pedido.
+
+    Depois de confirmado, um pacote **automático** (o relatório de benchmark) é
+    produzido de imediato — o cliente recebe o PDF sem esperar pela equipa.
+    """
     action = _text(action).lower()
     if action not in {"confirm", "reject"}:
         raise ValueError("Ação de pagamento inválida.")
@@ -1135,7 +1185,87 @@ def set_payment_result(
             _log(store, "payment.rejected", request=doc, actor=actor, detail=note)
         doc["updated_at"] = _now()
         _write_store(store)
-        return request_view(doc, include_internal=True)
+        view = request_view(doc, include_internal=True)
+    if action == "confirm":
+        produzido = _produzir_automatico(request_id)
+        if produzido is not None:
+            return produzido
+    return view
+
+
+def _produzir_automatico(request_id: str) -> Optional[Dict[str, Any]]:
+    """Produz o relatório de um pacote automático e anexa-o ao pedido.
+
+    Hoje só o **benchmark** é automático: o PDF é calculado a partir dos
+    parâmetros guardados no pedido (país, empresa, CPV, anos), pelo que o
+    cliente o recebe logo após o pagamento. Os restantes pacotes continuam a ser
+    produzidos à mão pela equipa.
+
+    Falhas não travam o pedido: ficam registados como nota interna e o
+    backoffice pode anexar o PDF manualmente.
+    """
+    doc = get_request(request_id)
+    if doc is None:
+        return None
+    item = package(str(doc.get("package_id") or ""))
+    if not item or str(item.get("auto") or "") != "benchmark":
+        return None
+    if str(doc.get("status")) in {"gerado", "entregue"} and (doc.get("files") or []):
+        return None
+    parametros = doc.get("benchmark") or {}
+    requester = str((doc.get("requester") or {}).get("email") or "")
+    try:
+        from api import benchmark_report
+
+        nome, dados, mime = benchmark_report.render(
+            parametros,
+            reference=str(doc.get("reference") or ""),
+            requester=requester,
+        )
+    except Exception as exc:  # noqa: BLE001 - o pedido não pode ficar preso
+        logger.warning("Falha ao gerar o PDF do benchmark %s: %s", doc.get("reference"), exc)
+        try:
+            attach_note(
+                request_id,
+                "sistema",
+                f"A geração automática do PDF falhou: {exc}. O backoffice pode anexar o relatório à mão.",
+                internal=True,
+            )
+        except ValueError:
+            pass
+        return None
+    return add_file(
+        request_id,
+        "sistema (benchmark)",
+        name=nome,
+        data=dados,
+        mime=mime,
+        mark_generated=True,
+    )
+
+
+def produzir_pendentes(limit: int = 20) -> List[Dict[str, Any]]:
+    """Produz os relatórios automáticos já pagos que ainda não têm ficheiro.
+
+    Serve de rede de segurança: se a geração falhar no momento do pagamento (por
+    exemplo com o Elasticsearch indisponível), pode repetir-se sem o cliente
+    pagar outra vez.
+    """
+    saida: List[Dict[str, Any]] = []
+    for doc in list(load()["requests"]):
+        if len(saida) >= limit:
+            break
+        if str(doc.get("status")) not in {"pagamento_confirmado", "em_producao"}:
+            continue
+        item = package(str(doc.get("package_id") or ""))
+        if not item or str(item.get("auto") or "") != "benchmark":
+            continue
+        if doc.get("files"):
+            continue
+        produzido = _produzir_automatico(str(doc.get("id") or ""))
+        if produzido is not None:
+            saida.append(produzido)
+    return saida
 
 
 def record_mbway_request(request_id: str, provider_request_id: str, provider_status: str = "") -> Optional[Dict[str, Any]]:

@@ -131,6 +131,10 @@ class RequestCreate(BaseModel):
     targets: List[Target] = Field(default_factory=list)
     notes: str = Field("", max_length=store.MAX_NOTES)
     mbway_phone: str = Field("", description="Telemóvel do cliente para o pedido MB Way")
+    benchmark: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Parâmetros do relatório de benchmark (modo, país, empresa, CPV, anos)",
+    )
 
 
 class PaymentDeclare(BaseModel):
@@ -265,6 +269,7 @@ def reports_create_request(payload: RequestCreate, session: ClienteSession) -> D
             {
                 "package_id": payload.package_id,
                 "targets": [target.model_dump() for target in payload.targets],
+                "benchmark": payload.benchmark,
                 "notes": payload.notes,
                 "mbway_phone": payload.mbway_phone,
                 "_admins": _admin_emails(),

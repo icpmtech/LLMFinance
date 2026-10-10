@@ -21,12 +21,14 @@ anos. Todos os valores são em euros.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from api import benchmark_countries as bc
 from api import benchmark_service as benchmark
+from api.auth_routes import require_session
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +78,27 @@ class BenchmarkCrossRequest(BaseModel):
     year_from: Optional[int] = Field(None, description="Ano inicial (inclusive)")
     year_to: Optional[int] = Field(None, description="Ano final (inclusive)")
     top: int = Field(0, ge=0, le=50, description="Quantas contrapartes por empresa considerar no cruzamento")
+
+
+class BenchmarkReportRequest(BaseModel):
+    """Pedido do relatório PDF do benchmark (pago na área «Relatórios»)."""
+
+    mode: str = Field("empresa", description="`empresa`, `mercado` (por CPV) ou `cruzar` (entre países)")
+    country: str = Field("pt", description="País dos dados no modo `empresa`")
+    nif: Optional[str] = Field(None, description="NIF/DIR3/SIRET (modo `empresa`)")
+    name: Optional[str] = Field(None, description="Nome da entidade (modo `empresa`)")
+    role: str = Field("adjudicatario", description="`adjudicatario` (vende) ou `adjudicante` (compra)")
+    cpv_code: Optional[str] = Field(None, description="CPV do segmento (prefixo aceite)")
+    year_from: Optional[int] = Field(None, description="Ano inicial (inclusive)")
+    year_to: Optional[int] = Field(None, description="Ano final (inclusive)")
+    region: Optional[str] = Field(None, description="Região/distrito (PT)")
+    countries: Optional[list[str]] = Field(None, description="Países do quadro por CPV (modo `mercado`)")
+    top: Optional[int] = Field(None, ge=5, le=200, description="Quantos CPV no quadro (modo `mercado`)")
+    entities: Optional[list[BenchmarkCrossEntity]] = Field(
+        None, description="Empresas a cruzar (modo `cruzar`, 2 a 6)"
+    )
+    mbway_phone: str = Field("", description="Telemóvel para o pedido de pagamento MB Way")
+    notes: str = Field("", max_length=2000, description="Notas que acompanham o pedido")
 
 
 @router.get("/meta")
@@ -195,6 +218,90 @@ def benchmark_cross_endpoint(req: BenchmarkCrossRequest) -> Dict[str, Any]:
     if resultado.get("error"):
         raise HTTPException(status_code=502, detail=str(resultado["error"]))
     return resultado
+
+
+@router.post("/report", status_code=201)
+def benchmark_report(
+    req: BenchmarkReportRequest,
+    session: Annotated[Any, Depends(require_session)],
+) -> Dict[str, Any]:
+    """Pede o **relatório PDF** do benchmark (preço definido no backoffice).
+
+    O pedido entra na área «Relatórios» como qualquer outro: o cliente paga (por
+    MB Way, se o passo seguinte for pedido com `mbway_phone`) e o PDF é gerado
+    automaticamente a partir dos mesmos dados das páginas. A resposta traz o
+    pedido, o preço em vigor e os dados públicos de pagamento.
+    """
+    from api import benchmark_report as relatorio
+    from api import reports_payments as payments
+    from api import reports_store as reports
+
+    try:
+        params = relatorio.normalise(req.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    pacote = reports.package("benchmark")
+    if not pacote or not reports._bool(pacote.get("active"), True):
+        raise HTTPException(status_code=503, detail="O relatório de benchmark está indisponível.")
+
+    email = str(getattr(session, "user", None).email or "").lower()
+    nome = str(getattr(session, "user", None).name or "") or email
+    try:
+        pedido = reports.create_request(
+            {"email": email, "name": nome},
+            {
+                "package_id": "benchmark",
+                "targets": _alvos_do_pedido(params),
+                "benchmark": params,
+                "notes": req.notes,
+                "mbway_phone": req.mbway_phone,
+            },
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # Se o cliente já deu o telemóvel e o MB Way está configurado, o pedido de
+    # pagamento é lançado logo (a notificação aparece na app MB Way).
+    automatico: Dict[str, Any] = {"ok": False, "configured": payments.api_configured(reports.settings())}
+    telefone = reports.normalise_phone(req.mbway_phone)
+    valor = reports.money((pedido.get("amounts") or {}).get("total"))
+    if telefone and valor > 0 and automatico["configured"]:
+        automatico = payments.create_payment_request(
+            reports.settings(),
+            phone=telefone,
+            amount=valor,
+            reference=str(pedido.get("reference") or ""),
+            description=f"{pedido.get('package_title')} — {pedido.get('reference')}",
+        )
+        if automatico.get("ok") and automatico.get("request_id"):
+            reports.record_mbway_request(str(pedido.get("id")), automatico["request_id"], automatico.get("status", ""))
+            pedido = reports.get_request_view(str(pedido.get("id")), include_internal=True) or pedido
+
+    return {
+        "request": pedido,
+        "package": pacote,
+        "report": {
+            "mode": params["mode"],
+            "title": relatorio.titulo(params),
+            "subtitle": relatorio.subtitulo(params),
+        },
+        "settings": reports.public_settings(),
+        "automatic": automatico,
+    }
+
+
+def _alvos_do_pedido(params: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Alvos mostrados no pedido (empresa(s) ou o âmbito do quadro por CPV)."""
+    if params["mode"] == "empresa":
+        return [{"name": params.get("name") or "", "nif": params.get("nif") or ""}]
+    if params["mode"] == "cruzar":
+        return [
+            {"name": alvo.get("name") or alvo.get("nif") or "", "nif": alvo.get("nif") or ""}
+            for alvo in params.get("entities") or []
+        ][:6]
+    paises = ", ".join(bc.dialect(pais)["label"] for pais in params.get("countries") or [])
+    return [{"name": f"Quadro por CPV — {paises}", "nif": params.get("cpv_code") or ""}]
 
 
 @router.get("/entity")
