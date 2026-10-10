@@ -1,28 +1,84 @@
-# Deploy do IQ OS na Kamatera (VM mais economica)
+# Deploy do IQ OS na Kamatera
 
-Estado deste deploy (2026-10-06):
+> **Para pôr código novo na VM**, ver [`DEPLOY.md`](DEPLOY.md) — deploy
+> incremental do frontend e do backend (~12 MB em vez de 4 GB).
+
+Estado deste deploy (actualizado 2026-10-10):
 
 | Item | Valor |
 | --- | --- |
 | VM | `iq-os-edge-01` — Kamatera, datacenter `EU-MD` (Madrid) |
 | ID | `4b9ccce0-0cba-43ef-9574-9079e87184ad` |
-| IP | `45.147.251.188` (SSH + HTTP/HTTPS abertos) |
-| Recursos | 1 vCPU tipo A, 2 GB RAM, 20 GB NVMe, swap 2 GB |
-| Preco | **6 USD/mes** (hourly: 0.008 USD/h) |
+| IP | `45.147.251.188` |
+| Recursos | **2 vCPU tipo A, 7952 MB RAM, 148 GB de disco**, swap 2 GB |
 | Docker | Engine 29.8.2 + Compose v5.6.0 |
 | Dominio publico | https://sabemos.studio |
-| Origem (PC) | **tunel SSH reverso** em Docker (`iqos-origin-tunnel`) |
+| Origem | configuravel: o PC (tunel) ou a propria VM — ver `17-origem.ps1` |
 
-Verificacao ponta-a-ponta (do PC, via internet):
+A VM comecou por ser um ponto de entrada publico com a stack no PC (1 vCPU,
+2 GB, 6 USD/mes). **Ja nao e isso**: foi redimensionada e a aplicacao —
+backend, frontend, Elasticsearch, MCP, OSIF, n8n, SearXNG — corre agora na
+propria VM, numa rede Docker partilhada (`iqos-net`). A historia das decisoes
+iniciais esta mais abaixo, marcada como tal.
+
+Alem disso existe um painel de estado em https://sabemos.studio/monitor/,
+que corre no edge e **nao depende da aplicacao** — e o que lhe permite mostrar
+o estado quando a origem esta em baixo.
+
+## Verificacao ponta-a-ponta
+
+Do PC, via internet:
 
 ```
-/healthz       -> 200  (Caddy no edge)
-/              -> 200  (SPA)
-/api/health    -> 200  (backend FastAPI, atraves do tunel de origem)
-/api/providers -> 401  (guarda de autenticacao a funcionar)
+/healthz                         -> 200  (Caddy no edge)
+/                                -> 200  (SPA)
+/api/health                      -> 200  (backend FastAPI)
+/monitor/healthz                 -> 200  (painel de estado)
+```
+## Arquitetura actual
+
+Tudo numa VM so, com o Caddy a servir HTTPS na frente:
+
+```
+                          internet
+                              |
+                     https://sabemos.studio
+                              |
+        +--------------------------------------------------+
+        | VM Kamatera iq-os-edge-01 (EU-MD, 2 vCPU, 8 GB)  |
+        |                                                  |
+        |   iqos-caddy          Caddy, network_mode: host  |
+        |                       80/443 + Let's Encrypt     |
+        |     /monitor*  -> iqos-monitor        :8091      |
+        |     /landing*  -> iqos-landing        :8090      |
+        |     resto      -> ORIGEM_UPSTREAM                |
+        |                                                  |
+        |   iqos-frontend       SPA + reverse_proxy /api   |
+        |   iqos-backend :8002  FastAPI                    |
+        |   iqos-elasticsearch  8.11 (2 GB de heap)        |
+        |   iqos-mcp     :8765                             |
+        |   iqos-osif-*  /  iqos-n8n  /  iqos-searxng      |
+        +--------------------------------------------------+
+                      rede Docker partilhada: iqos-net
 ```
 
-## Arquitetura
+Quase tudo escuta em `127.0.0.1` e e publicado pelo Caddy. Isso **nao e
+cosmetico**: esta VM nao tem firewall, por isso o que nao estiver preso ao
+loopback fica acessivel a Internet inteira. Vale para o painel de monitorizacao
+como para o resto — ver o `MONITOR_BIND` no `edge/monitor/server.py`.
+
+O Caddy le a origem de `ORIGEM_UPSTREAM` no `edge/.env`, que muda com o
+`17-origem.ps1`:
+
+| Modo | Upstream | Serve |
+| --- | --- | --- |
+| `vm` | `127.0.0.1:4180` | a aplicacao que corre na VM (o normal) |
+| `pc` | `127.0.0.1:8080` | a stack do PC, publicada pelo tunel SSH reverso |
+
+## Arquitetura original (historico)
+
+> Fica registado porque explica de onde vem o tunel, o `17-origem.ps1` e a ideia
+> de o edge ser independente da aplicacao — que continua a ser usada.
 
 ```
                           internet
@@ -48,15 +104,21 @@ Verificacao ponta-a-ponta (do PC, via internet):
               +-------------------------------+
 ```
 
-Porque e que a stack **nao** corre na VM: a maquina mais barata da Kamatera tem
-1 vCPU / 2 GB / 20 GB, e a stack pede ~40 GB de dados + indices Elasticsearch +
-modelos. A VM fica como **ponto de entrada publico com TLS proprio**
-(Caddy + Let's Encrypt) e os dados ficam no PC.
+## Historia: porque e que a stack **nao** corria na VM
 
-Porque e que **nao ha Cloudflare**: o quick tunnel era efemero (o hostname mudava
-e o tunel morria com o container `Up`, deixando o site em 502/Error 1033).
-O tunel SSH reverso nao tem terceiros pelo meio, tem um endereco fixo e o
-proprio container religa sozinho quando a ligacao cai.
+> **Desactualizado.** A VM foi redimensionada e a stack passou a correr la.
+> Fica registado porque explica porque existem o tunel, o `17-origem.ps1` e a
+> ideia de o edge ser independente da aplicacao — que continua a ser usada.
+
+A maquina mais barata da Kamatera tinha 1 vCPU / 2 GB / 20 GB, e a stack pede
+~40 GB de dados + indices Elasticsearch + modelos. A VM ficava como **ponto de
+entrada publico com TLS proprio** (Caddy + Let's Encrypt) e os dados no PC.
+
+Porque e que **nao ha Cloudflare**: o quick tunnel era efemero (o hostname
+mudava e o tunel morria com o container `Up`, deixando o site em 502/Error
+1033). O tunel SSH reverso nao tem terceiros pelo meio, tem um endereco fixo e
+o proprio container religa sozinho quando a ligacao cai. Isso continua valido:
+com a stack na VM, o tunel so serve para o modo `pc` do `17-origem.ps1`.
 
 ## Ficheiros
 
@@ -68,9 +130,25 @@ proprio container religa sozinho quando a ligacao cai.
 | `05-edge-up.sh` | VM | Swap + afina o sshd + `docker compose up` do edge |
 | `07-origin-tunnel.ps1` | PC | Sobe/para o tunel SSH reverso (Docker) e instala o arranque automatico |
 | `00-push-file.ps1` | PC | Envia um ficheiro para a VM (ssh + base64, sem scp) |
+| `00-push-edge-files.ps1` | PC | Envia a pasta `edge/` inteira (tar.gz pelo stdin, com conferencia de tamanhos) |
 | `00-keep-awake.ps1` | PC | Impede o PC de adormecer (a origem cai se ele dormir) |
+| `10-redimensionar-vm.ps1` | PC | Muda o tamanho da VM pela API da Kamatera |
+| `11-es-vm.ps1` | VM | Sobe o Elasticsearch da VM (2 GB de heap) e reinicia o backend |
+| `12-es-migrar.ps1` / `13-es-validar.ps1` | PC | Migra os indices do PC para a VM e confere-os |
+| `14-servico-vm.ps1` | PC | Para / arranca / mostra um servico da VM |
+| `15-imagem-vm.ps1` | PC | Imagem inteira, por blocos (quando o incremental nao serve) |
+| `16-validar-setup.ps1` | PC | Validacao ponta-a-ponta do conjunto |
+| `17-origem.ps1` | PC | Alterna a origem do site entre o PC (tunel) e a VM |
+| `18-monitor-env.ps1` | PC | Define a password do painel de estado |
+| `19-deploy-codigo.ps1` | PC | **Deploy incremental** do frontend e do backend — ver [`DEPLOY.md`](DEPLOY.md) |
+| `19-validar-monitor.ps1` | PC | Valida o painel de estado (rota, login, sessao, dados) |
+| `20-teste-painel.ps1` | PC | Renderiza o painel de fora, com dados reais, para se ver o que desenha |
+| `_limpar_nomes_cr.py` | VM | Limpa nomes com retorno de carro (simula por omissao) |
+| `es/` | PC | Ferramentas da migracao do Elasticsearch (exportar, importar, auditar) |
+| `servicos/` | VM | Um compose por servico migrado (backend, frontend, mcp, es, osif, n8n, searxng) |
 | `origin/` | PC | tunel SSH reverso: `Dockerfile`, `tunnel.sh`, `compose.yml` |
-| `edge/` | VM | Caddy (HTTPS proprio) `reverse_proxy` para `127.0.0.1:8080` + pagina offline |
+| `edge/` | VM | O que fica **fora da aplicacao**: o Caddy (HTTPS proprio), o `landing` (pagina publica + registos) e o `monitor` (painel de estado com login) |
+| `DEPLOY.md` | — | Como pôr codigo novo na VM (deploy incremental) |
 
 ## Arranque (passo a passo)
 

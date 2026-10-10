@@ -239,7 +239,15 @@ Write-Host '=== 6. Validacao ===' -ForegroundColor Cyan
 $problemas = 0
 $sondas = @()
 if ($fazerFrontend) { $sondas += @{ Nome = 'frontend'; Url = 'http://127.0.0.1:4180/' } }
-if ($fazerBackend) { $sondas += @{ Nome = 'backend'; Url = 'http://127.0.0.1:8000/health' } }
+# **8002**, e nao 8000. O backend publica `127.0.0.1:8002:8000` no compose da VM
+# (a porta do anfitriao foi fixada em 8002 quando o servico migrou, porque
+# herdava o `FINANCE_API_PORT=8002` do `.env` do PC). A 8000 nao escuta nada.
+#
+# Isto esteve errado e o sintoma enganava: o deploy corria bem, o contentor
+# ficava `healthy`, e o script anunciava "1 servico sem resposta" -- a mandar
+# procurar um problema no backend que nao existia. Custou uma ida a VM ver
+# `docker port` para perceber que a sonda e que apontava para o lado errado.
+if ($fazerBackend) { $sondas += @{ Nome = 'backend'; Url = 'http://127.0.0.1:8002/health' } }
 if ($fazerBackend) { $sondas += @{ Nome = 'mcp'; Url = 'http://127.0.0.1:8765/' } }
 foreach ($s in $sondas) {
     # Com repeticao: o contentor acabou de ser recriado, e um `curl` imediato da
@@ -255,6 +263,40 @@ foreach ($s in $sondas) {
     Write-Host ("  {0,-10} {1}  HTTP {2}" -f $s.Nome, $(if ($ok) { 'ok   ' } else { 'FALHA' }), $codigo) -ForegroundColor $(if ($ok) { 'Green' } else { 'Red' })
 }
 Show-Vm 'df -h / | tail -1' | Out-Null
+
+# O bundle que o frontend **serve**, comparado com o que foi construido aqui.
+#
+# Um 200 no `curl` no frontend nao prova nada sobre a versao do codigo: o nginx
+# responde 200 com o `index.html` que tiver. E este o modo de falha que o
+# `Dockerfile.frontend.incremental` avisa que ja aconteceu -- build passa,
+# contentor sobe, pagina serve o bundle antigo. Comparar o nome do ficheiro
+# (que o Vite muda a cada build, por causa do hash de conteudo) e o que distingue
+# "o servico respondeu" de "o codigo novo chegou".
+if ($fazerFrontend) {
+    $localHtml = Join-Path $raiz '_frontend_dist\index.html'
+    $bundleLocal = ''
+    if (Test-Path $localHtml) {
+        $m = [regex]::Match((Get-Content -Raw $localHtml), 'assets/index-[A-Za-z0-9_-]+\.js')
+        if ($m.Success) { $bundleLocal = $m.Value }
+    }
+    # `grep -o` dentro do contentor: le o `index.html` que a imagem tem, e nao o
+    # que esta no disco da VM.
+    $bundleImagem = (Invoke-Vm "docker run --rm --entrypoint sh iq-os-frontend:latest -c 'grep -o assets/index-[A-Za-z0-9_-]*.js /usr/share/nginx/html/index.html'").Output.Trim()
+    # E o que sai pelo porto publicado, que e o que o browser recebe.
+    $bundlePublico = (Invoke-Vm "curl -s -m 8 http://127.0.0.1:4180/ | grep -o assets/index-[A-Za-z0-9_-]*.js").Output.Trim()
+
+    if (-not $bundleLocal) {
+        Write-Host '  bundle     nao encontrei o hash local (ver _frontend_dist\index.html)' -ForegroundColor Yellow
+    } elseif ($bundleImagem -eq $bundleLocal -and $bundlePublico -eq $bundleLocal) {
+        Write-Host "  bundle     ok     $bundleLocal (na imagem e servido)" -ForegroundColor Green
+    } else {
+        $problemas++
+        Write-Host '  bundle     FALHA  o frontend nao esta a servir o codigo que acabou de ser construido' -ForegroundColor Red
+        Write-Host "             local    : $bundleLocal" -ForegroundColor Red
+        Write-Host "             na imagem: $bundleImagem" -ForegroundColor Red
+        Write-Host "             servido  : $bundlePublico" -ForegroundColor Red
+    }
+}
 
 # A cache de build cresce a cada deploy (o driver `docker` do buildkit guarda
 # snapshots). Depois de um deploy vi-a ir de 89 MB para 13,8 GB. Nao e erro, mas
