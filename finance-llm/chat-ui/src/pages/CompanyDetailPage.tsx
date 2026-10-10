@@ -5,6 +5,7 @@ import {
   Frown,
   ChevronDown,
   FileText,
+  X,
   TrendingUp,
   Euro,
   Calendar,
@@ -35,9 +36,10 @@ import {
 import { SeeAllContractsButton } from "./EntityContractsWindow";
 import EmpresaLogo from "../components/benchmark/EmpresaLogo";
 import { siteDe, usePerfisEmpresas } from "../components/benchmark/usePerfisEmpresas";
-import { EntityEnrichmentCard } from "./EmpresasIQPage";
+import { EntityEnrichmentCard, ContractDetailPanel } from "./EmpresasIQPage";
 import { obterDadosEmpresa } from "../societarioRecolhaApi";
 import { useWindowMode } from "../layout";
+import { openWindow } from "../windows";
 import type { CompanyDetail, CompanyAnalyticsResponse, CompanySocietarioResponse, ContractItem, ContractParty, ContractAnalyticsRow } from "../types";
 
 /** Contratos por página na ficha (o «carregar mais» pede a página seguinte). */
@@ -132,6 +134,8 @@ export default function CompanyDetailPage({
   const [contratosRole, setContratosRole] = useState<PapelContrato>("all");
   const [aCarregarContratos, setACarregarContratos] = useState(false);
   const [erroContratos, setErroContratos] = useState<string | null>(null);
+  /** Contrato aberto em modal (só no modo página; no modo janelas abre janela). */
+  const [contratoAberto, setContratoAberto] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<CompanyAnalyticsResponse | null>(null);
   /** Publicações do Ministério da Justiça já indexadas (só se existirem no Elastic). */
   const [societario, setSocietario] = useState<CompanySocietarioResponse | null>(null);
@@ -159,6 +163,34 @@ export default function CompanyDetailPage({
   const perfilEmpresa = perfis[nif] ?? company?.perfil ?? undefined;
   /** O gestor de janelas só existe no modo janelas: no modo página a lista é inline. */
   const { windowMode } = useWindowMode();
+
+  /**
+   * Abre a ficha de um contrato: em modo janelas numa **janela nova** (arrastável
+   * e redimensionável, como as restantes aplicações); em modo página — onde não
+   * há gestor de janelas — numa **modal** sobre a ficha.
+   */
+  const abrirContrato = (id?: string) => {
+    if (!id) return;
+    if (onViewContract) {
+      onViewContract(id);
+      return;
+    }
+    if (windowMode) {
+      openWindow(`contract-detail:${id}`, undefined, { title: "Ficha do contrato" });
+      return;
+    }
+    setContratoAberto(id);
+  };
+
+  /* Fechar a modal do contrato com Escape, como nas restantes modais. */
+  useEffect(() => {
+    if (!contratoAberto) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setContratoAberto(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [contratoAberto]);
 
   /**
    * Lê uma página de contratos do servidor. `de > 0` acrescenta à lista em vez de
@@ -976,10 +1008,15 @@ export default function CompanyDetailPage({
                   {contratos.map((c, idx) => (
                     <tr
                       key={c.idcontrato || c.doc_id || idx}
-                      className="border-b border-white/5 hover:bg-white/[0.04] transition"
+                      onClick={() => abrirContrato(c.idcontrato || c.doc_id || "")}
+                      className="cursor-pointer border-b border-white/5 hover:bg-white/[0.04] transition"
+                      title="Abrir a ficha do contrato"
                     >
                       <td className="py-3 pr-4 max-w-xs truncate" title={c.objectoContrato || c.descContrato || ""}>
-                        {c.objectoContrato || c.descContrato || "—"}
+                        <span className="block truncate">{c.objectoContrato || c.descContrato || "—"}</span>
+                        <span className="block font-mono text-[10.5px] text-muted-foreground">
+                          {c.idcontrato || c.doc_id || "—"}
+                        </span>
                       </td>
                       <td className="py-3 pr-4 max-w-xs truncate text-muted-foreground" title={partyText(c.adjudicantes)}>
                         {partyText(c.adjudicantes)}
@@ -994,11 +1031,14 @@ export default function CompanyDetailPage({
                         {formatCompactPrice(contractValue(c))}
                       </td>
                       <td className="py-3">
-                        {onViewContract && c.idcontrato && (
+                        {c.idcontrato && (
                           <button
-                            onClick={() => onViewContract(c.idcontrato!)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              abrirContrato(c.idcontrato);
+                            }}
                             className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition"
-                            title="Ver contrato"
+                            title={windowMode ? "Abrir numa janela nova" : "Abrir a ficha do contrato"}
                           >
                             <ExternalLink size={16} />
                           </button>
@@ -1049,6 +1089,44 @@ export default function CompanyDetailPage({
           )}
         </div>
       </div>
+
+      {/* Modal da ficha do contrato (modo página: sem gestor de janelas). */}
+      {contratoAberto && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Ficha do contrato"
+          className="fixed inset-0 z-[999] flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm md:items-center"
+          onClick={() => setContratoAberto(null)}
+        >
+          <div
+            className="relative max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/10 bg-background/95 p-4 shadow-2xl md:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setContratoAberto(null)}
+              className="absolute right-3 top-3 z-10 rounded-lg p-1.5 text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+              title="Fechar (Esc)"
+            >
+              <X size={18} />
+            </button>
+            <ContractDetailPanel
+              id={contratoAberto}
+              onBack={() => setContratoAberto(null)}
+              onEntity={(alvo) => {
+                setContratoAberto(null);
+                if (windowMode) {
+                  openWindow(`company-detail:${alvo}`, undefined, { title: "Ficha da entidade" });
+                  return;
+                }
+                window.history.pushState({}, "", `/companies/${encodeURIComponent(alvo)}`);
+                window.dispatchEvent(new PopStateEvent("popstate"));
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
