@@ -29,7 +29,7 @@ Notas de dados (medidas no cluster, 2026-10-10):
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from api.elasticsearch_client import (
     CONTRATOS_ES_INDEX,
@@ -275,6 +275,23 @@ def entity_search_filter(country: Optional[str], role: str, q: Optional[str]) ->
     consulta = entity_search_query(country, role, q)
     nested = party(country, role).get("nested")
     if nested and "match_all" not in consulta:
+        return {"nested": {"path": nested, "query": consulta}}
+    return consulta
+
+
+def party_in_filter(country: Optional[str], role: str, ids: Sequence[str]) -> Dict[str, Any]:
+    """Filtro «a parte (quem compra ou vende) é uma destas entidades».
+
+    Serve para perguntar «o que é que estes compradores compram» a partir de uma
+    lista de identificadores (NIF/DIR3/SIRET).
+    """
+    spec = party(country, role)
+    limpos = [str(item) for item in ids if str(item or "").strip()]
+    if not limpos:
+        return {"match_none": {}}
+    consulta = {"terms": {spec["id"]: limpos}}
+    nested = spec.get("nested")
+    if nested:
         return {"nested": {"path": nested, "query": consulta}}
     return consulta
 
@@ -610,6 +627,11 @@ def _cpv_descricao(agg: Optional[Dict[str, Any]], code: Any, chave: str) -> str:
                 if isinstance(entry, dict) and entry.get(chave):
                     return str(entry[chave])
     return ""
+
+
+def cpv_description(country: Optional[str], agg: Optional[Dict[str, Any]], code: Any) -> str:
+    """Descrição legível de um CPV de um bucket (a chave muda entre países)."""
+    return _cpv_descricao(agg, code, dialect(country)["cpv"]["descricao"])
 
 
 def ano_agg(country: Optional[str], size: int = 50) -> Dict[str, Any]:

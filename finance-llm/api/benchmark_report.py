@@ -187,6 +187,37 @@ def build(params: Dict[str, Any], *, es: Any = None) -> Dict[str, Any]:
             top=MAX_ROWS,
             es=es,
         )
+        if not (isinstance(resultado, dict) and resultado.get("error")):
+            # As duas leituras de valor acrescentado (anomalias e o que os
+            # compradores compram sem esta empresa) entram no PDF; se falharem,
+            # o relatório sai sem elas em vez de não sair.
+            try:
+                resultado["anomalies"] = bench.benchmark_anomalies(
+                    nif=params.get("nif") or None,
+                    name=params.get("name") or None,
+                    role=params["role"],
+                    country=params.get("country") or "pt",
+                    cpv_code=params.get("cpv_code") or None,
+                    year_from=params.get("year_from"),
+                    year_to=params.get("year_to"),
+                    region=params.get("region") or None,
+                    es=es,
+                )
+            except Exception as exc:  # noqa: BLE001 - o relatório não pode falhar por isto
+                logger.warning("Sem anomalias no relatório: %s", exc)
+            try:
+                resultado["gaps"] = bench.benchmark_gaps(
+                    nif=params.get("nif") or None,
+                    name=params.get("name") or None,
+                    role=params["role"],
+                    country=params.get("country") or "pt",
+                    year_from=params.get("year_from"),
+                    year_to=params.get("year_to"),
+                    region=params.get("region") or None,
+                    es=es,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Sem oportunidades no relatório: %s", exc)
     elif modo == "cruzar":
         resultado = bench.benchmark_cross(
             entities=params.get("entities") or [],
@@ -409,6 +440,8 @@ def sections(
                 ],
             }
         )
+        secoes.extend(_seccoes_anomalias(dados.get("anomalies")))
+        secoes.extend(_seccoes_oportunidades(dados.get("gaps")))
     elif modo == "mercado":
         secoes.append(
             {
@@ -594,6 +627,98 @@ def _seccao_cpvs(titulo_seccao: str, cpvs: Sequence[Dict[str, Any]]) -> Dict[str
             for item in list(cpvs)[:MAX_CPV]
         ],
     }
+
+
+def _seccoes_anomalias(anomalias: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Secções das anomalias de preço/concentração (vazio se não houver dados)."""
+    if not anomalias or anomalias.get("error"):
+        return []
+    secoes: List[Dict[str, Any]] = []
+    itens = anomalias.get("items") or []
+    if itens:
+        secoes.append(
+            {
+                "title": "Sinais de alerta (preço, concentração e qualidade do dado)",
+                "columns": ["Severidade", "Sinal", "Explicação"],
+                "rows": [
+                    [str(item.get("severity") or "info"), str(item.get("title") or ""), str(item.get("detail") or "")]
+                    for item in itens
+                ],
+            }
+        )
+    if anomalias.get("by_cpv"):
+        secoes.append(
+            {
+                "title": "Preço e concorrência por CPV (empresa vs mercado)",
+                "columns": [
+                    "CPV",
+                    "Descrição",
+                    "Contratos",
+                    "Quota",
+                    "Mediana empresa",
+                    "Mediana mercado",
+                    "Fornecedores",
+                    "Leitura",
+                ],
+                "rows": [
+                    [
+                        linha.get("code") or "—",
+                        _texto(linha.get("description"), 60) or "—",
+                        f"{_contratos(linha.get('contracts'))} de {_contratos(linha.get('market_contracts'))}",
+                        _pct(linha.get("share_pct")),
+                        _moeda(linha.get("entity_median")),
+                        _moeda(linha.get("market_median")),
+                        _contratos(linha.get("suppliers")),
+                        f"{linha.get('competition_verdict')} / {linha.get('price_verdict')}",
+                    ]
+                    for linha in anomalias["by_cpv"]
+                ],
+            }
+        )
+    if anomalias.get("outliers"):
+        secoes.append(
+            {
+                "title": "Contratos acima do p90 do segmento",
+                "columns": ["Data", "Objeto", "Contraparte", "Valor", "×p90"],
+                "rows": [
+                    [
+                        _data(contrato.get("date")),
+                        _texto(contrato.get("object"), 120) or "—",
+                        _texto(contrato.get("counterpart"), 60) or "—",
+                        _moeda(contrato.get("value")),
+                        f"{contrato['times_p90']:.1f}×" if contrato.get("times_p90") else "—",
+                    ]
+                    for contrato in anomalias["outliers"]
+                ],
+            }
+        )
+    return secoes
+
+
+def _seccoes_oportunidades(lacunas: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Secção das oportunidades (CPV dos compradores que a empresa não serve)."""
+    if not lacunas or lacunas.get("error") or not lacunas.get("gaps"):
+        return []
+    papel = "Onde pode vender mais" if lacunas.get("role") == bc.SUPPLIER else "O que pode comprar e ainda não compra"
+    return [
+        {
+            "title": papel,
+            "columns": ["CPV", "Descrição", "Valor contratado", "Contratos", "Mediana", "Compradores", "Quem vende ali"],
+            "rows": [
+                [
+                    linha.get("code") or "—",
+                    _texto(linha.get("description"), 60) or "—",
+                    _moeda(linha.get("value")),
+                    _contratos(linha.get("contracts")),
+                    _moeda(linha.get("median")),
+                    _contratos(linha.get("buyers_total")),
+                    ", ".join(_texto(item.get("name") or item.get("nif"), 28) for item in (linha.get("competition") or [])[:2])
+                    or "—",
+                ]
+                for linha in lacunas["gaps"]
+            ],
+        }
+    ]
 
 
 def _janela(params: Dict[str, Any]) -> str:

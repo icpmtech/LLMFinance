@@ -44,6 +44,7 @@ import BenchmarkByCpv from "../components/benchmark/BenchmarkByCpv";
 import BenchmarkCompare from "../components/benchmark/BenchmarkCompare";
 import { CpvAutocomplete, EmpresaAutocomplete, type EmpresaBenchmark } from "../components/benchmark/BenchmarkPickers";
 import BenchmarkReportCard from "../components/benchmark/BenchmarkReportCard";
+import BenchmarkInsights from "../components/benchmark/BenchmarkInsights";
 import {
   getBenchmarkEntity,
   getBenchmarkMeta,
@@ -690,6 +691,25 @@ export default function BenchmarkPage({
               </ul>
             </div>
           ) : null}
+
+          {/* anomalias, concentração e oportunidades — só depois da análise */}
+          <BenchmarkInsights
+            ativo={Boolean(dados)}
+            query={
+              dados && entidade
+                ? {
+                    nif: entidade.nif || undefined,
+                    name: entidade.name,
+                    role,
+                    country: pais,
+                    cpv_code: cpv.trim() || undefined,
+                    year_from: anoDe === "" ? undefined : Number(anoDe),
+                    year_to: anoAte === "" ? undefined : Number(anoAte),
+                    region: regiao.trim() || undefined,
+                  }
+                : null
+            }
+          />
 
           <BenchmarkReportCard
             pronto={Boolean(entidade)}

@@ -516,8 +516,118 @@ export async function compareBenchmarkCross(payload: BenchmarkCrossRequest): Pro
   return res.json();
 }
 
-/* ------------------------------------------------ relatório PDF (pago) */
+/* ------------------------------------- anomalias de preço e concentração */
 
+export interface BenchmarkAnomalyItem {
+  kind: string;
+  severity: "alta" | "media" | "info" | string;
+  title: string;
+  detail: string;
+  value?: number | null;
+}
+
+export interface BenchmarkAnomalyContract {
+  value: number;
+  times_p90?: number | null;
+  object?: string | null;
+  date?: string | null;
+  counterpart?: string | null;
+  id?: string | null;
+}
+
+export interface BenchmarkAnomalyCpv {
+  code: string;
+  description?: string | null;
+  contracts: number;
+  market_contracts: number;
+  market_median?: number | null;
+  entity_median?: number | null;
+  ratio?: number | null;
+  suppliers: number;
+  share_pct?: number | null;
+  competition_verdict: string;
+  price_verdict: string;
+}
+
+export interface BenchmarkAnomaliesResponse {
+  role: BenchmarkRole;
+  country: BenchmarkCountry;
+  country_label: string;
+  entity: {
+    nif?: string | null;
+    name: string;
+    contracts: number;
+    total_value: number;
+    median?: number | null;
+    p90?: number | null;
+    share_of_segment_pct?: number | null;
+  };
+  reference: { contracts: number; median?: number | null; p90?: number | null };
+  items: BenchmarkAnomalyItem[];
+  outliers: BenchmarkAnomalyContract[];
+  by_cpv: BenchmarkAnomalyCpv[];
+  data_quality: { excluded_contracts: number; excluded_value?: number | null };
+  notes: string[];
+  error?: string;
+}
+
+/** Anomalias de preço e concentração de uma entidade no seu segmento. */
+export async function getBenchmarkAnomalies(params: BenchmarkQuery & { top_cpvs?: number }): Promise<BenchmarkAnomaliesResponse> {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    search.set(key, String(value));
+  }
+  const res = await fetch(`${API_BASE}/benchmark/anomalies?${search}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Erro nas anomalias: ${res.status}`);
+  }
+  return res.json();
+}
+
+/* -------------------------------- oportunidades (CPV dos compradores) */
+
+export interface BenchmarkGapRow {
+  code: string;
+  description?: string | null;
+  contracts: number;
+  value: number;
+  median?: number | null;
+  buyers: BenchmarkRow[];
+  buyers_total: number;
+  competition: BenchmarkRow[];
+}
+
+export interface BenchmarkGapsResponse {
+  role: BenchmarkRole;
+  country: BenchmarkCountry;
+  country_label: string;
+  entity: { nif?: string | null; name: string; cpvs_known: number };
+  buyers: BenchmarkRow[];
+  gaps: BenchmarkGapRow[];
+  notes: string[];
+  error?: string;
+}
+
+/** Onde a entidade pode vender mais: CPV dos seus compradores que ela não serve. */
+export async function getBenchmarkGaps(
+  params: BenchmarkQuery & { top_buyers?: number; size?: number },
+): Promise<BenchmarkGapsResponse> {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    search.set(key, String(value));
+  }
+  const res = await fetch(`${API_BASE}/benchmark/gaps?${search}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Erro nas oportunidades: ${res.status}`);
+  }
+  return res.json();
+}
+
+/* ------------------------------------------------ relatório PDF (pago) */
 /** Âmbito do relatório: uma empresa, o quadro por CPV ou o cruzamento. */
 export type BenchmarkReportMode = "empresa" | "mercado" | "cruzar";
 

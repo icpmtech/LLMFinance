@@ -33,7 +33,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 
 from api.elasticsearch_client import (
-    _cpv_description_from_hits,
     _top_hit_name,
     get_es_client,
 )
@@ -579,6 +578,638 @@ def benchmark_entity(
         "history": history,
         "opportunities": opportunities,
         "notes": notes,
+    }
+
+
+# ---------------------------------------- anomalias de preço e concentração
+
+#: Quantos CPV da empresa entram na leitura de concentração/preço.
+_ANOMALY_CPVS = 6
+#: Contratos acima do p90 mostrados (os maiores).
+_ANOMALY_CONTRACTS = 6
+#: A partir de que rácio (empresa ÷ mediana do CPV) se diz «acima do mercado».
+_PRICE_ABOVE = 1.25
+#: Abaixo deste rácio diz-se «abaixo do mercado».
+_PRICE_BELOW = 0.8
+#: A partir de que quota de valor num CPV o mercado é «dominado».
+_DOMINANT_SHARE = 60.0
+#: Com este número de fornecedores (ou menos) o CPV é de «pouca concorrência».
+_THIN_MARKET = 3
+#: Contratos mínimos da entidade num CPV para se comparar o preço (abaixo disto é ruído).
+_MIN_CPV_CONTRACTS = 5
+
+
+def _percentil(agg: Optional[Dict[str, Any]], chave: str) -> Optional[float]:
+    valores = (((agg or {}).get("pc") or {}).get("values")) or {}
+    valor = valores.get(chave)
+    return round(float(valor), 2) if valor is not None else None
+
+
+def money_pt(valor: Any) -> str:
+    """Valor em euros no formato português (para os textos de explicação)."""
+    if not isinstance(valor, (int, float)):
+        return "—"
+    return f"{valor:,.2f} €".replace(",", " ").replace(".", ",")
+
+
+def benchmark_anomalies(
+    *,
+    nif: Optional[str] = None,
+    name: Optional[str] = None,
+    role: str = "adjudicatario",
+    country: str = "pt",
+    cpv_code: Optional[str] = None,
+    year_from: Optional[int] = None,
+    year_to: Optional[int] = None,
+    region: Optional[str] = None,
+    top_cpvs: int = _ANOMALY_CPVS,
+    es: Any = None,
+) -> Dict[str, Any]:
+    """Anomalias de preço e de concentração de uma entidade no seu segmento.
+
+    Responde a três perguntas de quem compra ou vende:
+
+    1. **Preço fora do normal** — os contratos da entidade acima do p90 do
+       segmento (quantas vezes o p90 valem) e se, nos CPV onde atua, a mediana
+       dela está acima ou abaixo da mediana do mercado.
+    2. **Concentração** — quantos fornecedores distintos existem em cada CPV e
+       que fatia do valor a entidade tem ali (um só fornecedor ou um mercado
+       dominado por ela é o oposto de concorrência).
+    3. **Qualidade do dado** — contratos com valores fora dos limites de
+       sanidade (negativos, nulos ou acima do teto) que ficam de fora das
+       estatísticas, para a leitura não ser feita sobre números contaminados.
+
+    Cada achado sai em `items` com uma explicação legível (`title`/`detail`),
+    severidade e os números que o sustentam.
+    """
+    role = role if role in ROLES else bc.SUPPLIER
+    if not (nif or (name or "").strip()):
+        return {"error": "Indique a entidade (NIF ou nome)."}
+    client = es or get_es_client(request_timeout=_REQUEST_TIMEOUT)
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    country = bc.country_key(country)
+    dialeto = bc.dialect(country)
+    valor_campo = dialeto["valor_campo"]
+    spec_cpv = dialeto["cpv"]
+    entidade_filtro = bc.entity_filter(country, role, nif=nif, name=name)
+    filtros = _segment_filters(country, cpv_code, year_from, year_to, region)
+    dentro: Dict[str, Any] = {"bool": {"filter": filtros}} if filtros else {"match_all": {}}
+    limpos = {"bool": {"filter": bc.value_filters(country)}}
+    sujos = {"bool": {"must_not": {"bool": {"filter": bc.value_filters(country)}}}}
+    top_cpvs = max(1, min(int(top_cpvs or _ANOMALY_CPVS), 20))
+
+    # A análise sai em duas pesquisas de propósito: a primeira é pequena (só os
+    # contratos da entidade) e diz onde ela atua; a segunda olha para o mercado
+    # **apenas nesses CPV** — uma agregação por CPV sobre o índice inteiro
+    # esgotava o circuit breaker do cluster.
+    recente = dialeto["recent"]
+    # Campos que o `top_hits` dos contratos caros traz (só o necessário: o
+    # `_source` completo desta agregação era o que pesava mais na pesquisa).
+    contraparte = bc.party(country, _counterpart_role(role))
+    campos_caros: List[str] = [
+        valor_campo,
+        recente["id"],
+        recente["objeto"],
+        recente["data"],
+        recente["data2"],
+        recente["valor"],
+    ]
+    if contraparte.get("nome"):
+        campos_caros.append(str(contraparte["nome"]))
+    if contraparte.get("nested"):
+        raiz = str(contraparte["nested"]).split(".")[0]
+        if raiz not in campos_caros:
+            campos_caros.append(raiz)
+    corpo_entidade: Dict[str, Any] = {
+        "size": 0,
+        "track_total_hits": True,
+        "query": {"bool": {"filter": [entidade_filtro, *filtros]}},
+        "aggs": {
+            "limpos": {
+                "filter": limpos,
+                "aggs": {
+                    "stats": {"stats": {"field": valor_campo}},
+                    "pc": {"percentiles": {"field": valor_campo, "percents": [50, 90]}},
+                    "caros": {
+                        "top_hits": {
+                            "size": _ANOMALY_CONTRACTS,
+                            "sort": [{valor_campo: {"order": "desc"}}],
+                            "_source": {"includes": campos_caros},
+                        }
+                    },
+                },
+            },
+            "suspeitos": {"filter": sujos},
+            "cpvs": {
+                "nested": {"path": spec_cpv["nested"]},
+                "aggs": {
+                    "top": {
+                        "terms": {"field": spec_cpv["code"], "size": top_cpvs, "order": {"_count": "desc"}},
+                        "aggs": {
+                            "descricao": {"top_hits": {"size": 1, "_source": True}},
+                            "limpos": {
+                                "reverse_nested": {},
+                                "aggs": {
+                                    "filter_limpos": {"filter": limpos, "aggs": {"pc": {"percentiles": {"field": valor_campo, "percents": [50]}}}}
+                                },
+                            },
+                        },
+                    }
+                },
+            },
+        },
+    }
+
+    try:
+        resp = client.search(index=dialeto["index"], body=corpo_entidade)
+    except Exception as exc:  # pragma: no cover - depende do cluster
+        logger.warning("Anomalias do benchmark falharam (%s): %s", country, exc)
+        return {"error": str(exc)}
+
+    aggs = resp.get("aggregations") or {}
+    entidade_aggs = aggs.get("entidade") or aggs
+    entidade_limpos = entidade_aggs.get("limpos") or {}
+    entidade_stats = entidade_limpos.get("stats") or {}
+    contratos_entidade = int(entidade_stats.get("count") or 0)
+    valor_entidade = round(float(entidade_stats.get("sum") or 0.0), 2)
+    mediana_entidade = _percentil(entidade_limpos, "50.0")
+    p90_entidade = _percentil(entidade_limpos, "90.0")
+    suspeitos = int((((entidade_aggs.get("suspeitos") or {}).get("doc_count")) or 0))
+    nome = _entity_hit_name(entidade_aggs, country, role) or (name or nif or "")
+
+    buckets_cpv = (((aggs.get("cpvs") or {}).get("top") or {}).get("buckets")) or []
+
+    # --- mercado só nos CPV da entidade ------------------------------------
+    filtros_cpv: Dict[str, Dict[str, Any]] = {}
+    codigos: Dict[str, str] = {}
+    for indice, bucket in enumerate(buckets_cpv):
+        codigo = str(bucket.get("key") or "")
+        filtro = bc.cpv_filter(country, codigo)
+        if not codigo or not filtro:
+            continue
+        filtros_cpv[f"cpv{indice}"] = filtro
+        codigos[f"cpv{indice}"] = codigo
+
+    mediana_mercado = p90_mercado = None
+    mercado_cpvs: Dict[str, Dict[str, Any]] = {}
+    mercado_stats: Dict[str, Any] = {}
+    if filtros_cpv:
+        corpo_mercado: Dict[str, Any] = {
+            "size": 0,
+            "track_total_hits": False,
+            "query": dentro,
+            "aggs": {
+                "mercado": {
+                    "filter": limpos,
+                    "aggs": {
+                        "stats": {"stats": {"field": valor_campo}},
+                        "pc": {"percentiles": {"field": valor_campo, "percents": [50, 90]}},
+                    },
+                },
+                "por_cpv": {
+                    "filters": {"filters": filtros_cpv},
+                    "aggs": {
+                        "pc": {"percentiles": {"field": valor_campo, "percents": [50]}},
+                        "fornecedores": bc.cardinality_agg(country, role),
+                    },
+                },
+            },
+        }
+        try:
+            resp_mercado = client.search(index=dialeto["index"], body=corpo_mercado)
+        except Exception as exc:  # pragma: no cover - depende do cluster
+            logger.warning("Mercado por CPV falhou (%s): %s", country, exc)
+            resp_mercado = {}
+        aggs_mercado = resp_mercado.get("aggregations") or {}
+        mercado = aggs_mercado.get("mercado") or {}
+        mercado_stats = mercado.get("stats") or {}
+        mediana_mercado = _percentil(mercado, "50.0")
+        p90_mercado = _percentil(mercado, "90.0")
+        for chave, bucket in ((aggs_mercado.get("por_cpv") or {}).get("buckets") or {}).items():
+            codigo = codigos.get(chave)
+            if codigo:
+                mercado_cpvs[codigo] = bucket or {}
+
+    # --- 1. contratos acima do p90 -----------------------------------------
+    caros: List[Dict[str, Any]] = []
+    for hit in (((entidade_limpos.get("caros") or {}).get("hits") or {}).get("hits")) or []:
+        fonte = hit.get("_source") or {}
+        valor = fonte.get(valor_campo)
+        if not isinstance(valor, (int, float)):
+            continue
+        if p90_mercado and valor <= p90_mercado:
+            continue
+        caros.append(
+            {
+                "value": round(float(valor), 2),
+                "times_p90": round(float(valor) / p90_mercado, 2) if p90_mercado else None,
+                "object": str(fonte.get(recente["objeto"]) or "")[:200] or None,
+                "date": str(fonte.get(recente["data"]) or fonte.get(recente["data2"]) or "")[:10] or None,
+                "counterpart": bc.nome_da_entidade(fonte, country, _counterpart_role(role)) or None,
+                "id": fonte.get(recente["id"]),
+            }
+        )
+
+    # --- 2. concentração e preço por CPV -----------------------------------
+    por_cpv: List[Dict[str, Any]] = []
+    for bucket in buckets_cpv:
+        codigo = str(bucket.get("key") or "")
+        contratos_cpv = int(bucket.get("doc_count") or 0)
+        mediana_empresa_cpv = _percentil((bucket.get("limpos") or {}).get("filter_limpos"), "50.0")
+        mercado_cpv = mercado_cpvs.get(codigo) or {}
+        fornecedores = bc.cardinality_value(mercado_cpv.get("fornecedores"))
+        mediana_cpv = _percentil(mercado_cpv, "50.0")
+        contratos_mercado_cpv = int(mercado_cpv.get("doc_count") or 0)
+        quota = round(100.0 * contratos_cpv / contratos_mercado_cpv, 2) if contratos_mercado_cpv else None
+        ratio = (
+            round(mediana_empresa_cpv / mediana_cpv, 2)
+            if mediana_empresa_cpv and mediana_cpv and contratos_cpv >= _MIN_CPV_CONTRACTS
+            else None
+        )
+        if fornecedores <= 1:
+            veredito_concorrencia = "um só fornecedor no período"
+        elif quota is not None and quota >= _DOMINANT_SHARE:
+            veredito_concorrencia = "mercado dominado pela empresa"
+        elif fornecedores <= _THIN_MARKET:
+            veredito_concorrencia = "pouca concorrência"
+        else:
+            veredito_concorrencia = "concorrencial"
+        if ratio is None:
+            veredito_preco = (
+                "amostra pequena para comparar"
+                if contratos_cpv and contratos_cpv < _MIN_CPV_CONTRACTS
+                else "sem valores comparáveis"
+            )
+        elif ratio >= _PRICE_ABOVE:
+            veredito_preco = "acima da mediana do CPV"
+        elif ratio <= _PRICE_BELOW:
+            veredito_preco = "abaixo da mediana do CPV"
+        else:
+            veredito_preco = "na linha da mediana do CPV"
+        por_cpv.append(
+            {
+                "code": codigo,
+                "description": bc.cpv_description(country, bucket.get("descricao"), codigo) or "",
+                "contracts": contratos_cpv,
+                "market_contracts": contratos_mercado_cpv,
+                "market_median": mediana_cpv,
+                "entity_median": mediana_empresa_cpv,
+                "ratio": ratio,
+                "suppliers": fornecedores,
+                "share_pct": quota,
+                "competition_verdict": veredito_concorrencia,
+                "price_verdict": veredito_preco,
+            }
+        )
+
+    # --- 3. achados legíveis -------------------------------------------------
+    itens: List[Dict[str, Any]] = []
+    if caros:
+        maior = caros[0]
+        itens.append(
+            {
+                "kind": "preco_fora_do_normal",
+                "severity": "alta" if (maior.get("times_p90") or 0) >= 3 else "media",
+                "title": f"{len(caros)} contrato(s) acima do p90 do segmento",
+                "detail": (
+                    f"O maior vale {money_pt(maior['value'])}"
+                    + (f" ({maior['times_p90']:.1f}× o p90 de {money_pt(p90_mercado)})" if p90_mercado else "")
+                    + f". O p90 do segmento é {money_pt(p90_mercado)}."
+                ),
+                "value": maior.get("times_p90"),
+            }
+        )
+    if mediana_entidade and mediana_mercado:
+        indice = round(mediana_entidade / mediana_mercado, 2)
+        if indice >= _PRICE_ABOVE:
+            itens.append(
+                {
+                    "kind": "preco_acima",
+                    "severity": "media",
+                    "title": "Preço mediano acima do mercado",
+                    "detail": (
+                        f"A mediana da empresa ({money_pt(mediana_entidade)}) é {indice:.2f}× a mediana do "
+                        f"segmento ({money_pt(mediana_mercado)})."
+                    ),
+                    "value": indice,
+                }
+            )
+        elif indice <= _PRICE_BELOW:
+            itens.append(
+                {
+                    "kind": "preco_abaixo",
+                    "severity": "info",
+                    "title": "Preço mediano abaixo do mercado",
+                    "detail": (
+                        f"A mediana da empresa ({money_pt(mediana_entidade)}) é {indice:.2f}× a mediana do "
+                        f"segmento ({money_pt(mediana_mercado)}) — margem potencial ou posição agressiva."
+                    ),
+                    "value": indice,
+                }
+            )
+    acima = [linha for linha in por_cpv if linha["price_verdict"] == "acima da mediana do CPV"]
+    if len(acima) >= 2:
+        exemplos = ", ".join(f"{linha['code']} ({linha['ratio']:.2f}×)" for linha in acima[:3])
+        itens.append(
+            {
+                "kind": "preco_sistematico",
+                "severity": "media",
+                "title": f"Preço acima do mercado em {len(acima)} dos {len(por_cpv)} CPV principais",
+                "detail": f"Exemplos: {exemplos}.",
+                "value": float(len(acima)),
+            }
+        )
+    monopolios = [linha for linha in por_cpv if linha["competition_verdict"] == "um só fornecedor no período"]
+    if monopolios:
+        itens.append(
+            {
+                "kind": "fornecedor_unico",
+                "severity": "media",
+                "title": f"{len(monopolios)} CPV com um só fornecedor no período",
+                "detail": (
+                    "Sem alternativa visível nos dados: "
+                    + ", ".join(f"{linha['code']} ({linha['contracts']} contratos)" for linha in monopolios[:3])
+                    + ". Vale confirmar procedimento e concorrência real."
+                ),
+                "value": float(len(monopolios)),
+            }
+        )
+    dominados = [linha for linha in por_cpv if linha["competition_verdict"] == "mercado dominado pela empresa"]
+    if dominados:
+        itens.append(
+            {
+                "kind": "mercado_dominado",
+                "severity": "media",
+                "title": f"Empresa domina {len(dominados)} CPV do seu perfil",
+                "detail": (
+                    "Quota de contratos acima de "
+                    f"{_DOMINANT_SHARE:.0f}%: "
+                    + ", ".join(f"{linha['code']} ({linha['share_pct']:.0f}%)" for linha in dominados[:3])
+                    + "."
+                ),
+                "value": float(len(dominados)),
+            }
+        )
+    if contratos_entidade and len(por_cpv) > 1:
+        total_cpv = sum(linha["contracts"] for linha in por_cpv)
+        maiores = sorted(por_cpv, key=lambda linha: linha["contracts"], reverse=True)[:3]
+        contratos_top = sum(linha["contracts"] for linha in maiores)
+        if total_cpv and contratos_top / total_cpv >= 0.8:
+            itens.append(
+                {
+                    "kind": "concentracao_carteria",
+                    "severity": "info",
+                    "title": "Carteira concentrada em poucos CPV",
+                    "detail": (
+                        f"{round(100.0 * contratos_top / total_cpv)}% dos contratos com CPV da empresa estão em "
+                        + ", ".join(linha["code"] for linha in maiores)
+                        + " — dependência alta de poucos segmentos."
+                    ),
+                    "value": round(100.0 * contratos_top / total_cpv, 1),
+                }
+            )
+    if suspeitos:
+        itens.append(
+            {
+                "kind": "dados_suspeitos",
+                "severity": "info",
+                "title": f"{suspeitos} contrato(s) com valores fora dos limites",
+                "detail": (
+                    "Valores nulos, negativos (notas de crédito) ou acima do teto de sanidade do país: "
+                    "ficaram de fora das estatísticas de preço."
+                ),
+                "value": float(suspeitos),
+            }
+        )
+
+    severidade = {"alta": 0, "media": 1, "info": 2}
+    itens.sort(key=lambda item: severidade.get(str(item.get("severity")), 3))
+
+    return {
+        "role": role,
+        "country": country,
+        "country_label": dialeto["label"],
+        "entity": {
+            "nif": nif,
+            "name": nome,
+            "contracts": contratos_entidade,
+            "total_value": valor_entidade,
+            "median": mediana_entidade,
+            "p90": _percentil(entidade_limpos, "90.0"),
+            "share_of_segment_pct": (
+                round(100.0 * contratos_entidade / int(mercado_stats.get("count") or 1), 2)
+                if mercado_stats.get("count")
+                else None
+            ),
+        },
+        "reference": {
+            "contracts": int(mercado_stats.get("count") or 0),
+            "median": mediana_mercado,
+            "p90": p90_mercado,
+        },
+        "items": itens,
+        "outliers": caros,
+        "by_cpv": por_cpv,
+        "data_quality": {"excluded_contracts": suspeitos, "excluded_value": None},
+        "notes": [
+            "Percentis aproximados (TDigest do Elasticsearch), sobre valores positivos e abaixo do teto do país.",
+            "«Fornecedores» é o número de entidades distintas que venderam nesse CPV no período filtrado — "
+            "não é o número de propostas de cada concurso (os dados não trazem os concorrentes perdedores).",
+            "A comparação de preço por CPV usa as medianas das duas séries (empresa e mercado) no mesmo CPV e período; "
+            f"abaixo de {_MIN_CPV_CONTRACTS} contratos da empresa no CPV não se conclui nada sobre o preço.",
+        ],
+    }
+
+
+# --------------------------------------------- oportunidades por comprador
+
+#: Compradores da empresa usados como base da recomendação.
+_GAPS_BUYERS = 25
+#: CPV propostos por análise.
+_GAPS_SIZE = 12
+#: CPV distintos do perfil da empresa (para saber o que se exclui).
+_GAPS_ENTITY_CPVS = 200
+
+
+def benchmark_gaps(
+    *,
+    nif: Optional[str] = None,
+    name: Optional[str] = None,
+    role: str = "adjudicatario",
+    country: str = "pt",
+    year_from: Optional[int] = None,
+    year_to: Optional[int] = None,
+    region: Optional[str] = None,
+    top_buyers: int = _GAPS_BUYERS,
+    size: int = _GAPS_SIZE,
+    es: Any = None,
+) -> Dict[str, Any]:
+    """Onde a empresa pode vender mais: CPV dos seus compradores que ela não serve.
+
+    O raciocínio é o de quem vende: **quem já me compra compra também outras
+    coisas**. Aqui cruza-se a carteira de compradores da empresa com o que esses
+    compradores contratam no mesmo período e país, e retiram-se os CPV onde a
+    empresa **não** tem contratos — ordenados por valor, com os compradores
+    concretos, a mediana praticada e quem já vende ali.
+
+    Só faz sentido para o papel `adjudicatario` (vende); no papel `adjudicante`
+    o resultado são os CPV dos fornecedores dela que ela ainda não compra.
+    """
+    role = role if role in ROLES else bc.SUPPLIER
+    if not (nif or (name or "").strip()):
+        return {"error": "Indique a entidade (NIF ou nome)."}
+    client = es or get_es_client(request_timeout=_REQUEST_TIMEOUT)
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+
+    country = bc.country_key(country)
+    dialeto = bc.dialect(country)
+    valor_campo = dialeto["valor_campo"]
+    spec_cpv = dialeto["cpv"]
+    counterpart_role = _counterpart_role(role)
+    entidade_filtro = bc.entity_filter(country, role, nif=nif, name=name)
+    top_buyers = max(2, min(int(top_buyers or _GAPS_BUYERS), 60))
+    size = max(1, min(int(size or _GAPS_SIZE), 40))
+    # O filtro de CPV não entra: o objetivo é justamente encontrar outros CPV.
+    filtros = [
+        filtro
+        for filtro in (
+            bc.year_filter(country, year_from, year_to),
+            bc.region_filter(country, region),
+        )
+        if filtro
+    ]
+    dentro: Dict[str, Any] = {"bool": {"filter": filtros}} if filtros else {"match_all": {}}
+
+    # 1. quem compra à empresa e em que CPV ela vende.
+    corpo_a: Dict[str, Any] = {
+        "size": 0,
+        "track_total_hits": True,
+        "query": {"bool": {"filter": [entidade_filtro, *filtros]}},
+        "aggs": {
+            "compradores": bc.rank_agg(country, counterpart_role, top_buyers),
+            "cpvs_empresa": {
+                "nested": {"path": spec_cpv["nested"]},
+                "aggs": {
+                    "codigos": {
+                        "terms": {"field": spec_cpv["code"], "size": _GAPS_ENTITY_CPVS},
+                    }
+                },
+            },
+        },
+    }
+    try:
+        resp_a = client.search(index=dialeto["index"], body=corpo_a)
+    except Exception as exc:  # pragma: no cover - depende do cluster
+        logger.warning("Recomendações do benchmark falharam (%s): %s", country, exc)
+        return {"error": str(exc)}
+
+    aggs_a = resp_a.get("aggregations") or {}
+    compradores = bc.rank_rows(country, counterpart_role, aggs_a.get("compradores"), top_buyers, None)
+    codigos_empresa = {
+        _codigo_cpv_base(str(bucket.get("key") or ""))
+        for bucket in (((aggs_a.get("cpvs_empresa") or {}).get("codigos") or {}).get("buckets")) or []
+    }
+    ids = [str(linha["nif"]) for linha in compradores if linha.get("nif")]
+    if not ids:
+        return {
+            "role": role,
+            "country": country,
+            "country_label": dialeto["label"],
+            "buyers": [],
+            "gaps": [],
+            "notes": ["Sem contrapartes identificadas para esta entidade no período — nada a recomendar."],
+        }
+
+    # 2. o que esses compradores contratam (e em que CPV a empresa não vende).
+    corpo_b: Dict[str, Any] = {
+        "size": 0,
+        "track_total_hits": True,
+        "query": {
+            "bool": {"filter": [bc.party_in_filter(country, counterpart_role, ids), *filtros]}
+        },
+        "aggs": {
+            "cpvs": {
+                "nested": {"path": spec_cpv["nested"]},
+                "aggs": {
+                    "top": {
+                        "terms": {
+                            "field": spec_cpv["code"],
+                            "size": max(size * 4, 40),
+                            "order": {"mercado>soma": "desc"},
+                        },
+                        "aggs": {
+                            "descricao": {"top_hits": {"size": 1, "_source": True}},
+                            "mercado": {
+                                "reverse_nested": {},
+                                "aggs": {
+                                    "soma": bc.value_sum(country),
+                                    "pc": {"percentiles": {"field": valor_campo, "percents": [50]}},
+                                    "compradores": bc.rank_agg(country, counterpart_role, 4),
+                                    "fornecedores": bc.rank_agg(country, role, 3),
+                                },
+                            },
+                        },
+                    }
+                },
+            }
+        },
+    }
+    try:
+        resp_b = client.search(index=dialeto["index"], body=corpo_b)
+    except Exception as exc:  # pragma: no cover - depende do cluster
+        logger.warning("Recomendações (compradores) falharam (%s): %s", country, exc)
+        return {"error": str(exc)}
+
+    aggs_b = resp_b.get("aggregations") or {}
+    lacunas: List[Dict[str, Any]] = []
+    for bucket in (((aggs_b.get("cpvs") or {}).get("top") or {}).get("buckets")) or []:
+        codigo = str(bucket.get("key") or "")
+        base = _codigo_cpv_base(codigo)
+        if not base or base in codigos_empresa:
+            continue
+        mercado = bucket.get("mercado") or {}
+        valor = (((mercado.get("soma") or {}).get("value")) or 0.0)
+        contratos = int(bucket.get("doc_count") or 0)
+        compradores_cpv = bc.rank_rows(country, counterpart_role, mercado.get("compradores"), 4, valor)
+        fornecedores_cpv = bc.rank_rows(country, role, mercado.get("fornecedores"), 3, valor)
+        lacunas.append(
+            {
+                "code": codigo,
+                "description": bc.cpv_description(country, bucket.get("descricao"), codigo) or "",
+                "contracts": contratos,
+                "value": round(float(valor), 2),
+                "median": _percentil(mercado, "50.0"),
+                "buyers": compradores_cpv,
+                "buyers_total": len(compradores_cpv),
+                "competition": fornecedores_cpv,
+            }
+        )
+    lacunas.sort(key=lambda linha: (linha["value"], linha["contracts"]), reverse=True)
+    lacunas = lacunas[:size]
+
+    nome = (name or nif or "").strip()
+    notas = [
+        "Base: os {0} maiores compradores desta entidade no período filtrado ({1} identificados).".format(
+            top_buyers, len(compradores)
+        ),
+        "Só aparecem CPV onde a entidade **não** tem contratos no período — se já vende ali, não é oportunidade.",
+        "O valor é o que esses compradores contrataram nesse CPV (todos os fornecedores), não o que está disponível para ganhar.",
+        "`buyers_total` conta quantos dos compradores da entidade compram nesse CPV (a lista mostra os maiores).",
+    ]
+    if country == "fr":
+        notas.append("Em França o DECP não traz nomes: as entidades são identificadas pelo SIRET.")
+
+    return {
+        "role": role,
+        "country": country,
+        "country_label": dialeto["label"],
+        "entity": {"nif": nif, "name": nome, "cpvs_known": len(codigos_empresa)},
+        "buyers": compradores,
+        "gaps": lacunas,
+        "notes": notas,
     }
 
 

@@ -7,6 +7,8 @@ em **Portugal, Espanha e França** — o parâmetro `country` escolhe o índice:
 - `GET  /benchmark/meta`    — países, volumetria e anos disponíveis
 - `GET  /benchmark/cpv`     — CPV mais usados de um país (seletor), com descrição
 - `GET  /benchmark/entities`— entidades de um país no papel pedido (seletor)
+- `GET  /benchmark/anomalies`— anomalias de preço, concentração e qualidade do dado
+- `GET  /benchmark/gaps`     — oportunidades: CPV dos compradores que a entidade não serve
 - `GET  /benchmark/entity`  — preço de referência, concorrência, historial e oportunidades
 - `POST /benchmark/compare` — comparação de **até 10 empresas** no mesmo segmento
 - `GET  /benchmark/by-cpv`  — quadro por CPV com o volume/preço de cada país
@@ -302,6 +304,70 @@ def _alvos_do_pedido(params: Dict[str, Any]) -> List[Dict[str, str]]:
         ][:6]
     paises = ", ".join(bc.dialect(pais)["label"] for pais in params.get("countries") or [])
     return [{"name": f"Quadro por CPV — {paises}", "nif": params.get("cpv_code") or ""}]
+
+
+@router.get("/anomalies")
+def benchmark_anomalies(
+    nif: Optional[str] = Query(None, description="NIF/DIR3/SIRET da entidade (preferido)"),
+    name: Optional[str] = Query(None, description="Nome da entidade (usado quando não há identificador)"),
+    role: str = Query("adjudicatario", description="`adjudicatario` (vende) ou `adjudicante` (compra)"),
+    country: str = Query("pt", description="País dos dados: `pt`, `es` ou `fr`"),
+    cpv_code: Optional[str] = Query(None, description="CPV do segmento (prefixo aceite)"),
+    year_from: Optional[int] = Query(None, description="Ano inicial (inclusive)"),
+    year_to: Optional[int] = Query(None, description="Ano final (inclusive)"),
+    region: Optional[str] = Query(None, description="Região/NUTS ou distrito (conforme o país)"),
+    top_cpvs: int = Query(6, ge=1, le=20, description="Quantos CPV do perfil entram na leitura"),
+) -> Dict[str, Any]:
+    """Anomalias de preço e concentração: contratos acima do p90, preço vs mediana
+    do CPV, número de fornecedores por CPV e contratos com valores fora dos limites."""
+    if not (nif or (name or "").strip()):
+        raise HTTPException(status_code=422, detail="Indique a entidade por `nif` ou `name`.")
+    resultado = benchmark.benchmark_anomalies(
+        nif=nif,
+        name=name,
+        role=role,
+        country=country,
+        cpv_code=cpv_code,
+        year_from=year_from,
+        year_to=year_to,
+        region=region,
+        top_cpvs=top_cpvs,
+    )
+    if resultado.get("error"):
+        raise HTTPException(status_code=502, detail=str(resultado["error"]))
+    return resultado
+
+
+@router.get("/gaps")
+def benchmark_gaps(
+    nif: Optional[str] = Query(None, description="NIF/DIR3/SIRET da entidade (preferido)"),
+    name: Optional[str] = Query(None, description="Nome da entidade (usado quando não há identificador)"),
+    role: str = Query("adjudicatario", description="`adjudicatario` (vende) ou `adjudicante` (compra)"),
+    country: str = Query("pt", description="País dos dados: `pt`, `es` ou `fr`"),
+    year_from: Optional[int] = Query(None, description="Ano inicial (inclusive)"),
+    year_to: Optional[int] = Query(None, description="Ano final (inclusive)"),
+    region: Optional[str] = Query(None, description="Região/NUTS ou distrito (conforme o país)"),
+    top_buyers: int = Query(25, ge=2, le=60, description="Quantos compradores da entidade servem de base"),
+    size: int = Query(12, ge=1, le=40, description="Quantas oportunidades devolver"),
+) -> Dict[str, Any]:
+    """Onde a entidade pode vender mais: CPV que os seus compradores contratam e
+    onde ela não tem contratos no período (com mediana e quem já vende ali)."""
+    if not (nif or (name or "").strip()):
+        raise HTTPException(status_code=422, detail="Indique a entidade por `nif` ou `name`.")
+    resultado = benchmark.benchmark_gaps(
+        nif=nif,
+        name=name,
+        role=role,
+        country=country,
+        year_from=year_from,
+        year_to=year_to,
+        region=region,
+        top_buyers=top_buyers,
+        size=size,
+    )
+    if resultado.get("error"):
+        raise HTTPException(status_code=502, detail=str(resultado["error"]))
+    return resultado
 
 
 @router.get("/entity")
