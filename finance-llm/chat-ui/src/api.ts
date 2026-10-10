@@ -1300,6 +1300,20 @@ export async function downloadEntityProcessosReport(nif: string): Promise<Blob> 
   return res.blob();
 }
 
+/**
+ * **Dossiê da empresa**: identidade digital (site e logótipo), ficha recolhida
+ * por web + IA, leitura de risco (CIRE, citações, devedores, situação fiscal),
+ * processos, atos societários, contratos e CPV — tudo num só PDF.
+ */
+export async function downloadEntityDossie(nif: string): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/entities/${encodeURIComponent(nif)}/report-dossie.pdf`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao gerar o dossiê: ${res.status} - ${text}`);
+  }
+  return res.blob();
+}
+
 export async function getEntityStats(): Promise<EntityStats> {
   const res = await fetch(`${API_BASE}/entities/stats`);
   if (!res.ok) throw new Error(`Erro ao obter estatísticas de entidades: ${res.status}`);

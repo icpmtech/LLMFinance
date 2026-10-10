@@ -1300,6 +1300,9 @@ class CompanyDetail(CompanySummary):
     enrichment_web: Optional[Dict[str, Any]] = None
     enrichment_summary: Optional[Dict[str, Any]] = None
     enrichment_last_updated: Optional[str] = None
+    # Site oficial e logótipo da empresa (módulo `empresas_perfil`): vêm do
+    # Elasticsearch/cache, sem ir à rede — a ficha mostra a marca e a ligação.
+    perfil: Optional[Dict[str, Any]] = None
 
 
 class CompanySearchRequest(BaseModel):

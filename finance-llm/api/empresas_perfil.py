@@ -26,6 +26,7 @@ iniciais da empresa.
 from __future__ import annotations
 
 import asyncio
+import base64
 import io
 import json
 import logging
@@ -52,6 +53,13 @@ LOGOS_DIR = EMPRESAS_DIR / "logos"
 CONFIG_FILE = EMPRESAS_DIR / "config.json"
 
 PERFIL_VERSION = 1
+
+#: Índice do Elasticsearch com a mesma informação (é o que a ficha da empresa
+#: mostra e o que fica pesquisável, independentemente da máquina que resolveu).
+ES_INDEX = "empresas_perfil"
+#: Quantas vezes se tenta criar o índice na vida do processo.
+_es_preparado = False
+_cache_b64: Dict[str, str] = {}
 
 #: User-agent de browser: muitos sites devolvem 403 a clientes que se
 #: identificam como robô (e o que queremos é o HTML público normal).
@@ -535,6 +543,16 @@ def _pesquisa_web(pergunta: str, quantos: int = 8) -> List[Dict[str, str]]:
         logger.info("Pesquisa web falhou (%s): %s", pergunta, exc)
         _pesquisa_bloqueada_ate = time.monotonic() + PESQUISA_COOLDOWN
         return []
+    if not any(item.get("href") or item.get("url") for item in resultados if isinstance(item, dict)):
+        # O SearXNG respondeu mas sem resultados: os motores a montante podem
+        # estar bloqueados. Vale a pena tentar o DuckDuckGo antes de desistir
+        # (é o que falta para muitas empresas sem site identificado).
+        try:
+            alternativos = web_search(pergunta, max_results=quantos, source="duckduckgo") or []
+            if any(item.get("href") or item.get("url") for item in alternativos if isinstance(item, dict)):
+                resultados = alternativos
+        except Exception as exc:  # noqa: BLE001
+            logger.info("Alternativa DuckDuckGo falhou (%s): %s", pergunta, exc)
     limpos: List[Dict[str, str]] = []
     for item in resultados:
         if not isinstance(item, dict) or item.get("error"):
@@ -592,7 +610,14 @@ def _candidatos_heuristica(nome: str, pais: str) -> List[Dict[str, str]]:
     palavras = palavras_chave(nome)
     if not palavras:
         return []
+    # A marca distintiva nem sempre é a primeira palavra: em «Petróleos de
+    # Portugal - Petrogal» o domínio é `petrogal.pt`, e em «Grupo Ferreira —
+    # Construções» pode ser `ferreira.pt`. Por isso cada palavra do nome entra
+    # como base, da mais comprida para a mais curta depois da primeira.
     bases: List[str] = [palavras[0]]
+    for palavra in sorted(palavras[1:], key=len, reverse=True):
+        if len(palavra) >= 4:
+            bases.append(palavra)
     if len(palavras) >= 2:
         bases.append("".join(palavras[:3]))
         bases.append("-".join(palavras[:3]))
@@ -602,16 +627,23 @@ def _candidatos_heuristica(nome: str, pais: str) -> List[Dict[str, str]]:
     sufixos = [tld] if tld == "com" else [tld, "com"]
     saida: List[Dict[str, str]] = []
     vistos: set[str] = set()
+    bases_limpas: List[str] = []
     for base in bases:
         base = base.strip("-")
-        if len(base) < 3 or base in vistos:
-            continue
-        vistos.add(base)
-        for sufixo in sufixos:
+        if len(base) >= 3 and base not in vistos:
+            vistos.add(base)
+            bases_limpas.append(base)
+    # Uma passagem por sufixo e só depois as variantes `www`: assim o lote
+    # pequeno que vai a exame espalha-se pelos nomes prováveis em vez de gastar
+    # as vagas todas no primeiro (`cosmos.pt`, `cosmos.com` — e o nome completo
+    # ficava de fora).
+    for sufixo in sufixos:
+        for base in bases_limpas:
             saida.append({"url": f"https://{base}.{sufixo}", "titulo": "", "resumo": "", "origem": "heuristica"})
-        for sufixo in sufixos:
+    for sufixo in sufixos:
+        for base in bases_limpas:
             saida.append({"url": f"https://www.{base}.{sufixo}", "titulo": "", "resumo": "", "origem": "heuristica"})
-    return saida[:8]
+    return saida[:12]
 
 
 # ---------------------------------------------------------------------------
@@ -830,6 +862,30 @@ def _titulo_do_html(html: str) -> str:
 # ---------------------------------------------------------------------------
 # IA: escolher entre candidatos
 # ---------------------------------------------------------------------------
+def _fornecedor_com_chave(user_id: Optional[str]) -> Optional[str]:
+    """Primeiro fornecedor **cloud com chave** configurado.
+
+    `pick_provider` aceita fornecedores locais sem chave (`key_optional`), o que
+    numa máquina sem esse modelo instalado faria a arbitragem cair no Ollama
+    local — lento e, sem o modelo, inútil. Para escolher entre candidatos, um
+    modelo cloud com chave é a melhor opção; o local fica como recurso.
+    """
+    try:
+        from api import providers_service
+    except Exception:  # noqa: BLE001
+        return None
+    for spec in getattr(providers_service, "PROVIDERS", []):
+        if spec.get("key_optional"):
+            continue
+        try:
+            chave, _origem = providers_service.resolve_key(user_id, spec.get("id"))
+        except Exception:  # noqa: BLE001
+            continue
+        if chave:
+            return str(spec.get("id"))
+    return None
+
+
 def _pedir_ia(
     nome: str,
     nif: Optional[str],
@@ -847,7 +903,11 @@ def _pedir_ia(
     try:
         from api import scraper_ai
 
-        provider_id, spec, modelo_id, chave = scraper_ai.pick_provider(user_id, provider, modelo)
+        provider_id, spec, modelo_id, chave = scraper_ai.pick_provider(
+            user_id,
+            provider or _fornecedor_com_chave(user_id),
+            modelo,
+        )
     except Exception as exc:  # noqa: BLE001
         logger.info("Sem fornecedor de IA para identificar o site: %s", exc)
         return None
@@ -1327,13 +1387,19 @@ def _processar(
     if escolhido and escolhido["pontos"] < 0.3 and not (ia and ia.get("confianca", 0) >= 0.7):
         escolhido = None
 
+    # Um site proposto pela IA (sem páginas pontuadas) fica com a confiança que
+    # o próprio modelo declarou — mostrar 0% ao lado de um site escolhido pela
+    # IA era enganador.
+    confianca = round(escolhido["pontos"], 3) if escolhido else 0.0
+    if escolhido and escolhido.get("origem") == "ia" and not escolhido.get("pontos"):
+        confianca = round(float((ia or {}).get("confianca") or 0.0), 3)
     perfil: Dict[str, Any] = {
         "nome": nome,
         "nif": nif,
         "pais": pais,
         "site": escolhido["url"] if escolhido else None,
         "dominio": _dominio(escolhido["url"]) if escolhido else None,
-        "confianca": round(escolhido["pontos"], 3) if escolhido else 0.0,
+        "confianca": confianca,
         "motivo": escolhido.get("motivo") if escolhido else (ia.get("motivo") if ia else ""),
         "origem": escolhido.get("origem") if escolhido else ("pesquisa" if candidatos else "sem_candidatos"),
         "candidatos": [
@@ -1400,11 +1466,17 @@ def guardar_perfil(perfil: Dict[str, Any]) -> Dict[str, Any]:
             perfil.setdefault("logo", anterior["logo"])
         dados["perfis"][chave_perfil] = perfil
         _gravar(dados)
+    # O Elasticsearch é a cópia durável (a ficha da empresa lê de lá) — vai
+    # depois da cache local, para nunca atrasar a resposta do grafo.
+    try:
+        guardar_em_elastic(chave_perfil, perfil)
+    except Exception as exc:  # noqa: BLE001
+        logger.info("Perfil %s ficou só em cache local: %s", chave_perfil, exc)
     return perfil
 
 
 def obter(nif: Optional[str], nome: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """Perfil em cache (sem tocar na rede)."""
+    """Perfil (da cache local ou do Elasticsearch) — sem tocar na rede externa."""
     chave_perfil = chave(nif, nome)
     if not chave_perfil:
         return None
@@ -1414,6 +1486,15 @@ def obter(nif: Optional[str], nome: Optional[str] = None) -> Optional[Dict[str, 
         # Guardado pelo nome mas pedido pelo NIF (ou o contrário).
         with _lock:
             perfil = (_carregar()["perfis"] or {}).get(chave(None, nome))
+    if not perfil:
+        # Noutra máquina (ou depois de limpar os dados) o perfil vem do
+        # Elasticsearch, incluindo o logótipo, que se materializa em disco.
+        perfil = _ler_elastic(chave_perfil)
+        if perfil:
+            with _lock:
+                dados = _carregar()
+                dados["perfis"][chave_perfil] = perfil
+                _gravar(dados)
     if not perfil:
         return None
     return _publico(perfil, chave_perfil)
@@ -1438,6 +1519,174 @@ def _publico(perfil: Dict[str, Any], chave_perfil: str) -> Dict[str, Any]:
         "ia": perfil.get("ia"),
         "em_cache": True,
     }
+
+
+# ---------------------------------------------------------------------------
+# Elasticsearch (a mesma ficha, pesquisável e partilhada entre máquinas)
+# ---------------------------------------------------------------------------
+def _cliente_es() -> Any:
+    try:
+        from api.elasticsearch_client import get_es_client
+
+        return get_es_client(request_timeout=30)
+    except Exception as exc:  # noqa: BLE001
+        logger.info("Elasticsearch indisponível para os perfis: %s", exc)
+        return None
+
+
+def _preparar_es(client: Any) -> None:
+    """Cria o índice na primeira utilização (mapeamento explícito)."""
+    global _es_preparado
+    if _es_preparado:
+        return
+    try:
+        if not client.indices.exists(index=ES_INDEX):
+            client.indices.create(
+                index=ES_INDEX,
+                body={
+                    "mappings": {
+                        "properties": {
+                            "chave": {"type": "keyword"},
+                            "nif": {"type": "keyword"},
+                            "nome": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+                            "pais": {"type": "keyword"},
+                            "site": {"type": "keyword", "ignore_above": 1024},
+                            "dominio": {"type": "keyword"},
+                            "confianca": {"type": "float"},
+                            "origem": {"type": "keyword"},
+                            "motivo": {"type": "text"},
+                            "candidatos": {"type": "object", "enabled": False},
+                            "ia": {"type": "object", "enabled": False},
+                            "logo_tipo": {"type": "keyword"},
+                            "logo_fonte": {"type": "keyword", "ignore_above": 1024},
+                            "logo_bytes": {"type": "integer"},
+                            # O logótipo viaja com o documento (`binary` = base64):
+                            # assim uma instalação nova mostra as marcas sem
+                            # depender dos ficheiros locais.
+                            "logo_b64": {"type": "binary"},
+                            "atualizado": {"type": "date"},
+                        }
+                    }
+                },
+            )
+        _es_preparado = True
+    except Exception as exc:  # noqa: BLE001
+        logger.info("Não criei o índice %s: %s", ES_INDEX, exc)
+
+
+def _ler_ficheiro_b64(chave_perfil: str) -> Optional[tuple]:
+    """Bytes do logótipo em disco (para o copiar para o Elasticsearch)."""
+    caminho = caminho_logo(chave_perfil)
+    if not caminho:
+        return None
+    try:
+        return caminho.read_bytes(), caminho.suffix.lstrip(".").lower()
+    except OSError:
+        return None
+
+
+def guardar_em_elastic(chave_perfil: str, perfil: Dict[str, Any]) -> bool:
+    """Indexa o perfil (com o logótipo em base64). Falha sem estragar nada."""
+    if not chave_perfil or not perfil:
+        return False
+    client = _cliente_es()
+    if not client:
+        return False
+    _preparar_es(client)
+    documento: Dict[str, Any] = {
+        "chave": chave_perfil,
+        "nif": perfil.get("nif"),
+        "nome": perfil.get("nome"),
+        "pais": perfil.get("pais"),
+        "site": perfil.get("site"),
+        "dominio": perfil.get("dominio"),
+        "confianca": perfil.get("confianca") or 0.0,
+        "origem": perfil.get("origem"),
+        "motivo": perfil.get("motivo"),
+        "candidatos": perfil.get("candidatos") or [],
+        "ia": perfil.get("ia"),
+        "logo_fonte": perfil.get("logo_fonte"),
+        "logo_tipo": perfil.get("logo_tipo"),
+        "logo_bytes": perfil.get("logo_bytes"),
+        "atualizado": perfil.get("atualizado"),
+    }
+    ficheiro = _ler_ficheiro_b64(chave_perfil)
+    if ficheiro:
+        dados, extensao = ficheiro
+        documento["logo_b64"] = base64.b64encode(dados).decode("ascii")
+        documento["logo_tipo"] = extensao or documento.get("logo_tipo")
+        documento["logo_bytes"] = len(dados)
+    try:
+        client.index(index=ES_INDEX, id=chave_perfil, document=documento, refresh=False)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.info("Não indexei o perfil %s: %s", chave_perfil, exc)
+        return False
+
+
+def _ler_elastic(chave_perfil: str) -> Optional[Dict[str, Any]]:
+    """Perfil no Elasticsearch (materializa o logótipo em disco, se vier)."""
+    client = _cliente_es()
+    if not client:
+        return None
+    try:
+        fonte = client.get(index=ES_INDEX, id=chave_perfil)["_source"]
+    except Exception:  # noqa: BLE001 - 404 é o caso normal
+        return None
+    if not isinstance(fonte, dict):
+        return None
+    dados_b64 = fonte.pop("logo_b64", None)
+    if dados_b64:
+        try:
+            conteudo = base64.b64decode(dados_b64)
+            extensao = str(fonte.get("logo_tipo") or "png").lower()
+            _ensure_dirs()
+            for antigo in LOGOS_DIR.glob(f"{chave_perfil}.*"):
+                try:
+                    antigo.unlink()
+                except OSError:
+                    pass
+            (LOGOS_DIR / f"{chave_perfil}.{extensao}").write_bytes(conteudo)
+            fonte["logo"] = f"{chave_perfil}.{extensao}"
+        except Exception as exc:  # noqa: BLE001
+            logger.info("Logótipo de %s ilegível no Elasticsearch: %s", chave_perfil, exc)
+    return fonte
+
+
+def sincronizar_elastic(*, forcar: bool = False) -> Dict[str, Any]:
+    """Copia a cache local para o Elasticsearch (semente e reconciliação)."""
+    client = _cliente_es()
+    if not client:
+        return {"ok": False, "erro": "Elasticsearch indisponível"}
+    _preparar_es(client)
+    with _lock:
+        perfis = dict((_carregar()["perfis"] or {}))
+    enviados = 0
+    ignorados = 0
+    for chave_perfil, perfil in perfis.items():
+        if not forcar and chave_perfil in _cache_b64:
+            ignorados += 1
+            continue
+        # Ajuste de dados antigos: um site escolhido pela IA ficou com confiança
+        # 0 (antes de se passar a usar a confiança declarada pelo modelo) — a
+        # informação certa já estava no perfil, em `ia.confianca`.
+        if perfil.get("origem") == "ia" and not perfil.get("confianca"):
+            declarada = (perfil.get("ia") or {}).get("confianca")
+            if declarada:
+                perfil = {**perfil, "confianca": round(float(declarada), 3)}
+                with _lock:
+                    dados = _carregar()
+                    dados["perfis"][chave_perfil] = perfil
+                    _gravar(dados)
+        if guardar_em_elastic(chave_perfil, perfil):
+            enviados += 1
+        else:
+            ignorados += 1
+    try:
+        client.indices.refresh(index=ES_INDEX)
+    except Exception:  # noqa: BLE001
+        pass
+    return {"ok": True, "total": len(perfis), "enviados": enviados, "ignorados": ignorados}
 
 
 def resolver(

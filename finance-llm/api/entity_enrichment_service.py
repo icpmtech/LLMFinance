@@ -117,22 +117,52 @@ async def _ask_structured_fields(
     page_excerpt = "\n\n".join((page_texts or [])[:3])[:6000]
     prompt = f"""
     A partir das fontes abaixo, extrai um JSON válido com estes campos:
+
+    Identificação
     - entity_name (string)
-    - legal_name (string ou null)
+    - legal_name (string ou null: firma registada, se for diferente do nome comercial)
+    - legal_form (string ou null: "Lda", "S.A.", "Unipessoal Lda", "Sociedade por quotas", …)
     - country (string)
     - status (string: active, unknown, inactive)
-    - description (string)
+    - description (string: 2 a 4 frases sobre o que a empresa faz)
+    - founded_year (número ou null: ano de constituição)
+    - nif (string)
+
+    Dados económicos (só quando aparecem explicitamente)
+    - share_capital (string ou null: capital social, como está escrito, ex.: "50 000 EUR")
+    - employees_band (string ou null: escalão, ex.: "10-49", "50-249")
+    - revenue_band (string ou null: volume de negócios/resultado, ex.: "1,2 M EUR (2023)")
+    - size_class (string ou null: micro, pequena, média, grande)
+
+    Atividade
     - cae (string ou null: código CAE/CIRS, só o número, ex.: "21200")
     - cae_description (string ou null: descrição da atividade económica do CAE)
-    - contacts (lista de strings)
-    - addresses (lista de strings)
-    - brands (lista de strings)
+    - cae_secondary (lista de strings: outros CAE, com descrição se houver)
+    - activities (lista de strings: áreas de atividade em linguagem simples)
+    - products_services (lista de strings: produtos e serviços)
+    - certifications (lista de strings: certificações, alvarás, licenças, registos)
+
+    Contactos e localização
+    - contacts (lista de strings: como aparecem na fonte)
+    - emails (lista de strings: endereços de email, sem duplicados)
+    - phones (lista de strings: telefones, com indicativo quando houver)
+    - website (string ou null: site oficial da própria empresa)
+    - socials (objeto: {{"linkedin": string|null, "facebook": string|null, "instagram": string|null, "youtube": string|null, "x": string|null}})
+    - addresses (lista de strings: moradas como aparecem na fonte)
+    - address (objeto ou null: {{"street": string|null, "postal_code": string|null, "city": string|null, "region": string|null, "country": string|null}})
+
+    Relações e notas
+    - brands (lista de strings: marcas/firmas conhecidas)
     - parent_company (string ou null)
     - related_entities (lista de objetos com {{"name": string, "kind": string, "evidence": string}})
+    - public_flags (lista de strings: factos públicos relevantes — insolvência, PER, dívidas, processos — só se a fonte o disser)
     - notes (lista de strings)
 
     Atenção: não inventes dados. Se não houver informação explícita, usa [] ou null.
     O CAE aparece em sites como Racius/eInforma sob «CAE» ou «Atividade principal».
+    O capital social aparece em fichas registais sob «Capital Social». Preenche `size_class`
+    (micro/pequena/média/grande) só quando o número de trabalhadores ou o volume constarem.
+    Preenche `website` apenas com o domínio da própria empresa (não com diretórios).
 
     Empresa: {name}
     NIF: {nif}
@@ -146,7 +176,7 @@ async def _ask_structured_fields(
         backend,
         system="És um analista de empresas. Devolves apenas JSON válido em português de Portugal.",
         prompt=prompt,
-        max_tokens=2000,
+        max_tokens=2600,
         temperature=0.1,
     )
     text = str(raw or "").strip()
@@ -1166,6 +1196,180 @@ def build_entity_processos_pdf(nif: str) -> Optional[str]:
     )
 
 
+#: Nível de risco atribuído ao dossiê, a partir dos sinais públicos.
+_RISCO_GRAUS = ("baixo", "moderado", "elevado")
+
+
+def _risco_da_empresa(dados: Dict[str, Any]) -> Dict[str, Any]:
+    """Lê os sinais públicos e devolve o grau de risco e o porquê.
+
+    Os sinais vêm do que o IQ OS já recolhe: **CIRE** (insolvências e
+    revitalizações), citações/notificações por editais, listas públicas de
+    devedores das Finanças e da Segurança Social, e a presença nos contratos.
+    O grau é uma leitura simples e explicável — não substitui a análise de
+    crédito, mas diz o que pesou.
+    """
+    sinais: List[str] = []
+    pontos = 0
+
+    cire = dados.get("cire") or {}
+    insolvencias = int(cire.get("insolvencias") or cire.get("total_insolvencias") or 0)
+    per = int(cire.get("per") or cire.get("revitalizacoes") or cire.get("total_per") or 0)
+    total_cire = int(cire.get("total") or 0)
+    if insolvencias or (total_cire and not insolvencias and not per):
+        pontos += 3
+        sinais.append(f"processo de insolvência publicado no CIRE ({insolvencias or total_cire})")
+    if per:
+        pontos += 2
+        sinais.append(f"processo especial de revitalização ({per})")
+
+    citacoes = dados.get("citacoes") or {}
+    total_citacoes = int(citacoes.get("total") or 0)
+    if total_citacoes:
+        pontos += 1 if total_citacoes < 5 else 2
+        sinais.append(f"{total_citacoes} citação(ões)/notificação(ões) por editais")
+
+    devedores = dados.get("devedores") or {}
+    listas = devedores.get("listas") if isinstance(devedores, dict) else None
+    if devedores and (listas or devedores.get("total")):
+        pontos += 3
+        nomes = []
+        if isinstance(listas, list):
+            nomes = [str(item.get("lista") or item) for item in listas][:3]
+        sinais.append(
+            "consta em listas públicas de devedores"
+            + (f" ({', '.join(nomes)})" if nomes else "")
+        )
+
+    fiscal = dados.get("fiscal")
+    if isinstance(fiscal, dict) and fiscal.get("situacao") and "regular" not in str(fiscal.get("situacao")).lower():
+        pontos += 1
+        sinais.append(f"situação fiscal: {fiscal.get('situacao')}")
+
+    if not dados.get("contracts_total"):
+        pontos += 1
+        sinais.append("sem contratos públicos indexados")
+
+    if pontos >= 5:
+        grau = "elevado"
+    elif pontos >= 2:
+        grau = "moderado"
+    else:
+        grau = "baixo"
+    return {
+        "grau": grau,
+        "pontos": pontos,
+        "sinais": sinais or ["sem sinais públicos relevantes nas fontes consultadas"],
+    }
+
+
+def _dossie_marca_blocks(nif: str, nome: str) -> List[Dict[str, Any]]:
+    """Bloco com o site oficial e o logótipo identificados para a empresa."""
+    try:
+        from api import empresas_perfil
+
+        perfil = empresas_perfil.obter(nif, nome) or {}
+    except Exception as exc:  # noqa: BLE001
+        logger.info("Dossiê de %s: sem perfil (%s)", nif, exc)
+        return []
+    if not perfil:
+        return []
+    linhas = [
+        ["Site oficial", perfil.get("site") or "não identificado"],
+        ["Domínio", perfil.get("dominio") or "—"],
+        ["Confiança", f"{round(float(perfil.get('confianca') or 0) * 100)}%"],
+        ["Origem", perfil.get("origem") or "—"],
+        ["Logótipo", "obtido" if perfil.get("logo_url") else "não encontrado"],
+        ["Atualizado", str(perfil.get("atualizado") or "—")[:19].replace("T", " ")],
+    ]
+    if perfil.get("motivo"):
+        linhas.append(["Como foi escolhido", str(perfil.get("motivo"))[:160]])
+    return [{"title": "Identidade digital (site e logótipo)", "columns": ["Item", "Valor"], "rows": linhas}]
+
+
+def _dossie_risco_blocks(dados: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Bloco de risco: grau, sinais que o sustentam e o que o faria mudar."""
+    risco = _risco_da_empresa(dados)
+    linhas = [
+        ["Grau de risco", str(risco["grau"]).upper()],
+        ["Sinais encontrados", str(len(risco["sinais"]))],
+    ]
+    blocos: List[Dict[str, Any]] = [
+        {"title": "Leitura de risco", "columns": ["Indicador", "Valor"], "rows": linhas},
+        {"title": "Sinais considerados", "columns": ["Sinal"], "rows": [[s] for s in risco["sinais"]]},
+    ]
+    return blocos
+
+
+def build_entity_dossie_pdf(nif: str) -> Optional[str]:
+    """**Dossiê da empresa**: tudo o que o IQ OS sabe, num só PDF.
+
+    Junta, por esta ordem: identificação e marca (site/logótipo), ficha do
+    enriquecimento por IA (descrição, contactos, morada, dimensão, atividade e
+    certificações), **leitura de risco** (com o CIRE, citações, devedores e
+    situação fiscal), processos e insolvências em detalhe, atos societários,
+    contratos e CPV, relações e fontes.
+
+    É o relatório «tudo sobre a empresa» da ficha — distingue-se do relatório de
+    processos (que é focado no risco) por trazer também a identidade e a
+    atividade recolhidas por web + IA.
+    """
+    from api.elasticsearch_client import ENTITIES_INDEX, ensure_indices
+
+    try:
+        dados = _processos_dados(nif)
+    except Exception:  # noqa: BLE001
+        logger.exception("Dossiê de %s falhou a recolher os processos", nif)
+        dados = {"nif": nif, "erros": ["processos"]}
+
+    nome = str(dados.get("name") or nif)
+
+    # Enriquecimento web/IA guardado na ficha da entidade.
+    payload: Dict[str, Any] = {}
+    client = get_es_client(request_timeout=30)
+    if client is not None:
+        try:
+            ensure_indices(client)
+            doc = client.get(index=ENTITIES_INDEX, id=f"{ENTITIES_INDEX}:{nif}")["_source"]
+            payload = dict(doc.get("enrichment_web") or {})
+            nome = str(doc.get("name") or payload.get("entity_name") or nome)
+        except Exception as exc:  # noqa: BLE001 - o dossiê sai sem o enriquecimento
+            logger.info("Dossiê de %s: sem enriquecimento guardado (%s)", nif, exc)
+
+    try:
+        from api.elasticsearch_client import get_entity_relations
+
+        relacoes = get_entity_relations(nif)
+        if relacoes.get("items"):
+            payload["relations"] = relacoes["items"]
+    except Exception as exc:  # noqa: BLE001
+        logger.info("Dossiê de %s: sem relações (%s)", nif, exc)
+
+    blocos: List[Dict[str, Any]] = []
+    blocos += _dossie_marca_blocks(nif, nome)
+    blocos += _entity_report_blocks(payload) if payload else []
+    blocos += _dossie_risco_blocks(dados)
+    blocos += _processos_blocks(dados)
+
+    notas = list(NOTAS_LEGAIS_PROCESSOS)
+    notas.insert(
+        0,
+        "<b>Dossiê da empresa.</b> Reúne a ficha recolhida por pesquisa web e IA, a identidade "
+        "digital (site e logótipo) e a leitura de risco a partir de fontes públicas. Os campos "
+        "marcados como «não identificado» não foram encontrados nas fontes consultadas — não "
+        "significam que a informação não exista.",
+    )
+    return _generate_pdf_report(
+        str(dados.get("nif") or nif),
+        nome,
+        payload,
+        titulo=f"Dossiê da empresa — {nome}",
+        notas=notas,
+        prefixo="dossie",
+        blocos=blocos,
+    )
+
+
 async def enrich_entity(nif: str, payload: Optional[Dict[str, Any]] = None, session: Any = None) -> Dict[str, Any]:
     """Enriquece uma entidade com web, scraping e IA, guardando resultado no Elasticsearch.
 
@@ -1229,20 +1433,67 @@ async def enrich_entity(nif: str, payload: Optional[Dict[str, Any]] = None, sess
     facts.setdefault("parent_company", None)
     facts.setdefault("related_entities", [])
     facts.setdefault("notes", [])
+    # Campos novos: quando o modelo os traz, completam-se uns aos outros (a lista
+    # simples de contactos passa a incluir emails e telefones).
+    emails = [str(x).strip() for x in (facts.get("emails") or []) if str(x).strip()]
+    phones = [str(x).strip() for x in (facts.get("phones") or []) if str(x).strip()]
+    contactos = [str(x).strip() for x in (facts.get("contacts") or []) if str(x).strip()]
+    for extra in [*emails, *phones]:
+        if extra not in contactos:
+            contactos.append(extra)
+    facts["contacts"] = contactos
+    for campo, vazio in (
+        ("emails", []),
+        ("phones", []),
+        ("cae_secondary", []),
+        ("activities", []),
+        ("products_services", []),
+        ("certifications", []),
+        ("public_flags", []),
+        ("legal_form", None),
+        ("founded_year", None),
+        ("share_capital", None),
+        ("employees_band", None),
+        ("revenue_band", None),
+        ("size_class", None),
+        ("address", None),
+        ("socials", {}),
+        ("website", None),
+    ):
+        facts.setdefault(campo, vazio)
+    if not str(facts.get("website") or "").strip():
+        facts["website"] = None
 
     combined = {
         "entity_name": facts.get("entity_name") or base_name or nif,
         "nif": nif,
         "country": facts.get("country") or "Portugal",
         "status": facts.get("status") or "unknown",
+        "legal_name": facts.get("legal_name"),
+        "legal_form": facts.get("legal_form"),
+        "founded_year": facts.get("founded_year"),
         "description": facts.get("description") or "",
         "cae": facts.get("cae") or None,
         "cae_description": facts.get("cae_description") or None,
+        "cae_secondary": facts.get("cae_secondary") or [],
+        "share_capital": facts.get("share_capital"),
+        "employees_band": facts.get("employees_band"),
+        "revenue_band": facts.get("revenue_band"),
+        "size_class": facts.get("size_class"),
+        "activities": facts.get("activities") or [],
+        "products_services": facts.get("products_services") or [],
+        "certifications": facts.get("certifications") or [],
         "contacts": facts.get("contacts") or [],
+        "emails": facts.get("emails") or [],
+        "phones": facts.get("phones") or [],
+        "website": facts.get("website"),
+        "socials": facts.get("socials") or {},
         "addresses": facts.get("addresses") or [],
+        "address": facts.get("address"),
         "brands": facts.get("brands") or [],
         "parent_company": facts.get("parent_company"),
         "related_entities": facts.get("related_entities") or [],
+        "public_flags": facts.get("public_flags") or [],
         "notes": facts.get("notes") or [],
         "sources": search_results,
         "page_text_chars": sum(len(text) for text in page_texts),
@@ -1261,9 +1512,45 @@ async def enrich_entity(nif: str, payload: Optional[Dict[str, Any]] = None, sess
         "contact_count": len(combined.get("contacts") or []),
         "address_count": len(combined.get("addresses") or []),
         "brand_count": len(combined.get("brands") or []),
+        "email_count": len(combined.get("emails") or []),
+        "phone_count": len(combined.get("phones") or []),
+        "activity_count": len(combined.get("activities") or []),
+        "certification_count": len(combined.get("certifications") or []),
         "related_count": len(combined.get("related_entities") or []),
     })
     combined["summary"] = summary
+
+    # Marca da empresa: site oficial e logótipo (`api.empresas_perfil`). Corre
+    # **antes** de gravar, para o documento de enriquecimento levar também o
+    # site, o domínio e o endereço do logótipo. O perfil fica no índice
+    # `empresas_perfil` do Elasticsearch (mais a cache local) e é o que a ficha
+    # da empresa mostra sem ir à rede.
+    perfil: Optional[Dict[str, Any]] = None
+    try:
+        from api import empresas_perfil
+
+        pais = "pt"
+        origem_pais = str(combined.get("country") or "").lower()
+        if origem_pais.startswith("es") or "espanha" in origem_pais:
+            pais = "es"
+        elif origem_pais.startswith("fr") or "fran" in origem_pais:
+            pais = "fr"
+        perfil = empresas_perfil.resolver(
+            base_name or nif,
+            nif,
+            pais,
+            usar_ia=True,
+            forcar=True,
+            user_id=getattr(getattr(session, "user", None), "id", None),
+        )
+        if perfil:
+            combined["site"] = perfil.get("site")
+            combined["dominio"] = perfil.get("dominio")
+            combined["logo_url"] = perfil.get("logo_url")
+            if perfil.get("site"):
+                summary["site"] = perfil.get("site")
+    except Exception as exc:  # noqa: BLE001 - a marca é um extra, nunca falha a ficha
+        logger.warning("Falha ao obter o site/logótipo de %s: %s", nif, exc)
 
     saved = _save_entity_doc(nif, base_name or nif, combined, summary)
 
@@ -1324,6 +1611,8 @@ async def enrich_entity(nif: str, payload: Optional[Dict[str, Any]] = None, sess
         "related_entities_count": len(combined.get("related_entities") or []),
         "sources_count": len(search_results),
         "pages_scraped": len(page_texts),
+        "site": (perfil or {}).get("site"),
+        "logo": bool((perfil or {}).get("logo_url")),
     }
     return {
         "nif": nif,

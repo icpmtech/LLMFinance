@@ -111,6 +111,21 @@ def estatisticas() -> Dict[str, Any]:
     return perfil.stats()
 
 
+@router.post("/sincronizar", summary="Copiar a cache de perfis para o Elasticsearch (sessão)")
+def sincronizar(
+    session: Annotated[Any, Depends(require_session)],
+    forcar: bool = False,
+) -> Dict[str, Any]:
+    """Semeia o índice `empresas_perfil` com o que já está resolvido.
+
+    Serve depois de limpar o Elasticsearch, ou para levar para lá os perfis que
+    só existiam na cache local (ficam pesquisáveis e disponíveis em qualquer
+    máquina).
+    """
+    resultado = perfil.sincronizar_elastic(forcar=forcar)
+    return {**resultado, "stats": perfil.stats()}
+
+
 @router.get("/lista", summary="Perfis conhecidos (backoffice)")
 def listar(
     limite: Annotated[int, Query(ge=1, le=1000)] = 200,

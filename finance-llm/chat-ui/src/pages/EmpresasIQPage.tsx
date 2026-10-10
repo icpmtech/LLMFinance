@@ -23,6 +23,11 @@ import {
   FolderPlus,
   GitBranch,
   GitCompare,
+  Globe,
+  CalendarClock,
+  Mail,
+  Phone,
+  Link2,
   Grid3x3,
   HandCoins,
   Heart,
@@ -103,6 +108,7 @@ import {
   downloadContractReport,
   downloadEntityReport,
   downloadEntityProcessosReport,
+  downloadEntityDossie,
   enrichEntity,
   getEntityRelations,
 } from "../api";
@@ -131,6 +137,8 @@ import { getRecolhaFicheiro, getRecolhaJob, getRecolhaJobs, obterDadosEmpresa, p
 import type { RecolhaJob } from "../societarioRecolhaApi";
 import { GraphCanvas } from "../components/graph/GraphCanvas";
 import { toStudioGraph, type GraphMetric, type StudioNode } from "../components/graph/graphStudio";
+import EmpresaLogo from "../components/benchmark/EmpresaLogo";
+import { siteDe, usePerfisEmpresas } from "../components/benchmark/usePerfisEmpresas";
 import type {
   CompanyAnalyticsResponse,
   CompanyContractsResponse,
@@ -6670,6 +6678,32 @@ function AnalysisSection({
 const asTextList = (value: unknown): string[] =>
   Array.isArray(value) ? value.map((v) => String(v ?? "").trim()).filter(Boolean) : [];
 
+/** Linha «etiqueta · valor» dos dados estruturados do enriquecimento. */
+function Linha({ label, valor }: { label: string; valor: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-1.5">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="truncate font-medium">{valor}</span>
+    </div>
+  );
+}
+
+/** Lista curta com título (atividade, produtos, certificações). */
+function Lista({ titulo, itens }: { titulo: string; itens: string[] }) {
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-wider text-muted-foreground">{titulo}</p>
+      <ul className="mt-1 space-y-0.5">
+        {itens.slice(0, 8).map((item) => (
+          <li key={item} className="text-foreground/90">
+            • {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /**
  * Cartão «Presença web & IA»: mostra o que a pesquisa web + scraper + IA
  * guardaram na entidade (`enrichment_web`). Sem dados, não desenha nada.
@@ -6694,6 +6728,36 @@ export function EntityEnrichmentCard({
   const contacts = asTextList(data.contacts);
   const brands = asTextList(data.brands);
   const notes = asTextList(data.notes);
+  // Campos ricos (identificação, dimensão, atividade, contactos ligáveis).
+  const legalForm = String(data.legal_form ?? "").trim();
+  const legalName = String(data.legal_name ?? "").trim();
+  const foundedYear = String(data.founded_year ?? "").trim();
+  const shareCapital = String(data.share_capital ?? "").trim();
+  const employeesBand = String(data.employees_band ?? "").trim();
+  const revenueBand = String(data.revenue_band ?? "").trim();
+  const sizeClass = String(data.size_class ?? "").trim();
+  const website = String(data.website ?? "").trim();
+  const emails = asTextList(data.emails);
+  const phones = asTextList(data.phones);
+  const caeSecondary = asTextList(data.cae_secondary);
+  const activities = asTextList(data.activities);
+  const products = asTextList(data.products_services);
+  const certifications = asTextList(data.certifications);
+  const publicFlags = asTextList(data.public_flags);
+  const socials = (data.socials && typeof data.socials === "object" ? data.socials : {}) as Record<string, unknown>;
+  const socialLinks = Object.entries(socials)
+    .map(([rede, url]) => ({ rede, url: String(url ?? "").trim() }))
+    .filter((item) => item.url);
+  const endereco = (data.address && typeof data.address === "object" ? data.address : {}) as Record<string, unknown>;
+  const morada = [
+    String(endereco.street ?? "").trim(),
+    String(endereco.postal_code ?? "").trim(),
+    String(endereco.city ?? "").trim(),
+    String(endereco.region ?? "").trim(),
+    String(endereco.country ?? "").trim(),
+  ]
+    .filter(Boolean)
+    .join(", ");
   const sources = Array.isArray(data.sources) ? (data.sources as Record<string, unknown>[]) : [];
   const related = Array.isArray(data.related_entities)
     ? (data.related_entities as Record<string, unknown>[])
@@ -6703,13 +6767,24 @@ export function EntityEnrichmentCard({
 
   const chips = [
     status && status !== "unknown" ? { label: `Estado: ${status}`, icon: Info } : null,
+    legalForm ? { label: legalForm, icon: Building2 } : null,
+    foundedYear ? { label: `Desde ${foundedYear}`, icon: CalendarClock } : null,
+    sizeClass ? { label: `Dimensão: ${sizeClass}`, icon: Users } : null,
     country ? { label: country, icon: MapPin } : null,
     cae ? { label: `CAE ${cae}${caeDescription ? ` — ${caeDescription}` : ""}`, icon: Briefcase } : null,
     parent ? { label: `Grupo: ${parent}`, icon: Building2 } : null,
   ].filter(Boolean) as { label: string; icon: React.ElementType }[];
 
   const emptyEverything =
-    !description && chips.length === 0 && addresses.length === 0 && contacts.length === 0 && brands.length === 0;
+    !description &&
+    chips.length === 0 &&
+    addresses.length === 0 &&
+    contacts.length === 0 &&
+    emails.length === 0 &&
+    phones.length === 0 &&
+    brands.length === 0 &&
+    activities.length === 0 &&
+    !morada;
 
   return (
     <Card>
@@ -6822,6 +6897,85 @@ export function EntityEnrichmentCard({
           ))}
         </ul>
       )}
+
+      {publicFlags.length > 0 && (
+        <ul className="mt-3 space-y-1 text-xs text-amber-200">
+          {publicFlags.map((flag) => (
+            <li key={flag} className="flex items-start gap-2 rounded-xl border border-amber-400/25 bg-amber-400/5 px-2 py-1">
+              <AlertCircle size={12} className="mt-0.5 shrink-0" /> {flag}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {(legalName || shareCapital || employeesBand || revenueBand) && (
+        <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+          {legalName && legalName !== String(data.entity_name ?? "") ? (
+            <Linha label="Firma" valor={legalName} />
+          ) : null}
+          {shareCapital ? <Linha label="Capital social" valor={shareCapital} /> : null}
+          {employeesBand ? <Linha label="Trabalhadores" valor={employeesBand} /> : null}
+          {revenueBand ? <Linha label="Volume de negócios" valor={revenueBand} /> : null}
+        </div>
+      )}
+
+      {morada ? (
+        <div className="mt-3 text-sm">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Sede</p>
+          <p className="mt-1 flex items-start gap-2 text-foreground/90">
+            <MapPin size={13} className="mt-0.5 shrink-0 text-teal-300" /> {morada}
+          </p>
+        </div>
+      ) : null}
+
+      {(emails.length > 0 || phones.length > 0 || website || socialLinks.length > 0) && (
+        <div className="mt-3 text-sm">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Contactos diretos</p>
+          <ul className="mt-1 space-y-1">
+            {website ? (
+              <li className="flex items-center gap-2">
+                <Globe size={13} className="shrink-0 text-teal-300" />
+                <a href={website} target="_blank" rel="noreferrer" className="text-teal-300 hover:underline break-all">
+                  {website.replace(/^https?:\/\/(www\.)?/, "")}
+                </a>
+              </li>
+            ) : null}
+            {emails.map((email) => (
+              <li key={email} className="flex items-center gap-2">
+                <Mail size={13} className="shrink-0 text-teal-300" />
+                <a href={`mailto:${email}`} className="text-teal-300 hover:underline break-all">
+                  {email}
+                </a>
+              </li>
+            ))}
+            {phones.map((telefone) => (
+              <li key={telefone} className="flex items-center gap-2">
+                <Phone size={13} className="shrink-0 text-teal-300" />
+                <a href={`tel:${telefone.replace(/[^\d+]/g, "")}`} className="text-teal-300 hover:underline">
+                  {telefone}
+                </a>
+              </li>
+            ))}
+            {socialLinks.map((rede) => (
+              <li key={rede.rede} className="flex items-center gap-2">
+                <Link2 size={13} className="shrink-0 text-teal-300" />
+                <a href={rede.url} target="_blank" rel="noreferrer" className="text-teal-300 hover:underline break-all">
+                  {rede.rede}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {activities.length > 0 || products.length > 0 || caeSecondary.length > 0 || certifications.length > 0 ? (
+        <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+          {activities.length > 0 ? <Lista titulo="Áreas de atividade" itens={activities} /> : null}
+          {products.length > 0 ? <Lista titulo="Produtos e serviços" itens={products} /> : null}
+          {caeSecondary.length > 0 ? <Lista titulo="Outros CAE" itens={caeSecondary} /> : null}
+          {certifications.length > 0 ? <Lista titulo="Certificações e registos" itens={certifications} /> : null}
+        </div>
+      ) : null}
 
       {showSources && sources.length > 0 && (
         <ul className="mt-3 space-y-2 border-t border-white/10 pt-3 text-xs">
@@ -7036,7 +7190,27 @@ export function EntityDetailPanel({
   const [relations, setRelations] = useState<EntityRelationsResponse | null>(null);
   const [aGerarRelatorio, setAGerarRelatorio] = useState(false);
   const [aGerarProcessos, setAGerarProcessos] = useState(false);
+  /** Geração do dossiê completo (ficha + marca + risco com CIRE). */
+  const [aGerarDossie, setAGerarDossie] = useState(false);
   const { recordVisit } = useWorkspace();
+
+  /**
+   * Marca da empresa: site oficial e logótipo (módulo `/empresas/perfil`).
+   * A cache do servidor (e o Elasticsearch) respondem logo; se ainda não
+   * houver perfil, procura-se em segundo plano. O botão «Enriquecer» pede
+   * também a marca e esta volta a ler o resultado.
+   */
+  const {
+    perfis,
+    aResolver: marcaAResolver,
+    progresso: progressoMarca,
+    repetir: repetirMarca,
+  } = usePerfisEmpresas(
+    useMemo(() => [{ nif, nome: company?.name }], [nif, company?.name]),
+    { ativo: Boolean(nif) },
+  );
+  const siteEmpresa = siteDe(perfis, { nif, nome: company?.name });
+  const perfilEmpresa = perfis[nif];
 
   useEffect(() => {
     let cancelled = false;
@@ -7412,6 +7586,8 @@ export function EntityDetailPanel({
       // Recarrega a ficha para mostrar os dados novos.
       const d = await getCompanyDetail(nif);
       setCompany(d);
+      // A marca (site e logótipo) também foi revista neste enriquecimento.
+      repetirMarca();
       // As relações novas só aparecem depois de recarregar a ontologia.
       try {
         setRelations(await getEntityRelations(nif));
@@ -7424,7 +7600,7 @@ export function EntityDetailPanel({
     } finally {
       setEnriching(false);
     }
-  }, [nif]);
+  }, [nif, repetirMarca]);
 
   /** Descarrega o relatório PDF da entidade (enriquecimento + CPV + relações). */
   const handleDownloadReport = useCallback(async () => {
@@ -7445,6 +7621,31 @@ export function EntityDetailPanel({
       setEnrichError(err instanceof Error ? err.message : "Erro ao gerar o relatório PDF");
     } finally {
       setAGerarRelatorio(false);
+    }
+  }, [nif]);
+
+  /**
+   * **Dossiê da empresa** (PDF): identidade digital, ficha web + IA, leitura de
+   * risco com o CIRE, processos, atos societários, contratos e CPV.
+   */
+  const handleDownloadDossie = useCallback(async () => {
+    setAGerarDossie(true);
+    setEnrichError(null);
+    try {
+      const blob = await downloadEntityDossie(nif);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `dossie_${nif}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setEnrichMessage("Dossiê da empresa gerado e descarregado.");
+    } catch (err) {
+      setEnrichError(err instanceof Error ? err.message : "Erro ao gerar o dossiê da empresa");
+    } finally {
+      setAGerarDossie(false);
     }
   }, [nif]);
 
@@ -7530,6 +7731,15 @@ export function EntityDetailPanel({
             Relatório PDF
           </button>
           <button
+            onClick={handleDownloadDossie}
+            disabled={aGerarDossie}
+            title="Dossiê completo: identidade digital, ficha (web + IA), risco com CIRE, processos, atos societários e contratos"
+            className="px-3 py-1.5 rounded-full glass-card text-sm text-amber-300 hover:text-amber-200 transition flex items-center gap-2 disabled:opacity-60"
+          >
+            {aGerarDossie ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+            Dossiê da empresa
+          </button>
+          <button
             onClick={handleDownloadProcessosReport}
             disabled={aGerarProcessos}
             title="Relatório de processos: insolvências/PER, processos judiciais, situação fiscal e atos societários"
@@ -7571,16 +7781,44 @@ export function EntityDetailPanel({
 
       <Card>
         <div className="flex items-center gap-4">
-          <div className="p-3 rounded-2xl bg-gradient-to-br from-teal-500/20 via-blue-500/15 to-rose-500/10 border border-white/10">
-            <Building2 size={36} className="text-teal-300" />
-          </div>
-          <div>
+          <EmpresaLogo
+            nome={company.name}
+            nif={nif}
+            logoUrl={perfilEmpresa?.logo_url}
+            size={72}
+            titulo={siteEmpresa ? `${company.name} · ${siteEmpresa}` : company.name}
+          />
+          <div className="min-w-0">
             <h2 className="text-2xl font-bold">{company.name}</h2>
             <div className="flex flex-wrap items-center gap-2 mt-2 text-sm text-muted-foreground">
               {company.nif && <Badge>NIF {company.nif}</Badge>}
               {company.normalized_name && company.normalized_name !== company.name && (
                 <span>{company.normalized_name}</span>
               )}
+              {siteEmpresa ? (
+                <a
+                  href={siteEmpresa}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sky-300 hover:text-sky-200 transition"
+                  title={`Site oficial: ${siteEmpresa}`}
+                >
+                  <Globe size={13} />
+                  {siteEmpresa.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}
+                </a>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-muted-foreground/80">
+                  <Globe size={13} />
+                  {marcaAResolver > 0 ? "à procura do site…" : "sem site identificado — use Enriquecer"}
+                </span>
+              )}
+              {perfilEmpresa?.confianca !== undefined && perfilEmpresa?.site ? (
+                <span className="text-[11px] opacity-70" title={perfilEmpresa.motivo ?? undefined}>
+                  confiança {Math.round((perfilEmpresa.confianca || 0) * 100)}%
+                  {perfilEmpresa.origem ? ` · ${perfilEmpresa.origem}` : ""}
+                </span>
+              ) : null}
+              {progressoMarca.total > 0 && marcaAResolver > 0 ? <Loader2 size={13} className="animate-spin" /> : null}
             </div>
           </div>
         </div>

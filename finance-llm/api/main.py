@@ -940,6 +940,15 @@ def companies_detail(request: Request, nif: str, year: Optional[int] = Query(Non
     except Exception as exc:
         logging.getLogger(__name__).warning(f"Falha ao ler timeline societária de {nif}: {exc}")
 
+    # Site oficial e logótipo (módulo de perfis): só cache/Elasticsearch, para a
+    # ficha abrir depressa. A procura a sério é feita no «Enriquecer».
+    try:
+        from api import empresas_perfil as perfis
+
+        company["perfil"] = perfis.obter(nif, company_name)
+    except Exception as exc:
+        logging.getLogger(__name__).warning(f"Falha ao ler o perfil de {nif}: {exc}")
+
     return CompanyDetail(**company)
 
 
@@ -1524,6 +1533,25 @@ def entities_report_processos_pdf(nif: str):
         _Path(path),
         media_type="application/pdf",
         filename=f"processos_{nif}.pdf",
+    )
+
+
+@app.get("/entities/{nif}/report-dossie.pdf")
+def entities_report_dossie_pdf(nif: str):
+    """Dossiê completo da empresa: ficha (web + IA), marca, risco com CIRE, processos e contratos."""
+    from api.entity_enrichment_service import build_entity_dossie_pdf
+    from pathlib import Path as _Path
+
+    try:
+        path = build_entity_dossie_pdf(nif)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar o dossiê: {exc}")
+    if not path or not _Path(path).exists():
+        raise HTTPException(status_code=502, detail="Não foi possível gerar o dossiê PDF.")
+    return FileResponse(
+        _Path(path),
+        media_type="application/pdf",
+        filename=f"dossie_{nif}.pdf",
     )
 
 
