@@ -15,6 +15,7 @@ Uso::
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -74,6 +75,17 @@ def main() -> int:
         print("   índices visíveis:", pagina.locator("main .font-mono").count())
         DESTINO.mkdir(parents=True, exist_ok=True)
         pagina.screenshot(path=str(DESTINO / "17_benchmarks_lista.png"))
+        # O cartão tem de mostrar números a sério: o «preço médio» já apareceu
+        # como «—» para sempre (o campo não existia nas estatísticas) e a chave
+        # de comparação aparecia como um «nome» solto, sem contexto.
+        if "preço médio —" in texto_lista:
+            problemas.append("o cartão mostra «preço médio —» mesmo com ofertas recolhidas")
+        if not re.search(r"preço médio\s*[\d]", texto_lista):
+            problemas.append("o cartão não mostrou o preço médio")
+        if "iguais por:" not in texto_lista:
+            problemas.append("a chave de comparação do cartão não está identificada")
+        if "Só uma loja" not in texto_lista and "Ainda sem ofertas" not in texto_lista:
+            print("   (todos os estudos têm 2+ lojas com ofertas)")
         if not tem_titulo:
             problemas.append("a página /benchmarks não mostrou o título")
         if cartoes == 0:
@@ -127,6 +139,39 @@ def main() -> int:
         if linhas_filtradas == 0:
             problemas.append("a pesquisa pública não devolveu resultados")
 
+        # 5. sonda de uma loja no formulário de criação (sem IA, para não esperar
+        #    pelo modelo local): tem de mostrar os campos detetados e a amostra.
+        pagina.goto(f"{BASE}/benchmarks", wait_until="load", timeout=60000)
+        pagina.wait_for_timeout(4000)
+        pagina.locator("main button:has-text('Novo benchmark')").first.click()
+        pagina.wait_for_timeout(800)
+        formulario = pagina.locator("main form")
+        formulario.locator("input[placeholder='https://loja.pt/categoria']").first.fill(
+            "https://books.toscrape.com/catalogue/page-1.html"
+        )
+        formulario.locator("input[placeholder='Nome da loja']").first.fill("Loja de demonstração")
+        # Desmarca a IA: a sonda determinística responde em segundos.
+        caixa_ia = formulario.locator("label:has-text('Sonda com IA') input[type=checkbox]")
+        if caixa_ia.count() and caixa_ia.first.is_checked():
+            caixa_ia.first.uncheck()
+        formulario.locator("button:has-text('Sonda (IA)')").first.click()
+        pagina.wait_for_timeout(30000)
+        painel = pagina.locator("main div:has-text('Amostra')").count()
+        texto_sonda = pagina.inner_text("main")
+        miniaturas = pagina.locator("main img").count()
+        tem_lista = "Lista:" in texto_sonda
+        tem_botao = pagina.locator("main button:has-text('Usar estes seletores')").count()
+        print(
+            f"sonda: painel={painel} · 'Lista:'={tem_lista} · miniaturas na amostra={miniaturas} · "
+            f"botão «Usar estes seletores»={tem_botao}"
+        )
+        print("   campos detetados:", [linha for linha in texto_sonda.split("\n") if "=" in linha and "::" in linha][:1])
+        pagina.screenshot(path=str(DESTINO / "19_benchmark_sonda.png"))
+        if not tem_lista or tem_botao == 0:
+            problemas.append("a sonda não mostrou o painel com os seletores propostos")
+        if miniaturas == 0:
+            problemas.append("a amostra da sonda não mostrou produtos (imagens)")
+
         print(f"erros de consola: {len(erros)}")
         for linha in erros[:4]:
             print("   ", linha[:150])
@@ -138,7 +183,7 @@ def main() -> int:
         for problema in problemas:
             print("  -", problema)
         return 1
-    print("\nTUDO OK: lista, menu por estudo, página do estudo e pesquisa pública.")
+    print("\nTUDO OK: lista, menu por estudo, página do estudo, sonda e pesquisa pública.")
     return 0
 
 

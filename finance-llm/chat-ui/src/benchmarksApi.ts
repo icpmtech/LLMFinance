@@ -62,6 +62,9 @@ export interface BenchmarkStats {
   offers?: number;
   products?: number;
   stores?: number;
+  avg_price?: number | null;
+  price_min?: number | null;
+  price_max?: number | null;
 }
 
 export interface BenchmarkLastRun {
@@ -285,6 +288,9 @@ export interface SondaResultado {
   origem?: "ia" | "heuristica" | string | null;
   ai?: { provider?: string; provider_label?: string; model?: string; notes?: string } | null;
   robots?: { permitido?: boolean | null; detalhe?: string } | null;
+  /** Código HTTP, quando a página foi recusada (403/429/…). */
+  http_status?: number | null;
+  bloqueado?: boolean;
   campos?: string[];
   field_map?: BenchmarkFieldMap;
   campos_detetados?: Record<string, string | null | undefined>;

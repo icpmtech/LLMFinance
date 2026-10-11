@@ -85,6 +85,19 @@ _PRECO_NO_TEXTO = re.compile(
 )
 
 
+def _sem_tags(valor: Any) -> str:
+    """Texto sem etiquetas HTML.
+
+    Rede de segurança: um seletor de **elemento** (em vez de `::text`) devolve o
+    HTML do nó, e os `data-v-981a3c18` trazem dígitos que estragavam o preço
+    («9813 18 799 , 99»). Recorre-se a isto sobre o que vier do scraper.
+    """
+    texto = str(valor if valor is not None else "")
+    if "<" in texto and ">" in texto:
+        texto = re.sub(r"<[^>]+>", " ", texto)
+    return re.sub(r"\s+", " ", texto).strip()
+
+
 def preco_para_float(valor: Any) -> Optional[float]:
     """Converte `1.234,56 €`, `€ 12,50` ou `1234.56` em `1234.56`/`12.5`.
 
@@ -100,7 +113,7 @@ def preco_para_float(valor: Any) -> Optional[float]:
         return None
     if isinstance(valor, (int, float)):
         return round(float(valor), 2)
-    texto = str(valor).strip()
+    texto = _sem_tags(valor).strip()
     if not texto:
         return None
     encontrados = _PRECO_NO_TEXTO.findall(texto)
@@ -126,14 +139,18 @@ def preco_para_float(valor: Any) -> Optional[float]:
 
 def _campo(campos: Dict[str, Any], *, mapa: Dict[str, Any], chave: str, aliases: Iterable[str]) -> Any:
     """Valor de um campo: primeiro pelo `field_map`, depois por nome conhecido."""
+
+    def limpo(valor: Any) -> Any:
+        return _sem_tags(valor) if isinstance(valor, str) else valor
+
     explicito = mapa.get(chave)
     if explicito and campos.get(explicito) not in (None, ""):
-        return campos[explicito]
+        return limpo(campos[explicito])
     normalizados = {_chave(k): v for k, v in campos.items()}
     for alias in aliases:
         valor = normalizados.get(_chave(alias))
         if valor not in (None, ""):
-            return valor
+            return limpo(valor)
     return None
 
 
@@ -450,7 +467,6 @@ async def sondar_loja(
         model=model,
         use_ai=use_ai,
     )
-
     definicao = resultado.get("definition") or {}
     campos = [str(campo.get("name") or "") for campo in (definicao.get("fields") or [])]
     # Mapa campo do benchmark → campo extraído, pela ordem em que o módulo os conhece.
@@ -517,6 +533,8 @@ async def sondar_loja(
         "origem": resultado.get("origin"),
         "ai": resultado.get("ai"),
         "robots": aviso_robots,
+        "http_status": resultado.get("http_status"),
+        "bloqueado": bool(resultado.get("blocked")),
         "campos": campos,
         "field_map": mapa,
         "campos_detetados": {

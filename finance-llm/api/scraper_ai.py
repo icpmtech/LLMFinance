@@ -506,11 +506,24 @@ def pick_provider(
     requested: Optional[str] = None,
     requested_model: Optional[str] = None,
 ) -> Tuple[Optional[str], Optional[Dict[str, Any]], Optional[str], Optional[str]]:
-    """Escolhe o fornecedor/modelo de IA utilizável (predefinição do utilizador primeiro)."""
+    """Escolhe o fornecedor/modelo de IA **configurado na solução**.
+
+    Ordem: o pedido explícito → a predefinição do utilizador → **um fornecedor com
+    chave configurada** → só no fim os fornecedores locais sem chave (Ollama).
+
+    O Ollama local tem `key_optional`, por isso era o primeiro a passar o teste e
+    ficava sempre escolhido: a sonda esperava 90 s por um modelo de 8B em CPU e
+    respondia «IA indisponível», mesmo havendo um fornecedor cloud configurado na
+    plataforma. Um fornecedor com chave (do utilizador ou do ambiente) é a prova
+    de que alguém o configurou de propósito.
+    """
     try:
         from api import providers_service as providers
     except Exception:
         return None, None, None, None
+
+    # Sem utilizador indicado, vale a configuração da plataforma (scripts, CLI).
+    user_id = user_id or providers.configured_user_id()
 
     defaults = (providers.load_user_config(user_id).get("defaults") if user_id else {}) or {}
     ordem: List[str] = []
@@ -518,7 +531,18 @@ def pick_provider(
         ordem.append(requested)
     if defaults.get("provider"):
         ordem.append(str(defaults["provider"]))
-    ordem.extend(spec["id"] for spec in providers.PROVIDERS)
+    # Depois da predefinição, valem os fornecedores **com chave** (do utilizador ou
+    # do ambiente) e só no fim os que não precisam de chave (Ollama local). Não é
+    # o mesmo que `key_optional`: o `ollama-cloud` também não exige chave, mas
+    # quando está configurado é um modelo remoto — e rápido.
+    com_chave: List[str] = []
+    sem_chave: List[str] = []
+    for spec in providers.PROVIDERS:
+        if spec["id"] in ordem:
+            continue
+        (com_chave if providers.resolve_key(user_id, spec["id"])[0] else sem_chave).append(spec["id"])
+    ordem.extend(com_chave)
+    ordem.extend(sem_chave)
 
     vistos = set()
     for provider_id in ordem:
@@ -623,6 +647,10 @@ def _clean_ai_fields(definition: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "all": bool(raw.get("all", False)),
                 "cast": raw.get("cast") or "text",
                 "max_length": int(raw.get("max_length") or 1000),
+                # Seletor de elemento (sem `::text`/`::attr`) → ler o **texto**,
+                # não o HTML: a IA propõe muitas vezes `span.price` e o valor
+                # vinha com etiquetas e `data-v-…` (com dígitos) colados.
+                "text_only": "::" not in selector,
             }
         )
     return fields
@@ -693,6 +721,19 @@ def _suggest_source_sync(
     except Exception as exc:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}", "analysis": []}
 
+    # Um 403/429 não é markup: o site recusou o pedido. Dizer isto evita que se
+    # ande a mexer em seletores por causa de um bloqueio.
+    status, bloqueio = _diagnostico_resposta(page)
+    if bloqueio:
+        return {
+            "ok": False,
+            "url": url,
+            "error": bloqueio,
+            "http_status": status,
+            "blocked": True,
+            "analysis": [],
+        }
+
     analysis = analyze_page(page, limit=8)
     heuristic = heuristic_definition(url, page, analysis)
 
@@ -758,6 +799,39 @@ def _suggest_source_sync(
     return result
 
 
+def _diagnostico_resposta(page: Any) -> Tuple[Optional[int], str]:
+    """Explica uma resposta que **não serve** (403/429/…), com o que o site diz.
+
+    Um 403 da Fnac aparecia como «não foi possível identificar uma lista de
+    produtos», o que aponta para o *markup* — quando o site simplesmente recusou
+    o pedido (`x-datadome: protected`). O utilizador ficava a mexer em seletores
+    por causa de um bloqueio.
+    """
+    status = getattr(page, "status", None)
+    if not isinstance(status, int) or status < 400:
+        return None, ""
+    cabecalhos = getattr(page, "headers", None) or {}
+    cabecalhos = {str(k).lower(): str(v) for k, v in dict(cabecalhos).items()} if isinstance(cabecalhos, dict) else {}
+    fornecedores = []
+    if "datadome" in str(cabecalhos.get("x-datadome", "")).lower() or any("datadome" in k for k in cabecalhos):
+        fornecedores.append("DataDome")
+    if "cloudflare" in str(cabecalhos.get("server", "")).lower() or "cf-mitigated" in cabecalhos:
+        fornecedores.append("Cloudflare")
+    if "akamai" in str(cabecalhos.get("server", "")).lower():
+        fornecedores.append("Akamai")
+    texto = ""
+    try:
+        texto = " ".join((page.get_all_text() or "").split())[:180]
+    except Exception:
+        texto = ""
+    detalhe = f" (proteção {', '.join(fornecedores)})" if fornecedores else ""
+    pista = f' A página diz: «{texto}».' if texto else ""
+    return status, (
+        f"A página respondeu HTTP {status}{detalhe} — o site recusou o pedido, "
+        f"não é problema de seletores.{pista}"
+    )
+
+
 def _validate(definition: Dict[str, Any], max_pages: int = 1) -> Dict[str, Any]:
     """Corre a definição a sério (sem guardar) para confirmar que extrai itens."""
     try:
@@ -814,11 +888,19 @@ _ELEMENTOS_BUSCA = "[class], [itemprop], h1, h2, h3, h4, h5, span, p, a, strong,
 
 
 def _selector_do_no(node: Any) -> str:
-    """Seletor CSS de um elemento (tag + até 2 classes estáveis)."""
-    try:
-        tag = (node.tagname or "").lower()
-    except Exception:
-        tag = ""
+    """Seletor CSS de um elemento (tag + até 3 classes estáveis).
+
+    **Atenção ao nome do atributo**: o `Selector` do Scrapling expõe `tag`, não
+    `tagname`. Ler o nome errado devolvia `''` e deixava a mineração de campos
+    **toda** muda (`_minerar_campo` salta quem não tem seletor) — a sonda chegou
+    a dizer «não encontrei preços» numa página cheia deles.
+    """
+    tag = ""
+    for atributo in ("tag", "tagname", "name"):
+        valor = getattr(node, atributo, None)
+        if isinstance(valor, str) and valor.strip():
+            tag = valor.strip().lower()
+            break
     if not tag:
         return ""
     try:
@@ -902,6 +984,41 @@ def _parece_preco(valor: str, seletor: str = "") -> bool:
     return bool(_PRICE_RE.search(valor or ""))
 
 
+#: Preço **sem símbolo** («799,99», «1.299,00»): acontece quando o `€` está num
+#: elemento à parte. Exige duas decimais (o que separa de percentagens e de
+#: «10x sem juros») e uma pista de preço no seletor.
+def _parece_preco_sem_simbolo(valor: str, seletor: str = "") -> bool:
+    texto = _sem_espacos(str(valor or ""))
+    if not re.fullmatch(r"\d{1,3}(?:[.\s]\d{3})*[.,]\d{2}", texto):
+        return False
+    return bool(pistas_ou_vazio(seletor))
+
+
+def _sem_espacos(texto: str) -> str:
+    return re.sub(r"\s+", "", texto)
+
+
+def pistas_ou_vazio(seletor: str) -> bool:
+    """`True` quando o seletor tem pista de preço (ou não há seletor nenhum)."""
+    return not seletor or _tem_pista(seletor, _PISTAS_PRECO)
+
+
+def _seletor_do_atributo(base: str, atributos: Dict[str, Any], nome: str) -> str:
+    """Seletor **específico** para um atributo de preço.
+
+    Sem o atributo que dá a pista, `meta::attr(content)` é ambíguo: num cartão há
+    `<meta itemprop="priceCurrency" content="EUR">` **e**
+    `<meta itemprop="price" content="799.99">` — e o seletor por tag apanha a
+    moeda em vez do preço (foi o que aconteceu na Worten).
+    """
+    for pista in ("itemprop", "property", "data-price", "data-cnstrc-item-price", "data-product-price"):
+        if atributos.get(pista) or (pista.startswith("data-") and pista in atributos):
+            if pista in ("itemprop", "property"):
+                return f"{base}[{pista}='{atributos[pista]}']::attr({nome})"
+            return f"{base}[{pista}]::attr({nome})"
+    return f"{base}::attr({nome})"
+
+
 def _preco_por_atributo(nodes: List[Any], minimo: float = 0.5) -> Optional[Dict[str, Any]]:
     """Preço em **dados estruturados** (itemprop/data-*), quando existir.
 
@@ -943,7 +1060,7 @@ def _preco_por_atributo(nodes: List[Any], minimo: float = 0.5) -> Optional[Dict[
                     continue
                 if not _preco_positivo(texto):
                     continue
-                seletor = f"{base}::attr({nome})"
+                seletor = _seletor_do_atributo(base, atributos, nome)
                 if seletor in vistos_no_item:
                     continue
                 vistos_no_item.add(seletor)
@@ -977,28 +1094,53 @@ def _preco_positivo(valor: str) -> bool:
 #: Seletores de preço por *parte* do nome da classe: o seletor exato falha porque
 #: as lojas juntam classes que variam de cartão para cartão (descontos, tamanhos),
 #: ficando `span.price--md.price--mixed.price--B` — que só casa em alguns itens.
+#:
+#: Sem `::text` de propósito: o preço vem **partido** em elementos filhos
+#: (`€<span>799</span><sup>,99</sup>`), por isso é o texto completo do elemento
+#: que interessa — o `::text` devolvia só fragmentos como `','`.
 _SELETORES_PRECO = (
-    "[itemprop='price']::text",
-    "[class*='price__numbers']::text",
-    "[class*='current-price']::text",
-    "[class*='price']::text",
-    "[class*='preco']::text",
-    "[class*='preço']::text",
-    "[class*='precio']::text",
-    "[class*='valor']::text",
-    ".price::text",
-    ".preco::text",
+    "[itemprop='price']",
+    "[class*='price__numbers']",
+    "[class*='current-price']",
+    "[class*='price']",
+    "[class*='preco']",
+    "[class*='preço']",
+    "[class*='precio']",
+    "[class*='valor']",
+    ".price",
+    ".preco",
 )
 _SELETORES_PRECO_ANTIGO = (
-    "[class*='scratched']::text",
-    "[class*='old-price']::text",
-    "[class*='price-old']::text",
-    "[class*='before']::text",
-    "[class*='antes']::text",
-    "[class*='pvp-antes']::text",
-    "s::text",
-    "del::text",
+    "[class*='scratched']",
+    "[class*='old-price']",
+    "[class*='price-old']",
+    "[class*='before']",
+    "[class*='antes']",
+    "[class*='pvp-antes']",
+    "s",
+    "del",
 )
+
+
+def _valores_do_seletor(node: Any, seletor: str) -> List[str]:
+    """Valores textuais de um seletor: `::text`, `::attr(x)` ou o texto completo.
+
+    Um seletor «de elemento» (sem `::`) é lido com `get_all_text()` — é o que
+    apanha preços partidos em filhos. Sem esta distinção, o preço da Worten era
+    lido como `','`.
+    """
+    valores: List[str] = []
+    try:
+        if "::text" in seletor or "::attr(" in seletor:
+            valores = [str(v).strip() for v in node.css(seletor).getall() if str(v).strip()]
+        else:
+            for elemento in node.css(seletor):
+                texto = (elemento.get_all_text() or "").strip()
+                if texto:
+                    valores.append(texto)
+    except Exception:
+        return []
+    return valores
 
 
 def _melhor_seletor_com_valor(
@@ -1021,11 +1163,7 @@ def _melhor_seletor_com_valor(
         ok = 0
         exemplo = ""
         for node in itens:
-            try:
-                valores = [str(v).strip() for v in node.css(seletor).getall() if str(v).strip()]
-            except Exception:
-                continue
-            valor = next((v for v in valores if aceita(v, seletor)), "")
+            valor = next((v for v in _valores_do_seletor(node, seletor) if aceita(v, seletor)), "")
             if valor:
                 ok += 1
                 exemplo = exemplo or valor
@@ -1085,16 +1223,21 @@ def product_heuristic_definition(url: str, page: Any, analysis: List[Dict[str, A
         ],
         nodes,
     )
-    preco_atributo = _preco_por_atributo(nodes)
-    preco = _minerar_campo(nodes, aceita=_parece_preco, pistas=_PISTAS_PRECO)
+    preco = _melhor_seletor_com_valor(nodes, _SELETORES_PRECO, aceita=_parece_preco)
     if preco is None:
-        # Segunda tentativa: seletores de preço conhecidos (por nome de classe),
-        # que aguentam classes variáveis de cartão para cartão.
-        preco = _melhor_seletor_com_valor(nodes, _SELETORES_PRECO, aceita=_parece_preco)
-    if preco_atributo:
-        # O preço estruturado ganha ao texto: é um número isolado, sem o risco de
-        # vir «€ 799 , 99 € 999 ,99» (preço e preço riscado) colados.
-        preco = preco_atributo
+        preco = _minerar_campo(nodes, aceita=_parece_preco, pistas=_PISTAS_PRECO)
+    if preco is None:
+        # Segunda passagem: sem símbolo monetário (o «€» está noutro elemento),
+        # mas com duas decimais e uma classe que diz «price». Só agora, para o
+        # símbolo continuar a ser a prova preferida.
+        preco = _melhor_seletor_com_valor(nodes, _SELETORES_PRECO, aceita=_parece_preco_sem_simbolo)
+    if preco is None:
+        preco = _minerar_campo(nodes, aceita=_parece_preco_sem_simbolo, pistas=_PISTAS_PRECO)
+    if preco is None:
+        # Último recurso: o preço em dados estruturados. Vem **antes** de
+        # ser um número isolado, mas o seletor por tag (`meta::attr(content)`)
+        # tanto apanha o preço como a moeda («EUR») — por isso não decide.
+        preco = _preco_por_atributo(nodes)
     antigo = _melhor_seletor_com_valor(nodes, _SELETORES_PRECO_ANTIGO, aceita=_parece_preco)
     if antigo is None:
         antigo = _minerar_campo(
@@ -1127,12 +1270,30 @@ def product_heuristic_definition(url: str, page: Any, analysis: List[Dict[str, A
 
     fields: List[Dict[str, Any]] = []
     if titulo:
-        fields.append({"name": "titulo", "label": "Título", "selector": titulo, "type": "css", "max_length": 500})
+        fields.append(
+            {"name": "titulo", "label": "Título", "selector": titulo, "type": "css", "max_length": 500, "text_only": True}
+        )
     if preco:
-        fields.append({"name": "preco", "label": "Preço", "selector": preco["selector"], "type": "css", "max_length": 40})
+        fields.append(
+            {
+                "name": "preco",
+                "label": "Preço",
+                "selector": preco["selector"],
+                "type": "css",
+                "max_length": 40,
+                "text_only": True,
+            }
+        )
     if antigo:
         fields.append(
-            {"name": "preco_antigo", "label": "Preço antes", "selector": antigo["selector"], "type": "css", "max_length": 40}
+            {
+                "name": "preco_antigo",
+                "label": "Preço antes",
+                "selector": antigo["selector"],
+                "type": "css",
+                "max_length": 40,
+                "text_only": True,
+            }
         )
     if link:
         fields.append({"name": "url", "label": "Ligação", "selector": link, "type": "css", "max_length": 1000})
@@ -1140,14 +1301,34 @@ def product_heuristic_definition(url: str, page: Any, analysis: List[Dict[str, A
         fields.append({"name": "imagem", "label": "Imagem", "selector": imagem, "type": "css", "max_length": 1000})
     if descricao:
         fields.append(
-            {"name": "descricao", "label": "Descrição", "selector": descricao["selector"], "type": "css", "max_length": 1200}
+            {
+                "name": "descricao",
+                "label": "Descrição",
+                "selector": descricao["selector"],
+                "type": "css",
+                "max_length": 1200,
+                "text_only": True,
+            }
         )
     if marca:
-        fields.append({"name": "marca", "label": "Marca", "selector": marca["selector"], "type": "css", "max_length": 120})
+        fields.append(
+            {"name": "marca", "label": "Marca", "selector": marca["selector"], "type": "css", "max_length": 120, "text_only": True}
+        )
     if ean:
-        fields.append({"name": "ean", "label": "EAN", "selector": ean["selector"], "type": "css", "max_length": 40})
+        fields.append(
+            {"name": "ean", "label": "EAN", "selector": ean["selector"], "type": "css", "max_length": 40, "text_only": True}
+        )
     if sku:
-        fields.append({"name": "sku", "label": "Referência", "selector": sku["selector"], "type": "css", "max_length": 80})
+        fields.append(
+            {
+                "name": "sku",
+                "label": "Referência",
+                "selector": sku["selector"],
+                "type": "css",
+                "max_length": 80,
+                "text_only": True,
+            }
+        )
     if disponibilidade:
         fields.append(
             {
@@ -1156,6 +1337,7 @@ def product_heuristic_definition(url: str, page: Any, analysis: List[Dict[str, A
                 "selector": disponibilidade["selector"],
                 "type": "css",
                 "max_length": 120,
+                "text_only": True,
             }
         )
     if not fields:
@@ -1339,7 +1521,9 @@ def _suggest_product_source_sync(
         "url": url,
         "fetcher": fetcher or "http",
         "enabled": False,
-        "options": options or {},
+        # Nos fetchers de browser, esperar pela rede parada: muitas lojas só
+        # escrevem o preço depois de o JavaScript dele carregar.
+        "options": options or ({"network_idle": True} if (fetcher or "http") != "http" else {}),
         "respect_robots": True,
         "schedule": {"cron": "", "timezone": "Europe/Lisbon"},
         "tags": [],
@@ -1351,6 +1535,18 @@ def _suggest_product_source_sync(
             raise RuntimeError("A página não devolveu conteúdo (pode estar protegida ou exigir JavaScript).")
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "url": url, "error": f"{type(exc).__name__}: {exc}", "analysis": []}
+
+    # Um 403/429 não é markup: o site recusou o pedido (Fnac = DataDome).
+    status, bloqueio = _diagnostico_resposta(page)
+    if bloqueio:
+        return {
+            "ok": False,
+            "url": url,
+            "error": bloqueio,
+            "http_status": status,
+            "blocked": True,
+            "analysis": [],
+        }
 
     analysis = analyze_products(page, limit=8)
     if not analysis:

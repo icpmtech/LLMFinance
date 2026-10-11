@@ -627,7 +627,7 @@ export function BenchmarksPage({ onOpen }: { onOpen?: (slug: string) => void }) 
                     <span className="font-mono">{indices[indice] ?? `finance_bench_${benchmark.slug}`}</span>
                   </p>
                 </div>
-                <Badge variant="info">{benchmark.match_on ?? "nome"}</Badge>
+                <Badge variant="info">iguais por: {benchmark.match_on ?? "nome"}</Badge>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-3 gap-2 text-center">
@@ -644,8 +644,21 @@ export function BenchmarksPage({ onOpen }: { onOpen?: (slug: string) => void }) 
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Última recolha: {dataCurta(benchmark.last_run?.at)} · preço médio{" "}
-                  {eur((benchmark.stats as { avg_price?: number } | undefined)?.avg_price, benchmark.currency)}
+                  {eur(benchmark.stats?.avg_price, benchmark.currency)}
+                  {benchmark.stats?.price_min != null && benchmark.stats?.price_max != null && (
+                    <>
+                      {" "}· {eur(benchmark.stats.price_min, benchmark.currency)} a{" "}
+                      {eur(benchmark.stats.price_max, benchmark.currency)}
+                    </>
+                  )}
                 </p>
+                {(benchmark.stats?.stores ?? 0) < 2 && (benchmark.stats?.offers ?? 0) > 0 && (
+                  <p className="text-xs text-amber-200">
+                    {benchmark.stats?.stores === 0
+                      ? "Ainda sem ofertas: use «Recolher»."
+                      : "Só uma loja: para comparar preços são precisas duas ou mais."}
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" icon={<BarChart3 size={14} />} onClick={() => onOpen?.(benchmark.slug)}>
                     Abrir estudo
@@ -724,6 +737,9 @@ function SondaPainel({
             <span className="rounded-md bg-background/60 px-2 py-0.5 text-muted-foreground">
               {sonda.origem === "ia" ? `IA · ${sonda.ai?.model || sonda.ai?.provider_label || "modelo"}` : "análise determinística"}
             </span>
+          )}
+          {sonda.bloqueado && (
+            <Badge variant="danger">site recusou o pedido{sonda.http_status ? ` (HTTP ${sonda.http_status})` : ""}</Badge>
           )}
           {sonda.robots?.permitido === false && <Badge variant="warning">robots.txt proíbe</Badge>}
           {sonda.robots?.permitido === true && (

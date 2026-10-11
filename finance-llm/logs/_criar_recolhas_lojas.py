@@ -114,6 +114,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Recolhas reais das lojas a partir da sonda.")
     parser.add_argument("--estudo", default="portateis", help="Conjunto de lojas (portateis)")
     parser.add_argument("--slug", default="", help="Slug do benchmark (por omissão: <estudo>-lojas)")
+    parser.add_argument("--lojas", default="", help="Só estas lojas (ids separados por vírgula)")
     parser.add_argument("--sem-ia", action="store_true", help="Sondar só com a análise determinística")
     parser.add_argument("--so-sondar", action="store_true", help="Sondar e parar (não cria nem recolhe)")
     parser.add_argument("--limite", type=int, default=120, help="Máximo de ofertas por loja")
@@ -123,6 +124,12 @@ def main() -> int:
     if not lojas:
         print(f"estudo desconhecido: {args.estudo} (disponíveis: {', '.join(LOJAS)})")
         return 2
+    escolhidas = [c.strip() for c in args.lojas.split(",") if c.strip()]
+    if escolhidas:
+        lojas = [loja for loja in lojas if loja["id"] in escolhidas]
+        if not lojas:
+            print(f"nenhuma loja conhecida em: {escolhidas}")
+            return 2
 
     slug = args.slug or f"{args.estudo}-lojas"
     cliente = _cliente()
@@ -207,7 +214,8 @@ def main() -> int:
         print(f"publicado em {dados.get('url')} (pesquisa: {dados.get('search_url')})")
         alvo = f"/site/benchmarks/{slug}/pesquisa"
         pagina = cliente.get(alvo, follow_redirects=True)
-        print(f"página de pesquisa: HTTP {pagina.status_code} · {len(pagina.text)} bytes · miniaturas={'class=\"thumb\"' in pagina.text}")
+        tem_miniaturas = 'class="thumb"' in pagina.text
+        print(f"página de pesquisa: HTTP {pagina.status_code} · {len(pagina.text)} bytes · miniaturas={tem_miniaturas}")
     else:
         print(f"publicação falhou: HTTP {publicacao.status_code} · {publicacao.text[:200]}")
     return 0

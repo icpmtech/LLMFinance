@@ -171,14 +171,15 @@ def listar() -> List[Dict[str, Any]]:
 
 
 def _stats_rapidas(slug: Optional[str]) -> Dict[str, Any]:
-    """Nº de ofertas/produtos/lojas sem varrer o índice todo."""
+    """Nº de ofertas/produtos/lojas e preços, sem varrer o índice todo."""
+    vazio = {"offers": 0, "products": 0, "stores": 0, "avg_price": None, "price_min": None, "price_max": None}
     client = esc.get_es_client()
     if not client or not slug:
-        return {"offers": 0, "products": 0, "stores": 0}
+        return vazio
     indice = esc.benchmark_items_index(slug)
     try:
         if not client.indices.exists(index=indice):
-            return {"offers": 0, "products": 0, "stores": 0}
+            return vazio
         resp = client.search(
             index=indice,
             body={
@@ -186,16 +187,25 @@ def _stats_rapidas(slug: Optional[str]) -> Dict[str, Any]:
                 "aggs": {
                     "produtos": {"cardinality": {"field": "product_key"}},
                     "lojas": {"cardinality": {"field": "store_id"}},
+                    # O preço médio já esteve só na análise; o cartão da lista
+                    # mostrava «preço médio —» para sempre, mesmo com 48 ofertas
+                    # com preço. Uma `stats` traz média/mínimo/máximo de graça.
+                    "precos": {"stats": {"field": "price"}},
                 },
             },
         )
     except Exception:  # noqa: BLE001
-        return {"offers": 0, "products": 0, "stores": 0}
+        return vazio
     aggs = resp.get("aggregations") or {}
+    precos = aggs.get("precos") or {}
+    media = precos.get("avg")
     return {
         "offers": int(((resp.get("hits") or {}).get("total") or {}).get("value") or 0),
         "products": int((aggs.get("produtos") or {}).get("value") or 0),
         "stores": int((aggs.get("lojas") or {}).get("value") or 0),
+        "avg_price": round(float(media), 2) if media is not None else None,
+        "price_min": precos.get("min"),
+        "price_max": precos.get("max"),
     }
 
 

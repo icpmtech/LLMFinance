@@ -281,6 +281,10 @@ def normalize_source(payload: Dict[str, Any], existing: Optional[Dict[str, Any]]
                 "cast": str(raw.get("cast") or "text").strip().lower(),
                 "max_length": int(raw.get("max_length") or 5000),
                 "regex": str(raw.get("regex") or "").strip() or None,
+                # Ler o **texto** do elemento em vez do HTML (sonda de produtos):
+                # sem preservar este sinal, o valor vinha com etiquetas e os
+                # `data-v-981a3c18` (dígitos!) estragavam o preço.
+                "text_only": bool(raw.get("text_only", False)),
             }
         )
     if not fields:
@@ -1012,7 +1016,15 @@ def _value_from(node: Any, field: Dict[str, Any]) -> Any:
             continue
         if attr and kind == "css" and "::attr(" not in selector and "::text" not in selector:
             selector = f"{selector}::attr({attr})"
-        values = [str(v).strip() for v in _select(node, selector, kind)]
+        if field.get("text_only") and kind == "css" and "::" not in selector:
+            # Seletor de **elemento**: ler o texto, não o HTML. Sem isto, um campo
+            # «preço» cujo seletor aponta para o contentor devolvia
+            # `<span class="price" data-v-981a3c18>€ 799 , 99</span>` — e o
+            # `data-v` (com dígitos!) entrava no valor. A sonda de produtos usa
+            # isto em todos os campos de texto.
+            values = [_node_text(elemento).strip() for elemento in _as_list(node.css(selector))]
+        else:
+            values = [str(v).strip() for v in _select(node, selector, kind)]
         if field.get("regex"):
             regex = str(field["regex"])
             values = [m for v in values for m in re.findall(regex, v) if m]

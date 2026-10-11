@@ -157,6 +157,39 @@ LOCAL_BACKENDS: List[Dict[str, Any]] = [
 
 PROVIDERS_BY_ID = {spec["id"]: spec for spec in PROVIDERS}
 
+
+def configured_user_id() -> Optional[str]:
+    """Utilizador cuja configuração de IA representa **a solução**.
+
+    Usado quando o chamador não indica utilizador (sonda de recolha, scripts de
+    linha de comandos): sem isto, `scraper_ai.pick_provider(None)` caía sempre no
+    Ollama **local** — porque é o primeiro da lista e não exige chave — mesmo com
+    um fornecedor cloud já configurado na plataforma. O resultado era a sonda a
+    esperar 90 s por um modelo de 8B em CPU e a devolver «IA indisponível», com
+    uma chave cloud válida guardada.
+
+    Ordem: quem tem **predefinição** escolhida; senão quem tem chave utilizável.
+    """
+    try:
+        from api import auth_service
+    except Exception:
+        return None
+    for user in auth_service.list_users(100):
+        user_id = str(user.get("id") or user.get("email") or "")
+        if not user_id:
+            continue
+        defaults = (load_user_config(user_id).get("defaults") or {})
+        if defaults.get("provider"):
+            return user_id
+    for user in auth_service.list_users(100):
+        user_id = str(user.get("id") or user.get("email") or "")
+        if not user_id:
+            continue
+        for spec in PROVIDERS:
+            if resolve_key(user_id, spec["id"])[0]:
+                return user_id
+    return None
+
 STATE_FIELDS = ("api_key", "default_model", "updated_at")
 
 

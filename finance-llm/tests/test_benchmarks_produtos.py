@@ -235,7 +235,7 @@ def test_preco_estruturado_ganha_ao_texto():
     class _No:
         def __init__(self, atributos):
             self.attrib = atributos
-            self.tagname = "span"
+            self.tag = "span"
 
     class _Item:
         def __init__(self, preco):
@@ -256,7 +256,7 @@ def test_preco_por_atributo_ignora_valores_a_zero():
     class _No:
         def __init__(self, valor):
             self.attrib = {"data-price": valor}
-            self.tagname = "span"
+            self.tag = "span"
 
     class _Item:
         def __init__(self, valor):
@@ -297,6 +297,61 @@ def test_o_aviso_de_cookies_nao_e_confundido_com_a_lista_de_produtos():
 def test_robots_da_sonda_pede_url_absoluto():
     resultado = servico.robots_permite("/sem-dominio")
     assert resultado["permitido"] is None
+
+
+def test_seletor_do_no_le_o_atributo_tag_do_scrapling():
+    """O `Selector` do Scrapling expõe `tag` — ler `tagname` devolvia '' e calava tudo."""
+    from api import scraper_ai
+
+    class _No:
+        def __init__(self, tag=None, tagname=None, classes="price__numbers"):
+            self.tag = tag
+            if tagname is not None:
+                self.tagname = tagname
+            self.attrib = {"class": classes} if classes else {}
+
+    assert scraper_ai._selector_do_no(_No(tag="span")) == "span.price__numbers"
+    # Tolerância ao nome antigo, para não voltar a falhar em silêncio.
+    assert scraper_ai._selector_do_no(_No(tagname="span")) == "span.price__numbers"
+    # Sem tag nenhuma não há seletor: quem chama salta o valor (e não rebenta).
+    assert scraper_ai._selector_do_no(_No()) == ""
+    assert scraper_ai._selector_do_no(_No(tag="span", classes="")) == "span"
+
+
+def test_precos_partidos_em_filhos_sao_lidos_pelo_texto_do_elemento():
+    """`€<span>799</span><sup>,99</sup>`: o `::text` dá `','`; o texto do elemento dá o preço."""
+    from api import scraper_ai
+
+    class _Filho:
+        def get_all_text(self):
+            return "799"
+
+    class _Preco:
+        tag = "span"
+
+        def __init__(self):
+            self.attrib = {"class": "price__numbers"}
+
+        def css(self, seletor):
+            if "::text" in seletor:
+                return type("_Lista", (), {"getall": lambda _self: [","]})()
+            return [_Filho()]
+
+        def get_all_text(self):
+            return "€ 799 , 99"
+
+    class _Item:
+        def css(self, _):
+            return [_Preco()]
+
+    valores = scraper_ai._valores_do_seletor(_Item(), "[class*='price__numbers']")
+    assert valores == ["€ 799 , 99"]
+    encontrado = scraper_ai._melhor_seletor_com_valor(
+        [_Item(), _Item()], ("[class*='price__numbers']",), aceita=scraper_ai._parece_preco
+    )
+    assert encontrado is not None
+    assert encontrado["sample"] == "€ 799 , 99"
+    assert encontrado["coverage"] == 1.0
 
 
 @pytest.mark.parametrize(
