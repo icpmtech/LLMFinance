@@ -299,6 +299,22 @@ def test_robots_da_sonda_pede_url_absoluto():
     assert resultado["permitido"] is None
 
 
+@pytest.mark.parametrize(
+    "preco,moeda",
+    [
+        ("£51.77", "GBP"),
+        ("€ 799 , 99", "EUR"),
+        ("R$ 1.299,00", "BRL"),
+        ("US$ 99.00", "USD"),
+        ("", None),
+    ],
+)
+def test_moeda_da_amostra_le_o_simbolo_do_preco(preco, moeda):
+    """Sem isto, uma loja inglesa aparecia como «51,77 EUR» (certo com moeda errada)."""
+    previsao = {"items": [{"data": {"preco": preco, "titulo": "X"}}]}
+    assert servico._moeda_da_amostra(previsao) == moeda
+
+
 def test_analise_de_lojas_calcula_indice_de_preco(monkeypatch):
     """O índice de preço é 100 para a média: 90 é 10% mais barato."""
     monkeypatch.setattr(servico.store, "obter", lambda slug: {"slug": slug, "name": "Demo", "stores": []})

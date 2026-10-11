@@ -458,12 +458,26 @@ export async function sondarLoja(payload: {
   benchmark?: string;
   nome_loja?: string;
 }): Promise<SondaResultado> {
-  return ler<SondaResultado>(
-    await fetch(`${API_BASE}/benchmarks/sonda`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ use_ai: true, fetcher: "http", ...payload }),
-    }),
-    "A sonda não conseguiu analisar a página",
-  );
+  // Prazo do lado do cliente: um modelo local pode demorar; mais vale uma
+  // mensagem clara do que um botão em «a sondar…» para sempre.
+  const controlador = new AbortController();
+  const prazo = window.setTimeout(() => controlador.abort(), 180_000);
+  try {
+    return await ler<SondaResultado>(
+      await fetch(`${API_BASE}/benchmarks/sonda`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ use_ai: true, fetcher: "http", ...payload }),
+        signal: controlador.signal,
+      }),
+      "A sonda não conseguiu analisar a página",
+    );
+  } catch (falha) {
+    if (falha instanceof DOMException && falha.name === "AbortError") {
+      throw new Error("A sonda demorou mais de 3 minutos. Experimente sem IA ou um fetcher mais simples.");
+    }
+    throw falha;
+  } finally {
+    window.clearTimeout(prazo);
+  }
 }

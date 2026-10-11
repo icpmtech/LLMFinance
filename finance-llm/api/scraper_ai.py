@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 from collections import Counter, defaultdict
 from typing import Any, Dict, List, Optional, Tuple
@@ -27,6 +28,24 @@ from typing import Any, Dict, List, Optional, Tuple
 from api import scraper_service as scraper
 
 logger = logging.getLogger(__name__)
+
+#: Limite de espera pela proposta da IA. Um modelo local (Ollama, 8B, em CPU) pode
+#: levar **minutos** a responder; a sonda não pode ficar presa — quem está a olhar
+#: para o botão precisa de uma resposta. Passado o limite vale a análise
+#: determinística e a resposta diz porquê (`avisos`).
+AI_TIMEOUT_S = float(os.environ.get("SCRAPER_AI_TIMEOUT", "90"))
+
+
+async def _ia_com_limite(corrotina: Any, segundos: float = AI_TIMEOUT_S) -> Dict[str, Any]:
+    """Corre a proposta da IA com prazo: sem isto, um Ollama lento prendia a sonda."""
+    try:
+        return await asyncio.wait_for(corrotina, timeout=max(5.0, segundos))
+    except asyncio.TimeoutError:
+        return {
+            "definition": None,
+            "ai": None,
+            "error": f"A IA não respondeu em {int(segundos)} s — apresento a análise determinística.",
+        }
 
 # Elementos que podem ser «um item de uma lista» numa página.
 _CONTAINER_TAGS = ("article", "li", "div", "section", "tr", "figure")
@@ -693,7 +712,7 @@ def _suggest_source_sync(
     # 2. IA (quando pedida e configurada).
     if use_ai:
         proposal = asyncio.run(
-            ai_definition(url, page, analysis, hint=hint, user_id=user_id, provider=provider, model=model)
+            _ia_com_limite(ai_definition(url, page, analysis, hint=hint, user_id=user_id, provider=provider, model=model))
         )
         result["ai"] = proposal.get("ai")
         result["ai_error"] = proposal.get("error")
@@ -1367,7 +1386,9 @@ def _suggest_product_source_sync(
 
     if use_ai:
         proposta = asyncio.run(
-            _product_ai_definition(url, page, analysis, hint=hint, user_id=user_id, provider=provider, model=model)
+            _ia_com_limite(
+                _product_ai_definition(url, page, analysis, hint=hint, user_id=user_id, provider=provider, model=model)
+            )
         )
         resultado["ai"] = proposta.get("ai")
         resultado["ai_error"] = proposta.get("error")
