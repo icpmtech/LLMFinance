@@ -47,6 +47,12 @@ export type AppModule = {
   hint: string;
   /** Identificadores das aplicações do módulo, pela ordem em que aparecem. */
   ids: string[];
+  /**
+   * Fonte dinâmica de entradas, por módulo: o `AppNav` vai buscá-las à API e
+   * acrescenta-as ao grupo. Hoje só os benchmarks de produtos (uma entrada de
+   * menu por estudo, criada quando o estudo é criado).
+   */
+  dynamic?: "benchmarks";
 };
 
 /**
@@ -86,6 +92,14 @@ export const APP_MODULES: AppModule[] = [
     label: "Benchmark",
     hint: "Preço de referência, concorrência e oportunidades — Portugal, Espanha e França",
     ids: ["benchmark", "benchmark-pt", "benchmark-es", "benchmark-fr", "benchmark-cross", "benchmark-buyer", "benchmark-seller"],
+  },
+  {
+    id: "benchmarks-produtos",
+    label: "Benchmarks de produtos",
+    hint: "O mesmo produto comparado entre lojas online (recolha de preços, índice próprio)",
+    // Cada benchmark criado acrescenta a sua própria entrada ao menu.
+    ids: ["benchmarks"],
+    dynamic: "benchmarks",
   },
   {
     id: "empresas",

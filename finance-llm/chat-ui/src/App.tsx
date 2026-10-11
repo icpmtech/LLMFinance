@@ -87,6 +87,8 @@ import OsintPage from "./pages/OsintPage";
 import ReportsPage from "./pages/ReportsPage";
 import SubvencoesPage from "./pages/SubvencoesPage";
 import BenchmarkPage from "./pages/BenchmarkPage";
+import BenchmarksPage from "./pages/BenchmarksPage";
+import BenchmarkDetailPage from "./pages/BenchmarkDetailPage";
 import BenchmarkCrossPage from "./pages/BenchmarkCrossPage";
 import BenchmarkBuyerPage from "./pages/BenchmarkBuyerPage";
 import BenchmarkSellerPage from "./pages/BenchmarkSellerPage";
@@ -190,6 +192,8 @@ type AppView =
   | "reports"
   | "subvencoes"
   | "benchmark"
+  | "benchmarks"
+  | "benchmark-detalhe"
   | "benchmark-pt"
   | "benchmark-es"
   | "benchmark-fr"
@@ -208,6 +212,8 @@ type AppView =
   | "login"
   | "register";
 const COMPANY_DETAIL_KEY = "finance-llm-company-detail";
+/** Benchmark de produtos aberto por último (`/benchmarks/<slug>`). */
+const BENCHMARK_DETAIL_KEY = "finance-llm-benchmark-detail";
 const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
 /** Região de contratos aberta a partir do mapa (janela `region-detail`). */
 const REGION_DETAIL_KEY = "finance-llm-region-detail";
@@ -264,6 +270,7 @@ function pathForView(
   company: string | null,
   ticker: string | null,
   region: RegionDetailTarget | null = null,
+  benchmark: string | null = null,
 ): string {
   if (view === "landing") return "/";
   if (view === "login") return "/login";
@@ -389,6 +396,8 @@ function pathForView(
   if (view === "noticias") return "/noticias";
   if (view === "contracts-list") return "/contracts-list";
   if (view === "company-detail" && company) return `/companies/${company}`;
+  if (view === "benchmarks") return "/benchmarks";
+  if (view === "benchmark-detalhe") return benchmark ? `/benchmarks/${benchmark}` : "/benchmarks";
   return "/";
 }
 
@@ -494,6 +503,11 @@ export default function App() {
   const [selectedCompany, setSelectedCompany] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     return localStorage.getItem(COMPANY_DETAIL_KEY);
+  });
+  /** Benchmark de produtos aberto (`/benchmarks/<slug>`). */
+  const [selectedBenchmark, setSelectedBenchmark] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem(BENCHMARK_DETAIL_KEY);
   });
   const [selectedTicker, setSelectedTicker] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
@@ -645,6 +659,15 @@ export default function App() {
       if (nif) setSelectedCompany(nif);
       return "company-detail";
     }
+    if (path === "/benchmarks") return "benchmarks";
+    if (path.startsWith("/benchmarks/")) {
+      const slug = path.replace("/benchmarks/", "").split("/")[0];
+      if (slug) {
+        setSelectedBenchmark(slug);
+        return "benchmark-detalhe";
+      }
+      return "benchmarks";
+    }
     if (path === "/" || path === "") {
       const saved = localStorage.getItem("finance-llm-view");
       return (saved as AppView) || "dashboard";
@@ -754,6 +777,12 @@ export default function App() {
         if (nif) setSelectedCompany(nif);
         next = "company-detail";
       }
+      else if (path === "/benchmarks") next = "benchmarks";
+      else if (path.startsWith("/benchmarks/")) {
+        const slug = path.replace("/benchmarks/", "").split("/")[0];
+        if (slug) setSelectedBenchmark(slug);
+        next = "benchmark-detalhe";
+      }
       setView(next);
     };
     window.addEventListener("popstate", onPop);
@@ -771,7 +800,12 @@ export default function App() {
     } else {
       localStorage.removeItem(TICKER_DETAIL_KEY);
     }
-  }, [selectedCompany, selectedTicker]);
+    if (selectedBenchmark) {
+      localStorage.setItem(BENCHMARK_DETAIL_KEY, selectedBenchmark);
+    } else {
+      localStorage.removeItem(BENCHMARK_DETAIL_KEY);
+    }
+  }, [selectedCompany, selectedTicker, selectedBenchmark]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
@@ -874,7 +908,7 @@ export default function App() {
         if (windowFor(next)) restoreWindow(next);
         else openWindow(next, workspaceEstimate());
       }
-      const path = pathForView(next, selectedCompany, selectedTicker, regionDetail);
+      const path = pathForView(next, selectedCompany, selectedTicker, regionDetail, selectedBenchmark);
       if (typeof window !== "undefined" && window.location.pathname !== path) {
         window.history.pushState({}, "", path);
       }
@@ -1706,7 +1740,7 @@ export default function App() {
               // Fichas e quick look são janelas auxiliares: não mexem no URL.
               if (!next || isDetailView(next)) return;
               // Mantém o URL sincronizado com a janela em foco, sem empilhar histórico.
-              const path = pathForView(next as AppView, selectedCompany, selectedTicker);
+              const path = pathForView(next as AppView, selectedCompany, selectedTicker, null, selectedBenchmark);
               if (typeof window !== "undefined" && window.location.pathname !== path) {
                 window.history.replaceState({}, "", path);
               }

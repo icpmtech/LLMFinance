@@ -605,6 +605,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "16,163,127",
   },
   {
+    id: "benchmarks",
+    label: "Benchmarks de produtos",
+    hint: "Comparar o mesmo produto entre lojas online, com recolha de preços e índice próprio",
+    icon: Scale,
+    gradient: "from-teal-200 via-cyan-500 to-blue-700",
+    accent: "20,184,166",
+  },
+  {
     id: "benchmark",
     label: "Benchmark · Tudo",
     hint: "Portugal, Espanha e França por CPV: volume, valor e preço mediano de cada país",
@@ -867,6 +875,7 @@ const DEFAULT_ITEMS = [
   "contracts-search",
   "contracts-dashboard",
   "benchmark",
+  "benchmarks",
   "benchmark-pt",
   "benchmark-es",
   "benchmark-fr",

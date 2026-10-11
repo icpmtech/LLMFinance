@@ -331,6 +331,7 @@ from api.subvencoes_routes import router as subvencoes_router
 # Benchmark de preços e concorrência por empresa + CPV: preço de referência do
 # segmento, concorrentes, historial de contrapartes e oportunidades.
 from api.benchmark_routes import router as benchmark_router
+from api.benchmarks_routes import router as benchmarks_router, site_router as benchmarks_site_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -600,6 +601,10 @@ app.include_router(search360_router)
 app.include_router(hermes_router)
 app.include_router(skills_router)
 app.include_router(office_router)
+# Benchmarks de produtos (`/benchmarks/*`). A página pública do benchmark tem de
+# ser registada **antes** do CMS: senão o `GET /site/{path}` do CMS apanha-a.
+app.include_router(benchmarks_site_router)
+app.include_router(benchmarks_router)
 # CMS: gestão em `/cms/*` e site público em `/site/*`.
 app.include_router(cms_router)
 # Loja online: gestão em `/shop/*` e vitrine pública em `/loja/*`.

@@ -57,3 +57,15 @@ FROM ${BASE}
 # construiu agora, e nao da soma de tudo o que ja se construiu.
 RUN rm -rf /usr/share/nginx/html
 COPY _frontend_dist /usr/share/nginx/html
+
+# A configuracao do nginx, alem do `dist`.
+#
+# Sao as **duas** coisas que mudam entre deploys: o codigo da SPA e as rotas que
+# o nginx serve. Sem esta linha o incremental publicava codigo novo sobre
+# configuracao velha -- e o sintoma nao e um erro, e uma pagina errada:
+# `/site/blog` caia no fallback da SPA (`try_files ... /index.html`) e mostrava
+# "A validar a sessao...", em vez de chegar ao backend.
+#
+# O custo e de 24 KB no contexto de build, que ja levava `docker/nginx.conf`
+# (nao esta em nenhuma lista de exclusoes, ao contrario de `chat-ui/dist`).
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf

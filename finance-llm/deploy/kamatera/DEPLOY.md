@@ -48,6 +48,7 @@ ARG BASE=iq-os-frontend:antes-deep-search
 FROM ${BASE}
 RUN rm -rf /usr/share/nginx/html
 COPY _frontend_dist /usr/share/nginx/html
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 ```
 
 O `rm -rf` antes do `COPY` **nao** e decorativo. O `COPY` de uma pasta para outra
@@ -56,6 +57,13 @@ Vite poe um hash de conteudo no nome de cada bundle -- logo o nome muda a cada
 build e o anterior fica para tras. Depois de 15 deploys estavam **15 bundles
 dentro da imagem, contra 1 no `_frontend_dist`**. A pagina era sempre servida
 certa, mas a imagem engordava sem razao a cada publicacao.
+
+O `COPY docker/nginx.conf` e a outra metade. Sao **duas** as coisas que mudam
+entre deploys: o codigo da SPA e as rotas que o nginx serve. Sem ele, uma
+alteracao ao nginx (por exemplo o `location /site/` que faz proxy do site publico
+para o backend) nao chegava a VM -- a SPA nova ficava sobre configuracao velha, e
+`/site/blog` caia no fallback da SPA a mostrar "A validar a sessao...". Custa
+24 KB no contexto.
 
 Assentam na imagem que **já está validada na VM** e substituem só o código. As
 versões de `pandas`, `transformers` e `numpy` ficam exactamente as que estavam a
@@ -116,9 +124,9 @@ O incremental só substitui código. Se o que mudou foi:
 | --- | --- |
 | `requirements.txt` (dependências novas) | `Dockerfile.backend` (rebuild completo) |
 | `package.json` / `package-lock.json` | `Dockerfile.frontend` (rebuild completo) |
-| `docker/nginx.conf` | `Dockerfile.frontend` |
 | Uma biblioteca de sistema (`apt`) | o Dockerfile completo correspondente |
 | Só código Python ou TypeScript | **este script** |
+| `docker/nginx.conf` | **este script** (o incremental já o copia) |
 
 E se a própria imagem base tiver de ser reconstruída a frio, ou for para uma
 máquina que não a tem, aí é o `15-imagem-vm.ps1` (imagem inteira, por blocos,
