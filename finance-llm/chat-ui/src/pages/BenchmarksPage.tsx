@@ -19,6 +19,7 @@ import {
   Plus,
   RefreshCw,
   Scale,
+  ScanSearch,
   Store as StoreIcon,
   Trash2,
   Upload,
@@ -39,10 +40,12 @@ import {
   listarBenchmarks,
   publicarBenchmark,
   recolherBenchmark,
+  sondarLoja,
   type Benchmark,
   type BenchmarkMeta,
   type BenchmarkPayload,
   type BenchmarkScraper,
+  type SondaResultado,
 } from "../benchmarksApi";
 import { refreshBenchmarkMenu } from "../benchmarkMenu";
 
@@ -51,14 +54,27 @@ type LojaForm = {
   url: string;
   template_id: string;
   scraper?: BenchmarkScraper;
+  /** `http` (rápido), `dynamic` (JavaScript) ou `stealth` (sites protegidos). */
+  fetcher?: string;
 };
 
-const LOJA_VAZIA: LojaForm = { name: "", url: "", template_id: "" };
+const LOJA_VAZIA: LojaForm = { name: "", url: "", template_id: "", fetcher: "http" };
 
+const FETCHERS: { id: string; label: string }[] = [
+  { id: "http", label: "Pedido simples" },
+  { id: "dynamic", label: "Browser (JavaScript)" },
+  { id: "stealth", label: "Browser furtivo" },
+];
+
+//: O que a sonda consegue trazer. O `field_map` liga cada linha do benchmark ao
+//: nome do campo extraído (é o que faz a comparação de preços funcionar).
 const CAMPOS_MAPA: { chave: keyof NonNullable<BenchmarkPayload["field_map"]>; label: string; ajuda: string }[] = [
   { chave: "price", label: "Preço", ajuda: "ex.: preco" },
   { chave: "product_name", label: "Nome do produto", ajuda: "ex.: titulo" },
+  { chave: "description", label: "Descrição", ajuda: "ex.: descricao" },
+  { chave: "image", label: "Imagem", ajuda: "ex.: imagem" },
   { chave: "url", label: "Endereço", ajuda: "ex.: url" },
+  { chave: "price_original", label: "Preço antes", ajuda: "ex.: preco_antigo" },
   { chave: "availability", label: "Disponibilidade", ajuda: "ex.: disponibilidade" },
   { chave: "brand", label: "Marca", ajuda: "ex.: marca" },
   { chave: "ean", label: "EAN/GTIN", ajuda: "ex.: ean" },
@@ -97,8 +113,18 @@ export function BenchmarksPage({ onOpen }: { onOpen?: (slug: string) => void }) 
   const [moeda, setMoeda] = useState("EUR");
   const [chave, setChave] = useState("nome");
   const [lojas, setLojas] = useState<LojaForm[]>([{ ...LOJA_VAZIA }]);
-  const [mapa, setMapa] = useState<Record<string, string>>({ price: "preco", product_name: "titulo", url: "url" });
+  const [mapa, setMapa] = useState<Record<string, string>>({
+    price: "preco",
+    product_name: "titulo",
+    url: "url",
+    image: "imagem",
+    description: "descricao",
+  });
   const [aCarregarModelo, setACarregarModelo] = useState<number | null>(null);
+  // --- sonda (análise da página + IA) ---
+  const [aSondar, setASondar] = useState<number | null>(null);
+  const [sondas, setSondas] = useState<Record<number, SondaResultado | undefined>>({});
+  const [sondaIA, setSondaIA] = useState(true);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -151,6 +177,69 @@ export function BenchmarksPage({ onOpen }: { onOpen?: (slug: string) => void }) 
     } finally {
       setACarregarModelo(null);
     }
+  }
+
+  /**
+   * Sonda uma loja: analisa a página e mostra o que lá encontrou (preço, imagem,
+   * descrição) antes de guardar seja o que for. Os seletores só entram na loja
+   * quando o utilizador aceitar.
+   */
+  async function sondar(indice: number) {
+    const loja = lojas[indice];
+    if (!loja?.url.trim()) {
+      setErro("Indique o endereço da página de produtos desta loja antes de sondar.");
+      return;
+    }
+    setASondar(indice);
+    setErro("");
+    setAviso("");
+    setSondas((atual) => ({ ...atual, [indice]: undefined }));
+    try {
+      const resultado = await sondarLoja({
+        url: loja.url.trim(),
+        fetcher: loja.fetcher || "http",
+        use_ai: sondaIA,
+        nome_loja: loja.name.trim(),
+        hint: [nome.trim() || categoria.trim(), "preço, imagem e descrição"].filter(Boolean).join(" · "),
+      });
+      setSondas((atual) => ({ ...atual, [indice]: resultado }));
+      if (!resultado.amostra?.length) {
+        setErro("A sonda não extraiu nenhum produto. Experimente o «Browser (JavaScript)» ou outro endereço.");
+      }
+    } catch (falha) {
+      setErro(falha instanceof Error ? falha.message : "A sonda falhou");
+    } finally {
+      setASondar(null);
+    }
+  }
+
+  /** Aceita a proposta da sonda: guarda os seletores na loja e completa o mapa. */
+  function usarSondagem(indice: number) {
+    const sonda = sondas[indice];
+    const scraper = sonda?.loja_sugerida?.scraper;
+    if (!sonda || !scraper) return;
+    setLojas((atual) =>
+      atual.map((loja, i) =>
+        i === indice
+          ? { ...loja, scraper, name: loja.name.trim() || sonda.loja_sugerida?.name || loja.name }
+          : loja,
+      ),
+    );
+    const novos = sonda.field_map ?? {};
+    setMapa((atual) => {
+      const resultado = { ...atual };
+      for (const [chave, campo] of Object.entries(novos)) {
+        // Só preenche o que está vazio: uma escolha do utilizador não é substituída.
+        if (campo && !String(resultado[chave] ?? "").trim()) resultado[chave] = String(campo);
+      }
+      return resultado;
+    });
+    setAviso(
+      `Seletores de «${sonda.loja_sugerida?.name}» aceites (${sonda.campos?.length ?? 0} campo(s)` +
+        (sonda.origem === "ia" ? ", proposta da IA" : ", proposta determinística") +
+        "). Ajuste o que precisar e crie o benchmark.",
+    );
+    setSondas((atual) => ({ ...atual, [indice]: undefined }));
   }
 
   async function submeter(evento: React.FormEvent) {
@@ -360,71 +449,119 @@ export function BenchmarksPage({ onOpen }: { onOpen?: (slug: string) => void }) 
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <Label>Lojas a comparar</Label>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    icon={<Plus size={14} />}
-                    onClick={() => setLojas((atual) => [...atual, { ...LOJA_VAZIA }])}
-                  >
-                    Adicionar loja
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 accent-teal-400"
+                        checked={sondaIA}
+                        onChange={(e) => setSondaIA(e.target.checked)}
+                      />
+                      Sonda com IA
+                    </label>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      icon={<Plus size={14} />}
+                      onClick={() => setLojas((atual) => [...atual, { ...LOJA_VAZIA }])}
+                    >
+                      Adicionar loja
+                    </Button>
+                  </div>
                 </div>
                 {lojas.map((loja, indice) => (
-                  <div key={indice} className="grid gap-2 rounded-xl border border-border/60 p-3 md:grid-cols-12">
-                    <div className="md:col-span-3">
-                      <Input
-                        value={loja.name}
-                        onChange={(e) =>
-                          setLojas((atual) => atual.map((l, i) => (i === indice ? { ...l, name: e.target.value } : l)))
-                        }
-                        placeholder="Nome da loja"
-                      />
-                    </div>
-                    <div className="md:col-span-4">
-                      <Input
-                        value={loja.url}
-                        onChange={(e) =>
-                          setLojas((atual) => atual.map((l, i) => (i === indice ? { ...l, url: e.target.value } : l)))
-                        }
-                        placeholder="https://loja.pt/categoria"
-                      />
-                    </div>
-                    <div className="md:col-span-4">
-                      <select
-                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        value={loja.template_id}
-                        onChange={(e) => void usarModelo(indice, e.target.value)}
-                      >
-                        <option value="">Seletores próprios (ou modelo…)</option>
-                        {(meta?.templates ?? []).map((modelo) => (
-                          <option key={modelo.id} value={modelo.id}>
-                            {modelo.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex items-center justify-end md:col-span-1">
-                      {aCarregarModelo === indice ? (
-                        <Loader2 size={16} className="animate-spin text-muted-foreground" />
-                      ) : (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          icon={<Trash2 size={14} />}
-                          onClick={() => setLojas((atual) => atual.filter((_, i) => i !== indice))}
-                          disabled={lojas.length === 1}
+                  <div key={indice} className="space-y-2 rounded-xl border border-border/60 p-3">
+                    <div className="grid gap-2 md:grid-cols-12">
+                      <div className="md:col-span-3">
+                        <Input
+                          value={loja.name}
+                          onChange={(e) =>
+                            setLojas((atual) => atual.map((l, i) => (i === indice ? { ...l, name: e.target.value } : l)))
+                          }
+                          placeholder="Nome da loja"
                         />
-                      )}
+                      </div>
+                      <div className="md:col-span-4">
+                        <Input
+                          value={loja.url}
+                          onChange={(e) =>
+                            setLojas((atual) => atual.map((l, i) => (i === indice ? { ...l, url: e.target.value } : l)))
+                          }
+                          placeholder="https://loja.pt/categoria"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <select
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          value={loja.fetcher ?? "http"}
+                          onChange={(e) =>
+                            setLojas((atual) =>
+                              atual.map((l, i) => (i === indice ? { ...l, fetcher: e.target.value } : l)),
+                            )
+                          }
+                          title="Como descarregar a página: pedido simples, browser com JavaScript ou browser furtivo"
+                        >
+                          {FETCHERS.map((opcao) => (
+                            <option key={opcao.id} value={opcao.id}>
+                              {opcao.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="md:col-span-3">
+                        <select
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          value={loja.template_id}
+                          onChange={(e) => void usarModelo(indice, e.target.value)}
+                        >
+                          <option value="">Seletores próprios (ou modelo…)</option>
+                          {(meta?.templates ?? []).map((modelo) => (
+                            <option key={modelo.id} value={modelo.id}>
+                              {modelo.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
-                    {loja.scraper && (
-                      <p className="text-xs text-muted-foreground md:col-span-12">
-                        Seletores carregados: {loja.scraper.list?.selector || "(sem lista)"} ·{" "}
-                        {(loja.scraper.fields ?? []).length} campo(s)
-                      </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        icon={aSondar === indice ? <Loader2 size={14} className="animate-spin" /> : <ScanSearch size={14} />}
+                        onClick={() => void sondar(indice)}
+                        disabled={aSondar !== null}
+                      >
+                        Sonda (IA)
+                      </Button>
+                      {loja.scraper && (
+                        <span className="text-xs text-muted-foreground">
+                          Seletores: {loja.scraper.list?.selector || "(sem lista)"} · {(loja.scraper.fields ?? []).length}{" "}
+                          campo(s)
+                        </span>
+                      )}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="ml-auto"
+                        icon={<Trash2 size={14} />}
+                        onClick={() => setLojas((atual) => atual.filter((_, i) => i !== indice))}
+                        disabled={lojas.length === 1}
+                      />
+                    </div>
+                    {aCarregarModelo === indice && (
+                      <p className="text-xs text-muted-foreground">A carregar o modelo de seletores…</p>
+                    )}
+                    {sondas[indice] && (
+                      <SondaPainel
+                        sonda={sondas[indice]!}
+                        onUsar={() => usarSondagem(indice)}
+                        onFechar={() => setSondas((atual) => ({ ...atual, [indice]: undefined }))}
+                      />
                     )}
                   </div>
                 ))}
@@ -556,6 +693,100 @@ export function BenchmarksPage({ onOpen }: { onOpen?: (slug: string) => void }) 
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * O que a sonda encontrou numa página — mostrado **antes** de se aceitar nada.
+ *
+ * A amostra é o que decide: se a imagem, o preço e a descrição aparecerem aqui,
+ * é o que vai para o benchmark depois de recolher.
+ */
+function SondaPainel({
+  sonda,
+  onUsar,
+  onFechar,
+}: {
+  sonda: SondaResultado;
+  onUsar: () => void;
+  onFechar: () => void;
+}) {
+  const campos = Object.entries(sonda.campos_detetados ?? {}).filter(([, seletor]) => Boolean(seletor));
+  return (
+    <div className="space-y-3 rounded-lg border border-teal-400/30 bg-teal-400/5 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <Badge variant={sonda.ok ? "success" : "warning"}>
+            {sonda.ok ? `${sonda.amostra?.length ?? 0} produto(s) de amostra` : "sem produtos"}
+          </Badge>
+          {sonda.origem && (
+            <span className="rounded-md bg-background/60 px-2 py-0.5 text-muted-foreground">
+              {sonda.origem === "ia" ? `IA · ${sonda.ai?.model || sonda.ai?.provider_label || "modelo"}` : "análise determinística"}
+            </span>
+          )}
+          {sonda.robots?.permitido === false && <Badge variant="warning">robots.txt proíbe</Badge>}
+          {sonda.robots?.permitido === true && (
+            <span className="text-muted-foreground">robots.txt permite</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button type="button" size="sm" onClick={onUsar} disabled={!sonda.loja_sugerida?.scraper}>
+            Usar estes seletores
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={onFechar}>
+            Descartar
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Lista: <span className="font-mono">{sonda.loja_sugerida?.scraper?.list?.selector || "(não detetada)"}</span>
+        {campos.length > 0 && (
+          <>
+            {" · "}
+            {campos.map(([chave, seletor]) => `${chave}=${seletor}`).join(" · ")}
+          </>
+        )}
+      </p>
+
+      {sonda.notas && <p className="text-xs italic text-muted-foreground">Nota do modelo: {sonda.notas}</p>}
+      {(sonda.avisos ?? []).map((aviso) => (
+        <p key={aviso} className="text-xs text-amber-200">
+          {aviso}
+        </p>
+      ))}
+
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {(sonda.amostra ?? []).slice(0, 6).map((oferta, indice) => (
+          <div key={`${oferta.product_key ?? indice}`} className="flex gap-2 rounded-lg border border-border/50 p-2">
+            {oferta.image ? (
+              <img
+                src={oferta.image}
+                alt=""
+                className="h-16 w-16 shrink-0 rounded-md object-contain bg-white/5"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-dashed border-border/60 text-[10px] text-muted-foreground">
+                sem imagem
+              </div>
+            )}
+            <div className="min-w-0 space-y-1">
+              <p className="line-clamp-2 text-xs font-medium">{oferta.product_name || "(sem nome)"}</p>
+              <p className="text-sm font-semibold text-teal-200">
+                {oferta.price !== null && oferta.price !== undefined ? eur(oferta.price, oferta.currency ?? "EUR") : "sem preço"}
+              </p>
+              {oferta.description ? (
+                <p className="line-clamp-2 text-[11px] text-muted-foreground">{oferta.description}</p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground/70">sem descrição</p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

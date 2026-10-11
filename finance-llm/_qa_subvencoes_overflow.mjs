@@ -5,8 +5,7 @@
  * as **fontes**: os elementos cuja largura excede a moldura da página e cujo pai
  * ainda cabe. São esses que têm de ser corrigidos.
  */
-const TOKEN =
-  "eyJzaWQiOiIyNzNiM2FhNWU2MDhhYWQzZDdhZWY2YTg3YmVkZDAyYzAyODgzYmVmNTYwMTRjMmIiLCJzdWIiOiIzYjFmZjQxNzdiOWFmNDhjNDAwYzM1YjFiMmY2NDYxOSIsImlhdCI6MTc5MTcxMDM5NCwiZXhwIjoxNzkxNzUzNTk0fQ.shle-ZAEx1KiQFsps9CBhFROKTW-k1JwXgIefyhp720";
+const TOKEN = process.env.QA_TOKEN || "";
 
 export default async function run(page) {
   await page.evaluate((t) => window.localStorage.setItem("finance-llm-token", t), TOKEN);

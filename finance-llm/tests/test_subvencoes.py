@@ -448,6 +448,37 @@ def test_jsonl_encontra_mesmo_o_ficheiro_em_disco(tmp_path: Path, monkeypatch: p
     assert subvencoes.tem_jsonl(legado) is True
 
 
+def test_manifesto_legado_e_migrado_na_leitura(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Um manifesto com `jsonl_path` absoluto converge para `jsonl` (nome).
+
+    Foi o que aconteceu na prática: o manifesto escrito antes da correção
+    guardava `C:\\…`, e ficaria assim para sempre — só os ficheiros relidos
+    passariam ao formato novo.
+    """
+    monkeypatch.setenv(subvencoes.DATA_DIR_ENV, str(tmp_path))
+    _dois_ficheiros(tmp_path)
+    subvencoes.ler_pasta()
+
+    # Reescreve o manifesto no formato antigo (caminho absoluto do anfitrião).
+    caminho = subvencoes.data_dir() / "_manifest.json"
+    dados = json.loads(caminho.read_text(encoding="utf-8"))
+    for lote in dados["lotes"].values():
+        lote["jsonl_path"] = f"C:\\LLMFinance\\finance-llm\\data\\subvencoes\\_normalized\\{lote.pop('jsonl')}"
+    caminho.write_text(json.dumps(dados, ensure_ascii=False), encoding="utf-8")
+
+    # Antes de reler, o `meta` já funciona (o resolvedor corta nos dois separadores).
+    assert subvencoes.meta()["lidos"] == 2
+
+    segunda = subvencoes.ler_pasta()
+    assert segunda["reutilizados_total"] == 2  # não houve releitura
+
+    migrado = json.loads(caminho.read_text(encoding="utf-8"))
+    for lote in migrado["lotes"].values():
+        assert "jsonl_path" not in lote
+        assert Path(lote["jsonl"]).is_absolute() is False
+    assert subvencoes.meta()["registos_lidos"] == 3
+
+
 def test_apagar_o_jsonl_obriga_a_reler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(subvencoes.DATA_DIR_ENV, str(tmp_path))
     _dois_ficheiros(tmp_path)
@@ -474,10 +505,29 @@ def test_preview_le_o_jsonl_do_ano(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     _dois_ficheiros(tmp_path)
     subvencoes.ler_pasta()
     amostra = subvencoes.preview(2024, limite=1)
-    assert amostra["total"] == 2
+    assert amostra["total"] == 2  # do manifesto, sem percorrer o ficheiro
     assert len(amostra["items"]) == 1
     assert amostra["items"][0]["ano"] == 2024
     assert subvencoes.preview(2030)["total"] == 0
+    assert subvencoes.preview(2030)["items"] == []
+
+
+def test_preview_le_so_as_primeiras_linhas(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A amostra não pode percorrer o ficheiro todo (o real tem 148 MB).
+
+    O total vem do manifesto; as linhas lidas são só as pedidas. Garante-se
+    contando as linhas efetivamente entregues pelo iterador do JSONL.
+    """
+    monkeypatch.setenv(subvencoes.DATA_DIR_ENV, str(tmp_path))
+    linhas = [_linha_dados(montante=str(1000 + i), nif_beneficiario=f"50000000{i}") for i in range(30)]
+    _escrever_ods(tmp_path / "2025" / "grande.ods", "Subv_2025", CABECALHO + linhas)
+    subvencoes.ler_pasta()
+    assert subvencoes.read_manifest()["lotes"]["2025/grande.ods"]["registos"] == 30
+
+    amostra = subvencoes.preview(2025, limite=5)
+    assert amostra["total"] == 30
+    assert len(amostra["items"]) == 5
+    assert [item["linha"] for item in amostra["items"]] == [6, 7, 8, 9, 10]
 
 
 def test_meta_conta_pendentes_e_anos(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

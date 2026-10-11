@@ -26,6 +26,14 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir markitdown[pdf]
 
+# Browsers do Playwright **na imagem** (fetchers `dynamic` e `stealth` das sondas).
+# Instalá-los dentro do contentor (com `scrapling install`) perde-se quando o
+# contentor é recriado — e a sonda passava a falhar com «Executable doesn't
+# exist» a meio de uma recolha. Sem eles, os sites de lojas (Worten, Fnac, Darty)
+# respondem 403 ao pedido simples.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN scrapling install || playwright install --with-deps chromium
+
 # Copiar código do projeto
 COPY . .
 

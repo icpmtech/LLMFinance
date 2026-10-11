@@ -204,8 +204,21 @@ def _usable(stats: Dict[str, Any]) -> bool:
     return stats["text_ratio"] >= 0.5 and stats["title_ratio"] >= 0.5 and stats["link_ratio"] >= 0.4
 
 
-def analyze_page(page: Any, limit: int = 8) -> List[Dict[str, Any]]:
-    """Candidatos a seletor de lista, ordenados por utilidade."""
+def _usable_produto(stats: Dict[str, Any]) -> bool:
+    """Um item de produto: ligação, texto e — sobretudo — **preço**.
+
+    O `_usable` genérico exige títulos com mais de 25 caracteres (faz sentido em
+    notícias), o que exclui listas de produtos com nomes curtos («Cabo HDMI 2 m»)
+    e fazia a sonda responder «não há produtos» numa página cheia deles. Aqui
+    aceita-se também quem tenha preço na maioria dos itens.
+    """
+    if stats["link_ratio"] < 0.4 or stats["text_ratio"] < 0.5:
+        return False
+    return stats.get("price_ratio", 0.0) >= 0.4 or stats["title_ratio"] >= 0.5
+
+
+def _assinaturas(page: Any) -> Dict[Tuple[str, Tuple[str, ...]], int]:
+    """Quantas vezes cada padrão «tag + classes» se repete (a base da análise)."""
     signatures: Dict[Tuple[str, Tuple[str, ...]], int] = defaultdict(int)
     for tag in _CONTAINER_TAGS:
         try:
@@ -217,6 +230,12 @@ def analyze_page(page: Any, limit: int = 8) -> List[Dict[str, Any]]:
             signatures[(tag, classes)] += 1
             if len(classes) > 3:  # variantes longas: interessa a parte estável
                 signatures[(tag, classes[:2])] += 1
+    return signatures
+
+
+def analyze_page(page: Any, limit: int = 8) -> List[Dict[str, Any]]:
+    """Candidatos a seletor de lista, ordenados por utilidade."""
+    signatures = _assinaturas(page)
 
     candidatos: Dict[str, Dict[str, Any]] = {}
     for (tag, classes), count in sorted(signatures.items(), key=lambda item: -item[1])[:40]:
@@ -246,6 +265,42 @@ def analyze_page(page: Any, limit: int = 8) -> List[Dict[str, Any]]:
     ordered = sorted(candidatos.values(), key=lambda c: -c["score"])[: max(1, limit)]
     # O nó do melhor candidato é preciso para a amostra de HTML enviada à IA;
     # nos restantes só pesaria na memória e nas respostas da API.
+    for index, entry in enumerate(ordered):
+        if index > 0:
+            entry.pop("node", None)
+    return ordered
+
+
+def analyze_products(page: Any, limit: int = 8) -> List[Dict[str, Any]]:
+    """Candidatos a **lista de produtos**, ordenados pelo preço que trazem.
+
+    Separa-se do `analyze_page` de propósito: uma página de loja tem menus,
+    «recomendados» e avisos de cookies que passam o teste genérico; o que
+    distingue o catálogo é cada item ter um preço.
+    """
+    signatures = _assinaturas(page)
+    candidatos: Dict[str, Dict[str, Any]] = {}
+    for (tag, classes), count in sorted(signatures.items(), key=lambda item: -item[1])[:60]:
+        if count < 3 or len(classes) > 4:
+            continue
+        selector = _node_selector(tag, list(classes))
+        if selector in candidatos:
+            continue
+        stats = _stats_for(page, selector)
+        if not stats or not _usable_produto(stats):
+            continue
+        candidatos[selector] = {**stats, "score": _product_score(stats)}
+
+    # Contentores genéricos (só o `tag`) também podem ser a lista de produtos —
+    # por exemplo uma grelha de `<li>` sem classes.
+    for tag in _CONTAINER_TAGS:
+        if tag in candidatos:
+            continue
+        stats = _stats_for(page, tag)
+        if stats and _usable_produto(stats):
+            candidatos[tag] = {**stats, "score": _product_score(stats)}
+
+    ordered = sorted(candidatos.values(), key=lambda c: -c["score"])[: max(1, limit)]
     for index, entry in enumerate(ordered):
         if index > 0:
             entry.pop("node", None)
@@ -1278,7 +1333,11 @@ def _suggest_product_source_sync(
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "url": url, "error": f"{type(exc).__name__}: {exc}", "analysis": []}
 
-    analysis = analyze_page(page, limit=8)
+    analysis = analyze_products(page, limit=8)
+    if not analysis:
+        # Rede de segurança: páginas sem preço (catálogos «a pedir orçamento»)
+        # ainda podem ter uma lista que vale a pena propor.
+        analysis = analyze_page(page, limit=8)
     if not analysis:
         return {
             "ok": False,

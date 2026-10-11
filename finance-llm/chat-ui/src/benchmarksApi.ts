@@ -17,6 +17,7 @@ export interface BenchmarkFieldMap {
   price?: string;
   price_original?: string;
   product_name?: string;
+  description?: string;
   brand?: string;
   category?: string;
   ean?: string;
@@ -145,6 +146,7 @@ export interface BenchmarkOffer {
   _id?: string;
   product_key?: string;
   product_name?: string;
+  description?: string | null;
   brand?: string | null;
   category?: string | null;
   sku?: string | null;
@@ -261,6 +263,38 @@ export interface BenchmarkIndexInfo {
   total: number;
   publicos: number;
   indexes: string[];
+}
+
+/** Uma oferta como a sonda a viu na página (antes de guardar fosse o que fosse). */
+export interface SondaOferta {
+  product_name?: string | null;
+  price?: number | null;
+  currency?: string | null;
+  image?: string | null;
+  url?: string | null;
+  description?: string | null;
+  brand?: string | null;
+  availability?: string | null;
+  product_key?: string | null;
+}
+
+export interface SondaResultado {
+  ok: boolean;
+  url: string;
+  titulo_pagina?: string | null;
+  origem?: "ia" | "heuristica" | string | null;
+  ai?: { provider?: string; provider_label?: string; model?: string; notes?: string } | null;
+  robots?: { permitido?: boolean | null; detalhe?: string } | null;
+  campos?: string[];
+  field_map?: BenchmarkFieldMap;
+  campos_detetados?: Record<string, string | null | undefined>;
+  candidatos_lista?: { selector?: string; count?: number; price_ratio?: number; samples?: string[] }[];
+  tentativas?: { origin?: string; items?: number }[];
+  amostra?: SondaOferta[];
+  loja_sugerida?: BenchmarkStore | null;
+  notas?: string;
+  avisos?: string[];
+  erro?: string | null;
 }
 
 async function ler<T>(res: Response, contexto: string): Promise<T> {
@@ -405,4 +439,31 @@ export async function listarBenchmarksPublicos(): Promise<{
   total: number;
 }> {
   return ler(await fetch(`${API_BASE}/benchmarks/publico/lista`), "Erro ao listar os benchmarks públicos");
+}
+
+/**
+ * Sonda uma página de loja: procura o preço, a imagem e a descrição dos produtos.
+ *
+ * A análise determinística corre primeiro e a IA é chamada a seguir (opcional);
+ * o que volta já é **validado a sério** — a amostra mostra as ofertas tal como
+ * ficariam no benchmark.
+ */
+export async function sondarLoja(payload: {
+  url: string;
+  fetcher?: string;
+  hint?: string;
+  use_ai?: boolean;
+  provider?: string;
+  model?: string;
+  benchmark?: string;
+  nome_loja?: string;
+}): Promise<SondaResultado> {
+  return ler<SondaResultado>(
+    await fetch(`${API_BASE}/benchmarks/sonda`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ use_ai: true, fetcher: "http", ...payload }),
+    }),
+    "A sonda não conseguiu analisar a página",
+  );
 }

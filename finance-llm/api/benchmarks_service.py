@@ -367,6 +367,28 @@ def recolher(
     return resumo
 
 
+#: Símbolo monetário → código ISO. Evita mostrar «51,77 EUR» numa loja inglesa.
+_MOEDA_POR_SIMBOLO = (
+    ("R$", "BRL"),
+    ("US$", "USD"),
+    ("€", "EUR"),
+    ("£", "GBP"),
+    ("$", "USD"),
+)
+
+
+def _moeda_da_amostra(previsao: Dict[str, Any]) -> Optional[str]:
+    """Deduz a moeda a partir do símbolo que aparece nos preços da página."""
+    for item in (previsao.get("items") or [])[:10]:
+        dados = item.get("data") if isinstance(item.get("data"), dict) else {}
+        for valor in dados.values():
+            texto = str(valor or "")
+            for simbolo, moeda in _MOEDA_POR_SIMBOLO:
+                if simbolo in texto:
+                    return moeda
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Sonda de uma loja (com IA opcional)
 # ---------------------------------------------------------------------------
@@ -455,7 +477,7 @@ async def sondar_loja(
     benchmark_teste = {
         "slug": benchmark or "sonda",
         "match_on": "nome",
-        "currency": "EUR",
+        "currency": _moeda_da_amostra(resultado.get("preview") or {}) or "EUR",
         "field_map": mapa,
     }
     amostra: List[Dict[str, Any]] = []
@@ -844,6 +866,14 @@ tr:hover td { background: #141a25; }
 .min { color: #34d399; font-weight: 600; }
 .max { color: #f87171; }
 .tag { display: inline-block; padding: 1px 7px; border-radius: 999px; background: #1f2937; color: #cbd5e1; font-size: 11px; }
+.produto { display: flex; gap: 10px; align-items: flex-start; }
+.thumb { width: 46px; height: 46px; flex: 0 0 46px; border-radius: 8px; object-fit: contain;
+         background: #0b0f16; border: 1px solid #24303f; }
+.thumb.vazio { display: block; border-style: dashed; }
+.nome-produto { font-weight: 600; }
+.descricao { display: block; margin-top: 3px; color: #94a3b8; font-size: 12px;
+             max-width: 460px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2;
+             -webkit-box-orient: vertical; }
 footer { color: #64748b; font-size: 12px; padding: 24px 22px 40px; border-top: 1px solid #1f2937; }
 .vazio { background: #161c28; border: 1px dashed #334155; border-radius: 12px; padding: 18px; color: #94a3b8; }
 """
@@ -905,9 +935,20 @@ def html_publico(
         marca = escape(str(produto.get("brand") or "sem marca"))
         dispersao = f"{produto['spread_pct']}%" if produto.get("spread_pct") is not None else "—"
         loja_barata = escape(str(melhor.get("store_name") or "—"))
+        # A imagem e a descrição vêm da oferta mais barata: é o que o visitante
+        # quer ver antes de clicar.
+        imagem = str(melhor.get("image") or "").strip()
+        miniatura = (
+            f'<img class="thumb" src="{escape(imagem, quote=True)}" alt="" loading="lazy" referrerpolicy="no-referrer">'
+            if imagem
+            else '<span class="thumb vazio"></span>'
+        )
+        descricao_bruta = str(melhor.get("description") or "").strip()
+        descricao = f'<span class="descricao">{escape(descricao_bruta[:240])}</span>' if descricao_bruta else ""
         linhas.append(
             "<tr>"
-            f"<td>{nome_html}<br><span class='tag'>{marca}</span></td>"
+            f'<td><div class="produto">{miniatura}<div><span class="nome-produto">{nome_html}</span>'
+            f"<br><span class='tag'>{marca}</span>{descricao}</div></div></td>"
             f"<td>{int(produto.get('stores') or 0)}</td>"
             f"<td class='min'>{_eur(produto.get('price_min'))}</td>"
             f"<td class='max'>{_eur(produto.get('price_max'))}</td>"

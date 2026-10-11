@@ -183,12 +183,17 @@ sem larguras fixas.
 * **`truncate` num filho de `flex` sem `min-w-0` estoura o cartão.** O valor
   padrão de `min-width` num item de `flex` é `auto`, pelo que um `<span>` com
   `truncate` (isto é, `white-space: nowrap`) **cresce até à largura do texto** em
-  vez de cortar: um nome de entidade com 516 px alargou o cartão das barras para
-  668 px e a página ganhou ~340 px de rolagem horizontal a 390 px. A barra de
-  rolagem do documento ficava escondida (`overflow-hidden` na moldura), pelo que
-  o sintoma visível era só «conteúdo cortado». Correção: `min-w-0 flex-1` no
-  rótulo e `shrink-0` no valor. Medir sempre com
-  `getElement.scrollWidth - clientWidth` **por elemento**, não só no `main`.
+  vez de cortar. Correção: `min-w-0 flex-1` no rótulo e `shrink-0` no valor.
+* **Um item de grelha tem `min-width: auto` (= `min-content`) e alarga a própria
+  coluna.** A correção do ponto anterior não chegou: a coluna continuava com
+  **667,8 px** dentro de um contentor de 358 px, porque o cartão (item do
+  `grid`) impunha o seu `min-content` como mínimo da pista. Os indicadores do
+  topo nunca estouraram porque o `Kpi` já passava `min-w-0` ao `Card` — foi esse
+  o sinal que resolveu o caso. Correção: `min-w-0` em **todos** os cartões/colunas
+  que são itens de grelha (Painel, Pesquisa e Ficha). Medir sempre
+  `scrollWidth - clientWidth` **por elemento**, não só no `main`, e listar apenas
+  as **fontes** do estouro (elementos que excedem e cujo pai ainda cabe) — a
+  lista completa tem 133 descendentes e esconde a causa.
 * **Caminho absoluto no `_manifest.json` não sobrevive ao contentor.** A pasta
   `data/subvencoes` é a mesma no anfitrião (`C:\…`) e dentro do contentor
   (`/app/…`). Guardar `jsonl_path` absoluto fez o painel do Docker mostrar
@@ -202,6 +207,10 @@ sem larguras fixas.
   dizia «Sem dados indexados. Abra o separador *Ficheiros*…» — verdade só
   depois de uma consulta de agregações sobre 414 mil documentos. Passou a
   distinguir «a carregar…» de «sem dados».
+* **«Amostra lida do disco» a 8,8 s.** A rota percorria as 212 511 linhas do
+  JSONL (148 MB) só para as contar. O total já está no manifesto (`registos`,
+  gravado na leitura), pelo que a amostra passou a ler **apenas as primeiras N
+  linhas** e a devolver o total do manifesto — de 8,8 s para menos de 0,2 s.
 * **Células tapadas por `span`.** O `FUNDAMENTO LEGAL` do cabeçalho ocupa três
   colunas; se as colunas tapadas não forem contadas como vazias, *tipo de ato*,
   *número* e *data* desalinham. O mesmo para `number-columns-repeated`, que
@@ -218,7 +227,7 @@ sem larguras fixas.
 
 ## Testes
 
-* `tests/test_subvencoes.py` — 40 verificações sem rede nem Elasticsearch:
+* `tests/test_subvencoes.py` — 43 verificações sem rede nem Elasticsearch:
   deteção de ano (subpasta/nome/folha), cabeçalho em duas linhas, `span` e
   colunas repetidas, montantes e datas, NIF estrangeiro, tipo de beneficiário,
   leitura e reaproveitamento por `sha256`, **portabilidade do manifesto**
@@ -234,9 +243,13 @@ sem larguras fixas.
 * `_qa_subvencoes_browser.mjs` — percorre os quatro separadores num browser a
   sério e mede o DOM (KPIs, resultado por filtro, páginas, fichas, lotes) em
   1280×800 e 390×844.
-* `_qa_subvencoes_overflow.mjs` — lista os elementos com
-  `scrollWidth - clientWidth > 2` a 390 px (foi o que encontrou as barras a
-  668 px).
+* `_qa_subvencoes_overflow.mjs` — lista as **fontes** do estouro a 390 px
+  (elementos que excedem a moldura e cujo pai ainda cabe) e prova
+  `scrollWidth === clientWidth` no Painel e na Pesquisa. A primeira versão
+  listava os 133 descendentes afetados e escondia a causa.
+* `_qa_subvencoes_mincontent.mjs` — mede a largura `min-content` de cada
+  elemento e a largura das pistas da grelha (foi o que mostrou a coluna de
+  667,8 px dentro de um contentor de 358 px).
 
 ## Resultado da leitura dos ficheiros de exemplo
 

@@ -373,6 +373,25 @@ TAGS_METADATA: List[Dict[str, str]] = [
         ),
     },
     {
+        "name": "devedores",
+        "description": (
+            "Listas públicas de devedores (Autoridade Tributária e Segurança "
+            "Social): recolha dos PDF oficiais para PDF + JSON com a data da "
+            "recolha, indexação em `finance_devedores` e área de pesquisa por "
+            "nome/NIF, tipo, escalão e data."
+        ),
+    },
+    {
+        "name": "subvencoes",
+        "description": (
+            "Subvenções públicas (Lei n.º 64/2013, de 27/08): leitura das "
+            "listagens anuais da IGF em `data/subvencoes` (um `.ods` por ano, ou "
+            "uma subpasta por ano), normalização para JSONL, indexação em "
+            "`finance_subvencoes`, pesquisa por ano/entidade/beneficiário/valor, "
+            "painel, fichas por NIF, amostra lida do disco e exportação CSV."
+        ),
+    },
+    {
         "name": "gleif",
         "description": (
             "GLEIF / LEI: registos *Legal Entity Identifier* do *Golden Copy* "

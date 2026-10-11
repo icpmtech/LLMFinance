@@ -481,13 +481,31 @@ export function BenchmarkDetailPage({ slug, onBack }: { slug: string; onBack?: (
                   {ofertas.map((oferta, indice) => (
                     <tr key={oferta._id ?? `${oferta.store_id}-${indice}`} className="border-b border-border/40">
                       <td className="py-2 pr-3">
-                        {oferta.url ? (
-                          <a className="hover:underline" href={oferta.url} target="_blank" rel="noreferrer">
-                            {oferta.product_name}
-                          </a>
-                        ) : (
-                          oferta.product_name
-                        )}
+                        <div className="flex items-start gap-2">
+                          {oferta.image ? (
+                            <img
+                              src={oferta.image}
+                              alt=""
+                              className="h-10 w-10 shrink-0 rounded-md object-contain bg-white/5"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="h-10 w-10 shrink-0 rounded-md border border-dashed border-border/60" />
+                          )}
+                          <div className="min-w-0">
+                            {oferta.url ? (
+                              <a className="hover:underline" href={oferta.url} target="_blank" rel="noreferrer">
+                                {oferta.product_name}
+                              </a>
+                            ) : (
+                              oferta.product_name
+                            )}
+                            {oferta.description && (
+                              <p className="line-clamp-2 max-w-md text-xs text-muted-foreground">{oferta.description}</p>
+                            )}
+                          </div>
+                        </div>
                       </td>
                       <td className="py-2 pr-3 text-muted-foreground">{oferta.store_name || oferta.store_id}</td>
                       <td className="py-2 pr-3 text-right">{eur(oferta.price, oferta.currency ?? moeda)}</td>

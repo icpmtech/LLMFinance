@@ -5,9 +5,11 @@
  * documento; tudo é medido no último. Os cliques nos separadores são feitos por
  * `evaluate` (o gestor de janelas deixa o botão coberto e o clique por
  * *hit-testing* expira).
+ *
+ * O token de sessão vem de `QA_TOKEN` (nunca fica escrito aqui):
+ *   $env:QA_TOKEN = (python _tmp_subvencoes_session.py | ConvertFrom-Json).token
  */
-const TOKEN =
-  "eyJzaWQiOiIyNzNiM2FhNWU2MDhhYWQzZDdhZWY2YTg3YmVkZDAyYzAyODgzYmVmNTYwMTRjMmIiLCJzdWIiOiIzYjFmZjQxNzdiOWFmNDhjNDAwYzM1YjFiMmY2NDYxOSIsImlhdCI6MTc5MTcxMDM5NCwiZXhwIjoxNzkxNzUzNTk0fQ.shle-ZAEx1KiQFsps9CBhFROKTW-k1JwXgIefyhp720";
+const TOKEN = process.env.QA_TOKEN || "";
 
 export default async function run(page, ui) {
   const resultado = {};
@@ -15,14 +17,21 @@ export default async function run(page, ui) {
   await page.evaluate((t) => window.localStorage.setItem("finance-llm-token", t), TOKEN);
   await page.goto("http://127.0.0.1:4180/subvencoes?v=20261009c", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(4000);
-  await page.waitForFunction(() => document.body.innerText.includes("Subvenções públicas"), {
-    timeout: 20000,
+  await page.waitForFunction(() => document.body.innerText.includes("Subvenções públicas"), null, {
+    timeout: 30000,
   });
   // O painel só aparece quando a leitura e as agregações (414 mil documentos)
-  // terminam: esperar pelo número em vez de dormir um tempo fixo.
-  await page.waitForFunction(() => document.body.innerText.replace(/\u00a0/g, " ").includes("414 759"), {
-    timeout: 120000,
-  });
+  // terminam: esperar pelo cartão por ano, em vez de dormir um tempo fixo.
+  await page.waitForFunction(
+    () => {
+      const mains = Array.from(document.querySelectorAll("main"));
+      const el = mains[mains.length - 1];
+      const t = el ? el.innerText : "";
+      return t.includes("ver registos") && !t.includes("A carregar");
+    },
+    null,
+    { timeout: 120000 }
+  );
 
   const main = page.locator("main").last();
   const texto = async () => (await main.innerText()).replace(/\u00a0/g, " ");
@@ -99,7 +108,9 @@ export default async function run(page, ui) {
 
   t = await texto();
   resultado.pesquisa = {
-    temKpis: t.includes("Registos") && t.includes("Montante"),
+    // Os rótulos dos indicadores são renderizados em maiúsculas (`uppercase`),
+    // e o `innerText` devolve o texto já transformado.
+    temKpis: t.includes("REGISTOS") && t.includes("MONTANTE"),
     mostra428: /\b428\b/.test(t),
     entidadeNosResultados: t.includes("MUNICÍPIO DE ALMADA"),
     resumoFiltro: t.includes("Resumo do filtro"),
@@ -138,7 +149,7 @@ export default async function run(page, ui) {
     nif: t.includes("510557260"),
     temPorAno: t.includes("Por ano de listagem"),
     temEntidades: t.includes("Entidades que atribuíram"),
-    total: (t.match(/TOTAL[^\n]{0,44}/) || [""])[0],
+    total: (t.match(/TOTAL[^\n]*/) || [""])[0].slice(0, 40),
   };
 
   // -------------------------------------------------- ficha da entidade
@@ -152,7 +163,7 @@ export default async function run(page, ui) {
     aberta: t.includes("MUNICÍPIO DE ALMADA"),
     temBeneficiarios: t.includes("Beneficiários"),
     temPorAno: t.includes("Por ano de listagem"),
-    total: (t.match(/TOTAL[^\n]{0,44}/) || [""])[0],
+    total: (t.match(/TOTAL[^\n]*/) || [""])[0].slice(0, 40),
     limite: (t.match(/A mostrar \d+ de [\d\s]{0,12}registos/) || [""])[0],
   };
 

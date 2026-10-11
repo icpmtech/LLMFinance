@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **964 operações** em **39 grupos**.
+Versão `0.4.0` · **1026 operações** em **41 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -42,6 +42,8 @@ Versão `0.4.0` · **964 operações** em **39 grupos**.
 - **dossier** — Dossier do utilizador: fichas favoritas (entidades e contratos) e pastas/histórico de consultas.
 - **import** — Importação de ficheiros (.zip/.xlsx/.json): pré-visualização das linhas e indexação (contratos no Elasticsearch, entidades em JSONL).
 - **contribuintes** — Contribuintes: índice único com todos os NIF/NIPC do sistema (agregado dos contratos PT/ES, cadastro de entidades, publicações societárias, CIRE, PessoasIQ, firmas, marcas e CRM), pesquisa e ficha por NIF, e sincronização manual/agendada (cron) a partir de todos os índices da plataforma.
+- **devedores** — Listas públicas de devedores (Autoridade Tributária e Segurança Social): recolha dos PDF oficiais para PDF + JSON com a data da recolha, indexação em `finance_devedores` e área de pesquisa por nome/NIF, tipo, escalão e data.
+- **subvencoes** — Subvenções públicas (Lei n.º 64/2013, de 27/08): leitura das listagens anuais da IGF em `data/subvencoes` (um `.ods` por ano, ou uma subpasta por ano), normalização para JSONL, indexação em `finance_subvencoes`, pesquisa por ano/entidade/beneficiário/valor, painel, fichas por NIF, amostra lida do disco e exportação CSV.
 - **gleif** — GLEIF / LEI: registos *Legal Entity Identifier* do *Golden Copy* (Golden Copy em ficheiro `data/gleif/lei.jsonl` e índice `finance_gleif_lei`), pesquisa por nome/LEI/cidade com facetas, agregado por país/região para o mapa e ingestão a partir da API oficial ou dos ficheiros Golden Copy (LEI-CDF).
 - **world** — World Model: estado materializado do mundo da contratação pública (entidades, contratos, relações, eventos e histórico), rede neuronal dinâmica (crescimento, poda, memória e previsão — mostrada como grafo), motor de grafo/tempo (relações, timestamps e causalidade candidata), simulador de futuro (t0 → t3 com cenários e Monte Carlo) e agente de investigação (Observe → Hypothesize → Search → Validate → Simulate → Evidence Report).
 - **spa** — Páginas da interface (single-page app). Devolvem o `index.html` e existem para permitir abrir os ecrãs diretamente pelo endereço — não são endpoints de dados.
@@ -53,6 +55,38 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | Método | Caminho | Resumo |
 | --- | --- | --- |
 | `GET` | `/` | Read Root |
+| `GET` | `/benchmark` | Serve Benchmark Spa Page |
+| `GET` | `/benchmark/anomalies` | Benchmark Anomalies |
+| `GET` | `/benchmark/buyer-graph` | Benchmark Buyer Graph |
+| `GET` | `/benchmark/by-cpv` | Benchmark By Cpv |
+| `GET` | `/benchmark/by-entity` | Benchmark By Entity |
+| `POST` | `/benchmark/compare` | Benchmark Compare Endpoint |
+| `GET` | `/benchmark/cpv` | Benchmark Cpv |
+| `POST` | `/benchmark/cross` | Benchmark Cross Endpoint |
+| `GET` | `/benchmark/entities` | Benchmark Entities |
+| `GET` | `/benchmark/entity` | Benchmark Entity |
+| `GET` | `/benchmark/gaps` | Benchmark Gaps |
+| `GET` | `/benchmark/meta` | Benchmark Meta |
+| `GET` | `/benchmark/price-risk` | Benchmark Price Risk |
+| `POST` | `/benchmark/report` | Benchmark Report |
+| `GET` | `/benchmark/seller-graph` | Benchmark Seller Graph |
+| `GET` | `/benchmark/{path}` | Serve Benchmark Spa Page |
+| `POST` | `/benchmarks` | Benchmark Criar |
+| `GET` | `/benchmarks/lista` | Benchmarks Lista |
+| `GET` | `/benchmarks/meta` | Benchmarks Meta |
+| `GET` | `/benchmarks/modelo/{template_id}` | Benchmarks Modelo |
+| `GET` | `/benchmarks/publico/lista` | Benchmarks Publicos |
+| `GET` | `/benchmarks/publico/{slug}` | Benchmark Publico |
+| `POST` | `/benchmarks/sonda` | Benchmarks Sonda |
+| `GET` | `/benchmarks/{slug}` | Benchmark Detalhe |
+| `PUT` | `/benchmarks/{slug}` | Benchmark Editar |
+| `DELETE` | `/benchmarks/{slug}` | Benchmark Apagar |
+| `GET` | `/benchmarks/{slug}/analise` | Benchmark Analise |
+| `GET` | `/benchmarks/{slug}/comparacao` | Benchmark Comparacao |
+| `GET` | `/benchmarks/{slug}/ofertas` | Benchmark Ofertas |
+| `POST` | `/benchmarks/{slug}/publicar` | Benchmark Publicar |
+| `DELETE` | `/benchmarks/{slug}/publicar` | Benchmark Despublicar |
+| `POST` | `/benchmarks/{slug}/recolher` | Benchmark Recolher |
 | `GET` | `/cae/autocomplete` | Autocomplete Cae |
 | `GET` | `/cae/list` | List Cae |
 | `GET` | `/cae/{code}` | Get Cae |
@@ -111,22 +145,14 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/contracts-fr/translate/status` | Contratos Fr Translate Status Endpoint |
 | `GET` | `/contracts-fr/{doc_id}` | Contrato Fr Detail Endpoint |
 | `GET` | `/deep-search` | Serve Spa Page |
+| `POST` | `/deep-search/analogies` | Deep Search Analogies |
+| `POST` | `/deep-search/analysis` | Deep Search Analysis |
 | `POST` | `/deep-search/ask` | Deep Search Ask |
 | `GET` | `/deep-search/examples` | Deep Search Examples |
 | `GET` | `/deep-search/meta` | Deep Search Meta |
+| `POST` | `/deep-search/ontology` | Deep Search Ontology |
 | `GET` | `/deep-search/search` | Deep Search Sources |
 | `GET` | `/deep-search/suggest` | Deep Search Suggest |
-| `POST` | `/devedores/collect` | Devedores Collect |
-| `GET` | `/devedores/devedor/{nif}` | Devedores Devedor |
-| `GET` | `/devedores/files` | Devedores Files |
-| `GET` | `/devedores/files/{base}` | Devedores File |
-| `GET` | `/devedores/files/{base}/pdf` | Devedores File Pdf |
-| `GET` | `/devedores/fontes` | Devedores Fontes |
-| `POST` | `/devedores/ingest` | Devedores Ingest |
-| `GET` | `/devedores/jobs` | Devedores Jobs |
-| `GET` | `/devedores/jobs/{job_id}` | Devedores Job |
-| `GET` | `/devedores/meta` | Devedores Meta |
-| `GET` | `/devedores/search` | Devedores Search |
 | `GET` | `/docs/document/{nome}` | Servir Documento |
 | `GET` | `/docs/documents` | Listar Documentos |
 | `GET` | `/docs/markdown/{nome}` | Ler Markdown |
@@ -269,6 +295,8 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `POST` | `/people/{nif}/social-collect` | People Social Collect Route |
 | `GET` | `/pessoas-iq` | Serve Spa Page |
 | `GET` | `/pessoas-iq/politicos` | Serve Spa Page |
+| `GET` | `/racius/meta` | Racius Meta |
+| `GET` | `/racius/search` | Racius Search |
 | `POST` | `/reports/admin/catalogue` | Reports Admin Save Package |
 | `DELETE` | `/reports/admin/catalogue/{package_id}` | Reports Admin Delete Package |
 | `GET` | `/reports/admin/export.csv` | Reports Admin Export |
@@ -528,6 +556,7 @@ Cadastro de entidades e empresas: pesquisa (GET/POST), estatísticas, países, a
 | `GET` | `/entities/{nif}` | Entities Detail |
 | `POST` | `/entities/{nif}/enrich` | Entities Enrich |
 | `GET` | `/entities/{nif}/relations` | Entities Relations |
+| `GET` | `/entities/{nif}/report-dossie.pdf` | Entities Report Dossie Pdf |
 | `GET` | `/entities/{nif}/report-processos.pdf` | Entities Report Processos Pdf |
 | `GET` | `/entities/{nif}/report.pdf` | Entities Report Pdf |
 | `POST` | `/firmas/ingest` | Firmas Ingest |
@@ -1108,6 +1137,44 @@ Contribuintes: índice único com todos os NIF/NIPC do sistema (agregado dos con
 | `POST` | `/contribuintes/sync` | Contribuintes Sync |
 | `GET` | `/contribuintes/{nif}` | Contribuintes Detail |
 
+## devedores
+
+Listas públicas de devedores (Autoridade Tributária e Segurança Social): recolha dos PDF oficiais para PDF + JSON com a data da recolha, indexação em `finance_devedores` e área de pesquisa por nome/NIF, tipo, escalão e data.
+
+| Método | Caminho | Resumo |
+| --- | --- | --- |
+| `POST` | `/devedores/collect` | Devedores Collect |
+| `GET` | `/devedores/devedor/{nif}` | Devedores Devedor |
+| `GET` | `/devedores/files` | Devedores Files |
+| `GET` | `/devedores/files/{base}` | Devedores File |
+| `GET` | `/devedores/files/{base}/pdf` | Devedores File Pdf |
+| `GET` | `/devedores/fontes` | Devedores Fontes |
+| `POST` | `/devedores/ingest` | Devedores Ingest |
+| `GET` | `/devedores/jobs` | Devedores Jobs |
+| `GET` | `/devedores/jobs/{job_id}` | Devedores Job |
+| `GET` | `/devedores/meta` | Devedores Meta |
+| `GET` | `/devedores/search` | Devedores Search |
+
+## subvencoes
+
+Subvenções públicas (Lei n.º 64/2013, de 27/08): leitura das listagens anuais da IGF em `data/subvencoes` (um `.ods` por ano, ou uma subpasta por ano), normalização para JSONL, indexação em `finance_subvencoes`, pesquisa por ano/entidade/beneficiário/valor, painel, fichas por NIF, amostra lida do disco e exportação CSV.
+
+| Método | Caminho | Resumo |
+| --- | --- | --- |
+| `GET` | `/subvencoes/amostra/{ano}` | Subvencoes Amostra |
+| `GET` | `/subvencoes/beneficiario/{nif}` | Subvencoes Beneficiario |
+| `GET` | `/subvencoes/entidade/{nif}` | Subvencoes Entidade |
+| `GET` | `/subvencoes/export.csv` | Subvencoes Export |
+| `GET` | `/subvencoes/ficheiros` | Subvencoes Ficheiros |
+| `POST` | `/subvencoes/indexar` | Subvencoes Indexar |
+| `GET` | `/subvencoes/jobs` | Subvencoes Jobs |
+| `GET` | `/subvencoes/jobs/{job_id}` | Subvencoes Job |
+| `POST` | `/subvencoes/ler` | Subvencoes Ler |
+| `GET` | `/subvencoes/lotes` | Subvencoes Lotes |
+| `GET` | `/subvencoes/meta` | Subvencoes Meta |
+| `GET` | `/subvencoes/resumo` | Subvencoes Resumo |
+| `GET` | `/subvencoes/search` | Subvencoes Search |
+
 ## gleif
 
 GLEIF / LEI: registos *Legal Entity Identifier* do *Golden Copy* (Golden Copy em ficheiro `data/gleif/lei.jsonl` e índice `finance_gleif_lei`), pesquisa por nome/LEI/cidade com facetas, agregado por país/região para o mapa e ingestão a partir da API oficial ou dos ficheiros Golden Copy (LEI-CDF).
@@ -1249,6 +1316,17 @@ Páginas da interface (single-page app). Devolvem o `index.html` e existem para 
 | `GET` | `/elastic` | Página da interface (SPA) |
 | `GET` | `/empresas-global` | Página da interface (SPA) |
 | `GET` | `/empresas-iq` | Página da interface (SPA) |
+| `GET` | `/empresas/perfil` | Perfis (site e logótipo) já conhecidos de vários NIF |
+| `GET` | `/empresas/perfil/config` | Configuração do módulo |
+| `POST` | `/empresas/perfil/config` | Actualiza a configuração (sessão) |
+| `GET` | `/empresas/perfil/lista` | Perfis conhecidos (backoffice) |
+| `POST` | `/empresas/perfil/resolver` | Descobrir site e logótipo (IA + scraper) |
+| `POST` | `/empresas/perfil/sincronizar` | Copiar a cache de perfis para o Elasticsearch (sessão) |
+| `GET` | `/empresas/perfil/stats` | Cobertura do módulo de sites e logótipos |
+| `GET` | `/empresas/perfil/{chave}` | Perfil de uma empresa (site e logótipo) |
+| `DELETE` | `/empresas/perfil/{chave}` | Esquecer o perfil de uma empresa (sessão) |
+| `GET` | `/empresas/perfil/{chave}/logo` | Logótipo da empresa (imagem) |
+| `POST` | `/empresas/perfil/{chave}/site` | Corrigir o site à mão (sessão) |
 | `GET` | `/entities/adjudicantes` | Serve Entities Spa Page |
 | `GET` | `/entities/adjudicatarios` | Serve Entities Spa Page |
 | `GET` | `/entities/compare` | Serve Entities Spa Page |

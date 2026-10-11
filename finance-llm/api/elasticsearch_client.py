@@ -17008,14 +17008,35 @@ def benchmark_product_comparison(
                         "top_hits": {
                             "size": 1,
                             "sort": [{"price": {"order": "asc"}}],
-                            "_source": ["store_id", "store_name", "price", "url", "image", "availability", "currency", "in_stock"],
+                            "_source": [
+                                "store_id",
+                                "store_name",
+                                "price",
+                                "url",
+                                "image",
+                                "description",
+                                "availability",
+                                "currency",
+                                "in_stock",
+                            ],
                         }
                     },
                     "ofertas": {
                         "top_hits": {
                             "size": 50,
                             "sort": [{"price": {"order": "asc"}}],
-                            "_source": ["store_id", "store_name", "price", "url", "availability", "currency", "in_stock", "discount_pct"],
+                            "_source": [
+                                "store_id",
+                                "store_name",
+                                "price",
+                                "url",
+                                "image",
+                                "description",
+                                "availability",
+                                "currency",
+                                "in_stock",
+                                "discount_pct",
+                            ],
                         }
                     },
                 },

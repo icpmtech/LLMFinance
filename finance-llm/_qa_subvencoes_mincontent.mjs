@@ -5,8 +5,7 @@
  * elementos cuja largura mínima (`min-content`) é grande — que são os que
  * impõem a largura da coluna.
  */
-const TOKEN =
-  "eyJzaWQiOiIyNzNiM2FhNWU2MDhhYWQzZDdhZWY2YTg3YmVkZDAyYzAyODgzYmVmNTYwMTRjMmIiLCJzdWIiOiIzYjFmZjQxNzdiOWFmNDhjNDAwYzM1YjFiMmY2NDYxOSIsImlhdCI6MTc5MTcxMDM5NCwiZXhwIjoxNzkxNzUzNTk0fQ.shle-ZAEx1KiQFsps9CBhFROKTW-k1JwXgIefyhp720";
+const TOKEN = process.env.QA_TOKEN || "";
 
 export default async function run(page) {
   await page.evaluate((t) => window.localStorage.setItem("finance-llm-token", t), TOKEN);

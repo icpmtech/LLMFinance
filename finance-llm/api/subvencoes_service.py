@@ -276,6 +276,20 @@ def tem_jsonl(lote: Dict[str, Any]) -> bool:
     return caminho is not None and caminho.exists()
 
 
+def migrar_lote(lote: Dict[str, Any]) -> Dict[str, Any]:
+    """Converte o campo legado `jsonl_path` (caminho absoluto) em `jsonl` (nome).
+
+    O manifesto escrito antes desta correção guardava o caminho do anfitrião
+    (`C:\\…`); ao voltar a gravar, a chave é convertida em vez de ficar a
+    arrastar-se para sempre — o que deixaria o formato do manifesto dependente
+    de quando foi escrito.
+    """
+    if not lote.get("jsonl") and lote.get("jsonl_path"):
+        lote["jsonl"] = str(lote["jsonl_path"]).replace("\\", "/").rsplit("/", 1)[-1]
+    lote.pop("jsonl_path", None)
+    return lote
+
+
 def listar_lotes() -> Dict[str, Any]:
     """Lotes lidos, agrupados por ano (mais recentes primeiro)."""
     manifest = read_manifest()
@@ -738,9 +752,16 @@ def ler_pasta(
             and anterior.get("sha256")
             and anterior.get("sha256") == _sha256(Path(str(item["path"])))[0]
         ):
+            # Um lote reutilizado é migrado na mesma: o manifesto não pode ficar
+            # com dois formatos conforme a data em que cada ficheiro foi lido.
+            lotes[rel] = migrar_lote(anterior)
             resultado["reutilizados"].append({"rel_path": rel, "ano": anterior.get("ano"), "registos": anterior.get("registos")})
             resultado["registos"] += int(anterior.get("registos") or 0)
             resultado["montante"] += float(anterior.get("montante_total") or 0.0)
+            # O manifesto é gravado a cada ficheiro: uma leitura interrompida não
+            # perde o que já foi feito nem deixa o formato por converter.
+            manifesto["lotes"] = lotes
+            _write_manifest(manifesto)
             if progresso is not None:
                 progresso["ficheiros_done"] = progresso.get("ficheiros_done", 0) + 1
             continue
@@ -753,7 +774,7 @@ def ler_pasta(
                 progresso["ficheiros_done"] = progresso.get("ficheiros_done", 0) + 1
             continue
         lote["rel_path"] = rel
-        lotes[rel] = lote
+        lotes[rel] = migrar_lote(lote)
         resultado["lidos"].append(lote)
         resultado["registos"] += int(lote.get("registos") or 0)
         resultado["montante"] += float(lote.get("montante_total") or 0.0)
@@ -777,24 +798,34 @@ def ler_pasta(
 
 
 def preview(ano: int, *, limite: int = 25) -> Dict[str, Any]:
-    """Amostra dos registos em disco de um ano (não precisa do Elasticsearch)."""
+    """Amostra dos registos em disco de um ano (não precisa do Elasticsearch).
+
+    Lê apenas as primeiras `limite` linhas de cada JSONL; o **total** vem do
+    manifesto (o número de registos gravado na leitura), para não percorrer
+    148 MB só para contar 212 mil linhas — a primeira versão fazia isso e a
+    resposta demorava 8,8 s.
+    """
     manifest = read_manifest()
     lotes = [lote for lote in (manifest.get("lotes") or {}).values() if int(lote.get("ano") or 0) == int(ano)]
     itens: List[Dict[str, Any]] = []
-    total = 0
     for lote in lotes:
         caminho = jsonl_path(lote)
         if caminho is None or not caminho.exists():
             continue
         with caminho.open("r", encoding="utf-8") as fh:
             for linha in fh:
-                total += 1
-                if len(itens) < limite:
-                    try:
-                        itens.append(json.loads(linha))
-                    except Exception:  # noqa: BLE001
-                        continue
-    return {"ano": int(ano), "total": total, "items": itens, "lotes": len(lotes)}
+                if len(itens) >= limite:
+                    break
+                try:
+                    itens.append(json.loads(linha))
+                except Exception:  # noqa: BLE001 - uma linha má não trava a amostra
+                    continue
+    return {
+        "ano": int(ano),
+        "total": sum(int(lote.get("registos") or 0) for lote in lotes),
+        "lotes": len(lotes),
+        "items": itens[:limite],
+    }
 
 
 # ---------------------------------------------------------------------------

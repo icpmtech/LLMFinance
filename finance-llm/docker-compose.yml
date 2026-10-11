@@ -90,6 +90,10 @@ services:
       # Modelos do `faster-whisper` (transcrição e palavra de ativação). Sem isto,
       # cada recriação do container volta a descarregar o modelo do Hugging Face.
       - whisper-cache:/root/.cache/huggingface
+      # Browsers do Playwright (fetchers `dynamic` e `stealth` da sonda). Ficam no
+      # volume: uma recriação do container passava a dar «Executable doesn't
+      # exist» a meio de uma recolha, mesmo com os browsers instalados.
+      - playwright-cache:/ms-playwright
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONPATH=/app
@@ -550,6 +554,8 @@ volumes:
   hermes-data:
   # Modelos do faster-whisper (transcrição do Jarvis e palavra de ativação).
   whisper-cache:
+  # Browsers do Playwright (fetchers `dynamic` e `stealth` da sonda de produtos).
+  playwright-cache:
   mirofish-uploads:
   osif-postgres-data:
   osif-redis-data:
