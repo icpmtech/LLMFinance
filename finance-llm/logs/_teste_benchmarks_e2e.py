@@ -41,6 +41,15 @@ LOJA = {
     },
 }
 
+# Segundo ponto de recolha **igual ao primeiro**, de propósito: é o único
+# catálogo de demonstração que tem os mesmos produtos em duas lojas, e é isso que
+# exercita a comparação entre lojas (mínimo/máximo/dispersão e ranking).
+LOJA_ESPELHO = {
+    **LOJA,
+    "id": "books-toscrape-espelho",
+    "name": "Books to Scrape (espelho)",
+}
+
 BENCHMARK = {
     "name": "Livros (demonstração)",
     "slug": SLUG,
@@ -50,7 +59,7 @@ BENCHMARK = {
     "match_on": "nome",
     "field_map": {"price": "preco", "product_name": "titulo", "url": "url", "image": "imagem", "availability": "disponibilidade"},
     "tags": ["demonstracao", "livros"],
-    "stores": [LOJA],
+    "stores": [LOJA, LOJA_ESPELHO],
 }
 
 
@@ -96,13 +105,15 @@ def main() -> int:
     estudo = passo("analise", cliente.get(f"/benchmarks/{SLUG}/analise"), ("kpis",))
     kpis = estudo.get("kpis") or {}
     print(f"   KPIs: {json.dumps(kpis, ensure_ascii=False)}")
-    lojas = estudo.get("stores") or []
-    if lojas:
-        print(f"   loja: {lojas[0].get('store_name')} · ofertas={lojas[0].get('ofertas')} · "
-              f"média={lojas[0].get('preco_medio')} · índice={lojas[0].get('indice_preco')}")
+    for loja_stats in estudo.get("stores") or []:
+        print(f"   loja: {loja_stats.get('store_name')} · ofertas={loja_stats.get('ofertas')} · "
+              f"média={loja_stats.get('preco_medio')} · índice={loja_stats.get('indice_preco')}")
+    comparaveis = int(kpis.get("comparable_products") or 0)
+    print(f"   produtos em 2+ lojas: {comparaveis}")
+    assert comparaveis > 0, "a comparação entre lojas não encontrou produtos comuns"
 
     # 4. comparação e pesquisa
-    comparacao = passo("comparacao", cliente.get(f"/benchmarks/{SLUG}/comparacao", params={"min_lojas": 1, "size": 5}), ("total",))
+    comparacao = passo("comparacao", cliente.get(f"/benchmarks/{SLUG}/comparacao", params={"min_lojas": 2, "size": 5}), ("total",))
     for produto in (comparacao.get("items") or [])[:5]:
         melhor = produto.get("best") or {}
         print(f"   {str(produto.get('product_name'))[:46]:46} min={produto.get('price_min')} max={produto.get('price_max')} "

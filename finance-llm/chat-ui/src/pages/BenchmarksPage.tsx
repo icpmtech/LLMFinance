@@ -44,6 +44,7 @@ import {
   type BenchmarkPayload,
   type BenchmarkScraper,
 } from "../benchmarksApi";
+import { refreshBenchmarkMenu } from "../benchmarkMenu";
 
 type LojaForm = {
   name: string;
@@ -107,6 +108,8 @@ export function BenchmarksPage({ onOpen }: { onOpen?: (slug: string) => void }) 
       setMeta(metadados);
       setBenchmarks(listagem.items ?? []);
       setIndices(listagem.indexes ?? []);
+      // A barra lateral tem uma entrada por benchmark: mantém-se em dia.
+      void refreshBenchmarkMenu();
     } catch (falha) {
       setErro(falha instanceof Error ? falha.message : "Erro ao carregar os benchmarks");
     } finally {

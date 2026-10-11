@@ -163,6 +163,7 @@ type AppView =
   | "crm-analytics"
   | "crm-dashboards"
   | `crm-mod:${string}`
+  | `benchmark-detalhe:${string}`
   | "cms"
   | "shop"
   | "rss"
@@ -1443,6 +1444,24 @@ export default function App() {
     if (target === "osint") return <OsintPage />;
     if (target === "reports") return <ReportsPage />;
     if (target === "subvencoes") return <SubvencoesPage />;
+    if (target === "benchmarks")
+      return (
+        <BenchmarksPage
+          onOpen={(slug) => {
+            setSelectedBenchmark(slug);
+            setViewAndHistory("benchmark-detalhe");
+          }}
+        />
+      );
+    if (target === "benchmark-detalhe") {
+      const slug = selectedBenchmark || (typeof window !== "undefined" ? localStorage.getItem(BENCHMARK_DETAIL_KEY) : null);
+      if (!slug) return <BenchmarksPage onOpen={(proximo) => { setSelectedBenchmark(proximo); setViewAndHistory("benchmark-detalhe"); }} />;
+      return <BenchmarkDetailPage slug={slug} onBack={() => setViewAndHistory("benchmarks")} />;
+    }
+    if (target.startsWith("benchmark-detalhe:")) {
+      const slug = target.slice("benchmark-detalhe:".length);
+      return <BenchmarkDetailPage slug={slug} onBack={() => setViewAndHistory("benchmarks")} />;
+    }
     if (target === "benchmark") return <BenchmarkPage scope="all" onSwitchView={() => setViewAndHistory("contracts-search")} />;
     if (target === "benchmark-pt")
       return <BenchmarkPage scope="pt" onSwitchView={() => setViewAndHistory("contracts-search")} />;

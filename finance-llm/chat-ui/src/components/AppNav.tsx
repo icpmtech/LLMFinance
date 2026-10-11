@@ -13,6 +13,7 @@ import {
   Search,
   SlidersHorizontal,
   Sparkles,
+  Scale,
   X,
   Plus,
 } from "lucide-react";
@@ -20,6 +21,12 @@ import { DOCK_CATALOG, IFRAME_PAGES_APP, type DockApp } from "../dock";
 import { CRM_SUITE_GROUPS } from "../crmSuite";
 import { dropHidden, hiddenModules, useSidebarAccess } from "../sidebarAccess";
 import { APP_MODULES, CRM_VIEW_IDS, TOOL_APP_IDS, dockAppById } from "../sidebarCatalog";
+import {
+  benchmarkMenuItems,
+  getBenchmarkMenuRevision,
+  refreshBenchmarkMenu,
+  subscribeBenchmarkMenu,
+} from "../benchmarkMenu";
 import { useWindows } from "../windows";
 import {
   SIDEBAR_MIN_WIDTH,
@@ -98,6 +105,7 @@ export type AppView =
   | "crm-agenda"
   | "crm-dashboard"
   | `crm-mod:${string}`
+  | `benchmark-detalhe:${string}`
   | "scraper"
   | "scraper-templates"
   | "scraper-execucoes"
@@ -269,6 +277,34 @@ const APP_MODULE_GROUPS: NavGroup[] = APP_MODULES.map((module) => {
 }).filter((group) => group.items.length > 0);
 
 /**
+ * Módulos com entradas **dinâmicas**: os benchmarks de produtos têm uma entrada
+ * de menu por estudo criado. A lista vem de `benchmarkMenu` (alimentado pela API)
+ * e é injetada em cada construção dos grupos — nunca no catálogo estático, senão
+ * os estudos criados depois de a página carregar não apareceriam.
+ */
+function injetarEntradasDinamicas(groups: NavGroup[]): NavGroup[] {
+  const estudos = benchmarkMenuItems();
+  if (!estudos.length) return groups;
+  return groups.map((group) =>
+    group.id === "app-benchmarks-produtos"
+      ? {
+          ...group,
+          items: [
+            ...group.items,
+            ...estudos.map((benchmark) => ({
+              id: `benchmark-detalhe:${benchmark.slug}` as AppView,
+              label: benchmark.label,
+              icon: <Scale size={16} />,
+              keywords: benchmark.hint,
+              match: ["benchmarks" as AppView, "benchmark-detalhe" as AppView],
+            })),
+          ],
+        }
+      : group,
+  );
+}
+
+/**
  * Grupo das ferramentas. O CRM e o grupo das páginas iframe são acrescentados em
  * `buildGroups()`.
  */
@@ -301,7 +337,7 @@ function baseGroups(): NavGroup[] {
 export function buildGroups(): NavGroup[] {
   const iframes = iframeDockApps();
   // Módulos de aplicações · CRM (por área) · Ferramentas · Páginas iframe.
-  const groups = baseGroups();
+  const groups = injetarEntradasDinamicas(baseGroups());
   if (iframes.length === 0) return groups;
   return [
     ...groups,
@@ -377,6 +413,13 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
   /* As páginas iframe são configuráveis: a barra lateral volta a construir os
      grupos sempre que a lista muda. */
   const iframeRevision = useSyncExternalStore(subscribeIframePages, getIframeRevision, getIframeRevision);
+  /* Os benchmarks de produtos são criados pelos utilizadores: o menu tem de
+     acompanhar a lista (uma entrada por estudo). */
+  useSyncExternalStore(subscribeBenchmarkMenu, getBenchmarkMenuRevision, getBenchmarkMenuRevision);
+  const benchmarkRevision = getBenchmarkMenuRevision();
+  useEffect(() => {
+    void refreshBenchmarkMenu();
+  }, []);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -417,12 +460,14 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
   };
 
   const context = useMemo(() => {
-    // `iframeRevision` é lido no corpo para que o menu seja recalculado quando
-    // as páginas iframe configuradas mudam (o oxlint não o vê como dependência).
+    // `iframeRevision` e `benchmarkRevision` são lidos no corpo para que o menu
+    // seja recalculado quando as páginas iframe ou os benchmarks mudam (o oxlint
+    // não os vê como dependências).
     void iframeRevision;
+    void benchmarkRevision;
     const allowed = itemsFor(user?.role);
     return { items: allowed, groups: groupsFor(user?.role) };
-  }, [user?.role, iframeRevision, sidebarAccess]);
+  }, [user?.role, iframeRevision, benchmarkRevision, sidebarAccess]);
 
   /* Histórico de vistas (alimenta a secção «Recentes»). */
   useEffect(() => {
