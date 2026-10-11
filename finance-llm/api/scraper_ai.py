@@ -900,6 +900,69 @@ def _preco_positivo(valor: str) -> bool:
         return False
 
 
+#: Seletores de preço por *parte* do nome da classe: o seletor exato falha porque
+#: as lojas juntam classes que variam de cartão para cartão (descontos, tamanhos),
+#: ficando `span.price--md.price--mixed.price--B` — que só casa em alguns itens.
+_SELETORES_PRECO = (
+    "[itemprop='price']::text",
+    "[class*='price__numbers']::text",
+    "[class*='current-price']::text",
+    "[class*='price']::text",
+    "[class*='preco']::text",
+    "[class*='preço']::text",
+    "[class*='precio']::text",
+    "[class*='valor']::text",
+    ".price::text",
+    ".preco::text",
+)
+_SELETORES_PRECO_ANTIGO = (
+    "[class*='scratched']::text",
+    "[class*='old-price']::text",
+    "[class*='price-old']::text",
+    "[class*='before']::text",
+    "[class*='antes']::text",
+    "[class*='pvp-antes']::text",
+    "s::text",
+    "del::text",
+)
+
+
+def _melhor_seletor_com_valor(
+    nodes: List[Any],
+    candidatos: Tuple[str, ...],
+    aceita: Any,
+    minimo: float = 0.5,
+) -> Optional[Dict[str, Any]]:
+    """Seletor com melhor cobertura **entre candidatos fixos**, já validado.
+
+    Ao contrário de `_minerar_campo` (que infere o seletor a partir do que existe
+    em cada item), aqui testam-se seletores conhecidos por nome de classe e
+    escolhe-se o que cobre mais itens com um valor que passa no `aceita`.
+    """
+    melhor = ""
+    melhor_cobertura = 0.0
+    amostra = ""
+    itens = nodes[:40]
+    for seletor in candidatos:
+        ok = 0
+        exemplo = ""
+        for node in itens:
+            try:
+                valores = [str(v).strip() for v in node.css(seletor).getall() if str(v).strip()]
+            except Exception:
+                continue
+            valor = next((v for v in valores if aceita(v, seletor)), "")
+            if valor:
+                ok += 1
+                exemplo = exemplo or valor
+        cobertura = ok / max(1, len(itens))
+        if cobertura > melhor_cobertura:
+            melhor, melhor_cobertura, amostra = seletor, cobertura, exemplo
+    if not melhor or melhor_cobertura < minimo:
+        return None
+    return {"selector": melhor, "coverage": round(melhor_cobertura, 2), "sample": amostra}
+
+
 def _parece_descricao(valor: str, seletor: str = "") -> bool:
     texto = (valor or "").strip()
     if len(texto) < 40 or _parece_preco(texto):
@@ -950,16 +1013,22 @@ def product_heuristic_definition(url: str, page: Any, analysis: List[Dict[str, A
     )
     preco_atributo = _preco_por_atributo(nodes)
     preco = _minerar_campo(nodes, aceita=_parece_preco, pistas=_PISTAS_PRECO)
+    if preco is None:
+        # Segunda tentativa: seletores de preço conhecidos (por nome de classe),
+        # que aguentam classes variáveis de cartão para cartão.
+        preco = _melhor_seletor_com_valor(nodes, _SELETORES_PRECO, aceita=_parece_preco)
     if preco_atributo:
         # O preço estruturado ganha ao texto: é um número isolado, sem o risco de
         # vir «€ 799 , 99 € 999 ,99» (preço e preço riscado) colados.
         preco = preco_atributo
-    antigo = _minerar_campo(
-        nodes,
-        aceita=lambda valor, seletor: _parece_preco(valor) and _tem_pista(seletor, _PISTAS_PRECO_ANTIGO),
-        pistas=_PISTAS_PRECO_ANTIGO,
-        minimo=0.3,
-    )
+    antigo = _melhor_seletor_com_valor(nodes, _SELETORES_PRECO_ANTIGO, aceita=_parece_preco)
+    if antigo is None:
+        antigo = _minerar_campo(
+            nodes,
+            aceita=lambda valor, seletor: _parece_preco(valor) and _tem_pista(seletor, _PISTAS_PRECO_ANTIGO),
+            pistas=_PISTAS_PRECO_ANTIGO,
+            minimo=0.3,
+        )
     descricao = _minerar_campo(nodes, aceita=_parece_descricao, pistas=_PISTAS_DESCRICAO, minimo=0.4)
     marca = _minerar_campo(
         nodes, aceita=lambda v, s: 1 < len(v) < 60, pistas=_PISTAS_MARCA, minimo=0.3, exigir_pista=True

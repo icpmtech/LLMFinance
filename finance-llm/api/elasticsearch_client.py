@@ -6012,11 +6012,17 @@ def get_company_analytics(
 
 
 def list_contract_years(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
-    """Devolve anos disponíveis e total indexado por ano."""
+    """Devolve anos disponíveis e total indexado por ano.
+
+    Em produção os JSONL normalizados podem não existir no disco, mas o
+    Elasticsearch já tem os contratos indexados. Nesse caso, os anos
+    disponíveis são os anos que constam do índice, para que o dashboard
+    mostre o filtro de anos correctamente.
+    """
     client = es or get_es_client()
     available = contract_years_available()
     if not client:
-        return {"available": available, "indexed": []}
+        return {"available": available or [], "indexed": []}
     try:
         resp = client.search(
             index=CONTRACTS_INDEX,
@@ -6030,9 +6036,12 @@ def list_contract_years(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
             },
         )
         indexed = [{"year": int(bucket["key"]), "count": bucket["doc_count"]} for bucket in resp["aggregations"]["by_year"]["buckets"]]
+        # Se não há JSONL no disco, os anos disponíveis são os anos indexados.
+        if not available and indexed:
+            available = [item["year"] for item in indexed]
         return {"available": available, "indexed": indexed}
     except Exception as e:
-        return {"available": available, "indexed": [], "error": str(e)}
+        return {"available": available or [], "indexed": [], "error": str(e)}
 
 
 def get_contract_by_id(idcontrato: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
