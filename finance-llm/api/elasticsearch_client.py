@@ -288,6 +288,10 @@ SIMULATIONS_INDEX = "finance_world_simulations"
 # Simulate→Evidence Report), com a auditoria completa e o relatório.
 INVESTIGATIONS_INDEX = "finance_world_investigations"
 
+# Execuções do modelo Lorenz (panorama + cenários de propagação), guardadas por
+# `run_id` com a fotografia completa em `resultado` (não indexada).
+LORENZ_RUNS_INDEX = "finance_lorenz_runs"
+
 # Resultados de pesquisa OSINT (username/email) via user-scanner.
 OSINT_INDEX = "finance_osint"
 
@@ -296,6 +300,18 @@ OSINT_INDEX = "finance_osint"
 INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
     ANALISES_EMPRESA_INDEX: {
         # Os nomes de empresas e as notas do analista são escritos com acentos.
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    LORENZ_RUNS_INDEX: {
+        # O título de cada execução é escrito com acentos.
         "analysis": {
             "analyzer": {
                 "world_folding": {
@@ -2047,6 +2063,26 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
     # Listas de devedores: um documento por devedor e por lista (Finanças ou
     # Segurança Social), com o escalão da dívida em campos próprios (o PDF publica
     # o escalão no cabeçalho, não o valor de cada devedor).
+    lorenz_runs_mappings = {
+        "properties": {
+            "run_id": {"type": "keyword"},
+            "created_at": {"type": "date"},
+            "titulo": {"type": "text", "analyzer": "world_folding", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "area": {"type": "keyword"},
+            "cpv_prefixos": {"type": "keyword"},
+            "ano_de": {"type": "integer"},
+            "ano_ate": {"type": "integer"},
+            "regiao": {"type": "keyword"},
+            "nif": {"type": "keyword"},
+            "autor": {"type": "keyword", "ignore_above": 320},
+            "regime": {"type": "keyword"},
+            "lambda_empirico": {"type": "float"},
+            "kpis": {"type": "object", "dynamic": True},
+            # Fotografia completa (lida por id, não pesquisada campo a campo).
+            "resultado": {"type": "object", "enabled": False},
+        }
+    }
+
     devedores_mappings = {
         "properties": {
             "doc_id": {"type": "keyword"},
@@ -2329,6 +2365,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (NETWORK_STATE_INDEX, network_state_mappings),
         (SIMULATIONS_INDEX, simulations_mappings),
         (INVESTIGATIONS_INDEX, investigations_mappings),
+        (LORENZ_RUNS_INDEX, lorenz_runs_mappings),
         (ANALISES_EMPRESA_INDEX, analises_empresa_mappings),
         (GLOBAL_PADROES_INDEX, global_padroes_mappings),
         (DEVEDORES_INDEX, devedores_mappings),

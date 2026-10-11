@@ -25,20 +25,21 @@ from api import scraper_service  # noqa: E402
 
 #: Lojas conhecidas (as que o utilizador pediu + alternativas nacionais).
 LOJAS: Dict[str, Dict[str, str]] = {
-    "worten": {"url": "https://www.worten.pt/informatica-e-acessorios/computadores/portateis", "nome": "Worten"},
-    "fnac": {"url": "https://www.fnac.pt/Computadores-Portateis/Computadores-Portateis/cN32208", "nome": "Fnac"},
+    "worten": {"url": "https://www.worten.pt/informatica-e-acessorios/computadores", "nome": "Worten"},
+    "amazon-es": {"url": "https://www.amazon.es/s?k=portatil", "nome": "Amazon Espanha"},
+    "fnac": {"url": "https://www.fnac.pt/informatica/h10", "nome": "Fnac"},
     "fnac-es": {"url": "https://www.fnac.es/Ordenadores-portatiles/Ordenadores-portatiles/na48", "nome": "Fnac Espanha"},
     "darty": {
         "url": "https://www.darty.com/nav/achat/informatique/ordinateur_portable-portable/index.html",
         "nome": "Darty",
     },
-    "pcdiga": {"url": "https://www.pcdiga.com/portateis", "nome": "PCDiga"},
+    "pcdiga": {"url": "https://www.pcdiga.com/computadores-e-software/computadores-laptop", "nome": "PCDiga"},
     "radiopopular": {
-        "url": "https://www.radiopopular.pt/produtos/informatica/portateis/",
+        "url": "https://www.radiopopular.pt/categoria/computadores-portateis",
         "nome": "Radio Popular",
     },
-    "mediamarkt-pt": {"url": "https://www.mediamarkt.pt/pt/cat/portateis", "nome": "MediaMarkt"},
-    "auchan": {"url": "https://www.auchan.pt/pt/informatica-e-telemoveis/informatica/portateis/", "nome": "Auchan"},
+    "mediamarkt-pt": {"url": "https://www.mediamarkt.pt/collections/portateis", "nome": "MediaMarkt"},
+    "auchan": {"url": "https://www.auchan.pt/pt/tecnologia/informatica/", "nome": "Auchan"},
 }
 
 

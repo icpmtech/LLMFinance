@@ -301,6 +301,53 @@ export interface SondaResultado {
   notas?: string;
   avisos?: string[];
   erro?: string | null;
+  /** Preenchido quando a sonda foi corrida **dentro de um estudo**. */
+  loja_guardada?: { id: string; name: string; url: string; campos: string[] } | null;
+  benchmark?: { slug: string; stores: number } | null;
+}
+
+/** Opções do módulo (página de configuração). */
+export interface BenchmarkConfiguracao {
+  fetcher: string;
+  use_ai: boolean;
+  provider: string;
+  model: string;
+  hint: string;
+  limite_por_loja: number;
+  pausa_segundos: number;
+  respeitar_robots: boolean;
+  moeda: string;
+  categoria_padrao: string;
+  updated_at?: string;
+}
+
+export interface BenchmarkFornecedor {
+  id: string;
+  label: string;
+  models: string[];
+  default_model?: string | null;
+  tem_chave: boolean;
+  origem_chave: string;
+  predefinido: boolean;
+}
+
+/** Loja do catálogo de endereços conhecidos. */
+export interface BenchmarkLojaConhecida {
+  id: string;
+  nome: string;
+  url: string;
+  fetcher: string;
+  estado: "ok" | "bloqueado" | "sem_preco" | string;
+  nota: string;
+}
+
+export interface BenchmarkConfiguracaoResposta {
+  configuracao: BenchmarkConfiguracao;
+  campos: string[];
+  fetchers: { id: string; label: string; hint: string }[];
+  fornecedores: BenchmarkFornecedor[];
+  lojas: BenchmarkLojaConhecida[];
+  lojas_resumo: { total: number; por_estado: Record<string, number>; atualizado_em: string };
 }
 
 async function ler<T>(res: Response, contexto: string): Promise<T> {
@@ -473,7 +520,7 @@ export async function sondarLoja(payload: {
       await fetch(`${API_BASE}/benchmarks/sonda`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ use_ai: true, fetcher: "http", ...payload }),
+        body: JSON.stringify({ ...payload }),
         signal: controlador.signal,
       }),
       "A sonda não conseguiu analisar a página",
@@ -486,4 +533,77 @@ export async function sondarLoja(payload: {
   } finally {
     window.clearTimeout(prazo);
   }
+}
+
+/**
+ * Sonda uma página **dentro de um estudo**: o resultado fica logo guardado na loja.
+ *
+ * É o caminho para corrigir uma loja sem passar pelo formulário — os seletores
+ * validados passam a ser os da loja e a recolha seguinte já os usa.
+ */
+export async function sondarEstudo(
+  slug: string,
+  payload: {
+    url: string;
+    fetcher?: string;
+    hint?: string;
+    use_ai?: boolean;
+    provider?: string;
+    model?: string;
+    loja_id?: string;
+    loja_nome?: string;
+    guardar?: boolean;
+  },
+): Promise<SondaResultado> {
+  const controlador = new AbortController();
+  const prazo = window.setTimeout(() => controlador.abort(), 240_000);
+  try {
+    return await ler<SondaResultado>(
+      await fetch(`${API_BASE}/benchmarks/${encodeURIComponent(slug)}/sonda`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guardar: true, ...payload }),
+        signal: controlador.signal,
+      }),
+      "A sonda não conseguiu analisar a página",
+    );
+  } catch (falha) {
+    if (falha instanceof DOMException && falha.name === "AbortError") {
+      throw new Error("A sonda demorou mais de 4 minutos. Experimente sem IA.");
+    }
+    throw falha;
+  } finally {
+    window.clearTimeout(prazo);
+  }
+}
+
+/** Configuração do módulo, catálogo de lojas conhecidas e fornecedores de IA. */
+export async function getBenchmarkConfiguracao(): Promise<BenchmarkConfiguracaoResposta> {
+  return ler<BenchmarkConfiguracaoResposta>(
+    await fetch(`${API_BASE}/benchmarks/configuracao`),
+    "Erro ao obter a configuração do módulo",
+  );
+}
+
+export async function guardarBenchmarkConfiguracao(
+  payload: Partial<BenchmarkConfiguracao>,
+): Promise<{ configuracao: BenchmarkConfiguracao }> {
+  return ler<{ configuracao: BenchmarkConfiguracao }>(
+    await fetch(`${API_BASE}/benchmarks/configuracao`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+    "Erro ao guardar a configuração",
+  );
+}
+
+export async function listarLojasConhecidas(): Promise<{
+  items: BenchmarkLojaConhecida[];
+  resumo: { total: number; por_estado: Record<string, number>; atualizado_em: string };
+}> {
+  return ler(
+    await fetch(`${API_BASE}/benchmarks/lojas`),
+    "Erro ao obter o catálogo de lojas",
+  );
 }

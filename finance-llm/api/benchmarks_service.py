@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 import unicodedata
 from datetime import datetime, timezone
 from html import escape
@@ -307,13 +308,18 @@ def recolher(
     slug: str,
     *,
     lojas: Optional[List[str]] = None,
-    limite_por_loja: int = 500,
+    limite_por_loja: Optional[int] = None,
     user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Corre a recolha das lojas do benchmark e indexa as ofertas no índice dele."""
     benchmark = store.obter(slug)
     if not benchmark:
         return {"error": "Benchmark não encontrado"}
+    # Sem limite indicado vale o da configuração do módulo (é lá que se evita
+    # trazer 5 000 ofertas sem querer de uma listagem com paginação infinita).
+    configuracao = store.obter_configuracao()
+    limite = int(limite_por_loja or configuracao.get("limite_por_loja") or 500)
+    pausa = float(configuracao.get("pausa_segundos") or 0)
     esc.ensure_benchmark_items_index(slug)
 
     selecionadas = {str(x).strip() for x in (lojas or []) if str(x).strip()}
@@ -371,6 +377,10 @@ def recolher(
             registo.update({"status": "erro", "error": f"{type(exc).__name__}: {exc}"})
             erros.append(f"{loja.get('name')}: {exc}")
         detalhes.append(registo)
+        if pausa:
+            # Respiro entre lojas (configurável): recolhas seguidas do mesmo site
+            # são a forma mais rápida de apanhar um bloqueio.
+            time.sleep(pausa)
 
     resumo = {
         "slug": slug,
@@ -441,9 +451,9 @@ def robots_permite(url: str, agente: str = "IQOSBenchmarkBot/1.0") -> Dict[str, 
 async def sondar_loja(
     url: str,
     *,
-    fetcher: str = "http",
+    fetcher: Optional[str] = None,
     hint: str = "",
-    use_ai: bool = True,
+    use_ai: Optional[bool] = None,
     provider: Optional[str] = None,
     model: Optional[str] = None,
     user_id: Optional[str] = None,
@@ -456,7 +466,18 @@ async def sondar_loja(
     o mapa de campos (preço/título/imagem/descrição/…) e uma **amostra de
     ofertas** já normalizadas — é o que a interface mostra antes de o utilizador
     aceitar a proposta.
+
+    O que não vier indicado toma o valor da **configuração do módulo** (fetcher,
+    usar IA, fornecedor/modelo, contexto): evita repetir a mesma escolha em cada
+    sonda.
     """
+    configuracao = store.obter_configuracao()
+    fetcher = fetcher or str(configuracao.get("fetcher") or "dynamic")
+    use_ai = bool(configuracao.get("use_ai", True)) if use_ai is None else use_ai
+    provider = provider or (str(configuracao.get("provider") or "") or None)
+    model = model or (str(configuracao.get("model") or "") or None)
+    hint = hint or str(configuracao.get("hint") or "")
+
     aviso_robots = robots_permite(url)
     resultado = await scraper_ai.suggest_product_source(
         url,

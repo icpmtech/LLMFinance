@@ -83,12 +83,15 @@ import CitacoesPage from "./pages/CitacoesPage";
 import ContribuintesPage from "./pages/ContribuintesPage";
 import WorldPage from "./pages/WorldPage";
 import PadroesPage from "./pages/PadroesPage";
+import LorenzPage from "./pages/LorenzPage";
 import OsintPage from "./pages/OsintPage";
 import ReportsPage from "./pages/ReportsPage";
 import SubvencoesPage from "./pages/SubvencoesPage";
 import BenchmarkPage from "./pages/BenchmarkPage";
 import BenchmarksPage from "./pages/BenchmarksPage";
 import BenchmarkDetailPage from "./pages/BenchmarkDetailPage";
+import BenchmarkSondaPage from "./pages/BenchmarkSondaPage";
+import BenchmarkConfigPage from "./pages/BenchmarkConfigPage";
 import BenchmarkCrossPage from "./pages/BenchmarkCrossPage";
 import BenchmarkBuyerPage from "./pages/BenchmarkBuyerPage";
 import BenchmarkSellerPage from "./pages/BenchmarkSellerPage";
@@ -189,11 +192,14 @@ type AppView =
   | "world"
   | "world-rede"
   | "padroes"
+  | "lorenz"
   | "osint"
   | "reports"
   | "subvencoes"
   | "benchmark"
   | "benchmarks"
+  | "benchmark-sonda"
+  | "benchmark-config"
   | "benchmark-detalhe"
   | "benchmark-pt"
   | "benchmark-es"
@@ -357,6 +363,7 @@ function pathForView(
   if (view === "benchmark-buyer") return "/benchmark/comprador";
   if (view === "benchmark-seller") return "/benchmark/vendedor";
   if (view === "padroes") return "/padroes";
+  if (view === "lorenz") return "/lorenz";
   if (view === "osint") return "/osint";
   if (view === "mirofish") return "/mirofish";
   if (view === "simulador") return "/simulador";
@@ -398,6 +405,8 @@ function pathForView(
   if (view === "contracts-list") return "/contracts-list";
   if (view === "company-detail" && company) return `/companies/${company}`;
   if (view === "benchmarks") return "/benchmarks";
+  if (view === "benchmark-sonda") return "/benchmarks/sonda";
+  if (view === "benchmark-config") return "/benchmarks/configuracao";
   if (view === "benchmark-detalhe") return benchmark ? `/benchmarks/${benchmark}` : "/benchmarks";
   return "/";
 }
@@ -573,6 +582,7 @@ export default function App() {
     if (path === "/benchmark/vendedor") return "benchmark-seller";
     if (path === "/benchmark" || path.startsWith("/benchmark/")) return "benchmark";
     if (path === "/padroes" || path.startsWith("/padroes/")) return "padroes";
+    if (path === "/lorenz" || path.startsWith("/lorenz/")) return "lorenz";
     if (path === "/mirofish" || path.startsWith("/mirofish/")) return "mirofish";
     if (path === "/simulador" || path.startsWith("/simulador/")) return "simulador";
     if (path === "/deep-search" || path.startsWith("/deep-search/")) return "deep-search";
@@ -661,9 +671,11 @@ export default function App() {
       return "company-detail";
     }
     if (path === "/benchmarks") return "benchmarks";
+    if (path === "/benchmarks/sonda") return "benchmark-sonda";
+    if (path === "/benchmarks/configuracao") return "benchmark-config";
     if (path.startsWith("/benchmarks/")) {
       const slug = path.replace("/benchmarks/", "").split("/")[0];
-      if (slug) {
+      if (slug && slug !== "sonda" && slug !== "configuracao") {
         setSelectedBenchmark(slug);
         return "benchmark-detalhe";
       }
@@ -703,6 +715,7 @@ export default function App() {
       else if (path === "/world/rede") next = "world-rede";
       else if (path === "/world" || path.startsWith("/world/")) next = "world";
       else if (path === "/padroes" || path.startsWith("/padroes/")) next = "padroes";
+      else if (path === "/lorenz" || path.startsWith("/lorenz/")) next = "lorenz";
       else if (path === "/osint" || path.startsWith("/osint/")) next = "osint";
       else if (path === "/reports" || path.startsWith("/reports/")) next = "reports";
       else if (path === "/subvencoes" || path.startsWith("/subvencoes/")) next = "subvencoes";
@@ -779,9 +792,11 @@ export default function App() {
         next = "company-detail";
       }
       else if (path === "/benchmarks") next = "benchmarks";
+      else if (path === "/benchmarks/sonda") next = "benchmark-sonda";
+      else if (path === "/benchmarks/configuracao") next = "benchmark-config";
       else if (path.startsWith("/benchmarks/")) {
         const slug = path.replace("/benchmarks/", "").split("/")[0];
-        if (slug) setSelectedBenchmark(slug);
+        if (slug && slug !== "sonda" && slug !== "configuracao") setSelectedBenchmark(slug);
         next = "benchmark-detalhe";
       }
       setView(next);
@@ -1441,6 +1456,8 @@ export default function App() {
     if (target === "contribuintes") return <ContribuintesPage />;
     if (target === "world" || target === "world-rede") return <WorldPage />;
     if (target === "padroes") return <PadroesPage />;
+    // Lorenz 1963: dinâmica, sensibilidade e propagação na contratação pública.
+    if (target === "lorenz") return <LorenzPage />;
     if (target === "osint") return <OsintPage />;
     if (target === "reports") return <ReportsPage />;
     if (target === "subvencoes") return <SubvencoesPage />;
@@ -1451,8 +1468,20 @@ export default function App() {
             setSelectedBenchmark(slug);
             setViewAndHistory("benchmark-detalhe");
           }}
+          onSonda={() => setViewAndHistory("benchmark-sonda")}
+          onConfiguracao={() => setViewAndHistory("benchmark-config")}
         />
       );
+    if (target === "benchmark-sonda")
+      return (
+        <BenchmarkSondaPage
+          onAbrirEstudo={(slug) => {
+            setSelectedBenchmark(slug);
+            setViewAndHistory("benchmark-detalhe");
+          }}
+        />
+      );
+    if (target === "benchmark-config") return <BenchmarkConfigPage />;
     if (target === "benchmark-detalhe") {
       const slug = selectedBenchmark || (typeof window !== "undefined" ? localStorage.getItem(BENCHMARK_DETAIL_KEY) : null);
       if (!slug) return <BenchmarksPage onOpen={(proximo) => { setSelectedBenchmark(proximo); setViewAndHistory("benchmark-detalhe"); }} />;

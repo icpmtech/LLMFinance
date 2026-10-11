@@ -68,6 +68,7 @@ import {
   Upload,
   Users,
   Microscope,
+  Waves,
 } from "lucide-react";
 import { getIframePages, iframeDockApps, iframeToDockApp, subscribeIframePages } from "./iframePages";
 import { CRM_SUITE_GROUPS } from "./crmSuite";
@@ -443,6 +444,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: Scan,
     gradient: "from-teal-200 via-rose-400 to-violet-600",
     accent: "45,212,191",
+  },
+  {
+    id: "lorenz",
+    label: "Lorenz 1963",
+    hint: "Sensibilidade às condições iniciais, propagação de perturbações e cenários de atraso — para qualquer área ou CPV",
+    icon: Waves,
+    gradient: "from-amber-200 via-rose-500 to-violet-700",
+    accent: "251,191,36",
   },
   {
     id: "osint",

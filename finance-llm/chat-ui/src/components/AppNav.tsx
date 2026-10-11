@@ -11,6 +11,7 @@ import {
   Settings,
   LogOut,
   Search,
+  ScanSearch,
   SlidersHorizontal,
   Sparkles,
   Scale,
@@ -65,6 +66,7 @@ export type AppView =
   | "world"
   | "world-rede"
   | "padroes"
+  | "lorenz"
   | "osint"
   | "reports"
   | "subvencoes"
@@ -284,24 +286,41 @@ const APP_MODULE_GROUPS: NavGroup[] = APP_MODULES.map((module) => {
  */
 function injetarEntradasDinamicas(groups: NavGroup[]): NavGroup[] {
   const estudos = benchmarkMenuItems();
-  if (!estudos.length) return groups;
-  return groups.map((group) =>
-    group.id === "app-benchmarks-produtos"
-      ? {
-          ...group,
-          items: [
-            ...group.items,
-            ...estudos.map((benchmark) => ({
-              id: `benchmark-detalhe:${benchmark.slug}` as AppView,
-              label: benchmark.label,
-              icon: <Scale size={16} />,
-              keywords: benchmark.hint,
-              match: ["benchmarks" as AppView, "benchmark-detalhe" as AppView],
-            })),
-          ],
-        }
-      : group,
-  );
+  return groups.map((group) => {
+    if (group.id !== "app-benchmarks-produtos") return group;
+    // Duas entradas fixas (sonda e configuração) antes de uma por estudo: a
+    // sonda é o primeiro passo de quem vai criar um estudo.
+    const fixas: NavItem[] = [
+      {
+        id: "benchmark-sonda" as AppView,
+        label: "Sonda de lojas",
+        icon: <ScanSearch size={16} />,
+        keywords: "descobrir seletores, preço, imagem, descrição, IA",
+        match: ["benchmarks" as AppView, "benchmark-sonda" as AppView, "benchmark-detalhe" as AppView],
+      },
+      {
+        id: "benchmark-config" as AppView,
+        label: "Configuração",
+        icon: <Settings size={16} />,
+        keywords: "fetcher, IA, limite, lojas conhecidas",
+        match: ["benchmarks" as AppView, "benchmark-config" as AppView],
+      },
+    ];
+    return {
+      ...group,
+      items: [
+        ...group.items,
+        ...fixas,
+        ...estudos.map((benchmark) => ({
+          id: `benchmark-detalhe:${benchmark.slug}` as AppView,
+          label: benchmark.label,
+          icon: <Scale size={16} />,
+          keywords: benchmark.hint,
+          match: ["benchmarks" as AppView, "benchmark-detalhe" as AppView],
+        })),
+      ],
+    };
+  });
 }
 
 /**

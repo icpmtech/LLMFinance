@@ -16,10 +16,12 @@ import {
   ExternalLink,
   Loader2,
   Package,
+  Pencil,
   Plus,
   RefreshCw,
   Scale,
   ScanSearch,
+  Settings,
   Store as StoreIcon,
   Trash2,
   Upload,
@@ -35,6 +37,7 @@ import {
   apagarBenchmark,
   criarBenchmark,
   despublicarBenchmark,
+  editarBenchmark,
   getBenchmarkModelo,
   getBenchmarksMeta,
   listarBenchmarks,
@@ -96,7 +99,15 @@ function dataCurta(iso?: string | null): string {
   return Number.isNaN(data.getTime()) ? "—" : data.toLocaleString("pt-PT", { dateStyle: "short", timeStyle: "short" });
 }
 
-export function BenchmarksPage({ onOpen }: { onOpen?: (slug: string) => void }) {
+export function BenchmarksPage({
+  onOpen,
+  onSonda,
+  onConfiguracao,
+}: {
+  onOpen?: (slug: string) => void;
+  onSonda?: () => void;
+  onConfiguracao?: () => void;
+}) {
   const [meta, setMeta] = useState<BenchmarkMeta | null>(null);
   const [benchmarks, setBenchmarks] = useState<Benchmark[]>([]);
   const [indices, setIndices] = useState<string[]>([]);
@@ -121,6 +132,8 @@ export function BenchmarksPage({ onOpen }: { onOpen?: (slug: string) => void }) 
     description: "descricao",
   });
   const [aCarregarModelo, setACarregarModelo] = useState<number | null>(null);
+  // Estudo em edição: o mesmo formulário serve para criar e para corrigir.
+  const [editando, setEditando] = useState<Benchmark | null>(null);
   // --- sonda (análise da página + IA) ---
   const [aSondar, setASondar] = useState<number | null>(null);
   const [sondas, setSondas] = useState<Record<number, SondaResultado | undefined>>({});
@@ -146,6 +159,48 @@ export function BenchmarksPage({ onOpen }: { onOpen?: (slug: string) => void }) 
   useEffect(() => {
     void carregar();
   }, [carregar]);
+
+  /** Abre o formulário: com um estudo para editar ou vazio (estudo novo). */
+  function abrirEdicao(benchmark?: Benchmark) {
+    setEditando(benchmark ?? null);
+    setErro("");
+    setAviso("");
+    setSondas({});
+    setNome(benchmark?.name ?? "");
+    setDescricao(benchmark?.description ?? "");
+    setCategoria(benchmark?.category ?? "");
+    setMoeda(benchmark?.currency ?? "EUR");
+    setChave(benchmark?.match_on ?? "nome");
+    setMapa(
+      Object.fromEntries(
+        Object.entries(benchmark?.field_map ?? {}).map(([campo, extraido]) => [campo, String(extraido ?? "")]),
+      ),
+    );
+    const lojasDoEstudo = benchmark?.stores ?? [];
+    setLojas(
+      lojasDoEstudo.length
+        ? lojasDoEstudo.map((loja) => ({
+            name: loja.name ?? "",
+            url: loja.url ?? "",
+            template_id: loja.template_id ?? "",
+            scraper: loja.scraper ?? undefined,
+            fetcher: loja.scraper?.fetcher ?? "dynamic",
+          }))
+        : [{ ...LOJA_VAZIA }],
+    );
+    setCriarAberto(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function fecharFormulario() {
+    setCriarAberto(false);
+    setEditando(null);
+    setNome("");
+    setDescricao("");
+    setCategoria("");
+    setLojas([{ ...LOJA_VAZIA }]);
+    setSondas({});
+  }
 
   const totais = useMemo(() => {
     const ofertas = benchmarks.reduce((soma, b) => soma + (b.stats?.offers ?? 0), 0);
@@ -272,17 +327,23 @@ export function BenchmarksPage({ onOpen }: { onOpen?: (slug: string) => void }) 
           enabled: true,
         })),
       };
+      if (editando) {
+        const guardado = await editarBenchmark(editando.slug, payload);
+        setAviso(
+          `«${guardado.name}» atualizado (${guardado.stores?.length ?? 0} loja(s)). ` +
+            "Recolha para aplicar os seletores novos.",
+        );
+        fecharFormulario();
+        await carregar();
+        return;
+      }
       const criado = await criarBenchmark(payload);
       setAviso(`Benchmark «${criado.name}» criado com o índice próprio. Já pode recolher.`);
-      setCriarAberto(false);
-      setNome("");
-      setDescricao("");
-      setCategoria("");
-      setLojas([{ ...LOJA_VAZIA }]);
+      fecharFormulario();
       await carregar();
       onOpen?.(criado.slug);
     } catch (falha) {
-      setErro(falha instanceof Error ? falha.message : "Erro ao criar o benchmark");
+      setErro(falha instanceof Error ? falha.message : "Erro ao guardar o benchmark");
     } finally {
       setATrabalhar("");
     }
@@ -359,10 +420,24 @@ export function BenchmarksPage({ onOpen }: { onOpen?: (slug: string) => void }) 
             Atualizar
           </Button>
           <Button
-            icon={criarAberto ? <X size={15} /> : <Plus size={15} />}
-            onClick={() => setCriarAberto((aberto) => !aberto)}
+            variant="outline"
+            icon={<ScanSearch size={15} />}
+            onClick={() => onSonda?.()}
           >
-            {criarAberto ? "Fechar" : "Novo benchmark"}
+            Sonda de lojas
+          </Button>
+          <Button
+            variant="outline"
+            icon={<Settings size={15} />}
+            onClick={() => onConfiguracao?.()}
+          >
+            Configuração
+          </Button>
+          <Button
+            icon={criarAberto && !editando ? <X size={15} /> : <Plus size={15} />}
+            onClick={() => (criarAberto && !editando ? fecharFormulario() : abrirEdicao())}
+          >
+            {criarAberto && !editando ? "Fechar" : "Novo benchmark"}
           </Button>
         </div>
       </div>
@@ -394,9 +469,19 @@ export function BenchmarksPage({ onOpen }: { onOpen?: (slug: string) => void }) 
       {criarAberto && (
         <Card>
           <CardHeader>
-            <CardTitle>Novo benchmark</CardTitle>
+            <CardTitle>{editando ? `Editar «${editando.name}»` : "Novo benchmark"}</CardTitle>
             <span className="text-xs text-muted-foreground">
-              O índice <span className="font-mono">finance_bench_&lt;slug&gt;</span> é criado logo a seguir.
+              {editando ? (
+                <>
+                  Endereço <span className="font-mono">{editando.slug}</span> e índice{" "}
+                  <span className="font-mono">{indices[benchmarks.findIndex((b) => b.slug === editando.slug)] ?? `finance_bench_${editando.slug}`}</span>{" "}
+                  não mudam.
+                </>
+              ) : (
+                <>
+                  O índice <span className="font-mono">finance_bench_&lt;slug&gt;</span> é criado logo a seguir.
+                </>
+              )}
             </span>
           </CardHeader>
           <CardContent>
@@ -588,10 +673,14 @@ export function BenchmarksPage({ onOpen }: { onOpen?: (slug: string) => void }) 
               </div>
 
               <div className="flex items-center gap-2">
-                <Button type="submit" loading={aTrabalhar === "criar"} icon={<Plus size={15} />}>
-                  Criar benchmark
+                <Button
+                  type="submit"
+                  loading={aTrabalhar === "criar"}
+                  icon={editando ? <Pencil size={15} /> : <Plus size={15} />}
+                >
+                  {editando ? "Guardar alterações" : "Criar benchmark"}
                 </Button>
-                <Button type="button" variant="ghost" onClick={() => setCriarAberto(false)}>
+                <Button type="button" variant="ghost" onClick={fecharFormulario}>
                   Cancelar
                 </Button>
               </div>
@@ -662,6 +751,14 @@ export function BenchmarksPage({ onOpen }: { onOpen?: (slug: string) => void }) 
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" icon={<BarChart3 size={14} />} onClick={() => onOpen?.(benchmark.slug)}>
                     Abrir estudo
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    icon={<Pencil size={14} />}
+                    onClick={() => abrirEdicao(benchmark)}
+                  >
+                    Editar
                   </Button>
                   <Button
                     size="sm"

@@ -370,6 +370,66 @@ def test_moeda_da_amostra_le_o_simbolo_do_preco(preco, moeda):
     assert servico._moeda_da_amostra(previsao) == moeda
 
 
+# ---------------------------------------------------------------------------
+# Configuração do módulo e catálogo de lojas
+# ---------------------------------------------------------------------------
+def test_configuracao_rejeita_fetcher_desconhecido():
+    config = store._normalizar_configuracao({"fetcher": "telepatia"})
+    assert config["fetcher"] == "dynamic"
+    assert config["use_ai"] is True
+    assert config["limite_por_loja"] == store.CONFIG_FIELDS["limite_por_loja"]
+
+
+def test_configuracao_limita_numeros_extremos():
+    config = store._normalizar_configuracao({"limite_por_loja": 999999, "pausa_segundos": -5})
+    assert config["limite_por_loja"] == 5000
+    assert config["pausa_segundos"] == 0
+
+
+def test_configuracao_mantem_o_que_nao_foi_enviado():
+    existente = store._normalizar_configuracao({"fetcher": "stealth", "moeda": "GBP"})
+    atualizada = store._normalizar_configuracao({"use_ai": False}, existente)
+    assert atualizada["fetcher"] == "stealth"
+    assert atualizada["moeda"] == "GBP"
+    assert atualizada["use_ai"] is False
+
+
+def test_o_documento_de_configuracao_nao_e_um_estudo():
+    """A configuração vive no mesmo índice: não pode aparecer na lista nem ser aberta."""
+    from api import benchmarks_store as store_modulo
+
+    assert store_modulo.CONFIG_SLUG == "__config__"
+    # `obter` filtra o documento de configuração e a lista também.
+    assert isinstance(store_modulo.obter(store_modulo.CONFIG_SLUG), type(None))
+
+
+def test_catalogo_de_lojas_tem_estado_e_endereco():
+    from api import benchmarks_lojas
+
+    lojas = benchmarks_lojas.lojas()
+    assert len(lojas) >= 5
+    for loja in lojas:
+        assert loja["url"].startswith("http")
+        assert loja["fetcher"] in store.FETCHERS_VALIDOS
+        assert loja["estado"] in ("ok", "sem_preco", "bloqueado")
+    resumo = benchmarks_lojas.resumo()
+    assert resumo["total"] == len(lojas)
+    assert sum(resumo["por_estado"].values()) == len(lojas)
+
+
+def test_loja_da_sonda_guarda_o_fetcher_no_scraper():
+    """A sonda devolve o fetcher no topo: tem de acabar dentro do `scraper` da loja."""
+    loja = store.normalize_store(
+        {
+            "name": "Loja de teste",
+            "url": "https://exemplo.pt/c",
+            "fetcher": "stealth",
+            "scraper": {"list": {"selector": "article"}, "fields": [{"name": "titulo", "selector": "h3"}]},
+        }
+    )
+    assert loja["scraper"]["fetcher"] == "stealth"
+
+
 def test_analise_de_lojas_calcula_indice_de_preco(monkeypatch):
     """O índice de preço é 100 para a média: 90 é 10% mais barato."""
     monkeypatch.setattr(servico.store, "obter", lambda slug: {"slug": slug, "name": "Demo", "stores": []})

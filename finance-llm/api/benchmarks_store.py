@@ -47,6 +47,26 @@ FIELD_MAP_KEYS = (
 #: Campos que cada loja pode trazer na definição.
 STORE_FIELDS = ("id", "name", "url", "enabled", "source_id", "template_id", "scraper", "tags")
 
+#: Definição das opções do módulo (a «página de configuração»). O que aqui se
+#: escolhe é o que a sonda usa por omissão, para não se repetir a escolha em cada
+#: loja.
+CONFIG_SLUG = "__config__"
+CONFIG_FIELDS: Dict[str, Any] = {
+    "fetcher": "dynamic",
+    "use_ai": True,
+    "provider": "",
+    "model": "",
+    "hint": "produtos com preço, imagem e descrição",
+    "limite_por_loja": 200,
+    "pausa_segundos": 2.0,
+    "respeitar_robots": True,
+    "moeda": "EUR",
+    "categoria_padrao": "Informática",
+}
+
+#: Valores aceites em campos fechados.
+FETCHERS_VALIDOS = ("http", "dynamic", "stealth")
+
 
 def _agora() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -87,6 +107,9 @@ def normalize_store(raw: Dict[str, Any], existente: Optional[Dict[str, Any]] = N
         loja["scraper"] = raw["scraper"]
     elif isinstance(dados.get("scraper"), dict):
         loja["scraper"] = dados["scraper"]
+    # O fetcher também pode vir no topo da loja (é assim que a sonda o devolve).
+    if raw.get("fetcher") and isinstance(loja.get("scraper"), dict) and not loja["scraper"].get("fetcher"):
+        loja["scraper"] = {**loja["scraper"], "fetcher": str(raw["fetcher"])}
     return loja
 
 
@@ -160,11 +183,73 @@ def normalize_benchmark(payload: Dict[str, Any], existente: Optional[Dict[str, A
 
 
 # ---------------------------------------------------------------------------
+# Configuração do módulo
+# ---------------------------------------------------------------------------
+def _normalizar_configuracao(bruto: Dict[str, Any], existente: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Valida as opções do módulo, mantendo o que já estava quando vier vazio."""
+    atual = {**CONFIG_FIELDS, **(existente or {})}
+    dados = bruto if isinstance(bruto, dict) else {}
+
+    def texto(chave: str, limite: int = 200) -> str:
+        if chave in dados and dados.get(chave) is not None:
+            return str(dados.get(chave)).strip()[:limite]
+        return str(atual.get(chave) or "")[:limite]
+
+    def booleano(chave: str) -> bool:
+        if chave in dados:
+            return bool(dados.get(chave))
+        return bool(atual.get(chave))
+
+    def numero(chave: str, minimo: float, maximo: float) -> float:
+        try:
+            valor = float(dados.get(chave, atual.get(chave)))
+        except (TypeError, ValueError):
+            valor = float(CONFIG_FIELDS[chave])
+        return max(minimo, min(maximo, valor))
+
+    fetcher = texto("fetcher", 20).lower() or "dynamic"
+    if fetcher not in FETCHERS_VALIDOS:
+        fetcher = "dynamic"
+    config = {
+        "fetcher": fetcher,
+        "use_ai": booleano("use_ai"),
+        "provider": texto("provider", 40),
+        "model": texto("model", 80),
+        "hint": texto("hint", 300),
+        "limite_por_loja": int(numero("limite_por_loja", 1, 5000)),
+        "pausa_segundos": round(numero("pausa_segundos", 0, 60), 2),
+        "respeitar_robots": booleano("respeitar_robots"),
+        "moeda": (texto("moeda", 3) or "EUR").upper(),
+        "categoria_padrao": texto("categoria_padrao", 60),
+        "updated_at": _agora(),
+    }
+    return config
+
+
+def obter_configuracao() -> Dict[str, Any]:
+    """Opções do módulo (com os valores por omissão já preenchidos)."""
+    guardada = esc.get_benchmark_definition(CONFIG_SLUG) or {}
+    return _normalizar_configuracao(guardada, guardada)
+
+
+def guardar_configuracao(payload: Dict[str, Any], *, autor: str = "") -> Dict[str, Any]:
+    """Guarda as opções do módulo."""
+    existente = esc.get_benchmark_definition(CONFIG_SLUG) or {}
+    config = _normalizar_configuracao(payload, existente)
+    config["slug"] = CONFIG_SLUG
+    config["name"] = "Configuração do módulo de benchmarks"
+    config["config"] = True
+    config["created_by"] = existente.get("created_by") or autor
+    esc.save_benchmark_definition(config)
+    return {k: v for k, v in config.items() if k not in ("slug", "name", "config")}
+
+
+# ---------------------------------------------------------------------------
 # CRUD
 # ---------------------------------------------------------------------------
 def listar() -> List[Dict[str, Any]]:
     """Todos os benchmarks (mais recentes primeiro), com a volumetria de cada um."""
-    benchmarks = esc.list_benchmark_definitions()
+    benchmarks = [b for b in esc.list_benchmark_definitions() if not b.get("config")]
     for benchmark in benchmarks:
         benchmark["stats"] = _stats_rapidas(benchmark.get("slug"))
     return benchmarks
@@ -211,11 +296,28 @@ def _stats_rapidas(slug: Optional[str]) -> Dict[str, Any]:
 
 def obter(slug: str) -> Optional[Dict[str, Any]]:
     """Definição de um benchmark, com a volumetria."""
+    if slug == CONFIG_SLUG:
+        return None
     benchmark = esc.get_benchmark_definition(slug)
-    if not benchmark:
+    if not benchmark or benchmark.get("config"):
         return None
     benchmark["stats"] = _stats_rapidas(benchmark.get("slug"))
     return benchmark
+
+
+def guardar_loja(slug: str, loja: Dict[str, Any]) -> Dict[str, Any]:
+    """Cria ou **substitui** uma loja num benchmark existente.
+
+    É o que a sonda usa para pôr os seletores que acabou de validar na loja certa
+    (por `id`), sem tocar nas outras nem no resto da definição.
+    """
+    benchmark = obter(slug)
+    if not benchmark:
+        raise ValueError(f"Benchmark «{slug}» não encontrado.")
+    nova = normalize_store(loja)
+    lojas = [l for l in (benchmark.get("stores") or []) if str(l.get("id")) != str(nova["id"])]
+    lojas.append(nova)
+    return atualizar(slug, {**benchmark, "stores": lojas}, autor=str(benchmark.get("created_by") or ""))
 
 
 def criar(payload: Dict[str, Any], *, autor: str = "") -> Dict[str, Any]:
@@ -234,6 +336,8 @@ def criar(payload: Dict[str, Any], *, autor: str = "") -> Dict[str, Any]:
 
 def atualizar(slug: str, payload: Dict[str, Any], *, autor: str = "") -> Dict[str, Any]:
     """Actualiza a definição (as lojas podem ser substituídas)."""
+    if slug == CONFIG_SLUG:
+        raise ValueError("O documento de configuração não é um estudo.")
     existente = esc.get_benchmark_definition(slug)
     if not existente:
         return {"error": "Benchmark não encontrado"}

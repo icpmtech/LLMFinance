@@ -5,6 +5,11 @@ recolhem-se os preços dos sites e publica-se o resultado (no painel, e — a pe
 — como página pública no site do CMS).
 
 - `GET    /benchmarks/meta`                 — categorias, moedas, chaves de comparação e modelos de recolha
+- `GET    /benchmarks/configuracao`         — opções do módulo + fornecedores de IA + catálogo de lojas
+- `PUT    /benchmarks/configuracao`         — guardar as opções (fetcher, IA, limite, pausa, robots)
+- `GET    /benchmarks/lojas`                — catálogo de lojas conhecidas (endereço + fetcher + estado)
+- `POST   /benchmarks/sonda`                — sondar uma página (análise + IA) sem guardar nada
+- `POST   /benchmarks/{slug}/sonda`         — sondar e **guardar os seletores numa loja do estudo**
 - `GET    /benchmarks/lista`                — benchmarks (com volumetria)
 - `POST   /benchmarks`                      — criar (cria logo o índice `finance_bench_<slug>`)
 - `GET    /benchmarks/{slug}`               — definição
@@ -29,6 +34,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
+from api import benchmarks_lojas as lojas_conhecidas
 from api import benchmarks_service as servico
 from api import benchmarks_store as store
 from api import elasticsearch_client as esc
@@ -89,16 +95,100 @@ class RecolhaPayload(BaseModel):
 
 
 class SondaPayload(BaseModel):
-    """Sonda de uma página de loja (preço, imagem e descrição)."""
+    """Sonda de uma página de loja (preço, imagem e descrição).
+
+    Os campos deixados a `None` tomam o valor da **configuração do módulo**
+    (`GET /benchmarks/configuracao`).
+    """
 
     url: str = Field(..., description="Endereço da listagem de produtos")
-    fetcher: str = Field("http", description="http | dynamic | stealth (browser real para sites protegidos)")
+    fetcher: Optional[str] = Field(None, description="http | dynamic | stealth (vazio = configuração do módulo)")
     hint: str = Field("", description="Contexto extra para a IA (ex.: «portáteis, preço com IVA»)")
-    use_ai: bool = Field(True, description="Pedir a proposta ao modelo de IA (além da análise determinística)")
-    provider: Optional[str] = Field(None, description="Fornecedor de IA (por omissão, o predefinido)")
+    use_ai: Optional[bool] = Field(None, description="Pedir a proposta ao modelo de IA (vazio = configuração do módulo)")
+    provider: Optional[str] = Field(None, description="Fornecedor de IA (por omissão, o configurado na solução)")
     model: Optional[str] = Field(None, description="Modelo de IA a usar")
     benchmark: Optional[str] = Field(None, description="Benchmark onde a loja vai entrar (afina o mapa de campos)")
     nome_loja: str = Field("", description="Nome da loja (para a proposta)")
+
+
+class ConfiguracaoPayload(BaseModel):
+    """Opções do módulo (usadas por omissão na sonda e nas recolhas)."""
+
+    fetcher: Optional[str] = Field(None, description="http | dynamic | stealth")
+    use_ai: Optional[bool] = Field(None, description="Pedir a proposta à IA por omissão")
+    provider: Optional[str] = Field(None, description="Fornecedor de IA (vazio = o configurado na plataforma)")
+    model: Optional[str] = Field(None, description="Modelo de IA")
+    hint: Optional[str] = Field(None, description="Contexto enviado à IA")
+    limite_por_loja: Optional[int] = Field(None, ge=1, le=5000)
+    pausa_segundos: Optional[float] = Field(None, ge=0, le=60, description="Espera entre lojas")
+    respeitar_robots: Optional[bool] = Field(None, description="Consultar o robots.txt antes de recolher")
+    moeda: Optional[str] = Field(None, description="Moeda por omissão dos estudos novos")
+    categoria_padrao: Optional[str] = Field(None)
+
+
+class SondaLojaPayload(SondaPayload):
+    """Sonda com destino: guarda logo o resultado numa loja do estudo."""
+
+    loja_id: str = Field("", description="Id da loja a criar/actualizar no estudo (por omissão, do domínio)")
+    loja_nome: str = Field("", description="Nome a dar à loja")
+    guardar: bool = Field(True, description="Guardar os seletores validados no estudo")
+
+
+# ---------------------------------------------------------------------------
+# Configuração do módulo
+# ---------------------------------------------------------------------------
+@router.get("/configuracao")
+def benchmarks_configuracao(session: ReadSession = None) -> Dict[str, Any]:
+    """Opções do módulo + o que a interface precisa para as editar."""
+    return {
+        "configuracao": store.obter_configuracao(),
+        "campos": list(store.CONFIG_FIELDS),
+        "fetchers": [
+            {"id": "http", "label": "Pedido simples", "hint": "Rápido; só para páginas sem JavaScript."},
+            {"id": "dynamic", "label": "Browser (Chromium)", "hint": "Renderiza o JavaScript — é o que as lojas exigem."},
+            {"id": "stealth", "label": "Browser furtivo", "hint": "Para sites com proteção agressiva."},
+        ],
+        "fornecedores": _fornecedores(),
+        "lojas": lojas_conhecidas.lojas(),
+        "lojas_resumo": lojas_conhecidas.resumo(),
+    }
+
+
+@router.put("/configuracao")
+def benchmarks_guardar_configuracao(payload: ConfiguracaoPayload, session: Session) -> Dict[str, Any]:
+    """Guarda as opções do módulo."""
+    dados = payload.model_dump(exclude_unset=True)
+    return {"configuracao": store.guardar_configuracao(dados, autor=_email(session))}
+
+
+@router.get("/lojas")
+def benchmarks_lojas(session: ReadSession = None) -> Dict[str, Any]:
+    """Catálogo de lojas conhecidas (endereço de categoria + fetcher recomendado)."""
+    return {"items": lojas_conhecidas.lojas(), "resumo": lojas_conhecidas.resumo()}
+
+
+def _fornecedores() -> List[Dict[str, Any]]:
+    """Fornecedores de IA disponíveis (o que a solução tem configurado)."""
+    try:
+        from api import providers_service as providers
+    except Exception:  # noqa: BLE001
+        return []
+    configurados = []
+    for spec in providers.PROVIDERS:
+        user_id = providers.configured_user_id()
+        chave, origem = providers.resolve_key(user_id, spec["id"])
+        configurados.append(
+            {
+                "id": spec["id"],
+                "label": spec.get("label") or spec["id"],
+                "models": spec.get("models") or [],
+                "default_model": spec.get("default_model"),
+                "tem_chave": bool(chave),
+                "origem_chave": origem,
+                "predefinido": bool((providers.load_user_config(user_id).get("defaults") or {}).get("provider") == spec["id"]),
+            }
+        )
+    return configurados
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +280,57 @@ async def benchmarks_sonda(payload: SondaPayload, session: Session) -> Dict[str,
     if not resultado.get("ok") and not resultado.get("amostra"):
         # 502: a falha é da página (bloqueio, JavaScript, markup) — não do pedido.
         raise HTTPException(status_code=502, detail=resultado.get("erro") or "A sonda não encontrou produtos.")
+    return resultado
+
+
+@router.post("/{slug}/sonda")
+async def benchmarks_sonda_estudo(slug: str, payload: SondaLojaPayload, session: Session) -> Dict[str, Any]:
+    """Sonda uma página e **guarda os seletores validados numa loja do estudo**.
+
+    É o caminho da interface para corrigir uma loja sem passar pelo formulário: a
+    sonda valida a definição e, se `guardar` (por omissão), a loja passa a ter
+    esses seletores — a recolha seguinte já usa o que foi validado agora.
+    """
+    benchmark = store.obter(slug)
+    if not benchmark:
+        raise HTTPException(status_code=404, detail=f"Benchmark «{slug}» não encontrado.")
+    if not payload.url.strip():
+        raise HTTPException(status_code=400, detail="Indique o endereço da página de produtos.")
+
+    resultado = await servico.sondar_loja(
+        payload.url.strip(),
+        fetcher=payload.fetcher,
+        hint=payload.hint,
+        use_ai=payload.use_ai,
+        provider=payload.provider,
+        model=payload.model,
+        user_id=_email(session),
+        benchmark=slug,
+        nome_loja=payload.loja_nome or payload.nome_loja,
+    )
+    if not resultado.get("ok") and not resultado.get("amostra"):
+        raise HTTPException(status_code=502, detail=resultado.get("erro") or "A sonda não encontrou produtos.")
+
+    proposta = resultado.get("loja_sugerida") or {}
+    if payload.guardar and proposta.get("scraper"):
+        loja = {
+            "id": payload.loja_id or store.slugify(payload.loja_nome or proposta.get("name") or payload.url),
+            "name": payload.loja_nome or proposta.get("name") or payload.url,
+            "url": payload.url.strip(),
+            "enabled": True,
+            "fetcher": payload.fetcher,
+            "scraper": proposta.get("scraper"),
+        }
+        guardado = store.guardar_loja(slug, loja)
+        if guardado.get("error"):
+            raise HTTPException(status_code=502, detail=str(guardado["error"]))
+        resultado["loja_guardada"] = {
+            "id": loja["id"],
+            "name": loja["name"],
+            "url": loja["url"],
+            "campos": resultado.get("campos") or [],
+        }
+        resultado["benchmark"] = {"slug": slug, "stores": len(guardado.get("stores") or [])}
     return resultado
 
 

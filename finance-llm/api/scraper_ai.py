@@ -773,7 +773,7 @@ def _suggest_source_sync(
                     "title_field": candidate.get("title_field") or fields[0]["name"],
                     "tags_field": candidate.get("tags_field") or "",
                 }
-                preview = _validate(trial, max_pages)
+                preview = _validate(trial, max_pages, page)
                 result["preview"] = preview
                 if preview.get("items"):
                     result["definition"] = trial
@@ -782,7 +782,7 @@ def _suggest_source_sync(
     # 3. Rede de segurança: heurística (validada).
     if result["definition"] is None and heuristic:
         trial = dict(base, **heuristic)
-        preview = _validate(trial, max_pages)
+        preview = _validate(trial, max_pages, page)
         result["preview"] = preview
         if preview.get("items"):
             result["definition"] = trial
@@ -832,9 +832,16 @@ def _diagnostico_resposta(page: Any) -> Tuple[Optional[int], str]:
     )
 
 
-def _validate(definition: Dict[str, Any], max_pages: int = 1) -> Dict[str, Any]:
-    """Corre a definição a sério (sem guardar) para confirmar que extrai itens."""
+def _validate(definition: Dict[str, Any], max_pages: int = 1, page: Any = None) -> Dict[str, Any]:
+    """Corre a definição a sério (sem guardar) para confirmar que extrai itens.
+
+    Com `page`, testa na **página já aberta**: evita um segundo download que, em
+    listagens dinâmicas, devolvia outro DOM e dava «0 itens» a uma definição
+    válida.
+    """
     try:
+        if page is not None:
+            return scraper.preview_on_page(page, definition, limit=3)
         return scraper.preview_source(definition, limit=3, max_pages=max(1, min(max_pages, 3)))
     except Exception as exc:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}", "items": [], "total": 0, "pages": 0}
@@ -1602,7 +1609,7 @@ def _suggest_product_source_sync(
                     "id_fields": candidata.get("id_fields") or ["url"],
                     "title_field": candidata.get("title_field") or fields[0]["name"],
                 }
-                previsao = _validate(ensaio, max_pages)
+                previsao = _validate(ensaio, max_pages, page)
                 resultado["tried"].append({"origin": "ia", "items": len(previsao.get("items") or [])})
                 resultado["preview"] = previsao
                 if previsao.get("items"):
@@ -1613,7 +1620,7 @@ def _suggest_product_source_sync(
         ensaio = {**base, **heuristic}
         ensaio.pop("campos", None)
         if ensaio.get("list", {}).get("selector") and ensaio.get("fields"):
-            previsao = _validate(ensaio, max_pages)
+            previsao = _validate(ensaio, max_pages, page)
             resultado["tried"].append({"origin": "heuristica", "items": len(previsao.get("items") or [])})
             if resultado["preview"] is None or previsao.get("items"):
                 resultado["preview"] = previsao
