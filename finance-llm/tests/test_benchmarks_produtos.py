@@ -48,6 +48,40 @@ def test_preco_para_float(entrada, esperado):
     assert servico.preco_para_float(entrada) == esperado
 
 
+@pytest.mark.parametrize(
+    "entrada,esperado",
+    [
+        # Como a Worten devolve o preço: partido em elementos, com espaços, e com
+        # o preço riscado no mesmo nó.
+        ("€ 799 , 99 € 999 ,99", 799.99),
+        ("799 , 99 €", 799.99),
+        ("12,50 € 15,00 €", 12.5),
+        ("1 299,00 €", 1299.0),
+    ],
+)
+def test_preco_para_float_com_varios_precos_no_mesmo_texto(entrada, esperado):
+    """Fica o **primeiro** preço (o que se paga), não a mistura dos dois."""
+    assert servico.preco_para_float(entrada) == esperado
+
+
+def test_oferta_guarda_descricao_e_absolutiza_urls():
+    item = {
+        "data": {
+            "titulo": "Portátil XPTO",
+            "preco": "799,99 €",
+            "imagem": "/media/xpto.jpg",
+            "descricao": "Portátil com 16 GB de RAM e 512 GB de SSD.",
+        },
+        "url": "/produtos/portatil-xpto",
+        "item_id": "1",
+    }
+    oferta = servico.normalizar_oferta(item, loja=_loja(), benchmark=BENCHMARK_BASE)
+    assert oferta is not None
+    assert oferta["description"].startswith("Portátil com 16 GB")
+    assert oferta["url"] == "https://exemplo.pt/produtos/portatil-xpto"
+    assert oferta["image"] == "https://exemplo.pt/media/xpto.jpg"
+
+
 # ---------------------------------------------------------------------------
 # Normalização de ofertas
 # ---------------------------------------------------------------------------
@@ -187,8 +221,82 @@ def test_indice_do_benchmark_por_slug():
 # Campos reconhecidos
 # ---------------------------------------------------------------------------
 def test_field_map_keys_inclui_o_essencial():
-    for chave in ("price", "product_name", "ean", "url"):
+    for chave in ("price", "product_name", "url", "image", "description", "brand", "ean", "sku"):
         assert chave in store.FIELD_MAP_KEYS
+
+
+# ---------------------------------------------------------------------------
+# Sonda de produtos (análise determinística)
+# ---------------------------------------------------------------------------
+def test_preco_estruturado_ganha_ao_texto():
+    """`data-*`/`itemprop` é a via fiável: o valor vem isolado e no formato certo."""
+    from api import scraper_ai
+
+    class _No:
+        def __init__(self, atributos):
+            self.attrib = atributos
+            self.tagname = "span"
+
+    class _Item:
+        def __init__(self, preco):
+            self._preco = preco
+
+        def css(self, _):
+            return [_No({"itemprop": "price", "class": "preco", "content": self._preco})]
+
+    encontrado = scraper_ai._preco_por_atributo([_Item("799.99"), _Item("1299.00")])
+    assert encontrado is not None
+    assert encontrado["sample"] == "799.99"
+    assert encontrado["coverage"] == 1.0
+
+
+def test_preco_por_atributo_ignora_valores_a_zero():
+    from api import scraper_ai
+
+    class _No:
+        def __init__(self, valor):
+            self.attrib = {"data-price": valor}
+            self.tagname = "span"
+
+    class _Item:
+        def __init__(self, valor):
+            self._valor = valor
+
+        def css(self, _):
+            return [_No(self._valor)]
+
+    assert scraper_ai._preco_por_atributo([_Item("0"), _Item("0.00")]) is None
+
+
+def test_o_aviso_de_cookies_nao_e_confundido_com_a_lista_de_produtos():
+    """O contentor do diálogo de cookies tinha 1086 «itens» e ganhava ao cartão."""
+    from api import scraper_ai
+
+    cookies = {
+        "selector": "div.CybotCookiebotDialogBodyLevelButtonIABContainerCollapsed",
+        "count": 1086,
+        "link_ratio": 0.9,
+        "text_ratio": 0.9,
+        "title_ratio": 0.9,
+        "image_ratio": 0.0,
+        "price_ratio": 0.0,
+    }
+    produtos = {
+        "selector": "article.product-card",
+        "count": 48,
+        "link_ratio": 1.0,
+        "text_ratio": 1.0,
+        "title_ratio": 1.0,
+        "image_ratio": 1.0,
+        "price_ratio": 1.0,
+    }
+    assert scraper_ai._product_score(produtos) > scraper_ai._product_score(cookies)
+    assert scraper_ai._chrome_penalty(cookies["selector"]) < 1.0
+
+
+def test_robots_da_sonda_pede_url_absoluto():
+    resultado = servico.robots_permite("/sem-dominio")
+    assert resultado["permitido"] is None
 
 
 def test_analise_de_lojas_calcula_indice_de_preco(monkeypatch):

@@ -59,6 +59,33 @@ _TITLE_SELECTORS = (
 _MIN_TITLE_CHARS = 25
 _MAX_HTML_SAMPLE = 3000
 
+#: Contentores que *nunca* são uma lista de produtos: o diálogo de cookies, os
+#: menus, os rodapés. Sem isto, o contentor do aviso de consentimento (1086
+#: «itens» de texto longo) ganhava ao cartão do produto (48 itens com preço) — e
+#: a sonda concluía, sem erro nenhum, que a página não tinha preços.
+_CHROME_RE = re.compile(
+    r"cookie|consent|gdpr|cybot|iab|banner|modal|dialog|popup|overlay|breadcrumb|"
+    r"footer|header|navbar|menu|sidebar|skip-link|carousel|swiper|slick",
+    re.IGNORECASE,
+)
+
+
+def _chrome_penalty(selector: str) -> float:
+    """Fator de castigo para contentores que são «moldura» da página, não conteúdo."""
+    return 0.12 if _CHROME_RE.search(selector or "") else 1.0
+
+
+def _count_penalty(total: int) -> float:
+    """Uma listagem de produtos tem dezenas de itens, não milhares.
+
+    Sem isto, um contentor com 1086 nós ganhava por tamanho a um com 48 — mesmo
+    com a raiz quadrada a amortecer, a diferença de contagem (33× vs 7×) era
+    grande de mais para a qualidade dos itens compensar.
+    """
+    if total <= 200:
+        return 1.0
+    return max(0.15, (200 / total) ** 0.9)
+
 
 # ------------------------------------------------------------------ análise
 def _node_selector(tag: str, classes: List[str]) -> str:
@@ -76,7 +103,7 @@ def _stats_for(page: Any, selector: str) -> Optional[Dict[str, Any]]:
     total = len(nodes)
     if total < 3 or total > 2000:
         return None
-    com_link = com_texto = com_imagem = com_titulo = 0
+    com_link = com_texto = com_imagem = com_titulo = com_preco = 0
     titulos: List[str] = []
     exemplo = None
     for node in nodes[:60]:
@@ -112,6 +139,13 @@ def _stats_for(page: Any, selector: str) -> Optional[Dict[str, Any]]:
                 com_imagem += 1
         except Exception:
             pass
+        # Um preço dentro do item é a prova mais forte de que é um produto à
+        # venda — e é o que distingue o cartão do produto do resto da página.
+        try:
+            if _PRICE_RE.search(node.html_content or "") or _PRICE_RE.search(texto):
+                com_preco += 1
+        except Exception:
+            pass
         if exemplo is None:
             exemplo = node
     amostra = min(60, total)
@@ -122,6 +156,7 @@ def _stats_for(page: Any, selector: str) -> Optional[Dict[str, Any]]:
         "text_ratio": round(com_texto / amostra, 2),
         "title_ratio": round(com_titulo / amostra, 2),
         "image_ratio": round(com_imagem / amostra, 2),
+        "price_ratio": round(com_preco / amostra, 2),
         "samples": titulos,
         "node": exemplo,
     }
@@ -136,10 +171,32 @@ def _score(stats: Dict[str, Any], *, generic: bool = False) -> float:
         * (1 + stats["text_ratio"])
         * (1 + 0.3 * stats["link_ratio"])
         * (1 + 0.2 * stats["image_ratio"])
+        * (1 + 0.5 * stats.get("price_ratio", 0.0))
+        * _chrome_penalty(stats["selector"])
+        * _count_penalty(stats["count"])
     )
     if generic:
         score *= 0.6
     return round(score, 1)
+
+
+def _product_score(stats: Dict[str, Any]) -> float:
+    """Avaliação **para produtos**: aqui o sinal decisivo é haver um preço.
+
+    Numa página de loja há sempre listas «parecidas» (recomendados, vistos
+    recentemente, menus): o que distingue o catálogo é a fração de itens com um
+    valor monetário.
+    """
+    return round(
+        (stats["count"] ** 0.5)
+        * (1 + 3.0 * stats.get("price_ratio", 0.0))
+        * (1 + 0.8 * stats["title_ratio"])
+        * (1 + 0.5 * stats["image_ratio"])
+        * (1 + 0.3 * stats["link_ratio"])
+        * _chrome_penalty(stats["selector"])
+        * _count_penalty(stats["count"]),
+        1,
+    )
 
 
 def _usable(stats: Dict[str, Any]) -> bool:
@@ -646,15 +703,34 @@ def _validate(definition: Dict[str, Any], max_pages: int = 1) -> Dict[str, Any]:
 # modelo de IA, sempre com validação a sério antes de devolver.
 # ---------------------------------------------------------------------------
 
-#: Um valor monetário: 1.299,00 € · 1299.00 EUR · R$ 1.299,90 · £51.77
+#: Um valor monetário: 1.299,00 € · 1299.00 EUR · R$ 1.299,90 · £51.77 · € 799 , 99
+#:
+#: As lojas portuguesas quebram o preço em vários elementos e o texto sai com
+#: espaços («€ 799 , 99»): sem os espaços opcionais à volta do separador
+#: decimal, o preço da Worten não era reconhecido.
 _PRICE_RE = re.compile(
-    r"(?:€|EUR|R\$|US\$|\$|£)\s*\d{1,3}(?:[.\s]\d{3})*(?:[.,]\d{1,2})?"
-    r"|\d{1,3}(?:[.\s]\d{3})*(?:[.,]\d{2})\s*(?:€|EUR|R\$|\$|£)",
+    r"(?:€|EUR|R\$|US\$|\$|£)\s*\d{1,3}(?:[.\s]\d{3})*(?:\s*[.,]\s*\d{1,2})?"
+    r"|\d{1,3}(?:[.\s]\d{3})*(?:\s*[.,]\s*\d{1,2})?\s*(?:€|EUR|R\$|US\$|\$|£)",
     re.IGNORECASE,
 )
 #: Classes que denunciam o campo (usadas só como preferência, nunca como regra).
 _PISTAS_PRECO = ("price", "preco", "preço", "precio", "valor", "pvp", "importe", "amount", "current")
-_PISTAS_PRECO_ANTIGO = ("old", "antes", "was", "strike", "before", "list", "regular", "original", "compare")
+_PISTAS_PRECO_ANTIGO = (
+    "old",
+    "antes",
+    "was",
+    "strike",
+    "before",
+    "list",
+    "regular",
+    "original",
+    "compare",
+    "scratched",
+    "riscado",
+    "riscada",
+)
+#: Nomes de atributo onde as lojas põem o preço em dados estruturados.
+_PISTAS_ATRIBUTO_PRECO = ("price", "preco", "preço", "precio", "importe", "amount", "pvp")
 _PISTAS_DESCRICAO = ("descri", "description", "resumo", "summary", "sinopse", "detalhe", "detail", "subtitle", "sub")
 _PISTAS_MARCA = ("brand", "marca", "fabricante", "manufacturer")
 _PISTAS_EAN = ("ean", "gtin", "barcode", "codigo_barras")
@@ -752,6 +828,78 @@ def _parece_preco(valor: str, seletor: str = "") -> bool:
     return bool(_PRICE_RE.search(valor or ""))
 
 
+def _preco_por_atributo(nodes: List[Any], minimo: float = 0.5) -> Optional[Dict[str, Any]]:
+    """Preço em **dados estruturados** (itemprop/data-*), quando existir.
+
+    É a via mais fiável: o valor está isolado e no formato certo. Na Worten, por
+    exemplo, o cartão traz `data-cnstrc-item-price="799.99"`, enquanto o texto do
+    preço vem partido em `€`, `799` e `sup.99`.
+    """
+    votos: Dict[str, int] = {}
+    amostras: Dict[str, str] = {}
+    itens = nodes[:40]
+    for node in itens:
+        vistos_no_item: set[str] = set()
+        alvos: List[Any] = []
+        try:
+            alvos = list(node.css("[itemprop], [data-price], meta, [content]"))
+        except Exception:
+            alvos = []
+        for elemento in alvos:
+            try:
+                atributos = dict(elemento.attrib or {})
+            except Exception:
+                continue
+            base = _selector_do_no(elemento)
+            if not base:
+                continue
+            # A pista pode estar no nome do atributo (`data-price`), no `itemprop`
+            # (`itemprop="price" content="799.99"`) ou na própria classe.
+            contexto = " ".join(
+                str(valor)
+                for chave, valor in atributos.items()
+                if chave in ("itemprop", "property", "name", "id", "class")
+            )
+            for nome, valor in atributos.items():
+                if not (_tem_pista(nome, _PISTAS_ATRIBUTO_PRECO) or _tem_pista(contexto, _PISTAS_ATRIBUTO_PRECO)):
+                    continue
+                texto = str(valor or "").strip()
+                # Aceita «799.99», «1299.00», «1.299,00», «1 299,00».
+                if not re.fullmatch(r"\d+(?:[.\s]\d{3})*(?:[.,]\d{1,2})?", texto):
+                    continue
+                if not _preco_positivo(texto):
+                    continue
+                seletor = f"{base}::attr({nome})"
+                if seletor in vistos_no_item:
+                    continue
+                vistos_no_item.add(seletor)
+                votos[seletor] = votos.get(seletor, 0) + 1
+                amostras.setdefault(seletor, texto[:60])
+    if not votos:
+        return None
+    total = max(1, len(itens))
+    melhor, contagem = max(votos.items(), key=lambda item: item[1])
+    cobertura = round(contagem / total, 2)
+    if cobertura < minimo:
+        return None
+    return {"selector": melhor, "coverage": cobertura, "sample": amostras.get(melhor, "")}
+
+
+def _preco_positivo(valor: str) -> bool:
+    """Um preço a sério não é zero (nem «0,00» de um campo por preencher)."""
+    texto = str(valor or "").strip().replace(" ", "")
+    if not texto:
+        return False
+    if "," in texto and "." in texto:
+        texto = texto.replace(".", "").replace(",", ".")
+    elif "," in texto:
+        texto = texto.replace(",", ".")
+    try:
+        return float(texto) > 0
+    except ValueError:
+        return False
+
+
 def _parece_descricao(valor: str, seletor: str = "") -> bool:
     texto = (valor or "").strip()
     if len(texto) < 40 or _parece_preco(texto):
@@ -764,10 +912,16 @@ def product_heuristic_definition(url: str, page: Any, analysis: List[Dict[str, A
 
     Devolve também `campos` — o resumo do que foi encontrado (para a interface
     mostrar o que a sonda viu antes de guardar seja o que for).
+
+    A escolha do contentor é feita com `_product_score` (pesa o preço em cada
+    item), e não pela ordem genérica da análise: numa página de loja, a lista
+    «mais repetida» é muitas vezes um menu ou o aviso de cookies, e escolhê-la
+    dava uma sonda que «não encontrava preços» numa página cheia deles.
     """
     if not analysis:
         return {}
-    best = analysis[0]
+    ordenados = sorted(analysis, key=_product_score, reverse=True)
+    best = ordenados[0]
     seletor_lista = best["selector"]
     try:
         nodes = list(page.css(seletor_lista))
@@ -794,7 +948,12 @@ def product_heuristic_definition(url: str, page: Any, analysis: List[Dict[str, A
         ],
         nodes,
     )
+    preco_atributo = _preco_por_atributo(nodes)
     preco = _minerar_campo(nodes, aceita=_parece_preco, pistas=_PISTAS_PRECO)
+    if preco_atributo:
+        # O preço estruturado ganha ao texto: é um número isolado, sem o risco de
+        # vir «€ 799 , 99 € 999 ,99» (preço e preço riscado) colados.
+        preco = preco_atributo
     antigo = _minerar_campo(
         nodes,
         aceita=lambda valor, seletor: _parece_preco(valor) and _tem_pista(seletor, _PISTAS_PRECO_ANTIGO),
@@ -1058,6 +1217,9 @@ def _suggest_product_source_sync(
             "error": "Não foi possível identificar uma lista de produtos nesta página.",
             "analysis": [],
         }
+    # Ordenar por utilidade **para produtos** antes de tudo o resto: é esta a
+    # ordem que a IA vê nos candidatos e o HTML de amostra que lhe é enviado.
+    analysis = sorted(analysis, key=_product_score, reverse=True)
 
     heuristic = product_heuristic_definition(url, page, analysis)
     resultado: Dict[str, Any] = {

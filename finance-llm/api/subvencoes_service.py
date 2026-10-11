@@ -256,11 +256,17 @@ def jsonl_path(lote: Dict[str, Any]) -> Optional[Path]:
     anfitrião (`C:\\…`) e de dentro do contentor (`/app/…`), e um caminho
     absoluto gravado num dos lados não existe no outro.
 
+    O nome é extraído **cortando nos dois separadores** (`\\` e `/`), e não com
+    `Path(...).name`: no Windows `Path` separa em `\\`, mas no Linux não há
+    separador nenhum, pelo que `Path("C:\\\\…\\\\subv-x.jsonl").name` devolve o
+    caminho inteiro — foi o que fez o contentor dizer «0 lidos» com os ficheiros
+    ao lado.
+
     Devolver `None` (e não um `Path` vazio) é deliberado: `Path("")` é o
     diretório atual, pelo que `.exists()` daria `True` para um lote sem JSONL.
     """
-    guardado = str(lote.get("jsonl") or lote.get("jsonl_path") or "").strip()
-    nome = Path(guardado).name if guardado else ""
+    guardado = str(lote.get("jsonl") or lote.get("jsonl_path") or "").strip().replace("\\", "/")
+    nome = guardado.rsplit("/", 1)[-1]
     return (normalized_dir() / nome) if nome else None
 
 

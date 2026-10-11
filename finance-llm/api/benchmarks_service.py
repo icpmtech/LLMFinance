@@ -77,11 +77,24 @@ def _chave(texto: str) -> str:
 # ---------------------------------------------------------------------------
 # Extração de valores
 # ---------------------------------------------------------------------------
+#: Preço dentro de um texto livre (a moeda antes ou depois, com espaços).
+_PRECO_NO_TEXTO = re.compile(
+    r"(?:€|EUR|R\$|US\$|\$|£)\s*\d{1,3}(?:[.\s]\d{3})*(?:\s*[.,]\s*\d{1,2})?"
+    r"|\d{1,3}(?:[.\s]\d{3})*(?:\s*[.,]\s*\d{1,2})?\s*(?:€|EUR|R\$|US\$|\$|£)",
+    re.IGNORECASE,
+)
+
+
 def preco_para_float(valor: Any) -> Optional[float]:
     """Converte `1.234,56 €`, `€ 12,50` ou `1234.56` em `1234.56`/`12.5`.
 
     Regra: quando existem **os dois** separadores, o último é o decimal; com um
     só, decide-se pelo número de dígitos à direita (3 dígitos = milhares).
+
+    Quando o texto traz **vários** preços colados (o preço atual e o riscado, como
+    a Worten devolve: «€ 799 , 99 € 999 ,99»), fica o primeiro — que é o preço a
+    pagar. Sem isto, os separadores de dois números juntavam-se num só
+    («799,99999,99») e o valor saía absurdo.
     """
     if valor is None:
         return None
@@ -90,6 +103,9 @@ def preco_para_float(valor: Any) -> Optional[float]:
     texto = str(valor).strip()
     if not texto:
         return None
+    encontrados = _PRECO_NO_TEXTO.findall(texto)
+    if len(encontrados) > 1:
+        texto = _PRECO_NO_TEXTO.search(texto).group(0)
     texto = re.sub(r"[^\d.,\-]", "", texto).replace(" ", "")
     if not texto or texto in {"-", ".", ","}:
         return None

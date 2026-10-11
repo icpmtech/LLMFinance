@@ -7,7 +7,7 @@
  * *hit-testing* expira).
  */
 const TOKEN =
-  "eyJzaWQiOiJhNjljZTlhYTdjMTczMmJmMmI0NjBkY2VkZDc0ZWMxNWMyNzU3NmJiM2YwY2YxZTQiLCJzdWIiOiIzYjFmZjQxNzdiOWFmNDhjNDAwYzM1YjFiMmY2NDYxOSIsImlhdCI6MTc5MTU1OTcxNCwiZXhwIjoxNzkxNjAyOTE0fQ.S6ipiSwmTqzi-abtiHfyfpt1uwN4_gqYfNzPtA70npc";
+  "eyJzaWQiOiIyNzNiM2FhNWU2MDhhYWQzZDdhZWY2YTg3YmVkZDAyYzAyODgzYmVmNTYwMTRjMmIiLCJzdWIiOiIzYjFmZjQxNzdiOWFmNDhjNDAwYzM1YjFiMmY2NDYxOSIsImlhdCI6MTc5MTcxMDM5NCwiZXhwIjoxNzkxNzUzNTk0fQ.shle-ZAEx1KiQFsps9CBhFROKTW-k1JwXgIefyhp720";
 
 export default async function run(page, ui) {
   const resultado = {};

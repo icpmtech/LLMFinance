@@ -417,12 +417,35 @@ def test_manifesto_guarda_nome_relativo_e_resolve_em_qualquer_pasta(
         "/app/data/subvencoes/_normalized/subv-a.jsonl",
         "subv-a.jsonl",
         "_normalized/subv-a.jsonl",
+        "C:/LLMFinance/finance-llm/data/subvencoes/_normalized/subv-a.jsonl",
     ],
 )
 def test_jsonl_resolve_sempre_para_a_pasta_normalizada(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, guardado: str) -> None:
-    """Seja qual for a forma guardada, o JSONL é procurado em `_normalized/`."""
+    """Seja qual for a forma guardada, o JSONL é procurado em `_normalized/`.
+
+    Inclui o caso que falhou em produção: um caminho **do Windows** resolvido
+    dentro do contentor Linux. `Path("C:\\\\…\\\\subv-a.jsonl").name` devolve o
+    caminho inteiro no Linux (não há `\\` como separador), pelo que o nome tem de
+    ser cortado nos **dois** separadores. A verificação do nome é feita aqui
+    porque o anfitrião Windows não reproduz o erro.
+    """
     monkeypatch.setenv(subvencoes.DATA_DIR_ENV, str(tmp_path))
-    assert subvencoes.jsonl_path({"jsonl_path": guardado}) == (subvencoes.normalized_dir() / "subv-a.jsonl")
+    caminho = subvencoes.jsonl_path({"jsonl_path": guardado})
+    assert caminho == (subvencoes.normalized_dir() / "subv-a.jsonl")
+    assert caminho.name == "subv-a.jsonl"
+    assert "\\" not in caminho.name and "/" not in caminho.name
+
+
+def test_jsonl_encontra_mesmo_o_ficheiro_em_disco(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """O nome resolvido corresponde mesmo ao ficheiro gravado por `ler_ficheiro`."""
+    monkeypatch.setenv(subvencoes.DATA_DIR_ENV, str(tmp_path))
+    ficheiro = _escrever_ods(tmp_path / "2025" / "lista-subvpublicas2025_1.ods", "Subv_2025", CABECALHO + [_linha_dados()])
+    lote = subvencoes.ler_ficheiro(ficheiro, 2025)
+    # Semeadura de um manifesto legado (caminho absoluto do anfitrião).
+    legado = {"jsonl_path": str(Path("C:/LLMFinance/finance-llm/data/subvencoes/_normalized") / lote["jsonl"])}
+    resolvido = subvencoes.jsonl_path(legado)
+    assert resolvido is not None and resolvido.exists(), str(resolvido)
+    assert subvencoes.tem_jsonl(legado) is True
 
 
 def test_apagar_o_jsonl_obriga_a_reler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

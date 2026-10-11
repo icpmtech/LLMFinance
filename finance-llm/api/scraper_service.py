@@ -25,6 +25,8 @@ erro explicativo (nunca derrubam a API).
 """
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import hashlib
 import json
 import logging
@@ -616,16 +618,31 @@ def _browsers_installed() -> bool:
     chegam com `scrapling install`. Sem esta verificação, a UI dizia «browsers
     disponíveis» e os fetchers `dynamic`/`stealth` morriam com «Executable
     doesn't exist».
+
+    A verificação corre num fio próprio quando já há um ciclo de eventos: a API
+    síncrona do Playwright recusa arrancar dentro de um (`Sync API inside the
+    asyncio loop`), e o diagnóstico passava a dizer «browsers: False» com os
+    browsers instalados — um alarme falso que me levou a reinstalar tudo.
     """
+
+    def _verificar() -> bool:
+        try:
+            from playwright.sync_api import sync_playwright  # type: ignore
+
+            with sync_playwright() as playwright:
+                return Path(playwright.chromium.executable_path).exists()
+        except Exception:
+            return False
+
     try:
-        from playwright.sync_api import sync_playwright  # type: ignore
-    except Exception:
-        return False
-    try:
-        with sync_playwright() as playwright:
-            return Path(playwright.chromium.executable_path).exists()
-    except Exception:
-        return False
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return _verificar()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        try:
+            return pool.submit(_verificar).result(timeout=60)
+        except Exception:
+            return False
 
 
 def availability() -> Dict[str, Any]:

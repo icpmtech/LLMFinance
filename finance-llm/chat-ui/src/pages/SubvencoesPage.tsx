@@ -568,7 +568,7 @@ export default function SubvencoesPage() {
             </Card>
 
             <div className="grid gap-4 lg:grid-cols-2">
-              <Card>
+              <Card className="min-w-0">
                 <CardHeader>
                   <CardTitle icon={<Landmark size={16} />}>Quem mais atribuiu</CardTitle>
                 </CardHeader>
@@ -582,7 +582,7 @@ export default function SubvencoesPage() {
                   />
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="min-w-0">
                 <CardHeader>
                   <CardTitle icon={<BadgeEuro size={16} />}>Quem mais recebeu</CardTitle>
                 </CardHeader>
@@ -599,7 +599,7 @@ export default function SubvencoesPage() {
             </div>
 
             <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-              <Card>
+              <Card className="min-w-0">
                 <CardHeader>
                   <CardTitle icon={<TrendingUp size={16} />}>Decisões por mês</CardTitle>
                 </CardHeader>
@@ -631,7 +631,7 @@ export default function SubvencoesPage() {
                   )}
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="min-w-0">
                 <CardHeader>
                   <CardTitle icon={<Users size={16} />}>Tipo de beneficiário</CardTitle>
                 </CardHeader>
@@ -826,7 +826,7 @@ export default function SubvencoesPage() {
             ) : null}
 
             <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2">
                 {(resultado?.items || []).map((item) => (
                   <LinhaSubvencao key={item.doc_id} item={item} onAbrir={() => setDetalhe(item)} />
                 ))}
@@ -855,7 +855,7 @@ export default function SubvencoesPage() {
                 ) : null}
               </div>
 
-              <div className="space-y-3">
+              <div className="min-w-0 space-y-3">
                 {detalhe ? (
                   <Card>
                     <CardHeader>
@@ -1053,7 +1053,7 @@ export default function SubvencoesPage() {
                 </Card>
 
                 <div className="grid gap-4 lg:grid-cols-2">
-                  <Card>
+                  <Card className="min-w-0">
                     <CardHeader>
                       <CardTitle icon={<CalendarDays size={16} />}>Por ano de listagem</CardTitle>
                     </CardHeader>
@@ -1068,7 +1068,7 @@ export default function SubvencoesPage() {
                       />
                     </CardContent>
                   </Card>
-                  <Card>
+                  <Card className="min-w-0">
                     <CardHeader>
                       <CardTitle icon={<Landmark size={16} />}>{fichaListaTitulo}</CardTitle>
                     </CardHeader>
@@ -1084,7 +1084,7 @@ export default function SubvencoesPage() {
                   </Card>
                 </div>
 
-                <div className="space-y-2">
+                <div className="min-w-0 space-y-2">
                   {(ficha.items || []).slice(0, 60).map((item) => (
                     <LinhaSubvencao
                       key={item.doc_id}
