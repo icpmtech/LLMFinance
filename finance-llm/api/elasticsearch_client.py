@@ -16695,6 +16695,7 @@ def benchmark_items_mappings() -> Dict[str, Any]:
             "benchmark": {"type": "keyword"},
             "product_key": {"type": "keyword"},
             "product_name": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "description": {"type": "text"},
             "brand": {"type": "keyword"},
             "category": {"type": "keyword"},
             "sku": {"type": "keyword"},

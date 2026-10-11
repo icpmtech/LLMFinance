@@ -23,10 +23,12 @@ import unicodedata
 from datetime import datetime, timezone
 from html import escape
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+from urllib.parse import urljoin
 
 from api import benchmarks_store as store
 from api import cms_store as cms
 from api import elasticsearch_client as esc
+from api import scraper_ai
 from api import scraper_service
 
 logger = logging.getLogger(__name__)
@@ -36,6 +38,17 @@ logger = logging.getLogger(__name__)
 _ALIASES_PRECO = ("preco", "preço", "price", "preco_final", "preco_promo", "pvp", "valor")
 _ALIASES_PRECO_ANTIGO = ("preco_antigo", "preco_original", "price_original", "preco_sem_desconto")
 _ALIASES_NOME = ("nome", "produto", "titulo", "título", "title", "name", "descricao", "descrição")
+_ALIASES_DESCRICAO = (
+    "descricao",
+    "descrição",
+    "description",
+    "resumo",
+    "summary",
+    "sinopse",
+    "subtitulo",
+    "subtítulo",
+    "subtitle",
+)
 _ALIASES_MARCA = ("marca", "brand", "fabricante")
 _ALIASES_EAN = ("ean", "gtin", "codigo_barras", "código_de_barras", "barcode")
 _ALIASES_SKU = ("sku", "referencia", "referência", "ref", "codigo", "código", "mpn")
@@ -146,6 +159,9 @@ def normalizar_oferta(
     nome = str(_campo(campos, mapa=mapa, chave="product_name", aliases=_ALIASES_NOME) or item.get("title") or "").strip()
     if not nome:
         return None
+    descricao = _campo(campos, mapa=mapa, chave="description", aliases=_ALIASES_DESCRICAO)
+    if not descricao and item.get("summary"):
+        descricao = item.get("summary")
     marca = _campo(campos, mapa=mapa, chave="brand", aliases=_ALIASES_MARCA)
     ean = _campo(campos, mapa=mapa, chave="ean", aliases=_ALIASES_EAN)
     sku = _campo(campos, mapa=mapa, chave="sku", aliases=_ALIASES_SKU)
@@ -159,6 +175,15 @@ def normalizar_oferta(
     disponibilidade_txt = _chave(disponibilidade) if disponibilidade else ""
     em_stock = not any(palavra in disponibilidade_txt for palavra in ("esgotado", "indisponivel", "sem stock", "out of stock"))
 
+    # Os sites devolvem muitas vezes caminhos relativos (`/media/x.jpg`): sem os
+    # tornar absolutos, a imagem e a ligação não abrem a partir da plataforma.
+    base = str(loja.get("url") or item.get("url") or "")
+    if url and base and not url.lower().startswith(("http://", "https://")):
+        url = urljoin(base, url)
+    imagem_abs = str(imagem).strip() if imagem else ""
+    if imagem_abs and base and not imagem_abs.lower().startswith(("http://", "https://")):
+        imagem_abs = urljoin(base, imagem_abs)
+
     oferta: Dict[str, Any] = {
         "item_id": item_id,
         "product_key": _chave_produto(
@@ -170,6 +195,7 @@ def normalizar_oferta(
             item_id=item_id,
         ),
         "product_name": nome[:512],
+        "description": str(descricao).strip()[:2000] if descricao else None,
         "brand": str(marca).strip()[:120] if marca else None,
         "category": str(categoria).strip()[:120] if categoria else None,
         "sku": str(sku).strip()[:80] if sku else None,
@@ -177,7 +203,7 @@ def normalizar_oferta(
         "store_id": loja.get("id"),
         "store_name": loja.get("name"),
         "url": url,
-        "image": str(imagem).strip() if imagem else None,
+        "image": imagem_abs or None,
         "availability": str(disponibilidade).strip()[:120] if disponibilidade else None,
         "in_stock": em_stock,
         "currency": benchmark.get("currency") or "EUR",
@@ -323,6 +349,162 @@ def recolher(
     }
     store.marcar_recolha(slug, resumo)
     return resumo
+
+
+# ---------------------------------------------------------------------------
+# Sonda de uma loja (com IA opcional)
+# ---------------------------------------------------------------------------
+def robots_permite(url: str, agente: str = "IQOSBenchmarkBot/1.0") -> Dict[str, Any]:
+    """Diz se o `robots.txt` do site permite recolher este endereço.
+
+    É um aviso ao utilizador (a recolha também respeita o ficheiro por si): sem
+    isto, uma sonda «bem-sucedida» num caminho proibido dava a ideia errada.
+    """
+    import urllib.robotparser
+    from urllib.parse import urlparse
+
+    partes = urlparse(url)
+    if not partes.scheme.startswith("http"):
+        return {"permitido": None, "detalhe": "Endereço sem http(s)."}
+    try:
+        import httpx
+
+        resposta = httpx.get(f"{partes.scheme}://{partes.netloc}/robots.txt", timeout=15, follow_redirects=True)
+    except Exception as exc:  # noqa: BLE001
+        return {"permitido": None, "detalhe": f"robots.txt inacessível ({type(exc).__name__})."}
+    if resposta.status_code >= 400:
+        return {"permitido": None, "detalhe": f"sem robots.txt (HTTP {resposta.status_code})."}
+    leitor = urllib.robotparser.RobotFileParser()
+    leitor.parse(resposta.text.splitlines())
+    permitido = leitor.can_fetch(agente, url)
+    return {
+        "permitido": permitido,
+        "detalhe": "permitido pelo robots.txt" if permitido else "PROIBIDO pelo robots.txt — não recolher este caminho.",
+    }
+
+
+async def sondar_loja(
+    url: str,
+    *,
+    fetcher: str = "http",
+    hint: str = "",
+    use_ai: bool = True,
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+    user_id: Optional[str] = None,
+    benchmark: Optional[str] = None,
+    nome_loja: str = "",
+) -> Dict[str, Any]:
+    """Analisa uma página de loja e devolve tudo o que é preciso para a recolher.
+
+    Devolve a definição de recolha **pronta a guardar numa loja do benchmark**,
+    o mapa de campos (preço/título/imagem/descrição/…) e uma **amostra de
+    ofertas** já normalizadas — é o que a interface mostra antes de o utilizador
+    aceitar a proposta.
+    """
+    aviso_robots = robots_permite(url)
+    resultado = await scraper_ai.suggest_product_source(
+        url,
+        hint=hint,
+        fetcher=fetcher or "http",
+        user_id=user_id,
+        provider=provider,
+        model=model,
+        use_ai=use_ai,
+    )
+
+    definicao = resultado.get("definition") or {}
+    campos = [str(campo.get("name") or "") for campo in (definicao.get("fields") or [])]
+    # Mapa campo do benchmark → campo extraído, pela ordem em que o módulo os conhece.
+    mapa: Dict[str, str] = {}
+    equivalencias = {
+        "price": "preco",
+        "price_original": "preco_antigo",
+        "product_name": "titulo",
+        "description": "descricao",
+        "brand": "marca",
+        "category": "categoria",
+        "ean": "ean",
+        "sku": "sku",
+        "url": "url",
+        "image": "imagem",
+        "availability": "disponibilidade",
+    }
+    for chave, campo in equivalencias.items():
+        if campo in campos:
+            mapa[chave] = campo
+
+    # Amostra normalizada: é isto que o estudo vai mostrar depois de recolher.
+    loja_teste = {"id": "sonda", "name": nome_loja or url, "url": url}
+    benchmark_teste = {
+        "slug": benchmark or "sonda",
+        "match_on": "nome",
+        "currency": "EUR",
+        "field_map": mapa,
+    }
+    amostra: List[Dict[str, Any]] = []
+    previsao = resultado.get("preview") or {}
+    for item in (previsao.get("items") or [])[:6]:
+        oferta = normalizar_oferta(item, loja=loja_teste, benchmark=benchmark_teste)
+        if oferta:
+            amostra.append(
+                {
+                    "product_name": oferta.get("product_name"),
+                    "price": oferta.get("price"),
+                    "currency": oferta.get("currency"),
+                    "image": oferta.get("image"),
+                    "url": oferta.get("url"),
+                    "description": oferta.get("description"),
+                    "brand": oferta.get("brand"),
+                    "availability": oferta.get("availability"),
+                    "product_key": oferta.get("product_key"),
+                }
+            )
+
+    encontrados = resultado.get("heuristic_fields") or {}
+    avisos: List[str] = []
+    if aviso_robots.get("permitido") is False:
+        avisos.append(str(aviso_robots.get("detalhe")))
+    if not amostra and resultado.get("ok"):
+        avisos.append(
+            "A proposta não devolveu ofertas normalizadas: falta o preço ou o nome do produto nos campos."
+        )
+    if resultado.get("ai_error"):
+        avisos.append(f"IA indisponível: {resultado['ai_error']}")
+
+    return {
+        "ok": bool(resultado.get("ok")) and bool(amostra),
+        "url": url,
+        "titulo_pagina": resultado.get("title"),
+        "origem": resultado.get("origin"),
+        "ai": resultado.get("ai"),
+        "robots": aviso_robots,
+        "campos": campos,
+        "field_map": mapa,
+        "campos_detetados": {
+            chave: (valor or {}).get("selector") if isinstance(valor, dict) else None
+            for chave, valor in encontrados.items()
+        },
+        "candidatos_lista": resultado.get("analysis") or [],
+        "tentativas": resultado.get("tried") or [],
+        "amostra": amostra,
+        "loja_sugerida": {
+            "name": nome_loja or (resultado.get("title") or "").split("|")[0].strip() or url,
+            "url": url,
+            "scraper": {
+                "fetcher": fetcher or "http",
+                "list": definicao.get("list") or {},
+                "fields": definicao.get("fields") or [],
+                "pagination": definicao.get("pagination") or {"max_pages": 1},
+                "respect_robots": True,
+                "id_fields": definicao.get("id_fields") or ["url"],
+                "title_field": definicao.get("title_field") or "titulo",
+            },
+        },
+        "notas": (resultado.get("ai") or {}).get("notes") or "",
+        "avisos": avisos,
+        "erro": None if resultado.get("ok") else resultado.get("error"),
+    }
 
 
 # ---------------------------------------------------------------------------

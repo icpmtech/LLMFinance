@@ -34,6 +34,7 @@ FIELD_MAP_KEYS = (
     "price",
     "price_original",
     "product_name",
+    "description",
     "brand",
     "category",
     "ean",

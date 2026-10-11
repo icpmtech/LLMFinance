@@ -88,6 +88,19 @@ class RecolhaPayload(BaseModel):
     limite_por_loja: int = Field(500, ge=1, le=5000, description="Máximo de ofertas lidas por loja")
 
 
+class SondaPayload(BaseModel):
+    """Sonda de uma página de loja (preço, imagem e descrição)."""
+
+    url: str = Field(..., description="Endereço da listagem de produtos")
+    fetcher: str = Field("http", description="http | dynamic | stealth (browser real para sites protegidos)")
+    hint: str = Field("", description="Contexto extra para a IA (ex.: «portáteis, preço com IVA»)")
+    use_ai: bool = Field(True, description="Pedir a proposta ao modelo de IA (além da análise determinística)")
+    provider: Optional[str] = Field(None, description="Fornecedor de IA (por omissão, o predefinido)")
+    model: Optional[str] = Field(None, description="Modelo de IA a usar")
+    benchmark: Optional[str] = Field(None, description="Benchmark onde a loja vai entrar (afina o mapa de campos)")
+    nome_loja: str = Field("", description="Nome da loja (para a proposta)")
+
+
 # ---------------------------------------------------------------------------
 # Metadados
 # ---------------------------------------------------------------------------
@@ -147,6 +160,37 @@ def benchmarks_modelo(template_id: str, session: ReadSession = None) -> Dict[str
             "id_fields": fonte.get("id_fields"),
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Sonda (análise da página + IA)
+# ---------------------------------------------------------------------------
+@router.post("/sonda")
+async def benchmarks_sonda(payload: SondaPayload, session: Session) -> Dict[str, Any]:
+    """Analisa uma página de loja e devolve a definição de recolha pronta a usar.
+
+    A análise é primeiro **determinística** (procura o contentor repetido, o preço
+    pelo formato, a imagem e o bloco de texto que parece descrição); a IA é
+    chamada a seguir para afinar os seletores e as duas propostas são validadas a
+    sério. Quando nada extrai, o erro explica se foi robots, bloqueio ou markup.
+    """
+    if not payload.url.strip():
+        raise HTTPException(status_code=400, detail="Indique o endereço da página de produtos.")
+    resultado = await servico.sondar_loja(
+        payload.url.strip(),
+        fetcher=payload.fetcher,
+        hint=payload.hint,
+        use_ai=payload.use_ai,
+        provider=payload.provider,
+        model=payload.model,
+        user_id=_email(session),
+        benchmark=payload.benchmark,
+        nome_loja=payload.nome_loja,
+    )
+    if not resultado.get("ok") and not resultado.get("amostra"):
+        # 502: a falha é da página (bloqueio, JavaScript, markup) — não do pedido.
+        raise HTTPException(status_code=502, detail=resultado.get("erro") or "A sonda não encontrou produtos.")
+    return resultado
 
 
 # ---------------------------------------------------------------------------

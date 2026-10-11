@@ -17,6 +17,7 @@ uma nota a explicar como ligar a IA.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -508,7 +509,40 @@ async def suggest_source(
     use_ai: bool = True,
     max_pages: int = 1,
 ) -> Dict[str, Any]:
-    """Sugere uma definição para um URL: IA primeiro, heurística como rede de segurança."""
+    """Sugere uma definição para um URL: IA primeiro, heurística como rede de segurança.
+
+    Corre num fio próprio: a API síncrona do Playwright recusa ser usada dentro do
+    ciclo de eventos do pedido («Sync API inside the asyncio loop»), o que fazia
+    falhar os *fetchers* `dynamic` e `stealth` — exatamente os que os sites de
+    lojas exigem.
+    """
+    return await asyncio.to_thread(
+        _suggest_source_sync,
+        url,
+        hint=hint,
+        fetcher=fetcher,
+        options=options,
+        user_id=user_id,
+        provider=provider,
+        model=model,
+        use_ai=use_ai,
+        max_pages=max_pages,
+    )
+
+
+def _suggest_source_sync(
+    url: str,
+    *,
+    hint: str = "",
+    fetcher: str = "http",
+    options: Optional[Dict[str, Any]] = None,
+    user_id: Optional[str] = None,
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+    use_ai: bool = True,
+    max_pages: int = 1,
+) -> Dict[str, Any]:
+    """Parte síncrona da sonda genérica (corre num fio próprio)."""
     base = {
         "url": url,
         "fetcher": fetcher or "http",
@@ -546,8 +580,8 @@ async def suggest_source(
 
     # 2. IA (quando pedida e configurada).
     if use_ai:
-        proposal = await ai_definition(
-            url, page, analysis, hint=hint, user_id=user_id, provider=provider, model=model
+        proposal = asyncio.run(
+            ai_definition(url, page, analysis, hint=hint, user_id=user_id, provider=provider, model=model)
         )
         result["ai"] = proposal.get("ai")
         result["ai_error"] = proposal.get("error")
@@ -599,3 +633,493 @@ def _validate(definition: Dict[str, Any], max_pages: int = 1) -> Dict[str, Any]:
         return scraper.preview_source(definition, limit=3, max_pages=max(1, min(max_pages, 3)))
     except Exception as exc:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}", "items": [], "total": 0, "pages": 0}
+
+
+# ---------------------------------------------------------------------------
+# Sonda de **produtos** (preço, imagem e descrição)
+#
+# A sonda genérica acima propõe «título, ligação, data e imagem» — serve para
+# notícias. Aqui o objetivo é um **produto à venda**: preço, preço antigo,
+# marca, EAN/SKU, disponibilidade, imagem e descrição. A deteção é feita primeiro
+# de forma determinística (à procura de valores que *parecem* preços e de blocos
+# de texto que *parecem* descrições dentro do item) e só depois se pede ajuda ao
+# modelo de IA, sempre com validação a sério antes de devolver.
+# ---------------------------------------------------------------------------
+
+#: Um valor monetário: 1.299,00 € · 1299.00 EUR · R$ 1.299,90 · £51.77
+_PRICE_RE = re.compile(
+    r"(?:€|EUR|R\$|US\$|\$|£)\s*\d{1,3}(?:[.\s]\d{3})*(?:[.,]\d{1,2})?"
+    r"|\d{1,3}(?:[.\s]\d{3})*(?:[.,]\d{2})\s*(?:€|EUR|R\$|\$|£)",
+    re.IGNORECASE,
+)
+#: Classes que denunciam o campo (usadas só como preferência, nunca como regra).
+_PISTAS_PRECO = ("price", "preco", "preço", "precio", "valor", "pvp", "importe", "amount", "current")
+_PISTAS_PRECO_ANTIGO = ("old", "antes", "was", "strike", "before", "list", "regular", "original", "compare")
+_PISTAS_DESCRICAO = ("descri", "description", "resumo", "summary", "sinopse", "detalhe", "detail", "subtitle", "sub")
+_PISTAS_MARCA = ("brand", "marca", "fabricante", "manufacturer")
+_PISTAS_EAN = ("ean", "gtin", "barcode", "codigo_barras")
+_PISTAS_SKU = ("sku", "ref", "referencia", "referência", "mpn", "codigo", "código")
+_PISTAS_DISPONIBILIDADE = ("stock", "disponibilidad", "disponibilidade", "availability", "estado")
+_ELEMENTOS_BUSCA = "[class], [itemprop], h1, h2, h3, h4, h5, span, p, a, strong, b, li, dd, dt, del, s"
+
+
+def _selector_do_no(node: Any) -> str:
+    """Seletor CSS de um elemento (tag + até 2 classes estáveis)."""
+    try:
+        tag = (node.tagname or "").lower()
+    except Exception:
+        tag = ""
+    if not tag:
+        return ""
+    try:
+        classes = [c for c in (node.attrib.get("class") or "").split() if c]
+    except Exception:
+        classes = []
+    return _node_selector(tag, classes) if classes else tag
+
+
+def _tem_pista(seletor: str, pistas: Tuple[str, ...]) -> bool:
+    minusculas = seletor.lower()
+    return any(pista in minusculas for pista in pistas)
+
+
+def _minerar_campo(
+    nodes: List[Any],
+    *,
+    aceita: Any,
+    pistas: Tuple[str, ...] = (),
+    atributo: str = "",
+    minimo: float = 0.5,
+    exigir_pista: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """Procura, dentro dos itens, o seletor que melhor extrai um valor.
+
+    `aceita(valor, seletor)` decide o que serve (ex.: «parece um preço»). Com
+    `exigir_pista=True` só conta quem tenha no seletor uma das `pistas` — é o que
+    evita tomar o título por «marca» ou um número qualquer por «EAN».
+    """
+    votos: Dict[str, int] = {}
+    amostras: Dict[str, str] = {}
+    com_pista: Dict[str, int] = {}
+    itens = nodes[:40]
+    for node in itens:
+        try:
+            elementos = node.css(_ELEMENTOS_BUSCA)
+        except Exception:
+            continue
+        vistos_no_item: set[str] = set()
+        for elemento in elementos:
+            seletor = _selector_do_no(elemento)
+            if not seletor or seletor in vistos_no_item:
+                continue
+            tem_pista = bool(pistas) and _tem_pista(seletor, pistas)
+            if exigir_pista and not tem_pista:
+                continue
+            valor = ""
+            try:
+                if atributo:
+                    valor = (elemento.attrib.get(atributo) or "").strip()
+                else:
+                    valor = (elemento.get_all_text() or "").strip()
+            except Exception:
+                valor = ""
+            if not valor or not aceita(valor, seletor):
+                continue
+            vistos_no_item.add(seletor)
+            votos[seletor] = votos.get(seletor, 0) + 1
+            amostras.setdefault(seletor, valor[:200])
+            if tem_pista:
+                com_pista[seletor] = com_pista.get(seletor, 0) + 1
+
+    if not votos:
+        return None
+    total = max(1, len(itens))
+
+    def pontuacao(item: Tuple[str, int]) -> float:
+        seletor, votos_seletor = item
+        base = votos_seletor / total
+        # A pista de classe desempata: `span.price` ganha a `span.texto`.
+        return base + (0.25 if com_pista.get(seletor) else 0.0)
+
+    melhor, votos_melhor = max(votos.items(), key=pontuacao)
+    cobertura = round(votos_melhor / total, 2)
+    if cobertura < minimo:
+        return None
+    return {"selector": melhor, "coverage": cobertura, "sample": amostras.get(melhor, "")}
+
+
+def _parece_preco(valor: str, seletor: str = "") -> bool:
+    return bool(_PRICE_RE.search(valor or ""))
+
+
+def _parece_descricao(valor: str, seletor: str = "") -> bool:
+    texto = (valor or "").strip()
+    if len(texto) < 40 or _parece_preco(texto):
+        return False
+    return len(texto) <= 1200
+
+
+def product_heuristic_definition(url: str, page: Any, analysis: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Definição determinística de **produto**, a partir do melhor contentor.
+
+    Devolve também `campos` — o resumo do que foi encontrado (para a interface
+    mostrar o que a sonda viu antes de guardar seja o que for).
+    """
+    if not analysis:
+        return {}
+    best = analysis[0]
+    seletor_lista = best["selector"]
+    try:
+        nodes = list(page.css(seletor_lista))
+    except Exception:
+        nodes = []
+    if not nodes:
+        return {}
+
+    titulo = _best_selector(page, list(_TITLE_SELECTORS), nodes)
+    link = _best_selector(
+        page,
+        ["h3 a::attr(href)", "h2 a::attr(href)", "a[itemprop='url']::attr(href)", "h1 a::attr(href)", "a::attr(href)"],
+        nodes,
+    )
+    imagem = _best_selector(
+        page,
+        [
+            "img::attr(src)",
+            "img::attr(data-src)",
+            "img::attr(data-original)",
+            "img::attr(srcset)",
+            "source::attr(srcset)",
+            "[itemprop='image']::attr(src)",
+        ],
+        nodes,
+    )
+    preco = _minerar_campo(nodes, aceita=_parece_preco, pistas=_PISTAS_PRECO)
+    antigo = _minerar_campo(
+        nodes,
+        aceita=lambda valor, seletor: _parece_preco(valor) and _tem_pista(seletor, _PISTAS_PRECO_ANTIGO),
+        pistas=_PISTAS_PRECO_ANTIGO,
+        minimo=0.3,
+    )
+    descricao = _minerar_campo(nodes, aceita=_parece_descricao, pistas=_PISTAS_DESCRICAO, minimo=0.4)
+    marca = _minerar_campo(
+        nodes, aceita=lambda v, s: 1 < len(v) < 60, pistas=_PISTAS_MARCA, minimo=0.3, exigir_pista=True
+    )
+    ean = _minerar_campo(
+        nodes,
+        aceita=lambda v, s: bool(re.fullmatch(r"[0-9\-\s]{8,14}", v.strip())),
+        pistas=_PISTAS_EAN,
+        minimo=0.3,
+        exigir_pista=True,
+    )
+    sku = _minerar_campo(
+        nodes, aceita=lambda v, s: 2 < len(v) < 60, pistas=_PISTAS_SKU, minimo=0.3, exigir_pista=True
+    )
+    disponibilidade = _minerar_campo(
+        nodes,
+        aceita=lambda v, s: 3 < len(v) < 60,
+        pistas=_PISTAS_DISPONIBILIDADE,
+        minimo=0.3,
+        exigir_pista=True,
+    )
+
+    fields: List[Dict[str, Any]] = []
+    if titulo:
+        fields.append({"name": "titulo", "label": "Título", "selector": titulo, "type": "css", "max_length": 500})
+    if preco:
+        fields.append({"name": "preco", "label": "Preço", "selector": preco["selector"], "type": "css", "max_length": 40})
+    if antigo:
+        fields.append(
+            {"name": "preco_antigo", "label": "Preço antes", "selector": antigo["selector"], "type": "css", "max_length": 40}
+        )
+    if link:
+        fields.append({"name": "url", "label": "Ligação", "selector": link, "type": "css", "max_length": 1000})
+    if imagem:
+        fields.append({"name": "imagem", "label": "Imagem", "selector": imagem, "type": "css", "max_length": 1000})
+    if descricao:
+        fields.append(
+            {"name": "descricao", "label": "Descrição", "selector": descricao["selector"], "type": "css", "max_length": 1200}
+        )
+    if marca:
+        fields.append({"name": "marca", "label": "Marca", "selector": marca["selector"], "type": "css", "max_length": 120})
+    if ean:
+        fields.append({"name": "ean", "label": "EAN", "selector": ean["selector"], "type": "css", "max_length": 40})
+    if sku:
+        fields.append({"name": "sku", "label": "Referência", "selector": sku["selector"], "type": "css", "max_length": 80})
+    if disponibilidade:
+        fields.append(
+            {
+                "name": "disponibilidade",
+                "label": "Disponibilidade",
+                "selector": disponibilidade["selector"],
+                "type": "css",
+                "max_length": 120,
+            }
+        )
+    if not fields:
+        return {}
+
+    definicao = {
+        "name": _title_for(url, page),
+        "url": url,
+        "list": {"selector": seletor_lista, "type": "css"},
+        "fields": fields,
+        "pagination": {"selector": "", "type": "css", "attr": "href", "max_pages": 1},
+        "id_fields": ["url"] if link else (["titulo"] if titulo else []),
+        "title_field": "titulo" if titulo else fields[0]["name"],
+    }
+    return {
+        **definicao,
+        "campos": {
+            "preco": preco,
+            "preco_antigo": antigo,
+            "descricao": descricao,
+            "imagem": {"selector": imagem} if imagem else None,
+            "titulo": {"selector": titulo} if titulo else None,
+        },
+    }
+
+
+def _product_prompt(url: str, page_title: str, analysis: List[Dict[str, Any]], sample: str, hint: str) -> str:
+    """Prompt orientado a **produto** (preço, imagem e descrição são obrigatórios)."""
+    candidatos = [
+        {k: c[k] for k in ("selector", "count", "text_ratio", "link_ratio", "image_ratio", "samples") if k in c}
+        for c in analysis[:6]
+    ]
+    return (
+        "És um especialista em web scraping de lojas online. Vais analisar uma página de listagem de "
+        "produtos e devolver a definição de extração em JSON.\n\n"
+        f"URL: {url}\nTítulo da página: {page_title}\n"
+        f"Objetivo: {hint or 'recolher os produtos desta listagem com preço, imagem e descrição'}\n\n"
+        "Candidatos a contentor de produto (já medidos; text_ratio/link_ratio = fração com texto/ligação):\n"
+        f"{json.dumps(candidatos, ensure_ascii=False, indent=1)}\n\n"
+        "Amostra do HTML de UM produto (usa-a para descobrir a estrutura interna):\n"
+        f"{sample}\n\n"
+        "Obrigatório: encontra o preço, a imagem e a descrição. Se a descrição não existir no item, "
+        "usa o subtítulo ou a categoria como descrição curta.\n\n"
+        "Devolve APENAS este JSON:\n"
+        "{\n"
+        '  "list": {"selector": "<css do item de produto>", "type": "css"},\n'
+        '  "fields": [\n'
+        '    {"name": "titulo", "label": "Título", "selector": "<css relativo ao item>", "type": "css"},\n'
+        '    {"name": "preco", "label": "Preço", "selector": "<css>", "type": "css"},\n'
+        '    {"name": "preco_antigo", "label": "Preço antes", "selector": "<css>", "type": "css"},\n'
+        '    {"name": "imagem", "label": "Imagem", "selector": "<css>", "type": "css"},\n'
+        '    {"name": "descricao", "label": "Descrição", "selector": "<css>", "type": "css"},\n'
+        '    {"name": "url", "label": "Ligação", "selector": "<css>", "type": "css"},\n'
+        '    {"name": "marca", "label": "Marca", "selector": "<css>", "type": "css"},\n'
+        '    {"name": "ean", "label": "EAN", "selector": "<css>", "type": "css"},\n'
+        '    {"name": "disponibilidade", "label": "Disponibilidade", "selector": "<css>", "type": "css"}\n'
+        "  ],\n"
+        '  "id_fields": ["url"],\n'
+        '  "title_field": "titulo",\n'
+        '  "pagination": {"selector": "<css do botão seguinte>", "type": "css", "attr": "href", "max_pages": 1},\n'
+        '  "notes": "<o que assumiste e o que pode falhar>"\n'
+        "}\n\n"
+        "Regras: só CSS; `::text` para texto e `::attr(nome)` para atributos; os seletores dos campos são "
+        "relativos ao item; o preço tem de ser o **preço atual** (não o antigo); omite os campos que não existam."
+    )
+
+
+async def _product_ai_definition(
+    url: str,
+    page: Any,
+    analysis: List[Dict[str, Any]],
+    *,
+    hint: str = "",
+    user_id: Optional[str] = None,
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Pede a definição de produto ao modelo (mesmo mecanismo da sonda genérica)."""
+    provider_id, spec, model_id, key = pick_provider(user_id, provider, model)
+    if not provider_id or not spec:
+        return {
+            "definition": None,
+            "ai": None,
+            "error": "Nenhum fornecedor de IA configurado. Defina uma chave em Definições → Fornecedores de IA.",
+        }
+
+    from api import cloud_chat
+
+    best = analysis[0] if analysis else None
+    page_title = ""
+    try:
+        page_title = (page.css("title::text").get() or "").strip()
+    except Exception:
+        page_title = ""
+    prompt = _product_prompt(url, page_title, analysis, _sample_html(best) if best else "", hint)
+    try:
+        answer = await cloud_chat.complete_answer(
+            provider=provider_id,
+            spec=spec,
+            model=model_id or spec.get("default_model") or "",
+            messages=[{"role": "user", "content": prompt}],
+            api_key=key,
+            temperature=0.1,
+            max_tokens=1400,
+        )
+    except Exception as exc:
+        logger.warning("Sonda de produtos: IA falhou (%s): %s", provider_id, exc)
+        return {"definition": None, "ai": None, "error": f"{type(exc).__name__}: {exc}"}
+
+    data = _parse_json(answer)
+    if not data:
+        return {"definition": None, "ai": None, "error": "A IA não devolveu JSON válido.", "raw": (answer or "")[:500]}
+    definicao: Dict[str, Any] = {
+        "list": data.get("list") or {},
+        "fields": data.get("fields") or [],
+        "pagination": data.get("pagination") or {"selector": "", "type": "css", "attr": "href", "max_pages": 1},
+    }
+    if data.get("id_fields"):
+        definicao["id_fields"] = data["id_fields"]
+    if data.get("title_field"):
+        definicao["title_field"] = data["title_field"]
+    return {
+        "definition": definicao,
+        "ai": {
+            "provider": provider_id,
+            "provider_label": spec.get("label") or provider_id,
+            "model": model_id,
+            "notes": str(data.get("notes") or "").strip(),
+        },
+        "error": None,
+    }
+
+
+async def suggest_product_source(
+    url: str,
+    *,
+    hint: str = "",
+    fetcher: str = "http",
+    options: Optional[Dict[str, Any]] = None,
+    user_id: Optional[str] = None,
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+    use_ai: bool = True,
+    max_pages: int = 1,
+) -> Dict[str, Any]:
+    """Sonda uma **página de produtos**: preço, imagem e descrição.
+
+    Ordem: análise determinística → proposta da IA (se pedida e configurada) →
+    validação a sério de cada proposta; a heurística de produto é a rede de
+    segurança, para a sonda nunca devolver «nada encontrado» sem explicação.
+    Corre num fio próprio (ver `suggest_source`) por causa da API do Playwright.
+    """
+    return await asyncio.to_thread(
+        _suggest_product_source_sync,
+        url,
+        hint=hint,
+        fetcher=fetcher,
+        options=options,
+        user_id=user_id,
+        provider=provider,
+        model=model,
+        use_ai=use_ai,
+        max_pages=max_pages,
+    )
+
+
+def _suggest_product_source_sync(
+    url: str,
+    *,
+    hint: str = "",
+    fetcher: str = "http",
+    options: Optional[Dict[str, Any]] = None,
+    user_id: Optional[str] = None,
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+    use_ai: bool = True,
+    max_pages: int = 1,
+) -> Dict[str, Any]:
+    """Parte síncrona da sonda de produtos (corre num fio próprio)."""
+    base: Dict[str, Any] = {
+        "url": url,
+        "fetcher": fetcher or "http",
+        "enabled": False,
+        "options": options or {},
+        "respect_robots": True,
+        "schedule": {"cron": "", "timezone": "Europe/Lisbon"},
+        "tags": [],
+    }
+    try:
+        with scraper._open_session(base["fetcher"], base["options"]) as session:
+            page = scraper._session_fetch(session, base["fetcher"], url, base["options"])
+        if page is None:
+            raise RuntimeError("A página não devolveu conteúdo (pode estar protegida ou exigir JavaScript).")
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "url": url, "error": f"{type(exc).__name__}: {exc}", "analysis": []}
+
+    analysis = analyze_page(page, limit=8)
+    if not analysis:
+        return {
+            "ok": False,
+            "url": url,
+            "error": "Não foi possível identificar uma lista de produtos nesta página.",
+            "analysis": [],
+        }
+
+    heuristic = product_heuristic_definition(url, page, analysis)
+    resultado: Dict[str, Any] = {
+        "ok": True,
+        "url": url,
+        "title": _title_for(url, page),
+        "analysis": [{k: v for k, v in c.items() if k != "node"} for c in analysis],
+        "heuristic": {k: v for k, v in heuristic.items() if k != "campos"},
+        "heuristic_fields": heuristic.get("campos") or {},
+        "definition": None,
+        "origin": None,
+        "ai": None,
+        "ai_error": None,
+        "preview": None,
+        "tried": [],
+    }
+
+    if use_ai:
+        proposta = asyncio.run(
+            _product_ai_definition(url, page, analysis, hint=hint, user_id=user_id, provider=provider, model=model)
+        )
+        resultado["ai"] = proposta.get("ai")
+        resultado["ai_error"] = proposta.get("error")
+        candidata = proposta.get("definition")
+        if candidata:
+            fields = _clean_ai_fields(candidata)
+            seletor_lista = str((candidata.get("list") or {}).get("selector") or "").strip()
+            if seletor_lista and fields:
+                ensaio = {
+                    **base,
+                    "name": _title_for(url, page),
+                    "list": {"selector": seletor_lista, "type": str((candidata.get("list") or {}).get("type") or "css")},
+                    "fields": fields,
+                    "pagination": candidata.get("pagination") or {"max_pages": 1},
+                    "id_fields": candidata.get("id_fields") or ["url"],
+                    "title_field": candidata.get("title_field") or fields[0]["name"],
+                }
+                previsao = _validate(ensaio, max_pages)
+                resultado["tried"].append({"origin": "ia", "items": len(previsao.get("items") or [])})
+                resultado["preview"] = previsao
+                if previsao.get("items"):
+                    resultado["definition"] = ensaio
+                    resultado["origin"] = "ia"
+
+    if resultado["definition"] is None:
+        ensaio = {**base, **heuristic}
+        ensaio.pop("campos", None)
+        if ensaio.get("list", {}).get("selector") and ensaio.get("fields"):
+            previsao = _validate(ensaio, max_pages)
+            resultado["tried"].append({"origin": "heuristica", "items": len(previsao.get("items") or [])})
+            if resultado["preview"] is None or previsao.get("items"):
+                resultado["preview"] = previsao
+            if previsao.get("items"):
+                resultado["definition"] = ensaio
+                resultado["origin"] = "heuristica"
+        if resultado["definition"] is None and not resultado.get("error"):
+            resultado["ok"] = False
+            resultado["error"] = (
+                resultado["preview"].get("error")
+                if isinstance(resultado.get("preview"), dict) and resultado["preview"].get("error")
+                else "Nenhuma proposta extraiu produtos desta página (pode estar protegida ou precisar de browser)."
+            )
+
+    return resultado
+
