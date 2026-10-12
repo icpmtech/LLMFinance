@@ -484,14 +484,31 @@ def pontos_de_atencao(dados: Dict[str, Any]) -> List[Dict[str, Any]]:
             "Não há contratos desta empresa na amostra recolhida — a leitura de contratação não se aplica.",
             "Confirmar o NIF e, se for adjudicante, usar a vista por papel de adjudicante.",
         )
+    if dados.get("encontrada") is False:
+        juntar(
+            "alerta",
+            "Empresa não encontrada na plataforma",
+            "O NIF não aparece no cadastro nem nos contratos: os gráficos abaixo não descrevem empresa nenhuma.",
+            "Confirmar o NIF antes de usar qualquer número deste painel.",
+        )
 
     insolvencias = resumo.get("insolvencias") or 0
     if insolvencias:
         juntar(
             "alerta",
-            f"{insolvencias} processo(s) no CIRE",
-            "Há processos de insolvência, PER, PEAP ou PEVE publicados no CITIUS.",
+            f"{insolvencias} processo(s) em que a empresa é a insolvente (CIRE)",
+            "Há processos de insolvência, PER, PEAP ou PEVE em que a empresa é a insolvente (CITIUS).",
             "Ler o processo mais recente e confirmar a situação atual antes de contratar ou pagar.",
+        )
+    mencoes_cire = resumo.get("mencoes_cire") or 0
+    if mencoes_cire and not insolvencias:
+        # Dizer isto evita o falso alarme mais perigoso deste painel: aparecer em
+        # milhares de processos do CIRE como credor **não** é ser insolvente.
+        juntar(
+            "info",
+            f"Aparece em {mencoes_cire} processo(s) do CIRE como credora/interveniente",
+            "São processos de terceiros: a empresa cobra ou participa, não é a insolvente.",
+            "Nada a fazer quanto a insolvência da empresa; usar apenas como contexto de mercado.",
         )
 
     top1 = concentracao_dados.get("top1")
@@ -690,6 +707,8 @@ def decisao(recolha: Dict[str, Any]) -> Dict[str, Any]:
     dados: Dict[str, Any] = {
         "nif": str(recolha.get("nif") or ""),
         "nome": str(recolha.get("nome") or ""),
+        "encontrada": recolha.get("encontrada", True),
+        "avisos": recolha.get("avisos") or [],
         "resumo": {
             "contratos": int(kpis.get("contratos") or len(contratos)),
             "contratos_lidos": len(contratos),
@@ -699,6 +718,7 @@ def decisao(recolha: Dict[str, Any]) -> Dict[str, Any]:
             "taxa_ajuste_direto": procedimento_dados["taxa_ajuste_direto"],
             "hhi": concentracao_dados["hhi"],
             "insolvencias": kpis.get("insolvencias") or 0,
+            "mencoes_cire": kpis.get("mencoes_cire") or 0,
             "confianca_risco": risco_secao.get("confianca"),
             "cobertura_risco": risco_secao.get("cobertura"),
         },

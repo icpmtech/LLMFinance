@@ -22,6 +22,20 @@ const CELL = 170;
 const REPULSION = 2400;
 const LINK_DISTANCE = 110;
 
+/**
+ * Distância mínima usada na repulsão.
+ *
+ * Dois nós com coordenadas quase iguais — o que acontece porque as sementes por
+ * tipo partilham anéis e ângulos — davam `dist ≈ 1e-15`, a repulsão
+ * `REPULSION / dist²` disparava para ~1e30 e o layout explodia. As posições
+ * ficavam **finitas mas gigantes**, o `fitToView` encolhia tudo para 30 % e a
+ * translação do canvas saía do bitmap: o grafo ficava invisível (canvas vazio).
+ */
+const DIST_MINIMA = 1;
+
+/** Coordenada máxima aceite: acima disto a posição é considerada rebentada e reposta no anel. */
+const COORD_MAXIMA = 20000;
+
 /** Orçamento de desenho: acima disto o grafo fica ilegível e a simulação arrasta-se. */
 const MAX_DRAW_NODES = 110;
 const MAX_DRAW_EDGES = 350;
@@ -665,13 +679,16 @@ export function GraphCanvas({
     });
 
     /**
-     * Recoloca no anel uma posição não finita (NaN/±∞).
+     * Recoloca no anel uma posição não finita (NaN/±∞) **ou rebentada**.
      *
      * É a rede de segurança do ciclo de forças: `Infinity` numa coordenada faz
      * `Math.floor(x / CELL)` dar `Infinity` e o ciclo
      * `for (let gx = cx - 1; gx <= cx + 1; gx++)` **nunca termina** —
      * `Infinity + 1` continua a ser `Infinity` — bloqueando a thread principal
      * sem forma de recuperar (a página fica sem resposta para sempre).
+     *
+     * Uma coordenada enorme mas finita (a física descontrolada) não bloqueia
+     * nada, mas deixa o grafo fora do canvas: também é reposta.
      */
     const sanear = (node: StudioNode, index: number): NodePosition => {
       const current = positions.get(node.id);
@@ -680,7 +697,9 @@ export function GraphCanvas({
         Number.isFinite(current.x) &&
         Number.isFinite(current.y) &&
         Number.isFinite(current.vx) &&
-        Number.isFinite(current.vy)
+        Number.isFinite(current.vy) &&
+        Math.abs(current.x) <= COORD_MAXIMA &&
+        Math.abs(current.y) <= COORD_MAXIMA
       ) {
         return current;
       }
@@ -725,7 +744,7 @@ export function GraphCanvas({
               if (!q) return;
               const vx = p.x - q.x;
               const vy = p.y - q.y;
-              const dist = Math.sqrt(vx * vx + vy * vy) || 1;
+              const dist = Math.max(Math.sqrt(vx * vx + vy * vy), DIST_MINIMA);
               if (dist > CELL * 3) return;
               const force = REPULSION / (dist * dist);
               p.vx += (vx / dist) * force;
@@ -742,7 +761,7 @@ export function GraphCanvas({
         if (!a || !b) return;
         const dx = b.x - a.x;
         const dy = b.y - a.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), DIST_MINIMA);
         const force = ((dist - LINK_DISTANCE) * 0.03) / 2;
         const fx = (dx / dist) * force;
         const fy = (dy / dist) * force;

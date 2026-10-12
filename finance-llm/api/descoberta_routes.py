@@ -60,6 +60,22 @@ def _fontes_param(valor: Optional[str]) -> Optional[List[str]]:
     return ids
 
 
+def _pais(valor: Optional[str]) -> str:
+    """Valida o país pedido.
+
+    A plataforma só lê os portais de Portugal e de Espanha. Um código
+    desconhecido devolveria zero contratos e um painel vazio, como se a empresa
+    não tivesse contratação — é um pedido inválido e diz-se que é.
+    """
+    codigo = str(valor or service.PAIS_DEFAULT).strip().upper()
+    if codigo not in service.PAISES_SUPORTADOS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"País não suportado: {codigo or '(vazio)'}. Use um de: {', '.join(service.PAISES_SUPORTADOS)}.",
+        )
+    return codigo
+
+
 @router.get("/meta", summary="Fontes, grupos e limites do painel de descoberta")
 def descoberta_meta() -> Dict[str, Any]:
     """Catálogo das fontes que a descoberta recolhe e as fontes de investigação do Hermes."""
@@ -97,7 +113,7 @@ async def descoberta_empresa(
     recolha = await run_in_threadpool(
         service.recolher,
         nif,
-        pais=pais.upper(),
+        pais=_pais(pais),
         nome=nome,
         apenas=_fontes_param(fontes),
     )
@@ -122,7 +138,7 @@ async def descoberta_decisao(
 
     Tudo calculado a partir da recolha — nenhum número vem de um modelo de IA.
     """
-    recolha = await run_in_threadpool(service.recolher, nif, pais=pais.upper(), nome=nome)
+    recolha = await run_in_threadpool(service.recolher, nif, pais=_pais(pais), nome=nome)
     if recolha.get("error"):
         raise HTTPException(status_code=422, detail=recolha["error"])
     return service.decisao(recolha)
@@ -135,7 +151,7 @@ async def descoberta_grafo(
     nome: Annotated[Optional[str], Query(max_length=200)] = None,
 ) -> Dict[str, Any]:
     """Malha empresa ↔ adjudicantes, CPV, pessoas, processos, marcas, firmas e imprensa."""
-    recolha = await run_in_threadpool(service.recolher, nif, pais=pais.upper(), nome=nome)
+    recolha = await run_in_threadpool(service.recolher, nif, pais=_pais(pais), nome=nome)
     if recolha.get("error"):
         raise HTTPException(status_code=422, detail=recolha["error"])
     return {**service.grafo(recolha), "nif": nif, "nome": recolha.get("nome"), "fontes": recolha.get("fontes")}
@@ -148,7 +164,7 @@ async def descoberta_ontologia(
     nome: Annotated[Optional[str], Query(max_length=200)] = None,
 ) -> Dict[str, Any]:
     """Tipos de objeto instanciados, tipos de ligação materializados e cobertura."""
-    recolha = await run_in_threadpool(service.recolher, nif, pais=pais.upper(), nome=nome)
+    recolha = await run_in_threadpool(service.recolher, nif, pais=_pais(pais), nome=nome)
     if recolha.get("error"):
         raise HTTPException(status_code=422, detail=recolha["error"])
     return service.ontologia(recolha, service.grafo(recolha))
@@ -168,11 +184,10 @@ async def descoberta_analise(
     Hermes recebe a pergunta padrão da descoberta, ancorada nos números da recolha.
     """
     payload = payload or {}
-    pais = str(payload.get("pais") or service.PAIS_DEFAULT).upper()
     recolha = await run_in_threadpool(
         service.recolher,
         nif,
-        pais=pais,
+        pais=_pais(payload.get("pais")),
         nome=payload.get("nome"),
         apenas=_fontes_param(payload.get("fontes_recolha")),
     )

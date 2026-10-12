@@ -28,7 +28,9 @@ import { SankeyDiagram } from "../components/graph/SankeyDiagram";
 import { TreemapChart } from "../components/graph/TreemapChart";
 import { formatCompact, formatMoney, legendEntries, toStudioGraph, type GraphMetric } from "../components/graph/graphStudio";
 import { DescobertaDecisao } from "../components/descoberta/DescobertaDecisao";
-import { useWindowMode } from "../layout";
+import DescobertaRiscoMercado from "../components/descoberta/DescobertaRiscoMercado";
+import { useWindowMode, getWindowMode } from "../layout";
+import { openWindow } from "../windows";
 import {
   analisarEmpresa,
   descobrirEmpresa,
@@ -38,8 +40,10 @@ import {
   resolverEmpresa,
   type DescobertaAlvo,
   type DescobertaAnalise,
+  type DescobertaMercado,
   type DescobertaMeta,
   type DescobertaRecolha,
+  type DescobertaRisco,
   type DescobertaSkills,
 } from "../descobertaApi";
 
@@ -53,6 +57,21 @@ const numero = (valor: unknown): number => {
 };
 
 const lista = <T,>(valor: unknown): T[] => (Array.isArray(valor) ? (valor as T[]) : []);
+
+/**
+ * Abre a ficha de uma pessoa no PessoasIQ: em modo janelas foca a janela
+ * `person-detail:<NIF>`, em modo página navega para `/pessoas-iq/<NIF>`.
+ */
+function abrirPessoaIQ(nif: string) {
+  if (!nif) return;
+  if (getWindowMode()) {
+    openWindow(`person-detail:${nif}`, undefined, { title: `Pessoas IQ · ${nif}`, rect: { width: 980, height: 760 } });
+    return;
+  }
+  if (typeof window === "undefined") return;
+  window.history.pushState({}, "", `/pessoas-iq/${encodeURIComponent(nif)}`);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
 
 /** Vistas do grafo de informação: três do `GraphCanvas` e duas próprias. */
 type VistaGrafo = "network" | "hierarchical" | "circular" | "sankey" | "treemap";
@@ -208,12 +227,16 @@ export default function DescobertaPage({ onBack }: { onBack?: () => void } = {})
   const sinais = lista<Record<string, unknown>>((secoes.contratos as Record<string, unknown>)?.sinais);
   const pessoas = lista<Record<string, unknown>>((secoes.pessoas as Record<string, unknown>)?.pessoas);
   const insolvencias = lista<Record<string, unknown>>((secoes.cire as Record<string, unknown>)?.insolvencias);
+  const insolvenciasTotal = numero((secoes.cire as Record<string, unknown>)?.insolvencias_total);
+  const mencoesCire = numero((secoes.cire as Record<string, unknown>)?.mencoes_total);
   const marcas = lista<Record<string, unknown>>((secoes.marcas as Record<string, unknown>)?.items);
   const firmas = lista<Record<string, unknown>>((secoes.firmas as Record<string, unknown>)?.items);
   const subvencoes = lista<Record<string, unknown>>((secoes.subvencoes as Record<string, unknown>)?.items);
   const devedores = lista<Record<string, unknown>>((secoes.devedores as Record<string, unknown>)?.items);
   const noticias = lista<Record<string, unknown>>((secoes.noticias as Record<string, unknown>)?.items);
   const societario = lista<Record<string, unknown>>((secoes.societario as Record<string, unknown>)?.items);
+  const risco = ((secoes.risco as Record<string, unknown>)?.risco as DescobertaRisco | undefined) ?? null;
+  const mercado = (secoes.mercado as DescobertaMercado | undefined) ?? null;
 
   const fontesResumo = meta?.fontes ?? [];
   const ontologia = recolha?.ontologia ?? null;
@@ -342,6 +365,19 @@ export default function DescobertaPage({ onBack }: { onBack?: () => void } = {})
 
         {recolha ? (
           <>
+            {recolha.avisos?.length ? (
+              <div className="mb-3 space-y-1.5">
+                {recolha.avisos.map((aviso) => (
+                  <p
+                    key={aviso}
+                    className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+                  >
+                    <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                    <span>{aviso}</span>
+                  </p>
+                ))}
+              </div>
+            ) : null}
             <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
               <Kpi rotulo="Contratos" valor={formatCompact(recolha.kpis.contratos)} nota={`${formatMoney(recolha.kpis.valor_total)} de valor lido`} />
               <Kpi rotulo="Adjudicantes" valor={formatCompact(recolha.kpis.adjudicantes)} nota={recolha.kpis.maior_adjudicante?.nome} />
@@ -451,18 +487,44 @@ export default function DescobertaPage({ onBack }: { onBack?: () => void } = {})
                     </CardHeader>
                     <CardContent className="space-y-1.5 text-xs">
                       {pessoas.length ? (
-                        pessoas.slice(0, 20).map((pessoa, indice) => (
-                          <div key={texto(pessoa.nif) || indice} className="border-b border-white/5 pb-1">
-                            <p className="font-medium">{texto(pessoa.nome)}</p>
-                            <p className="text-muted-foreground">
-                              {lista<Record<string, unknown>>(pessoa.cargos)
-                                .map((cargo) => texto(cargo.role_org || cargo.role))
-                                .filter(Boolean)
-                                .slice(0, 3)
-                                .join(" · ") || "cargo registado"}
-                            </p>
-                          </div>
-                        ))
+                        pessoas.slice(0, 20).map((pessoa, indice) => {
+                          const nifPessoa = texto(pessoa.nif);
+                          const cargos = lista<Record<string, unknown>>(pessoa.roles);
+                          const funcao = [texto(pessoa.role_org), texto(pessoa.cargo)].filter(Boolean).join(" · ");
+                          const data = texto(pessoa.date).slice(0, 10);
+                          const aqui = numero(pessoa.cargos_empresa) || cargos.length;
+                          return (
+                            <div key={nifPessoa || indice} className="flex items-start justify-between gap-3 border-b border-white/5 pb-1">
+                              <div className="min-w-0">
+                                <p className="truncate font-medium">
+                                  {nifPessoa ? (
+                                    <button
+                                      type="button"
+                                      className="truncate text-left hover:text-primary hover:underline"
+                                      onClick={() => abrirPessoaIQ(nifPessoa)}
+                                    >
+                                      {texto(pessoa.name || pessoa.nome) || nifPessoa}
+                                    </button>
+                                  ) : (
+                                    texto(pessoa.name || pessoa.nome) || "—"
+                                  )}
+                                  {pessoa.is_company ? (
+                                    <span className="ml-1.5 rounded border border-white/10 px-1 py-px text-[10px] text-muted-foreground">empresa</span>
+                                  ) : null}
+                                </p>
+                                <p className="truncate text-muted-foreground">
+                                  {funcao || "cargo registado"}
+                                  {data ? ` · desde ${data}` : ""}
+                                </p>
+                              </div>
+                              <span className="shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
+                                {aqui || 1} cargo(s)
+                                {numero(pessoa.roles_total) > (aqui || 1) ? <><br />{numero(pessoa.roles_total)} no total</> : null}
+                                {numero(pessoa.companies_total) > 1 ? <><br />{numero(pessoa.companies_total)} empresas</> : null}
+                              </span>
+                            </div>
+                          );
+                        })
                       ) : (
                         <p className="text-muted-foreground">Sem cargos registados.</p>
                       )}
@@ -471,7 +533,7 @@ export default function DescobertaPage({ onBack }: { onBack?: () => void } = {})
 
                   <Card>
                     <CardHeader className="mb-2">
-                      <CardTitle>Insolvências ({insolvencias.length})</CardTitle>
+                      <CardTitle>Insolvências da empresa ({insolvenciasTotal || insolvencias.length})</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-1.5 text-xs">
                       {insolvencias.length ? (
@@ -484,7 +546,11 @@ export default function DescobertaPage({ onBack }: { onBack?: () => void } = {})
                           </div>
                         ))
                       ) : (
-                        <p className="text-muted-foreground">Sem processos do CIRE.</p>
+                        <p className="text-muted-foreground">
+                          {mencoesCire
+                            ? `Sem processos em que a empresa seja a insolvente. Aparece em ${mencoesCire.toLocaleString("pt-PT")} processo(s) de terceiros, como credora ou interveniente.`
+                            : "Sem processos do CIRE."}
+                        </p>
                       )}
                     </CardContent>
                   </Card>
@@ -554,18 +620,9 @@ export default function DescobertaPage({ onBack }: { onBack?: () => void } = {})
                       )}
                     </CardContent>
                   </Card>
-                  <Card>
-                    <CardHeader className="mb-2">
-                      <CardTitle>Risco e mercado</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <ChaveValor dados={((secoes.risco as Record<string, unknown>)?.risco as Record<string, unknown>) ?? {}} />
-                      {(secoes.mercado as Record<string, unknown>) ? (
-                        <ChaveValor dados={(secoes.mercado as Record<string, unknown>) as Record<string, unknown>} />
-                      ) : null}
-                    </CardContent>
-                  </Card>
                 </div>
+
+                <DescobertaRiscoMercado risco={risco} mercado={mercado} />
               </TabsContent>
 
               <TabsContent value="grafo" active={aba === "grafo"}>

@@ -70,7 +70,7 @@ function Cursor({ active, payload, titulo }: { active?: boolean; payload?: { pay
   );
 }
 
-function Cartao({
+export function Cartao({
   titulo,
   porque,
   children,
@@ -151,6 +151,15 @@ export function DescobertaDecisao({ decisao }: { decisao: DescobertaDecisao }) {
             {resumo.contratos_lidos} contratos lidos de {resumo.contratos} · {resumo.anos[0] ?? "—"}–
             {resumo.anos[resumo.anos.length - 1] ?? "—"}
           </span>
+          {resumo.insolvencias ? (
+            <span className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2.5 py-0.5 text-[11px] font-medium text-rose-200">
+              insolvente em {resumo.insolvencias} processo(s)
+            </span>
+          ) : resumo.mencoes_cire ? (
+            <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[11px] text-muted-foreground">
+              {resumo.mencoes_cire.toLocaleString("pt-PT")} menções em processos de terceiros (não é insolvência)
+            </span>
+          ) : null}
         </div>
         <p className="mt-2 text-sm">{decisao.leitura}</p>
       </div>
@@ -440,7 +449,10 @@ export function DescobertaDecisao({ decisao }: { decisao: DescobertaDecisao }) {
         <p className="mt-1 text-[11px] text-muted-foreground">
           {risco.metodo_label ? `${risco.metodo_label} · ` : ""}
           cobertura {risco.cobertura !== null && risco.cobertura !== undefined ? `${Math.round(risco.cobertura * 100)}%` : "—"}
-          {resumo.insolvencias ? ` · ${resumo.insolvencias} processo(s) no CIRE` : ""}
+          {resumo.insolvencias ? ` · insolvente em ${resumo.insolvencias} processo(s)` : ""}
+          {!resumo.insolvencias && resumo.mencoes_cire
+            ? ` · ${resumo.mencoes_cire.toLocaleString("pt-PT")} menções em processos de terceiros`
+            : ""}
           {precos.mediana_efetiva !== null && precos.mediana_efetiva !== undefined
             ? ` · valor efetivo/contratual mediano ${precos.mediana_efetiva}`
             : ""}

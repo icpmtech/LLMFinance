@@ -33,6 +33,15 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tupl
 logger = logging.getLogger(__name__)
 
 PAIS_DEFAULT = "PT"
+#: Países que a plataforma sabe ler no portal base (o mesmo conjunto que
+#: `padroes_service.COUNTRIES`). Um país fora daqui não é "zero resultados": é
+#: um pedido inválido, e tem de ser dito em vez de responder com 0 contratos.
+PAISES_SUPORTADOS = ("PT", "ES")
+
+#: Valor **exato** do campo `intervenientes.papel` (keyword) no índice do CIRE
+#: para quem é o insolvente do processo. Os credores e os administradores de
+#: insolvência têm outros papéis e não são insolvências da empresa.
+PAPEL_INSOLVENTE = "Insolvente"
 
 # Orçamento de cada fonte. Uma fonte lenta não pode segurar o painel: devolve o
 # que tiver e o painel diz que ficou incompleta.
@@ -393,6 +402,7 @@ def _kpis(recolha: Dict[str, Any]) -> Dict[str, Any]:
     marcas = (secoes.get("marcas") or {}).get("total") or 0
     firmas = (secoes.get("firmas") or {}).get("total") or 0
     cire = (secoes.get("cire") or {}).get("total") or 0
+    mencoes_cire = (secoes.get("cire") or {}).get("mencoes_total") or 0
     subvencoes = float((secoes.get("subvencoes") or {}).get("valor_total") or 0.0)
     noticias = (secoes.get("noticias") or {}).get("total") or 0
 
@@ -407,6 +417,7 @@ def _kpis(recolha: Dict[str, Any]) -> Dict[str, Any]:
         "risco": risco.get("nivel"),
         "risco_pontos": risco.get("pontos") or risco.get("score"),
         "insolvencias": cire,
+        "mencoes_cire": mencoes_cire,
         "pessoas": pessoas,
         "marcas": marcas,
         "firmas": firmas,
@@ -429,7 +440,13 @@ def _fonte_cadastro(nif: str, nome: str, pais: str) -> Dict[str, Any]:
         dados["perfil"] = perfil.obter(nif)
     except Exception as exc:
         dados["perfil_erro"] = str(exc)
-    return {"total": 1 if dados.get("cadastro") else 0, "dados": dados}
+
+    # `get_company_by_nif` devolve sempre um documento; quando o NIF não existe no
+    # cadastro, o `name` vem igual ao NIF. Isso não é cadastro: é ausência dele.
+    cadastro = dados.get("cadastro") or {}
+    nome_cadastro = str(cadastro.get("name") or cadastro.get("nome") or "").strip()
+    encontrado = bool(nome_cadastro) and nome_cadastro != nif
+    return {"total": 1 if encontrado else 0, "dados": dados}
 
 
 def _fonte_contratos(nif: str, nome: str, pais: str) -> Dict[str, Any]:
@@ -456,10 +473,14 @@ def _fonte_rede(nif: str, nome: str, pais: str) -> Dict[str, Any]:
     dossier = padroes.entity_dossier(nif, pais=pais)
     if dossier.get("error"):
         return {"erro": dossier["error"], "total": 0, "dados": {}}
+    grafo = dossier.get("grafo") or {}
+    # O grafo do dossiê traz sempre o nó central (a empresa): contar nós diria
+    # "ok" mesmo sem uma única relação. Contam-se as **relações**.
+    relacoes = max(0, len(grafo.get("nodes") or []) - 1)
     return {
-        "total": len((dossier.get("grafo") or {}).get("nodes") or []),
+        "total": relacoes,
         "dados": {
-            "grafo": dossier.get("grafo") or {},
+            "grafo": grafo,
             "lacos": dossier.get("lacos") or [],
             "intervenientes_processos": dossier.get("intervenientes_processos") or [],
             "cargos_sociais": dossier.get("cargos_sociais") or [],
@@ -500,24 +521,98 @@ def _fonte_societario(nif: str, nome: str, pais: str) -> Dict[str, Any]:
     }
 
 
+def _cire_da_empresa(nif: str) -> Dict[str, Any]:
+    """Separa as **insolvências da empresa** das **menções em processos de terceiros**.
+
+    O índice do CIRE guarda todos os intervenientes do processo. A EDP aparece em
+    milhares de processos como **credora** (cobra dívidas): contá-los como
+    insolvências da empresa seria um alarme falso. Só o papel `Insolvente` conta
+    como insolvência dela — a mesma fronteira que o módulo de risco já usa.
+    """
+    from api import elasticsearch_client as es_client  # noqa: PLC0415
+    from api import padroes_service as padroes  # noqa: PLC0415
+
+    vazio: Dict[str, Any] = {"insolvencias": [], "insolvencias_total": 0, "mencoes_total": 0}
+    client = es_client.get_es_client()
+    if client is None:
+        return {**vazio, "erro": "Elasticsearch indisponível"}
+    alvo = str(nif)
+
+    corpo = {
+        "size": 20,
+        "track_total_hits": True,
+        "_source": ["insolvente", "especie", "ato", "data_publicacao", "tribunal", "processo_numero", "intervenientes"],
+        "query": {
+            "nested": {
+                "path": "intervenientes",
+                "query": {
+                    "bool": {
+                        "must": [
+                            {"term": {"intervenientes.nif": alvo}},
+                            {"match_phrase": {"intervenientes.papel": PAPEL_INSOLVENTE}},
+                        ]
+                    }
+                },
+            }
+        },
+        "sort": [{"data_publicacao": {"order": "desc", "unmapped_type": "date"}}],
+    }
+    try:
+        resposta = client.search(index=padroes.CIRE_INDEX, body=corpo)
+    except Exception as exc:
+        logger.warning("Descoberta: CIRE de %s falhou: %s", alvo, exc)
+        return {**vazio, "erro": str(exc)}
+
+    total_insolvente = int(((resposta.get("hits") or {}).get("total") or {}).get("value") or 0)
+    insolvencias = []
+    for hit in (resposta.get("hits") or {}).get("hits") or []:
+        src = hit.get("_source") or {}
+        insolvencias.append(
+            {
+                "especie": src.get("especie"),
+                "ato": src.get("ato"),
+                "data": src.get("data_publicacao"),
+                "tribunal": src.get("tribunal"),
+                "processo": src.get("processo_numero"),
+                "insolvente": src.get("insolvente"),
+            }
+        )
+
+    mencoes = 0
+    try:
+        contagem = client.count(index=padroes.CIRE_INDEX, query={"terms": {"nifs": [alvo]}})
+        mencoes = int(contagem.get("count") or 0)
+    except Exception as exc:
+        logger.warning("Descoberta: menções no CIRE de %s falharam: %s", alvo, exc)
+
+    return {
+        "insolvencias": insolvencias,
+        "insolvencias_total": total_insolvente,
+        "mencoes_total": mencoes,
+        "total": total_insolvente,
+    }
+
+
 def _fonte_cire(nif: str, nome: str, pais: str) -> Dict[str, Any]:
-    from api import cire_service as cire  # noqa: PLC0415
     from api import padroes_service as padroes  # noqa: PLC0415
 
     dossier = padroes.entity_dossier(nif, pais=pais)
-    insolvencias = dossier.get("insolvencias") or []
-    dados: Dict[str, Any] = {
-        "insolvencias": insolvencias,
-        "total": dossier.get("insolvencias_total") or len(insolvencias),
-        "intervenientes": dossier.get("intervenientes_processos") or [],
+    cire = _cire_da_empresa(nif)
+    if cire.get("erro"):
+        return {"erro": cire["erro"], "total": 0, "dados": {"intervenientes": dossier.get("intervenientes_processos") or []}}
+
+    insolvente = cire["insolvencias_total"] > 0
+    return {
+        "total": int(cire["insolvencias_total"]),
+        "dados": {
+            "insolvencias": cire["insolvencias"],
+            "insolvencias_total": cire["insolvencias_total"],
+            "mencoes_total": cire["mencoes_total"],
+            "papel_insolvente": insolvente,
+            "intervenientes": dossier.get("intervenientes_processos") or [],
+        },
+        "erro": dossier.get("error"),
     }
-    try:
-        mencoes = cire.interveniente(nif, size=60)
-        dados["mencoes"] = mencoes.get("items") if isinstance(mencoes, dict) else None
-        dados["mencoes_total"] = (mencoes or {}).get("total") if isinstance(mencoes, dict) else None
-    except Exception as exc:
-        dados["mencoes_erro"] = str(exc)
-    return {"total": dados.get("total") or 0, "dados": dados, "erro": dossier.get("error")}
 
 
 def _fonte_risco(nif: str, nome: str, pais: str) -> Dict[str, Any]:
@@ -526,7 +621,9 @@ def _fonte_risco(nif: str, nome: str, pais: str) -> Dict[str, Any]:
     resultado = risco.risco_empresa(nif=nif, pais=pais)
     if resultado.get("error"):
         return {"erro": resultado["error"], "total": 0, "dados": {}}
-    return {"total": 1, "dados": resultado}
+    # Sem contratos o motor devolve um cartão sem pontuação: isso não é risco medido.
+    pontuado = ((resultado.get("risco") or {}).get("score")) is not None
+    return {"total": 1 if pontuado else 0, "dados": resultado, "erro": None if pontuado else "Sem dados para pontuar"}
 
 
 def _fonte_marcas(nif: str, nome: str, pais: str) -> Dict[str, Any]:
@@ -560,11 +657,11 @@ def _fonte_subvencoes(nif: str, nome: str, pais: str) -> Dict[str, Any]:
     except Exception as exc:
         dados["entidade_erro"] = str(exc)
     itens = dados.get("items") or []
-    valor = dados.get("valor_total") or dados.get("total_valor")
+    valor = dados.get("valor_total") or dados.get("total_valor") or dados.get("montante")
     if valor is None:
         valor = sum(float(item.get("valor") or 0.0) for item in itens if isinstance(item, dict))
     return {
-        "total": dados.get("total") or len(itens),
+        "total": len(itens),
         "valor_total": round(float(valor or 0.0), 2),
         "dados": dados,
     }
@@ -593,16 +690,18 @@ def _fonte_mercado(nif: str, nome: str, pais: str) -> Dict[str, Any]:
     from api import mercado_service as mercado  # noqa: PLC0415
 
     resultado = mercado.empresa(nif)
-    return {"total": 1 if resultado else 0, "dados": resultado, "erro": resultado.get("error")}
+    tem_dados = bool(resultado.get("contratos") or resultado.get("valor") or resultado.get("cae"))
+    return {"total": 1 if tem_dados else 0, "dados": resultado, "erro": resultado.get("error")}
 
 
 def _fonte_lei(nif: str, nome: str, pais: str) -> Dict[str, Any]:
     from api import gleif_service as gleif  # noqa: PLC0415
 
-    termo = nome or nif
-    if not termo:
-        return {"total": 0, "dados": {}}
-    resultado = gleif.search(termo, size=MAX_FIRMAS)
+    # O GLEIF pesquisa por **nome**: sem nome conhecido não se procura o NIF como
+    # se fosse um nome (dava resultados estranhos para NIF inventados).
+    if not nome:
+        return {"total": 0, "dados": {}, "erro": "Sem nome conhecido para pesquisar o registo LEI"}
+    resultado = gleif.search(nome, size=MAX_FIRMAS)
     itens = resultado.get("items") or resultado.get("results") or []
     return {"total": resultado.get("total") or len(itens), "dados": resultado, "erro": resultado.get("error")}
 
@@ -613,7 +712,7 @@ def _fonte_racius(nif: str, nome: str, pais: str) -> Dict[str, Any]:
     if not racius.available():
         return {"total": 0, "dados": {}, "erro": "Racius indisponível (sem sessão/credenciais)."}
     resultado = racius.detail(nif)
-    return {"total": 1 if resultado else 0, "dados": resultado, "erro": resultado.get("error")}
+    return {"total": 1 if resultado.get("found") else 0, "dados": resultado, "erro": resultado.get("error")}
 
 
 def _fonte_noticias(nif: str, nome: str, pais: str) -> Dict[str, Any]:
@@ -646,7 +745,12 @@ CARREGADORES: Dict[str, Callable[[str, str, str], Dict[str, Any]]] = {
 
 
 def _nome_da_empresa(nif: str, nome: Optional[str] = None) -> str:
-    """Nome da empresa a partir do cadastro (a recolha precisa dele para as notícias)."""
+    """Nome da empresa a partir do cadastro (a recolha precisa dele para as notícias).
+
+    Quando o NIF não existe no cadastro, `get_company_by_nif` devolve o próprio
+    NIF como nome — isso não é um nome, é ausência dele, e devolvê-lo faria as
+    fontes que pesquisam por nome irem à procura de um NIF como texto.
+    """
     if nome:
         return str(nome)
     from api import elasticsearch_client as es_client  # noqa: PLC0415
@@ -656,7 +760,8 @@ def _nome_da_empresa(nif: str, nome: Optional[str] = None) -> str:
     except Exception as exc:  # pragma: no cover - depende do Elasticsearch
         logger.warning("Descoberta: nome de %s não resolvido: %s", nif, exc)
         return ""
-    return str(cadastro.get("name") or cadastro.get("nome") or "")
+    nome_cadastro = str(cadastro.get("name") or cadastro.get("nome") or "").strip()
+    return "" if normalizar_nif(nome_cadastro) == nif else nome_cadastro
 
 
 def _registar_fonte(
@@ -769,7 +874,35 @@ def recolher(
         "em_falta": [item["id"] for item in estado if item["estado"] != "ok"],
         "ms": int((time.perf_counter() - iniciado) * 1000),
     }
-    recolha["kpis"] = _kpis(recolha)
+    kpis = _kpis(recolha)
+    recolha["kpis"] = kpis
+
+    # A empresa existe na plataforma? Sem cadastro, sem contratos, sem processos
+    # nem pessoas, o painel tem de o dizer — e não desenhar um dashboard vazio que
+    # parece um resultado.
+    encontrada = bool(nome_empresa) or any(
+        (kpis.get(chave) or 0) for chave in ("contratos", "insolvencias", "pessoas", "marcas", "firmas")
+    )
+    recolha["encontrada"] = bool(encontrada)
+
+    avisos: List[str] = []
+    if not encontrada:
+        avisos.append(
+            f"O NIF {alvo} não foi encontrado no cadastro nem nos contratos do portal base. "
+            "Confirme o número (9 dígitos, sem espaços)."
+        )
+    sem_resposta = [(item["id"], item.get("erro")) for item in estado if item["estado"] in ("erro", "tempo")]
+    if sem_resposta:
+        # Distinguir "não respondeu" de "respondeu sem dados": são coisas
+        # diferentes para quem lê o painel (uma é avaria, a outra é ausência).
+        detalhe = "; ".join(f"{fonte_id} ({motivo})" if motivo else fonte_id for fonte_id, motivo in sem_resposta)
+        avisos.append(f"{len(sem_resposta)} fonte(s) sem dados: {detalhe}.")
+    if not kpis.get("insolvencias") and kpis.get("mencoes_cire"):
+        avisos.append(
+            f"A empresa aparece em {kpis['mencoes_cire']} processo(s) do CIRE como credora ou "
+            "interveniente — não como insolvente. Não é uma insolvência dela."
+        )
+    recolha["avisos"] = avisos
     return recolha
 
 
@@ -925,7 +1058,26 @@ def grafo(recolha: Dict[str, Any]) -> Dict[str, Any]:
                 count=1,
             )
         )
-        edges.append(_aresta(centro, node_id, relation="tem processo"))
+        edges.append(_aresta(centro, node_id, relation="é insolvente em"))
+
+    # Sem insolvências próprias, mas com presença no CIRE como credor: é contexto
+    # útil (a empresa cobra dívidas), e vai marcado como tal para não passar por
+    # insolvência dela.
+    mencoes_cire = int((secoes.get("cire") or {}).get("mencoes_total") or 0)
+    if not insolvencias and mencoes_cire:
+        node_id = "cire:mencoes-terceiros"
+        nodes.append(
+            _no(
+                node_id,
+                key=nif,
+                label="Processos de terceiros",
+                dimension="cire",
+                tipo="processo",
+                role=f"{mencoes_cire} processo(s) como credora/interveniente · não é insolvente",
+                count=mencoes_cire,
+            )
+        )
+        edges.append(_aresta(centro, node_id, count=mencoes_cire, relation="aparece em processos de terceiros"))
 
     # --- Marcas (INPI) -------------------------------------------------------
     for indice, marca in enumerate(((secoes.get("marcas") or {}).get("items") or [])[:MAX_MARCAS]):
@@ -1153,11 +1305,13 @@ def _relacoes_evidencia(recolha: Dict[str, Any]) -> List[Dict[str, Any]]:
         int((secoes.get("pessoas") or {}).get("total") or len(pessoas) or len(cargos)),
         "pessoas com cargo registado na empresa",
     )
+    # Só as insolvências **da empresa** entram como relação; as menções em
+    # processos de terceiros não são relação da empresa com o processo.
     juntar(
         "empresa",
         "processo_cire",
-        int((secoes.get("cire") or {}).get("total") or len((secoes.get("cire") or {}).get("insolvencias") or [])),
-        "processos do CIRE",
+        int((secoes.get("cire") or {}).get("insolvencias_total") or 0),
+        "processos do CIRE em que a empresa é a insolvente",
     )
     juntar("empresa", "subvencao", int((secoes.get("subvencoes") or {}).get("total") or 0), "subvenções atribuídas")
     juntar("empresa", "devedor", int((secoes.get("devedores") or {}).get("total") or 0), "listas de devedores")

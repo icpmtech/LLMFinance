@@ -188,7 +188,7 @@ def test_pontos_de_atencao_disparam_e_nao_se_repetem():
     dados = motor.decisao(_recolha())
     titulos = [item["titulo"] for item in dados["atencao"]]
 
-    assert any("processo(s) no CIRE" in titulo for titulo in titulos)
+    assert any("insolvente" in titulo for titulo in titulos)
     assert any("num só comprador" in titulo for titulo in titulos)
     assert any("ajuste direto" in titulo for titulo in titulos)
     assert any("Elevado" in titulo for titulo in titulos)
@@ -229,3 +229,39 @@ def test_decisao_sem_contratos_nao_rebenta():
     assert any(item["severidade"] == "info" for item in dados["atencao"])
     assert "Sem contratos lidos" in dados["leitura"]
     assert all(item["valor"] is None or 0 <= item["valor"] <= 100 for item in dados["perfil"])
+
+
+def test_mencoes_no_cire_sem_insolvencia_nao_e_alerta():
+    """Regressão: aparecer em milhares de processos como credor não é ser insolvente.
+
+    O caso real que motivou a regra: a EDP tem milhares de menções no CIRE (cobra
+    dívidas) e zero processos em que seja a insolvente. O painel tem de dar nota,
+    não alerta.
+    """
+    recolha = _recolha()
+    recolha["kpis"]["insolvencias"] = 0
+    recolha["kpis"]["mencoes_cire"] = 8953
+    dados = motor.decisao(recolha)
+
+    assert dados["resumo"]["insolvencias"] == 0
+    assert dados["resumo"]["mencoes_cire"] == 8953
+    assert not any(item["severidade"] == "alerta" and "insolvente" in item["titulo"] for item in dados["atencao"])
+    nota = next((item for item in dados["atencao"] if "credora" in item["titulo"]), None)
+    assert nota is not None
+    assert nota["severidade"] == "info"
+    assert "8953" in nota["titulo"]
+
+
+def test_empresa_nao_encontrada_e_alerta():
+    recolha = _recolha()
+    recolha["encontrada"] = False
+    recolha["kpis"]["contratos"] = 0
+    recolha["kpis"]["insolvencias"] = 0
+    recolha["kpis"]["mencoes_cire"] = 0
+    recolha["secoes"]["contratos"] = {"contratos": []}
+    dados = motor.decisao(recolha)
+
+    assert dados["encontrada"] is False
+    assert any(
+        item["severidade"] == "alerta" and "não encontrada" in item["titulo"] for item in dados["atencao"]
+    )

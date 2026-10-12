@@ -56,7 +56,12 @@ def _recolha() -> dict:
             },
             "rede": {"cargos_sociais": [{"nif": "1", "nome": "Ana Silva", "cargos": [{"role_org": "Gerente"}]}]},
             "pessoas": {"pessoas": [{"nif": "1", "nome": "Ana Silva"}], "total": 1},
-            "cire": {"insolvencias": [{"especie": "Insolvência", "processo": "p1", "tribunal": "T1"}], "total": 1},
+            "cire": {
+                "insolvencias": [{"especie": "Insolvência", "processo": "p1", "tribunal": "T1"}],
+                "insolvencias_total": 1,
+                "mencoes_total": 7,
+                "total": 1,
+            },
             "marcas": {"items": [{"nord": "m1", "nome": "Marca Teste"}], "total": 1},
             "firmas": {"items": [{"nipc": "f1", "nome": "Firma Teste"}], "total": 1},
             "subvencoes": {"items": [{"id": "s1", "valor": 500.0, "entidade": "IAPMEI"}], "total": 1, "valor_total": 500.0},

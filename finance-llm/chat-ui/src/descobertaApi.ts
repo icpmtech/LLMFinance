@@ -47,12 +47,73 @@ export type DescobertaKpis = {
   risco?: string | null;
   risco_pontos?: number | null;
   insolvencias: number;
+  /** Menções no CIRE em processos de **terceiros** (credor/interveniente), que não são insolvências da empresa. */
+  mencoes_cire?: number;
   pessoas: number;
   marcas: number;
   firmas: number;
   subvencoes_valor: number;
   noticias: number;
   sinais: { padrao: string; detalhe: string; total?: number; itens?: number }[];
+};
+
+export type RiscoComponente = {
+  id: string;
+  label: string;
+  descricao: string;
+  metodo: string;
+  unidade: string;
+  peso: number;
+  peso_efetivo?: number;
+  pontos: number | null;
+  contributo?: number;
+  evidencia: string[];
+  disponivel: boolean;
+};
+
+/** Cartão de risco da empresa (`risco_service.risco_empresa`), como o painel o lê. */
+export type DescobertaRisco = {
+  score: number | null;
+  nivel: string;
+  nivel_label: string;
+  cor: string;
+  faixa: string;
+  cobertura: number;
+  confianca: string;
+  metodo: string;
+  metodo_label: string;
+  componentes: RiscoComponente[];
+  fatores?: RiscoComponente[];
+  features?: Record<string, unknown>;
+  cartao_modelo?: { versao: string; rotulo: string; aviso: string };
+  avisos?: string[];
+  gerado_em?: string;
+};
+
+/** Ficha de mercado da empresa (`mercado_service.empresa`). */
+export type DescobertaMercado = {
+  nif: string;
+  nome: string;
+  cae?: {
+    cae_principal?: string | null;
+    cae_principal_label?: string | null;
+    caes_secundarios?: string[];
+    concelho?: string | null;
+    situacao?: string | null;
+  };
+  compatibilidade?: { grau?: string; score?: number; motivo?: string; regra?: string | null; cae?: string | null };
+  contratos?: number;
+  valor?: number;
+  entidades?: { nif: string; nome: string; valor: number; contratos: number; quota: number }[];
+  entidades_distintas?: number;
+  cpvs?: { classe: string; divisao: string; valor: number; contratos: number; quota: number }[];
+  dependencia?: { hhi?: number; maior_quota?: number; n_entidades?: number; entropia?: number; hhi_normalizado?: number };
+  evolucao?: { anos?: number[]; valores?: number[]; variacao?: number | null; cagr?: number | null; declive?: number | null; n_anos?: number };
+  taxa_sem_concurso?: number | null;
+  alertas?: { tipo: string; severidade: string; detalhe: string }[];
+  perfil?: string;
+  evidencias?: { total?: number };
+  erro?: string | null;
 };
 
 export type DescobertaGrafo = ContractGraphBuildResponse & {
@@ -78,6 +139,8 @@ export type DescobertaDecisao = {
   nif: string;
   nome: string;
   leitura: string;
+  encontrada: boolean;
+  avisos: string[];
   resumo: {
     contratos: number;
     contratos_lidos: number;
@@ -87,6 +150,7 @@ export type DescobertaDecisao = {
     taxa_ajuste_direto: number | null;
     hhi: number | null;
     insolvencias: number;
+    mencoes_cire: number;
     confianca_risco?: string | null;
     cobertura_risco?: number | null;
   };
@@ -210,6 +274,10 @@ export type DescobertaRecolha = {
   em_falta: string[];
   ms: number;
   kpis: DescobertaKpis;
+  /** Falso quando o NIF não existe no cadastro nem nos contratos. */
+  encontrada: boolean;
+  /** Avisos que o painel tem de mostrar (NIF não encontrado, fontes em falta, menções no CIRE…). */
+  avisos: string[];
   grafo?: DescobertaGrafo;
   ontologia?: DescobertaOntologia;
   decisao?: DescobertaDecisao;
