@@ -13,10 +13,12 @@ escrita pelo **Hermes** (`api.hermes_service`), com as skills da plataforma.
 - `GET  /descoberta/empresa/{nif}/ontologia` — só a projeção sobre a ontologia
 - `GET  /descoberta/empresa/{nif}/decisao`   — evolução, concentração, preços, perfil e pontos de atenção
 - `POST /descoberta/empresa/{nif}/analise`   — análise citada pelo Hermes
+- `GET  /descoberta/conjunto`                — comparação de várias empresas (números, cruzamentos e rede)
+- `POST /descoberta/conjunto`                — igual, com a lista de empresas no corpo
 
 O trabalho pesado (recolha paralela por fonte, grafo, ontologia e decisão) está
-em `api.descoberta_service` e `api.descoberta_decisao`; aqui só se expõe o
-resultado.
+em `api.descoberta_service`, `api.descoberta_decisao` e `api.descoberta_conjunto`;
+aqui só se expõe o resultado.
 """
 from __future__ import annotations
 
@@ -26,6 +28,7 @@ from typing import Annotated, Any, Dict, List, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 
+from api import descoberta_conjunto as conjunto_service
 from api import descoberta_service as service
 from api.auth_routes import CurrentSession, optional_session
 
@@ -34,6 +37,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/descoberta", tags=["descoberta"])
 
 Session = Annotated[Optional[CurrentSession], Depends(optional_session)]
+
+#: Limites de empresas por pedido no painel de conjunto (validados na rota).
+MIN_EMPRESAS = conjunto_service.MIN_EMPRESAS
+MAX_EMPRESAS = conjunto_service.MAX_EMPRESAS
 
 
 def _scope(session: Optional[CurrentSession]) -> Optional[Dict[str, Any]]:
@@ -74,6 +81,51 @@ def _pais(valor: Optional[str]) -> str:
             detail=f"País não suportado: {codigo or '(vazio)'}. Use um de: {', '.join(service.PAISES_SUPORTADOS)}.",
         )
     return codigo
+
+
+def _pedido_lista(valor: Any) -> Optional[List[str]]:
+    """Aceita uma lista ou um texto com vírgulas/pontos e vírgulas."""
+    if valor is None:
+        return None
+    if isinstance(valor, (list, tuple, set)):
+        itens = [str(parte).strip() for parte in valor]
+    else:
+        itens = [parte.strip() for parte in str(valor).replace(";", ",").split(",")]
+    limpos = [item for item in itens if item]
+    return limpos or None
+
+
+def _lista(valor: Optional[str]) -> Optional[List[str]]:
+    """Igual a `_pedido_lista`, para os parâmetros de query."""
+    return _pedido_lista(valor)
+
+
+async def _conjunto(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Valida o pedido de comparação e devolve o conjunto (ou 422 legível).
+
+    Os limites são verificados aqui (e não só no esquema da rota) porque o
+    corpo do `POST` é livre.
+    """
+    limite = payload.get("max_empresas")
+    try:
+        limite = int(limite) if limite not in (None, "") else 6
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="`max_empresas` tem de ser um número.") from exc
+    if limite < MIN_EMPRESAS or limite > MAX_EMPRESAS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"`max_empresas` tem de estar entre {MIN_EMPRESAS} e {MAX_EMPRESAS}.",
+        )
+    try:
+        return await run_in_threadpool(
+            conjunto_service.conjunto,
+            nifs=_pedido_lista(payload.get("nifs")),
+            nomes=_pedido_lista(payload.get("nomes")),
+            pais=_pais(payload.get("pais")),
+            max_empresas=limite,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/meta", summary="Fontes, grupos e limites do painel de descoberta")
@@ -168,6 +220,39 @@ async def descoberta_ontologia(
     if recolha.get("error"):
         raise HTTPException(status_code=422, detail=recolha["error"])
     return service.ontologia(recolha, service.grafo(recolha))
+
+
+@router.get("/conjunto", summary="Compara várias empresas (NIFs ou nomes)")
+async def descoberta_conjunto_get(
+    nifs: Annotated[Optional[str], Query(description="NIFs separados por vírgulas")] = None,
+    nomes: Annotated[Optional[str], Query(description="Nomes separados por vírgulas")] = None,
+    pais: Annotated[str, Query(pattern="^[A-Za-z]{2}$")] = service.PAIS_DEFAULT,
+    max_empresas: Annotated[int, Query(ge=MIN_EMPRESAS, le=MAX_EMPRESAS)] = 6,
+) -> Dict[str, Any]:
+    """Números alinhados, cruzamentos, rede do conjunto e pontos de atenção agregados.
+
+    Cada empresa é recolhida e analisada com o mesmo motor do painel individual,
+    pelo que os números coincidem com os do painel de cada uma.
+    """
+    return await _conjunto(
+        {
+            "nifs": _lista(nifs),
+            "nomes": _lista(nomes),
+            "pais": pais,
+            "max_empresas": max_empresas,
+        }
+    )
+
+
+@router.post("/conjunto", summary="Compara várias empresas (corpo JSON)")
+async def descoberta_conjunto_post(payload: Dict[str, Any] = Body(default_factory=dict)) -> Dict[str, Any]:
+    """Igual a `GET /descoberta/conjunto`, com a lista no corpo.
+
+    O corpo aceita `nifs` (lista ou texto com vírgulas), `nomes`, `pais` e
+    `max_empresas`.
+    """
+    payload = payload or {}
+    return await _conjunto(payload)
 
 
 @router.post("/empresa/{nif}/analise", summary="Análise da empresa pelo Hermes")

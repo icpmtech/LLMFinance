@@ -462,6 +462,103 @@ export function analisarEmpresa(nif: string, pedido: AnalisePedido = {}): Promis
   );
 }
 
+/* ---------------------------------------------------------------- conjunto */
+
+export type ConjuntoValorMetrica = { nif: string; nome: string; valor: number | null; melhor: boolean };
+
+export type ConjuntoMetrica = {
+  id: string;
+  label: string;
+  unidade: string;
+  /** `null` quando a métrica se compara por distância a um alvo (ex.: preço base). */
+  maior_melhor: boolean | null;
+  alvo?: number | null;
+  porque: string;
+  valores: ConjuntoValorMetrica[];
+  melhor: { nif: string; nome: string; valor: number; texto: string } | null;
+  pior: { nif: string; nome: string; valor: number; texto: string } | null;
+  mediana: number | null;
+  amplitude: number | null;
+  sem_dados: string[];
+};
+
+export type ConjuntoEmpresa = {
+  nif: string;
+  nome: string;
+  erro: string | null;
+  encontrada: boolean;
+  contratos: number | null;
+  contratos_lidos: number | null;
+  valor_total: number | null;
+  adjudicantes: number | null;
+  top1: number | null;
+  insolvencias: number | null;
+  mencoes_cire: number | null;
+  risco: { score: number | null; nivel: string | null; nivel_label: string | null; cor: string | null; confianca: string | null; cobertura: number | null };
+  perfil: { id: string; label: string; valor: number | null; detalhe: string }[];
+  atencao: { severidade: string; titulo: string; detalhe: string; verificar: string }[];
+  leitura: string;
+  avisos: string[];
+  fontes_ok: number | null;
+  fontes: number | null;
+  em_falta: string[];
+  ms: number | null;
+};
+
+export type ConjuntoCruzamento = {
+  nif?: string | null;
+  nome?: string | null;
+  empresa?: string | null;
+  descricao?: string | null;
+  cpv?: string | null;
+  processo?: string | null;
+  especie?: string | null;
+  valor?: number;
+  contratos?: number;
+  cargos?: string[];
+  empresas: string[];
+  empresas_nome: string[];
+  n_empresas: number;
+};
+
+/** Comparação de várias empresas (`/descoberta/conjunto`). */
+export type DescobertaConjunto = {
+  pais: string;
+  pais_label?: string | null;
+  gerado_em: string;
+  pedido: { empresas: number; analisadas: number; max_empresas: number };
+  empresas: ConjuntoEmpresa[];
+  comparacao: ConjuntoMetrica[];
+  perfil: {
+    dimensoes: { id: string; label: string }[];
+    series: { nif: string; nome: string; valores: Record<string, number | null>; detalhes: Record<string, string> }[];
+  };
+  cruzamentos: {
+    adjudicantes: ConjuntoCruzamento[];
+    pessoas: ConjuntoCruzamento[];
+    processos: ConjuntoCruzamento[];
+    cpvs: ConjuntoCruzamento[];
+    resumo: { adjudicantes: number; pessoas: number; processos: number; cpvs: number };
+  };
+  grafo: ContractGraphBuildResponse | null;
+  atencao: { nif: string; nome: string; severidade: string; titulo: string; detalhe: string; verificar: string }[];
+  totais: Record<string, number | string | null>;
+  leitura: string;
+  avisos: string[];
+};
+
+export function compararConjunto(
+  nifs: string[],
+  nomes: string[] = [],
+  opcoes: { pais?: string; maxEmpresas?: number } = {},
+): Promise<DescobertaConjunto> {
+  const { pais = "PT", maxEmpresas = 6 } = opcoes;
+  return request<DescobertaConjunto>(
+    "/descoberta/conjunto",
+    withBody({ nifs, nomes, pais, max_empresas: maxEmpresas }),
+  );
+}
+
 /** NIF de um endereço `/descoberta/<NIF>`, se a página tiver sido aberta por link direto. */
 export function nifDoEndereco(): string {
   const match = window.location.pathname.match(/^\/descoberta\/(\d{9})/);

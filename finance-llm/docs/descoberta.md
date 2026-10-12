@@ -28,6 +28,8 @@ escolher (ou a que o painel impuser).
 | `GET /descoberta/empresa/{nif}/ontologia` | só a projeção sobre a ontologia |
 | `GET /descoberta/empresa/{nif}/decisao` | evolução, concentração, preços, perfil e pontos de atenção |
 | `POST /descoberta/empresa/{nif}/analise` | análise citada pelo Hermes |
+| `GET /descoberta/conjunto?nifs=&nomes=` | comparação de várias empresas (números, cruzamentos e rede) |
+| `POST /descoberta/conjunto` | igual, com a lista de empresas no corpo |
 
 `GET /descoberta/empresa/{nif}` aceita `pais` (`PT`, `ES`, `FR`), `nome` (quando já é conhecido),
 `fontes` (lista de ids separada por vírgulas) e `incluir_grafo` / `incluir_ontologia` /
@@ -119,11 +121,69 @@ alinhamento de preço e risco (invertido) para 0–100, sempre acompanhado do n�
 ajuste direto, aditivos, desvio de preço, ausência de concorrência, atraso de publicação, insolvência,
 risco alto, queda abrupta de valor) e não repetem os sinais que o motor de padrões já cobre.
 
+## Risco e mercado
+
+No separador **Resumo**, o bloco *Risco e mercado* junta duas fichas que já existiam no servidor e
+antes só apareciam como lista de campos: o **risco** (`risco_service.risco_empresa`) e o **mercado**
+(`mercado_service.empresa`). Agora lê-se com números e gráficos:
+
+- **Nível de risco** — medidor 0–100 na cor do nível, faixa, cobertura, confiança, método e avisos de
+  cobertura baixa.
+- **O que puxa o risco** — contributo de cada componente ao score (pontos × peso efetivo), a cor pela
+  severidade dos pontos, com a evidência de cada sinal na dica.
+- **Componentes do modelo** — tabela com pontos, peso efetivo, contributo e evidência, incluindo os
+  sinais sem dados (que não contam para o score).
+- **Evolução do valor contratado** — barras por ano com linha, mediana de referência e variação/CAGR.
+- **Dependência de compradores** — quota de cada comprador, com o limiar de dependência (50 %) marcado,
+  mais maior comprador, HHI e taxa sem concurso.
+- **Onde está o valor (CPV)** — top de classes com barra de quota, contratos, valor e valor médio.
+- **Alertas de padrão**, perfil, CAE e compatibilidade com o que a empresa vende ao Estado.
+
+## Várias empresas (Conjunto)
+
+O modo **Várias empresas** (2 a 8) responde ao que só existe com duas ou mais: quem é maior, quem
+depende mais de um só comprador, o que partilham e o que verificar primeiro. Está em
+`api/descoberta_conjunto.py`, com três camadas:
+
+1. **Por empresa** — a mesma recolha e o mesmo motor de decisão do painel individual
+   (`descoberta_service.recolher` + `descoberta_decisao.decisao`), para os números do conjunto **não**
+   divergirem dos do painel de cada uma.
+2. **Comparação** — dez métricas alinhadas (contratos, valor, compradores distintos, maior comprador,
+   HHI, ajuste direto, concorrentes, rácio adjudicado/base, dias até publicar e risco), com o melhor e
+   o mais exposto de cada linha marcados, mais as séries do mesmo radar de perfil sobrepostas.
+3. **Cruzamento** — adjudicantes, pessoas e processos partilhados e a rede do conjunto, calculados por
+   `padroes_service.analise_empresas`: as mesmas regras que a página de Padrões usa, para os
+   cruzamentos serem os mesmos nas duas páginas.
+
+A resposta traz ainda `atencao` (pontos de atenção de todas as empresas, por gravidade), `totais` e
+`leitura` (síntese determinística). Validações: país suportado, pelo menos duas empresas e
+`max_empresas` entre 2 e 8 — um pedido inválido devolve 422 com a razão.
+
+O custo é o da recolha de cada empresa (em paralelo, no máximo 4 de cada vez) mais a amostra nacional
+do módulo de padrões: ~15–25 s na primeira vez e praticamente instantâneo depois, porque os dois
+serviços mantêm cache.
+
 ## Grafo de informação — vistas
 
 O separador **Grafo** desenha a mesma malha em cinco vistas: **rede**, **hierarquia** e **circular**
 (`GraphCanvas`), **fluxo** (Sankey, para o valor que sai da empresa para cada camada) e **peso**
 (treemap, para a área proporcional ao valor). Todas aceitam métrica de valor ou de contagem.
+
+### Ler o grafo
+
+- **Pictogramas em vez de nomes**: cada nó desenha o símbolo do seu tipo (empresa, entidade pública,
+  pessoa, CPF/classificação, processo do CIRE, firma, marca, imprensa, subvenção, região) e o nome só
+  aparece no nó apontado ou escolhido — um grafo denso lê-se pela forma e pelo tamanho, sem etiquetas
+  por cima das ligações. O painel usa `labels="selecao"` do `GraphCanvas`.
+- **Ficha do nó**: clicar num nó abre uma modal com identificação, contratos, valor, peso no total,
+  ligações (com o sentido e o valor de cada uma) e a **evidência** já recolhida para aquele nó
+  (comprador, contratos com esse comprador, cargos da pessoa, processo do CIRE, subvenção, marca,
+  firma, notícia). Na ficha pode saltar-se para um nó vizinho.
+- **Ações no lado direito**: o cartão *Ações do nó* repete as ações da ficha — abrir ficha, **isolar a
+  vizinhança**, **ver só um tipo**, **esconder um tipo**, abrir no módulo (EmpresasIQ, PessoasIQ ou a
+  notícia) e limpar a seleção. O cartão *Tipos* mostra as dimensões presentes com contagem e permite
+  o mesmo por clique. A vista é filtrada em memória sobre o grafo do servidor, por isso o layout
+  recalcula sozinho e há sempre «Ver o grafo completo» para voltar.
 
 ## Análise pelo Hermes
 
@@ -156,9 +216,14 @@ O prompt `investigar_empresa` começa por `descoberta_resolver` → `descoberta_
 |---|---|
 | `api/descoberta_service.py` | catálogo de fontes, recolha paralela, grafo, ontologia e análise |
 | `api/descoberta_decisao.py` | evolução, concentração, preços, perfil e pontos de atenção (cálculo puro) |
+| `api/descoberta_conjunto.py` | comparação de várias empresas (métricas alinhadas, cruzamentos e rede) |
 | `api/descoberta_routes.py` | rotas `/descoberta/*` |
 | `chat-ui/src/pages/DescobertaPage.tsx` | painel (decisão, resumo, grafo, ontologia, fontes e análise) |
 | `chat-ui/src/components/descoberta/DescobertaDecisao.tsx` | gráficos de decisão (Recharts) |
+| `chat-ui/src/components/descoberta/DescobertaRiscoMercado.tsx` | risco (medidor, contributos, componentes) e mercado (evolução, dependência, CPV) |
+| `chat-ui/src/components/descoberta/DescobertaConjunto.tsx` | comparação de várias empresas (tabela, radar sobreposto, cruzamentos e rede) |
+| `chat-ui/src/components/descoberta/DescobertaNodeFicha.tsx` | ficha de um nó do grafo (modal) com a evidência do painel |
+| `chat-ui/src/components/descoberta/descobertaGrafo.ts` | rótulos das dimensões e vistas do grafo (isolar/ver tipo/esconder) |
 | `chat-ui/src/descobertaApi.ts` | cliente tipado das rotas |
 
 A página aceita link direto (`/descoberta/<NIF>`), como o PessoasIQ, e aparece no dock e no menu em

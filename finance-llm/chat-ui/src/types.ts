@@ -963,6 +963,8 @@ export interface ContractGraphBuildEdge {
   target: string;
   count: number;
   value: number;
+  /** Como se lê a ligação (ex.: «é adjudicatária de», «atua em»). */
+  relation?: string;
 }
 
 export interface ContractGraphBuildMeta {

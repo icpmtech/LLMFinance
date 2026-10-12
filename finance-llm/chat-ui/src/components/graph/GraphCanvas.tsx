@@ -44,19 +44,86 @@ const DENSE_NODE_COUNT = 70;
 
 type NodeShape = "circle" | "square" | "diamond" | "hexagon";
 
-/** Forma por tipo de nó: pessoa ●, empresa ■, entidade ◆, site/perfil ⬢. */
+/** Como os nomes aparecem no grafo. */
+export type LabelMode = "auto" | "selecao";
+
+/**
+ * Pictograma do nó — o «logo» que o identifica sem escrever o nome.
+ *
+ * Cada tipo desenha-se em traço, sem imagens: a forma do nó (contorno) e o
+ * pictograma (interior) dizem em conjunto o que é aquilo, o que permite ler um
+ * grafo denso sem etiquetas por cima das ligações.
+ */
+type NodeGlyph =
+  | "empresa"
+  | "entidade"
+  | "pessoa"
+  | "globo"
+  | "cpv"
+  | "processo"
+  | "firma"
+  | "marca"
+  | "noticia"
+  | "contrato"
+  | "subvencao"
+  | "regiao";
+
+/** Tipo/dimensão do nó → pictograma (aceita os nomes das duas famílias de grafos). */
+const GLYPH_POR_TIPO: Record<string, NodeGlyph> = {
+  empresa: "empresa",
+  company: "empresa",
+  adjudicante: "entidade",
+  entidade: "entidade",
+  entity: "entidade",
+  pessoa: "pessoa",
+  person: "pessoa",
+  site: "globo",
+  source: "globo",
+  perfil: "globo",
+  cpv: "cpv",
+  cae: "cpv",
+  processo: "processo",
+  cire: "processo",
+  insolvencia: "processo",
+  firma: "firma",
+  marca: "marca",
+  noticia: "noticia",
+  news: "noticia",
+  contrato: "contrato",
+  subvencao: "subvencao",
+  regiao: "regiao",
+  concorrente: "empresa",
+};
+
+/** Forma do contorno por tipo: pessoa ●, empresa ■, entidade ◆, classificação ⬢. */
 function shapeForType(type: string | undefined): NodeShape {
   switch (String(type || "").toLowerCase()) {
     case "company":
+    case "empresa":
+    case "firma":
       return "square";
     case "entity":
+    case "entidade":
+    case "adjudicante":
       return "diamond";
     case "source":
+    case "cpv":
+    case "processo":
+    case "subvencao":
+    case "marca":
+    case "noticia":
       return "hexagon";
     case "person":
+    case "pessoa":
     default:
       return "circle";
   }
+}
+
+/** Pictograma do nó: a dimensão é mais fina do que o tipo, por isso vem primeiro. */
+function glyphFor(node: { dimension?: string; type?: string }): NodeGlyph | null {
+  const chave = String(node.dimension || node.type || "").toLowerCase();
+  return GLYPH_POR_TIPO[chave] ?? null;
 }
 
 function traceRoundRect(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, radius: number) {
@@ -108,8 +175,22 @@ function traceShape(ctx: CanvasRenderingContext2D, x: number, y: number, radius:
   ctx.arc(x, y, radius, 0, Math.PI * 2);
 }
 
-/** Glifo dentro do nó: pessoa, edifício, documento e globo (desenhados, sem imagens). */
-function drawGlyph(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, shape: NodeShape, alpha: number) {
+/**
+ * Pictogramas dentro do nó — o «logo» de cada tipo, desenhado e não importado.
+ *
+ * Sem imagens externas (o grafo desenha-se por frame, a 60 fps): cada tipo tem
+ * uma forma simples e reconhecível, e é ela que identifica o nó quando as
+ * etiquetas estão desligadas.
+ */
+function drawGlyph(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number,
+  glyph: NodeGlyph | null,
+  shape: NodeShape,
+  alpha: number,
+) {
   if (radius < 7) return;
   const s = Math.max(3, radius * 0.46);
   ctx.save();
@@ -117,57 +198,183 @@ function drawGlyph(ctx: CanvasRenderingContext2D, x: number, y: number, radius: 
   ctx.lineWidth = Math.max(1.1, radius * 0.11);
   ctx.strokeStyle = "rgba(255,255,255,0.95)";
   ctx.fillStyle = "rgba(255,255,255,0.95)";
-  if (shape === "circle") {
-    // Pessoa: cabeça + ombros.
-    ctx.beginPath();
-    ctx.arc(x, y - s * 0.5, s * 0.42, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x, y + s * 0.95, s * 0.78, Math.PI * 1.15, Math.PI * 1.85);
-    ctx.stroke();
-  } else if (shape === "square") {
-    // Empresa: edifício com janelas.
-    const w = s * 1.1;
-    const h = s * 1.35;
-    ctx.strokeRect(x - w / 2, y - h / 2, w, h);
-    ctx.beginPath();
-    const step = w / 3;
-    for (let row = 0; row < 2; row += 1) {
-      for (let col = 0; col < 2; col += 1) {
-        ctx.rect(x - w / 2 + step * (col + 0.6), y - h / 2 + h * (0.22 + row * 0.42), step * 0.42, h * 0.2);
+  switch (glyph ?? shape) {
+    case "empresa": {
+      // Empresa: edifício com janelas.
+      const w = s * 1.1;
+      const h = s * 1.35;
+      ctx.strokeRect(x - w / 2, y - h / 2, w, h);
+      const step = w / 3;
+      for (let row = 0; row < 2; row += 1) {
+        for (let col = 0; col < 2; col += 1) {
+          ctx.beginPath();
+          ctx.rect(x - w / 2 + step * (col + 0.6), y - h / 2 + h * (0.22 + row * 0.42), step * 0.42, h * 0.2);
+          ctx.fill();
+        }
       }
+      break;
     }
-    ctx.fill();
-  } else if (shape === "diamond") {
-    // Entidade: documento com linhas.
-    const w = s * 1.0;
-    const h = s * 1.3;
-    ctx.beginPath();
-    ctx.moveTo(x - w / 2, y - h / 2);
-    ctx.lineTo(x + w / 2, y - h / 2);
-    ctx.lineTo(x + w / 2, y + h / 2 - s * 0.3);
-    ctx.lineTo(x + w / 2 - s * 0.3, y + h / 2);
-    ctx.lineTo(x - w / 2, y + h / 2);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x - w * 0.28, y - h * 0.18);
-    ctx.lineTo(x + w * 0.28, y - h * 0.18);
-    ctx.moveTo(x - w * 0.28, y + h * 0.12);
-    ctx.lineTo(x + w * 0.12, y + h * 0.12);
-    ctx.stroke();
-  } else {
-    // Site/perfil: globo com um meridiano.
-    ctx.beginPath();
-    ctx.arc(x, y, s * 0.75, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.ellipse(x, y, s * 0.34, s * 0.75, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x - s * 0.73, y);
-    ctx.lineTo(x + s * 0.73, y);
-    ctx.stroke();
+    case "entidade": {
+      // Entidade pública: frontão e colunas.
+      ctx.beginPath();
+      ctx.moveTo(x - s * 0.95, y - s * 0.45);
+      ctx.lineTo(x, y - s * 1.05);
+      ctx.lineTo(x + s * 0.95, y - s * 0.45);
+      ctx.closePath();
+      ctx.stroke();
+      for (let column = -1; column <= 1; column += 1) {
+        ctx.beginPath();
+        ctx.moveTo(x + column * s * 0.58, y - s * 0.3);
+        ctx.lineTo(x + column * s * 0.58, y + s * 0.65);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.moveTo(x - s * 1.0, y + s * 0.9);
+      ctx.lineTo(x + s * 1.0, y + s * 0.9);
+      ctx.stroke();
+      break;
+    }
+    case "pessoa": {
+      // Pessoa: cabeça + ombros.
+      ctx.beginPath();
+      ctx.arc(x, y - s * 0.5, s * 0.42, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x, y + s * 0.95, s * 0.78, Math.PI * 1.15, Math.PI * 1.85);
+      ctx.stroke();
+      break;
+    }
+    case "cpv": {
+      // Classificação: etiqueta com furo.
+      ctx.beginPath();
+      ctx.moveTo(x - s * 1.0, y - s * 0.75);
+      ctx.lineTo(x + s * 0.45, y - s * 0.75);
+      ctx.lineTo(x + s * 1.0, y);
+      ctx.lineTo(x + s * 0.45, y + s * 0.75);
+      ctx.lineTo(x - s * 1.0, y + s * 0.75);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x - s * 0.45, y, s * 0.18, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+    case "processo": {
+      // Processo (CIRE): balança.
+      ctx.beginPath();
+      ctx.moveTo(x, y - s * 1.0);
+      ctx.lineTo(x, y + s * 0.8);
+      ctx.moveTo(x - s * 1.0, y - s * 0.55);
+      ctx.lineTo(x + s * 1.0, y - s * 0.55);
+      ctx.moveTo(x - s * 0.65, y + s * 0.95);
+      ctx.lineTo(x + s * 0.65, y + s * 0.95);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x - s * 0.95, y - s * 0.05, s * 0.42, 0, Math.PI);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x + s * 0.95, y - s * 0.05, s * 0.42, 0, Math.PI);
+      ctx.stroke();
+      break;
+    }
+    case "firma": {
+      // Firma/estabelecimento: toldo e montra.
+      ctx.beginPath();
+      ctx.moveTo(x - s * 1.0, y - s * 0.55);
+      for (let index = 0; index < 4; index += 1) {
+        ctx.lineTo(x - s * 1.0 + s * (index + 0.5) * 0.5, y - s * 0.15);
+        ctx.lineTo(x - s * 1.0 + s * (index + 1) * 0.5, y - s * 0.55);
+      }
+      ctx.lineTo(x + s * 1.0, y + s * 0.95);
+      ctx.lineTo(x - s * 1.0, y + s * 0.95);
+      ctx.closePath();
+      ctx.stroke();
+      break;
+    }
+    case "marca": {
+      // Marca registada: estrela.
+      ctx.beginPath();
+      for (let point = 0; point < 10; point += 1) {
+        const r = point % 2 === 0 ? s * 1.05 : s * 0.45;
+        const angle = (Math.PI / 5) * point - Math.PI / 2;
+        const px = x + Math.cos(angle) * r;
+        const py = y + Math.sin(angle) * r;
+        if (point === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      break;
+    }
+    case "noticia": {
+      // Imprensa: jornal dobrado.
+      const w = s * 1.2;
+      const h = s * 1.4;
+      ctx.strokeRect(x - w / 2, y - h / 2, w, h);
+      ctx.beginPath();
+      ctx.moveTo(x - w * 0.3, y - h * 0.2);
+      ctx.lineTo(x + w * 0.3, y - h * 0.2);
+      ctx.moveTo(x - w * 0.3, y + h * 0.1);
+      ctx.lineTo(x + w * 0.15, y + h * 0.1);
+      ctx.stroke();
+      break;
+    }
+    case "contrato": {
+      // Contrato/processo administrativo: documento com linhas.
+      const w = s * 1.0;
+      const h = s * 1.3;
+      ctx.beginPath();
+      ctx.moveTo(x - w / 2, y - h / 2);
+      ctx.lineTo(x + w / 2, y - h / 2);
+      ctx.lineTo(x + w / 2, y + h / 2 - s * 0.3);
+      ctx.lineTo(x + w / 2 - s * 0.3, y + h / 2);
+      ctx.lineTo(x - w / 2, y + h / 2);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x - w * 0.28, y - h * 0.18);
+      ctx.lineTo(x + w * 0.28, y - h * 0.18);
+      ctx.moveTo(x - w * 0.28, y + h * 0.12);
+      ctx.lineTo(x + w * 0.12, y + h * 0.12);
+      ctx.stroke();
+      break;
+    }
+    case "subvencao": {
+      // Apoio financeiro: moedas empilhadas.
+      ctx.beginPath();
+      ctx.ellipse(x, y + s * 0.45, s * 1.0, s * 0.4, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(x, y - s * 0.15, s * 1.0, s * 0.4, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      break;
+    }
+    case "regiao": {
+      // Região: alfinete de mapa.
+      ctx.beginPath();
+      ctx.arc(x, y - s * 0.35, s * 0.62, Math.PI * 0.85, Math.PI * 0.15);
+      ctx.lineTo(x, y + s);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x, y - s * 0.35, s * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+    default: {
+      // Site/perfil: globo com um meridiano.
+      ctx.beginPath();
+      ctx.arc(x, y, s * 0.75, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(x, y, s * 0.34, s * 0.75, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x - s * 0.73, y);
+      ctx.lineTo(x + s * 0.73, y);
+      ctx.stroke();
+      break;
+    }
   }
   ctx.restore();
 }
@@ -181,6 +388,7 @@ export function GraphCanvas({
   loading = false,
   heightClass = "h-[560px]",
   unitLabel = "contratos",
+  labels = "auto",
   nodeSummary,
   edgeSummary,
   onNodeClick,
@@ -195,6 +403,12 @@ export function GraphCanvas({
   heightClass?: string;
   /** Unidade mostrada nas dicas (ex.: «contratos» ou «publicações»). */
   unitLabel?: string;
+  /**
+   * Nomes no grafo: `auto` escreve os nós mais relevantes (por omissão, como
+   * sempre); `selecao` deixa o nome só no nó apontado ou escolhido — o tipo lê-se
+   * pelo pictograma e a ficha do nó dá o detalhe.
+   */
+  labels?: LabelMode;
   /** Resumo personalizado do nó na dica (por omissão: contratos · valor). */
   nodeSummary?: (node: StudioNode) => string;
   /** Resumo personalizado da aresta na dica (por omissão: métrica · contratos). */
@@ -301,6 +515,7 @@ export function GraphCanvas({
     selectedNodeId,
     labelledIds,
     dense,
+    labels,
     omittedNodes: drawn.omittedNodes,
     omittedEdges: drawn.omittedEdges,
   });
@@ -316,6 +531,7 @@ export function GraphCanvas({
       selectedNodeId,
       labelledIds,
       dense,
+      labels,
       omittedNodes: drawn.omittedNodes,
       omittedEdges: drawn.omittedEdges,
     };
@@ -422,8 +638,9 @@ export function GraphCanvas({
       isHovered: boolean,
     ) => {
       const radius = isSelected ? node.radius + 5 : isHovered ? node.radius + 3 : node.radius;
-      // A forma identifica o tipo: ● pessoa · ■ empresa · ◆ entidade · ⬢ site/perfil.
-      const shape = shapeForType(node.type ?? node.dimension);
+      // A forma do contorno e o pictograma identificam o tipo: ● pessoa · ■ empresa
+      // · ◆ entidade · ⬢ classificação/processo.
+      const shape = shapeForType(node.dimension ?? node.type);
       traceShape(ctx, p.x, p.y, radius, shape);
 
       if (current.dense && !isSelected && !isHovered) {
@@ -446,12 +663,16 @@ export function GraphCanvas({
       ctx.strokeStyle = isSelected || isHovered ? "#ffffff" : node.color;
       ctx.stroke();
 
-      // Os glifos dão a ler o tipo; em grafos enormes são o primeiro luxo a cair.
+      // Os pictogramas dão a ler o tipo; em grafos enormes são o primeiro luxo a cair.
       if (!current.dense || isSelected || isHovered || current.nodes.length <= 350) {
-        drawGlyph(ctx, p.x, p.y, radius, shape, isSelected || isHovered ? 1 : current.dense ? 0.7 : 0.85);
+        drawGlyph(ctx, p.x, p.y, radius, glyphFor(node), shape, isSelected || isHovered ? 1 : current.dense ? 0.7 : 0.85);
       }
 
-      if (isSelected || isHovered || (!current.dense && current.labelledIds.has(node.id))) {
+      // «selecao»: o nome só aparece no nó apontado ou escolhido — o grafo lê-se
+      // pelos pictogramas e a ficha do nó dá o resto.
+      const comEtiqueta =
+        isSelected || isHovered || (current.labels === "auto" && !current.dense && current.labelledIds.has(node.id));
+      if (comEtiqueta) {
         drawLabel(node.label, p.x + radius + 6, p.y + 3, isSelected || isHovered);
       }
     };
@@ -470,7 +691,7 @@ export function GraphCanvas({
           return;
         }
         const radius = node.radius;
-        const shape = shapeForType(node.type ?? node.dimension);
+        const shape = shapeForType(node.dimension ?? node.type);
         traceShape(ctx, p.x, p.y, radius, shape);
         ctx.fillStyle = `${node.color}b8`;
         ctx.fill();
@@ -478,7 +699,7 @@ export function GraphCanvas({
         ctx.strokeStyle = node.color;
         ctx.stroke();
         if (current.nodes.length <= 350) {
-          drawGlyph(ctx, p.x, p.y, radius, shape, 0.7);
+          drawGlyph(ctx, p.x, p.y, radius, glyphFor(node), shape, 0.7);
         }
       });
       emphasised.forEach((entry) => drawNodeAt(entry.node, entry.p, entry.selected, true));
@@ -857,7 +1078,7 @@ export function GraphCanvas({
   useEffect(() => {
     draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draw, nodes, edges, hovered, hoveredEdge, scale, offset, size, selectedNodeId, labelledIds]);
+  }, [draw, nodes, edges, hovered, hoveredEdge, scale, offset, size, selectedNodeId, labelledIds, labels]);
 
   // Zoom com scroll sem arrastar a página.
   useEffect(() => {

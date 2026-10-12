@@ -15,10 +15,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Compass,
+  Eye,
+  EyeOff,
+  ExternalLink,
+  Focus,
+  IdCard,
   Layers,
   ListChecks,
+  MousePointerClick,
   Network,
   RefreshCw,
+  RotateCcw,
   Search,
   Sparkles,
 } from "lucide-react";
@@ -26,9 +33,26 @@ import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Tabs, T
 import { GraphCanvas } from "../components/graph/GraphCanvas";
 import { SankeyDiagram } from "../components/graph/SankeyDiagram";
 import { TreemapChart } from "../components/graph/TreemapChart";
-import { formatCompact, formatMoney, legendEntries, toStudioGraph, type GraphMetric } from "../components/graph/graphStudio";
+import {
+  formatCompact,
+  formatMoney,
+  legendEntries,
+  toStudioGraph,
+  type GraphMetric,
+  type StudioNode,
+} from "../components/graph/graphStudio";
 import { DescobertaDecisao } from "../components/descoberta/DescobertaDecisao";
+import DescobertaConjunto from "../components/descoberta/DescobertaConjunto";
+import DescobertaNodeFicha from "../components/descoberta/DescobertaNodeFicha";
 import DescobertaRiscoMercado from "../components/descoberta/DescobertaRiscoMercado";
+import {
+  apenasDimensao,
+  corDoNo,
+  dimensoesDoGrafo,
+  rotuloDimensao,
+  semDimensao,
+  vizinhanca,
+} from "../components/descoberta/descobertaGrafo";
 import { useWindowMode, getWindowMode } from "../layout";
 import { openWindow } from "../windows";
 import {
@@ -134,9 +158,16 @@ export default function DescobertaPage({ onBack }: { onBack?: () => void } = {})
   const [aDescobrir, setADescobrir] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [aba, setAba] = useState("decisao");
+  /** Uma empresa (painel completo) ou várias (comparação de conjunto). */
+  const [modo, setModo] = useState<"empresa" | "conjunto">("empresa");
   const [vista, setVista] = useState<VistaGrafo>("network");
   const [metric, setMetric] = useState<GraphMetric>("valor");
   const [noSelecionado, setNoSelecionado] = useState<string | null>(null);
+  /** Nó com a ficha aberta (modal) e a vista do grafo (nó em foco / tipo isolado / tipos escondidos). */
+  const [fichaNo, setFichaNo] = useState<string | null>(null);
+  const [foco, setFoco] = useState<string | null>(null);
+  const [tipoVisivel, setTipoVisivel] = useState<string | null>(null);
+  const [escondidas, setEscondidas] = useState<string[]>([]);
   const [skills, setSkills] = useState<DescobertaSkills | null>(null);
   const [profundidade, setProfundidade] = useState<"rapida" | "profunda">("rapida");
   const [skillId, setSkillId] = useState("");
@@ -222,6 +253,79 @@ export default function DescobertaPage({ onBack }: { onBack?: () => void } = {})
   );
   const legenda = useMemo(() => (grafoStudio ? legendEntries(grafoStudio.nodes) : []), [grafoStudio]);
 
+  /**
+   * Vista do grafo: o grafo todo, a vizinhança de um nó ou só um tipo — as
+   * ações do menu do lado direito. Filtra-se sobre o grafo em memória, por isso
+   * a mudança é imediata e o layout recalcula sozinho (chave nova).
+   */
+  const grafoVisivel = useMemo(() => {
+    if (!grafoStudio) return null;
+    let resultado = grafoStudio;
+    escondidas.forEach((dimensao) => {
+      resultado = semDimensao(resultado, dimensao);
+    });
+    if (foco) return vizinhanca(resultado, foco);
+    if (tipoVisivel) return apenasDimensao(resultado, tipoVisivel);
+    return resultado;
+  }, [escondidas, foco, grafoStudio, tipoVisivel]);
+  const dimensoes = useMemo(() => dimensoesDoGrafo(grafoStudio), [grafoStudio]);
+  const noFicha = useMemo(
+    () => (grafoStudio && fichaNo ? grafoStudio.nodes.find((no) => no.id === fichaNo) ?? null : null),
+    [fichaNo, grafoStudio],
+  );
+
+  const abrirNoModulo = (no: StudioNode) => {
+    const chave = String(no.key ?? no.id.split(":").slice(1).join(":"));
+    const dimensao = String(no.dimension || no.type || "").toLowerCase();
+    if (dimensao === "pessoa") {
+      abrirPessoaIQ(chave);
+      return;
+    }
+    if (dimensao === "noticia") {
+      if (typeof window !== "undefined") window.open(chave, "_blank", "noopener");
+      return;
+    }
+    if (dimensao === "empresa" || dimensao === "adjudicante" || dimensao === "entidade" || dimensao === "concorrente") {
+      if (typeof window === "undefined") return;
+      window.history.pushState({}, "", `/empresas-iq/${encodeURIComponent(chave)}`);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }
+  };
+
+  const selecionarNo = (no: StudioNode) => {
+    setNoSelecionado(no.id);
+    setFichaNo(no.id);
+  };
+
+  const isolarNo = (no: StudioNode) => {
+    setFoco(no.id);
+    setTipoVisivel(null);
+    setFichaNo(null);
+  };
+
+  const verSoTipo = (no: StudioNode) => {
+    const dimensao = String(no.dimension || no.type || "");
+    setTipoVisivel(dimensao);
+    setFoco(null);
+    setFichaNo(null);
+  };
+
+  const esconderTipo = (no: StudioNode) => {
+    const dimensao = String(no.dimension || no.type || "");
+    setEscondidas((atual) => (atual.includes(dimensao) ? atual : [...atual, dimensao]));
+    setFoco(null);
+    setTipoVisivel(null);
+    setFichaNo(null);
+  };
+
+  const limparVista = () => {
+    setFoco(null);
+    setTipoVisivel(null);
+    setEscondidas([]);
+    setNoSelecionado(null);
+    setFichaNo(null);
+  };
+
   const secoes = recolha?.secoes ?? {};
   const contratos = lista<Record<string, unknown>>((secoes.contratos as Record<string, unknown>)?.contratos);
   const sinais = lista<Record<string, unknown>>((secoes.contratos as Record<string, unknown>)?.sinais);
@@ -296,9 +400,26 @@ export default function DescobertaPage({ onBack }: { onBack?: () => void } = {})
             Atualizar
           </Button>
         ) : null}
+        <div className="ml-auto flex items-center gap-1 rounded-xl border border-white/8 p-0.5">
+          <Button size="sm" variant={modo === "empresa" ? "primary" : "ghost"} onClick={() => setModo("empresa")}>
+            Uma empresa
+          </Button>
+          <Button size="sm" variant={modo === "conjunto" ? "primary" : "ghost"} onClick={() => setModo("conjunto")}>
+            Várias empresas
+          </Button>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3 @4xl:p-4">
+        {/* O modo conjunto fica montado sempre: trocar de vista não pode perder a comparação já feita. */}
+        <div className={modo === "conjunto" ? "" : "hidden"}>
+          <DescobertaConjunto
+            onAbrirEmpresa={(nif) => {
+              setModo("empresa");
+              void descobrir(nif);
+            }}
+          />
+        </div>
         {erro ? (
           <p className="mb-3 flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
             <AlertTriangle size={14} /> {erro}
@@ -338,7 +459,7 @@ export default function DescobertaPage({ onBack }: { onBack?: () => void } = {})
           </Card>
         ) : null}
 
-        {!recolha ? (
+        {!recolha && modo === "empresa" ? (
           <Card>
             <CardHeader className="mb-2">
               <CardTitle icon={<Compass size={16} className="text-primary" />}>Como funciona</CardTitle>
@@ -363,7 +484,7 @@ export default function DescobertaPage({ onBack }: { onBack?: () => void } = {})
           </Card>
         ) : null}
 
-        {recolha ? (
+        {recolha && modo === "empresa" ? (
           <>
             {recolha.avisos?.length ? (
               <div className="mb-3 space-y-1.5">
@@ -627,43 +748,100 @@ export default function DescobertaPage({ onBack }: { onBack?: () => void } = {})
 
               <TabsContent value="grafo" active={aba === "grafo"}>
                 <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-                  {grafoStudio ? (
+                  {grafoVisivel && grafoVisivel.nodes.length ? (
                     vista === "sankey" ? (
                       <SankeyDiagram
-                        nodes={grafoStudio.nodes}
-                        edges={grafoStudio.edges}
+                        nodes={grafoVisivel.nodes}
+                        edges={grafoVisivel.edges}
                         metric={metric}
                         unitLabel="€"
                         height={560}
-                        onNodeClick={(no) => setNoSelecionado((atual) => (atual === no.id ? null : no.id))}
+                        onNodeClick={(no) => selecionarNo(no)}
                       />
                     ) : vista === "treemap" ? (
                       <TreemapChart
-                        nodes={grafoStudio.nodes}
+                        nodes={grafoVisivel.nodes}
                         metric={metric}
                         unitLabel="€"
                         height={560}
-                        onNodeClick={(no) => setNoSelecionado((atual) => (atual === no.id ? null : no.id))}
+                        onNodeClick={(no) => selecionarNo(no)}
                       />
                     ) : (
                       <GraphCanvas
-                        graph={grafoStudio}
+                        graph={grafoVisivel}
                         layout={vista}
                         metric={metric}
                         unitLabel="€"
                         heightClass="h-[560px]"
+                        labels="selecao"
                         selectedNodeId={noSelecionado}
                         nodeSummary={(no) => `${no.role || no.dimension} · ${formatCompact(no.count)} · ${formatMoney(no.total_value)}`}
                         edgeSummary={(aresta) => `${formatMoney(aresta.value)} · ${formatCompact(aresta.count)}`}
-                        onNodeClick={(no) => setNoSelecionado((atual) => (atual === no.id ? null : no.id))}
+                        onNodeClick={(no) => selecionarNo(no)}
                       />
                     )
                   ) : (
                     <Card>
-                      <CardContent className="text-sm text-muted-foreground">Sem grafo para esta empresa.</CardContent>
+                      <CardContent className="space-y-2 text-sm text-muted-foreground">
+                        <p>Sem nós para mostrar nesta vista.</p>
+                        {foco || tipoVisivel || escondidas.length ? (
+                          <Button size="sm" variant="outline" onClick={limparVista}>
+                            Ver o grafo completo
+                          </Button>
+                        ) : null}
+                      </CardContent>
                     </Card>
                   )}
                   <div className="space-y-3">
+                    <Card>
+                      <CardHeader className="mb-2">
+                        <CardTitle icon={<MousePointerClick size={16} className="text-primary" />}>Ações do nó</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-xs">
+                        {noSelecionado && grafoStudio ? (
+                          (() => {
+                            const no = grafoStudio.nodes.find((candidato) => candidato.id === noSelecionado);
+                            if (!no) return <p className="text-muted-foreground">Nó fora da vista atual.</p>;
+                            return (
+                              <>
+                                <div className="flex items-center gap-2">
+                                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: corDoNo(no) }} />
+                                  <span className="min-w-0 flex-1 truncate font-medium">{no.label}</span>
+                                </div>
+                                <p className="truncate text-muted-foreground">{rotuloDimensao(no.dimension, no.type)}</p>
+                                <p className="tabular-nums text-muted-foreground">
+                                  {formatCompact(no.count)} · {formatMoney(no.total_value)}
+                                </p>
+                                <div className="flex flex-col gap-1.5 pt-1">
+                                  <Button size="sm" variant="secondary" onClick={() => setFichaNo(no.id)}>
+                                    <IdCard size={14} /> Abrir ficha
+                                  </Button>
+                                  <Button size="sm" variant="secondary" onClick={() => isolarNo(no)}>
+                                    <Focus size={14} /> Isolar vizinhança
+                                  </Button>
+                                  <Button size="sm" variant="secondary" onClick={() => verSoTipo(no)}>
+                                    <Eye size={14} /> Ver só este tipo
+                                  </Button>
+                                  <Button size="sm" variant="secondary" onClick={() => esconderTipo(no)}>
+                                    <EyeOff size={14} /> Esconder este tipo
+                                  </Button>
+                                  <Button size="sm" variant="secondary" onClick={() => abrirNoModulo(no)}>
+                                    <ExternalLink size={14} /> Abrir no módulo
+                                  </Button>
+                                  <Button size="sm" variant="ghost" onClick={limparVista}>
+                                    <RotateCcw size={14} /> Limpar seleção
+                                  </Button>
+                                </div>
+                              </>
+                            );
+                          })()
+                        ) : (
+                          <p className="text-muted-foreground">
+                            Clique num nó do grafo: a ficha abre-se e as ações ficam aqui, à direita.
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
                     <Card>
                       <CardHeader className="mb-2">
                         <CardTitle icon={<Layers size={16} className="text-primary" />}>Camadas</CardTitle>
@@ -710,8 +888,67 @@ export default function DescobertaPage({ onBack }: { onBack?: () => void } = {})
                         ))}
                       </CardContent>
                     </Card>
+                    <Card>
+                      <CardHeader className="mb-2">
+                        <CardTitle>Tipos ({dimensoes.length})</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-1 text-xs">
+                        {dimensoes.map((dimensao) => {
+                          const escondida = escondidas.includes(dimensao.id);
+                          const ativa = tipoVisivel === dimensao.id;
+                          return (
+                            <div key={dimensao.id} className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                className={`min-w-0 flex-1 truncate rounded-lg px-1.5 py-0.5 text-left ${ativa ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-white/5"} ${escondida ? "line-through opacity-60" : ""}`}
+                                onClick={() => (ativa ? setTipoVisivel(null) : setTipoVisivel(dimensao.id))}
+                                title={escondida ? "Tipo escondido — clique para voltar a mostrar" : "Ver só este tipo"}
+                              >
+                                {dimensao.label}
+                              </button>
+                              <span className="w-7 shrink-0 text-right tabular-nums text-muted-foreground">{dimensao.total}</span>
+                              <button
+                                type="button"
+                                className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-white/5"
+                                onClick={() =>
+                                  setEscondidas((atual) =>
+                                    atual.includes(dimensao.id)
+                                      ? atual.filter((item) => item !== dimensao.id)
+                                      : [...atual, dimensao.id],
+                                  )
+                                }
+                                aria-label={escondida ? `Mostrar ${dimensao.label}` : `Esconder ${dimensao.label}`}
+                              >
+                                {escondida ? <Eye size={12} /> : <EyeOff size={12} />}
+                              </button>
+                            </div>
+                          );
+                        })}
+                        {foco || tipoVisivel || escondidas.length ? (
+                          <Button size="sm" variant="outline" className="mt-1 w-full" onClick={limparVista}>
+                            <RotateCcw size={14} /> Ver o grafo completo
+                          </Button>
+                        ) : null}
+                      </CardContent>
+                    </Card>
                   </div>
                 </div>
+                {noFicha && grafoStudio ? (
+                  <DescobertaNodeFicha
+                    node={noFicha}
+                    grafo={grafoStudio}
+                    secoes={secoes}
+                    onClose={() => setFichaNo(null)}
+                    onSelecionar={(nodeId) => {
+                      setNoSelecionado(nodeId);
+                      setFichaNo(nodeId);
+                    }}
+                    onIsolar={isolarNo}
+                    onVerTipo={verSoTipo}
+                    onEsconderTipo={esconderTipo}
+                    onAbrirNoModulo={abrirNoModulo}
+                  />
+                ) : null}
               </TabsContent>
 
               <TabsContent value="ontologia" active={aba === "ontologia"} className="space-y-3">
