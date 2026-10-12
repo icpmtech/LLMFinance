@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from api import racius_service as service
 
@@ -54,3 +54,12 @@ def racius_search(
         size=size,
         offset=offset,
     )
+
+
+@router.get("/{nif}")
+def racius_detail(nif: str) -> dict:
+    """Ficha de uma empresa do diretório Racius (por NIF)."""
+    result = service.detail(nif)
+    if not result.get("found"):
+        raise HTTPException(status_code=404, detail="Empresa não encontrada no diretório Racius.")
+    return result.get("item") or {}

@@ -1151,6 +1151,13 @@ export default function App() {
       if (target.startsWith("company-detail:")) {
         const nif = target.slice("company-detail:".length);
         if (nif) setSelectedCompany(nif);
+        // No modo página, `company-detail:<nif>` é uma janela auxiliar; queremos
+        // abrir a ficha de empresa principal (`company-detail`) para ter a barra
+        // de navegação e as ações corretas.
+        if (!windowMode) {
+          setViewAndHistory("company-detail");
+          return;
+        }
       }
       if (windowMode) {
         if (windowFor(target)) restoreWindow(target);

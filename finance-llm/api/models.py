@@ -1313,6 +1313,16 @@ class CompanyDetail(CompanySummary):
     # Site oficial e logótipo da empresa (módulo `empresas_perfil`): vêm do
     # Elasticsearch/cache, sem ir à rede — a ficha mostra a marca e a ligação.
     perfil: Optional[Dict[str, Any]] = None
+    # Dados do diretório Racius (quando a empresa não existe no cadastro de
+    # entidades/contratos públicos, mas foi recolhida do Racius).
+    racius_url: Optional[str] = None
+    morada: Optional[str] = None
+    atividade: Optional[str] = None
+    forma_juridica: Optional[str] = None
+    capital_social_eur: Optional[float] = None
+    localizacao: Optional[str] = None
+    racius_ficha: Optional[Dict[str, Any]] = None
+    racius_source_name: Optional[str] = None
 
 
 class CompanySearchRequest(BaseModel):

@@ -1088,6 +1088,15 @@ export interface CompanyDetail extends CompanySummary {
     logo_url?: string | null;
     atualizado?: string | null;
   } | null;
+  /** Dados do diretório Racius (quando a empresa não existe no cadastro de contratos). */
+  racius_url?: string | null;
+  morada?: string | null;
+  atividade?: string | null;
+  forma_juridica?: string | null;
+  capital_social_eur?: number | null;
+  localizacao?: string | null;
+  racius_ficha?: Record<string, string> | null;
+  racius_source_name?: string | null;
 }
 
 export interface SocietarioTimelinePayload {

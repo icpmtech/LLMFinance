@@ -1116,10 +1116,42 @@ def companies_detail(request: Request, nif: str, year: Optional[int] = Query(Non
     if UI_BUILD_DIR.is_dir() and _accepts_html(request):
         return spa_index_response()
     company = get_company_by_nif(nif)
+
+    # Fallback para o diretório Racius quando a entidade não existe no cadastro
+    # de contratos públicos. Isto permite abrir a ficha de empresas recolhidas do
+    # Racius (ex.: 500083002) mesmo sem contratos indexados.
+    racius = None
+    if not company.get("error") and company.get("contracts_total", 0) == 0 and company.get("name") == nif:
+        # A empresa só tem o NIF como nome: provavelmente não existe no cadastro.
+        # Vamos tentar o Racius antes de devolver uma ficha vazia.
+        try:
+            from api import racius_service
+
+            racius = racius_service.detail(nif)
+            if racius.get("found") and racius.get("item"):
+                item = racius["item"]
+                company.update({
+                    "name": item.get("nome") or nif,
+                    "normalized_name": item.get("nome") or nif,
+                    "morada": item.get("morada"),
+                    "atividade": item.get("atividade"),
+                    "forma_juridica": item.get("forma_juridica"),
+                    "capital_social_eur": item.get("capital_social_eur"),
+                    "localizacao": item.get("localizacao"),
+                    "racius_url": item.get("url"),
+                    "racius_ficha": item.get("ficha"),
+                    "racius_source_name": item.get("source_name"),
+                })
+        except Exception as exc:
+            logging.getLogger(__name__).warning(f"Fallback Racius falhou para {nif}: {exc}")
+
     if company.get("error"):
         raise HTTPException(status_code=502, detail=company.get("error"))
 
-    recent = get_company_contracts(nif=nif, role="all", size=10, from_=0)
+    # Se a ficha veio do Racius, não há contratos nem top_partners para calcular.
+    is_racius_only = bool(company.get("racius_url"))
+
+    recent = get_company_contracts(nif=nif, role="all", size=10, from_=0) if not is_racius_only else {"items": [], "total": 0}
     company["recent_contracts"] = recent.get("items", [])
 
     contracts_list = recent.get("items", [])
@@ -1849,6 +1881,7 @@ def entities_report_dossie_pdf(nif: str):
 @app.get("/world")
 @app.get("/world/rede")
 @app.get("/empresas-global")
+@app.get("/empresas-global/{path:path}")
 @app.get("/gleif")
 @app.get("/gleif/mapa")
 @app.get("/gleif/ingestao")

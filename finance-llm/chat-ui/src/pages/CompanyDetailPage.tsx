@@ -23,6 +23,7 @@ import {
   AlertCircle,
   Info,
 } from "lucide-react";
+import { formatEuros } from "../raciusApi";
 import {
   getCompanyDetail,
   getCompanyContracts,
@@ -326,7 +327,10 @@ export default function CompanyDetailPage({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    Promise.all([getCompanyDetail(nif), getCompanyAnalytics(nif)])
+    Promise.all([
+      getCompanyDetail(nif),
+      getCompanyAnalytics(nif).catch(() => null),
+    ])
       .then(([d, a]) => {
         if (cancelled) return;
         setCompany(d);
@@ -531,9 +535,23 @@ export default function CompanyDetailPage({
               <h1 className="text-2xl md:text-4xl font-bold leading-tight mb-1">{company.name}</h1>
               <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                 {company.nif && <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10">NIF {company.nif}</span>}
+                {company.forma_juridica ? (
+                  <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10">{company.forma_juridica}</span>
+                ) : null}
                 {company.normalized_name && company.normalized_name !== company.name && (
                   <span>{company.normalized_name}</span>
                 )}
+                {company.racius_url ? (
+                  <a
+                    href={company.racius_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-teal-300 hover:text-teal-200 transition"
+                    title="Abrir ficha no Racius"
+                  >
+                    <ExternalLink size={13} /> Racius
+                  </a>
+                ) : null}
                 {siteEmpresa ? (
                   <a
                     href={siteEmpresa}
@@ -567,36 +585,51 @@ export default function CompanyDetailPage({
           <div className="glass-card gradient-border rounded-2xl p-5 glow-teal min-w-0">
             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
               <FileText size={16} className="text-teal-400" />
-              Total de contratos
+              {company.racius_url ? "Contratos públicos" : "Total de contratos"}
             </div>
             <p className="text-3xl font-bold stat-value text-glow-teal tabular-nums" title={String(company.contracts_total ?? 0)}>
               {formatCount(company.contracts_total)}
             </p>
           </div>
-          <div className="glass-card gradient-border rounded-2xl p-5 glow-amber min-w-0">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-              <Euro size={16} className="text-amber-400" />
-              Valor total
-            </div>
-            <p
-              className="text-2xl md:text-3xl font-bold stat-value text-glow-amber tabular-nums leading-tight break-words"
-              title={formatPrice(company.total_value)}
-            >
-              {formatCompactPrice(company.total_value)}
-            </p>
-            {abreviado(company.total_value) && (
-              <p className="mt-1 text-[11px] text-muted-foreground tabular-nums break-all">
-                {formatPrice(company.total_value)}
+          {company.racius_url ? (
+            <div className="glass-card gradient-border rounded-2xl p-5 glow-amber min-w-0">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                <Euro size={16} className="text-amber-400" />
+                Capital social
+              </div>
+              <p
+                className="text-2xl md:text-3xl font-bold stat-value text-glow-amber tabular-nums leading-tight break-words"
+                title={formatEuros(company.capital_social_eur)}
+              >
+                {formatEuros(company.capital_social_eur)}
               </p>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="glass-card gradient-border rounded-2xl p-5 glow-amber min-w-0">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                <Euro size={16} className="text-amber-400" />
+                Valor total
+              </div>
+              <p
+                className="text-2xl md:text-3xl font-bold stat-value text-glow-amber tabular-nums leading-tight break-words"
+                title={formatPrice(company.total_value)}
+              >
+                {formatCompactPrice(company.total_value)}
+              </p>
+              {abreviado(company.total_value) && (
+                <p className="mt-1 text-[11px] text-muted-foreground tabular-nums break-all">
+                  {formatPrice(company.total_value)}
+                </p>
+              )}
+            </div>
+          )}
           <div className="glass-card gradient-border rounded-2xl p-5 glow-blue min-w-0">
             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
               <Calendar size={16} className="text-blue-400" />
-              Período
+              {company.racius_url ? "Localização" : "Período"}
             </div>
             <p className="text-3xl font-bold stat-value text-glow-blue tabular-nums">
-              {firstYear ?? "—"} — {lastYear ?? "—"}
+              {company.racius_url ? company.localizacao ?? "—" : `${firstYear ?? "—"} — ${lastYear ?? "—"}`}
             </p>
           </div>
           <div className="glass-card gradient-border rounded-2xl p-5 glow-rose min-w-0">
@@ -618,7 +651,9 @@ export default function CompanyDetailPage({
           </div>
         </div>
 
-        {/* Role cards */}
+        {/* Role cards — só para empresas com contratos públicos */}
+        {!company.racius_url && (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {company.adjudicante && company.adjudicante.contracts_count > 0 && (
             <div className="glass-card gradient-border rounded-2xl p-6 glow-blue">
@@ -681,6 +716,8 @@ export default function CompanyDetailPage({
             </div>
           )}
         </div>
+        </>
+        )}
 
         {/* Top partners */}
         {(company.top_adjudicantes?.length > 0 || company.top_adjudicatarios?.length > 0) && (
@@ -736,7 +773,9 @@ export default function CompanyDetailPage({
           </div>
         )}
 
-        {/* Breakdown columns */}
+        {/* Breakdown columns — escondidas para fichas só do Racius */}
+        {!company.racius_url && (
+        <>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           {yearly.length > 0 && (
             <div className="glass-card gradient-border rounded-2xl p-5">
@@ -805,6 +844,67 @@ export default function CompanyDetailPage({
             </div>
           )}
         </div>
+        </>
+        )}
+
+        {/* Ficha do diretório Racius (quando a empresa vem do Racius) */}
+        {company.racius_url || company.racius_ficha ? (
+          <div className="glass-card gradient-border rounded-2xl p-5 md:p-6 mb-8">
+            <div className="flex flex-wrap items-center gap-3 mb-5">
+              <div className="p-2 rounded-xl bg-teal-500/15 border border-teal-400/20">
+                <ExternalLink size={20} className="text-teal-300" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-xl font-semibold">Ficha do Racius</h2>
+                <p className="text-xs text-muted-foreground">
+                  {company.racius_source_name ?? "Dados recolhidos do diretório Racius"}
+                </p>
+              </div>
+              {company.racius_url ? (
+                <a
+                  href={company.racius_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-auto inline-flex items-center gap-1 text-sm text-teal-300 hover:text-teal-200 transition"
+                >
+                  <ExternalLink size={14} /> Ver no Racius
+                </a>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
+              {[
+                { label: "Morada", value: company.morada },
+                { label: "Localização", value: company.localizacao },
+                { label: "Forma jurídica", value: company.forma_juridica },
+                { label: "Capital social", value: formatEuros(company.capital_social_eur) },
+                { label: "Atividade", value: company.atividade },
+                { label: "CAE", value: company.cae_principal },
+              ]
+                .filter((f) => f.value && f.value !== "—")
+                .map((f) => (
+                  <div key={f.label} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                    <p className="text-xs uppercase tracking-wider text-muted-foreground">{f.label}</p>
+                    <p className="mt-1 text-sm">{f.value}</p>
+                  </div>
+                ))}
+            </div>
+            {company.racius_ficha && Object.keys(company.racius_ficha).length > 0 ? (
+              <details>
+                <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
+                  Ficha completa ({Object.keys(company.racius_ficha).length} campos)
+                </summary>
+                <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+                  {Object.entries(company.racius_ficha).map(([key, value]) => (
+                    <div key={key} className="contents">
+                      <dt className="text-muted-foreground">{key}</dt>
+                      <dd className="break-words">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* Contracts table */}
         {/* Ficha recolhida por web + IA: descrição, contactos, morada, dimensão, atividade */}
@@ -921,6 +1021,7 @@ export default function CompanyDetailPage({
           </div>
         )}
 
+        {company.contracts_total > 0 || !company.racius_url ? (
         <div className="glass-card gradient-border rounded-2xl p-5 md:p-6">
           <div className="flex flex-wrap items-center gap-3 mb-5">
             <div className="p-2 rounded-xl bg-primary/15 border border-primary/20">
@@ -1088,6 +1189,7 @@ export default function CompanyDetailPage({
             </div>
           )}
         </div>
+        ) : null}
       </div>
 
       {/* Modal da ficha do contrato (modo página: sem gestor de janelas). */}

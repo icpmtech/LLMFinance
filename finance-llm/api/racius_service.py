@@ -118,6 +118,40 @@ def search(
     return result
 
 
+def detail(nif: str) -> Dict[str, Any]:
+    """Ficha de uma empresa do diretório Racius, procurada pelo NIF.
+
+    Devolve os campos normalizados da empresa (nome, morada, forma jurídica,
+    capital social, atividade, CAE, url, ficha completa, localização). Se o
+    NIF não existir no índice, devolve um dicionário vazio com `found=False`.
+    """
+    client = get_es_client()
+    if not client:
+        return {"nif": nif, "found": False, "error": "Elasticsearch indisponível"}
+    try:
+        if not client.indices.exists(index=INDEX):
+            return {"nif": nif, "found": False, "error": "Índice Racius não existe"}
+        resp = client.search(
+            index=INDEX,
+            body={
+                "query": {"term": {"nif": str(nif)}},
+                "size": 1,
+                "track_total_hits": True,
+            },
+        )
+        hits = resp.get("hits", {}).get("hits", [])
+        total = resp.get("hits", {}).get("total", {})
+        total_value = total.get("value", 0) if isinstance(total, dict) else total
+        if not hits:
+            return {"nif": nif, "found": False, "total": int(total_value)}
+        source = hits[0].get("_source", {})
+        item = _item(source)
+        return {"nif": nif, "found": True, "total": int(total_value), "item": item}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Falha ao ler ficha Racius de %s: %s", nif, exc)
+        return {"nif": nif, "found": False, "error": str(exc)}
+
+
 def meta() -> Dict[str, Any]:
     """Total de empresas e opções dos filtros (sem depender de uma pesquisa)."""
     client = get_es_client()
