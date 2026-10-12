@@ -29,6 +29,7 @@ import {
   Fingerprint,
   Fish,
   FolderOpen,
+  FolderDown,
   FolderSearch,
   Gauge,
   GitCompare,
@@ -468,6 +469,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: Gauge,
     gradient: "from-violet-200 via-fuchsia-500 to-indigo-700",
     accent: "167,139,250",
+  },
+  {
+    id: "vortal",
+    label: "Peças do procedimento",
+    hint: "Recolher as peças de um procedimento da Vortal (caderno de encargos, programa do concurso, anexos) para disco, indexar o texto e pesquisar por dentro dos documentos",
+    icon: FolderDown,
+    gradient: "from-sky-200 via-teal-500 to-emerald-700",
+    accent: "56,189,248",
   },
   {
     id: "osint",

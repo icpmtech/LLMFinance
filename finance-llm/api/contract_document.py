@@ -35,7 +35,16 @@ ALLOWED_HOSTS = {
     "anogov.com",
     "www.base.gov.pt",
     "base.gov.pt",
+    # Vortal: a ligação publicada aponta para a **página pública de peças do
+    # procedimento** (SPA), não para um ZIP — o texto vem das peças que a API
+    # pública lista (`api/vortal_service.py`).
+    "community.vortal.biz",
+    "www.vortal.biz",
+    "vortal.biz",
 }
+
+#: Anfitriões cujo conteúdo é uma página de peças da Vortal (lida pela API pública).
+VORTAL_HOSTS = {"community.vortal.biz", "www.vortal.biz", "vortal.biz"}
 
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -339,6 +348,18 @@ def contract_document(idcontrato: str, contract: Optional[Dict[str, Any]] = None
         result.update(cached[1])
         return result
 
+    anfitriao = (urlparse(url).hostname or "").lower()
+    if anfitriao in VORTAL_HOSTS:
+        # Página de peças da Vortal: o texto vem das peças que a API pública lista.
+        payload = _vortal_pieces(url, idcontrato)
+        if payload.get("error"):
+            result["error"] = payload["error"]
+            result["source"] = "vortal"
+            return result
+        _cache[url] = (time.time(), payload)
+        result.update(payload)
+        return result
+
     try:
         blob = _download(url, timeout=25)
         documents = _read_archive(blob)
@@ -358,7 +379,56 @@ def contract_document(idcontrato: str, contract: Optional[Dict[str, Any]] = None
             item["document"] = document["name"]
             highlights.append(item)
 
-    payload = {"pieces": documents, "highlights": highlights}
+    payload = {"pieces": documents, "highlights": highlights, "source": "arquivo"}
     _cache[url] = (time.time(), payload)
     result.update(payload)
     return result
+
+
+def _vortal_pieces(url: str, idcontrato: str) -> Dict[str, Any]:
+    """Peças de um aviso da Vortal (em memória) + valores lidos do texto.
+
+    A página publicada da Vortal é uma aplicação: o conteúdo só aparece por API.
+    Aqui resolve-se o aviso, descarregam-se as primeiras peças (caderno de
+    encargos, programa do concurso, mapa de quantidades…) e extrai-se o texto,
+    para a ficha do contrato poder mostrar os valores publicados.
+    """
+    from api import vortal_service as vortal
+
+    try:
+        dados = vortal.pecas_em_memoria(url, limite=8, limite_texto=20000)
+    except Exception as exc:  # noqa: BLE001
+        logger.info("Peças do contrato %s (Vortal) não lidas: %s", idcontrato, exc)
+        return {"error": f"Não foi possível ler as peças na Vortal: {exc}"}
+    if dados.get("erro"):
+        return {"error": str(dados["erro"])}
+
+    documents: List[Dict[str, str]] = []
+    highlights: List[Dict[str, str]] = []
+    seen_facts: set[str] = set()
+    for peca in dados.get("pecas") or []:
+        texto = str(peca.get("texto") or "")
+        if texto:
+            documents.append({"name": str(peca.get("nome") or "peca"), "kind": str(peca.get("extensao") or ""), "text": texto[: _MAX_TEXT_CHARS]})
+        for item in extract_values(texto):
+            chave = f"{item['label']}|{item['value']}"
+            if chave in seen_facts:
+                continue
+            seen_facts.add(chave)
+            item["document"] = str(peca.get("nome") or "peca")
+            highlights.append(item)
+
+    return {
+        "pieces": documents,
+        "highlights": highlights,
+        "source": "vortal",
+        "uid": dados.get("uid"),
+        "url_aviso": dados.get("url_aviso"),
+        "publicado": dados.get("publicado"),
+        "pieces_total": dados.get("total", len(documents)),
+        "note": dados.get("nota")
+        or (
+            f"Peças publicadas na plataforma de contratação (Vortal): {len(documents)} lida(s) de "
+            f"{dados.get('total', len(documents))}. O módulo «Peças do procedimento» guarda-as em disco e indexa o texto."
+        ),
+    }

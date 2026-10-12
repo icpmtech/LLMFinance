@@ -69,6 +69,7 @@ export type AppView =
   | "lorenz"
   | "mercado"
   | "mercado-cenarios"
+  | "vortal"
   | "osint"
   | "reports"
   | "subvencoes"

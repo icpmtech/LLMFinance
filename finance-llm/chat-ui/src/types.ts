@@ -874,14 +874,21 @@ export interface ContractDocumentFact {
   document?: string;
 }
 
+/** Peças do procedimento de um contrato: origem, aviso e valores lidos. */
 export interface ContractDocumentResponse {
   contract_id?: string;
   links: ContractDocumentLink[];
   values: ContractDocumentValue[];
   pieces: ContractDocumentPiece[];
   highlights: ContractDocumentFact[];
-  note?: string;
-  error?: string;
+  note?: string | null;
+  error?: string | null;
+  /** `vortal` quando as peças vêm da plataforma de contratação, `arquivo` quando vêm de um ZIP. */
+  source?: string | null;
+  uid?: string | null;
+  url_aviso?: string | null;
+  publicado?: boolean | null;
+  pieces_total?: number | null;
 }
 
 export interface ContractAnalyticsRow {

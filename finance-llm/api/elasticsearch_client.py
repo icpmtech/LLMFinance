@@ -298,6 +298,10 @@ MERCADO_RUNS_INDEX = "finance_mercado_runs"
 # Resultados de pesquisa OSINT (username/email) via user-scanner.
 OSINT_INDEX = "finance_osint"
 
+# Peças do procedimento descarregadas do Portal Vortal (uma entrada por ficheiro,
+# com o texto extraído para pesquisa).
+VORTAL_PECAS_INDEX = "finance_vortal_pecas"
+
 # Definições (settings) específicas de determinados índices — nomeadamente
 # analisadores usados em subcampos de pesquisa por prefixo.
 INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
@@ -327,6 +331,19 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
     },
     MERCADO_RUNS_INDEX: {
         # Idem: títulos de mercado com acentos («Construção», «Saúde»).
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    VORTAL_PECAS_INDEX: {
+        # Nomes de peças e texto de cadernos de encargos: acentos e maiúsculas
+        # («CADERNO DE ENCARGOS», «Município») têm de ser pesquisáveis a dobrar.
         "analysis": {
             "analyzer": {
                 "world_folding": {
@@ -2117,6 +2134,44 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    vortal_pecas_mappings = {
+        "properties": {
+            "uid": {"type": "keyword"},
+            "token": {"type": "keyword", "ignore_above": 1024},
+            "url_aviso": {"type": "keyword", "ignore_above": 1024},
+            "publicado": {"type": "boolean"},
+            "nome": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "ficheiro": {"type": "keyword", "ignore_above": 512},
+            "descricao": {"type": "text", "analyzer": "world_folding", "search_analyzer": "world_folding"},
+            "extensao": {"type": "keyword"},
+            "tipo": {"type": "keyword"},
+            "tipo_label": {"type": "keyword"},
+            "doc_id": {"type": "long"},
+            "file_id": {"type": "keyword", "ignore_above": 256},
+            "url": {"type": "keyword", "index": False, "ignore_above": 2048},
+            "bytes": {"type": "long"},
+            "sha256": {"type": "keyword", "ignore_above": 64},
+            "pasta": {"type": "keyword", "index": False, "ignore_above": 1024},
+            "recolhido_em": {"type": "date"},
+            "descarregado_em": {"type": "date"},
+            "indexado_em": {"type": "date"},
+            "texto_chars": {"type": "integer"},
+            "texto_metodo": {"type": "keyword"},
+            "paginas": {"type": "integer"},
+            "precisa_ocr": {"type": "boolean"},
+            "texto_partes": {"type": "object", "enabled": False},
+            "erro": {"type": "text", "index": False},
+            # Texto da peça (caderno de encargos, programa do concurso, …):
+            # é isto que dá a pesquisa por dentro dos documentos.
+            "texto": {"type": "text", "analyzer": "world_folding", "search_analyzer": "world_folding"},
+        }
+    }
+
     devedores_mappings = {
         "properties": {
             "doc_id": {"type": "keyword"},
@@ -2401,6 +2456,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (INVESTIGATIONS_INDEX, investigations_mappings),
         (LORENZ_RUNS_INDEX, lorenz_runs_mappings),
         (MERCADO_RUNS_INDEX, mercado_runs_mappings),
+        (VORTAL_PECAS_INDEX, vortal_pecas_mappings),
         (ANALISES_EMPRESA_INDEX, analises_empresa_mappings),
         (GLOBAL_PADROES_INDEX, global_padroes_mappings),
         (DEVEDORES_INDEX, devedores_mappings),

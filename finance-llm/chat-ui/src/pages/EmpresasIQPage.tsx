@@ -19,6 +19,7 @@ import {
   FileSpreadsheet,
   Filter,
   FolderHeart,
+  FolderDown,
   FolderOpen,
   FolderPlus,
   GitBranch,
@@ -5485,8 +5486,16 @@ function ContractAIAnalysis({
       {/* Peça do procedimento */}
       <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs text-muted-foreground">Peça do procedimento</p>
-          {pieceLoading && <Loader2 size={14} className="animate-spin text-teal-300" />}
+          <p className="text-xs text-muted-foreground">
+            Peça do procedimento
+            {piece?.source === "vortal" ? " · plataforma Vortal" : piece?.source === "arquivo" ? " · ficheiro publicado" : ""}
+          </p>
+          <div className="flex items-center gap-2">
+            {piece?.source === "vortal" && piece?.uid ? (
+              <span className="font-mono text-[10.5px] text-muted-foreground">{piece.uid}</span>
+            ) : null}
+            {pieceLoading && <Loader2 size={14} className="animate-spin text-teal-300" />}
+          </div>
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
           {(piece?.links ?? []).length === 0 && !pieceLoading && (
@@ -5503,7 +5512,30 @@ function ContractAIAnalysis({
               <FileText size={12} /> {link.label}
             </a>
           ))}
+          {/* Peças da Vortal: a recolha completa (disco + índice + pesquisa) vive no
+              módulo «Peças do procedimento», que abre já com este aviso. */}
+          {(piece?.links ?? []).some((link) => /vortal\.biz/i.test(link.url ?? "")) ? (
+            <button
+              type="button"
+              onClick={() => {
+                const alvo = (piece?.links ?? []).find((link) => /vortal\.biz/i.test(link.url ?? ""));
+                const destino = alvo ? `/vortal?url=${encodeURIComponent(alvo.url)}` : "/vortal";
+                window.open(destino, "_blank", "noopener");
+              }}
+              className="rounded-lg border border-teal-400/30 bg-teal-400/10 px-3 py-1.5 text-xs text-teal-100 hover:bg-teal-400/20 transition flex items-center gap-1.5"
+              title="Abrir este aviso no módulo «Peças do procedimento» — descarregar para disco, indexar e pesquisar"
+            >
+              <FolderDown size={12} /> Obter peças no módulo
+            </button>
+          ) : null}
         </div>
+
+        {piece?.source === "vortal" && piece?.pieces_total ? (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            {piece.pieces.length.toLocaleString("pt-PT")} de {piece.pieces_total.toLocaleString("pt-PT")} peças lidas
+            nesta ficha · {(piece.highlights?.length ?? 0).toLocaleString("pt-PT")} valor(es) reconhecido(s)
+          </p>
+        ) : null}
 
         {(piece?.highlights ?? []).length > 0 && (
           <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">

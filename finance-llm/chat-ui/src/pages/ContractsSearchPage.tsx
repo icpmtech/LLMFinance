@@ -28,6 +28,8 @@ import {
   ingestContracts,
 } from "../api";
 import { openWindow } from "../windows";
+import { useWindowMode } from "../layout";
+import { ContractDetailPanel } from "./EmpresasIQPage";
 import { MiniMapaLocal, localTexto } from "../components/MiniMapaLocal";
 import type {
   ContractAnalyticsFilters,
@@ -109,6 +111,11 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
   const searchInputRef = useRef<HTMLInputElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
+  /** Contrato com a ficha aberta em **modal** (modo página; no modo janelas usa-se o gestor). */
+  const [contratoAberto, setContratoAberto] = useState<string | null>(null);
+  /** O gestor de janelas só existe no modo janelas: sem ele, a ficha é uma modal. */
+  const { windowMode } = useWindowMode();
+
   const [chatOpen, setChatOpen] = useState(false);
   const [chatQuestion, setChatQuestion] = useState("");
   const [chatAnswer, setChatAnswer] = useState<string | null>(null);
@@ -130,6 +137,16 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Erro ao carregar estado"));
   }, []);
+
+  /* Fechar a modal do contrato com Escape, como nas restantes modais. */
+  useEffect(() => {
+    if (!contratoAberto) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setContratoAberto(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [contratoAberto]);
 
   const buildRequest = (): ContractSearchRequest => ({
     q: query.trim() || undefined,
@@ -191,10 +208,16 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
     }
   };
 
-  /** Abre a ficha do contrato (mesma janela usada na lista de contratos da entidade). */
+  /** Abre a ficha do contrato: em modo janelas numa janela nova; em modo página
+   * — onde o gestor de janelas não é renderizado — numa **modal** sobre a lista
+   * (antes registava uma janela que nunca aparecia: o clique parecia não fazer nada). */
   const abrirDetalhe = (id?: string) => {
     if (!id) return;
-    openWindow(`contract-detail:${id}`, undefined, { title: "Ficha do contrato" });
+    if (windowMode) {
+      openWindow(`contract-detail:${id}`, undefined, { title: "Ficha do contrato" });
+      return;
+    }
+    setContratoAberto(id);
   };
 
   const doSearch = async (resetFrom = true) => {
@@ -797,6 +820,39 @@ export function ContractsSearchPage({ onSwitchView, onSwitchDashboard }: Contrac
           )}
         </div>
       </div>
+
+      {/* Modal da ficha do contrato (modo página: sem gestor de janelas). */}
+      {contratoAberto && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Ficha do contrato"
+          className="fixed inset-0 z-[999] flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm md:items-center"
+          onClick={() => setContratoAberto(null)}
+        >
+          <div
+            className="relative max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/10 bg-background/95 p-4 shadow-2xl md:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setContratoAberto(null)}
+              className="absolute right-3 top-3 z-10 rounded-lg p-1.5 text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+              title="Fechar (Esc)"
+            >
+              <X size={18} />
+            </button>
+            <ContractDetailPanel
+              id={contratoAberto}
+              onBack={() => setContratoAberto(null)}
+              onEntity={(alvo) => {
+                setContratoAberto(null);
+                openWindow(`company-detail:${alvo}`, undefined, { title: "Ficha da entidade" });
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

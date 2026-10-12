@@ -86,6 +86,7 @@ import PadroesPage from "./pages/PadroesPage";
 import LorenzPage from "./pages/LorenzPage";
 import MercadoPage from "./pages/MercadoPage";
 import MercadoCenariosPage from "./pages/MercadoCenariosPage";
+import VortalPage from "./pages/VortalPage";
 import OsintPage from "./pages/OsintPage";
 import ReportsPage from "./pages/ReportsPage";
 import SubvencoesPage from "./pages/SubvencoesPage";
@@ -197,6 +198,7 @@ type AppView =
   | "lorenz"
   | "mercado"
   | "mercado-cenarios"
+  | "vortal"
   | "osint"
   | "reports"
   | "subvencoes"
@@ -370,6 +372,7 @@ function pathForView(
   if (view === "lorenz") return "/lorenz";
   if (view === "mercado") return "/mercado";
   if (view === "mercado-cenarios") return "/mercado/cenarios";
+  if (view === "vortal") return "/vortal";
   if (view === "osint") return "/osint";
   if (view === "mirofish") return "/mirofish";
   if (view === "simulador") return "/simulador";
@@ -592,6 +595,8 @@ export default function App() {
     // O módulo de mercado vive em `/mercado` (benchmark) e `/mercado/cenarios`.
     if (path === "/mercado/cenarios" || path.startsWith("/mercado/cenarios/")) return "mercado-cenarios";
     if (path === "/mercado" || path.startsWith("/mercado/")) return "mercado";
+    // Peças do procedimento (Vortal): recolha para disco + índice Elasticsearch.
+    if (path === "/vortal" || path.startsWith("/vortal/")) return "vortal";
     if (path === "/mirofish" || path.startsWith("/mirofish/")) return "mirofish";
     if (path === "/simulador" || path.startsWith("/simulador/")) return "simulador";
     if (path === "/deep-search" || path.startsWith("/deep-search/")) return "deep-search";
@@ -727,6 +732,7 @@ export default function App() {
       else if (path === "/lorenz" || path.startsWith("/lorenz/")) next = "lorenz";
       else if (path === "/mercado/cenarios" || path.startsWith("/mercado/cenarios/")) next = "mercado-cenarios";
       else if (path === "/mercado" || path.startsWith("/mercado/")) next = "mercado";
+      else if (path === "/vortal" || path.startsWith("/vortal/")) next = "vortal";
       else if (path === "/osint" || path.startsWith("/osint/")) next = "osint";
       else if (path === "/reports" || path.startsWith("/reports/")) next = "reports";
       else if (path === "/subvencoes" || path.startsWith("/subvencoes/")) next = "subvencoes";
@@ -1472,6 +1478,8 @@ export default function App() {
     // Inteligência de mercado: empresas no mesmo mercado, dependências e cenários.
     if (target === "mercado") return <MercadoPage onAbrirCenarios={() => setViewAndHistory("mercado-cenarios")} />;
     if (target === "mercado-cenarios") return <MercadoCenariosPage onAbrirMercado={() => setViewAndHistory("mercado")} />;
+    // Peças do procedimento (Vortal): recolha para disco, índice e pesquisa.
+    if (target === "vortal") return <VortalPage />;
     if (target === "osint") return <OsintPage />;
     if (target === "reports") return <ReportsPage />;
     if (target === "subvencoes") return <SubvencoesPage />;

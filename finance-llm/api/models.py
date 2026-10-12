@@ -818,6 +818,13 @@ class ContractDocumentResponse(BaseModel):
     highlights: List[ContractDocumentFact] = []
     note: Optional[str] = None
     error: Optional[str] = None
+    # Origem das peças: `vortal` (página pública da plataforma de contratação,
+    # lida por API), `arquivo` (ZIP/ficheiro descarregado) ou ausente.
+    source: Optional[str] = None
+    uid: Optional[str] = None
+    url_aviso: Optional[str] = None
+    publicado: Optional[bool] = None
+    pieces_total: Optional[int] = None
 
 
 class ContractIngestRequest(BaseModel):
