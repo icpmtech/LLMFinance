@@ -260,6 +260,19 @@ async def wake(
     except RuntimeError as exc:
         # 501: a interface cai para o reconhecimento de voz do browser.
         raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.warning("Erro no /jarvis/wake: %s", exc, exc_info=True)
+        # A escuta contínua não pode rebentar: devolvemos "não ouvi nada" para
+        # o browser continuar a ouvir, mas incluímos o erro no texto para debug.
+        return {
+            "text": "",
+            "active": False,
+            "word": None,
+            "command": "",
+            "engine": None,
+            "model": None,
+            "error": f"Falha na transcrição: {exc}",
+        }
 
 
 @router.post("/speak")

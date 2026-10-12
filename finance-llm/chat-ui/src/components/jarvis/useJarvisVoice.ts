@@ -27,6 +27,96 @@ import {
   type JarvisWakeStatus,
 } from "../../jarvisApi";
 
+/**
+ * Grava um trecho de `MediaStream` em WAV 16 kHz mono com `AudioContext`.
+ *
+ * O `MediaRecorder` grava formatos variáveis (webm/opus) que o servidor nem
+ * sempre consegue decodificar. O WAV PCM é universal e o formato esperado
+ * pelo `faster-whisper`, pelo que gravamos diretamente em WAV no browser.
+ */
+async function recordWavChunk(stream: MediaStream, ms: number): Promise<Blob> {
+  const AudioContextCtor =
+    (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext })
+      .AudioContext ||
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) {
+    throw new Error("AudioContext não disponível neste browser.");
+  }
+
+  const context = new AudioContextCtor({ sampleRate: 16000 });
+  try {
+    const source = context.createMediaStreamSource(stream);
+    const processor = context.createScriptProcessor(4096, 1, 1);
+    const chunks: Float32Array[] = [];
+
+    await new Promise<void>((resolve) => {
+      const onData = (event: AudioProcessingEvent) => {
+        const input = event.inputBuffer.getChannelData(0);
+        chunks.push(new Float32Array(input));
+      };
+      processor.onaudioprocess = onData;
+      source.connect(processor);
+      processor.connect(context.destination);
+      window.setTimeout(() => {
+        processor.onaudioprocess = null;
+        source.disconnect();
+        processor.disconnect();
+        resolve();
+      }, ms);
+    });
+
+    // Concatena os buffers
+    let length = 0;
+    for (const chunk of chunks) length += chunk.length;
+    const samples = new Float32Array(length);
+    let offset = 0;
+    for (const chunk of chunks) {
+      samples.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    // Converte float [-1,1] para int16
+    const wavBuffer = new ArrayBuffer(samples.length * 2);
+    const view = new DataView(wavBuffer);
+    for (let i = 0; i < samples.length; i += 1) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+
+    // Cabeçalho WAV 44 bytes
+    const header = new ArrayBuffer(44);
+    const h = new DataView(header);
+    const writeString = (offset: number, text: string) => {
+      for (let i = 0; i < text.length; i += 1) h.setUint8(offset + i, text.charCodeAt(i));
+    };
+    const numChannels = 1;
+    const sampleRate = 16000;
+    const byteRate = sampleRate * numChannels * 2;
+    const blockAlign = numChannels * 2;
+    const bitsPerSample = 16;
+    const dataBytes = samples.length * numChannels * 2;
+
+    writeString(0, "RIFF");
+    h.setUint32(4, 36 + dataBytes, true);
+    writeString(8, "WAVE");
+    writeString(12, "fmt ");
+    h.setUint32(16, 16, true);
+    h.setUint16(20, 1, true); // PCM
+    h.setUint16(22, numChannels, true);
+    h.setUint32(24, sampleRate, true);
+    h.setUint32(28, byteRate, true);
+    h.setUint16(32, blockAlign, true);
+    h.setUint16(34, bitsPerSample, true);
+    writeString(36, "data");
+    h.setUint32(40, dataBytes, true);
+
+    const parts = [new Uint8Array(header), new Uint8Array(wavBuffer)];
+    return new Blob(parts, { type: "audio/wav" });
+  } finally {
+    await context.close();
+  }
+}
+
 /* ----------------------------------------------------------- Web Speech API */
 
 type SpeechRecognitionLike = {
@@ -521,56 +611,70 @@ export function useJarvisVoice({
     stopSpeaking();
     try {
       const stream = await openMicStream();
+      // Gravamos em WAV 16 kHz mono via AudioContext: é o formato canónico para
+      // Whisper e evita que o MediaRecorder produza webm/opus ilegíveis.
       const recorder = new MediaRecorder(stream);
       wakeRecorderRef.current = recorder;
       backToDormant();
 
-      recorder.ondataavailable = async (event: BlobEvent) => {
-        if (!event.data?.size) return;
-        const state = wakeStateRef.current;
-        if (state === "off" || wakeBusyRef.current) return;
+      let commandBlob: Blob | null = null;
 
-        if (state === "dormant") {
-          wakeBusyRef.current = true;
-          try {
-            const result = await wakeJarvisAudio(event.data, language.slice(0, 2));
-            if (!result.active) return;
-            setWakeWord(result.word ?? wakeWords[0] ?? null);
-            const command = (result.command || "").trim();
-            if (command.length >= 3) {
-              // Disse a palavra e o pedido de uma vez: não se perde o resto.
-              await finishWakeCommand(event.data);
-              return;
+      const sendWakeChunk = async () => {
+        try {
+          const blob = await recordWavChunk(stream, WAKE_CHUNK_MS);
+          if (!blob.size) return;
+          const state = wakeStateRef.current;
+          if (state === "off" || wakeBusyRef.current) return;
+
+          if (state === "dormant") {
+            wakeBusyRef.current = true;
+            try {
+              const result = await wakeJarvisAudio(blob, language.slice(0, 2));
+              if (!result.active) return;
+              setWakeWord(result.word ?? wakeWords[0] ?? null);
+              const command = (result.command || "").trim();
+              if (command.length >= 3) {
+                // Disse a palavra e o pedido de uma vez: não se perde o resto.
+                await finishWakeCommand(blob);
+                return;
+              }
+              // Só a palavra: grava o pedido até haver silêncio.
+              commandBlob = null;
+              wakeChunksRef.current = [];
+              wakeSilenceRef.current = 0;
+              wakeStateRef.current = "capturing";
+              setWakeState("capturing");
+              wakeBeep();
+              clearWakeTimer();
+              wakeTimerRef.current = window.setTimeout(() => {
+                void finishWakeCommand(commandBlob || new Blob(wakeChunksRef.current, { type: "audio/wav" }));
+              }, WAKE_MAX_COMMAND_MS);
+            } catch {
+              /* é um ciclo: um trecho falhado não pode parar a escuta */
+            } finally {
+              wakeBusyRef.current = false;
             }
-            // Só a palavra: grava o pedido até haver silêncio.
-            wakeChunksRef.current = [];
-            wakeSilenceRef.current = 0;
-            wakeStateRef.current = "capturing";
-            setWakeState("capturing");
-            wakeBeep();
-            clearWakeTimer();
-            wakeTimerRef.current = window.setTimeout(() => {
-              const chunks = wakeChunksRef.current;
-              void finishWakeCommand(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }));
-            }, WAKE_MAX_COMMAND_MS);
-          } catch {
-            /* é um ciclo: um trecho falhado não pode parar a escuta */
-          } finally {
-            wakeBusyRef.current = false;
+            return;
           }
-          return;
-        }
 
-        // A capturar o pedido: acumula e conta o silêncio.
-        wakeChunksRef.current.push(event.data);
-        if (levelRef.current < WAKE_MIN_LEVEL) wakeSilenceRef.current += 1;
-        else wakeSilenceRef.current = 0;
-        if (wakeSilenceRef.current >= WAKE_SILENCE_CHUNKS) {
-          const chunks = wakeChunksRef.current;
-          void finishWakeCommand(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }));
+          // A capturar o pedido: acumula e conta o silêncio.
+          commandBlob = blob;
+          wakeChunksRef.current.push(blob);
+          if (levelRef.current < WAKE_MIN_LEVEL) wakeSilenceRef.current += 1;
+          else wakeSilenceRef.current = 0;
+          if (wakeSilenceRef.current >= WAKE_SILENCE_CHUNKS) {
+            void finishWakeCommand(new Blob(wakeChunksRef.current, { type: "audio/wav" }));
+          }
+        } catch {
+          // Erro de gravação: tenta continuar; em caso grave o utilizador para.
         }
       };
 
+      // `MediaRecorder` é mantido só para ter um ciclo de vida de gravação;
+      // o áudio real vem do `AudioContext` como WAV.
+      recorder.ondataavailable = () => {
+        void sendWakeChunk();
+      };
       recorder.start(WAKE_CHUNK_MS);
       wakeStateRef.current = "dormant";
       setWakeState("dormant");

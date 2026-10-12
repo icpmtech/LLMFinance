@@ -1126,6 +1126,60 @@ def match_wake(text: str) -> Dict[str, Any]:
     return {"active": False, "word": None, "command": ""}
 
 
+def _decode_audio_to_wav(data: bytes, filename: str) -> bytes:
+    """Converte qualquer formato suportado pelo PyAV para PCM WAV 16 kHz mono.
+
+    O `faster-whisper` suporta vários formatos, mas alguns browsers (Chrome)
+    gravam Opus/WebM com layouts que o descodificador dele nem sempre aceita.
+    Re-amostrar para 16 kHz mono é o formato que o Whisper espera.
+    """
+    try:
+        import av  # type: ignore[import-not-found]
+    except Exception as exc:  # pragma: no cover - depende do ambiente
+        raise RuntimeError("PyAV não está disponível no servidor.") from exc
+
+    suffix = Path(filename or "audio.webm").suffix or ".webm"
+    input_path = None
+    output_path = None
+    try:
+        handle, input_path = tempfile.mkstemp(suffix=suffix, prefix="jarvis-in-")
+        os.close(handle)
+        handle, output_path = tempfile.mkstemp(suffix=".wav", prefix="jarvis-out-")
+        os.close(handle)
+        Path(input_path).write_bytes(data)
+
+        input_container = av.open(input_path, "r")
+        output_container = av.open(output_path, "w")
+        try:
+            input_stream = input_container.streams.audio[0]
+            # 16 kHz mono s16 — o formato canónico para Whisper
+            output_stream = output_container.add_stream("pcm_s16le", rate=16000, layout="mono")
+            for frame in input_container.decode(audio=0):
+                # Re-amostrar para 16 kHz
+                resampler = av.audio.resampler.AudioResampler(
+                    format="s16",
+                    layout="mono",
+                    rate=16000,
+                )
+                for resampled in resampler.resample(frame):
+                    for packet in output_stream.encode(resampled):
+                        output_container.mux(packet)
+            for packet in output_stream.encode(None):
+                output_container.mux(packet)
+        finally:
+            input_container.close()
+            output_container.close()
+
+        return Path(output_path).read_bytes()
+    finally:
+        for p in (input_path, output_path):
+            if p:
+                try:
+                    os.unlink(p)
+                except OSError:
+                    pass
+
+
 def transcribe(
     data: bytes,
     *,
@@ -1151,11 +1205,17 @@ def transcribe(
     if not data:
         raise RuntimeError("O áudio recebido está vazio.")
 
-    suffix = Path(filename or "audio.webm").suffix or ".webm"
-    handle, path = tempfile.mkstemp(suffix=suffix, prefix="jarvis-")
+    try:
+        wav_data = _decode_audio_to_wav(data, filename)
+    except Exception as exc:
+        logger.warning("Não foi possível decodificar o áudio como WAV: %s", exc)
+        # Se PyAV não consegue, tentamos passar o original — pode ser um WAV já.
+        wav_data = data
+
+    handle, path = tempfile.mkstemp(suffix=".wav", prefix="jarvis-")
     os.close(handle)
     try:
-        Path(path).write_bytes(data)
+        Path(path).write_bytes(wav_data)
         chosen = (model or DEFAULT_STT_MODEL).strip() or DEFAULT_STT_MODEL
         whisper = _whisper_model(WhisperModel, chosen)
         segments, info = whisper.transcribe(

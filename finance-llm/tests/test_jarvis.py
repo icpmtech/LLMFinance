@@ -580,6 +580,13 @@ def test_transcribe_sem_audio_falha():
         service.transcribe(b"")
 
 
+def test_decode_audio_to_wav_recusa_sem_pyav(monkeypatch):
+    """Sem PyAV, a conversão levanta RuntimeError — a função não deve rebentar com ImportError."""
+    monkeypatch.setitem(sys.modules, "av", None)
+    with pytest.raises(RuntimeError):
+        service._decode_audio_to_wav(b"fake", "audio.webm")
+
+
 # ---------------------------------------------------------------------------
 # Palavra de ativação (escuta contínua local)
 # ---------------------------------------------------------------------------
