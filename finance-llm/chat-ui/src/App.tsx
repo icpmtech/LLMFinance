@@ -252,6 +252,15 @@ function readRegionDetailTarget(): RegionDetailTarget | null {
 /** Último modelo/fornecedor escolhido no chat. */
 const BACKEND_KEY = "finance-llm-backend";
 
+/**
+ * Cérebro predefinido do chat.
+ *
+ * O `/chat` responde pelo **gateway** do IQ OS: a pergunta é entregue ao
+ * **Hermes Agent** (agente autónomo) ou ao **Hermes** (investigação citada).
+ * Outros modelos continuam disponíveis no selector.
+ */
+const DEFAULT_CHAT_BACKEND: ModelBackend = "hermes-agent";
+
 const STORAGE_KEY = "finance-llm-conversations";
 
 interface Conversation {
@@ -509,8 +518,13 @@ export default function App() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [backend, setBackend] = useState<ModelBackend>(() => {
-    if (typeof window === "undefined") return "gpt2";
-    return window.localStorage.getItem(BACKEND_KEY) || "gpt2";
+    if (typeof window === "undefined") return DEFAULT_CHAT_BACKEND;
+    const guardado = window.localStorage.getItem(BACKEND_KEY) || "";
+    // `gpt2` era o modelo local predefinido: quem nunca escolheu nada passa a usar
+    // o cérebro do chat (o Hermes Agent, pelo gateway). Uma escolha explícita de
+    // um modelo ou fornecedor é respeitada.
+    if (!guardado || guardado === "gpt2") return DEFAULT_CHAT_BACKEND;
+    return guardado;
   });
   const changeBackend = useCallback((next: ModelBackend) => {
     setBackend(next);
@@ -1249,7 +1263,14 @@ export default function App() {
       return <DashboardPage onSwitchView={handleSwitchView} onSelectTicker={handleSelectTicker} />;
     }
     if (target === "finder") return <FinderPage />;
-    if (target === "racius") return <RaciusPage />;
+    if (target === "racius") {
+      const handleSelectCompany = (nif: string | null) => {
+        if (!nif) return;
+        setSelectedCompany(nif);
+        setViewAndHistory("company-detail");
+      };
+      return <RaciusPage onSelectCompany={handleSelectCompany} />;
+    }
     if (target === "compare") return <CompareWindow />;
     if (target.startsWith("company-detail:")) {
       return <EntityDetailWindow nif={target.slice("company-detail:".length)} />;

@@ -39,6 +39,31 @@ export type ProviderInfo = {
 export type ProvidersCatalog = {
   providers: ProviderInfo[];
   defaults: { provider?: string; model?: string };
+  /**
+   * Cérebros servidos pelo **gateway** do IQ OS (`hermes-agent`, `hermes`).
+   *
+   * Vêm do próprio backend (`/chat/backends`) porque é lá que está a definição
+   * (ferramenta do gateway, tempo máximo, disponibilidade) — a lista não é
+   * duplicada no cliente, que assim nunca desmente o servidor.
+   */
+  gateways?: ChatGatewayBrain[];
+  gatewayDefault?: string;
+};
+
+/** Um cérebro do chat servido pelo gateway (Hermes Agent, Hermes). */
+export type ChatGatewayBrain = {
+  id: string;
+  label: string;
+  hint: string;
+  gateway: string;
+  tool: string;
+  timeout_seconds?: number;
+  available: boolean;
+  note?: string | null;
+  model?: string | null;
+  skills?: number;
+  toolsets?: number;
+  error?: string | null;
 };
 
 export type ChatModelOption = {
@@ -85,14 +110,27 @@ function subscribe(onChange: () => void) {
   return () => window.removeEventListener(CHANGE_EVENT, onChange);
 }
 
-/** Carrega (ou recarrega) o catálogo de fornecedores. */
+/** Carrega (ou recarrega) o catálogo de fornecedores e os cérebros do gateway. */
 export async function refreshProviders(): Promise<ProvidersCatalog> {
   if (loading) return cache;
   loading = true;
   try {
     const catalog = await request<ProvidersCatalog>("/providers");
-    commit(catalog);
-    return catalog;
+    // Os cérebros do gateway são um extra: se este pedido falhar, o chat continua
+    // a funcionar com os modelos da plataforma e não fica sem selector.
+    try {
+      const gateways = await request<{ default?: string; backends?: ChatGatewayBrain[] }>(
+        "/chat/backends",
+      );
+      commit({
+        ...catalog,
+        gateways: gateways.backends || [],
+        gatewayDefault: gateways.default,
+      });
+    } catch {
+      commit(catalog);
+    }
+    return cache;
   } finally {
     loading = false;
   }
@@ -176,9 +214,27 @@ export function useProviders() {
   };
 }
 
-/** Opções do selector do chat, agrupadas (locais + cloud). */
+/** Opções do selector do chat, agrupadas (cérebros do gateway + locais + cloud). */
 export function buildChatOptions(catalog: ProvidersCatalog): ChatModelOption[] {
   const options: ChatModelOption[] = [];
+
+  // Os cérebros do gateway vêm primeiro: é o caminho do IQ OS (Hermes Agent).
+  for (const brain of catalog.gateways || []) {
+    const detalhe = [brain.note, brain.timeout_seconds ? `até ${Math.round(brain.timeout_seconds)}s` : null]
+      .filter(Boolean)
+      .join(" · ");
+    options.push({
+      id: brain.id,
+      label: brain.label,
+      group: "Cérebro (gateway)",
+      model: brain.id,
+      provider: brain.gateway,
+      usable: brain.available !== false,
+      note: detalhe || null,
+      default: brain.id === catalog.gatewayDefault,
+    });
+  }
+
   for (const provider of catalog.providers) {
     if (provider.kind === "local") {
       options.push({

@@ -506,3 +506,68 @@ def test_meta_descreve_o_modulo():
     assert "public-tender-documents" in dados["endpoints_api"][0] or "GetPublicTenderInformation" in dados["endpoints_api"][0]
     assert "community.vortal.biz" in dados["hosts_permitidos"]
     assert dados["tipos"]["caderno_encargos"] == "Caderno de encargos"
+
+
+# ------------------------------------------------------- peças em memória (ficha)
+def _sessao_com_pecas(pecas: List[Dict[str, Any]], *, publicado: bool = True) -> _Sessao:
+    """Sessão falsa com informação do aviso e N peças descarregáveis."""
+    respostas: Dict[str, _Resposta] = {
+        f"{vortal.PUBLICO}/api/PublicTenderDocuments/GetPublicTenderInformation": _Resposta(
+            json_dados={
+                "documentList": [],
+                "contractNoticeUrl": URL_AVISO,
+                "tenderInformation": {"tenderIsPublished": publicado},
+            }
+        ),
+        f"{vortal.PUBLICO}/api/ContractNoticeDetail/GetContractNoticeDocuments": _Resposta(json_dados=pecas),
+    }
+    for indice, peca in enumerate(pecas):
+        respostas[str(peca["downloadUrl"])] = _Resposta(
+            conteudo=f"Preço Base 1{indice}0.000,00 €\nCaução\nPrestação de caução: 5 %".encode("utf-8"),
+            cabecalhos={"content-type": "text/plain"},
+        )
+    return _Sessao(respostas)
+
+
+def test_pecas_em_memoria_leva_texto_e_contagens():
+    sessao = _sessao_com_pecas(
+        [
+            {"id": 1, "name": "CE.txt", "downloadUrl": "https://community.vortal.biz/archive/ce"},
+            {"id": 2, "name": "PC.txt", "downloadUrl": "https://community.vortal.biz/archive/pc"},
+        ]
+    )
+    dados = vortal.pecas_em_memoria(URL_PAGINA, cliente=sessao)
+    assert dados["uid"] == UID
+    assert dados["publicado"] is True
+    assert dados["total"] == 2
+    assert dados["incluidas"] == 2
+    assert [peca["nome"] for peca in dados["pecas"]] == ["CE.txt", "PC.txt"]
+    assert all("Preço Base" in peca["texto"] for peca in dados["pecas"])
+    assert "2 de 2" in dados["nota"]
+
+
+def test_pecas_em_memoria_respeita_o_limite():
+    sessao = _sessao_com_pecas(
+        [{"id": n, "name": f"p{n}.txt", "downloadUrl": f"https://community.vortal.biz/archive/{n}"} for n in range(1, 5)]
+    )
+    dados = vortal.pecas_em_memoria(URL_PAGINA, limite=2, cliente=sessao)
+    assert dados["total"] == 4
+    assert dados["incluidas"] == 2
+    assert "2 de 4" in dados["nota"]
+
+
+def test_pecas_em_memoria_aviso_publicado_sem_pecas_publicas():
+    """Procedimento por convite: publicado, mas sem peças de acesso público."""
+    sessao = _sessao_com_pecas([])
+    dados = vortal.pecas_em_memoria(URL_PAGINA, cliente=sessao)
+    assert dados["uid"] == UID
+    assert dados["publicado"] is True
+    assert dados["total"] == 0 and dados["pecas"] == []
+    assert "convite" in dados["nota"]
+    assert "não tem peças de acesso público" in dados["nota"]
+
+
+def test_pecas_em_memoria_sem_aviso_resolvivel():
+    dados = vortal.pecas_em_memoria("https://exemplo.pt/x", cliente=_Sessao({}))
+    assert dados["pecas"] == []
+    assert "não foi possível determinar o aviso" in dados["erro"]

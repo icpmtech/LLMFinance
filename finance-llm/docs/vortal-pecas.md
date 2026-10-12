@@ -102,6 +102,38 @@ Quatro leituras, com KPIs no cabeçalho (peças em disco, documentos no índice)
 A aba de monitorização só aparece a quem tem `role === "admin"`; o servidor
 devolve **403** a qualquer outro (a autorização não depende do cliente).
 
+A página aceita `?url=<URL do aviso>` (e `?uid=`) no endereço: chega com a caixa
+preenchida, para vir da ficha de um contrato sem repetir a procura.
+
+## 5.1 Ligação à ficha do contrato (`/contracts/search` → «Ver detalhe»)
+
+Quem consulta um contrato vê, na secção **Peça do procedimento**, o que a peça diz
+sem sair da ficha:
+
+- `api/contract_document.py` autoriza os anfitriões `community.vortal.biz`,
+  `www.vortal.biz` e `vortal.biz`; quando a ligação das peças é da Vortal segue o
+  ramo `_vortal_pieces()` em vez de tentar ler a página (que é uma aplicação, não
+  um ficheiro);
+- `vortal.pecas_em_memoria()` resolve o aviso, descarrega as primeiras 8 peças
+  (caderno de encargos, programa…), extrai até 20 000 caracteres por peça e
+  devolve texto + origem **sem tocar no disco**;
+- o texto passa por `extract_values()`, por isso os valores publicados (preço
+  base, caução, prazos, IVA…) aparecem como destaques; valores repetidos em peças
+  diferentes são deduplicados;
+- a resposta traz `source` (`vortal` ou `arquivo`), `uid`, `url_aviso`,
+  `publicado` e `pieces_total`, e é guardada em cache por URL durante o TTL
+  normal;
+- a ficha mostra no cabeçalho «· plataforma Vortal», o UID em monoespaçado, a
+  linha «N de M peças lidas nesta ficha · K valor(es) reconhecido(s)» e o botão
+  **Obter peças no módulo**, que abre `/vortal?url=<aviso>` já preenchido.
+
+Um aviso **publicado sem peças de acesso público** (procedimento por convite)
+responde **200** com `pieces: []` e `pieces_total: 0`, e a nota di-lo com todas as
+letras — não é erro nem falha de leitura: as ligações oficiais e os valores do
+contrato continuam na ficha. Exemplo real: `11970015` (convite), contra
+`11970045` (2 peças) e `11970139` (3 peças, 7 valores) — os 324 994 contratos com
+ligação Vortal seguem o mesmo caminho.
+
 ## 6. Limites e decisões
 
 - Só se descarrega de anfitriões `*.vortal.biz` (guarda contra SSRF, como em
@@ -119,9 +151,13 @@ devolve **403** a qualquer outro (a autorização não depende do cliente).
 
 ## 7. Operação
 
-- Testes: `.\.venv\Scripts\python.exe -m pytest tests/test_vortal.py -q` (42).
+- Testes: `.\\.venv\\Scripts\\python.exe -m pytest tests/test_vortal.py tests/test_contract_document_vortal.py -q`
+  (42 + 9, estes últimos cobrem a ligação à ficha: extração, deduplicação,
+  aviso por convite e cache).
 - Recolha real: `_probe_vortal_pecas.py [URL-ou-UID …]` (descarrega, indexa e
   mostra a pesquisa).
+- Ficha (sem HTTP): `_probe_ficha_vortal.py 11970045`; pela API:
+  `_probe_ficha_api.py /contracts/11970045/document`.
 - Índice: criado automaticamente na primeira utilização (`ensure_indices`); na VM
   foi criado explicitamente com o mesmo corpo (`_probe_vortal_indice_vm.py`), para
   o painel de monitorização não o dar como inexistente antes da primeira recolha.

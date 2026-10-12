@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Euro,
   ExternalLink,
+  FileText,
   Loader2,
   MapPin,
   RefreshCw,
@@ -82,7 +83,13 @@ function CompanyFicha({ ficha }: { ficha?: Record<string, string> }) {
   );
 }
 
-function CompanyCard({ company }: { company: RaciusCompany }) {
+function CompanyCard({
+  company,
+  onOpenDetail,
+}: {
+  company: RaciusCompany;
+  onOpenDetail?: (nif: string) => void;
+}) {
   const local = [company.concelho, company.distrito].filter(Boolean).join(", ");
   return (
     <article className="glass-card rounded-2xl p-4">
@@ -96,17 +103,29 @@ function CompanyCard({ company }: { company: RaciusCompany }) {
             {company.forma_juridica ? ` · ${company.forma_juridica}` : ""}
           </p>
         </div>
-        {company.url ? (
-          <a
-            href={company.url}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-[11px] text-sky-200 hover:text-sky-100"
-            title="Abrir a empresa no Racius"
-          >
-            Racius <ExternalLink size={11} />
-          </a>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {company.nif && onOpenDetail ? (
+            <button
+              type="button"
+              onClick={() => onOpenDetail(company.nif!)}
+              className="inline-flex items-center gap-1 text-[11px] text-emerald-200 hover:text-emerald-100"
+              title="Abrir ficha da empresa"
+            >
+              <FileText size={11} /> Ficha
+            </button>
+          ) : null}
+          {company.url ? (
+            <a
+              href={company.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] text-sky-200 hover:text-sky-100"
+              title="Abrir a empresa no Racius"
+            >
+              Racius <ExternalLink size={11} />
+            </a>
+          ) : null}
+        </div>
       </div>
 
       <div className="mt-2 flex flex-wrap gap-1">
@@ -139,7 +158,11 @@ function CompanyCard({ company }: { company: RaciusCompany }) {
   );
 }
 
-export default function RaciusPage() {
+export default function RaciusPage({
+  onSelectCompany,
+}: {
+  onSelectCompany?: (nif: string) => void;
+}) {
   const [meta, setMeta] = useState<RaciusMeta | null>(null);
   const [items, setItems] = useState<RaciusCompany[]>([]);
   const [total, setTotal] = useState(0);
@@ -407,7 +430,11 @@ export default function RaciusPage() {
         <>
           <div className="grid gap-3 lg:grid-cols-2">
             {items.map((company) => (
-              <CompanyCard key={company.nif ?? company.nome} company={company} />
+              <CompanyCard
+                key={company.nif ?? company.nome}
+                company={company}
+                onOpenDetail={onSelectCompany}
+              />
             ))}
           </div>
           <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">

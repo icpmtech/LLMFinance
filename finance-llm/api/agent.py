@@ -468,7 +468,27 @@ def run_chat(
     user_email: Optional[str] = None,
     skill_block: str = "",
 ) -> Dict:
-    """Executa o agente síncrono e devolve resposta completa."""
+    """Executa o agente síncrono e devolve resposta completa.
+
+    Três caminhos, por esta ordem:
+
+    1. **gateway** (`hermes-agent`, `hermes`) — a pergunta é entregue ao gateway
+       do IQ OS, que a encaminha para o Hermes Agent autónomo ou para o Hermes.
+       É o cérebro predefinido do chat;
+    2. **cloud** (`fornecedor:modelo`) — um fornecedor externo com a chave do
+       utilizador ou do ambiente;
+    3. **local** (`gpt2`, `mistral`, `bloomberg`) — os modelos da plataforma.
+    """
+    from api import chat_gateways  # noqa: PLC0415
+
+    if chat_gateways.is_gateway_backend(backend):
+        return chat_gateways.ask_sync(
+            messages,
+            backend,
+            user_id=user_id,
+            user_email=user_email,
+        )
+
     parsed = providers.parse_backend(backend)
     if parsed["kind"] == "cloud":
         try:
@@ -550,12 +570,23 @@ async def stream_chat(
 
     Modelos locais: envia um evento de progresso, recolhe os dados num thread
     separado e simula o streaming. Fornecedores externos: transmite os pedaços
-    reais devolvidos pela API do fornecedor.
+    reais devolvidos pela API do fornecedor. Cérebros do gateway (Hermes /
+    Hermes Agent): entrega a tarefa e devolve a resposta completa em blocos —
+    o caminho tem os mesmos eventos SSE dos restantes.
     """
-    parsed = providers.parse_backend(backend)
+    from api import chat_gateways  # noqa: PLC0415
 
     # 1) Ligar a stream imediatamente.
     yield ":keep-alive\n\n"
+
+    if chat_gateways.is_gateway_backend(backend):
+        async for pedaco in chat_gateways.stream(
+            messages, backend, user_id=user_id, user_email=user_email
+        ):
+            yield pedaco
+        return
+
+    parsed = providers.parse_backend(backend)
 
     if parsed["kind"] == "cloud":
         yield "event: status\ndata: " + json.dumps({"status": "busy", "detail": "A contactar o fornecedor…"}) + "\n\n"

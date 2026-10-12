@@ -1942,21 +1942,65 @@ def openapi_export():
 
 
 async def _chat_skill(req: ChatRequest, backend: str, session: Any) -> dict:
-    """Skill (método) do pedido de chat: escolhida na biblioteca ou criada agora."""
+    """Skill (método) do pedido de chat: escolhida na biblioteca ou criada agora.
+
+    Com um backend do **gateway** (`hermes-agent`/`hermes`) não há skill: o agente
+    tem as skills dele e o Hermes o plano de investigação próprio. Evita-se assim
+    uma chamada a um modelo só para escrever um método que ninguém usaria.
+    """
+    from api import chat_gateways as gateways
     from api import skills_service as skills
+
+    if gateways.is_gateway_backend(backend):
+        return {"id": None, "public": None, "block": "", "mode": "gateway"}
 
     question = req.messages[-1].content if req.messages else ""
     return await skills.for_request(question, session=session, backend=backend)
 
 
+@app.get("/chat/backends")
+def chat_backends(probe: bool = Query(True, description="Sondar a disponibilidade do Hermes Agent")):
+    """Cérebros do chat servidos pelo **gateway** (`hermes-agent`, `hermes`).
+
+    Diz qual é o predefinido e se cada um está disponível: o `hermes-agent`
+    depende do container do agente (perfil `agents`) e o `hermes` corre no
+    próprio backend.
+    """
+    from api import chat_gateways as gateways
+
+    return gateways.catalogue(probe=probe)
+
+
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest, backend: str = Query("gpt2"), session: Any = Depends(optional_session)):
-    """Responde no chat seguindo a **skill** do pedido (escolhida ou criada agora)."""
+    """Responde no chat seguindo a **skill** do pedido (escolhida ou criada agora).
+
+    Com um backend do gateway, quem responde é o cérebro do IQ OS (o **Hermes
+    Agent**, por omissão, ou o **Hermes**), entregue pela mesma via que o Jarvis usa.
+    """
+    from api import chat_gateways as gateways
     from api import skills_service as skills
 
     question = req.messages[-1].content if req.messages else ""
     user_id = getattr(getattr(session, "user", None), "id", None)
     user_email = getattr(getattr(session, "user", None), "email", None)
+
+    if gateways.is_gateway_backend(backend):
+        result = await asyncio.to_thread(
+            gateways.ask_sync,
+            req.messages,
+            backend,
+            user_id=user_id,
+            user_email=user_email,
+            session=session,
+        )
+        return ChatResponse(
+            message=result["message"],
+            sources=result["sources"],
+            tools=result["tools"],
+            skill=None,
+        )
+
     skill = await skills.for_request(question, session=session, backend=backend)
     result = await asyncio.to_thread(
         run_chat,

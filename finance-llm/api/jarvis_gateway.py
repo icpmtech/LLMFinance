@@ -632,7 +632,18 @@ async def invoke(tool_id: str, args: Optional[Dict[str, Any]] = None, *, ctx: Op
             session=context.get("session"),
             country=str(context.get("country") or "PRT"),
         )
-        return {"answer": result.get("answer"), "sources": result.get("sources") or [], "subquestions": result.get("subquestions") or []}
+        return {
+            # O serviço devolve a resposta em `text` no caminho normal de investigação
+            # e em `answer` quando quem responde é o agente dinâmico «Hermes». Ler só
+            # `answer` dava resposta vazia em todos os outros casos.
+            "answer": result.get("answer") or result.get("text"),
+            "sources": result.get("sources") or [],
+            # As citações `[n]` da resposta estão nas **evidências** (`n`, título, URL,
+            # extrato). Em `sources` vêm os *ids* das fontes consultadas (`internal`,
+            # `documents`, …), que não são citações.
+            "evidence": result.get("evidence") or [],
+            "subquestions": result.get("subquestions") or [],
+        }
 
     async def _web(name: str) -> Dict[str, Any]:
         if name == "web.search":
