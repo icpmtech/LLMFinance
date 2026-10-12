@@ -12,6 +12,9 @@ e verifica, de ponta a ponta:
 Uso:
     python -u logs/_validar_base_impic.py [--base http://127.0.0.1:8000]
                                          [--ano 2026] [--limite 3000] [--sem-cancelar]
+
+Corre tanto dentro do container (`/app/logs/...`, base 8000) como no anfitrião
+(`--base http://127.0.0.1:8002`), por isso a raiz do projeto entra no `sys.path`.
 """
 from __future__ import annotations
 
@@ -19,9 +22,14 @@ import argparse
 import json
 import sys
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
+
+RAIZ = Path(__file__).resolve().parents[1]
+if str(RAIZ) not in sys.path:
+    sys.path.insert(0, str(RAIZ))
 
 FALHAS: List[str] = []
 
@@ -45,7 +53,8 @@ def _esperar(cliente: httpx.Client, ano: int, *, segundos: float = 900.0) -> Dic
         ultimo = (estado.get("trabalhos") or {}).get(str(ano)) or {}
         print(
             f"    {ultimo.get('estado')} · {ultimo.get('fase')} · lidos={ultimo.get('registos')}"
-            f" indexados={ultimo.get('indexados')} erros={ultimo.get('erros')} lotes={ultimo.get('lotes')}"
+            f" novos={ultimo.get('indexados')} ja_existiam={ultimo.get('ignorados')}"
+            f" erros={ultimo.get('erros')} lotes={ultimo.get('lotes')}"
         )
         if ultimo.get("estado") in ("concluido", "erro", "cancelado"):
             return ultimo
@@ -108,20 +117,34 @@ def main() -> int:
     estado = _esperar(cliente, ano)
     verificar(estado.get("estado") == "concluido", "importação terminou sem erro", estado.get("mensagem"))
     verificar(int(estado.get("registos") or 0) == args.limite, "todos os registos pedidos foram lidos", estado.get("registos"))
-    verificar(int(estado.get("indexados") or 0) == args.limite, "todos os registos foram indexados", estado.get("indexados"))
+    verificar(
+        int(estado.get("indexados") or 0) + int(estado.get("ignorados") or 0) == args.limite,
+        "cada contrato lido foi indexado ou ignorado (já existia)",
+        f"{estado.get('indexados')} novos + {estado.get('ignorados')} já existiam",
+    )
     verificar(int(estado.get("erros") or 0) == 0, "sem erros de indexação", estado.get("erros"))
     verificar(int(estado.get("lotes") or 0) >= 1, "indexação em lotes", f"{estado.get('lotes')} lote(s)")
 
-    # 5. Índice depois: repetir a importação (idempotência) não pode duplicar
+    # 5. Repetir a importação: não pode acrescentar **nada**
     indice_depois = cliente.get("/base-impic/estado").json().get("indice") or {}
     repeticao = cliente.post("/base-impic/importar", json={"ano": ano, "limite": args.limite, "descarregar": False})
-    verificar(repeticao.status_code == 200, "segunda importação (idempotência) aceita", f"HTTP {repeticao.status_code}")
+    verificar(repeticao.status_code == 200, "segunda importação aceita", f"HTTP {repeticao.status_code}")
     estado2 = _esperar(cliente, ano)
     verificar(estado2.get("estado") == "concluido", "segunda importação terminou", estado2.get("mensagem"))
+    verificar(
+        int(estado2.get("indexados") or 0) == 0,
+        "segunda importação não indexa nada (só entra o que não existe)",
+        f"novos={estado2.get('indexados')}",
+    )
+    verificar(
+        int(estado2.get("ignorados") or 0) == args.limite,
+        "os contratos repetidos foram contados como já existentes",
+        f"já existiam={estado2.get('ignorados')} de {args.limite}",
+    )
     indice_final = cliente.get("/base-impic/estado").json().get("indice") or {}
     verificar(
         _por_ano(indice_final, ano) == _por_ano(indice_depois, ano),
-        f"repetir a importação não duplica contratos em {ano}",
+        f"repetir a importação não altera a contagem de {ano}",
         f"{_por_ano(indice_depois, ano)} → {_por_ano(indice_final, ano)}",
     )
 

@@ -1,4 +1,5 @@
 /**
+ * @file AdminBaseImpic
  * Importação dos **Contratos Públicos do Portal Base** (dados.gov.pt) —
  * separador da aplicação «Administração».
  *
@@ -12,12 +13,14 @@
  *    se é um *array* JSON, os campos de cada contrato (tipo e exemplo) e os
  *    primeiros contratos já normalizados — o que vai entrar no Elasticsearch;
  * 3. lança a **importação** (ano inteiro ou um ensaio com limite), com progresso
- *    ao vivo (fase, descarregamento, contratos lidos/indexados, erros, lotes),
- *    cancelamento a meio e a volumetria do índice por ano depois de terminar.
+ *    ao vivo (fase, descarregamento, contratos lidos/novos/já existentes, erros,
+ *    lotes), cancelamento a meio e a volumetria do índice por ano depois de
+ *    terminar.
  *
  * A importação corre no servidor em segundo plano: fechar a janela não a
- * interrompe. É **idempotente** por `idcontrato`, por isso repetir o mesmo ano
- * atualiza os contratos em vez de os duplicar.
+ * interrompe. Só entram contratos que ainda não estejam no índice (verificado
+ * pelo campo `idcontrato`), por isso importar o mesmo ano outra vez não duplica
+ * nem reescreve nada.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -142,6 +145,24 @@ export function AdminBaseImpicTab({ onError }: { onError: (message: string | nul
   const aCorrer = trabalho?.estado === "a_correr";
   const jaTemZip = Boolean(catalogo?.em_cache.some((item) => item.ano === String(ano)));
 
+  /**
+   * ZIP em cache que foi descarregado **antes** da última atualização publicada.
+   *
+   * O critério é a data, não o tamanho: o `filesize` do CKAN não é exato ao byte
+   * (anos com 874 bytes de diferença apareciam como «desatualizados» sem o serem),
+   * mas a data de publicação diz sempre a verdade sobre quando o ficheiro mudou.
+   * Quem decide de facto é o servidor, que compara o `sha1` publicado e descarrega
+   * a versão nova se não coincidir.
+   */
+  const desatualizados = useMemo(() => {
+    const publicado = new Map((catalogo?.recursos ?? []).map((item) => [item.ano, item]));
+    return (catalogo?.em_cache ?? []).filter((item) => {
+      const recurso = publicado.get(item.ano);
+      if (!recurso?.atualizado_em || !item.modificado_em) return false;
+      return new Date(item.modificado_em).getTime() < new Date(recurso.atualizado_em).getTime();
+    });
+  }, [catalogo]);
+
   /** Enquanto há uma importação a correr, a página sonda o estado a cada 3 s. */
   useEffect(() => {
     if (!aCorrer) return;
@@ -222,7 +243,7 @@ export function AdminBaseImpicTab({ onError }: { onError: (message: string | nul
       setAviso(
         `O ano ${ano} tem ` +
           `${(estado?.indice.por_ano?.find((item) => item.ano === ano)?.contratos ?? 0).toLocaleString("pt-PT")} ` +
-          "contratos já no índice. Clique outra vez para importar o ano completo — os contratos repetidos são atualizados, não duplicados.",
+          "contratos já no índice. Clique outra vez para importar o ano completo — só serão acrescentados os que ainda não existem.",
       );
       return;
     }
@@ -276,8 +297,10 @@ export function AdminBaseImpicTab({ onError }: { onError: (message: string | nul
               O ZIP de cada ano é lido do dados.gov.pt no momento (o URL muda a cada atualização semanal), o JSON é
               percorrido em <em>streaming</em> — sem o carregar para memória — e cada contrato é normalizado com{" "}
               <span className="font-mono text-[11px]">normalize_contract</span> e indexado em{" "}
-              <span className="font-mono text-[11px]">contratos</span> em lotes de 1000. Repetir um ano atualiza pelo{" "}
-              <span className="font-mono text-[11px]">idcontrato</span>, não duplica.
+              <span className="font-mono text-[11px]">contratos</span> em lotes de 1000. <strong>Só entram contratos que
+              ainda não existem</strong> (verificado pelo <span className="font-mono text-[11px]">idcontrato</span>): os
+              repetidos são ignorados e contados à parte — importar o mesmo ano outra vez não acrescenta nem reescreve
+              nada.
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
               {catalogo && (
@@ -321,6 +344,22 @@ export function AdminBaseImpicTab({ onError }: { onError: (message: string | nul
             </CardTitle>
             <span className="text-[10.5px] text-muted-foreground">{recursosZip.length} ZIP</span>
           </CardHeader>
+          {desatualizados.length > 0 && (
+            <p className="flex items-start gap-2 border-b border-amber-400/20 bg-amber-400/10 px-3 py-1.5 text-[10.5px] text-amber-100">
+              <AlertTriangle size={11} className="mt-0.5 shrink-0" />
+              <span>
+                {desatualizados.length} ZIP em cache foram descarregados antes da última atualização publicada em
+                dados.gov.pt (
+                {desatualizados
+                  .map((item) => item.ano)
+                  .slice(0, 6)
+                  .join(", ")}
+                {desatualizados.length > 6 ? "…" : ""}). No momento da importação o servidor compara o{" "}
+                <span className="font-mono">sha1</span> publicado com o ficheiro local e descarrega-o se não coincidir —
+                não é preciso apagar nada à mão.
+              </span>
+            </p>
+          )}
           <CardContent className="max-h-[340px] overflow-y-auto">
             <table className="w-full text-left text-[11.5px]">
               <thead className="sticky top-0 bg-[#0b0f14]/95 text-[10px] uppercase tracking-wide text-muted-foreground backdrop-blur">
@@ -336,6 +375,12 @@ export function AdminBaseImpicTab({ onError }: { onError: (message: string | nul
               <tbody>
                 {recursosZip.map((recurso) => {
                   const emCache = catalogo?.em_cache.find((item) => item.ano === recurso.ano);
+                  const desatualizado = Boolean(
+                    emCache &&
+                      emCache.modificado_em &&
+                      recurso.atualizado_em &&
+                      new Date(emCache.modificado_em).getTime() < new Date(recurso.atualizado_em).getTime(),
+                  );
                   return (
                     <tr
                       key={recurso.id || recurso.ano}
@@ -355,12 +400,19 @@ export function AdminBaseImpicTab({ onError }: { onError: (message: string | nul
                       </td>
                       <td className="px-3 py-1.5 text-muted-foreground">{baseImpicQuando(recurso.atualizado_em)}</td>
                       <td className="px-3 py-1.5">
-                        {emCache ? (
+                        {!emCache ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : desatualizado ? (
+                          <span
+                            className="inline-flex items-center gap-1 text-amber-200"
+                            title={`Descarregado em ${baseImpicQuando(emCache.modificado_em)} — o ficheiro publicado foi atualizado em ${baseImpicQuando(recurso.atualizado_em)}. A importação confirma o sha1 publicado e descarrega a versão nova se não coincidir.`}
+                          >
+                            <AlertTriangle size={11} /> {baseImpicBytes(emCache.bytes)} · de {baseImpicQuando(emCache.modificado_em).split(",")[0]}
+                          </span>
+                        ) : (
                           <span className="inline-flex items-center gap-1 text-teal-200">
                             <CheckCircle2 size={11} /> {baseImpicBytes(emCache.bytes)}
                           </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
                         )}
                       </td>
                     </tr>
@@ -553,7 +605,16 @@ export function AdminBaseImpicTab({ onError }: { onError: (message: string | nul
                 hint={trabalho?.bytes_total && trabalho.bytes_lidos < trabalho.bytes_total ? "a receber do dados.gov.pt" : undefined}
               />
               <Kpi label="Contratos lidos" valor={(trabalho?.registos ?? 0).toLocaleString("pt-PT")} hint="streaming do JSON" />
-              <Kpi label="No Elasticsearch" valor={(trabalho?.indexados ?? 0).toLocaleString("pt-PT")} hint={`${trabalho?.lotes ?? 0} lote(s) de 1000`} />
+              <Kpi
+                label="Novos no Elasticsearch"
+                valor={(trabalho?.indexados ?? 0).toLocaleString("pt-PT")}
+                hint={`${trabalho?.lotes ?? 0} lote(s) de 1000`}
+              />
+              <Kpi
+                label="Já existiam"
+                valor={(trabalho?.ignorados ?? 0).toLocaleString("pt-PT")}
+                hint="ignorados (não repetidos)"
+              />
               <Kpi label="Erros" valor={(trabalho?.erros ?? 0).toLocaleString("pt-PT")} hint="registos inválidos ou falhas do bulk" />
               <Kpi label={`No índice em ${ano ?? "—"}`} valor={contratosDoAno.toLocaleString("pt-PT")} hint="antes/depois da importação" />
               <Kpi label="Índice total" valor={totalIndice.toLocaleString("pt-PT")} hint={estado?.indice.indice ?? "contratos"} />

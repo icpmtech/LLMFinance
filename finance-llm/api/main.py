@@ -2535,7 +2535,7 @@ async def elastic_ingest_ticker(
 
 
 @app.get("/elastic/search/prices/{ticker}", response_model=ElasticSearchPricesResponse)
-def elastic_search_prices(
+async def elastic_search_prices(
     ticker: str,
     start_date: str = Query(None, description="Data inicial (YYYY-MM-DD)"),
     end_date: str = Query(None, description="Data final (YYYY-MM-DD)"),
@@ -2543,7 +2543,10 @@ def elastic_search_prices(
 ):
     """Pesquisa preços indexados por ticker e intervalo de datas."""
     ticker = _normalize_ticker(ticker)
-    return search_ticker_prices(ticker, start_date=start_date, end_date=end_date, size=size)
+    # `search_ticker_prices` é `async`: sem o `await` a rota devolvia a **corrotina** e o
+    # FastAPI rebentava na validação da resposta («Input should be a valid dictionary or
+    # object to extract fields from», com `coroutine … was never awaited` nos logs).
+    return await search_ticker_prices(ticker, start_date=start_date, end_date=end_date, size=size)
 
 
 @app.get("/elastic/search/news/{ticker}", response_model=ElasticSearchNewsResponse)

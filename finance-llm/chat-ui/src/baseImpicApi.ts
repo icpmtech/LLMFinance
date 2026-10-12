@@ -4,7 +4,8 @@
  * A página de administração usa estes endpoints para (1) ler o catálogo de
  * ficheiros publicados por ano, (2) ver o **formato real** do ZIP do ano atual,
  * (3) lançar a importação para o Elasticsearch e seguir o progresso, e (4)
- * cancelar a meio.
+ * cancelar a meio. A importação só acrescenta contratos que ainda não existem
+ * (os repetidos são ignorados, não duplicados).
  *
  * O `fetch` de `authApi.ts` injecta o token; a importação exige sessão de
  * administrador (`403` nas contas sem papel `admin`).
@@ -98,6 +99,8 @@ export type BaseImpicTrabalho = {
   bytes_total: number;
   registos: number;
   indexados: number;
+  /** Contratos que já estavam no índice e por isso não foram mexidos. */
+  ignorados: number;
   erros: number;
   lotes: number;
   cancelar: boolean;

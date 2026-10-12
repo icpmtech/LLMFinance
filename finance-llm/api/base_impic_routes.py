@@ -27,7 +27,11 @@ ReadSession = Annotated[CurrentSession, Depends(optional_session)]
 
 
 class ImportarPayload(BaseModel):
-    """Parâmetros da importação de um ano do Portal Base."""
+    """Parâmetros da importação de um ano do Portal Base.
+
+    A importação **só acrescenta contratos que ainda não existem** no índice: os
+    que já lá estão (mesmo `idcontrato`) são ignorados e contados à parte.
+    """
 
     ano: Optional[int] = Field(None, description="Ano a importar (por omissão, o mais recente)")
     limite: Optional[int] = Field(None, ge=1, le=2_000_000, description="Máximo de contratos (ensaio)")

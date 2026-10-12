@@ -262,6 +262,78 @@ def test_importar_em_segundo_plano_e_idempotente_por_idcontrato(monkeypatch: pyt
     base_impic._trabalhos.pop(2026, None)
 
 
+# ------------------------------------------------- só entra o que ainda não existe
+
+
+class _ClienteFalso:
+    """Cliente ES mínimo: devolve como existentes os `idcontrato` indicados."""
+
+    def __init__(self, existentes: list[str]) -> None:
+        self.existentes = existentes
+        self.consultas: list[list[str]] = []
+
+    def search(self, **_kwargs: object) -> dict:
+        return {"aggregations": {"existentes": {"buckets": [{"key": valor} for valor in self.existentes]}}}
+
+
+def _lote(n: int) -> list[dict]:
+    return [{"idcontrato": str(i), "Ano": 2026} for i in range(n)]
+
+
+def test_indexar_lote_salta_os_contratos_ja_indexados(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Um contrato que já está no índice não volta a ser escrito."""
+    base_impic._trabalhos[2026] = base_impic._estado_base(2026)
+    cliente = _ClienteFalso(["0", "2"])
+    enviados: list[list[str]] = []
+
+    def _indexar(docs: list[dict]) -> dict:
+        enviados.append([doc["idcontrato"] for doc in docs])
+        return {"indexed_count": len(docs), "total": len(docs), "errors": 0}
+
+    base_impic._indexar_lote(2026, _lote(5), cliente, _indexar)
+
+    assert enviados == [["1", "3", "4"]]
+    atual = base_impic.estado(2026)
+    assert (atual["registos"], atual["indexados"], atual["ignorados"], atual["erros"]) == (5, 3, 2, 0)
+    assert "já existiam" in atual["mensagem"]
+    base_impic._trabalhos.pop(2026, None)
+
+
+def test_indexar_lote_nao_chama_o_indice_quando_ja_esta_tudo(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Repetir a importação não faz um único pedido de escrita ao Elasticsearch."""
+    base_impic._trabalhos[2026] = base_impic._estado_base(2026)
+    cliente = _ClienteFalso([str(i) for i in range(4)])
+
+    def _indexar(_docs: list[dict]) -> dict:  # pragma: no cover
+        raise AssertionError("não devia escrever: todos os contratos já existem")
+
+    base_impic._indexar_lote(2026, _lote(4), cliente, _indexar)
+
+    atual = base_impic.estado(2026)
+    assert (atual["indexados"], atual["ignorados"], atual["erros"]) == (0, 4, 0)
+    base_impic._trabalhos.pop(2026, None)
+
+
+def test_ja_indexados_pergunta_pelo_campo_idcontrato_e_nao_pelo_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Documentos antigos podem ter outro `_id` (ex.: `Ano:idcontrato`).
+
+    A pergunta tem de ser pelo campo `idcontrato`; se fosse pelo `_id`, os
+    contratos importados pelo pipeline antigo voltariam a entrar como novos.
+    """
+    corpo_visto: dict = {}
+
+    class _Cliente:
+        def search(self, **kwargs: object) -> dict:
+            corpo_visto.update(kwargs.get("body") or {})  # type: ignore[arg-type]
+            return {"aggregations": {"existentes": {"buckets": [{"key": "12014814"}]}}}
+
+    encontrados = base_impic._ja_indexados(_Cliente(), ["12014814", "12026866"])
+
+    assert encontrados == {"12014814"}
+    assert corpo_visto["query"] == {"terms": {"idcontrato": ["12014814", "12026866"]}}
+    assert corpo_visto["aggs"]["existentes"]["terms"]["field"] == "idcontrato"
+
+
 # ---------------------------------------------------------------- amostra/índice
 
 

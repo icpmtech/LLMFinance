@@ -13,8 +13,10 @@ Este módulo faz o que a página de administração promete:
    um *array* JSON ou NDJSON, quais os campos de cada contrato e um exemplo;
 3. `importar(ano)` — descarrega, normaliza (com o `normalize_contract` já usado
    pelo pipeline de contratos) e indexa no índice `contratos` em lotes de 1000,
-   com progresso e cancelamento. É **idempotente** por `idcontrato`, por isso
-   repetir a importação actualiza em vez de duplicar.
+   com progresso e cancelamento. **Só entra o que ainda não existe**: cada lote
+   pergunta ao índice pelos seus `idcontrato` e os já presentes são ignorados
+   (não reescritos, não duplicados) — importar o mesmo ano duas vezes não muda
+   nada na segunda vez.
 
 O ficheiro grande é lido em *streaming*: o JSON do ano tem centenas de MB e
 carregá-lo para memória (como o import por upload faz, para ficheiros pequenos)
@@ -342,6 +344,7 @@ def _estado_base(ano: int) -> Dict[str, Any]:
         "bytes_total": 0,
         "registos": 0,
         "indexados": 0,
+        "ignorados": 0,
         "erros": 0,
         "lotes": 0,
         "cancelar": False,
@@ -373,7 +376,11 @@ def importar(
     descarregar_se_preciso: bool = True,
     utilizador: str = "",
 ) -> Dict[str, Any]:
-    """Arranca a importação de um ano em segundo plano (idempotente por `idcontrato`)."""
+    """Arranca a importação de um ano em segundo plano.
+
+    Só entram no índice os contratos que **ainda lá não estão**: um contrato já
+    indexado (mesmo `idcontrato`) é ignorado, não reescrito nem duplicado.
+    """
     ano_int = int(ano)
     with _trava:
         atual = _trabalhos.get(ano_int)
@@ -440,6 +447,7 @@ def _correr_importacao(ano: int, limite: Optional[int], descarregar_se_preciso: 
             bytes_total=caminho.stat().st_size,
             registos=0,
             indexados=0,
+            ignorados=0,
             erros=0,
             lotes=0,
         )
@@ -454,10 +462,10 @@ def _correr_importacao(ano: int, limite: Optional[int], descarregar_se_preciso: 
                 _atualizar(ano, erros=int(estado(ano)["erros"]) + 1)
                 continue
             if len(lote) >= LOTE_INDEXACAO:
-                _indexar_lote(ano, lote, index_contracts)
+                _indexar_lote(ano, lote, cliente, index_contracts)
                 lote = []
         if lote:
-            _indexar_lote(ano, lote, index_contracts)
+            _indexar_lote(ano, lote, cliente, index_contracts)
 
         atual = estado(ano)
         _atualizar(
@@ -465,8 +473,9 @@ def _correr_importacao(ano: int, limite: Optional[int], descarregar_se_preciso: 
             estado="concluido",
             fase="terminado",
             mensagem=(
-                f"{atual['indexados']} contratos indexados de {atual['registos']} lidos"
-                + (f" ({atual['erros']} com erro)" if atual["erros"] else "")
+                f"{atual['indexados']} contratos novos indexados de {atual['registos']} lidos"
+                + (f" · {atual['ignorados']} já existiam (não foram mexidos)" if atual["ignorados"] else "")
+                + (f" · {atual['erros']} com erro" if atual["erros"] else "")
             ),
             terminado_em=_agora(),
         )
@@ -475,16 +484,53 @@ def _correr_importacao(ano: int, limite: Optional[int], descarregar_se_preciso: 
         _atualizar(ano, estado="erro", mensagem=f"{type(exc).__name__}: {exc}", terminado_em=_agora())
 
 
-def _indexar_lote(ano: int, lote: List[Dict[str, Any]], indexar: Callable[..., Dict[str, Any]]) -> None:
-    resultado = indexar(list(lote))
+def _ja_indexados(cliente: Any, idcontratos: List[str]) -> set:
+    """`idcontrato` do lote que já existem no índice de contratos.
+
+    A pergunta é feita pelo **campo** `idcontrato`, não pelo `_id`: documentos
+    mais antigos podem estar guardados com outro identificador (por exemplo
+    `Ano:idcontrato`) e, sem esta verificação, a importação voltava a inseri-los.
+    """
+    from api.elasticsearch_client import CONTRACTS_INDEX
+
+    valores = [str(valor).strip() for valor in idcontratos if str(valor).strip()]
+    if not valores:
+        return set()
+    resposta = cliente.search(
+        index=CONTRACTS_INDEX,
+        body={
+            "size": 0,
+            "query": {"terms": {"idcontrato": valores}},
+            "aggs": {"existentes": {"terms": {"field": "idcontrato", "size": len(valores) * 2}}},
+        },
+    )
+    baldes = ((resposta.get("aggregations") or {}).get("existentes") or {}).get("buckets") or []
+    return {str(balde.get("key")) for balde in baldes}
+
+
+def _indexar_lote(
+    ano: int,
+    lote: List[Dict[str, Any]],
+    cliente: Any,
+    indexar: Callable[..., Dict[str, Any]],
+) -> None:
+    """Indexa um lote **apenas com os contratos que ainda não existem**."""
+    ja_existem = _ja_indexados(cliente, [str(doc.get("idcontrato") or "") for doc in lote])
+    novos = [doc for doc in lote if str(doc.get("idcontrato") or "") not in ja_existem]
+    ignorados = len(lote) - len(novos)
+
+    resultado = indexar(novos) if novos else {"indexed_count": 0}
     atual = estado(ano)
     _atualizar(
         ano,
         registos=int(atual["registos"]) + len(lote),
         indexados=int(atual["indexados"]) + int(resultado.get("indexed_count") or 0),
-        erros=int(atual["erros"]) + int(resultado.get("errors") or 0) + (len(lote) if resultado.get("error") else 0),
+        ignorados=int(atual["ignorados"]) + ignorados,
+        erros=int(atual["erros"])
+        + int(resultado.get("errors") or 0)
+        + (len(novos) if resultado.get("error") else 0),
         lotes=int(atual["lotes"]) + 1,
-        mensagem=resultado.get("error") or "",
+        mensagem=resultado.get("error") or (f"{ignorados} contrato(s) do lote já existiam." if ignorados else ""),
     )
 
 

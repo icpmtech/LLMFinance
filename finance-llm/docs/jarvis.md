@@ -141,6 +141,17 @@ teclado.
   nunca vira pergunta. Ao ouvi-la, dá-se um bipe, grava-se o pedido até haver
   silêncio e transcreve-se com o modelo completo (`JARVIS_STT_MODEL`). Nada sai
   da máquina para detetar a palavra.
+- **Requer `faster-whisper` no backend** (está no `requirements.txt`; o volume
+  `whisper-cache` guarda o modelo). Sem ele, `GET /jarvis/voice` devolve
+  `wake.available: false` e **a orelha fica desativada** — o microfone continua a
+  funcionar, mas pela *Web Speech API* do browser (Chrome/Edge), que manda o áudio
+  para o serviço de voz do browser.
+- **Validar sem microfone**: gerar um WAV com a voz do Windows
+  (`System.Speech.Synthesis.SpeechSynthesizer`) e enviá-lo a `/jarvis/wake` —
+  ver `_qa_wake_word.py` (com um áudio de controlo, para provar que não dispara
+  com qualquer fala). Medido: «Sabemos, how many contracts …» → `active: true`,
+  `word: "sabemos"`, comando `"how many contracts …"`; frase sem a palavra →
+  `active: false`.
 - **Palavras** (`api/jarvis_service.py` → `DEFAULT_WAKE_WORDS`, ou
   `JARVIS_WAKE_WORDS="sabemos,hey jarvis"` para as substituir):
   `sabemos`, `jarvis`, `hey jarvis`, `olá jarvis`, `apollo`, `hey hermes`. As
