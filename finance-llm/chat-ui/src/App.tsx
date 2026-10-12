@@ -93,6 +93,7 @@ import OsintPage from "./pages/OsintPage";
 import ReportsPage from "./pages/ReportsPage";
 import SubvencoesPage from "./pages/SubvencoesPage";
 import PartidosPage from "./pages/PartidosPage";
+import ErcPage from "./pages/ErcPage";
 import BenchmarkPage from "./pages/BenchmarkPage";
 import BenchmarksPage from "./pages/BenchmarksPage";
 import BenchmarkDetailPage from "./pages/BenchmarkDetailPage";
@@ -208,6 +209,7 @@ type AppView =
   | "reports"
   | "subvencoes"
   | "partidos"
+  | "erc"
   | "benchmark"
   | "benchmarks"
   | "benchmark-sonda"
@@ -379,6 +381,7 @@ function pathForView(
   if (view === "reports") return "/reports";
   if (view === "subvencoes") return "/subvencoes";
   if (view === "partidos") return "/partidos";
+  if (view === "erc") return "/erc";
   if (view === "benchmark") return "/benchmark";
   if (view === "benchmark-pt") return "/benchmark/portugal";
   if (view === "benchmark-es") return "/benchmark/espanha";
@@ -607,6 +610,7 @@ export default function App() {
     if (path === "/reports" || path.startsWith("/reports/")) return "reports";
     if (path === "/subvencoes" || path.startsWith("/subvencoes/")) return "subvencoes";
     if (path === "/partidos" || path.startsWith("/partidos/")) return "partidos";
+    if (path === "/erc" || path.startsWith("/erc/")) return "erc";
     if (path === "/benchmark/portugal") return "benchmark-pt";
     if (path === "/benchmark/espanha") return "benchmark-es";
     if (path === "/benchmark/franca") return "benchmark-fr";
@@ -763,6 +767,7 @@ export default function App() {
       else if (path === "/reports" || path.startsWith("/reports/")) next = "reports";
       else if (path === "/subvencoes" || path.startsWith("/subvencoes/")) next = "subvencoes";
       else if (path === "/partidos" || path.startsWith("/partidos/")) next = "partidos";
+      else if (path === "/erc" || path.startsWith("/erc/")) next = "erc";
       else if (path === "/benchmark/portugal") next = "benchmark-pt";
       else if (path === "/benchmark/espanha") next = "benchmark-es";
       else if (path === "/benchmark/franca") next = "benchmark-fr";
@@ -1530,6 +1535,8 @@ export default function App() {
     if (target === "reports") return <ReportsPage />;
     if (target === "subvencoes") return <SubvencoesPage />;
     if (target === "partidos") return <PartidosPage />;
+    // Portal da Transparência da ERC: entidades, pessoas dos órgãos sociais e OCS.
+    if (target === "erc") return <ErcPage />;
     if (target === "benchmarks")
       return (
         <BenchmarksPage

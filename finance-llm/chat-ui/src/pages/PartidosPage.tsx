@@ -63,6 +63,7 @@ import {
   getPartidosAnos,
   getPartidosFicheiros,
   getPartidosJob,
+  getPartidosMarkdown,
   getPartidosMeta,
   getPartidosPessoa,
   getPartidosPartido,
@@ -70,6 +71,7 @@ import {
   getPartidosRegisto,
   getPartidosResumo,
   indexarPartidos,
+  metodoLabel,
   partidoPdfUrl,
   recolherPartidos,
   searchPartidos,
@@ -180,6 +182,27 @@ function BadgeEntrega({ item }: { item: PartidosDocumento }) {
 /** Cartão de um documento das contas. */
 function LinhaDocumento({ item, onAbrirPartido }: { item: PartidosDocumento; onAbrirPartido?: () => void }) {
   const temPdf = Boolean(item.ficheiro);
+  const [markdown, setMarkdown] = useState<string | null>(null);
+  const [aCarregar, setACarregar] = useState(false);
+  const [erroMarkdown, setErroMarkdown] = useState<string | null>(null);
+
+  const alternarMarkdown = async () => {
+    if (markdown !== null) {
+      setMarkdown(null);
+      return;
+    }
+    setACarregar(true);
+    setErroMarkdown(null);
+    try {
+      const dados = await getPartidosMarkdown(item.ano, item.ficheiro as string);
+      setMarkdown(dados.markdown || "(documento sem texto: é uma digitalização, só com OCR daria conteúdo)");
+    } catch (erro) {
+      setErroMarkdown(erro instanceof Error ? erro.message : "Falhou a leitura do Markdown");
+    } finally {
+      setACarregar(false);
+    }
+  };
+
   return (
     <div className="rounded-xl border bg-card px-3 py-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -203,10 +226,11 @@ function LinhaDocumento({ item, onAbrirPartido }: { item: PartidosDocumento; onA
           <div className="flex flex-wrap justify-end gap-1">
             {item.paginas ? <Badge variant="secondary">{count(item.paginas)} pág.</Badge> : null}
             {item.ficheiro_kb ? <Badge variant="outline">{compact(item.ficheiro_kb)} KB</Badge> : null}
-            {item.pdf_digitalizado ? <Badge variant="warning">digitalizado</Badge> : null}
+            {item.precisa_ocr ? <Badge variant="warning">precisa OCR</Badge> : null}
+            {item.texto_metodo ? <Badge variant="outline">{metodoLabel(item.texto_metodo)}</Badge> : null}
             {item.texto_extraido ? (
               <Badge variant="success" className="gap-1">
-                <CheckCircle2 size={11} /> texto
+                <CheckCircle2 size={11} /> {compact(item.texto_chars)} car.
               </Badge>
             ) : null}
           </div>
@@ -229,6 +253,15 @@ function LinhaDocumento({ item, onAbrirPartido }: { item: PartidosDocumento; onA
                   <Download size={12} className="mr-1 inline align-[-2px]" />
                   descarregar
                 </a>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                  onClick={alternarMarkdown}
+                  disabled={aCarregar}
+                >
+                  {aCarregar ? <Loader2 size={12} className="mr-1 inline animate-spin align-[-2px]" /> : <ScrollText size={12} className="mr-1 inline align-[-2px]" />}
+                  {markdown === null ? "ver Markdown" : "fechar Markdown"}
+                </button>
               </>
             ) : null}
             {onAbrirPartido && item.partido_chave ? (
@@ -243,6 +276,14 @@ function LinhaDocumento({ item, onAbrirPartido }: { item: PartidosDocumento; onA
           </div>
         </div>
       </div>
+      {erroMarkdown ? (
+        <p className="mt-2 text-xs text-destructive">{erroMarkdown}</p>
+      ) : null}
+      {markdown !== null ? (
+        <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted/40 p-3 text-[11px] leading-relaxed">
+          {markdown}
+        </pre>
+      ) : null}
     </div>
   );
 }

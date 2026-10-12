@@ -15,7 +15,7 @@ import time
 import unicodedata
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 from elasticsearch import Elasticsearch, NotFoundError
 from elasticsearch.helpers import bulk
@@ -268,6 +268,27 @@ PARTIDOS_REGISTO_INDEX = "finance_partidos_registo"
 # erros — para a página poder mostrar o que está recolhido e de onde veio.
 PARTIDOS_RECOLHAS_INDEX = "finance_partidos_recolhas"
 
+# Portal da Transparência da **ERC** — entidades proprietárias de órgãos de
+# comunicação social, as **pessoas** dos seus órgãos sociais e os OCS detidos.
+# Três índices, alimentados por `api/erc_service.py`:
+#
+# - `finance_erc_entidades`: um documento por entidade (`_id` = `IdEntidade`),
+#   com os dados gerais, o número de OCS e a lista de pessoas dos órgãos sociais
+#   e das participações (detentores/detidas);
+# - `finance_erc_pessoas`: um documento por pessoa regulada (`_id` = GUID da
+#   pessoa), com os cargos (empresas onde é gerente/administrador) e as
+#   participações diretas;
+# - `finance_erc_ocs`: um documento por órgão de comunicação social
+#   (`_id` = `<designação>:<tipo>:<entidade proprietária>`).
+ERC_ENTIDADES_INDEX = "finance_erc_entidades"
+ERC_PESSOAS_INDEX = "finance_erc_pessoas"
+ERC_OCS_INDEX = "finance_erc_ocs"
+
+# Histórico das recolhas do portal da ERC: uma entrada por **página descarregada**
+# (listagem, ficha de entidade ou ficha de pessoa), com o `sha256` do HTML, o que
+# rendeu e eventuais erros.
+ERC_RECOLHAS_INDEX = "finance_erc_recolhas"
+
 # ---------------------------------------------------------------------------
 # «World Model» — o estado do mundo da contratação pública, materializado.
 #
@@ -382,6 +403,53 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
         "analysis": {
             "analyzer": {
                 "agent_name_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    # Portal da Transparência da ERC: nomes de entidades e pessoas escritos com
+    # acentos («Comunicação», «Guimarães») — `asciifolding` deixa que uma pesquisa
+    # sem acentos os encontre.
+    ERC_ENTIDADES_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    ERC_PESSOAS_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    ERC_OCS_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    ERC_RECOLHAS_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
                     "type": "custom",
                     "tokenizer": "standard",
                     "filter": ["lowercase", "asciifolding"],
@@ -2413,9 +2481,15 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "pdf_sha256": {"type": "keyword"},
             "paginas": {"type": "integer"},
             # Verdadeiro quando o PDF é uma digitalização sem camada de texto
-            # (as contas anuais e as listas de ações do TC são-no).
+            # (várias contas anuais e listas de ações do TC são-no).
             "pdf_digitalizado": {"type": "boolean"},
+            # Digitalização: não há texto a indexar sem OCR (que não se faz).
+            "precisa_ocr": {"type": "boolean"},
+            # Texto indexado: `texto` é o **Markdown** do MarkItDown (com as
+            # tabelas das contas/listas de ações) ou, em recurso, o texto simples
+            # do PyMuPDF. `texto_metodo` diz qual dos dois o produziu.
             "texto": {"type": "text", "analyzer": "world_folding", "search_analyzer": "world_folding"},
+            "texto_metodo": {"type": "keyword"},
             "texto_chars": {"type": "integer"},
             "texto_extraido": {"type": "boolean"},
             "recolhido_em": {"type": "date"},
@@ -2509,6 +2583,183 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "raw_data": {"type": "object", "enabled": False},
             "ingested_at": {"type": "date"},
             "updated_at": {"type": "date"},
+        }
+    }
+
+    # Portal da Transparência da ERC. As sub-listas (pessoas dos órgãos sociais,
+    # OCS detidos e participações) são `nested` para poderem ser agregadas sem
+    # misturar valores de documentos diferentes.
+    _erc_participacao = {
+        "type": "nested",
+        "properties": {
+            "id": {"type": "keyword"},
+            "nome": {"type": "text", "analyzer": "world_folding", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "e_empresa": {"type": "boolean"},
+            "e_pessoa": {"type": "boolean"},
+            # `detentor` (a contraparte detém o sujeito) ou `detida` (é detida por ele).
+            "tipo_relacao": {"type": "keyword"},
+            "tipo_detencao": {"type": "keyword", "ignore_above": 128},
+            "percentagem": {"type": "keyword", "ignore_above": 32},
+            "percentagem_valor": {"type": "double"},
+            "direitos_voto": {"type": "keyword", "ignore_above": 32},
+            "direitos_voto_valor": {"type": "double"},
+        },
+    }
+
+    erc_entidades_mappings = {
+        "properties": {
+            "doc_id": {"type": "keyword"},
+            "nome": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "nome_keyword": {"type": "keyword", "ignore_above": 512},
+            "slug": {"type": "keyword", "ignore_above": 512},
+            "url": {"type": "keyword", "ignore_above": 512, "index": False},
+            "tipo_sociedade": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "actividade_principal": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "distrito": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "distrito_keyword": {"type": "keyword", "ignore_above": 128},
+            "contabilidade_organizada": {"type": "boolean"},
+            "detem_ocs": {"type": "boolean"},
+            "capital_social": {"type": "keyword", "ignore_above": 64},
+            "capital_social_eur": {"type": "double"},
+            "nr_registo": {"type": "keyword"},
+            "n_ocs": {"type": "integer"},
+            "n_pessoas": {"type": "integer"},
+            "n_detentores": {"type": "integer"},
+            "n_detidas": {"type": "integer"},
+            "pessoas": {
+                "type": "nested",
+                "properties": {
+                    "id": {"type": "keyword"},
+                    "nome": {"type": "text", "analyzer": "world_folding", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+                    "tipo_orgao": {"type": "text", "analyzer": "world_folding", "fields": {"keyword": {"type": "keyword", "ignore_above": 128}}},
+                    "funcao": {"type": "text", "analyzer": "world_folding", "fields": {"keyword": {"type": "keyword", "ignore_above": 128}}},
+                },
+            },
+            "pessoas_nomes": {"type": "keyword", "ignore_above": 512},
+            "ocs": {
+                "type": "nested",
+                "properties": {
+                    "designacao": {"type": "text", "analyzer": "world_folding", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+                    "tipo": {"type": "keyword", "ignore_above": 128},
+                    "entidade_proprietaria": {"type": "keyword", "ignore_above": 512},
+                    "distrito": {"type": "keyword", "ignore_above": 128},
+                },
+            },
+            "ocs_designacoes": {"type": "keyword", "ignore_above": 512},
+            "detentores": _erc_participacao,
+            "detidas": _erc_participacao,
+            "financeiro": {"type": "object", "enabled": False},
+            "fonte": {"type": "keyword"},
+            "recolhido_em": {"type": "date"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    erc_pessoas_mappings = {
+        "properties": {
+            "doc_id": {"type": "keyword"},
+            "nome": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "nome_keyword": {"type": "keyword", "ignore_above": 512},
+            "slug": {"type": "keyword", "ignore_above": 512},
+            "url": {"type": "keyword", "ignore_above": 512, "index": False},
+            "actividade_principal": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "distrito": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "distrito_keyword": {"type": "keyword", "ignore_above": 128},
+            "detem_ocs": {"type": "boolean"},
+            "n_empresas": {"type": "integer"},
+            "n_participacoes": {"type": "integer"},
+            "orgaos": {
+                "type": "nested",
+                "properties": {
+                    "id": {"type": "keyword"},
+                    "nome": {"type": "text", "analyzer": "world_folding", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+                    "tipo_orgao": {"type": "text", "analyzer": "world_folding", "fields": {"keyword": {"type": "keyword", "ignore_above": 128}}},
+                    "funcao": {"type": "text", "analyzer": "world_folding", "fields": {"keyword": {"type": "keyword", "ignore_above": 128}}},
+                },
+            },
+            "empresas": {"type": "keyword", "ignore_above": 512},
+            "participacoes": _erc_participacao,
+            "participacoes_nomes": {"type": "keyword", "ignore_above": 512},
+            "financeiro": {"type": "object", "enabled": False},
+            "fonte": {"type": "keyword"},
+            "recolhido_em": {"type": "date"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    erc_ocs_mappings = {
+        "properties": {
+            "doc_id": {"type": "keyword"},
+            "designacao": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "designacao_keyword": {"type": "keyword", "ignore_above": 512},
+            "tipo": {"type": "keyword", "ignore_above": 128},
+            "entidade_proprietaria": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "entidade_proprietaria_id": {"type": "keyword"},
+            "distrito": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "distrito_keyword": {"type": "keyword", "ignore_above": 128},
+            "fonte": {"type": "keyword"},
+            "recolhido_em": {"type": "date"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    erc_recolhas_mappings = {
+        "properties": {
+            "recolha_id": {"type": "keyword"},
+            # `listagem` (todas as entidades) | `entidade` | `pessoa`.
+            "tipo": {"type": "keyword"},
+            "entidade_id": {"type": "keyword"},
+            "nome": {"type": "keyword", "ignore_above": 512},
+            "url": {"type": "keyword", "ignore_above": 512},
+            "sha256": {"type": "keyword"},
+            "bytes": {"type": "long"},
+            "itens": {"type": "long"},
+            "erro": {"type": "text", "analyzer": "world_folding"},
+            "recolhido_em": {"type": "date"},
+            "ingested_at": {"type": "date"},
         }
     }
 
@@ -2675,6 +2926,12 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (PARTIDOS_REGISTO_INDEX, partidos_registo_mappings),
         (PARTIDOS_RECOLHAS_INDEX, partidos_recolhas_mappings),
         (VEREADORES_INDEX, vereadores_mappings),
+        # Portal da Transparência da ERC: entidades proprietárias de OCS, pessoas
+        # dos órgãos sociais, OCS detidos e o histórico das recolhas.
+        (ERC_ENTIDADES_INDEX, erc_entidades_mappings),
+        (ERC_PESSOAS_INDEX, erc_pessoas_mappings),
+        (ERC_OCS_INDEX, erc_ocs_mappings),
+        (ERC_RECOLHAS_INDEX, erc_recolhas_mappings),
         (OSINT_INDEX, osint_mappings),
         (TICKER_TRANSLATIONS_INDEX, ticker_translations_mappings),
     ]:
@@ -16891,6 +17148,258 @@ def vereadores_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
         return out
     except Exception as exc:
         return {"error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Portal da Transparência da ERC
+# ---------------------------------------------------------------------------
+
+def _erc_wildcard(field: str, value: str) -> Dict[str, Any]:
+    return {"wildcard": {field: {"value": f"*{value}*", "case_insensitive": True}}}
+
+
+def index_erc_bulk(index: str, items: Iterable[Dict[str, Any]], es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Indexa documentos da ERC num dos índices `finance_erc_*`.
+
+    Cada item tem de trazer `doc_id` (usado como `_id`, para reindexar sem
+    duplicar); reindexar o mesmo portal sobrepõe-se em vez de acumular.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed": 0}
+    ensure_indices(client)
+    now = datetime.utcnow().isoformat()
+    actions = []
+    for doc in items:
+        doc_id = doc.get("doc_id")
+        if not doc_id:
+            continue
+        source = dict(doc)
+        source.setdefault("ingested_at", now)
+        actions.append({"_op_type": "index", "_index": index, "_id": doc_id, **source})
+    if not actions:
+        return {"index": index, "indexed": 0}
+    try:
+        indexed, errors = bulk(client, actions, raise_on_error=False)
+        client.indices.refresh(index=index)
+        return {"index": index, "indexed": indexed, "errors": len(errors) if errors else 0}
+    except Exception as exc:
+        return {"error": str(exc), "index": index, "indexed": 0}
+
+
+def _erc_search(
+    index: str,
+    *,
+    q: Optional[str] = None,
+    text_fields: Sequence[str] = (),
+    keyword_fields: Sequence[str] = (),
+    filters: Optional[Sequence[Dict[str, Any]]] = None,
+    nested_should: Optional[Sequence[Dict[str, Any]]] = None,
+    sort: Optional[List[Dict[str, Any]]] = None,
+    size: int = 25,
+    page: int = 1,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa genérica `bool` nos índices da ERC (texto + filtros + nested)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+    ensure_indices(client)
+
+    must: List[Dict[str, Any]] = []
+    if q:
+        should: List[Dict[str, Any]] = []
+        for field in text_fields:
+            should.append({"match_phrase": {field: {"query": q, "boost": 6}}})
+            should.append({"match": {field: {"query": q, "operator": "and", "boost": 3}}})
+        for field in keyword_fields:
+            should.append(_erc_wildcard(field, q))
+        if nested_should:
+            should.extend(nested_should)
+        if should:
+            must.append({"bool": {"should": should, "minimum_should_match": 1}})
+
+    bool_query: Dict[str, Any] = {}
+    if must:
+        bool_query["must"] = must
+    if filters:
+        bool_query["filter"] = list(filters)
+    query: Dict[str, Any] = {"bool": bool_query} if bool_query else {"match_all": {}}
+
+    body: Dict[str, Any] = {
+        "query": query,
+        "from": max(0, (page - 1) * max(1, size)),
+        "size": max(1, min(int(size), 500)),
+        "track_total_hits": True,
+    }
+    if sort:
+        body["sort"] = sort
+    try:
+        resp = client.search(index=index, body=body)
+        return {
+            "total": resp["hits"]["total"]["value"],
+            "items": [{**hit["_source"], "doc_id": hit["_id"]} for hit in resp["hits"]["hits"]],
+            "page": page,
+            "size": size,
+        }
+    except Exception as exc:
+        return {"error": str(exc), "items": [], "total": 0}
+
+
+def search_erc_entidades(
+    q: Optional[str] = None,
+    distrito: Optional[str] = None,
+    tipo_sociedade: Optional[str] = None,
+    actividade: Optional[str] = None,
+    detem_ocs: Optional[bool] = None,
+    pessoa: Optional[str] = None,
+    size: int = 25,
+    page: int = 1,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa entidades proprietárias de OCS (`finance_erc_entidades`)."""
+    filters: List[Dict[str, Any]] = []
+    if distrito:
+        filters.append(_erc_wildcard("distrito_keyword", distrito))
+    if tipo_sociedade:
+        filters.append(_erc_wildcard("tipo_sociedade.keyword", tipo_sociedade))
+    if actividade:
+        filters.append(_erc_wildcard("actividade_principal.keyword", actividade))
+    if detem_ocs is not None:
+        filters.append({"term": {"detem_ocs": bool(detem_ocs)}})
+    if pessoa:
+        filters.append({"nested": {"path": "pessoas", "query": {"match": {
+            "pessoas.nome": {"query": pessoa, "operator": "and"},
+        }}}})
+    # O texto livre também chega às pessoas dos órgãos sociais e aos OCS detidos
+    # (campos analisados, por isso sem acentos: «planicie» encontra «Planície»).
+    nested_should = [
+        {"nested": {"path": "pessoas", "query": {"match": {
+            "pessoas.nome": {"query": q, "operator": "and", "boost": 4},
+        }}, "score_mode": "max"}},
+        {"nested": {"path": "ocs", "query": {"match": {
+            "ocs.designacao": {"query": q, "operator": "and", "boost": 3},
+        }}, "score_mode": "max"}},
+    ] if q else None
+    return _erc_search(
+        ERC_ENTIDADES_INDEX,
+        q=q,
+        text_fields=("nome", "tipo_sociedade", "actividade_principal", "distrito"),
+        keyword_fields=("nome.keyword", "distrito_keyword", "ocs_designacoes", "pessoas_nomes"),
+        filters=filters,
+        nested_should=nested_should,
+        sort=[{"_score": {"order": "desc"}}, {"nome.keyword": {"order": "asc"}}],
+        size=size,
+        page=page,
+        es=es,
+    )
+
+
+def search_erc_pessoas(
+    q: Optional[str] = None,
+    distrito: Optional[str] = None,
+    detem_ocs: Optional[bool] = None,
+    empresa: Optional[str] = None,
+    funcao: Optional[str] = None,
+    size: int = 25,
+    page: int = 1,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa pessoas reguladas (`finance_erc_pessoas`)."""
+    filters: List[Dict[str, Any]] = []
+    if distrito:
+        filters.append(_erc_wildcard("distrito_keyword", distrito))
+    if detem_ocs is not None:
+        filters.append({"term": {"detem_ocs": bool(detem_ocs)}})
+    if empresa:
+        filters.append({"nested": {"path": "orgaos", "query": {"bool": {"must": [
+            {"match_phrase": {"orgaos.nome": {"query": empresa}}},
+        ]}}}})
+    if funcao:
+        filters.append({"nested": {"path": "orgaos", "query": {"match": {
+            "orgaos.funcao": {"query": funcao, "operator": "and"},
+        }}}})
+    return _erc_search(
+        ERC_PESSOAS_INDEX,
+        q=q,
+        text_fields=("nome", "distrito"),
+        keyword_fields=("nome.keyword", "empresas", "participacoes_nomes"),
+        filters=filters,
+        sort=[{"_score": {"order": "desc"}}, {"nome.keyword": {"order": "asc"}}],
+        size=size,
+        page=page,
+        es=es,
+    )
+
+
+def search_erc_ocs(
+    q: Optional[str] = None,
+    tipo: Optional[str] = None,
+    distrito: Optional[str] = None,
+    proprietaria: Optional[str] = None,
+    size: int = 25,
+    page: int = 1,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa órgãos de comunicação social (`finance_erc_ocs`)."""
+    filters: List[Dict[str, Any]] = []
+    if tipo:
+        filters.append(_erc_wildcard("tipo", tipo))
+    if distrito:
+        filters.append(_erc_wildcard("distrito_keyword", distrito))
+    if proprietaria:
+        filters.append(_erc_wildcard("entidade_proprietaria.keyword", proprietaria))
+    return _erc_search(
+        ERC_OCS_INDEX,
+        q=q,
+        text_fields=("designacao", "entidade_proprietaria", "distrito"),
+        keyword_fields=("entidade_proprietaria.keyword",),
+        filters=filters,
+        sort=[{"_score": {"order": "desc"}}, {"designacao.keyword": {"order": "asc"}}],
+        size=size,
+        page=page,
+        es=es,
+    )
+
+
+def erc_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Volumetria e agregações rápidas dos índices do portal da ERC."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    ensure_indices(client)
+    out: Dict[str, Any] = {}
+    try:
+        for key, index in (("entidades", ERC_ENTIDADES_INDEX), ("pessoas", ERC_PESSOAS_INDEX), ("ocs", ERC_OCS_INDEX)):
+            out[key] = {"index": index, "documents": client.count(index=index).get("count", 0)}
+    except Exception as exc:
+        return {"error": str(exc)}
+    try:
+        resp = client.search(
+            index=ERC_ENTIDADES_INDEX,
+            body={"size": 0, "aggs": {
+                "by_distrito": {"terms": {"field": "distrito_keyword", "size": 25}},
+                "by_tipo": {"terms": {"field": "tipo_sociedade.keyword", "size": 25}},
+                "by_actividade": {"terms": {"field": "actividade_principal.keyword", "size": 10}},
+                "sem_ocs": {"filter": {"term": {"detem_ocs": False}}},
+            }},
+        )
+        aggs = resp.get("aggregations", {})
+        out["entidades"]["by_distrito"] = [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("by_distrito", {}).get("buckets", [])]
+        out["entidades"]["by_tipo"] = [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("by_tipo", {}).get("buckets", [])]
+        out["entidades"]["by_actividade"] = [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("by_actividade", {}).get("buckets", [])]
+        out["entidades"]["sem_ocs"] = aggs.get("sem_ocs", {}).get("doc_count", 0)
+    except Exception as exc:
+        out["error"] = str(exc)
+    try:
+        resp = client.search(
+            index=ERC_OCS_INDEX,
+            body={"size": 0, "aggs": {"by_tipo": {"terms": {"field": "tipo", "size": 20}}}},
+        )
+        out["ocs"]["by_tipo"] = [{"key": b["key"], "count": b["doc_count"]} for b in resp.get("aggregations", {}).get("by_tipo", {}).get("buckets", [])]
+    except Exception:
+        pass
+    return out
 
 
 _UNIFIED_GRAPH_MAX_CONTRACTS = 200

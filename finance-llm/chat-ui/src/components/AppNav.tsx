@@ -74,6 +74,7 @@ export type AppView =
   | "reports"
   | "subvencoes"
   | "partidos"
+  | "erc"
   | "benchmark"
   | "benchmark-pt"
   | "benchmark-es"

@@ -346,6 +346,10 @@ from api.subvencoes_routes import router as subvencoes_router
 # ações e meios de propaganda, relatórios, acórdãos e decisões da ECFP) cruzadas
 # com o registo oficial dos partidos na CNE; indexadas em `finance_partidos`.
 from api.partidos_routes import router as partidos_router
+# Portal da Transparência da ERC: entidades proprietárias de órgãos de
+# comunicação social, as pessoas dos seus órgãos sociais e os OCS detidos;
+# indexados em `finance_erc_entidades`, `finance_erc_pessoas` e `finance_erc_ocs`.
+from api.erc_routes import router as erc_router
 # Benchmark de preços e concorrência por empresa + CPV: preço de referência do
 # segmento, concorrentes, historial de contrapartes e oportunidades.
 from api.benchmark_routes import router as benchmark_router
@@ -598,6 +602,9 @@ _NO_STORE_PREFIXES = (
     # As contas dos partidos também: o painel e o estado da recolha mudam a cada
     # leitura e não podem vir do cache do browser.
     "/partidos",
+    # O portal da ERC segue a mesma regra: o painel e o progresso da recolha
+    # mudam a cada leitura.
+    "/erc",
 )
 
 
@@ -725,6 +732,8 @@ app.include_router(subvencoes_router)
 # do Tribunal Constitucional (contas anuais, listas de ações e meios, relatórios,
 # acórdãos e decisões da ECFP) cruzadas com o registo oficial da CNE.
 app.include_router(partidos_router)
+# Portal da Transparência da ERC (entidades, pessoas dos órgãos sociais e OCS).
+app.include_router(erc_router)
 app.include_router(benchmark_router)
 
 

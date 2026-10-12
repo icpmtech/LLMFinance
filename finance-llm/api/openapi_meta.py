@@ -405,6 +405,18 @@ TAGS_METADATA: List[Dict[str, str]] = [
         ),
     },
     {
+        "name": "erc",
+        "description": (
+            "Portal da Transparência da ERC: entidades proprietárias de órgãos "
+            "de comunicação social, as pessoas dos seus órgãos sociais e os OCS "
+            "detidos. Recolhe a listagem, as fichas de cada entidade e de cada "
+            "pessoa (cargos e participações diretas) e a estrutura de "
+            "propriedade; indexa em `finance_erc_entidades`, "
+            "`finance_erc_pessoas` e `finance_erc_ocs`, e serve painel, "
+            "pesquisa, fichas e exportação CSV."
+        ),
+    },
+    {
         "name": "gleif",
         "description": (
             "GLEIF / LEI: registos *Legal Entity Identifier* do *Golden Copy* "

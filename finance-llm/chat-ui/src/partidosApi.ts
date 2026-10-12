@@ -44,6 +44,10 @@ export type PartidosDocumento = {
   pdf_titulo?: string | null;
   paginas?: number | null;
   pdf_digitalizado?: boolean | null;
+  /** Digitalização sem camada de texto: só com OCR daria texto a indexar. */
+  precisa_ocr?: boolean | null;
+  /** Como o texto foi lido: `markitdown` (Markdown com tabelas), `pymupdf` ou `pdf-sem-texto`. */
+  texto_metodo?: string | null;
   texto?: string | null;
   texto_chars?: number | null;
   texto_extraido?: boolean;
@@ -395,6 +399,19 @@ export function secaoLabel(secao?: string | null, label?: string | null): string
   return SECOES_LABEL[secao] || secao;
 }
 
+/** Rótulo do método com que o texto do PDF foi lido. */
+export const METODOS_LABEL: Record<string, string> = {
+  markitdown: "MarkItDown (Markdown)",
+  pymupdf: "PyMuPDF (texto simples)",
+  "pdf-sem-texto": "Digitalização (sem texto)",
+};
+
+/** Rótulo do método de leitura do texto do PDF. */
+export function metodoLabel(metodo?: string | null): string {
+  if (!metodo) return "—";
+  return METODOS_LABEL[metodo] || metodo;
+}
+
 /** Rótulo do estado de entrega das contas. */
 export function entregaLabel(item: Pick<PartidosDocumento, "entregou" | "motivo" | "nota" | "agregado">): string {
   if (item.nota) return "Nota";
@@ -484,6 +501,22 @@ export function getPartidosAmostra(ano: number, limite = 50): Promise<PartidosAm
 /** URL do PDF guardado no módulo (`inline` abre no browser; `download` descarrega). */
 export function partidoPdfUrl(ano: number, ficheiro: string, download = false): string {
   return `${API_BASE}/partidos/documento/pdf${queryString({ ano, ficheiro, download: download || undefined })}`;
+}
+
+export type PartidosMarkdown = {
+  ano: number;
+  ficheiro: string;
+  partido_sigla?: string | null;
+  secao?: string | null;
+  metodo?: string | null;
+  paginas?: number | null;
+  precisa_ocr?: boolean | null;
+  markdown: string;
+};
+
+/** Markdown de um documento — o mesmo texto que ficou indexado. */
+export function getPartidosMarkdown(ano: number, ficheiro: string): Promise<PartidosMarkdown> {
+  return request<PartidosMarkdown>(`/partidos/documento/markdown${queryString({ ano, ficheiro })}`);
 }
 
 /** Exporta em CSV o resultado da pesquisa. */

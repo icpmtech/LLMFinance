@@ -520,3 +520,171 @@ def test_start_job_recolher_arranca_e_termina(pasta: Path, monkeypatch: pytest.M
     assert atual["result"]["anos_lidos"] == 1
     assert atual["progress"]["phase"] == "concluído"
     assert partidos.list_jobs()["total"] >= 1
+
+
+# ---------------------------------------------------------------------------
+# PDF: MarkItDown (Markdown com tabelas) e recurso ao PyMuPDF
+# ---------------------------------------------------------------------------
+
+
+def _pdf_com_tabela(linhas: list[list[str]]) -> bytes:
+    """PDF sintético com uma tabela simples (células alinhadas em colunas)."""
+    import pymupdf
+
+    documento = pymupdf.open()
+    pagina = documento.new_page()
+    altura = 60
+    for indice, linha in enumerate(linhas):
+        for coluna, celula in enumerate(linha):
+            pagina.insert_text((60 + coluna * 130, altura + indice * 16), celula, fontsize=10)
+    conteudo = documento.tobytes()
+    documento.close()
+    return conteudo
+
+
+def _pdf_sem_texto() -> bytes:
+    """PDF de uma página em branco: é o que uma digitalização dá sem OCR."""
+    import pymupdf
+
+    documento = pymupdf.open()
+    documento.new_page()
+    conteudo = documento.tobytes()
+    documento.close()
+    return conteudo
+
+
+def test_extrair_documento_pdf_usa_o_markdown_do_markitdown():
+    pytest.importorskip("markitdown")
+    linhas = [
+        ["Ação", "Gasto", "Fornecedor"],
+        ["Povo Livre Digital", "492,00", "CodeWrite"],
+    ]
+    extraido = partidos.extrair_documento_pdf(_pdf_com_tabela(linhas))
+    assert extraido["texto_metodo"] == partidos.METODO_MARKITDOWN
+    assert extraido["digitalizado"] is False
+    assert "Povo Livre Digital" in extraido["texto"]
+    assert "CodeWrite" in extraido["texto"]
+
+
+def test_extrair_documento_pdf_recorre_ao_pymupdf_quando_o_markitdown_falha(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        partidos,
+        "extrair_markdown_pdf",
+        lambda conteudo, **kw: {"texto": "", "truncado": False, "error": "MissingDependencyException: pdf"},
+    )
+    extraido = partidos.extrair_documento_pdf(_pdf_com_tabela([["Povo Livre Digital", "492,00"]]))
+    assert extraido["texto_metodo"] == partidos.METODO_PYMUPDF
+    assert "Povo Livre Digital" in extraido["texto"]
+    assert extraido["digitalizado"] is False
+
+
+def test_extrair_documento_pdf_sem_texto_fica_marcado_para_ocr(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        partidos,
+        "extrair_markdown_pdf",
+        lambda conteudo, **kw: {"texto": "", "truncado": False, "error": None},
+    )
+    extraido = partidos.extrair_documento_pdf(_pdf_sem_texto())
+    assert extraido["texto_metodo"] == partidos.METODO_SEM_TEXTO
+    assert extraido["texto"] == ""
+    assert extraido["digitalizado"] is True
+    assert extraido["paginas"] == 1
+
+
+def test_extrair_documento_pdf_traz_o_numero_de_paginas(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        partidos,
+        "extrair_markdown_pdf",
+        lambda conteudo, **kw: {"texto": "| a | b |", "truncado": False, "error": None},
+    )
+    extraido = partidos.extrair_documento_pdf(_pdf_sem_texto())
+    assert extraido["paginas"] == 1
+    assert extraido["texto_metodo"] == partidos.METODO_MARKITDOWN
+
+
+def test_documento_indexado_regista_o_metodo_e_a_falta_de_ocr():
+    item = {"ordem": 1, "partido_chave": "PPDPSD", "partido_nome": "Partido Social Democrata", "entregou": True}
+    documento = partidos._documento_do_item(
+        item,
+        ano=2025,
+        secao="lista_acoes",
+        secao_titulo="Lista de ações e meios de propaganda política",
+        ancora="1104",
+        pagina_url="https://www.tribunalconstitucional.pt/tc/contas_eleicoes-partidos-2025.html",
+        recolhido_em="2026-01-01T00:00:00Z",
+        dados_pdf={
+            "ficheiro": "11_CA2025_PSD_ListaAM_vf.pdf",
+            "pdf_bytes": 434001,
+            "pdf_sha256": "abc",
+            "paginas": 100,
+            "texto": "| Ação | Gasto |\n| --- | --- |\n| Povo Livre Digital | 492,00 |",
+            "texto_metodo": partidos.METODO_MARKITDOWN,
+            "digitalizado": False,
+        },
+    )
+    assert documento["texto_metodo"] == partidos.METODO_MARKITDOWN
+    assert documento["texto_extraido"] is True
+    assert documento["pdf_digitalizado"] is False
+    assert documento["precisa_ocr"] is False
+
+    digitalizado = partidos._documento_do_item(
+        {**item, "ordem": 2},
+        ano=2025,
+        secao="contas_anuais",
+        secao_titulo="Contas anuais dos partidos políticos",
+        ancora="1111",
+        pagina_url="https://www.tribunalconstitucional.pt/tc/contas_eleicoes-partidos-2025.html",
+        recolhido_em="2026-01-01T00:00:00Z",
+        dados_pdf={
+            "ficheiro": "4_CA2025_PCP_Bal_DR_vf.pdf",
+            "pdf_bytes": 574000,
+            "pdf_sha256": "def",
+            "paginas": 6,
+            "texto": "",
+            "texto_metodo": partidos.METODO_SEM_TEXTO,
+            "digitalizado": True,
+        },
+    )
+    assert digitalizado["texto_extraido"] is False
+    assert digitalizado["pdf_digitalizado"] is True
+    assert digitalizado["precisa_ocr"] is True
+
+
+def test_markdown_do_documento_le_o_texto_indexado(pasta: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        partidos,
+        "_pdf_do_documento",
+        lambda href, ano, **kw: {
+            "ficheiro": partidos._ficheiro_do_href(href) or "x.pdf",
+            "pdf_bytes": 1234,
+            "pdf_sha256": "abc",
+            "paginas": 3,
+            "texto": "| Ação | Gasto |",
+            "texto_metodo": partidos.METODO_MARKITDOWN,
+            "digitalizado": False,
+            "erro": None,
+        },
+    )
+    partidos.recolher([2024], com_pdf=True, com_cne=False)
+    dados = partidos.markdown_do_documento(2024, "4_CA2025_PCP_ListaAM_vf.pdf")
+    assert dados["metodo"] == partidos.METODO_MARKITDOWN
+    assert dados["markdown"] == "| Ação | Gasto |"
+    assert dados["precisa_ocr"] is False
+    assert dados["partido_sigla"] == "PCP"
+
+
+def test_markdown_do_documento_converte_o_pdf_quando_o_ano_nao_foi_lido(pasta: Path):
+    destino = partidos.pdf_dir(2024) / "conta.pdf"
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_bytes(_pdf_com_tabela([["Povo Livre Digital", "492,00"]]))
+    dados = partidos.markdown_do_documento(2024, "conta.pdf")
+    assert dados["ficheiro"] == "conta.pdf"
+    assert dados["metodo"] in (partidos.METODO_MARKITDOWN, partidos.METODO_PYMUPDF)
+    assert "Povo Livre Digital" in dados["markdown"]
+
+
+def test_markdown_do_documento_inexistente(pasta: Path):
+    with pytest.raises(FileNotFoundError):
+        partidos.markdown_do_documento(2024, "nao-existe.pdf")
+    with pytest.raises(ValueError):
+        partidos.markdown_do_documento(2024, "../fora.pdf")

@@ -37,11 +37,19 @@ O que fica gravado, por recolha:
   `finance_partidos_registo` e o histórico das recolhas em
   `finance_partidos_recolhas`.
 
-**Atenção ao texto dos PDF.** Os relatórios e as decisões da ECFP são digitais e
-dão texto para pesquisa integral; as **contas anuais** e as **listas de ações**
-são digitalizações sem camada de texto — dessas fica o número de páginas
-(`paginas`), o `pdf_sha256` e o indicador `pdf_digitalizado`, mas não há texto a
-indexar (seria preciso OCR, que este módulo não faz).
+**Como se lê o texto dos PDF.** Recorre-se ao **MarkItDown** (Microsoft), que
+converte o PDF em *Markdown* e **preserva a estrutura das tabelas** — que é
+exatamente o que interessa aqui, porque as contas anuais e as listas de ações são
+tabelas (ação, meio, gasto, receita, fornecedor). O texto que fica indexado é
+esse Markdown, pelo que uma pesquisa por «Povo Livre» ou por um NIF de fornecedor
+encontra a linha da tabela a que pertence. Quando o MarkItDown não está
+disponível (ou falha), recorre-se ao texto simples do PyMuPDF; o campo
+`texto_metodo` diz qual dos dois produziu o texto (`markitdown` | `pymupdf`).
+
+Alguns documentos — as **contas anuais digitalizadas** e várias listas de ações —
+são imagens sem camada de texto. Desses fica o número de páginas (`paginas`), o
+`pdf_sha256` e os indicadores `pdf_digitalizado`/`precisa_ocr`, mas não há texto a
+indexar: o MarkItDown não faz OCR e este módulo também não.
 
 O site do TC limita pedidos agressivos (HTTP 429), pelo que todos os pedidos
 passam por `_pedir()`, que repete com recuo exponencial; e o que já está em
@@ -138,6 +146,9 @@ TIPOS_JOB = ("recolher", "indexar")
 #: Tamanho máximo do texto guardado por documento (PDF de contas podem ser
 #: longos: anexos, notas às contas, relatórios de auditoria).
 MAX_TEXTO_CHARS = 400_000
+#: Teto para o Markdown do MarkItDown. É mais alto que o texto simples porque as
+#: tabelas em Markdown ocupam bastante mais (cada linha traz os separadores).
+MAX_MARKDOWN_CHARS = 900_000
 #: Ficheiro PDF acima deste tamanho não é descarregado (protege a pasta).
 MAX_PDF_BYTES = 40 * 1024 * 1024
 
@@ -691,6 +702,38 @@ def parse_cne_partido(html_texto: str) -> Dict[str, Any]:
 # Extração de texto dos PDF
 # ---------------------------------------------------------------------------
 
+#: Métodos de leitura registados em `texto_metodo`.
+METODO_MARKITDOWN = "markitdown"
+METODO_PYMUPDF = "pymupdf"
+METODO_SEM_TEXTO = "pdf-sem-texto"
+
+
+def _markitdown() -> Any:
+    """Instância do MarkItDown (importada tarde: o módulo é opcional)."""
+    from markitdown import MarkItDown
+
+    return MarkItDown()
+
+
+def extrair_markdown_pdf(conteudo: bytes, *, maximo_caracteres: int = MAX_MARKDOWN_CHARS) -> Dict[str, Any]:
+    """Markdown de um PDF, pelo MarkItDown. Nunca levanta: devolve o erro.
+
+    O MarkItDown converte o PDF preservando cabeçalhos, listas e — o que aqui
+    mais importa — as **tabelas**, que dão às contas e às listas de ações a
+    estrutura sem a qual o texto não se distingue de uma sopa de números.
+    """
+    try:
+        resultado = _markitdown().convert_stream(io.BytesIO(conteudo), file_extension=".pdf")
+    except Exception as exc:  # noqa: BLE001 - sem Markdown, o texto simples serve
+        logger.warning("Partidos: Markdown do PDF não extraído (%s)", exc)
+        return {"texto": "", "truncado": False, "error": f"{type(exc).__name__}: {exc}"}
+    texto = (resultado.text_content or "").strip()
+    return {
+        "texto": texto[:maximo_caracteres],
+        "truncado": len(texto) > maximo_caracteres,
+        "error": None,
+    }
+
 
 def extrair_texto_pdf(conteudo: bytes, *, maximo_caracteres: int = MAX_TEXTO_CHARS) -> Dict[str, Any]:
     """Texto de um PDF (com o número de páginas). Nunca levanta: devolve o erro."""
@@ -719,6 +762,42 @@ def extrair_texto_pdf(conteudo: bytes, *, maximo_caracteres: int = MAX_TEXTO_CHA
     except Exception as exc:  # noqa: BLE001 - o documento fica sem texto, não sem registo
         logger.warning("Partidos: texto do PDF não extraído (%s)", exc)
         return {"paginas": None, "texto": "", "truncado": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def extrair_documento_pdf(conteudo: bytes) -> Dict[str, Any]:
+    """Texto indexável de um PDF + número de páginas + método usado.
+
+    O MarkItDown dá o Markdown (com as tabelas); o PyMuPDF continua a ser quem
+    conta as páginas e quem garante um texto simples de recurso quando o
+    MarkItDown não está instalado ou não consegue ler o documento. Um PDF sem
+    texto por nenhuma das vias é uma **digitalização** — fica marcado como tal em
+    vez de parecer um documento vazio.
+    """
+    markdown = extrair_markdown_pdf(conteudo)
+    simples = extrair_texto_pdf(conteudo)
+
+    texto = markdown.get("texto") or ""
+    if texto:
+        metodo, truncado, erro = METODO_MARKITDOWN, bool(markdown.get("truncado")), None
+    elif simples.get("texto"):
+        texto = simples["texto"]
+        metodo, truncado, erro = METODO_PYMUPDF, bool(simples.get("truncado")), None
+    else:
+        metodo, truncado = METODO_SEM_TEXTO, False
+        erro = markdown.get("error") or simples.get("error")
+
+    paginas = simples.get("paginas")
+    digitalizado: Optional[bool] = None
+    if paginas:
+        digitalizado = not texto
+    return {
+        "paginas": paginas,
+        "texto": texto,
+        "texto_metodo": metodo,
+        "truncado": truncado,
+        "digitalizado": digitalizado,
+        "error": erro,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -777,7 +856,17 @@ def _pdf_do_documento(
     progresso: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Descarrega (ou reaproveita) o PDF e extrai-lhe o texto."""
-    vazio = {"ficheiro": None, "pdf_bytes": None, "pdf_sha256": None, "paginas": None, "texto": "", "texto_truncado": False, "erro": None}
+    vazio = {
+        "ficheiro": None,
+        "pdf_bytes": None,
+        "pdf_sha256": None,
+        "paginas": None,
+        "texto": "",
+        "texto_metodo": None,
+        "texto_truncado": False,
+        "digitalizado": None,
+        "erro": None,
+    }
     if not href:
         return vazio
     nome = _ficheiro_do_href(href)
@@ -801,14 +890,16 @@ def _pdf_do_documento(
         destino.parent.mkdir(parents=True, exist_ok=True)
         destino.write_bytes(conteudo)
 
-    extraido = extrair_texto_pdf(conteudo)
+    extraido = extrair_documento_pdf(conteudo)
     return {
         "ficheiro": nome,
         "pdf_bytes": len(conteudo),
         "pdf_sha256": _sha256(conteudo),
         "paginas": extraido.get("paginas"),
         "texto": extraido.get("texto") or "",
+        "texto_metodo": extraido.get("texto_metodo"),
         "texto_truncado": bool(extraido.get("truncado")),
+        "digitalizado": extraido.get("digitalizado"),
         "erro": extraido.get("error"),
     }
 
@@ -850,10 +941,14 @@ def _documento_do_item(
         "paginas": dados_pdf.get("paginas"),
         "texto": dados_pdf.get("texto") or item.get("texto") or "",
         "texto_extraido": bool(dados_pdf.get("texto")),
-        # As contas anuais e as listas de ações são **digitalizações** (sem
-        # camada de texto): ficam com o número de páginas e sem texto. Os
-        # relatórios e decisões da ECFP são digitais e dão texto.
-        "pdf_digitalizado": (bool(dados_pdf.get("paginas")) and not dados_pdf.get("texto")) if dados_pdf.get("ficheiro") else None,
+        # `markitdown` (Markdown com as tabelas), `pymupdf` (texto simples de
+        # recurso) ou `pdf-sem-texto` quando o documento é uma digitalização.
+        "texto_metodo": dados_pdf.get("texto_metodo"),
+        # As contas anuais e as listas de ações surgem muitas vezes como
+        # digitalizações (imagem sem camada de texto): ficam com o número de
+        # páginas e sem texto, assinaladas em vez de parecerem vazias.
+        "pdf_digitalizado": dados_pdf.get("digitalizado"),
+        "precisa_ocr": bool(dados_pdf.get("digitalizado")),
         "fonte": "tc",
         "pagina_url": pagina_url,
         "recolhido_em": recolhido_em,
@@ -1264,6 +1359,7 @@ def _filtros_search(
     partido_chave: Optional[str],
     sigla: Optional[str],
     entregou: Optional[bool],
+    metodo: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     filtros: List[Dict[str, Any]] = []
     if ano:
@@ -1276,6 +1372,8 @@ def _filtros_search(
         filtros.append({"term": {"partido_sigla": sigla}})
     if entregou is not None:
         filtros.append({"term": {"entregou": bool(entregou)}})
+    if metodo:
+        filtros.append({"term": {"texto_metodo": metodo}})
     return filtros
 
 
@@ -1289,6 +1387,7 @@ def search(
     entregou: Optional[bool] = None,
     com_documento: Optional[bool] = None,
     digitalizado: Optional[bool] = None,
+    metodo: Optional[str] = None,
     sort: str = "relevancia",
     order: str = "desc",
     page: int = 1,
@@ -1297,10 +1396,10 @@ def search(
 ) -> Dict[str, Any]:
     """Pesquisa nos documentos do financiamento partidário, com facetas.
 
-    `q` procura no nome do partido, no título da secção e **no texto extraído do
-    PDF** — é o que permite encontrar, por exemplo, «demonstração de resultados»
-    nos relatórios e decisões da ECFP (as contas anuais são digitalizações e não
-    têm texto).
+    `q` procura no nome do partido, no título da secção e **no texto do PDF** —
+    o Markdown do MarkItDown (com as tabelas das contas e das listas de ações)
+    ou, quando esse falha, o texto simples do PyMuPDF. As digitalizações, que não
+    têm texto nenhum, ficam assinaladas com `precisa_ocr`.
     """
     from api import elasticsearch_client as esc
 
@@ -1309,7 +1408,7 @@ def search(
         return {"error": "Elasticsearch indisponível", "total": 0, "items": [], "facets": {}, "kpis": {}}
     esc.ensure_indices(cliente)
 
-    filtros = _filtros_search(ano=ano, secao=secao, partido_chave=partido, sigla=sigla, entregou=entregou)
+    filtros = _filtros_search(ano=ano, secao=secao, partido_chave=partido, sigla=sigla, entregou=entregou, metodo=metodo)
     if com_documento is not None:
         filtros.append({"term": {"documento": bool(com_documento)}})
     if digitalizado is not None:
@@ -1352,6 +1451,7 @@ def search(
             "com_documento": {"filter": {"term": {"documento": True}}},
             "com_texto": {"filter": {"term": {"texto_extraido": True}}},
             "digitalizados": {"filter": {"term": {"pdf_digitalizado": True}}},
+            "por_metodo": {"terms": {"field": "texto_metodo", "size": 6}},
         },
     }
     try:
@@ -1401,6 +1501,10 @@ def search(
             "com_texto": (agregacoes.get("com_texto") or {}).get("doc_count", 0),
             "digitalizados": (agregacoes.get("digitalizados") or {}).get("doc_count", 0),
         },
+        "por_metodo": [
+            {"metodo": bucket.get("key"), "count": bucket.get("doc_count")}
+            for bucket in _buckets("por_metodo")
+        ],
     }
 
 
@@ -1428,18 +1532,6 @@ def resumo(*, anos: Optional[Iterable[int]] = None, es: Any = None) -> Dict[str,
                 "aggs": {
                     "secoes": {"terms": {"field": "secao", "size": 10}},
                     "partidos": {"cardinality": {"field": "partido_chave"}},
-                    "documentos": {"filter": {"term": {"documento": True}}},
-                    "com_texto": {"filter": {"term": {"texto_extraido": True}}},
-                    "em_falta": {"filter": {"term": {"entregou": False}}},
-                    "paginas": {"sum": {"field": "paginas"}},
-                    "megabytes": {"sum": {"field": "ficheiro_kb"}},
-                },
-            },
-            "por_secao": {"terms": {"field": "secao", "size": 10}},
-            "top_partidos": {
-                "terms": {"field": "partido_chave", "size": 40},
-                "aggs": {
-                    "nome": {"terms": {"field": "partido_nome.keyword", "size": 1}},
                     "documentos": {"filter": {"term": {"documento": True}}},
                     "com_texto": {"filter": {"term": {"texto_extraido": True}}},
                     "digitalizados": {"filter": {"term": {"pdf_digitalizado": True}}},
@@ -1869,6 +1961,45 @@ def caminho_documento(ano: int, ficheiro: str) -> Path:
     if raiz not in caminho.parents:
         raise ValueError("Ficheiro fora da pasta do módulo")
     return caminho
+
+
+def markdown_do_documento(ano: int, ficheiro: str) -> Dict[str, Any]:
+    """Markdown guardado de um documento (o mesmo texto que ficou indexado).
+
+    Vem do JSONL, que é a fonte de verdade: assim o que se vê é exatamente o que
+    a pesquisa encontra. Só quando o ano ainda não foi lido é que se converte o
+    PDF que está em disco.
+    """
+    nome = caminho_documento(int(ano), ficheiro).name
+    caminho = _jsonl_do_ano(int(ano))
+    if caminho.exists():
+        for documento in _iter_jsonl(caminho):
+            if documento.get("ficheiro") == nome:
+                return {
+                    "ano": int(ano),
+                    "ficheiro": nome,
+                    "partido_sigla": documento.get("partido_sigla"),
+                    "secao": documento.get("secao"),
+                    "metodo": documento.get("texto_metodo"),
+                    "paginas": documento.get("paginas"),
+                    "precisa_ocr": documento.get("precisa_ocr"),
+                    "markdown": documento.get("texto") or "",
+                }
+
+    pdf = caminho_documento(ano, nome)
+    if not pdf.exists():
+        raise FileNotFoundError("Documento não encontrado no módulo (faça a recolha com PDF).")
+    extraido = extrair_documento_pdf(pdf.read_bytes())
+    return {
+        "ano": int(ano),
+        "ficheiro": nome,
+        "partido_sigla": None,
+        "secao": None,
+        "metodo": extraido.get("texto_metodo"),
+        "paginas": extraido.get("paginas"),
+        "precisa_ocr": bool(extraido.get("digitalizado")),
+        "markdown": extraido.get("texto") or "",
+    }
 
 
 def amostra(ano: int, *, limite: int = 50) -> Dict[str, Any]:

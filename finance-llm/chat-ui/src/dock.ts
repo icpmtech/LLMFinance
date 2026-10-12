@@ -527,6 +527,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "139,92,246",
   },
   {
+    id: "erc",
+    label: "ERC · Comunicação social",
+    hint: "Entidades proprietárias de órgãos de comunicação social, as pessoas dos seus órgãos sociais, os OCS detidos e a estrutura de propriedade",
+    icon: Newspaper,
+    gradient: "from-rose-200 via-rose-500 to-sky-700",
+    accent: "244,63,94",
+  },
+  {
     id: "simulador",
     label: "Simulador IQ OS",
     hint: "Simulações de previsão por enxame de agentes com os dados do sistema, com resultados, relatório e elenco",
@@ -925,6 +933,7 @@ const DEFAULT_ITEMS = [
   "reports",
   "subvencoes",
   "partidos",
+  "erc",
   "rss",
   "empresas-iq",
   "pessoas-iq",

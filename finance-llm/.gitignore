@@ -61,3 +61,9 @@ data/contratos-espanha/*.zip
 data/partidos/paginas/
 data/partidos/cne/
 data/partidos/pdf/
+
+# Portal da Transparência da ERC. O HTML de cada ficha (listagem de ~1 440
+# entidades, mais 2-3 páginas por entidade e 2 por pessoa) é **re-descarregável**
+# e fica só em disco — `POST /erc/recolher` volta a buscá-lo. O que fica
+# versionado são os JSONL normalizados, já apanhados por `*.jsonl`.
+data/erc/raw/

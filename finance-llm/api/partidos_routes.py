@@ -25,6 +25,7 @@ Endpoints:
 - `GET  /partidos/pessoa/{nif}`     — a pessoa e o partido dela, com as contas do partido
 - `GET  /partidos/amostra/{ano}`    — amostra lida do disco (funciona sem Elasticsearch)
 - `GET  /partidos/documento/pdf`    — o PDF guardado (ano + ficheiro), sem sair da pasta
+- `GET  /partidos/documento/markdown` — o Markdown do MarkItDown que ficou indexado
 - `GET  /partidos/export.csv`       — exportação da pesquisa
 """
 from __future__ import annotations
@@ -174,6 +175,7 @@ def partidos_search(
     entregou: Optional[bool] = Query(None, description="Só o que foi entregue (`true`) ou o que falta (`false`)"),
     com_documento: Optional[bool] = Query(None, description="Só as entradas com documento publicado"),
     digitalizado: Optional[bool] = Query(None, description="Só os PDF que são digitalizações (sem texto extraível)"),
+    metodo: Optional[str] = Query(None, description="markitdown | pymupdf | pdf-sem-texto"),
     sort: str = Query("relevancia", pattern="^(relevancia|ano|partido|secao|paginas)$"),
     order: str = Query("desc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1),
@@ -190,6 +192,7 @@ def partidos_search(
         entregou=entregou,
         com_documento=com_documento,
         digitalizado=digitalizado,
+        metodo=metodo,
         sort=sort,
         order=order,
         page=page,
@@ -282,6 +285,21 @@ def partidos_documento_pdf(
         filename=ficheiro if download else None,
         content_disposition_type="attachment" if download else "inline",
     )
+
+
+@router.get("/documento/markdown")
+def partidos_documento_markdown(
+    ano: int = Query(..., description="Ano da página do TC"),
+    ficheiro: str = Query(..., description="Nome do ficheiro, como o TC o publica"),
+    session: ReadSession = None,
+) -> Dict[str, Any]:
+    """Markdown de um documento (o texto que ficou indexado), com o método usado."""
+    try:
+        return partidos.markdown_do_documento(ano, ficheiro)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/export.csv")

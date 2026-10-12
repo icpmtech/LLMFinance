@@ -113,24 +113,41 @@ encontrar o registo `CDS - Partido Popular` da CNE.
 Campos mais relevantes de `finance_partidos`: `ano`, `secao`, `secao_titulo`,
 `partido_nome`, `partido_sigla`, `partido_chave`, `entregou`, `motivo`,
 `observacao`, `nota`, `agregado`, `documento`, `ficheiro`, `ficheiro_kb`,
-`pdf_url`, `pdf_sha256`, `paginas`, `pdf_digitalizado`, `texto`, `texto_chars`,
-`texto_extraido`, `pagina_url`.
+`pdf_url`, `pdf_sha256`, `paginas`, `pdf_digitalizado`, `precisa_ocr`,
+`texto_metodo`, `texto`, `texto_chars`, `texto_extraido`, `pagina_url`.
 
-## O texto dos PDF (e por que nem todos o têm)
+## O texto dos PDF: MarkItDown, e por que alguns não têm texto
 
-Os PDF são descarregados e o texto é extraído com **PyMuPDF** para pesquisa
-integral — mas com uma distinção que importa:
+Cada PDF é descarregado e convertido em **Markdown** pelo **MarkItDown**
+(Microsoft, `markitdown[pdf]`), que — ao contrário de uma extração de texto
+simples — **preserva a estrutura das tabelas**. É o que faz diferença aqui,
+porque as contas anuais e as listas de ações são exatamente isso: tabelas de
+ação × meio × gasto × receita × fornecedor. O que fica no campo `texto` (e no
+índice) é esse Markdown, pelo que uma linha da tabela continua a ser uma linha
+pesquisável — «Povo Livre Digital», um NIF de fornecedor ou «492,00» encontram o
+documento **e a linha a que pertencem**.
 
-* os **relatórios** e as **decisões** da ECFP são digitais (PDF com camada de
-  texto): ficam pesquisáveis palavra a palavra (`texto_extraido = true`);
-* as **contas anuais** e as **listas de ações** são **digitalizações**: não têm
-  camada de texto. Dessas fica o documento, o `pdf_sha256` e o número de páginas,
-  e o indicador `pdf_digitalizado = true`. **Não há OCR**: para pesquisar dentro
-  de uma digitalização é preciso abrir o PDF (o módulo serve-o em
-  `/partidos/documento/pdf`, sem voltar ao TC).
+O campo `texto_metodo` diz como o texto foi obtido:
 
-O texto guardado por documento é limitado a 400 000 caracteres
-(`MAX_TEXTO_CHARS`) e um PDF acima de 40 MB não é descarregado (`MAX_PDF_BYTES`).
+| `texto_metodo` | O que significa |
+| --- | --- |
+| `markitdown` | Markdown do MarkItDown (caminho normal) |
+| `pymupdf` | Texto simples do **PyMuPDF**, usado como recurso quando o MarkItDown falha ou não está instalado |
+| `pdf-sem-texto` | O PDF é uma **digitalização** (imagem sem camada de texto): não há texto nenhum a indexar |
+
+O **PyMuPDF** continua a ser quem conta as páginas (`paginas`) e quem garante o
+texto de recurso. O Markdown é limitado a 900 000 caracteres
+(`MAX_MARKDOWN_CHARS`; o texto simples de recurso, a 400 000) e um PDF acima de
+40 MB não é descarregado (`MAX_PDF_BYTES`).
+
+**As digitalizações.** Boa parte das **contas anuais** e algumas **listas de
+ações** são imagens digitalizadas: o MarkItDown não faz OCR (nem o módulo), por
+isso dessas fica o documento, o `pdf_sha256` e o número de páginas, com
+`texto_metodo = pdf-sem-texto` e `precisa_ocr = true`. Para ler o conteúdo é
+preciso abrir o PDF — que o módulo serve em `/partidos/documento/pdf`, sem
+voltar ao TC. O Markdown guardado de qualquer documento (o que ficou indexado)
+está em `/partidos/documento/markdown`, e a página **Partidos e contas** mostra-o
+ao clicar em **ver Markdown**.
 
 ## Recolha
 
@@ -164,13 +181,14 @@ Pedir um ano que o TC não publica **não** recolhe tudo: o ano fica em
 | `POST` | `/partidos/indexar` | Indexação (segundo plano) |
 | `GET` | `/partidos/jobs`, `/partidos/jobs/{id}` | Progresso dos trabalhos |
 | `GET` | `/partidos/resumo` | Painel: por ano, por secção, top partidos, cumprimento |
-| `GET` | `/partidos/search` | Pesquisa (texto, ano, secção, partido, cumprimento) |
+| `GET` | `/partidos/search` | Pesquisa (texto, ano, secção, partido, cumprimento, método do texto) |
 | `GET` | `/partidos/registo` | Registo oficial da CNE (inscritos/extintos) |
 | `GET` | `/partidos/partido/{termo}` | Ficha do partido: registo da CNE + contas por ano |
 | `GET` | `/partidos/partido/{termo}/pessoas` | Pessoas do PessoasIQ ligadas ao partido |
 | `GET` | `/partidos/pessoa/{nif}` | A pessoa e o partido dela, com as contas do partido |
 | `GET` | `/partidos/amostra/{ano}` | Amostra lida do disco (funciona sem Elasticsearch) |
 | `GET` | `/partidos/documento/pdf` | O PDF guardado (`ano` + `ficheiro`), sem sair da pasta |
+| `GET` | `/partidos/documento/markdown` | O Markdown que ficou indexado (com o método e o aviso de OCR) |
 | `GET` | `/partidos/export.csv` | Exportação da pesquisa |
 
 ### A ponte «pessoas e partidos»
@@ -196,3 +214,8 @@ recurso à denominação e à sigla da CNE quando a sigla do TC não coincide).
   original e a retificada): são documentos distintos, ambos indexados.
 * `finance_partidos_recolhas` guarda o `sha256` de cada página descarregada, o
   que permite saber se o TC republicou o ano.
+* O **Markdown** de uma tabela de PDF nem sempre sai perfeito: os cabeçalhos
+  multi-linha das listas de ações (que o próprio PDF desenha em várias linhas)
+  aparecem por vezes desalinhados. As **linhas de dados** — designação, datas,
+  valores, fornecedores — mantêm-se legíveis e pesquisáveis, que é o que
+  interessa para encontrar e conferir.
