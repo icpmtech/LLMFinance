@@ -15942,7 +15942,10 @@ def company_people_from_index(
 
     Lê `finance_people` pelos documentos que têm um cargo na empresa indicada e
     devolve, por pessoa, os cargos **nessa empresa** (o mais recente primeiro),
-    além do nome da empresa tal como aparece nas publicações.
+    além do nome da empresa tal como aparece nas publicações. Cada cargo traz o
+    que distingue um cargo de outro (`quota`, `causa`, `tribunal`) e cada pessoa
+    traz `outras_empresas` — onde mais tem cargos, sem as do pedido — para se ver
+    a rede da pessoa sem uma segunda consulta.
     """
     client = es or get_es_client()
     nif = str(company_nif or "").strip()
@@ -15957,7 +15960,8 @@ def company_people_from_index(
         "query": {"nested": {"path": "roles", "query": {"term": {"roles.company_nif": nif}}}},
         "_source": [
             "nif", "name", "name_keyword", "is_company", "roles", "roles_count",
-            "companies_count", "source", "sources", "ingested_at", "last_seen",
+            "companies", "companies_count", "source", "sources", "ingested_at",
+            "first_seen", "last_seen",
         ],
         "sort": [{"roles_count": {"order": "desc"}}, {"nif": "asc"}],
     }
@@ -15998,7 +16002,15 @@ def company_people_from_index(
             "publication_id": latest.get("publication_id"),
             "roles_total": int(source.get("roles_count") or 0),
             "companies_total": int(source.get("companies_count") or 0),
+            "first_seen": source.get("first_seen"),
+            "last_seen": source.get("last_seen"),
             "origin": (source.get("sources") or [None])[0] if source.get("sources") else source.get("source"),
+            "origens": list(source.get("sources") or ([source["source"]] if source.get("source") else [])),
+            "outras_empresas": [
+                {"nif": str(empresa.get("nif") or ""), "nome": str(empresa.get("name") or "")}
+                for empresa in (source.get("companies") or [])
+                if isinstance(empresa, dict) and str(empresa.get("nif") or "") not in ("", nif)
+            ],
             "roles": [
                 {
                     "role": role.get("role"),
@@ -16007,6 +16019,10 @@ def company_people_from_index(
                     "date": role.get("date"),
                     "acto": role.get("acto"),
                     "publication_id": role.get("publication_id"),
+                    "quota": role.get("quota"),
+                    "causa": role.get("causa"),
+                    "tribunal": role.get("tribunal"),
+                    "nacionalidade": role.get("nacionalidade"),
                 }
                 for role in roles[:20]
             ],

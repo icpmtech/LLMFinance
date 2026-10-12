@@ -43,6 +43,7 @@ import EntityComparePage from "./pages/EntityComparePage";
 import EmpresasIQPage from "./pages/EmpresasIQPage";
 import PessoasIQPage from "./pages/PessoasIQPage";
 import DescobertaPage from "./pages/DescobertaPage";
+import DescobertaPessoasPage from "./pages/DescobertaPessoasPage";
 import PoliticosPortugalPage from "./pages/PoliticosPortugalPage";
 import { PessoasGraphWindow } from "./pages/PessoasGraphWindow";
 import { parseGraphWindowView } from "./components/people/peopleKit";
@@ -161,6 +162,7 @@ type AppView =
   | "pessoas-iq"
   | "pessoas-iq-politicos"
   | "descoberta"
+  | "descoberta-pessoas"
   | "pessoas-graph"
   | "ontology"
   | "crm"
@@ -339,6 +341,7 @@ function pathForView(
   if (view === "pessoas-iq") return "/pessoas-iq";
   if (view === "pessoas-iq-politicos") return "/pessoas-iq/politicos";
   if (view === "descoberta") return "/descoberta";
+  if (view === "descoberta-pessoas") return "/descoberta-pessoas";
   if (view === "ontology") return "/ontology";
   if (view === "hermes") return "/hermes";
   if (view === "jarvis") return "/jarvis";
@@ -667,6 +670,7 @@ export default function App() {
     if (path === "/pessoas-iq/politicos") return "pessoas-iq-politicos";
     if (path === "/pessoas-iq" || path.startsWith("/pessoas-iq/")) return "pessoas-iq";
     if (path === "/descoberta" || path.startsWith("/descoberta/")) return "descoberta";
+    if (path === "/descoberta-pessoas" || path.startsWith("/descoberta-pessoas/")) return "descoberta-pessoas";
     if (path === "/empresas-global") return "companies-global";
     if (path === "/ontology" || path.startsWith("/ontology/")) return "ontology";
     if (path === "/hermes" || path.startsWith("/hermes/")) return "hermes";
@@ -801,6 +805,7 @@ export default function App() {
       else if (path === "/pessoas-iq/politicos") next = "pessoas-iq-politicos";
       else if (path === "/pessoas-iq" || path.startsWith("/pessoas-iq/")) next = "pessoas-iq";
       else if (path === "/descoberta" || path.startsWith("/descoberta/")) next = "descoberta";
+      else if (path === "/descoberta-pessoas" || path.startsWith("/descoberta-pessoas/")) next = "descoberta-pessoas";
       else if (path === "/empresas-global") next = "companies-global";
       else if (path === "/ontology" || path.startsWith("/ontology/")) next = "ontology";
       else if (path === "/hermes" || path.startsWith("/hermes/")) next = "hermes";
@@ -1365,6 +1370,7 @@ export default function App() {
     if (target === "empresas-iq") return <EmpresasIQPage />;
     if (target === "pessoas-iq") return <PessoasIQPage />;
     if (target === "descoberta") return <DescobertaPage onBack={() => setViewAndHistory("chat")} />;
+    if (target === "descoberta-pessoas") return <DescobertaPessoasPage onBack={() => setViewAndHistory("chat")} />;
     if (target === "pessoas-iq-politicos") return <PoliticosPortugalPage />;
     if (target === "companies-global") return <CompaniesGlobalPage onOpenView={handleOpenSearchView} />;
     if (target === "ontology") return <OntologyPage />;

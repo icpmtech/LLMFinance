@@ -153,6 +153,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "192,38,211",
   },
   {
+    id: "descoberta-pessoas",
+    label: "Descoberta de Pessoas",
+    hint: "Uma ou várias empresas → quem nelas tem cargos, o capital, os papéis nos processos e quem liga as empresas",
+    icon: Users,
+    gradient: "from-pink-300 via-rose-500 to-fuchsia-600",
+    accent: "244,63,94",
+  },
+  {
     id: "companies-global",
     label: "Empresas Global",
     hint: "Entidades e empresas de todo o sistema (PT + Espanha + CRM)",

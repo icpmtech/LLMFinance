@@ -103,6 +103,7 @@ export type AppView =
   | "entities-compare"
   | "empresas-iq"
   | "pessoas-iq"
+  | "descoberta-pessoas"
   | "companies-global"
   | "crm"
   | "crm-accounts"

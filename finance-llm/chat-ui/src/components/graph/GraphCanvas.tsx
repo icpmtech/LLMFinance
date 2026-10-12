@@ -391,6 +391,7 @@ export function GraphCanvas({
   labels = "auto",
   nodeSummary,
   edgeSummary,
+  nodeSubtitle,
   onNodeClick,
   onEdgeClick,
 }: {
@@ -411,6 +412,11 @@ export function GraphCanvas({
   labels?: LabelMode;
   /** Resumo personalizado do nó na dica (por omissão: contratos · valor). */
   nodeSummary?: (node: StudioNode) => string;
+  /**
+   * Segunda linha do nome no nó (ex.: o título do cargo de uma pessoa), desenhada
+   * por baixo e mais pequena nos nós com etiqueta. Sem isto, o nó fica como sempre.
+   */
+  nodeSubtitle?: (node: StudioNode) => string | undefined;
   /** Resumo personalizado da aresta na dica (por omissão: métrica · contratos). */
   edgeSummary?: (edge: StudioEdge) => string;
   onNodeClick?: (node: StudioNode) => void;
@@ -610,10 +616,18 @@ export function GraphCanvas({
     }
 
     const boxes: { x: number; y: number; w: number; h: number }[] = [];
-    const drawLabel = (text: string, x: number, y: number, emphasised: boolean) => {
-      ctx.font = emphasised ? "bold 12px ui-sans-serif, system-ui" : "600 10px ui-sans-serif, system-ui";
+    const drawLabel = (text: string, x: number, y: number, emphasised: boolean, subtitle = "") => {
+      const fontePrincipal = emphasised ? "bold 12px ui-sans-serif, system-ui" : "600 10px ui-sans-serif, system-ui";
+      const fonteSub = "500 9px ui-sans-serif, system-ui";
+      ctx.font = fontePrincipal;
       const label = text.length > 26 ? `${text.slice(0, 24)}…` : text;
-      const box = { x: x - 4, y: y - 10, w: ctx.measureText(label).width + 8, h: 16 };
+      const sub = subtitle.length > 34 ? `${subtitle.slice(0, 32)}…` : subtitle;
+      let largura = ctx.measureText(label).width;
+      if (sub) {
+        ctx.font = fonteSub;
+        largura = Math.max(largura, ctx.measureText(sub).width);
+      }
+      const box = { x: x - 4, y: y - 10, w: largura + 8, h: sub ? 26 : 16 };
       const collides = boxes.some(
         (other) =>
           !(
@@ -627,8 +641,14 @@ export function GraphCanvas({
       boxes.push(box);
       ctx.fillStyle = "rgba(3,12,17,0.86)";
       ctx.fillRect(box.x, box.y, box.w, box.h);
+      ctx.font = fontePrincipal;
       ctx.fillStyle = emphasised ? "#ffffff" : "#dbeafe";
       ctx.fillText(label, x, y);
+      if (sub) {
+        ctx.font = fonteSub;
+        ctx.fillStyle = "#94a3b8";
+        ctx.fillText(sub, x, y + 12);
+      }
     };
 
     const drawNodeAt = (
@@ -673,7 +693,7 @@ export function GraphCanvas({
       const comEtiqueta =
         isSelected || isHovered || (current.labels === "auto" && !current.dense && current.labelledIds.has(node.id));
       if (comEtiqueta) {
-        drawLabel(node.label, p.x + radius + 6, p.y + 3, isSelected || isHovered);
+        drawLabel(node.label, p.x + radius + 6, p.y + 3, isSelected || isHovered, nodeSubtitle?.(node) ?? "");
       }
     };
 

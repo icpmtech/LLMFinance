@@ -298,6 +298,9 @@ from api.empresas_perfil_routes import router as empresas_perfil_router
 # Descoberta: painel de controlo de uma empresa — NIF → recolha total → grafo de
 # informação → ontologia → análise citada pelo Hermes.
 from api.descoberta_routes import router as descoberta_router
+# Descoberta de pessoas: uma ou várias empresas → quem nelas tem cargos, a rede de
+# cada pessoa e (com duas ou mais empresas) quem as liga (`/descoberta/pessoas/*`).
+from api.descoberta_pessoas_routes import router as descoberta_pessoas_router
 from api.cire_routes import router as cire_router
 from api.citacoes_routes import router as citacoes_router
 from api.people_routes import router as people_router
@@ -643,6 +646,7 @@ app.include_router(empresas_perfil_router)
 # Descoberta: uma empresa, todas as fontes, o grafo de informação, a ontologia e
 # a análise do Hermes (`/descoberta/*`).
 app.include_router(descoberta_router)
+app.include_router(descoberta_pessoas_router)
 
 
 @app.get("/societario")

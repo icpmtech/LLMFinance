@@ -31,6 +31,9 @@ escolher (ou a que o painel impuser).
 | `GET /descoberta/conjunto?nifs=&nomes=` | comparação de várias empresas (números, cruzamentos e rede) |
 | `POST /descoberta/conjunto` | igual, com a lista de empresas no corpo |
 
+A pergunta ao contrário — **quem está por trás das empresas** — tem módulo próprio, a
+[Descoberta de pessoas](./descoberta-pessoas.md) (`/descoberta/pessoas/*`).
+
 `GET /descoberta/empresa/{nif}` aceita `pais` (`PT`, `ES`, `FR`), `nome` (quando já é conhecido),
 `fontes` (lista de ids separada por vírgulas) e `incluir_grafo` / `incluir_ontologia` /
 `incluir_decisao`.
