@@ -16,7 +16,8 @@ export type CompaniesGlobalSourceId =
   | "organo_es"
   | "adjudicataria_es"
   | "crm"
-  | "iberinform";
+  | "iberinform"
+  | "racius";
 
 /** Fonte concreta (sem o agregado «all»). */
 export type CompaniesGlobalSourceKey = Exclude<CompaniesGlobalSourceId, "all">;

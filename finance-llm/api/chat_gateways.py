@@ -46,6 +46,20 @@ DEFAULT_BACKEND = "hermes-agent"
 MAX_HISTORY_TURNS = 12
 MAX_HISTORY_CHARS = 4000
 
+#: Tecto do rótulo de uma citação. O chat mostra cada fonte como uma etiqueta
+#: (``📊 nome``): o título de uma evidência do Hermes é uma frase inteira e, com
+#: 12 delas, a linha de etiquetas ocupava mais ecrã do que a própria resposta.
+MAX_SOURCE_LABEL = 52
+
+
+def _curto(texto: str, limite: int = MAX_SOURCE_LABEL) -> str:
+    """Uma linha só, cortada em fronteira de palavra, com reticências."""
+    limpo = " ".join(str(texto or "").split())
+    if len(limpo) <= limite:
+        return limpo
+    corte = limpo[:limite].rsplit(" ", 1)[0] or limpo[:limite]
+    return corte.rstrip(" ,;:·—-") + "…"
+
 
 @dataclass(frozen=True)
 class ChatBrain:
@@ -225,24 +239,26 @@ def _sources(entry: Dict[str, Any]) -> List[Dict[str, Any]]:
         for evidence in data.get("evidence") or []:
             if not isinstance(evidence, dict):
                 continue
+            numero = evidence.get("n") or len(items) + 1
+            titulo = evidence.get("title") or evidence.get("source")
+            etiqueta = _curto(titulo) if titulo else f"evidência {numero}"
             items.append(
                 {
-                    "name": str(
-                        evidence.get("title") or evidence.get("source") or f"evidência {len(items) + 1}"
-                    )[:300],
+                    "name": f"[{numero}] {etiqueta}",
                     "url": evidence.get("url") or None,
-                    "value": (evidence.get("snippet") or evidence.get("source") or None),
+                    # O título completo fica no valor: a etiqueta do chat é curta,
+                    # mas nada se perde para quem mostre as fontes em detalhe.
+                    "value": (evidence.get("snippet") or evidence.get("title") or evidence.get("source") or None),
                 }
             )
         if not items:
             for index, source in enumerate(data.get("sources") or [], start=1):
                 if not isinstance(source, dict):
                     continue  # id de fonte consultada, não é citação
+                titulo = source.get("title") or source.get("doc_title") or source.get("label")
                 items.append(
                     {
-                        "name": str(
-                            source.get("title") or source.get("doc_title") or source.get("label") or f"fonte {index}"
-                        )[:300],
+                        "name": f"[{index}] {_curto(titulo) if titulo else f'fonte {index}'}",
                         "url": source.get("url") or None,
                         "value": (source.get("snippet") or source.get("text") or None),
                     }
@@ -329,6 +345,7 @@ async def ask(
             "message": ChatMessage(role="assistant", content="Escreva a pergunta que quer colocar."),
             "sources": [],
             "tools": [],
+            "thinking": None,
             "model": f"gateway:{brain.gateway}",
         }
 
@@ -352,6 +369,7 @@ async def ask(
         "message": ChatMessage(role="assistant", content=answer),
         "sources": _sources(entry),
         "tools": [_tool_call(brain, {brain.arg: question}, entry)],
+        "thinking": _thinking(entry),
         "model": f"gateway:{brain.gateway}",
     }
 
@@ -370,6 +388,49 @@ def ask_sync(
     ciclo a decorrer — mesma solução que o caminho cloud usa.
     """
     return asyncio.run(ask(messages, backend, user_id=user_id, user_email=user_email, session=session))
+
+
+def _thinking(entry: Dict[str, Any]) -> Optional[str]:
+    """O raciocínio do cérebro, para o chat o poder mostrar.
+
+    No Hermes Agent é o `reasoning_content` do turno (o «thinking» que o agente
+    escreve antes de usar ferramentas) — só existe quando o modelo raciocina, pelo
+    que uma tarefa trivial devolve `None`. No Hermes (investigação) não há
+    raciocínio em texto: mostra-se o **plano** que ele seguiu.
+    """
+    if not entry.get("ok"):
+        return None
+    data = entry.get("data") if isinstance(entry.get("data"), dict) else {}
+
+    gateway = str(entry.get("gateway") or "")
+    if gateway == "agent":
+        texto = str(data.get("thinking") or "").strip()
+        return texto or None
+
+    if gateway == "hermes":
+        linhas: List[str] = []
+        for passo in data.get("steps") or []:
+            if not isinstance(passo, dict):
+                continue
+            # `focus` é o rótulo humano do passo («Pergunta», «Web»…). Um passo sem
+            # rótulo só teria um `id` interno à vista — não se mostra.
+            foco = str(passo.get("focus") or passo.get("label") or "").strip()
+            if not foco:
+                continue
+            itens = passo.get("items")
+            fontes = passo.get("sources_with_results")
+            ms = passo.get("ms")
+            detalhe: List[str] = []
+            if itens is not None:
+                detalhe.append(f"{itens} resultado(s)")
+            if fontes is not None:
+                detalhe.append(f"{fontes} fonte(s) com resultados")
+            if ms:
+                detalhe.append(f"{float(ms) / 1000:.1f} s")
+            linhas.append(f"{foco}: {' · '.join(detalhe)}" if detalhe else foco)
+        return "\n".join(linhas) or None
+
+    return None
 
 
 def _log(
@@ -451,6 +512,7 @@ async def stream(
             "sources": resultado["sources"],
             "tools": resultado["tools"],
             "skill": None,
+            "thinking": resultado.get("thinking"),
             "model": resultado["model"],
         },
     )

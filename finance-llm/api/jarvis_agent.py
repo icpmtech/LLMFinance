@@ -483,6 +483,10 @@ async def ask(
     message = choices[0].get("message") or {}
     return {
         "answer": str(message.get("content") or "").strip(),
+        # O raciocínio do turno vem em `reasoning_content` (o campo estilo DeepSeek
+        # que o chat mostra como «thinking»). Vem também no modo não-stream, mas
+        # **só quando o modelo raciocina**: numa tarefa trivial o campo não existe.
+        "thinking": str(message.get("reasoning_content") or "").strip(),
         "model": str(data.get("model") or MODEL),
         "usage": data.get("usage") or {},
         "tool_calls": len(message.get("tool_calls") or []),

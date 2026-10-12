@@ -337,6 +337,9 @@ from api.subvencoes_routes import router as subvencoes_router
 # segmento, concorrentes, historial de contrapartes e oportunidades.
 from api.benchmark_routes import router as benchmark_router
 from api.benchmarks_routes import router as benchmarks_router, site_router as benchmarks_site_router
+# Importação dos Contratos Públicos do Portal Base (IMPIC) publicados em dados.gov.pt:
+# catálogo dos ficheiros por ano, formato do ZIP e importação para o Elasticsearch.
+from api.base_impic_routes import router as base_impic_router
 from api import auth_service as auth
 from api import events_service as events
 from api import ontology_registry as ontology_registry
@@ -610,6 +613,7 @@ app.include_router(office_router)
 # ser registada **antes** do CMS: senão o `GET /site/{path}` do CMS apanha-a.
 app.include_router(benchmarks_site_router)
 app.include_router(benchmarks_router)
+app.include_router(base_impic_router)
 # CMS: gestão em `/cms/*` e site público em `/site/*`.
 app.include_router(cms_router)
 # Loja online: gestão em `/shop/*` e vitrine pública em `/loja/*`.
@@ -1999,6 +2003,7 @@ async def chat(req: ChatRequest, backend: str = Query("gpt2"), session: Any = De
             sources=result["sources"],
             tools=result["tools"],
             skill=None,
+            thinking=result.get("thinking"),
         )
 
     skill = await skills.for_request(question, session=session, backend=backend)

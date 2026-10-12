@@ -200,10 +200,33 @@ def test_hermes_devolve_citacoes_como_fontes(monkeypatch: pytest.MonkeyPatch) ->
     resultado = _run(gateways.ask(_conversa(("user", "insolvências da Cofely")), "hermes"))
 
     fontes = resultado["sources"]
-    assert fontes[0] == {"name": "Publicação CIRE 123", "url": "https://cire/j/123", "value": "PER em 2024"}
-    assert fontes[1]["name"] == "Notícia X"
+    # A etiqueta do chat é curta e numerada (`📊 [1] …`), para 12 citações não
+    # ocuparem mais ecrã do que a resposta; o resto fica no valor/URL.
+    assert fontes[0] == {"name": "[1] Publicação CIRE 123", "url": "https://cire/j/123", "value": "PER em 2024"}
+    assert fontes[1]["name"] == "[2] Notícia X"
     assert len(fontes) == 2  # a string solta na lista não vira fonte
     assert resultado["model"] == "gateway:hermes"
+
+
+def test_etiqueta_da_citacao_e_curta_mas_o_titulo_fica_no_valor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O título de uma evidência é uma frase: a etiqueta encurta, o valor não."""
+    titulo = "Contratos públicos (total global da plataforma): 2 250 969 contratos · 156.50 mM€"
+
+    async def _invoke(tool_id: str, args: Dict[str, Any], *, ctx: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        return {
+            "tool": tool_id,
+            "gateway": "hermes",
+            "ok": True,
+            "data": {"answer": "…", "evidence": [{"n": 7, "title": titulo, "url": "/contracts/dashboard"}]},
+        }
+
+    monkeypatch.setattr("api.jarvis_gateway.invoke", _invoke)
+    fonte = _run(gateways.ask(_conversa(("user", "quantos contratos?")), "hermes"))["sources"][0]
+
+    assert fonte["name"] == "[7] Contratos públicos (total global da plataforma): 2…"
+    assert len(fonte["name"]) <= gateways.MAX_SOURCE_LABEL + len("[7] ") + 1
+    assert fonte["value"] == titulo  # nada se perdeu, só ficou fora da etiqueta
+    assert fonte["url"] == "/contracts/dashboard"
 
 
 def test_hermes_sem_evidencias_cai_para_as_fontes_do_agente_dinamico(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -220,7 +243,7 @@ def test_hermes_sem_evidencias_cai_para_as_fontes_do_agente_dinamico(monkeypatch
     monkeypatch.setattr("api.jarvis_gateway.invoke", _invoke)
     resultado = _run(gateways.ask(_conversa(("user", "olá")), "hermes"))
 
-    assert resultado["sources"][0]["name"] == "Relatório anual"
+    assert resultado["sources"][0]["name"] == "[1] Relatório anual"
     assert resultado["sources"][0]["value"] == "…"
 
 
@@ -415,6 +438,117 @@ def test_rota_chat_backends(monkeypatch: pytest.MonkeyPatch) -> None:
     assert resposta.json()["backends"][0]["available"] is False
 
 
+def test_thinking_do_agente_chega_ao_chat(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O `reasoning_content` do agente é o «thinking» que o chat mostra."""
+
+    async def _invoke(tool_id: str, args: Dict[str, Any], *, ctx: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        return {
+            "tool": tool_id,
+            "gateway": "agent",
+            "ok": True,
+            "data": {
+                "answer": "19",
+                "model": "deepseek-chat",
+                "tool_calls": 1,
+                "thinking": "Preciso de somar 5 ao 14 que pensei antes.",
+            },
+        }
+
+    monkeypatch.setattr("api.jarvis_gateway.invoke", _invoke)
+    resultado = _run(gateways.ask(_conversa(("user", "soma 5")), "hermes-agent"))
+
+    assert resultado["thinking"] == "Preciso de somar 5 ao 14 que pensei antes."
+
+
+def test_sem_raciocinio_o_thinking_e_nulo(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Numa tarefa trivial o modelo pode não raciocinar: `thinking` fica nulo."""
+
+    async def _invoke(tool_id: str, args: Dict[str, Any], *, ctx: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        return {"tool": tool_id, "gateway": "agent", "ok": True, "data": {"answer": "14", "thinking": "   "}}
+
+    monkeypatch.setattr("api.jarvis_gateway.invoke", _invoke)
+    resultado = _run(gateways.ask(_conversa(("user", "pensa num número")), "hermes-agent"))
+
+    assert resultado["thinking"] is None
+
+
+def test_thinking_do_hermes_e_o_plano_de_investigacao(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O Hermes não raciocina em texto: mostra-se o plano que seguiu."""
+
+    async def _invoke(tool_id: str, args: Dict[str, Any], *, ctx: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        return {
+            "tool": tool_id,
+            "gateway": "hermes",
+            "ok": True,
+            "data": {
+                "answer": "…[1]",
+                "steps": [
+                    {"id": "pergunta", "focus": "Pergunta", "items": 20, "sources_with_results": 3, "ms": 6897},
+                    {"id": "vazio", "focus": "", "items": None},
+                ],
+            },
+        }
+
+    monkeypatch.setattr("api.jarvis_gateway.invoke", _invoke)
+    resultado = _run(gateways.ask(_conversa(("user", "quantos contratos?")), "hermes"))
+
+    assert resultado["thinking"] == "Pergunta: 20 resultado(s) · 3 fonte(s) com resultados · 6.9 s"
+
+
+def test_falha_nao_traz_raciocinio(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _invoke(tool_id: str, args: Dict[str, Any], *, ctx: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        return {"tool": tool_id, "gateway": "agent", "ok": False, "error": "timeout"}
+
+    monkeypatch.setattr("api.jarvis_gateway.invoke", _invoke)
+    resultado = _run(gateways.ask(_conversa(("user", "olá")), "hermes-agent"))
+
+    assert resultado["thinking"] is None
+
+
+def test_seguimento_leva_o_dialogo_e_a_pergunta_nova(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Uma pergunta de seguimento («soma 5 a esse número») precisa do diálogo atrás."""
+    visto: Dict[str, Any] = {}
+
+    async def _invoke(tool_id: str, args: Dict[str, Any], *, ctx: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        visto["args"] = args
+        visto["ctx"] = ctx or {}
+        return {"tool": tool_id, "gateway": "agent", "ok": True, "data": {"answer": "19"}}
+
+    monkeypatch.setattr("api.jarvis_gateway.invoke", _invoke)
+    _run(
+        gateways.ask(
+            _conversa(
+                ("user", "Pensa num número entre 10 e 20."),
+                ("assistant", "14"),
+                ("user", "Soma 5 a esse número."),
+            ),
+            "hermes-agent",
+        )
+    )
+
+    # A pergunta nova vai como tarefa; o resto da conversa vai como histórico.
+    assert visto["args"] == {"task": "Soma 5 a esse número."}
+    assert visto["ctx"]["history"] == [
+        {"role": "user", "content": "Pensa num número entre 10 e 20."},
+        {"role": "assistant", "content": "14"},
+    ]
+
+
+def test_stream_devolve_o_raciocinio_no_done(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _invoke(tool_id: str, args: Dict[str, Any], *, ctx: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        return {"tool": tool_id, "gateway": "agent", "ok": True, "data": {"answer": "19", "thinking": "14+5"}}
+
+    monkeypatch.setattr("api.jarvis_gateway.invoke", _invoke)
+
+    async def _recolher() -> List[str]:
+        return [evento async for evento in gateways.stream(_conversa(("user", "soma 5")), "hermes-agent")]
+
+    eventos = _run(_recolher())
+    done = json.loads([e for e in eventos if "event: done" in e][0].split("data: ", 1)[1])
+
+    assert done["thinking"] == "14+5"
+
+
 def test_rota_chat_responde_pelo_agente(monkeypatch: pytest.MonkeyPatch) -> None:
     """`POST /chat?backend=hermes-agent` devolve a resposta do agente, com o rasto."""
     chamadas: List[str] = []
@@ -426,7 +560,12 @@ def test_rota_chat_responde_pelo_agente(monkeypatch: pytest.MonkeyPatch) -> None
             "gateway": "agent",
             "label": "Hermes Agent",
             "ok": True,
-            "data": {"answer": "Respondido pelo agente.", "model": "deepseek-chat", "tool_calls": 2},
+            "data": {
+                "answer": "Respondido pelo agente.",
+                "model": "deepseek-chat",
+                "tool_calls": 2,
+                "thinking": "O utilizador quer saber quem é.",
+            },
         }
 
     monkeypatch.setattr("api.jarvis_gateway.invoke", _invoke)
@@ -445,6 +584,8 @@ def test_rota_chat_responde_pelo_agente(monkeypatch: pytest.MonkeyPatch) -> None
     assert corpo["message"]["content"] == "Respondido pelo agente."
     assert corpo["tools"][0]["tool"] == "agent.ask"
     assert corpo["sources"][0]["name"] == "Hermes Agent"
+    # O raciocínio do agente vai no corpo da resposta (o chat mostra-o à parte).
+    assert corpo["thinking"] == "O utilizador quer saber quem é."
     # A skill da plataforma não é gerada para estes backends (não havia skill a usar).
     assert corpo["skill"] is None
     assert chamadas == ["agent.ask"]

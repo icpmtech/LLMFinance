@@ -162,6 +162,9 @@ class ChatResponse(BaseModel):
     tools: List[ToolCall] = []
     chart: Optional[dict] = None
     skill: Optional[SkillRef] = None
+    #: Raciocínio do cérebro do gateway (o «thinking» do Hermes Agent). Vazio
+    #: nos caminhos que não o produzem (modelos locais/cloud, RAG).
+    thinking: Optional[str] = None
 
 
 class TranslateRequest(BaseModel):

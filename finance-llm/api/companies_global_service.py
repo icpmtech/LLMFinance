@@ -35,11 +35,13 @@ from api.elasticsearch_client import (
     ensure_indices,
     get_es_client,
     search_contratos_es_entities,
+    search_directory,
     search_entities,
     search_firmas,
     search_iberinform,
     search_trademarks,
 )
+from api.racius_service import INDEX as RACIUS_INDEX
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +98,13 @@ SOURCES: List[Dict[str, Any]] = [
         "country": "PT",
         "index": SCRAPED_INDEX,
     },
+    {
+        "id": "racius",
+        "label": "Racius",
+        "hint": "Empresas recolhidas do diretório Racius",
+        "country": "PT",
+        "index": RACIUS_INDEX,
+    },
 ]
 SOURCE_IDS = [source["id"] for source in SOURCES]
 _ES_KIND = {"organo_es": "organo", "adjudicataria_es": "adjudicatario"}
@@ -103,7 +112,7 @@ _ES_KIND = {"organo_es": "organo", "adjudicataria_es": "adjudicatario"}
 #: Fontes «rápidas»: leem diretórios indexados. As de Espanha são **agregações**
 #: sobre os ~4 M de contratos do PLACSP e podem demorar dezenas de segundos
 #: (sobretudo com a cache do Elasticsearch fria).
-FAST_SOURCE_IDS = ("entity", "firma", "trademark", "iberinform")
+FAST_SOURCE_IDS = ("entity", "firma", "trademark", "iberinform", "racius")
 
 #: Teto de tempo por fonte: uma fonte lenta não pode segurar a resposta toda.
 SOURCE_TIMEOUT = 20.0
@@ -291,6 +300,46 @@ def _collect_iberinform(q: str, size: int, offset: int) -> Dict[str, Any]:
     return {"items": rows, "total": int(result.get("total") or 0), "error": None}
 
 
+def _collect_racius(q: str, size: int, offset: int) -> Dict[str, Any]:
+    """Coletor do diretório Racius: empresas com ficha normalizada."""
+    result = search_directory(
+        RACIUS_INDEX,
+        q=q or None,
+        sort="relevance" if q else "recent",
+        size=size,
+        offset=offset,
+        search_fields=("nome^4", "nif^2", "morada^2", "atividade", "acerca", "localizacao", "data.*"),
+    )
+    if result.get("error"):
+        return {"error": str(result["error"]), "items": [], "total": 0}
+    rows = []
+    for row in result.get("items") or []:
+        nif = str(row.get("nif") or "")
+        nome = row.get("nome") or ""
+        concelho = row.get("concelho") or ""
+        distrito = row.get("distrito") or ""
+        rows.append(
+            _row(
+                "racius",
+                row.get("item_id") or row.get("_id") or nif or nome or "",
+                nome,
+                detail=" · ".join(filter(None, [row.get("forma_juridica"), concelho, distrito])),
+                nif=nif,
+                region=concelho or distrito or "",
+                date=row.get("scraped_at"),
+                extra={
+                    "concelho": concelho,
+                    "distrito": distrito,
+                    "forma_juridica": row.get("forma_juridica"),
+                    "capital_social_eur": row.get("capital_social_eur"),
+                    "url": row.get("url"),
+                },
+                open_view={"view": "company-detail", "arg": nif} if nif else None,
+            )
+        )
+    return {"items": rows, "total": int(result.get("total") or 0), "error": None}
+
+
 def _collect_crm(q: str, size: int, offset: int, session_scope: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if not session_scope:
         return {"error": None, "items": [], "total": 0, "skipped": True}
@@ -329,6 +378,7 @@ COLLECTORS = {
     "adjudicataria_es": lambda q, size, offset, scope: _collect_es("adjudicataria_es", q, size, offset),
     "crm": lambda q, size, offset, scope: _collect_crm(q, size, offset, scope),
     "iberinform": lambda q, size, offset, scope: _collect_iberinform(q, size, offset),
+    "racius": lambda q, size, offset, scope: _collect_racius(q, size, offset),
 }
 
 

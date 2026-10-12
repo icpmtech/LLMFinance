@@ -125,6 +125,39 @@ Três formas de interagir, por ordem de preferência — todas degradam sem part
    passada ao gateway do Hermes), «Falar» (ler as respostas), escolha da voz e a
    lista de ferramentas disponíveis.
 
+#### Palavra de ativação («sabemos»)
+
+O microfone também se pode ligar **à espera de uma palavra**: quem diz «sabemos»
+acorda o assistente, faz o pedido e o pedido segue para o chat sem tocar no
+teclado.
+
+- **Onde**: no **Chat IA** (os dois botões à esquerda da caixa de texto — o
+  microfone e a orelha) e na **página `/jarvis`** (o botão com a orelha). A
+  orelha liga a escuta contínua; o microfone grava um pedido.
+- **Como funciona**: a escuta grava trechos de 1,5 s e envia-os a
+  `POST /jarvis/wake`, que os transcreve **localmente** com `faster-whisper`
+  (`JARVIS_WAKE_MODEL`, por omissão `tiny`). Só quando uma palavra da lista
+  aparece é que o áudio passa a valer como pedido — o resto do que a sala fala
+  nunca vira pergunta. Ao ouvi-la, dá-se um bipe, grava-se o pedido até haver
+  silêncio e transcreve-se com o modelo completo (`JARVIS_STT_MODEL`). Nada sai
+  da máquina para detetar a palavra.
+- **Palavras** (`api/jarvis_service.py` → `DEFAULT_WAKE_WORDS`, ou
+  `JARVIS_WAKE_WORDS="sabemos,hey jarvis"` para as substituir):
+  `sabemos`, `jarvis`, `hey jarvis`, `olá jarvis`, `apollo`, `hey hermes`. As
+  frases de duas palavras ganham à palavra sozinha (a lista é ordenada por
+  comprimento), para «hey jarvis …» não perder o «hey».
+- **O enviesamento do descodificador acompanha a lista**
+  (`wake_prompt()`): sem ele o `tiny` ouvia «Serviço» em vez de «Jarvis». Uma
+  palavra nova só é reconhecida se também entrar no prompt — daí o prompt ser
+  construído a partir das palavras **efetivas** e não das de origem.
+- **«sabemos» é uma palavra corrente** («sabemos que…»): dispara com mais
+  facilidade do que «jarvis». Em salas com conversa, use `JARVIS_WAKE_WORDS`
+  para ficar só com as frases de duas palavras.
+- **Limites**: é escuta **local** (browser + backend), pelo que não existe nos
+  canais de mensagens (Telegram, Discord, …) nem no container do Hermes Agent —
+  que não tem microfone. O pedido que ela transporta vai para o cérebro
+  escolhido no chat (por omissão o Hermes Agent).
+
 ### Memória da sessão (perguntas de seguimento)
 
 A interface envia o diálogo anterior em `history` (no `POST /jarvis/ask` e no
@@ -274,6 +307,7 @@ mas só com dados públicos (os dados de CRM ficam de fora).
 | `GET /jarvis/actions` | catálogo das **ações** (destinos + criações) |
 | `POST /jarvis/actions/run` | executa uma criação em nome do utilizador |
 | `GET /jarvis/voice` | estado da voz (STT/TTS) e vozes disponíveis |
+| `POST /jarvis/wake` | trecho de áudio → texto + se ouviu a palavra de ativação + o pedido que veio atrás dela |
 | `POST /jarvis/ask` | pergunta → resposta + plano + passos + citações |
 | `POST /jarvis/ask/stream` | o mesmo, em SSE |
 | `POST /jarvis/transcribe` | áudio (multipart) → texto |

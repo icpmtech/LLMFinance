@@ -605,6 +605,10 @@ def test_wake_words_mais_longas_primeiro():
         ("Apolo, qual é o maior contrato?", "apollo", "qual é o maior contrato"),
         ("JARVIS", "jarvis", ""),
         ("Olá, Jarvis", "olá jarvis", ""),
+        # «sabemos» é o nome da plataforma; é a palavra que o chat usa.
+        ("Sabemos, quantos contratos tem a EDP?", "sabemos", "quantos contratos tem a EDP"),
+        ("Sabemos quantos contratos existem?", "sabemos", "quantos contratos existem"),
+        ("sabemos", "sabemos", ""),
     ],
 )
 def test_match_wake_aceita_variacoes(texto, palavra, comando):
@@ -628,6 +632,22 @@ def test_match_wake_recusa_o_que_nao_e_a_palavra(texto):
     resultado = service.match_wake(texto)
     assert resultado["active"] is False, texto
     assert resultado["command"] == ""
+
+
+def test_wake_prompt_enviesa_para_as_palavras_efetivas():
+    """O enviesamento tem de acompanhar as palavras que o serviço usa.
+
+    Com as palavras vindas de `JARVIS_WAKE_WORDS`, um prompt fixo nas antigas fazia
+    o `tiny` continuar a tentar ouvir palavras que já não ativam nada.
+    """
+    assert "sabemos" in service.WAKE_PROMPT
+    for palavra in service.WAKE_WORDS:
+        assert palavra in service.wake_prompt()
+    assert service.wake_prompt(("alfa", "beta")) == "Português de Portugal. alfa, beta."
+
+
+def test_wake_status_publica_a_palavra_sabemos():
+    assert "sabemos" in service.wake_status()["words"]
 
 
 def test_transcribe_wake_usa_o_modelo_pequeno_com_prompt(monkeypatch):

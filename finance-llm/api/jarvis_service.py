@@ -60,7 +60,13 @@ DEFAULT_STT_MODEL = os.getenv("JARVIS_STT_MODEL", "small")
 #: localmente com `faster-whisper` e só acorda quando ouve uma delas — o resto do
 #: áudio nunca chega a virar pergunta. Configurável por `JARVIS_WAKE_WORDS`
 #: (lista separada por vírgulas).
+#:
+#: «sabemos» é o nome da plataforma (a marca é «sabemos»), mas é também uma
+#: palavra corrente em português («sabemos que…»): dispara mais facilmente do que
+#: «jarvis». Quem tiver falsos despertares numa sala com conversa deve usar as
+#: frases de duas palavras («hey jarvis», «hey hermes»).
 DEFAULT_WAKE_WORDS: Tuple[str, ...] = (
+    "sabemos",
     "jarvis",
     "hey jarvis",
     "olá jarvis",
@@ -91,10 +97,17 @@ WAKE_MODEL = os.getenv("JARVIS_WAKE_MODEL", "tiny")
 #: `tiny` não serve**: medido com fala sintética em pt-PT, ouvia «Serviço» em vez
 #: de «Jarvis» e acertava 1 em 4; com o prompt acerta 4 em 4 (e o `base`, que é
 #: ~50% mais lento, não melhora).
-WAKE_PROMPT = os.getenv(
-    "JARVIS_WAKE_PROMPT",
-    "Português de Portugal. " + ", ".join(DEFAULT_WAKE_WORDS) + ".",
-)
+def wake_prompt(words: Sequence[str] = WAKE_WORDS) -> str:
+    """Frase que enviesa o descodificador para as palavras de ativação.
+
+    Tem de acompanhar as palavras **efetivas** — as de `JARVIS_WAKE_WORDS`, quando
+    definidas —, senão o `tiny` continua a tentar ouvir as antigas e uma palavra
+    nova nunca é reconhecida.
+    """
+    return "Português de Portugal. " + ", ".join(words) + "."
+
+
+WAKE_PROMPT = os.getenv("JARVIS_WAKE_PROMPT") or wake_prompt()
 
 # Palavras que sugerem que a pergunta precisa da web (e não só dos dados internos).
 _WEB_HINTS = ("web", "internet", "online", "site", "noticia de hoje", "o que se diz", "fora da plataforma")

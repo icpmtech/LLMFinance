@@ -24,7 +24,11 @@ import {
 } from "lucide-react";
 
 import JarvisOrb, { type JarvisOrbState } from "../components/jarvis/JarvisOrb";
-import { useJarvisVoice } from "../components/jarvis/useJarvisVoice";
+import {
+  primaryWakeWord,
+  useJarvisVoice,
+  wakeWordsHint,
+} from "../components/jarvis/useJarvisVoice";
 import {
   JarvisComposer,
   JarvisThread,
@@ -240,9 +244,9 @@ export default function JarvisPage({ onNavigate }: { onNavigate?: (action: Jarvi
             }`}
             title={
               voice.wakeAvailable
-                ? `Escuta contínua local (faster-whisper ${meta?.voice.wake?.model ?? ""}): diga «${
-                    voice.wakeWords[0] ?? "Jarvis"
-                  }» para acordar o Jarvis`
+                ? `Escuta contínua local (faster-whisper ${
+                    meta?.voice.wake?.model ?? ""
+                  }). ${wakeWordsHint(voice.wakeWords)}`
                 : meta?.voice.wake?.note || "Palavra de ativação indisponível"
             }
           >
@@ -250,7 +254,7 @@ export default function JarvisPage({ onNavigate }: { onNavigate?: (action: Jarvi
             {voice.wakeState === "capturing"
               ? "A ouvir o pedido…"
               : voice.wakeState === "dormant"
-                ? `Diga «${voice.wakeWords[0] ?? "Jarvis"}»`
+                ? `Diga «${primaryWakeWord(voice.wakeWords) ?? "sabemos"}»`
                 : "Palavra de ativação"}
           </button>
 

@@ -51,6 +51,7 @@ const SOURCE_ICON: Record<string, React.ReactNode> = {
   adjudicataria_es: <Handshake size={14} />,
   crm: <Briefcase size={14} />,
   iberinform: <Search size={14} />,
+  racius: <Building2 size={14} />,
 };
 
 const SOURCE_TONE: Record<string, string> = {
@@ -61,6 +62,7 @@ const SOURCE_TONE: Record<string, string> = {
   adjudicataria_es: "border-orange-400/25 bg-orange-400/10 text-orange-200",
   crm: "border-indigo-400/25 bg-indigo-400/10 text-indigo-200",
   iberinform: "border-rose-400/25 bg-rose-400/10 text-rose-200",
+  racius: "border-teal-400/25 bg-teal-400/10 text-teal-200",
 };
 
 const SORTS = [

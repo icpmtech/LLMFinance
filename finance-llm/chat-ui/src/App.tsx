@@ -903,6 +903,7 @@ export default function App() {
           sources: result.sources,
           tools: result.tools,
           skill: result.skill ?? null,
+          thinking: result.thinking ?? null,
         };
         setMessages((prev) => {
           const last = prev[prev.length - 1];

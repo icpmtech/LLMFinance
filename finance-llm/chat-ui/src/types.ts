@@ -8,6 +8,8 @@ export interface Message {
   sources?: Source[];
   tools?: ToolCall[];
   skill?: SkillRef | null;
+  /** Raciocínio do cérebro do gateway («thinking» do Hermes Agent). */
+  thinking?: string | null;
 }
 
 /** Skill (método) que o assistente seguiu para responder. */
@@ -157,6 +159,8 @@ export interface ChatResponse {
   sources: Source[];
   tools: ToolCall[];
   skill?: SkillRef | null;
+  /** Raciocínio do cérebro do gateway, quando existir. */
+  thinking?: string | null;
 }
 
 export interface TranslateRequest {

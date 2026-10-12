@@ -66,6 +66,22 @@ function speechRecognitionCtor(): SpeechRecognitionCtor | null {
  */
 export type JarvisWakeState = "off" | "dormant" | "capturing";
 
+/**
+ * Palavra a destacar na UI. «sabemos» é a palavra da plataforma: quando existe na
+ * lista, é essa que se mostra (a lista vem ordenada por comprimento, pelo que a
+ * primeira seria uma frase de duas palavras).
+ */
+export function primaryWakeWord(words: string[] | undefined | null): string | null {
+  if (!words?.length) return null;
+  return words.find((word) => word === "sabemos") ?? words[0];
+}
+
+/** Texto para o `title`: todas as palavras que acordam o assistente. */
+export function wakeWordsHint(words: string[] | undefined | null): string {
+  if (!words?.length) return "Palavra de ativação indisponível";
+  return `Diga uma destas para acordar: ${words.map((word) => `«${word}»`).join(", ")}`;
+}
+
 //: Duração de cada trecho enviado a transcrever. Curto = latência baixa; longo =
 //: menos pedidos. 1,5 s dá ~0,8 s de atraso entre falar e a órbita acordar.
 const WAKE_CHUNK_MS = 1500;

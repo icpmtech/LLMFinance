@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { Bot, User, Copy, Check, ThumbsUp, ThumbsDown } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Bot, User, Copy, Check, ThumbsUp, ThumbsDown, Brain, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Message } from "../types";
@@ -69,6 +69,12 @@ function MessageItem({ message }: { message: Message }) {
       </div>
 
       <div className={["flex flex-col gap-1 max-w-[85%]", isUser ? "items-end" : "items-start"].join(" ")}>
+        {!isUser && message.thinking ? (
+          <ThinkingBlock
+            text={message.thinking}
+            label={message.tools?.length ? "Raciocínio do cérebro (gateway)" : "Raciocínio"}
+          />
+        ) : null}
         <div
           className={[
             "px-4 py-3 rounded-2xl text-sm leading-relaxed prose prose-invert max-w-none",
@@ -133,6 +139,31 @@ function MessageItem({ message }: { message: Message }) {
   );
 }
 
+function ThinkingBlock({ text, label }: { text: string; label: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="w-full rounded-xl border border-dashed border-border bg-background/40">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground"
+      >
+        <Brain size={13} />
+        <span className="font-medium">{label}</span>
+        <span className="text-[10px] opacity-70">{open ? "ocultar" : `${text.length} caracteres`}</span>
+        <ChevronDown size={14} className={["ml-auto transition-transform", open ? "rotate-180" : ""].join(" ")} />
+      </button>
+      {open && (
+        <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words border-t border-border px-3 py-2 font-sans text-[11px] leading-relaxed text-muted-foreground">
+          {text}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 function MessageActions({ content }: { content: string }) {
   return (
     <div className="flex items-center gap-1">
@@ -166,5 +197,3 @@ function CopyButton({ text }: { text: string }) {
     </button>
   );
 }
-
-import { useState } from "react";
