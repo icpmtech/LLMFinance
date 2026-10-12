@@ -119,7 +119,11 @@ export function ChatInput({ onSend, loading, backend = "gpt2", onBackendChange }
         <div className="absolute left-2 bottom-2 flex items-center gap-0.5">
           <button
             type="button"
-            onClick={() => (voice.listening ? voice.stop() : voice.start())}
+            onClick={() => {
+              setVoiceError(null);
+              if (voice.listening) voice.stop();
+              else voice.start();
+            }}
             disabled={!voice.canListen || loading}
             title={
               voice.canListen
@@ -137,7 +141,10 @@ export function ChatInput({ onSend, loading, backend = "gpt2", onBackendChange }
           </button>
           <button
             type="button"
-            onClick={() => voice.toggleWake()}
+            onClick={() => {
+              setVoiceError(null);
+              voice.toggleWake();
+            }}
             disabled={!voice.wakeAvailable || loading}
             title={
               voice.wakeAvailable

@@ -378,7 +378,14 @@ def importar(
     with _trava:
         atual = _trabalhos.get(ano_int)
         if atual and atual["estado"] == "a_correr":
-            return {"iniciado": False, "mensagem": f"Já há uma importação de {ano_int} a correr.", **dict(atual)}
+            # As chaves explícitas vêm **depois** do estado: o `mensagem` do
+            # trabalho (vazio) não pode tapar a explicação de recusa.
+            return {
+                **dict(atual),
+                "iniciado": False,
+                "ano": ano_int,
+                "mensagem": f"Já há uma importação de {ano_int} a correr.",
+            }
         _trabalhos[ano_int] = _estado_base(ano_int)
 
     thread = threading.Thread(
