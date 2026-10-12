@@ -36,7 +36,8 @@ _carregar_env_do_projeto()
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Body, Request, UploadFile, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse, Response
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from api.models import (
     ActionsResponse,
@@ -688,8 +689,11 @@ app.include_router(benchmark_router)
 @app.get("/benchmark")
 @app.get("/benchmark/{path:path}")
 def serve_benchmark_spa_page(path: str = ""):
-    """Página do módulo **Benchmark de preços e concorrência** (SPA)."""
-    return spa_index_response()
+    """Página do módulo **Benchmark de preços e concorrência** (SPA).
+
+    Serve o index.html com meta tags de SEO adaptadas à sub-rota.
+    """
+    return spa_index_response(path=f"/benchmark/{path}" if path else "/benchmark")
 
 
 @app.get("/osint")
@@ -788,7 +792,32 @@ if UI_BUILD_DIR.is_dir():
 
     app.mount("/assets", _StaticFiles(directory=UI_BUILD_DIR / "assets"), name="assets")
 
-# Servir fotos e outros dados recolhidos (deputados, políticos Wikipédia, etc.)
+    # Middleware para servir ficheiros da raiz do build (favicon, manifest,
+    # robots.txt, sitemap.xml, etc.) apenas em GET/HEAD. Usar `StaticFiles` na
+    # raiz captura também POST/PUT/DELETE e devolve 405 Method Not Allowed,
+    # quebrando endpoints como `/contracts/search` e `/companies/search`.
+    class _RootStaticMiddleware:
+        def __init__(self, app: ASGIApp, directory: Path) -> None:
+            self.app = app
+            self.directory = directory
+
+        async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+            if scope["type"] == "http" and scope["method"] in {"GET", "HEAD"}:
+                path = scope.get("path", "") or "/"
+                # Ignorar a raiz e caminhos que terminam em / — esses vão para a SPA.
+                if path != "/" and not path.endswith("/"):
+                    candidate = self.directory / path.lstrip("/")
+                    if candidate.is_file():
+                        response = FileResponse(
+                            str(candidate),
+                            headers={"Cache-Control": "no-store, must-revalidate"},
+                        )
+                        await response(scope, receive, send)
+                        return
+            await self.app(scope, receive, send)
+
+    app.add_middleware(_RootStaticMiddleware, directory=UI_BUILD_DIR)
+
 # Preferir a pasta data dentro do projecto; fallback para a pasta irmã no workspace.
 DATA_DIR = ROOT / "data"
 if not DATA_DIR.is_dir():
@@ -856,14 +885,183 @@ def companies_role_summary(req: EntityRoleSummaryRequest):
 # Catch-all da SPA para sub-rotas de /companies devem ser registradas ANTES
 # do endpoint dinâmico GET /companies/{nif}, senão o path "search" é
 # interpretado como NIF.
-def spa_index_response() -> FileResponse:
+# Caches de SEO: evita ler e parsear o index.html em cada pedido.
+_SPA_INDEX_HTML: Optional[str] = None
+_SPA_INDEX_HTML_MTIME: Optional[float] = None
+
+
+def _load_spa_index_html() -> str:
+    """Lê o `index.html` da SPA, recarregando se o ficheiro mudar no disco."""
+    global _SPA_INDEX_HTML, _SPA_INDEX_HTML_MTIME
+    path = UI_BUILD_DIR / "index.html"
+    if not path.is_file():
+        return ""
+    mtime = path.stat().st_mtime
+    if _SPA_INDEX_HTML is None or _SPA_INDEX_HTML_MTIME != mtime:
+        _SPA_INDEX_HTML = path.read_text(encoding="utf-8")
+        _SPA_INDEX_HTML_MTIME = mtime
+    return _SPA_INDEX_HTML
+
+
+def _seo_meta_for_path(path: str) -> Dict[str, str]:
+    """Título, descrição e keywords consoante a rota da SPA."""
+    base = {
+        "title": "IQ OS — Plataforma de Inteligência Financeira",
+        "description": "Contratos públicos, empresas, mercados, previsões e chat com modelos de linguagem numa única plataforma.",
+        "keywords": "contratos públicos, empresas, mercados, finanças, IA",
+        "og_title": "IQ OS — Plataforma de Inteligência Financeira",
+        "og_description": "Contratos públicos, empresas, mercados, previsões e chat com modelos de linguagem numa única plataforma.",
+        "og_type": "website",
+    }
+    rotas: Dict[str, Dict[str, str]] = {
+        "/benchmark": {
+            "title": "Benchmark de preços e concorrência — IQ OS",
+            "description": "Preço de referência, concorrentes, historial e oportunidades nos contratos públicos de Portugal, Espanha e França.",
+            "keywords": "benchmark de preços, concorrência, contratos públicos, CPV, fornecedores, compradores, Portugal, Espanha, França",
+            "og_title": "Benchmark de preços e concorrência — IQ OS",
+            "og_description": "Preço de referência, concorrentes, historial e oportunidades nos contratos públicos de Portugal, Espanha e França.",
+        },
+        "/benchmark/portugal": {
+            "title": "Benchmark Portugal — preço de referência e concorrência — IQ OS",
+            "description": "Preço de referência por CPV, concorrentes, historial de contrapartes e oportunidades para empresas que vendem ao Estado em Portugal.",
+            "keywords": "benchmark Portugal, contratos públicos Portugal, preço de referência CPV, fornecedores estado, concorrência",
+            "og_title": "Benchmark Portugal — preço de referência e concorrência — IQ OS",
+            "og_description": "Preço de referência por CPV, concorrentes, historial de contrapartes e oportunidades para empresas que vendem ao Estado em Portugal.",
+        },
+        "/benchmark/espanha": {
+            "title": "Benchmark Espanha — preço de referência e concorrência — IQ OS",
+            "description": "Preço de referência por CPV, concorrentes, historial e oportunidades nos contratos públicos espanhóis (PLACSP).",
+            "keywords": "benchmark Espanha, contratos públicos Espanha, PLACSP, preço de referência CPV, fornecedores",
+            "og_title": "Benchmark Espanha — preço de referência e concorrência — IQ OS",
+            "og_description": "Preço de referência por CPV, concorrentes, historial e oportunidades nos contratos públicos espanhóis (PLACSP).",
+        },
+        "/benchmark/franca": {
+            "title": "Benchmark França — preço de referência e concorrência — IQ OS",
+            "description": "Preço de referência por CPV, concorrentes, historial e oportunidades nos contratos públicos franceses (DECP).",
+            "keywords": "benchmark França, contratos públicos França, DECP, preço de referência CPV, fornecedores",
+            "og_title": "Benchmark França — preço de referência e concorrência — IQ OS",
+            "og_description": "Preço de referência por CPV, concorrentes, historial e oportunidades nos contratos públicos franceses (DECP).",
+        },
+        "/benchmark/cruzar": {
+            "title": "Benchmark entre países — cruzar empresas — IQ OS",
+            "description": "Cruze empresas de Portugal, Espanha e França pelo CPV: encontre compradores e fornecedores em comum.",
+            "keywords": "cruzar empresas, benchmark internacional, contratos públicos, CPV comum, fornecedores Europa",
+            "og_title": "Benchmark entre países — cruzar empresas — IQ OS",
+            "og_description": "Cruze empresas de Portugal, Espanha e França pelo CPV: encontre compradores e fornecedores em comum.",
+        },
+        "/benchmark/comprador": {
+            "title": "Benchmark do comprador — fornecedores e concorrência — IQ OS",
+            "description": "Análise de fornecedores de uma entidade compradora: forças e fraquezas, clientes comuns, preços e geografia das compras.",
+            "keywords": "benchmark comprador, fornecedores, entidade pública, contratos públicos, concorrência, preço de referência",
+            "og_title": "Benchmark do comprador — fornecedores e concorrência — IQ OS",
+            "og_description": "Análise de fornecedores de uma entidade compradora: forças e fraquezas, clientes comuns, preços e geografia das compras.",
+        },
+        "/benchmark/vendedor": {
+            "title": "Benchmark do vendedor — compradores e concorrentes — IQ OS",
+            "description": "Análise de quem vende ao Estado: compradores, concorrentes que disputam os mesmos clientes, preços e geografia das vendas.",
+            "keywords": "benchmark vendedor, fornecedor estado, compradores, concorrentes, contratos públicos, preço de referência",
+            "og_title": "Benchmark do vendedor — compradores e concorrentes — IQ OS",
+            "og_description": "Análise de quem vende ao Estado: compradores, concorrentes que disputam os mesmos clientes, preços e geografia das vendas.",
+        },
+        "/contracts/search": {
+            "title": "Pesquisa de contratos públicos — IQ OS",
+            "description": "Pesquise contratos públicos de Portugal, Espanha e França por entidade, CPV, valor, região e data.",
+            "keywords": "contratos públicos, pesquisa, Portugal, Espanha, França, CPV, entidade, valor",
+            "og_title": "Pesquisa de contratos públicos — IQ OS",
+            "og_description": "Pesquise contratos públicos de Portugal, Espanha e França por entidade, CPV, valor, região e data.",
+        },
+        "/companies/search": {
+            "title": "Pesquisa de empresas — IQ OS",
+            "description": "Pesquise empresas e entidades presentes nos contratos públicos de Portugal, Espanha e França.",
+            "keywords": "empresas, entidades, contratos públicos, NIF, fornecedores, compradores, Portugal, Espanha, França",
+            "og_title": "Pesquisa de empresas — IQ OS",
+            "og_description": "Pesquise empresas e entidades presentes nos contratos públicos de Portugal, Espanha e França.",
+        },
+    }
+    candidatas = sorted(
+        (rota for rota in rotas if path == rota or path.startswith(rota + "/")),
+        key=len,
+        reverse=True,
+    )
+    if candidatas:
+        escolhida = rotas[candidatas[0]]
+        base.update(escolhida)
+    return base
+
+
+def _render_seo_index(path: str = "") -> HTMLResponse:
+    """Devolve o `index.html` com título e meta tags adaptados à rota."""
+    html = _load_spa_index_html()
+    if not html:
+        raise HTTPException(status_code=404, detail="Interface não construída.")
+
+    meta = _seo_meta_for_path(path)
+    canonical = f"https://sabemos.studio{path}" if path else "https://sabemos.studio/"
+
+    html = html.replace("<title>IQ OS — Plataforma de Inteligência Financeira</title>", f"<title>{meta['title']}</title>", 1)
+    desc_original = 'content="Contratos públicos, empresas, mercados, previsões e chat com modelos de linguagem numa única plataforma."'
+    desc_novo = f'content="{meta["description"]}"'
+    html = html.replace(desc_original, desc_novo, 1)
+
+    head_inject = f'''
+    <meta name="keywords" content="{meta['keywords']}" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="{canonical}" />
+    <meta property="og:title" content="{meta['og_title']}" />
+    <meta property="og:description" content="{meta['og_description']}" />
+    <meta property="og:type" content="{meta.get('og_type', 'website')}" />
+    <meta property="og:url" content="{canonical}" />
+    <meta property="og:site_name" content="IQ OS" />
+    <meta property="og:image" content="https://sabemos.studio/icon-512.png" />
+    <meta property="og:locale" content="pt_PT" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{meta['og_title']}" />
+    <meta name="twitter:description" content="{meta['og_description']}" />
+    <meta name="twitter:image" content="https://sabemos.studio/icon-512.png" />
+    '''
+    # Substitui o canonical e as OG tags genéricas do build pelas da rota.
+    html = html.replace(
+        '<link rel="canonical" href="https://sabemos.studio/" />',
+        f'<link rel="canonical" href="{canonical}" />',
+        1,
+    )
+    html = html.replace(
+        '<meta property="og:title" content="IQ OS — Plataforma de Inteligência Financeira" />',
+        f'<meta property="og:title" content="{meta["og_title"]}" />',
+        1,
+    )
+    html = html.replace(
+        '<meta property="og:description" content="Contratos públicos, empresas, mercados, previsões e chat com modelos de linguagem numa única plataforma." />',
+        f'<meta property="og:description" content="{meta["og_description"]}" />',
+        1,
+    )
+    html = html.replace(
+        '<meta property="og:url" content="https://sabemos.studio/" />',
+        f'<meta property="og:url" content="{canonical}" />',
+        1,
+    )
+    # Twitter título/descrição genéricos.
+    html = html.replace(
+        '<meta name="twitter:title" content="IQ OS — Plataforma de Inteligência Financeira" />',
+        f'<meta name="twitter:title" content="{meta["og_title"]}" />',
+        1,
+    )
+    html = html.replace(
+        '<meta name="twitter:description" content="Contratos públicos, empresas, mercados, previsões e chat com modelos de linguagem numa única plataforma." />',
+        f'<meta name="twitter:description" content="{meta["og_description"]}" />',
+        1,
+    )
+
+    return HTMLResponse(content=html, headers={"Cache-Control": "no-store, must-revalidate"})
+
+
+def spa_index_response(path: str = "") -> FileResponse:
     """`index.html` da SPA **sem cache**.
 
-    O HTML referencia ficheiros com hash (`/assets/index-*.js`), por isso um
-    `index.html` em cache fazia o browser continuar a pedir o bundle antigo
-    depois de um novo `build` (a heurística de cache do browser guarda-o durante
-    ~10% da idade do ficheiro) — as correções pareciam não existir.
+    Quando `path` é fornecido, renderiza meta tags específicas da rota.
     """
+    if path:
+        return _render_seo_index(path)  # type: ignore[return-value]
     return FileResponse(
         str(UI_BUILD_DIR / "index.html"),
         headers={"Cache-Control": "no-store, must-revalidate"},
@@ -873,8 +1071,17 @@ def spa_index_response() -> FileResponse:
 @app.get("/companies")
 @app.get("/companies/search")
 @app.get("/companies/dashboard")
-def serve_companies_spa_page():
-    return spa_index_response()
+def serve_companies_spa_page(request: Request):
+    path = str(request.url.path) or "/companies"
+    return spa_index_response(path=path)
+
+
+@app.post("/companies/search", response_model=CompanySearchResponse)
+@app.get("/companies/search")
+def companies_search(req: CompanySearchRequest, request: Request):
+    """Pesquisa empresas/entidades (POST); GET serve a SPA."""
+    if request.method == "GET":
+        return spa_index_response(path="/companies/search")
 
 
 # Os dashboards e o comparador de entidades vivem em `/entities/...`, mas
@@ -1577,8 +1784,8 @@ def entities_report_dossie_pdf(nif: str):
 @app.get("/rag")
 @app.get("/elastic")
 @app.get("/contracts")
-@app.get("/contracts/dashboard")
 @app.get("/contracts/search")
+@app.get("/contracts/dashboard")
 @app.get("/contracts/map")
 @app.get("/contracts/ecologicos")
 @app.get("/empresas-iq")
@@ -1650,19 +1857,43 @@ def entities_report_dossie_pdf(nif: str):
 @app.get("/office/dossies")
 @app.get("/search")
 @app.get("/import")
-def serve_spa_page():
-    return spa_index_response()
+def serve_spa_page(request: Request):
+    path = str(request.url.path) or "/"
+    return spa_index_response(path=path)
+
+
+@app.get("/robots.txt")
+def serve_robots_txt():
+    """Serve o robots.txt do build estático."""
+    path = UI_BUILD_DIR / "robots.txt"
+    if path.is_file():
+        return FileResponse(str(path), media_type="text/plain")
+    raise HTTPException(status_code=404, detail="Not Found")
+
+
+@app.get("/sitemap.xml")
+def serve_sitemap_xml():
+    """Serve o sitemap.xml do build estático."""
+    path = UI_BUILD_DIR / "sitemap.xml"
+    if path.is_file():
+        return FileResponse(str(path), media_type="application/xml")
+    raise HTTPException(status_code=404, detail="Not Found")
+
+
+@app.get("/favicon.svg")
+def serve_favicon_svg():
+    """Serve o favicon.svg do build estático."""
+    path = UI_BUILD_DIR / "favicon.svg"
+    if path.is_file():
+        return FileResponse(str(path), media_type="image/svg+xml")
+    raise HTTPException(status_code=404, detail="Not Found")
 
 
 @app.get("/")
 def read_root(request: Request):
-    """Raiz: a aplicação para quem navega no browser, o estado da API para clientes.
-
-    Sem esta distinção, abrir `http://127.0.0.1:8002/` mostrava JSON em vez da
-    plataforma (o mesmo critério já usado em `/companies/{nif}` e no CMS).
-    """
+    """Raiz: a aplicação para quem navega no browser, o estado da API para clientes."""
     if UI_BUILD_DIR.is_dir() and _accepts_html(request):
-        return spa_index_response()
+        return spa_index_response(path="/")
     return {
         "status": "ok",
         "service": "IQ OS API",
@@ -3133,4 +3364,5 @@ def serve_spa_deep_link(request: Request, full_path: str):
     index = UI_BUILD_DIR / "index.html"
     if not index.is_file():
         raise HTTPException(status_code=404, detail="Interface não construída.")
-    return spa_index_response()
+    path = f"/{full_path}" if full_path else "/"
+    return spa_index_response(path=path)

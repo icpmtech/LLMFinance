@@ -16,19 +16,41 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+import pytest
+
 from api import elasticsearch_client as esc
+
+
+@pytest.fixture(autouse=True)
+def _limpar_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A resolução do campo do nome é memorizada no módulo (uma vez por índice)."""
+    monkeypatch.setattr(esc, "_PARTE_NOME_CACHE", {})
 
 
 class _FakeES:
     """Cliente mínimo: guarda o corpo do pedido e devolve a resposta preparada."""
 
-    def __init__(self, resposta: Dict[str, Any]) -> None:
+    def __init__(self, resposta: Dict[str, Any], mapping: Dict[str, Any] | None = None) -> None:
         self.resposta = resposta
+        self.mapping = mapping
         self.pedidos: List[Dict[str, Any]] = []
 
     def search(self, **kwargs: Any) -> Dict[str, Any]:
         self.pedidos.append(kwargs)
         return self.resposta
+
+    class _Indices:
+        def __init__(self, outer: "_FakeES") -> None:
+            self.outer = outer
+
+        def get_mapping(self, index: str | None = None) -> Dict[str, Any]:
+            if self.outer.mapping is None:
+                raise RuntimeError("sem mapping no cliente falso")
+            return self.outer.mapping
+
+    @property
+    def indices(self) -> "_FakeES._Indices":
+        return _FakeES._Indices(self)
 
 
 def _balde(nome: str, doc_count: int) -> Dict[str, Any]:
@@ -153,3 +175,53 @@ def test_erro_do_elasticsearch_volta_como_erro(monkeypatch):
     resultado = esc.contracts_autocomplete(q="janssen", es=_Explode())
     assert "search_phase_execution_exception" in resultado["error"]
     assert resultado["suggestions"] == []
+
+
+def _mapping(nome: str) -> Dict[str, Any]:
+    """Mapping mínimo do índice de contratos com o campo do nome das partes."""
+    return {
+        "contratos": {
+            "mappings": {
+                "properties": {
+                    "adjudicantes": {"properties": {"parsed": {"type": "nested", "properties": {"nome": nome}}}},
+                    "adjudicatarios": {"properties": {"parsed": {"type": "nested", "properties": {"nome": nome}}}},
+                }
+            }
+        }
+    }
+
+
+def test_campo_do_nome_segue_o_mapping_texto_com_keyword():
+    cliente = _FakeES(_resposta([], [], []), _mapping({"type": "text", "fields": {"keyword": {"type": "keyword"}}}))
+    esc.contracts_autocomplete(q="janssen", size=4, es=cliente)
+    corpo = _corpo(cliente)
+    assert corpo["aggs"]["adjudicantes"]["aggs"]["names"]["terms"]["field"] == "adjudicantes.parsed.nome.keyword"
+    ramo_partes = corpo["query"]["bool"]["should"][2]
+    assert "adjudicantes.parsed.nome.keyword" in str(ramo_partes)
+
+
+def test_campo_do_nome_segue_o_mapping_keyword_direto():
+    cliente = _FakeES(_resposta([], [], []), _mapping({"type": "keyword"}))
+    esc.contracts_autocomplete(q="janssen", size=4, es=cliente)
+    corpo = _corpo(cliente)
+    assert corpo["aggs"]["adjudicatarios"]["aggs"]["names"]["terms"]["field"] == "adjudicatarios.parsed.nome"
+    assert ".keyword" not in str(corpo)
+
+
+def test_ordenacao_pelas_partes_usa_o_campo_resolvido():
+    """Ordenar por parte usava `.keyword` fixo: com o mapping novo a pesquisa falhava."""
+    cliente = _FakeES(_resposta([], [], []), _mapping({"type": "keyword"}))
+    ordenacao = esc._build_contract_sort("adjudicatarios", "asc", cliente)
+    assert ordenacao[0]["adjudicatarios.parsed.nome"] == {
+        "order": "asc",
+        "nested": {"path": "adjudicatarios.parsed"},
+        "unmapped_type": "keyword",
+    }
+
+    cliente_texto = _FakeES(_resposta([], [], []), _mapping({"type": "text", "fields": {"keyword": {"type": "keyword"}}}))
+    ordenacao_texto = esc._build_contract_sort("adjudicantes", "desc", cliente_texto)
+    assert "adjudicantes.parsed.nome.keyword" in ordenacao_texto[0]
+
+    # Sem cliente (função pura) nunca se aponta para um campo inexistente sem rede de segurança.
+    sem_cliente = esc._build_contract_sort("adjudicantes")
+    assert sem_cliente[0]["adjudicantes.parsed.nome"]["unmapped_type"] == "keyword"

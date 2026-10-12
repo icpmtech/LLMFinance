@@ -3771,7 +3771,7 @@ def search_contracts(
         return {"error": "Elasticsearch indisponível", "items": []}
 
     query = _build_contract_query(q, year, entity, nif, counterparty_nif, region, cpv_code, min_price, max_price, start_date, end_date, ecological=ecological)
-    sort = _build_contract_sort(sort_by, sort_order)
+    sort = _build_contract_sort(sort_by, sort_order, client)
 
     try:
         body = {
@@ -3803,15 +3803,26 @@ def search_contracts(
 def _build_contract_sort(
     sort_by: Optional[str] = None,
     sort_order: Optional[str] = None,
+    client: Optional[Elasticsearch] = None,
 ) -> List[Dict[str, Any]]:
+    """Ordenação da pesquisa de contratos.
+
+    As partes são ordenadas pelo campo **resolvido no mapping**
+    (`_campo_nome_parte`): o `.keyword` fixo deixou de existir depois da migração
+    e um sort sobre um campo inexistente falha a pesquisa inteira. Sem cliente
+    (função pura), cai no campo direto e usa `unmapped_type` para nunca derrubar a
+    pesquisa por causa da ordenação.
+    """
     order = sort_order if sort_order in ("asc", "desc") else "desc"
     field = sort_by or "dataPublicacao"
     if field == "relevance":
         return ["_score"]
     if field == "adjudicantes":
-        return [{"adjudicantes.parsed.nome.keyword": {"order": order, "nested": {"path": "adjudicantes.parsed"}}}, "_score"]
+        caminho = _campo_nome_parte(client, "adjudicantes") if client is not None else "adjudicantes.parsed.nome"
+        return [{caminho: {"order": order, "nested": {"path": "adjudicantes.parsed"}, "unmapped_type": "keyword"}}, "_score"]
     if field == "adjudicatarios":
-        return [{"adjudicatarios.parsed.nome.keyword": {"order": order, "nested": {"path": "adjudicatarios.parsed"}}}, "_score"]
+        caminho = _campo_nome_parte(client, "adjudicatarios") if client is not None else "adjudicatarios.parsed.nome"
+        return [{caminho: {"order": order, "nested": {"path": "adjudicatarios.parsed"}, "unmapped_type": "keyword"}}, "_score"]
     if field == "tipoContrato":
         return [{"tipoContrato.keyword": {"order": order}}, "_score"]
     if field == "objectoContrato":
@@ -3821,6 +3832,47 @@ def _build_contract_sort(
     if field == "precoContratual":
         return [{field: {"order": order, "missing": "_last", "unmapped_type": "float"}}, "_score"]
     return [{"dataPublicacao": {"order": "desc"}}, "_score"]
+
+
+# Campo do nome das partes por papel (`adjudicantes`/`adjudicatarios`), resolvido no mapping.
+_PARTE_NOME_CACHE: Dict[str, str] = {}
+
+
+def _campo_nome_parte(client: Elasticsearch, papel: str) -> str:
+    """Campo agregável do nome da parte (`{papel}.parsed.nome`).
+
+    O mapeamento manda: depois da migração o campo é `keyword` **sem** subcampo
+    `.keyword`; antes disso era `text` com `.keyword`. Agregar/consultar o lado
+    errado dava 400 («Can only use phrase prefix queries on text fields») e o
+    endpoint devolvia 502 (ver `contracts_autocomplete`).
+    """
+    caminho = f"{papel}.parsed.nome"
+    if caminho in _PARTE_NOME_CACHE:
+        return _PARTE_NOME_CACHE[caminho]
+
+    destino = caminho
+    try:
+        mapping = client.indices.get_mapping(index=CONTRACTS_INDEX)
+        no: Any = list(mapping.values())[0].get("mappings", {}).get("properties", {})
+        partes = caminho.split(".")
+        especificacao: Any = {}
+        for posicao, parte in enumerate(partes):
+            filho = (no or {}).get(parte) or {}
+            if posicao == len(partes) - 1:
+                especificacao = filho
+                break
+            # Nos níveis intermédios desce-se pelos `properties` (o campo `parsed`
+            # é `nested` com os seus próprios filhos).
+            no = filho.get("properties") or {}
+        if especificacao.get("type") == "keyword":
+            destino = caminho
+        elif (especificacao.get("fields") or {}).get("keyword"):
+            destino = f"{caminho}.keyword"
+    except Exception:
+        destino = caminho
+
+    _PARTE_NOME_CACHE[caminho] = destino
+    return destino
 
 
 def contracts_autocomplete(
@@ -3837,7 +3889,9 @@ def contracts_autocomplete(
       (`adjudicantes.parsed.nome`) → `match_phrase_prefix` dá 400
       («Can only use phrase prefix queries on text fields») e o endpoint devolvia
       **502** ao utilizador; consultar `.keyword` devolvia sempre zero sugestões;
-    - `prefix` com `case_insensitive` funciona (o dado está em maiúsculas);
+    - `prefix` com `case_insensitive` funciona (o dado está em maiúsculas) e o
+      campo é resolvido no mapping (`_campo_nome_parte`), para funcionar quer o
+      nome seja `keyword` direto quer `text` com `.keyword`;
     - o `include` da agregação `terms` é inútil neste cluster: a forma com objeto
       é rejeitada («Unknown parameter in Include/Exclude clause») e as formas de
       string (com ou sem `(?i)`) devolvem **zero baldes** — a filtragem do texto
@@ -3852,6 +3906,8 @@ def contracts_autocomplete(
         return {"suggestions": []}
 
     alvo = q.lower()
+    campo_adjudicantes = _campo_nome_parte(client, "adjudicantes")
+    campo_adjudicatarios = _campo_nome_parte(client, "adjudicatarios")
 
     try:
         resp = client.search(
@@ -3869,13 +3925,13 @@ def contracts_autocomplete(
                                         {
                                             "nested": {
                                                 "path": "adjudicantes.parsed",
-                                                "query": {"prefix": {"adjudicantes.parsed.nome": {"value": q, "case_insensitive": True}}},
+                                                "query": {"prefix": {campo_adjudicantes: {"value": q, "case_insensitive": True}}},
                                             }
                                         },
                                         {
                                             "nested": {
                                                 "path": "adjudicatarios.parsed",
-                                                "query": {"prefix": {"adjudicatarios.parsed.nome": {"value": q, "case_insensitive": True}}},
+                                                "query": {"prefix": {campo_adjudicatarios: {"value": q, "case_insensitive": True}}},
                                             }
                                         },
                                     ],
@@ -3894,7 +3950,7 @@ def contracts_autocomplete(
                         "aggs": {
                             "names": {
                                 "terms": {
-                                    "field": "adjudicantes.parsed.nome",
+                                    "field": campo_adjudicantes,
                                     "size": max(size * 8, 50),
                                     "order": {"_count": "desc"},
                                 }
@@ -3906,7 +3962,7 @@ def contracts_autocomplete(
                         "aggs": {
                             "names": {
                                 "terms": {
-                                    "field": "adjudicatarios.parsed.nome",
+                                    "field": campo_adjudicatarios,
                                     "size": max(size * 8, 50),
                                     "order": {"_count": "desc"},
                                 }
