@@ -178,29 +178,77 @@ def _annotations(op: Operation) -> ToolAnnotations:
     )
 
 
-def _selected_operations() -> List[Operation]:
-    """Operações do catálogo a expor, filtradas por ``IQOS_MCP_TAGS``.
-
-    Sem a variável (ou com ``*``) expõe o catálogo completo. Com uma lista de
-    grupos separados por vírgula (ex.: ``contratos,contratos-fr,empresas``)
-    expõe apenas essas operações.
-
-    O filtro existe porque os clientes (Copilot/DeepSeek) limitam o número de
-    funções por pedido (128 no DeepSeek) e o catálogo completo tem 219 — a
-    lista inteira provoca o erro «supports at most 128 functions».
-    """
-    raw = os.environ.get("IQOS_MCP_TAGS", "").strip()
+def _env_tags(name: str) -> List[str]:
+    """Lê uma lista de grupos separada por vírgulas (``*`` ou vazio = todos)."""
+    raw = os.environ.get(name, "").strip()
     if not raw or raw == "*":
-        return list(OPERATIONS)
-    wanted = {tag.strip().lower() for tag in raw.split(",") if tag.strip()}
-    unknown = wanted - {tag.lower() for tag in TAGS}
-    if unknown:
+        return []
+    return [tag.strip().lower() for tag in raw.split(",") if tag.strip()]
+
+
+def _max_tools() -> int:
+    """Teto de ferramentas curadas a expor (``0`` = sem teto)."""
+    raw = os.environ.get("IQOS_MCP_MAX_TOOLS", "").strip()
+    if not raw:
+        return 0
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        LOGGER.warning("IQOS_MCP_MAX_TOOLS inválido (%r): ignorado (sem teto)", raw)
+        return 0
+
+
+def _selected_operations() -> List[Operation]:
+    """Operações do catálogo a expor.
+
+    Filtros, por ordem:
+
+    1. ``IQOS_MCP_TAGS`` — grupos a expor (lista separada por vírgulas; vazio ou
+       ``*`` expõe o catálogo completo).
+    2. ``IQOS_MCP_EXCLUDE_TAGS`` — grupos a retirar da seleção anterior.
+    3. ``IQOS_MCP_MAX_TOOLS`` — teto de ferramentas curadas (``0``/vazio = sem
+       teto), aplicado na ordem do catálogo.
+
+    Os dois primeiros existem porque os clientes limitam o número de **funções
+    por pedido** — o DeepSeek recusa acima de 128 e a conta inclui as
+    ferramentas internas do cliente (ficheiro, terminal, browser, …), não só as
+    do MCP. O catálogo completo tem 224: expô-lo inteiro faz o cliente falhar
+    com «supports at most 128 functions». O teto é a rede de segurança para uma
+    seleção de grupos demasiado generosa (ou para quando o catálogo cresce).
+    """
+    wanted = set(_env_tags("IQOS_MCP_TAGS"))
+    excluded = set(_env_tags("IQOS_MCP_EXCLUDE_TAGS"))
+    known = {tag.lower() for tag in TAGS}
+    for env_name, tags in (("IQOS_MCP_TAGS", wanted), ("IQOS_MCP_EXCLUDE_TAGS", excluded)):
+        unknown = tags - known
+        if unknown:
+            LOGGER.warning(
+                "%s: grupos desconhecidos %s (válidos: %s)",
+                env_name,
+                sorted(unknown),
+                sorted(TAGS),
+            )
+
+    selected = [
+        op
+        for op in OPERATIONS
+        if (not wanted or op.tag.lower() in wanted) and op.tag.lower() not in excluded
+    ]
+
+    limit = _max_tools()
+    if limit and len(selected) > limit:
+        dropped = selected[limit:]
         LOGGER.warning(
-            "IQOS_MCP_TAGS: grupos desconhecidos %s (válidos: %s)",
-            sorted(unknown),
-            sorted(TAGS),
+            "IQOS_MCP_MAX_TOOLS=%d: %d de %d ferramentas curadas ficaram de fora (grupos afetados: %s). "
+            "Reduza IQOS_MCP_TAGS ou aumente o teto.",
+            limit,
+            len(dropped),
+            len(selected),
+            sorted({op.tag for op in dropped}),
         )
-    return [op for op in OPERATIONS if op.tag.lower() in wanted]
+        selected = selected[:limit]
+    return selected
+
 
 
 def register_catalog_tools() -> int:
@@ -448,29 +496,84 @@ def investigar_empresa(empresa: str) -> str:
     """
     return f"""Investiga a empresa "{empresa}" usando as ferramentas do IQ OS.
 
-1. `empresas_autocomplete` ou `empresas_search` para obter o NIF e a ficha.
-2. `empresa_detail` com o NIF: volume de contratos, valores e papéis.
-3. `empresa_contratos` e `empresa_analytics`: contratos, evolução anual, CPV e contrapartes.
-4. `empresa_marcas` e `empresa_firmas`: marcas (INPI) e firmas (RNPC), se existirem.
+1. `descoberta_resolver` com "{empresa}": obtém o NIF (e candidatos, se houver dúvida).
+2. `descoberta_empresa` com o NIF: recolhe **tudo** numa só chamada — cadastro,
+   contratos, rede de relações, pessoas e cargos, atos societários, insolvências
+   (CIRE), risco, marcas (INPI), firmas (RNPC), subvenções, devedores,
+   contribuintes, mercado, registos LEI e notícias — e devolve o **grafo de
+   informação** (camadas: adjudicantes, CPV, pessoas, processos, marcas, firmas)
+   e a projeção na **ontologia** (tipos instanciados, ligações materializadas e
+   lacunas).
+3. `empresa_contratos` e `empresa_analytics` para o detalhe contrato a contrato
+   e a evolução anual por CPV e contraparte.
+4. `hermes_ask` para uma leitura citada, com as fontes da plataforma.
 5. `empresas_global_search` para confirmar presença noutras fontes (Espanha, CRM).
-6. Se for pedido sentimento, usar `sentiment_analyze_corpus` com origin=contracts ou news.
 
 Apresenta: identificação, dimensão (nº de contratos e valor), papéis
-(adjudicante/adjudicatário), principais contrapartes, evolução anual e
-sinais de risco. Cita sempre o número de contratos e o valor total.
+(adjudicante/adjudicatário), principais contrapartes, evolução anual,
+insolvências e sinais de risco, e o que a ontologia ainda não cobre.
+Cita sempre o número de contratos e o valor total.
 """
+
+
+#: Ferramentas genéricas (não vêm do catálogo).
+GENERIC_TOOLS = 4
+#: Limite de **funções por pedido** de alguns clientes (DeepSeek, por exemplo).
+#: A conta inclui as ferramentas internas do cliente, por isso o orçamento do
+#: servidor MCP tem de ser bem menor do que isto.
+CLIENT_TOOL_LIMIT = 128
+
+
+def tool_report() -> Dict[str, Any]:
+    """Resumo do que este servidor vai expor (usado pelo CLI e pelos testes)."""
+    selected = _selected_operations()
+    tags = sorted({op.tag for op in selected})
+    total = len(selected) + GENERIC_TOOLS
+    return {
+        "catalog": len(OPERATIONS),
+        "selected": len(selected),
+        "generic": GENERIC_TOOLS,
+        "total": total,
+        "tags": tags,
+        "limit": _max_tools(),
+        "client_limit": CLIENT_TOOL_LIMIT,
+        "over_client_limit": total > CLIENT_TOOL_LIMIT,
+        "env": {
+            "IQOS_MCP_TAGS": os.environ.get("IQOS_MCP_TAGS", ""),
+            "IQOS_MCP_EXCLUDE_TAGS": os.environ.get("IQOS_MCP_EXCLUDE_TAGS", ""),
+            "IQOS_MCP_MAX_TOOLS": os.environ.get("IQOS_MCP_MAX_TOOLS", ""),
+        },
+    }
 
 
 def build_server() -> MCPServer:
     """Regista as ferramentas do catálogo e devolve o servidor pronto."""
     count = register_catalog_tools()
     tags = os.environ.get("IQOS_MCP_TAGS", "").strip() or "*"
+    total = count + GENERIC_TOOLS
     LOGGER.info(
-        "Servidor MCP do IQ OS: %d ferramentas curadas + 4 genéricas (grupos: %s).",
+        "Servidor MCP do IQ OS: %d ferramentas curadas + %d genéricas = %d (grupos: %s).",
         count,
+        GENERIC_TOOLS,
+        total,
         tags,
     )
+    if total > CLIENT_TOOL_LIMIT:
+        LOGGER.warning(
+            "O servidor expõe %d ferramentas: alguns clientes recusam pedidos com mais de %d funções "
+            "(a conta inclui as ferramentas internas do cliente). Defina IQOS_MCP_TAGS "
+            "(ex.: contratos,empresas,deep-search,hermes) e/ou IQOS_MCP_MAX_TOOLS.",
+            total,
+            CLIENT_TOOL_LIMIT,
+        )
     return server
 
 
-__all__ = ["server", "build_server", "get_client", "register_catalog_tools", "_selected_operations"]
+__all__ = [
+    "server",
+    "build_server",
+    "get_client",
+    "register_catalog_tools",
+    "tool_report",
+    "_selected_operations",
+]

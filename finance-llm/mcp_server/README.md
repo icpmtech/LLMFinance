@@ -40,6 +40,34 @@ c:/LLMFinance/finance-llm/_start_8002.py`).
 | `IQOS_MCP_TRANSPORT` | `stdio` | `stdio`, `streamable-http` ou `sse`. |
 | `IQOS_MCP_HOST` / `IQOS_MCP_PORT` | `127.0.0.1` / `8765` | Só para transporte HTTP. |
 | `IQOS_MCP_PATH` | `/mcp` | Caminho do endpoint HTTP. |
+| `IQOS_MCP_TAGS` | todos | Grupos do catálogo a expor, separados por vírgulas (ex.: `contratos,empresas,deep-search,hermes`); `*` ou vazio = catálogo completo. |
+| `IQOS_MCP_EXCLUDE_TAGS` | — | Grupos a retirar da seleção anterior. |
+| `IQOS_MCP_MAX_TOOLS` | sem teto | Teto de ferramentas **curadas** (as 4 genéricas contam à parte); uma seleção demasiado generosa é cortada e registada no log. |
+
+## Orçamento de ferramentas (limite do cliente)
+
+Os clientes de IA limitam o número de **funções por pedido** — o DeepSeek recusa
+acima de **128** e a conta inclui as ferramentas internas do próprio cliente
+(ficheiro, terminal, browser, …). O catálogo curado tem **226** operações: expô-lo
+inteiro faz o pedido falhar com
+«supports at most 128 functions in a single `tools` request», antes de o modelo
+responder.
+
+Por isso a seleção tem de ser deliberada:
+
+```powershell
+# ver quantas ferramentas cada grupo traz e simular uma seleção
+c:/LLMFinance/.venv/Scripts/python.exe scripts/mcp_tools.py --tags contratos,empresas,deep-search,hermes --max 40
+
+# o mesmo, no próprio servidor (inclui o que as variáveis de ambiente dizem)
+c:/LLMFinance/.venv/Scripts/python.exe -m mcp_server --report
+```
+
+A seleção usada no *workspace* e no contentor `mcp` — `contratos`, `empresas`,
+`deep-search`, `hermes`, com teto 40 — expõe **38** ferramentas, deixando margem
+para as internas do cliente. O que ficar de fora continua acessível pelas
+ferramentas genéricas: `iqos_search_endpoints` → `iqos_describe_endpoint` →
+`iqos_api_call`.
 
 ## Ferramentas
 
@@ -60,7 +88,8 @@ Três camadas, para que **todo o sistema** esteja acessível:
    (JSON, sem consumir contexto de ferramentas).
 
 Há ainda o prompt `investigar_empresa`, com o roteiro de investigação de uma
-empresa (cadastro → contratos → analytics → marcas/firmas → sentimento).
+empresa (`descoberta_resolver` → `descoberta_empresa` → contratos/analytics →
+`hermes_ask` → fontes globais).
 
 ## Registo no VS Code
 
@@ -74,7 +103,11 @@ O ficheiro `.vscode/mcp.json` na raiz do *workspace* já configura o servidor:
       "command": "c:/LLMFinance/.venv/Scripts/python.exe",
       "args": ["-m", "mcp_server"],
       "cwd": "c:/LLMFinance/finance-llm",
-      "env": { "IQOS_API_URL": "http://127.0.0.1:8002" }
+      "env": {
+        "IQOS_API_URL": "http://127.0.0.1:8002",
+        "IQOS_MCP_TAGS": "contratos,empresas,deep-search,hermes",
+        "IQOS_MCP_MAX_TOOLS": "40"
+      }
     }
   }
 }
@@ -82,7 +115,8 @@ O ficheiro `.vscode/mcp.json` na raiz do *workspace* já configura o servidor:
 
 Abra o painel **MCP Servers** (ou a paleta → *MCP: List Servers*) e inicie
 `iqos`. Para autenticar, defina `IQOS_API_TOKEN` ou
-`IQOS_API_EMAIL`/`IQOS_API_PASSWORD` em `env`.
+`IQOS_API_EMAIL`/`IQOS_API_PASSWORD` em `env`. Depois de alterar `env`, reinicie
+o servidor nesse painel (ou recarregue a janela) para a seleção nova entrar em vigor.
 
 ## Verificação
 

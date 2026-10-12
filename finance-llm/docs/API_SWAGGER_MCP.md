@@ -96,9 +96,11 @@ c:/LLMFinance/.venv/Scripts/python.exe -m mcp_server --list-tools
 
 Três camadas, para que **todo o sistema** esteja acessível:
 
-1. **Curadas** — ~205 ferramentas com nomes descritivos por módulo
+1. **Curadas** — 226 ferramentas com nomes descritivos por módulo
    (`contratos_search`, `contratos_es_entities`, `empresas_search`,
-   `empresa_detail`, `empresas_global_search`, `search_unified`,
+   `empresa_detail`, `empresas_global_search`, `descoberta_empresa`,
+   `descoberta_resolver`,
+   `search_unified`,
    `search360_topic`, `hermes_ask`, `rag_chat`, `market_forecast`,
    `elastic_search_global`, `crm_deals`, `office_documents`,
    `email_messages`, `sentiment_analyze_corpus`, `visualizador_query`,
@@ -112,9 +114,35 @@ Três camadas, para que **todo o sistema** esteja acessível:
 Mais o prompt `investigar_empresa`, com o roteiro de investigação de uma
 empresa.
 
-### Registo no VS Code
+### Orçamento de ferramentas (porque não se expõe o catálogo inteiro)
 
-`.vscode/mcp.json` já define o servidor `iqos` (stdio) e `iqos-http`:
+O cliente de IA limita as **funções por pedido** — o DeepSeek recusa acima de
+**128** e a conta inclui as ferramentas internas do cliente (ficheiro, terminal,
+browser, …). Expor as 226 curadas provoca
+«supports at most 128 functions in a single `tools` request» e o agente deixa de
+conseguir responder.
+
+O `IQOS_MCP_TAGS` escolhe os grupos e `IQOS_MCP_MAX_TOOLS` funciona como teto:
+
+```powershell
+# simular uma seleção e confirmar que cabe no orçamento
+c:/LLMFinance/.venv/Scripts/python.exe scripts/mcp_tools.py --tags contratos,empresas,deep-search,hermes --max 40
+
+# o que o servidor vai expor (lê as variáveis de ambiente do processo)
+c:/LLMFinance/.venv/Scripts/python.exe -m mcp_server --report
+```
+
+Seleção usada por omissão no *workspace* e no contentor `mcp`:
+`contratos,empresas,deep-search,hermes` + teto 40 → **36 curadas + 4 genéricas
+= 40 ferramentas**. A descoberta entra com o grupo `empresas` por dois verbos
+(`descoberta_empresa` e `descoberta_resolver`): o grafo, a ontologia e a análise
+vêm na própria descoberta ou já existem como `ontology_*` e `hermes_ask`, e o
+orçamento não dá para duplicar rotas. O resto
+da API continua acessível via `iqos_search_endpoints` → `iqos_describe_endpoint`
+→ `iqos_api_call`.
+
+### Registo no VS Code
+`.vscode/mcp.json` já define o servidor `iqos` (stdio):
 
 ```json
 {
@@ -124,7 +152,11 @@ empresa.
       "command": "c:/LLMFinance/.venv/Scripts/python.exe",
       "args": ["-m", "mcp_server"],
       "cwd": "c:/LLMFinance/finance-llm",
-      "env": { "IQOS_API_URL": "http://127.0.0.1:8002" }
+      "env": {
+        "IQOS_API_URL": "http://127.0.0.1:8002",
+        "IQOS_MCP_TAGS": "contratos,empresas,deep-search,hermes",
+        "IQOS_MCP_MAX_TOOLS": "40"
+      }
     }
   }
 }

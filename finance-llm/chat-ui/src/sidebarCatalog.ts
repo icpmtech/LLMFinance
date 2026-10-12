@@ -106,6 +106,7 @@ export const APP_MODULES: AppModule[] = [
     label: "Empresas",
     hint: "Risco, diretórios, fichas, adjudicantes e comparação de entidades",
     ids: [
+      "descoberta",
       "risco",
       "empresas-iq",
       "entities-search",

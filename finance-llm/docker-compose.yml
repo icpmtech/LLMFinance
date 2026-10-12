@@ -361,6 +361,12 @@ services:
       - IQOS_API_TOKEN=${IQOS_API_TOKEN:-}
       - IQOS_API_EMAIL=${IQOS_API_EMAIL:-}
       - IQOS_API_PASSWORD=${IQOS_API_PASSWORD:-}
+      # Grupos do catálogo a expor e teto de ferramentas. O cliente (Copilot/
+      # DeepSeek) limita a 128 funções por pedido **contando as ferramentas
+      # internas dele**; expor o catálogo completo (224) faz o pedido falhar.
+      - IQOS_MCP_TAGS=${IQOS_MCP_TAGS:-contratos,empresas,deep-search,hermes}
+      - IQOS_MCP_EXCLUDE_TAGS=${IQOS_MCP_EXCLUDE_TAGS:-}
+      - IQOS_MCP_MAX_TOOLS=${IQOS_MCP_MAX_TOOLS:-40}
     depends_on:
       backend:
         condition: service_healthy

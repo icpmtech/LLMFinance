@@ -297,6 +297,22 @@ OPERATIONS: List[Operation] = _ops(
           Q("q", "str", "Nome"), Q("concelho", "str", "Concelho"), Q("cae", "str", "CAE"),
           Q("situacao", "str", "Situação"), Q("size", "int", "Resultados", 20)),
     _read("enrichment_indices", "GET", "/enrichment/indices", "Estado dos índices de enriquecimento (INPI e RNPC).", "empresas"),
+    # -- descoberta -------------------------------------------------------
+    # Painel de controlo de uma empresa: NIF → recolha total → grafo de
+    # informação → ontologia → análise citada pelo Hermes (`/descoberta/*`).
+    # Só os dois verbos que valem para um agente: descobrir e resolver. O grafo,
+    # a ontologia e a análise vêm na própria descoberta (`incluir_grafo`,
+    # `incluir_ontologia`) ou já existem como `hermes_ask`/`ontology_*` — o
+    # orçamento de ferramentas do cliente (40) não dá para duplicar rotas.
+    _read("descoberta_resolver", "GET", "/descoberta/resolver", "Resolve um nome ou NIF na empresa certa, com candidatos.", "empresas",
+          RQ("q", "str", "Nome da empresa ou NIF"), Q("size", "int", "Candidatos", 8)),
+    _read("descoberta_empresa", "GET", "/descoberta/empresa/{nif}",
+          "Descoberta de uma empresa: todas as fontes, o grafo de informação, a ontologia e os números de decisão.", "empresas",
+          PTH("nif"), Q("pais", "str", "País (PT/ES/FR)", "PT"), Q("nome", "str", "Nome, quando já é conhecido"),
+          Q("fontes", "str", "Fontes a recolher (vírgulas); por omissão, todas"),
+          Q("incluir_grafo", "bool", "Incluir o grafo de informação", True),
+          Q("incluir_ontologia", "bool", "Incluir a projeção na ontologia", True),
+          Q("incluir_decisao", "bool", "Incluir a evolução, concentração, preços e pontos de atenção", True)),
     # -- companies-global ------------------------------------------------
     _read("empresas_global_sources", "GET", "/companies-global/sources", "Fontes disponíveis na pesquisa global.", "companies-global"),
     _read("empresas_global_search", "GET", "/companies-global/search", "Pesquisa empresas/entidades em todas as fontes.", "companies-global",

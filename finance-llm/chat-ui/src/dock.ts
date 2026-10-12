@@ -145,6 +145,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "244,63,94",
   },
   {
+    id: "descoberta",
+    label: "Descoberta",
+    hint: "Empresa a empresa: todas as fontes, o grafo de informação, a ontologia e a análise do Hermes",
+    icon: Compass,
+    gradient: "from-violet-300 via-fuchsia-500 to-indigo-600",
+    accent: "192,38,211",
+  },
+  {
     id: "companies-global",
     label: "Empresas Global",
     hint: "Entidades e empresas de todo o sistema (PT + Espanha + CRM)",
