@@ -19,12 +19,76 @@ import sys
 from typing import Any, Dict
 
 import pytest
-
 sys.path.insert(0, "c:/LLMFinance/finance-llm")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from api import elasticsearch_client as es_client  # noqa: E402
 from api import main as api_main  # noqa: E402
+
+
+class _ClienteFalso:
+    """Cliente ES mínimo: devolve os documentos que lhe derem e guarda a consulta."""
+
+    def __init__(self, documentos: list) -> None:
+        self.documentos = documentos
+        self.consultas: list = []
+
+    def search(self, index: str, body: dict) -> dict:
+        self.consultas.append(body)
+        return {
+            "hits": {
+                "total": {"value": len(self.documentos)},
+                "hits": [{"_source": doc} for doc in self.documentos],
+            }
+        }
+
+
+def test_pesquisa_de_precos_exclui_documentos_sem_data() -> None:
+    """O índice tem documentos «stub» (tudo a `null`, sem `date`).
+
+    Foi um deles que fez a rota rebentar: o modelo exige `date` e a validação
+    falhava com `points.0.date Input should be a valid string (input_value=None)`.
+    """
+    cliente = _ClienteFalso(
+        [
+            {"ticker": "SPCX", "date": "2026-10-01", "close": 10.5},
+            {"ticker": "SPCX", "date": None, "close": None, "period": "1y"},
+        ]
+    )
+
+    resultado = es_client.search_prices("SPCX", es=cliente)
+
+    assert [ponto["date"] for ponto in resultado["points"]] == ["2026-10-01"]
+    # E os stubs nem chegam a vir do índice: a consulta filtra-os.
+    filtros = cliente.consultas[0]["query"]["bool"]["must"]
+    assert {"exists": {"field": "date"}} in filtros
+
+
+def test_escrita_de_precos_nao_indexa_linha_sem_data(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Uma linha sem `date` gerava `_id="TICKER-None"` — o stub que nos caiu em cima."""
+    escritos: Dict[str, Any] = {}
+
+    def _bulk(cliente: Any, acoes: list, **_kwargs: Any) -> tuple:
+        escritos["acoes"] = acoes
+        return len(acoes), []
+
+    monkeypatch.setattr("api.elasticsearch_client.ensure_indices", lambda *_: None)
+    monkeypatch.setattr("api.elasticsearch_client.bulk", _bulk)
+
+    resultado = es_client.index_price_points(
+        "SPCX",
+        [
+            {"date": "2026-10-01", "close": 10.5},
+            {"date": None, "close": None},
+        ],
+        # O cliente não chega a ser usado: `ensure_indices` e `bulk` estão trocados.
+        es=object(),
+    )
+
+    assert resultado["indexed_count"] == 1
+    assert len(escritos["acoes"]) == 1
+    assert escritos["acoes"][0]["date"] == "2026-10-01"
 
 
 def test_handler_de_precos_e_async() -> None:
@@ -49,8 +113,8 @@ def test_rota_de_precos_devolve_o_resultado(monkeypatch: pytest.MonkeyPatch) -> 
             "ticker": ticker,
             "total": 2,
             "points": [
-                {"date": "2026-10-01", "close": 10.5},
-                {"date": "2026-10-02", "close": 10.8},
+                {"ticker": ticker, "date": "2026-10-01", "close": 10.5},
+                {"ticker": ticker, "date": "2026-10-02", "close": 10.8},
             ],
         }
 

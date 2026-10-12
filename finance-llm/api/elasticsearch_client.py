@@ -2562,7 +2562,14 @@ def index_price_points(ticker: str, points: List[Dict[str, Any]], period: str = 
     ensure_indices(client)
     ticker = ticker.upper()
     actions = []
+    sem_data = 0
     for p in points:
+        # Uma linha sem `date` não é um ponto da série: o histórico já veio vazio
+        # (tudo a `null`) e ficava indexada como `_id="TICKER-None"` — um documento
+        # «stub» que depois fazia rebentar quem o lesse (o modelo exige `date`).
+        if not p.get("date"):
+            sem_data += 1
+            continue
         doc = {
             "_op_type": "index",
             "_index": "finance_prices",
@@ -2578,6 +2585,9 @@ def index_price_points(ticker: str, points: List[Dict[str, Any]], period: str = 
             "ingested_at": _today(),
         }
         actions.append(doc)
+
+    if sem_data:
+        logger.warning("finance_prices: %d ponto(s) de %s sem `date` ignorados", sem_data, ticker)
 
     if not actions:
         return {"ticker": ticker, "indexed_count": 0, "total_points": 0}
@@ -2706,7 +2716,19 @@ def search_prices(
     if not client:
         return {"ticker": ticker, "error": "Elasticsearch indisponível", "points": []}
 
-    query: Dict[str, Any] = {"bool": {"must": [{"term": {"ticker": ticker.upper()}}]}}
+    query: Dict[str, Any] = {
+        "bool": {
+            "must": [
+                {"term": {"ticker": ticker.upper()}},
+                # Documentos «stub» (tudo a `null`, sem `date`) existem no índice, de
+                # ingestões que não trouxeram dados. Não são pontos de série e
+                # faziam a rota rebentar na validação da resposta (o modelo exige
+                # `date`). Excluem-se na consulta, para o `total` bater certo com o
+                # que se devolve.
+                {"exists": {"field": "date"}},
+            ]
+        }
+    }
     range_filter = {}
     if start_date:
         range_filter["gte"] = start_date
@@ -2725,10 +2747,21 @@ def search_prices(
             },
         )
         points = [hit["_source"] for hit in resp["hits"]["hits"]]
+        # Rede de segurança: um cliente/índice que devolva o documento sem `date`
+        # (apesar do filtro) não pode voltar a derrubar a rota.
+        usaveis = [ponto for ponto in points if ponto.get("date")]
+        if len(usaveis) != len(points):
+            logger.warning(
+                "finance_prices: %d documento(s) de %s sem `date` ignorados na leitura",
+                len(points) - len(usaveis),
+                ticker.upper(),
+            )
         return {
             "ticker": ticker.upper(),
+            # `total` continua a ser o que o índice diz que casa (paginação), mesmo
+            # que a rede de segurança acima tenha deixado algum ponto de fora.
             "total": resp["hits"]["total"]["value"],
-            "points": points,
+            "points": usaveis,
             "start_date": start_date,
             "end_date": end_date,
         }
