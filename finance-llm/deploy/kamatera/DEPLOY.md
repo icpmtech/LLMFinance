@@ -10,8 +10,29 @@ cd C:\LLMFinance\finance-llm\deploy\kamatera
 .\19-deploy-codigo.ps1 -Servico backend    # backend + mcp
 .\19-deploy-codigo.ps1 -SemBuild           # reutiliza o dist já construído
 .\19-deploy-codigo.ps1 -Planear            # mostra o que faria, sem enviar nada
-.\19-deploy-codigo.ps1 -LimparCache        # e limpa a cache de build no fim
+.\19-deploy-codigo.ps1 -LimparCache        # limpa a cache de build no fim
+.\19-deploy-codigo.ps1 -NaoLimparAuto      # desliga a limpeza automática
+.\19-deploy-codigo.ps1 -LimiteDiscoGb 50   # limpa abaixo de 50 GB livres
 ```
+
+### A limpeza automática
+
+**Um deploy deixa ~13 GB de cache de build.** Medido duas vezes: 20 kB → 13,29 GB
+num deploy, e 13,29 → 13,35 GB no seguinte. Em disco (148 GB) são ~9 pontos por
+deploy — ou seja, cerca de **9 deploys até apertar**, e o aviso aparecia só quando
+já estava nos 85%.
+
+Por isso este script mede o espaço livre no fim e decide:
+
+- abaixo de `-LimiteDiscoGb` (30 GB por omissão): limpa a cache de build e as
+  imagens **sem etiqueta**;
+- acima: não toca em nada, e diz quanto sobra — a cache acelera o build seguinte.
+
+A limpeza é `docker builder prune -af` (só cache) mais `docker image prune -f`
+(só imagens sem etiqueta). Nenhuma toca em imagens com tag, por isso nada em
+execução — nem nada que os composes arranquem a partir de uma tag — é afectado.
+**`image prune -a` seria outra história**: apaga imagens sem contentor associado,
+que é exactamente o que os composes usam para arrancar.
 
 ## Porque é que isto é "incremental"
 
@@ -106,11 +127,11 @@ bundle     ok     assets/index-B-40BDWI.js (na imagem e servido)
 
 | Item | Valor |
 | --- | --- |
-| Contexto de build | 11,9 MB (limite de segurança: 150 MB) |
+| Contexto de build | 12,6 MB (limite de segurança: 150 MB) |
 | Imagem do backend | 13,7 GB |
-| Imagem do frontend | 279 MB |
-| Disco da VM | 148 GB, 68% usado |
-| Cache de build | ~14 GB (cresce ~GB por deploy) |
+| Imagem do frontend | 337 MB |
+| Disco da VM | 148 GB |
+| Cache de build | **~13 GB por deploy** — ver a limpeza automática acima |
 
 A cache de build é o único custo que cresce sozinho. O driver `docker` do
 buildkit guarda um snapshot por build; depois de um deploy vi-a ir de 89 MB para

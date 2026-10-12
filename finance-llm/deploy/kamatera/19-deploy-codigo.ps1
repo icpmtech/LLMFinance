@@ -46,9 +46,17 @@ param(
 
     # Salta o `npm run build` e reutiliza o `_frontend_dist` que ja exista.
     [switch]$SemBuild,
-    # Limpa a cache de build no fim. A cache acelera builds repetidos, mas cresce
-    # ~GB por deploy com o driver `docker` do buildkit.
+    # Limpa a cache de build **sempre**, no fim.
     [switch]$LimparCache,
+
+    # Rede de seguranca: limpar a cache sozinho quando o espaco livre descer
+    # abaixo disto. Medido nesta VM: **um deploy deixa ~13 GB de cache** e come
+    # ~9 pontos de disco (148 GB de total). Sem rede de seguranca, sao ~9
+    # deploys ate o disco apertar -- e o aviso aparece so quando ja esta em 85%.
+    [int]$LimiteDiscoGb = 30,
+    # Desliga a rede de seguranca (faz so o que foi pedido).
+    [switch]$NaoLimparAuto,
+
     [switch]$Planear
 )
 
@@ -298,14 +306,45 @@ if ($fazerFrontend) {
     }
 }
 
-# A cache de build cresce a cada deploy (o driver `docker` do buildkit guarda
-# snapshots). Depois de um deploy vi-a ir de 89 MB para 13,8 GB. Nao e erro, mas
-# enche o disco sem avisar.
+# A cache de build cresce a cada deploy (o driver `docker` do buildkit guarda um
+# snapshot por passo). Medido: **~13 GB por deploy**, ~9 pontos de disco.
+#
+# Nao e erro, mas enche o disco sem avisar -- e numa VM que corre o
+# Elasticsearch, um disco cheio nao da um erro claro, da uma lentidao estranha.
+# A limpeza automatica abaixo existe para que a manutencao aconteca quando faz
+# falta, e nao quando alguem se lembra de olhar.
+$livreGb = 0
+$leitura = (Invoke-Vm "df -BG / | tail -1 | tr -s ' ' | cut -d' ' -f4").Output.Trim()
+if ($leitura -match '(\d+)') { $livreGb = [int]$Matches[1] }
+
 $cache = (Invoke-Vm "docker system df --format '{{.Type}} {{.Size}}' | grep -i build").Output.Trim()
 if ($cache) { Write-Host "  $cache" -ForegroundColor DarkGray }
+
+$limpar = $LimparCache
+$motivo = ''
 if ($LimparCache) {
-    Write-Host '  a limpar a cache de build...' -ForegroundColor DarkGray
-    Show-Vm 'docker builder prune -af 2>&1 | tail -2' | Out-Null
+    $motivo = '-LimparCache'
+} elseif (-not $NaoLimparAuto -and $livreGb -gt 0 -and $livreGb -lt $LimiteDiscoGb) {
+    $limpar = $true
+    $motivo = "so $livreGb GB livres (limite $LimiteDiscoGb)"
+}
+
+if ($limpar) {
+    Write-Host ("  a limpar a cache de build e as imagens orfas ({0})..." -f $motivo) -ForegroundColor Yellow
+    # `builder prune -af`: so cache. `image prune -f`: so imagens **sem
+    # etiqueta** -- as que nenhum contentor usa e que ninguem consegue nomear.
+    # Nenhuma das duas toca em imagens com tag, por isso nenhum servico em
+    # execucao (nem nenhum que va arrancar depois, a partir de uma tag) e
+    # afectado. `image prune -a` seria outra historia: apagaria imagens sem
+    # contentor associado, que e o que os composes usam para arrancar.
+    Show-Vm 'docker builder prune -af 2>&1 | tail -1; docker image prune -f 2>&1 | tail -1' | Out-Null
+
+    $leitura = (Invoke-Vm "df -BG / | tail -1 | tr -s ' ' | cut -d' ' -f4").Output.Trim()
+    if ($leitura -match '(\d+)') {
+        Write-Host ("  agora: {0} GB livres" -f $Matches[1]) -ForegroundColor Green
+    }
+} elseif ($livreGb -gt 0) {
+    Write-Host ("  {0} GB livres (limite {1} GB) -- cache mantida, os builds ficam mais rapidos" -f $livreGb, $LimiteDiscoGb) -ForegroundColor DarkGray
 }
 
 Write-Host ''
