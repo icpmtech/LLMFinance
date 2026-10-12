@@ -84,6 +84,8 @@ import ContribuintesPage from "./pages/ContribuintesPage";
 import WorldPage from "./pages/WorldPage";
 import PadroesPage from "./pages/PadroesPage";
 import LorenzPage from "./pages/LorenzPage";
+import MercadoPage from "./pages/MercadoPage";
+import MercadoCenariosPage from "./pages/MercadoCenariosPage";
 import OsintPage from "./pages/OsintPage";
 import ReportsPage from "./pages/ReportsPage";
 import SubvencoesPage from "./pages/SubvencoesPage";
@@ -193,6 +195,8 @@ type AppView =
   | "world-rede"
   | "padroes"
   | "lorenz"
+  | "mercado"
+  | "mercado-cenarios"
   | "osint"
   | "reports"
   | "subvencoes"
@@ -364,6 +368,8 @@ function pathForView(
   if (view === "benchmark-seller") return "/benchmark/vendedor";
   if (view === "padroes") return "/padroes";
   if (view === "lorenz") return "/lorenz";
+  if (view === "mercado") return "/mercado";
+  if (view === "mercado-cenarios") return "/mercado/cenarios";
   if (view === "osint") return "/osint";
   if (view === "mirofish") return "/mirofish";
   if (view === "simulador") return "/simulador";
@@ -583,6 +589,9 @@ export default function App() {
     if (path === "/benchmark" || path.startsWith("/benchmark/")) return "benchmark";
     if (path === "/padroes" || path.startsWith("/padroes/")) return "padroes";
     if (path === "/lorenz" || path.startsWith("/lorenz/")) return "lorenz";
+    // O módulo de mercado vive em `/mercado` (benchmark) e `/mercado/cenarios`.
+    if (path === "/mercado/cenarios" || path.startsWith("/mercado/cenarios/")) return "mercado-cenarios";
+    if (path === "/mercado" || path.startsWith("/mercado/")) return "mercado";
     if (path === "/mirofish" || path.startsWith("/mirofish/")) return "mirofish";
     if (path === "/simulador" || path.startsWith("/simulador/")) return "simulador";
     if (path === "/deep-search" || path.startsWith("/deep-search/")) return "deep-search";
@@ -716,6 +725,8 @@ export default function App() {
       else if (path === "/world" || path.startsWith("/world/")) next = "world";
       else if (path === "/padroes" || path.startsWith("/padroes/")) next = "padroes";
       else if (path === "/lorenz" || path.startsWith("/lorenz/")) next = "lorenz";
+      else if (path === "/mercado/cenarios" || path.startsWith("/mercado/cenarios/")) next = "mercado-cenarios";
+      else if (path === "/mercado" || path.startsWith("/mercado/")) next = "mercado";
       else if (path === "/osint" || path.startsWith("/osint/")) next = "osint";
       else if (path === "/reports" || path.startsWith("/reports/")) next = "reports";
       else if (path === "/subvencoes" || path.startsWith("/subvencoes/")) next = "subvencoes";
@@ -1458,6 +1469,9 @@ export default function App() {
     if (target === "padroes") return <PadroesPage />;
     // Lorenz 1963: dinâmica, sensibilidade e propagação na contratação pública.
     if (target === "lorenz") return <LorenzPage />;
+    // Inteligência de mercado: empresas no mesmo mercado, dependências e cenários.
+    if (target === "mercado") return <MercadoPage onAbrirCenarios={() => setViewAndHistory("mercado-cenarios")} />;
+    if (target === "mercado-cenarios") return <MercadoCenariosPage onAbrirMercado={() => setViewAndHistory("mercado")} />;
     if (target === "osint") return <OsintPage />;
     if (target === "reports") return <ReportsPage />;
     if (target === "subvencoes") return <SubvencoesPage />;

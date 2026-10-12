@@ -39,6 +39,10 @@ export const TYPE_COLORS: Record<string, string> = {
   cpv: "#a78bfa",
   processo: "#60a5fa",
   tempo: "#f59e0b",
+  // Grafos do módulo de mercado: o contrato e a atividade registada (CAE) são
+  // camadas próprias da malha empresa → contrato → entidade → CPV → CAE.
+  contrato: "#60a5fa",
+  cae: "#fbbf24",
   // Pessoas (órgãos sociais, intervenientes em processos): distinguem-se das
   // entidades e dos processos sem precisar de uma segunda dimensão.
   pessoa: "#f472b6",
@@ -52,6 +56,8 @@ export const TYPE_LABELS: Record<string, string> = {
   cpv: "Classificação CPV",
   processo: "Procedimento",
   tempo: "Tempo",
+  contrato: "Contratos",
+  cae: "Atividade (CAE)",
   pessoa: "Pessoas",
   outra: "Outros",
 };

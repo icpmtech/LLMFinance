@@ -139,7 +139,7 @@ export const APP_MODULES: AppModule[] = [
     id: "investigacao",
     label: "Investigação e IA",
     hint: "Pesquisa 360, Hermes, Jarvis, investigador, agentes e RAG",
-    ids: ["search360", "hermes", "jarvis", "researcher", "world", "world-rede", "padroes", "lorenz", "osint", "simulador", "mirofish", "agents", "rag"],
+    ids: ["search360", "hermes", "jarvis", "researcher", "world", "world-rede", "padroes", "lorenz", "mercado", "mercado-cenarios", "osint", "simulador", "mirofish", "agents", "rag"],
   },
   {
     id: "conhecimento",

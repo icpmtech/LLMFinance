@@ -454,6 +454,22 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "251,191,36",
   },
   {
+    id: "mercado",
+    label: "Inteligência de mercado",
+    hint: "Compara empresas no mesmo mercado (CPV + CAE), mede dependências recíprocas com as entidades públicas e segue a evolução no tempo",
+    icon: Scale,
+    gradient: "from-teal-200 via-emerald-500 to-sky-700",
+    accent: "45,212,191",
+  },
+  {
+    id: "mercado-cenarios",
+    label: "Cenários de mercado",
+    hint: "World Model da contratação pública: seis eventos contrafactuais com hipóteses declaradas, evidência e sensibilidade (Lorenz)",
+    icon: Gauge,
+    gradient: "from-violet-200 via-fuchsia-500 to-indigo-700",
+    accent: "167,139,250",
+  },
+  {
     id: "osint",
     label: "OSINT",
     hint: "Pesquisa de usernames e emails em plataformas com user-scanner",

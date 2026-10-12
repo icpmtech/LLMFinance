@@ -292,6 +292,9 @@ INVESTIGATIONS_INDEX = "finance_world_investigations"
 # `run_id` com a fotografia completa em `resultado` (não indexada).
 LORENZ_RUNS_INDEX = "finance_lorenz_runs"
 
+# Execuções do módulo de inteligência de mercado (benchmark CPV × CAE × contrato).
+MERCADO_RUNS_INDEX = "finance_mercado_runs"
+
 # Resultados de pesquisa OSINT (username/email) via user-scanner.
 OSINT_INDEX = "finance_osint"
 
@@ -312,6 +315,18 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
     },
     LORENZ_RUNS_INDEX: {
         # O título de cada execução é escrito com acentos.
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    MERCADO_RUNS_INDEX: {
+        # Idem: títulos de mercado com acentos («Construção», «Saúde»).
         "analysis": {
             "analyzer": {
                 "world_folding": {
@@ -2083,6 +2098,25 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    mercado_runs_mappings = {
+        "properties": {
+            "run_id": {"type": "keyword"},
+            "created_at": {"type": "date"},
+            "titulo": {"type": "text", "analyzer": "world_folding", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "area": {"type": "keyword"},
+            "cpv_prefixos": {"type": "keyword"},
+            "ano_de": {"type": "integer"},
+            "ano_ate": {"type": "integer"},
+            "regiao": {"type": "keyword"},
+            "nif": {"type": "keyword"},
+            "autor": {"type": "keyword", "ignore_above": 320},
+            "empresas": {"type": "integer"},
+            "mercado": {"type": "object", "enabled": False},
+            # Fotografia completa (lida por id, não pesquisada campo a campo).
+            "resultado": {"type": "object", "enabled": False},
+        }
+    }
+
     devedores_mappings = {
         "properties": {
             "doc_id": {"type": "keyword"},
@@ -2366,6 +2400,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (SIMULATIONS_INDEX, simulations_mappings),
         (INVESTIGATIONS_INDEX, investigations_mappings),
         (LORENZ_RUNS_INDEX, lorenz_runs_mappings),
+        (MERCADO_RUNS_INDEX, mercado_runs_mappings),
         (ANALISES_EMPRESA_INDEX, analises_empresa_mappings),
         (GLOBAL_PADROES_INDEX, global_padroes_mappings),
         (DEVEDORES_INDEX, devedores_mappings),
@@ -3793,7 +3828,21 @@ def contracts_autocomplete(
     size: int = 12,
     es: Optional[Elasticsearch] = None,
 ) -> Dict[str, Any]:
-    """Sugestões de autocomplete para entidades e CPV."""
+    """Sugestões de autocomplete para entidades e CPV.
+
+    Validado no índice real (`contratos`, mapping + sonda):
+
+    - `objectoContrato`/`descContrato` são `text` → `match_phrase_prefix` funciona;
+    - as partes são **`keyword`** e **sem** subcampo `.keyword`
+      (`adjudicantes.parsed.nome`) → `match_phrase_prefix` dá 400
+      («Can only use phrase prefix queries on text fields») e o endpoint devolvia
+      **502** ao utilizador; consultar `.keyword` devolvia sempre zero sugestões;
+    - `prefix` com `case_insensitive` funciona (o dado está em maiúsculas);
+    - o `include` da agregação `terms` é inútil neste cluster: a forma com objeto
+      é rejeitada («Unknown parameter in Include/Exclude clause») e as formas de
+      string (com ou sem `(?i)`) devolvem **zero baldes** — a filtragem do texto
+      é feita em Python, depois de o `prefix` já ter restringido os documentos.
+    """
     client = es or get_es_client()
     if not client:
         return {"error": "Elasticsearch indisponível", "suggestions": []}
@@ -3802,7 +3851,7 @@ def contracts_autocomplete(
     if not q:
         return {"suggestions": []}
 
-    lower_q = q.lower()
+    alvo = q.lower()
 
     try:
         resp = client.search(
@@ -3820,13 +3869,13 @@ def contracts_autocomplete(
                                         {
                                             "nested": {
                                                 "path": "adjudicantes.parsed",
-                                                "query": {"match_phrase_prefix": {"adjudicantes.parsed.nome": q}},
+                                                "query": {"prefix": {"adjudicantes.parsed.nome": {"value": q, "case_insensitive": True}}},
                                             }
                                         },
                                         {
                                             "nested": {
                                                 "path": "adjudicatarios.parsed",
-                                                "query": {"match_phrase_prefix": {"adjudicatarios.parsed.nome": q}},
+                                                "query": {"prefix": {"adjudicatarios.parsed.nome": {"value": q, "case_insensitive": True}}},
                                             }
                                         },
                                     ],
@@ -3837,15 +3886,16 @@ def contracts_autocomplete(
                         "minimum_should_match": 1,
                     }
                 },
+                # Sem `include`: pede-se um topo maior por grupo e filtra-se o texto
+                # em Python (o `include` não funciona neste cluster).
                 "aggs": {
                     "adjudicantes": {
                         "nested": {"path": "adjudicantes.parsed"},
                         "aggs": {
                             "names": {
                                 "terms": {
-                                    "field": "adjudicantes.parsed.nome.keyword",
-                                    "size": size,
-                                    "include": f".*{lower_q}.*",
+                                    "field": "adjudicantes.parsed.nome",
+                                    "size": max(size * 8, 50),
                                     "order": {"_count": "desc"},
                                 }
                             }
@@ -3856,9 +3906,8 @@ def contracts_autocomplete(
                         "aggs": {
                             "names": {
                                 "terms": {
-                                    "field": "adjudicatarios.parsed.nome.keyword",
-                                    "size": size,
-                                    "include": f".*{lower_q}.*",
+                                    "field": "adjudicatarios.parsed.nome",
+                                    "size": max(size * 8, 50),
                                     "order": {"_count": "desc"},
                                 }
                             }
@@ -3870,8 +3919,7 @@ def contracts_autocomplete(
                             "codes": {
                                 "terms": {
                                     "field": "cpv.code",
-                                    "size": 5,
-                                    "include": f"{lower_q}.*",
+                                    "size": 40,
                                     "order": {"_count": "desc"},
                                 }
                             }
@@ -3881,19 +3929,23 @@ def contracts_autocomplete(
             },
         )
 
-        suggestions = []
+        suggestions: List[Dict[str, Any]] = []
         seen = set()
         for agg_key in ("adjudicantes", "adjudicatarios"):
             for bucket in resp["aggregations"][agg_key]["names"]["buckets"]:
                 text = bucket["key"]
-                if text and text not in seen:
-                    seen.add(text)
-                    suggestions.append({"text": text, "type": "entity", "count": bucket["doc_count"]})
+                # O prefixo já restringiu os documentos: aqui basta o que contém o texto
+                # (e o topo por contagem pode trazer nomes que só partilham o documento).
+                if not text or alvo not in str(text).lower() or text in seen:
+                    continue
+                seen.add(text)
+                suggestions.append({"text": text, "type": "entity", "count": bucket["doc_count"]})
         for bucket in resp["aggregations"]["cpv_codes"]["codes"]["buckets"]:
             text = bucket["key"]
-            if text and text not in seen:
-                seen.add(text)
-                suggestions.append({"text": text, "type": "cpv", "count": bucket["doc_count"]})
+            if not text or not str(text).lower().startswith(alvo) or text in seen:
+                continue
+            seen.add(text)
+            suggestions.append({"text": text, "type": "cpv", "count": bucket["doc_count"]})
 
         return {"suggestions": suggestions[:size]}
     except Exception as e:

@@ -67,6 +67,8 @@ export type AppView =
   | "world-rede"
   | "padroes"
   | "lorenz"
+  | "mercado"
+  | "mercado-cenarios"
   | "osint"
   | "reports"
   | "subvencoes"

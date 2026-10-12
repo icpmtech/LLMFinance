@@ -302,6 +302,7 @@ from api.gleif_routes import router as gleif_router
 from api.world_routes import router as world_router
 from api.padroes_routes import router as padroes_router
 from api.lorenz_routes import router as lorenz_router
+from api.mercado_routes import router as mercado_router
 from api.risco_routes import router as risco_router
 # MiroFish: simulações de previsão por enxame de agentes alimentadas com dados
 # do sistema (ficha de empresa, tema do Pesquisa 360, notícias, documentos).
@@ -653,6 +654,9 @@ app.include_router(padroes_router)
 # Lorenz 1963: sensibilidade às condições iniciais e propagação de perturbações
 # no grafo comprador↔fornecedor (qualquer área/CPV, região, entidade, período).
 app.include_router(lorenz_router)
+# Inteligência de mercado: benchmark CPV × CAE × contrato, dependências
+# recíprocas com as entidades públicas e cenários (World Model + Lorenz).
+app.include_router(mercado_router)
 # Empresas & Risco: nível de risco por empresa (ML + regras), pesquisa tipo
 # motor de busca, contratos associados, comparação e grafos analíticos 360.
 app.include_router(risco_router)

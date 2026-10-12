@@ -371,6 +371,8 @@ PLATFORM_MODULES = (
     ("Contratos ES", "contratos públicos de Espanha"),
     ("Finder", "explorador dos dados da plataforma"),
     ("Mercados", "cotações, notícias e indicadores por ticker"),
+    ("Lorenz 1963", "sensibilidade às condições iniciais e propagação de perturbações na contratação pública"),
+    ("Inteligência de mercado", "empresas no mesmo mercado (CPV + CAE), dependências recíprocas com as entidades e cenários"),
     ("Browser", "navegador dentro da plataforma"),
 )
 
