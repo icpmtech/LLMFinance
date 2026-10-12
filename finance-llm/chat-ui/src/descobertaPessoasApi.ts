@@ -9,11 +9,57 @@
  * junta todos os cargos dela no universo da plataforma.
  */
 import { API_BASE } from "./api";
-import type { ContractGraphBuildResponse } from "./types";
+import type { HermesEvidence, HermesMetric, HermesStep } from "./hermesApi";
+import type { ContractGraphBuildResponse, SkillRef } from "./types";
 
 /* ------------------------------------------------------------------- tipos */
 
 export type PessoaClasse = "gestao" | "capital" | "processo" | "outro";
+
+export type PessoaRiscoComponente = {
+  id: string;
+  label: string;
+  peso: number;
+  unidade: string;
+  descricao: string;
+  metodo: string;
+  pontos: number | null;
+  evidencia: string[];
+  disponivel: boolean;
+  peso_efetivo?: number;
+  contributo?: number;
+};
+
+/** Risco da pessoa (0–100), na mesma escala do risco das empresas. */
+export type PessoaRisco = {
+  score: number | null;
+  nivel: string | null;
+  nivel_label: string;
+  cor: string;
+  faixa?: string | null;
+  cobertura: number;
+  confianca: string;
+  metodo: string;
+  metodo_label: string;
+  componentes: PessoaRiscoComponente[];
+  fatores: { id: string; label: string; pontos: number | null; contributo: number | null }[];
+};
+
+/** Titular com cargo nos dois lados de um contrato. */
+export type PessoasConflito = {
+  nif: string;
+  nome: string;
+  classe: PessoaClasse;
+  classe_label: string;
+  empresa: { nif: string; nome: string; titulo: string };
+  contraparte: { nif: string; nome: string; dentro_do_pedido: boolean };
+  direcao: string;
+  direcoes: string[];
+  contratos: number;
+  valor: number;
+  severidade: "alerta" | "aviso" | "info";
+  titulo: string;
+};
 
 export type PessoasFonte = {
   id: string;
@@ -107,6 +153,8 @@ export type PessoasPessoa = {
   outras_empresas: { nif: string; nome: string }[];
   cire: PessoaCirePapel[];
   devedores?: PessoaDevedores | null;
+  risco: PessoaRisco;
+  conflitos: number;
   evidencia: string[];
 };
 
@@ -140,6 +188,12 @@ export type PessoasKpis = {
   processos: number;
   cire_pessoas: number;
   devedores: number;
+  conflitos: number;
+  conflitos_graves: number;
+  risco_alto: number;
+  risco_critico: number;
+  risco_medio: number | null;
+  risco_max: number | null;
   cargo_top: { cargo: string; pessoas: number; empresas: number; classe: PessoaClasse } | null;
   profundidade: number | null;
 };
@@ -180,7 +234,9 @@ export type PessoasPainel = {
   kpis: PessoasKpis;
   cargos: PessoasCargoBarra[];
   ligacoes: PessoasLigacao[];
+  conflitos: PessoasConflito[];
   grafo: PessoasGrafo | null;
+  grafo_pessoas: PessoasGrafo | null;
   atencao: PessoasAtencao[];
   fontes: PessoasFonte[];
   leitura: string;
@@ -193,7 +249,31 @@ export type PessoasMeta = {
   pais: string[];
   classes: { id: PessoaClasse; label: string }[];
   orgaos_gestao: string[];
+  risco: {
+    metodo: string;
+    metodo_label: string;
+    componentes: { id: string; label: string; peso: number; unidade: string; descricao: string; metodo: string }[];
+  };
   limites: Record<string, number>;
+};
+
+/** Resposta da análise do Hermes sobre o conjunto de pessoas. */
+export type PessoasAnalise = {
+  pergunta: string;
+  empresas: string[];
+  profundidade: string;
+  skill_imposta?: string | null;
+  text: string;
+  mode: "ai" | "factual" | "empty" | string;
+  evidence: HermesEvidence[];
+  metrics: HermesMetric[];
+  steps: HermesStep[];
+  skill?: SkillRef | null;
+  followups?: string[];
+  warnings?: string[];
+  notes?: string[];
+  elapsed_seconds?: number;
+  generated_at?: string;
 };
 
 export type PessoaFicha = {
@@ -263,6 +343,7 @@ export type PessoasOpcoes = {
   fontes?: string[];
   incluirGrafo?: boolean;
   incluirDevedores?: boolean;
+  incluirConflitos?: boolean;
 };
 
 export function descobrirPessoas(nifs: string[], opcoes: PessoasOpcoes = {}): Promise<PessoasPainel> {
@@ -273,6 +354,7 @@ export function descobrirPessoas(nifs: string[], opcoes: PessoasOpcoes = {}): Pr
     fontes,
     incluirGrafo = true,
     incluirDevedores = true,
+    incluirConflitos = true,
   } = opcoes;
   return request<PessoasPainel>("/descoberta/pessoas/descobrir", {
     method: "POST",
@@ -285,6 +367,44 @@ export function descobrirPessoas(nifs: string[], opcoes: PessoasOpcoes = {}): Pr
       fontes: fontes?.length ? fontes : undefined,
       incluir_grafo: incluirGrafo,
       incluir_devedores: incluirDevedores,
+      incluir_conflitos: incluirConflitos,
+    }),
+  });
+}
+
+export type AnalisePessoasPedido = PessoasOpcoes & {
+  pergunta?: string;
+  profundidade?: "rapida" | "profunda";
+  skillId?: string;
+  backend?: string;
+  sources?: string[];
+};
+
+/** Análise citada do conjunto de pessoas pelo Hermes. */
+export function analisarPessoas(nifs: string[], pedido: AnalisePessoasPedido = {}): Promise<PessoasAnalise> {
+  const {
+    nomes = [],
+    pais = "PT",
+    maxEmpresas = 6,
+    pergunta,
+    profundidade = "rapida",
+    skillId,
+    backend,
+    sources,
+  } = pedido;
+  return request<PessoasAnalise>("/descoberta/pessoas/analise", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      empresas: nifs,
+      nomes,
+      pais,
+      max_empresas: maxEmpresas,
+      pergunta,
+      profundidade,
+      skill_id: skillId || undefined,
+      backend,
+      sources: sources?.length ? sources : undefined,
     }),
   });
 }

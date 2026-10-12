@@ -73,6 +73,7 @@ export type AppView =
   | "osint"
   | "reports"
   | "subvencoes"
+  | "partidos"
   | "benchmark"
   | "benchmark-pt"
   | "benchmark-es"

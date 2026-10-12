@@ -19,6 +19,7 @@ import {
   Settings,
   ShieldAlert,
   Sparkles,
+  Trophy,
   Users,
   Video,
   X,
@@ -30,6 +31,8 @@ import {
   API_BASE,
   autocompletePeople,
   collectPersonSocial,
+  getAutarquicasCandidates,
+  getAutarquicasStats,
   getCompanyCombinedGraph,
   getCompanyPeople,
   getCompanyPeopleGraph,
@@ -39,6 +42,7 @@ import {
   getPersonGraph,
   ingestPeopleForCompany,
   ingestPeopleFromCire,
+  refreshAutarquicasCandidates,
   searchPeople,
   searchPeopleCompanies,
 } from "../api";
@@ -87,6 +91,8 @@ import {
   type PeopleSort,
 } from "../components/people/peopleKit";
 import type {
+  AutarquicasCandidatesResponse,
+  AutarquicasStatsResponse,
   People360Response,
   PeopleAutocompleteItem,
   PeopleFiltersResponse,
@@ -119,7 +125,7 @@ import type {
 // Sections
 // ---------------------------------------------------------------------------
 
-type PessoasIQSection = "dashboard" | "search" | "graph" | "score360" | "devedores" | "settings";
+type PessoasIQSection = "dashboard" | "search" | "graph" | "score360" | "devedores" | "autarquicas" | "settings";
 
 const SECTIONS: { id: PessoasIQSection; label: string; icon: React.ElementType }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -127,6 +133,7 @@ const SECTIONS: { id: PessoasIQSection; label: string; icon: React.ElementType }
   { id: "graph", label: "Grafo", icon: Network },
   { id: "score360", label: "360", icon: ShieldAlert },
   { id: "devedores", label: "Devedores", icon: AlertTriangle },
+  { id: "autarquicas", label: "Autárquicas", icon: Trophy },
   { id: "settings", label: "Configurações", icon: Settings },
 ];
 
@@ -2923,6 +2930,262 @@ function Dossier360Section({
   );
 }
 
+function AutarquicasSection({ onSelectNif }: { onSelectNif: (nif: string) => void }) {
+  const [data, setData] = useState<AutarquicasCandidatesResponse | null>(null);
+  const [stats, setStats] = useState<AutarquicasStatsResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [district, setDistrict] = useState("");
+  const [concelho, setConcelho] = useState("");
+  const [party, setParty] = useState("");
+  const [page, setPage] = useState(1);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(
+    async (nextPage = 1) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const resp = await getAutarquicasCandidates({
+          q: q.trim() || undefined,
+          district: district || undefined,
+          concelho: concelho || undefined,
+          party: party || undefined,
+          page: nextPage,
+          size: 50,
+        });
+        setData(resp);
+        setPage(nextPage);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Erro ao carregar candidatos");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [q, district, concelho, party],
+  );
+
+  useEffect(() => {
+    void load(1);
+    getAutarquicasStats()
+      .then(setStats)
+      .catch(() => setStats(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    setError(null);
+    try {
+      await refreshAutarquicasCandidates();
+      await load(1);
+      const s = await getAutarquicasStats().catch(() => null);
+      if (s) setStats(s);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao atualizar");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const districts = data?.facets.districts ?? stats?.districts.map(([d]) => d) ?? [];
+  const concelhos = data?.facets.concelhos ?? [];
+  const parties = data?.facets.parties ?? stats?.top_parties.map(([p]) => p) ?? [];
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.size)) : 1;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="flex items-center gap-2 text-lg font-semibold">
+              <Trophy size={20} className="text-amber-300" /> Autárquicas 2025
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Candidatos às eleições locais por distrito, concelho e partido.
+              {stats && (
+                <>
+                  {" "}· {stats.total_candidates.toLocaleString("pt-PT")} candidatos em{" "}
+                  {stats.total_concelhos} concelhos · {stats.total_parties} partidos/coligações
+                </>
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+          >
+            {refreshing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+            Atualizar dados
+          </button>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="flex flex-col gap-3">
+          <div className="flex min-h-[44px] items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 focus-within:ring-2 focus-within:ring-amber-400/40">
+            <Search size={18} className="shrink-0 text-muted-foreground" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && load(1)}
+              placeholder="Nome ou partido…"
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+            {q && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQ("");
+                  void load(1);
+                }}
+                className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground"
+                aria-label="Limpar"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <select
+              value={district}
+              onChange={(e) => {
+                setDistrict(e.target.value);
+                setConcelho("");
+                void load(1);
+              }}
+              className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40"
+            >
+              <option value="">Todos os distritos</option>
+              {districts.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={concelho}
+              onChange={(e) => {
+                setConcelho(e.target.value);
+                void load(1);
+              }}
+              disabled={!district}
+              className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40 disabled:opacity-40"
+            >
+              <option value="">Todos os concelhos</option>
+              {concelhos
+                .filter((c) => !district || data?.items.some((it) => it.district === district && it.concelho === c))
+                .map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+            </select>
+
+            <select
+              value={party}
+              onChange={(e) => {
+                setParty(e.target.value);
+                void load(1);
+              }}
+              className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40"
+            >
+              <option value="">Todos os partidos</option>
+              {parties.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              {data ? `${data.total.toLocaleString("pt-PT")} resultado${data.total === 1 ? "" : "s"}` : "a carregar…"}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void load(Math.max(1, page - 1))}
+                disabled={page <= 1 || loading}
+                className="rounded-lg border border-white/10 px-2 py-1 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+              >
+                Anterior
+              </button>
+              <span className="text-xs text-muted-foreground">
+                {page} / {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => void load(Math.min(totalPages, page + 1))}
+                disabled={page >= totalPages || loading}
+                className="rounded-lg border border-white/10 px-2 py-1 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+              >
+                Seguinte
+              </button>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {loading && !data && <Loading message="A carregar candidatos…" />}
+      {error && (
+        <Card className="p-4 text-center">
+          <p className="text-rose-300 text-sm">{error}</p>
+        </Card>
+      )}
+
+      {data && (
+        <div className="grid grid-cols-1 gap-3 @md:grid-cols-2">
+          {data.items.map((c) => (
+            <Card key={`${c.district}-${c.concelho}-${c.party}-${c.name}`} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-medium text-foreground">{c.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {c.district} · {c.concelho}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-amber-400/10 px-2 py-0.5 text-xs text-amber-300">
+                  {c.party}
+                </span>
+              </div>
+              {c.party_description && c.party_description !== c.party && (
+                <p className="mt-1 text-xs text-muted-foreground">{c.party_description}</p>
+              )}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] text-muted-foreground">
+                  {c.type} · posição {c.position}
+                  {c.state && c.state !== "NA" && ` · ${c.state}`}
+                </span>
+                {c.nif && (
+                  <button
+                    type="button"
+                    onClick={() => onSelectNif(c.nif!)}
+                    className="ml-auto flex items-center gap-1 rounded-lg bg-white/[0.06] px-2 py-1 text-[11px] text-teal-200 transition hover:bg-white/[0.12]"
+                  >
+                    <PersonStanding size={11} /> Abrir ficha
+                  </button>
+                )}
+              </div>
+            </Card>
+          ))}
+          {data.items.length === 0 && (
+            <Card className="p-8 text-center @md:col-span-2">
+              <p className="text-sm text-muted-foreground">Nenhum candidato encontrado com os filtros atuais.</p>
+            </Card>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function IngestPanel() {
   const [nif, setNif] = useState("");
   const [result, setResult] = useState<PeopleIngestResponse | null>(null);
@@ -3287,6 +3550,8 @@ export default function PessoasIQPage({ nif: nifProp }: { nif?: string } = {}) {
         return <Dossier360Section person={selectedPerson} onPickNif={(value) => void handlePickNif(value)} />;
       case "devedores":
         return <DevedoresSection onPickNif={(value) => void handlePickNif(value)} />;
+      case "autarquicas":
+        return <AutarquicasSection onSelectNif={(value) => void abrirNif(value, "search")} />;
       case "settings":
         return <IngestPanel />;
       default:

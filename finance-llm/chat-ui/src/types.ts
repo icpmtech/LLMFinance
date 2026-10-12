@@ -1168,6 +1168,85 @@ export interface PeopleSearchResponse {
   error?: string | null;
 }
 
+export interface AutarquicasCandidatesResponse {
+  total: number;
+  page: number;
+  size: number;
+  items: {
+    name: string;
+    position: number;
+    type: string;
+    state: string;
+    party: string;
+    party_description?: string | null;
+    district: string;
+    district_id?: number | null;
+    concelho: string;
+    concelho_id?: number | null;
+    election: string;
+    election_id: number;
+    nif?: string | null;
+  }[];
+  facets: {
+    districts: string[];
+    concelhos: string[];
+    parties: string[];
+  };
+}
+
+export interface AutarquicasStatsResponse {
+  total_candidates: number;
+  total_concelhos: number;
+  total_parties: number;
+  total_districts: number;
+  cached_at?: string | null;
+  ttl_seconds: number;
+  top_parties: [string, number][];
+  districts: [string, number][];
+}
+
+export interface Vereador {
+  doc_id?: string;
+  name: string;
+  concelho: string;
+  district?: string;
+  party?: string;
+  role: string;
+  source?: string;
+  source_url?: string;
+  election?: string;
+  year?: number;
+  nif?: string | null;
+  notes?: string | null;
+  remuneration?: Record<string, unknown> | null;
+  raw_data?: Record<string, unknown>;
+  ingested_at?: string;
+  updated_at?: string;
+}
+
+export interface VereadoresResponse {
+  total: number;
+  page: number;
+  size: number;
+  items: Vereador[];
+  facets?: {
+    districts?: string[];
+    concelhos?: string[];
+    parties?: string[];
+    roles?: string[];
+  } | null;
+}
+
+export interface VereadoresStatsResponse {
+  total: number;
+  with_remuneration: number;
+  total_concelhos: number;
+  roles: Record<string, number>;
+  sources: Record<string, number>;
+  files: string[];
+  data_dir: string;
+}
+
 export interface PeopleGraphNode {
   id: string;
   // "entity" = entidade contratual (nó de contratos) devolvido por

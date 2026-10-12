@@ -92,6 +92,7 @@ import VortalPage from "./pages/VortalPage";
 import OsintPage from "./pages/OsintPage";
 import ReportsPage from "./pages/ReportsPage";
 import SubvencoesPage from "./pages/SubvencoesPage";
+import PartidosPage from "./pages/PartidosPage";
 import BenchmarkPage from "./pages/BenchmarkPage";
 import BenchmarksPage from "./pages/BenchmarksPage";
 import BenchmarkDetailPage from "./pages/BenchmarkDetailPage";
@@ -206,6 +207,7 @@ type AppView =
   | "osint"
   | "reports"
   | "subvencoes"
+  | "partidos"
   | "benchmark"
   | "benchmarks"
   | "benchmark-sonda"
@@ -376,6 +378,7 @@ function pathForView(
   if (view === "osint") return "/osint";
   if (view === "reports") return "/reports";
   if (view === "subvencoes") return "/subvencoes";
+  if (view === "partidos") return "/partidos";
   if (view === "benchmark") return "/benchmark";
   if (view === "benchmark-pt") return "/benchmark/portugal";
   if (view === "benchmark-es") return "/benchmark/espanha";
@@ -603,6 +606,7 @@ export default function App() {
     if (path === "/osint" || path.startsWith("/osint/")) return "osint";
     if (path === "/reports" || path.startsWith("/reports/")) return "reports";
     if (path === "/subvencoes" || path.startsWith("/subvencoes/")) return "subvencoes";
+    if (path === "/partidos" || path.startsWith("/partidos/")) return "partidos";
     if (path === "/benchmark/portugal") return "benchmark-pt";
     if (path === "/benchmark/espanha") return "benchmark-es";
     if (path === "/benchmark/franca") return "benchmark-fr";
@@ -758,6 +762,7 @@ export default function App() {
       else if (path === "/osint" || path.startsWith("/osint/")) next = "osint";
       else if (path === "/reports" || path.startsWith("/reports/")) next = "reports";
       else if (path === "/subvencoes" || path.startsWith("/subvencoes/")) next = "subvencoes";
+      else if (path === "/partidos" || path.startsWith("/partidos/")) next = "partidos";
       else if (path === "/benchmark/portugal") next = "benchmark-pt";
       else if (path === "/benchmark/espanha") next = "benchmark-es";
       else if (path === "/benchmark/franca") next = "benchmark-fr";
@@ -1524,6 +1529,7 @@ export default function App() {
     if (target === "osint") return <OsintPage />;
     if (target === "reports") return <ReportsPage />;
     if (target === "subvencoes") return <SubvencoesPage />;
+    if (target === "partidos") return <PartidosPage />;
     if (target === "benchmarks")
       return (
         <BenchmarksPage

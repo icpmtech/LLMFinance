@@ -392,6 +392,19 @@ TAGS_METADATA: List[Dict[str, str]] = [
         ),
     },
     {
+        "name": "partidos",
+        "description": (
+            "Partidos políticos e as suas contas. Recolhe as páginas anuais do "
+            "financiamento partidário do Tribunal Constitucional (contas anuais "
+            "dos partidos, listas de ações e meios de propaganda política, "
+            "relatórios, acórdãos e decisões da ECFP) e o registo oficial dos "
+            "partidos na CNE; indexa em `finance_partidos`, "
+            "`finance_partidos_registo` e `finance_partidos_recolhas`, e serve "
+            "painel, pesquisa (com o texto dos PDF), fichas por partido, ligação "
+            "às pessoas do PessoasIQ e exportação CSV."
+        ),
+    },
+    {
         "name": "gleif",
         "description": (
             "GLEIF / LEI: registos *Legal Entity Identifier* do *Golden Copy* "

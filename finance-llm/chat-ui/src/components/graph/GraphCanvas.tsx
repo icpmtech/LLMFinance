@@ -522,6 +522,7 @@ export function GraphCanvas({
     labelledIds,
     dense,
     labels,
+    nodeSubtitle,
     omittedNodes: drawn.omittedNodes,
     omittedEdges: drawn.omittedEdges,
   });
@@ -538,6 +539,7 @@ export function GraphCanvas({
       labelledIds,
       dense,
       labels,
+      nodeSubtitle,
       omittedNodes: drawn.omittedNodes,
       omittedEdges: drawn.omittedEdges,
     };
@@ -693,7 +695,7 @@ export function GraphCanvas({
       const comEtiqueta =
         isSelected || isHovered || (current.labels === "auto" && !current.dense && current.labelledIds.has(node.id));
       if (comEtiqueta) {
-        drawLabel(node.label, p.x + radius + 6, p.y + 3, isSelected || isHovered, nodeSubtitle?.(node) ?? "");
+        drawLabel(node.label, p.x + radius + 6, p.y + 3, isSelected || isHovered, current.nodeSubtitle?.(node) ?? "");
       }
     };
 

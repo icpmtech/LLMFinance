@@ -114,6 +114,11 @@ import type {
   People360Response,
   PoliticianProfile,
   NodeSummaryResponse,
+  AutarquicasCandidatesResponse,
+  AutarquicasStatsResponse,
+  Vereador,
+  VereadoresResponse,
+  VereadoresStatsResponse,
   ImportFileType,
   ImportDataType,
   ImportPreviewRow,
@@ -1840,6 +1845,114 @@ export async function getNodeSummary(opts: {
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Erro ao obter o resumo do nó: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Candidatos às Autárquicas 2025 (site eleicoes.mai.gov.pt). */
+export async function getAutarquicasCandidates(opts?: {
+  q?: string;
+  district?: string;
+  concelho?: string;
+  party?: string;
+  page?: number;
+  size?: number;
+  refresh?: boolean;
+}): Promise<AutarquicasCandidatesResponse> {
+  const params = new URLSearchParams();
+  if (opts?.q) params.set("q", opts.q);
+  if (opts?.district) params.set("district", opts.district);
+  if (opts?.concelho) params.set("concelho", opts.concelho);
+  if (opts?.party) params.set("party", opts.party);
+  params.set("page", String(opts?.page ?? 1));
+  params.set("size", String(opts?.size ?? 50));
+  if (opts?.refresh) params.set("refresh", "true");
+  const res = await fetch(`${API_BASE}/people/autarquicas/candidates?${params.toString()}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter candidatos: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Estatísticas dos candidatos às Autárquicas 2025. */
+export async function getAutarquicasStats(): Promise<AutarquicasStatsResponse> {
+  const res = await fetch(`${API_BASE}/people/autarquicas/stats`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter estatísticas autárquicas: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Força a recolha nova dos candidatos às Autárquicas 2025. */
+export async function refreshAutarquicasCandidates(): Promise<{ refreshed_at: string; total: number; territories: number }> {
+  const res = await fetch(`${API_BASE}/people/autarquicas/refresh`, { method: "POST" });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao atualizar candidatos: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Vereadores e remunerações autárquicas. */
+export async function getVereadores(opts?: {
+  q?: string;
+  district?: string;
+  concelho?: string;
+  party?: string;
+  role?: string;
+  has_remuneration?: boolean;
+  page?: number;
+  size?: number;
+}): Promise<VereadoresResponse> {
+  const params = new URLSearchParams();
+  if (opts?.q) params.set("q", opts.q);
+  if (opts?.district) params.set("district", opts.district);
+  if (opts?.concelho) params.set("concelho", opts.concelho);
+  if (opts?.party) params.set("party", opts.party);
+  if (opts?.role) params.set("role", opts.role);
+  if (opts?.has_remuneration !== undefined) params.set("has_remuneration", String(opts.has_remuneration));
+  params.set("page", String(opts?.page ?? 1));
+  params.set("size", String(opts?.size ?? 50));
+  const res = await fetch(`${API_BASE}/people/vereadores?${params.toString()}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter vereadores: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Estatísticas dos vereadores indexados. */
+export async function getVereadoresStats(): Promise<VereadoresStatsResponse> {
+  const res = await fetch(`${API_BASE}/people/vereadores/stats`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter estatísticas de vereadores: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Atualiza/recolhe dados base de vereadores. */
+export async function refreshVereadores(): Promise<{ refreshed_at: string; total: number; territories: number }> {
+  const res = await fetch(`${API_BASE}/people/vereadores/refresh`, { method: "POST" });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao atualizar vereadores: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Importa vereadores via JSON. */
+export async function importVereadores(items: Omit<Vereador, "doc_id">[]): Promise<{ imported: number; total: number; path: string }> {
+  const res = await fetch(`${API_BASE}/people/vereadores/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao importar vereadores: ${res.status} - ${text}`);
   }
   return res.json();
 }

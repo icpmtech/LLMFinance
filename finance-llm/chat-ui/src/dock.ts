@@ -519,6 +519,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "16,185,129",
   },
   {
+    id: "partidos",
+    label: "Partidos e contas",
+    hint: "Contas anuais e financiamento partidário (Tribunal Constitucional) e registo oficial dos partidos (CNE)",
+    icon: Landmark,
+    gradient: "from-violet-200 via-violet-500 to-sky-700",
+    accent: "139,92,246",
+  },
+  {
     id: "simulador",
     label: "Simulador IQ OS",
     hint: "Simulações de previsão por enxame de agentes com os dados do sistema, com resultados, relatório e elenco",
@@ -916,6 +924,7 @@ const DEFAULT_ITEMS = [
   "shop",
   "reports",
   "subvencoes",
+  "partidos",
   "rss",
   "empresas-iq",
   "pessoas-iq",

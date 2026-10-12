@@ -138,11 +138,32 @@ def descoberta(monkeypatch):
             }
         return {"nif": str(nif), "total": 0, "devedor": False, "entidades": [], "escaloes": []}
 
+    def fake_contratos(*, nif=None, size=0, **kwargs):
+        # Alfa vende à Delta (fora do pedido) e à Beta (dentro do pedido).
+        if str(nif) == "111111111":
+            return {
+                "total": 2,
+                "items": [
+                    {
+                        "precoContratual": 100000.0,
+                        "adjudicantes": {"parsed": [{"nif": "999999999", "nome": "Delta, Lda."}]},
+                        "adjudicatarios": {"parsed": [{"nif": "111111111", "nome": "Alfa, S.A."}]},
+                    },
+                    {
+                        "precoContratual": 5000.0,
+                        "adjudicantes": {"parsed": [{"nif": "222222222", "nome": "Beta, Lda."}]},
+                        "adjudicatarios": {"parsed": [{"nif": "111111111", "nome": "Alfa, S.A."}]},
+                    },
+                ],
+            }
+        return {"total": 0, "items": []}
+
     def fake_resolver(texto, *, size=8):
         return {"query": texto, "items": [{"nif": "222222222", "nome": "Beta, Lda."}], "candidatos": []}
 
     monkeypatch.setattr(dp.es_client, "company_people_from_index", fake_empresa)
     monkeypatch.setattr(dp.es_client, "get_es_client", lambda: None)
+    monkeypatch.setattr(dp.es_client, "search_contracts", fake_contratos)
     monkeypatch.setattr(dp.cire_service, "search", fake_cire)
     monkeypatch.setattr(dp.devedores_service, "por_nif", fake_devedores)
     monkeypatch.setattr(dp.service, "resolver", fake_resolver)
@@ -179,6 +200,36 @@ def test_classificacao_dos_cargos():
     assert dp._classe_cargo(_cargo("Administrador da insolvência")) == "processo"
     assert dp._classe_cargo(_cargo("Credor")) == "processo"
     assert dp._classe_cargo(_cargo("Fiscal Único")) == "outro"
+
+
+def test_titulo_limpa_o_ruido_da_publicacao():
+    # A publicação cola a causa e a data ao cargo: o título acaba antes disso.
+    assert dp._titulo(_cargo("Vogal Causa: renúncia Data: 2022.04.30", role_org="Gerência")) == "Vogal"
+    assert dp._titulo(_cargo("Presidente NIF/NIPC: 211835900 Causa: Renúncia")) == "Presidente"
+    assert dp._titulo(_cargo("Gerente", role_org="Gerência")) == "Gerente"
+    # Sem cargo, o órgão é o que resta para dizer.
+    assert dp._titulo(_cargo("", role_org="Conselho De Administração")) == "Conselho De Administração"
+    assert dp._titulo({}) == ""
+
+
+def test_titulos_por_pessoa(descoberta):
+    ana = next(pessoa for pessoa in descoberta["pessoas"] if pessoa["nome"] == "Ana Silva")
+    assert ana["titulo"] == "Gerente"
+    assert ana["titulos"] == ["Gerente", "Sócia"]
+    alfa = next(empresa for empresa in ana["empresas"] if empresa["nif"] == "111111111")
+    assert alfa["titulo"] == "Gerente"
+    assert alfa["cargos"][0]["titulo"] == "Gerente"
+
+
+def test_titulos_nao_contam_a_mesma_grafia_duas_vezes():
+    # As publicações escrevem o mesmo cargo de formas diferentes («Vogal», «VOGAL»).
+    pessoa = {
+        "empresas": [
+            {"cargos": [{"titulo": "Vogal"}, {"titulo": "VOGAL"}, {"titulo": "vogal"}]},
+            {"cargos": [{"titulo": "Presidente"}]},
+        ]
+    }
+    assert dp._titulos(pessoa) == ["Vogal", "Presidente"]
 
 
 def test_quota_marca_o_capital(descoberta):
@@ -237,8 +288,12 @@ def test_grafo_liga_empresas_a_pessoas(descoberta):
     assert ana["type"] == "pessoa"
     assert ana["count"] == 3
     assert ana["total_value"] == 60000.0
+    # O nó da pessoa leva o título (os cargos), não o nome da publicação.
+    assert ana["role"] == "Gerente · Sócia"
     arestas = [edge for edge in grafo["edges"] if edge["target"] == "pessoa:200000001"]
     assert {edge["source"] for edge in arestas} == {"empresa:111111111", "empresa:222222222"}
+    # Cada ligação diz o título com que a pessoa está naquela empresa.
+    assert all(edge["relation"] == "tem como Gerente" for edge in arestas)
 
 
 def test_cargos_distribuicao(descoberta):
@@ -328,6 +383,113 @@ def test_meta_publica_as_fontes_e_os_limites():
     assert meta["limites"]["empresas"] == dp.MAX_EMPRESAS
     assert {classe["id"] for classe in meta["classes"]} == set(dp.CLASSES)
     assert meta["orgaos_gestao"]
+    assert {item["id"] for item in meta["risco"]["componentes"]} == {spec["id"] for spec in dp.COMPONENTES_RISCO}
+    assert round(sum(spec["peso"] for spec in dp.COMPONENTES_RISCO), 6) == 1.0
+
+
+def _pessoa_para_risco(**extra) -> dict:
+    base = {
+        "nif": "200000001",
+        "nome": "Ana Silva",
+        "empresas_universo": 5,
+        "ultimo": "2026-09-01",
+        "cargos_pedido": 2,
+        "empresas": [
+            {
+                "nif": "111111111",
+                "nome": "Alfa, S.A.",
+                "cargos": [
+                    {"role": "Gerente", "role_org": "Gerência", "data": "2026-09-01", "causa": "", "classe": "gestao"},
+                    {"role": "Vogal", "role_org": "", "data": "2024-01-01", "causa": "renúncia", "classe": "gestao"},
+                ],
+            }
+        ],
+        "cire": [],
+        "devedores": {"devedor": False, "total": 0, "entidades": []},
+    }
+    base.update(extra)
+    return base
+
+
+def test_risco_da_pessoa_sobe_com_os_sinais():
+    limpa = dp.risco_da_pessoa(_pessoa_para_risco())
+    assert limpa["score"] is not None
+    assert limpa["nivel"] in {nivel["id"] for nivel in __import__("api.risco_service", fromlist=["NIVEIS"]).NIVEIS}
+    assert limpa["cobertura"] == 1.0
+
+    suja = dp.risco_da_pessoa(
+        _pessoa_para_risco(
+            cire=[{"papel": "Insolvente", "processo": "1/24", "especie": "Insolvência", "data": "2024-03-01"}],
+            devedores={"devedor": True, "total": 2, "entidades": ["Finanças"], "maior_valor_min": 90000.0},
+        )
+    )
+    assert suja["score"] > limpa["score"]
+    assert suja["fatores"]
+    assert any("Insolvente" in linha for linha in suja["componentes"][1]["evidencia"])
+
+
+def test_risco_sem_dados_nao_inventa_score():
+    risco = dp.risco_da_pessoa({"nif": "1", "nome": "X", "empresas": [], "cire": [], "devedores": None})
+    assert risco["score"] is None
+    assert risco["nivel_label"] == "Sem dados"
+    assert risco["cobertura"] == 0.0
+
+
+def test_conflitos_detetam_titulares_dos_dois_lados(descoberta):
+    conflitos = descoberta["conflitos"]
+    nomes = {item["contraparte"]["nome"] for item in conflitos}
+    assert "Delta, Lda." in nomes
+    assert descoberta["kpis"]["conflitos"] >= 1
+    dentro = [item for item in conflitos if item["contraparte"]["dentro_do_pedido"]]
+    assert dentro, "uma empresa do pedido que contrata com a outra tem de contar"
+    assert any(item["severidade"] == "alerta" for item in conflitos)
+    assert any("dois lados" in item["titulo"] for item in descoberta["atencao"])
+
+
+def test_grafo_pessoas_liga_quem_partilha_empresa(descoberta):
+    grafo = descoberta["grafo_pessoas"]
+    assert grafo["meta"]["dimension_a"] == "pessoa"
+    assert grafo["meta"]["dimension_b"] == "pessoa"
+    ids = {node["id"] for node in grafo["nodes"]}
+    assert "pessoa:200000001" in ids
+    relacoes = {edge["relation"] for edge in grafo["edges"]}
+    assert "juntos em Alfa, S.A." in relacoes
+    assert all(edge["source"].startswith("pessoa:") and edge["target"].startswith("pessoa:") for edge in grafo["edges"])
+
+
+def test_pergunta_padrao_ancora_nos_numeros(descoberta):
+    pergunta = dp.pergunta_padrao(descoberta)
+    assert "quem manda" in pergunta
+    assert f"pessoas com cargos: {descoberta['kpis']['pessoas']}" in pergunta
+    assert "titulares: " in pergunta
+
+
+def test_pergunta_padrao_nomeia_titulares_com_titulo(descoberta):
+    pergunta = dp.pergunta_padrao(descoberta)
+    pessoa = descoberta["pessoas"][0]
+    assert f"{pessoa['nome']} — {pessoa['titulo']}" in pergunta
+    assert pessoa["empresas"][0]["nome"] in pergunta
+    assert pergunta.count(" | ") + 1 <= dp.MAX_TITULARES_PEDIDO
+
+
+def test_analise_pede_ao_hermes(monkeypatch, descoberta):
+    import asyncio
+
+    from api import hermes_service
+
+    pedidos: dict = {}
+
+    async def fake_ask(pergunta, **kwargs):
+        pedidos["pergunta"] = pergunta
+        pedidos["kwargs"] = kwargs
+        return {"text": "Resposta citada [1].", "mode": "ai", "evidence": [{"id": 1}], "metrics": [], "steps": []}
+
+    monkeypatch.setattr(hermes_service, "ask", fake_ask)
+    resultado = asyncio.run(dp.analisar(descoberta, pergunta="Quem manda nestas empresas?"))
+    assert resultado["text"] == "Resposta citada [1]."
+    assert resultado["pergunta"] == "Quem manda nestas empresas?"
+    assert pedidos["kwargs"]["country"] == "PRT"
+    assert resultado["empresas"]
 
 
 def test_ficha_junta_todos_os_cargos_da_pessoa(monkeypatch):

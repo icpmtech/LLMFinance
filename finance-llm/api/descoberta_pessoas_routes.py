@@ -81,6 +81,7 @@ async def _descobrir(payload: Dict[str, Any]) -> Dict[str, Any]:
             fontes=_lista(payload.get("fontes")) or None,
             incluir_grafo=bool(payload.get("incluir_grafo", True)),
             incluir_devedores=bool(payload.get("incluir_devedores", True)),
+            incluir_conflitos=bool(payload.get("incluir_conflitos", True)),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -111,6 +112,7 @@ async def descoberta_pessoas_descobrir_get(
     fontes: Annotated[Optional[str], Query(description="Fontes separadas por vírgulas")] = None,
     incluir_grafo: bool = True,
     incluir_devedores: bool = True,
+    incluir_conflitos: bool = True,
     session: Session = None,
 ) -> Dict[str, Any]:
     """Pessoas com cargos nas empresas indicadas, com evidência, grafo e atenção."""
@@ -123,6 +125,7 @@ async def descoberta_pessoas_descobrir_get(
             "fontes": fontes,
             "incluir_grafo": incluir_grafo,
             "incluir_devedores": incluir_devedores,
+            "incluir_conflitos": incluir_conflitos,
         }
     )
 
@@ -135,6 +138,34 @@ async def descoberta_pessoas_descobrir_post(payload: Dict[str, Any] = Body(defau
     `pais`, `max_empresas`, `fontes`, `incluir_grafo` e `incluir_devedores`.
     """
     return await _descobrir(payload or {})
+
+
+@router.post("/analise", summary="Análise do conjunto de pessoas pelo Hermes")
+async def descoberta_pessoas_analise(
+    payload: Dict[str, Any] = Body(default_factory=dict),
+    session: Session = None,
+) -> Dict[str, Any]:
+    """Escreve a análise citada do conjunto, ancorada nos números calculados.
+
+    O corpo aceita as empresas (`empresas`/`nifs`, `nomes`, `pais`,
+    `max_empresas`) e o pedido ao Hermes (`pergunta`, `profundidade`, `fontes`,
+    `backend`, `skill_id`). Sem pergunta, o Hermes recebe a pergunta padrão da
+    descoberta de pessoas, ancorada no painel.
+    """
+    payload = payload or {}
+    painel = await _descobrir(payload)
+    try:
+        return await service.analisar(
+            painel,
+            pergunta=payload.get("pergunta"),
+            profundidade=payload.get("profundidade"),
+            fontes=_lista(payload.get("sources") or payload.get("fontes_hermes")),
+            backend=payload.get("backend"),
+            skill_id=payload.get("skill_id") or None,
+            session=session,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/pessoa/{nif}", summary="Ficha de uma pessoa em todo o universo")

@@ -12,16 +12,19 @@
  * individual não divergirem.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import {
   AlertTriangle,
   Building2,
   Compass,
+  Download,
   GitCompareArrows,
   Info,
   Network,
   Plus,
   RefreshCw,
   Search,
+  ShieldAlert,
   Sparkles,
   UserRound,
   Users,
@@ -29,17 +32,29 @@ import {
 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input } from "../components/ui";
 import { GraphCanvas } from "../components/graph/GraphCanvas";
-import { formatCompact, formatMoney, toStudioGraph, type GraphMetric, type StudioGraph } from "../components/graph/graphStudio";
+import {
+  formatCompact,
+  formatMoney,
+  toStudioGraph,
+  type GraphMetric,
+  type StudioGraph,
+  type StudioNode,
+} from "../components/graph/graphStudio";
+import { downloadBlob } from "../visualizadorExport";
 import { resolverEmpresa, type DescobertaAlvo } from "../descobertaApi";
 import {
+  analisarPessoas,
   descobrirPessoas,
   getFichaPessoa,
   getPessoasMeta,
   nifsDoEndereco,
   type PessoaCargo,
   type PessoaFicha,
+  type PessoaRisco,
+  type PessoasAnalise,
   type PessoasAtencao,
   type PessoasCargoBarra,
+  type PessoasConflito,
   type PessoasEmpresa,
   type PessoasFonte,
   type PessoasLigacao,
@@ -127,6 +142,7 @@ function TabelaPessoas({ pessoas, onAbrir }: { pessoas: PessoasPessoa[]; onAbrir
             <th className="pb-1 font-medium">Empresas do pedido</th>
             <th className="pb-1 text-right font-medium">Cargos</th>
             <th className="pb-1 text-right font-medium">Universo</th>
+            <th className="pb-1 text-right font-medium">Risco</th>
             <th className="pb-1 pl-3 text-right font-medium">Registo</th>
           </tr>
         </thead>
@@ -147,6 +163,11 @@ function TabelaPessoas({ pessoas, onAbrir }: { pessoas: PessoasPessoa[]; onAbrir
                       liga {pessoa.empresas_pedido}
                     </Badge>
                   ) : null}
+                  {pessoa.conflitos ? (
+                    <Badge className="border-rose-500/30 bg-rose-500/10 text-rose-200">
+                      {pessoa.conflitos} conflito(s)
+                    </Badge>
+                  ) : null}
                   {classeBadge(pessoa.classe)}
                 </div>
                 <p className="truncate text-[10px] text-muted-foreground">
@@ -156,10 +177,13 @@ function TabelaPessoas({ pessoas, onAbrir }: { pessoas: PessoasPessoa[]; onAbrir
                 </p>
               </td>
               <td className="max-w-[190px] py-1.5 pr-2">
-                <span className="block truncate" title={`${pessoa.cargo_atual} · ${pessoa.role_org}`}>
-                  {pessoa.cargo_atual || "—"}
+                <span className="block truncate" title={`${pessoa.titulo || pessoa.cargo_atual} · ${pessoa.role_org}`}>
+                  {pessoa.titulo || pessoa.cargo_atual || "—"}
                 </span>
-                <span className="block truncate text-[10px] text-muted-foreground">{pessoa.role_org}</span>
+                <span className="block truncate text-[10px] text-muted-foreground">
+                  {pessoa.role_org}
+                  {pessoa.titulos.length > 1 ? ` · +${pessoa.titulos.length - 1} título(s)` : ""}
+                </span>
               </td>
               <td className="py-1.5 pr-2">
                 <div className="flex flex-wrap gap-1">
@@ -167,7 +191,7 @@ function TabelaPessoas({ pessoas, onAbrir }: { pessoas: PessoasPessoa[]; onAbrir
                     <span
                       key={empresa.nif}
                       className="max-w-[150px] truncate rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px]"
-                      title={`${empresa.nome} · ${empresa.cargo_atual}`}
+                      title={`${empresa.nome} · ${empresa.titulo || empresa.cargo_atual}`}
                     >
                       {empresa.nome}
                     </span>
@@ -186,6 +210,9 @@ function TabelaPessoas({ pessoas, onAbrir }: { pessoas: PessoasPessoa[]; onAbrir
                   <span className="block text-[10px] text-muted-foreground">{pessoa.cargos_universo} cargos</span>
                 ) : null}
               </td>
+              <td className="py-1.5 text-right">
+                <RiscoBadge risco={pessoa.risco} />
+              </td>
               <td className="py-1.5 pl-3 text-right tabular-nums text-muted-foreground">
                 {dataCurta(pessoa.desde)}
                 {pessoa.ultimo && pessoa.ultimo !== pessoa.desde ? ` → ${dataCurta(pessoa.ultimo)}` : ""}
@@ -196,7 +223,8 @@ function TabelaPessoas({ pessoas, onAbrir }: { pessoas: PessoasPessoa[]; onAbrir
       </table>
       <p className="mt-1.5 text-[10px] text-muted-foreground">
         Clique numa pessoa para ver a ficha com todos os cargos. «Universo» é o que a plataforma já conhece desta pessoa
-        fora das empresas pedidas.
+        fora das empresas pedidas; o «Risco» é a triagem de 0–100 (cargos acumulados, processos, listas de devedores,
+        renúncias e mudanças de gestão).
       </p>
     </div>
   );
@@ -244,57 +272,95 @@ function Ligacoes({ ligacoes, onAbrir }: { ligacoes: PessoasLigacao[]; onAbrir: 
 
 /* ----------------------------------------------------------------- grafo */
 
-function GrafoPessoas({ painel }: { painel: PessoasPainel }) {
+function GrafoPessoas({ painel, vista }: { painel: PessoasPainel; vista: "empresas" | "pessoas" }) {
   const [metrica, setMetrica] = useState<GraphMetric>("contratos");
-  const [vista, setVista] = useState<VistaGrafo>("network");
+  const [disposicao, setDisposicao] = useState<VistaGrafo>("network");
   const [selecionado, setSelecionado] = useState<string | null>(null);
 
-  const grafoStudio = useMemo<StudioGraph | null>(
-    () => toStudioGraph(painel.grafo ?? null, metrica),
-    [painel.grafo, metrica],
-  );
+  const coTitularidade = vista === "pessoas";
+  const fonte = coTitularidade ? painel.grafo_pessoas : painel.grafo;
+  const grafoStudio = useMemo<StudioGraph | null>(() => toStudioGraph(fonte ?? null, metrica), [fonte, metrica]);
   const fichaNo = useMemo(
     () => (grafoStudio && selecionado ? grafoStudio.nodes.find((no) => no.id === selecionado) ?? null : null),
     [grafoStudio, selecionado],
   );
 
+  // O título de cada pessoa, por NIF: é o que se desenha por baixo do nome no nó.
+  const tituloPorNif = useMemo(() => {
+    const mapa = new Map<string, string>();
+    painel.pessoas.forEach((pessoa) => {
+      const titulo = pessoa.titulo || pessoa.titulos.join(" · ");
+      if (titulo) mapa.set(pessoa.nif, titulo);
+    });
+    return mapa;
+  }, [painel.pessoas]);
+  const subtituloDoNo = useCallback(
+    (no: StudioNode) => (no.type === "pessoa" ? tituloPorNif.get(no.key) : undefined),
+    [tituloPorNif],
+  );
+
   if (!grafoStudio || !grafoStudio.nodes.length) {
-    return <p className="text-xs text-muted-foreground">Sem rede de pessoas para este pedido.</p>;
+    return (
+      <p className="text-xs text-muted-foreground">
+        {coTitularidade
+          ? "Sem co-titularidade para desenhar: nenhuma pessoa do painel partilha uma empresa com outra."
+          : "Sem rede de pessoas para este pedido."}
+      </p>
+    );
   }
 
   return (
     <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_230px]">
       <GraphCanvas
         graph={grafoStudio}
-        layout={vista}
+        layout={disposicao}
         metric={metrica}
-        unitLabel={metrica === "valor" ? "€ de capital" : "cargos"}
+        unitLabel={coTitularidade ? "empresas partilhadas" : metrica === "valor" ? "€ de capital" : "cargos"}
         heightClass="h-[460px]"
-        labels="selecao"
+        labels="auto"
         selectedNodeId={selecionado}
         nodeSummary={(no) => `${no.role || no.dimension} · ${formatCompact(no.count)} cargo(s)`}
-        edgeSummary={(aresta) => aresta.relation || "cargo"}
+        nodeSubtitle={subtituloDoNo}
+        edgeSummary={(aresta) => aresta.relation || "cargo registado"}
         onNodeClick={(no) => setSelecionado(no.id)}
       />
       <div className="space-y-2 text-xs">
-        <div className="flex gap-2">
-          <Button size="sm" variant={metrica === "contratos" ? "primary" : "outline"} onClick={() => setMetrica("contratos")}>
-            Cargos
-          </Button>
-          <Button size="sm" variant={metrica === "valor" ? "primary" : "outline"} onClick={() => setMetrica("valor")}>
-            Capital
-          </Button>
-        </div>
+        {!coTitularidade ? (
+          <div className="flex gap-2">
+            <Button size="sm" variant={metrica === "contratos" ? "primary" : "outline"} onClick={() => setMetrica("contratos")}>
+              Cargos
+            </Button>
+            <Button size="sm" variant={metrica === "valor" ? "primary" : "outline"} onClick={() => setMetrica("valor")}>
+              Capital
+            </Button>
+          </div>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           {VISTAS.map((opcao) => (
-            <Button key={opcao.id} size="sm" variant={vista === opcao.id ? "primary" : "outline"} onClick={() => setVista(opcao.id)}>
+            <Button
+              key={opcao.id}
+              size="sm"
+              variant={disposicao === opcao.id ? "primary" : "outline"}
+              onClick={() => setDisposicao(opcao.id)}
+            >
               {opcao.label}
             </Button>
           ))}
         </div>
         <p className="text-[11px] text-muted-foreground">
-          As empresas do pedido ligadas a quem nelas tem cargos registados ({painel.grafo?.meta.camadas?.pessoa ?? 0} pessoas
-          no desenho). Clique num nó para ver o cargo; os papéis processuais do CIRE são evidência, não ligação.
+          {coTitularidade ? (
+            <>
+              Cada ligação é uma empresa partilhada por duas pessoas ({painel.grafo_pessoas?.edges.length ?? 0} ligações): os
+              quadros das empresas do pedido e as empresas do universo de cada pessoa. Os quadros grandes entram pelos
+              titulares mais relevantes.
+            </>
+          ) : (
+            <>
+              As empresas do pedido ligadas a quem nelas tem cargos registados (
+              {painel.grafo?.meta.camadas?.pessoa ?? 0} pessoas no desenho). Clique num nó para ver o cargo; os papéis
+              processuais do CIRE são evidência, não ligação.
+            </>
+          )}
         </p>
         {fichaNo ? (
           <div className="rounded-xl border border-white/10 bg-white/5 p-2 text-[11px]">
@@ -448,6 +514,402 @@ function PainelFontes({ fontes, avisos }: { fontes: PessoasFonte[]; avisos: stri
   );
 }
 
+/* ------------------------------------------------------------------ risco */
+
+function RiscoBadge({ risco }: { risco: PessoaRisco }) {
+  if (risco.score === null) {
+    return <Badge className="border-white/10 bg-white/5 text-muted-foreground">—</Badge>;
+  }
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium tabular-nums"
+      style={{ borderColor: `${risco.cor}55`, background: `${risco.cor}18`, color: risco.cor }}
+      title={`${risco.nivel_label} · cobertura ${Math.round(risco.cobertura * 100)}% · ${risco.metodo_label}`}
+    >
+      {risco.score}
+      <span className="hidden sm:inline">{risco.nivel_label}</span>
+    </span>
+  );
+}
+
+function RiscoDasPessoas({ pessoas, onAbrir }: { pessoas: PessoasPessoa[]; onAbrir: (nif: string) => void }) {
+  const ordenadas = useMemo(
+    () => [...pessoas].filter((pessoa) => pessoa.risco.score !== null).sort((a, b) => (b.risco.score ?? 0) - (a.risco.score ?? 0)).slice(0, 6),
+    [pessoas],
+  );
+  if (!ordenadas.length) {
+    return <p className="text-xs text-muted-foreground">Sem risco calculável para estas pessoas (faltam dados).</p>;
+  }
+  return (
+    <ul className="space-y-2 text-[11px]">
+      {ordenadas.map((pessoa) => (
+        <li key={pessoa.nif} className="rounded-xl border border-white/5 p-2">
+          <button type="button" className="w-full text-left" onClick={() => onAbrir(pessoa.nif)}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="min-w-0 flex-1 truncate font-semibold" title={pessoa.nome}>
+                {pessoa.nome}
+              </span>
+              <RiscoBadge risco={pessoa.risco} />
+            </div>
+            <p className="truncate text-[10px] text-muted-foreground">
+              {pessoa.titulo || pessoa.cargo_atual} · {pessoa.classe_label} · cobertura{" "}
+              {Math.round(pessoa.risco.cobertura * 100)}%
+            </p>
+          </button>
+          {pessoa.risco.fatores.length ? (
+            <ul className="mt-1 space-y-1">
+              {pessoa.risco.fatores.slice(0, 3).map((fator) => (
+                <li key={fator.id}>
+                  <div className="flex items-center justify-between gap-2 text-[10px]">
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">{fator.label}</span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">{Math.round(fator.pontos ?? 0)}/100</span>
+                  </div>
+                  <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-white/5">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${Math.max(4, fator.pontos ?? 0)}%`, background: pessoa.risco.cor }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-1 text-[10px] text-muted-foreground">Sem componente acima de metade da escala.</p>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/* -------------------------------------------------------------- conflitos */
+
+function Conflitos({ conflitos, onAbrir }: { conflitos: PessoasConflito[]; onAbrir: (nif: string) => void }) {
+  if (!conflitos.length) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Nenhum titular com cargo nos dois lados de um contrato na amostra lida: nenhuma pessoa do painel gere — ao mesmo
+        tempo — uma empresa do pedido e outra que contrata com ela.
+      </p>
+    );
+  }
+  return (
+    <ul className="space-y-1.5 text-[11px]">
+      {conflitos.map((conflito, indice) => {
+        const spec = SEVERIDADE[conflito.severidade] ?? SEVERIDADE.info;
+        return (
+          <li key={`${conflito.nif}-${conflito.empresa.nif}-${conflito.contraparte.nif}-${indice}`} className="rounded-xl border border-white/5 p-2">
+            <div className="flex items-start justify-between gap-2">
+              <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onAbrir(conflito.nif)}>
+                <p className="truncate font-semibold" title={conflito.nome}>
+                  {conflito.nome}
+                </p>
+                <p className="truncate text-[10px] text-muted-foreground">{conflito.classe_label}</p>
+              </button>
+              <Badge className={spec.className}>{spec.label}</Badge>
+            </div>
+            <p className="mt-0.5">
+              <span className="font-medium">{conflito.empresa.nome}</span>
+              {conflito.empresa.titulo ? ` (${conflito.empresa.titulo})` : ""} · {conflito.direcao}{" "}
+              <span className="font-medium">{conflito.contraparte.nome}</span>
+              {conflito.contraparte.dentro_do_pedido ? " · ambas do pedido" : ""}
+            </p>
+            <p className="text-[10px] text-muted-foreground">
+              {formatCompact(conflito.contratos)} contrato(s) · {formatMoney(conflito.valor)} na amostra lida
+            </p>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/* ----------------------------------------------------------------- análise */
+
+function AnaliseHermes({
+  pergunta,
+  setPergunta,
+  profundidade,
+  setProfundidade,
+  aAnalisar,
+  analise,
+  erro,
+  onAnalisar,
+}: {
+  pergunta: string;
+  setPergunta: (valor: string) => void;
+  profundidade: "rapida" | "profunda";
+  setProfundidade: (valor: "rapida" | "profunda") => void;
+  aAnalisar: boolean;
+  analise: PessoasAnalise | null;
+  erro: string | null;
+  onAnalisar: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <textarea
+        value={pergunta}
+        onChange={(evento) => setPergunta(evento.target.value)}
+        rows={3}
+        placeholder="Pergunta (por omissão: quem manda nestas empresas, quem as liga, que conflitos e riscos existem e o que verificar — ancorada nos números do painel)."
+        className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+      />
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-xs">
+          <span className="mb-1 block text-muted-foreground">Profundidade</span>
+          <select
+            value={profundidade}
+            onChange={(evento) => setProfundidade(evento.target.value as "rapida" | "profunda")}
+            className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs"
+          >
+            <option value="rapida">Resposta rápida</option>
+            <option value="profunda">Investigação profunda</option>
+          </select>
+        </label>
+        <Button onClick={onAnalisar} loading={aAnalisar} icon={<Sparkles size={15} />}>
+          Analisar pessoas
+        </Button>
+      </div>
+      {erro ? (
+        <p className="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+          <AlertTriangle size={14} /> {erro}
+        </p>
+      ) : null}
+      {analise ? (
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="space-y-2 text-sm">
+            <p className="whitespace-pre-wrap">{analise.text}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {analise.mode === "factual"
+                ? "Modo factual (sem modelo): resposta montada a partir dos números."
+                : analise.mode === "empty"
+                  ? "Sem evidências citadas."
+                  : "Resposta do modelo com evidências citadas."}
+              {analise.skill?.name ? ` · skill: ${analise.skill.name}` : ""}
+              {analise.elapsed_seconds ? ` · ${Math.round(analise.elapsed_seconds)}s` : ""}
+            </p>
+            {analise.followups?.length ? (
+              <div className="flex flex-wrap gap-1.5">
+                {analise.followups.map((seguinte) => (
+                  <button
+                    key={seguinte}
+                    type="button"
+                    onClick={() => setPergunta(seguinte)}
+                    className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+                  >
+                    {seguinte}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className="max-h-[320px] space-y-2 overflow-y-auto text-[11px]">
+            {(analise.evidence ?? []).map((item) => (
+              <div key={item.n} className="border-b border-white/5 pb-1.5">
+                <p>
+                  <span className="mr-1 font-medium text-primary">[{item.n}]</span>
+                  {item.title}
+                </p>
+                <p className="text-muted-foreground">
+                  {item.source}
+                  {item.date ? ` · ${texto(item.date).slice(0, 10)}` : ""}
+                </p>
+              </div>
+            ))}
+            {!(analise.evidence ?? []).length ? <p className="text-muted-foreground">Sem evidências citadas.</p> : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- exportação */
+
+function nomeDoPedido(painel: PessoasPainel): string {
+  const nifs = painel.empresas.map((empresa) => empresa.nif).join("_") || "pessoas";
+  return `descoberta-pessoas_${nifs}_${new Date().toISOString().slice(0, 10)}`;
+}
+
+/** Linhas do painel para exportação: uma pessoa por linha, com o risco e o título. */
+function linhasDasPessoas(painel: PessoasPainel): Record<string, unknown>[] {
+  return painel.pessoas.map((pessoa) => ({
+    Nome: pessoa.nome,
+    NIF: pessoa.nif,
+    "É sociedade": pessoa.is_company ? "sim" : "não",
+    Título: pessoa.titulo || pessoa.cargo_atual,
+    Títulos: pessoa.titulos.join(" · "),
+    Órgão: pessoa.role_org,
+    Classe: pessoa.classe_label,
+    "Empresas do pedido": pessoa.empresas.map((empresa) => empresa.nome).join(" | "),
+    Ligação: pessoa.ligacao ? `em ${pessoa.empresas_pedido} empresas` : "",
+    "Cargos no pedido": pessoa.cargos_pedido,
+    "Cargos no universo": pessoa.cargos_universo,
+    "Empresas no universo": pessoa.empresas_universo,
+    "Outras empresas": pessoa.outras_empresas.map((empresa) => empresa.nome || empresa.nif).join(" | "),
+    "Risco (0-100)": pessoa.risco.score ?? "",
+    "Nível de risco": pessoa.risco.score === null ? "" : pessoa.risco.nivel_label,
+    "Fatores de risco": pessoa.risco.fatores.map((fator) => fator.label).join(" | "),
+    Conflitos: pessoa.conflitos,
+    "Listas de devedores": pessoa.devedores?.devedor ? "sim" : "",
+    "Processos CIRE": pessoa.cire.map((item) => `${item.papel} ${item.processo}`).join(" | "),
+    Desde: pessoa.desde,
+    Último: pessoa.ultimo,
+  }));
+}
+
+function exportarPessoasExcel(painel: PessoasPainel): void {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(linhasDasPessoas(painel)), "Pessoas");
+  if (painel.conflitos.length) {
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(
+        painel.conflitos.map((conflito) => ({
+          Pessoa: conflito.nome,
+          NIF: conflito.nif,
+          Empresa: conflito.empresa.nome,
+          Título: conflito.empresa.titulo,
+          Contraparte: conflito.contraparte.nome,
+          "NIF da contraparte": conflito.contraparte.nif,
+          "Do pedido": conflito.contraparte.dentro_do_pedido ? "sim" : "não",
+          Direção: conflito.direcao,
+          Contratos: conflito.contratos,
+          "Valor (EUR)": conflito.valor,
+          Severidade: conflito.severidade,
+        })),
+      ),
+      "Conflitos",
+    );
+  }
+  if (painel.ligacoes.length) {
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(
+        painel.ligacoes.map((ligacao) => ({
+          Pessoa: ligacao.nome,
+          NIF: ligacao.nif,
+          Título: ligacao.titulo,
+          "Empresas do pedido": ligacao.empresas_pedido,
+          Empresas: ligacao.empresas.map((empresa) => `${empresa.nome} (${empresa.cargo})`).join(" | "),
+        })),
+      ),
+      "Ligações",
+    );
+  }
+  XLSX.writeFile(wb, `${nomeDoPedido(painel)}.xlsx`);
+}
+
+function exportarPessoasCsv(painel: PessoasPainel): void {
+  const ws = XLSX.utils.json_to_sheet(linhasDasPessoas(painel));
+  const csv = XLSX.utils.sheet_to_csv(ws, { FS: ";" });
+  downloadBlob(new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" }), `${nomeDoPedido(painel)}.csv`);
+}
+
+/** Relatório em Markdown, pronto a colar num dossiê (com a análise, se existir). */
+function exportarRelatorioMd(painel: PessoasPainel, analise: PessoasAnalise | null): void {
+  const kpis = painel.kpis;
+  const linhas: string[] = [
+    "# Descoberta de pessoas",
+    "",
+    `Gerado em ${texto(painel.gerado_em).slice(0, 19).replace("T", " ")} UTC · ${painel.ms} ms`,
+    "",
+    `**Leitura:** ${painel.leitura}`,
+    "",
+    "## Empresas do pedido",
+    "",
+    "| Empresa | NIF | Pessoas | Processos CIRE | Papéis em processos |",
+    "|---|---|---|---|---|",
+    ...painel.empresas.map(
+      (empresa) =>
+        `| ${empresa.nome} | ${empresa.nif} | ${empresa.pessoas} | ${empresa.processos} | ${empresa.cire_pessoas} |`,
+    ),
+    "",
+    "## Números",
+    "",
+    "| Indicador | Valor |",
+    "|---|---|",
+    `| Pessoas | ${kpis.pessoas} |`,
+    `| Cargos lidos | ${kpis.cargos} |`,
+    `| Órgãos sociais | ${kpis.gestao} |`,
+    `| Pessoas em mais de uma empresa | ${kpis.em_varias} |`,
+    `| Conflitos de interesse | ${kpis.conflitos} |`,
+    `| Risco médio / máximo | ${kpis.risco_medio ?? "—"} / ${kpis.risco_max ?? "—"} |`,
+    `| Titulares nas listas de devedores | ${kpis.devedores} |`,
+    "",
+  ];
+
+  if (painel.conflitos.length) {
+    linhas.push("## Conflitos de interesse", "");
+    painel.conflitos.forEach((conflito) => {
+      linhas.push(
+        `- **${conflito.nome}** — ${conflito.empresa.nome}${conflito.empresa.titulo ? ` (${conflito.empresa.titulo})` : ""}` +
+          ` ${conflito.direcao} ${conflito.contraparte.nome}${conflito.contraparte.dentro_do_pedido ? " (ambas do pedido)" : ""}` +
+          ` · ${conflito.contratos} contrato(s) · ${formatMoney(conflito.valor)}`,
+      );
+    });
+    linhas.push("");
+  }
+
+  if (painel.ligacoes.length) {
+    linhas.push("## Quem liga as empresas", "");
+    painel.ligacoes.forEach((ligacao) => {
+      linhas.push(
+        `- **${ligacao.nome}** (${ligacao.titulo || "cargo registado"}) — ${ligacao.empresas
+          .map((empresa) => `${empresa.nome}`
+          )
+          .join(", ")}`,
+      );
+    });
+    linhas.push("");
+  }
+
+  linhas.push("## Pessoas", "", "| Nome | NIF | Título | Classe | Empresas | Risco |", "|---|---|---|---|---|---|");
+  painel.pessoas.slice(0, 40).forEach((pessoa) => {
+    linhas.push(
+      `| ${pessoa.nome} | ${pessoa.nif} | ${pessoa.titulo || pessoa.cargo_atual} | ${pessoa.classe_label} | ` +
+        `${pessoa.empresas.map((empresa) => empresa.nome).join(", ")} | ${pessoa.risco.score ?? "—"} ${pessoa.risco.nivel_label} |`,
+    );
+  });
+  linhas.push("");
+
+  if (painel.atencao.length) {
+    linhas.push("## O que verificar primeiro", "");
+    painel.atencao.forEach((ponto) => {
+      linhas.push(`- **${ponto.titulo}** (${ponto.severidade}) — ${ponto.detalhe} Verificar: ${ponto.verificar}`);
+    });
+    linhas.push("");
+  }
+
+  if (analise) {
+    linhas.push("## Análise do Hermes", "", `Pergunta: ${analise.pergunta}`, "", analise.text, "");
+    if ((analise.evidence ?? []).length) {
+      linhas.push("Evidências:", "");
+      analise.evidence.forEach((item) => {
+        linhas.push(`- [${item.n}] ${item.title} — ${item.source}${item.date ? ` · ${texto(item.date).slice(0, 10)}` : ""}`);
+      });
+      linhas.push("");
+    }
+  }
+
+  if (painel.fontes.length) {
+    linhas.push("## Fontes", "", "| Fonte | Estado | Total |", "|---|---|---|");
+    painel.fontes.forEach((fonte) => {
+      linhas.push(`| ${fonte.label} | ${fonte.estado} | ${fonte.total} |`);
+    });
+    linhas.push("");
+  }
+
+  painel.avisos.forEach((aviso) => linhas.push(`> ${aviso}`));
+
+  downloadBlob(
+    new Blob([linhas.join("\n")], { type: "text/markdown;charset=utf-8" }),
+    `${nomeDoPedido(painel)}.md`,
+  );
+}
+
+
+
 /* ------------------------------------------------------------ ficha modal */
 
 function CargosDaEmpresa({ cargos }: { cargos: PessoaCargo[] }) {
@@ -457,7 +919,7 @@ function CargosDaEmpresa({ cargos }: { cargos: PessoaCargo[] }) {
         <li key={`${cargo.role}-${cargo.data}-${indice}`} className="border-b border-white/5 pb-1 last:border-0">
           <div className="flex items-start justify-between gap-2">
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium">{cargo.role || "cargo registado"}</span>
+              <span className="block truncate font-medium">{cargo.titulo || cargo.role || "cargo registado"}</span>
               <span className="block truncate text-[10px] text-muted-foreground" title={cargo.role_org}>
                 {cargo.role_org}
                 {cargo.ato ? ` · ${cargo.ato}` : ""}
@@ -474,7 +936,50 @@ function CargosDaEmpresa({ cargos }: { cargos: PessoaCargo[] }) {
   );
 }
 
-function FichaPessoa({ ficha, aCarregar, onClose }: { ficha: PessoaFicha | null; aCarregar: boolean; onClose: () => void }) {
+function RiscoDetalhe({ risco }: { risco: PessoaRisco }) {
+  return (
+    <div className="rounded-xl border border-white/5 p-2 text-[11px]">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-medium">Risco da pessoa</p>
+        <RiscoBadge risco={risco} />
+      </div>
+      <p className="text-muted-foreground">
+        {risco.metodo_label} · cobertura {Math.round(risco.cobertura * 100)}% · confiança {risco.confianca}
+        {risco.faixa ? ` · faixa ${risco.faixa}` : ""}
+      </p>
+      <ul className="mt-1 space-y-1">
+        {risco.componentes.map((componente) => (
+          <li key={componente.id} className={componente.disponivel ? "" : "opacity-60"}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="min-w-0 flex-1 truncate" title={componente.descricao}>
+                {componente.label}
+              </span>
+              <span className="shrink-0 tabular-nums text-muted-foreground">
+                {componente.pontos === null ? "sem dados" : `${Math.round(componente.pontos)}/100`} · peso{" "}
+                {Math.round(componente.peso * 100)}%
+              </span>
+            </div>
+            {componente.evidencia.length ? (
+              <p className="truncate text-[10px] text-muted-foreground">{componente.evidencia.join(" · ")}</p>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function FichaPessoa({
+  ficha,
+  aCarregar,
+  risco,
+  onClose,
+}: {
+  ficha: PessoaFicha | null;
+  aCarregar: boolean;
+  risco?: PessoaRisco | null;
+  onClose: () => void;
+}) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 sm:p-8" onClick={onClose}>
       <div
@@ -510,6 +1015,7 @@ function FichaPessoa({ ficha, aCarregar, onClose }: { ficha: PessoaFicha | null;
 
         {ficha?.encontrada ? (
           <div className="mt-3 space-y-3">
+            {risco ? <RiscoDetalhe risco={risco} /> : null}
             {ficha.avisos.map((aviso) => (
               <p key={aviso} className="flex items-start gap-1.5 text-[11px] text-amber-200">
                 <Info size={12} className="mt-0.5 shrink-0" /> {aviso}
@@ -541,8 +1047,13 @@ function FichaPessoa({ ficha, aCarregar, onClose }: { ficha: PessoaFicha | null;
                     </span>
                     {empresa.no_pedido ? <Badge className="border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-200">pedido</Badge> : null}
                   </p>
+                  <p className="truncate text-[11px] text-muted-foreground">{empresa.nif}</p>
+                  <p className="truncate text-[11px]">
+                    <span className="text-muted-foreground">Título: </span>
+                    {empresa.titulo || empresa.cargo_atual || "—"}
+                  </p>
                   <p className="text-[10px] text-muted-foreground">
-                    {empresa.nif} · {empresa.cargos_total} cargo(s)
+                    {empresa.cargos_total} cargo(s)
                     {empresa.desde ? ` · desde ${dataCurta(empresa.desde)}` : ""}
                   </p>
                   <CargosDaEmpresa cargos={empresa.cargos} />
@@ -589,10 +1100,62 @@ export default function DescobertaPessoasPage({ onBack }: { onBack?: () => void 
   const [erro, setErro] = useState<string | null>(null);
   const [fichaNo, setFichaNo] = useState<string | null>(null);
   const [ficha, setFicha] = useState<PessoaFicha | null>(null);
+  const [riscoDaFicha, setRiscoDaFicha] = useState<PessoaRisco | null>(null);
   const [aCarregarFicha, setACarregarFicha] = useState(false);
+  const [filtro, setFiltro] = useState<"todas" | "gestao" | "capital" | "processo" | "ligacoes" | "conflitos" | "risco">(
+    "todas",
+  );
+  const [filtroTexto, setFiltroTexto] = useState("");
+  const [grafoAtivo, setGrafoAtivo] = useState<"empresas" | "pessoas">("empresas");
+  const [pergunta, setPergunta] = useState("");
+  const [profundidade, setProfundidade] = useState<"rapida" | "profunda">("rapida");
+  const [analise, setAnalise] = useState<PessoasAnalise | null>(null);
+  const [aAnalisar, setAAnalisar] = useState(false);
+  const [erroAnalise, setErroAnalise] = useState<string | null>(null);
   const iniciado = useRef(false);
 
   const nifs = useMemo(() => empresas.map((empresa) => empresa.nif), [empresas]);
+
+  /** Filtro de leitura sobre as pessoas já calculadas (não pede nada ao servidor). */
+  const pessoasVisiveis = useMemo(() => {
+    const lista = painel?.pessoas ?? [];
+    const termo = filtroTexto.trim().toLowerCase();
+    return lista.filter((pessoa) => {
+      if (filtro === "gestao" && !pessoa.gestao) return false;
+      if (filtro === "capital" && !pessoa.capital) return false;
+      if (filtro === "processo" && !pessoa.processo) return false;
+      if (filtro === "ligacoes" && !pessoa.ligacao) return false;
+      if (filtro === "conflitos" && !pessoa.conflitos) return false;
+      if (filtro === "risco" && (pessoa.risco.score ?? 0) < 40) return false;
+      if (!termo) return true;
+      return [pessoa.nome, pessoa.nif, pessoa.titulo, pessoa.role_org, ...pessoa.titulos]
+        .join(" ")
+        .toLowerCase()
+        .includes(termo);
+    });
+  }, [filtro, filtroTexto, painel?.pessoas]);
+
+  const correrAnalise = useCallback(async () => {
+    if (!empresas.length) {
+      setErroAnalise("Indique pelo menos uma empresa antes de pedir a análise.");
+      return;
+    }
+    setAAnalisar(true);
+    setErroAnalise(null);
+    try {
+      const resultado = await analisarPessoas(nifs, {
+        nomes: empresas.map((empresa) => empresa.nome),
+        pergunta: pergunta.trim() || undefined,
+        profundidade,
+      });
+      setAnalise(resultado);
+    } catch (falha) {
+      setErroAnalise(falha instanceof Error ? falha.message : String(falha));
+      setAnalise(null);
+    } finally {
+      setAAnalisar(false);
+    }
+  }, [empresas, nifs, pergunta, profundidade]);
 
   useEffect(() => {
     getPessoasMeta()
@@ -681,6 +1244,7 @@ export default function DescobertaPessoasPage({ onBack }: { onBack?: () => void 
     async (nif: string) => {
       setFichaNo(nif);
       setFicha(null);
+      setRiscoDaFicha((painel?.pessoas ?? []).find((pessoa) => pessoa.nif === nif)?.risco ?? null);
       setACarregarFicha(true);
       try {
         const resultado = await getFichaPessoa(nif, nifs);
@@ -709,7 +1273,7 @@ export default function DescobertaPessoasPage({ onBack }: { onBack?: () => void 
         setACarregarFicha(false);
       }
     },
-    [nifs],
+    [nifs, painel?.pessoas],
   );
 
   const kpis = painel?.kpis;
@@ -843,7 +1407,7 @@ export default function DescobertaPessoasPage({ onBack }: { onBack?: () => void 
         {painel ? (
           <>
             {kpis ? (
-              <div className="mb-3 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="mb-3 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-5">
                 <Kpi rotulo="Pessoas" valor={formatCompact(kpis.pessoas)} nota={`${kpis.cargos} cargo(s) lidos`} />
                 <Kpi
                   rotulo="Ligam empresas"
@@ -854,6 +1418,24 @@ export default function DescobertaPessoasPage({ onBack }: { onBack?: () => void 
                   rotulo="Órgãos sociais"
                   valor={formatCompact(kpis.gestao)}
                   nota={`${kpis.capital} com capital · ${kpis.processo} só em processos`}
+                />
+                <Kpi
+                  rotulo="Conflitos"
+                  valor={formatCompact(kpis.conflitos)}
+                  nota={
+                    kpis.conflitos
+                      ? `${kpis.conflitos_graves} grave(s) — nos dois lados do contrato`
+                      : "nenhum titular nos dois lados"
+                  }
+                />
+                <Kpi
+                  rotulo="Risco alto"
+                  valor={formatCompact(kpis.risco_alto)}
+                  nota={
+                    kpis.risco_medio === null
+                      ? "sem risco calculável"
+                      : `média ${kpis.risco_medio} · máximo ${kpis.risco_max}`
+                  }
                 />
                 <Kpi
                   rotulo="Empresas"
@@ -896,30 +1478,124 @@ export default function DescobertaPessoasPage({ onBack }: { onBack?: () => void 
             <div className="mb-3 grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
               <Card>
                 <CardHeader className="mb-2">
-                  <CardTitle icon={<Users size={16} className="text-primary" />}>Pessoas encontradas ({painel.pessoas.length})</CardTitle>
+                  <CardTitle icon={<Users size={16} className="text-primary" />}>
+                    Pessoas encontradas ({pessoasVisiveis.length}
+                    {pessoasVisiveis.length !== painel.pessoas.length ? ` de ${painel.pessoas.length}` : ""})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Input
+                      value={filtroTexto}
+                      onChange={(evento) => setFiltroTexto(evento.target.value)}
+                      placeholder="Procurar por nome, NIF ou título…"
+                      className="max-w-[220px]"
+                    />
+                    {(
+                      [
+                        ["todas", "Todas"],
+                        ["gestao", "Órgãos sociais"],
+                        ["capital", "Capital"],
+                        ["processo", "Processos"],
+                        ["ligacoes", "Ligam empresas"],
+                        ["conflitos", "Com conflitos"],
+                        ["risco", "Risco ≥ 40"],
+                      ] as const
+                    ).map(([id, label]) => (
+                      <Button key={id} size="sm" variant={filtro === id ? "primary" : "outline"} onClick={() => setFiltro(id)}>
+                        {label}
+                      </Button>
+                    ))}
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <Button size="sm" variant="outline" onClick={() => exportarPessoasExcel(painel)}>
+                        <Download size={13} /> Excel
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => exportarPessoasCsv(painel)}>
+                        <Download size={13} /> CSV
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => exportarRelatorioMd(painel, analise)}>
+                        <Download size={13} /> Relatório
+                      </Button>
+                    </div>
+                  </div>
+                  <TabelaPessoas pessoas={pessoasVisiveis} onAbrir={(pessoa) => void abrirFicha(pessoa.nif)} />
+                </CardContent>
+              </Card>
+              <div className="space-y-3">
+                <Card>
+                  <CardHeader className="mb-2">
+                    <CardTitle icon={<ShieldAlert size={16} className="text-rose-300" />}>
+                      Conflitos de interesse ({painel.conflitos.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Conflitos conflitos={painel.conflitos} onAbrir={(nif) => void abrirFicha(nif)} />
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="mb-2">
+                    <CardTitle icon={<GitCompareArrows size={16} className="text-fuchsia-300" />}>
+                      Quem liga as empresas ({painel.ligacoes.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Ligacoes ligacoes={painel.ligacoes} onAbrir={(nif) => void abrirFicha(nif)} />
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+
+            <div className="mb-3 grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+              <Card>
+                <CardHeader className="mb-2">
+                  <CardTitle icon={<Network size={16} className="text-primary" />}>
+                    Rede de pessoas
+                    <span className="ml-2 inline-flex gap-1">
+                      <Button size="sm" variant={grafoAtivo === "empresas" ? "primary" : "outline"} onClick={() => setGrafoAtivo("empresas")}>
+                        Empresas ↔ pessoas
+                      </Button>
+                      <Button size="sm" variant={grafoAtivo === "pessoas" ? "primary" : "outline"} onClick={() => setGrafoAtivo("pessoas")}>
+                        Pessoas ↔ pessoas
+                      </Button>
+                    </span>
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <TabelaPessoas pessoas={painel.pessoas} onAbrir={(pessoa) => void abrirFicha(pessoa.nif)} />
+                  <GrafoPessoas painel={painel} vista={grafoAtivo} />
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="mb-2">
-                  <CardTitle icon={<GitCompareArrows size={16} className="text-fuchsia-300" />}>
-                    Quem liga as empresas ({painel.ligacoes.length})
+                  <CardTitle icon={<ShieldAlert size={16} className="text-primary" />}>
+                    Risco das pessoas ({painel.kpis.risco_alto} alto(s))
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <Ligacoes ligacoes={painel.ligacoes} onAbrir={(nif) => void abrirFicha(nif)} />
+                  <RiscoDasPessoas pessoas={painel.pessoas} onAbrir={(nif) => void abrirFicha(nif)} />
+                  <p className="mt-2 text-[10px] text-muted-foreground">
+                    Triagem de 0–100 com os mesmos níveis das empresas ({meta?.risco.metodo_label ?? "triagem"}): acumulação de
+                    cargos, processos do CIRE, listas de devedores, renúncias, mudanças de gestão e cargos sem órgão
+                    identificado. A cobertura diz quanta informação existia.
+                  </p>
                 </CardContent>
               </Card>
             </div>
 
             <Card className="mb-3">
               <CardHeader className="mb-2">
-                <CardTitle icon={<Network size={16} className="text-primary" />}>Rede de pessoas</CardTitle>
+                <CardTitle icon={<Sparkles size={16} className="text-primary" />}>Análise do Hermes sobre o conjunto</CardTitle>
               </CardHeader>
               <CardContent>
-                <GrafoPessoas painel={painel} />
+                <AnaliseHermes
+                  pergunta={pergunta}
+                  setPergunta={setPergunta}
+                  profundidade={profundidade}
+                  setProfundidade={setProfundidade}
+                  aAnalisar={aAnalisar}
+                  analise={analise}
+                  erro={erroAnalise}
+                  onAnalisar={() => void correrAnalise()}
+                />
               </CardContent>
             </Card>
 
@@ -975,7 +1651,9 @@ export default function DescobertaPessoasPage({ onBack }: { onBack?: () => void 
         )}
       </div>
 
-      {fichaNo ? <FichaPessoa ficha={ficha} aCarregar={aCarregarFicha} onClose={() => setFichaNo(null)} /> : null}
+      {fichaNo ? (
+        <FichaPessoa ficha={ficha} aCarregar={aCarregarFicha} risco={riscoDaFicha} onClose={() => setFichaNo(null)} />
+      ) : null}
     </div>
   );
 }

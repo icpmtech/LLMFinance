@@ -14,6 +14,11 @@ por trás delas?* As fontes dizem, todas sobre pessoas:
    parte: administradores de insolvência, credores pessoa e insolventes.
 5. **Listas de devedores** — se os titulares encontrados figuram nas listas das
    Finanças ou da Segurança Social (amostra dos titulares mais relevantes).
+6. **Contratos** — quem contrata com as empresas do pedido, para cruzar os
+   titulares dos dois lados de um contrato (conflitos de interesse).
+
+Cada pessoa sai com o **título** do cargo, uma pontuação de **risco** de 0 a 100
+e os **conflitos de interesse** em que aparece.
 
 Com **duas ou mais** empresas, a pergunta que só aí existe é *quem as liga*:
 quem se senta nas duas, quem gere várias, quem só aparece numa. É a leitura do
@@ -56,6 +61,15 @@ MAX_GRAFO_PESSOAS = 40
 MAX_PROCESSOS = 40
 #: Titulares verificados nas listas de devedores (uma consulta por titular).
 MAX_DEVEDORES = 12
+#: Contratos lidos por empresa do pedido para encontrar contrapartes (conflitos).
+MAX_CONTRATOS_CONFLITO = 200
+#: Conflitos devolvidos no painel (os de maior valor).
+MAX_CONFLITOS = 8
+#: Quadros até este tamanho desenham as ligações pessoa↔pessoa da empresa; acima
+#: disso seria uma teia (uma empresa com 20 titulares dá 190 ligações).
+MAX_QUADRO_PARES = 12
+#: Teto de ligações no grafo de co-titularidade.
+MAX_ARESTAS_PESSOAS = 400
 #: Acumulação de cargos no universo que merece aviso.
 LIMIAR_EMPRESAS_UNIVERSO = 5
 #: Um cargo registado nos últimos meses é uma mudança de gestão, não historial.
@@ -147,6 +161,13 @@ FONTES: List[Dict[str, Any]] = [
         "descricao": "Titulares encontrados nas listas de devedores das Finanças e da Segurança Social.",
         "indice": "finance_devedores",
     },
+    {
+        "id": "contratos",
+        "label": "Contrapartes em contratos",
+        "grupo": "contratacao",
+        "descricao": "Quem contrata com as empresas do pedido: é por aqui que se vê um titular nos dois lados do contrato.",
+        "indice": "contratos",
+    },
 ]
 FONTE_BY_ID = {fonte["id"]: fonte for fonte in FONTES}
 FONTE_IDS = [fonte["id"] for fonte in FONTES]
@@ -160,6 +181,61 @@ CLASSE_LABEL = {
     "outro": "Outro cargo",
 }
 
+#: Componentes do risco da pessoa. Os pesos somam 1 e o score renormaliza pelos
+#: componentes com dados (como no risco da empresa, `risco_service.avaliar`): uma
+#: pessoa sem listas de devedores consultadas não é penalizada por isso — baixa é
+#: a cobertura, não o risco.
+COMPONENTES_RISCO: Tuple[Dict[str, Any], ...] = (
+    {
+        "id": "acumulacao",
+        "label": "Acumulação de cargos",
+        "peso": 0.18,
+        "unidade": "empresas",
+        "descricao": "Quantas empresas a plataforma conhece com cargos desta pessoa registados.",
+        "metodo": "Contagem de empresas do índice de pessoas",
+    },
+    {
+        "id": "insolvencias",
+        "label": "Processos de insolvência",
+        "peso": 0.22,
+        "unidade": "processos",
+        "descricao": "Processos do CIRE das empresas do pedido em que a pessoa é insolvente ou credora.",
+        "metodo": "Papéis do interveniente no processo (CIRE)",
+    },
+    {
+        "id": "devedores",
+        "label": "Listas de devedores",
+        "peso": 0.22,
+        "unidade": "listas",
+        "descricao": "Presença da pessoa nas listas de devedores das Finanças ou da Segurança Social.",
+        "metodo": "Consulta às listas públicas por NIF",
+    },
+    {
+        "id": "cessacoes",
+        "label": "Cessação por renúncia",
+        "peso": 0.14,
+        "unidade": "cargos",
+        "descricao": "Cargos cessados com causa de renúncia — saída sem substituto nomeado no mesmo ato.",
+        "metodo": "Causa da cessação na publicação de registo",
+    },
+    {
+        "id": "rotatividade",
+        "label": "Mudança recente de gestão",
+        "peso": 0.12,
+        "unidade": "dias",
+        "descricao": "Há quanto tempo foi o último cargo registado: uma gestão nova ainda não tem histórico.",
+        "metodo": "Data do cargo mais recente",
+    },
+    {
+        "id": "opacidade",
+        "label": "Cargos sem órgão identificado",
+        "peso": 0.12,
+        "unidade": "% dos cargos",
+        "descricao": "Parte dos cargos cuja publicação não diz o órgão social — não se sabe o que a pessoa faz.",
+        "metodo": "Proporção de cargos sem órgão na publicação",
+    },
+)
+
 
 def meta() -> Dict[str, Any]:
     """Catálogo de fontes, classes de cargo e limites do módulo."""
@@ -169,13 +245,25 @@ def meta() -> Dict[str, Any]:
         "pais": list(PAISES_SUPORTADOS),
         "classes": [{"id": classe, "label": CLASSE_LABEL[classe]} for classe in CLASSES],
         "orgaos_gestao": list(_orgaos_gestao()),
+        "risco": {
+            "metodo": METODO_RISCO,
+            "metodo_label": METODO_RISCO_LABEL,
+            "componentes": [
+                {chave: spec[chave] for chave in ("id", "label", "peso", "unidade", "descricao", "metodo")}
+                for spec in COMPONENTES_RISCO
+            ],
+        },
         "limites": {
             "empresas": MAX_EMPRESAS,
             "pessoas_por_empresa": MAX_PESSOAS_POR_EMPRESA,
             "pessoas_painel": MAX_PESSOAS_PAINEL,
             "pessoas_grafo": MAX_GRAFO_PESSOAS,
+            "quadro": MAX_QUADRO_PARES,
+            "arestas_pessoas": MAX_ARESTAS_PESSOAS,
             "processos": MAX_PROCESSOS,
             "devedores": MAX_DEVEDORES,
+            "contratos_conflito": MAX_CONTRATOS_CONFLITO,
+            "conflitos": MAX_CONFLITOS,
             "timeout_fonte": FONTE_TIMEOUT,
             "paralelo": MAX_PARALELO,
         },
@@ -282,12 +370,19 @@ def _titulo(cargo: Dict[str, Any]) -> str:
 
 
 def _titulos(pessoa: Dict[str, Any]) -> List[str]:
-    """Títulos da pessoa nas empresas do pedido, do mais recente para o mais antigo."""
+    """Títulos da pessoa nas empresas do pedido, do mais recente para o mais antigo.
+
+    As publicações escrevem o mesmo cargo de várias formas («Vogal», «VOGAL»,
+    «vogal»): guarda-se a primeira grafia e cai o resto.
+    """
     titulos: List[str] = []
+    vistos: set = set()
     for empresa in pessoa.get("empresas") or []:
         for cargo in empresa.get("cargos") or []:
             titulo = _texto(cargo.get("titulo")) or _titulo(cargo)
-            if titulo and titulo not in titulos:
+            chave = _fold(titulo)
+            if titulo and chave not in vistos:
+                vistos.add(chave)
                 titulos.append(titulo)
     return titulos
 
@@ -648,6 +743,382 @@ def _ordem(pessoa: Dict[str, Any]) -> Tuple[int, int, int, int, int, str]:
     )
 
 
+def _ordem_painel(pessoa: Dict[str, Any]) -> Tuple[int, int, int, int, int, int, str]:
+    """Ordem final, já com o risco: é o número que diz quem olhar primeiro."""
+    risco = pessoa.get("risco") or {}
+    return (
+        0 if pessoa.get("gestao") else 1 if pessoa.get("capital") else 2,
+        0 if pessoa.get("ligacao") else 1,
+        -int(round(float(risco.get("score") or 0.0))),
+        -int(pessoa.get("empresas_pedido") or 0),
+        -int(pessoa.get("cargos_pedido") or 0),
+        -int(pessoa.get("empresas_universo") or 0),
+        pessoa.get("nome") or "",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Risco da pessoa
+# ---------------------------------------------------------------------------
+METODO_RISCO = "triagem_pessoas"
+METODO_RISCO_LABEL = "Triagem (cargos, processos e listas públicas)"
+#: Causas de cessação que contam como saída de risco.
+CAUSAS_CESSAO = ("renuncia", "renuncia ao cargo", "demissao")
+
+
+def _nivel_de(score: float) -> Dict[str, Any]:
+    """Faixa de risco partilhada com o painel das empresas (`risco_service`)."""
+    from api import risco_service  # noqa: PLC0415
+
+    return risco_service.nivel_de(score)
+
+
+def _pontos_acumulacao(pessoa: Dict[str, Any]) -> Tuple[Optional[float], List[str]]:
+    empresas = int(pessoa.get("empresas_universo") or 0)
+    if not empresas:
+        return None, []
+    for limiar, pontos in ((5, 100.0), (4, 80.0), (3, 55.0), (2, 30.0)):
+        if empresas >= limiar:
+            return pontos, [f"{empresas} empresas com cargos registados"]
+    return 8.0, ["1 empresa com cargos registados"]
+
+
+def _pontos_insolvencias(pessoa: Dict[str, Any]) -> Tuple[Optional[float], List[str]]:
+    papeis = [item for item in pessoa.get("cire") or [] if isinstance(item, dict)]
+    if not papeis:
+        return 0.0, ["Sem processos do CIRE das empresas do pedido"]
+    insolvente = [item for item in papeis if _fold(item.get("papel")) == "insolvente"]
+    if insolvente:
+        primeiro = insolvente[0]
+        return 100.0, [
+            f"Insolvente no processo {primeiro.get('processo') or '?'} "
+            f"({primeiro.get('especie') or 'CIRE'}, {primeiro.get('data') or 'sem data'})"
+        ]
+    credor = [item for item in papeis if _fold(item.get("papel")) in ("credor", "devedor", "requerente")]
+    if credor:
+        return 30.0, [f"{len(credor)} processo(s) como {credor[0].get('papel')}"]
+    return 10.0, [f"{len(papeis)} processo(s) do CIRE como interveniente"]
+
+
+def _pontos_devedores(pessoa: Dict[str, Any]) -> Tuple[Optional[float], List[str]]:
+    dados = pessoa.get("devedores")
+    if not isinstance(dados, dict):
+        return None, []
+    if not dados.get("devedor"):
+        return 0.0, ["Sem registo nas listas consultadas"]
+    entidades = ", ".join(dados.get("entidades") or []) or "listas de devedores"
+    valor = dados.get("maior_valor_min")
+    pontos = 100.0 if not valor or float(valor) >= 50_000 else 70.0
+    return pontos, [f"{dados.get('total') or 0} registo(s) em {entidades}"]
+
+
+def _causa_do_cargo(cargo: Dict[str, Any]) -> str:
+    """Causa da cessação: o campo próprio ou a que a publicação cola ao cargo.
+
+    «Vogal Causa: renúncia Data: 2022.04.30» guarda a causa no próprio texto do
+    cargo — é de lá que ela sai quando o campo `causa` vem vazio.
+    """
+    causa = _texto(cargo.get("causa"))
+    if causa:
+        return causa
+    papel = _texto(cargo.get("role"))
+    baixo = _fold(papel)
+    corte = baixo.find("causa:")
+    if corte < 0:
+        return ""
+    resto = papel[corte + len("causa:") :].strip(" ,;-")
+    fim = _fold(resto).find("data:")
+    return (resto[:fim] if fim > 0 else resto).strip(" ,;-")
+
+
+def _pontos_cessacoes(pessoa: Dict[str, Any]) -> Tuple[Optional[float], List[str]]:
+    renuncias: List[Tuple[str, str]] = []
+    total = 0
+    for empresa in pessoa.get("empresas") or []:
+        for cargo in empresa.get("cargos") or []:
+            total += 1
+            causa = _fold(_causa_do_cargo(cargo))
+            if causa and any(marca in causa for marca in CAUSAS_CESSAO):
+                renuncias.append((empresa.get("nome") or empresa.get("nif") or "", cargo.get("data") or ""))
+    if not total:
+        return None, []
+    if not renuncias:
+        return 0.0, ["Sem cessação por renúncia nos cargos lidos"]
+    recentes = [item for item in renuncias if (_idade_dias(item[1]) or 10**6) <= 730]
+    primeira = (recentes or renuncias)[0]
+    detalhe = f"{len(renuncias)} cargo(s) cessados por renúncia ({primeira[0]}, {primeira[1] or 'sem data'})"
+    return (100.0 if recentes else 60.0), [detalhe]
+
+
+def _pontos_rotatividade(pessoa: Dict[str, Any]) -> Tuple[Optional[float], List[str]]:
+    dias = _idade_dias(_texto(pessoa.get("ultimo")))
+    if dias is None:
+        return None, []
+    if dias <= 90:
+        return 60.0, [f"Último cargo registado há {dias} dia(s) — gestão nova"]
+    if dias <= 365:
+        return 25.0, [f"Último cargo registado há {dias} dia(s)"]
+    return 0.0, [f"Último cargo registado há {dias} dia(s)"]
+
+
+def _pontos_opacidade(pessoa: Dict[str, Any]) -> Tuple[Optional[float], List[str]]:
+    cargos = [cargo for empresa in pessoa.get("empresas") or [] for cargo in empresa.get("cargos") or []]
+    if not cargos:
+        return None, []
+    sem_orgao = [cargo for cargo in cargos if not _texto(cargo.get("role_org"))]
+    quota = len(sem_orgao) / len(cargos)
+    if not sem_orgao:
+        return 0.0, [f"Todos os {len(cargos)} cargo(s) dizem o órgão social"]
+    return quota * 100.0, [f"{len(sem_orgao)} de {len(cargos)} cargo(s) sem órgão identificado na publicação"]
+
+
+def _idade_dias(valor: str) -> Optional[int]:
+    """Dias desde uma data ISO, ou `None` quando não há data legível."""
+    texto = _texto(valor)[:10]
+    if len(texto) < 10:
+        return None
+    try:
+        data = datetime.fromisoformat(texto).replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    return max(0, (datetime.now(timezone.utc) - data).days)
+
+
+_RISCO_POR_COMPONENTE = {
+    "acumulacao": _pontos_acumulacao,
+    "insolvencias": _pontos_insolvencias,
+    "devedores": _pontos_devedores,
+    "cessacoes": _pontos_cessacoes,
+    "rotatividade": _pontos_rotatividade,
+    "opacidade": _pontos_opacidade,
+}
+
+
+def risco_da_pessoa(pessoa: Dict[str, Any]) -> Dict[str, Any]:
+    """Risco da pessoa (0–100): componentes, cobertura e o que puxa o valor.
+
+    Mesma gramática do risco da empresa (`risco_service.avaliar`): pesos somam 1,
+    o score renormaliza pelos componentes com dados e o nível sai das mesmas
+    faixas — o painel das pessoas e o das empresas leem-se na mesma escala.
+    """
+    componentes: List[Dict[str, Any]] = []
+    # Sem um único cargo lido não há pessoa para avaliar: mostrar 0/100 seria dizer
+    # «sem risco» quando o que falta é a evidência.
+    com_cargos = any(empresa.get("cargos") for empresa in pessoa.get("empresas") or [])
+    for spec in COMPONENTES_RISCO:
+        pontos, evidencia = _RISCO_POR_COMPONENTE[spec["id"]](pessoa) if com_cargos else (None, [])
+        componentes.append(
+            {
+                "id": spec["id"],
+                "label": spec["label"],
+                "peso": spec["peso"],
+                "unidade": spec["unidade"],
+                "descricao": spec["descricao"],
+                "metodo": spec["metodo"],
+                "pontos": None if pontos is None else round(float(pontos), 2),
+                "evidencia": evidencia,
+                "disponivel": pontos is not None,
+            }
+        )
+
+    disponiveis = [item for item in componentes if item["disponivel"]]
+    peso_total = sum(float(item["peso"]) for item in disponiveis)
+    base = {
+        "metodo": METODO_RISCO,
+        "metodo_label": METODO_RISCO_LABEL,
+        "componentes": componentes,
+        "fatores": [],
+    }
+    if not disponiveis or peso_total <= 0:
+        return {**base, "score": None, "nivel": None, "nivel_label": "Sem dados", "cor": "#94a3b8", "faixa": None, "cobertura": 0.0, "confianca": "sem dados"}
+
+    score = sum(float(item["peso"]) * float(item["pontos"]) for item in disponiveis) / peso_total
+    for item in componentes:
+        item["peso_efetivo"] = round(float(item["peso"]) / peso_total, 4) if item["disponivel"] else 0.0
+        item["contributo"] = (
+            round(float(item["pontos"]) * float(item["peso_efetivo"]), 3) if item["disponivel"] else 0.0
+        )
+    nivel = _nivel_de(score)
+    fatores = sorted(
+        (item for item in disponiveis if (item["pontos"] or 0.0) >= 50.0),
+        key=lambda item: -(item["contributo"] or 0.0),
+    )[:4]
+    confianca = "alta" if peso_total >= 0.85 else "média" if peso_total >= 0.6 else "baixa"
+    return {
+        **base,
+        "score": round(score, 1),
+        "nivel": nivel["id"],
+        "nivel_label": nivel["label"],
+        "cor": nivel["cor"],
+        "faixa": nivel.get("faixa"),
+        "cobertura": round(peso_total, 3),
+        "confianca": confianca,
+        "fatores": [
+            {"id": item["id"], "label": item["label"], "pontos": item["pontos"], "contributo": item["contributo"]}
+            for item in fatores
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Conflitos de interesse (titulares dos dois lados do contrato)
+# ---------------------------------------------------------------------------
+def _partes(campo: Any) -> Dict[str, str]:
+    """NIF → nome das partes de um contrato (`adjudicantes`/`adjudicatarios`)."""
+    if isinstance(campo, dict):
+        itens = campo.get("parsed") or []
+    elif isinstance(campo, list):
+        itens = campo
+    else:
+        return {}
+    partes: Dict[str, str] = {}
+    for item in itens:
+        if isinstance(item, dict):
+            nif, nome = _texto(item.get("nif")), _texto(item.get("nome"))
+        else:
+            texto = _texto(item)
+            nif, nome = _texto(texto.split(" - ")[0]), texto
+        if nif:
+            partes[nif] = nome or nif
+    return partes
+
+
+def _contrapartes_de(nif: str) -> Dict[str, Dict[str, Any]]:
+    """Com quem esta empresa contrata (nos dois sentidos), numa amostra de contratos.
+
+    Lê os contratos em que a empresa é parte em qualquer papel e agrega as
+    contrapartes: quando a empresa é adjudicatária, as contrapartes são os
+    compradores (vende a); quando é adjudicante, são os fornecedores (compra a).
+    """
+    try:
+        resultado = es_client.search_contracts(nif=nif, size=MAX_CONTRATOS_CONFLITO)
+    except Exception as exc:  # noqa: BLE001 - uma empresa má não derruba o painel
+        logger.warning("Descoberta de pessoas: contrapartes de %s falharam: %s", nif, exc)
+        return {}
+    if resultado.get("error"):
+        return {}
+
+    contrapartes: Dict[str, Dict[str, Any]] = {}
+
+    def registar(outro_nif: str, outro_nome: str, direcao: str, valor: float) -> None:
+        if not outro_nif or outro_nif == nif:
+            return
+        registo = contrapartes.setdefault(
+            outro_nif,
+            {"nif": outro_nif, "nome": outro_nome or outro_nif, "direcoes": [], "contratos": 0, "valor": 0.0},
+        )
+        if direcao not in registo["direcoes"]:
+            registo["direcoes"].append(direcao)
+        if outro_nome and not registo["nome"]:
+            registo["nome"] = outro_nome
+        registo["contratos"] += 1
+        registo["valor"] += valor
+
+    for documento in resultado.get("items") or []:
+        if not isinstance(documento, dict):
+            continue
+        compradores = _partes(documento.get("adjudicantes"))
+        vendedores = _partes(documento.get("adjudicatarios"))
+        valor = float(documento.get("precoContratual") or documento.get("PrecoTotalEfetivo") or 0.0)
+        if nif in vendedores:
+            for outro_nif, outro_nome in compradores.items():
+                registar(outro_nif, outro_nome, "vende a", valor)
+        if nif in compradores:
+            for outro_nif, outro_nome in vendedores.items():
+                registar(outro_nif, outro_nome, "compra a", valor)
+    return contrapartes
+
+
+def _contrapartes_das_empresas(empresas: Sequence[Dict[str, Any]]) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    """Contrapartes de cada empresa do pedido, em paralelo."""
+    if not empresas:
+        return {}
+    contrapartes: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    with ThreadPoolExecutor(max_workers=min(MAX_PARALELO, len(empresas))) as pool:
+        futuros = {pool.submit(_contrapartes_de, empresa["nif"]): empresa["nif"] for empresa in empresas}
+        for futuro in as_completed(futuros):
+            nif = futuros[futuro]
+            try:
+                contrapartes[nif] = futuro.result()
+            except Exception as exc:  # noqa: BLE001 - a falha de uma empresa é reportada
+                logger.warning("Descoberta de pessoas: contrapartes de %s falharam: %s", nif, exc)
+                contrapartes[nif] = {}
+    return contrapartes
+
+
+def _conflitos(
+    pessoas: Sequence[Dict[str, Any]],
+    empresas: Sequence[Dict[str, Any]],
+    contrapartes: Dict[str, Dict[str, Dict[str, Any]]],
+) -> List[Dict[str, Any]]:
+    """Quem tem cargo nos dois lados de um contrato com dinheiro público.
+
+    Duas formas, ambas com a mesma pergunta por trás — *esta pessoa serve o
+    comprador e o vendedor?*:
+
+    - a pessoa tem cargo numa empresa do pedido e noutra que **contrata com ela**
+      (fora do pedido, mas registada na plataforma);
+    - a pessoa tem cargo em **duas empresas do pedido** que contratam entre si.
+    """
+    conflitos: List[Dict[str, Any]] = []
+    vistos: set = set()
+
+    def juntar(pessoa: Dict[str, Any], empresa: Dict[str, Any], outro: Dict[str, Any], dentro: bool) -> None:
+        chave = (pessoa["nif"], empresa["nif"], outro["nif"], dentro)
+        if chave in vistos:
+            return
+        vistos.add(chave)
+        direcoes = outro.get("direcoes") or []
+        severidade = "alerta" if pessoa.get("classe") in ("gestao", "capital") else "aviso"
+        conflitos.append(
+            {
+                "nif": pessoa["nif"],
+                "nome": pessoa["nome"],
+                "classe": pessoa["classe"],
+                "classe_label": pessoa["classe_label"],
+                "empresa": {
+                    "nif": empresa["nif"],
+                    "nome": empresa["nome"],
+                    "titulo": empresa["titulo"] or empresa["cargo_atual"],
+                },
+                "contraparte": {
+                    "nif": outro["nif"],
+                    "nome": outro.get("nome") or outro["nif"],
+                    "dentro_do_pedido": dentro,
+                },
+                "direcao": direcoes[0] if direcoes else "",
+                "direcoes": direcoes,
+                "contratos": int(outro.get("contratos") or 0),
+                "valor": round(float(outro.get("valor") or 0.0), 2),
+                "severidade": severidade,
+                "titulo": (
+                    f"{pessoa['nome']} tem cargo em {empresa['nome']} e em {outro.get('nome') or outro['nif']}, "
+                    + ("ambas do pedido, " if dentro else "")
+                    + f"e uma contrata com a outra"
+                ),
+            }
+        )
+
+    for pessoa in pessoas:
+        for empresa in pessoa.get("empresas") or []:
+            mapa = contrapartes.get(empresa["nif"]) or {}
+            if not mapa:
+                continue
+            for outra in pessoa.get("outras_empresas") or []:
+                registo = mapa.get(outra["nif"])
+                if registo:
+                    juntar(pessoa, empresa, {**registo, "nome": registo.get("nome") or outra.get("nome")}, False)
+            for irma in pessoa.get("empresas") or []:
+                if irma["nif"] == empresa["nif"]:
+                    continue
+                registo = mapa.get(irma["nif"])
+                if registo:
+                    juntar(pessoa, empresa, {**registo, "nome": irma["nome"]}, True)
+
+    conflitos.sort(key=lambda item: (-float(item["valor"] or 0), -int(item["contratos"] or 0), item["nome"]))
+    return conflitos
+
+
 # ---------------------------------------------------------------------------
 # Painel
 # ---------------------------------------------------------------------------
@@ -711,12 +1182,22 @@ def _ligacoes(pessoas: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return ligacoes
 
 
-def _kpis(empresas: Sequence[Dict[str, Any]], pessoas: Sequence[Dict[str, Any]], cargos: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+def _kpis(
+    empresas: Sequence[Dict[str, Any]],
+    pessoas: Sequence[Dict[str, Any]],
+    cargos: Sequence[Dict[str, Any]],
+    conflitos: Sequence[Dict[str, Any]],
+) -> Dict[str, Any]:
     com_cargos = [empresa for empresa in empresas if empresa.get("pessoas")]
     devedores = [pessoa for pessoa in pessoas if (pessoa.get("devedores") or {}).get("devedor")]
     cargos_lidos = sum(int(empresa.get("total") or len(empresa.get("pessoas") or [])) for empresa in empresas)
     processos = sum(len(empresa.get("processos") or []) for empresa in empresas)
     profundidade = round(sum(int(pessoa["cargos_pedido"]) for pessoa in pessoas) / len(pessoas), 2) if pessoas else None
+    riscos = [
+        float(pessoa["risco"]["score"])
+        for pessoa in pessoas
+        if isinstance(pessoa.get("risco"), dict) and pessoa["risco"].get("score") is not None
+    ]
     return {
         "empresas": len(empresas),
         "empresas_com_pessoas": len(com_cargos),
@@ -732,17 +1213,61 @@ def _kpis(empresas: Sequence[Dict[str, Any]], pessoas: Sequence[Dict[str, Any]],
         "processos": processos,
         "cire_pessoas": sum(1 for pessoa in pessoas if pessoa.get("cire")),
         "devedores": len(devedores),
+        "conflitos": len(conflitos),
+        "conflitos_graves": sum(1 for item in conflitos if item.get("severidade") == "alerta"),
+        "risco_alto": sum(1 for score in riscos if score >= 40),
+        "risco_critico": sum(1 for score in riscos if score >= 60),
+        "risco_medio": round(sum(riscos) / len(riscos), 1) if riscos else None,
+        "risco_max": round(max(riscos), 1) if riscos else None,
         "cargo_top": cargos[0] if cargos else None,
         "profundidade": profundidade,
     }
 
 
-def _atencao(empresas: Sequence[Dict[str, Any]], pessoas: Sequence[Dict[str, Any]], ligacoes: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _atencao(
+    empresas: Sequence[Dict[str, Any]],
+    pessoas: Sequence[Dict[str, Any]],
+    ligacoes: Sequence[Dict[str, Any]],
+    conflitos: Sequence[Dict[str, Any]] = (),
+) -> List[Dict[str, Any]]:
     """O que verificar primeiro — as mesmas severidades do painel das empresas."""
     itens: List[Dict[str, Any]] = []
 
     def juntar(severidade: str, titulo: str, detalhe: str, verificar: str) -> None:
         itens.append({"severidade": severidade, "titulo": titulo, "detalhe": detalhe, "verificar": verificar})
+
+    for conflito in list(conflitos)[:MAX_CONFLITOS]:
+        direcao = conflito.get("direcao") or "contrata com"
+        dentro = " (ambas do pedido)" if conflito["contraparte"].get("dentro_do_pedido") else ""
+        juntar(
+            conflito.get("severidade") or "aviso",
+            f"{conflito['nome']} nos dois lados: {conflito['empresa']['nome']} ↔ {conflito['contraparte']['nome']}{dentro}",
+            f"Tem cargo em {conflito['empresa']['nome']} ({conflito['empresa']['titulo'] or 'cargo registado'}) e em "
+            f"{conflito['contraparte']['nome']}, e uma {direcao} outra — {conflito['contratos']} contrato(s), "
+            f"{conflito['valor']} € de valor registado na amostra.",
+            "Ler os contratos entre as duas empresas e confirmar se o cargo existia à data e quem representou cada parte.",
+        )
+
+    for pessoa in pessoas:
+        risco = pessoa.get("risco") or {}
+        score = risco.get("score")
+        if score is None:
+            continue
+        fatores = ", ".join(item["label"] for item in (risco.get("fatores") or [])[:3])
+        if score >= 60:
+            juntar(
+                "alerta",
+                f"Risco crítico em {pessoa['nome']} ({score}/100)",
+                f"Componentes que puxam o risco: {fatores or 'sem fator isolado'}.",
+                "Abrir a ficha da pessoa e confirmar cada componente antes de a envolver numa decisão.",
+            )
+        elif score >= 40:
+            juntar(
+                "aviso",
+                f"Risco elevado em {pessoa['nome']} ({score}/100)",
+                f"Componentes que puxam o risco: {fatores or 'sem fator isolado'}.",
+                "Comparar com os pares do mesmo cargo antes de concluir.",
+            )
 
     for ligacao in ligacoes:
         empresas_nome = ", ".join(empresa["nome"] for empresa in ligacao["empresas"])
@@ -1023,6 +1548,212 @@ def _titulo_do_no(pessoa: Dict[str, Any]) -> str:
     return " · ".join(titulos[:3]) or "cargo registado"
 
 
+def _grafo_pessoas(pessoas: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Malha **pessoa ↔ pessoa**: quem se senta com quem na mesma empresa.
+
+    Duas famílias de ligação: as empresas do pedido (os quadros que ali se
+    cruzam) e as empresas do universo de cada pessoa — é nesta segunda que
+    aparece a rede que o painel de uma empresa só não mostra. Quadros grandes
+    ficam de fora do desenho (uma empresa com 20 titulares dá 190 ligações) e o
+    painel diz quantos ficaram.
+    """
+    desenhadas = _para_grafo(pessoas)
+    nodes: List[Dict[str, Any]] = []
+    for pessoa in desenhadas:
+        nodes.append(
+            {
+                "id": f"pessoa:{pessoa['nif']}",
+                "key": pessoa["nif"],
+                "label": pessoa["nome"],
+                "dimension": "pessoa",
+                "type": "pessoa",
+                "role": _titulo_do_no(pessoa),
+                "count": int(pessoa["cargos_pedido"]),
+                "total_value": round(float(pessoa["quota"] or 0.0), 2),
+            }
+        )
+
+    grupos: Dict[str, Dict[str, Any]] = {}
+    for pessoa in desenhadas:
+        for empresa in pessoa.get("empresas") or []:
+            chave = f"pedido:{empresa['nif']}"
+            registo = grupos.setdefault(
+                chave,
+                {"nome": empresa["nome"], "nif": empresa["nif"], "do_pedido": True, "membros": []},
+            )
+            if pessoa["nif"] not in registo["membros"]:
+                registo["membros"].append(pessoa["nif"])
+        for outra in pessoa.get("outras_empresas") or []:
+            chave = f"fora:{outra['nif']}"
+            registo = grupos.setdefault(
+                chave,
+                {"nome": outra.get("nome") or outra["nif"], "nif": outra["nif"], "do_pedido": False, "membros": []},
+            )
+            if pessoa["nif"] not in registo["membros"]:
+                registo["membros"].append(pessoa["nif"])
+
+    edges: List[Dict[str, Any]] = []
+    limitados: List[str] = []
+    for chave, grupo in sorted(grupos.items(), key=lambda item: -len(item[1]["membros"])):
+        membros = grupo["membros"]
+        if len(membros) < 2:
+            continue
+        if len(membros) > MAX_QUADRO_PARES:
+            # Um quadro grande não se desenha todo (26 titulares dão 325 ligações):
+            # ligam-se os mais relevantes e o painel diz quantos ficaram de fora.
+            limitados.append(f"{grupo['nome']} ({len(membros)})")
+            membros = membros[:MAX_QUADRO_PARES]
+        for indice, origem in enumerate(membros):
+            for destino in membros[indice + 1 :]:
+                if len(edges) >= MAX_ARESTAS_PESSOAS:
+                    break
+                edges.append(
+                    {
+                        "source": f"pessoa:{origem}",
+                        "target": f"pessoa:{destino}",
+                        "count": 1,
+                        "value": 0.0,
+                        "relation": (
+                            f"juntos em {grupo['nome']}" if grupo["do_pedido"] else f"fora do pedido: {grupo['nome']}"
+                        ),
+                    }
+                )
+
+    por_tipo: Dict[str, int] = {"pessoa": len(nodes)}
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "meta": {
+            "dimension_a": "pessoa",
+            "dimension_b": "pessoa",
+            "metric": "contratos",
+            "mode": "descoberta_pessoas_cotitularidade",
+            "complete": len(desenhadas) == len(pessoas),
+            "scan_capped": len(desenhadas) < len(pessoas),
+            "sample_order": "gestão, ligações e cargos",
+            "sample_limit": MAX_GRAFO_PESSOAS,
+            "documents_scanned": len(pessoas),
+            "documents_matching": len(desenhadas),
+            "scanned_value": 0.0,
+            "nodes_total": len(nodes),
+            "edges_total": len(edges),
+            "kept_nodes": len(nodes),
+            "kept_edges": len(edges),
+            "omitted_edges": 0,
+            "coverage_value_share": None,
+            "coverage_count_share": None,
+            "directed": False,
+            "limits": {
+                "pessoas": MAX_GRAFO_PESSOAS,
+                "quadro": MAX_QUADRO_PARES,
+                "arestas": MAX_ARESTAS_PESSOAS,
+            },
+            "notes": [
+                "Grafo de co-titularidade: cada ligação é uma empresa partilhada por duas pessoas.",
+                f"Quadros com mais de {MAX_QUADRO_PARES} titulares entram pelos mais relevantes.",
+                *([f"Quadros limitados: {', '.join(limitados[:4])}."] if limitados else []),
+            ],
+            "filters": {"pessoas": len(desenhadas)},
+            "camadas": por_tipo,
+            "valor_das_camadas": 0.0,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Análise pelo Hermes
+# ---------------------------------------------------------------------------
+MAX_PEDIDO_CHARS = 1800
+MAX_TITULARES_PEDIDO = 6
+
+
+def pergunta_padrao(painel: Dict[str, Any]) -> str:
+    """Pergunta do Hermes ancorada nos números do painel (determinística)."""
+    kpis = painel.get("kpis") or {}
+    empresas = painel.get("empresas") or []
+    nomes = ", ".join(_texto(empresa.get("nome")) for empresa in empresas[:4]) or "as empresas pedidas"
+    factos = [
+        f"empresas: {kpis.get('empresas') or 0}",
+        f"pessoas com cargos: {kpis.get('pessoas') or 0}",
+        f"pessoas em mais de uma empresa: {kpis.get('em_varias') or 0}",
+        f"órgãos sociais: {kpis.get('gestao') or 0}",
+        f"titulares com risco elevado: {kpis.get('risco_alto') or 0}",
+        f"conflitos de interesse: {kpis.get('conflitos') or 0}",
+        f"titulares nas listas de devedores: {kpis.get('devedores') or 0}",
+    ]
+    ligacoes = painel.get("ligacoes") or []
+    if ligacoes:
+        factos.append(f"quem liga as empresas: {ligacoes[0].get('nome')} ({ligacoes[0].get('empresas_pedido')} empresas)")
+    # Sem os nomes e os títulos, o Hermes só pode falar de contagens: dá-se-lhe quem.
+    titulares = []
+    for pessoa in (painel.get("pessoas") or [])[:MAX_TITULARES_PEDIDO]:
+        titulo = _texto(pessoa.get("titulo"))
+        nas_empresas = ", ".join(_texto(empresa.get("nome")) for empresa in (pessoa.get("empresas") or [])[:3])
+        if not titulo or not nas_empresas:
+            continue
+        titulares.append(f"{_texto(pessoa.get('nome'))} — {titulo} ({nas_empresas})")
+    if titulares:
+        factos.append("titulares: " + " | ".join(titulares))
+    return (
+        f"Analisa quem está por trás de {nomes}: quem manda, quem liga as empresas, "
+        "que conflitos e riscos existem e o que deve ser verificado a seguir. "
+        f"Factos calculados na plataforma: {'; '.join(factos)}."
+    )
+
+
+async def analisar(
+    painel: Dict[str, Any],
+    *,
+    pergunta: Optional[str] = None,
+    profundidade: Optional[str] = None,
+    fontes: Optional[Sequence[str]] = None,
+    backend: Optional[str] = None,
+    skill_id: Optional[str] = None,
+    session: Any = None,
+    scope: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Pede ao Hermes a análise citada do conjunto de pessoas.
+
+    Sem `skill_id` é o Hermes que escolhe o método (como no painel das empresas);
+    com `skill_id`, o método da skill é injetado no pedido.
+    """
+    from api import hermes_service as hermes  # noqa: PLC0415
+    from api import skills_service as biblioteca  # noqa: PLC0415
+
+    empresas = painel.get("empresas") or []
+    if not empresas:
+        raise ValueError("Painel sem empresas: não há conjunto de pessoas para analisar.")
+
+    texto = (pergunta or "").strip() or pergunta_padrao(painel)
+    if skill_id:
+        skill = biblioteca.get_skill(str(skill_id))
+        if skill is None:
+            raise ValueError(f"Skill desconhecida: {skill_id}.")
+        if not skill.get("enabled", True):
+            raise ValueError(f"A skill «{skill.get('name') or skill_id}» está desativada.")
+        metodo = biblioteca.prompt_block(skill, label="Skill escolhida na descoberta de pessoas")
+        disponivel = max(0, MAX_PEDIDO_CHARS - len(texto) - 2)
+        if disponivel > 0:
+            texto = f"{metodo[:disponivel]}\n\n{texto}"
+
+    resultado = await hermes.ask(
+        texto,
+        depth=str(profundidade or hermes.DEFAULT_DEPTH),
+        sources_ids=list(fontes) if fontes else None,
+        backend=backend,
+        scope=scope,
+        session=session,
+        country="PRT",
+    )
+    return {
+        "pergunta": texto,
+        "empresas": [empresa.get("nif") for empresa in empresas],
+        "profundidade": profundidade or hermes.DEFAULT_DEPTH,
+        "skill_imposta": skill_id or None,
+        **resultado,
+    }
+
+
 def _fontes_estado(
     empresas: Sequence[Dict[str, Any]],
     pessoas: Sequence[Dict[str, Any]],
@@ -1030,6 +1761,8 @@ def _fontes_estado(
     devedores: Dict[str, Dict[str, Any]],
     erros: Dict[str, str],
     cire_pessoas: int = 0,
+    conflitos: Sequence[Dict[str, Any]] = (),
+    contrapartes: int = 0,
 ) -> List[Dict[str, Any]]:
     """Estado de cada fonte, como no painel das empresas: ok, vazio, erro ou tempo."""
     com_quota = [pessoa for pessoa in pessoas if pessoa.get("quota") is not None]
@@ -1042,6 +1775,7 @@ def _fontes_estado(
         "universo": len(com_universo),
         "cire": cire_pessoas,
         "devedores": len(devedores_encontrados),
+        "contratos": len(conflitos),
     }
     ms = {
         "cargos": sum(int(empresa.get("ms") or 0) for empresa in empresas) or None,
@@ -1049,6 +1783,7 @@ def _fontes_estado(
         "universo": None,
         "cire": None,
         "devedores": None,
+        "contratos": None,
     }
 
     estado: List[Dict[str, Any]] = []
@@ -1083,6 +1818,8 @@ def _fontes_estado(
                     if fonte_id == "devedores"
                     else f"Pessoas com NIF nos até {MAX_PROCESSOS} processos lidos por empresa; ficam anotadas as que são titulares."
                     if fonte_id == "cire"
+                    else f"{contrapartes} contraparte(s) nas empresas do pedido (até {MAX_CONTRATOS_CONFLITO} contratos por empresa)."
+                    if fonte_id == "contratos"
                     else None
                 ),
             }
@@ -1126,6 +1863,7 @@ def descobrir(
     fontes: Optional[Sequence[str]] = None,
     incluir_grafo: bool = True,
     incluir_devedores: bool = True,
+    incluir_conflitos: bool = True,
 ) -> Dict[str, Any]:
     """Descobre as pessoas ligadas a uma ou várias empresas.
 
@@ -1188,21 +1926,44 @@ def descobrir(
         for pessoa in pessoas:
             pessoa["devedores"] = devedores.get(pessoa["nif"])
 
+    # --- Conflitos: quem está nos dois lados de um contrato -----------------
+    contrapartes: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    conflitos: List[Dict[str, Any]] = []
+    if incluir_conflitos and "contratos" in pretendidas:
+        contrapartes = _contrapartes_das_empresas(empresas)
+        conflitos = _conflitos(pessoas, empresas, contrapartes)
+
+    # --- Risco por pessoa: só depois de ter cargos, processos e listas ------
+    for pessoa in pessoas:
+        pessoa["risco"] = risco_da_pessoa(pessoa)
+        pessoa["conflitos"] = sum(1 for item in conflitos if item["nif"] == pessoa["nif"])
+    pessoas.sort(key=_ordem_painel)
+
     for pessoa in pessoas:
         pessoa["evidencia"] = _evidencia(pessoa)
 
     painel = pessoas[:MAX_PESSOAS_PAINEL]
     cargos = _cargos_distribuicao(painel)
     ligacoes = _ligacoes(painel)
-    kpis = _kpis(empresas, painel, cargos)
-    atencao = _atencao(empresas, painel, ligacoes)
+    kpis = _kpis(empresas, painel, cargos, conflitos)
+    atencao = _atencao(empresas, painel, ligacoes, conflitos)
     leitura = _leitura(empresas, painel, ligacoes, kpis, atencao)
     # Pessoas (NIF) vistas nos processos do CIRE das empresas do pedido — não são
     # necessariamente titulares: só as que coincidem com o painel ficam anotadas.
     cire_pessoas = {
         nif for empresa in empresas for nif in (empresa.get("cire_map") or {})
     }
-    fontes_estado = _fontes_estado(empresas, painel, pretendidas, devedores, erros, len(cire_pessoas))
+    contrapartes_lidas = len({nif for mapa in contrapartes.values() for nif in mapa})
+    fontes_estado = _fontes_estado(
+        empresas,
+        painel,
+        pretendidas,
+        devedores,
+        erros,
+        len(cire_pessoas),
+        conflitos,
+        contrapartes_lidas,
+    )
 
     avisos: List[str] = []
     for empresa in empresas:
@@ -1211,12 +1972,16 @@ def descobrir(
     if len(pessoas) > len(painel):
         avisos.append(
             f"Foram encontradas {len(pessoas)} pessoas e mostradas as {len(painel)} mais relevantes "
-            "(órgãos sociais, ligações entre empresas e número de cargos)."
+            "(órgãos sociais, ligações entre empresas, risco e número de cargos)."
         )
     if not pessoas and empresas:
         avisos.append(
             "Nenhuma das empresas do pedido tem cargos de órgãos sociais registados na plataforma. "
             "Não é ausência de gestão: é ausência de publicações de registo comercial indexadas."
+        )
+    if conflitos:
+        avisos.append(
+            f"{len(conflitos)} titular(es) com cargo nos dois lados de um contrato — é o primeiro ponto a verificar."
         )
 
     return {
@@ -1234,7 +1999,9 @@ def descobrir(
         "kpis": kpis,
         "cargos": cargos,
         "ligacoes": ligacoes,
+        "conflitos": conflitos[:MAX_CONFLITOS],
         "grafo": _grafo(empresas, painel) if incluir_grafo else None,
+        "grafo_pessoas": _grafo_pessoas(painel) if incluir_grafo else None,
         "atencao": atencao,
         "fontes": fontes_estado,
         "leitura": leitura,

@@ -52,3 +52,12 @@ deploy/kamatera/es/_export/
 # acima de 100 MiB. As listas de códigos `codigos/*.gc` são pequenas e ficam
 # versionadas: o coletor e os testes leem-nas.
 data/contratos-espanha/*.zip
+
+# Partidos políticos (Tribunal Constitucional + CNE). As páginas anuais do TC,
+# as fichas da CNE e, sobretudo, os PDF das contas (centenas de ficheiros, que
+# chegam a somar centenas de MB) são **re-descarregáveis** e ficam só em disco —
+# `POST /partidos/recolher` volta a buscá-los. O manifesto e o que está lido
+# (`_manifest.json`, `_normalized/*.jsonl`) já são apanhados por `*.json`/`*.jsonl`.
+data/partidos/paginas/
+data/partidos/cne/
+data/partidos/pdf/

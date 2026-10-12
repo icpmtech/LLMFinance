@@ -244,6 +244,30 @@ SUBVENCOES_INDEX = "finance_subvencoes"
 # o que já foi lido e de onde veio cada registo.
 SUBVENCOES_LOTES_INDEX = "finance_subvencoes_lotes"
 
+# Financiamento partidário (Tribunal Constitucional). A Entidade das Contas e
+# Financiamentos Políticos (ECFP) publica, por ano, as **contas anuais** de cada
+# partido, a **lista de ações e meios** de propaganda política, os relatórios da
+# ECFP, os acórdãos e as decisões. Um documento por **entrada da página anual**
+# (partido × ano × secção), com o texto do PDF extraído para pesquisa integral.
+# `_id` = `<ano>:<secção>:<partido>` — reindexar o mesmo ano sobrepõe-se em vez
+# de duplicar. Alimentado por `api/partidos_service.py`.
+PARTIDOS_INDEX = "finance_partidos"
+
+# Vereadores e remunerações autárquicas. Documento por pessoa × concelho ×
+# cargo, agregando candidaturas, mandatos e valores de remuneração declarados
+# pelas câmaras municipais.
+VEREADORES_INDEX = "finance_vereadores"
+
+# Registo oficial dos partidos na **CNE**: denominação, sigla, data de inscrição,
+# situação (`inscrito`/`extinto`), sítio na Internet, símbolo e descrição. É a
+# chave que liga os documentos das contas ao partido. `_id` = `<chave>` (slug).
+PARTIDOS_REGISTO_INDEX = "finance_partidos_registo"
+
+# Histórico das recolhas: uma entrada por **página descarregada** (ano do TC ou
+# listagem/partido da CNE), com o `sha256` do HTML, o que rendeu e eventuais
+# erros — para a página poder mostrar o que está recolhido e de onde veio.
+PARTIDOS_RECOLHAS_INDEX = "finance_partidos_recolhas"
+
 # ---------------------------------------------------------------------------
 # «World Model» — o estado do mundo da contratação pública, materializado.
 #
@@ -358,6 +382,17 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
         "analysis": {
             "analyzer": {
                 "agent_name_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    VEREADORES_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
                     "type": "custom",
                     "tokenizer": "standard",
                     "filter": ["lowercase", "asciifolding"],
@@ -596,6 +631,43 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
     SUBVENCOES_INDEX: {
         # Entidades e beneficiários vêm em maiúsculas e com acentos («MUNICÍPIO
         # DE ALMADA»); `world_folding` deixa que «municipio de almada» os encontre.
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    PARTIDOS_INDEX: {
+        # Nomes de partidos e o texto extraído dos PDF das contas vêm com acentos
+        # («Bloco de Esquerda», «Demonstração de Resultados»).
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    PARTIDOS_REGISTO_INDEX: {
+        # Idem: «Alternativa Democrática Nacional», «Nós, Cidadãos!».
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    PARTIDOS_RECOLHAS_INDEX: {
+        # As mensagens de erro das recolhas trazem acentos e maiúsculas.
         "analysis": {
             "analyzer": {
                 "world_folding": {
@@ -2306,6 +2378,140 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    partidos_mappings = {
+        "properties": {
+            # `<ano>:<secção>:<partido>` — reindexar o mesmo ano sobrepõe-se.
+            "doc_id": {"type": "keyword"},
+            # Ano da **página do TC** (o exercício a que as contas respeitam).
+            "ano": {"type": "integer"},
+            # `contas_anuais` | `lista_acoes` | `relatorios_ecfp` | `acordaos` |
+            # `decisoes_ecfp` (derivado do anchor da secção na página anual).
+            "secao": {"type": "keyword"},
+            "secao_titulo": {"type": "text", "analyzer": "world_folding", "fields": {"keyword": {"type": "keyword", "ignore_above": 512}}},
+            "ancora": {"type": "keyword"},
+            "ordem": {"type": "integer"},
+            "partido_nome": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "partido_sigla": {"type": "keyword"},
+            "partido_chave": {"type": "keyword"},
+            # Falso quando a página diz que o partido não entregou/não comunicou.
+            "entregou": {"type": "boolean"},
+            # Texto entre parênteses a seguir ao nome («Não entregou»,
+            # «Balanço rectificado em 17 de junho de 2011»).
+            "observacao": {"type": "text", "analyzer": "world_folding"},
+            # Entradas que são notas da secção e não um partido.
+            "nota": {"type": "boolean"},
+            "documento": {"type": "boolean"},
+            "ficheiro": {"type": "keyword", "ignore_above": 512},
+            "ficheiro_kb": {"type": "long"},
+            "pdf_url": {"type": "keyword", "ignore_above": 512},
+            "pdf_titulo": {"type": "keyword", "ignore_above": 256},
+            "pdf_sha256": {"type": "keyword"},
+            "paginas": {"type": "integer"},
+            # Verdadeiro quando o PDF é uma digitalização sem camada de texto
+            # (as contas anuais e as listas de ações do TC são-no).
+            "pdf_digitalizado": {"type": "boolean"},
+            "texto": {"type": "text", "analyzer": "world_folding", "search_analyzer": "world_folding"},
+            "texto_chars": {"type": "integer"},
+            "texto_extraido": {"type": "boolean"},
+            "recolhido_em": {"type": "date"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    partidos_registo_mappings = {
+        "properties": {
+            "chave": {"type": "keyword"},
+            "denominacao": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "sigla": {"type": "keyword"},
+            # Siglas alternativas (as que a CNE publica e as que o TC usa nas
+            # páginas anuais) — a ligação entre as duas fontes faz-se por aqui.
+            "siglas": {"type": "keyword"},
+            "situacao": {"type": "keyword"},
+            "data_inscricao": {"type": "date"},
+            "site": {"type": "keyword", "ignore_above": 512},
+            "logotipo_url": {"type": "keyword", "ignore_above": 512},
+            "descricao": {"type": "text", "analyzer": "world_folding"},
+            "url": {"type": "keyword", "ignore_above": 512},
+            "recolhido_em": {"type": "date"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    partidos_recolhas_mappings = {
+        "properties": {
+            "recolha_id": {"type": "keyword"},
+            # `tc` (páginas anuais do Tribunal Constitucional) ou `cne`.
+            "fonte": {"type": "keyword"},
+            "ano": {"type": "integer"},
+            "url": {"type": "keyword", "ignore_above": 512},
+            "sha256": {"type": "keyword"},
+            "bytes": {"type": "long"},
+            "itens": {"type": "long"},
+            "documentos": {"type": "long"},
+            "pdfs": {"type": "long"},
+            "com_texto": {"type": "long"},
+            "erro": {"type": "text", "analyzer": "world_folding"},
+            "recolhido_em": {"type": "date"},
+            "ingested_at": {"type": "date"},
+        }
+    }
+
+    vereadores_mappings = {
+        "properties": {
+            "doc_id": {"type": "keyword"},
+            "name": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "name_keyword": {"type": "keyword", "ignore_above": 512},
+            "concelho": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "concelho_keyword": {"type": "keyword", "ignore_above": 128},
+            "district": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "district_keyword": {"type": "keyword", "ignore_above": 128},
+            "party": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "party_keyword": {"type": "keyword", "ignore_above": 128},
+            "role": {"type": "keyword", "ignore_above": 128},
+            "role_keyword": {"type": "keyword", "ignore_above": 128},
+            "election": {"type": "keyword", "ignore_above": 128},
+            "year": {"type": "integer"},
+            "source": {"type": "keyword", "ignore_above": 64},
+            "source_url": {"type": "keyword", "ignore_above": 512, "index": False},
+            "nif": {"type": "keyword", "ignore_above": 32},
+            "notes": {"type": "text", "analyzer": "world_folding"},
+            "remuneration": {"type": "object", "enabled": False},
+            "raw_data": {"type": "object", "enabled": False},
+            "ingested_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
     analises_empresa_mappings = {
         "properties": {
             "doc_id": {"type": "keyword"},
@@ -2463,6 +2669,12 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (DEVEDORES_RECOLHAS_INDEX, devedores_recolhas_mappings),
         (SUBVENCOES_INDEX, subvencoes_mappings),
         (SUBVENCOES_LOTES_INDEX, subvencoes_lotes_mappings),
+        # Financiamento partidário: documentos das contas por partido e ano, o
+        # registo oficial da CNE e o histórico das recolhas.
+        (PARTIDOS_INDEX, partidos_mappings),
+        (PARTIDOS_REGISTO_INDEX, partidos_registo_mappings),
+        (PARTIDOS_RECOLHAS_INDEX, partidos_recolhas_mappings),
+        (VEREADORES_INDEX, vereadores_mappings),
         (OSINT_INDEX, osint_mappings),
         (TICKER_TRANSLATIONS_INDEX, ticker_translations_mappings),
     ]:
@@ -16539,6 +16751,143 @@ def people_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
             out["total_company_links"] = int(aggs.get("companies_stats", {}).get("value", 0))
             out["by_source"] = [{"key": str(b["key"]), "count": b["doc_count"]} for b in aggs.get("by_source", {}).get("buckets", [])]
             out["top_roles"] = [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("top_roles", {}).get("roles", {}).get("buckets", [])]
+        return out
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def index_vereadores_bulk(items: Iterable[Dict[str, Any]], es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Indexa documentos de vereadores no índice finance_vereadores.
+
+    Cada item deve ter `doc_id`, `name`, `concelho`, `district`, `party`, `role`
+    e, opcionalmente, `remuneration`, `nif`, `source_url` e `raw_data`.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed": 0}
+    ensure_indices(client)
+    actions = []
+    now = datetime.utcnow().isoformat()
+    for doc in items:
+        if not doc.get("doc_id") or not doc.get("name"):
+            continue
+        source = dict(doc)
+        source.setdefault("ingested_at", now)
+        source.setdefault("updated_at", now)
+        actions.append({
+            "_op_type": "index",
+            "_index": VEREADORES_INDEX,
+            "_id": source["doc_id"],
+            **source,
+        })
+    if not actions:
+        return {"indexed": 0}
+    try:
+        indexed, errors = bulk(client, actions, raise_on_error=False)
+        client.indices.refresh(index=VEREADORES_INDEX)
+        return {"indexed": indexed, "errors": len(errors) if errors else 0}
+    except Exception as exc:
+        return {"error": str(exc), "indexed": 0}
+
+
+def search_vereadores(
+    q: Optional[str] = None,
+    district: Optional[str] = None,
+    concelho: Optional[str] = None,
+    party: Optional[str] = None,
+    role: Optional[str] = None,
+    size: int = 50,
+    page: int = 1,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa no índice finance_vereadores."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+    ensure_indices(client)
+
+    must: List[Dict[str, Any]] = []
+    filters: List[Dict[str, Any]] = []
+
+    if q:
+        must.append({
+            "bool": {
+                "should": [
+                    {"match_phrase": {"name": {"query": q, "boost": 6}}},
+                    {"match": {"name": {"query": q, "operator": "and", "boost": 3}}},
+                    {"wildcard": {"party.keyword": {"value": f"*{q}*", "case_insensitive": True}}},
+                    {"wildcard": {"concelho.keyword": {"value": f"*{q}*", "case_insensitive": True}}},
+                ],
+                "minimum_should_match": 1,
+            }
+        })
+    if district:
+        filters.append({"wildcard": {"district.keyword": {"value": f"*{district}*", "case_insensitive": True}}})
+    if concelho:
+        filters.append({"wildcard": {"concelho.keyword": {"value": f"*{concelho}*", "case_insensitive": True}}})
+    if party:
+        filters.append({"wildcard": {"party.keyword": {"value": f"*{party}*", "case_insensitive": True}}})
+    if role:
+        filters.append({"wildcard": {"role": {"value": f"*{role}*", "case_insensitive": True}}})
+
+    bool_query: Dict[str, Any] = {}
+    if must:
+        bool_query["must"] = must
+    if filters:
+        bool_query["filter"] = filters
+
+    query = {"bool": bool_query} if bool_query else {"match_all": {}}
+    from_ = max(0, (page - 1) * size)
+
+    body = {
+        "query": query,
+        "from": from_,
+        "size": max(1, min(size, 500)),
+        "sort": [{"_score": {"order": "desc"}}, {"name.keyword": {"order": "asc"}}],
+        "track_total_hits": True,
+    }
+
+    try:
+        resp = client.search(index=VEREADORES_INDEX, body=body)
+        total = resp["hits"]["total"]["value"]
+        return {
+            "total": total,
+            "items": [{**hit["_source"], "doc_id": hit["_id"]} for hit in resp["hits"]["hits"]],
+            "from": from_,
+            "size": size,
+            "page": page,
+        }
+    except Exception as exc:
+        return {"error": str(exc), "items": [], "total": 0}
+
+
+def vereadores_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Volumetria rápida do índice de vereadores."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    ensure_indices(client)
+    try:
+        count = client.count(index=VEREADORES_INDEX).get("count", 0)
+        out: Dict[str, Any] = {"index": VEREADORES_INDEX, "documents": count}
+        if count:
+            resp = client.search(
+                index=VEREADORES_INDEX,
+                body={
+                    "size": 0,
+                    "aggs": {
+                        "by_role": {"terms": {"field": "role_keyword", "size": 20}},
+                        "by_source": {"terms": {"field": "source", "size": 20}},
+                        "by_party": {"terms": {"field": "party_keyword", "size": 20}},
+                        "by_concelho": {"terms": {"field": "concelho_keyword", "size": 20}},
+                    },
+                },
+            )
+            aggs = resp.get("aggregations", {})
+            out["by_role"] = [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("by_role", {}).get("buckets", [])]
+            out["by_source"] = [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("by_source", {}).get("buckets", [])]
+            out["by_party"] = [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("by_party", {}).get("buckets", [])]
+            out["by_concelho"] = [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("by_concelho", {}).get("buckets", [])]
         return out
     except Exception as exc:
         return {"error": str(exc)}

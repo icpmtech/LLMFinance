@@ -304,6 +304,8 @@ from api.descoberta_pessoas_routes import router as descoberta_pessoas_router
 from api.cire_routes import router as cire_router
 from api.citacoes_routes import router as citacoes_router
 from api.people_routes import router as people_router
+from api.autarquicas_routes import router as autarquicas_router
+from api.vereadores_routes import router as vereadores_router
 from api.contribuintes_routes import router as contribuintes_router
 from api.gleif_routes import router as gleif_router
 from api.world_routes import router as world_router
@@ -339,6 +341,11 @@ from api.reports_routes import router as reports_router
 # guardados em `data/subvencoes` (um ficheiro por ano, ou uma subpasta por ano),
 # indexa-os em `finance_subvencoes` e dá-lhes pesquisa, painel e exportação.
 from api.subvencoes_routes import router as subvencoes_router
+# Partidos políticos e as suas contas: as páginas anuais do financiamento
+# partidário do Tribunal Constitucional (contas anuais dos partidos, listas de
+# ações e meios de propaganda, relatórios, acórdãos e decisões da ECFP) cruzadas
+# com o registo oficial dos partidos na CNE; indexadas em `finance_partidos`.
+from api.partidos_routes import router as partidos_router
 # Benchmark de preços e concorrência por empresa + CPV: preço de referência do
 # segmento, concorrentes, historial de contrapartes e oportunidades.
 from api.benchmark_routes import router as benchmark_router
@@ -579,7 +586,19 @@ app.add_middleware(
 # Vale o mesmo para a **gestão da loja** (`/shop/*`): sem isto o backoffice
 # mostrava listas e o tema da vitrine desatualizados. O leitor de RSS segue a
 # mesma regra: as listas de artigos e o estado da recolha têm de estar frescos.
-_NO_STORE_PREFIXES = ("/docs", "/redoc", "/openapi", "/shop", "/rss", "/sentiment/market", "/reports", "/subvencoes")
+_NO_STORE_PREFIXES = (
+    "/docs",
+    "/redoc",
+    "/openapi",
+    "/shop",
+    "/rss",
+    "/sentiment/market",
+    "/reports",
+    "/subvencoes",
+    # As contas dos partidos também: o painel e o estado da recolha mudam a cada
+    # leitura e não podem vir do cache do browser.
+    "/partidos",
+)
 
 
 @app.middleware("http")
@@ -662,6 +681,8 @@ def serve_empresas_recolha_spa_page():
 app.include_router(cire_router)
 app.include_router(citacoes_router)
 app.include_router(people_router)
+app.include_router(autarquicas_router)
+app.include_router(vereadores_router)
 app.include_router(contribuintes_router)
 app.include_router(gleif_router)
 # World Model: estado do mundo, rede neuronal dinâmica (grafo), motor de
@@ -700,6 +721,10 @@ app.include_router(cae_router)
 # (`/reports/backoffice/*`) e configuração na administração (`/reports/admin/*`).
 app.include_router(reports_router)
 app.include_router(subvencoes_router)
+# Partidos políticos e as suas contas: páginas anuais do financiamento partidário
+# do Tribunal Constitucional (contas anuais, listas de ações e meios, relatórios,
+# acórdãos e decisões da ECFP) cruzadas com o registo oficial da CNE.
+app.include_router(partidos_router)
 app.include_router(benchmark_router)
 
 
