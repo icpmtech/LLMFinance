@@ -13,8 +13,8 @@
  *
  * **Desligado em toda a plataforma**: quem o monta é o `App.tsx`, atrás de
  * `JARVIS_WIDGET_ENABLED` (a `false`), pelo que o Jarvis se usa pela página
- * `/jarvis` e pelo Dock. Ligar o interruptor traz o botão de volta, com os
- * esconderijos acima.
+ * `/jarvis` e pela barra lateral (`Investigação e IA` → `Jarvis`). Ligar o
+ * interruptor traz o botão de volta, com os esconderijos acima.
  *
  * A voz está sempre disponível: o microfone no compositor e a leitura das
  * respostas em voz alta, com as mesmas preferências da página.

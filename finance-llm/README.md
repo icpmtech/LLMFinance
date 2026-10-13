@@ -1435,14 +1435,15 @@ microfone quando ouve, acelera quando fala com os gateways e ondula quando respo
 alta. A resposta é construída em direto — os passos (skill, plano, ferramenta, resultado)
 aparecem à medida que acontecem.
 
-O Jarvis está **sempre à mão**: a página `/jarvis` e a aplicação **Jarvis** no Dock. Além disso, o
-código traz um **widget flutuante** — um botão só com o ícone que abre o **Control Center** — mas
-está **desligado** (`JARVIS_WIDGET_ENABLED` em `chat-ui/src/App.tsx`): o painel flutuante tapava o
-trabalho nas páginas de dados. O painel tem o *estado do sistema* num relance (modelo, quantas
-ferramentas expõe cada gateway, estado da voz), quatro atalhos para os pedidos mais comuns
-(*maiores contratos*, *ficha de empresa*, *notícias de mercado*, *estado do sistema*) e a conversa
-completa com passos, fontes e sugestões. O botão arrasta-se (a posição fica guardada), o microfone
-está sempre no compositor e o histórico é **o mesmo** da página — os dois sincronizam-se.
+O Jarvis está **sempre à mão**: a página `/jarvis` e a entrada **Jarvis** na barra lateral
+(*Investigação e IA*), que também aparece no Menu Iniciar. Além disso, o código traz um **widget
+flutuante** — um botão só com o ícone que abre o **Control Center** — mas está **desligado**
+(`JARVIS_WIDGET_ENABLED` em `chat-ui/src/App.tsx`): o painel flutuante tapava o trabalho nas
+páginas de dados. O painel tem o *estado do sistema* num relance (modelo, quantas ferramentas
+expõe cada gateway, estado da voz), quatro atalhos para os pedidos mais comuns (*maiores
+contratos*, *ficha de empresa*, *notícias de mercado*, *estado do sistema*) e a conversa completa
+com passos, fontes e sugestões. O botão arrasta-se (a posição fica guardada), o microfone está
+sempre no compositor e o histórico é **o mesmo** da página — os dois sincronizam-se.
 
 Voz, por ordem de preferência e sempre com degradação:
 

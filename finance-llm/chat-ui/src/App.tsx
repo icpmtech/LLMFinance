@@ -247,9 +247,9 @@ const REGION_DETAIL_KEY = "finance-llm-region-detail";
 const VIEWS_WITHOUT_JARVIS_WIDGET = new Set<string>(["jarvis", "visualizador"]);
 
 /* O widget flutuante do Jarvis está **desligado em toda a plataforma**: o
-   Jarvis vive na página `/jarvis` e no Dock, que tem a aplicação Jarvis. Pôr
-   isto a `true` devolve o botão — e ele volta a esconder-se nas páginas de
-   `VIEWS_WITHOUT_JARVIS_WIDGET`. */
+   Jarvis vive na página `/jarvis` e na barra lateral (`Investigação e IA` →
+   `Jarvis`), que também está no Menu Iniciar. Pôr isto a `true` devolve o botão
+   — e ele volta a esconder-se nas páginas de `VIEWS_WITHOUT_JARVIS_WIDGET`. */
 const JARVIS_WIDGET_ENABLED: boolean = false;
 
 /** Divisão do mapa GLEIF cujas empresas estão abertas (vista/janela `gleif-region`). */
