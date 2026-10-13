@@ -36,35 +36,64 @@ import { closeWindow, openWindow, windowFor } from "../windows";
 
 /* --------------------------------------------------------------- fichas */
 
-/** Ficha de entidade dentro de uma janela. */
-export function EntityDetailWindow({ nif }: { nif: string }) {
+/**
+ * Abre uma ficha na janela correspondente. Os contratos de uma entidade pedem uma
+ * janela maior (tabela larga); as restantes usam o tamanho por omissão.
+ */
+function abrirJanela(destino: string, titulo?: string) {
+  if (destino.startsWith("entity-contracts:")) {
+    openWindow(destino, undefined, { title: titulo, rect: { width: 1100, height: 720 } });
+    return;
+  }
+  openWindow(destino, undefined, { title: titulo });
+}
+
+/** Ficha de entidade dentro de uma janela (ou de uma página, em modo página). */
+export function EntityDetailWindow({
+  nif,
+  onBack,
+  onNavegar,
+}: {
+  nif: string;
+  /** Regresso: em modo página devolve o utilizador à vista onde estava. */
+  onBack?: () => void;
+  /** Abre outra ficha (contrato, contratos da entidade) no modo certo. */
+  onNavegar?: (view: string, title?: string) => void;
+}) {
   const view = `company-detail:${nif}`;
+  const abrir = onNavegar ?? ((destino: string, titulo?: string) => abrirJanela(destino, titulo));
   return (
     <EntityDetailPanel
       nif={nif}
-      onBack={() => closeWindow(view)}
-      onContract={(id) => openWindow(`contract-detail:${id}`, undefined, { title: "Ficha do contrato" })}
-      onAllContracts={(entity, name) =>
-        openWindow(`entity-contracts:${entity}`, undefined, {
-          title: name ? `Contratos · ${name}` : "Contratos da entidade",
-          rect: { width: 1100, height: 720 },
-        })
-      }
+      onBack={onBack ?? (() => closeWindow(view))}
+      onContract={(id) => abrir(`contract-detail:${id}`, "Ficha do contrato")}
+      onAllContracts={(entity, name) => abrir(`entity-contracts:${entity}`, name ? `Contratos · ${name}` : "Contratos da entidade")}
     />
   );
 }
 
-/** Ficha de contrato dentro de uma janela. */
-export function ContractDetailWindow({ id }: { id: string }) {
+/** Ficha de contrato dentro de uma janela (ou de uma página, em modo página). */
+export function ContractDetailWindow({
+  id,
+  onBack,
+  onNavegar,
+}: {
+  id: string;
+  /** Regresso: em modo página devolve o utilizador à vista onde estava. */
+  onBack?: () => void;
+  /** Abre a ficha da entidade no modo certo. */
+  onNavegar?: (view: string, title?: string) => void;
+}) {
   const view = `contract-detail:${id}`;
   const [, setTick] = useState(0);
+  const abrir = onNavegar ?? ((destino: string, titulo?: string) => abrirJanela(destino, titulo));
   return (
     <ContractDetailPanel
       id={id}
-      onBack={() => closeWindow(view)}
+      onBack={onBack ?? (() => closeWindow(view))}
       onEntity={(nif) => {
         const target = `company-detail:${nif}`;
-        openWindow(target, undefined, { title: "Ficha da entidade" });
+        abrir(target, "Ficha da entidade");
         // Re-render para o título da janela acompanhar a entidade aberta.
         if (windowFor(target)) setTick((value) => value + 1);
       }}

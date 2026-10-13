@@ -34,7 +34,17 @@ async def municipios_despesas(
     distrito: Optional[str] = Query(None, description="Distrito (substring)"),
     nuts: Optional[str] = Query(None, description="Código NUTS III (ex.: 1D2)"),
     ano: Optional[int] = Query(None, description="Ano com despesa publicada"),
-    ordenar: str = Query("despesas", description="despesas | pessoal | bens_servicos | capital | contratos | contratos_total | nome"),
+    ano_contratos: Optional[int] = Query(
+        None,
+        description="Ano do Portal BASE cuja contratação a lista mostra e ordena (ex.: 2024)",
+    ),
+    ordenar: str = Query(
+        "despesas",
+        description=(
+            "despesas | pessoal | bens_servicos | capital | contratos | contratos_total | nome. "
+            "Com `ano_contratos`, `contratos` e `contratos_total` passam a ser os **desse ano**."
+        ),
+    ),
     ordem: str = Query("desc", description="asc | desc"),
     min_despesas: Optional[float] = Query(None, description="Despesa total mínima, em euros"),
     page: int = Query(1, ge=1),
@@ -43,7 +53,7 @@ async def municipios_despesas(
 ) -> Dict[str, Any]:
     return await run_in_threadpool(
         municipios.listar,
-        q=q, distrito=distrito, nuts=nuts, ano=ano,
+        q=q, distrito=distrito, nuts=nuts, ano=ano, ano_contratos=ano_contratos,
         ordenar=ordenar, ordem=ordem, min_despesas=min_despesas,
         size=size, page=page,
     )

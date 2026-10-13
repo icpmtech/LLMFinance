@@ -66,6 +66,7 @@ import {
   getAdministracaoCentralMeta,
   money,
   moneyShort,
+  periodoAtividade,
   reindexarAdministracaoCentral,
   searchAdministracaoCentralContratos,
   searchAdministracaoCentralEntidades,
@@ -276,7 +277,16 @@ function Tarteira({ dados }: { dados: { nome: string; valor: number }[] }) {
 
 /* ----------------------------------------------------------------- página */
 
-export default function AdministracaoCentralPage() {
+interface AdministracaoCentralPageProps {
+  /**
+   * Abre uma vista ou ficha. Em modo janelas abre (ou foca) a janela; em modo
+   * página navega para lá — quem decide é o `App`. Sem callback (a página usada
+   * isoladamente), abre-se a janela diretamente.
+   */
+  onOpenView?: (view: string, title?: string) => void;
+}
+
+export default function AdministracaoCentralPage({ onOpenView }: AdministracaoCentralPageProps) {
   const [aba, setAba] = useState<Aba>("entidades");
   const [meta, setMeta] = useState<AdministracaoCentralMeta | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -308,6 +318,15 @@ export default function AdministracaoCentralPage() {
   const pesquisa = useDebounce(rascunho.q);
 
   const subsetores = meta?.subsetores ?? [];
+
+  /** Abre a ficha de um contrato (`contract-detail:<id>`) ou de uma entidade. */
+  const abrirFicha = useCallback(
+    (vista: string, titulo: string) => {
+      if (onOpenView) onOpenView(vista, titulo);
+      else openWindow(vista, undefined, { title: titulo });
+    },
+    [onOpenView],
+  );
 
   /* ------------------------------------------------------------ pedidos */
 
@@ -480,6 +499,7 @@ export default function AdministracaoCentralPage() {
 
   const totalPaginas = resultado ? Math.ceil(resultado.total / PAGINA) : 0;
   const totalContratos = contratos ? Math.ceil(contratos.total / 20) : 0;
+  const periodoFicha = ficha ? periodoAtividade(ficha.entidade.ano_min, ficha.entidade.ano_max) : null;
 
   /* ------------------------------------------------------------- markup */
 
@@ -579,8 +599,8 @@ export default function AdministracaoCentralPage() {
           {/* ----------------------------------------------------- entidades */}
           <TabsContent value="entidades" active={aba === "entidades"} className="space-y-4">
             <Card>
-              <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-                <div className="space-y-1">
+              <div className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="space-y-1 sm:col-span-2 xl:col-span-1">
                   <Label className="text-xs">Pesquisar entidade</Label>
                   <div className="relative">
                     <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -660,48 +680,57 @@ export default function AdministracaoCentralPage() {
             </div>
 
             <div className="grid gap-2">
-              {(resultado?.items ?? []).map((entidade) => (
-                <button
-                  key={entidade.id}
-                  type="button"
-                  onClick={() => void abrirEntidade(entidade.id)}
-                  className={`flex flex-col gap-2 rounded-xl border bg-card px-4 py-3 text-left transition hover:border-primary/60 hover:bg-accent/40 md:flex-row md:items-center md:justify-between ${
-                    aSelecionar === entidade.id ? "border-primary/70" : ""
-                  }`}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="truncate font-medium">{entidade.nome}</span>
-                      <Badge variant="secondary" className="shrink-0">
-                        {entidade.subsetor}
-                      </Badge>
-                      <span
-                        className="shrink-0"
-                        title={entidade.nif ? LIGACAO_LABEL[entidade.ligacao] : "Sem NIF ligado nos contratos"}
-                      >
-                        <Badge variant={TOM_LIGACAO[entidade.ligacao]} className="shrink-0">
-                          {entidade.nif ? entidade.nif : "sem NIF"}
+              {(resultado?.items ?? []).map((entidade) => {
+                const periodo = periodoAtividade(entidade.ano_min, entidade.ano_max);
+                return (
+                  <button
+                    key={entidade.id}
+                    type="button"
+                    onClick={() => void abrirEntidade(entidade.id)}
+                    className={`flex flex-col gap-2 rounded-xl border bg-card px-4 py-3 text-left transition hover:border-primary/60 hover:bg-accent/40 md:flex-row md:items-center md:justify-between ${
+                      aSelecionar === entidade.id ? "border-primary/70" : ""
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate font-medium">{entidade.nome}</span>
+                        <Badge variant="secondary" className="shrink-0">
+                          {entidade.subsetor}
                         </Badge>
-                      </span>
+                        <span
+                          className="shrink-0"
+                          title={entidade.nif ? LIGACAO_LABEL[entidade.ligacao] : "Sem NIF ligado nos contratos"}
+                        >
+                          <Badge variant={TOM_LIGACAO[entidade.ligacao]} className="shrink-0">
+                            {entidade.nif ? entidade.nif : "sem NIF"}
+                          </Badge>
+                        </span>
+                      </div>
+                      {entidade.nome_contratos && entidade.nome_contratos !== entidade.nome ? (
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          nos contratos: {entidade.nome_contratos}
+                        </p>
+                      ) : null}
                     </div>
-                    {entidade.nome_contratos && entidade.nome_contratos !== entidade.nome ? (
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        nos contratos: {entidade.nome_contratos}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-6 text-right">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Contratos</p>
-                      <p className="font-semibold tabular-nums">{count(entidade.contratos)}</p>
+                    <div className="flex shrink-0 items-center gap-6 text-right">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Contratos</p>
+                        <p className="font-semibold tabular-nums">{count(entidade.contratos)}</p>
+                      </div>
+                      <div className="min-w-[110px]">
+                        <p className="text-xs text-muted-foreground">Valor adjudicado</p>
+                        <p className="font-semibold tabular-nums">{moneyShort(entidade.valor)}</p>
+                      </div>
+                      {periodo ? (
+                        <div className="min-w-[92px]" title="Primeiro e último ano com contratos">
+                          <p className="text-xs text-muted-foreground">Anos</p>
+                          <p className="font-semibold tabular-nums">{periodo}</p>
+                        </div>
+                      ) : null}
                     </div>
-                    <div className="min-w-[110px]">
-                      <p className="text-xs text-muted-foreground">Valor adjudicado</p>
-                      <p className="font-semibold tabular-nums">{moneyShort(entidade.valor)}</p>
-                    </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
               {!carregando && (resultado?.items ?? []).length === 0 ? (
                 <div className="rounded-xl border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
                   Nenhuma entidade corresponde aos filtros.
@@ -754,6 +783,7 @@ export default function AdministracaoCentralPage() {
                             {ficha.entidade.subsetor} — {ficha.entidade.subsetor_nome}
                             {ficha.entidade.nif ? ` · NIF ${ficha.entidade.nif}` : ""}
                             {ficha.entidade.nome_contratos ? ` · nos contratos: ${ficha.entidade.nome_contratos}` : ""}
+                            {periodoFicha ? ` · atividade ${periodoFicha}` : ""}
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
@@ -764,9 +794,7 @@ export default function AdministracaoCentralPage() {
                               icon={<ExternalLink size={14} />}
                               title="Abrir a ficha do NIF na app de entidades"
                               onClick={() =>
-                                openWindow(`company-detail:${ficha.entidade.nif}`, undefined, {
-                                  title: ficha.entidade.nome,
-                                })
+                                abrirFicha(`company-detail:${ficha.entidade.nif}`, ficha.entidade.nome)
                               }
                             >
                               Ficha da entidade
@@ -820,7 +848,7 @@ export default function AdministracaoCentralPage() {
                         <div className="mb-2">
                           <CardTitle icon={<FileText size={16} />}>Contratos mais recentes</CardTitle>
                         </div>
-                        <ContratosTabela contratos={ficha.ultimos ?? []} />
+                        <ContratosTabela contratos={ficha.ultimos ?? []} aoAbrirFicha={abrirFicha} />
                       </Card>
                     </>
                   ) : null}
@@ -958,7 +986,7 @@ export default function AdministracaoCentralPage() {
           <TabsContent value="contratos" active={aba === "contratos"} className="space-y-4">
             <Card>
               <form
-                className="grid gap-3 md:grid-cols-3"
+                className="grid items-end gap-3 md:grid-cols-3"
                 onSubmit={(evento) => {
                   evento.preventDefault();
                   setPaginaContratos(0);
@@ -1058,7 +1086,7 @@ export default function AdministracaoCentralPage() {
             ) : null}
 
             <Card padding="none">
-              <ContratosTabela contratos={contratos?.items ?? []} />
+              <ContratosTabela contratos={contratos?.items ?? []} aoAbrirFicha={abrirFicha} />
             </Card>
 
             {totalContratos > 1 ? (
@@ -1092,7 +1120,14 @@ export default function AdministracaoCentralPage() {
 }
 
 /** Lista de contratos do portal BASE (objeto, partes, valor e datas). */
-function ContratosTabela({ contratos }: { contratos: AdministracaoCentralContrato[] }) {
+function ContratosTabela({
+  contratos,
+  aoAbrirFicha,
+}: {
+  contratos: AdministracaoCentralContrato[];
+  /** Abre a ficha do contrato na vista certa (janela ou página). */
+  aoAbrirFicha: (id: string, titulo: string) => void;
+}) {
   if (contratos.length === 0) {
     return <p className="px-4 py-6 text-center text-sm text-muted-foreground">Sem contratos.</p>;
   }
@@ -1140,9 +1175,10 @@ function ContratosTabela({ contratos }: { contratos: AdministracaoCentralContrat
                     icon={<ExternalLink size={14} />}
                     title="Abrir a ficha do contrato"
                     onClick={() =>
-                      openWindow(`contract-detail:${contrato.idcontrato || contrato.doc_id}`, undefined, {
-                        title: contrato.objectoContrato || "Ficha do contrato",
-                      })
+                      aoAbrirFicha(
+                        `contract-detail:${contrato.idcontrato || contrato.doc_id}`,
+                        contrato.objectoContrato || "Ficha do contrato",
+                      )
                     }
                   >
                     Ficha

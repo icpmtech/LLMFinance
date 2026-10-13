@@ -369,6 +369,7 @@ export default function MunicipiosDespesasPage() {
 
   const [q, setQ] = useState("");
   const [distrito, setDistrito] = useState("");
+  const [anoContratos, setAnoContratos] = useState("");
   const [ordenar, setOrdenar] = useState<string>("despesas");
   const [ordem, setOrdem] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
@@ -381,6 +382,7 @@ export default function MunicipiosDespesasPage() {
         const resposta = await getMunicipiosDespesas({
           q: q.trim() || undefined,
           distrito: distrito || undefined,
+          ano_contratos: anoContratos ? Number(anoContratos) : undefined,
           ordenar,
           ordem,
           page: pagina,
@@ -394,13 +396,14 @@ export default function MunicipiosDespesasPage() {
         setACarregar(false);
       }
     },
-    [q, distrito, ordenar, ordem],
+    [q, distrito, anoContratos, ordenar, ordem],
   );
 
   useEffect(() => {
+    // `carregar` muda de identidade quando um filtro muda: é ele que traz a
+    // lista do filtro que o utilizador acabou de escolher.
     void carregar(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [carregar]);
 
   useEffect(() => {
     getMunicipiosDespesasMeta()
@@ -473,7 +476,17 @@ export default function MunicipiosDespesasPage() {
             valor={euroCompacto(indice?.total_despesas)}
             nota={meta?.ultimo_periodo ? `ano ${meta.ultimo_periodo}` : undefined}
           />
-          <Kpi label="Valor contratado" valor={euroCompacto(indice?.total_contratos)} nota="Portal BASE" />
+          <Kpi
+            label={dados?.ano_contratos ? `Contratado em ${dados.ano_contratos}` : "Valor contratado"}
+            valor={euroCompacto(
+              dados?.ano_contratos ? dados.contratos_ano_somados : indice?.total_contratos,
+            )}
+            nota={
+              dados?.ano_contratos
+                ? `${numero(dados.contratos_ano_total_somados)} contratos · Portal BASE`
+                : "Portal BASE"
+            }
+          />
           <Kpi
             label="Sem despesa publicada"
             valor={numero(indice?.sem_despesas)}
@@ -509,10 +522,7 @@ export default function MunicipiosDespesasPage() {
 
             <select
               value={distrito}
-              onChange={(evento) => {
-                setDistrito(evento.target.value);
-                void carregar(1);
-              }}
+              onChange={(evento) => setDistrito(evento.target.value)}
               className="rounded-lg border border-input bg-background px-2 py-1.5 text-xs"
             >
               <option value="">Todos os distritos</option>
@@ -524,26 +534,37 @@ export default function MunicipiosDespesasPage() {
             </select>
 
             <select
+              value={anoContratos}
+              onChange={(evento) => setAnoContratos(evento.target.value)}
+              className="rounded-lg border border-input bg-background px-2 py-1.5 text-xs"
+              title="Ver e ordenar a contratação de um ano do Portal BASE"
+            >
+              <option value="">Contratação: todos os anos</option>
+              {(meta?.anos_contratos ?? []).map((ano) => (
+                <option key={ano} value={ano}>
+                  Contratação em {ano}
+                </option>
+              ))}
+            </select>
+
+            <select
               value={ordenar}
-              onChange={(evento) => {
-                setOrdenar(evento.target.value);
-                void carregar(1);
-              }}
+              onChange={(evento) => setOrdenar(evento.target.value)}
               className="rounded-lg border border-input bg-background px-2 py-1.5 text-xs"
             >
               {ORDENACOES.map((item) => (
                 <option key={item.id} value={item.id}>
                   Ordenar por {item.label.toLowerCase()}
+                  {anoContratos && (item.id === "contratos" || item.id === "contratos_total")
+                    ? ` (${anoContratos})`
+                    : ""}
                 </option>
               ))}
             </select>
 
             <button
               type="button"
-              onClick={() => {
-                setOrdem(ordem === "desc" ? "asc" : "desc");
-                void carregar(1);
-              }}
+              onClick={() => setOrdem(ordem === "desc" ? "asc" : "desc")}
               className="min-h-[32px] rounded-lg border border-input px-2 py-1.5 text-xs text-muted-foreground transition hover:text-foreground"
               title="Inverter a ordem"
             >
@@ -558,6 +579,14 @@ export default function MunicipiosDespesasPage() {
                 {" "}
                 Despesa somada: <strong className="text-foreground">{euroCompacto(dados.despesas_somadas)}</strong> ·
                 contratado: <strong className="text-foreground">{euroCompacto(dados.contratos_somados)}</strong>.
+                {dados.ano_contratos ? (
+                  <>
+                    {" "}
+                    Em <strong className="text-foreground">{dados.ano_contratos}</strong> foram celebrados{" "}
+                    <strong className="text-foreground">{numero(dados.contratos_ano_total_somados)}</strong> contratos, no
+                    valor de <strong className="text-foreground">{euroCompacto(dados.contratos_ano_somados)}</strong>.
+                  </>
+                ) : null}
               </>
             ) : null}
             {meta?.atualizado_no_ine ? ` INE atualizado em ${meta.atualizado_no_ine}.` : null}
@@ -580,8 +609,12 @@ export default function MunicipiosDespesasPage() {
                     <th className="px-3 py-2 font-medium">Distrito</th>
                     <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Despesa total</th>
                     <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Com pessoal</th>
-                    <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Contratos</th>
-                    <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Valor contratado</th>
+                    <th className="px-3 py-2 text-right font-medium whitespace-nowrap">
+                      {dados?.ano_contratos ? `Contratos ${dados.ano_contratos}` : "Contratos"}
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium whitespace-nowrap">
+                      {dados?.ano_contratos ? `Contratado ${dados.ano_contratos}` : "Valor contratado"}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -607,9 +640,11 @@ export default function MunicipiosDespesasPage() {
                       <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">
                         {euroCompacto(m.despesas_pessoal)}
                       </td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">{numero(m.contratos_total)}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">
+                        {m.contratos_ano_total ?? numero(m.contratos_total)}
+                      </td>
                       <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">
-                        {euroCompacto(m.contratos_valor)}
+                        {euroCompacto(m.contratos_ano_valor ?? m.contratos_valor)}
                       </td>
                     </tr>
                   ))}

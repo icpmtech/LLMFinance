@@ -54,7 +54,7 @@ import {
 import * as cms from "../cmsApi";
 import type { CmsCatalogue, CmsCategory, CmsOverview, CmsPage, CmsPost, CmsRevision, CmsStatus } from "../cmsApi";
 
-export type CmsSection = "painel" | "paginas" | "conteudos" | "blog" | "media" | "taxonomia" | "modelos" | "aparencia";
+export type CmsSection = "painel" | "paginas" | "conteudos" | "blog" | "municipios" | "media" | "taxonomia" | "modelos" | "aparencia";
 
 export type CmsCtx = {
   catalogue: CmsCatalogue;
@@ -96,7 +96,7 @@ export function CmsOverviewPanel({
 }: {
   overview: CmsOverview;
   onOpenSection: (section: CmsSection) => void;
-  onOpenItem: (entity: "pages" | "posts", id: string) => void;
+  onOpenItem: (entity: string, id: string) => void;
 }) {
   const cards: { label: string; value: string; hint: string; run: () => void }[] = [
     {
@@ -243,7 +243,7 @@ export function CmsOverviewPanel({
 
 /* ================================================================== comuns */
 
-function SeoFields({
+export function SeoFields({
   seo,
   onChange,
   media,
@@ -275,7 +275,7 @@ function SeoFields({
   );
 }
 
-function PublishBar({
+export function PublishBar({
   status,
   scheduledAt,
   onStatus,
@@ -340,7 +340,7 @@ function PublishBar({
   );
 }
 
-function HistoryPanel({
+export function HistoryPanel({
   entity,
   itemId,
   onRestored,

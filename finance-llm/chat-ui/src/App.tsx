@@ -453,6 +453,14 @@ function pathForView(
   if (view === "benchmark-sonda") return "/benchmarks/sonda";
   if (view === "benchmark-config") return "/benchmarks/configuracao";
   if (view === "benchmark-detalhe") return benchmark ? `/benchmarks/${benchmark}` : "/benchmarks";
+  // As fichas auxiliares (`contract-detail:<id>`, `quicklook:…`) não têm
+  // endereço próprio: mantém-se o caminho onde o utilizador está. Antes
+  // empurrava-se `/` para o histórico, pelo que abrir uma ficha mudava o URL
+  // para a raiz e um recarregamento caía no dashboard.
+  if (isDetailView(view)) {
+    const atual = typeof window === "undefined" ? "" : window.location.pathname;
+    return atual || "/";
+  }
   return "/";
 }
 
@@ -564,6 +572,11 @@ export default function App() {
     if (typeof window === "undefined") return null;
     return localStorage.getItem(COMPANY_DETAIL_KEY);
   });
+  /**
+   * Vista de onde se abriu a ficha que está aberta, em modo página — o «Voltar»
+   * da ficha devolve o utilizador a este módulo em vez de o deixar preso.
+   */
+  const [detalheOrigem, setDetalheOrigem] = useState<AppView | null>(null);
   /** Benchmark de produtos aberto (`/benchmarks/<slug>`). */
   const [selectedBenchmark, setSelectedBenchmark] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
@@ -1182,6 +1195,24 @@ export default function App() {
   );
 
   /**
+   * Guarda de que vista se abriu a ficha, para o «Voltar» da ficha saber para
+   * onde regressar em modo página. Vindo de outra ficha mantém-se a vista de
+   * origem anterior, para uma cadeia ficha→ficha regressar à página de onde saiu.
+   */
+  const registarOrigemDaFicha = useCallback((origem: AppView) => {
+    setDetalheOrigem((anterior) => (anterior && isDetailView(origem) ? anterior : origem));
+  }, []);
+
+  /**
+   * A origem só é precisa enquanto há uma ficha aberta: ao voltar a uma vista de
+   * página normal a referência é esquecida, para não arrastar o «Voltar» de uma
+   * ficha antiga para outra sessão de navegação.
+   */
+  useEffect(() => {
+    if (!isDetailView(view) && view !== "company-detail") setDetalheOrigem(null);
+  }, [view]);
+
+  /**
    * Abre uma vista ou ficha a partir de um resultado da Pesquisa total.
    * Em modo janelas abre (ou foca) a janela da aplicação; em modo página navega
    * para ela. As fichas levam o identificador no próprio nome da vista
@@ -1196,6 +1227,7 @@ export default function App() {
         // abrir a ficha de empresa principal (`company-detail`) para ter a barra
         // de navegação e as ações corretas.
         if (!windowMode) {
+          registarOrigemDaFicha(view);
           setViewAndHistory("company-detail");
           return;
         }
@@ -1205,10 +1237,36 @@ export default function App() {
         else openWindow(target, workspaceEstimate(), title ? { title } : undefined);
         return;
       }
+      // Em modo página as fichas auxiliares não têm janela nem «Voltar» próprio:
+      // guarda-se de onde se veio para o regresso funcionar.
+      if (isDetailView(target)) registarOrigemDaFicha(view);
       setViewAndHistory(target as AppView);
     },
-    [windowMode, setViewAndHistory],
+    [windowMode, setViewAndHistory, view, registarOrigemDaFicha],
   );
+
+  /**
+   * Regressa de uma ficha. Em modo janelas fecha a janela; em modo página devolve
+   * o utilizador à vista de onde abriu a ficha (antes, o «Voltar» da ficha
+   * chamava `closeWindow`, que nesse modo não faz nada, e ficava-se preso).
+   */
+  const voltarDaFicha = useCallback(
+    (fechar?: string) => {
+      if (fechar && windowFor(fechar)) {
+        closeWindow(fechar);
+        return;
+      }
+      setViewAndHistory(detalheOrigem ?? "dashboard");
+      setDetalheOrigem(null);
+    },
+    [detalheOrigem, setViewAndHistory],
+  );
+
+  /** «Voltar» da ficha de empresa em modo página: para a vista de onde foi aberta. */
+  const voltarDaEmpresa = useCallback(() => {
+    setViewAndHistory(detalheOrigem ?? "companies-search");
+    setDetalheOrigem(null);
+  }, [detalheOrigem, setViewAndHistory]);
 
   /* ------------------------------------------------- janelas do CRM (macOS) */
 
@@ -1334,7 +1392,13 @@ export default function App() {
     }
     if (target === "compare") return <CompareWindow />;
     if (target.startsWith("company-detail:")) {
-      return <EntityDetailWindow nif={target.slice("company-detail:".length)} />;
+      return (
+        <EntityDetailWindow
+          nif={target.slice("company-detail:".length)}
+          onBack={() => voltarDaFicha(target)}
+          onNavegar={handleOpenSearchView}
+        />
+      );
     }
     if (target.startsWith("person-detail:")) {
       return <PessoasIQPage nif={target.slice("person-detail:".length)} />;
@@ -1349,7 +1413,13 @@ export default function App() {
       );
     }
     if (target.startsWith("contract-detail:")) {
-      return <ContractDetailWindow id={target.slice("contract-detail:".length)} />;
+      return (
+        <ContractDetailWindow
+          id={target.slice("contract-detail:".length)}
+          onBack={() => voltarDaFicha(target)}
+          onNavegar={handleOpenSearchView}
+        />
+      );
     }
     if (target.startsWith("quicklook:")) {
       const [, kind, ...rest] = target.split(":");
@@ -1569,7 +1639,7 @@ export default function App() {
     if (target === "subvencoes") return <SubvencoesPage />;
     // Administração Central: o índice das entidades do setor institucional do INE
     // (SEC 2010) ligado aos contratos e às adjudicatárias de cada entidade.
-    if (target === "administracao-central") return <AdministracaoCentralPage />;
+    if (target === "administracao-central") return <AdministracaoCentralPage onOpenView={handleOpenSearchView} />;
     // Remunerações dos eleitos locais: tabela de abonos (Lei n.º 11/96) cruzada
     // com o n.º de eleitores de cada concelho e freguesia, com mapa.
     if (target === "remuneracoes") return <RemuneracoesPage />;
@@ -1794,7 +1864,7 @@ export default function App() {
       return (
         <CompanyDetailPage
           nif={selectedCompany}
-          onBack={() => setViewAndHistory("companies-search")}
+          onBack={voltarDaEmpresa}
           onSwitchDashboard={() => setViewAndHistory("companies-dashboard")}
         />
       );

@@ -90,6 +90,24 @@ do PDF, valor = NIF) tem precedência sobre a ligação automática; basta corre
 `POST /administracao-central/reindexar` ou
 `python scripts/indexar_administracao_central.py`.
 
+### NIF partilhado por mais de uma entidade do INE
+
+**23 dos 265 NIF ligados** aparecem em mais de uma linha do PDF — quase sempre o
+caso dos serviços de ação social, que o INE lista como entidade própria mas que
+contratam sob o NIF da instituição:
+
+| NIF | Entidades do INE |
+| --- | --- |
+| `600023265` | Instituto Politécnico da Guarda · SAS - Instituto Politécnico da Guarda |
+| `519102622` | Instituto de Educação, Qualidade e Avaliação, I.P. · UL - Instituto de Educação |
+| … | (idem nos politécnicos de Beja, Bragança, Castelo Branco, Coimbra, Leiria, Lisboa, …) |
+
+Consequência prática: na **lista** de entidades, duas linhas com o mesmo NIF
+mostram os mesmos números (é a mesma entidade contratante no portal BASE). Já as
+**analíticas não contam duas vezes**: a agregação filtra por um conjunto de NIF
+(o `terms` do Elasticsearch deduplica) e o ranking de entidades é indexado por
+NIF.
+
 ## O índice
 
 `administracao-central.json` é a **fonte da verdade da lista** (não depende do
@@ -114,7 +132,9 @@ leituras:
 
 1. **Entidades** — lista pesquisável (por nome, nome usado nos contratos ou NIF)
    com filtros por subsetor e por tipo de ligação, ordenação por valor ou nº de
-   contratos, e exportação CSV;
+   contratos, e exportação CSV. Cada linha mostra os contratos, o valor
+   adjudicado e o **período de atividade** (primeiro e último ano com
+   contratos);
 2. **Analíticas** — volume e valor dos contratos do setor, evolução anual,
    ranking das entidades que mais adjudicam, adjudicatárias, CPV, tipo de
    procedimento e tipo de contrato;
@@ -123,7 +143,16 @@ leituras:
 
 Abrir uma entidade mostra a **ficha**: contratos e valor adjudicado, contrato
 médio e maior contrato, valor por ano, adjudicatárias, CPV e os contratos mais
-recentes (com ligação à ficha do contrato).
+recentes (com ligação à ficha do contrato). O cabeçalho da ficha indica o NIF, o
+nome usado nos contratos e o período de atividade (`2012–2026`).
+
+### Fichas e regresso
+
+Em **modo página** as fichas (`contract-detail:<id>`, `company-detail:<NIF>`) não
+têm janela própria: abrem-se na vista atual, o caminho (`/administracao-central`)
+mantém-se no URL e o «Voltar» da ficha devolve o utilizador ao módulo de onde
+saiu — a origem da ficha é guardada ao abri-la, pelo que não se fica preso. Em
+**modo janelas** abre-se (ou foca-se) a janela correspondente.
 
 ## Analytics de contratos e de adjudicatárias
 

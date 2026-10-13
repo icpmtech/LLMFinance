@@ -127,6 +127,83 @@ export type CmsTemplate = {
   updated_at?: string;
 };
 
+/** Dados oficiais de um município, guardados na ficha (INE + Portal BASE). */
+export type CmsMunicipioDados = {
+  municipio?: string;
+  geocod?: string | null;
+  geocod_curto?: string | null;
+  distrito?: string | null;
+  nuts?: string | null;
+  nuts_nome?: string | null;
+  ano_despesas?: number | null;
+  anos_despesas?: string[];
+  /** Série anual da despesa total (o INE publica um ano de cada vez). */
+  serie_despesas?: { ano: string; total: number }[];
+  por_classificador?: { codigo: string; etiqueta: string; valor: number }[];
+  despesas_total?: number;
+  despesas_correntes?: number;
+  despesas_capital?: number;
+  despesas_pessoal?: number;
+  despesas_bens_servicos?: number;
+  contratos?: {
+    total?: number;
+    valor?: number;
+    primeiro_ano?: number | null;
+    ultimo_ano?: number | null;
+    /** Ano → contratos e valor (a série do Portal BASE). */
+    por_ano?: Record<string, { contratos: number; valor: number }>;
+    fornecedores?: { nome: string; contratos: number; valor: number }[];
+    adjudicantes?: string[];
+  };
+  recolhido_em?: string | null;
+  fontes?: { documento?: string | null; url?: string | null }[];
+  error?: string;
+};
+
+/** Ficha pública de um município (entidade `municipios` do CMS). */
+export type CmsMunicipio = {
+  id: string;
+  title: string;
+  slug: string;
+  municipio: string;
+  geocod?: string | null;
+  status: CmsStatus;
+  published_at?: string | null;
+  scheduled_at?: string | null;
+  excerpt?: string;
+  blocks: CmsBlock[];
+  dados?: CmsMunicipioDados | null;
+  seo?: CmsSeo;
+  created_at?: string;
+  updated_at?: string;
+  updated_by?: string;
+  blocks_count?: number;
+};
+
+/** Um município que se pode publicar, com a ficha que já existe (se existir). */
+export type CmsMunicipioOpcao = {
+  municipio: string;
+  geocod?: string | null;
+  distrito?: string | null;
+  nuts_nome?: string | null;
+  ano_despesas?: number | null;
+  despesas_total?: number;
+  ficha_id?: string | null;
+  ficha_status?: CmsStatus | null;
+};
+
+/** Rascunho escrito pela IA a partir dos números da ficha. */
+export type CmsMunicipioTexto = {
+  ok: boolean;
+  titulo: string;
+  resumo: string;
+  corpo: string;
+  municipio?: string;
+  resumo_dos_dados?: string;
+  ai?: { provider?: string; provider_label?: string; model?: string };
+  error?: string;
+};
+
 export type CmsMenuItem = {
   id: string;
   label: string;
@@ -187,12 +264,13 @@ export type CmsCatalogue = {
 export type CmsOverview = {
   pages: { total: number; by_status: Record<CmsStatus, number>; published: number };
   posts: { total: number; by_status: Record<CmsStatus, number>; published: number };
+  municipios?: { total: number; by_status: Record<CmsStatus, number>; published: number };
   contents: number;
   media: { total: number; bytes: number };
   categories: number;
   templates: number;
   words: number;
-  scheduled: { id: string; entity: "pages" | "posts"; title: string; slug: string; at: string }[];
+  scheduled: { id: string; entity: string; title: string; slug: string; at: string }[];
   recent: { id: string; entity: string; title: string; slug: string; at: string; status: CmsStatus; by?: string }[];
   activity: CmsActivity[];
   site: { home: string; pages: number; posts: number; settings: CmsSettings };
@@ -337,6 +415,50 @@ export function listCmsPages(options: ListOptions = {}): Promise<CmsListPayload<
 
 export function listCmsPosts(options: ListOptions = {}): Promise<CmsListPayload<CmsPost>> {
   return request(`/cms/posts${listQuery({ limit: 300, ...options })}`);
+}
+
+export function listCmsMunicipios(options: ListOptions = {}): Promise<CmsListPayload<CmsMunicipio>> {
+  return request(`/cms/municipios${listQuery({ limit: 300, ...options })}`);
+}
+
+export function getCmsMunicipio(id: string): Promise<{ item: CmsMunicipio }> {
+  return request(`/cms/municipios/${encodeURIComponent(id)}`);
+}
+
+/** Os 308 municípios que se podem publicar, com a ficha que já existe de cada um. */
+export function getCmsMunicipioOpcoes(): Promise<{ total: number; items: CmsMunicipioOpcao[]; ano_despesas?: string | null }> {
+  return request("/cms/municipios/opcoes");
+}
+
+/** Cria a ficha de um município; os dados oficiais entram já lidos do INE/BASE. */
+export function createCmsMunicipio(payload: { municipio: string; title?: string; slug?: string }): Promise<{ saved: boolean; item: CmsMunicipio }> {
+  return request("/cms/municipios", withBody("POST", payload));
+}
+
+export function updateCmsMunicipio(id: string, payload: Partial<CmsMunicipio>): Promise<{ saved: boolean; item: CmsMunicipio }> {
+  return request(`/cms/municipios/${encodeURIComponent(id)}`, withBody("PATCH", payload));
+}
+
+/** Volta a ler a despesa e a contratação oficiais e guarda-as na ficha. */
+export function refreshCmsMunicipioDados(id: string): Promise<{ saved: boolean; item: CmsMunicipio; resumo_dos_dados: string }> {
+  return request(`/cms/municipios/${encodeURIComponent(id)}/dados`, withBody("POST", {}));
+}
+
+/** Rascunho do texto escrito pela IA com os números da ficha (não grava nada). */
+export function gerarCmsMunicipioTexto(
+  id: string,
+  payload: { instrucoes?: string; provider?: string; model?: string } = {},
+): Promise<CmsMunicipioTexto> {
+  return request(`/cms/municipios/${encodeURIComponent(id)}/texto`, withBody("POST", payload));
+}
+
+export function cmsMunicipioPreviewUrl(id: string, stamp = Date.now()): string {
+  return `${API_BASE}/cms/preview/municipios/${encodeURIComponent(id)}?t=${stamp}`;
+}
+
+/** Endereço público de uma ficha de município (`/site/municipio/{slug}`). */
+export function cmsMunicipioUrl(slug: string): string {
+  return cmsPublicUrl(`/municipio/${slug}`);
 }
 
 export function listCmsContents(options: ListOptions = {}): Promise<CmsListPayload<CmsContent>> {
@@ -487,7 +609,7 @@ export function cmsMediaUrl(media: { id: string; url: string; storage?: string }
 }
 
 /** URL da pré-visualização HTML (iframe com `?t=` para não apanhar cache). */
-export function cmsPreviewUrl(entity: "pages" | "posts", id: string, stamp = Date.now()): string {
+export function cmsPreviewUrl(entity: "pages" | "posts" | "municipios", id: string, stamp = Date.now()): string {
   return `${API_BASE}/cms/preview/${entity}/${encodeURIComponent(id)}?t=${stamp}`;
 }
 

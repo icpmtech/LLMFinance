@@ -261,6 +261,22 @@ def resumo_dos_dados(dados: Dict[str, Any]) -> str:
             f"Contratação pública no Portal BASE{anos}: {contratos['total']} contratos, "
             f"{_milhoes(_euros(contratos.get('valor')))}"
         )
+        por_ano = contratos.get("por_ano") or {}
+        # Os últimos anos, para quem escreve poder falar da evolução e não só do total.
+        ultimos = [
+            (str(ano), valores)
+            for ano, valores in sorted(por_ano.items(), reverse=True)[:5]
+            if isinstance(valores, dict)
+        ]
+        if len(ultimos) > 1:
+            linhas.append(
+                "Contratação por ano (Portal BASE): "
+                + "; ".join(
+                    f"{ano}: {int(valores.get('contratos') or 0)} contratos, "
+                    f"{_milhoes(_euros(valores.get('valor')))}"
+                    for ano, valores in reversed(ultimos)
+                )
+            )
         fornecedores = contratos.get("fornecedores") or []
         if fornecedores:
             linhas.append(
@@ -359,7 +375,7 @@ def texto_com_ia(
             messages=[{"role": "user", "content": prompt}],
             api_key=key,
             temperature=0.4,
-            max_tokens=1600,
+            max_tokens=900,
         )
 
     try:

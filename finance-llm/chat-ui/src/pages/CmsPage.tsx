@@ -17,6 +17,7 @@ import {
   Globe2,
   Hash,
   LayoutDashboard,
+  Landmark,
   Loader2,
   Newspaper,
   Palette,
@@ -27,6 +28,7 @@ import {
 } from "lucide-react";
 
 import { CmsAppearancePanel, CmsContentsPanel, CmsMediaPanel, CmsTaxonomyPanel, CmsTemplatesPanel } from "./CmsLibrary";
+import { CmsMunicipiosPanel } from "./CmsMunicipios";
 import { CmsOverviewPanel, CmsPagesPanel, CmsPostsPanel, type CmsCtx, type CmsSection } from "./CmsPanels";
 import { Notice } from "../components/cms/CmsKit";
 import * as cms from "../cmsApi";
@@ -37,6 +39,7 @@ export const CMS_SECTIONS: { id: CmsSection; label: string; path: string; icon: 
   { id: "paginas", label: "Páginas", path: "/cms/paginas", icon: <FileText size={13} />, hint: "Páginas por blocos, com hierarquia e menu" },
   { id: "conteudos", label: "Conteúdos", path: "/cms/conteudos", icon: <Recycle size={13} />, hint: "Blocos com nome, reutilizados em várias páginas" },
   { id: "blog", label: "Blog", path: "/cms/blog", icon: <Newspaper size={13} />, hint: "Artigos, categorias, etiquetas e capas" },
+  { id: "municipios", label: "Municípios", path: "/cms/municipios", icon: <Landmark size={13} />, hint: "Fichas públicas de município (despesa, contratação e texto)" },
   { id: "media", label: "Media", path: "/cms/media", icon: <BookOpen size={13} />, hint: "Biblioteca de imagens e documentos" },
   { id: "taxonomia", label: "Taxonomia", path: "/cms/taxonomia", icon: <Hash size={13} />, hint: "Categorias e etiquetas do blog" },
   { id: "modelos", label: "Modelos", path: "/cms/modelos", icon: <Palette size={13} />, hint: "Estruturas de blocos prontas a usar" },
@@ -64,7 +67,7 @@ export default function CmsPage() {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<CmsSearchHit[]>([]);
   const [searching, setSearching] = useState(false);
-  const [focus, setFocus] = useState<{ entity: "pages" | "posts"; id: string } | null>(null);
+  const [focus, setFocus] = useState<{ entity: string; id: string } | null>(null);
 
   const notify = useCallback((message: string, tone: "info" | "error" | "ok" = "info") => {
     const id = Date.now() + Math.random();
@@ -266,7 +269,7 @@ export default function CmsPage() {
             overview={overview}
             onOpenSection={changeSection}
             onOpenItem={(entity, id) => {
-              changeSection(entity === "pages" ? "paginas" : "blog");
+              changeSection(entity === "pages" ? "paginas" : entity === "municipios" ? "municipios" : "blog");
               setFocus({ entity, id });
             }}
           />
@@ -274,6 +277,8 @@ export default function CmsPage() {
           <CmsPagesPanel ctx={ctx} focusId={focus?.entity === "pages" ? focus.id : null} onFocusHandled={() => setFocus(null)} />
         ) : section === "blog" ? (
           <CmsPostsPanel ctx={ctx} focusId={focus?.entity === "posts" ? focus.id : null} onFocusHandled={() => setFocus(null)} />
+        ) : section === "municipios" ? (
+          <CmsMunicipiosPanel ctx={ctx} focusId={focus?.entity === "municipios" ? focus.id : null} onFocusHandled={() => setFocus(null)} />
         ) : section === "conteudos" ? (
           <CmsContentsPanel ctx={ctx} />
         ) : section === "media" ? (

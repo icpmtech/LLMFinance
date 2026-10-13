@@ -531,6 +531,118 @@ def fichas_locais() -> List[Dict[str, Any]]:
     return dados.get("fichas") or []
 
 
+def anos_de_contratos(fichas: Optional[List[Dict[str, Any]]] = None) -> List[str]:
+    """Anos com contratação registada no Portal BASE, do mais recente para o mais antigo.
+
+    Sai das fichas locais (a série é a mesma que está no índice): é o que o
+    seletor de ano da interface precisa para não oferecer anos vazios.
+    """
+    anos: set = set()
+    for ficha in fichas if fichas is not None else fichas_locais():
+        anos.update(str(ano) for ano in (ficha.get("contratos_por_ano") or {}))
+    return sorted((ano for ano in anos if ano.isdigit()), reverse=True)
+
+
+def contratos_do_ano(ficha: Dict[str, Any], ano: Any) -> Dict[str, float]:
+    """Contratação de um município **num ano** (nº de contratos e valor)."""
+    valores = (ficha.get("contratos_por_ano") or {}).get(str(ano)) or {}
+    try:
+        return {
+            "contratos": int(valores.get("contratos") or 0),
+            "valor": float(valores.get("valor") or 0.0),
+        }
+    except (TypeError, ValueError):
+        return {"contratos": 0, "valor": 0.0}
+
+
+#: Ordenações da lista quando se escolhe um ano de contratos: as de contratação
+#: passam a ser **do ano escolhido** (é o valor que a coluna mostra).
+ORDENACOES_ANO_CONTRATOS: Dict[str, str] = {
+    "despesas": "despesas_total",
+    "pessoal": "despesas_pessoal",
+    "bens_servicos": "despesas_bens_servicos",
+    "capital": "despesas_capital",
+    "contratos": "contratos_ano_valor",
+    "contratos_total": "contratos_ano_total",
+    "nome": "nome",
+}
+
+
+def listar_por_ano_contratos(
+    *,
+    q: Optional[str] = None,
+    distrito: Optional[str] = None,
+    nuts: Optional[str] = None,
+    ano: Optional[int] = None,
+    ano_contratos: int,
+    ordenar: str = "contratos",
+    ordem: str = "desc",
+    min_despesas: Optional[float] = None,
+    size: int = 30,
+    page: int = 1,
+) -> Dict[str, Any]:
+    """Lista os municípios pela contratação **de um ano** do Portal BASE.
+
+    O `contratos_por_ano` é um objeto guardado mas **não indexado** (não se
+    pesquisa nem se ordena por ele no Elasticsearch), pelo que a lista é montada
+    sobre as 308 fichas locais: 308 linhas fazem-se em memória e poupam uma
+    reindexação só para se poder ordenar por um ano.
+    """
+    alvo = _chave(q) if q else ""
+    distrito_chave = _chave(distrito) if distrito else ""
+    itens: List[Dict[str, Any]] = []
+    for ficha in fichas_locais():
+        if alvo and alvo not in _chave(str(ficha.get("nome") or "")):
+            continue
+        if distrito_chave and distrito_chave not in _chave(str(ficha.get("distrito") or "")):
+            continue
+        if nuts and str(ficha.get("nuts") or "") != str(nuts):
+            continue
+        if ano and str(ano) not in [str(valor) for valor in (ficha.get("anos") or [])]:
+            continue
+        if min_despesas is not None and float(ficha.get("despesas_total") or 0) < float(min_despesas):
+            continue
+        do_ano = contratos_do_ano(ficha, ano_contratos)
+        itens.append({
+            **ficha,
+            "contratos_ano": int(ano_contratos),
+            "contratos_ano_valor": do_ano["valor"],
+            "contratos_ano_total": do_ano["contratos"],
+        })
+
+    campo = ORDENACOES_ANO_CONTRATOS.get(str(ordenar or ""), "contratos_ano_valor")
+    reverso = str(ordem).lower() != "asc"
+    itens.sort(
+        key=lambda ficha: (
+            str(ficha.get("nome") or "").lower() if campo == "nome" else float(ficha.get(campo) or 0)
+        ),
+        reverse=reverso,
+    )
+
+    distritos: Dict[str, int] = {}
+    for ficha in itens:
+        nome_distrito = str(ficha.get("distrito") or "—")
+        distritos[nome_distrito] = distritos.get(nome_distrito, 0) + 1
+
+    inicio = max(0, (max(1, page) - 1) * max(1, size))
+    return {
+        "total": len(itens),
+        "items": itens[inicio : inicio + max(1, size)],
+        "page": page,
+        "size": size,
+        "origem": "json-local",
+        "ano_contratos": int(ano_contratos),
+        "contratos_ano_somados": sum(ficha["contratos_ano_valor"] for ficha in itens),
+        "contratos_ano_total_somados": sum(ficha["contratos_ano_total"] for ficha in itens),
+        "despesas_somadas": sum(float(ficha.get("despesas_total") or 0) for ficha in itens),
+        "contratos_somados": sum(float(ficha.get("contratos_valor") or 0) for ficha in itens),
+        "distritos": [
+            {"key": chave, "count": count}
+            for chave, count in sorted(distritos.items(), key=lambda par: -par[1])
+        ],
+    }
+
+
 def listar(
     q: Optional[str] = None,
     distrito: Optional[str] = None,
@@ -541,8 +653,28 @@ def listar(
     min_despesas: Optional[float] = None,
     size: int = 30,
     page: int = 1,
+    ano_contratos: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Lista os municípios (Elasticsearch; recorre ao JSON local se falhar)."""
+    """Lista os municípios (Elasticsearch; recorre ao JSON local se falhar).
+
+    Com `ano_contratos`, a lista é montada sobre as fichas locais para poder
+    ordenar e somar a contratação **desse ano** do Portal BASE — a série anual
+    não está indexada.
+    """
+    if ano_contratos:
+        return listar_por_ano_contratos(
+            q=q,
+            distrito=distrito,
+            nuts=nuts,
+            ano=ano,
+            ano_contratos=int(ano_contratos),
+            ordenar=ordenar,
+            ordem=ordem,
+            min_despesas=min_despesas,
+            size=size,
+            page=page,
+        )
+
     from api.elasticsearch_client import search_municipios_despesas
 
     resposta = search_municipios_despesas(
@@ -615,6 +747,7 @@ def meta() -> Dict[str, Any]:
         "gerado_em": dados.get("gerado_em"),
         "diagnostico": dados.get("diagnostico"),
         "classificadores": [{"codigo": c, "etiqueta": e} for c, _, e in CLASSIFICADORES],
+        "anos_contratos": anos_de_contratos(),
         "indice": municipios_despesas_status(),
     }
 

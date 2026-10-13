@@ -226,6 +226,17 @@ export function shortDate(iso?: string | null): string {
   return `${partes[2]}/${partes[1]}/${partes[0]}`;
 }
 
+/**
+ * Período de atividade da entidade: primeiro e último ano com contratos
+ * (`2012–2026`), um único ano quando só há um. `null` sem contratos.
+ */
+export function periodoAtividade(anoMin?: number | null, anoMax?: number | null): string | null {
+  const inicio = anoMin ?? anoMax;
+  const fim = anoMax ?? anoMin;
+  if (!inicio || !fim) return null;
+  return inicio === fim ? String(inicio) : `${inicio}–${fim}`;
+}
+
 /** Etiqueta legível do tipo de ligação nome→NIF. */
 export const LIGACAO_LABEL: Record<AdministracaoCentralLigacao, string> = {
   exato: "Nome exato",

@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1190 operações** em **44 grupos**.
+Versão `0.4.0` · **1196 operações** em **44 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -941,6 +941,11 @@ CMS: páginas por blocos, conteúdos reutilizáveis, blog com taxonomia, media, 
 | `POST` | `/cms/menus` | Cms Create Menu |
 | `PATCH` | `/cms/menus/{menu_id}` | Cms Patch Menu |
 | `DELETE` | `/cms/menus/{menu_id}` | Cms Delete Menu |
+| `POST` | `/cms/municipios` | Cms Create Municipio |
+| `GET` | `/cms/municipios/opcoes` | Cms Municipios Opcoes |
+| `PATCH` | `/cms/municipios/{item_id}` | Cms Patch Municipio |
+| `POST` | `/cms/municipios/{item_id}/dados` | Cms Municipio Dados |
+| `POST` | `/cms/municipios/{item_id}/texto` | Cms Municipio Texto |
 | `GET` | `/cms/overview` | Cms Overview |
 | `GET` | `/cms/preview/{entity}/{item_id}` | Cms Preview |
 | `POST` | `/cms/revisions/{revision_id}/restore` | Cms Restore |
@@ -964,6 +969,7 @@ CMS: páginas por blocos, conteúdos reutilizáveis, blog com taxonomia, media, 
 | `GET` | `/site/blog/{slug}` | Site Post |
 | `GET` | `/site/categoria/{slug}` | Site Category |
 | `GET` | `/site/etiqueta/{tag}` | Site Tag |
+| `GET` | `/site/municipio/{slug}` | Site Municipio |
 | `GET` | `/site/robots.txt` | Site Robots |
 | `GET` | `/site/rss.xml` | Site Rss |
 | `GET` | `/site/sitemap.xml` | Site Sitemap |
