@@ -1895,3 +1895,15 @@ html.reduce-motion *::after {
   scroll-behavior: auto !important;
 }
 
+/* Widget de consentimento da iubenda (`index.html`): o botão flutuante de
+   preferências só aparece na área de perfil (`/settings`), que é onde o
+   `App.tsx` marca o `<html>` — nas restantes páginas tapava o canto inferior
+   direito. A especificidade tem de ganhar (e o `!important` também) às regras
+   que a iubenda injeta para o próprio botão. A faixa de consentimento inicial
+   não é tocada: só se escondem os botões flutuantes (`data-tp-float`). */
+html:not([data-consent-floating]) .iubenda-tp-btn[data-tp-float],
+html:not([data-consent-floating]) .iubenda-tp-alert-btn[data-tp-float],
+html:not([data-consent-floating]) .iubenda-uspr-btn[data-tp-float] {
+  display: none !important;
+}
+

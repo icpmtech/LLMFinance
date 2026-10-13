@@ -29,11 +29,18 @@ Há **duas formas** de o usar, com a mesma conversa:
 - a **página** `/jarvis` — a experiência completa (órbita grande, painel de
   gateways, histórico longo);
 - o **widget flutuante** — um botão só com o ícone, em qualquer página da
-  plataforma, que abre o **Control Center**.
+  plataforma, que abre o **Control Center**. Está **desligado** de momento (ver
+  §1): o Jarvis usa-se pela página e pelo **Dock**, que tem a aplicação Jarvis.
 
 ---
 
 ## 1. O widget (Control Center)
+
+> **Desligado em toda a plataforma.** O widget deixou de ser montado: em
+> `chat-ui/src/App.tsx` o interruptor `JARVIS_WIDGET_ENABLED` está a `false`, pelo
+> que o botão flutuante não aparece em página nenhuma. O Jarvis continua na
+> página `/jarvis` e no Dock. A secção abaixo descreve o que o widget faz — e
+> volta a valer tal e qual ao ligar o interruptor.
 
 O widget acompanha toda a plataforma: um botão flutuante no canto inferior
 direito com a órbita do Jarvis. **Só o ícone** quando fechado; ao clicar abre um
@@ -63,6 +70,9 @@ Detalhes de comportamento:
 - `Esc` fecha o painel — exceto enquanto o Jarvis está a responder;
 - **na página `/jarvis` o widget esconde-se**, porque aí já está a conversa
   toda; o cabeçalho do widget tem um atalho para lá;
+- **no `/visualizador` (o editor de BI) o widget também se esconde**: o painel
+  flutuante tapava o painel de campos, os filtros e os visuais — o Jarvis
+  continua a chegar-se pelo Dock;
 - o **histórico é o mesmo** da página: os dois sincronizam-se por um `storage`
   event e por uma publicação interna (`subscribeJarvisHistory`), pelo que abrir
   o widget a meio de um trabalho na página mostra a mesma conversa;

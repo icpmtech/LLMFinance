@@ -2786,6 +2786,17 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
                 },
             },
             "tem_foto_camara": {"type": "boolean"},
+            # O brasão do município e a data de criação do concelho (Wikipédia e
+            # Commons, com o Wikidata a completar os brasões que a tabela não traz).
+            "brasao": {"type": "keyword", "ignore_above": 2048, "index": False},
+            "brasao_ficheiro": {"type": "keyword", "ignore_above": 512},
+            "brasao_autor": {"type": "text"},
+            "brasao_licenca": {"type": "keyword", "ignore_above": 256},
+            "tem_brasao": {"type": "boolean"},
+            "criacao": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+            "criacao_ano": {"type": "integer"},
+            "codigo_tres_letras": {"type": "keyword", "ignore_above": 8},
+            "populacao_2021": {"type": "integer"},
             "camara": {
                 "type": "object",
                 "properties": {
@@ -2795,6 +2806,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
                     "mandatos": {"type": "integer"},
                     "presidentes": {"type": "integer"},
                     "vereadores": {"type": "integer"},
+                    "nomes": {"type": "text"},
                 },
             },
             "escalao_id": {"type": "keyword"},

@@ -24,11 +24,13 @@ import pytest
 
 from api import camaras_wikidata
 from api import mapa_oficial_cne
+from api import municipios_wikipedia
 from api import remuneracoes_service as remuneracoes
 
 TABELA_REAL = (
     Path(__file__).resolve().parents[1] / "data" / "remuneracoes" / remuneracoes.TABELA_FILE
 )
+WIKIPAGE = municipios_wikipedia.PAGINA
 
 
 # ---------------------------------------------------------------------------
@@ -1132,6 +1134,293 @@ def test_docs_das_pessoas_para_indexar(pasta_nomes: Path) -> None:
     assert membro["freguesia"] == "Sé"
     assert membro["concelho"] == "Teste"
     assert membro["senhas"] == 98.00
+
+
+# ---------------------------------------------------------------------------
+# Brasões e datas de criação dos municípios (Wikipédia)
+# ---------------------------------------------------------------------------
+
+WIKITEXT = """{| class="wikitable sortable"
+! colspan="2" | Município
+! Data de criação do município
+! Código
+! População em 2021
+|-
+| [[Imagem:PRT Abrantes CoA.svg|33px]] || '''[[Abrantes]]''' || [[1179]] (foral de [[Afonso I de Portugal|D. Afonso Henriques]]) || ABT || align="right" | {{fmtn|34351}}
+|-
+| || '''[[Almada]]''' || [[1190]] (data aproximada, foral de [[Sancho I de Portugal|D. Sancho I]])<ref name="x">fonte</ref> || ALM || align="right" | 177400
+|-
+| [[Imagem:Vila_Real_bras%C3%A3o.gif|33px]] || '''[[Vila Real]]''' || [[1289]] || VRL || align="right" | 49623
+|}
+"""
+
+
+def _wikitext_de(quantos: int = 308) -> str:
+    """Uma tabela sintética com a forma da lista da Wikipédia (308 linhas)."""
+    linhas = [
+        '{| class="wikitable"',
+        '! colspan="2" | Município',
+        "! Data de criação do município",
+        "! Código",
+        "! População em 2021",
+    ]
+    for indice in range(quantos):
+        nome = f"Concelho {indice:03d}"
+        imagem = f"Brasao_{indice:03d}.png" if indice else None
+        celula = f"| [[Imagem:{imagem}|33px]] " if imagem else "| "
+        linhas.append("|-")
+        linhas.append(
+            f"{celula} || '''[[{nome}]]''' || [[{1100 + indice}]] (foral de D. Teste)"
+            f' || C{indice:02d} || align="right" | {1000 + indice}'
+        )
+    linhas.append("|}")
+    return "\n".join(linhas)
+
+
+def test_ler_tabela_traz_brasao_data_codigo_e_populacao() -> None:
+    """A linha da tabela dá o brasão, a data de criação, o código e a população."""
+    registos = municipios_wikipedia.ler_tabela(WIKITEXT)
+
+    assert [r["municipio"] for r in registos] == ["Abrantes", "Almada", "Vila Real"]
+    primeira = registos[0]
+    assert primeira["imagem"] == "PRT Abrantes CoA.svg"
+    assert primeira["ano"] == 1179
+    assert primeira["criacao"] == "1179 (foral de D. Afonso Henriques)"
+    assert primeira["codigo"] == "ABT"
+    assert primeira["populacao_2021"] == 34351
+    assert primeira["artigo"] == "Abrantes"
+
+    # Linha sem brasão (acontece com Almada) e nome de ficheiro percent-encoded.
+    assert registos[1]["imagem"] is None
+    assert registos[1]["populacao_2021"] == 177400
+    assert registos[2]["imagem"] == "Vila Real brasão.gif"
+
+
+def test_primeira_tabela_nao_engole_as_tabelas_de_dentro() -> None:
+    """As tabelas do wikitext podem ter tabelas dentro: só interessa a primeira."""
+    texto = "{|\n|-\n| a || b\n|}\n{|\n|-\n| c || d\n|}"
+
+    tabela = municipios_wikipedia.primeira_tabela(texto)
+
+    assert "a" in tabela and "c" not in tabela
+
+
+def test_limpar_tira_referencias_ligacoes_e_negrito() -> None:
+    """Do wikitext fica só o texto — e o atributo de alinhamento não é conteúdo."""
+    assert (
+        municipios_wikipedia.limpar("[[1179]] (foral de [[Afonso I de Portugal|D. Afonso]])")
+        == "1179 (foral de D. Afonso)"
+    )
+    assert municipios_wikipedia.limpar("'''Abrantes'''<ref name=\"x\">nota</ref>") == "Abrantes"
+    assert municipios_wikipedia.limpar('align="right" | {{fmtn|34 351}}') == "34 351"
+
+
+@pytest.mark.parametrize(
+    ("descricao", "esperado"),
+    [
+        ("1179 (foral de D. Afonso Henriques)", 1179),
+        ("1834", 1834),
+        ("8 de maio de 1914 (desanexado de Torres Novas)", 1914),
+        ("sem data conhecida", None),
+        ("25 de Abril de 1974", 1974),
+    ],
+)
+def test_ano_da_criacao(descricao: str, esperado: Optional[int]) -> None:
+    """O ano é o primeiro número de quatro dígitos com sentido (não o dia)."""
+    assert municipios_wikipedia._ano(descricao) == esperado
+
+
+def test_coletar_recusa_uma_lista_incompleta(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Uma página truncada não pode substituir a lista boa."""
+    monkeypatch.setattr(municipios_wikipedia, "obter_wikitext", lambda pagina=WIKIPAGE: WIKITEXT)
+
+    with pytest.raises(municipios_wikipedia.ErroLista):
+        municipios_wikipedia.coletar(pasta=tmp_path)
+
+
+def test_coletar_guarda_brasoes_e_completa_os_que_faltam(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A lista é guardada com créditos, e o brasão que falta vem do Wikidata."""
+    monkeypatch.setattr(
+        municipios_wikipedia, "obter_wikitext", lambda pagina=WIKIPAGE: _wikitext_de()
+    )
+    monkeypatch.setattr(
+        municipios_wikipedia,
+        "brasoes_do_wikidata",
+        lambda titulos: {"Concelho 000": "Brasao_do_wikidata.png"},
+    )
+    pedidos: Dict[str, Any] = {}
+
+    def falsos_creditos(nomes, largura=200):
+        pedidos["nomes"] = nomes
+        return {
+            nome: {"url": f"https://upload.invalid/{nome}", "autor": "Ana", "licenca": "CC0"}
+            for nome in nomes
+        }
+
+    monkeypatch.setattr(camaras_wikidata, "creditos_imagens", falsos_creditos)
+
+    dados = municipios_wikipedia.coletar(pasta=tmp_path)
+
+    assert dados["total"] == 308
+    assert dados["com_brasao"] == 308
+    assert dados["com_credito"] == 308
+    assert dados["com_data_criacao"] == 308
+    primeiro = dados["municipios"][0]
+    assert primeiro["imagem"] == "Brasao_do_wikidata.png"
+    assert primeiro["imagem_fonte"] == "Wikidata (P94)"
+    assert primeiro["credito"]["url"].endswith("Brasao_do_wikidata.png")
+    # Só os que faltavam foram perguntados ao Wikidata.
+    assert "Brasao_do_wikidata.png" in pedidos["nomes"]
+    assert (tmp_path / municipios_wikipedia.FICHEIRO).exists()
+
+    # Fica em cache: a segunda leitura não volta a pedir a página.
+    def explodir(*_args, **_kwargs):
+        raise AssertionError("voltou a pedir a página")
+
+    monkeypatch.setattr(municipios_wikipedia, "obter_wikitext", explodir)
+    assert municipios_wikipedia.coletar(pasta=tmp_path)["total"] == 308
+
+
+def _municipios_wikipedia() -> Dict[str, Any]:
+    """Brasões e datas de criação dos concelhos sintéticos (Teste e Outro)."""
+    return {
+        "recolhido_em": "2026-01-04T00:00:00Z",
+        "fonte": "Wikipédia (teste)",
+        "fonte_url": "https://example.invalid/municipios",
+        "fonte_imagens": "Commons (teste)",
+        "municipios": [
+            {
+                "municipio": "Teste",
+                "artigo": "Teste",
+                "imagem": "Teste.png",
+                "criacao": "1179 (foral de D. Afonso Henriques)",
+                "ano": 1179,
+                "codigo": "TST",
+                "populacao_2021": 50000,
+                "credito": {
+                    "url": "https://upload.invalid/teste.png",
+                    "autor": "Ana Heráldica",
+                    "licenca": "CC BY-SA 4.0",
+                    "pagina": "https://commons.invalid/teste",
+                },
+            },
+            {
+                "municipio": "Outro",
+                "artigo": "Outro",
+                "imagem": "Outro.png",
+                "imagem_fonte": "Wikidata (P94)",
+                "criacao": "1914",
+                "ano": 1914,
+                "codigo": "OUT",
+                "populacao_2021": 9000,
+                "credito": None,
+            },
+        ],
+        "total": 2,
+        "com_brasao": 2,
+        "com_credito": 1,
+        "com_data_criacao": 2,
+    }
+
+
+@pytest.fixture
+def pasta_municipios(pasta: Path) -> Path:
+    """A pasta de dados com os brasões e as datas de criação em disco."""
+    (pasta / remuneracoes.MUNICIPIOS_FILE).write_text(
+        json.dumps(_municipios_wikipedia(), ensure_ascii=False), encoding="utf-8"
+    )
+    remuneracoes.limpar_cache()
+    yield pasta
+    remuneracoes.limpar_cache()
+
+
+def test_listar_municipios_traz_brasao_e_criacao(pasta_municipios: Path) -> None:
+    """Cada município com o brasão, a data de criação e o abono que lhe cabe."""
+    dados = remuneracoes.listar_municipios()
+
+    assert dados["total"] == 2
+    assert dados["com_brasao"] == 1
+    assert dados["com_data_criacao"] == 2
+    assert dados["fonte"] == "Wikipédia (teste)"
+    por_nome = {item["nome"]: item for item in dados["items"]}
+
+    teste = por_nome["Teste"]
+    assert teste["criacao_ano"] == 1179
+    assert teste["codigo"] == "TST"
+    assert teste["populacao_2021"] == 50000
+    assert teste["brasao"]["foto"] == "https://upload.invalid/teste.png"
+    assert teste["brasao"]["autor"] == "Ana Heráldica"
+    assert teste["eleitores"] == 37000
+    assert teste["remuneracao_mensal"] == 3848.00
+
+    assert por_nome["Outro"]["brasao"]["foto"] is None
+    assert por_nome["Outro"]["brasao"]["origem"] == "Wikidata (P94)"
+
+
+def test_listar_municipios_ordena_e_filtra(pasta_municipios: Path) -> None:
+    """A lista ordena-se por nome, pelos mais antigos ou pela população."""
+    assert [m["nome"] for m in remuneracoes.listar_municipios(ordem="criacao")["items"]] == [
+        "Teste",
+        "Outro",
+    ]
+    assert [m["nome"] for m in remuneracoes.listar_municipios(ordem="populacao")["items"]] == [
+        "Teste",
+        "Outro",
+    ]
+    assert remuneracoes.listar_municipios(q="TST")["total"] == 1
+    assert remuneracoes.listar_municipios(q="Outro")["total"] == 1
+    assert remuneracoes.listar_municipios(q="Faro")["total"] == 1
+    assert remuneracoes.listar_municipios(distrito="Porto")["total"] == 1
+    assert remuneracoes.listar_municipios(apenas_com_brasao=True)["total"] == 1
+
+
+def test_concelho_detail_e_mapa_trazem_o_brasao_e_a_criacao(pasta_municipios: Path) -> None:
+    """O brasão e a data de criação chegam à ficha e ao mapa."""
+    ficha = remuneracoes.concelho_detail("Teste")
+    assert ficha["criacao"] == "1179 (foral de D. Afonso Henriques)"
+    assert ficha["criacao_ano"] == 1179
+    assert ficha["codigo"] == "TST"
+    assert ficha["populacao_2021"] == 50000
+    assert ficha["brasao"]["foto"] == "https://upload.invalid/teste.png"
+    assert ficha["brasao"]["licenca"] == "CC BY-SA 4.0"
+
+    mapa = remuneracoes.mapa()
+    teste = next(f for f in mapa["features"] if f["nome"] == "Teste")
+    assert teste["brasao"] == "https://upload.invalid/teste.png"
+    assert teste["criacao_ano"] == 1179
+    assert teste["codigo"] == "TST"
+    assert teste["populacao_2021"] == 50000
+    outro = next(f for f in mapa["features"] if f["nome"] == "Outro")
+    assert outro["brasao"] is None
+
+    lista = remuneracoes.listar_concelhos(q="Teste")
+    assert lista["items"][0]["criacao_ano"] == 1179
+    assert lista["items"][0]["brasao"]["foto"] == "https://upload.invalid/teste.png"
+
+
+def test_documentos_indexados_trazem_o_brasao_e_a_criacao(pasta_municipios: Path) -> None:
+    """O índice pesquisa por código, ano de criação e presença de brasão."""
+    documentos = {d["doc_id"]: d for d in remuneracoes._docs_territorios()}
+
+    teste = documentos["concelho-10"]
+    assert teste["codigo_tres_letras"] == "TST"
+    assert teste["criacao_ano"] == 1179
+    assert teste["tem_brasao"] is True
+    assert teste["brasao_autor"] == "Ana Heráldica"
+    assert teste["populacao_2021"] == 50000
+
+    assert documentos["concelho-20"]["tem_brasao"] is False
+    assert documentos["concelho-20"]["criacao_ano"] == 1914
+
+
+def test_stats_contam_os_brasoes(pasta_municipios: Path) -> None:
+    """O painel diz quantos municípios têm brasão e data de criação."""
+    dados = remuneracoes.stats()
+    assert dados["municipios"]["total"] == 2
+    assert dados["municipios"]["com_brasao"] == 1
+    assert dados["municipios"]["com_data_criacao"] == 2
 
 
 # ---------------------------------------------------------------------------

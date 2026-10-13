@@ -39,10 +39,12 @@ import {
   getCamaras,
   getConcelho,
   getMapaRemuneracoes,
+  getMunicipios,
   getRemuneracoesMeta,
   getRemuneracoesStats,
   getRemuneracoesTabelas,
   nivelLabel,
+  notaCriacao,
   numero,
   percentagem,
   recolherRemuneracoes,
@@ -54,6 +56,7 @@ import {
   type RemuneracoesFreguesia,
   type RemuneracoesMapa,
   type RemuneracoesMeta,
+  type RemuneracoesMunicipio,
   type RemuneracoesPessoa,
   type RemuneracoesRubrica,
   type RemuneracoesStats,
@@ -63,11 +66,12 @@ import {
 
 const PAGE_SIZE = 500;
 
-type Aba = "mapa" | "concelhos" | "freguesias" | "eleitos" | "camaras" | "tabela";
+type Aba = "mapa" | "concelhos" | "brasões" | "freguesias" | "eleitos" | "camaras" | "tabela";
 
 const ABAS: { id: Aba; label: string }[] = [
   { id: "mapa", label: "Mapa" },
   { id: "concelhos", label: "Concelhos" },
+  { id: "brasões", label: "Brasões" },
   { id: "freguesias", label: "Freguesias" },
   { id: "eleitos", label: "Eleitos" },
   { id: "camaras", label: "Câmaras" },
@@ -128,6 +132,13 @@ function pontoDoMapa(feature: {
     licenca?: string | null;
     pagina?: string | null;
   } | null;
+  brasao?: string | null;
+  brasao_autor?: string | null;
+  brasao_licenca?: string | null;
+  criacao?: string | null;
+  criacao_ano?: number | null;
+  codigo?: string | null;
+  populacao_2021?: number | null;
 }): MapaPonto {
   const contexto =
     feature.nivel === "freguesia" ? feature.concelho ?? null : feature.distrito ?? null;
@@ -145,6 +156,13 @@ function pontoDoMapa(feature: {
     foto_autor: feature.camara?.autor ?? null,
     foto_licenca: feature.camara?.licenca ?? null,
     foto_pagina: feature.camara?.pagina ?? null,
+    brasao: feature.brasao ?? null,
+    brasao_autor: feature.brasao_autor ?? null,
+    brasao_licenca: feature.brasao_licenca ?? null,
+    criacao: feature.criacao ?? null,
+    criacao_ano: feature.criacao_ano ?? null,
+    codigo: feature.codigo ?? null,
+    populacao_2021: feature.populacao_2021 ?? null,
   };
 }
 
@@ -568,6 +586,152 @@ function GaleriaCamaras() {
   );
 }
 
+/* ------------------------------------------------------------- brasões */
+
+/**
+ * Os brasões dos 308 municípios e as datas de criação dos concelhos.
+ *
+ * A lista e as datas vêm da tabela da Wikipédia «Lista de municípios de
+ * Portugal»; os brasões são ficheiros do Wikimedia Commons, com autor e licença.
+ * Onde a tabela não traz imagem, o brasão vem do Wikidata e é dito qual foi o
+ * caso — como tudo o resto no módulo, nada se inventa.
+ */
+function GaleriaBrasoes() {
+  const [municipios, setMunicipios] = useState<RemuneracoesMunicipio[]>([]);
+  const [resumo, setResumo] = useState({ total: 0, comBrasao: 0, comData: 0 });
+  const [busca, setBusca] = useState("");
+  const [ordem, setOrdem] = useState<"nome" | "criacao" | "populacao">("nome");
+  const [aCarregar, setACarregar] = useState(false);
+  const [fonte, setFonte] = useState<{ nome?: string | null; pagina?: string | null }>({});
+
+  useEffect(() => {
+    const temporizador = window.setTimeout(async () => {
+      setACarregar(true);
+      try {
+        const resposta = await getMunicipios({ q: busca || undefined, ordem });
+        setMunicipios(resposta.items);
+        setResumo({
+          total: resposta.total,
+          comBrasao: resposta.com_brasao,
+          comData: resposta.com_data_criacao,
+        });
+        setFonte({ nome: resposta.fonte, pagina: resposta.fonte_url });
+      } catch {
+        setMunicipios([]);
+      } finally {
+        setACarregar(false);
+      }
+    }, 300);
+    return () => window.clearTimeout(temporizador);
+  }, [busca, ordem]);
+
+  return (
+    <div className="space-y-3">
+      <div className="glass-card rounded-2xl p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search size={13} className="pointer-events-none absolute left-2.5 top-2.5 text-muted-foreground" />
+            <input
+              value={busca}
+              onChange={(evento) => setBusca(evento.target.value)}
+              placeholder="Procurar município, distrito ou código (ex.: ABT)"
+              className="w-full rounded-lg border border-white/10 bg-white/5 py-1.5 pl-8 pr-3 text-xs outline-none placeholder:text-muted-foreground focus:border-teal-400/40"
+            />
+          </div>
+          <select
+            value={ordem}
+            onChange={(evento) => setOrdem(evento.target.value as "nome" | "criacao" | "populacao")}
+            className="rounded-lg border border-white/10 bg-[#07151b] px-2 py-1.5 text-xs"
+          >
+            <option value="nome">Ordem alfabética</option>
+            <option value="criacao">Mais antigos primeiro</option>
+            <option value="populacao">Maior população (2021)</option>
+          </select>
+          {aCarregar ? <Loader2 size={14} className="animate-spin text-muted-foreground" /> : null}
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          <strong className="text-foreground">{numero(resumo.total)}</strong> municípios ·{" "}
+          <strong className="text-foreground">{numero(resumo.comBrasao)}</strong> com brasão ·{" "}
+          <strong className="text-foreground">{numero(resumo.comData)}</strong> com data de criação.{" "}
+          {fonte.nome ? <>Fonte: {fonte.nome}. </> : null}
+          {fonte.pagina ? (
+            <a className="underline hover:text-foreground" href={fonte.pagina} target="_blank" rel="noreferrer">
+              Lista de municípios de Portugal (Wikipédia)
+            </a>
+          ) : null}
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {municipios.map((municipio) => (
+          <figure
+            key={municipio.nome}
+            className="glass-card flex items-start gap-3 rounded-2xl p-3"
+          >
+            {municipio.brasao?.foto ? (
+              <img
+                src={municipio.brasao.foto}
+                alt={`Brasão de ${municipio.nome}`}
+                loading="lazy"
+                className="h-20 w-16 shrink-0 object-contain"
+              />
+            ) : (
+              <div className="flex h-20 w-16 shrink-0 items-center justify-center rounded-lg bg-white/5 text-[10px] text-muted-foreground">
+                sem brasão
+              </div>
+            )}
+            <figcaption className="min-w-0 space-y-1">
+              <p className="text-xs font-semibold">{municipio.nome}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {municipio.distrito ?? "—"}
+                {municipio.codigo ? ` · ${municipio.codigo}` : ""}
+              </p>
+              <p className="text-[11px]">
+                <span className="text-muted-foreground">Criado em </span>
+                <span className="font-medium tabular-nums">
+                  {municipio.criacao_ano ?? "—"}
+                </span>
+                {notaCriacao(municipio.criacao) ? (
+                  <span className="text-muted-foreground"> — {notaCriacao(municipio.criacao)}</span>
+                ) : null}
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                {numero(municipio.eleitores)} eleitores · {euro(municipio.remuneracao_mensal)}
+                {municipio.populacao_2021 ? ` · ${numero(municipio.populacao_2021)} hab. (2021)` : ""}
+              </p>
+              {municipio.brasao?.origem === "Wikidata (P94)" ? (
+                <p className="text-[10px] text-amber-200/80">
+                  Brasão completado pelo Wikidata (a tabela não o traz)
+                </p>
+              ) : null}
+              {municipio.brasao?.pagina ? (
+                <p className="text-[10px] text-muted-foreground">
+                  {municipio.brasao.autor ? <>© {municipio.brasao.autor} </> : null}
+                  {municipio.brasao.licenca ? <>· {municipio.brasao.licenca} </> : null}
+                  <a
+                    className="underline hover:text-foreground"
+                    href={municipio.brasao.pagina}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Commons
+                  </a>
+                </p>
+              ) : null}
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+      {municipios.length === 0 && !aCarregar ? (
+        <p className="text-[11px] text-muted-foreground">
+          Sem brasões para mostrar. Recolha-os com{" "}
+          <code>POST /remuneracoes/municipios/recolher</code>.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------- blocos de abonos */
 
 function ListaVerbas({ verbas }: { verbas: RemuneracoesVerba[] }) {
@@ -640,18 +804,61 @@ function FichaConcelho({
     <div className="space-y-4">
       <div className="glass-card rounded-2xl p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h2 className="text-lg font-semibold">{detalhe.nome}</h2>
-            <p className="text-xs text-muted-foreground">
-              <MapPin size={12} className="mr-1 inline" />
-              {detalhe.distrito} · {numero(detalhe.total_freguesias)} freguesias
-              {detalhe.lat !== null && detalhe.lat !== undefined ? (
-                <>
-                  {" "}
-                  · {detalhe.lat.toFixed(3)}, {detalhe.lon?.toFixed(3)}
-                </>
+          <div className="flex items-start gap-3">
+            {detalhe.brasao?.foto ? (
+              <img
+                src={detalhe.brasao.foto}
+                alt={`Brasão de ${detalhe.nome}`}
+                className="h-16 w-14 shrink-0 object-contain"
+                title={
+                  [detalhe.brasao.autor ? `© ${detalhe.brasao.autor}` : null, detalhe.brasao.licenca]
+                    .filter(Boolean)
+                    .join(" · ") || undefined
+                }
+              />
+            ) : null}
+            <div>
+              <h2 className="text-lg font-semibold">{detalhe.nome}</h2>
+              <p className="text-xs text-muted-foreground">
+                <MapPin size={12} className="mr-1 inline" />
+                {detalhe.distrito} · {numero(detalhe.total_freguesias)} freguesias
+                {detalhe.codigo ? ` · ${detalhe.codigo}` : ""}
+                {detalhe.lat !== null && detalhe.lat !== undefined ? (
+                  <>
+                    {" "}
+                    · {detalhe.lat.toFixed(3)}, {detalhe.lon?.toFixed(3)}
+                  </>
+                ) : null}
+              </p>
+              {detalhe.criacao ? (
+                <p className="mt-1 text-[11px]">
+                  <span className="uppercase tracking-wide text-muted-foreground">Criado em </span>
+                  <span className="font-medium tabular-nums">{detalhe.criacao_ano ?? "—"}</span>
+                  {notaCriacao(detalhe.criacao) ? (
+                    <span className="text-muted-foreground"> — {notaCriacao(detalhe.criacao)}</span>
+                  ) : null}
+                </p>
               ) : null}
-            </p>
+              {detalhe.populacao_2021 ? (
+                <p className="text-[11px] text-muted-foreground">
+                  {numero(detalhe.populacao_2021)} habitantes no censo de 2021
+                </p>
+              ) : null}
+              {detalhe.brasao?.pagina ? (
+                <p className="text-[10px] text-muted-foreground">
+                  {detalhe.brasao.autor ? <>© {detalhe.brasao.autor} </> : null}
+                  {detalhe.brasao.licenca ? <>· {detalhe.brasao.licenca} </> : null}
+                  <a
+                    className="underline hover:text-foreground"
+                    href={detalhe.brasao.pagina}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Commons
+                  </a>
+                </p>
+              ) : null}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <button
@@ -1269,6 +1476,7 @@ export default function RemuneracoesPage() {
             <thead>
               <tr className="text-left text-muted-foreground">
                 <th className="py-1.5 pr-3 font-medium">Concelho</th>
+                <th className="py-1.5 pr-3 font-medium">Criado em</th>
                 <th className="py-1.5 pr-3 font-medium">Distrito</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Eleitores</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Votantes</th>
@@ -1289,7 +1497,21 @@ export default function RemuneracoesPage() {
                   }}
                   title="Abrir a ficha deste concelho no mapa"
                 >
-                  <td className="py-1.5 pr-3 font-medium">{concelho.nome}</td>
+                  <td className="py-1.5 pr-3 font-medium">
+                    <span className="inline-flex items-center gap-2">
+                      {concelho.brasao?.foto ? (
+                        <img
+                          src={concelho.brasao.foto}
+                          alt={`Brasão de ${concelho.nome}`}
+                          className="h-6 w-5 shrink-0 object-contain"
+                        />
+                      ) : null}
+                      {concelho.nome}
+                    </span>
+                  </td>
+                  <td className="py-1.5 pr-3 text-muted-foreground" title={concelho.criacao ?? undefined}>
+                    {concelho.criacao_ano ? `${concelho.criacao_ano}` : "—"}
+                  </td>
                   <td className="py-1.5 pr-3 text-muted-foreground">{concelho.distrito}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums">{numero(concelho.eleitores)}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums">{numero(concelho.votantes)}</td>
@@ -1393,6 +1615,8 @@ export default function RemuneracoesPage() {
       ) : null}
 
       {aba === "eleitos" ? <ListaPessoas /> : null}
+
+      {aba === "brasões" ? <GaleriaBrasoes /> : null}
 
       {aba === "camaras" ? <GaleriaCamaras /> : null}
 

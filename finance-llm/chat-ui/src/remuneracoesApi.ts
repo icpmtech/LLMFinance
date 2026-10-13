@@ -97,6 +97,17 @@ export type RemuneracoesResumo = {
   verbas: RemuneracoesVerba[];
 };
 
+/** O brasão de um município, com a procedência da imagem. */
+export type RemuneracoesBrasao = {
+  ficheiro?: string | null;
+  foto?: string | null;
+  autor?: string | null;
+  licenca?: string | null;
+  pagina?: string | null;
+  /** «Wikipédia (Commons)» ou «Wikidata (P94)», quando a tabela não o trazia. */
+  origem?: string | null;
+};
+
 export type RemuneracoesConcelho = {
   id: number;
   nome: string;
@@ -109,6 +120,12 @@ export type RemuneracoesConcelho = {
   remuneracao_mensal?: number | null;
   lat?: number | null;
   lon?: number | null;
+  /** Identidade do município: brasão, data de criação, código e população. */
+  brasao?: RemuneracoesBrasao | null;
+  criacao?: string | null;
+  criacao_ano?: number | null;
+  codigo?: string | null;
+  populacao_2021?: number | null;
   total_freguesias: number;
   total_eleitores_freguesias: number;
 };
@@ -214,6 +231,11 @@ export type RemuneracoesConcelhoDetail = RemuneracoesResumo & {
     total_mensal_presidentes: number;
   };
   eleitos?: RemuneracoesEleitos | null;
+  brasao?: RemuneracoesBrasao | null;
+  criacao?: string | null;
+  criacao_ano?: number | null;
+  codigo?: string | null;
+  populacao_2021?: number | null;
   fonte?: string | null;
   fonte_url?: string | null;
   fonte_geo?: string | null;
@@ -238,6 +260,14 @@ export type RemuneracoesMapaFeature = {
   lat?: number | null;
   lon?: number | null;
   wikidata?: string | null;
+  /** No mapa dos concelhos: o brasão e a data de criação do município. */
+  brasao?: string | null;
+  brasao_autor?: string | null;
+  brasao_licenca?: string | null;
+  criacao?: string | null;
+  criacao_ano?: number | null;
+  codigo?: string | null;
+  populacao_2021?: number | null;
 };
 
 export type RemuneracoesMapa = {
@@ -455,6 +485,41 @@ export function getCamaras(params: {
   return pedir(`/remuneracoes/camaras${queryString({ ...params })}`);
 }
 
+/** Um município com a identidade (brasão, criação) e o abono que lhe cabe. */
+export type RemuneracoesMunicipio = {
+  nome: string;
+  concelho_id?: number | null;
+  distrito?: string | null;
+  codigo?: string | null;
+  brasao?: RemuneracoesBrasao | null;
+  criacao?: string | null;
+  criacao_ano?: number | null;
+  populacao_2021?: number | null;
+  eleitores?: number | null;
+  votantes?: number | null;
+  escalao?: string | null;
+  remuneracao_mensal?: number | null;
+};
+
+export function getMunicipios(params: {
+  q?: string;
+  distrito?: string;
+  apenas_com_brasao?: boolean;
+  ordem?: "nome" | "criacao" | "populacao";
+} = {}): Promise<{
+  total: number;
+  total_municipios: number;
+  com_brasao: number;
+  com_data_criacao: number;
+  fonte?: string | null;
+  fonte_url?: string | null;
+  fonte_imagens?: string | null;
+  recolhido_em?: string | null;
+  items: RemuneracoesMunicipio[];
+}> {
+  return pedir(`/remuneracoes/municipios${queryString({ ...params })}`);
+}
+
 export function buscarEleitos(params: {
   q?: string;
   distrito?: string;
@@ -552,6 +617,21 @@ export function euro(valor?: number | null, decimais = 2): string {
 export function percentagem(valor?: number | null, decimais = 0): string {
   if (valor === undefined || valor === null) return "—";
   return `${valor.toLocaleString("pt-PT", { minimumFractionDigits: decimais, maximumFractionDigits: decimais })} %`;
+}
+
+/**
+ * A nota da data de criação, sem o ano («1179 (foral de D. Afonso Henriques)» →
+ * «foral de D. Afonso Henriques»). A tabela da Wikipédia escreve a origem entre
+ * parênteses, e o ano já aparece ao lado.
+ */
+export function notaCriacao(criacao?: string | null): string {
+  return (criacao ?? "")
+    .replace(/^\s*\d{3,4}\s*/, "")
+    .replace(/^[—–-]\s*/, "")
+    .trim()
+    .replace(/^\(\s*/, "")
+    .replace(/\s*\)?\.?$/, "")
+    .trim();
 }
 
 /** Nível do território como a interface o escreve. */

@@ -25,12 +25,14 @@ partido) e a mesma conta para cada uma das suas freguesias.
 - `GET  /remuneracoes/eleitos/nomes`     — quem foi eleito (Mapa Oficial da CNE) e o que a fonte não traz
 - `GET  /remuneracoes/pessoas`           — quem foi eleito, onde e quanto recebe (todas as pessoas)
 - `GET  /remuneracoes/camaras`           — os edifícios das câmaras, com foto e créditos
+- `GET  /remuneracoes/municipios`        — brasão, data de criação, eleitores e abono de cada município
 - `GET  /remuneracoes/eleitos/executivo` — cobertura dos nomes do executivo (sites dos municípios)
 - `GET  /remuneracoes/simular`           — quanto vale um território com N eleitores
 - `POST /remuneracoes/refresh`           — recolher do MAI, georreferenciar e reindexar
 - `POST /remuneracoes/eleitos/recolher`  — recolher os eleitos e reindexar
 - `POST /remuneracoes/eleitos/nomes/recolher` — recolher os nomes do Mapa Oficial da CNE
 - `POST /remuneracoes/camaras/recolher`  — recolher as câmaras municipais (fotos)
+- `POST /remuneracoes/municipios/recolher` — recolher os brasões e as datas de criação
 - `POST /remuneracoes/eleitos/executivo` — importar os nomes do executivo de um município
 - `POST /remuneracoes/reindex`           — reindexar sem recolher
 - `POST /remuneracoes/tabelas/import`    — importar/substituir uma tabela (ex.: municípios)
@@ -121,6 +123,12 @@ def remuneracoes_meta(session: Session = None) -> Dict[str, Any]:
             "referencias": remuneracoes.abonos().get("referencias") or {},
         },
         "niveis": [t.get("nivel") for t in remuneracoes.abonos().get("tabelas") or []],
+        "municipios": {
+            "fonte": (remuneracoes.municipios() or {}).get("fonte"),
+            "fonte_url": (remuneracoes.municipios() or {}).get("fonte_url"),
+            "fonte_imagens": (remuneracoes.municipios() or {}).get("fonte_imagens"),
+            "recolhido_em": (remuneracoes.municipios() or {}).get("recolhido_em"),
+        },
     }
 
 
@@ -314,6 +322,40 @@ def remuneracoes_camaras(
     session: Session = None,
 ) -> Dict[str, Any]:
     return remuneracoes.listar_camaras(q=q, distrito=distrito, apenas_com_foto=apenas_com_foto)
+
+
+@router.get("/municipios", summary="Municípios: brasão, data de criação, eleitores e abono")
+def remuneracoes_municipios(
+    q: Optional[str] = Query(None, description="Município, distrito ou código de três letras"),
+    distrito: Optional[str] = Query(None),
+    apenas_com_brasao: bool = Query(False, description="Só os que têm brasão"),
+    ordem: str = Query("nome", description="`nome`, `criacao` (mais antigos primeiro) ou `populacao`"),
+    session: Session = None,
+) -> Dict[str, Any]:
+    return remuneracoes.listar_municipios(
+        q=q, distrito=distrito, apenas_com_brasao=apenas_com_brasao, ordem=ordem
+    )
+
+
+@router.post("/municipios/recolher", summary="Recolher os brasões e as datas de criação")
+def remuneracoes_recolher_municipios(
+    forcar: bool = Query(False, description="Voltar a ler a lista da Wikipédia"),
+    reindexar: bool = Query(True),
+    session: Session = None,
+) -> Dict[str, Any]:
+    dados = remuneracoes.municipios(forcar=forcar)
+    saida: Dict[str, Any] = {
+        "recolhido_em": dados.get("recolhido_em"),
+        "fonte": dados.get("fonte"),
+        "total": len(dados.get("municipios") or []),
+        "com_brasao": dados.get("com_brasao"),
+        "com_credito": dados.get("com_credito"),
+        "com_data_criacao": dados.get("com_data_criacao"),
+        "erro": dados.get("erro"),
+    }
+    if reindexar:
+        saida["indexado"] = remuneracoes.indexar()
+    return saida
 
 
 @router.post("/eleitos/nomes/recolher", summary="Recolher os nomes dos eleitos do Mapa Oficial da CNE")

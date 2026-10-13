@@ -8,7 +8,13 @@
  *
  * É a mesma conversa da página `/jarvis` (o histórico é partilhado), mas sem
  * sair do sítio onde o utilizador está. Na página `/jarvis` o widget esconde-se,
- * porque aí já está a conversa toda.
+ * porque aí já está a conversa toda; no `/visualizador` também, para o painel
+ * flutuante não tapar o painel de campos, os filtros e os visuais.
+ *
+ * **Desligado em toda a plataforma**: quem o monta é o `App.tsx`, atrás de
+ * `JARVIS_WIDGET_ENABLED` (a `false`), pelo que o Jarvis se usa pela página
+ * `/jarvis` e pelo Dock. Ligar o interruptor traz o botão de volta, com os
+ * esconderijos acima.
  *
  * A voz está sempre disponível: o microfone no compositor e a leitura das
  * respostas em voz alta, com as mesmas preferências da página.

@@ -241,6 +241,17 @@ const TICKER_DETAIL_KEY = "finance-llm-ticker-detail";
 /** Região de contratos aberta a partir do mapa (janela `region-detail`). */
 const REGION_DETAIL_KEY = "finance-llm-region-detail";
 
+/* Páginas onde o widget do Jarvis (o Control Center flutuante) se esconde.
+   Na `/jarvis` a conversa toda já está no ecrã; no `/visualizador` o painel
+   tapa o trabalho — o painel de campos, os filtros e os visuais. */
+const VIEWS_WITHOUT_JARVIS_WIDGET = new Set<string>(["jarvis", "visualizador"]);
+
+/* O widget flutuante do Jarvis está **desligado em toda a plataforma**: o
+   Jarvis vive na página `/jarvis` e no Dock, que tem a aplicação Jarvis. Pôr
+   isto a `true` devolve o botão — e ele volta a esconder-se nas páginas de
+   `VIEWS_WITHOUT_JARVIS_WIDGET`. */
+const JARVIS_WIDGET_ENABLED: boolean = false;
+
 /** Divisão do mapa GLEIF cujas empresas estão abertas (vista/janela `gleif-region`). */
 type GleifRegionTarget = { level: GleifRegionLevel; code: string; label?: string };
 
@@ -1232,6 +1243,16 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [windowMode]);
 
+  /* O botão flutuante de preferências de consentimento (iubenda, `index.html`)
+     só aparece na área de perfil (`/settings`) — em todas as outras páginas
+     tapava o canto inferior direito. A regra que o esconde vive no `index.css`;
+     em modo janelas segue a janela em foco, que é a que está à frente. */
+  useEffect(() => {
+    const area = windowMode ? focusedWindowView ?? view : view;
+    if (area === "settings") document.documentElement.dataset.consentFloating = "true";
+    else document.documentElement.removeAttribute("data-consent-floating");
+  }, [view, windowMode, focusedWindowView]);
+
   // Aplica as preferências da conta quando a sessão abre (uma vez por login).
   useEffect(() => {
     if (authStatus !== "authenticated") {
@@ -1851,6 +1872,10 @@ export default function App() {
     <Dock active={windowMode && focusedWindowView ? focusedWindowView : view} onOpen={(id) => handleDockOpen(id)} />
   );
 
+  /** O botão flutuante do Jarvis — ou nada, enquanto `JARVIS_WIDGET_ENABLED` for falso. */
+  const renderJarvisWidget = (hidden: boolean) =>
+    JARVIS_WIDGET_ENABLED ? <JarvisWidget hidden={hidden} onNavigate={handleJarvisNavigate} /> : null;
+
   /* ------------------------------------------------- modo janelas (macOS) */
   if (windowMode) {
     return (
@@ -1880,7 +1905,7 @@ export default function App() {
           />
         </main>
         {renderDock()}
-        <JarvisWidget onNavigate={handleJarvisNavigate} />
+        {renderJarvisWidget(VIEWS_WITHOUT_JARVIS_WIDGET.has(focusedWindowView ?? view))}
         <InstallBanner />
       </div>
     );
@@ -1905,7 +1930,7 @@ export default function App() {
           {renderContent()}
         </main>
         {renderDock()}
-        <JarvisWidget onNavigate={handleJarvisNavigate} />
+        {renderJarvisWidget(false)}
         <InstallBanner />
       </div>
     );
@@ -1931,7 +1956,7 @@ export default function App() {
           {renderContent()}
         </main>
         {renderDock()}
-        <JarvisWidget hidden={view === "jarvis"} onNavigate={handleJarvisNavigate} />
+        {renderJarvisWidget(VIEWS_WITHOUT_JARVIS_WIDGET.has(view))}
         <InstallBanner />
       </div>
     );
@@ -1942,7 +1967,7 @@ export default function App() {
       <div className={["relative w-full bg-background text-foreground", dockSpacer.sides, dockSpacer.bottom].join(" ")}>
         {renderContent()}
         {renderDock()}
-        <JarvisWidget onNavigate={handleJarvisNavigate} />
+        {renderJarvisWidget(false)}
         <InstallBanner />
       </div>
     );
@@ -1959,7 +1984,7 @@ export default function App() {
         {renderContent()}
       </main>
       {renderDock()}
-      <JarvisWidget onNavigate={handleJarvisNavigate} />
+      {renderJarvisWidget(VIEWS_WITHOUT_JARVIS_WIDGET.has(view))}
       <InstallBanner />
     </div>
   );

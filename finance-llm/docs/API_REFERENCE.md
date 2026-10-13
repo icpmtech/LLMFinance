@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1167 operações** em **43 grupos**.
+Versão `0.4.0` · **1169 operações** em **43 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -384,6 +384,8 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/remuneracoes/freguesias` | Freguesias com eleitores, escalão e abonos |
 | `GET` | `/remuneracoes/mapa` | Coordenadas, eleitores e abonos por território |
 | `GET` | `/remuneracoes/meta` | Proveniência dos dados e volumetria da tabela |
+| `GET` | `/remuneracoes/municipios` | Municípios: brasão, data de criação, eleitores e abono |
+| `POST` | `/remuneracoes/municipios/recolher` | Recolher os brasões e as datas de criação |
 | `GET` | `/remuneracoes/pessoas` | Quem foi eleito, onde e quanto recebe |
 | `POST` | `/remuneracoes/refresh` | Recolher de novo do MAI e reindexar |
 | `POST` | `/remuneracoes/reindex` | Indexar no Elasticsearch sem recolher dados novos |

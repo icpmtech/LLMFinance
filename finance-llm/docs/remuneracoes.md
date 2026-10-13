@@ -33,6 +33,7 @@ nas autárquicas de 2025.
 | Eleitos nas autárquicas de 2025 (mandatos) | MAI, `assets/static/candidate/candidates-…-candidatesElected=true-page=N.json` e os resultados por órgão (`organId=4`, Câmara Municipal) | Presidente da câmara eleito (nome e lista) e os mandatos e vereadores de cada partido na câmara |
 | **Nomes** de todos os eleitos | **Mapa Oficial n.º 2-B/2025** da **CNE** (`2025al-mapa-oficial_retificado.zip`, ficheiros `mapa_3_eleitos` e `mapa_1_resultados`) | O nome de **cada** pessoa eleita — presidente da câmara, vereadores, presidentes de junta e membros das assembleias — com a lista por que foi eleita |
 | Câmaras municipais (edifício e fotografia) | Wikidata (classe `Q25550691`, «câmara municipal») e Wikimedia Commons | Designação, coordenadas, classificação patrimonial (SIPA) e uma **fotografia com autor e licença** |
+| **Brasões** e **datas de criação** dos municípios | Wikipédia, `Lista de municípios de Portugal` (tabela com o brasão, a data de criação, o código de três letras e a população de 2021); os brasões que a tabela não traz vêm do Wikidata (`P94`) | O brasão de cada concelho (ficheiro do Commons, com autor e licença) e a data de criação com a origem quando é um foral («1179 (foral de D. Afonso Henriques)») |
 | Executivos municipais (pelouros) | Sites dos municípios (curado à mão em `data/remuneracoes/eleitos_executivo.json`; exemplo: `cm-porto.pt/executivo`) | Os pelouros de cada vereador, onde o município os publica |
 | Coordenadas geográficas | Wikidata (classes `Q13217644` município e `Q1131296` freguesia, CC0) | Latitude/longitude de cada concelho e freguesia — as coordenadas que servem o OpenStreetMap |
 
@@ -57,6 +58,7 @@ finance-llm/data/remuneracoes/
 ├── mai_recolha.json             # cache da recolha, para a poder retomar (re-descarregável)
 ├── cne_eleitos_nomes.json       # nomes de todos os eleitos (Mapa Oficial da CNE)
 ├── camaras_wikidata.json        # edifícios das câmaras + créditos das fotos (Wikidata/Commons)
+├── municipios_wikipedia.json    # brasões e datas de criação dos municípios (Wikipédia)
 └── geo_territorios.json         # coordenadas dos concelhos e freguesias (re-descarregável)
 ```
 
@@ -146,7 +148,7 @@ como «sem coordenadas conhecidas», em vez de faltarem em silêncio.
 | Índice | Documento | Conteúdo |
 | --- | --- | --- |
 | `finance_remuneracoes` | uma **linha da tabela** (ano × nível × regime × verba × cargo × modalidade) | Os valores por escalão, com os limites de eleitores e a percentagem do PR |
-| `finance_remuneracoes_territorios` | um **território** (concelho ou freguesia) | Eleitores, votantes, mandatos, escalão, verbas aplicáveis, `lat`/`lon` e `localizacao` (`geo_point`), a câmara municipal (edifício e foto) e o presidente eleito |
+| `finance_remuneracoes_territorios` | um **território** (concelho ou freguesia) | Eleitores, votantes, mandatos, escalão, verbas aplicáveis, `lat`/`lon` e `localizacao` (`geo_point`), a câmara municipal (edifício e foto), o presidente eleito e, nos concelhos, o **brasão** (`tem_brasao`, com autor e licença), a **data de criação** (`criacao`, `criacao_ano`), o código de três letras e a população de 2021 |
 | `finance_remuneracoes_pessoas` | uma **pessoa eleita** (29 745) | Nome, cargo, tipo, nível, lista, concelho, freguesia, escalão, remuneração mensal, despesas e senhas — pesquisável por nome, concelho, partido e cargo |
 
 O índice dos territórios guarda o `localizacao` como `geo_point`, para permitir
@@ -168,12 +170,14 @@ consultas por caixa ou raio sobre o mapa.
 | `GET /remuneracoes/eleitos/nomes` | Quem foi eleito pelo Mapa Oficial da CNE (presidentes, vereadores, juntas e assembleias) e o que a fonte não traz (lacunas e divergências) |
 | `GET /remuneracoes/pessoas` | **Todas as pessoas eleitas** (29 745) com o cargo, o território, a lista e o que cada uma recebe — filtros por nome, distrito, concelho, cargo, partido e nível |
 | `GET /remuneracoes/camaras` | Os edifícios das câmaras municipais: designação, coordenadas, património, município e **fotografia com autor e licença** |
+| `GET /remuneracoes/municipios` | Os 308 municípios com o **brasão**, a **data de criação**, o código de três letras, a população de 2021, os eleitores e o abono — com `ordem=nome\|criacao\|populacao` |
 | `GET /remuneracoes/eleitos/executivo` | Cobertura dos executivos municipais curados (pelouros por vereador) |
 | `GET /remuneracoes/simular?eleitores=8000&nivel=freguesia` | Em que escalão cai um território com N eleitores e quanto vale |
 | `POST /remuneracoes/refresh` | Recolhe do MAI o que falta e reindexa |
 | `POST /remuneracoes/eleitos/recolher` | Recolhe os eleitos de 2025 do MAI e reindexa |
 | `POST /remuneracoes/eleitos/nomes/recolher` | Descarrega o Mapa Oficial da CNE, lê os nomes de todos os eleitos e reindexa |
 | `POST /remuneracoes/camaras/recolher` | Recolhe as câmaras municipais (Wikidata) e as fotos do Commons, e reindexa |
+| `POST /remuneracoes/municipios/recolher` | Lê a lista dos municípios (brasões e datas de criação) e reindexa |
 | `POST /remuneracoes/eleitos/executivo` | Importa os nomes/pelouros do executivo de um município |
 | `POST /remuneracoes/reindex` | Reindexa o que está em disco |
 | `POST /remuneracoes/tabelas/import` | Importa/substitui uma tabela (ex.: a dos municípios) |
@@ -270,20 +274,25 @@ nunca cai lá um concelho pelo número de eleitores.
 
 ## A página no portal
 
-`/remuneracoes` (`chat-ui/src/pages/RemuneracoesPage.tsx`), com seis separadores:
+`/remuneracoes` (`chat-ui/src/pages/RemuneracoesPage.tsx`), com sete separadores:
 
 - **Mapa** — um **mapa OpenStreetMap** navegável (arrastar para percorrer, roda do
   rato ou `+`/`−` para o zoom, «Enquadrar» para voltar a ver tudo) com um ponto
   por concelho, pintado e dimensionado pela métrica escolhida — eleitores,
   votantes ou abono mensal. Passar por cima mostra o detalhe de cada concelho,
-  com a **fotografia da câmara municipal** e o crédito de quem a tirou; clicar
-  abre a **ficha do município**, com o número de eleitores, o escalão, os abonos,
-  os **eleitos em 2025** (presidente, vereadores, nomes por lista e o que cada um
-  recebe) e **um mapa próprio das suas freguesias**. A navegação fica presa a
-  Portugal: nem o arrasto nem o zoom saem do país, e o zoom mínimo é aquele em que
-  o país ainda cabe no mapa.
-- **Concelhos** — tabela pesquisável (por nome ou distrito) com eleitores,
-  votantes, mandatos, escalão e abono; clicar numa linha abre a ficha no mapa.
+  com o **brasão**, a **data de criação**, a fotografia da câmara municipal e o
+  crédito de quem a tirou; clicar abre a **ficha do município**, com o número de
+  eleitores, o escalão, os abonos, os **eleitos em 2025** (presidente, vereadores,
+  nomes por lista e o que cada um recebe) e **um mapa próprio das suas
+  freguesias**. A navegação fica presa a Portugal: nem o arrasto nem o zoom saem
+  do país, e o zoom mínimo é aquele em que o país ainda cabe no mapa.
+- **Concelhos** — tabela pesquisável (por nome ou distrito) com o **brasão**, o
+  ano de criação, eleitores, votantes, mandatos, escalão e abono; clicar numa
+  linha abre a ficha no mapa.
+- **Brasões** — os 308 municípios com o brasão, a data de criação (e o que a
+  origem diz: «foral de D. Afonso Henriques»), o código de três letras, a
+  população de 2021, os eleitores e o abono; ordenável por nome, pelos mais
+  antigos ou pela população, com o crédito de cada imagem.
 - **Freguesias** — a mesma leitura para as 3 259 freguesias, com o **presidente da
   junta** (nome e lista) e o **valor de cada pessoa da freguesia**: presidente
   (mensal), vogal (senha), secretário (compensação) e assembleia (senha), mais o
@@ -321,6 +330,14 @@ deslocados do seu sítio real — a diferença chega a 25 % a meio do país.
   n.º 2-B/2025 da CNE. Onde o mapa oficial não publica um nome — 15 mandatos de
   câmara em seis municípios, 52 juntas sem presidente identificado —, o módulo
   conta-o em vez de o preencher.
-- As **fotografias** das câmaras são do Wikimedia Commons e são servidas em
-  miniatura (480 px), com autor, licença e ligação à página do ficheiro: usar o
-  original seria trazer dezenas de megabytes para um *tooltip*.
+- As **fotografias** das câmaras e os **brasões** vêm do Wikimedia Commons e são
+  servidos em miniatura (480 px e 200 px), com autor, licença e ligação à página do
+  ficheiro: usar o original seria trazer dezenas de megabytes para um *tooltip*.
+- A **data de criação** de um município é a que a lista da Wikipédia indica, com a
+  origem quando a tem («1179 (foral de D. Afonso Henriques)»); a mais antiga é São
+  João da Pesqueira (1055) e as mais recentes são Odivelas, Trofa e Vizela (1998).
+  Não é a data do foral quando a tabela não o diz — e é por isso que a origem
+  aparece ao lado do ano.
+- O **brasão** de um município que a tabela não mostre é buscado ao Wikidata
+  (`P94`) e fica assinalado como tal na galeria: os 308 têm brasão — 307 pela
+  tabela da Wikipédia e Almada pelo Wikidata.

@@ -96,6 +96,7 @@ ELEITOS_FILE = "mai_eleitos.json"
 EXECUTIVO_FILE = "eleitos_executivo.json"
 # Nomes de todos os eleitos, transcritos do Mapa Oficial da CNE (re-descarregável).
 ELEITOS_NOMES_FILE = "cne_eleitos_nomes.json"
+MUNICIPIOS_FILE = "municipios_wikipedia.json"
 # Cache da recolha do MAI, escrito **à medida que avança**: a árvore completa são
 # ~3900 pedidos e, sem isto, um corte a meio (ou o servidor a pedir para abrandar)
 # obrigaria a pedir tudo de novo.
@@ -1197,6 +1198,144 @@ def camara_do_municipio(nome: str) -> Optional[Dict[str, Any]]:
     return _indice_camaras().get(chave_territorio(nome or ""))
 
 
+def municipios(forcar: bool = False) -> Dict[str, Any]:
+    """A lista dos municípios (brasão, data de criação), do ficheiro em disco."""
+    with _LOCK:
+        if "municipios" in _CACHE and not forcar:
+            return _CACHE["municipios"]
+    from api import municipios_wikipedia
+
+    try:
+        payload = municipios_wikipedia.coletar(forcar=forcar, pasta=_data_dir())
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Não foi possível recolher a lista dos municípios: %s", exc)
+        payload = {"municipios": [], "erro": str(exc)}
+    with _LOCK:
+        _CACHE["municipios"] = payload
+        _CACHE.pop("indice_municipios", None)
+    return payload
+
+
+def _brasao(item: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """O brasão de um município, com o crédito, em forma curta (para o mapa)."""
+    if not item:
+        return None
+    credito = item.get("credito") or {}
+    return {
+        "ficheiro": item.get("imagem"),
+        "foto": credito.get("url"),
+        "autor": credito.get("autor"),
+        "licenca": credito.get("licenca"),
+        "pagina": credito.get("pagina"),
+        "origem": item.get("imagem_fonte") or "Wikipédia (Commons)",
+    }
+
+
+def _indice_municipios() -> Dict[str, Dict[str, Any]]:
+    """Chave do município → brasão, data de criação, código e população.
+
+    Como o dos edifícios das câmaras, é construído uma só vez: a lista serve o
+    mapa (308 concelhos de uma vez) e a ficha de cada um.
+    """
+    with _LOCK:
+        if "indice_municipios" in _CACHE:
+            return _CACHE["indice_municipios"]
+    indice: Dict[str, Dict[str, Any]] = {}
+    for item in municipios().get("municipios") or []:
+        chave = chave_territorio(item.get("municipio") or "")
+        if chave and chave not in indice:
+            indice[chave] = item
+    with _LOCK:
+        _CACHE["indice_municipios"] = indice
+    return indice
+
+
+def municipio_do_concelho(nome: str) -> Optional[Dict[str, Any]]:
+    """O registo do município (brasão, criação) pelo nome do concelho."""
+    return _indice_municipios().get(chave_territorio(nome or ""))
+
+
+def _dados_do_municipio(nome: Optional[str]) -> Dict[str, Any]:
+    """Brasão e data de criação de um concelho, prontos a mostrar."""
+    item = municipio_do_concelho(nome or "")
+    return {
+        "brasao": _brasao(item),
+        "criacao": (item or {}).get("criacao"),
+        "criacao_ano": (item or {}).get("ano"),
+        "codigo": (item or {}).get("codigo"),
+        "populacao_2021": (item or {}).get("populacao_2021"),
+        "fonte": (municipios() or {}).get("fonte"),
+        "fonte_url": (municipios() or {}).get("fonte_url"),
+    }
+
+
+def listar_municipios(
+    q: Optional[str] = None,
+    distrito: Optional[str] = None,
+    apenas_com_brasao: bool = False,
+    ordem: str = "nome",
+) -> Dict[str, Any]:
+    """Os 308 municípios com o brasão, a data de criação e o que cada um recebe.
+
+    Junta as três peças que interessam a quem olha para um município: a
+    identidade (brasão, criação, código), o território (eleitores, votantes,
+    freguesias) e o abono que lhe cabe pelo escalão.
+    """
+    dados = municipios()
+    por_chave = {chave_territorio(c.get("nome") or ""): c for c in territorios().get("concelhos") or []}
+    regiao = {chave_territorio(c["nome"]): c.get("distrito") for c in territorios().get("concelhos") or []}
+
+    itens = []
+    for item in dados.get("municipios") or []:
+        nome = item.get("municipio") or ""
+        concelho = por_chave.get(chave_territorio(nome)) or {}
+        if apenas_com_brasao and not (item.get("credito") or {}).get("url"):
+            continue
+        distrito_item = concelho.get("distrito") or regiao.get(chave_territorio(nome))
+        if distrito and _fold(distrito) not in _fold(distrito_item or ""):
+            continue
+        if q:
+            termo = _fold(q)
+            alvo = f"{nome} {distrito_item or ''} {item.get('codigo') or ''}"
+            if termo not in _fold(alvo):
+                continue
+        escalao = escalao_por_eleitores("municipio", concelho.get("eleitores"), nome) or {}
+        itens.append({
+            "nome": nome,
+            "concelho_id": concelho.get("id"),
+            "distrito": distrito_item,
+            "codigo": item.get("codigo"),
+            "brasao": _brasao(item),
+            "criacao": item.get("criacao"),
+            "criacao_ano": item.get("ano"),
+            "populacao_2021": item.get("populacao_2021"),
+            "eleitores": concelho.get("eleitores"),
+            "votantes": concelho.get("votantes"),
+            "escalao": escalao.get("designacao"),
+            "remuneracao_mensal": _remuneracao_mensal("municipio", concelho.get("eleitores"), None, nome),
+        })
+
+    if ordem == "criacao":
+        itens.sort(key=lambda i: (i.get("criacao_ano") or 9999, i.get("nome") or ""))
+    elif ordem == "populacao":
+        itens.sort(key=lambda i: -(i.get("populacao_2021") or 0))
+    else:
+        itens.sort(key=lambda i: (i.get("nome") or ""))
+
+    return {
+        "total": len(itens),
+        "total_municipios": len(dados.get("municipios") or []),
+        "com_brasao": sum(1 for i in itens if (i.get("brasao") or {}).get("foto")),
+        "com_data_criacao": sum(1 for i in itens if i.get("criacao_ano")),
+        "fonte": dados.get("fonte"),
+        "fonte_url": dados.get("fonte_url"),
+        "fonte_imagens": dados.get("fonte_imagens"),
+        "recolhido_em": dados.get("recolhido_em"),
+        "erro": dados.get("erro"),
+        "items": itens,
+    }
+
+
 def _indice_camaras() -> Dict[str, Dict[str, Any]]:
     """Chave do município → câmara (edifício, foto e crédito).
 
@@ -2287,35 +2426,44 @@ def listar_concelhos(
     def presidente_de(concelho_id: Any) -> Dict[str, Any]:
         return ((eleitos_por_concelho.get(str(concelho_id)) or {}).get("presidente")) or {}
 
+    def linha(c: Dict[str, Any]) -> Dict[str, Any]:
+        nome = c.get("nome") or ""
+        identidade = _dados_do_municipio(nome)
+        escalao = escalao_por_eleitores("municipio", c.get("eleitores"), nome) or {}
+        ponto = coordenadas("municipio", nome, c.get("distrito")) or {}
+        return {
+            "id": c.get("id"),
+            "nome": nome,
+            "distrito": c.get("distrito"),
+            "eleitores": c.get("eleitores"),
+            "votantes": c.get("votantes"),
+            "mandatos": c.get("mandatos"),
+            "presidente": presidente_de(c.get("id")).get("nome"),
+            "partido": presidente_de(c.get("id")).get("sigla"),
+            "escalao_id": escalao.get("id"),
+            "escalao": escalao.get("designacao"),
+            "remuneracao_mensal": _remuneracao_mensal(
+                "municipio", c.get("eleitores"), None, nome
+            ),
+            "lat": ponto.get("lat"),
+            "lon": ponto.get("lon"),
+            "brasao": identidade["brasao"],
+            "criacao": identidade["criacao"],
+            "criacao_ano": identidade["criacao_ano"],
+            "codigo": identidade["codigo"],
+            "populacao_2021": identidade["populacao_2021"],
+            "total_freguesias": len(c.get("freguesias") or []),
+            "total_eleitores_freguesias": sum(
+                (f.get("eleitores") or 0) for f in (c.get("freguesias") or [])
+            ),
+        }
+
     return {
         "total": total,
         "page": page,
         "size": size,
         "tabela": {k: v for k, v in (tabela("municipio") or {}).items() if k != "rubricas"},
-        "items": [
-            {
-                "id": c.get("id"),
-                "nome": c.get("nome"),
-                "distrito": c.get("distrito"),
-                "eleitores": c.get("eleitores"),
-                "votantes": c.get("votantes"),
-                "mandatos": c.get("mandatos"),
-                "presidente": presidente_de(c.get("id")).get("nome"),
-                "partido": presidente_de(c.get("id")).get("sigla"),
-                "escalao_id": (escalao_por_eleitores("municipio", c.get("eleitores"), c.get("nome")) or {}).get("id"),
-                "escalao": (escalao_por_eleitores("municipio", c.get("eleitores"), c.get("nome")) or {}).get("designacao"),
-                "remuneracao_mensal": _remuneracao_mensal(
-                    "municipio", c.get("eleitores"), None, c.get("nome")
-                ),
-                "lat": (coordenadas("municipio", c.get("nome") or "", c.get("distrito")) or {}).get("lat"),
-                "lon": (coordenadas("municipio", c.get("nome") or "", c.get("distrito")) or {}).get("lon"),
-                "total_freguesias": len(c.get("freguesias") or []),
-                "total_eleitores_freguesias": sum(
-                    (f.get("eleitores") or 0) for f in (c.get("freguesias") or [])
-                ),
-            }
-            for c in recorte
-        ],
+        "items": [linha(c) for c in recorte],
         "facets": {
             "distritos": sorted({c.get("distrito") for c in concelhos if c.get("distrito")}),
             "escaloes": [
@@ -2366,6 +2514,7 @@ def concelho_detail(concelho: str) -> Dict[str, Any]:
     doc["total_eleitores_freguesias"] = sum((f.get("eleitores") or 0) for f in freguesias_doc)
     doc["remuneracoes_freguesias"] = _agregado_freguesias(freguesias_doc)
     doc["eleitos"] = eleitos_concelho(encontrado.get("id"))
+    doc.update(_dados_do_municipio(encontrado.get("nome")))
     doc["fonte"] = dados.get("fonte")
     doc["fonte_url"] = dados.get("fonte_url")
     doc["fonte_geo"] = (geo() or {}).get("fonte")
@@ -2446,6 +2595,7 @@ def mapa(
             sem_coordenadas.append(item.get("nome"))
         camara_do_edificio = camara_do_municipio(item.get("nome") or "") if nivel == "municipio" else None
         credito = (camara_do_edificio or {}).get("credito") or {}
+        identidade = _dados_do_municipio(item.get("nome")) if nivel == "municipio" else {}
         features.append({
             "id": item.get("id"),
             "nome": item.get("nome"),
@@ -2472,6 +2622,17 @@ def mapa(
                 "patrimonio": (camara_do_edificio or {}).get("patrimonio"),
                 "artigo": (camara_do_edificio or {}).get("artigo"),
             } if camara_do_edificio else None,
+            # O brasão e a data de criação acompanham o ponto: é a identidade do
+            # município, e é o que se vê ao passar por cima no mapa.
+            "brasao": (identidade.get("brasao") or {}).get("foto"),
+            "brasao_ficheiro": (identidade.get("brasao") or {}).get("ficheiro"),
+            "brasao_autor": (identidade.get("brasao") or {}).get("autor"),
+            "brasao_licenca": (identidade.get("brasao") or {}).get("licenca"),
+            "brasao_pagina": (identidade.get("brasao") or {}).get("pagina"),
+            "criacao": identidade.get("criacao"),
+            "criacao_ano": identidade.get("criacao_ano"),
+            "codigo": identidade.get("codigo"),
+            "populacao_2021": identidade.get("populacao_2021"),
             "lat": (ponto or {}).get("lat"),
             "lon": (ponto or {}).get("lon"),
             "wikidata": (ponto or {}).get("wikidata"),
@@ -2619,6 +2780,17 @@ def stats() -> Dict[str, Any]:
             }),
             "concelhos_com_nomes_executivo": cobertura_executivo()["com_nomes"],
         },
+        "municipios": {
+            "recolhido_em": (municipios() or {}).get("recolhido_em"),
+            "fonte": (municipios() or {}).get("fonte"),
+            "total": len((municipios() or {}).get("municipios") or []),
+            "com_brasao": sum(
+                1 for m in (municipios() or {}).get("municipios") or [] if (m.get("credito") or {}).get("url")
+            ),
+            "com_data_criacao": sum(
+                1 for m in (municipios() or {}).get("municipios") or [] if m.get("ano")
+            ),
+        },
         "fonte_tabela": (abonos().get("fonte") or {}).get("documento"),
     }
 
@@ -2723,6 +2895,7 @@ def _docs_territorios() -> List[Dict[str, Any]]:
         executivo = (eleitos_doc or {}).get("executivo") or {}
         nomes_doc = (eleitos_doc or {}).get("nomes") or {}
         camara_edificio = (eleitos_doc or {}).get("camara_municipal") or {}
+        identidade = municipio_do_concelho(territorio.get("nome") or "") if prefixo == "concelho" else None
         return {
             "doc_id": f"{prefixo}-{territorio.get('id')}",
             "territory_id": territorio.get("id"),
@@ -2781,6 +2954,16 @@ def _docs_territorios() -> List[Dict[str, Any]]:
                 "artigo": camara_edificio.get("artigo"),
             } if camara_edificio else None,
             "tem_foto_camara": bool((camara_edificio.get("credito") or {}).get("url")),
+            # Brasão e data de criação do município (Wikipédia/Commons + Wikidata).
+            "brasao": ((identidade or {}).get("credito") or {}).get("url"),
+            "brasao_ficheiro": (identidade or {}).get("imagem"),
+            "brasao_autor": ((identidade or {}).get("credito") or {}).get("autor"),
+            "brasao_licenca": ((identidade or {}).get("credito") or {}).get("licenca"),
+            "tem_brasao": bool(((identidade or {}).get("credito") or {}).get("url")),
+            "criacao": (identidade or {}).get("criacao"),
+            "criacao_ano": (identidade or {}).get("ano"),
+            "codigo_tres_letras": (identidade or {}).get("codigo"),
+            "populacao_2021": (identidade or {}).get("populacao_2021"),
             "escalao_id": resumo.get("escalao_id"),
             "escalao": resumo.get("escalao"),
             "remuneracao_mensal": resumo.get("remuneracao_mensal"),

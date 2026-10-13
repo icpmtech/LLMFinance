@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Crosshair, Loader2, Minus, Plus } from "lucide-react";
 
 import { TILE_SIZE, latToWorld, lonToWorld, worldToLat, worldToLon } from "../graph/geo";
-import { euro, numero } from "../../remuneracoesApi";
+import { euro, notaCriacao, numero } from "../../remuneracoesApi";
 
 export type MapaPonto = {
   id: number;
@@ -38,6 +38,14 @@ export type MapaPonto = {
   foto_autor?: string | null;
   foto_licenca?: string | null;
   foto_pagina?: string | null;
+  /** Brasão do município (Wikipédia/Commons) e data de criação do concelho. */
+  brasao?: string | null;
+  brasao_autor?: string | null;
+  brasao_licenca?: string | null;
+  criacao?: string | null;
+  criacao_ano?: number | null;
+  codigo?: string | null;
+  populacao_2021?: number | null;
 };
 
 export type MetricaMapa = "eleitores" | "votantes" | "remuneracao";
@@ -376,8 +384,31 @@ export default function MapaOSM({
                 </figcaption>
               </figure>
             ) : null}
-            <p className="text-sm font-semibold">{sobre.nome}</p>
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              {sobre.brasao ? (
+                <img
+                  src={sobre.brasao}
+                  alt={`Brasão de ${sobre.nome}`}
+                  className="h-7 w-6 shrink-0 object-contain"
+                  title={
+                    [sobre.brasao_autor ? `© ${sobre.brasao_autor}` : null, sobre.brasao_licenca]
+                      .filter(Boolean)
+                      .join(" · ") || undefined
+                  }
+                />
+              ) : null}
+              {sobre.nome}
+            </p>
             {sobre.contexto ? <p className="text-muted-foreground">{sobre.contexto}</p> : null}
+            {sobre.criacao ? (
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                Criado em{" "}
+                <span className="font-medium text-foreground">
+                  {sobre.criacao_ano ?? sobre.criacao}
+                </span>
+                {notaCriacao(sobre.criacao) ? ` — ${notaCriacao(sobre.criacao)}` : null}
+              </p>
+            ) : null}
             <dl className="mt-2 space-y-0.5">
               <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Eleitores</dt>
@@ -395,6 +426,12 @@ export default function MapaOSM({
                 <dt className="text-muted-foreground">Abono mensal</dt>
                 <dd className="tabular-nums">{euro(sobre.remuneracao_mensal)}</dd>
               </div>
+              {sobre.populacao_2021 ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">População (2021)</dt>
+                  <dd className="tabular-nums">{numero(sobre.populacao_2021)}</dd>
+                </div>
+              ) : null}
             </dl>
           </div>
         ) : null}
