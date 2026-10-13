@@ -90,6 +90,12 @@ TERRITORIOS_FILE = "mai_territorios.json"
 GEO_FILE = "geo_territorios.json"
 # Eleitos nas autárquicas de 2025: presidente da câmara e vereadores por partido.
 ELEITOS_FILE = "mai_eleitos.json"
+# Nomes do executivo de cada município, lidos do site da própria câmara: é a
+# única fonte que publica os nomes dos **vereadores** (o MAI só publica as
+# cabeças de lista). Curado à mão, como a tabela de abonos.
+EXECUTIVO_FILE = "eleitos_executivo.json"
+# Nomes de todos os eleitos, transcritos do Mapa Oficial da CNE (re-descarregável).
+ELEITOS_NOMES_FILE = "cne_eleitos_nomes.json"
 # Cache da recolha do MAI, escrito **à medida que avança**: a árvore completa são
 # ~3900 pedidos e, sem isto, um corte a meio (ou o servidor a pedir para abrandar)
 # obrigaria a pedir tudo de novo.
@@ -857,23 +863,941 @@ def eleitos_concelho(concelho_id: Any) -> Optional[Dict[str, Any]]:
             presidente["vereadores"] = lista.get("vereadores")
 
     vereadores = sum(p.get("vereadores") or 0 for p in camara)
+    por_partido = sorted(
+        (p for p in camara if (p.get("mandatos") or 0) > 0),
+        key=lambda p: (-(p.get("mandatos") or 0), -(p.get("votos") or 0)),
+    )
+    por_partido = [dict(linha) for linha in por_partido]
+    executivo = executivo_concelho(registo.get("id"), registo.get("nome"))
+    if executivo:
+        _associar_nomes(por_partido, presidente, executivo)
+
+    # Nomes e remunerações: quem são as pessoas e quanto recebe cada uma.
+    nomes = nomes_eleitos()
+    registo_nomes = (nomes.get("concelhos") or {}).get(str(concelho_id))
+    papeis = papeis_territorio("municipio", registo.get("eleitores"), registo.get("nome"))
+    pessoas = _pessoas_do_concelho(
+        registo,
+        nomes.get("concelhos") or {},
+        papeis_por_chave("municipio", registo.get("eleitores"), registo.get("nome")),
+    )
+    if registo_nomes:
+        # Com os nomes do Mapa Oficial, é a cada um deles que se cola o abono —
+        # e a lista de cada pessoa passa a ser a lista por que foi eleita.
+        nomes_por_lista = {
+            _sigla_chave(lista.get("sigla")): [nome for nome in lista.get("nomes") or []]
+            for lista in registo_nomes.get("camara") or []
+        }
+        for linha in por_partido:
+            candidatos = nomes_por_lista.get(_sigla_chave(linha.get("sigla"))) or []
+            if candidatos:
+                linha["nomes"] = candidatos
     return {
         "presidente": presidente,
+        "pessoas": pessoas,
+        "papeis": papeis,
         "vereadores": {
             "total": vereadores,
             "total_mandatos": sum(p.get("mandatos") or 0 for p in camara),
             # Só quem elegeu alguém: as listas sem mandato constam dos resultados,
             # mas não fazem parte da composição da câmara.
-            "por_partido": sorted(
-                (p for p in camara if (p.get("mandatos") or 0) > 0),
-                key=lambda p: (-(p.get("mandatos") or 0), -(p.get("votos") or 0)),
+            "por_partido": por_partido,
+        },
+        "nomes": {
+            "fonte": nomes.get("fonte"),
+            "fonte_url": nomes.get("fonte_url"),
+            "recolhido_em": nomes.get("cached_at"),
+            "total_eleitos": (registo_nomes or {}).get("total_eleitos"),
+            "total_mandatos": (registo_nomes or {}).get("total_mandatos"),
+            "lacuna": next(
+                (
+                    aviso
+                    for aviso in (nomes.get("lacunas") or [])
+                    if aviso.get("concelho") == registo.get("nome")
+                ),
+                None,
+            ),
+            "divergencia": next(
+                (
+                    aviso
+                    for aviso in (nomes.get("divergencias") or [])
+                    if aviso.get("concelho") == registo.get("nome")
+                ),
+                None,
             ),
         },
+        "camara_municipal": camara_do_municipio(registo.get("nome") or ""),
+        "executivo": executivo,
         "fonte": dados.get("fonte"),
         "fonte_url": dados.get("fonte_url"),
         "eleicao": dados.get("eleicao"),
         "nota": dados.get("nota"),
         "recolhido_em": dados.get("cached_at"),
+    }
+
+
+PARTICULAS_NOME = {"de", "da", "do", "das", "dos", "e", "di", "del", "van", "von"}
+
+
+def _tokens_nome(nome: Optional[str]) -> set:
+    """Palavras de um nome, sem as partículas de ligação («de», «da», «dos»)."""
+    return {
+        token
+        for token in _fold(nome or "").split()
+        if token and token not in PARTICULAS_NOME
+    }
+
+
+def nomes_compativeis(a: Optional[str], b: Optional[str]) -> bool:
+    """Dois nomes da mesma pessoa, escritos de forma diferente.
+
+    As fontes oficiais não escrevem os nomes da mesma maneira: o MAI diz «Pedro
+    Miguel Azeredo Duarte» e o Mapa Oficial «Pedro Miguel **de** Azeredo Duarte».
+    Compara-se por palavras, sem partículas, e aceita-se que um esteja contido no
+    outro — mas só a partir de duas palavras iguais, para «Silva» não casar com
+    «Silva» de outra pessoa.
+    """
+    tokens_a, tokens_b = _tokens_nome(a), _tokens_nome(b)
+    if len(tokens_a) < 2 or len(tokens_b) < 2:
+        return False
+    comum = tokens_a & tokens_b
+    if len(comum) < 2:
+        return False
+    return tokens_a <= tokens_b or tokens_b <= tokens_a
+
+
+def _distancia(a: str, b: str) -> int:
+    """Distância de Levenshtein (para tolerar gralhas entre fontes)."""
+    if a == b:
+        return 0
+    if not a or not b:
+        return max(len(a), len(b))
+    anterior = list(range(len(b) + 1))
+    for i, ca in enumerate(a, start=1):
+        atual = [i]
+        for j, cb in enumerate(b, start=1):
+            atual.append(min(anterior[j] + 1, atual[j - 1] + 1, anterior[j - 1] + (ca != cb)))
+        anterior = atual
+    return anterior[-1]
+
+
+def _tolera(token: str) -> int:
+    """Quantas letras se toleram a menos num nome («Gaudinho» vs «Gaudino»)."""
+    if len(token) >= 9:
+        return 2
+    return 1 if len(token) >= 5 else 0
+
+
+def _palavras_iguais(a: str, b: str) -> bool:
+    """Duas palavras da mesma pessoa: iguais, com gralha, ou as mesmas letras.
+
+    «Bolana» e «Balona» têm as mesmas letras trocadas de sítio — a distância de
+    Levenshtein não o vê (são duas substituições), mas ordenar as letras vê-o.
+    """
+    if a == b:
+        return True
+    if _distancia(a, b) <= _tolera(a):
+        return True
+    return len(a) >= 5 and sorted(a) == sorted(b)
+
+
+def nomes_parecidos(a: Optional[str], b: Optional[str]) -> bool:
+    """Dois nomes da mesma pessoa quando as fontes têm gralhas entre si.
+
+    O MAI escreve «Sónia **I**asabel Fernandes» e o Mapa Oficial «Sónia **I**sabel
+    Fernandes»; escreve «Bejinha» onde o mapa diz «Beijinha». Comparar as letras
+    uma a uma — em vez de exigir palavras iguais — deixa passar essas diferenças
+    sem deixar passar pessoas diferentes: são precisas duas palavras iguais (ou
+    quase) e a maioria das palavras do nome mais curto.
+    """
+    tokens_a, tokens_b = _tokens_nome(a), _tokens_nome(b)
+    if len(tokens_a) < 2 or len(tokens_b) < 2:
+        return False
+    curtos, longos = (tokens_a, tokens_b) if len(tokens_a) <= len(tokens_b) else (tokens_b, tokens_a)
+    usados: set = set()
+    iguais = 0
+    for token in curtos:
+        for outro in longos:
+            if outro in usados:
+                continue
+            if _palavras_iguais(token, outro):
+                usados.add(outro)
+                iguais += 1
+                break
+    if iguais < 2:
+        return False
+    return iguais / len(curtos) >= 0.6
+
+
+def _sigla_chave(sigla: Optional[str]) -> str:
+    return re.sub(r"[^a-z0-9]", "", _fold(sigla or ""))
+
+
+def _mesmo_nome(curto: Optional[str], longo: Optional[str]) -> bool:
+    """`Pedro Duarte` está em `Pedro Miguel Azeredo Duarte` (os municípios abreviam)."""
+    if not curto or not longo:
+        return False
+    dobrado = _fold(longo)
+    tokens = [t for t in _fold(curto).split() if t]
+    return bool(tokens) and all(token in dobrado for token in tokens)
+
+
+def _titulo(nome: str) -> str:
+    """`JORGE HENRIQUE FERNANDES DE ALMEIDA` → `Jorge Henrique Fernandes de Almeida`."""
+    particulas = {"de", "da", "do", "das", "dos", "e"}
+    palavras = []
+    for indice, palavra in enumerate(nome.split()):
+        minuscula = palavra.lower()
+        if indice > 0 and minuscula in particulas:
+            palavras.append(minuscula)
+        else:
+            palavras.append(palavra.capitalize())
+    return " ".join(palavras)
+
+
+def _slug(nome: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", _fold(nome)).strip("-")
+
+
+def papeis_por_chave(nivel: str, eleitores: Optional[int], nome: Optional[str] = None) -> Dict[str, Any]:
+    """As verbas de um território indexadas pelo papel (presidente, vereador…)."""
+    por_chave: Dict[str, Any] = {}
+    for papel in papeis_territorio(nivel, eleitores, nome):
+        por_chave.setdefault(papel["papel"], papel)
+    return por_chave
+
+
+def camaras(forcar: bool = False) -> Dict[str, Any]:
+    """Edifícios das câmaras municipais (foto, coordenadas, património)."""
+    with _LOCK:
+        if "camaras" in _CACHE and not forcar:
+            return _CACHE["camaras"]
+    from api import camaras_wikidata
+
+    try:
+        payload = camaras_wikidata.coletar(forcar=forcar, pasta=_data_dir())
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Não foi possível recolher as câmaras: %s", exc)
+        payload = {"camaras": [], "creditos": {}, "erro": str(exc)}
+    with _LOCK:
+        _CACHE["camaras"] = payload
+    return payload
+
+
+def _municipio_do_edificio(item: Dict[str, Any], por_chave: Dict[str, Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """A que município pertence o edifício de uma câmara.
+
+    A Wikidata liga a câmara à **freguesia** onde fica (`P131`), não ao município,
+    pelo que o nome da freguesia é o que resolve. Quando o nome do município
+    aparece na própria designação («Câmara Municipal de Arouca»), é esse que vale.
+    """
+    designacao = _fold(item.get("designacao") or "")
+    for chave, concelho in por_chave.items():
+        if chave and chave in designacao:
+            return concelho
+    localizacao = (item.get("localizacao") or "").strip()
+    if localizacao:
+        freguesia = _freguesia_por_nome(localizacao)
+        if freguesia:
+            return por_chave.get(chave_territorio(freguesia.get("concelho") or ""))
+    return None
+
+
+def listar_camaras(
+    q: Optional[str] = None,
+    distrito: Optional[str] = None,
+    apenas_com_foto: bool = False,
+) -> Dict[str, Any]:
+    """As câmaras municipais com fotografia, ligadas ao município de cada uma."""
+    dados = camaras()
+    concelhos = territorios().get("concelhos") or []
+    por_chave = {chave_territorio(c.get("nome") or ""): c for c in concelhos}
+
+    itens = []
+    for item in dados.get("camaras") or []:
+        registo = _com_credito(item, dados)
+        municipal = _municipio_do_edificio(item, por_chave)
+        registo["municipio"] = (municipal or {}).get("nome")
+        registo["municipio_id"] = (municipal or {}).get("id")
+        registo["distrito"] = (municipal or {}).get("distrito")
+        registo["eleitores"] = (municipal or {}).get("eleitores")
+        if apenas_com_foto and not registo.get("imagem"):
+            continue
+        if distrito and _fold(distrito) not in _fold(registo.get("distrito") or ""):
+            continue
+        if q:
+            termo = _fold(q)
+            alvo = f"{registo.get('designacao') or ''} {registo.get('municipio') or ''} {registo.get('distrito') or ''}"
+            if termo not in _fold(alvo):
+                continue
+        itens.append(registo)
+
+    itens.sort(key=lambda registo: (registo.get("municipio") or "zz", registo.get("designacao") or ""))
+    return {
+        "total": len(itens),
+        "total_edificios": len(dados.get("camaras") or []),
+        "com_foto": sum(1 for i in itens if i.get("imagem")),
+        "sem_municipio": sum(1 for i in itens if not i.get("municipio")),
+        "fonte": dados.get("fonte"),
+        "fonte_url": dados.get("fonte_url"),
+        "pagina": dados.get("pagina_wikipedia"),
+        "recolhido_em": dados.get("recolhido_em"),
+        "erro": dados.get("erro"),
+        "items": itens,
+    }
+
+
+def _com_credito(item: Dict[str, Any], dados: Dict[str, Any]) -> Dict[str, Any]:
+    registo = dict(item)
+    registo["credito"] = (dados.get("creditos") or {}).get(item.get("imagem") or "")
+    return registo
+
+
+def camara_do_municipio(nome: str) -> Optional[Dict[str, Any]]:
+    """A câmara municipal (edifício, com foto e crédito) de um município."""
+    dados = camaras()
+    por_chave = {chave_territorio(nome): {"nome": nome}}
+    for item in dados.get("camaras") or []:
+        if _municipio_do_edificio(item, por_chave):
+            return _com_credito(item, dados)
+    return None
+
+
+def executivos() -> Dict[str, Any]:
+    """Nomes do executivo de cada município, do ficheiro curado em disco."""
+    with _LOCK:
+        if "executivos" in _CACHE:
+            return _CACHE["executivos"]
+    payload = _read_json(EXECUTIVO_FILE) or {}
+    with _LOCK:
+        _CACHE["executivos"] = payload
+    return payload
+
+
+def _freguesia_por_nome(nome: str) -> Optional[Dict[str, Any]]:
+    """Freguesia da árvore do MAI pelo nome (para situar um edifício)."""
+    alvo = chave_territorio(nome)
+    for freguesia in territorios().get("freguesias") or []:
+        if chave_territorio(freguesia.get("nome") or "") == alvo:
+            return freguesia
+    return None
+
+
+def nomes_eleitos() -> Dict[str, Any]:
+    """Nomes dos eleitos (CNE, Mapa Oficial), do ficheiro em disco."""
+    with _LOCK:
+        if "nomes_eleitos" in _CACHE:
+            return _CACHE["nomes_eleitos"]
+    payload = _read_json(ELEITOS_NOMES_FILE) or {}
+    with _LOCK:
+        _CACHE["nomes_eleitos"] = payload
+    return payload
+
+
+def _vencedora(resultado: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """A candidatura mais votada de um território (é ela que preside)."""
+    if not resultado:
+        return None
+    votos = resultado.get("votos") or []
+    return votos[0] if votos else None
+
+
+def _presidente_do_mapa(
+    bloco: Dict[str, Any],
+    resultado: Optional[Dict[str, Any]],
+    avisos: List[Dict[str, Any]],
+    nome_concelho: str,
+    nome_mais: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Quem preside: o primeiro nome da coluna da candidatura mais votada.
+
+    O `nome_mais` (o que o MAI publica como eleito) serve só de conferência: as
+    duas fontes escrevem os nomes de forma diferente («Gaudinho» e «Gaudino») e é
+    a estrutura — a lista vencedora, com o seu cabeça de lista — que decide.
+    """
+    vencedora = _vencedora(resultado)
+    if not vencedora:
+        return None
+    alvo = _sigla_chave(vencedora.get("sigla"))
+    for lista in bloco.get("listas") or []:
+        if _sigla_chave(lista.get("sigla")) == alvo or (
+            alvo and _sigla_chave(lista.get("sigla")) and (
+                _sigla_chave(lista["sigla"]) in alvo or alvo in _sigla_chave(lista["sigla"])
+            )
+        ):
+            nomes = lista.get("nomes") or []
+            if not nomes:
+                return None
+            dono = nomes[0]
+            if nome_mais and not nomes_parecidos(dono, nome_mais):
+                avisos.append({
+                    "concelho": nome_concelho,
+                    "aviso": "grafia diferente entre o MAI e o Mapa Oficial",
+                    "nome_no_mai": nome_mais,
+                    "nome_no_mapa": _titulo(dono),
+                })
+            return {
+                "nome": _titulo(dono),
+                "sigla": lista.get("sigla"),
+                "votos": vencedora.get("votos"),
+                "cargo": "Presidente",
+            }
+    return None
+
+
+def collect_eleitos_nomes(forcar: bool = False) -> Dict[str, Any]:
+    """Recolhe os **nomes** dos eleitos do Mapa Oficial da CNE.
+
+    O MAI diz quem ganhou e quantos mandatos tem cada lista; o Mapa Oficial diz
+    **quem** são as pessoas. Cruzam-se pelo nome do presidente eleito: a coluna do
+    mapa que contém o presidente é a lista dele, e o primeiro nome dessa coluna é
+    ele próprio.
+
+    O que fica gravado é só o que veio dos dois lados: os nomes, a lista de cada
+    um e a conferência de que a soma dos nomes de cada câmara dá exactamente os
+    mandatos daquela câmara (`aviso` onde não der).
+    """
+    from api import mapa_oficial_cne
+
+    dados = eleitos()
+    if not dados:
+        raise RuntimeError(
+            "Sem eleitos do MAI: corra primeiro `collect_eleitos` (é o que diz quem ganhou)."
+        )
+    mapa = mapa_oficial_cne.coletar(_data_dir(), forcar=forcar)
+    # Municípios do MAI: é a lista (e não um dicionário por nome) porque há nomes
+    # repetidos — «Calheta» existe nos Açores e na Madeira.
+    concelhos = list(territorios().get("concelhos") or [])
+    por_concelho: Dict[str, Any] = {}
+    sem_correspondencia: List[str] = []
+    avisos: List[Dict[str, Any]] = []
+
+    for bloco in mapa["camaras"]:
+        concelho = _concelho_do_mapa(bloco.get("concelho") or "", concelhos)
+        if not concelho:
+            sem_correspondencia.append(bloco.get("concelho"))
+            continue
+
+        registo_mais = (dados.get("concelhos") or {}).get(str(concelho.get("id"))) or {}
+        presidente_mais = (registo_mais.get("presidente") or {})
+        nome_presidente = presidente_mais.get("nome")
+
+        listas = list(bloco.get("listas") or [])
+        # Quem ganhou a câmara sabe-se pelos resultados (a lista que elegeu a
+        # presidência); a coluna dessa lista no Mapa Oficial é a do presidente, e
+        # o primeiro nome dessa coluna é ele. É a estrutura que o diz — não a
+        presidente = _presidente_do_mapa(
+            bloco,
+            (mapa.get("resultados") or {}).get(f'{bloco.get("cod")}|{mapa_oficial_cne.ORGAO_CAMARA}'),
+            avisos,
+            concelho.get("nome"),
+            nome_presidente,
+        )
+        if presidente:
+            presidente["cargo"] = "Presidente da Câmara Municipal"
+        indice_presidente = None
+        if presidente:
+            for indice, lista in enumerate(listas):
+                if _sigla_chave(lista.get("sigla")) == _sigla_chave(presidente.get("sigla")):
+                    indice_presidente = indice
+                    break
+
+        vereadores = []
+        for indice, lista in enumerate(listas):
+            for posicao, nome in enumerate(lista.get("nomes") or []):
+                if indice == indice_presidente and posicao == 0:
+                    continue
+                vereadores.append({
+                    "nome": _titulo(nome),
+                    "sigla": lista.get("sigla"),
+                    "cargo": "Vereador",
+                })
+
+        total_mandatos = sum(p.get("mandatos") or 0 for p in (registo_mais.get("camara") or []))
+        total_nomes = sum(len(lista.get("nomes") or []) for lista in listas)
+        if total_mandatos and total_nomes != total_mandatos:
+            avisos.append({
+                "concelho": concelho.get("nome"),
+                "mandatos": total_mandatos,
+                "nomes": total_nomes,
+            })
+
+        por_concelho[str(concelho.get("id"))] = {
+            "concelho_id": concelho.get("id"),
+            "concelho": concelho.get("nome"),
+            "distrito": concelho.get("distrito"),
+            "codigo_ine": bloco.get("cod"),
+            "presidente": presidente,
+            "vereadores": vereadores,
+            "camara": [
+                {"sigla": lista.get("sigla"), "total": len(lista.get("nomes") or []), "nomes": listas and [_titulo(n) for n in lista.get("nomes") or []]}
+                for lista in listas
+            ],
+            "total_eleitos": total_nomes,
+            "total_mandatos": total_mandatos,
+            "presidente_identificado": presidente is not None,
+        }
+
+    com_presidente = sum(1 for registo in por_concelho.values() if registo["presidente_identificado"])
+    if len(por_concelho) < int(MAI_TOTAL_CONCELHOS * 0.9):
+        raise RuntimeError(
+            f"Só {len(por_concelho)} de {MAI_TOTAL_CONCELHOS} municípios casaram com o Mapa "
+            "Oficial. Nada foi substituído."
+        )
+
+    payload = {
+        "cached_at": _now_iso(),
+        "fonte": mapa.get("fonte"),
+        "fonte_url": mapa.get("fonte_url"),
+        "fonte_pagina": mapa.get("pagina"),
+        "eleicao": mapa.get("eleicao"),
+        "orgao": "Câmara Municipal",
+        "nota": (
+            "Nomes transcritos do Mapa Oficial n.º 2-B/2025 da Comissão Nacional de Eleições "
+            "(ficheiros `mapa_3_eleitos` e `mapa_1_resultados`, versão retificada). Quem preside é "
+            "o cabeça de lista da candidatura mais votada; os vereadores são todas as outras "
+            "pessoas eleitas para a câmara, cada uma com a lista por que foi eleita."
+        ),
+        "total_concelhos": len(por_concelho),
+        "total_com_presidente": com_presidente,
+        "total_vereadores": sum(len(r["vereadores"]) for r in por_concelho.values()),
+        "lacunas": [
+            {**aviso, "faltam": (aviso.get("mandatos") or 0) - (aviso.get("nomes") or 0)}
+            for aviso in avisos
+            if "mandatos" in aviso
+        ],
+        "divergencias": [aviso for aviso in avisos if "mandatos" not in aviso],
+        "sem_correspondencia": sorted(nome for nome in sem_correspondencia if nome),
+        "concelhos": por_concelho,
+        "freguesias": _eleitos_das_freguesias(mapa),
+    }
+    _write_json(ELEITOS_NOMES_FILE, payload)
+    with _LOCK:
+        _CACHE["nomes_eleitos"] = payload
+    return payload
+
+
+def _concelho_do_mapa(nome: str, concelhos: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Município do MAI a que corresponde um concelho do Mapa Oficial da CNE.
+
+    O mapa desambigua os três municípios homónimos com a região autónoma —
+    «Calheta (R.A.M.)», «Calheta (R.A.A.)» e «Lagoa (R.A.A)» —, e é por esse
+    sufixo que se escolhe o município certo: a chave do nome é a mesma nos dois
+    («calheta»), pelo que sem a região o casamento seria ao lado.
+    """
+    dobrado = _fold(nome)
+    regiao = None
+    if re.search(r"r\.?\s*a\.?\s*m", dobrado):
+        regiao = "madeira"
+    elif re.search(r"r\.?\s*a\.?\s*a", dobrado):
+        regiao = "acores"
+    # A região não faz parte do nome: sai antes de procurar pela chave.
+    nome_limpo = re.sub(r"\(\s*r\.?\s*a\.?\s*[am]\.?\s*\)", "", nome, flags=re.IGNORECASE)
+    alvo = chave_territorio(nome_limpo)
+    if not alvo:
+        return None
+    candidatos = [c for c in concelhos if chave_territorio(c.get("nome") or "") == alvo]
+    if not candidatos:
+        return None
+    if regiao:
+        for concelho in candidatos:
+            if regiao in _fold(concelho.get("distrito") or ""):
+                return concelho
+        return None
+    return candidatos[0]
+
+
+def _pessoas_do_concelho(
+    registo: Dict[str, Any],
+    nomes: Dict[str, Any],
+    papeis: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Presidente e vereadores com o que cada um recebe, prontos a mostrar."""
+    pessoas: List[Dict[str, Any]] = []
+    nome_registo = nomes.get(str(registo.get("id"))) or {}
+    presidente = dict((nome_registo.get("presidente") or {}) or {})
+    if presidente:
+        presidente.update({
+            "tipo": "presidente",
+            "remuneracao_mensal": (papeis.get("presidente") or {}).get("valor"),
+            "remuneracao_descricao": (papeis.get("presidente") or {}).get("descricao"),
+            "despesas_representacao": (papeis.get("despesas_presidente") or {}).get("valor"),
+            "senhas": (papeis.get("senha_presidente_assembleia") or {}).get("valor"),
+            "fonte_nome": nome_registo.get("concelho") and nomes.get("fonte"),
+        })
+        pessoas.append(presidente)
+    valor_vereador = (
+        (papeis.get("vereador") or {}).get("valor")
+        or (papeis.get("vereador_meio_tempo") or {}).get("valor")
+    )
+    for vereador in nome_registo.get("vereadores") or []:
+        pessoas.append({
+            "nome": vereador.get("nome"),
+            "sigla": vereador.get("sigla"),
+            "cargo": "Vereador",
+            "tipo": "vereador",
+            "remuneracao_mensal": valor_vereador,
+            "remuneracao_descricao": (papeis.get("vereador") or {}).get("descricao"),
+            "despesas_representacao": (papeis.get("despesas_vereador") or {}).get("valor"),
+            "senhas": (papeis.get("senha_vereador") or {}).get("valor"),
+        })
+    return pessoas
+
+
+def listar_pessoas(
+    q: Optional[str] = None,
+    distrito: Optional[str] = None,
+    cargo: Optional[str] = None,
+    partido: Optional[str] = None,
+    page: int = 1,
+    size: int = 50,
+) -> Dict[str, Any]:
+    """Quem foi eleito, onde, por que lista e quanto recebe.
+
+    Junta as três peças por pessoa: o nome (Mapa Oficial da CNE), o município e o
+    escalão (MAI) e a remuneração que a tabela fixa para aquele cargo.
+    """
+    dados = territorios()
+    nomes = nomes_eleitos()
+    por_concelho = nomes.get("concelhos") or {}
+    pessoas: List[Dict[str, Any]] = []
+
+    for concelho in dados.get("concelhos") or []:
+        registo_nomes = por_concelho.get(str(concelho.get("id")))
+        if not registo_nomes:
+            continue
+        if distrito and _fold(distrito) not in _fold(concelho.get("distrito") or ""):
+            continue
+        papeis = papeis_por_chave("municipio", concelho.get("eleitores"), concelho.get("nome"))
+        for pessoa in _pessoas_do_concelho(concelho, por_concelho, papeis):
+            registo = {
+                **pessoa,
+                "concelho": concelho.get("nome"),
+                "concelho_id": concelho.get("id"),
+                "distrito": concelho.get("distrito"),
+                "eleitores": concelho.get("eleitores"),
+                "escalao": escalao_por_eleitores(
+                    "municipio", concelho.get("eleitores"), concelho.get("nome")
+                ),
+            }
+            registo["escalao"] = (registo["escalao"] or {}).get("designacao")
+            if cargo and _fold(cargo) not in _fold(pessoa.get("tipo") or ""):
+                continue
+            if partido and _fold(partido) not in _fold(pessoa.get("sigla") or ""):
+                continue
+            if q:
+                termo = _fold(q)
+                if termo not in _fold(
+                    f"{pessoa.get('nome') or ''} {concelho.get('nome') or ''} {pessoa.get('sigla') or ''}"
+                ):
+                    continue
+            pessoas.append(registo)
+
+    pessoas.sort(key=lambda p: (p.get("distrito") or "", p.get("concelho") or "", p.get("tipo") != "presidente", p.get("nome") or ""))
+    total = len(pessoas)
+    from_ = max(0, (page - 1) * size)
+    return {
+        "total": total,
+        "page": page,
+        "size": size,
+        "items": pessoas[from_ : from_ + size],
+        "total_presidentes": sum(1 for p in pessoas if p.get("tipo") == "presidente"),
+        "total_vereadores": sum(1 for p in pessoas if p.get("tipo") == "vereador"),
+        "fonte": nomes.get("fonte"),
+        "fonte_url": nomes.get("fonte_url"),
+        "eleicao": nomes.get("eleicao"),
+        "recolhido_em": nomes.get("cached_at"),
+    }
+
+
+def executivo_concelho(
+    concelho_id: Any = None, nome: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """O executivo de um município lido do site da câmara (pelouros incluídos).
+
+    Complementa o Mapa Oficial: os nomes e as listas vêm da CNE, mas os pelouros
+    e a página de cada eleito só existem no site do município.
+    """
+    dados = executivos()
+    concelhos = dados.get("concelhos") or {}
+    if not concelhos:
+        return None
+    alvo = _fold(nome) if nome else None
+    for chave, registo in concelhos.items():
+        if concelho_id is not None and str(registo.get("concelho_id")) == str(concelho_id):
+            return _formatar_executivo(registo, dados)
+        if alvo and (_fold(chave) == alvo or _fold(registo.get("nome")) == alvo):
+            return _formatar_executivo(registo, dados)
+    return None
+
+
+def _formatar_executivo(registo: Dict[str, Any], dados: Dict[str, Any]) -> Dict[str, Any]:
+    membros = [dict(m) for m in (registo.get("membros") or [])]
+    return {
+        "nome": registo.get("nome"),
+        "fonte": registo.get("fonte") or (dados.get("fonte") or {}).get("documento"),
+        "fonte_url": registo.get("fonte_url"),
+        "consultado_em": registo.get("consultado_em"),
+        "total": len(membros),
+        "membros": membros,
+        "por_cargo": _contar_cargos(membros),
+    }
+
+
+def _contar_cargos(membros: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    contagem: Dict[str, int] = {}
+    for membro in membros:
+        cargo = (membro.get("cargo") or "").strip().capitalize() or "—"
+        contagem[cargo] = contagem.get(cargo, 0) + 1
+    return [{"cargo": cargo, "count": n} for cargo, n in sorted(contagem.items(), key=lambda x: -x[1])]
+
+
+def _associar_nomes(
+    por_partido: List[Dict[str, Any]],
+    presidente: Optional[Dict[str, Any]],
+    executivo: Dict[str, Any],
+) -> None:
+    """Liga os nomes do executivo à composição eleita e ao presidente.
+
+    Os nomes só se colam a uma lista quando a **preenchem exactamente** (sem o
+    presidente, que ocupa a presidência e não um lugar de vereador): assim não se
+    dá a entender que uma lista está completa quando não está. O município pode
+    declarar uma filiação diferente da lista por que a pessoa foi eleita (é o caso
+    dos independentes); quem não fechar uma lista fica em `nao_associados`, onde a
+    interface o mostra — em vez de desaparecer.
+    """
+    membros = executivo.get("membros") or []
+    if presidente:
+        dono = next(
+            (
+                membro
+                for membro in membros
+                if (membro.get("cargo") or "").lower().startswith("president")
+                and _mesmo_nome(membro.get("nome"), presidente.get("nome"))
+            ),
+            None,
+        )
+        if dono:
+            presidente["nome_no_municipio"] = dono.get("nome")
+            presidente["atribuicoes"] = dono.get("atribuicoes")
+            presidente["url"] = dono.get("url")
+
+    nomes_por_sigla: Dict[str, List[str]] = {}
+    for membro in membros:
+        sigla = membro.get("partido")
+        if not sigla or (membro.get("cargo") or "").lower().startswith("president"):
+            continue
+        nomes_por_sigla.setdefault(sigla, []).append(membro.get("nome"))
+    associados: set = set()
+    for linha in por_partido:
+        nomes = nomes_por_sigla.get(linha.get("sigla")) or []
+        if nomes and len(nomes) == (linha.get("vereadores") or 0):
+            linha["nomes"] = nomes
+            associados.update(nomes)
+    executivo["nao_associados"] = [
+        {
+            "nome": membro.get("nome"),
+            "cargo": membro.get("cargo"),
+            "partido": membro.get("partido"),
+            "atribuicoes": membro.get("atribuicoes"),
+        }
+        for membro in membros
+        if membro.get("nome") not in associados
+        and not (membro.get("cargo") or "").lower().startswith("president")
+    ]
+
+
+def importar_executivo(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Guarda (ou substitui) o executivo de um município e reindexa.
+
+    É a porta para acrescentar municípios sem tocar no código: o que vier do site
+    da câmara entra tal como foi lido, com o URL de onde veio.
+    """
+    nome = (payload.get("concelho") or payload.get("nome") or "").strip()
+    membros = payload.get("membros") or []
+    if not nome:
+        return {"error": "`concelho` é obrigatório", "imported": 0}
+    if not membros:
+        return {"error": "`membros` tem de trazer pelo menos um nome", "imported": 0}
+
+    encontrado = _encontrar_concelho_territorio(nome)
+    atual = executivos()
+    registo = {
+        "concelho_id": (encontrado or {}).get("id") or payload.get("concelho_id"),
+        "nome": (encontrado or {}).get("nome") or nome,
+        "distrito": (encontrado or {}).get("distrito") or payload.get("distrito"),
+        "fonte": payload.get("fonte"),
+        "fonte_url": payload.get("fonte_url"),
+        "consultado_em": payload.get("consultado_em") or _now_iso()[:10],
+        "total_membros": len(membros),
+        "membros": [
+            {
+                "nome": (membro.get("nome") or "").strip(),
+                "cargo": (membro.get("cargo") or "").strip() or None,
+                "partido": (membro.get("partido") or "").strip() or None,
+                "atribuicoes": (membro.get("atribuicoes") or membro.get("pelouros") or None),
+                "url": membro.get("url"),
+            }
+            for membro in membros
+            if (membro.get("nome") or "").strip()
+        ],
+    }
+    if not registo["membros"]:
+        return {"error": "nenhum membro tem `nome`", "imported": 0}
+
+    concelhos = dict(atual.get("concelhos") or {})
+    concelhos[registo["nome"]] = registo
+    atual = {**atual, "concelhos": concelhos, "gerado_em": _now_iso()}
+    atual.setdefault("fonte", {
+        "documento": "Composição do executivo (câmara municipal) — sites dos municípios",
+        "nota": (
+            "Os nomes dos vereadores só existem publicados por cada município. "
+            "Este ficheiro guarda o que foi lido de cada site municipal, com o URL exacto."
+        ),
+    })
+    _write_json(EXECUTIVO_FILE, atual)
+    with _LOCK:
+        _CACHE["executivos"] = atual
+
+    return {
+        "imported": 1,
+        "concelho": registo["nome"],
+        "concelho_id": registo.get("concelho_id"),
+        "total_membros": len(registo["membros"]),
+        "total_concelhos_com_nomes": len(concelhos),
+        "indexado": indexar(),
+    }
+
+
+def _encontrar_concelho_territorio(concelho: str) -> Optional[Dict[str, Any]]:
+    """Concelho da árvore do MAI (evita importar nomes para um município inexistente)."""
+    dados = territorios()
+    termo = _fold(concelho)
+    for item in dados.get("concelhos") or []:
+        if _fold(item.get("nome")) == termo or str(item.get("id")) == str(concelho):
+            return item
+    return None
+
+
+def _eleitos_das_freguesias(mapa: Dict[str, Any]) -> Dict[str, Any]:
+    """Os eleitos de cada freguesia: presidente da junta e assembleia.
+
+    Nas freguesias quem preside é o cabeça de lista da candidatura mais votada
+    para a assembleia — é a mesma candidatura, e é por isso que a lista vencedora
+    do `mapa_1` diz quem é o presidente da junta.
+    """
+    freguesias = territorios().get("freguesias") or []
+    por_chave = {
+        (chave_territorio(f.get("concelho") or ""), chave_territorio(f.get("nome") or "")): f
+        for f in freguesias
+    }
+    resultados = mapa.get("resultados") or {}
+    saida: Dict[str, Any] = {}
+    sem_correspondencia: List[str] = []
+
+    for bloco in mapa.get("assembleias_freguesia") or []:
+        chave = (
+            chave_territorio(bloco.get("concelho") or ""),
+            chave_territorio(bloco.get("freguesia") or ""),
+        )
+        freguesia = por_chave.get(chave)
+        if not freguesia:
+            sem_correspondencia.append(f"{bloco.get('concelho')} / {bloco.get('freguesia')}")
+            continue
+        resultado = resultados.get(f'{bloco.get("cod")}|AF')
+        presidente = _presidente_do_mapa(bloco, resultado, [], freguesia.get("nome") or "")
+        if presidente:
+            presidente["cargo"] = "Presidente da Junta de Freguesia"
+        membros = []
+        for lista in bloco.get("listas") or []:
+            for posicao, nome in enumerate(lista.get("nomes") or []):
+                if presidente and posicao == 0 and lista.get("sigla") == presidente.get("sigla"):
+                    continue
+                membros.append({
+                    "nome": _titulo(nome),
+                    "sigla": lista.get("sigla"),
+                    "cargo": "Membro da Assembleia de Freguesia",
+                })
+        saida[str(freguesia.get("id"))] = {
+            "freguesia_id": freguesia.get("id"),
+            "freguesia": freguesia.get("nome"),
+            "concelho": freguesia.get("concelho"),
+            "concelho_id": freguesia.get("concelho_id"),
+            "distrito": freguesia.get("distrito"),
+            "codigo_ine": bloco.get("cod"),
+            "presidente": presidente,
+            "membros": membros,
+            "assembleia": [
+                {"sigla": lista.get("sigla"), "total": len(lista.get("nomes") or [])}
+                for lista in bloco.get("listas") or []
+            ],
+            "total_eleitos": sum(len(lista.get("nomes") or []) for lista in bloco.get("listas") or []),
+            "votantes": (resultado or {}).get("votantes"),
+            "inscritos": (resultado or {}).get("inscritos"),
+        }
+    return {
+        "total": len(saida),
+        "com_presidente": sum(1 for r in saida.values() if r.get("presidente")),
+        "sem_correspondencia": sorted(nome for nome in sem_correspondencia if nome)[:40],
+        "total_sem_correspondencia": len(sem_correspondencia),
+        "por_freguesia": saida,
+    }
+
+
+def eleitos_freguesia(freguesia_id: Any) -> Optional[Dict[str, Any]]:
+    """Presidente da junta e membros da assembleia de uma freguesia."""
+    dados = nomes_eleitos().get("freguesias") or {}
+    registo = (dados.get("por_freguesia") or {}).get(str(freguesia_id))
+    if not registo:
+        return None
+    nomes = nomes_eleitos()
+    return {
+        **registo,
+        "papeis": papeis_territorio(
+            "freguesia",
+            next(
+                (
+                    f.get("eleitores")
+                    for f in territorios().get("freguesias") or []
+                    if str(f.get("id")) == str(freguesia_id)
+                ),
+                None,
+            ),
+            registo.get("freguesia"),
+        ),
+        "fonte": nomes.get("fonte"),
+        "fonte_url": nomes.get("fonte_url"),
+        "recolhido_em": nomes.get("cached_at"),
+    }
+
+
+def cobertura_executivo() -> Dict[str, Any]:
+    """Quanto do país já tem nomes do executivo (e quais faltam)."""
+    dados = executivos()
+    concelhos = dados.get("concelhos") or {}
+    concelhos_pais = territorios().get("concelhos") or []
+    com_nomes = set(concelhos)
+    faltam = [c for c in concelhos_pais if c.get("nome") not in com_nomes]
+    return {
+        "total_concelhos": len(concelhos_pais),
+        "com_nomes": sum(1 for c in concelhos_pais if c.get("nome") in com_nomes),
+        "total_em_falta": len(faltam),
+        "total_membros_lidos": sum(len(r.get("membros") or []) for r in concelhos.values()),
+        "fonte": (dados.get("fonte") or {}).get("documento"),
+        "nota": (dados.get("fonte") or {}).get("nota"),
+        "como_acrescentar": (dados.get("fonte") or {}).get("como_acrescentar"),
+        "concelhos": [
+            {
+                "nome": registo.get("nome"),
+                "concelho_id": registo.get("concelho_id"),
+                "distrito": registo.get("distrito"),
+                "total_membros": len(registo.get("membros") or []),
+                "fonte_url": registo.get("fonte_url"),
+                "consultado_em": registo.get("consultado_em"),
+            }
+            for registo in sorted(concelhos.values(), key=lambda r: (r.get("nome") or ""))
+        ],
+        "em_falta": sorted({c.get("nome") for c in faltam if c.get("nome")}),
     }
 
 
@@ -900,7 +1824,11 @@ def tabela(nivel: str, ano: Optional[int] = None) -> Optional[Dict[str, Any]]:
     return None
 
 
-def escalao_por_eleitores(nivel: str, eleitores: Optional[int]) -> Optional[Dict[str, Any]]:
+def escalao_por_eleitores(
+    nivel: str,
+    eleitores: Optional[int],
+    nome: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
     """Escalão da tabela em que cai um território com este número de eleitores.
 
     Os escalões são percorridos por ordem decrescente de limite inferior e
@@ -908,13 +1836,29 @@ def escalao_por_eleitores(nivel: str, eleitores: Optional[int]) -> Optional[Dict
     se sobrepõem (o escalão «7 mil eleitores e 100Km2» e o «5 mil eleitores até
     10 mil» partilham o intervalo dos 7 aos 10 mil, e ambos valem 19%), é o
     critério mais exigente — o maior número de eleitores — que decide.
+
+    Há escalões que não se decidem pelos eleitores: **Lisboa e Porto** valem 55 %
+    mesmo tendo muito mais do que os 40 mil eleitores do escalão seguinte. Por
+    isso o nome do território, quando é conhecido, decide primeiro.
     """
     if eleitores is None:
         return None
     tabela_ = tabela(nivel)
     if not tabela_:
         return None
-    candidatos = [e for e in tabela_.get("escaloes") or [] if isinstance(e, dict)]
+    candidatos: List[Dict[str, Any]] = []
+    alvo = chave_territorio(nome) if nome else None
+    for escalao in tabela_.get("escaloes") or []:
+        if not isinstance(escalao, dict):
+            continue
+        municipios = escalao.get("municipios")
+        if municipios:
+            # Escalão decidido pelo município (Lisboa e Porto): ou o nome bate
+            # certo, ou o escalão não se aplica — nunca cai aqui por eleitores.
+            if alvo and alvo in {chave_territorio(m) for m in municipios}:
+                return escalao
+            continue
+        candidatos.append(escalao)
     candidatos.sort(key=lambda e: (e.get("min_eleitores") or 0), reverse=True)
     for escalao in candidatos:
         minimo = escalao.get("min_eleitores")
@@ -933,12 +1877,17 @@ def _valor(rubrica: Dict[str, Any], escalao: Optional[Dict[str, Any]]) -> Option
     return (rubrica.get("valores") or {}).get(escalao.get("id"))
 
 
-def verbas(nivel: str, eleitores: Optional[int], ano: Optional[int] = None) -> List[Dict[str, Any]]:
+def verbas(
+    nivel: str,
+    eleitores: Optional[int],
+    ano: Optional[int] = None,
+    nome: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """Verbas da tabela aplicáveis a um território com este número de eleitores."""
     tabela_ = tabela(nivel, ano)
     if not tabela_:
         return []
-    escalao = escalao_por_eleitores(nivel, eleitores)
+    escalao = escalao_por_eleitores(nivel, eleitores, nome)
     saida: List[Dict[str, Any]] = []
     for rubrica in tabela_.get("rubricas") or []:
         saida.append({
@@ -954,9 +1903,14 @@ def verbas(nivel: str, eleitores: Optional[int], ano: Optional[int] = None) -> L
     return saida
 
 
-def _remuneracao_mensal(nivel: str, eleitores: Optional[int], ano: Optional[int] = None) -> Optional[float]:
+def _remuneracao_mensal(
+    nivel: str,
+    eleitores: Optional[int],
+    ano: Optional[int] = None,
+    nome: Optional[str] = None,
+) -> Optional[float]:
     """Remuneração mensal do presidente (tempo inteiro, exclusividade)."""
-    for verba in verbas(nivel, eleitores, ano):
+    for verba in verbas(nivel, eleitores, ano, nome):
         modalidade = (verba.get("modalidade") or "").lower()
         if verba.get("natureza") != "remuneracao" or verba.get("regime") != "Tempo Inteiro":
             continue
@@ -965,16 +1919,117 @@ def _remuneracao_mensal(nivel: str, eleitores: Optional[int], ano: Optional[int]
     return None
 
 
-def resumo_territorio(nivel: str, eleitores: Optional[int]) -> Dict[str, Any]:
+def papeis_territorio(
+    nivel: str,
+    eleitores: Optional[int],
+    nome: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Quanto recebe **cada pessoa** de um território, com o papel identificado.
+
+    A tabela oficial fala em regimes e modalidades («Tempo Inteiro», «Não
+    exclusividade»); quem mostra isto quer saber *quanto recebe o presidente* e
+    *quanto recebe um vereador*. Esta função faz essa tradução — sem inventar: o
+    `valor` sai sempre da tabela, e a `descricao` é o que a tabela diz por
+    palavras.
+
+    Serve para municípios e freguesias (nas freguesias o lugar dos vereadores é
+    dos vogais e a compensação é dos secretários e tesoureiros).
+    """
+    papeis: List[Dict[str, Any]] = []
+    vistos: set = set()
+    for verba in verbas(nivel, eleitores, None, nome):
+        if verba.get("valor") is None:
+            continue
+        papel = _papel_da_verba(verba)
+        # A mesma verba aparece duas vezes em alguns cargos (ex.: despesas de
+        # representação com e sem exclusividade): fica a primeira com valor.
+        if papel in vistos:
+            continue
+        vistos.add(papel)
+        papeis.append({
+            "papel": papel,
+            "descricao": _descricao_da_verba(verba),
+            "regime": verba.get("regime"),
+            "cargo": verba.get("cargo"),
+            "modalidade": verba.get("modalidade"),
+            "natureza": verba.get("natureza"),
+            "percentagem": verba.get("percentagem"),
+            "valor": verba.get("valor"),
+        })
+    return papeis
+
+
+def _texto_verba(verba: Dict[str, Any]) -> str:
+    return " ".join(
+        str(verba.get(campo) or "").lower()
+        for campo in ("cargo", "modalidade", "grupo")
+    )
+
+
+def _papel_da_verba(verba: Dict[str, Any]) -> str:
+    """O lugar a que a verba diz respeito, em chave curta.
+
+    Classifica-se pelo **cargo** — e não pelo grupo ou pela modalidade —, porque a
+    modalidade dos vereadores diz «80 % da remuneração do **presidente** da
+    câmara» e isso fazia passar os vereadores por presidentes.
+    """
+    cargo = (verba.get("cargo") or "").lower()
+    natureza = (verba.get("natureza") or "").lower()
+    if "senha" in natureza or "senha" in (verba.get("grupo") or "").lower():
+        if "assembleia municipal" in cargo and "presidente" in cargo:
+            return "senha_presidente_assembleia"
+        if "assembleia municipal" in cargo and "secret" in cargo:
+            return "senha_secretario_assembleia"
+        if "vereador" in cargo:
+            return "senha_vereador"
+        if "vogal" in cargo:
+            return "senha_vogal"
+        return "senha_assembleia"
+    if "representa" in natureza:
+        if "vereador" in cargo:
+            return "despesas_vereador"
+        if "vogal" in cargo:
+            return "despesas_vogal"
+        return "despesas_presidente"
+    if "compensa" in natureza:
+        if "secret" in cargo:
+            return "compensacao_secretario"
+        if "vogal" in cargo:
+            return "compensacao_vogal"
+        return "compensacao_presidente"
+    if "vereador" in cargo:
+        return "vereador_meio_tempo" if (verba.get("regime") or "") == "Meio Tempo" else "vereador"
+    if "presidente" in cargo:
+        return "presidente"
+    if "vogal" in cargo:
+        return "vogal"
+    if "secret" in cargo or "tesoureiro" in cargo:
+        return "secretario"
+    return "outro"
+
+
+def _descricao_da_verba(verba: Dict[str, Any]) -> str:
+    """O que a tabela diz, por palavras (para mostrar tal e qual ou quase)."""
+    cargo = (verba.get("cargo") or "").strip()
+    modalidade = (verba.get("modalidade") or "").strip()
+    regime = (verba.get("regime") or "").strip()
+    return " · ".join(parte for parte in (cargo, modalidade or regime) if parte)
+
+
+def resumo_territorio(
+    nivel: str,
+    eleitores: Optional[int],
+    nome: Optional[str] = None,
+) -> Dict[str, Any]:
     """O essencial de um território: escalão, remuneração mensal e verbas."""
-    escalao = escalao_por_eleitores(nivel, eleitores)
+    escalao = escalao_por_eleitores(nivel, eleitores, nome)
     return {
         "eleitores": eleitores,
         "escalao_id": (escalao or {}).get("id"),
         "escalao": (escalao or {}).get("designacao"),
         "percentagem_pr": (escalao or {}).get("percentagem_pr"),
-        "remuneracao_mensal": _remuneracao_mensal(nivel, eleitores),
-        "verbas": verbas(nivel, eleitores),
+        "remuneracao_mensal": _remuneracao_mensal(nivel, eleitores, None, nome),
+        "verbas": verbas(nivel, eleitores, None, nome),
     }
 
 
@@ -986,7 +2041,9 @@ def _com_resumo(territorio: Dict[str, Any], nivel: str, incluir_verbas: bool = T
     tabela em cada uma delas tornaria a resposta desnecessariamente grande.
     """
     doc = dict(territorio)
-    doc.update(resumo_territorio(nivel, territorio.get("eleitores")))
+    doc.update(
+        resumo_territorio(nivel, territorio.get("eleitores"), territorio.get("nome"))
+    )
     if not incluir_verbas:
         doc["verbas"] = []
     return doc
@@ -1048,9 +2105,11 @@ def listar_concelhos(
                 "mandatos": c.get("mandatos"),
                 "presidente": presidente_de(c.get("id")).get("nome"),
                 "partido": presidente_de(c.get("id")).get("sigla"),
-                "escalao_id": (escalao_por_eleitores("municipio", c.get("eleitores")) or {}).get("id"),
-                "escalao": (escalao_por_eleitores("municipio", c.get("eleitores")) or {}).get("designacao"),
-                "remuneracao_mensal": _remuneracao_mensal("municipio", c.get("eleitores")),
+                "escalao_id": (escalao_por_eleitores("municipio", c.get("eleitores"), c.get("nome")) or {}).get("id"),
+                "escalao": (escalao_por_eleitores("municipio", c.get("eleitores"), c.get("nome")) or {}).get("designacao"),
+                "remuneracao_mensal": _remuneracao_mensal(
+                    "municipio", c.get("eleitores"), None, c.get("nome")
+                ),
                 "lat": (coordenadas("municipio", c.get("nome") or "", c.get("distrito")) or {}).get("lat"),
                 "lon": (coordenadas("municipio", c.get("nome") or "", c.get("distrito")) or {}).get("lon"),
                 "total_freguesias": len(c.get("freguesias") or []),
@@ -1185,7 +2244,7 @@ def mapa(
             item.get("nome") or "",
             item.get("distrito") if nivel == "municipio" else item.get("concelho"),
         )
-        escalao = escalao_por_eleitores(tabela_nivel, item.get("eleitores"))
+        escalao = escalao_por_eleitores(tabela_nivel, item.get("eleitores"), item.get("nome"))
         if not ponto:
             sem_coordenadas.append(item.get("nome"))
         features.append({
@@ -1199,7 +2258,9 @@ def mapa(
             "mandatos": item.get("mandatos"),
             "escalao_id": (escalao or {}).get("id"),
             "escalao": (escalao or {}).get("designacao"),
-            "remuneracao_mensal": _remuneracao_mensal(tabela_nivel, item.get("eleitores")),
+            "remuneracao_mensal": _remuneracao_mensal(
+                tabela_nivel, item.get("eleitores"), None, item.get("nome")
+            ),
             "lat": (ponto or {}).get("lat"),
             "lon": (ponto or {}).get("lon"),
             "wikidata": (ponto or {}).get("wikidata"),
@@ -1331,6 +2392,7 @@ def stats() -> Dict[str, Any]:
                 for registo in ((eleitos() or {}).get("concelhos") or {}).values()
                 if (registo.get("presidente") or {}).get("sigla")
             }),
+            "concelhos_com_nomes_executivo": cobertura_executivo()["com_nomes"],
         },
         "fonte_tabela": (abonos().get("fonte") or {}).get("documento"),
     }
@@ -1385,6 +2447,7 @@ def _docs_tabela() -> List[Dict[str, Any]]:
     documentos: List[Dict[str, Any]] = []
     fonte = abonos().get("fonte") or {}
     for tabela_ in abonos().get("tabelas") or []:
+        fonte_tabela = tabela_.get("fonte") or fonte
         escaloes = {e.get("id"): e for e in (tabela_.get("escaloes") or []) if e.get("id")}
         for rubrica in tabela_.get("rubricas") or []:
             valores = []
@@ -1394,6 +2457,7 @@ def _docs_tabela() -> List[Dict[str, Any]]:
                     "escalao": escalao.get("designacao"),
                     "min_eleitores": escalao.get("min_eleitores"),
                     "max_eleitores": escalao.get("max_eleitores"),
+                    "municipios": escalao.get("municipios"),
                     "percentagem_pr": escalao.get("percentagem_pr"),
                     "valor": (rubrica.get("valores") or {}).get(escalao_id),
                     "percentagem": (rubrica.get("percentagens") or {}).get(escalao_id),
@@ -1408,8 +2472,8 @@ def _docs_tabela() -> List[Dict[str, Any]]:
                 "cargo": rubrica.get("cargo"),
                 "modalidade": rubrica.get("modalidade"),
                 "natureza": rubrica.get("natureza"),
-                "base_legal": fonte.get("base_legal"),
-                "fonte": fonte.get("documento"),
+                "base_legal": fonte_tabela.get("base_legal"),
+                "fonte": fonte_tabela.get("documento"),
                 "valores": valores,
             })
     return documentos
@@ -1424,13 +2488,16 @@ def _docs_territorios() -> List[Dict[str, Any]]:
     documentos: List[Dict[str, Any]] = []
 
     def _doc(territorio: Dict[str, Any], nivel: str, prefixo: str) -> Dict[str, Any]:
-        resumo = resumo_territorio(nivel, territorio.get("eleitores"))
+        resumo = resumo_territorio(nivel, territorio.get("eleitores"), territorio.get("nome"))
         concelho = territorio.get("nome") if prefixo == "concelho" else territorio.get("concelho")
         ponto = coordenadas(
             nivel, territorio.get("nome") or "", territorio.get("distrito" if prefixo == "concelho" else "concelho")
         ) or {}
         eleitos_doc = eleitos_concelho(territorio.get("id")) if prefixo == "concelho" else None
         presidente = (eleitos_doc or {}).get("presidente") or {}
+        executivo = (eleitos_doc or {}).get("executivo") or {}
+        nomes_doc = (eleitos_doc or {}).get("nomes") or {}
+        camara_edificio = (eleitos_doc or {}).get("camara_municipal") or {}
         return {
             "doc_id": f"{prefixo}-{territorio.get('id')}",
             "territory_id": territorio.get("id"),
@@ -1459,9 +2526,36 @@ def _docs_territorios() -> List[Dict[str, Any]]:
                     "mandatos": p.get("mandatos"),
                     "presidentes": p.get("presidentes"),
                     "vereadores": p.get("vereadores"),
+                    "nomes": p.get("nomes"),
                 }
                 for p in ((eleitos_doc or {}).get("vereadores") or {}).get("por_partido") or []
             ],
+            # Nomes do executivo, lidos do site da câmara (a única fonte que os
+            # publica): ficam pesquisáveis por nome do vereador.
+            "executivo": [
+                {
+                    "nome": membro.get("nome"),
+                    "cargo": membro.get("cargo"),
+                    "partido": membro.get("partido"),
+                    "atribuicoes": membro.get("atribuicoes"),
+                }
+                for membro in executivo.get("membros") or []
+            ],
+            "executivo_nomes": [membro.get("nome") for membro in executivo.get("membros") or []],
+            "executivo_fonte": executivo.get("fonte_url"),
+            "nomes_fonte": nomes_doc.get("fonte"),
+            "total_eleitos_com_nome": nomes_doc.get("total_eleitos"),
+            "camara_municipal": {
+                "designacao": camara_edificio.get("designacao"),
+                "imagem": camara_edificio.get("imagem"),
+                "foto_url": (camara_edificio.get("credito") or {}).get("url"),
+                "credito_autor": (camara_edificio.get("credito") or {}).get("autor"),
+                "credito_licenca": (camara_edificio.get("credito") or {}).get("licenca"),
+                "patrimonio": camara_edificio.get("patrimonio"),
+                "wikidata": camara_edificio.get("wikidata"),
+                "artigo": camara_edificio.get("artigo"),
+            } if camara_edificio else None,
+            "tem_foto_camara": bool((camara_edificio.get("credito") or {}).get("url")),
             "escalao_id": resumo.get("escalao_id"),
             "escalao": resumo.get("escalao"),
             "remuneracao_mensal": resumo.get("remuneracao_mensal"),
@@ -1491,12 +2585,56 @@ def _docs_territorios() -> List[Dict[str, Any]]:
     return documentos
 
 
+def _docs_pessoas() -> List[Dict[str, Any]]:
+    """Uma pessoa eleita por documento: presidente de câmara e vereadores.
+
+    Sai daqui o que a pesquisa de pessoas precisa: o nome, o município, o
+    partido, o cargo e quanto recebe por mês.
+    """
+    dados = territorios()
+    nomes = nomes_eleitos()
+    por_concelho = nomes.get("concelhos") or {}
+    documentos: List[Dict[str, Any]] = []
+
+    for concelho in dados.get("concelhos") or []:
+        registo = por_concelho.get(str(concelho.get("id")))
+        if not registo:
+            continue
+        papeis = papeis_por_chave("municipio", concelho.get("eleitores"), concelho.get("nome"))
+        for pessoa in _pessoas_do_concelho(concelho, por_concelho, papeis):
+            nome = pessoa.get("nome") or ""
+            if not nome:
+                continue
+            documentos.append({
+                "doc_id": f"{concelho.get('id')}-{_slug(nome)}",
+                "nome": nome,
+                "cargo": pessoa.get("cargo") or "Vereador",
+                "tipo": pessoa.get("tipo"),
+                "sigla": pessoa.get("sigla"),
+                "concelho_id": concelho.get("id"),
+                "concelho": concelho.get("nome"),
+                "distrito": concelho.get("distrito"),
+                "eleitores": concelho.get("eleitores"),
+                "escalao": (
+                    escalao_por_eleitores("municipio", concelho.get("eleitores"), concelho.get("nome")) or {}
+                ).get("designacao"),
+                "remuneracao_mensal": pessoa.get("remuneracao_mensal"),
+                "despesas_representacao": pessoa.get("despesas_representacao"),
+                "senhas": pessoa.get("senhas"),
+                "fonte": nomes.get("fonte"),
+                "eleicao": nomes.get("eleicao"),
+                "mandato": "2025-2029",
+            })
+    return documentos
+
+
 def indexar(apenas_tabelas: bool = False) -> Dict[str, Any]:
     """Indexa a tabela de abonos e (salvo `apenas_tabelas`) os territórios."""
     try:
         from api.elasticsearch_client import (
             get_es_client,
             index_remuneracoes_bulk,
+            index_remuneracoes_pessoas_bulk,
             index_remuneracoes_territorios_bulk,
         )
     except Exception as exc:  # pragma: no cover - import sempre disponível
@@ -1508,6 +2646,7 @@ def indexar(apenas_tabelas: bool = False) -> Dict[str, Any]:
     saida = {"tabela": index_remuneracoes_bulk(_docs_tabela(), es=client)}
     if not apenas_tabelas:
         saida["territorios"] = index_remuneracoes_territorios_bulk(_docs_territorios(), es=client)
+        saida["pessoas"] = index_remuneracoes_pessoas_bulk(_docs_pessoas(), es=client)
     return saida
 
 

@@ -269,6 +269,13 @@ REMUNERACOES_INDEX = "finance_remuneracoes"
 # que caem e as remunerações que lhes correspondem, mais o polígono do mapa.
 REMUNERACOES_TERRITORIOS_INDEX = "finance_remuneracoes_territorios"
 
+# As **pessoas** eleitas: um documento por eleito (presidente de câmara e
+# vereadores), com o município, o partido, o cargo e a remuneração mensal que a
+# tabela fixa para esse cargo. Os nomes vêm do Mapa Oficial da CNE (é a única
+# publicação com os nomes de todos os eleitos); quem ganhou e quantos mandatos
+# tem cada lista vem do MAI. `_id` = `<concelho_id>-<slug do nome>`.
+REMUNERACOES_PESSOAS_INDEX = "finance_remuneracoes_pessoas"
+
 # Registo oficial dos partidos na **CNE**: denominação, sigla, data de inscrição,
 # situação (`inscrito`/`extinto`), sítio na Internet, símbolo e descrição. É a
 # chave que liga os documentos das contas ao partido. `_id` = `<chave>` (slug).
@@ -491,6 +498,17 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
         }
     },
     REMUNERACOES_TERRITORIOS_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    REMUNERACOES_PESSOAS_INDEX: {
         "analysis": {
             "analyzer": {
                 "world_folding": {
@@ -2670,6 +2688,39 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
     }
 
     # Os abonos aplicados ao território (concelho e freguesia).
+    remuneracoes_pessoas_mappings = {
+        "properties": {
+            "doc_id": {"type": "keyword"},
+            "nome": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 256}},
+            },
+            "cargo": {"type": "keyword", "ignore_above": 128},
+            "tipo": {"type": "keyword"},
+            "sigla": {"type": "keyword", "ignore_above": 128},
+            "concelho_id": {"type": "integer"},
+            "concelho": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 256}},
+            },
+            "distrito": {"type": "keyword", "ignore_above": 128},
+            "eleitores": {"type": "long"},
+            "escalao": {"type": "keyword", "ignore_above": 512},
+            "remuneracao_mensal": {"type": "double"},
+            "despesas_representacao": {"type": "double"},
+            "senhas": {"type": "double"},
+            "fonte": {"type": "keyword", "ignore_above": 512},
+            "eleicao": {"type": "keyword", "ignore_above": 128},
+            "mandato": {"type": "keyword", "ignore_above": 64},
+            "ingested_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
     remuneracoes_territorios_mappings = {
         "properties": {
             "doc_id": {"type": "keyword"},
@@ -2708,6 +2759,33 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "partido": {"type": "keyword", "ignore_above": 128},
             "partido_descricao": {"type": "keyword", "ignore_above": 256},
             "vereadores": {"type": "integer"},
+            "executivo": {
+                "type": "object",
+                "properties": {
+                    "nome": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+                    "cargo": {"type": "keyword", "ignore_above": 64},
+                    "partido": {"type": "keyword", "ignore_above": 128},
+                    "atribuicoes": {"type": "text"},
+                },
+            },
+            "executivo_nomes": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+            "executivo_fonte": {"type": "keyword", "ignore_above": 512},
+            # A câmara municipal (o edifício): fotografia com autor e licença,
+            # coordenadas e classificação patrimonial. Vem do Wikidata/Commons.
+            "camara_municipal": {
+                "type": "object",
+                "properties": {
+                    "designacao": {"type": "text"},
+                    "imagem": {"type": "keyword", "ignore_above": 512},
+                    "foto_url": {"type": "keyword", "ignore_above": 2048, "index": False},
+                    "credito_autor": {"type": "text"},
+                    "credito_licenca": {"type": "keyword", "ignore_above": 256},
+                    "patrimonio": {"type": "keyword", "ignore_above": 512},
+                    "wikidata": {"type": "keyword", "ignore_above": 64},
+                    "artigo": {"type": "keyword", "ignore_above": 2048, "index": False},
+                },
+            },
+            "tem_foto_camara": {"type": "boolean"},
             "camara": {
                 "type": "object",
                 "properties": {
@@ -3186,6 +3264,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         # a cada concelho e freguesia (eleitores, escalão e polígono do mapa).
         (REMUNERACOES_INDEX, remuneracoes_mappings),
         (REMUNERACOES_TERRITORIOS_INDEX, remuneracoes_territorios_mappings),
+        (REMUNERACOES_PESSOAS_INDEX, remuneracoes_pessoas_mappings),
         # Portal da Transparência da ERC: entidades proprietárias de OCS, pessoas
         # dos órgãos sociais, OCS detidos e o histórico das recolhas.
         (ERC_ENTIDADES_INDEX, erc_entidades_mappings),
@@ -17629,6 +17708,95 @@ def search_remuneracoes_territorios(
         return {"error": str(exc), "items": [], "total": 0}
 
 
+def index_remuneracoes_pessoas_bulk(
+    items: Iterable[Dict[str, Any]],
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa as pessoas eleitas (presidente de câmara e vereadores)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed": 0}
+    ensure_indices(client)
+    actions = []
+    now = datetime.utcnow().isoformat()
+    for doc in items:
+        if not doc.get("doc_id"):
+            continue
+        source = dict(doc)
+        source.setdefault("ingested_at", now)
+        source.setdefault("updated_at", now)
+        actions.append({
+            "_op_type": "index",
+            "_index": REMUNERACOES_PESSOAS_INDEX,
+            "_id": source["doc_id"],
+            **source,
+        })
+    if not actions:
+        return {"indexed": 0}
+    try:
+        indexed, errors = bulk(client, actions, raise_on_error=False)
+        client.indices.refresh(index=REMUNERACOES_PESSOAS_INDEX)
+        return {"indexed": indexed, "errors": len(errors) if errors else 0}
+    except Exception as exc:
+        return {"error": str(exc), "indexed": 0}
+
+
+def search_remuneracoes_pessoas(
+    q: Optional[str] = None,
+    distrito: Optional[str] = None,
+    concelho: Optional[str] = None,
+    cargo: Optional[str] = None,
+    sigla: Optional[str] = None,
+    min_remuneracao: Optional[float] = None,
+    size: int = 100,
+    page: int = 1,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa **pessoas** eleitas: por nome, município, partido ou cargo."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+    ensure_indices(client)
+
+    filters: List[Dict[str, Any]] = []
+    if distrito:
+        filters.append({"term": {"distrito": distrito}})
+    if concelho:
+        filters.append({"wildcard": {"concelho.keyword": {"value": f"*{concelho}*", "case_insensitive": True}}})
+    if cargo:
+        filters.append({"wildcard": {"cargo": {"value": f"*{cargo}*", "case_insensitive": True}}})
+    if sigla:
+        filters.append({"wildcard": {"sigla": {"value": f"*{sigla}*", "case_insensitive": True}}})
+    if min_remuneracao is not None:
+        filters.append({"range": {"remuneracao_mensal": {"gte": min_remuneracao}}})
+
+    must: List[Dict[str, Any]] = []
+    if q:
+        must.append({
+            "multi_match": {
+                "query": q,
+                "fields": ["nome^3", "concelho^2", "sigla", "cargo", "distrito"],
+                "fuzziness": "AUTO",
+            }
+        })
+    body = {
+        "query": {"bool": {"must": must or [{"match_all": {}}], "filter": filters}},
+        "from": max(0, (page - 1) * size),
+        "size": size,
+        "sort": [{"remuneracao_mensal": {"order": "desc", "missing": "_last"}}, {"nome.keyword": "asc"}],
+    }
+    try:
+        resp = client.search(index=REMUNERACOES_PESSOAS_INDEX, body=body)
+        return {
+            "total": resp["hits"]["total"]["value"],
+            "items": [{**hit["_source"], "doc_id": hit["_id"]} for hit in resp["hits"]["hits"]],
+            "page": page,
+            "size": size,
+        }
+    except Exception as exc:
+        return {"error": str(exc), "items": [], "total": 0}
+
+
 def remuneracoes_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
     """Volumetria dos índices de remunerações, por ano, nível e escalão."""
     client = es or get_es_client()
@@ -17640,6 +17808,9 @@ def remuneracoes_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
         out["indices"][REMUNERACOES_INDEX] = client.count(index=REMUNERACOES_INDEX).get("count", 0)
         out["indices"][REMUNERACOES_TERRITORIOS_INDEX] = client.count(
             index=REMUNERACOES_TERRITORIOS_INDEX
+        ).get("count", 0)
+        out["indices"][REMUNERACOES_PESSOAS_INDEX] = client.count(
+            index=REMUNERACOES_PESSOAS_INDEX
         ).get("count", 0)
     except Exception as exc:
         return {"error": str(exc)}
@@ -17686,6 +17857,30 @@ def remuneracoes_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
             out["territorios_by_distrito"] = _buckets(resp, "by_distrito")
             out["total_eleitores"] = int(
                 (resp.get("aggregations", {}).get("eleitores", {}) or {}).get("value", 0)
+            )
+        if out["indices"][REMUNERACOES_PESSOAS_INDEX]:
+            resp = client.search(
+                index=REMUNERACOES_PESSOAS_INDEX,
+                body={
+                    "size": 0,
+                    "aggs": {
+                        "by_tipo": {"terms": {"field": "tipo", "size": 10}},
+                        "by_distrito": {"terms": {"field": "distrito", "size": 30}},
+                        "by_sigla": {"terms": {"field": "sigla", "size": 30}},
+                        "remuneracao_media": {"avg": {"field": "remuneracao_mensal"}},
+                        "remuneracao_total": {"sum": {"field": "remuneracao_mensal"}},
+                    },
+                },
+            )
+            out["pessoas_by_tipo"] = _buckets(resp, "by_tipo")
+            out["pessoas_by_distrito"] = _buckets(resp, "by_distrito")
+            out["pessoas_by_sigla"] = _buckets(resp, "by_sigla")
+            agregacoes = resp.get("aggregations", {}) or {}
+            out["pessoas_remuneracao_media"] = round(
+                float((agregacoes.get("remuneracao_media", {}) or {}).get("value") or 0), 2
+            )
+            out["total_mensal_presidentes_e_vereadores"] = round(
+                float((agregacoes.get("remuneracao_total", {}) or {}).get("value") or 0), 2
             )
     except Exception as exc:
         out["agg_error"] = str(exc)

@@ -3,9 +3,10 @@
  *
  * Junta as duas peças que só fazem sentido juntas:
  *
- * 1. a **tabela oficial** dos abonos (Lei n.º 11/96) — a remuneração do
- *    presidente da junta/câmara é uma percentagem da remuneração do Presidente
- *    da República, por escalão de eleitores;
+ * 1. a **tabela oficial** dos abonos — a remuneração do presidente da
+ *    junta/câmara é uma percentagem da remuneração do Presidente da República,
+ *    por escalão de eleitores (freguesias: Lei n.º 11/96; municípios: Estatuto
+ *    dos Eleitos Locais, Lei n.º 29/87);
  * 2. o **território** — quantos eleitores inscritos tem cada concelho e cada
  *    freguesia (recenseamento do MAI) e onde fica cada um.
  *
@@ -713,8 +714,9 @@ export default function RemuneracoesPage() {
             {meta?.tabela.documento ?? "Tabela de Abonos dos Eleitos Locais"} — cruzada com o número
             de eleitores inscritos de cada concelho e freguesia
             {meta?.eleicao ? ` (${meta.eleicao})` : ""}. A remuneração de cada cargo é uma
-            percentagem da remuneração do Presidente da República, por escalão de eleitores
-            {meta?.tabela.base_legal ? ` (${meta.tabela.base_legal})` : ""}.
+            percentagem da remuneração do Presidente da República, por escalão de eleitores: nas
+            freguesias pela Lei n.º 11/96, nos municípios pelo Estatuto dos Eleitos Locais
+            (Lei n.º 29/87).
           </p>
         </div>
         <button
@@ -836,7 +838,7 @@ export default function RemuneracoesPage() {
               onSelecionar={(ponto) => void abrirConcelho(ponto.id)}
               metrica={metrica}
               semCoordenadas={mapa?.sem_coordenadas ?? []}
-              legenda={`${numero(mapa?.total ?? 0)} concelhos · política de remunerações da Lei n.º 11/96, por escalão de eleitores. Clique num concelho para abrir a ficha e ver as suas freguesias.`}
+              legenda={`${numero(mapa?.total ?? 0)} concelhos · abonos por escalão de eleitores (municípios: Estatuto dos Eleitos Locais, Lei n.º 29/87). Clique num concelho para abrir a ficha e ver as suas freguesias.`}
             />
             <div className="glass-card rounded-2xl p-3 text-[11px] text-muted-foreground">
               <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground">

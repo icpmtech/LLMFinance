@@ -16,7 +16,8 @@ A resposta não está num sítio só. Vem de duas peças que só fazem sentido j
 Sem a segunda metade não se sabe em que escalão cai o território; logo, não se
 sabe quanto é que ele recebe. O módulo cruza as duas e devolve, para cada um dos
 **308 concelhos** e das **3 259 freguesias**, o escalão em que cai e as verbas que
-lhe cabem — mais um **mapa OpenStreetMap** navegável onde se vê tudo isso.
+lhe cabem — mais um **mapa OpenStreetMap** navegável onde se vê tudo isso, e quem
+foi **eleito** em cada município nas autárquicas de 2025.
 
 ## As duas fontes
 
@@ -70,11 +71,27 @@ remuneração do presidente de câmara de município com 10 mil ou menos eleitor
 partilham o mesmo valor, pelo que a sobreposição dos seus limites não tem
 consequência financeira.
 
-A tabela dos **municípios** está definida nos escalões mas **ainda sem valores**:
-o PDF fornecido só trazia a tabela das freguesias. Importa-se com
-`POST /remuneracoes/tabelas/import` (ver abaixo) e, até lá, o campo
-`remuneracao_mensal` dos concelhos aparece a `null` — a interface di-lo, em vez
-de inventar um número.
+A tabela dos **municípios** é outra tabela, com outro regime legal: o **Estatuto
+dos Eleitos Locais** (Lei n.º 29/87, de 30 de junho, artigos 6.º a 10.º), e não a
+Lei n.º 11/96. Os escalões também não são os mesmos — e o primeiro decide-se pelo
+**município**, não pelos eleitores:
+
+| Escalão | % do PR | Presidente da câmara | Vereadores (tempo inteiro) |
+| --- | --- | --- | --- |
+| Lisboa e Porto | 55 % | 4 703,00 € | 3 762,40 € |
+| 40 mil ou mais eleitores | 50 % | 4 276,00 € | 3 420,80 € |
+| Mais de 10 mil e menos de 40 mil eleitores | 45 % | 3 848,00 € | 3 078,40 € |
+| 10 mil ou menos eleitores (restantes municípios) | 40 % | 3 421,00 € | 2 736,80 € |
+
+A tabela completa (vereadores a meio tempo, despesas de representação e senhas de
+presença da assembleia municipal) está em
+`data/remuneracoes/abonos_eleitos_locais.json`. Os valores do presidente da
+câmara são a percentagem do PR **arredondada para a unidade de euro imediatamente
+superior** (artigo 6.º n.º 2): 45 % de 8 550,10 € dá 3 847,55 €, que a tabela
+publica como 3 848,00 €. Foi transcrita da circular da **ANMP** («Remunerações dos
+Eleitos Locais 2026 – Municípios», CIR: 21/2026-LR, de 05/02/2026) e conferida
+contra os documentos de 2026 de três municípios (Tavira, Freixo de Espada à
+Cinta e Almada) — todos com os mesmos valores.
 
 ## Recolha
 
@@ -158,32 +175,48 @@ câmara é apresentada por partido. A soma confere com o total nacional: **308
 presidentes + 1 750 vereadores = 2 058 mandatos**, exactamente os mandatos
 atribuídos que o MAI publica para o país.
 
-### Importar a tabela dos municípios
+### Importar ou substituir uma tabela
+
+As tabelas de 2026 (freguesias e municípios) já estão transcritas em
+`data/remuneracoes/abonos_eleitos_locais.json`. Quando sair a tabela de um novo
+ano, importa-se pela API — o corpo é uma tabela inteira, e importar o mesmo
+`ano` + `nivel` **substitui** a anterior (corrigir em vez de duplicar):
 
 ```bash
 curl -X POST http://127.0.0.1:8002/remuneracoes/tabelas/import \
   -H "Content-Type: application/json" \
   -d '{
-        "ano": 2026,
+        "ano": 2027,
         "nivel": "municipio",
-        "titulo": "ABONOS DOS ELEITOS LOCAIS - MUNICÍPIO - ANO 2026",
+        "titulo": "ABONOS DOS ELEITOS LOCAIS - MUNICÍPIO - ANO 2027",
         "escaloes": [
-          {"id": "mun-20mil-ou-mais", "designacao": "20 mil ou mais eleitores", "min_eleitores": 20000},
-          {"id": "mun-10mil-a-20mil", "designacao": "10 mil eleitores e menos de 20 mil", "min_eleitores": 10000, "max_eleitores": 20000},
-          {"id": "mun-10mil-ou-menos", "designacao": "10 mil ou menos eleitores", "max_eleitores": 10000}
+          {"id": "mun-lisboa-porto", "designacao": "Lisboa e Porto",
+           "municipios": ["Lisboa", "Porto"], "percentagem_pr": 55.0},
+          {"id": "mun-40mil-ou-mais", "designacao": "40 mil ou mais eleitores",
+           "min_eleitores": 40000, "percentagem_pr": 50.0},
+          {"id": "mun-10mil-a-40mil", "designacao": "Mais de 10 mil e menos de 40 mil eleitores",
+           "min_eleitores": 10001, "max_eleitores": 40000, "percentagem_pr": 45.0},
+          {"id": "mun-10mil-ou-menos", "designacao": "10 mil ou menos eleitores (restantes municípios)",
+           "max_eleitores": 10001, "percentagem_pr": 40.0}
         ],
         "rubricas": [
-          {"id": "mun-remuneracao-presidente-exclusividade",
+          {"id": "mun-ti-remuneracao-presidentes",
            "regime": "Tempo Inteiro",
            "grupo": "Remuneração mensal e subsídio extraordinário de junho e novembro",
-           "cargo": "Presidente", "natureza": "remuneracao",
-           "valores": {"mun-20mil-ou-mais": 0.0, "mun-10mil-a-20mil": 0.0, "mun-10mil-ou-menos": 3421.00}}
+           "cargo": "Presidentes da Câmara Municipal",
+           "modalidade": "Permanência (exclusividade)", "natureza": "remuneracao",
+           "percentagens": {"mun-lisboa-porto": 55.0, "mun-40mil-ou-mais": 50.0,
+                            "mun-10mil-a-40mil": 45.0, "mun-10mil-ou-menos": 40.0},
+           "valores": {"mun-lisboa-porto": 4804.0, "mun-40mil-ou-mais": 4367.0,
+                       "mun-10mil-a-40mil": 3930.0, "mun-10mil-ou-menos": 3495.0}}
         ]
       }'
 ```
 
-Importar o mesmo `ano` + `nivel` **substitui** o que lá estava (corrigir em vez de
-duplicar) e reindexa automaticamente.
+O campo `min_eleitores` é inclusivo e `max_eleitores` exclusivo, como nos
+escalões das freguesias; como os eleitores são números inteiros, «mais de 10 mil»
+escreve-se `10001`. Um escalão com `municipios` só se aplica a esses municípios —
+nunca cai lá um concelho pelo número de eleitores.
 
 ## A página no portal
 

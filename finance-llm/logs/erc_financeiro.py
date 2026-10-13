@@ -30,6 +30,7 @@ parser.add_argument("--trabalhadores", type=int, default=8)
 parser.add_argument("--pausa", type=float, default=0.15)
 parser.add_argument("--vazios", type=int, default=0, help="parar após N anos vazios seguidos (0 = janela toda)")
 parser.add_argument("--todas", action="store_true", help="recolher também as entidades que já têm dados")
+parser.add_argument("--sem-indexar", action="store_true", help="não indexar no fim (indexar em separado)")
 args = parser.parse_args()
 
 progresso: dict = {}
@@ -70,6 +71,9 @@ print("[analise]", resultado["analise"], flush=True)
 for erro in resultado["errors"][:15]:
     print("   erro:", erro, flush=True)
 
-print("[indexação] a indexar (recriando os índices)…", flush=True)
-print("[indexação]", erc.indexar(forcar=True), flush=True)
-print("[fim]", flush=True)
+if args.sem_indexar:
+    print("[fim] (indexação saltada)", flush=True)
+else:
+    print("[indexação] a indexar (recriando os índices)…", flush=True)
+    print("[indexação]", erc.indexar(forcar=True), flush=True)
+    print("[fim]", flush=True)

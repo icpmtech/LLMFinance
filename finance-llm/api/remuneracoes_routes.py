@@ -22,9 +22,11 @@ partido) e a mesma conta para cada uma das suas freguesias.
 - `GET  /remuneracoes/freguesias`        — pesquisa de freguesias
 - `GET  /remuneracoes/mapa`              — coordenadas + eleitores + abono (mapa OSM)
 - `GET  /remuneracoes/eleitos`           — presidentes de câmara e vereadores eleitos em 2025
+- `GET  /remuneracoes/eleitos/executivo` — cobertura dos nomes do executivo (sites dos municípios)
 - `GET  /remuneracoes/simular`           — quanto vale um território com N eleitores
 - `POST /remuneracoes/refresh`           — recolher do MAI, georreferenciar e reindexar
 - `POST /remuneracoes/eleitos/recolher`  — recolher os eleitos e reindexar
+- `POST /remuneracoes/eleitos/executivo` — importar os nomes do executivo de um município
 - `POST /remuneracoes/reindex`           — reindexar sem recolher
 - `POST /remuneracoes/tabelas/import`    — importar/substituir uma tabela (ex.: municípios)
 """
@@ -72,6 +74,24 @@ class TabelaImportRequest(BaseModel):
     nota: Optional[str] = None
     escaloes: List[EscalaoItem]
     rubricas: List[RubricaItem] = Field(default_factory=list)
+
+
+class ExecutivoMembro(BaseModel):
+    nome: str
+    cargo: Optional[str] = Field(None, description="`Presidente`, `Vice-Presidente` ou `Vereador`")
+    partido: Optional[str] = Field(None, description="Filiação declarada pelo município")
+    atribuicoes: Optional[str] = Field(None, description="Pelouros, tal como o município os escreve")
+    url: Optional[str] = Field(None, description="Página do eleito no site do município")
+
+
+class ExecutivoImportRequest(BaseModel):
+    """Os nomes do executivo de um município, lidos do site da câmara."""
+
+    concelho: str
+    fonte: Optional[str] = None
+    fonte_url: Optional[str] = None
+    consultado_em: Optional[str] = None
+    membros: List[ExecutivoMembro]
 
 
 @router.get("/meta", summary="Proveniência dos dados e volumetria da tabela")
@@ -196,12 +216,15 @@ def remuneracoes_mapa(
 def remuneracoes_simular(
     eleitores: int = Query(..., ge=0, description="Número de eleitores inscritos"),
     nivel: str = Query("freguesia", description="`municipio` ou `freguesia`"),
+    municipio: Optional[str] = Query(
+        None, description="Nome do município (Lisboa e Porto têm escalão próprio na tabela)"
+    ),
     session: Session = None,
 ) -> Dict[str, Any]:
     return {
         "nivel": nivel,
         "eleitores": eleitores,
-        **remuneracoes.resumo_territorio(nivel, eleitores),
+        **remuneracoes.resumo_territorio(nivel, eleitores, municipio),
     }
 
 
@@ -217,6 +240,19 @@ def remuneracoes_eleitos(
     return remuneracoes.listar_eleitos(
         distrito=distrito, q=q, partido=partido, page=page, size=size
     )
+
+
+@router.get("/eleitos/executivo", summary="Cobertura dos nomes do executivo municipal")
+def remuneracoes_cobertura_executivo(session: Session = None) -> Dict[str, Any]:
+    return remuneracoes.cobertura_executivo()
+
+
+@router.post("/eleitos/executivo", summary="Importar os nomes do executivo de um município")
+def remuneracoes_importar_executivo(
+    payload: ExecutivoImportRequest,
+    session: Session = None,
+) -> Dict[str, Any]:
+    return remuneracoes.importar_executivo(payload.model_dump())
 
 
 @router.post("/eleitos/recolher", summary="Recolher os eleitos do MAI e reindexar")

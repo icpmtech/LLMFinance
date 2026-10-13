@@ -2,6 +2,7 @@
   "fonte": {
     "documento": "Tabela de Abonos dos Eleitos Locais — Ano 2026",
     "ficheiro": "Tabela_Abonos_eleitos_locais 2026.pdf",
+    "ambito": "Freguesias (a tabela dos municípios tem fonte e base legal próprias — ver `tabelas[nivel=municipio].fonte`)",
     "base_legal": "Artigos 5.º, 5.º-A, 7.º e 8.º da Lei n.º 11/96, de 18 de abril",
     "atualizacao": "Atualizado de acordo com a alínea b) do artigo 4.º do Decreto-Lei n.º 29-A/2026, de 30 de janeiro (acréscimo de 2,15%).",
     "unidade": "EUR"
@@ -281,38 +282,198 @@
       "ano": 2026,
       "nivel": "municipio",
       "titulo": "ABONOS DOS ELEITOS LOCAIS - MUNICÍPIO - ANO 2026",
-      "estado": "por_importar",
-      "nota": "O PDF fornecido só contém a tabela das freguesias. Os escalões abaixo ficam definidos (o próprio PDF refere «Município com 10 mil ou menos eleitores»), mas as percentagens e os valores têm de ser importados da tabela oficial dos municípios — não são inventados.",
+      "estado": "verificada",
+      "nota": "Transcrita da tabela oficial de 2026 dos municípios (ANMP, circular CIR: 21/2026-LR, de 05/02/2026, «Remunerações dos Eleitos Locais 2026 – Municípios»), conferida contra documentos de 2026 de três municípios (Tavira, Freixo de Espada à Cinta e Almada). O regime legal é o Estatuto dos Eleitos Locais (Lei n.º 29/87, de 30 de junho, artigos 6.º a 10.º) — não a Lei n.º 11/96, que é das freguesias. Os escalões não são os das freguesias: Lisboa e Porto têm escalão próprio (55 %), seguidos de «40 mil ou mais» (50 %), «mais de 10 mil e menos de 40 mil» (45 %) e restantes municípios (40 %).",
+      "fonte": {
+        "documento": "Remunerações dos Eleitos Locais 2026 — Municípios",
+        "emissor": "ANMP — Associação Nacional de Municípios Portugueses",
+        "referencia": "CIR: 21/2026-LR, de 05/02/2026",
+        "base_legal": "Artigos 6.º, 7.º, 8.º e 10.º do Estatuto dos Eleitos Locais (Lei n.º 29/87, de 30 de junho)",
+        "atualizacao": "Atualizado 2,15 % pelo Decreto-Lei n.º 29-A/2026, de 30 de janeiro; a remuneração do Presidente da Câmara é arredondada para a unidade de euro imediatamente superior (artigo 6.º n.º 2).",
+        "conferido_com": [
+          "CM Tavira, «Abonos dos eleitos locais do Município de Tavira em fevereiro c/ efeitos a janeiro/2026» (22 519 eleitores → 45 %)",
+          "CM Freixo de Espada à Cinta, «Remuneração dos eleitos locais 2026» (≤10 mil → 40 %)",
+          "CM Almada, «Remuneração dos eleitos locais» (2026, >40 mil → 50 %)",
+          "CM Lousada, exemplar da circular da ANMP (tabela das quatro colunas)"
+        ]
+      },
       "escaloes": [
         {
-          "id": "mun-20mil-ou-mais",
-          "designacao": "20 mil ou mais eleitores",
+          "id": "mun-lisboa-porto",
+          "designacao": "Lisboa e Porto",
           "ordem": 1,
-          "min_eleitores": 20000,
+          "min_eleitores": null,
           "max_eleitores": null,
-          "percentagem_pr": null,
-          "inferido": true
+          "percentagem_pr": 55.0,
+          "municipios": ["Lisboa", "Porto"]
         },
         {
-          "id": "mun-10mil-a-20mil",
-          "designacao": "10 mil eleitores e menos de 20 mil",
+          "id": "mun-40mil-ou-mais",
+          "designacao": "40 mil ou mais eleitores",
           "ordem": 2,
-          "min_eleitores": 10000,
-          "max_eleitores": 20000,
-          "percentagem_pr": null,
-          "inferido": true
+          "min_eleitores": 40000,
+          "max_eleitores": null,
+          "percentagem_pr": 50.0
+        },
+        {
+          "id": "mun-10mil-a-40mil",
+          "designacao": "Mais de 10 mil e menos de 40 mil eleitores",
+          "ordem": 3,
+          "min_eleitores": 10001,
+          "max_eleitores": 40000,
+          "percentagem_pr": 45.0
         },
         {
           "id": "mun-10mil-ou-menos",
-          "designacao": "10 mil ou menos eleitores",
-          "ordem": 3,
+          "designacao": "10 mil ou menos eleitores (restantes municípios)",
+          "ordem": 4,
           "min_eleitores": null,
-          "max_eleitores": 10000,
-          "percentagem_pr": null,
-          "inferido": true
+          "max_eleitores": 10001,
+          "percentagem_pr": 40.0
         }
       ],
-      "rubricas": []
+      "rubricas": [
+        {
+          "id": "mun-ti-remuneracao-presidentes",
+          "regime": "Tempo Inteiro",
+          "grupo": "Remuneração mensal e subsídio extraordinário de junho e novembro",
+          "cargo": "Presidentes da Câmara Municipal",
+          "modalidade": "Permanência (exclusividade)",
+          "natureza": "remuneracao",
+          "percentagens": {
+            "mun-lisboa-porto": 55.0,
+            "mun-40mil-ou-mais": 50.0,
+            "mun-10mil-a-40mil": 45.0,
+            "mun-10mil-ou-menos": 40.0
+          },
+          "valores": {
+            "mun-lisboa-porto": 4703.0,
+            "mun-40mil-ou-mais": 4276.0,
+            "mun-10mil-a-40mil": 3848.0,
+            "mun-10mil-ou-menos": 3421.0
+          }
+        },
+        {
+          "id": "mun-ti-remuneracao-vereadores",
+          "regime": "Tempo Inteiro",
+          "grupo": "Remuneração mensal e subsídio extraordinário de junho e novembro",
+          "cargo": "Vereadores a tempo inteiro",
+          "modalidade": "Permanência (exclusividade); 80 % da remuneração do presidente da câmara",
+          "natureza": "remuneracao",
+          "percentagens": null,
+          "valores": {
+            "mun-lisboa-porto": 3762.4,
+            "mun-40mil-ou-mais": 3420.8,
+            "mun-10mil-a-40mil": 3078.4,
+            "mun-10mil-ou-menos": 2736.8
+          }
+        },
+        {
+          "id": "mun-mt-remuneracao-vereadores",
+          "regime": "Meio Tempo",
+          "grupo": "Remuneração mensal e subsídio extraordinário de junho e novembro",
+          "cargo": "Vereadores a meio tempo",
+          "modalidade": "Meio tempo (50 % do vereador a tempo inteiro)",
+          "natureza": "remuneracao",
+          "percentagens": null,
+          "valores": {
+            "mun-lisboa-porto": 1881.2,
+            "mun-40mil-ou-mais": 1710.4,
+            "mun-10mil-a-40mil": 1539.2,
+            "mun-10mil-ou-menos": 1368.4
+          }
+        },
+        {
+          "id": "mun-ti-representacao-presidentes",
+          "regime": "Tempo Inteiro",
+          "grupo": "Despesas de representação (12 meses)",
+          "cargo": "Presidentes da Câmara Municipal",
+          "modalidade": "Permanência (exclusividade); 30 % da remuneração",
+          "natureza": "despesas_representacao",
+          "percentagens": null,
+          "valores": {
+            "mun-lisboa-porto": 1410.9,
+            "mun-40mil-ou-mais": 1282.8,
+            "mun-10mil-a-40mil": 1154.4,
+            "mun-10mil-ou-menos": 1026.3
+          }
+        },
+        {
+          "id": "mun-ti-representacao-vereadores",
+          "regime": "Tempo Inteiro",
+          "grupo": "Despesas de representação (12 meses)",
+          "cargo": "Vereadores a tempo inteiro",
+          "modalidade": "Exclusividade; 20 % da remuneração",
+          "natureza": "despesas_representacao",
+          "percentagens": null,
+          "valores": {
+            "mun-lisboa-porto": 752.48,
+            "mun-40mil-ou-mais": 684.16,
+            "mun-10mil-a-40mil": 615.68,
+            "mun-10mil-ou-menos": 547.36
+          }
+        },
+        {
+          "id": "mun-np-senhas-vereadores",
+          "regime": "Não permanência",
+          "grupo": "Senhas de presença (% do vencimento do presidente da câmara)",
+          "cargo": "Vereadores da Câmara Municipal (2 %)",
+          "modalidade": "Senhas de presença",
+          "natureza": "senha_presenca",
+          "percentagens": null,
+          "valores": {
+            "mun-lisboa-porto": 94.06,
+            "mun-40mil-ou-mais": 85.52,
+            "mun-10mil-a-40mil": 76.96,
+            "mun-10mil-ou-menos": 68.42
+          }
+        },
+        {
+          "id": "mun-np-senhas-presidente-assembleia",
+          "regime": "Não permanência",
+          "grupo": "Senhas de presença (% do vencimento do presidente da câmara)",
+          "cargo": "Presidentes da Assembleia Municipal (3 %)",
+          "modalidade": "Senhas de presença",
+          "natureza": "senha_presenca",
+          "percentagens": null,
+          "valores": {
+            "mun-lisboa-porto": 141.09,
+            "mun-40mil-ou-mais": 128.28,
+            "mun-10mil-a-40mil": 115.44,
+            "mun-10mil-ou-menos": 102.63
+          }
+        },
+        {
+          "id": "mun-np-senhas-secretarios-assembleia",
+          "regime": "Não permanência",
+          "grupo": "Senhas de presença (% do vencimento do presidente da câmara)",
+          "cargo": "Secretários da Assembleia Municipal (2,5 %)",
+          "modalidade": "Senhas de presença",
+          "natureza": "senha_presenca",
+          "percentagens": null,
+          "valores": {
+            "mun-lisboa-porto": 117.58,
+            "mun-40mil-ou-mais": 106.9,
+            "mun-10mil-a-40mil": 96.2,
+            "mun-10mil-ou-menos": 85.53
+          }
+        },
+        {
+          "id": "mun-np-senhas-assembleia",
+          "regime": "Não permanência",
+          "grupo": "Senhas de presença (% do vencimento do presidente da câmara)",
+          "cargo": "Restantes membros da Assembleia Municipal (2 %)",
+          "modalidade": "Senhas de presença",
+          "natureza": "senha_presenca",
+          "percentagens": null,
+          "valores": {
+            "mun-lisboa-porto": 94.06,
+            "mun-40mil-ou-mais": 85.52,
+            "mun-10mil-a-40mil": 76.96,
+            "mun-10mil-ou-menos": 68.42
+          }
+        }
+      ]
     }
   ],
   "gerado_em": "2026-10-13T09:03:08Z"

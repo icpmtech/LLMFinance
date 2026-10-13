@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1158 operações** em **43 grupos**.
+Versão `0.4.0` · **1160 operações** em **43 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -372,6 +372,8 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/racius/{nif}` | Racius Detail |
 | `GET` | `/remuneracoes/concelhos` | Concelhos com eleitores, escalão e abonos |
 | `GET` | `/remuneracoes/concelhos/{concelho}` | Ficha de um concelho e das suas freguesias |
+| `GET` | `/remuneracoes/eleitos` | Presidentes de câmara e vereadores eleitos (2025) |
+| `POST` | `/remuneracoes/eleitos/recolher` | Recolher os eleitos do MAI e reindexar |
 | `GET` | `/remuneracoes/escaloes` | Escalões de eleitores de um nível |
 | `GET` | `/remuneracoes/freguesias` | Freguesias com eleitores, escalão e abonos |
 | `GET` | `/remuneracoes/mapa` | Coordenadas, eleitores e abonos por território |

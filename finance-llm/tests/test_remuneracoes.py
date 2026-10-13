@@ -16,6 +16,7 @@ Testa-se o que **não** depende da rede nem do Elasticsearch:
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Dict
 
@@ -72,10 +73,44 @@ def _tabela_minima() -> Dict[str, Any]:
                 "nivel": "municipio",
                 "titulo": "MUNICÍPIO - 2026",
                 "escaloes": [
-                    {"id": "mun-grande", "designacao": "20 mil ou mais", "min_eleitores": 20000},
-                    {"id": "mun-pequeno", "designacao": "10 mil ou menos", "max_eleitores": 10000},
+                    {
+                        "id": "mun-lisboa-porto",
+                        "designacao": "Lisboa e Porto",
+                        "municipios": ["Lisboa", "Porto"],
+                        "percentagem_pr": 55.0,
+                    },
+                    {"id": "mun-grande", "designacao": "40 mil ou mais", "min_eleitores": 40000, "percentagem_pr": 50.0},
+                    {
+                        "id": "mun-medio",
+                        "designacao": "Mais de 10 mil e menos de 40 mil",
+                        "min_eleitores": 10001,
+                        "max_eleitores": 40000,
+                        "percentagem_pr": 45.0,
+                    },
+                    {"id": "mun-pequeno", "designacao": "10 mil ou menos", "max_eleitores": 10001, "percentagem_pr": 40.0},
                 ],
-                "rubricas": [],
+                "rubricas": [
+                    {
+                        "id": "mun-rem",
+                        "regime": "Tempo Inteiro",
+                        "grupo": "Remuneração mensal",
+                        "cargo": "Presidentes da Câmara Municipal",
+                        "modalidade": "Permanência (exclusividade)",
+                        "natureza": "remuneracao",
+                        "percentagens": {
+                            "mun-lisboa-porto": 55.0,
+                            "mun-grande": 50.0,
+                            "mun-medio": 45.0,
+                            "mun-pequeno": 40.0,
+                        },
+                        "valores": {
+                            "mun-lisboa-porto": 4703.0,
+                            "mun-grande": 4276.0,
+                            "mun-medio": 3848.0,
+                            "mun-pequeno": 3421.0,
+                        },
+                    },
+                ],
             },
         ],
     }
@@ -184,6 +219,49 @@ def test_remuneracao_mensal_usa_a_exclusividade(pasta: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Escalões dos municípios
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    ("eleitores", "esperado"),
+    [
+        (2981, "mun-pequeno"),
+        (10000, "mun-pequeno"),   # «10 mil ou menos» é inclusivo
+        (10001, "mun-medio"),     # «mais de 10 mil» começa em 10 001
+        (39999, "mun-medio"),
+        (40000, "mun-grande"),    # «40 mil ou mais» é inclusivo
+        (168147, "mun-grande"),
+    ],
+)
+def test_escalao_municipal_por_eleitores(pasta: Path, eleitores: int, esperado: str) -> None:
+    """Os escalões dos municípios não são os das freguesias (10 mil / 40 mil)."""
+    escalao = remuneracoes.escalao_por_eleitores("municipio", eleitores)
+    assert (escalao or {}).get("id") == esperado
+
+
+def test_escalao_municipal_de_lisboa_e_porto(pasta: Path) -> None:
+    """Lisboa e Porto têm escalão próprio: 55 %, mesmo com muitos mais eleitores."""
+    for nome in ("Lisboa", "Porto", "Município de Lisboa"):
+        escalao = remuneracoes.escalao_por_eleitores("municipio", 500000, nome)
+        assert (escalao or {}).get("id") == "mun-lisboa-porto"
+
+    assert remuneracoes._remuneracao_mensal("municipio", 500000, None, "Lisboa") == 4703.0
+    # Sem o nome não se adivinha: cai no escalão geral dos 40 mil ou mais.
+    assert remuneracoes.escalao_por_eleitores("municipio", 500000)["id"] == "mun-grande"
+    assert remuneracoes._remuneracao_mensal("municipio", 500000) == 4276.0
+
+
+def test_abono_do_municipio_esta_preenchido(pasta: Path) -> None:
+    """O abono mensal do presidente da câmara aparece na ficha do município."""
+    resumo = remuneracoes.resumo_territorio("municipio", 37000)
+
+    assert resumo["escalao_id"] == "mun-medio"
+    assert resumo["percentagem_pr"] == 45.0
+    assert resumo["remuneracao_mensal"] == 3848.0
+    assert any(v["natureza"] == "remuneracao" for v in resumo["verbas"])
+
+
+# ---------------------------------------------------------------------------
 # Casamento de nomes (MAI ↔ Wikidata)
 # ---------------------------------------------------------------------------
 
@@ -243,7 +321,8 @@ def test_listar_concelhos_traz_escalao_e_coordenadas(pasta: Path) -> None:
     assert resposta["total"] == 2
     teste = next(item for item in resposta["items"] if item["nome"] == "Teste")
     assert teste["eleitores"] == 37000
-    assert teste["escalao"] == "20 mil ou mais"
+    assert teste["escalao"] == "Mais de 10 mil e menos de 40 mil"
+    assert teste["remuneracao_mensal"] == 3848.0
     assert teste["lat"] == 41.0
     assert teste["total_freguesias"] == 3
     assert resposta["facets"]["distritos"] == ["Faro", "Porto"]
@@ -329,7 +408,14 @@ def test_importar_tabela_recusa_nivel_invalido(pasta: Path) -> None:
     assert "error" in remuneracoes.importar_tabela({"nivel": "municipio", "escaloes": [{"id": "a", "designacao": "A"}]})
 
 
-def test_importar_tabela_substitui_a_mesma_combinacao(pasta: Path) -> None:
+def test_importar_tabela_substitui_a_mesma_combinacao(
+    pasta: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A importação reindexa: sem isto, a tabela de teste iria para o índice a sério.
+    import api.elasticsearch_client as es
+
+    monkeypatch.setattr(es, "get_es_client", lambda: None)
+
     nova = {
         "ano": 2026,
         "nivel": "municipio",
@@ -387,13 +473,19 @@ def test_importar_tabela_reindexa_so_a_tabela(pasta: Path, monkeypatch: pytest.M
 
 def test_docs_da_tabela_uma_linha_por_rubrica(pasta: Path) -> None:
     documentos = {doc["doc_id"]: doc for doc in remuneracoes._docs_tabela()}
-    assert set(documentos) == {"rem", "rem-nao"}
+    assert set(documentos) == {"rem", "rem-nao", "mun-rem"}
     rem = documentos["rem"]
     assert rem["ano"] == 2026 and rem["nivel"] == "freguesia"
     assert len(rem["valores"]) == 3
     grande = next(v for v in rem["valores"] if v["escalao_id"] == "grande")
     assert grande["valor"] == 2137.53
     assert grande["max_eleitores"] is None
+    # O escalão decidido pelo município leva os municípios no documento.
+    municipio = documentos["mun-rem"]
+    assert municipio["nivel"] == "municipio"
+    lisboa = next(v for v in municipio["valores"] if v["escalao_id"] == "mun-lisboa-porto")
+    assert lisboa["municipios"] == ["Lisboa", "Porto"]
+    assert lisboa["valor"] == 4703.0
 
 
 def test_docs_dos_territorios_trazem_localizacao(pasta: Path) -> None:
@@ -698,11 +790,41 @@ def test_tabela_oficial_esta_completa() -> None:
     assert escaloes[0] == "20 mil ou mais eleitores"
     assert escaloes[-1] == "Menos de 5 mil eleitores"
 
-    # A tabela dos municípios existe mas ainda não tem valores (o PDF só trazia
-    # a das freguesias): não se inventam números.
+    # A tabela dos municípios tem fonte e base legal próprias (ANMP / Lei n.º 29/87)
+    # e escalões diferentes dos das freguesias: Lisboa e Porto primeiro.
     municipio = remuneracoes.tabela("municipio", 2026)
-    assert municipio and municipio["estado"] == "por_importar"
-    assert municipio["rubricas"] == []
+    assert municipio and municipio["estado"] == "verificada"
+    assert len(municipio["escaloes"]) == 4
+    assert municipio["escaloes"][0]["municipios"] == ["Lisboa", "Porto"]
+    assert municipio["escaloes"][0]["percentagem_pr"] == 55.0
+    assert municipio["escaloes"][-1]["percentagem_pr"] == 40.0
+    assert "29/87" in municipio["fonte"]["base_legal"]
+    assert len(municipio["rubricas"]) == 9
+
+
+@pytest.mark.skipif(not TABELA_REAL.exists(), reason="tabela oficial não está em disco")
+def test_municipios_batem_certo_com_as_percentagens() -> None:
+    """A tabela dos municípios: % do PR arredondada para cima, ao euro."""
+    remuneracoes.limpar_cache()
+    municipio = remuneracoes.tabela("municipio", 2026)
+    pr = remuneracoes.abonos()["referencias"]["remuneracao_presidente_republica"]
+    assert pr == 8550.10
+
+    presidentes = next(r for r in municipio["rubricas"] if r["id"] == "mun-ti-remuneracao-presidentes")
+    for escalao in municipio["escaloes"]:
+        escalao_id = escalao["id"]
+        esperado = math.ceil(pr * escalao["percentagem_pr"] / 100)
+        assert presidentes["valores"][escalao_id] == float(esperado)
+        # A percentagem publicada é a do escalão; a calculada confere com o valor.
+        assert presidentes["percentagens"][escalao_id] == escalao["percentagem_pr"]
+
+    # Vereadores a tempo inteiro = 80 % do presidente; meio tempo = 50 % disso.
+    vereadores = next(r for r in municipio["rubricas"] if r["id"] == "mun-ti-remuneracao-vereadores")
+    meio_tempo = next(r for r in municipio["rubricas"] if r["id"] == "mun-mt-remuneracao-vereadores")
+    for escalao in municipio["escaloes"]:
+        escalao_id = escalao["id"]
+        assert vereadores["valores"][escalao_id] == round(presidentes["valores"][escalao_id] * 0.8, 2)
+        assert meio_tempo["valores"][escalao_id] == round(vereadores["valores"][escalao_id] * 0.5, 2)
 
 
 @pytest.mark.skipif(not TABELA_REAL.exists(), reason="tabela oficial não está em disco")
