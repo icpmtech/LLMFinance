@@ -45,9 +45,12 @@ MEDIA_DIR = CMS_DIR / "media"
 CMS_VERSION = 1
 
 # Entidades do CMS: as listas dentro do documento.
-ENTITIES: Tuple[str, ...] = ("pages", "posts", "contents", "media", "categories", "templates", "menus")
+ENTITIES: Tuple[str, ...] = ("pages", "posts", "municipios", "contents", "media", "categories", "templates", "menus")
 SINGULAR: Dict[str, str] = {entity: entity.rstrip("s") if entity not in ("media",) else "media" for entity in ENTITIES}
 SINGULAR["categories"] = "categoria"
+
+#: Entidades que se **publicam** (têm estado, agendamento e endereço no site).
+PUBLISHABLE: Tuple[str, ...] = ("pages", "posts", "municipios")
 
 STATUSES: Tuple[str, ...] = ("rascunho", "agendado", "publicado", "arquivado")
 STATUS_LABELS: Dict[str, str] = {
@@ -497,11 +500,11 @@ def _refresh_content_usage(store: Dict[str, Any]) -> None:
 # --------------------------------------------------------------------------
 def _summary(entity: str, doc: Dict[str, Any]) -> Dict[str, Any]:
     """Versão leve de um documento para listagens."""
-    item = {key: value for key, value in doc.items() if key not in ("blocks", "markdown", "data")}
+    item = {key: value for key, value in doc.items() if key not in ("blocks", "markdown", "data", "dados")}
     # `entity_label` e não `kind`: nos conteúdos e nos media `kind` é um campo real.
     item["entity"] = entity
-    item["entity_label"] = "página" if entity == "pages" else "artigo" if entity == "posts" else entity
-    if entity == "pages":
+    item["entity_label"] = "página" if entity == "pages" else "artigo" if entity == "posts" else "município" if entity == "municipios" else entity
+    if entity in ("pages", "municipios"):
         item["blocks_count"] = len(doc.get("blocks") or [])
     if entity == "posts":
         item["reading_minutes"] = doc.get("reading_minutes") or reading_minutes(doc.get("markdown") or "")
@@ -558,7 +561,7 @@ def list_items(
         if entity == "posts":
             for item in payload_items:
                 item.pop("markdown", None)
-        if entity == "pages":
+        if entity in ("pages", "municipios"):
             # O número de blocos é o que a listagem mostra; `_summary` só o conta
             # nas listagens leves.
             for item in payload_items:
@@ -626,6 +629,44 @@ def category_by_slug(slug: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def municipio_by_slug(slug: str, published_only: bool = True) -> Optional[Dict[str, Any]]:
+    """Ficha de município pelo endereço público (`/municipio/{slug}`)."""
+    store = _load()
+    wanted = (slug or "").strip().lower()
+    for item in store["municipios"]:
+        if published_only and item.get("status") != "publicado":
+            continue
+        if str(item.get("slug") or "").lower() == wanted:
+            return copy.deepcopy(item)
+    return None
+
+
+def municipio_by_name(nome: str) -> Optional[Dict[str, Any]]:
+    """Ficha já existente de um município (evita duas fichas do mesmo concelho)."""
+    store = _load()
+    wanted = _slug(nome or "")
+    if not wanted:
+        return None
+    for item in store["municipios"]:
+        if _slug(str(item.get("municipio") or "")) == wanted:
+            return copy.deepcopy(item)
+    return None
+
+
+def published_municipios() -> List[Dict[str, Any]]:
+    """Fichas de município publicadas (mais recentes primeiro)."""
+    store = _load()
+    items = [item for item in store["municipios"] if item.get("status") == "publicado"]
+    items.sort(key=lambda item: str(item.get("published_at") or item.get("created_at") or ""), reverse=True)
+    return copy.deepcopy(items)
+
+
+def municipio_path(doc: Dict[str, Any]) -> str:
+    """Caminho público da ficha de um município (`/municipio/{slug}`)."""
+    slug = str(doc.get("slug") or "").strip("/")
+    return f"/municipio/{slug}" if slug else ""
+
+
 def media_url(media_id: Optional[str]) -> str:
     return f"/cms/media/{media_id}/raw" if media_id else ""
 
@@ -641,7 +682,7 @@ def _normalise(entity: str, payload: Dict[str, Any], existing: Optional[Dict[str
     def pick(field: str, default: Any = None) -> Any:
         return payload[field] if field in payload else existing.get(field, default)
 
-    if entity in ("pages", "posts"):
+    if entity in PUBLISHABLE:
         title = str(pick("title") or "").strip()
         doc["title"] = title
         doc["slug"] = _slug(str(pick("slug") or title))
@@ -672,6 +713,19 @@ def _normalise(entity: str, payload: Dict[str, Any], existing: Optional[Dict[str
         doc["featured"] = bool(pick("featured", False))
         doc["blocks"] = _normalise_blocks(pick("blocks", []))
         doc["reading_minutes"] = reading_minutes(doc["markdown"])
+
+    if entity == "municipios":
+        # Ficha pública de um município: o texto e os blocos são editoriais, e o
+        # `dados` é a fotografia da ficha das despesas/contratação no momento em
+        # que foi lida (refresca-se com `POST /cms/municipios/{id}/dados`).
+        dados = pick("dados")
+        doc["municipio"] = str(pick("municipio") or "").strip()
+        doc["geocod"] = pick("geocod") or existing.get("geocod")
+        doc["excerpt"] = str(pick("excerpt") or "")
+        doc["blocks"] = _normalise_blocks(pick("blocks", []))
+        doc["dados"] = copy.deepcopy(dados) if isinstance(dados, dict) else {}
+        if not doc["excerpt"]:
+            doc["excerpt"] = _excerpt(_blocks_text(doc["blocks"]))
 
     if entity == "contents":
         doc["title"] = str(pick("title") or "").strip()
@@ -766,8 +820,10 @@ def save_item(entity: str, payload: Dict[str, Any], author: str = "") -> Dict[st
         raise KeyError(f"{SINGULAR.get(entity, entity)} {item_id} não encontrado.")
 
     doc = _normalise(entity, {**payload, "updated_by": author or payload.get("updated_by")}, existing)
-    if entity in ("pages", "posts") and not doc.get("title"):
+    if entity in PUBLISHABLE and not doc.get("title"):
         raise ValueError("O título é obrigatório.")
+    if entity == "municipios" and not doc.get("municipio"):
+        raise ValueError("O município é obrigatório.")
     if entity == "contents" and not doc.get("title"):
         raise ValueError("O nome do conteúdo é obrigatório.")
     if entity == "categories" and not doc.get("name"):
@@ -777,7 +833,7 @@ def save_item(entity: str, payload: Dict[str, Any], author: str = "") -> Dict[st
     if entity == "menus" and not doc.get("name"):
         raise ValueError("O nome do menu é obrigatório.")
 
-    if entity in ("pages", "posts"):
+    if entity in PUBLISHABLE:
         ignore = str(existing.get("id")) if existing else None
         doc["slug"] = _unique(store, entity, doc["slug"], ignore_id=ignore)
 
@@ -802,7 +858,7 @@ def save_item(entity: str, payload: Dict[str, Any], author: str = "") -> Dict[st
         doc["id"] = doc.get("id") or _new_id(_id_prefix(entity))
         doc["created_at"] = _now()
         doc["updated_at"] = _now()
-        if entity in ("pages", "posts"):
+        if entity in PUBLISHABLE:
             doc["published_at"] = existing.get("published_at") if existing else None  # type: ignore[union-attr]
             if doc.get("status") == "publicado":
                 doc["published_at"] = _now()
@@ -819,6 +875,7 @@ def _id_prefix(entity: str) -> str:
     return {
         "pages": "pag",
         "posts": "post",
+        "municipios": "mun",
         "contents": "ctd",
         "media": "med",
         "categories": "cat",
@@ -930,7 +987,7 @@ def _apply_schedule(store: Dict[str, Any]) -> bool:
     """Publica tudo o que está agendado e já venceu. Devolve True se mudou algo."""
     now = datetime.now(timezone.utc)
     changed = False
-    for entity in ("pages", "posts"):
+    for entity in PUBLISHABLE:
         for doc in store[entity]:
             if doc.get("status") != "agendado":
                 continue
@@ -957,8 +1014,8 @@ def _apply_schedule(store: Dict[str, Any]) -> bool:
 def publish_item(entity: str, item_id: str, author: str = "", at: Optional[str] = None) -> Dict[str, Any]:
     """Publica agora, ou agenda para `at` (ISO 8601)."""
     _check_entity(entity)
-    if entity not in ("pages", "posts"):
-        raise ValueError("Só páginas e artigos têm estado de publicação.")
+    if entity not in PUBLISHABLE:
+        raise ValueError("Só páginas, artigos e municípios têm estado de publicação.")
     store = _load()
     doc = _find(store, entity, item_id)
     if doc is None:
@@ -983,8 +1040,8 @@ def publish_item(entity: str, item_id: str, author: str = "", at: Optional[str] 
 
 def unpublish_item(entity: str, item_id: str, author: str = "") -> Dict[str, Any]:
     _check_entity(entity)
-    if entity not in ("pages", "posts"):
-        raise ValueError("Só páginas e artigos têm estado de publicação.")
+    if entity not in PUBLISHABLE:
+        raise ValueError("Só páginas, artigos e municípios têm estado de publicação.")
     store = _load()
     doc = _find(store, entity, item_id)
     if doc is None:
@@ -1365,29 +1422,27 @@ def overview() -> Dict[str, Any]:
 
     pages = counts("pages")
     posts = counts("posts")
+    municipios = counts("municipios")
     published_pages = [page for page in store["pages"] if page.get("status") == "publicado"]
     published_posts = [post for post in store["posts"] if post.get("status") == "publicado"]
     scheduled = [
         {
             "id": item.get("id"),
-            "entity": "pages" if entity == "pages" else "posts",
-            "title": item.get("title"),
+            "entity": entity,
+            "title": item.get("title") or item.get("municipio"),
             "slug": item.get("slug"),
             "at": item.get("scheduled_at"),
         }
-        for entity in ("pages", "posts")
+        for entity in PUBLISHABLE
         for item in store[entity]
         if item.get("status") == "agendado"
     ]
     scheduled.sort(key=lambda item: str(item.get("at") or ""))
     recent = sorted(
         [
-            {"id": page.get("id"), "entity": "pages", "title": page.get("title"), "slug": page.get("slug"), "at": page.get("updated_at"), "status": page.get("status"), "by": page.get("updated_by")}
-            for page in store["pages"]
-        ]
-        + [
-            {"id": post.get("id"), "entity": "posts", "title": post.get("title"), "slug": post.get("slug"), "at": post.get("updated_at"), "status": post.get("status"), "by": post.get("updated_by")}
-            for post in store["posts"]
+            {"id": item.get("id"), "entity": entity, "title": item.get("title") or item.get("municipio"), "slug": item.get("slug"), "at": item.get("updated_at"), "status": item.get("status"), "by": item.get("updated_by")}
+            for entity in PUBLISHABLE
+            for item in store[entity]
         ],
         key=lambda item: str(item.get("at") or ""),
         reverse=True,
@@ -1396,6 +1451,7 @@ def overview() -> Dict[str, Any]:
     return {
         "pages": {"total": len(store["pages"]), "by_status": pages, "published": pages["publicado"]},
         "posts": {"total": len(store["posts"]), "by_status": posts, "published": posts["publicado"]},
+        "municipios": {"total": len(store["municipios"]), "by_status": municipios, "published": municipios["publicado"]},
         "contents": len(store["contents"]),
         "media": {"total": len(store["media"]), "bytes": sum(int(item.get("size") or 0) for item in store["media"])},
         "categories": len(store["categories"]),
@@ -1420,11 +1476,11 @@ def search(query: str, limit: int = 30) -> Dict[str, Any]:
         return {"query": query, "total": 0, "items": []}
     store = _load()
     hits: List[Dict[str, Any]] = []
-    for entity in ("pages", "posts", "contents", "media", "categories", "templates"):
+    for entity in ("pages", "posts", "municipios", "contents", "media", "categories", "templates"):
         for doc in store[entity]:
             haystack = " ".join(
                 str(doc.get(field) or "")
-                for field in ("title", "name", "slug", "path", "excerpt", "markdown", "body", "description", "alt", "filename", "notes")
+                for field in ("title", "name", "municipio", "slug", "path", "excerpt", "markdown", "body", "description", "alt", "filename", "notes")
             ).lower()
             if needle not in haystack:
                 continue

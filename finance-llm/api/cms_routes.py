@@ -17,10 +17,19 @@
 - `GET  /cms/media/{id}/raw` — servir o binário
 - `GET  /cms/preview/{entidade}/{id}` — pré-visualização HTML do rascunho
 
+**Fichas de município** (o `municipios` é uma entidade do CMS, com o seu editor):
+
+- `GET  /cms/municipios/opcoes` — os 308 municípios, com a ficha que já existe
+- `POST /cms/municipios` — cria a ficha (os dados da despesa/contratação entram já)
+- `PATCH /cms/municipios/{id}` — altera título, texto, blocos e SEO
+- `POST /cms/municipios/{id}/dados` — volta a ler os dados oficiais para a ficha
+- `POST /cms/municipios/{id}/texto` — rascunho do texto escrito pela IA com os números
+
 **Site público** (sem sessão):
 
 - `GET /site` — página inicial
 - `GET /site/blog`, `/site/blog/{slug}`, `/site/categoria/{slug}`, `/site/etiqueta/{tag}`
+- `GET /site/municipio/{slug}` — ficha pública de um município
 - `GET /site/rss.xml`, `/site/sitemap.xml`, `/site/robots.txt`
 - `GET /site/{caminho}` — qualquer página publicada
 """
@@ -34,6 +43,7 @@ from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Red
 
 from api import cms_render as render
 from api import cms_store as store
+from api import municipios_publicos as publicos
 from api.auth_routes import CurrentSession, optional_session
 
 logger = logging.getLogger(__name__)
@@ -66,7 +76,7 @@ def _entity(entity: str) -> str:
 # rotas colidem com `GET /cms/{entidade}` (e `/cms/media` com a listagem dos
 # media), pelo que uma **navegação do browser** (que pede HTML) tem de devolver a
 # SPA construída — senão recarregar a página dava JSON em vez da aplicação.
-UI_SECTION_SLUGS = frozenset({"paginas", "conteudos", "blog", "media", "taxonomia", "modelos", "aparencia"})
+UI_SECTION_SLUGS = frozenset({"paginas", "conteudos", "blog", "municipios", "media", "taxonomia", "modelos", "aparencia"})
 
 
 def _is_browser_navigation(request: Request) -> bool:
@@ -188,6 +198,117 @@ def cms_delete_menu(menu_id: str, session: Session = None) -> Dict[str, Any]:
         return store.delete_item("menus", menu_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
+# ==========================================================================
+# Fichas de município (entidade `municipios` do CMS)
+# ==========================================================================
+@router.get("/cms/municipios/opcoes")
+def cms_municipios_opcoes() -> Dict[str, Any]:
+    """Os 308 municípios que se podem publicar, e a ficha que já existe de cada um."""
+    return publicos.opcoes()
+
+
+@router.post("/cms/municipios")
+def cms_create_municipio(payload: Dict[str, Any] = Body(...), session: Session = None) -> Dict[str, Any]:
+    """Cria a ficha pública de um município.
+
+    O editor escolhe o município e o texto; os **números entram já lidos** da ficha
+    das despesas e da contratação, para o documento não nascer vazio.
+    """
+    author = _writer(session)
+    nome = str(payload.get("municipio") or "").strip()
+    if not nome:
+        raise HTTPException(status_code=422, detail="Escolha o município da ficha.")
+
+    existente = store.municipio_by_name(nome)
+    if existente:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Já existe uma ficha de {existente.get('municipio') or nome}.",
+        )
+
+    corpo = dict(payload)
+    corpo.setdefault("title", f"Despesas da Câmara Municipal de {nome}")
+    # O endereço público é o nome do município (`/site/municipio/porto`): é o que
+    # se partilha e o que o Google indexa, não o título inteiro.
+    corpo.setdefault("slug", nome)
+    if not corpo.get("dados"):
+        dados = publicos.dados_do_municipio(nome)
+        if dados.get("error"):
+            raise HTTPException(status_code=404, detail=dados["error"])
+        corpo["dados"] = dados
+        corpo.setdefault("geocod", dados.get("geocod"))
+    try:
+        return {"saved": True, "item": store.save_item("municipios", corpo, author)}
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.patch("/cms/municipios/{item_id}")
+def cms_patch_municipio(item_id: str, payload: Dict[str, Any] = Body(...), session: Session = None) -> Dict[str, Any]:
+    """Altera a ficha de um município (título, texto, blocos, SEO)."""
+    author = _writer(session)
+    try:
+        return {"saved": True, "item": store.save_item("municipios", {**payload, "id": item_id}, author)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.post("/cms/municipios/{item_id}/dados")
+def cms_municipio_dados(item_id: str, session: Session = None) -> Dict[str, Any]:
+    """Volta a ler a ficha oficial (INE + Portal BASE) e guarda-a no documento.
+
+    A página publicada usa sempre a fotografia guardada: é este passo que a
+    actualiza, para que a recolha seguinte não mude uma página já publicada.
+    """
+    author = _writer(session)
+    try:
+        doc = store.get_item("municipios", item_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    dados = publicos.dados_do_municipio(str(doc.get("municipio") or doc.get("title") or ""))
+    if dados.get("error"):
+        raise HTTPException(status_code=404, detail=dados["error"])
+    item = store.save_item(
+        "municipios",
+        {**doc, "id": item_id, "dados": dados, "geocod": dados.get("geocod")},
+        author,
+    )
+    return {"saved": True, "item": item, "resumo_dos_dados": publicos.resumo_dos_dados(dados)}
+
+
+@router.post("/cms/municipios/{item_id}/texto")
+def cms_municipio_texto(
+    item_id: str,
+    payload: Dict[str, Any] = Body(default_factory=dict),
+    session: Session = None,
+) -> Dict[str, Any]:
+    """Rascunho do texto escrito pela IA com os números da ficha à frente.
+
+    Devolve o rascunho **sem gravar**: quem escreve revê-o no editor e é a gravar
+    que ele passa a ser o texto da ficha — a IA ajuda, não publica.
+    """
+    _writer(session)
+    try:
+        doc = store.get_item("municipios", item_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    utilizador = getattr(session, "user", None) if session else None
+    resultado = publicos.texto_com_ia(
+        str(doc.get("municipio") or doc.get("title") or ""),
+        dados=doc.get("dados") if isinstance(doc.get("dados"), dict) else None,
+        instrucoes=str(payload.get("instrucoes") or ""),
+        user_id=getattr(utilizador, "id", None),
+        provider=payload.get("provider"),
+        model=payload.get("model"),
+    )
+    if not resultado.get("ok"):
+        raise HTTPException(status_code=502, detail=resultado.get("error"))
+    return resultado
 
 
 # ==========================================================================
@@ -375,14 +496,19 @@ def cms_media_raw(item_id: str) -> Response:
 def cms_preview(entity: str, item_id: str, session: Session = None) -> HTMLResponse:
     """Pré-visualização HTML do rascunho (iframe do editor)."""
     _entity(entity)
-    if entity not in ("pages", "posts"):
-        raise HTTPException(status_code=422, detail="Só páginas e artigos têm pré-visualização.")
+    if entity not in store.PUBLISHABLE:
+        raise HTTPException(status_code=422, detail="Só páginas, artigos e municípios têm pré-visualização.")
     try:
         doc = store.get_item(entity, item_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     settings = store.get_settings()
-    html = render.render_page(doc, preview=True, settings=settings) if entity == "pages" else render.render_post(doc, preview=True, settings=settings)
+    if entity == "pages":
+        html = render.render_page(doc, preview=True, settings=settings)
+    elif entity == "posts":
+        html = render.render_post(doc, preview=True, settings=settings)
+    else:
+        html = render.render_municipio(doc, preview=True, settings=settings)
     return HTMLResponse(html, headers={"Cache-Control": "no-store, must-revalidate"})
 
 
@@ -463,6 +589,16 @@ def site_tag(tag: str, page: int = Query(1, ge=1)) -> HTMLResponse:
     return HTMLResponse(render.render_blog(page_no=page, tag=tag, settings=settings), headers=_PUBLIC_HEADERS)
 
 
+@router.get("/site/municipio/{slug}", response_class=HTMLResponse)
+def site_municipio(slug: str) -> HTMLResponse:
+    """Ficha pública de um município (despesa e contratação, com o texto publicado)."""
+    settings = store.get_settings()
+    doc = store.municipio_by_slug(slug, published_only=True)
+    if not doc:
+        return HTMLResponse(render.render_not_found(settings=settings), status_code=404, headers=_PUBLIC_HEADERS)
+    return HTMLResponse(render.render_municipio(doc, settings=settings), headers=_PUBLIC_HEADERS)
+
+
 @router.get("/site/rss.xml")
 def site_rss() -> Response:
     """Feed RSS dos artigos publicados."""
@@ -471,7 +607,7 @@ def site_rss() -> Response:
 
 @router.get("/site/sitemap.xml")
 def site_sitemap() -> Response:
-    """Sitemap XML das páginas e artigos publicados."""
+    """Sitemap XML das páginas, artigos e fichas de município publicados."""
     return Response(render.render_sitemap(store.get_settings()), media_type="application/xml; charset=utf-8", headers=_PUBLIC_HEADERS)
 
 

@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1169 operações** em **43 grupos**.
+Versão `0.4.0` · **1190 operações** em **44 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -44,6 +44,7 @@ Versão `0.4.0` · **1169 operações** em **43 grupos**.
 - **contribuintes** — Contribuintes: índice único com todos os NIF/NIPC do sistema (agregado dos contratos PT/ES, cadastro de entidades, publicações societárias, CIRE, PessoasIQ, firmas, marcas e CRM), pesquisa e ficha por NIF, e sincronização manual/agendada (cron) a partir de todos os índices da plataforma.
 - **devedores** — Listas públicas de devedores (Autoridade Tributária e Segurança Social): recolha dos PDF oficiais para PDF + JSON com a data da recolha, indexação em `finance_devedores` e área de pesquisa por nome/NIF, tipo, escalão e data.
 - **subvencoes** — Subvenções públicas (Lei n.º 64/2013, de 27/08): leitura das listagens anuais da IGF em `data/subvencoes` (um `.ods` por ano, ou uma subpasta por ano), normalização para JSONL, indexação em `finance_subvencoes`, pesquisa por ano/entidade/beneficiário/valor, painel, fichas por NIF, amostra lida do disco e exportação CSV.
+- **administracao-central** — Administração Central (SEC 2010): o índice das entidades do Setor Institucional das Administrações Públicas que o INE publica em PDF (`data/entidades-sector/`), ligado pelo NIF aos contratos do portal BASE. Serve a lista pesquisável de entidades (Estado, Serviços e Fundos Autónomos e Instituições Sem Fim Lucrativo), a ficha de cada entidade com as suas adjudicatárias, o painel de contratos do setor, a pesquisa de contratos e a exportação CSV.
 - **partidos** — Partidos políticos e as suas contas. Recolhe as páginas anuais do financiamento partidário do Tribunal Constitucional (contas anuais dos partidos, listas de ações e meios de propaganda política, relatórios, acórdãos e decisões da ECFP) e o registo oficial dos partidos na CNE; indexa em `finance_partidos`, `finance_partidos_registo` e `finance_partidos_recolhas`, e serve painel, pesquisa (com o texto dos PDF), fichas por partido, ligação às pessoas do PessoasIQ e exportação CSV.
 - **erc** — Portal da Transparência da ERC: entidades proprietárias de órgãos de comunicação social, as pessoas dos seus órgãos sociais e os OCS detidos. Recolhe a listagem, as fichas de cada entidade e de cada pessoa (cargos e participações diretas) e a estrutura de propriedade; indexa em `finance_erc_entidades`, `finance_erc_pessoas` e `finance_erc_ocs`, e serve painel, pesquisa, fichas e exportação CSV.
 - **gleif** — GLEIF / LEI: registos *Legal Entity Identifier* do *Golden Copy* (Golden Copy em ficheiro `data/gleif/lei.jsonl` e índice `finance_gleif_lei`), pesquisa por nome/LEI/cidade com facetas, agregado por país/região para o mapa e ingestão a partir da API oficial ou dos ficheiros Golden Copy (LEI-CDF).
@@ -280,6 +281,11 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `POST` | `/mirofish/settings/apply` | Apply Settings |
 | `POST` | `/mirofish/simulations` | Start Simulation |
 | `GET` | `/mirofish/status` | Status |
+| `GET` | `/municipios/despesas` | Municípios com despesa e contratação |
+| `GET` | `/municipios/despesas/mapa` | Municípios com os valores para o mapa |
+| `GET` | `/municipios/despesas/meta` | Proveniência e volumetria das despesas municipais |
+| `POST` | `/municipios/despesas/recolher` | Recolher do INE e dos contratos, e indexar |
+| `GET` | `/municipios/despesas/{municipio}` | Ficha de um município |
 | `POST` | `/news/collect` | News Collect |
 | `GET` | `/news/search` | News Search |
 | `GET` | `/news/stats` | News Index Stats |
@@ -346,6 +352,9 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/people/ingest-cire/jobs` | People Ingest Cire Jobs Route |
 | `GET` | `/people/ingest-cire/jobs/{job_id}` | People Ingest Cire Job Route |
 | `POST` | `/people/ingest/{nif}` | People Ingest Route |
+| `GET` | `/people/municipio/candidates` | Lista de membros de executivos municipais |
+| `POST` | `/people/municipio/refresh` | Recolher e indexar os executivos dos 308 concelhos |
+| `GET` | `/people/municipio/stats` | Resumo dos executivos municipais indexados |
 | `GET` | `/people/search` | People Search Route |
 | `GET` | `/people/status` | People Status Route |
 | `GET` | `/people/summary` | Node Summary Get Route |
@@ -366,7 +375,11 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/people/{nif}/social` | People Social Route |
 | `POST` | `/people/{nif}/social-collect` | People Social Collect Route |
 | `GET` | `/pessoas-iq` | Serve Spa Page |
+| `GET` | `/pessoas-iq/autarquicas` | Serve Spa Page |
+| `GET` | `/pessoas-iq/executivo` | Serve Spa Page |
+| `GET` | `/pessoas-iq/municipio` | Serve Spa Page |
 | `GET` | `/pessoas-iq/politicos` | Serve Spa Page |
+| `GET` | `/pessoas-iq/vereadores` | Serve Spa Page |
 | `GET` | `/racius/meta` | Racius Meta |
 | `GET` | `/racius/search` | Racius Search |
 | `GET` | `/racius/{nif}` | Racius Detail |
@@ -1285,6 +1298,22 @@ Subvenções públicas (Lei n.º 64/2013, de 27/08): leitura das listagens anuai
 | `GET` | `/subvencoes/meta` | Subvencoes Meta |
 | `GET` | `/subvencoes/resumo` | Subvencoes Resumo |
 | `GET` | `/subvencoes/search` | Subvencoes Search |
+
+## administracao-central
+
+Administração Central (SEC 2010): o índice das entidades do Setor Institucional das Administrações Públicas que o INE publica em PDF (`data/entidades-sector/`), ligado pelo NIF aos contratos do portal BASE. Serve a lista pesquisável de entidades (Estado, Serviços e Fundos Autónomos e Instituições Sem Fim Lucrativo), a ficha de cada entidade com as suas adjudicatárias, o painel de contratos do setor, a pesquisa de contratos e a exportação CSV.
+
+| Método | Caminho | Resumo |
+| --- | --- | --- |
+| `GET` | `/administracao-central/analiticas` | Administracao Central Analiticas |
+| `GET` | `/administracao-central/contratos` | Administracao Central Contratos |
+| `GET` | `/administracao-central/entidades` | Administracao Central Entidades |
+| `GET` | `/administracao-central/entidades/{identificador}` | Administracao Central Entidade |
+| `GET` | `/administracao-central/entidades/{identificador}/contratos` | Administracao Central Contratos Da Entidade |
+| `GET` | `/administracao-central/export.csv` | Administracao Central Export |
+| `GET` | `/administracao-central/meta` | Administracao Central Meta |
+| `POST` | `/administracao-central/reindexar` | Administracao Central Reindexar |
+| `GET` | `/administracao-central/subsetores` | Administracao Central Subsetores |
 
 ## partidos
 

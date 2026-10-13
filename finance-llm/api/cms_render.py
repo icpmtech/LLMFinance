@@ -214,6 +214,11 @@ figcaption {{ color: var(--muted); font-size: .86rem; margin-top: 8px; }}
 .site-footer .wrap {{ display: flex; gap: 18px; flex-wrap: wrap; align-items: center; justify-content: space-between; }}
 .site-footer nav {{ display: flex; gap: 14px; flex-wrap: wrap; }}
 .site-footer a {{ color: var(--muted); }}
+.kpis {{ display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }}
+.kpi {{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }}
+.kpi span {{ display: block; color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }}
+.kpi strong {{ display: block; margin-top: 6px; font-size: 1.32rem; letter-spacing: -.02em; }}
+.kpi small {{ display: block; margin-top: 4px; color: var(--muted); font-size: .8rem; }}
 .draft-banner {{
   position: sticky; top: 0; z-index: 30; background: #f59e0b; color: #1f2937;
   text-align: center; font-size: .85rem; font-weight: 700; padding: 6px 12px;
@@ -561,6 +566,162 @@ def render_page(
     )
 
 
+# --------------------------------------------------------------------------
+# Ficha pública de um município
+# --------------------------------------------------------------------------
+def _euros(valor: Any) -> str:
+    """Valor em euros à portuguesa («317 577 000 €»)."""
+    try:
+        numero = float(valor or 0)
+    except (TypeError, ValueError):
+        numero = 0.0
+    return f"{numero:,.0f}".replace(",", " ") + " €"
+
+
+def _euros_curto(valor: Any) -> str:
+    """Valor em euros compacto, para os destaques («317,6 M€»)."""
+    try:
+        numero = float(valor or 0)
+    except (TypeError, ValueError):
+        numero = 0.0
+    if abs(numero) >= 1_000_000:
+        return f"{numero / 1_000_000:.1f}".replace(".", ",") + " M€"
+    if abs(numero) >= 1_000:
+        return f"{numero / 1_000:.0f} mil €"
+    return _euros(numero)
+
+
+def _numero(valor: Any) -> str:
+    try:
+        return f"{int(valor or 0):,}".replace(",", " ")
+    except (TypeError, ValueError):
+        return "0"
+
+
+def _tabela(titulo: str, cabecalho: List[str], linhas: List[List[str]]) -> str:
+    if not linhas:
+        return ""
+    head = "".join(f"<th>{_esc(celula)}</th>" for celula in cabecalho)
+    body = "".join(
+        "<tr>" + "".join(f"<td>{_esc(celula)}</td>" for celula in linha) + "</tr>"
+        for linha in linhas
+    )
+    return (
+        f'<div class="section prose"><h2>{_esc(titulo)}</h2>'
+        f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>"
+    )
+
+
+def _kpis_do_municipio(dados: Dict[str, Any]) -> str:
+    ano = dados.get("ano_despesas")
+    contratos = dados.get("contratos") or {}
+    cartoes = [
+        ("Despesa total", _euros_curto(dados.get("despesas_total")), f"Execução de {ano}" if ano else ""),
+        ("Despesas correntes", _euros_curto(dados.get("despesas_correntes")), "Funcionamento corrente"),
+        ("Despesas de capital", _euros_curto(dados.get("despesas_capital")), "Investimento e outros"),
+        ("Despesa com pessoal", _euros_curto(dados.get("despesas_pessoal")), "Rubrica D11"),
+        ("Bens e serviços", _euros_curto(dados.get("despesas_bens_servicos")), "Rubrica D12"),
+    ]
+    if contratos.get("total"):
+        cartoes.append((
+            "Contratos celebrados",
+            _numero(contratos.get("total")),
+            f"{_euros_curto(contratos.get('valor'))} em aquisições",
+        ))
+    abertos = "".join(
+        f'<div class="kpi"><span>{_esc(titulo)}</span><strong>{_esc(valor)}</strong>'
+        + (f"<small>{_esc(nota)}</small>" if nota else "")
+        + "</div>"
+        for titulo, valor, nota in cartoes
+    )
+    return f'<div class="section kpis">{abertos}</div>'
+
+
+def _corpo_do_municipio(dados: Dict[str, Any], doc: Dict[str, Any], *, preview: bool) -> str:
+    """Blocos editoriais + os dados oficiais que os sustentam."""
+    corpo: List[str] = [_kpis_do_municipio(dados), blocks_to_html(doc.get("blocks") or [], preview=preview)]
+
+    classificadores = dados.get("por_classificador") or []
+    if classificadores:
+        corpo.append(_tabela(
+            f"Despesa por classificador económico ({dados.get('ano_despesas')})",
+            ["Classificador", "Valor"],
+            [[item.get("etiqueta") or item.get("codigo") or "", _euros(item.get("valor"))] for item in classificadores],
+        ))
+
+    contratos = dados.get("contratos") or {}
+    por_ano = contratos.get("por_ano") or {}
+    if por_ano:
+        linhas = [
+            [str(ano), _numero((valores or {}).get("contratos")), _euros((valores or {}).get("valor"))]
+            for ano, valores in sorted(por_ano.items())
+            if isinstance(valores, dict)
+        ]
+        corpo.append(_tabela(
+            "Contratação pública por ano (Portal BASE)",
+            ["Ano", "Contratos", "Valor"],
+            list(reversed(linhas)),
+        ))
+
+    fornecedores = contratos.get("fornecedores") or []
+    if fornecedores:
+        corpo.append(_tabela(
+            "Principais fornecedores",
+            ["Fornecedor", "Contratos", "Valor"],
+            [[item.get("nome") or "", _numero(item.get("contratos")), _euros(item.get("valor"))] for item in fornecedores],
+        ))
+
+    fontes = [fonte.get("documento") for fonte in (dados.get("fontes") or []) if fonte.get("documento")]
+    if fontes:
+        recolhido = _date(dados.get("recolhido_em")) if dados.get("recolhido_em") else ""
+        nota = " · ".join(fontes)
+        if recolhido:
+            nota += f" · dados recolhidos a {recolhido}"
+        corpo.append(f'<div class="section aviso">{_esc(nota)}</div>')
+
+    return "".join(bloco for bloco in corpo if bloco)
+
+
+def render_municipio(
+    doc: Dict[str, Any],
+    *,
+    preview: bool = False,
+    settings: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Ficha pública de um município: texto editorial e os números oficiais."""
+    settings = settings or store.get_settings()
+    seo = doc.get("seo") or {}
+    dados = doc.get("dados") if isinstance(doc.get("dados"), dict) else {}
+    municipio = str(doc.get("municipio") or dados.get("municipio") or doc.get("title") or "")
+    path = f"/site/municipio/{doc.get('slug')}" if doc.get("slug") else "/site"
+    base_url = str(settings.get("base_url") or "")
+    descricao = str(seo.get("description") or doc.get("excerpt") or "").strip() or (
+        f"Despesa e contratação pública da Câmara Municipal de {municipio}."
+    )
+    json_ld = {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": doc.get("title") or municipio,
+        "description": descricao,
+        "url": _absolute(path, base_url),
+        "about": {"@type": "GovernmentOrganization", "name": f"Câmara Municipal de {municipio}"},
+        "isBasedOn": [fonte.get("url") for fonte in (dados.get("fontes") or []) if fonte.get("url")],
+    }
+    return _layout(
+        title=str(seo.get("title") or doc.get("title") or municipio),
+        description=descricao,
+        body=_corpo_do_municipio(dados, doc, preview=preview),
+        current_path=path,
+        settings=settings,
+        canonical=path,
+        og_image=_media_url(seo.get("image_id")),
+        keywords=seo.get("keywords") or None,
+        json_ld=json_ld,
+        preview=preview,
+        noindex=bool(seo.get("noindex")),
+    )
+
+
 def _post_card(post: Dict[str, Any]) -> str:
     href = f"/site/blog/{post.get('slug')}"
     cover = _media_url(post.get("cover_id"))
@@ -828,6 +989,15 @@ def render_sitemap(settings: Optional[Dict[str, Any]] = None) -> str:
         lastmod = str(page.get("updated_at") or "")[:10]
         entries.append(f"<url><loc>{_esc(loc)}</loc>{f'<lastmod>{lastmod}</lastmod>' if lastmod else ''}<priority>0.9</priority></url>")
     entries.append(f"<url><loc>{_esc(_absolute('/site/blog', base_url))}</loc></url>")
+    for municipio in store.published_municipios():
+        if (municipio.get("seo") or {}).get("noindex"):
+            continue
+        slug = str(municipio.get("slug") or "")
+        if not slug:
+            continue
+        loc = _absolute(f"/site/municipio/{slug}", base_url)
+        lastmod = str(municipio.get("updated_at") or municipio.get("published_at") or "")[:10]
+        entries.append(f"<url><loc>{_esc(loc)}</loc>{f'<lastmod>{lastmod}</lastmod>' if lastmod else ''}<priority>0.8</priority></url>")
     for post in store.published_posts(limit=500):
         if (post.get("seo") or {}).get("noindex"):
             continue

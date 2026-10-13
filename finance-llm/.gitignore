@@ -76,3 +76,12 @@ data/erc/raw/
 # `mai_recolha.json`, ~17 MB de polígonos) são re-descarregáveis com
 # `POST /remuneracoes/refresh` e ficam só em disco.
 !data/remuneracoes/abonos_eleitos_locais.json
+
+# Entidades do Setor Institucional das Administrações Públicas (INE / SEC 2010).
+# O PDF anual do INE fica versionado tal como é publicado; o **índice** que dele
+# se constrói (designações oficiais, subsetor, NIF com que cada entidade contrata
+# e totais de contrato) também: é pequeno (~357 entidades), muda uma vez por ano
+# e é o que faz o módulo funcionar **sem Elasticsearch** logo depois de um clone.
+# `POST /administracao-central/reindexar` (ou
+# `scripts/indexar_administracao_central.py`) volta a gerá-lo.
+!data/entidades-sector/administracao-central.json
