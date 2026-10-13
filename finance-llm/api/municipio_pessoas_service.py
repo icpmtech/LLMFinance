@@ -300,9 +300,10 @@ def search_municipio_pessoas(
                     {"match_phrase": {"name": {"query": q, "boost": 6}}},
                     {"match": {"name": {"query": q, "operator": "and", "boost": 3}}},
                     {"wildcard": {"party.keyword": {"value": f"*{q}*", "case_insensitive": True}}},
-                    {"wildcard": {"role.keyword": {"value": f"*{q}*", "case_insensitive": True}}},
+                    {"wildcard": {"role": {"value": f"*{q}*", "case_insensitive": True}}},
+                    {"wildcard": {"role_keyword": {"value": f"*{q}*", "case_insensitive": True}}},
                     {"wildcard": {"concelho.keyword": {"value": f"*{q}*", "case_insensitive": True}}},
-                    {"wildcard": {"pelouros.keyword": {"value": f"*{q}*", "case_insensitive": True}}},
+                    {"wildcard": {"pelouros": {"value": f"*{q}*", "case_insensitive": True}}},
                 ],
                 "minimum_should_match": 1,
             }
