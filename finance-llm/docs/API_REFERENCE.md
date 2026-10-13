@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1196 operações** em **44 grupos**.
+Versão `0.4.0` · **1202 operações** em **44 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -286,6 +286,7 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/municipios/despesas/meta` | Proveniência e volumetria das despesas municipais |
 | `POST` | `/municipios/despesas/recolher` | Recolher do INE e dos contratos, e indexar |
 | `GET` | `/municipios/despesas/{municipio}` | Ficha de um município |
+| `GET` | `/municipios/despesas/{municipio}/fornecedores` | Todos os fornecedores de um município |
 | `POST` | `/news/collect` | News Collect |
 | `GET` | `/news/search` | News Search |
 | `GET` | `/news/stats` | News Index Stats |
@@ -947,6 +948,10 @@ CMS: páginas por blocos, conteúdos reutilizáveis, blog com taxonomia, media, 
 | `POST` | `/cms/municipios/{item_id}/dados` | Cms Municipio Dados |
 | `POST` | `/cms/municipios/{item_id}/texto` | Cms Municipio Texto |
 | `GET` | `/cms/overview` | Cms Overview |
+| `POST` | `/cms/pesquisas` | Cms Create Pesquisa |
+| `GET` | `/cms/pesquisas/opcoes` | Cms Pesquisas Opcoes |
+| `PATCH` | `/cms/pesquisas/{item_id}` | Cms Patch Pesquisa |
+| `POST` | `/cms/pesquisas/{item_id}/dados` | Cms Pesquisa Dados |
 | `GET` | `/cms/preview/{entity}/{item_id}` | Cms Preview |
 | `POST` | `/cms/revisions/{revision_id}/restore` | Cms Restore |
 | `GET` | `/cms/search` | Cms Search |
@@ -970,6 +975,7 @@ CMS: páginas por blocos, conteúdos reutilizáveis, blog com taxonomia, media, 
 | `GET` | `/site/categoria/{slug}` | Site Category |
 | `GET` | `/site/etiqueta/{tag}` | Site Tag |
 | `GET` | `/site/municipio/{slug}` | Site Municipio |
+| `GET` | `/site/pesquisa/{slug}` | Site Pesquisa |
 | `GET` | `/site/robots.txt` | Site Robots |
 | `GET` | `/site/rss.xml` | Site Rss |
 | `GET` | `/site/sitemap.xml` | Site Sitemap |

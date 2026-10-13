@@ -25,11 +25,20 @@
 - `POST /cms/municipios/{id}/dados` — volta a ler os dados oficiais para a ficha
 - `POST /cms/municipios/{id}/texto` — rascunho do texto escrito pela IA com os números
 
+**Páginas de pesquisa** (entidade `pesquisas` — uma consulta congelada sobre os
+municípios, com filtros, SEO, marca e imagens):
+
+- `GET  /cms/pesquisas/opcoes` — filtros disponíveis (distritos, anos, ordenações)
+- `POST /cms/pesquisas` — cria a página (os números entram já lidos da pesquisa)
+- `PATCH /cms/pesquisas/{id}` — altera título, filtros, texto, marca e SEO
+- `POST /cms/pesquisas/{id}/dados` — volta a correr a pesquisa e guarda-a
+
 **Site público** (sem sessão):
 
 - `GET /site` — página inicial
 - `GET /site/blog`, `/site/blog/{slug}`, `/site/categoria/{slug}`, `/site/etiqueta/{tag}`
 - `GET /site/municipio/{slug}` — ficha pública de um município
+- `GET /site/pesquisa/{slug}` — página pública de uma pesquisa
 - `GET /site/rss.xml`, `/site/sitemap.xml`, `/site/robots.txt`
 - `GET /site/{caminho}` — qualquer página publicada
 """
@@ -44,6 +53,7 @@ from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Red
 from api import cms_render as render
 from api import cms_store as store
 from api import municipios_publicos as publicos
+from api import pesquisas_publicas as pesquisas
 from api.auth_routes import CurrentSession, optional_session
 
 logger = logging.getLogger(__name__)
@@ -76,7 +86,7 @@ def _entity(entity: str) -> str:
 # rotas colidem com `GET /cms/{entidade}` (e `/cms/media` com a listagem dos
 # media), pelo que uma **navegação do browser** (que pede HTML) tem de devolver a
 # SPA construída — senão recarregar a página dava JSON em vez da aplicação.
-UI_SECTION_SLUGS = frozenset({"paginas", "conteudos", "blog", "municipios", "media", "taxonomia", "modelos", "aparencia"})
+UI_SECTION_SLUGS = frozenset({"paginas", "conteudos", "blog", "municipios", "pesquisas", "media", "taxonomia", "modelos", "aparencia"})
 
 
 def _is_browser_navigation(request: Request) -> bool:
@@ -312,6 +322,82 @@ def cms_municipio_texto(
 
 
 # ==========================================================================
+# Páginas de pesquisa (entidade `pesquisas` do CMS)
+# ==========================================================================
+@router.get("/cms/pesquisas/opcoes")
+def cms_pesquisas_opcoes() -> Dict[str, Any]:
+    """Filtros disponíveis para montar uma pesquisa (distritos, anos, ordenações)."""
+    return pesquisas.opcoes()
+
+
+@router.post("/cms/pesquisas")
+def cms_create_pesquisa(payload: Dict[str, Any] = Body(...), session: Session = None) -> Dict[str, Any]:
+    """Cria uma página de pesquisa.
+
+    Os filtros vêm do editor e os números entram já lidos (`dados_da_pesquisa`),
+    para o documento não nascer vazio e a pré-visualização ter o que mostrar.
+    """
+    author = _writer(session)
+    corpo = dict(payload)
+    filtros = store.normalizar_filtros(corpo.get("filtros"))
+    corpo["filtros"] = filtros
+    corpo.setdefault("descricao_filtros", pesquisas.descricao_dos_filtros(filtros))
+    if not corpo.get("title"):
+        corpo["title"] = f"Despesas municipais — {corpo['descricao_filtros']}"
+    if not corpo.get("slug"):
+        corpo["slug"] = corpo["title"]
+    if not corpo.get("dados"):
+        corpo["dados"] = pesquisas.dados_da_pesquisa(filtros)
+    try:
+        return {"saved": True, "item": store.save_item("pesquisas", corpo, author)}
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.patch("/cms/pesquisas/{item_id}")
+def cms_patch_pesquisa(item_id: str, payload: Dict[str, Any] = Body(...), session: Session = None) -> Dict[str, Any]:
+    """Altera a página de pesquisa (título, filtros, texto, marca, blocos e SEO)."""
+    author = _writer(session)
+    try:
+        return {"saved": True, "item": store.save_item("pesquisas", {**payload, "id": item_id}, author)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.post("/cms/pesquisas/{item_id}/dados")
+def cms_pesquisa_dados(
+    item_id: str,
+    payload: Dict[str, Any] = Body(default_factory=dict),
+    session: Session = None,
+) -> Dict[str, Any]:
+    """Volta a correr a pesquisa guardada e grava a fotografia nova.
+
+    O corpo pode trazer `filtros` (para experimentar sem guardar à mão) e/ou
+    `guardar_filtros` — a página publicada usa sempre a fotografia guardada.
+    """
+    author = _writer(session)
+    try:
+        doc = store.get_item("pesquisas", item_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    filtros = store.normalizar_filtros(payload.get("filtros") or doc.get("filtros"))
+    dados = pesquisas.dados_da_pesquisa(filtros)
+    if dados.get("error"):
+        raise HTTPException(status_code=502, detail=dados["error"])
+
+    corpo = {**doc, "id": item_id, "dados": dados}
+    if payload.get("guardar_filtros"):
+        corpo["filtros"] = filtros
+    if payload.get("guardar_descricao", True):
+        corpo["descricao_filtros"] = pesquisas.descricao_dos_filtros(filtros)
+    item = store.save_item("pesquisas", corpo, author)
+    return {"saved": True, "item": item, "resumo_dos_dados": pesquisas.resumo_dos_dados(dados)}
+
+
+# ==========================================================================
 # CRUD genérico por entidade
 # ==========================================================================
 @router.get("/cms/{entity}")
@@ -507,6 +593,8 @@ def cms_preview(entity: str, item_id: str, session: Session = None) -> HTMLRespo
         html = render.render_page(doc, preview=True, settings=settings)
     elif entity == "posts":
         html = render.render_post(doc, preview=True, settings=settings)
+    elif entity == "pesquisas":
+        html = render.render_pesquisa(doc, preview=True, settings=settings)
     else:
         html = render.render_municipio(doc, preview=True, settings=settings)
     return HTMLResponse(html, headers={"Cache-Control": "no-store, must-revalidate"})
@@ -597,6 +685,16 @@ def site_municipio(slug: str) -> HTMLResponse:
     if not doc:
         return HTMLResponse(render.render_not_found(settings=settings), status_code=404, headers=_PUBLIC_HEADERS)
     return HTMLResponse(render.render_municipio(doc, settings=settings), headers=_PUBLIC_HEADERS)
+
+
+@router.get("/site/pesquisa/{slug}", response_class=HTMLResponse)
+def site_pesquisa(slug: str) -> HTMLResponse:
+    """Página pública de uma pesquisa (a fotografia guardada, com marca e SEO)."""
+    settings = store.get_settings()
+    doc = store.pesquisa_by_slug(slug, published_only=True)
+    if not doc:
+        return HTMLResponse(render.render_not_found(settings=settings), status_code=404, headers=_PUBLIC_HEADERS)
+    return HTMLResponse(render.render_pesquisa(doc, settings=settings), headers=_PUBLIC_HEADERS)
 
 
 @router.get("/site/rss.xml")

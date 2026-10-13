@@ -467,6 +467,7 @@ def _layout(
     json_ld: Optional[Dict[str, Any]] = None,
     preview: bool = False,
     noindex: bool = False,
+    extra_css: str = "",
 ) -> str:
     base_url = str(settings.get("base_url") or "")
     site_name = _esc(settings.get("site_name") or "Site")
@@ -509,7 +510,7 @@ def _layout(
         + '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
         + f"<title>{_esc(full_title)}</title>"
         + "".join(meta)
-        + f"<style>{_css(settings)}</style></head><body>"
+        + f"<style>{_css(settings)}{extra_css}</style></head><body>"
         + _header(settings, current_path=current_path, preview=preview)
         + f"<main><div class=\"wrap\">{body}</div></main>"
         + _footer(settings)
@@ -719,6 +720,181 @@ def render_municipio(
         json_ld=json_ld,
         preview=preview,
         noindex=bool(seo.get("noindex")),
+    )
+
+
+# --------------------------------------------------------------------------
+# Página de uma pesquisa (entidade `pesquisas`)
+# --------------------------------------------------------------------------
+_CSS_PESQUISA = """
+.pesquisa-marca { display: flex; align-items: center; gap: 14px; margin: 0 0 16px; }
+.pesquisa-marca img { max-height: 54px; width: auto; }
+.pesquisa-capa { margin: 0 0 22px; }
+.pesquisa-capa img { width: 100%; border-radius: var(--radius); border: 1px solid var(--border); }
+.pesquisa-tabela { overflow-x: auto; }
+.pesquisa-tabela th, .pesquisa-tabela td { white-space: nowrap; }
+.pesquisa-anos { color: var(--muted); font-size: .85rem; }
+"""
+
+
+def _com_ano_despesas(ano: Any) -> str:
+    return f"Despesa {ano}" if ano else "Despesa"
+
+
+def _marca_da_pesquisa(doc: Dict[str, Any]) -> str:
+    """Logótipo e imagem de capa **da página** (não das definições do site)."""
+    partes: List[str] = []
+    logo = _media_url(doc.get("logo_id"))
+    if logo:
+        partes.append(
+            f'<div class="pesquisa-marca"><img src="{_esc(logo)}" '
+            f'alt="{_esc(str(doc.get("title") or "Logótipo"))}"></div>'
+        )
+    capa = _media_url(doc.get("capa_id"))
+    if capa:
+        partes.append(
+            f'<figure class="pesquisa-capa"><img src="{_esc(capa)}" '
+            f'alt="{_esc(str(doc.get("title") or ""))}"></figure>'
+        )
+    return "".join(partes)
+
+
+def _kpis_da_pesquisa(dados: Dict[str, Any]) -> str:
+    ano = dados.get("ano_contratos")
+    cartoes = [
+        ("Municípios no filtro", _numero(dados.get("total")), "depois dos filtros aplicados"),
+        (
+            "Despesa somada",
+            _euros_curto(dados.get("despesas_somadas")),
+            f"INE · ano {dados.get('ano_despesas')}" if dados.get("ano_despesas") else "INE",
+        ),
+        ("Contratado", _euros_curto(dados.get("contratos_somados")), "Portal BASE · 2012→hoje"),
+    ]
+    if ano:
+        cartoes.append(
+            (
+                f"Contratado em {ano}",
+                _euros_curto(dados.get("contratos_ano_somados")),
+                f"{_numero(dados.get('contratos_ano_total_somados'))} contratos",
+            )
+        )
+    abertos = "".join(
+        f'<div class="kpi"><span>{_esc(titulo)}</span><strong>{_esc(valor)}</strong>'
+        + (f"<small>{_esc(nota)}</small>" if nota else "")
+        + "</div>"
+        for titulo, valor, nota in cartoes
+    )
+    return f'<div class="section kpis">{abertos}</div>'
+
+
+def _tabela_da_pesquisa(dados: Dict[str, Any]) -> str:
+    itens = dados.get("itens") or []
+    if not itens:
+        return '<div class="section aviso">Nenhum município com estes filtros.</div>'
+    ano = dados.get("ano_contratos")
+    ano_despesas = dados.get("ano_despesas")
+    cabecalho = ["Município", "Distrito", _com_ano_despesas(ano_despesas), "Contratado (total)", "Anos recentes"]
+    if ano:
+        cabecalho = [
+            "Município",
+            "Distrito",
+            _com_ano_despesas(ano_despesas),
+            f"Contratos {ano}",
+            f"Contratado {ano}",
+            "Anos recentes",
+        ]
+    linhas: List[List[str]] = []
+    for item in itens:
+        anos_recentes = " · ".join(
+            str(registro.get("ano") or "") for registro in (item.get("anos_recentes") or [])[:5]
+        )
+        linha = [
+            str(item.get("nome") or ""),
+            str(item.get("distrito") or "—"),
+            _euros_curto(item.get("despesas_total")),
+        ]
+        if ano:
+            linha += [_numero(item.get("contratos_ano_total")), _euros_curto(item.get("contratos_ano_valor"))]
+        else:
+            linha += [_euros_curto(item.get("contratos_valor"))]
+        linha.append(anos_recentes)
+        linhas.append(linha)
+    tabela = _tabela("Municípios do filtro", cabecalho, linhas)
+    nota = f"{_numero(dados.get('linhas'))} de {_numero(dados.get('total'))} municípios"
+    return (
+        f'<div class="pesquisa-tabela">{tabela}</div>'
+        f'<div class="section"><p class="meta">{_esc(nota)} · '
+        f'{_esc(str(dados.get("descricao") or ""))}</p></div>'
+    )
+
+
+def _corpo_da_pesquisa(dados: Dict[str, Any], doc: Dict[str, Any], *, preview: bool) -> str:
+    """Marca + texto editorial + os números que a pesquisa devolveu."""
+    partes: List[str] = [_marca_da_pesquisa(doc)]
+    if doc.get("intro"):
+        partes.append(f'<div class="section prose">{_md(str(doc["intro"]))}</div>')
+    if dados.get("descricao"):
+        partes.append(
+            f'<div class="section"><p class="pill">{_esc(str(dados["descricao"]))}</p></div>'
+        )
+    partes.append(_kpis_da_pesquisa(dados))
+    partes.append(blocks_to_html(doc.get("blocks") or [], preview=preview))
+    partes.append(_tabela_da_pesquisa(dados))
+
+    fontes = [fonte.get("documento") for fonte in (dados.get("fontes") or []) if fonte.get("documento")]
+    if fontes:
+        nota = " · ".join(fontes)
+        recolhido = _date(dados.get("gerado_em")) if dados.get("gerado_em") else ""
+        if recolhido:
+            nota += f" · valores lidos a {recolhido}"
+        partes.append(f'<div class="section aviso">{_esc(nota)}</div>')
+    return "".join(parte for parte in partes if parte)
+
+
+def render_pesquisa(
+    doc: Dict[str, Any],
+    *,
+    preview: bool = False,
+    settings: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Página pública de uma pesquisa de despesas municipais (filtros congelados)."""
+    settings = settings or store.get_settings()
+    seo = doc.get("seo") or {}
+    dados = doc.get("dados") if isinstance(doc.get("dados"), dict) else {}
+    titulo = str(doc.get("title") or "Pesquisa de despesas municipais")
+    path = f"/site/pesquisa/{doc.get('slug')}" if doc.get("slug") else "/site"
+    base_url = str(settings.get("base_url") or "")
+    descricao = str(seo.get("description") or doc.get("excerpt") or "").strip() or (
+        f"{titulo}: {dados.get('descricao') or 'despesa e contratação dos municípios'}"
+        f" (INE e Portal BASE)."
+    )
+    cor = str(doc.get("cor") or "").strip()
+    extra_css = _CSS_PESQUISA + (f":root {{ --accent: {cor}; }}" if cor else "")
+    json_ld = {
+        "@context": "https://schema.org",
+        "@type": "Dataset",
+        "name": titulo,
+        "description": descricao,
+        "url": _absolute(path, base_url),
+        "spatialCoverage": {"@type": "Place", "name": "Portugal"},
+        "creator": {"@type": "Organization", "name": str(settings.get("site_name") or "")},
+        "isBasedOn": [fonte.get("url") for fonte in (dados.get("fontes") or []) if fonte.get("url")],
+    }
+    if dados.get("ano_contratos") or dados.get("ano_despesas"):
+        json_ld["temporalCoverage"] = str(dados.get("ano_contratos") or dados.get("ano_despesas"))
+    return _layout(
+        title=str(seo.get("title") or titulo),
+        description=descricao,
+        body=_corpo_da_pesquisa(dados, doc, preview=preview),
+        current_path=path,
+        settings=settings,
+        canonical=path,
+        og_image=_media_url(seo.get("image_id") or doc.get("capa_id")),
+        keywords=seo.get("keywords") or None,
+        json_ld=json_ld,
+        preview=preview,
+        noindex=bool(seo.get("noindex")),
+        extra_css=extra_css,
     )
 
 
@@ -1004,6 +1180,15 @@ def render_sitemap(settings: Optional[Dict[str, Any]] = None) -> str:
         loc = _absolute(f"/site/blog/{post.get('slug')}", base_url)
         lastmod = str(post.get("updated_at") or post.get("published_at") or "")[:10]
         entries.append(f"<url><loc>{_esc(loc)}</loc>{f'<lastmod>{lastmod}</lastmod>' if lastmod else ''}<priority>0.7</priority></url>")
+    for pesquisa in store.published_pesquisas():
+        if (pesquisa.get("seo") or {}).get("noindex"):
+            continue
+        slug = str(pesquisa.get("slug") or "")
+        if not slug:
+            continue
+        loc = _absolute(f"/site/pesquisa/{slug}", base_url)
+        lastmod = str(pesquisa.get("updated_at") or pesquisa.get("published_at") or "")[:10]
+        entries.append(f"<url><loc>{_esc(loc)}</loc>{f'<lastmod>{lastmod}</lastmod>' if lastmod else ''}<priority>0.8</priority></url>")
     return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join(entries) + "</urlset>"
 
 

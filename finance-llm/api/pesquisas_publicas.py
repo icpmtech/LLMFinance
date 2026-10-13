@@ -168,7 +168,7 @@ def resumo_dos_dados(dados: Optional[Dict[str, Any]]) -> str:
         f"contratado {_euros_curto(dados.get('contratos_somados'))}"
         + (
             f" · em {dados.get('ano_contratos')}: "
-            f"{int(dados.get('contratos_ano_total_somados') or 0)} contratos, "
+            f"{_numero(dados.get('contratos_ano_total_somados'))} contratos, "
             f"{_euros_curto(dados.get('contratos_ano_somados'))}"
             if dados.get("ano_contratos")
             else ""
@@ -186,6 +186,13 @@ def _ano_das_despesas(itens: List[Dict[str, Any]]) -> Optional[int]:
         except ValueError:
             return None
     return None
+
+
+def _numero(valor: Any) -> str:
+    try:
+        return f"{int(valor or 0):,}".replace(",", " ")
+    except (TypeError, ValueError):
+        return "0"
 
 
 def _euros_curto(valor: Any) -> str:

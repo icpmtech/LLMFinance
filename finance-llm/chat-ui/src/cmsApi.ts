@@ -204,6 +204,91 @@ export type CmsMunicipioTexto = {
   error?: string;
 };
 
+/** Filtros de uma pesquisa sobre as despesas municipais (ficam guardados na página). */
+export type CmsPesquisaFiltros = {
+  q?: string;
+  distrito?: string;
+  nuts?: string;
+  ano_contratos?: number | null;
+  ordenar?: string;
+  ordem?: "asc" | "desc";
+  min_despesas?: number | null;
+  limite?: number;
+};
+
+/** Uma linha da tabela de uma pesquisa. */
+export type CmsPesquisaLinha = {
+  nome?: string;
+  geocod?: string | null;
+  distrito?: string | null;
+  ano_despesas?: number | null;
+  despesas_total?: number | null;
+  despesas_pessoal?: number | null;
+  contratos_total?: number | null;
+  contratos_valor?: number | null;
+  contratos_ano_total?: number | null;
+  contratos_ano_valor?: number | null;
+  anos_recentes?: { ano: string; contratos: number; valor: number }[];
+};
+
+/** A fotografia que a página mostra (lida quando o editor a mandou ler). */
+export type CmsPesquisaDados = {
+  filtros?: CmsPesquisaFiltros;
+  descricao?: string;
+  total?: number;
+  linhas?: number;
+  itens?: CmsPesquisaLinha[];
+  ano_contratos?: number | null;
+  ano_despesas?: number | null;
+  despesas_somadas?: number;
+  contratos_somados?: number;
+  contratos_ano_somados?: number;
+  contratos_ano_total_somados?: number;
+  distritos?: { key: string; count: number }[];
+  origem?: string;
+  gerado_em?: string | null;
+  fontes?: { documento?: string | null; url?: string | null }[];
+  error?: string;
+};
+
+/** Página pública de uma pesquisa (entidade `pesquisas` do CMS). */
+export type CmsPesquisa = {
+  id: string;
+  title: string;
+  slug: string;
+  status: CmsStatus;
+  published_at?: string | null;
+  scheduled_at?: string | null;
+  excerpt?: string;
+  /** Frase legível dos filtros («distrito do Porto, contratação de 2024…»). */
+  descricao_filtros?: string;
+  filtros?: CmsPesquisaFiltros;
+  /** Texto de entrada (Markdown), por cima dos números. */
+  intro?: string;
+  blocks: CmsBlock[];
+  dados?: CmsPesquisaDados | null;
+  /** Marca da página: imagem de capa, logótipo e cor de destaque. */
+  capa_id?: string | null;
+  logo_id?: string | null;
+  cor?: string;
+  seo?: CmsSeo;
+  created_at?: string;
+  updated_at?: string;
+  updated_by?: string;
+};
+
+/** Filtros disponíveis para montar uma pesquisa. */
+export type CmsPesquisaOpcoes = {
+  distritos: string[];
+  anos_contratos: string[];
+  ordenacoes: { id: string; label: string }[];
+  limite_maximo: number;
+  ultimo_periodo?: string | null;
+  ano_despesas?: string | null;
+  fonte_despesas?: string | null;
+  fonte_contratos?: string | null;
+};
+
 export type CmsMenuItem = {
   id: string;
   label: string;
@@ -461,6 +546,45 @@ export function cmsMunicipioUrl(slug: string): string {
   return cmsPublicUrl(`/municipio/${slug}`);
 }
 
+export function listCmsPesquisas(options: ListOptions = {}): Promise<CmsListPayload<CmsPesquisa>> {
+  return request(`/cms/pesquisas${listQuery({ limit: 300, ...options })}`);
+}
+
+export function getCmsPesquisa(id: string): Promise<{ item: CmsPesquisa }> {
+  return request(`/cms/pesquisas/${encodeURIComponent(id)}`);
+}
+
+/** Distritos, anos de contratação e ordenações que se podem filtrar. */
+export function getCmsPesquisaOpcoes(): Promise<CmsPesquisaOpcoes> {
+  return request("/cms/pesquisas/opcoes");
+}
+
+/** Cria a página de pesquisa; a fotografia dos números entra já lida. */
+export function createCmsPesquisa(payload: {
+  title?: string;
+  slug?: string;
+  filtros?: CmsPesquisaFiltros;
+}): Promise<{ saved: boolean; item: CmsPesquisa }> {
+  return request("/cms/pesquisas", withBody("POST", payload));
+}
+
+export function updateCmsPesquisa(id: string, payload: Partial<CmsPesquisa>): Promise<{ saved: boolean; item: CmsPesquisa }> {
+  return request(`/cms/pesquisas/${encodeURIComponent(id)}`, withBody("PATCH", payload));
+}
+
+/** Volta a correr a pesquisa e guarda a fotografia nova (a página muda com ela). */
+export function refreshCmsPesquisaDados(
+  id: string,
+  payload: { filtros?: CmsPesquisaFiltros; guardar_filtros?: boolean } = {},
+): Promise<{ saved: boolean; item: CmsPesquisa; resumo_dos_dados: string }> {
+  return request(`/cms/pesquisas/${encodeURIComponent(id)}/dados`, withBody("POST", payload));
+}
+
+/** Endereço público de uma página de pesquisa (`/site/pesquisa/{slug}`). */
+export function cmsPesquisaUrl(slug: string): string {
+  return cmsPublicUrl(`/pesquisa/${slug}`);
+}
+
 export function listCmsContents(options: ListOptions = {}): Promise<CmsListPayload<CmsContent>> {
   return request(`/cms/contents${listQuery({ limit: 300, ...options })}`);
 }
@@ -609,7 +733,7 @@ export function cmsMediaUrl(media: { id: string; url: string; storage?: string }
 }
 
 /** URL da pré-visualização HTML (iframe com `?t=` para não apanhar cache). */
-export function cmsPreviewUrl(entity: "pages" | "posts" | "municipios", id: string, stamp = Date.now()): string {
+export function cmsPreviewUrl(entity: "pages" | "posts" | "municipios" | "pesquisas", id: string, stamp = Date.now()): string {
   return `${API_BASE}/cms/preview/${entity}/${encodeURIComponent(id)}?t=${stamp}`;
 }
 

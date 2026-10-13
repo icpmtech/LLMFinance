@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   BookOpen,
   FileText,
+  Filter,
   Globe2,
   Hash,
   LayoutDashboard,
@@ -29,6 +30,7 @@ import {
 
 import { CmsAppearancePanel, CmsContentsPanel, CmsMediaPanel, CmsTaxonomyPanel, CmsTemplatesPanel } from "./CmsLibrary";
 import { CmsMunicipiosPanel } from "./CmsMunicipios";
+import { CmsPesquisasPanel } from "./CmsPesquisas";
 import { CmsOverviewPanel, CmsPagesPanel, CmsPostsPanel, type CmsCtx, type CmsSection } from "./CmsPanels";
 import { Notice } from "../components/cms/CmsKit";
 import * as cms from "../cmsApi";
@@ -40,6 +42,7 @@ export const CMS_SECTIONS: { id: CmsSection; label: string; path: string; icon: 
   { id: "conteudos", label: "Conteúdos", path: "/cms/conteudos", icon: <Recycle size={13} />, hint: "Blocos com nome, reutilizados em várias páginas" },
   { id: "blog", label: "Blog", path: "/cms/blog", icon: <Newspaper size={13} />, hint: "Artigos, categorias, etiquetas e capas" },
   { id: "municipios", label: "Municípios", path: "/cms/municipios", icon: <Landmark size={13} />, hint: "Fichas públicas de município (despesa, contratação e texto)" },
+  { id: "pesquisas", label: "Pesquisas", path: "/cms/pesquisas", icon: <Filter size={13} />, hint: "Páginas com uma pesquisa congelada (filtros, SEO, marca e imagens)" },
   { id: "media", label: "Media", path: "/cms/media", icon: <BookOpen size={13} />, hint: "Biblioteca de imagens e documentos" },
   { id: "taxonomia", label: "Taxonomia", path: "/cms/taxonomia", icon: <Hash size={13} />, hint: "Categorias e etiquetas do blog" },
   { id: "modelos", label: "Modelos", path: "/cms/modelos", icon: <Palette size={13} />, hint: "Estruturas de blocos prontas a usar" },
@@ -269,7 +272,15 @@ export default function CmsPage() {
             overview={overview}
             onOpenSection={changeSection}
             onOpenItem={(entity, id) => {
-              changeSection(entity === "pages" ? "paginas" : entity === "municipios" ? "municipios" : "blog");
+              changeSection(
+                entity === "pages"
+                  ? "paginas"
+                  : entity === "municipios"
+                    ? "municipios"
+                    : entity === "pesquisas"
+                      ? "pesquisas"
+                      : "blog",
+              );
               setFocus({ entity, id });
             }}
           />
@@ -279,6 +290,8 @@ export default function CmsPage() {
           <CmsPostsPanel ctx={ctx} focusId={focus?.entity === "posts" ? focus.id : null} onFocusHandled={() => setFocus(null)} />
         ) : section === "municipios" ? (
           <CmsMunicipiosPanel ctx={ctx} focusId={focus?.entity === "municipios" ? focus.id : null} onFocusHandled={() => setFocus(null)} />
+        ) : section === "pesquisas" ? (
+          <CmsPesquisasPanel ctx={ctx} focusId={focus?.entity === "pesquisas" ? focus.id : null} onFocusHandled={() => setFocus(null)} />
         ) : section === "conteudos" ? (
           <CmsContentsPanel ctx={ctx} />
         ) : section === "media" ? (
