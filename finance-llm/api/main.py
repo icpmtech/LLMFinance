@@ -359,6 +359,12 @@ from api.erc_routes import router as erc_router
 # Benchmark de preços e concorrência por empresa + CPV: preço de referência do
 # segmento, concorrentes, historial de contrapartes e oportunidades.
 from api.benchmark_routes import router as benchmark_router
+# Administração Central (SEC 2010): o índice das entidades do Setor
+# Institucional das Administrações Públicas que o INE publica em PDF (Estado,
+# Serviços e Fundos Autónomos e Instituições Sem Fim Lucrativo), ligado aos
+# contratos do portal BASE — contratos adjudicados e empresas adjudicatárias
+# de cada entidade.
+from api.administracao_central_routes import router as administracao_central_router
 from api.benchmarks_routes import router as benchmarks_router, site_router as benchmarks_site_router
 # Importação dos Contratos Públicos do Portal Base (IMPIC) publicados em dados.gov.pt:
 # catálogo dos ficheiros por ano, formato do ZIP e importação para o Elasticsearch.
@@ -611,6 +617,9 @@ _NO_STORE_PREFIXES = (
     # O portal da ERC segue a mesma regra: o painel e o progresso da recolha
     # mudam a cada leitura.
     "/erc",
+    # O índice da Administração Central e as agregações dos contratos mudam a
+    # cada leitura (e a cada reconstrução do índice).
+    "/administracao-central",
 )
 
 
@@ -746,6 +755,7 @@ app.include_router(partidos_router)
 # Portal da Transparência da ERC (entidades, pessoas dos órgãos sociais e OCS).
 app.include_router(erc_router)
 app.include_router(benchmark_router)
+app.include_router(administracao_central_router)
 
 
 @app.get("/benchmark")
@@ -976,6 +986,22 @@ def _seo_meta_for_path(path: str) -> Dict[str, str]:
         "og_type": "website",
     }
     rotas: Dict[str, Dict[str, str]] = {
+        "/administracao-central": {
+            "title": "Administração Central — entidades, contratos e adjudicatárias — IQ OS",
+            "description": (
+                "Índice das entidades do Setor Institucional das Administrações Públicas (INE/SEC 2010): "
+                "serviços e fundos autónomos da Administração Central, os contratos que adjudicam e as "
+                "empresas que lhes vendem."
+            ),
+            "keywords": (
+                "administração central, serviços e fundos autónomos, setor institucional, SEC 2010, INE, "
+                "entidades públicas, contratos públicos, adjudicatárias, portal base"
+            ),
+            "og_title": "Administração Central — entidades, contratos e adjudicatárias — IQ OS",
+            "og_description": (
+                "Quem são os serviços e fundos autónomos da Administração Central, quanto contratam e a quem compram."
+            ),
+        },
         "/benchmark": {
             "title": "Benchmark de preços e concorrência — IQ OS",
             "description": "Preço de referência, concorrentes, historial e oportunidades nos contratos públicos de Portugal, Espanha e França.",

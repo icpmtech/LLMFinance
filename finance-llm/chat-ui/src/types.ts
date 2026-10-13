@@ -1254,6 +1254,10 @@ export interface MunicipioPessoa {
   party: string;
   concelho: string;
   district?: string;
+  concelho_id?: number | null;
+  codigo_ine?: string | null;
+  election?: string;
+  mandato?: string;
   pelouros?: string[];
   photo_url?: string | null;
   profile_url?: string | null;
@@ -1276,6 +1280,7 @@ export interface MunicipioPessoasStatsResponse {
   index: string;
   documents: number;
   by_concelho?: { key: string; count: number }[];
+  by_district?: { key: string; count: number; concelhos?: { key: string; count: number }[] }[];
   by_party?: { key: string; count: number }[];
   by_role?: { key: string; count: number }[];
   error?: string | null;

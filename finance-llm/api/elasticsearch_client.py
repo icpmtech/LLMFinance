@@ -264,9 +264,10 @@ VEREADORES_INDEX = "finance_vereadores"
 # `contratos`. Alimentado por `api/municipios_service.py`.
 MUNICIPIOS_DESPESAS_INDEX = "finance_municipios_despesas"
 
-# Executivos municipais: membros das câmaras municipais (presidente,
-# vice-presidentes, vereadores) extraídos dos sites oficiais. Documento por
-# pessoa × concelho × cargo, com pelouros, partido e fotografia.
+# Executivos municipais: membros das câmaras municipais dos 308 concelhos
+# (presidente, vice-presidentes, vereadores). Documento por pessoa × concelho ×
+# cargo — os nomes e os partidos vêm do Mapa Oficial da CNE e os pelouros, a
+# fotografia e a página de cada eleito dos sites das câmaras.
 MUNICIPIO_PESSOAS_INDEX = "finance_municipio_pessoas"
 
 # Abonos dos eleitos locais. Um documento por **linha da tabela oficial**
@@ -2763,6 +2764,10 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "role": {"type": "keyword", "ignore_above": 128},
             "role_keyword": {"type": "keyword", "ignore_above": 128},
             "pelouros": {"type": "keyword", "ignore_above": 256},
+            "concelho_id": {"type": "long"},
+            "codigo_ine": {"type": "keyword", "ignore_above": 16},
+            "election": {"type": "keyword", "ignore_above": 64},
+            "mandato": {"type": "keyword", "ignore_above": 16},
             "source": {"type": "keyword", "ignore_above": 64},
             "source_url": {"type": "keyword", "ignore_above": 512, "index": False},
             "profile_url": {"type": "keyword", "ignore_above": 512, "index": False},

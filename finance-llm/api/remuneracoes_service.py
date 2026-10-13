@@ -946,10 +946,15 @@ PARTICULAS_NOME = {"de", "da", "do", "das", "dos", "e", "di", "del", "van", "von
 
 
 def _tokens_nome(nome: Optional[str]) -> set:
-    """Palavras de um nome, sem as partículas de ligação («de», «da», «dos»)."""
+    """Palavras de um nome, sem as partículas de ligação («de», «da», «dos»).
+
+    O hífen também separa: os sites escrevem «Miguel Corte-Real» onde o Mapa
+    Oficial escreve «Miguel Corte Real», e sem isto as duas formas davam duas
+    palavras diferentes.
+    """
     return {
         token
-        for token in _fold(nome or "").split()
+        for token in re.split(r"[\s\-]+", _fold(nome or ""))
         if token and token not in PARTICULAS_NOME
     }
 
@@ -1056,6 +1061,17 @@ def _mesmo_nome(curto: Optional[str], longo: Optional[str]) -> bool:
     dobrado = _fold(longo)
     tokens = [t for t in _fold(curto).split() if t]
     return bool(tokens) and all(token in dobrado for token in tokens)
+
+
+def nomes_da_mesma_pessoa(a: Optional[str], b: Optional[str]) -> bool:
+    """As duas formas de escrever o nome da mesma pessoa, venham de onde vierem.
+
+    Junta os três critérios que o módulo já usa — a abreviatura do município
+    (`_mesmo_nome`), as partículas de ligação (`nomes_compativeis`) e as gralhas
+    entre fontes (`nomes_parecidos`) — para quem precisa de casar nomes sem saber
+    qual das três diferenças tem à frente.
+    """
+    return _mesmo_nome(a, b) or nomes_compativeis(a, b) or nomes_parecidos(a, b)
 
 
 def _titulo(nome: str) -> str:

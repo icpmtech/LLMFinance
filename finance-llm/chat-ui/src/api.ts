@@ -1959,7 +1959,7 @@ export async function importVereadores(items: Omit<Vereador, "doc_id">[]): Promi
   return res.json();
 }
 
-/** Membros de executivos municipais (cm-*.pt). */
+/** Membros de executivos municipais (Mapa Oficial da CNE + sites das câmaras). */
 export async function getMunicipioPessoas(opts?: {
   q?: string;
   district?: string;
@@ -1997,8 +1997,15 @@ export async function getMunicipioPessoasStats(): Promise<MunicipioPessoasStatsR
   return res.json();
 }
 
-/** Força a recolha nova dos executivos municipais. */
-export async function refreshMunicipioPessoas(): Promise<{ refreshed_at: string; concelho: string; total: number; indexed: number; errors: number }> {
+/** Força a recolha nova dos executivos municipais (os 308 concelhos). */
+export async function refreshMunicipioPessoas(): Promise<{
+  refreshed_at: string;
+  concelhos: number;
+  total: number;
+  indexed: number;
+  errors: number;
+  fontes: string[];
+}> {
   const res = await fetch(`${API_BASE}/people/municipio/refresh`, { method: "POST" });
   if (!res.ok) {
     const text = await res.text();

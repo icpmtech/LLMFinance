@@ -2,7 +2,7 @@
 
 - `GET /people/municipio/candidates`      — lista de membros de executivos
 - `GET /people/municipio/stats`           — resumo indexado
-- `POST /people/municipio/refresh`        — recolher novamente
+- `POST /people/municipio/refresh`        — recolher novamente os 308 concelhos
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def list_municipio_candidates(
     session: Session = None,
 ) -> Dict[str, Any]:
     if refresh:
-        municipios.refresh_cm_porto()
+        municipios.refresh_executivos()
     return municipios.search_municipio_pessoas(
         q=q,
         district=district,
@@ -48,6 +48,6 @@ def municipio_stats(session: Session = None) -> Dict[str, Any]:
     return municipios.stats()
 
 
-@router.post("/refresh", summary="Recolher e indexar executivo do Porto")
+@router.post("/refresh", summary="Recolher e indexar os executivos dos 308 concelhos")
 def municipio_refresh(session: Session = None) -> Dict[str, Any]:
-    return municipios.refresh_cm_porto()
+    return municipios.refresh_executivos()

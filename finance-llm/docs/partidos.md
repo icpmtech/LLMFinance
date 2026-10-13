@@ -12,7 +12,9 @@ publicam:
 É a resposta a «que contas entregou cada partido, em que ano, e o que ficou por
 entregar» — hoje **1 309 entradas** (1 065 documentos, 191 em falta e 53 notas)
 em **22 anos**, para **46 partidos** com contas, cruzadas com os **61 partidos**
-do registo da CNE (24 inscritos e 37 extintos).
+do registo da CNE (24 inscritos e 37 extintos). Dos 1 065 documentos, **665 são
+pesquisáveis pelo conteúdo** (o Markdown das contas e das listas de ações) e
+**400 são digitalizações** sem camada de texto.
 
 Para o que a ECFP publica, ver também o registo das pessoas em
 `docs/descoberta-pessoas.md` e a ponte `/partidos/pessoa/{nif}` descrita abaixo.
@@ -143,11 +145,13 @@ texto de recurso. O Markdown é limitado a 900 000 caracteres
 **As digitalizações.** Boa parte das **contas anuais** e algumas **listas de
 ações** são imagens digitalizadas: o MarkItDown não faz OCR (nem o módulo), por
 isso dessas fica o documento, o `pdf_sha256` e o número de páginas, com
-`texto_metodo = pdf-sem-texto` e `precisa_ocr = true`. Para ler o conteúdo é
-preciso abrir o PDF — que o módulo serve em `/partidos/documento/pdf`, sem
-voltar ao TC. O Markdown guardado de qualquer documento (o que ficou indexado)
-está em `/partidos/documento/markdown`, e a página **Partidos e contas** mostra-o
-ao clicar em **ver Markdown**.
+`texto_metodo = pdf-sem-texto` e `precisa_ocr = true`. Do conjunto já recolhido,
+**665 dos 1 065 documentos** deram texto (≈46,8 M de caracteres indexados, sobre
+21 509 páginas) e **400 são digitalizações** — para ler essas é preciso abrir o
+PDF, que o módulo serve em `/partidos/documento/pdf`, sem voltar ao TC. O
+Markdown guardado de qualquer documento (o que ficou indexado) está em
+`/partidos/documento/markdown`, e a página **Partidos e contas** mostra-o ao
+clicar em **ver Markdown**.
 
 ## Recolha
 

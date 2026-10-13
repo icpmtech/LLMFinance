@@ -519,6 +519,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "16,185,129",
   },
   {
+    id: "administracao-central",
+    label: "Administração Central",
+    hint: "Entidades do setor institucional do INE (SEC 2010): serviços e fundos autónomos, contratos adjudicados e adjudicatárias",
+    icon: Landmark,
+    gradient: "from-slate-200 via-sky-500 to-indigo-700",
+    accent: "59,130,246",
+  },
+  {
     id: "partidos",
     label: "Partidos e contas",
     hint: "Contas anuais e financiamento partidário (Tribunal Constitucional) e registo oficial dos partidos (CNE)",

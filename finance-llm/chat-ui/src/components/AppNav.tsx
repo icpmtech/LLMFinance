@@ -73,6 +73,7 @@ export type AppView =
   | "osint"
   | "reports"
   | "subvencoes"
+  | "administracao-central"
   | "remuneracoes"
   | "municipios-despesas"
   | "partidos"

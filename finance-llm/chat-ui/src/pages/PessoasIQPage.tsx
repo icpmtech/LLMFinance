@@ -3200,6 +3200,7 @@ function MunicipioSection() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [district, setDistrict] = useState("");
   const [concelho, setConcelho] = useState("");
   const [party, setParty] = useState("");
   const [role, setRole] = useState("");
@@ -3213,6 +3214,7 @@ function MunicipioSection() {
       try {
         const resp = await getMunicipioPessoas({
           q: q.trim() || undefined,
+          district: district || undefined,
           concelho: concelho || undefined,
           party: party || undefined,
           role: role || undefined,
@@ -3227,15 +3229,19 @@ function MunicipioSection() {
         setLoading(false);
       }
     },
-    [q, concelho, party, role],
+    [q, district, concelho, party, role],
   );
 
   useEffect(() => {
+    // `load` muda de identidade sempre que um filtro muda: é ele que traz os
+    // resultados do filtro que o utilizador acabou de escolher.
     void load(1);
+  }, [load]);
+
+  useEffect(() => {
     getMunicipioPessoasStats()
       .then(setStats)
       .catch(() => setStats(null));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const refresh = async () => {
@@ -3253,8 +3259,16 @@ function MunicipioSection() {
     }
   };
 
-  const concelhos = stats?.by_concelho?.map((b) => b.key) ?? data?.items.map((it) => it.concelho) ?? [];
+  const districts = stats?.by_district ?? [];
+  const concelhos = district
+    ? districts.find((d) => d.key === district)?.concelhos?.map((c) => c.key) ?? []
+    : stats?.by_concelho?.map((b) => b.key) ?? data?.items.map((it) => it.concelho) ?? [];
   const uniqueConcelhos = Array.from(new Set(concelhos));
+  // «Lagoa» e «Calheta» são cada uma dois concelhos (Algarve/Açores e
+  // Madeira/Açores): só contando por distrito é que a soma dá os 308.
+  const totalConcelhos = districts.length
+    ? districts.reduce((n, d) => n + (d.concelhos?.length ?? 0), 0)
+    : stats?.by_concelho?.length;
   const parties = stats?.by_party?.map((b) => b.key) ?? data?.items.map((it) => it.party) ?? [];
   const uniqueParties = Array.from(new Set(parties));
   const roles = stats?.by_role?.map((b) => b.key) ?? data?.items.map((it) => it.role) ?? [];
@@ -3270,11 +3284,11 @@ function MunicipioSection() {
               <University size={20} className="text-teal-300" /> Executivos Municipais
             </h2>
             <p className="text-xs text-muted-foreground">
-              Membros dos executivos das câmaras municipais (ex: Porto).
+              Membros dos executivos das câmaras municipais (Mapa Oficial da CNE), de todos os concelhos.
               {stats && (
                 <>
                   {" "}· {stats.documents.toLocaleString("pt-PT")} pessoas indexadas
-                  {stats.by_concelho && ` em ${stats.by_concelho.length} concelho${stats.by_concelho.length === 1 ? "" : "s"}`}
+                  {totalConcelhos != null && ` em ${totalConcelhos} concelho${totalConcelhos === 1 ? "" : "s"}`}
                 </>
               )}
             </p>
@@ -3305,10 +3319,7 @@ function MunicipioSection() {
             {q && (
               <button
                 type="button"
-                onClick={() => {
-                  setQ("");
-                  void load(1);
-                }}
+                onClick={() => setQ("")}
                 className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground"
                 aria-label="Limpar"
               >
@@ -3317,13 +3328,26 @@ function MunicipioSection() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 @md:grid-cols-4">
+            <select
+              value={district}
+              onChange={(e) => {
+                setDistrict(e.target.value);
+                setConcelho("");
+              }}
+              className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+            >
+              <option value="">Todos os distritos</option>
+              {districts.map((d) => (
+                <option key={d.key} value={d.key}>
+                  {d.key}
+                </option>
+              ))}
+            </select>
+
             <select
               value={concelho}
-              onChange={(e) => {
-                setConcelho(e.target.value);
-                void load(1);
-              }}
+              onChange={(e) => setConcelho(e.target.value)}
               className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
             >
               <option value="">Todos os concelhos</option>
@@ -3336,10 +3360,7 @@ function MunicipioSection() {
 
             <select
               value={party}
-              onChange={(e) => {
-                setParty(e.target.value);
-                void load(1);
-              }}
+              onChange={(e) => setParty(e.target.value)}
               className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
             >
               <option value="">Todos os partidos</option>
@@ -3352,10 +3373,7 @@ function MunicipioSection() {
 
             <select
               value={role}
-              onChange={(e) => {
-                setRole(e.target.value);
-                void load(1);
-              }}
+              onChange={(e) => setRole(e.target.value)}
               className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
             >
               <option value="">Todos os cargos</option>

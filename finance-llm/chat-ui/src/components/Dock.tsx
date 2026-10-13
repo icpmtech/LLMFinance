@@ -1779,7 +1779,7 @@ function DockPreferences({
           />
           <ToggleRow
             label="Widget do Jarvis"
-            hint="O botão flutuante do Control Center, no canto inferior direito. Desligado, o Jarvis fica na página /jarvis e na barra lateral."
+            hint="O botão flutuante do Control Center, no canto inferior direito. Desligado — ou escondido no próprio widget — o Jarvis fica na página /jarvis e na barra lateral; ligue aqui para o trazer de volta."
             checked={prefs.jarvisWidget}
             onChange={(jarvisWidget) => onChange({ jarvisWidget })}
           />

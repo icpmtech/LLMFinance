@@ -18,6 +18,11 @@
  * conversa toda já está no ecrã e o painel taparia o painel de campos, os
  * filtros e os visuais.
  *
+ * O próprio widget traz o **botão de esconder** — o `×` no canto do botão
+ * flutuante e *Esconder* no cabeçalho do painel. É a mesma preferência do dock
+ * (`jarvisWidget`, em `false`): quem o esconder volta a ligá-lo em
+ * *Preferências do dock* → *Interface*.
+ *
  * A voz está sempre disponível: o microfone no compositor e a leitura das
  * respostas em voz alta, com as mesmas preferências da página.
  */
@@ -27,6 +32,7 @@ import {
   Bot,
   Brain,
   ChevronDown,
+  EyeOff,
   Globe2,
   Maximize2,
   Mic,
@@ -55,6 +61,7 @@ import {
   type JarvisAction,
   type JarvisMeta,
 } from "../../jarvisApi";
+import { updateDockPrefs } from "../../dock";
 
 /** Atalhos do Control Center: o que se pede ao Jarvis com um clique. */
 const QUICK_ACTIONS: { icon: typeof Zap; label: string; question: string }[] = [
@@ -185,6 +192,15 @@ export default function JarvisWidget({
     [chat],
   );
 
+  /* Esconder o widget: desliga a preferência do dock em vez de guardar um
+     estado só do widget, para o botão voltar com o mesmo interruptor das
+     Preferências do dock. */
+  const hide = useCallback(() => {
+    chat.stop();
+    setWidget((current) => ({ ...current, open: false }));
+    updateDockPrefs({ jarvisWidget: false });
+  }, [chat]);
+
   useEffect(() => {
     const node = scrollRef.current;
     if (node && open) node.scrollTop = node.scrollHeight;
@@ -236,29 +252,39 @@ export default function JarvisWidget({
 
   return (
     <>
-      {/* Botão flutuante — só o ícone. */}
+      {/* Botão flutuante — só o ícone, com o «×» de esconder no canto. */}
       {!open ? (
-        <button
-          ref={buttonRef}
-          type="button"
-          onPointerDown={startDrag}
-          onClick={toggle}
-          title="Jarvis — Control Center do IQ OS (pergunte qualquer coisa)"
-          aria-label="Abrir o Jarvis"
-          style={style}
-          className="fixed bottom-[124px] right-4 z-[60] grid h-14 w-14 place-items-center rounded-full border border-cyan-400/30 bg-slate-950/85 shadow-2xl shadow-cyan-500/25 backdrop-blur transition hover:border-cyan-300/60 hover:shadow-cyan-400/40"
-        >
-          <span className="pointer-events-none absolute inset-0 rounded-full ring-1 ring-inset ring-white/10" />
-          {busy || voice.listening || voice.speaking ? (
-            <span className="pointer-events-none absolute inset-0 animate-ping rounded-full border border-cyan-300/40" />
-          ) : null}
-          <JarvisOrb state={orbState} level={voice.level} size={52} />
-          {turns.length ? (
-            <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-cyan-500 px-1 text-[10px] font-semibold text-slate-950">
-              {turns.length > 9 ? "9+" : turns.length}
-            </span>
-          ) : null}
-        </button>
+        <div className="group fixed bottom-[124px] right-4 z-[60]" style={style}>
+          <button
+            ref={buttonRef}
+            type="button"
+            onPointerDown={startDrag}
+            onClick={toggle}
+            title="Jarvis — Control Center do IQ OS (pergunte qualquer coisa)"
+            aria-label="Abrir o Jarvis"
+            className="relative grid h-14 w-14 place-items-center rounded-full border border-cyan-400/30 bg-slate-950/85 shadow-2xl shadow-cyan-500/25 backdrop-blur transition hover:border-cyan-300/60 hover:shadow-cyan-400/40"
+          >
+            <span className="pointer-events-none absolute inset-0 rounded-full ring-1 ring-inset ring-white/10" />
+            {busy || voice.listening || voice.speaking ? (
+              <span className="pointer-events-none absolute inset-0 animate-ping rounded-full border border-cyan-300/40" />
+            ) : null}
+            <JarvisOrb state={orbState} level={voice.level} size={52} />
+            {turns.length ? (
+              <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-cyan-500 px-1 text-[10px] font-semibold text-slate-950">
+                {turns.length > 9 ? "9+" : turns.length}
+              </span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            onClick={hide}
+            title="Esconder o widget (volta a ligá-lo nas Preferências do dock)"
+            aria-label="Esconder o widget do Jarvis"
+            className="absolute -left-1.5 -top-1.5 grid h-6 w-6 place-items-center rounded-full border border-white/15 bg-slate-900/95 text-muted-foreground/80 opacity-70 shadow-lg shadow-black/40 backdrop-blur transition hover:border-rose-300/40 hover:text-rose-200 hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-rose-300/50"
+          >
+            <EyeOff size={12} />
+          </button>
+        </div>
       ) : null}
 
       {/* Painel do Control Center. */}
@@ -304,6 +330,15 @@ export default function JarvisWidget({
                 className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground transition hover:bg-white/[0.06] hover:text-foreground"
               >
                 <Minus size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={hide}
+                title="Esconder o widget (volta a ligá-lo nas Preferências do dock)"
+                aria-label="Esconder o widget do Jarvis"
+                className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground transition hover:bg-white/[0.06] hover:text-rose-200"
+              >
+                <EyeOff size={14} />
               </button>
               <button
                 type="button"

@@ -31,7 +31,8 @@ Há **duas formas** de o usar, com a mesma conversa:
 - o **widget flutuante** — um botão só com o ícone, em qualquer página da
   plataforma, que abre o **Control Center**. Liga-se e desliga-se em
   **Preferências do dock → Widget do Jarvis**; desligado, o Jarvis usa-se pela
-  página e pela barra lateral (`Investigação e IA` → `Jarvis`).
+  página e pela barra lateral (`Investigação e IA` → `Jarvis`). O próprio widget
+  tem um `×` para se esconder dali mesmo.
 
 ---
 
@@ -41,6 +42,10 @@ Há **duas formas** de o usar, com a mesma conversa:
 > (preferência do dock, `jarvisWidget`). Desligado, o botão flutuante não
 > aparece em página nenhuma e o Jarvis continua na página `/jarvis` e na barra
 > lateral.
+>
+> **Do próprio widget:** o `×` no canto do botão flutuante e **Esconder** no
+> cabeçalho do painel desligam esta mesma preferência — é aqui que o botão
+> volta a ser ligado.
 
 O widget acompanha toda a plataforma: um botão flutuante no canto inferior
 direito com a órbita do Jarvis. **Só o ícone** quando fechado; ao clicar abre um
@@ -64,6 +69,10 @@ Detalhes de comportamento:
 
 - o botão **arrasta-se** e a posição fica guardada; o ícone pulsa quando o
   Jarvis está a ouvir, a pensar ou a falar, e traz um contador de respostas;
+- **esconder o widget**: o `×` no canto do botão flutuante e **Esconder** no
+  cabeçalho do painel desligam a preferência do dock (`jarvisWidget`) — a mesma
+  de *Preferências do dock* → *Interface*, que é onde o botão volta a ser
+  ligado;
 - **voz sempre disponível**: o microfone está no compositor e as respostas são
   lidas em voz alta (o altifalante no cabeçalho liga/desliga), com as mesmas
   preferências da página;

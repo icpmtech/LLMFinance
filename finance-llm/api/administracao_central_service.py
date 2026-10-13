@@ -13,7 +13,7 @@ regional — já têm módulos próprios na plataforma):
 - ``S.13112`` — Serviços e Fundos Autónomos da Administração Central;
 - ``S.13113`` — Instituições Sem Fim Lucrativo da Administração Central.
 
-O índice vive em ``data/entidades-sector/servicos-fundos-autonomos.json`` e é
+O índice vive em ``data/entidades-sector/administracao-central.json`` e é
 regenerável a partir do PDF + do índice de contratos (``reconstruir``). As
 ligações nome→NIF podem ser corrigidas à mão em
 ``data/entidades-sector/ligacoes-manuais.json`` (``{«nome do PDF»: «NIF»}``),
@@ -29,14 +29,14 @@ import threading
 import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[1]
 PASTA = ROOT / "data" / "entidades-sector"
 PDF_FONTE = PASTA / "Entidades que integram o Setor Institucional das Administrações Públicas - 2025.pdf"
-INDICE = PASTA / "servicos-fundos-autonomos.json"
+INDICE = PASTA / "administracao-central.json"
 LIGACOES_MANUAIS = PASTA / "ligacoes-manuais.json"
 CADASTRO_PORTAL_BASE = ROOT / "data" / "entidades-gov-portal-base" / "entidades.json"
 
@@ -76,14 +76,20 @@ SECOES_POR_CODIGO = {codigo.replace(".", ""): codigo for codigo in SECOES}
 
 #: Nº de páginas do PDF ("88 de 88").
 _RE_RODAPE = re.compile(r"^\d+\s+de\s+\d+$")
-_RE_CABECALHO = re.compile(r"^S\.\d+\s*[–—-]")
-_RE_SIGLA = re.compile(r"^(.{2,12}?)\s+[–—-]\s+")
+#: Cabeçalho de subsetor («S.13112 – Administração Central», «S.131311A – …»).
+_RE_CABECALHO = re.compile(r"^S\.\d+[A-Z]?\s*[–—-]\s")
+_RE_SIGLA = re.compile(r"^(.{2,24}?)\s+[–—-]\s+")
 
-#: Sufixos societários que não ajudam a distinguir entidades.
-_RE_SUFIXOS = re.compile(r"\b(I\.?P\.?|S\.?A\.?|SGPS|E\.?P\.?E\.?|LDA\.?|LDA|UNIPESSOAL|EPE|SA|IP|ACE|A\.C\.E\.?)\b")
-#: Palavras que aparecem em quase todos os nomes.
+#: Formas societárias que não ajudam a distinguir entidades, **já normalizadas**:
+#: a normalização transforma «I.P.» em «I P», pelo que a limpeza tem de ser feita
+#: depois dela — e só no fim do nome, para não tocar em nomes que as contenham.
+_RE_SUFIXOS_FIM = re.compile(
+    r"(?:\s+(?:I P|IP|S A|SA|SGPS|E P E|EPE|LDA|UNIPESSOAL|A C E|ACE))+$"
+)
+#: Palavras que aparecem em quase todos os nomes (não distinguem entidades).
 _RUIDO = {
-    "DE", "DA", "DO", "DAS", "DOS", "E", "PARA", "A", "O", "EM", "NO", "NA", "AO", "AOS",
+    "A", "AS", "AO", "AOS", "O", "OS", "UM", "UMA", "DE", "DA", "DO", "DAS", "DOS", "E",
+    "EM", "NO", "NA", "PARA",
     "INSTITUTO", "SERVICO", "SERVICOS", "AGENCIA", "FUNDO", "SOCIEDADE", "EMPRESA",
     "NACIONAL", "GERAL", "PUBLICA", "PUBLICO", "PORTUGAL", "PORTUGUESA", "PORTUGUES",
 }
@@ -93,16 +99,25 @@ _RUIDO = {
 
 
 def normalizar(valor: Any) -> str:
-    """Texto em maiúsculas, sem acentos e sem pontuação (para comparação)."""
-    texto = unicodedata.normalize("NFKD", str(valor or ""))
-    texto = "".join(c for c in texto if not unicodedata.combining(c))
-    return re.sub(r"\s+", " ", re.sub(r"[^A-Za-z0-9]+", " ", texto.upper())).strip()
+    """Texto em maiúsculas, sem acentos e sem pontuação (para comparação).
+
+    Inclui a equivalência entre a grafia anterior e a posterior ao Acordo
+    Ortográfico (``DIRECCAO``/``DIRECAO``, ``ACTIVIDADE``/``ATIVIDADE``), que é
+    onde os nomes do portal BASE e os do INE mais divergem.
+    """
+    # «2.º» e «2º» dão a mesma palavra («2O»): a marca de ordinal perde-se na
+    # decomposição de acentos, pelo que a normalização tem de vir antes dela.
+    texto = re.sub(r"(\d)\s*\.?\s*([ºª])", lambda m: m.group(1) + ("A" if m.group(2) == "ª" else "O"), str(valor or ""))
+    texto = unicodedata.normalize("NFKD", texto)
+    texto = "".join(c for c in texto if not unicodedata.combining(c)).upper()
+    texto = re.sub(r"CC|CT|PC|PT", lambda m: m.group(0)[-1], texto)
+    return re.sub(r"\s+", " ", re.sub(r"[^A-Za-z0-9]+", " ", texto)).strip()
 
 
 def chave_nome(valor: Any) -> str:
-    """Chave de comparação: nome normalizado, sem sufixos societários nem parênteses."""
+    """Chave de comparação: nome normalizado, sem parênteses nem formas societárias."""
     limpo = re.sub(r"\([^)]*\)", " ", str(valor or ""))
-    return re.sub(r"\s+", " ", re.sub(r"[^A-Z0-9 ]+", " ", _RE_SUFIXOS.sub(" ", normalizar(limpo)))).strip()
+    return re.sub(r"\s+", " ", _RE_SUFIXOS_FIM.sub("", normalizar(limpo))).strip()
 
 
 def tokens_nome(valor: Any) -> set:
@@ -124,25 +139,40 @@ def nome_sem_sigla(valor: Any) -> str:
 
 
 def tokens_equivalentes(primeiro: str, segundo: str) -> bool:
-    """Duas palavras são a mesma quando uma é prefixo da outra (plural, truncagem)."""
+    """Duas palavras são a mesma quando uma é prefixo da outra (plural, truncagem).
+
+    Só se aceitam prefixos com 6 ou mais caracteres: é o que evita confundir
+    siglas curtas com palavras longas («METRO» nunca é «METROPOLITANOS»). As
+    gralhas e as grafias antigas são tratadas em `normalizar`.
+    """
     if primeiro == segundo:
         return True
-    if len(primeiro) < 5 or len(segundo) < 5:
+    if len(primeiro) < 6 or len(segundo) < 6:
         return False
     curta, longa = sorted((primeiro, segundo), key=len)
     return longa.startswith(curta)
 
 
 def pontuar_tokens(alvo: set, palavras: set) -> Tuple[int, float, float]:
-    """Compara dois conjuntos de palavras, tolerando plural/truncagem.
+    """Compara dois conjuntos de palavras, tolerando plural/truncagem/gralhas.
+
+    O emparelhamento é **um para um** (guloso): sem isso, «Escola» e «Escolar»
+    contariam ambos contra a mesma palavra do candidato e dois nomes de escolas
+    diferentes («… do Nordeste» e «… da Calheta») pareceriam o mesmo.
 
     Devolve ``(palavras em comum, Jaccard, cobertura)``. A cobertura usa o menor
-    dos conjuntos: é o que permite reconhecer um nome curto do portal BASE
-    («Autoridade da Concorrência») como o mesmo que o nome completo do INE.
+    dos conjuntos: é o que reconhece um nome curto do portal BASE como o mesmo
+    que o nome completo do INE.
     """
     if not alvo or not palavras:
         return 0, 0.0, 0.0
-    comuns = sum(1 for token in alvo if any(tokens_equivalentes(token, outro) for outro in palavras))
+    restantes = set(palavras)
+    comuns = 0
+    for token in sorted(alvo):
+        encontrado = next((outro for outro in restantes if tokens_equivalentes(token, outro)), None)
+        if encontrado is not None:
+            restantes.discard(encontrado)
+            comuns += 1
     jaccard = comuns / (len(alvo) + len(palavras) - comuns)
     cobertura = comuns / min(len(alvo), len(palavras))
     return comuns, jaccard, cobertura
@@ -295,8 +325,7 @@ def ligar_nome(nome: str, indice: Dict[str, Any]) -> Tuple[Optional[Dict[str, An
     - ``prefixo`` — a chave mais curta é prefixo da outra e tem ≥ 18 caracteres
       (o portal BASE trunca nomes longos e muda de versão sem aviso);
     - ``sigla`` — a sigla que abre o nome é igual e as palavras coincidem em ≥ 60 %;
-    - ``forte`` — palavras significativas coincidem em ≥ 80 % (Jaccard) ou o nome
-      mais curto está contido no outro com ≥ 3 palavras em comum.
+    - ``forte`` — palavras significativas coincidem em ≥ 80 % (Jaccard).
     """
     if not nome:
         return None, "nenhuma", 0.0
@@ -314,6 +343,10 @@ def ligar_nome(nome: str, indice: Dict[str, Any]) -> Tuple[Optional[Dict[str, An
         return por_chave[simples][0], "nome", 0.97
     if chave and chave in por_chave_simples:
         return por_chave_simples[chave][0], "nome", 0.97
+    if simples and simples in indice["por_chave_simples"]:
+        # Duas siglas diferentes para o mesmo nome («UL - Instituto Superior de
+        # Economia e Gestão» e «ISEG - Instituto Superior de Economia e Gestão»).
+        return indice["por_chave_simples"][simples][0], "nome", 0.96
 
     alvo = tokens_nome(nome)
     if not alvo:
@@ -335,7 +368,13 @@ def ligar_nome(nome: str, indice: Dict[str, Any]) -> Tuple[Optional[Dict[str, An
             continue
         nome_candidato = candidatos_chave[0].get("nome") or ""
         palavras = tokens_nome(nome_candidato)
-        comuns, jaccard, cobertura = pontuar_tokens(alvo, palavras)
+        # A sigla que abre o nome («IMT - Instituto da Mobilidade…») desaparece do
+        # nome usado nos contratos («Instituto da Mobilidade e dos Transportes»):
+        # comparada à parte, senão faria baixar a semelhança de um nome que é igual.
+        alvo_comparado = alvo
+        if sigla and not any(tokens_equivalentes(sigla, outro) for outro in palavras):
+            alvo_comparado = alvo - {sigla}
+        comuns, jaccard, cobertura = pontuar_tokens(alvo_comparado, palavras)
         if comuns == 0:
             continue
         curta, longa = sorted((chave, candidata), key=len)
@@ -343,13 +382,16 @@ def ligar_nome(nome: str, indice: Dict[str, Any]) -> Tuple[Optional[Dict[str, An
         mesma_sigla = bool(sigla) and len(sigla) >= 2 and sigla == sigla_nome(nome_candidato)
 
         if prefixo and cobertura >= 0.9:
+            # O portal BASE trunca nomes longos («Agência para a Integração» para
+            # «Agência para a Integração, Migrações e Asilo»), mas um nome mais
+            # *curto* que apenas *contém* o do INE é outra entidade («Secretaria
+            # Regional da Juventude» não é a Secretaria Regional de Inclusão,
+            # Trabalho e Juventude): só o prefixo conta.
             tipo, score = "prefixo", 0.95
         elif mesma_sigla and cobertura >= 0.6:
             tipo, score = "sigla", 0.9
         elif jaccard >= 0.8:
             tipo, score = "forte", 0.85
-        elif cobertura >= 0.9 and comuns >= 3:
-            tipo, score = "forte", 0.8
         else:
             continue
         if score > melhor_score:
@@ -762,8 +804,19 @@ def contratos(
     return {"total": resposta["hits"]["total"]["value"], "items": itens, "from": desde, "size": tamanho}
 
 
-def _nome_do_nif(candidatos: Dict[str, str], nif: str) -> Optional[str]:
-    return candidatos.get(nif)
+def _valor_do_balde(balde: Dict[str, Any]) -> float:
+    """Valor somado de um balde, nas duas formas usadas nas agregações.
+
+    `por_ano` soma diretamente (`{"valor": {"value": n}}`), enquanto os baldes de
+    ranking usam uma sub-agregação `reverse_nested` (`{"valor": {"v": {"value": n}}}`).
+    """
+    dados = balde.get("valor") or {}
+    if isinstance(dados, dict) and isinstance(dados.get("v"), dict):
+        dados = dados["v"]
+    try:
+        return round(float(dados.get("value") or 0), 2)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _linhas_de_baldes(baldes: Sequence[Dict[str, Any]], nomes: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
@@ -771,20 +824,23 @@ def _linhas_de_baldes(baldes: Sequence[Dict[str, Any]], nomes: Optional[Dict[str
     linhas = []
     for balde in baldes:
         chave = balde.get("key")
-        nome = None
-        if nomes:
-            nome = nomes.get(str(chave))
+        nome = nomes.get(str(chave)) if nomes else None
         if not nome:
             acertos = ((balde.get("nome") or {}).get("hits") or {}).get("hits") or []
             if acertos:
                 fonte = acertos[0].get("_source") or {}
-                nome = fonte.get("nome") or fonte.get("adjudicatarios", {}).get("parsed", {}).get("nome")
+                nome = fonte.get("nome") or fonte.get("description")
+                if not nome and fonte.get("cpv"):
+                    nome = (fonte["cpv"] or [{}])[0].get("description")
+        if not nome and chave not in (None, ""):
+            # Nas agregações de tipo (procedimento, contrato) a própria chave é o rótulo.
+            nome = str(chave)
         linhas.append(
             {
                 "key": chave,
                 "nome": nome,
                 "count": int(balde.get("doc_count") or 0),
-                "valor": round(float(((balde.get("valor") or {}).get("v") or {}).get("value") or 0), 2),
+                "valor": _valor_do_balde(balde),
             }
         )
     return linhas
@@ -878,7 +934,7 @@ def agregacoes(
                     "chaves": {
                         "terms": {"field": "cpv.code", "size": top, "order": {"_count": "desc"}},
                         "aggs": {
-                            "nome": {"top_hits": {"size": 1, "_source": ["cpv"]}},
+                            "nome": {"top_hits": {"size": 1, "_source": ["cpv.code", "cpv.description"]}},
                             "valor": {"reverse_nested": {}, "aggs": {"v": {"sum": {"field": "precoContratual"}}}},
                         },
                     }

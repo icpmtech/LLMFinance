@@ -392,6 +392,18 @@ TAGS_METADATA: List[Dict[str, str]] = [
         ),
     },
     {
+        "name": "administracao-central",
+        "description": (
+            "Administração Central (SEC 2010): o índice das entidades do Setor "
+            "Institucional das Administrações Públicas que o INE publica em PDF "
+            "(`data/entidades-sector/`), ligado pelo NIF aos contratos do portal "
+            "BASE. Serve a lista pesquisável de entidades (Estado, Serviços e "
+            "Fundos Autónomos e Instituições Sem Fim Lucrativo), a ficha de cada "
+            "entidade com as suas adjudicatárias, o painel de contratos do setor, "
+            "a pesquisa de contratos e a exportação CSV."
+        ),
+    },
+    {
         "name": "partidos",
         "description": (
             "Partidos políticos e as suas contas. Recolhe as páginas anuais do "
