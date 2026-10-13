@@ -496,10 +496,15 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
   }, [user?.role, iframeRevision, benchmarkRevision, sidebarAccess]);
 
   /* Histórico de vistas (alimenta a secção «Recentes»). */
+  const recentViewId = useMemo(() => resolveItem(active, context.items)?.id ?? null, [active, context.items]);
+
+  /* Regista quando a vista muda — e não a cada mudança de identidade da lista de
+     itens. Com vários separadores abertos, registar em cada render escrevia no
+     `localStorage` em ciclo (cada escrita notifica os outros separadores) e a
+     secção «Recentes» ficava a piscar. */
   useEffect(() => {
-    const item = resolveItem(active, context.items);
-    if (item) recordRecentView(item.id);
-  }, [active, context.items]);
+    if (recentViewId) recordRecentView(recentViewId);
+  }, [recentViewId]);
 
   const recentItems = useMemo(
     () =>

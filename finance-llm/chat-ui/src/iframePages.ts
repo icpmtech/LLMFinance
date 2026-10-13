@@ -314,11 +314,18 @@ export function subscribeIframePages(onChange: () => void): () => void {
     revision += 1;
     onChange();
   };
+  /* Só a chave desta lista a pode ter mudado: reagir a qualquer escrita no
+     `localStorage` (de outro separador ou de outro store) recarregava a lista e
+     subia a revisão sem motivo — e quem depende dela redesenha. */
+  const onStorage = (event: StorageEvent) => {
+    if (event.key && event.key !== STORAGE_KEY) return;
+    handler();
+  };
   window.addEventListener(CHANGE_EVENT, handler);
-  window.addEventListener("storage", handler);
+  window.addEventListener("storage", onStorage);
   return () => {
     window.removeEventListener(CHANGE_EVENT, handler);
-    window.removeEventListener("storage", handler);
+    window.removeEventListener("storage", onStorage);
   };
 }
 
