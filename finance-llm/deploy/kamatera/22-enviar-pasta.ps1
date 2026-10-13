@@ -75,7 +75,12 @@ Write-Host ("  destino: $Destino")
 # colidiam no dicionario. Ver o `00-push-edge-files.ps1`.
 $listagem = (Invoke-Vm "find $Destino -type f -printf '%P|%s\n' 2>/dev/null || true").Output
 $remotos = @{}
-foreach ($linha in ($listagem -split "`n")) {
+# `\r?\n` e nao `` `n ``: o `Out-String` do PowerShell junta as linhas com
+# `\r\n`, e ao separar so por `\n` fica um `\r` no fim de cada uma -- o `$` da
+# regex deixa de casar e **nenhuma** linha e lida. Deu "tudo em falta" numa pasta
+# que estava completa. O `TrimEnd` do `Invoke-Vm` poupa a ultima linha, o que
+# torna o sintoma ainda mais enganador: parece que so falhou uma.
+foreach ($linha in ($listagem -split "\r?\n")) {
     if ("$linha" -match '^(.*)\|(\d+)$') { $remotos[$Matches[1]] = [int64]$Matches[2] }
 }
 
@@ -131,7 +136,7 @@ Write-Host ''
 Write-Host '=== a conferir ===' -ForegroundColor Cyan
 $listagem = (Invoke-Vm "find $Destino -type f -printf '%P|%s\n'").Output
 $remotos = @{}
-foreach ($linha in ($listagem -split "`n")) {
+foreach ($linha in ($listagem -split "\r?\n")) {
     if ("$linha" -match '^(.*)\|(\d+)$') { $remotos[$Matches[1]] = [int64]$Matches[2] }
 }
 

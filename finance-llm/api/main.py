@@ -306,6 +306,7 @@ from api.citacoes_routes import router as citacoes_router
 from api.people_routes import router as people_router
 from api.autarquicas_routes import router as autarquicas_router
 from api.vereadores_routes import router as vereadores_router
+from api.municipio_pessoas_routes import router as municipio_pessoas_router
 # Abonos dos eleitos locais (Lei n.º 11/96): a tabela oficial por escalão de
 # eleitores cruzada com o recenseamento do MAI, para se saber quanto cabe a cada
 # concelho e a cada freguesia; `finance_remuneracoes` + `finance_remuneracoes_territorios`.
@@ -694,6 +695,7 @@ app.include_router(citacoes_router)
 app.include_router(people_router)
 app.include_router(autarquicas_router)
 app.include_router(vereadores_router)
+app.include_router(municipio_pessoas_router)
 # Remunerações dos eleitos locais: tabela de abonos + eleitores/polígonos por
 # concelho e freguesia (recenseamento do MAI).
 app.include_router(remuneracoes_router)
@@ -1159,6 +1161,35 @@ def serve_entities_spa_page():
 def _accepts_html(request: Request) -> bool:
     accept = request.headers.get("accept", "")
     return "text/html" in accept
+
+
+def _is_api_path(path: str) -> bool:
+    """Verifica se um caminho pertence à API (não à SPA).
+
+    O Vite preview serve a aplicação em `/` e faz proxy de `/api/*` para o
+    backend. Quando o pedido chega ao backend, o prefixo `/api` já foi
+    removido pelo proxy. No entanto, se o utilizador aceder diretamente a
+    uma sub-rota da SPA como `/pessoas-iq`, o browser faz pedido a
+    `http://127.0.0.1:4177/pessoas-iq` sem `/api`, e o Vite devolve o
+    `index.html`. O backend só recebe pedidos através do proxy, pelo que
+    `/api` deve ser considerado API e não SPA.
+    """
+    api_prefixes = (
+        "/api/",
+        "/auth/",
+        "/people/",
+        "/partidos/",
+        "/vereadores/",
+        "/contracts/",
+        "/companies/",
+        "/entities/",
+        "/health",
+        "/docs",
+        "/redoc",
+        "/openapi",
+    )
+    normalized = f"/{path.lstrip('/')}"
+    return any(normalized.startswith(p) for p in api_prefixes)
 
 
 @app.get("/companies/{nif}", response_model=CompanyDetail)
@@ -1881,6 +1912,10 @@ def entities_report_dossie_pdf(nif: str):
 @app.get("/empresas-iq")
 @app.get("/pessoas-iq")
 @app.get("/pessoas-iq/politicos")
+@app.get("/pessoas-iq/autarquicas")
+@app.get("/pessoas-iq/vereadores")
+@app.get("/pessoas-iq/municipio")
+@app.get("/pessoas-iq/executivo")
 @app.get("/empresas-risco")
 @app.get("/crm")
 @app.get("/crm/contas")
@@ -3499,6 +3534,11 @@ def serve_spa_deep_link(request: Request, full_path: str):
     if Path(full_path or "").suffix.lower() in _ASSET_SUFFIXES:
         raise HTTPException(status_code=404, detail="Not Found")
     if not _accepts_html(request):
+        raise HTTPException(status_code=404, detail="Not Found")
+    # Quando o backend é usado através do proxy `/api` do Vite preview, os
+    # pedidos de API podem cair aqui se o proxy estiver mal configurado.
+    # Nesses casos servemos 404 para não devolver HTML a chamadas de API.
+    if _is_api_path(full_path):
         raise HTTPException(status_code=404, detail="Not Found")
     index = UI_BUILD_DIR / "index.html"
     if not index.is_file():

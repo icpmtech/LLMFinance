@@ -1247,6 +1247,40 @@ export interface VereadoresStatsResponse {
   data_dir: string;
 }
 
+export interface MunicipioPessoa {
+  doc_id: string;
+  name: string;
+  role: string;
+  party: string;
+  concelho: string;
+  district?: string;
+  pelouros?: string[];
+  photo_url?: string | null;
+  profile_url?: string | null;
+  source_url?: string | null;
+  source?: string;
+  raw_role?: string;
+  ingested_at?: string;
+  updated_at?: string;
+}
+
+export interface MunicipioPessoasResponse {
+  total: number;
+  page: number;
+  size: number;
+  items: MunicipioPessoa[];
+  error?: string | null;
+}
+
+export interface MunicipioPessoasStatsResponse {
+  index: string;
+  documents: number;
+  by_concelho?: { key: string; count: number }[];
+  by_party?: { key: string; count: number }[];
+  by_role?: { key: string; count: number }[];
+  error?: string | null;
+}
+
 export interface PeopleGraphNode {
   id: string;
   // "entity" = entidade contratual (nó de contratos) devolvido por

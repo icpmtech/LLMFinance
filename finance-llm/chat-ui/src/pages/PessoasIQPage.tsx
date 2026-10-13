@@ -20,6 +20,7 @@ import {
   ShieldAlert,
   Sparkles,
   Trophy,
+  University,
   Users,
   Video,
   X,
@@ -36,6 +37,8 @@ import {
   getCompanyCombinedGraph,
   getCompanyPeople,
   getCompanyPeopleGraph,
+  getMunicipioPessoas,
+  getMunicipioPessoasStats,
   getPeopleFilters,
   getPerson,
   getPerson360,
@@ -43,6 +46,7 @@ import {
   ingestPeopleForCompany,
   ingestPeopleFromCire,
   refreshAutarquicasCandidates,
+  refreshMunicipioPessoas,
   searchPeople,
   searchPeopleCompanies,
 } from "../api";
@@ -93,6 +97,9 @@ import {
 import type {
   AutarquicasCandidatesResponse,
   AutarquicasStatsResponse,
+  MunicipioPessoa,
+  MunicipioPessoasResponse,
+  MunicipioPessoasStatsResponse,
   People360Response,
   PeopleAutocompleteItem,
   PeopleFiltersResponse,
@@ -125,7 +132,7 @@ import type {
 // Sections
 // ---------------------------------------------------------------------------
 
-type PessoasIQSection = "dashboard" | "search" | "graph" | "score360" | "devedores" | "autarquicas" | "settings";
+type PessoasIQSection = "dashboard" | "search" | "graph" | "score360" | "devedores" | "autarquicas" | "municipio" | "settings";
 
 const SECTIONS: { id: PessoasIQSection; label: string; icon: React.ElementType }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -134,6 +141,7 @@ const SECTIONS: { id: PessoasIQSection; label: string; icon: React.ElementType }
   { id: "score360", label: "360", icon: ShieldAlert },
   { id: "devedores", label: "Devedores", icon: AlertTriangle },
   { id: "autarquicas", label: "Autárquicas", icon: Trophy },
+  { id: "municipio", label: "Municípios", icon: University },
   { id: "settings", label: "Configurações", icon: Settings },
 ];
 
@@ -3186,6 +3194,287 @@ function AutarquicasSection({ onSelectNif }: { onSelectNif: (nif: string) => voi
   );
 }
 
+function MunicipioSection() {
+  const [data, setData] = useState<MunicipioPessoasResponse | null>(null);
+  const [stats, setStats] = useState<MunicipioPessoasStatsResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [district, setDistrict] = useState("");
+  const [concelho, setConcelho] = useState("");
+  const [party, setParty] = useState("");
+  const [role, setRole] = useState("");
+  const [, setDistrict] = useState("");
+  const [page, setPage] = useState(1);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(
+    async (nextPage = 1) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const resp = await getMunicipioPessoas({
+          q: q.trim() || undefined,
+          district: district || undefined,
+          concelho: concelho || undefined,
+          party: party || undefined,
+          role: role || undefined,
+          page: nextPage,
+          size: 50,
+        });
+        setData(resp);
+        setPage(nextPage);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Erro ao carregar executivo municipal");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [q, district, concelho, party, role],
+  );
+
+  useEffect(() => {
+    void load(1);
+    getMunicipioPessoasStats()
+      .then(setStats)
+      .catch(() => setStats(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    setError(null);
+    try {
+      await refreshMunicipioPessoas();
+      await load(1);
+      const s = await getMunicipioPessoasStats().catch(() => null);
+      if (s) setStats(s);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao atualizar");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const concelhos = stats?.by_concelho?.map((b) => b.key) ?? data?.items.map((it) => it.concelho) ?? [];
+  const uniqueConcelhos = Array.from(new Set(concelhos));
+  const parties = stats?.by_party?.map((b) => b.key) ?? data?.items.map((it) => it.party) ?? [];
+  const uniqueParties = Array.from(new Set(parties));
+  const roles = stats?.by_role?.map((b) => b.key) ?? data?.items.map((it) => it.role) ?? [];
+  const uniqueRoles = Array.from(new Set(roles));
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.size)) : 1;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="flex items-center gap-2 text-lg font-semibold">
+              <University size={20} className="text-teal-300" /> Executivos Municipais
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Membros dos executivos das câmaras municipais (ex: Porto).
+              {stats && (
+                <>
+                  {" "}· {stats.documents.toLocaleString("pt-PT")} pessoas indexadas
+                  {stats.by_concelho && ` em ${stats.by_concelho.length} concelho${stats.by_concelho.length === 1 ? "" : "s"}`}
+                </>
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+          >
+            {refreshing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+            Atualizar dados
+          </button>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="flex flex-col gap-3">
+          <div className="flex min-h-[44px] items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 focus-within:ring-2 focus-within:ring-teal-400/40">
+            <Search size={18} className="shrink-0 text-muted-foreground" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && load(1)}
+              placeholder="Nome, pelouro ou partido…"
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+            {q && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQ("");
+                  void load(1);
+                }}
+                className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground"
+                aria-label="Limpar"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <select
+              value={concelho}
+              onChange={(e) => {
+                setConcelho(e.target.value);
+                void load(1);
+              }}
+              className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+            >
+              <option value="">Todos os concelhos</option>
+              {uniqueConcelhos.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={party}
+              onChange={(e) => {
+                setParty(e.target.value);
+                void load(1);
+              }}
+              className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+            >
+              <option value="">Todos os partidos</option>
+              {uniqueParties.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={role}
+              onChange={(e) => {
+                setRole(e.target.value);
+                void load(1);
+              }}
+              className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40"
+            >
+              <option value="">Todos os cargos</option>
+              {uniqueRoles.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              {data ? `${data.total.toLocaleString("pt-PT")} resultado${data.total === 1 ? "" : "s"}` : "a carregar…"}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void load(Math.max(1, page - 1))}
+                disabled={page <= 1 || loading}
+                className="rounded-lg border border-white/10 px-2 py-1 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+              >
+                Anterior
+              </button>
+              <span className="text-xs text-muted-foreground">
+                {page} / {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => void load(Math.min(totalPages, page + 1))}
+                disabled={page >= totalPages || loading}
+                className="rounded-lg border border-white/10 px-2 py-1 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+              >
+                Seguinte
+              </button>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {loading && !data && <Loading message="A carregar executivos municipais…" />}
+      {error && (
+        <Card className="p-4 text-center">
+          <p className="text-rose-300 text-sm">{error}</p>
+        </Card>
+      )}
+
+      {data && (
+        <div className="grid grid-cols-1 gap-3 @md:grid-cols-2">
+          {data.items.map((p: MunicipioPessoa) => (
+            <Card key={p.doc_id} className="p-4">
+              <div className="flex items-start gap-3">
+                {p.photo_url ? (
+                  <img
+                    src={p.photo_url}
+                    alt={p.name}
+                    className="h-16 w-16 rounded-lg object-cover ring-1 ring-white/10"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-white/[0.05] ring-1 ring-white/10">
+                    <University size={24} className="text-muted-foreground" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground">{p.name}</p>
+                      <p className="text-xs text-muted-foreground">{p.role}</p>
+                      {p.district && (
+                        <p className="text-xs text-muted-foreground">
+                          {p.district} · {p.concelho}
+                        </p>
+                      )}
+                      {!p.district && p.concelho && (
+                        <p className="text-xs text-muted-foreground">{p.concelho}</p>
+                      )}
+                    </div>
+                    <span className="shrink-0 rounded-full bg-teal-400/10 px-2 py-0.5 text-xs text-teal-300">
+                      {p.party}
+                    </span>
+                  </div>
+                  {p.pelouros && p.pelouros.length > 0 && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground/80">Pelouros:</span>{" "}
+                      {p.pelouros.join(", ")}
+                    </p>
+                  )}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {p.profile_url && (
+                      <a
+                        href={p.profile_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 rounded-lg bg-white/[0.06] px-2 py-1 text-[11px] text-teal-200 transition hover:bg-white/[0.12]"
+                      >
+                        <ExternalLink size={11} /> Perfil
+                      </a>
+                    )}
+                    <span className="text-[11px] text-muted-foreground">{p.source}</span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ))}
+          {data.items.length === 0 && (
+            <Card className="p-8 text-center @md:col-span-2">
+              <p className="text-sm text-muted-foreground">Nenhum membro de executivo encontrado com os filtros atuais.</p>
+            </Card>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function IngestPanel() {
   const [nif, setNif] = useState("");
   const [result, setResult] = useState<PeopleIngestResponse | null>(null);
@@ -3552,6 +3841,8 @@ export default function PessoasIQPage({ nif: nifProp }: { nif?: string } = {}) {
         return <DevedoresSection onPickNif={(value) => void handlePickNif(value)} />;
       case "autarquicas":
         return <AutarquicasSection onSelectNif={(value) => void abrirNif(value, "search")} />;
+      case "municipio":
+        return <MunicipioSection />;
       case "settings":
         return <IngestPanel />;
       default:

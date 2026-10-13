@@ -258,6 +258,11 @@ PARTIDOS_INDEX = "finance_partidos"
 # pelas câmaras municipais.
 VEREADORES_INDEX = "finance_vereadores"
 
+# Executivos municipais: membros das câmaras municipais (presidente,
+# vice-presidentes, vereadores) extraídos dos sites oficiais. Documento por
+# pessoa × concelho × cargo, com pelouros, partido e fotografia.
+MUNICIPIO_PESSOAS_INDEX = "finance_municipio_pessoas"
+
 # Abonos dos eleitos locais. Um documento por **linha da tabela oficial**
 # (ano × nível × regime × verba × cargo × modalidade), com os valores por escalão
 # de eleitores — é o direito aplicável, não a pessoa. Alimentado por
@@ -476,6 +481,17 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
         }
     },
     VEREADORES_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    MUNICIPIO_PESSOAS_INDEX: {
         "analysis": {
             "analyzer": {
                 "world_folding": {
@@ -2637,6 +2653,50 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    municipio_pessoas_mappings = {
+        "properties": {
+            "doc_id": {"type": "keyword"},
+            "name": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "name_keyword": {"type": "keyword", "ignore_above": 512},
+            "concelho": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "concelho_keyword": {"type": "keyword", "ignore_above": 128},
+            "district": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "district_keyword": {"type": "keyword", "ignore_above": 128},
+            "party": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 128}},
+            },
+            "party_keyword": {"type": "keyword", "ignore_above": 128},
+            "role": {"type": "keyword", "ignore_above": 128},
+            "role_keyword": {"type": "keyword", "ignore_above": 128},
+            "pelouros": {"type": "keyword", "ignore_above": 256},
+            "source": {"type": "keyword", "ignore_above": 64},
+            "source_url": {"type": "keyword", "ignore_above": 512, "index": False},
+            "profile_url": {"type": "keyword", "ignore_above": 512, "index": False},
+            "photo_url": {"type": "keyword", "ignore_above": 1024, "index": False},
+            "raw_role": {"type": "text", "analyzer": "world_folding"},
+            "ingested_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
     # Abonos dos eleitos locais: uma linha da tabela oficial por documento.
     remuneracoes_mappings = {
         "properties": {
@@ -3272,6 +3332,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (PARTIDOS_REGISTO_INDEX, partidos_registo_mappings),
         (PARTIDOS_RECOLHAS_INDEX, partidos_recolhas_mappings),
         (VEREADORES_INDEX, vereadores_mappings),
+        (MUNICIPIO_PESSOAS_INDEX, municipio_pessoas_mappings),
         # Abonos dos eleitos locais: a tabela oficial e o mesmo direito aplicado
         # a cada concelho e freguesia (eleitores, escalão e polígono do mapa).
         (REMUNERACOES_INDEX, remuneracoes_mappings),

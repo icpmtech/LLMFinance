@@ -743,40 +743,46 @@ function ListaVerbas({ verbas }: { verbas: RemuneracoesVerba[] }) {
     );
   }
   return (
-    <table className="w-full text-[11px]">
-      <thead>
-        <tr className="text-left text-muted-foreground">
-          <th className="py-1 font-medium">Regime</th>
-          <th className="py-1 font-medium">Verba</th>
-          <th className="py-1 font-medium">Cargo</th>
-          <th className="py-1 text-right font-medium">Valor</th>
-        </tr>
-      </thead>
-      <tbody>
-        {verbas
-          .filter((verba) => verba.valor !== null || verbas.length <= 6)
-          .map((verba, indice) => (
-            <tr key={`${verba.id}-${indice}`} className="border-t border-white/5">
-              <td className="py-1 align-top text-muted-foreground">{verba.regime ?? "—"}</td>
-              <td className="py-1 align-top">
-                <span className="block">{verba.grupo ?? "—"}</span>
-                {verba.modalidade ? (
-                  <span className="text-[10px] text-muted-foreground">{verba.modalidade}</span>
-                ) : null}
-              </td>
-              <td className="py-1 align-top text-muted-foreground">{verba.cargo ?? "—"}</td>
-              <td className="py-1 text-right align-top tabular-nums">
-                {euro(verba.valor)}
-                {verba.percentagem !== null && verba.percentagem !== undefined ? (
-                  <span className="ml-1 text-[10px] text-muted-foreground">
-                    ({percentagem(verba.percentagem)})
-                  </span>
-                ) : null}
-              </td>
-            </tr>
-          ))}
-      </tbody>
-    </table>
+    // `overflow-x-auto`: sem isto a tabela impunha o seu `min-content` (305 px)
+    // ao cartão e empurrava a página nos ecrãs de 320 px.
+    <div className="overflow-x-auto">
+      <table className="w-full text-[11px]">
+        <thead>
+          <tr className="text-left text-muted-foreground">
+            <th className="py-1 pr-2 font-medium whitespace-nowrap">Regime</th>
+            <th className="py-1 font-medium">Verba</th>
+            <th className="py-1 font-medium">Cargo</th>
+            <th className="py-1 pl-2 text-right font-medium whitespace-nowrap">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {verbas
+            .filter((verba) => verba.valor !== null || verbas.length <= 6)
+            .map((verba, indice) => (
+              <tr key={`${verba.id}-${indice}`} className="border-t border-white/5">
+                <td className="py-1 pr-2 align-top text-muted-foreground whitespace-nowrap">
+                  {verba.regime ?? "—"}
+                </td>
+                <td className="py-1 align-top">
+                  <span className="block">{verba.grupo ?? "—"}</span>
+                  {verba.modalidade ? (
+                    <span className="text-[10px] text-muted-foreground">{verba.modalidade}</span>
+                  ) : null}
+                </td>
+                <td className="py-1 align-top text-muted-foreground">{verba.cargo ?? "—"}</td>
+                <td className="py-1 pl-2 text-right align-top tabular-nums whitespace-nowrap">
+                  {euro(verba.valor)}
+                  {verba.percentagem !== null && verba.percentagem !== undefined ? (
+                    <span className="ml-1 text-[10px] text-muted-foreground">
+                      ({percentagem(verba.percentagem)})
+                    </span>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -877,7 +883,7 @@ function FichaConcelho({
           </div>
         </div>
 
-        <dl className="mt-3 grid grid-cols-2 gap-3 text-[11px] sm:grid-cols-4">
+        <dl className="mt-3 grid grid-cols-2 gap-3 text-[11px] @xl:grid-cols-4">
           <div>
             <dt className="text-muted-foreground">Eleitores (concelho)</dt>
             <dd className="text-base font-semibold tabular-nums">{numero(detalhe.eleitores)}</dd>
@@ -901,8 +907,17 @@ function FichaConcelho({
 
       <EleitosConcelho eleitos={detalhe.eleitos} />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="glass-card rounded-2xl p-4">
+      {/* `@3xl` (container) e não `lg` (viewport): esta ficha vive num painel de
+          520 px ao lado do mapa. Com o breakpoint da viewport, um ecrã grande
+          partia o painel em duas colunas de ~250 px e as tabelas ficavam
+          ilegíveis. A divisão passa a depender da largura do painel.
+
+          `min-w-0` nos cartões: sem ele o `min-width: auto` do item da grelha
+          assume o `min-content` da tabela de verbas (305 px) e empurra a página
+          nos ecrãs de 320 px; com ele o cartão encolhe e a tabela desliza
+          dentro do seu `overflow-x-auto`. */}
+      <div className="grid gap-4 @3xl:grid-cols-2">
+        <div className="glass-card min-w-0 rounded-2xl p-4">
           <h3 className="text-xs font-semibold">Remunerações das freguesias por escalão de eleitores</h3>
           <p className="mt-1 text-[11px] text-muted-foreground">
             Total mensal dos presidentes de junta:{" "}
@@ -934,7 +949,7 @@ function FichaConcelho({
           </ul>
         </div>
 
-        <div className="glass-card rounded-2xl p-4">
+        <div className="glass-card min-w-0 rounded-2xl p-4">
           <h3 className="text-xs font-semibold">
             Freguesias {freguesia ? `· ${freguesia.nome}` : ""}
           </h3>
@@ -1325,13 +1340,16 @@ export default function RemuneracoesPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
+        {/* `dock-scroll` + `max-w-full`: em ecrãs estreitos a faixa desliza em vez
+            de empurrar a página (a sete separadores mediam 510 px numa viewport
+            de 320 px). */}
+        <div className="dock-scroll flex max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-white/10 bg-white/5 p-1">
           {ABAS.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setAba(item.id)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition ${
                 aba === item.id
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
@@ -1372,13 +1390,13 @@ export default function RemuneracoesPage() {
         ) : null}
 
         {aba === "mapa" ? (
-          <div className="inline-flex gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
+          <div className="dock-scroll flex max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-white/10 bg-white/5 p-1">
             {METRICAS.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => setMetrica(item.id)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition ${
                   metrica === item.id
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
@@ -1392,9 +1410,14 @@ export default function RemuneracoesPage() {
         ) : null}
       </div>
 
+      {/* A ficha do concelho é a coluna densa e estava presa a 520 px: num ecrã
+          de 1920 px sobravam ~1700 px de vazio por baixo do mapa. A coluna passa
+          a crescer com o espaço disponível (45 %), com teto de 820 px para as
+          linhas da tabela não esticarem. O mapa acompanha o scroll (`sticky`)
+          para o vazio por baixo dele não ficar morto. */}
       {aba === "mapa" ? (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,520px)]">
-          <div className="space-y-3">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,min(45%,820px))]">
+          <div className="space-y-3 xl:sticky xl:top-4 xl:self-start">
             <MapaOSM
               pontos={pontosMapa}
               selecionado={selecionado}
@@ -1437,7 +1460,7 @@ export default function RemuneracoesPage() {
               ) : null}
             </div>
           </div>
-          <div>
+          <div className="@container min-w-0">
             {aCarregar ? (
               <div className="glass-card flex h-40 items-center justify-center rounded-2xl text-xs text-muted-foreground">
                 <Loader2 size={14} className="mr-2 animate-spin" /> A carregar o concelho…

@@ -102,8 +102,7 @@ export function installAuthFetch() {
   fetchPatched = true;
   const original = window.fetch.bind(window);
   window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-    if (!token || !url.startsWith(API_BASE)) return original(input, init);
+    if (!token) return original(input, init);
     const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
     if (!headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
     return original(input, { ...init, headers });

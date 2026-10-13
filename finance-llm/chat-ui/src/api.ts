@@ -119,6 +119,8 @@ import type {
   Vereador,
   VereadoresResponse,
   VereadoresStatsResponse,
+  MunicipioPessoasResponse,
+  MunicipioPessoasStatsResponse,
   ImportFileType,
   ImportDataType,
   ImportPreviewRow,
@@ -1953,6 +1955,54 @@ export async function importVereadores(items: Omit<Vereador, "doc_id">[]): Promi
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Erro ao importar vereadores: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Membros de executivos municipais (cm-*.pt). */
+export async function getMunicipioPessoas(opts?: {
+  q?: string;
+  district?: string;
+  concelho?: string;
+  party?: string;
+  role?: string;
+  page?: number;
+  size?: number;
+  refresh?: boolean;
+}): Promise<MunicipioPessoasResponse> {
+  const params = new URLSearchParams();
+  if (opts?.q) params.set("q", opts.q);
+  if (opts?.district) params.set("district", opts.district);
+  if (opts?.concelho) params.set("concelho", opts.concelho);
+  if (opts?.party) params.set("party", opts.party);
+  if (opts?.role) params.set("role", opts.role);
+  params.set("page", String(opts?.page ?? 1));
+  params.set("size", String(opts?.size ?? 50));
+  if (opts?.refresh) params.set("refresh", "true");
+  const res = await fetch(`${API_BASE}/people/municipio/candidates?${params.toString()}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter executivo municipal: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Estatísticas dos executivos municipais indexados. */
+export async function getMunicipioPessoasStats(): Promise<MunicipioPessoasStatsResponse> {
+  const res = await fetch(`${API_BASE}/people/municipio/stats`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao obter estatísticas municipais: ${res.status} - ${text}`);
+  }
+  return res.json();
+}
+
+/** Força a recolha nova dos executivos municipais. */
+export async function refreshMunicipioPessoas(): Promise<{ refreshed_at: string; concelho: string; total: number; indexed: number; errors: number }> {
+  const res = await fetch(`${API_BASE}/people/municipio/refresh`, { method: "POST" });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao atualizar executivos municipais: ${res.status} - ${text}`);
   }
   return res.json();
 }
