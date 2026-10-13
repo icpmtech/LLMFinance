@@ -58,25 +58,11 @@ def _split_pelouros(pelouro_part: str) -> List[str]:
     """Divide pelouros pelo padrão 'Pelouro do/da/de...'.
 
     O texto vem como 'Pelouro da X, Pelouro da Y e Pelouro da Z'. Separamos
-    por vírgula, mas juntamos fragmentos que não começam por 'Pelouro' ao
-    anterior, porque o último pelouro pode ter 'e' antes dele.
+    por vírgula e por 'e' antes de 'Pelouro'.
     """
-    raw = [p.strip() for p in pelouro_part.split(",") if p.strip()]
-    result: List[str] = []
-    for part in raw:
-        # Separa também por 'e' quando ambos os lados têm 'Pelouro'.
-        sub_parts = re.split(r"\s+e\s+(?=Pelouro)", part)
-        for sp in sub_parts:
-            sp = sp.strip()
-            if not sp:
-                continue
-            if sp.lower().startswith("pelouro"):
-                result.append(sp)
-            elif result:
-                result[-1] = result[-1] + " e " + sp
-            else:
-                result.append(sp)
-    return result
+    # Normaliza separadores para vírgula.
+    text = re.sub(r"\s+e\s+(?=Pelouro)", ", ", pelouro_part, flags=re.IGNORECASE)
+    return [p.strip() for p in text.split(",") if p.strip().lower().startswith("pelouro")]
 
 
 def _normalize_party(raw: str) -> str:
@@ -137,14 +123,20 @@ def _parse_executivo_cm_porto(html: str, source_url: str) -> List[Dict[str, Any]
         if " - " in role_line:
             party = _normalize_party(role_line.rsplit(" - ", 1)[-1].strip())
 
-        pelouro_part = role_line.split(" - ")[0]
-        if "," in pelouro_part:
-                    pelouros = [
-                        p for p in _split_pelouros(pelouro_part)
-                        if p.lower().startswith("pelouro")
-                    ]
+        # Remove o prefixo do cargo/pelouro para extrair só os pelouros.
+        pelouro_part = re.sub(
+            r"^(Vereador[oa]?|Presidente da Câmara Municipal|Vice-Presidente da Câmara Municipal),?\s*",
+            "",
+            role_line.split(" - ")[0],
+            flags=re.IGNORECASE,
+        ).strip()
+        if pelouro_part:
+            pelouros = [
+                p for p in _split_pelouros(pelouro_part)
+                if p.lower().startswith("pelouro")
+            ]
 
-                # Procura foto no elemento ou no link individual: o site usa `imageBg`
+        # Procura foto no elemento ou no link individual: o site usa `imageBg`
         # com `background-image:url("...")` em vez de `<img>`.
         photo_url = None
         profile_url = None
@@ -310,6 +302,7 @@ def search_municipio_pessoas(
                     {"wildcard": {"party.keyword": {"value": f"*{q}*", "case_insensitive": True}}},
                     {"wildcard": {"role.keyword": {"value": f"*{q}*", "case_insensitive": True}}},
                     {"wildcard": {"concelho.keyword": {"value": f"*{q}*", "case_insensitive": True}}},
+                    {"wildcard": {"pelouros.keyword": {"value": f"*{q}*", "case_insensitive": True}}},
                 ],
                 "minimum_should_match": 1,
             }

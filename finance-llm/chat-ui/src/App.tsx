@@ -93,6 +93,7 @@ import OsintPage from "./pages/OsintPage";
 import ReportsPage from "./pages/ReportsPage";
 import SubvencoesPage from "./pages/SubvencoesPage";
 import RemuneracoesPage from "./pages/RemuneracoesPage";
+import MunicipiosDespesasPage from "./pages/MunicipiosDespesasPage";
 import PartidosPage from "./pages/PartidosPage";
 import ErcPage from "./pages/ErcPage";
 import BenchmarkPage from "./pages/BenchmarkPage";
@@ -210,6 +211,7 @@ type AppView =
   | "reports"
   | "subvencoes"
   | "remuneracoes"
+  | "municipios-despesas"
   | "partidos"
   | "erc"
   | "benchmark"
@@ -389,6 +391,7 @@ function pathForView(
   if (view === "reports") return "/reports";
   if (view === "subvencoes") return "/subvencoes";
   if (view === "remuneracoes") return "/remuneracoes";
+  if (view === "municipios-despesas") return "/municipios/despesas";
   if (view === "partidos") return "/partidos";
   if (view === "erc") return "/erc";
   if (view === "benchmark") return "/benchmark";
@@ -619,6 +622,7 @@ export default function App() {
     if (path === "/reports" || path.startsWith("/reports/")) return "reports";
     if (path === "/subvencoes" || path.startsWith("/subvencoes/")) return "subvencoes";
     if (path === "/remuneracoes" || path.startsWith("/remuneracoes/")) return "remuneracoes";
+    if (path === "/municipios/despesas" || path.startsWith("/municipios/despesas/")) return "municipios-despesas";
     if (path === "/partidos" || path.startsWith("/partidos/")) return "partidos";
     if (path === "/erc" || path.startsWith("/erc/")) return "erc";
     if (path === "/benchmark/portugal") return "benchmark-pt";
@@ -777,6 +781,7 @@ export default function App() {
       else if (path === "/reports" || path.startsWith("/reports/")) next = "reports";
       else if (path === "/subvencoes" || path.startsWith("/subvencoes/")) next = "subvencoes";
       else if (path === "/remuneracoes" || path.startsWith("/remuneracoes/")) next = "remuneracoes";
+      else if (path === "/municipios/despesas" || path.startsWith("/municipios/despesas/")) next = "municipios-despesas";
       else if (path === "/partidos" || path.startsWith("/partidos/")) next = "partidos";
       else if (path === "/erc" || path.startsWith("/erc/")) next = "erc";
       else if (path === "/benchmark/portugal") next = "benchmark-pt";
@@ -1560,6 +1565,9 @@ export default function App() {
     // Remunerações dos eleitos locais: tabela de abonos (Lei n.º 11/96) cruzada
     // com o n.º de eleitores de cada concelho e freguesia, com mapa.
     if (target === "remuneracoes") return <RemuneracoesPage />;
+    // Despesas das câmaras municipais: despesa por classificador económico
+    // (INE/DGAL) e contratação pública por município (Portal BASE).
+    if (target === "municipios-despesas") return <MunicipiosDespesasPage />;
     if (target === "partidos") return <PartidosPage />;
     // Portal da Transparência da ERC: entidades, pessoas dos órgãos sociais e OCS.
     if (target === "erc") return <ErcPage />;

@@ -258,6 +258,12 @@ PARTIDOS_INDEX = "finance_partidos"
 # pelas câmaras municipais.
 VEREADORES_INDEX = "finance_vereadores"
 
+# Despesas das câmaras municipais. Um documento por **município** (308), com a
+# despesa anual do indicador do INE/DGAL (classificador económico) e a
+# contratação pública em que o município é adjudicante, agregada do índice
+# `contratos`. Alimentado por `api/municipios_service.py`.
+MUNICIPIOS_DESPESAS_INDEX = "finance_municipios_despesas"
+
 # Executivos municipais: membros das câmaras municipais (presidente,
 # vice-presidentes, vereadores) extraídos dos sites oficiais. Documento por
 # pessoa × concelho × cargo, com pelouros, partido e fotografia.
@@ -481,6 +487,18 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
         }
     },
     VEREADORES_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    MUNICIPIOS_DESPESAS_INDEX: {
+        # Nomes de municípios escritos com acentos («Covilhã», «Alandroal»).
         "analysis": {
             "analyzer": {
                 "world_folding": {
@@ -2607,6 +2625,64 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    municipios_despesas_mappings = {
+        "properties": {
+            "doc_id": {"type": "keyword"},
+            "nome": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 256}},
+            },
+            "nome_keyword": {"type": "keyword", "ignore_above": 256},
+            # Código geográfico do INE (7 caracteres) — a chave estável do município.
+            "geocod": {"type": "keyword"},
+            "codigo": {"type": "keyword"},
+            "distrito": {"type": "keyword", "ignore_above": 128},
+            "nuts": {"type": "keyword", "ignore_above": 32},
+            "nuts_nome": {"type": "keyword", "ignore_above": 128},
+            "populacao_2021": {"type": "long"},
+            # Ano mais recente com despesa publicada (o INE publica um ano por vez).
+            "ano_despesas": {"type": "integer"},
+            # Anos com despesa publicada (lista), para o filtro por ano não
+            # obrigar a percorrer o objeto `despesas_por_ano`, que é opaco.
+            "anos": {"type": "keyword"},
+            # Classificador económico: valores do município, em euros, do ano mais
+            # recente. Ficam a topo para se poder pesquisar e ordenar por eles.
+            "despesas_total": {"type": "double"},
+            "despesas_correntes": {"type": "double"},
+            "despesas_capital": {"type": "double"},
+            "despesas_pessoal": {"type": "double"},
+            "despesas_bens_servicos": {"type": "double"},
+            "despesas_bens_capital": {"type": "double"},
+            "despesas_juros": {"type": "double"},
+            "despesas_transferencias_freguesias": {"type": "double"},
+            "despesas_transferencias_capital": {"type": "double"},
+            "despesas_transferencias_capital_freguesias": {"type": "double"},
+            "despesas_outras_transferencias_capital": {"type": "double"},
+            "despesas_outras_correntes": {"type": "double"},
+            "despesas_outras_capital": {"type": "double"},
+            "despesas_ativos_financeiros": {"type": "double"},
+            "despesas_passivos_financeiros": {"type": "double"},
+            # Série completa (ano → classificador → euros) e a legenda dos códigos:
+            # lidas por id, não pesquisadas campo a campo.
+            "despesas_por_ano": {"type": "object", "enabled": False},
+            "classificadores": {"type": "object", "enabled": False},
+            # Contratação pública em que o município é adjudicante.
+            "contratos_total": {"type": "long"},
+            "contratos_valor": {"type": "double"},
+            "contratos_por_ano": {"type": "object", "enabled": False},
+            "contratos_primeiro_ano": {"type": "integer"},
+            "contratos_ultimo_ano": {"type": "integer"},
+            "adjudicantes": {"type": "keyword", "ignore_above": 512},
+            "fonte_despesas": {"type": "keyword", "ignore_above": 256},
+            "fonte_contratos": {"type": "keyword", "ignore_above": 128},
+            "recolhido_em": {"type": "date"},
+            "ingested_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
     vereadores_mappings = {
         "properties": {
             "doc_id": {"type": "keyword"},
@@ -3332,6 +3408,7 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (PARTIDOS_REGISTO_INDEX, partidos_registo_mappings),
         (PARTIDOS_RECOLHAS_INDEX, partidos_recolhas_mappings),
         (VEREADORES_INDEX, vereadores_mappings),
+        (MUNICIPIOS_DESPESAS_INDEX, municipios_despesas_mappings),
         (MUNICIPIO_PESSOAS_INDEX, municipio_pessoas_mappings),
         # Abonos dos eleitos locais: a tabela oficial e o mesmo direito aplicado
         # a cada concelho e freguesia (eleitores, escalão e polígono do mapa).
@@ -17560,6 +17637,332 @@ def vereadores_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
         return out
     except Exception as exc:
         return {"error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Despesas das câmaras municipais (INE/DGAL + contratação pública)
+# ---------------------------------------------------------------------------
+
+#: Campos pelos quais a lista de municípios pode ser ordenada. A ordenação é
+#: feita no Elasticsearch, por isso só entram campos mapeados como número.
+MUNICIPIOS_ORDENACOES = {
+    "despesas": "despesas_total",
+    "pessoal": "despesas_pessoal",
+    "bens_servicos": "despesas_bens_servicos",
+    "capital": "despesas_capital",
+    "contratos": "contratos_valor",
+    "contratos_total": "contratos_total",
+    "nome": "nome_keyword",
+}
+
+
+def index_municipios_despesas_bulk(
+    items: Iterable[Dict[str, Any]],
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa as fichas dos municípios no índice `finance_municipios_despesas`.
+
+    Cada item tem de trazer `doc_id` e `nome`; os restantes campos são opcionais
+    (a ficha de um município sem despesa publicada continua a ser útil, porque
+    pode ter contratação).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed": 0}
+    ensure_indices(client)
+    actions = []
+    now = datetime.utcnow().isoformat()
+    for doc in items:
+        if not doc.get("doc_id") or not doc.get("nome"):
+            continue
+        source = dict(doc)
+        source.setdefault("ingested_at", now)
+        source.setdefault("updated_at", now)
+        actions.append({
+            "_op_type": "index",
+            "_index": MUNICIPIOS_DESPESAS_INDEX,
+            "_id": source["doc_id"],
+            **source,
+        })
+    if not actions:
+        return {"indexed": 0}
+    try:
+        indexed, errors = bulk(client, actions, raise_on_error=False)
+        client.indices.refresh(index=MUNICIPIOS_DESPESAS_INDEX)
+        return {"indexed": indexed, "errors": len(errors) if errors else 0}
+    except Exception as exc:
+        return {"error": str(exc), "indexed": 0}
+
+
+def search_municipios_despesas(
+    q: Optional[str] = None,
+    distrito: Optional[str] = None,
+    nuts: Optional[str] = None,
+    ano: Optional[int] = None,
+    ordenar: str = "despesas",
+    ordem: str = "desc",
+    min_despesas: Optional[float] = None,
+    size: int = 30,
+    page: int = 1,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Lista e filtra os municípios por despesa e contratação."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+    ensure_indices(client)
+
+    must: List[Dict[str, Any]] = []
+    filters: List[Dict[str, Any]] = []
+    if q:
+        termo = str(q).strip()
+        must.append({
+            "bool": {
+                "should": [
+                    {"match_phrase": {"nome": {"query": termo, "boost": 6}}},
+                    {"match": {"nome": {"query": termo, "operator": "and", "boost": 3}}},
+                    {"wildcard": {"nome_keyword": {"value": f"*{termo}*", "case_insensitive": True}}},
+                    {"term": {"geocod": termo}},
+                ],
+                "minimum_should_match": 1,
+            }
+        })
+    if distrito:
+        filters.append({"wildcard": {"distrito": {"value": f"*{distrito}*", "case_insensitive": True}}})
+    if nuts:
+        filters.append({"term": {"nuts": str(nuts)}})
+    if ano:
+        filters.append({"term": {"anos": str(ano)}})
+    if min_despesas is not None:
+        filters.append({"range": {"despesas_total": {"gte": float(min_despesas)}}})
+
+    bool_query: Dict[str, Any] = {}
+    if must:
+        bool_query["must"] = must
+    if filters:
+        bool_query["filter"] = filters
+    query = {"bool": bool_query} if bool_query else {"match_all": {}}
+
+    campo = MUNICIPIOS_ORDENACOES.get(str(ordenar or ""), "despesas_total")
+    direcao = "asc" if str(ordem).lower() == "asc" else "desc"
+    from_ = max(0, (max(1, page) - 1) * max(1, size))
+
+    body = {
+        "query": query,
+        "from": from_,
+        "size": max(1, min(size, 500)),
+        "sort": [{campo: {"order": direcao, "missing": "_last"}}, {"nome_keyword": {"order": "asc"}}],
+        "track_total_hits": True,
+        "aggs": {
+            "total_despesas": {"sum": {"field": "despesas_total"}},
+            "total_contratos": {"sum": {"field": "contratos_valor"}},
+            "por_distrito": {"terms": {"field": "distrito", "size": 30}},
+        },
+    }
+
+    try:
+        resp = client.search(index=MUNICIPIOS_DESPESAS_INDEX, body=body)
+        total = resp["hits"]["total"]["value"]
+        aggs = resp.get("aggregations", {})
+        return {
+            "total": total,
+            "items": [{**hit["_source"], "doc_id": hit["_id"]} for hit in resp["hits"]["hits"]],
+            "from": from_,
+            "size": size,
+            "page": page,
+            "despesas_somadas": (aggs.get("total_despesas", {}) or {}).get("value") or 0.0,
+            "contratos_somados": (aggs.get("total_contratos", {}) or {}).get("value") or 0.0,
+            "distritos": [
+                {"key": b["key"], "count": b["doc_count"]}
+                for b in (aggs.get("por_distrito", {}) or {}).get("buckets", [])
+            ],
+        }
+    except Exception as exc:
+        return {"error": str(exc), "items": [], "total": 0}
+
+
+def get_municipio_despesas(nome_ou_codigo: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Ficha de um município, pelo código INE ou pelo nome (tolerante a acentos)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    ensure_indices(client)
+    alvo = str(nome_ou_codigo or "").strip()
+    if not alvo:
+        return {"error": "Indique o município."}
+
+    try:
+        resp = client.get(index=MUNICIPIOS_DESPESAS_INDEX, id=alvo, _source=True)
+        return {**resp.get("_source", {}), "doc_id": resp.get("_id")}
+    except NotFoundError:
+        pass
+    except Exception as exc:
+        logger.debug("Leitura direta do município %s falhou: %s", alvo, exc)
+
+    body = {
+        "size": 1,
+        "query": {
+            "bool": {
+                "should": [
+                    {"term": {"geocod": alvo}},
+                    {"term": {"nome_keyword": alvo.lower()}},
+                    {"match_phrase": {"nome": {"query": alvo, "boost": 4}}},
+                ],
+                "minimum_should_match": 1,
+            }
+        },
+    }
+    try:
+        resp = client.search(index=MUNICIPIOS_DESPESAS_INDEX, body=body)
+    except Exception as exc:
+        return {"error": str(exc)}
+    hits = resp.get("hits", {}).get("hits", [])
+    if not hits:
+        return {"error": f"Município não encontrado: {alvo}", "total": 0}
+    return {**hits[0]["_source"], "doc_id": hits[0]["_id"]}
+
+
+def municipios_despesas_mapa(es: Optional[Elasticsearch] = None) -> List[Dict[str, Any]]:
+    """Todos os municípios com o essencial para o mapa (nome, código, totais)."""
+    client = es or get_es_client()
+    if not client:
+        return []
+    ensure_indices(client)
+    try:
+        resp = client.search(
+            index=MUNICIPIOS_DESPESAS_INDEX,
+            body={
+                "size": 500,
+                "_source": [
+                    "nome", "geocod", "codigo", "distrito", "nuts", "nuts_nome",
+                    "ano_despesas", "despesas_total", "despesas_pessoal", "despesas_capital",
+                    "contratos_total", "contratos_valor", "populacao_2021",
+                ],
+                "sort": [{"nome_keyword": {"order": "asc"}}],
+            },
+        )
+        return [{**hit["_source"], "doc_id": hit["_id"]} for hit in resp["hits"]["hits"]]
+    except Exception as exc:
+        logger.warning("Mapa dos municípios falhou: %s", exc)
+        return []
+
+
+def municipios_despesas_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Volumetria do índice de despesas municipais."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    ensure_indices(client)
+    try:
+        count = client.count(index=MUNICIPIOS_DESPESAS_INDEX).get("count", 0)
+        out: Dict[str, Any] = {"index": MUNICIPIOS_DESPESAS_INDEX, "documents": count}
+        if count:
+            resp = client.search(
+                index=MUNICIPIOS_DESPESAS_INDEX,
+                body={
+                    "size": 0,
+                    "aggs": {
+                        "por_distrito": {"terms": {"field": "distrito", "size": 30}},
+                        "por_nuts": {"terms": {"field": "nuts", "size": 15}},
+                        "total_despesas": {"sum": {"field": "despesas_total"}},
+                        "total_contratos": {"sum": {"field": "contratos_valor"}},
+                        "sem_despesas": {"filter": {"bool": {"must_not": [{"exists": {"field": "despesas_total"}}]}}},
+                    },
+                },
+            )
+            aggs = resp.get("aggregations", {})
+            out["total_despesas"] = (aggs.get("total_despesas", {}) or {}).get("value") or 0.0
+            out["total_contratos"] = (aggs.get("total_contratos", {}) or {}).get("value") or 0.0
+            out["sem_despesas"] = (aggs.get("sem_despesas", {}) or {}).get("doc_count") or 0
+            out["por_distrito"] = [{"key": b["key"], "count": b["doc_count"]} for b in (aggs.get("por_distrito", {}) or {}).get("buckets", [])]
+            out["por_nuts"] = [{"key": b["key"], "count": b["doc_count"]} for b in (aggs.get("por_nuts", {}) or {}).get("buckets", [])]
+        return out
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def contratos_do_municipio(
+    nomes_adjudicante: Iterable[str],
+    *,
+    fornecedores: int = 12,
+    anos: int = 12,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Contratação pública em que o município é adjudicante.
+
+    Recebe os nomes com que a câmara aparece no Portal BASE (ex.: «Município de
+    Lisboa», «Câmara Municipal da Guarda», «Serviços Municipalizados … de
+    Abrantes») e devolve totais, série anual e principais fornecedores.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    nomes = [str(n) for n in (nomes_adjudicante or []) if n]
+    if not nomes:
+        return {"total": 0, "valor": 0.0, "por_ano": {}, "fornecedores": []}
+
+    query = {
+        "nested": {
+            "path": "adjudicantes.parsed",
+            "query": {"terms": {"adjudicantes.parsed.nome": nomes}},
+        }
+    }
+    body = {
+        "size": 0,
+        "query": query,
+        "aggs": {
+            "valor": {"sum": {"field": "precoContratual"}},
+            "por_ano": {
+                "date_histogram": {
+                    "field": "dataCelebracaoContrato",
+                    "calendar_interval": "year",
+                    "format": "yyyy",
+                    "min_doc_count": 1,
+                },
+                "aggs": {"valor": {"sum": {"field": "precoContratual"}}},
+            },
+            "fornecedores": {
+                "nested": {"path": "adjudicatarios.parsed"},
+                "aggs": {
+                    "nomes": {
+                        "terms": {"field": "adjudicatarios.parsed.nome", "size": max(1, fornecedores)},
+                        "aggs": {"raiz": {"reverse_nested": {}, "aggs": {"valor": {"sum": {"field": "precoContratual"}}}}},
+                    }
+                },
+            },
+            "tipos": {"terms": {"field": "tipoContrato", "size": 10}},
+        },
+    }
+    try:
+        resp = client.search(index=CONTRACTS_INDEX, body=body)
+    except Exception as exc:
+        logger.warning("Contratos do município falharam: %s", exc)
+        return {"error": str(exc), "total": 0, "valor": 0.0, "por_ano": {}, "fornecedores": []}
+
+    total = int((resp.get("hits", {}).get("total") or {}).get("value") or 0)
+    aggs = resp.get("aggregations", {})
+    serie = {
+        str(b.get("key_as_string") or b.get("key")): {
+            "contratos": b["doc_count"],
+            "valor": (b.get("valor", {}) or {}).get("value") or 0.0,
+        }
+        for b in (aggs.get("por_ano", {}) or {}).get("buckets", [])
+    }
+    tops = [
+        {
+            "nome": b["key"],
+            "contratos": b["doc_count"],
+            "valor": ((b.get("raiz", {}) or {}).get("valor", {}) or {}).get("value") or 0.0,
+        }
+        for b in ((aggs.get("fornecedores", {}) or {}).get("nomes", {}) or {}).get("buckets", [])
+    ]
+    return {
+        "total": total,
+        "valor": (aggs.get("valor", {}) or {}).get("value") or 0.0,
+        "por_ano": dict(sorted(serie.items(), reverse=True)[: max(1, anos)]),
+        "fornecedores": tops,
+        "tipos": [{"key": b["key"], "count": b["doc_count"]} for b in (aggs.get("tipos", {}) or {}).get("buckets", [])],
+    }
 
 
 # ---------------------------------------------------------------------------

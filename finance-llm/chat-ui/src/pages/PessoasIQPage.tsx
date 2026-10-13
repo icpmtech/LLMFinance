@@ -3200,11 +3200,9 @@ function MunicipioSection() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [district, setDistrict] = useState("");
   const [concelho, setConcelho] = useState("");
   const [party, setParty] = useState("");
   const [role, setRole] = useState("");
-  const [, setDistrict] = useState("");
   const [page, setPage] = useState(1);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -3215,7 +3213,6 @@ function MunicipioSection() {
       try {
         const resp = await getMunicipioPessoas({
           q: q.trim() || undefined,
-          district: district || undefined,
           concelho: concelho || undefined,
           party: party || undefined,
           role: role || undefined,
@@ -3230,7 +3227,7 @@ function MunicipioSection() {
         setLoading(false);
       }
     },
-    [q, district, concelho, party, role],
+    [q, concelho, party, role],
   );
 
   useEffect(() => {

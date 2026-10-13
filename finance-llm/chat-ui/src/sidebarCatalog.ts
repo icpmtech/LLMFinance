@@ -127,8 +127,8 @@ export const APP_MODULES: AppModule[] = [
   {
     id: "dados-publicos",
     label: "Dados públicos",
-    hint: "Insolvências, citações editais, contribuintes, societário, registos LEI, subvenções, remunerações dos eleitos locais e comunicação social (ERC)",
-    ids: ["cire", "citacoes", "contribuintes", "societario", "gleif", "gleif-mapa", "gleif-ingestao", "subvencoes", "remuneracoes", "erc", "vortal"],
+    hint: "Insolvências, citações editais, contribuintes, societário, registos LEI, subvenções, remunerações dos eleitos locais, despesas das câmaras municipais e comunicação social (ERC)",
+    ids: ["cire", "citacoes", "contribuintes", "societario", "gleif", "gleif-mapa", "gleif-ingestao", "subvencoes", "remuneracoes", "municipios-despesas", "erc", "vortal"],
   },
   {
     id: "mercados",

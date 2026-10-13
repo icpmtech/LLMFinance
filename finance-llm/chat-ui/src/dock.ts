@@ -543,6 +543,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "20,184,166",
   },
   {
+    id: "municipios-despesas",
+    label: "Despesas das câmaras municipais",
+    hint: "Despesa de cada município por classificador económico (INE/DGAL), cruzada com a contratação pública em que o município é adjudicante (Portal BASE) — com área por município",
+    icon: Building2,
+    gradient: "from-sky-200 via-blue-500 to-indigo-700",
+    accent: "56,189,248",
+  },
+  {
     id: "simulador",
     label: "Simulador IQ OS",
     hint: "Simulações de previsão por enxame de agentes com os dados do sistema, com resultados, relatório e elenco",

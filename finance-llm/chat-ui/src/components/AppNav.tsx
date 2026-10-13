@@ -74,6 +74,7 @@ export type AppView =
   | "reports"
   | "subvencoes"
   | "remuneracoes"
+  | "municipios-despesas"
   | "partidos"
   | "erc"
   | "benchmark"
