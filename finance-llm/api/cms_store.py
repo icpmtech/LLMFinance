@@ -42,6 +42,10 @@ ROOT = Path(__file__).resolve().parents[1]
 CMS_DIR = ROOT / "data" / "cms"
 CMS_PATH = CMS_DIR / "cms.json"
 MEDIA_DIR = CMS_DIR / "media"
+#: Imagens que viajam com o código (logótipo, favicon, capas e ilustrações).
+#: Ficam aqui, e não em `data/`, porque o deploy incremental de código não envia
+#: `data/`: sem isto, uma instalação nova ficava sem biblioteca de imagem nenhuma.
+SITE_ASSETS_DIR = Path(__file__).resolve().parent / "site_assets"
 CMS_VERSION = 1
 
 # Entidades do CMS: as listas dentro do documento.
@@ -93,6 +97,7 @@ BLOCK_TYPES: List[Dict[str, Any]] = [
     {"id": "imagem", "label": "Imagem", "hint": "Uma imagem com legenda", "icon": "Image"},
     {"id": "galeria", "label": "Galeria", "hint": "Conjunto de imagens em grelha", "icon": "Images"},
     {"id": "destaques", "label": "Cartões", "hint": "Cartões de destaque em grelha", "icon": "LayoutGrid"},
+    {"id": "numeros", "label": "Números", "hint": "Indicadores em tiras (valor, etiqueta e nota)", "icon": "Gauge"},
     {"id": "cta", "label": "Chamada à ação", "hint": "Faixa com botão", "icon": "MousePointerClick"},
     {"id": "faq", "label": "Perguntas frequentes", "hint": "Perguntas e respostas", "icon": "HelpCircle"},
     {"id": "passos", "label": "Passos", "hint": "Sequência numerada", "icon": "ListOrdered"},
@@ -163,7 +168,7 @@ EXT_MIME: Dict[str, str] = {
 }
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
-    "site_name": "IQ OS",
+    "site_name": "Sabemos Studio",
     "tagline": "Inteligência financeira e contratual",
     "description": "Plataforma de inteligência financeira: contratos públicos, empresas, mercado e investigação assistida.",
     "base_url": "",
@@ -174,7 +179,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "theme": "claro",
     "accent": "#0ea5a4",
     "radius": 14,
-    "footer_text": "© IQ OS — todos os direitos reservados.",
+    "footer_text": "© Sabemos Studio — todos os direitos reservados.",
     "logo_id": None,
     "favicon_id": None,
     "social": {"email": "", "linkedin": "", "x": "", "github": ""},

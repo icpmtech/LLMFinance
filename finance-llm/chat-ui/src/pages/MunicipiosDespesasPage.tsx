@@ -863,6 +863,7 @@ export default function MunicipiosDespesasPage() {
     setErroPublicar(null);
     try {
       const criada = await createCmsPesquisa({
+        title: tituloDaPublicacao,
         filtros: {
           q: q.trim(),
           distrito,
@@ -885,6 +886,16 @@ export default function MunicipiosDespesasPage() {
   const registarFichaCms = useCallback((municipio: string, ficha: FichaNoCms) => {
     setFichasCms((atual) => ({ ...atual, [municipio]: ficha }));
   }, []);
+
+  // O título da página publicada diz o que está no ecrã (distrito, ano e texto
+  // procurado): é o que dá o endereço público e o que aparece no Google.
+  const tituloDaPublicacao = useMemo(() => {
+    const partes = ["Despesas municipais"];
+    if (distrito) partes.push(`do distrito de ${distrito}`);
+    if (anoContratos) partes.push(`em ${anoContratos}`);
+    if (q.trim()) partes.push(`· ${q.trim()}`);
+    return partes.join(" ");
+  }, [distrito, anoContratos, q]);
 
   useEffect(() => {
     // A área aberta segue o ano escolhido: mudar de ano recarrega a ficha, e a

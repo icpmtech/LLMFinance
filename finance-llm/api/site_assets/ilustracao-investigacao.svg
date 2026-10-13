@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" width="800" height="480" role="img" aria-label="Investigação assistida com evidências citadas">
+  <rect width="800" height="480" fill="#f1f5f9"/>
+  <rect x="72" y="72" width="420" height="336" rx="18" fill="#ffffff" stroke="#dbe3ec"/>
+  <rect x="104" y="104" width="356" height="34" rx="17" fill="#f1f5f9"/>
+  <rect x="120" y="114" width="180" height="14" rx="7" fill="#cbd5e1"/>
+  <g fill="#e2e8f0">
+    <rect x="104" y="164" width="300" height="12" rx="6"/>
+    <rect x="104" y="192" width="340" height="12" rx="6"/>
+    <rect x="104" y="220" width="262" height="12" rx="6"/>
+  </g>
+  <rect x="104" y="252" width="356" height="60" rx="12" fill="#ecfeff" stroke="#67e8f9"/>
+  <g fill="#0ea5a4">
+    <rect x="120" y="270" width="8" height="24" rx="4"/>
+    <rect x="110" y="278" width="28" height="8" rx="4"/>
+  </g>
+  <text x="150" y="288" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="17" fill="#0e7490">Fonte: Portal BASE · contrato 2024/3481</text>
+  <g fill="#e2e8f0">
+    <rect x="104" y="330" width="286" height="12" rx="6"/>
+    <rect x="104" y="358" width="206" height="12" rx="6"/>
+  </g>
+  <circle cx="592" cy="228" r="96" fill="none" stroke="#0f172a" stroke-width="16"/>
+  <rect x="654" y="300" width="30" height="118" rx="15" fill="#0f172a" transform="rotate(-45 654 300)"/>
+  <circle cx="592" cy="228" r="72" fill="#e0f2fe"/>
+  <g fill="#0ea5a4">
+    <rect x="556" y="252" width="26" height="26" rx="6"/>
+    <rect x="592" y="228" width="26" height="50" rx="6"/>
+    <rect x="628" y="196" width="26" height="82" rx="6"/>
+  </g>
+  <text x="592" y="452" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="20" font-weight="700" fill="#0f172a" text-anchor="middle">Resposta com fontes</text>
+</svg>

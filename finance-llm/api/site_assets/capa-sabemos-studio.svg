@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="Sabemos Studio — inteligência financeira e contratual">
+  <defs>
+    <linearGradient id="fundo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#0e3b52"/>
+    </linearGradient>
+    <linearGradient id="subida" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#0ea5a4"/>
+      <stop offset="1" stop-color="#60a5fa"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#fundo)"/>
+  <g stroke="#1e3a5f" stroke-width="1" opacity=".55">
+    <path d="M0 105H1200M0 210H1200M0 315H1200M0 420H1200M0 525H1200"/>
+    <path d="M150 0V630M300 0V630M450 0V630M600 0V630M750 0V630M900 0V630M1050 0V630"/>
+  </g>
+  <g opacity=".92">
+    <rect x="828" y="392" width="48" height="168" rx="10" fill="url(#subida)"/>
+    <rect x="896" y="336" width="48" height="224" rx="10" fill="url(#subida)"/>
+    <rect x="964" y="278" width="48" height="282" rx="10" fill="url(#subida)"/>
+    <rect x="1032" y="206" width="48" height="354" rx="10" fill="url(#subida)"/>
+    <rect x="1100" y="132" width="48" height="428" rx="10" fill="url(#subida)"/>
+  </g>
+  <path d="M852 378 920 322 988 264 1056 192 1124 118" fill="none" stroke="#22d3ee" stroke-width="3" opacity=".85"/>
+  <g fill="#22d3ee">
+    <circle cx="852" cy="378" r="6"/><circle cx="920" cy="322" r="6"/><circle cx="988" cy="264" r="6"/>
+    <circle cx="1056" cy="192" r="6"/><circle cx="1124" cy="118" r="6"/>
+  </g>
+  <g transform="translate(80 96)">
+    <rect x="0" y="0" width="68" height="68" rx="20" fill="#0ea5a4"/>
+    <g fill="#ffffff">
+      <rect x="17" y="37" width="9" height="17" rx="3"/>
+      <rect x="30" y="25" width="9" height="29" rx="3"/>
+      <rect x="43" y="14" width="9" height="40" rx="3"/>
+    </g>
+  </g>
+  <text x="80" y="298" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="76" font-weight="800" fill="#ffffff">Sabemos Studio</text>
+  <text x="80" y="362" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="31" fill="#a5f3fc">Inteligência financeira e contratual</text>
+  <text x="80" y="412" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="25" fill="#cbd5e1">Contratos públicos, empresas, mercado e investigação</text>
+  <text x="80" y="450" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="25" fill="#cbd5e1">com evidências citadas — a partir de dados abertos.</text>
+  <rect x="80" y="496" width="210" height="52" rx="26" fill="#0ea5a4"/>
+  <text x="185" y="530" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#ffffff" text-anchor="middle">Explorar os dados</text>
+</svg>

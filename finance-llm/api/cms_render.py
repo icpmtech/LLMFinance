@@ -128,6 +128,7 @@ a:hover {{ text-decoration: underline; }}
 .site-header .wrap {{ display: flex; align-items: center; gap: 16px; min-height: 64px; }}
 .brand {{ font-weight: 800; font-size: 1.05rem; color: var(--text); letter-spacing: -.01em; }}
 .brand small {{ display: block; font-weight: 500; font-size: .72rem; color: var(--muted); letter-spacing: 0; }}
+.brand .brand-mark {{ display: block; height: 34px; width: auto; }}
 nav.main {{ margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }}
 nav.main a {{
   color: var(--text); font-size: .92rem; font-weight: 600; padding: 7px 12px; border-radius: 999px;
@@ -337,6 +338,19 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
         title = f"<h2>{_esc(data.get('title'))}</h2>" if data.get("title") else ""
         return f'<div class="section">{title}<div class="grid">{tiles}</div></div>'
 
+    if block_type == "numeros":
+        items = [item for item in (data.get("items") or []) if isinstance(item, dict)]
+        if not items:
+            return ""
+        cartoes = "".join(
+            f'<div class="kpi"><span>{_esc(item.get("label"))}</span><strong>{_esc(item.get("value"))}</strong>'
+            + (f'<small>{_esc(item.get("note"))}</small>' if item.get("note") else "")
+            + "</div>"
+            for item in items
+        )
+        title = f"<h2>{_esc(data.get('title'))}</h2>" if data.get("title") else ""
+        return f'<div class="section">{title}<div class="kpis">{cartoes}</div></div>'
+
     if block_type == "cta":
         return (
             f'<div class="section cta"><div><h2>{_esc(data.get("title"))}</h2>'
@@ -425,11 +439,21 @@ def _header(settings: Dict[str, Any], *, current_path: str, preview: bool = Fals
         target = ' target="_blank" rel="noopener"' if item.get("new_tab") else ""
         links.append(f'<a href="{_esc(item.get("href"))}"{active}{target}>{_esc(item.get("label"))}</a>')
     tagline = f'<small>{_esc(settings.get("tagline"))}</small>' if settings.get("tagline") else ""
+    # Com logótipo na biblioteca, o cabeçalho mostra a imagem (que já traz o
+    # nome); sem ele, fica o nome em texto, como antes.
+    logo = _media_url(settings.get("logo_id"))
+    if logo:
+        brand = (
+            f'<img class="brand-mark" src="{_esc(logo)}" alt="{_esc(settings.get("site_name"))}" width="320" height="72">'
+            + tagline
+        )
+    else:
+        brand = f'{_esc(settings.get("site_name"))}{tagline}'
     banner = '<div class="draft-banner">Pré-visualização — este conteúdo ainda não está publicado</div>' if preview else ""
     return (
         banner
         + '<header class="site-header"><div class="wrap">'
-        + f'<a class="brand" href="/site">{_esc(settings.get("site_name"))}{tagline}</a>'
+        + f'<a class="brand" href="/site">{brand}</a>'
         + f'<nav class="main">{"".join(links)}</nav>'
         + "</div></header>"
     )
@@ -529,10 +553,17 @@ def _layout(
         f'<meta property="og:title" content="{_esc(full_title)}">',
         f'<meta property="og:description" content="{_esc(description)}">',
         f'<meta property="og:url" content="{_esc(canonical_url or "/")}">',
+        f'<meta property="og:locale" content="{_esc(str(settings.get("language") or "pt-PT").replace("-", "_"))}">',
         '<meta name="twitter:card" content="summary_large_image">',
+        f'<meta name="twitter:title" content="{_esc(full_title)}">',
+        f'<meta name="twitter:description" content="{_esc(description)}">',
     ]
     if og_image:
-        meta.append(f'<meta property="og:image" content="{_esc(og_image)}">')
+        # Open Graph e Twitter só aceitam URLs absolutos: um caminho relativo
+        # (`/cms/media/...`) é ignorado e a partilha fica sem imagem.
+        imagem = _absolute(og_image, base_url)
+        meta.append(f'<meta property="og:image" content="{_esc(imagem)}">')
+        meta.append(f'<meta name="twitter:image" content="{_esc(imagem)}">')
     if keywords:
         meta.append(f'<meta name="keywords" content="{_esc(", ".join(keywords))}">')
     analytics = str(settings.get("analytics_id") or "").strip()
@@ -615,6 +646,77 @@ def _trilha_da_pagina(page: Dict[str, Any]) -> List[Dict[str, str]]:
     return trilha
 
 
+def _site_home_url(settings: Dict[str, Any]) -> str:
+    """O endereço da página inicial (serve de base aos `@id` do JSON-LD)."""
+    return _absolute("/site", str(settings.get("base_url") or ""))
+
+
+def _organization_json_ld(settings: Dict[str, Any]) -> Dict[str, Any]:
+    """A entidade por trás do site, para o grafo de conhecimento dos motores.
+
+    Os perfis das definições entram como `sameAs`: é assim que as redes sociais
+    e o Google ligam o site às páginas oficiais da marca.
+    """
+    base_url = str(settings.get("base_url") or "")
+    casa = _site_home_url(settings)
+    dados: Dict[str, Any] = {
+        "@type": "Organization",
+        "@id": f"{casa}#organizacao",
+        "name": str(settings.get("site_name") or ""),
+        "url": casa,
+    }
+    descricao = str(settings.get("description") or (settings.get("seo") or {}).get("description") or "")
+    if descricao:
+        dados["description"] = descricao
+    logo = _media_url(settings.get("logo_id"))
+    if logo:
+        dados["logo"] = {"@type": "ImageObject", "url": _absolute(logo, base_url)}
+    perfis = [
+        str(valor).strip()
+        for chave, valor in (settings.get("social") or {}).items()
+        if chave != "email" and str(valor or "").strip()
+    ]
+    if perfis:
+        dados["sameAs"] = perfis
+    return dados
+
+
+def _website_json_ld(settings: Dict[str, Any]) -> Dict[str, Any]:
+    casa = _site_home_url(settings)
+    return {
+        "@type": "WebSite",
+        "@id": f"{casa}#site",
+        "name": str(settings.get("site_name") or ""),
+        "url": casa,
+        "inLanguage": str(settings.get("language") or "pt-PT"),
+        "publisher": {"@id": f"{casa}#organizacao"},
+    }
+
+
+def _faq_json_ld(blocks: Iterable[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """`FAQPage` a partir do bloco de perguntas frequentes (dá rich results)."""
+    perguntas: List[Dict[str, Any]] = []
+    for block in blocks or []:
+        if str(block.get("type") or "") != "faq" or block.get("hidden"):
+            continue
+        for item in (block.get("data") or {}).get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            pergunta = str(item.get("question") or item.get("title") or "").strip()
+            resposta = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", _md(str(item.get("answer") or item.get("text") or "")))).strip()
+            if pergunta and resposta:
+                perguntas.append(
+                    {
+                        "@type": "Question",
+                        "name": pergunta,
+                        "acceptedAnswer": {"@type": "Answer", "text": resposta},
+                    }
+                )
+    if not perguntas:
+        return None
+    return {"@type": "FAQPage", "mainEntity": perguntas}
+
+
 def render_page(
     page: Dict[str, Any],
     *,
@@ -627,14 +729,35 @@ def render_page(
     body = blocks_to_html(page.get("blocks") or [], preview=preview)
     if not body.strip():
         body = f'<div class="section prose">{_md(str(page.get("markdown") or page.get("excerpt") or ""))}</div>' or ""
+    base_url = str(settings.get("base_url") or "")
     path = f"/site/{page.get('path')}" if page.get("path") else "/site"
-    json_ld = {
-        "@context": "https://schema.org",
+    casa = _site_home_url(settings)
+    imagem = _media_url(seo.get("image_id")) or _media_url((settings.get("seo") or {}).get("image_id"))
+    # Bloco «@graph»: além da página, o site e a organização que o publica. O
+    # motor passa a ter a marca ligada ao domínio, e não só uma página solta.
+    grafo: List[Dict[str, Any]] = [_website_json_ld(settings), _organization_json_ld(settings)]
+    pagina_ld: Dict[str, Any] = {
         "@type": "WebPage",
+        "@id": f"{_absolute(path, base_url)}#pagina",
         "name": page.get("title"),
         "description": _page_description(page),
-        "url": _absolute(path, str(settings.get("base_url") or "")),
+        "url": _absolute(path, base_url),
+        "inLanguage": str(settings.get("language") or "pt-PT"),
+        "isPartOf": {"@id": f"{casa}#site"},
+        "publisher": {"@id": f"{casa}#organizacao"},
     }
+    if imagem:
+        pagina_ld["primaryImageOfPage"] = {
+            "@type": "ImageObject",
+            "url": _absolute(imagem, base_url),
+        }
+    if page.get("updated_at"):
+        pagina_ld["dateModified"] = page.get("updated_at")
+    grafo.append(pagina_ld)
+    faq = _faq_json_ld(page.get("blocks") or [])
+    if faq:
+        grafo.append(faq)
+    json_ld: Dict[str, Any] = {"@context": "https://schema.org", "@graph": grafo}
     return _layout(
         title=str(seo.get("title") or page.get("title") or ""),
         description=_page_description(page),
@@ -642,8 +765,8 @@ def render_page(
         current_path=path,
         settings=settings,
         canonical=path,
-        og_image=_media_url(seo.get("image_id")),
-        keywords=seo.get("keywords") or None,
+        og_image=imagem,
+        keywords=seo.get("keywords") or (settings.get("seo") or {}).get("keywords") or None,
         json_ld=json_ld,
         preview=preview,
         noindex=bool(seo.get("noindex")),
@@ -1013,9 +1136,10 @@ def _adjudicatarios_da_pesquisa(dados: Dict[str, Any]) -> str:
         return ""
     ano = bloco.get("ano")
     titulo = "Principais adjudicatários" + (f" em {ano}" if ano else "")
+    considerados = _numero(bloco.get("municipios"))
     subtitulo = (
         f"{_numero(bloco.get('total'))} adjudicatários"
-        + (f" nos {_numero(bloco.get('municipios'))} municípios do filtro" if bloco.get("municipios") else "")
+        + (f" nos contratos dos {considerados} municípios considerados" if bloco.get("municipios") else "")
         + f" · {_euros_curto(bloco.get('valor'))} adjudicados · "
         "um contrato com vários adjudicatários conta em cada um"
     )
@@ -1024,11 +1148,19 @@ def _adjudicatarios_da_pesquisa(dados: Dict[str, Any]) -> str:
         [str(item.get("nome") or ""), _numero(item.get("contratos")), _euros_curto(item.get("valor"))]
         for item in itens
     ]
+    barras = [
+        {
+            "rotulo": item.get("nome"),
+            "valor": _para_float(item.get("valor")),
+            "nota": f"{_numero(item.get('contratos'))} contratos",
+        }
+        for item in itens[:12]
+    ]
     return (
         '<section class="section grafico"><h3>'
         + _esc(titulo)
         + f'</h3><p class="sub">{_esc(subtitulo)}</p>'
-        + _barras(itens[:12])
+        + _barras(barras)
         + "</section>"
         + _tabela(titulo, cabecalho, linhas)
     )

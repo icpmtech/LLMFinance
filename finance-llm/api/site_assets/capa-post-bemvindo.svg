@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="Bem-vindo ao blog do Sabemos Studio">
+  <defs>
+    <linearGradient id="fundo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#155e75"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#fundo)"/>
+  <g stroke="#1e3a5f" stroke-width="1" opacity=".5">
+    <path d="M0 158H1200M0 316H1200M0 474H1200"/>
+    <path d="M240 0V630M480 0V630M720 0V630M960 0V630"/>
+  </g>
+  <g transform="translate(80 84)">
+    <rect x="0" y="0" width="56" height="56" rx="16" fill="#0ea5a4"/>
+    <g fill="#ffffff">
+      <rect x="14" y="30" width="8" height="14" rx="3"/>
+      <rect x="24" y="22" width="8" height="22" rx="3"/>
+      <rect x="34" y="12" width="8" height="32" rx="3"/>
+    </g>
+  </g>
+  <text x="80" y="330" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="62" font-weight="800" fill="#ffffff">Bem-vindo ao blog</text>
+  <text x="80" y="392" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="28" fill="#a5f3fc">Análises de dados abertos, notas de método</text>
+  <text x="80" y="430" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="28" fill="#a5f3fc">e novidades da plataforma.</text>
+  <rect x="80" y="492" width="150" height="8" rx="4" fill="#0ea5a4"/>
+</svg>

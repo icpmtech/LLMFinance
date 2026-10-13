@@ -136,7 +136,11 @@ def dados_da_pesquisa(filtros: Optional[Dict[str, Any]] = None) -> Dict[str, Any
         )
 
     ano_despesas = _ano_das_despesas(itens)
-    adjudicatarios = _adjudicatarios(universo, ano_contratos)
+    adjudicatarios = _adjudicatarios(
+        universo,
+        ano_contratos,
+        total_municipios=int(resposta.get("total") or 0),
+    )
 
     return {
         "filtros": limpos,
@@ -168,7 +172,12 @@ def dados_da_pesquisa(filtros: Optional[Dict[str, Any]] = None) -> Dict[str, Any
     }
 
 
-def _adjudicatarios(universo: List[Dict[str, Any]], ano_contratos: Optional[int]) -> Dict[str, Any]:
+def _adjudicatarios(
+    universo: List[Dict[str, Any]],
+    ano_contratos: Optional[int],
+    *,
+    total_municipios: int = 0,
+) -> Dict[str, Any]:
     """Os maiores adjudicatários dos contratos dos municípios do filtro.
 
     A lista é lida do índice dos contratos (não do INE) e fica **guardada** com a
@@ -186,6 +195,7 @@ def _adjudicatarios(universo: List[Dict[str, Any]], ano_contratos: Optional[int]
         "total": int(dados.get("total") or 0),
         "valor": float(dados.get("valor") or 0.0),
         "municipios": len(universo),
+        "total_municipios": total_municipios or len(universo),
         "itens": (dados.get("itens") or [])[:ADJUDICATARIOS_MAXIMO],
     }
 

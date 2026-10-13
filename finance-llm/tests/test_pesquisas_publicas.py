@@ -394,5 +394,7 @@ def test_render_da_pagina_tem_graficos_e_adjudicatarios(cms_limpo: Any) -> None:
 
     assert "Principais adjudicatários" in html
     assert "3 892 adjudicatários" in html
+    assert '<span class="rotulo">Edilages</span>' in html  # a barra leva o nome
+    assert '<span class="rotulo">Porto</span>' in html  # e a dos municípios também
     assert "Edilages" in html and "48 737 249" not in html and "48,7 M€" in html
     assert "GERTAL" in html
