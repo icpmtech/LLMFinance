@@ -169,6 +169,10 @@ p {{ margin: 0 0 14px; }}
 .tile p {{ margin: 0; color: var(--muted); font-size: .94rem; }}
 figure {{ margin: 22px 0; }}
 figure img, .prose img {{ max-width: 100%; height: auto; border-radius: calc(var(--radius) - 4px); display: block; }}
+/* A grelha da galeria parte de 240px por coluna: sem isto, o SVG de origem
+   (800px) estica a coluna e a página ganha barra horizontal. */
+.grid.galeria {{ grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }}
+.grid.galeria img {{ width: 100%; height: auto; border-radius: calc(var(--radius) - 4px); display: block; }}
 figcaption {{ color: var(--muted); font-size: .86rem; margin-top: 8px; }}
 .prose {{ max-width: 760px; }}
 .prose ul, .prose ol {{ padding-left: 22px; }}
@@ -325,7 +329,7 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
         if not urls:
             return ""
         images = "".join(f'<img src="{_esc(url)}" alt="" loading="lazy">' for url in urls)
-        return f'<div class="grid">{images}</div>'
+        return f'<div class="grid galeria">{images}</div>'
 
     if block_type == "destaques":
         items = [item for item in (data.get("items") or []) if isinstance(item, dict)]

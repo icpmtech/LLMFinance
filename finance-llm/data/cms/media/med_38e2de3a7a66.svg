@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" width="800" height="480" role="img" aria-label="Municípios: despesa e contratação, com fichas por concelho">
+  <rect width="800" height="480" fill="#f1f5f9"/>
+  <g stroke="#e2e8f0" stroke-width="1">
+    <path d="M60 392H740M60 300H740M60 208H740M60 116H740"/>
+  </g>
+  <path d="M96 392 176 268 240 320 328 176 424 296 500 232 592 356 704 240" fill="none" stroke="#0ea5a4" stroke-width="6" stroke-linejoin="round"/>
+  <g fill="#0ea5a4">
+    <circle cx="176" cy="268" r="11"/><circle cx="328" cy="176" r="11"/>
+    <circle cx="500" cy="232" r="11"/><circle cx="704" cy="240" r="11"/>
+  </g>
+  <g fill="#cbd5e1">
+    <circle cx="96" cy="392" r="8"/><circle cx="240" cy="320" r="8"/>
+    <circle cx="424" cy="296" r="8"/><circle cx="592" cy="356" r="8"/>
+  </g>
+  <rect x="72" y="72" width="230" height="92" rx="16" fill="#ffffff" stroke="#dbe3ec"/>
+  <text x="96" y="108" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Despesa total (2023)</text>
+  <text x="96" y="142" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="28" font-weight="800" fill="#0f172a">22,3 M€</text>
+  <rect x="498" y="72" width="230" height="92" rx="16" fill="#ffffff" stroke="#dbe3ec"/>
+  <text x="522" y="108" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Contratos no ano</text>
+  <text x="522" y="142" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="28" font-weight="800" fill="#0f172a">412</text>
+  <rect x="72" y="410" width="656" height="40" rx="20" fill="#ffffff" stroke="#dbe3ec"/>
+  <text x="400" y="436" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="17" fill="#0f172a" text-anchor="middle">Ficha por concelho · INE + Portal BASE</text>
+</svg>

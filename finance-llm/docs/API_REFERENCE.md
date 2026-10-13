@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1202 operações** em **44 grupos**.
+Versão `0.4.0` · **1205 operações** em **44 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -500,8 +500,11 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/vortal/avisos` | Avisos já recolhidos para disco (pelos manifestos) |
 | `GET` | `/vortal/estado` | O que está em disco e o que está indexado |
 | `POST` | `/vortal/indexar` | Indexar no Elasticsearch o que já está em disco (exige sessão) |
+| `POST` | `/vortal/lote` | Recolher e indexar, em lotes, os avisos Vortal de um mês/ano (exige sessão) |
 | `GET` | `/vortal/meta` | Metamodelo: endpoints públicos usados, índice, tipos e limites |
 | `GET` | `/vortal/pecas` | Peças indexadas (por aviso ou todas) |
+| `GET` | `/vortal/periodo` | O que há num mês/ano: avisos, o que já está em disco e o que falta |
+| `GET` | `/vortal/periodos` | Anos e meses com avisos Vortal publicados (para escolher o lote) |
 | `GET` | `/vortal/pesquisa` | Pesquisa no texto das peças recolhidas |
 | `POST` | `/vortal/recolha` | Descarregar as peças para disco e (opcionalmente) indexar (exige sessão) |
 

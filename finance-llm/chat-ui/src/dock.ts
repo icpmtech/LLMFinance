@@ -489,7 +489,7 @@ export const DOCK_CATALOG: DockApp[] = [
   {
     id: "vortal",
     label: "Peças do procedimento",
-    hint: "Recolher as peças de um procedimento da Vortal (caderno de encargos, programa do concurso, anexos) para disco, indexar o texto e pesquisar por dentro dos documentos",
+    hint: "Recolher as peças de um procedimento da Vortal (caderno de encargos, programa do concurso, anexos) para disco, indexar o texto e pesquisar por dentro dos documentos — aviso a aviso ou em lotes por mês e ano",
     icon: FolderDown,
     gradient: "from-sky-200 via-teal-500 to-emerald-700",
     accent: "56,189,248",

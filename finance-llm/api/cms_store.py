@@ -8,7 +8,9 @@ imediatamente ou agendado.
 
 Tudo vive num único documento JSON (`data/cms/cms.json`) com escrita atómica: o
 ficheiro é a fonte de verdade e pode ser versionado. Os binários dos media ficam
-em `data/cms/media/`.
+em `data/cms/media/`; as imagens da marca (logótipo, favicon, capas e
+ilustrações) vivem em `api/site_assets/`, para viajarem com o código — o deploy
+incremental não envia a pasta `data/` (ver `SEED_MEDIA`).
 
 Estados de publicação (`status`):
 
@@ -1609,11 +1611,326 @@ def search(query: str, limit: int = 30) -> Dict[str, Any]:
 
 
 # --------------------------------------------------------------------------
+# Imagens de marca
+# --------------------------------------------------------------------------
+#: Ficheiros de `api/site_assets/` que a biblioteca de media deve ter, com o
+#: título e o texto alternativo com que aparecem no CMS.
+SEED_MEDIA: Tuple[Tuple[str, str, str, str], ...] = (
+    ("logo-sabemos-studio.svg", "Logótipo Sabemos Studio", "Sabemos Studio", ""),
+    ("icone-sabemos-studio.svg", "Ícone Sabemos Studio", "Sabemos Studio", "Usado como favicon do site."),
+    (
+        "capa-sabemos-studio.svg",
+        "Capa do site",
+        "Sabemos Studio — inteligência financeira e contratual",
+        "Imagem de partilha (Open Graph) e de abertura da página inicial.",
+    ),
+    ("ilustracao-contratos.svg", "Ilustração · contratos públicos", "Contratos públicos: adjudicantes, adjudicatários e valores", ""),
+    ("ilustracao-empresas.svg", "Ilustração · empresas", "Empresas: cadastro, relações societárias e sinais de risco", ""),
+    ("ilustracao-municipios.svg", "Ilustração · municípios", "Municípios: despesa e contratação por concelho", ""),
+    ("ilustracao-investigacao.svg", "Ilustração · investigação", "Investigação assistida com evidências citadas", ""),
+    ("ilustracao-benchmarks.svg", "Ilustração · benchmarks", "Benchmarks de preços por loja", ""),
+    ("capa-post-bemvindo.svg", "Capa · bem-vindo ao blog", "Bem-vindo ao blog do Sabemos Studio", ""),
+    ("capa-post-contratos-2026.svg", "Capa · contratos públicos em 2026", "Contratos públicos em 2026: o que os dados mostram", ""),
+)
+
+
+def _instalar_media(store: Dict[str, Any]) -> Dict[str, str]:
+    """Acrescenta à biblioteca as imagens que vêm com o código.
+
+    Idempotente: um ficheiro que já esteja na biblioteca reaproveita o media
+    existente, por isso chamar isto duas vezes não duplica nada. Devolve
+    `{ficheiro: id}` para quem monta o conteúdo as poder referenciar.
+    """
+    ids: Dict[str, str] = {}
+    for filename, title, alt, caption in SEED_MEDIA:
+        existente = next((item for item in store["media"] if item.get("filename") == filename), None)
+        if existente is not None:
+            ids[filename] = str(existente.get("id"))
+            continue
+        origem = SITE_ASSETS_DIR / filename
+        try:
+            blob = origem.read_bytes()
+        except OSError:
+            logger.warning("Imagem de marca em falta: %s", origem)
+            continue
+        mime = EXT_MIME.get(origem.suffix.lower(), "application/octet-stream")
+        extension = MIME_EXT.get(mime) or origem.suffix.lower()
+        media_id = _new_id("med")
+        MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+        (MEDIA_DIR / f"{media_id}{extension}").write_bytes(blob)
+        store["media"].insert(
+            0,
+            {
+                "id": media_id,
+                "filename": filename,
+                "mime": mime,
+                "extension": extension,
+                "size": len(blob),
+                "storage": "ficheiro",
+                "url": f"/cms/media/{media_id}/raw",
+                "title": title,
+                "alt": alt,
+                "caption": caption,
+                "credit": "",
+                "tags": [],
+                "kind": "imagem",
+                "created_at": _now(),
+                "updated_at": _now(),
+                "updated_by": "sistema",
+            },
+        )
+        ids[filename] = media_id
+    return ids
+
+
+def instalar_media_de_marca() -> Dict[str, str]:
+    """Instala as imagens de marca numa instalação já em uso e grava a loja.
+
+    O primeiro arranque já as instala pela semente; isto serve as instalações
+    que já existiam, porque o deploy de código não leva a pasta `data/`.
+    """
+    with _lock:
+        store = _load()
+        ids = _instalar_media(store)
+        _write_store(store)
+    return ids
+
+
+#: SEO da página inicial. A semente e a migração do site leem daqui, para não
+#: existirem duas versões do mesmo texto.
+INICIO_SEO: Dict[str, Any] = {
+    "title": "Sabemos Studio — contratos públicos, empresas e dados abertos",
+    "description": "O Sabemos Studio transforma dados abertos em inteligência financeira: contratos públicos, empresas, municípios e investigação com evidências citadas.",
+    "keywords": [
+        "Sabemos Studio",
+        "sabemos.studio",
+        "contratos públicos",
+        "Portal BASE",
+        "IQ OS",
+        "empresas",
+        "inteligência financeira",
+        "dados abertos",
+    ],
+    "image_id": None,
+    "noindex": False,
+}
+
+INICIO_EXCERPT = "O Sabemos Studio junta contratos públicos, empresas, mercado e investigação assistida numa só plataforma."
+
+SOBRE_SEO: Dict[str, Any] = {
+    "title": "Sobre o Sabemos Studio",
+    "description": "Quem faz o IQ OS, com que fontes trabalhamos e que princípios seguimos.",
+    "keywords": ["Sabemos Studio", "sobre", "dados abertos"],
+    "image_id": None,
+    "noindex": False,
+}
+
+
+def conteudo_da_inicio(media: Dict[str, str]) -> List[Dict[str, Any]]:
+    """Blocos da página inicial (a mesma para a semente e para a migração)."""
+    return [
+        {
+            "id": "blk_hero",
+            "type": "hero",
+            "data": {
+                "title": "Inteligência financeira e contratual, num só sítio",
+                "subtitle": "Contratos públicos de Portugal, Espanha e França, cadastro de empresas, mercado e investigação assistida — sempre com a fonte citada.",
+                "cta_label": "Explorar o blog",
+                "cta_href": "/site/blog",
+                "align": "centro",
+            },
+        },
+        {
+            "id": "blk_numeros",
+            "type": "numeros",
+            "data": {
+                "title": "O que já está indexado",
+                "items": [
+                    {"value": "2 273 420", "label": "Contratos públicos", "note": "Portal BASE · Portugal, 2012 a 2026"},
+                    {"value": "214 123", "label": "Entidades no cadastro", "note": "empresas, municípios e outras entidades"},
+                    {"value": "12 090", "label": "Adjudicantes", "note": "compradores públicos identificados"},
+                    {"value": "198,8 mil M€", "label": "Valor contratado mapeado", "note": "relações adjudicante–adjudicatário"},
+                ],
+            },
+        },
+        {
+            "id": "blk_texto",
+            "type": "texto",
+            "data": {
+                "title": "O que é o Sabemos Studio",
+                "markdown": (
+                    "O **Sabemos Studio** é um estúdio de produtos de dados: pegamos no que já é público — "
+                    "contratos, contas e registos — e devolvemos leitura que se pode verificar.\n\n"
+                    "O **IQ OS** é a plataforma onde isso acontece: recolha contínua de contratos públicos e de "
+                    "finanças locais, uma ontologia de entidades (empresas, municípios e pessoas) e assistentes de "
+                    "investigação que respondem com a evidência à vista.\n\n"
+                    "O que nos distingue:\n\n"
+                    "- **Fonte nomeada** — Portal BASE, INE, registos oficiais e boletins. Nenhum número aparece sem origem.\n"
+                    "- **Entidades ligadas** — a mesma empresa, o mesmo município e a mesma pessoa são o mesmo objeto "
+                    "em toda a plataforma, mesmo quando o nome aparece escrito de outra maneira.\n"
+                    "- **Fotografia datada** — cada análise guarda o dia em que foi lida: o número citado continua a "
+                    "ser o número que se viu.\n"
+                    "- **Conta refazível** — publicamos o critério e o registo, para quem lê poder repetir o cálculo."
+                ),
+            },
+        },
+        {
+            "id": "blk_capacidades",
+            "type": "destaques",
+            "data": {
+                "title": "Por onde começar",
+                "items": [
+                    {
+                        "title": "Contratos públicos",
+                        "text": "Adjudicantes, adjudicatários, valores e procedimento, por região e por ano.",
+                    },
+                    {
+                        "title": "Empresas e pessoas",
+                        "text": "Cadastro, relações societárias, gerentes e sinais de risco a partir de fontes públicas.",
+                    },
+                    {
+                        "title": "Municípios",
+                        "text": "Despesa, execução e contratação por concelho, com os indicadores oficiais do INE.",
+                    },
+                    {
+                        "title": "Benchmarks",
+                        "text": "Comparação de preços e produtos entre lojas, a partir de recolhas próprias.",
+                    },
+                    {
+                        "title": "Investigação assistida",
+                        "text": "Perguntas em linguagem natural com resposta citada e grafo de evidências.",
+                    },
+                    {
+                        "title": "Mercado",
+                        "text": "Concentração, concorrência e preços por CPV, com leitura estatística.",
+                    },
+                ],
+            },
+        },
+        {
+            "id": "blk_metodo",
+            "type": "passos",
+            "data": {
+                "title": "Como se chega ao número",
+                "items": [
+                    {
+                        "title": "Recolha",
+                        "text": "Lemos dados abertos: Portal BASE para contratação, INE para finanças locais, registos oficiais de empresas e boletins.",
+                    },
+                    {
+                        "title": "Normalização",
+                        "text": "Limpamos, ligamos entidades e consolidamos tudo numa ontologia única — a mesma empresa é a mesma em todo o lado.",
+                    },
+                    {
+                        "title": "Cálculo",
+                        "text": "Calculamos indicadores e guardamos a fotografia com a data da leitura, para o número não mudar por baixo da análise.",
+                    },
+                    {
+                        "title": "Evidência",
+                        "text": "Cada resposta cita o documento e o registo de onde saiu, e pode ser reproduzida por quem a lê.",
+                    },
+                ],
+            },
+        },
+        {
+            "id": "blk_galeria",
+            "type": "galeria",
+            "data": {
+                "media_ids": [
+                    media.get("ilustracao-contratos.svg"),
+                    media.get("ilustracao-empresas.svg"),
+                    media.get("ilustracao-municipios.svg"),
+                    media.get("ilustracao-investigacao.svg"),
+                ],
+            },
+        },
+        {
+            "id": "blk_faq",
+            "type": "faq",
+            "data": {
+                "title": "Perguntas frequentes",
+                "items": [
+                    {
+                        "question": "Que fontes usam?",
+                        "answer": "Só fontes públicas: Portal BASE (contratação pública), INE (despesa e finanças locais), registos oficiais de empresas, boletins e diários da República, e recolhas próprias de preços. Cada resposta indica de onde veio.",
+                    },
+                    {
+                        "question": "Com que frequência os dados são atualizados?",
+                        "answer": "A recolha é contínua. As páginas de análise guardam a **fotografia** do dia em que foram geradas, com a data à vista, para que o número citado continue a ser o número que foi lido.",
+                    },
+                    {
+                        "question": "Que países cobrem?",
+                        "answer": "Portugal, Espanha e França na contratação pública, com o cadastro de entidades a incluir contrapartes de outros países.",
+                    },
+                    {
+                        "question": "Posso citar os números que aqui estão?",
+                        "answer": "Sim. Damos a fonte primária e o critério usado, para poder refazer a conta. Se precisar do detalhe, fale connosco.",
+                    },
+                    {
+                        "question": "O Sabemos Studio e o IQ OS são a mesma coisa?",
+                        "answer": "O **Sabemos Studio** é quem faz; o **IQ OS** é a plataforma. Este site é a parte editorial — análises, fichas e notas de método.",
+                    },
+                ],
+            },
+        },
+        {
+            "id": "blk_cta",
+            "type": "cta",
+            "data": {
+                "title": "Precisa de um número que aguente ser citado?",
+                "text": "Lemos os dados abertos, ligamos as entidades e mostramos a evidência por trás de cada valor.",
+                "button_label": "Ver as análises",
+                "button_href": "/site/blog",
+            },
+        },
+        {"id": "blk_blog", "type": "blog", "data": {"title": "Últimos artigos", "limit": 3}},
+    ]
+
+
+def conteudo_da_sobre() -> List[Dict[str, Any]]:
+    """Blocos da página «Sobre» (a mesma para a semente e para a migração)."""
+    return [
+        {
+            "id": "blk_sobre_hero",
+            "type": "hero",
+            "data": {
+                "title": "Sobre o Sabemos Studio",
+                "subtitle": "Um estúdio de produtos de dados: recolha, ontologia e assistentes de investigação.",
+                "align": "esquerda",
+            },
+        },
+        {
+            "id": "blk_sobre_texto",
+            "type": "texto",
+            "data": {
+                "markdown": (
+                    "## Princípios\n\n"
+                    "- **Fonte aberta** — todo o dado bruto vem de fontes públicas.\n"
+                    "- **Rasto** — cada resposta cita a evidência que a sustenta.\n"
+                    "- **Reutilização** — o mesmo conteúdo serve a plataforma, o site e o blog."
+                ),
+            },
+        },
+        {
+            "id": "blk_sobre_cta",
+            "type": "cta",
+            "data": {
+                "title": "Tem uma pergunta?",
+                "text": "A plataforma investiga com evidências citadas — comece pelo blog para ver o método em prática.",
+                "button_label": "Ler o blog",
+                "button_href": "/site/blog",
+            },
+        },
+    ]
+
+
+# --------------------------------------------------------------------------
 # Sementes (primeiro arranque)
 # --------------------------------------------------------------------------
 def _seed(store: Dict[str, Any]) -> None:
     """Conteúdo inicial para o CMS não aparecer vazio."""
     now = _now()
+    media = _instalar_media(store)
     home_id = "pag_inicio"
     sobre_id = "pag_sobre"
     blog_id = "pag_blog"
@@ -1631,42 +1948,9 @@ def _seed(store: Dict[str, Any]) -> None:
             "show_in_menu": True,
             "menu_order": 1,
             "menu_label": "Início",
-            "excerpt": "O IQ OS junta contratos públicos, empresas, mercado e investigação assistida numa só plataforma.",
-            "blocks": [
-                {
-                    "id": "blk_seed_hero",
-                    "type": "hero",
-                    "data": {
-                        "title": "Inteligência financeira e contratual, num só sítio",
-                        "subtitle": "Contratos públicos de Portugal e Espanha, cadastro de empresas, mercado e investigação com evidências citadas.",
-                        "cta_label": "Explorar o blog",
-                        "cta_href": "/site/blog",
-                        "align": "centro",
-                    },
-                },
-                {
-                    "id": "blk_seed_texto",
-                    "type": "texto",
-                    "data": {
-                        "title": "O que é o IQ OS",
-                        "markdown": "O **IQ OS** reúne recolha de dados abertos, ontologia de entidades e assistentes de investigação.\n\nTudo o que se escreve aqui é publicado por blocos: páginas, artigos de blog, media e menus — com rascunho, agendamento e histórico de revisões.",
-                    },
-                },
-                {
-                    "id": "blk_seed_cards",
-                    "type": "destaques",
-                    "data": {
-                        "title": "Por onde começar",
-                        "items": [
-                            {"title": "Contratos públicos", "text": "Pesquise adjudicantes, adjudicatários e valores por região."},
-                            {"title": "Empresas", "text": "Cadastro, relações societárias e sinais de risco."},
-                            {"title": "Investigação", "text": "Perguntas com resposta citada e grafo de evidências."},
-                        ],
-                    },
-                },
-                {"id": "blk_seed_blog", "type": "blog", "data": {"title": "Últimos artigos", "limit": 3}},
-            ],
-            "seo": {"title": "IQ OS — inteligência financeira e contratual", "description": "Contratos públicos, empresas, mercado e investigação assistida.", "keywords": [], "image_id": None, "noindex": False},
+            "excerpt": INICIO_EXCERPT,
+            "blocks": conteudo_da_inicio(media),
+            "seo": {**INICIO_SEO, "image_id": media.get("capa-sabemos-studio.svg")},
             "created_at": now,
             "updated_at": now,
             "updated_by": "sistema",
@@ -1685,18 +1969,8 @@ def _seed(store: Dict[str, Any]) -> None:
             "menu_order": 2,
             "menu_label": "",
             "excerpt": "Como trabalhamos os dados abertos e o que pode esperar da plataforma.",
-            "blocks": [
-                {"id": "blk_seed_sobre_hero", "type": "hero", "data": {"title": "Sobre o IQ OS", "subtitle": "Dados abertos, ontologia e assistentes de investigação.", "align": "esquerda"}},
-                {
-                    "id": "blk_seed_sobre_texto",
-                    "type": "texto",
-                    "data": {
-                        "markdown": "## Princípios\n\n- **Fonte aberta** — todo o dado bruto vem de fontes públicas.\n- **Rasto** — cada resposta cita a evidência que a sustenta.\n- **Reutilização** — o mesmo conteúdo serve a plataforma, o site e o blog.",
-                    },
-                },
-                {"id": "blk_seed_sobre_cta", "type": "cta", "data": {"title": "Tem uma pergunta?", "text": "Use o Hermes para investigar com evidências citadas.", "button_label": "Abrir o Hermes", "button_href": "/hermes"}},
-            ],
-            "seo": {"title": "Sobre o IQ OS", "description": "Princípios e métodos da plataforma.", "keywords": [], "image_id": None, "noindex": False},
+            "blocks": conteudo_da_sobre(),
+            "seo": SOBRE_SEO,
             "created_at": now,
             "updated_at": now,
             "updated_by": "sistema",
@@ -1738,7 +2012,7 @@ def _seed(store: Dict[str, Any]) -> None:
     store["posts"] = [
         {
             "id": "post_bemvindo",
-            "title": "Bem-vindo ao blog do IQ OS",
+            "title": "Bem-vindo ao blog do Sabemos Studio",
             "slug": "bem-vindo-ao-blog",
             "excerpt": "O que vai encontrar aqui: análises de contratos públicos, notas sobre empresas e o método por detrás dos números.",
             "markdown": (
@@ -1752,10 +2026,10 @@ def _seed(store: Dict[str, Any]) -> None:
                 "Se procura um tema, comece pela pesquisa 360."
             ),
             "blocks": [],
-            "cover_id": None,
+            "cover_id": media.get("capa-post-bemvindo.svg"),
             "category_ids": [analytics_id],
             "tags": ["contratos públicos", "método"],
-            "author": "Equipa IQ OS",
+            "author": "Equipa Sabemos Studio",
             "status": "publicado",
             "published_at": now,
             "scheduled_at": None,
@@ -1782,10 +2056,10 @@ def _seed(store: Dict[str, Any]) -> None:
                 "_Em preparação: a análise por CPV._"
             ),
             "blocks": [],
-            "cover_id": None,
+            "cover_id": media.get("capa-post-contratos-2026.svg"),
             "category_ids": [analytics_id, market_id],
             "tags": ["contratos públicos", "2026", "mercado"],
-            "author": "Equipa IQ OS",
+            "author": "Equipa Sabemos Studio",
             "status": "publicado",
             "published_at": (datetime.now(timezone.utc) - timedelta(days=4)).isoformat(),
             "scheduled_at": None,
@@ -1871,8 +2145,16 @@ def _seed(store: Dict[str, Any]) -> None:
         {
             "home_page_id": home_id,
             "blog_page_id": blog_id,
-            "site_name": "IQ OS",
+            "site_name": "Sabemos Studio",
             "tagline": "Inteligência financeira e contratual",
+            "logo_id": media.get("logo-sabemos-studio.svg"),
+            "favicon_id": media.get("icone-sabemos-studio.svg"),
+            "seo": {
+                "title": "",
+                "description": "Sabemos Studio: contratos públicos, empresas e investigação a partir de dados abertos.",
+                "image_id": media.get("capa-sabemos-studio.svg"),
+                "keywords": ["Sabemos Studio", "contratos públicos", "dados abertos"],
+            },
         }
     )
 

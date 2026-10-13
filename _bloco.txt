@@ -1,0 +1,9 @@
+<p>O <strong>Sabemos Studio</strong> é um estúdio de produtos de dados: pegamos no que já é público — contratos, contas e registos — e devolvemos leitura que se pode verificar.</p>
+<p>O <strong>IQ OS</strong> é a plataforma onde isso acontece: recolha contínua de contratos públicos e de finanças locais, uma ontologia de entidades (empresas, municípios e pessoas) e assistentes de investigação que respondem com a evidência à vista.</p>
+<p>O que nos distingue:</p>
+<ul>
+<li><strong>Fonte nomeada</strong> — Portal BASE, INE, registos oficiais e boletins. Nenhum número aparece sem origem.</li>
+<li><strong>Entidades ligadas</strong> — a mesma empresa, o mesmo município e a mesma pessoa são o mesmo objeto em toda a plataforma, mesmo quando o nome aparece escrito de outra maneira.</li>
+<li><strong>Fotografia datada</strong> — cada análise guarda o dia em que foi lida: o número citado continua a ser o número que se viu.</li>
+<li><strong>Conta refazível</strong> — publicamos o critério e o registo, para quem lê poder repetir o cálculo.</li>
+</ul>

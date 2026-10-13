@@ -477,6 +477,17 @@ const itemDefaults: Record<string, Record<string, string>> = {
   destaques: { title: "Novo cartão", text: "" },
   faq: { question: "Pergunta?", answer: "" },
   passos: { title: "Passo", text: "" },
+  numeros: { value: "0", label: "Indicador", note: "" },
+};
+
+/** Nome de cada campo de um item, por chave (o resto cai em «Texto»). */
+const itemFieldLabels: Record<string, string> = {
+  question: "Pergunta",
+  answer: "Resposta",
+  title: "Título",
+  value: "Valor",
+  label: "Etiqueta",
+  note: "Nota",
 };
 
 /** Itens de uma lista dentro de um bloco (`destaques`, `faq`, `passos`). */
@@ -509,7 +520,7 @@ function ItemsEditor({
           </div>
           <div className="mt-1 grid gap-2 sm:grid-cols-2">
             {keys.map((key) => (
-              <Field key={key} label={key === "question" ? "Pergunta" : key === "answer" ? "Resposta" : key === "title" ? "Título" : "Texto"} wide={key === "title" || key === "question"}>
+              <Field key={key} label={itemFieldLabels[key] ?? "Texto"} wide={key === "title" || key === "question" || key === "value"}>
                 <input
                   className={inputClass}
                   value={String(item[key] ?? "")}
@@ -607,6 +618,7 @@ function BlockForm({
     case "destaques":
     case "faq":
     case "passos":
+    case "numeros":
       return (
         <div className="space-y-2">
           <TextInput label="Título da secção" value={text("title")} onChange={(next) => set("title", next)} wide />
