@@ -152,8 +152,27 @@ function FichaMunicipio({
   );
 
   const contratos = ficha.contratos_detalhe as
-    | { total?: number; valor?: number; por_ano?: Record<string, { contratos: number; valor: number }>; fornecedores?: { nome: string; contratos: number; valor: number }[]; tipos?: { key: string; count: number }[] }
+    | {
+        total?: number;
+        valor?: number;
+        por_ano?: Record<string, { contratos: number; valor: number }>;
+        fornecedores?: { nome: string; contratos: number; valor: number }[];
+        tipos?: { key: string; count: number }[];
+        ano?: number;
+        ano_total?: number;
+        ano_valor?: number;
+        ano_fornecedores?: { nome: string; contratos: number; valor: number }[];
+        ano_tipos?: { key: string; count: number }[];
+      }
     | undefined;
+
+  // Com um ano escolhido no filtro, a contratação mostrada é a **desse ano**,
+  // calculada no índice do Portal BASE (é a única fonte com contratação ano a
+  // ano); sem ano, são os totais de 2012 até hoje. A despesa do INE não segue o
+  // ano: o indicador só publica um ano e fica identificado como tal.
+  const anoDoFiltro = anoSelecionado && contratos?.ano === Number(anoSelecionado) ? anoSelecionado : null;
+  const fornecedores = (anoDoFiltro ? contratos?.ano_fornecedores : contratos?.fornecedores) ?? [];
+  const tipos = (anoDoFiltro ? contratos?.ano_tipos : contratos?.tipos) ?? [];
 
   const serie = useMemo(() => {
     const dados = (contratos?.por_ano ?? ficha.contratos_por_ano) || {};
@@ -184,36 +203,68 @@ function FichaMunicipio({
               {ficha.geocod ? ` · INE ${ficha.geocod}` : ""}
             </p>
           </div>
-          {ano ? (
-            <span
-              className="shrink-0 rounded-full bg-teal-400/10 px-2 py-0.5 text-[11px] text-teal-200"
-              title={`A despesa do INE é a do ano ${ano} (o único que o INE publica); o ano do filtro aplica-se à contratação do Portal BASE.`}
-            >
-              despesa de {ano}
-            </span>
-          ) : (
-            <span className="shrink-0 rounded-full bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-200">
-              sem despesa publicada
-            </span>
-          )}
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+            {anoDoFiltro ? (
+              <span
+                className="rounded-full bg-sky-400/10 px-2 py-0.5 text-[11px] text-sky-200"
+                title="Contratação calculada no índice do Portal BASE para o ano escolhido na lista."
+              >
+                contratação de {anoDoFiltro}
+              </span>
+            ) : null}
+            {ano ? (
+              <span
+                className="rounded-full bg-teal-400/10 px-2 py-0.5 text-[11px] text-teal-200"
+                title={`Despesa do INE do ano ${ano} — o indicador 0013909 só publica um ano (2021→2023). O ano da página vem do Portal BASE.`}
+              >
+                despesa INE de {ano}
+              </span>
+            ) : (
+              <span className="rounded-full bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-200">
+                sem despesa publicada
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-3 text-[11px] @3xl:grid-cols-4">
           <div>
-            <p className="text-muted-foreground">Despesa total</p>
+            <p className="text-muted-foreground">
+              Contratos {anoDoFiltro ?? ""} <span className="opacity-60">· Portal BASE</span>
+            </p>
+            <p className="text-base font-semibold tabular-nums">
+              {numero(anoDoFiltro ? contratos?.ano_total ?? 0 : ficha.contratos_total)}
+            </p>
+            {anoDoFiltro ? (
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                de {numero(ficha.contratos_total)} desde {ficha.contratos_primeiro_ano}
+              </p>
+            ) : null}
+          </div>
+          <div>
+            <p className="text-muted-foreground">
+              Valor contratado {anoDoFiltro ?? ""} <span className="opacity-60">· Portal BASE</span>
+            </p>
+            <p className="text-base font-semibold tabular-nums">
+              {euroCompacto(anoDoFiltro ? contratos?.ano_valor ?? 0 : ficha.contratos_valor)}
+            </p>
+            {anoDoFiltro ? (
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                de {euroCompacto(ficha.contratos_valor)} no total
+              </p>
+            ) : null}
+          </div>
+          <div>
+            <p className="text-muted-foreground">
+              Despesa total <span className="opacity-60">· INE {ano ?? ""}</span>
+            </p>
             <p className="text-base font-semibold tabular-nums">{euroCompacto(ficha.despesas_total)}</p>
           </div>
           <div>
-            <p className="text-muted-foreground">Com pessoal</p>
+            <p className="text-muted-foreground">
+              Com pessoal <span className="opacity-60">· INE {ano ?? ""}</span>
+            </p>
             <p className="text-base font-semibold tabular-nums">{euroCompacto(ficha.despesas_pessoal)}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Contratos</p>
-            <p className="text-base font-semibold tabular-nums">{numero(ficha.contratos_total)}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Valor contratado</p>
-            <p className="text-base font-semibold tabular-nums">{euroCompacto(ficha.contratos_valor)}</p>
           </div>
         </div>
         {ficha.contratos_primeiro_ano && ficha.contratos_ultimo_ano ? (
@@ -226,8 +277,15 @@ function FichaMunicipio({
       <div className="grid gap-4 @3xl:grid-cols-2">
         <Cartao>
           <h3 className="text-xs font-semibold">
-            Despesa por classificador económico{ano ? ` · ${ano}` : ""}
+            Despesa por classificador económico{ano ? ` · INE ${ano}` : ""}
           </h3>
+          {anoDoFiltro ? (
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              O INE só publica {ano} (2021→2023): a despesa não existe para {anoDoFiltro}. A
+              contratação de {anoDoFiltro} está nos cartões de cima e na série, calculada no índice
+              do Portal BASE.
+            </p>
+          ) : null}
           {totalCorrenteCapital > 0 ? (
             <p className="mt-1 text-[11px] text-muted-foreground">
               Corrente{" "}
@@ -311,9 +369,15 @@ function FichaMunicipio({
         </Cartao>
       </div>
 
-      {contratos?.fornecedores?.length ? (
+      {fornecedores.length ? (
         <Cartao>
-          <h3 className="text-xs font-semibold">Principais fornecedores do município</h3>
+          <h3 className="text-xs font-semibold">
+            Principais fornecedores{anoDoFiltro ? ` em ${anoDoFiltro}` : " do município"}
+          </h3>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Portal BASE
+            {anoDoFiltro ? " · contratos celebrados nesse ano" : " · desde 2012"}
+          </p>
           <div className="mt-2 overflow-x-auto">
             <table className="w-full min-w-[380px] text-[11px]">
               <thead>
@@ -324,7 +388,7 @@ function FichaMunicipio({
                 </tr>
               </thead>
               <tbody>
-                {contratos.fornecedores.map((f) => (
+                {fornecedores.map((f) => (
                   <tr key={f.nome} className="border-t border-white/5">
                     <td className="py-1 pr-2">{f.nome}</td>
                     <td className="py-1 pl-2 text-right align-top tabular-nums">{numero(f.contratos)}</td>
@@ -336,11 +400,17 @@ function FichaMunicipio({
               </tbody>
             </table>
           </div>
-          {contratos.tipos?.length ? (
+          {tipos.length ? (
             <p className="mt-2 text-[10px] text-muted-foreground">
-              Tipos: {contratos.tipos.slice(0, 4).map((t) => `${t.key} (${t.count})`).join(" · ")}
+              Tipos: {tipos.slice(0, 4).map((t) => `${t.key} (${t.count})`).join(" · ")}
             </p>
           ) : null}
+        </Cartao>
+      ) : anoDoFiltro ? (
+        <Cartao>
+          <p className="text-[11px] text-muted-foreground">
+            Sem contratos atribuídos a este município no Portal BASE em {anoDoFiltro}.
+          </p>
         </Cartao>
       ) : null}
 
@@ -396,6 +466,7 @@ export default function MunicipiosDespesasPage() {
   const [q, setQ] = useState("");
   const [distrito, setDistrito] = useState("");
   const [anoContratos, setAnoContratos] = useState("");
+  const [alvoDetalhe, setAlvoDetalhe] = useState<string | null>(null);
   const [ordenar, setOrdenar] = useState<string>("despesas");
   const [ordem, setOrdem] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
@@ -437,17 +508,31 @@ export default function MunicipiosDespesasPage() {
       .catch(() => setMeta(null));
   }, []);
 
-  const abrir = useCallback(async (municipio: MunicipioDespesas) => {
+  const abrir = useCallback((municipio: MunicipioDespesas) => {
+    setAlvoDetalhe(municipio.geocod || municipio.nome);
+  }, []);
+
+  useEffect(() => {
+    // A área aberta segue o ano escolhido: mudar de ano recarrega a ficha, e a
+    // agregação do ano é feita no índice do Portal BASE (não no INE).
+    if (!alvoDetalhe) return;
+    let ativo = true;
     setADetalhar(true);
     setErro(null);
-    try {
-      setDetalhe(await getMunicipioFicha(municipio.geocod || municipio.nome));
-    } catch (excecao) {
-      setErro(excecao instanceof Error ? excecao.message : String(excecao));
-    } finally {
-      setADetalhar(false);
-    }
-  }, []);
+    getMunicipioFicha(alvoDetalhe, anoContratos || undefined)
+      .then((resposta) => {
+        if (ativo) setDetalhe(resposta);
+      })
+      .catch((excecao) => {
+        if (ativo) setErro(excecao instanceof Error ? excecao.message : String(excecao));
+      })
+      .finally(() => {
+        if (ativo) setADetalhar(false);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [alvoDetalhe, anoContratos]);
 
   const recolher = useCallback(async () => {
     setARecolher(true);
@@ -481,8 +566,7 @@ export default function MunicipiosDespesasPage() {
               {meta?.fonte_despesas ?? "INE · indicador 0013909 (DGAL)"} — cruzada com a
               contratação pública em que o município é adjudicante ({meta?.fonte_contratos ?? "Portal BASE"}).
               {meta?.designacao ? ` ${meta.designacao}` : ""} Valores em euros: despesa de{" "}
-              {meta?.ultimo_periodo ? `ano ${meta.ultimo_periodo}` : "um ano"} — o único que o INE publica —
-              e contratação de{" "}
+              {meta?.ultimo_periodo ?? "um ano"} (o único ano que o INE publica) e contratação de{" "}
               {meta?.anos_contratos?.length
                 ? `${meta.anos_contratos[meta.anos_contratos.length - 1]} a ${meta.anos_contratos[0]}`
                 : "vários anos"}

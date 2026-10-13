@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 
 #: Endpoint do INE que devolve o indicador em JSON. `lang` tem de ir em
 #: minúsculas: com `Lang=PT` a API responde «O código do idioma não é válido».
+#: `op=2` traz o último período: a série do indicador é 2021→2023 e é anual, mas
+#: o **ano** da página vem do Portal BASE (índice `contratos`), que é a única
+#: fonte com contratação ano a ano (2012→2026).
 INE_URL = "https://www.ine.pt/ine/json_indicador/pindica.jsp?op=2&varcd=0013909&lang=PT"
 INE_INDICADOR = "0013909"
 INE_FONTE = "INE · indicador 0013909 (despesas das câmaras municipais, DGAL)"
@@ -205,7 +208,7 @@ def recolher_ine(timeout: float = 90.0) -> Dict[str, Any]:
     meta = {
         "indicador": bloco.get("IndicadorCod") or INE_INDICADOR,
         "designacao": bloco.get("IndicadorDsg"),
-        "atualizado_em": bloco.get("DataUltimoAtualizacao"),
+        "atualizado_em": bloco.get("DataUltimoAtualizacao") or bloco.get("DataUltimoPref"),
         "ultimo_periodo": bloco.get("UltimoPref"),
         "anos": sorted(anos),
         "municipios": len(despesas),
@@ -760,12 +763,20 @@ def listar(
     }
 
 
-def ficha(nome_ou_codigo: str, detalhar_contratos: bool = True) -> Dict[str, Any]:
+def ficha(
+    nome_ou_codigo: str,
+    detalhar_contratos: bool = True,
+    ano: Optional[int] = None,
+) -> Dict[str, Any]:
     """Ficha de um município, com a despesa detalhada e a contratação.
 
     Quando `detalhar_contratos` é verdadeiro (por omissão), junta a agregação a
     pedido — fornecedores e tipos de contrato —, que não é guardada no índice
     porque só interessa a quem abre a ficha.
+
+    Com `ano`, a agregação traz também o **ano escolhido** (contratos, valor,
+    fornecedores e tipos desse ano), calculado sobre o índice `contratos`: a
+    ficha abre no mesmo ano da lista, sem uma segunda viagem à lista.
     """
     from api.elasticsearch_client import contratos_do_municipio, get_municipio_despesas
 
@@ -778,7 +789,7 @@ def ficha(nome_ou_codigo: str, detalhar_contratos: bool = True) -> Dict[str, Any
                 break
 
     if detalhar_contratos and not doc.get("error") and doc.get("adjudicantes"):
-        doc["contratos_detalhe"] = contratos_do_municipio(doc["adjudicantes"])
+        doc["contratos_detalhe"] = contratos_do_municipio(doc["adjudicantes"], ano=ano)
     return doc
 
 

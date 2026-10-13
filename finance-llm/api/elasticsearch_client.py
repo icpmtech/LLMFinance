@@ -17889,6 +17889,7 @@ def municipios_despesas_status(es: Optional[Elasticsearch] = None) -> Dict[str, 
 def contratos_do_municipio(
     nomes_adjudicante: Iterable[str],
     *,
+    ano: Optional[int] = None,
     fornecedores: int = 12,
     anos: int = 12,
     es: Optional[Elasticsearch] = None,
@@ -17898,6 +17899,11 @@ def contratos_do_municipio(
     Recebe os nomes com que a câmara aparece no Portal BASE (ex.: «Município de
     Lisboa», «Câmara Municipal da Guarda», «Serviços Municipalizados … de
     Abrantes») e devolve totais, série anual e principais fornecedores.
+
+    Com `ano`, o mesmo é calculado **para esse ano** (`ano_total`, `ano_valor`,
+    `ano_fornecedores`, `ano_tipos`) sem se perder a série: a agregação do ano é
+    um filtro dentro da consulta, não a consulta. É o que permite abrir a área de
+    um município já no ano escolhido na lista.
     """
     client = es or get_es_client()
     if not client:
@@ -17912,32 +17918,47 @@ def contratos_do_municipio(
             "query": {"terms": {"adjudicantes.parsed.nome": nomes}},
         }
     }
-    body = {
-        "size": 0,
-        "query": query,
-        "aggs": {
-            "valor": {"sum": {"field": "precoContratual"}},
-            "por_ano": {
-                "date_histogram": {
-                    "field": "dataCelebracaoContrato",
-                    "calendar_interval": "year",
-                    "format": "yyyy",
-                    "min_doc_count": 1,
-                },
-                "aggs": {"valor": {"sum": {"field": "precoContratual"}}},
+
+    def _fornecedores() -> Dict[str, Any]:
+        return {
+            "nested": {"path": "adjudicatarios.parsed"},
+            "aggs": {
+                "nomes": {
+                    "terms": {"field": "adjudicatarios.parsed.nome", "size": max(1, fornecedores)},
+                    "aggs": {"raiz": {"reverse_nested": {}, "aggs": {"valor": {"sum": {"field": "precoContratual"}}}}},
+                }
             },
-            "fornecedores": {
-                "nested": {"path": "adjudicatarios.parsed"},
-                "aggs": {
-                    "nomes": {
-                        "terms": {"field": "adjudicatarios.parsed.nome", "size": max(1, fornecedores)},
-                        "aggs": {"raiz": {"reverse_nested": {}, "aggs": {"valor": {"sum": {"field": "precoContratual"}}}}},
-                    }
-                },
+        }
+
+    aggs: Dict[str, Any] = {
+        "valor": {"sum": {"field": "precoContratual"}},
+        "por_ano": {
+            "date_histogram": {
+                "field": "dataCelebracaoContrato",
+                "calendar_interval": "year",
+                "format": "yyyy",
+                "min_doc_count": 1,
             },
-            "tipos": {"terms": {"field": "tipoContrato", "size": 10}},
+            "aggs": {"valor": {"sum": {"field": "precoContratual"}}},
         },
+        "fornecedores": _fornecedores(),
+        "tipos": {"terms": {"field": "tipoContrato", "size": 10}},
     }
+    if ano:
+        aggs["ano"] = {
+            "filter": {
+                "range": {
+                    "dataCelebracaoContrato": {"gte": f"{int(ano)}-01-01", "lte": f"{int(ano)}-12-31"}
+                }
+            },
+            "aggs": {
+                "valor": {"sum": {"field": "precoContratual"}},
+                "fornecedores": _fornecedores(),
+                "tipos": {"terms": {"field": "tipoContrato", "size": 10}},
+            },
+        }
+
+    body = {"size": 0, "query": query, "aggs": aggs}
     try:
         resp = client.search(index=CONTRACTS_INDEX, body=body)
     except Exception as exc:
@@ -17961,13 +17982,32 @@ def contratos_do_municipio(
         }
         for b in ((aggs.get("fornecedores", {}) or {}).get("nomes", {}) or {}).get("buckets", [])
     ]
-    return {
+    resposta = {
         "total": total,
         "valor": (aggs.get("valor", {}) or {}).get("value") or 0.0,
         "por_ano": dict(sorted(serie.items(), reverse=True)[: max(1, anos)]),
         "fornecedores": tops,
         "tipos": [{"key": b["key"], "count": b["doc_count"]} for b in (aggs.get("tipos", {}) or {}).get("buckets", [])],
     }
+
+    bloco_ano = aggs.get("ano") or {}
+    if ano and bloco_ano:
+        resposta["ano"] = int(ano)
+        resposta["ano_total"] = int(bloco_ano.get("doc_count") or 0)
+        resposta["ano_valor"] = (bloco_ano.get("valor", {}) or {}).get("value") or 0.0
+        resposta["ano_fornecedores"] = [
+            {
+                "nome": b["key"],
+                "contratos": b["doc_count"],
+                "valor": ((b.get("raiz", {}) or {}).get("valor", {}) or {}).get("value") or 0.0,
+            }
+            for b in ((bloco_ano.get("fornecedores", {}) or {}).get("nomes", {}) or {}).get("buckets", [])
+        ]
+        resposta["ano_tipos"] = [
+            {"key": b["key"], "count": b["doc_count"]}
+            for b in (bloco_ano.get("tipos", {}) or {}).get("buckets", [])
+        ]
+    return resposta
 
 
 # ---------------------------------------------------------------------------

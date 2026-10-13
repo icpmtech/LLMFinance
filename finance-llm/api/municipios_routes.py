@@ -80,6 +80,16 @@ async def municipios_recolher(
 
 
 @router.get("/despesas/{municipio}", summary="Ficha de um município")
-async def municipio_ficha(municipio: str, session: Session = None) -> Dict[str, Any]:
+async def municipio_ficha(
+    municipio: str,
+    ano: Optional[int] = Query(
+        None,
+        description=(
+            "Ano da contratação a detalhar (fornecedores e tipos desse ano), calculado no "
+            "índice do Portal BASE (ex.: 2024). A série anual vem sempre completa."
+        ),
+    ),
+    session: Session = None,
+) -> Dict[str, Any]:
     """Aceita o nome (tolerante a acentos) ou o código geográfico do INE."""
-    return await run_in_threadpool(municipios.ficha, municipio)
+    return await run_in_threadpool(municipios.ficha, municipio, True, ano)

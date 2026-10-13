@@ -75,7 +75,9 @@ export type MunicipioFicha = MunicipioDespesas & {
   contratos_por_ano?: Record<string, { contratos: number; valor: number }> | null;
   /**
    * Agregação a pedido (não guardada no índice): fornecedores e tipos de
-   * contrato do município, calculados quando a área é aberta.
+   * contrato do município, calculados quando a área é aberta. Com o filtro de
+   * ano ligado, traz também o **ano escolhido** (`ano_total`, `ano_valor`,
+   * `ano_fornecedores`, `ano_tipos`), calculado no índice do Portal BASE.
    */
   contratos_detalhe?: {
     total?: number;
@@ -83,6 +85,11 @@ export type MunicipioFicha = MunicipioDespesas & {
     por_ano?: Record<string, { contratos: number; valor: number }>;
     fornecedores?: { nome: string; contratos: number; valor: number }[];
     tipos?: { key: string; count: number }[];
+    ano?: number;
+    ano_total?: number;
+    ano_valor?: number;
+    ano_fornecedores?: { nome: string; contratos: number; valor: number }[];
+    ano_tipos?: { key: string; count: number }[];
     error?: string;
   } | null;
   recolhido_em?: string | null;
@@ -201,8 +208,9 @@ export function getMunicipiosDespesasMapa(): Promise<MunicipiosMapaResposta> {
   return pedir<MunicipiosMapaResposta>("/municipios/despesas/mapa");
 }
 
-export function getMunicipioFicha(municipio: string): Promise<MunicipioFicha> {
-  return pedir<MunicipioFicha>(`/municipios/despesas/${encodeURIComponent(municipio)}`);
+export function getMunicipioFicha(municipio: string, ano?: string | number): Promise<MunicipioFicha> {
+  const sufixo = ano ? `?ano=${encodeURIComponent(String(ano))}` : "";
+  return pedir<MunicipioFicha>(`/municipios/despesas/${encodeURIComponent(municipio)}${sufixo}`);
 }
 
 export function recolherMunicipiosDespesas(forcar = false): Promise<{
