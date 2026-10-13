@@ -1,6 +1,7 @@
 /**
  * Biblioteca do CMS — **conteúdos** reutilizáveis, **media**, **taxonomia**,
- * **modelos** e **aparência** (definições do site + menus).
+ * **modelos**, **contactos** recebidos pelo site e **aparência** (definições do
+ * site + menus).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -9,8 +10,10 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  Inbox,
   Link2,
   Loader2,
+  Mail,
   Palette,
   Pencil,
   Plus,
@@ -39,7 +42,7 @@ import {
   timeAgo,
 } from "../components/cms/CmsKit";
 import * as cms from "../cmsApi";
-import type { CmsCategory, CmsContent, CmsMedia, CmsMenu, CmsMenuItem, CmsSettings, CmsTemplate } from "../cmsApi";
+import type { CmsCategory, CmsContacto, CmsContent, CmsMedia, CmsMenu, CmsMenuItem, CmsSettings, CmsTemplate } from "../cmsApi";
 import type { CmsCtx } from "./CmsPanels";
 
 function openExternal(url: string) {
@@ -674,6 +677,193 @@ export function CmsTaxonomyPanel({ ctx }: { ctx: CmsCtx }) {
             <TextInput label="Endereço (slug)" value={draft.slug ?? ""} onChange={(next) => setDraft({ ...draft, slug: next })} hint="Vazio = gerado do nome." />
             <TextInput label="Cor" value={draft.color ?? ""} onChange={(next) => setDraft({ ...draft, color: next })} placeholder="#0ea5a4" />
             <TextArea label="Descrição" value={draft.description ?? ""} onChange={(next) => setDraft({ ...draft, description: next })} rows={3} wide />
+          </div>
+        </Sheet>
+      )}
+    </div>
+  );
+}
+
+/* =============================================================== contactos */
+
+const ESTADOS_CONTACTO: { id: CmsContacto["estado"]; label: string }[] = [
+  { id: "novo", label: "Novo" },
+  { id: "em_curso", label: "Em curso" },
+  { id: "tratado", label: "Tratado" },
+];
+
+const TOM_CONTACTO: Record<string, string> = {
+  novo: "border-teal-300/30 bg-teal-400/10 text-teal-100",
+  em_curso: "border-amber-300/30 bg-amber-400/10 text-amber-100",
+  tratado: "border-emerald-300/30 bg-emerald-400/10 text-emerald-100",
+};
+
+/** Mensagens recebidas pelo formulário do site (`POST /site/contacto`). */
+export function CmsContactosPanel({ ctx }: { ctx: CmsCtx }) {
+  const [items, setItems] = useState<CmsContacto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filtro, setFiltro] = useState<"todos" | CmsContacto["estado"]>("todos");
+  const [aberto, setAberto] = useState<CmsContacto | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const payload = await cms.listCmsContactos();
+      setItems(payload.items ?? []);
+    } catch (err) {
+      ctx.notify((err as Error).message, "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [ctx]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const guardar = async (contacto: CmsContacto, campos: Partial<CmsContacto>) => {
+    setBusy(true);
+    try {
+      const result = await cms.updateCmsContacto(contacto.id, campos);
+      setAberto(result.item);
+      setItems((atuais) => atuais.map((item) => (item.id === result.item.id ? result.item : item)));
+      ctx.notify("Contacto atualizado.", "ok");
+      ctx.refreshOverview();
+    } catch (err) {
+      ctx.notify((err as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const visiveis = filtro === "todos" ? items : items.filter((item) => item.estado === filtro);
+  const contagem = (estado: CmsContacto["estado"]) => items.filter((item) => item.estado === estado).length;
+
+  return (
+    <div className="space-y-3">
+      <PanelHeader title="Contactos" hint="Pedidos enviados pelo formulário do site. Responda pelo email indicado — a resposta sai da sua caixa de correio.">
+        <Button size="sm" variant="secondary" icon={<RefreshCw size={13} />} onClick={() => void load()}>
+          Atualizar
+        </Button>
+      </PanelHeader>
+
+      <div className="flex flex-wrap gap-1.5">
+        {(["todos", "novo", "em_curso", "tratado"] as const).map((estado) => (
+          <button
+            key={estado}
+            type="button"
+            onClick={() => setFiltro(estado)}
+            className={[
+              "rounded-full border px-2.5 py-1 text-[11.5px] transition",
+              filtro === estado ? "border-teal-300/40 bg-teal-400/15 text-teal-100" : "border-white/10 bg-white/[0.04] text-muted-foreground hover:bg-white/[0.09]",
+            ].join(" ")}
+          >
+            {estado === "todos" ? "Todos" : ESTADOS_CONTACTO.find((item) => item.id === estado)?.label} ·{" "}
+            {estado === "todos" ? items.length : contagem(estado)}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <p className="flex items-center gap-2 py-10 text-[12.5px] text-muted-foreground">
+          <Loader2 size={14} className="animate-spin" /> A carregar…
+        </p>
+      ) : visiveis.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-white/12 px-3 py-8 text-center text-[12px] text-muted-foreground">
+          Sem contactos nesta vista. O formulário da página «Contactos» do site escreve aqui.
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          {visiveis.map((contacto) => (
+            <ListRow
+              key={contacto.id}
+              icon={<Inbox size={13} />}
+              title={contacto.nome + (contacto.organizacao ? ` · ${contacto.organizacao}` : "")}
+              subtitle={`${contacto.email}${contacto.assunto ? ` · ${contacto.assunto}` : ""} · ${timeAgo(contacto.created_at)}`}
+              badges={
+                <span className={`rounded-full border px-2 py-0.5 text-[10.5px] ${TOM_CONTACTO[contacto.estado] ?? ""}`}>
+                  {ESTADOS_CONTACTO.find((item) => item.id === contacto.estado)?.label ?? contacto.estado}
+                </span>
+              }
+              meta={<span className="hidden sm:inline">{contacto.mensagem.slice(0, 60)}</span>}
+              onClick={() => setAberto(contacto)}
+              actions={
+                <>
+                  <IconAction title="Responder por email" onClick={() => openExternal(`mailto:${contacto.email}${contacto.assunto ? `?subject=${encodeURIComponent(`Re: ${contacto.assunto}`)}` : ""}`)}>
+                    <Mail size={12} />
+                  </IconAction>
+                  <IconAction
+                    title="Apagar"
+                    danger
+                    onClick={async () => {
+                      if (!window.confirm(`Apagar a mensagem de ${contacto.nome}?`)) return;
+                      try {
+                        await cms.deleteCmsEntity("contactos", contacto.id);
+                        setItems((atuais) => atuais.filter((item) => item.id !== contacto.id));
+                        ctx.notify("Contacto apagado.", "ok");
+                        ctx.refreshOverview();
+                      } catch (err) {
+                        ctx.notify((err as Error).message, "error");
+                      }
+                    }}
+                  >
+                    <Trash2 size={12} />
+                  </IconAction>
+                </>
+              }
+            />
+          ))}
+        </div>
+      )}
+
+      {aberto && (
+        <Sheet
+          busy={busy}
+          title={`${aberto.nome}${aberto.organizacao ? ` · ${aberto.organizacao}` : ""}`}
+          onClose={() => setAberto(null)}
+          footer={
+            <>
+              <Button size="sm" variant="ghost" onClick={() => setAberto(null)}>
+                Fechar
+              </Button>
+              <Button size="sm" variant="secondary" loading={busy} onClick={() => void guardar(aberto, { estado: aberto.estado, notas: aberto.notas ?? "" })}>
+                Guardar notas
+              </Button>
+              <Button size="sm" variant="primary" icon={<Mail size={13} />} onClick={() => openExternal(`mailto:${aberto.email}`)}>
+                Responder
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            <div className="grid gap-1 text-[12.5px] sm:grid-cols-2">
+              <p>
+                <span className="text-muted-foreground">Email: </span>
+                <a className="text-teal-200" href={`mailto:${aberto.email}`}>
+                  {aberto.email}
+                </a>
+              </p>
+              <p>
+                <span className="text-muted-foreground">Assunto: </span>
+                {aberto.assunto || "—"}
+              </p>
+            </div>
+            <SelectInput
+              label="Estado"
+              value={aberto.estado}
+              onChange={(next) => void guardar(aberto, { estado: next as CmsContacto["estado"] })}
+              options={ESTADOS_CONTACTO.map((item) => ({ value: item.id, label: item.label }))}
+              wide
+            />
+            <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3 text-[12.5px] whitespace-pre-wrap text-foreground">
+              {aberto.mensagem}
+            </div>
+            <TextArea label="Notas internas" value={aberto.notas ?? ""} onChange={(next) => setAberto({ ...aberto, notas: next })} rows={3} />
+            <p className="text-[11px] text-muted-foreground">
+              Recebido {timeAgo(aberto.created_at)} · consentimento {aberto.consentimento ? "dado" : "não registado"}
+              {aberto.origem ? ` · origem ${aberto.origem}` : ""}
+            </p>
           </div>
         </Sheet>
       )}

@@ -167,6 +167,10 @@ p {{ margin: 0 0 14px; }}
 .tile {{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }}
 .tile h3 {{ margin: 0 0 6px; font-size: 1rem; }}
 .tile p {{ margin: 0; color: var(--muted); font-size: .94rem; }}
+/* Cartão que leva a algum lado: continua a parecer cartão, mas responde ao rato. */
+a.tile {{ display: block; color: inherit; }}
+a.tile:hover {{ text-decoration: none; border-color: var(--accent); box-shadow: 0 1px 2px rgba(16,24,40,.06), 0 10px 28px rgba(16,24,40,.10); }}
+a.tile h3 {{ color: var(--accent); }}
 figure {{ margin: 22px 0; }}
 figure img, .prose img {{ max-width: 100%; height: auto; border-radius: calc(var(--radius) - 4px); display: block; }}
 /* A grelha da galeria parte de 240px por coluna: sem isto, o SVG de origem
@@ -215,6 +219,23 @@ figcaption {{ color: var(--muted); font-size: .86rem; margin-top: 8px; }}
 .hr {{ height: 1px; background: var(--border); margin: 30px 0; border: 0; }}
 .contactos {{ display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }}
 .contactos div {{ padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }}
+.formulario {{ max-width: 720px; }}
+.formulario form {{ display: grid; gap: 14px; margin-top: 18px; }}
+.formulario .campo {{ display: grid; gap: 6px; }}
+.formulario label {{ font-weight: 600; font-size: .93rem; }}
+.formulario input, .formulario textarea {{
+  width: 100%; padding: 11px 13px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text); font: inherit;
+}}
+.formulario input:focus, .formulario textarea:focus {{ outline: 2px solid var(--accent); outline-offset: 1px; }}
+.formulario textarea {{ resize: vertical; min-height: 140px; }}
+.formulario .erro {{ color: #b42318; font-size: .82rem; }}
+.formulario .consentimento {{ display: flex; align-items: flex-start; gap: 10px; }}
+.formulario .consentimento input {{ width: auto; margin-top: 4px; }}
+.formulario .consentimento label {{ font-weight: 500; font-size: .9rem; color: var(--muted); }}
+.formulario .acao {{ display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }}
+/* Campo-armadilha: invisível para quem lê, apetecível para quem preenche formulários em série. */
+.hp {{ position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }}
 .steps {{ counter-reset: step; display: grid; gap: 14px; }}
 .steps .step {{ position: relative; padding-left: 52px; }}
 .steps .step::before {{
@@ -291,6 +312,118 @@ def _render_blog_block(data: Dict[str, Any], *, preview: bool) -> str:
     return f'<div class="section">{head}<div class="posts">{cards}</div></div>'
 
 
+# --------------------------------------------------------------------------
+# Formulário de contacto
+# --------------------------------------------------------------------------
+#: Campos do formulário, pela ordem em que aparecem: (nome, etiqueta, tipo,
+#: obrigatório, ajuda, autocomplete, linhas).
+CAMPOS_CONTACTO: List[Dict[str, Any]] = [
+    {"nome": "nome", "etiqueta": "Nome", "obrigatorio": True, "autocomplete": "name"},
+    {"nome": "email", "etiqueta": "Email", "tipo": "email", "obrigatorio": True, "autocomplete": "email"},
+    {"nome": "organizacao", "etiqueta": "Organização", "autocomplete": "organization"},
+    {"nome": "assunto", "etiqueta": "Assunto"},
+    {"nome": "mensagem", "etiqueta": "Mensagem", "obrigatorio": True, "linhas": 6},
+]
+
+FORMULARIO_ACTION_PADRAO = "/site/contacto"
+
+
+def _campo_do_formulario(campo: Dict[str, Any], valor: str = "", erro: str = "") -> str:
+    nome = str(campo["nome"])
+    ident = f"contacto-{nome}"
+    atributos = ""
+    if campo.get("obrigatorio"):
+        atributos += ' required aria-required="true"'
+    if campo.get("autocomplete"):
+        atributos += f' autocomplete="{_esc(campo["autocomplete"])}"'
+    if campo.get("linhas"):
+        controlo = f'<textarea id="{ident}" name="{nome}" rows="{int(campo["linhas"])}"{atributos}>{_esc(valor)}</textarea>'
+    else:
+        controlo = f'<input id="{ident}" name="{nome}" type="{_esc(campo.get("tipo") or "text")}" value="{_esc(valor)}"{atributos}>'
+    nota = f'<small class="erro">{_esc(erro)}</small>' if erro else ""
+    etiqueta = _esc(campo["etiqueta"]) + (" *" if campo.get("obrigatorio") else "")
+    return f'<div class="campo"><label for="{ident}">{etiqueta}</label>{controlo}{nota}</div>'
+
+
+def formulario_contacto(
+    data: Dict[str, Any],
+    *,
+    valores: Optional[Dict[str, str]] = None,
+    erros: Optional[Dict[str, str]] = None,
+    aviso: str = "",
+) -> str:
+    """Formulário de contacto (grava em `/site/contacto`, sem depender de JS)."""
+    valores = valores or {}
+    erros = erros or {}
+    action = str(data.get("action") or FORMULARIO_ACTION_PADRAO)
+    titulo = f"<h2>{_esc(data.get('title'))}</h2>" if data.get("title") else ""
+    intro = f'<p class="lead">{_esc(data.get("intro"))}</p>' if data.get("intro") else ""
+    corpo = "".join(_campo_do_formulario(campo, valores.get(str(campo["nome"]), ""), erros.get(str(campo["nome"]), "")) for campo in CAMPOS_CONTACTO)
+    erro_consentimento = f'<small class="erro">{_esc(erros["consentimento"])}</small>' if erros.get("consentimento") else ""
+    return (
+        f'<div class="section formulario">{titulo}{intro}'
+        + (f'<div class="aviso red">{_esc(aviso)}</div>' if aviso else "")
+        + f'<form method="post" action="{_esc(action)}">'
+        + corpo
+        + '<div class="campo consentimento">'
+        + '<input id="contacto-consentimento" name="consentimento" type="checkbox" value="sim"'
+        + (' checked' if valores.get("consentimento") else "")
+        + ' required aria-required="true">'
+        + '<label for="contacto-consentimento">Autorizo que me contactem por email sobre este pedido. '
+        + "Os dados são usados só para responder e podem ser apagados a pedido.</label>"
+        + "</div>"
+        + erro_consentimento
+        + '<div class="hp"><label for="contacto-website">Não preencher</label>'
+        + '<input id="contacto-website" name="website" type="text" tabindex="-1" autocomplete="off"></div>'
+        + '<div class="acao"><button class="btn" type="submit">'
+        + f'{_esc(data.get("button_label") or "Enviar mensagem")}</button>'
+        + "</div></form></div>"
+    )
+
+
+def render_contacto(
+    *,
+    ok: bool,
+    valores: Optional[Dict[str, str]] = None,
+    erros: Optional[Dict[str, str]] = None,
+    aviso: str = "",
+    settings: Optional[Dict[str, Any]] = None,
+    voltar_para: str = "/site/contactos",
+) -> str:
+    """Resposta do formulário de contacto: agradecimento ou erros a corrigir."""
+    settings = settings or store.get_settings()
+    if ok:
+        corpo = (
+            '<div class="section"><h1>Mensagem recebida</h1>'
+            "<p class=\"lead\">Obrigado. Registámos o seu pedido e respondemos para o email indicado.</p>"
+            f'<div class="actions"><a class="btn" href="{_esc(voltar_para)}">Voltar</a></div></div>'
+        )
+        return _layout(
+            title="Mensagem recebida",
+            description="Pedido de contacto registado.",
+            body=corpo,
+            current_path="/site/contacto",
+            settings=settings,
+            canonical="/site/contacto",
+            noindex=True,
+        )
+    corpo = formulario_contacto(
+        {"title": "Fale connosco", "intro": "Corrija o que falta e volte a enviar."},
+        valores=valores,
+        erros=erros,
+        aviso=aviso,
+    )
+    return _layout(
+        title="Fale connosco",
+        description="Formulário de contacto.",
+        body=corpo,
+        current_path="/site/contacto",
+        settings=settings,
+        canonical="/site/contacto",
+        noindex=True,
+    )
+
+
 def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
     if block.get("hidden"):
         return ""
@@ -335,12 +468,18 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
         items = [item for item in (data.get("items") or []) if isinstance(item, dict)]
         if not items:
             return ""
-        tiles = "".join(
-            f'<div class="tile"><h3>{_esc(item.get("title"))}</h3><p>{_esc(item.get("text"))}</p></div>'
-            for item in items
-        )
+        tiles = []
+        for item in items:
+            href = str(item.get("href") or "").strip()
+            if href:
+                tiles.append(
+                    f'<a class="tile link" href="{_esc(href)}"><h3>{_esc(item.get("title"))}</h3>'
+                    f'<p>{_esc(item.get("text"))}</p></a>'
+                )
+            else:
+                tiles.append(f'<div class="tile"><h3>{_esc(item.get("title"))}</h3><p>{_esc(item.get("text"))}</p></div>')
         title = f"<h2>{_esc(data.get('title'))}</h2>" if data.get("title") else ""
-        return f'<div class="section">{title}<div class="grid">{tiles}</div></div>'
+        return f'<div class="section">{title}<div class="grid">{"".join(tiles)}</div></div>'
 
     if block_type == "numeros":
         items = [item for item in (data.get("items") or []) if isinstance(item, dict)]
@@ -415,6 +554,9 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
             parts.append(f'<div><strong>Morada</strong><br>{_esc(data["address"])}</div>')
         title = f"<h2>{_esc(data.get('title'))}</h2>" if data.get("title") else ""
         return f'<div class="section">{title}<div class="contactos">{"".join(parts)}</div></div>'
+
+    if block_type == "formulario":
+        return formulario_contacto(data)
 
     if block_type == "conteudo":
         return f'<div class="section">{_render_content_block(str(data.get("content_id") or ""))}</div>'
@@ -652,7 +794,17 @@ def _trilha_da_pagina(page: Dict[str, Any]) -> List[Dict[str, str]]:
 
 def _site_home_url(settings: Dict[str, Any]) -> str:
     """O endereço da página inicial (serve de base aos `@id` do JSON-LD)."""
-    return _absolute("/site", str(settings.get("base_url") or ""))
+    return _absolute("/site/", str(settings.get("base_url") or ""))
+
+
+def _caminho_da_pagina(page: Dict[str, Any]) -> str:
+    """Endereço público de uma página.
+
+    A inicial acaba em `/` porque é assim que o URL responde 200 (o `/site` sem
+    barra é um redireccionamento) — a canónica tem de ser o endereço servido.
+    """
+    caminho = str(page.get("path") or "")
+    return f"/site/{caminho}" if caminho else "/site/"
 
 
 def _organization_json_ld(settings: Dict[str, Any]) -> Dict[str, Any]:
@@ -734,7 +886,7 @@ def render_page(
     if not body.strip():
         body = f'<div class="section prose">{_md(str(page.get("markdown") or page.get("excerpt") or ""))}</div>' or ""
     base_url = str(settings.get("base_url") or "")
-    path = f"/site/{page.get('path')}" if page.get("path") else "/site"
+    path = _caminho_da_pagina(page)
     casa = _site_home_url(settings)
     imagem = _media_url(seo.get("image_id")) or _media_url((settings.get("seo") or {}).get("image_id"))
     # Bloco «@graph»: além da página, o site e a organização que o publica. O
@@ -1502,7 +1654,7 @@ def render_sitemap(settings: Optional[Dict[str, Any]] = None) -> str:
     for page in store.published_pages():
         if (page.get("seo") or {}).get("noindex"):
             continue
-        loc = _absolute(f"/site/{page.get('path')}" if page.get("path") else "/site", base_url)
+        loc = _absolute(_caminho_da_pagina(page), base_url)
         lastmod = str(page.get("updated_at") or "")[:10]
         entries.append(f"<url><loc>{_esc(loc)}</loc>{f'<lastmod>{lastmod}</lastmod>' if lastmod else ''}<priority>0.9</priority></url>")
     entries.append(f"<url><loc>{_esc(_absolute('/site/blog', base_url))}</loc></url>")

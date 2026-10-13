@@ -474,7 +474,7 @@ export function formatBytes(bytes: number): string {
 /* ------------------------------------------------------------- blocos */
 
 const itemDefaults: Record<string, Record<string, string>> = {
-  destaques: { title: "Novo cartão", text: "" },
+  destaques: { title: "Novo cartão", text: "", href: "" },
   faq: { question: "Pergunta?", answer: "" },
   passos: { title: "Passo", text: "" },
   numeros: { value: "0", label: "Indicador", note: "" },
@@ -488,6 +488,8 @@ const itemFieldLabels: Record<string, string> = {
   value: "Valor",
   label: "Etiqueta",
   note: "Nota",
+  href: "Ligação",
+  text: "Texto",
 };
 
 /** Itens de uma lista dentro de um bloco (`destaques`, `faq`, `passos`). */
@@ -728,6 +730,22 @@ function BlockForm({
           wide
           hint="Alterar o conteúdo na secção «Conteúdos» atualiza todas as páginas que o usam."
         />
+      );
+    case "formulario":
+      return (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <TextInput label="Título" value={text("title")} onChange={(next) => set("title", next)} wide />
+          <TextInput label="Texto de apoio" value={text("intro")} onChange={(next) => set("intro", next)} wide />
+          <TextInput label="Botão — texto" value={text("button_label")} onChange={(next) => set("button_label", next)} wide />
+          <TextInput
+            label="Endereço de envio"
+            value={text("action")}
+            onChange={(next) => set("action", next)}
+            placeholder="/site/contacto"
+            wide
+            hint="Campos: nome, email, organização, assunto e mensagem. As respostas ficam em «Contactos» e exigem consentimento."
+          />
+        </div>
       );
     case "divisor":
       return <p className="text-[12px] text-muted-foreground">Uma linha de separação entre secções. Não tem campos.</p>;

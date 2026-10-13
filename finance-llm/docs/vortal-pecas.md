@@ -169,7 +169,10 @@ Decisões que valem a pena fixar:
 - uma ligação que não seja `*.vortal.biz` é ignorada na leitura (guarda contra
   SSRF, como no resto do módulo);
 - cada lote é independente: um aviso que falhe fica nos `erros` e não aborta os
-  outros; o disco continua a ser a fonte de verdade (repetir é seguro).
+  outros; o disco continua a ser a fonte de verdade (repetir é seguro);
+- `recolhidos` conta os avisos que ficaram **em disco** (é o progresso real) e
+  `restantes` os que ainda faltam; a Vortal limita o ritmo por IP e uma rajada
+  passa a dar `403` (ver 7.1).
 
 Limites da rota: `lote` ≤ 100 avisos, `lotes` ≤ 20 por chamada, `escanear` ≤
 20 000 contratos. As recolhas em lote entram no histórico de administração com
@@ -200,6 +203,33 @@ Limites da rota: `lote` ≤ 100 avisos, `lotes` ≤ 20 por chamada, `escanear` �
 - Lote real: `_probe_vortal_lote.py [ANO] [MÊS] [--recolher] [--lotes N]` — sem
   `--recolher` só lê o período (contratos, avisos únicos, o que está em disco);
   com `--recolher` corre os lotes (5 avisos por lote) e mostra as peças.
+- Lote longo (destacado, com log): `scripts/recolher_vortal_lotes.py --ano 2026
+  --mes 10 --lote 4 --lotes 1 --pausa 60`; na VM fica a correr com
+  `docker exec -d iqos-backend sh -c 'nohup python -u
+  /app/scripts/recolher_vortal_lotes.py … >> /app/logs/vortal_lote_2026-10.log 2>&1 &'`
+  (o log e o PID ficam no volume `logs/`).
+
+### 7.1 Ritmo (medido em produção)
+
+A Vortal **limita por IP** e responde `403` (e às vezes `500`) quando se excede
+o ritmo. Medição de 2026-10-13, na VM: uma recolha de outubro **sem pausas**
+(50 avisos por lote, um lote a cada 8 s) recolheu o primeiro lote (43 peças) e
+depois caiu para **~97 % de recusas** — 968 linhas `403 Client Error` em ~1 000
+tentativas, 41 avisos em disco. Os **mesmos tokens**, em pedido isolado,
+voltaram a responder **200 da VM** ~15 min depois: era ritmo, não bloqueio
+permanente nem token inválido.
+
+O que ficou a impedir que isto se repita:
+
+- `recolher_lote` conta o progresso pelo que **ficou em disco** (`recolhidos`) e
+  o `restantes` reflete os avisos que ainda faltam, não as tentativas — antes,
+  uma corrida de recusas dava `restantes: 0` sem ter trazido nada;
+- o runner começa com pausas de **60 s** entre lotes, **abranda** (até 600 s)
+  quando um lote falha em mais de metade e **para** ao fim de 3 lotes sem nada
+  recolhido.
+
+Regra prática: ~4 avisos por minuto é sustentável; qualquer coisa acima de ~100
+pedidos por minuto pára o IP durante alguns minutos.
 - Ficha (sem HTTP): `_probe_ficha_vortal.py 11970045`; pela API:
   `_probe_ficha_api.py /contracts/11970045/document`.
 - Índice: criado automaticamente na primeira utilização (`ensure_indices`); na VM

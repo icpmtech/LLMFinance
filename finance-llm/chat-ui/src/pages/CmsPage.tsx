@@ -17,6 +17,7 @@ import {
   Filter,
   Globe2,
   Hash,
+  Inbox,
   LayoutDashboard,
   Landmark,
   Loader2,
@@ -28,7 +29,7 @@ import {
   X,
 } from "lucide-react";
 
-import { CmsAppearancePanel, CmsContentsPanel, CmsMediaPanel, CmsTaxonomyPanel, CmsTemplatesPanel } from "./CmsLibrary";
+import { CmsAppearancePanel, CmsContactosPanel, CmsContentsPanel, CmsMediaPanel, CmsTaxonomyPanel, CmsTemplatesPanel } from "./CmsLibrary";
 import { CmsMunicipiosPanel } from "./CmsMunicipios";
 import { CmsPesquisasPanel } from "./CmsPesquisas";
 import { CmsOverviewPanel, CmsPagesPanel, CmsPostsPanel, type CmsCtx, type CmsSection } from "./CmsPanels";
@@ -43,6 +44,7 @@ export const CMS_SECTIONS: { id: CmsSection; label: string; path: string; icon: 
   { id: "blog", label: "Blog", path: "/cms/blog", icon: <Newspaper size={13} />, hint: "Artigos, categorias, etiquetas e capas" },
   { id: "municipios", label: "Municípios", path: "/cms/municipios", icon: <Landmark size={13} />, hint: "Fichas públicas de município (despesa, contratação e texto)" },
   { id: "pesquisas", label: "Pesquisas", path: "/cms/pesquisas", icon: <Filter size={13} />, hint: "Páginas com uma pesquisa congelada (filtros, SEO, marca e imagens)" },
+  { id: "contactos", label: "Contactos", path: "/cms/contactos", icon: <Inbox size={13} />, hint: "Mensagens recebidas pelo formulário do site" },
   { id: "media", label: "Media", path: "/cms/media", icon: <BookOpen size={13} />, hint: "Biblioteca de imagens e documentos" },
   { id: "taxonomia", label: "Taxonomia", path: "/cms/taxonomia", icon: <Hash size={13} />, hint: "Categorias e etiquetas do blog" },
   { id: "modelos", label: "Modelos", path: "/cms/modelos", icon: <Palette size={13} />, hint: "Estruturas de blocos prontas a usar" },
@@ -316,6 +318,8 @@ export default function CmsPage() {
           <CmsMunicipiosPanel ctx={ctx} focusId={focus?.entity === "municipios" ? focus.id : null} onFocusHandled={() => setFocus(null)} />
         ) : section === "pesquisas" ? (
           <CmsPesquisasPanel ctx={ctx} focusId={focus?.entity === "pesquisas" ? focus.id : null} onFocusHandled={() => setFocus(null)} />
+        ) : section === "contactos" ? (
+          <CmsContactosPanel ctx={ctx} />
         ) : section === "conteudos" ? (
           <CmsContentsPanel ctx={ctx} />
         ) : section === "media" ? (

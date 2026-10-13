@@ -385,6 +385,8 @@ export type CmsOverview = {
   categories: number;
   templates: number;
   words: number;
+  /** Contactos recebidos pelo formulário do site, por estado de seguimento. */
+  contactos?: Record<string, number>;
   scheduled: { id: string; entity: string; title: string; slug: string; at: string }[];
   recent: { id: string; entity: string; title: string; slug: string; at: string; status: CmsStatus; by?: string }[];
   activity: CmsActivity[];
@@ -526,6 +528,31 @@ function listQuery(options: ListOptions = {}): string {
 
 export function listCmsPages(options: ListOptions = {}): Promise<CmsListPayload<CmsPage>> {
   return request(`/cms/pages${listQuery({ limit: 300, ...options })}`);
+}
+
+/** Mensagem recebida pelo formulário do site (`POST /site/contacto`). */
+export type CmsContacto = {
+  id: string;
+  nome: string;
+  email: string;
+  organizacao?: string;
+  assunto?: string;
+  mensagem: string;
+  estado: "novo" | "em_curso" | "tratado";
+  notas?: string;
+  origem?: string;
+  consentimento?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  updated_by?: string;
+};
+
+export function listCmsContactos(options: ListOptions = {}): Promise<CmsListPayload<CmsContacto>> {
+  return request(`/cms/contactos${listQuery({ limit: 200, ...options })}`);
+}
+
+export function updateCmsContacto(id: string, payload: Partial<CmsContacto>): Promise<{ saved: boolean; item: CmsContacto }> {
+  return request(`/cms/contactos/${encodeURIComponent(id)}`, withBody("PATCH", payload));
 }
 
 export function listCmsPosts(options: ListOptions = {}): Promise<CmsListPayload<CmsPost>> {

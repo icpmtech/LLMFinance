@@ -219,10 +219,15 @@ services:
   # Hermes Agent (Nous Research) — agente autónomo. Traz:
   #   * API OpenAI-compatível + health em :8642 ("gateway run")
   #   * dashboard web em :9119 (HERMES_DASHBOARD=1) — é o que abre na página iframe.
+  #   * voz local sem chaves: TTS Piper (voz pt-PT) + STT faster-whisper, reposta
+  #     a cada arranque por `docker/hermes/init/028-hermes-voice.sh`.
   #
   # Fica no perfil "agents" porque o 1.º arranque passa pelo assistente de
   # configuração (chaves de API): `docker compose --profile agents run --rm hermes-agent setup`.
   # O estado (config, sessões, memórias) vive no volume `hermes-data` → /opt/data.
+  # Nota: `/dev/snd` e PortAudio não existem no contentor, por isso o modo de voz
+  # em tempo real (`/voice on`, push-to-talk, `/wake`) não funciona aqui — o áudio
+  # sai como ficheiro/ligação (MEDIA:) e o microfone tem de vir da app desktop.
   hermes-agent:
     image: nousresearch/hermes-agent:latest
     container_name: finance-llm-hermes-agent
@@ -242,6 +247,10 @@ services:
       - ./docker/hermes/plugins/dashboard-auth-iqos:/opt/data/plugins/dashboard-auth-iqos:ro
       # Ativa esse plugin em cada arranque (o estado de ativação vive no volume).
       - ./docker/hermes/init/026-enable-iqos-plugin.sh:/etc/cont-init.d/026-enable-iqos-plugin.sh:ro
+      # Repõe a voz local (TTS Piper pt-PT + STT faster-whisper) quando o volume
+      # é recriado: instala o piper-tts no alvo durável e descarrega a voz —
+      # ver `docker/hermes/init/028-hermes-voice.sh`.
+      - ./docker/hermes/init/028-hermes-voice.sh:/etc/cont-init.d/028-hermes-voice.sh:ro
       # Skills do IQ OS (versionadas no repositório, montadas por cima do volume):
       # `pesquisa-total` (pesquisa unificada da plataforma), `pesquisa-profunda`
       # (resposta citada com fontes) e `websearch` (SearXNG interno + leitura de

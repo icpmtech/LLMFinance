@@ -25,9 +25,9 @@ def check(label: str, condition: bool, detail: object = "") -> None:
 
 print("== semente e panorama ==")
 overview = store.reset_seed()
-check("3 páginas semeadas", overview["pages"]["total"] == 3, overview["pages"])
+check("12 páginas semeadas", overview["pages"]["total"] == 12, overview["pages"])
 check("2 artigos semeados", overview["posts"]["total"] == 2, overview["posts"])
-check("publicadas = 3", overview["pages"]["published"] == 3)
+check("publicadas = 12", overview["pages"]["published"] == 12)
 check("categorias = 3", overview["categories"] == 3)
 check("modelos = 3", overview["templates"] == 3)
 check("atividade registada", len(overview["activity"]) >= 1)

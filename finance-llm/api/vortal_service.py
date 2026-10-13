@@ -1035,6 +1035,12 @@ def recolher_lote(
             break
 
     processados = sum(int(item["avisos"]) for item in executados)
+    # O que conta para o progresso é o que **ficou em disco**, não o que se
+    # tentou: um aviso que a Vortal recusa (403/500, ritmo excedido) não tem
+    # manifesto e volta a ser candidato no lote seguinte. Sem isto, `restantes`
+    # descia à custa de tentativas falhadas e a recolha dava-se por concluída
+    # sem ter trazido nada.
+    tokens_recolhidos = {str(aviso.get("token")) for aviso in detalhe if aviso.get("token")}
     return {
         "ok": True,
         "periodo": resumo,
@@ -1046,7 +1052,8 @@ def recolher_lote(
         "lotes": executados,
         "candidatos": len(candidatos),
         "processados": processados,
-        "restantes": max(0, len(candidatos) - processados),
+        "recolhidos": len(tokens_recolhidos),
+        "restantes": len([c for c in candidatos if str(c.get("token")) not in tokens_recolhidos]),
         "avisos": len(detalhe),
         "pecas": pecas,
         "bytes": total_bytes,

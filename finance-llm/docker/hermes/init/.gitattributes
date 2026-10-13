@@ -1,0 +1,5 @@
+# Scripts do cont-init do Hermes: forçar LF.
+# Chegam ao contentor por *bind mount* a partir do Windows — com CRLF o
+# shebang `#!/command/with-contenv sh` apanha um \r e o s6 deixa de os executar.
+# (Mesma armadilha documentada em deploy/gcp/.gitattributes.)
+* text eol=lf

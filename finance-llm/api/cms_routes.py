@@ -8,7 +8,8 @@
 - `GET|PUT /cms/settings` — aparência e ligações do site
 - `GET|POST|PATCH|DELETE /cms/menus…`
 - `GET|POST /cms/{entidade}` e `GET|PATCH|DELETE /cms/{entidade}/{id}`
-  (`pages`, `posts`, `contents`, `media`, `categories`, `templates`, `menus`)
+  (`pages`, `posts`, `contents`, `media`, `categories`, `templates`, `menus`;
+  `contactos` — as mensagens do formulário do site — só se **leem** com sessão)
 - `POST /cms/{entidade}/{id}/duplicate`
 - `POST /cms/{entidade}/{id}/publish|unpublish|status` — publicar, despublicar,
   agendar (`{"at": "…"}`) ou mudar o estado
@@ -40,6 +41,7 @@ municípios, com filtros, SEO, marca e imagens):
 - `GET /site/municipio/{slug}` — ficha pública de um município
 - `GET /site/pesquisa/{slug}` — página pública de uma pesquisa
 - `GET /site/rss.xml`, `/site/sitemap.xml`, `/site/robots.txt`
+- `POST /site/contacto` — formulário de contacto (grava na entidade `contactos`)
 - `GET /site/{caminho}` — qualquer página publicada
 """
 from __future__ import annotations
@@ -82,11 +84,29 @@ def _entity(entity: str) -> str:
     return entity
 
 
+def _ip_do_pedido(request: Request) -> str:
+    """IP de quem enviou: o proxy (nginx/Caddy) deixa-o no `X-Forwarded-For`."""
+    encaminhado = str(request.headers.get("x-forwarded-for") or "")
+    if encaminhado:
+        return encaminhado.split(",")[0].strip()
+    return request.client.host if request.client else ""
+
+
+def _privado(entity: str, session: Optional[CurrentSession]) -> None:
+    """Entidades com dados pessoais (contactos) só se leem com sessão.
+
+    A leitura do CMS é aberta de propósito — o conteúdo do site é público — mas
+    isso não pode incluir quem escreveu pelo formulário.
+    """
+    if entity in store.PRIVATE_ENTITIES and not session:
+        raise HTTPException(status_code=401, detail="Entrar na plataforma para ler os contactos recebidos.")
+
+
 # Secções da interface do CMS: `/cms/paginas`, `/cms/media`, `/cms/blog`… Estas
 # rotas colidem com `GET /cms/{entidade}` (e `/cms/media` com a listagem dos
 # media), pelo que uma **navegação do browser** (que pede HTML) tem de devolver a
 # SPA construída — senão recarregar a página dava JSON em vez da aplicação.
-UI_SECTION_SLUGS = frozenset({"paginas", "conteudos", "blog", "municipios", "pesquisas", "media", "taxonomia", "modelos", "aparencia"})
+UI_SECTION_SLUGS = frozenset({"paginas", "conteudos", "blog", "municipios", "pesquisas", "contactos", "media", "taxonomia", "modelos", "aparencia"})
 
 
 def _is_browser_navigation(request: Request) -> bool:
@@ -410,11 +430,13 @@ def cms_list(
     tag: Optional[str] = Query(None),
     limit: int = Query(200, ge=1, le=500),
     full: bool = Query(True, description="Incluir os blocos/corpo (False = resumo)."),
+    session: Session = None,
 ) -> Any:
     """Lista uma entidade do CMS, com filtros por estado, pesquisa, categoria e etiqueta."""
     if entity in UI_SECTION_SLUGS and _is_browser_navigation(request):
         return _spa_response()
     _entity(entity)
+    _privado(entity, session)
     return store.list_items(entity, status=status, query=q, category_id=category_id, tag=tag, limit=limit, with_blocks=full)
 
 
@@ -433,9 +455,10 @@ def cms_create(entity: str, payload: Dict[str, Any] = Body(...), session: Sessio
 
 
 @router.get("/cms/{entity}/{item_id}")
-def cms_get(entity: str, item_id: str) -> Dict[str, Any]:
+def cms_get(entity: str, item_id: str, session: Session = None) -> Dict[str, Any]:
     """Documento completo do CMS."""
     _entity(entity)
+    _privado(entity, session)
     try:
         return {"item": store.get_item(entity, item_id)}
     except KeyError as exc:
@@ -695,6 +718,54 @@ def site_pesquisa(slug: str) -> HTMLResponse:
     if not doc:
         return HTMLResponse(render.render_not_found(settings=settings), status_code=404, headers=_PUBLIC_HEADERS)
     return HTMLResponse(render.render_pesquisa(doc, settings=settings), headers=_PUBLIC_HEADERS)
+
+
+@router.post("/site/contacto", response_class=HTMLResponse)
+async def site_contacto(request: Request) -> HTMLResponse:
+    """Recebe o formulário de contacto do site e guarda a mensagem no CMS.
+
+    Responde sempre com HTML do próprio site (sem JavaScript): agradecimento,
+    ou o formulário outra vez com os erros assinalados.
+    """
+    settings = store.get_settings()
+    sem_cache = {"Cache-Control": "no-store, must-revalidate"}
+    form = await request.form()
+    valores = {campo: str(form.get(campo) or "").strip() for campo in store.CONTACTO_LIMITES}
+    valores["consentimento"] = "sim" if form.get("consentimento") else ""
+    if str(form.get("website") or "").strip():
+        # Campo-armadilha preenchido: é um robô. Recebe o mesmo agradecimento e
+        # nada é guardado (não vale a pena ensinar-lhe o que falhou).
+        return HTMLResponse(render.render_contacto(ok=True, settings=settings), headers=sem_cache)
+    if not store.contacto_permitido(_ip_do_pedido(request)):
+        html = render.render_contacto(
+            ok=False,
+            valores=valores,
+            aviso="Recebemos vários pedidos seguidos deste endereço. Tente novamente daqui a pouco.",
+            settings=settings,
+        )
+        return HTMLResponse(html, status_code=429, headers=sem_cache)
+    erros = store.validar_contacto({**valores, "consentimento": bool(valores["consentimento"])})
+    if erros:
+        html = render.render_contacto(
+            ok=False,
+            valores=valores,
+            erros=erros,
+            aviso="Confira os campos assinalados.",
+            settings=settings,
+        )
+        return HTMLResponse(html, status_code=422, headers=sem_cache)
+    store.save_item(
+        "contactos",
+        {
+            **valores,
+            "consentimento": True,
+            "estado": "novo",
+            "origem": str(request.headers.get("referer") or "")[:120],
+        },
+        "",
+    )
+    logger.info("Contacto recebido pelo site.")
+    return HTMLResponse(render.render_contacto(ok=True, settings=settings), headers=sem_cache)
 
 
 @router.get("/site/rss.xml")

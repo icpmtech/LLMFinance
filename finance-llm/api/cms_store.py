@@ -32,11 +32,14 @@ import json
 import logging
 import re
 import threading
+import time
 import unicodedata
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+from api import cms_editorial as editorial
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +54,34 @@ SITE_ASSETS_DIR = Path(__file__).resolve().parent / "site_assets"
 CMS_VERSION = 1
 
 # Entidades do CMS: as listas dentro do documento.
-ENTITIES: Tuple[str, ...] = ("pages", "posts", "municipios", "pesquisas", "contents", "media", "categories", "templates", "menus")
+ENTITIES: Tuple[str, ...] = ("pages", "posts", "municipios", "pesquisas", "contents", "media", "categories", "templates", "menus", "contactos")
 SINGULAR: Dict[str, str] = {entity: entity.rstrip("s") if entity not in ("media",) else "media" for entity in ENTITIES}
 SINGULAR["categories"] = "categoria"
 
 #: Entidades que se **publicam** (têm estado, agendamento e endereço no site).
 PUBLISHABLE: Tuple[str, ...] = ("pages", "posts", "municipios", "pesquisas")
+
+#: Entidades cujo conteúdo é **privado**: a leitura exige sessão (ao contrário
+#: das restantes, que o site público mostra de qualquer maneira). Os contactos
+#: têm dados pessoais de quem escreve — nome e email não podem ficar à vista.
+PRIVATE_ENTITIES: Tuple[str, ...] = ("contactos",)
+
+#: Estados de um contacto recebido pelo formulário do site.
+CONTACTOS_ESTADOS: Tuple[Tuple[str, str], ...] = (
+    ("novo", "Novo"),
+    ("em_curso", "Em curso"),
+    ("tratado", "Tratado"),
+)
+CONTACTOS_ESTADO_IDS = {estado for estado, _ in CONTACTOS_ESTADOS}
+
+#: Campos do formulário de contacto e o limite de caracteres de cada um.
+CONTACTO_LIMITES: Dict[str, int] = {
+    "nome": 120,
+    "email": 160,
+    "organizacao": 160,
+    "assunto": 160,
+    "mensagem": 4000,
+}
 
 #: Rótulo de cada entidade publicável, para listagens e para o `overview`.
 ENTITY_LABELS: Dict[str, str] = {
@@ -108,6 +133,7 @@ BLOCK_TYPES: List[Dict[str, Any]] = [
     {"id": "aviso", "label": "Aviso", "hint": "Nota, atenção ou sucesso", "icon": "AlertTriangle"},
     {"id": "codigo", "label": "Código", "hint": "Bloco de código ou comando", "icon": "Code2"},
     {"id": "contactos", "label": "Contactos", "hint": "Email, telefone e morada", "icon": "Phone"},
+    {"id": "formulario", "label": "Formulário", "hint": "Formulário de contacto (as respostas ficam no CMS)", "icon": "MailPlus"},
     {"id": "blog", "label": "Últimos artigos", "hint": "Lista os artigos publicados", "icon": "Newspaper"},
     {"id": "conteudo", "label": "Conteúdo reutilizado", "hint": "Insere um conteúdo guardado no CMS", "icon": "Recycle"},
     {"id": "divisor", "label": "Divisor", "hint": "Linha de separação", "icon": "Minus"},
@@ -829,6 +855,18 @@ def _normalise(entity: str, payload: Dict[str, Any], existing: Optional[Dict[str
         doc["cor"] = _cor(pick("cor"))
         doc["excerpt"] = str(pick("excerpt") or "") or _excerpt(doc["intro"] or doc["descricao_filtros"])
 
+    if entity == "contactos":
+        # Mensagens do formulário do site: dados pessoais de quem escreve, por
+        # isso não têm estado de publicação nem endereço — só um estado de
+        # seguimento («novo», «em curso», «tratado»).
+        for campo, limite in CONTACTO_LIMITES.items():
+            doc[campo] = str(pick(campo) or "").strip()[:limite]
+        estado = str(pick("estado") or "novo").strip().lower()
+        doc["estado"] = estado if estado in CONTACTOS_ESTADO_IDS else "novo"
+        doc["notas"] = str(pick("notas") or "").strip()[:2000]
+        doc["origem"] = str(pick("origem") or "site")[:120]
+        doc["consentimento"] = bool(pick("consentimento", False))
+
     if entity == "contents":
         doc["title"] = str(pick("title") or "").strip()
         kind = str(pick("kind") or "texto").strip()
@@ -984,6 +1022,7 @@ def _id_prefix(entity: str) -> str:
         "categories": "cat",
         "templates": "tpl",
         "menus": "menu",
+        "contactos": "ctt",
     }.get(entity, "item")
 
 
@@ -1303,6 +1342,60 @@ def media_usage(media_id: str) -> List[Dict[str, str]]:
 
 
 # --------------------------------------------------------------------------
+# Contactos (formulário do site)
+# --------------------------------------------------------------------------
+#: Um formulário público é alvo de robôs: o limite por IP é grosseiro de
+#: propósito (não substitui uma proteção a sério, evita o pior).
+CONTACTO_JANELA_SEGUNDOS = 3600
+CONTACTO_MAX_POR_JANELA = 5
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s.]+\.[^@\s]{2,}$")
+
+_contactos_por_ip: Dict[str, List[float]] = {}
+
+
+def contacto_permitido(ip: str) -> bool:
+    """Conta a tentativa e diz se ainda está dentro do limite por IP."""
+    agora = time.monotonic()
+    with _lock:
+        marcas = [marca for marca in _contactos_por_ip.get(ip or "-", []) if agora - marca < CONTACTO_JANELA_SEGUNDOS]
+        if len(marcas) >= CONTACTO_MAX_POR_JANELA:
+            return False
+        marcas.append(agora)
+        _contactos_por_ip[ip or "-"] = marcas
+    return True
+
+
+def validar_contacto(payload: Dict[str, Any]) -> Dict[str, str]:
+    """Erros por campo de uma mensagem do formulário (vazio = pode entrar)."""
+    erros: Dict[str, str] = {}
+    for campo, limite in CONTACTO_LIMITES.items():
+        if len(str(payload.get(campo) or "")) > limite:
+            erros[campo] = f"Máximo de {limite} caracteres."
+    if not str(payload.get("nome") or "").strip():
+        erros["nome"] = "Indique o seu nome."
+    email = str(payload.get("email") or "").strip()
+    if not email:
+        erros["email"] = "Indique um email, para podermos responder."
+    elif not EMAIL_RE.match(email):
+        erros["email"] = "Esse email não parece válido."
+    if not str(payload.get("mensagem") or "").strip():
+        erros["mensagem"] = "Escreva a mensagem."
+    if not payload.get("consentimento"):
+        erros["consentimento"] = "Precisa de autorizar o contacto para enviar."
+    return erros
+
+
+def contactos_por_estado() -> Dict[str, int]:
+    """Contagem dos contactos por estado (para o painel)."""
+    store = _load()
+    contagem = {estado: 0 for estado, _ in CONTACTOS_ESTADOS}
+    for item in store["contactos"]:
+        estado = str(item.get("estado") or "novo")
+        contagem[estado] = contagem.get(estado, 0) + 1
+    return contagem
+
+
+# --------------------------------------------------------------------------
 # Menus, aparência e catálogo
 # --------------------------------------------------------------------------
 def get_settings() -> Dict[str, Any]:
@@ -1398,32 +1491,26 @@ def menu_for(location: str = "header") -> Dict[str, Any]:
     return menu
 
 
+def itens_de_menu(location: str, store: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Itens de um menu, pela ordem definida no conteúdo editorial.
+
+    Uma página que não exista na instalação é simplesmente saltada — é o que
+    permite o mesmo menu servir instalações com páginas diferentes.
+    """
+    store = store or _load()
+    especificacao = editorial.MENU_RODAPE if location == "footer" else editorial.MENU_PRINCIPAL
+    por_caminho = {str(page.get("path") or ""): page for page in store["pages"] if page.get("status") == "publicado"}
+    itens: List[Dict[str, Any]] = []
+    for etiqueta, caminho in especificacao:
+        pagina = por_caminho.get(caminho)
+        if pagina is None:
+            continue
+        itens.append({"id": _new_id("mi"), "label": etiqueta, "href": "", "page_id": pagina.get("id"), "new_tab": False})
+    return itens
+
+
 def _default_menu_items(store: Dict[str, Any], location: str) -> List[Dict[str, Any]]:
-    if location == "footer":
-        return [
-            {"id": _new_id("mi"), "label": "Blog", "href": "/site/blog", "page_id": None, "new_tab": False},
-        ]
-    items: List[Dict[str, Any]] = []
-    pages = sorted(
-        [page for page in store["pages"] if page.get("status") == "publicado" and page.get("show_in_menu")],
-        key=lambda item: (int(item.get("menu_order") or 0), str(item.get("title") or "").lower()),
-    )
-    for page in pages[:6]:
-        items.append(
-            {
-                "id": _new_id("mi"),
-                "label": page.get("menu_label") or page.get("title") or "",
-                "href": "",
-                "page_id": page.get("id"),
-                "new_tab": False,
-            }
-        )
-    # O blog só entra uma vez: a página «Blog» (se existir e estiver no menu) já
-    # traz o seu próprio link.
-    blog_page_id = (store.get("settings") or {}).get("blog_page_id")
-    if not any(item.get("page_id") == blog_page_id for item in items):
-        items.append({"id": _new_id("mi"), "label": "Blog", "href": "/site/blog", "page_id": None, "new_tab": False})
-    return items
+    return itens_de_menu(location, store)
 
 
 def page_tree(published_only: bool = False) -> List[Dict[str, Any]]:
@@ -1568,6 +1655,8 @@ def overview() -> Dict[str, Any]:
         "media": {"total": len(store["media"]), "bytes": sum(int(item.get("size") or 0) for item in store["media"])},
         "categories": len(store["categories"]),
         "templates": len(store["templates"]),
+        # Contactos recebidos pelo formulário do site, por estado de seguimento.
+        "contactos": contactos_por_estado(),
         "words": words,
         "scheduled": scheduled,
         "recent": recent,
@@ -1613,36 +1702,18 @@ def search(query: str, limit: int = 30) -> Dict[str, Any]:
 # --------------------------------------------------------------------------
 # Imagens de marca
 # --------------------------------------------------------------------------
-#: Ficheiros de `api/site_assets/` que a biblioteca de media deve ter, com o
-#: título e o texto alternativo com que aparecem no CMS.
-SEED_MEDIA: Tuple[Tuple[str, str, str, str], ...] = (
-    ("logo-sabemos-studio.svg", "Logótipo Sabemos Studio", "Sabemos Studio", ""),
-    ("icone-sabemos-studio.svg", "Ícone Sabemos Studio", "Sabemos Studio", "Usado como favicon do site."),
-    (
-        "capa-sabemos-studio.svg",
-        "Capa do site",
-        "Sabemos Studio — inteligência financeira e contratual",
-        "Imagem de partilha (Open Graph) e de abertura da página inicial.",
-    ),
-    ("ilustracao-contratos.svg", "Ilustração · contratos públicos", "Contratos públicos: adjudicantes, adjudicatários e valores", ""),
-    ("ilustracao-empresas.svg", "Ilustração · empresas", "Empresas: cadastro, relações societárias e sinais de risco", ""),
-    ("ilustracao-municipios.svg", "Ilustração · municípios", "Municípios: despesa e contratação por concelho", ""),
-    ("ilustracao-investigacao.svg", "Ilustração · investigação", "Investigação assistida com evidências citadas", ""),
-    ("ilustracao-benchmarks.svg", "Ilustração · benchmarks", "Benchmarks de preços por loja", ""),
-    ("capa-post-bemvindo.svg", "Capa · bem-vindo ao blog", "Bem-vindo ao blog do Sabemos Studio", ""),
-    ("capa-post-contratos-2026.svg", "Capa · contratos públicos em 2026", "Contratos públicos em 2026: o que os dados mostram", ""),
-)
-
-
+# --------------------------------------------------------------------------
+# Imagens de marca
+# --------------------------------------------------------------------------
 def _instalar_media(store: Dict[str, Any]) -> Dict[str, str]:
-    """Acrescenta à biblioteca as imagens que vêm com o código.
+    """Acrescenta à biblioteca as imagens que vêm com o código (`editorial.SEED_MEDIA`).
 
     Idempotente: um ficheiro que já esteja na biblioteca reaproveita o media
     existente, por isso chamar isto duas vezes não duplica nada. Devolve
     `{ficheiro: id}` para quem monta o conteúdo as poder referenciar.
     """
     ids: Dict[str, str] = {}
-    for filename, title, alt, caption in SEED_MEDIA:
+    for filename, title, alt, caption in editorial.SEED_MEDIA:
         existente = next((item for item in store["media"] if item.get("filename") == filename), None)
         if existente is not None:
             ids[filename] = str(existente.get("id"))
@@ -1696,234 +1767,6 @@ def instalar_media_de_marca() -> Dict[str, str]:
     return ids
 
 
-#: SEO da página inicial. A semente e a migração do site leem daqui, para não
-#: existirem duas versões do mesmo texto.
-INICIO_SEO: Dict[str, Any] = {
-    "title": "Sabemos Studio — contratos públicos, empresas e dados abertos",
-    "description": "O Sabemos Studio transforma dados abertos em inteligência financeira: contratos públicos, empresas, municípios e investigação com evidências citadas.",
-    "keywords": [
-        "Sabemos Studio",
-        "sabemos.studio",
-        "contratos públicos",
-        "Portal BASE",
-        "IQ OS",
-        "empresas",
-        "inteligência financeira",
-        "dados abertos",
-    ],
-    "image_id": None,
-    "noindex": False,
-}
-
-INICIO_EXCERPT = "O Sabemos Studio junta contratos públicos, empresas, mercado e investigação assistida numa só plataforma."
-
-SOBRE_SEO: Dict[str, Any] = {
-    "title": "Sobre o Sabemos Studio",
-    "description": "Quem faz o IQ OS, com que fontes trabalhamos e que princípios seguimos.",
-    "keywords": ["Sabemos Studio", "sobre", "dados abertos"],
-    "image_id": None,
-    "noindex": False,
-}
-
-
-def conteudo_da_inicio(media: Dict[str, str]) -> List[Dict[str, Any]]:
-    """Blocos da página inicial (a mesma para a semente e para a migração)."""
-    return [
-        {
-            "id": "blk_hero",
-            "type": "hero",
-            "data": {
-                "title": "Inteligência financeira e contratual, num só sítio",
-                "subtitle": "Contratos públicos de Portugal, Espanha e França, cadastro de empresas, mercado e investigação assistida — sempre com a fonte citada.",
-                "cta_label": "Explorar o blog",
-                "cta_href": "/site/blog",
-                "align": "centro",
-            },
-        },
-        {
-            "id": "blk_numeros",
-            "type": "numeros",
-            "data": {
-                "title": "O que já está indexado",
-                "items": [
-                    {"value": "2 273 420", "label": "Contratos públicos", "note": "Portal BASE · Portugal, 2012 a 2026"},
-                    {"value": "214 123", "label": "Entidades no cadastro", "note": "empresas, municípios e outras entidades"},
-                    {"value": "12 090", "label": "Adjudicantes", "note": "compradores públicos identificados"},
-                    {"value": "198,8 mil M€", "label": "Valor contratado mapeado", "note": "relações adjudicante–adjudicatário"},
-                ],
-            },
-        },
-        {
-            "id": "blk_texto",
-            "type": "texto",
-            "data": {
-                "title": "O que é o Sabemos Studio",
-                "markdown": (
-                    "O **Sabemos Studio** é um estúdio de produtos de dados: pegamos no que já é público — "
-                    "contratos, contas e registos — e devolvemos leitura que se pode verificar.\n\n"
-                    "O **IQ OS** é a plataforma onde isso acontece: recolha contínua de contratos públicos e de "
-                    "finanças locais, uma ontologia de entidades (empresas, municípios e pessoas) e assistentes de "
-                    "investigação que respondem com a evidência à vista.\n\n"
-                    "O que nos distingue:\n\n"
-                    "- **Fonte nomeada** — Portal BASE, INE, registos oficiais e boletins. Nenhum número aparece sem origem.\n"
-                    "- **Entidades ligadas** — a mesma empresa, o mesmo município e a mesma pessoa são o mesmo objeto "
-                    "em toda a plataforma, mesmo quando o nome aparece escrito de outra maneira.\n"
-                    "- **Fotografia datada** — cada análise guarda o dia em que foi lida: o número citado continua a "
-                    "ser o número que se viu.\n"
-                    "- **Conta refazível** — publicamos o critério e o registo, para quem lê poder repetir o cálculo."
-                ),
-            },
-        },
-        {
-            "id": "blk_capacidades",
-            "type": "destaques",
-            "data": {
-                "title": "Por onde começar",
-                "items": [
-                    {
-                        "title": "Contratos públicos",
-                        "text": "Adjudicantes, adjudicatários, valores e procedimento, por região e por ano.",
-                    },
-                    {
-                        "title": "Empresas e pessoas",
-                        "text": "Cadastro, relações societárias, gerentes e sinais de risco a partir de fontes públicas.",
-                    },
-                    {
-                        "title": "Municípios",
-                        "text": "Despesa, execução e contratação por concelho, com os indicadores oficiais do INE.",
-                    },
-                    {
-                        "title": "Benchmarks",
-                        "text": "Comparação de preços e produtos entre lojas, a partir de recolhas próprias.",
-                    },
-                    {
-                        "title": "Investigação assistida",
-                        "text": "Perguntas em linguagem natural com resposta citada e grafo de evidências.",
-                    },
-                    {
-                        "title": "Mercado",
-                        "text": "Concentração, concorrência e preços por CPV, com leitura estatística.",
-                    },
-                ],
-            },
-        },
-        {
-            "id": "blk_metodo",
-            "type": "passos",
-            "data": {
-                "title": "Como se chega ao número",
-                "items": [
-                    {
-                        "title": "Recolha",
-                        "text": "Lemos dados abertos: Portal BASE para contratação, INE para finanças locais, registos oficiais de empresas e boletins.",
-                    },
-                    {
-                        "title": "Normalização",
-                        "text": "Limpamos, ligamos entidades e consolidamos tudo numa ontologia única — a mesma empresa é a mesma em todo o lado.",
-                    },
-                    {
-                        "title": "Cálculo",
-                        "text": "Calculamos indicadores e guardamos a fotografia com a data da leitura, para o número não mudar por baixo da análise.",
-                    },
-                    {
-                        "title": "Evidência",
-                        "text": "Cada resposta cita o documento e o registo de onde saiu, e pode ser reproduzida por quem a lê.",
-                    },
-                ],
-            },
-        },
-        {
-            "id": "blk_galeria",
-            "type": "galeria",
-            "data": {
-                "media_ids": [
-                    media.get("ilustracao-contratos.svg"),
-                    media.get("ilustracao-empresas.svg"),
-                    media.get("ilustracao-municipios.svg"),
-                    media.get("ilustracao-investigacao.svg"),
-                ],
-            },
-        },
-        {
-            "id": "blk_faq",
-            "type": "faq",
-            "data": {
-                "title": "Perguntas frequentes",
-                "items": [
-                    {
-                        "question": "Que fontes usam?",
-                        "answer": "Só fontes públicas: Portal BASE (contratação pública), INE (despesa e finanças locais), registos oficiais de empresas, boletins e diários da República, e recolhas próprias de preços. Cada resposta indica de onde veio.",
-                    },
-                    {
-                        "question": "Com que frequência os dados são atualizados?",
-                        "answer": "A recolha é contínua. As páginas de análise guardam a **fotografia** do dia em que foram geradas, com a data à vista, para que o número citado continue a ser o número que foi lido.",
-                    },
-                    {
-                        "question": "Que países cobrem?",
-                        "answer": "Portugal, Espanha e França na contratação pública, com o cadastro de entidades a incluir contrapartes de outros países.",
-                    },
-                    {
-                        "question": "Posso citar os números que aqui estão?",
-                        "answer": "Sim. Damos a fonte primária e o critério usado, para poder refazer a conta. Se precisar do detalhe, fale connosco.",
-                    },
-                    {
-                        "question": "O Sabemos Studio e o IQ OS são a mesma coisa?",
-                        "answer": "O **Sabemos Studio** é quem faz; o **IQ OS** é a plataforma. Este site é a parte editorial — análises, fichas e notas de método.",
-                    },
-                ],
-            },
-        },
-        {
-            "id": "blk_cta",
-            "type": "cta",
-            "data": {
-                "title": "Precisa de um número que aguente ser citado?",
-                "text": "Lemos os dados abertos, ligamos as entidades e mostramos a evidência por trás de cada valor.",
-                "button_label": "Ver as análises",
-                "button_href": "/site/blog",
-            },
-        },
-        {"id": "blk_blog", "type": "blog", "data": {"title": "Últimos artigos", "limit": 3}},
-    ]
-
-
-def conteudo_da_sobre() -> List[Dict[str, Any]]:
-    """Blocos da página «Sobre» (a mesma para a semente e para a migração)."""
-    return [
-        {
-            "id": "blk_sobre_hero",
-            "type": "hero",
-            "data": {
-                "title": "Sobre o Sabemos Studio",
-                "subtitle": "Um estúdio de produtos de dados: recolha, ontologia e assistentes de investigação.",
-                "align": "esquerda",
-            },
-        },
-        {
-            "id": "blk_sobre_texto",
-            "type": "texto",
-            "data": {
-                "markdown": (
-                    "## Princípios\n\n"
-                    "- **Fonte aberta** — todo o dado bruto vem de fontes públicas.\n"
-                    "- **Rasto** — cada resposta cita a evidência que a sustenta.\n"
-                    "- **Reutilização** — o mesmo conteúdo serve a plataforma, o site e o blog."
-                ),
-            },
-        },
-        {
-            "id": "blk_sobre_cta",
-            "type": "cta",
-            "data": {
-                "title": "Tem uma pergunta?",
-                "text": "A plataforma investiga com evidências citadas — comece pelo blog para ver o método em prática.",
-                "button_label": "Ler o blog",
-                "button_href": "/site/blog",
-            },
-        },
-    ]
-
-
 # --------------------------------------------------------------------------
 # Sementes (primeiro arranque)
 # --------------------------------------------------------------------------
@@ -1948,9 +1791,9 @@ def _seed(store: Dict[str, Any]) -> None:
             "show_in_menu": True,
             "menu_order": 1,
             "menu_label": "Início",
-            "excerpt": INICIO_EXCERPT,
-            "blocks": conteudo_da_inicio(media),
-            "seo": {**INICIO_SEO, "image_id": media.get("capa-sabemos-studio.svg")},
+            "excerpt": editorial.INICIO_EXCERPT,
+            "blocks": editorial.conteudo_da_inicio(media),
+            "seo": {**editorial.INICIO_SEO, "image_id": media.get("capa-sabemos-studio.svg")},
             "created_at": now,
             "updated_at": now,
             "updated_by": "sistema",
@@ -1966,11 +1809,11 @@ def _seed(store: Dict[str, Any]) -> None:
             "published_at": now,
             "scheduled_at": None,
             "show_in_menu": True,
-            "menu_order": 2,
+            "menu_order": 6,
             "menu_label": "",
             "excerpt": "Como trabalhamos os dados abertos e o que pode esperar da plataforma.",
-            "blocks": conteudo_da_sobre(),
-            "seo": SOBRE_SEO,
+            "blocks": editorial.conteudo_da_sobre(),
+            "seo": editorial.SOBRE_SEO,
             "created_at": now,
             "updated_at": now,
             "updated_by": "sistema",
@@ -1986,18 +1829,21 @@ def _seed(store: Dict[str, Any]) -> None:
             "published_at": now,
             "scheduled_at": None,
             "show_in_menu": True,
-            "menu_order": 3,
+            "menu_order": 4,
             "menu_label": "Blog",
             "excerpt": "Análises, notas de método e novidades da plataforma.",
             "blocks": [
-                {"id": "blk_seed_blog_hero", "type": "hero", "data": {"title": "Blog", "subtitle": "Análises, método e novidades.", "align": "esquerda"}},
-                {"id": "blk_seed_blog_list", "type": "blog", "data": {"title": "", "limit": 12}},
+                {"id": "blk_blog_01_hero", "type": "hero", "data": {"title": "Blog", "subtitle": "Análises, método e novidades.", "align": "esquerda"}},
+                {"id": "blk_blog_02_blog", "type": "blog", "data": {"title": "", "limit": 12}},
             ],
             "seo": {"title": "Blog", "description": "Análises, notas de método e novidades da plataforma.", "keywords": [], "image_id": None, "noindex": False},
             "created_at": now,
             "updated_at": now,
             "updated_by": "sistema",
         },
+    ] + [
+        {**pagina, "published_at": now, "created_at": now, "updated_at": now, "updated_by": "sistema"}
+        for pagina in editorial.paginas_do_site(media)
     ]
 
     analytics_id = "cat_analises"

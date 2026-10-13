@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1205 operações** em **44 grupos**.
+Versão `0.4.0` · **1206 operações** em **44 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -976,6 +976,7 @@ CMS: páginas por blocos, conteúdos reutilizáveis, blog com taxonomia, media, 
 | `GET` | `/site/blog` | Site Blog |
 | `GET` | `/site/blog/{slug}` | Site Post |
 | `GET` | `/site/categoria/{slug}` | Site Category |
+| `POST` | `/site/contacto` | Site Contacto |
 | `GET` | `/site/etiqueta/{tag}` | Site Tag |
 | `GET` | `/site/municipio/{slug}` | Site Municipio |
 | `GET` | `/site/pesquisa/{slug}` | Site Pesquisa |

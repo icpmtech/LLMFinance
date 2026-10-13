@@ -700,7 +700,7 @@ def test_recolher_lote_avanca_por_lotes_e_salta_o_que_esta_em_disco(tmp_path: Pa
             "pecas": 2 * len(urls),
             "bytes": 100 * len(urls),
             "erros": [],
-            "detalhe": [{"uid": f"U{n}", "pecas": []} for n in range(len(urls))],
+            "detalhe": [{"uid": f"U{n}", "token": vortal.token_de_url(url), "pecas": []} for n, url in enumerate(urls)],
             "indice": {"ok": True, "index": vortal.VORTAL_PECAS_INDEX, "indexados": 2 * len(urls)},
         }
 
@@ -710,11 +710,25 @@ def test_recolher_lote_avanca_por_lotes_e_salta_o_que_esta_em_disco(tmp_path: Pa
     assert resultado["ok"] is True
     assert resultado["candidatos"] == 4, "o aviso que já está em disco não entra no lote"
     assert [len(chamada) for chamada in chamadas] == [2, 2]
-    assert resultado["processados"] == 4 and resultado["restantes"] == 0
+    assert resultado["processados"] == 4 and resultado["recolhidos"] == 4 and resultado["restantes"] == 0
     assert resultado["pecas"] == 8 and resultado["bytes"] == 400 and resultado["indexados"] == 8
     assert [item["n"] for item in resultado["lotes"]] == [1, 2]
     assert resultado["indice"]["indexados"] == 8
     assert _url_token(TOKEN) not in {url for chamada in chamadas for url in chamada}
+
+
+def test_recolher_lote_conta_o_progresso_pelo_que_ficou_em_disco(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Avisos recusados pela Vortal não contam como recolhidos (senão dá-se por concluído sem trazer nada)."""
+    monkeypatch.setattr(
+        vortal,
+        "recolher",
+        lambda urls, **kwargs: {"avisos": len(urls), "pecas": 0, "bytes": 0, "erros": [f"{len(urls)} recusados"], "detalhe": [], "indice": {}},
+    )
+    resultado = vortal.recolher_lote(ano=2026, mes=9, lote=10, destino_base=tmp_path, es=_es_cinco_avisos())
+
+    assert resultado["processados"] == 5 and resultado["recolhidos"] == 0
+    assert resultado["restantes"] == 5, "nada foi para disco, logo o período continua todo por recolher"
+    assert resultado["erros"]
 
 
 def test_recolher_lote_respeita_o_teto_do_lote_e_deixa_restantes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -722,7 +736,14 @@ def test_recolher_lote_respeita_o_teto_do_lote_e_deixa_restantes(tmp_path: Path,
 
     def _recolher(urls, **kwargs):
         capturado.update(kwargs)
-        return {"avisos": len(urls), "pecas": len(urls), "bytes": 1, "erros": ["falha simulada"], "detalhe": [], "indice": {}}
+        return {
+            "avisos": len(urls),
+            "pecas": len(urls),
+            "bytes": 1,
+            "erros": ["falha simulada"],
+            "detalhe": [{"uid": f"U{n}", "token": vortal.token_de_url(url), "pecas": []} for n, url in enumerate(urls)],
+            "indice": {},
+        }
 
     monkeypatch.setattr(vortal, "recolher", _recolher)
     resultado = vortal.recolher_lote(ano=2026, mes=9, lote=1000, lotes=1, forcar=True, destino_base=tmp_path, es=_es_cinco_avisos())
