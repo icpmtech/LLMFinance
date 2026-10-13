@@ -45,12 +45,32 @@ MEDIA_DIR = CMS_DIR / "media"
 CMS_VERSION = 1
 
 # Entidades do CMS: as listas dentro do documento.
-ENTITIES: Tuple[str, ...] = ("pages", "posts", "municipios", "contents", "media", "categories", "templates", "menus")
+ENTITIES: Tuple[str, ...] = ("pages", "posts", "municipios", "pesquisas", "contents", "media", "categories", "templates", "menus")
 SINGULAR: Dict[str, str] = {entity: entity.rstrip("s") if entity not in ("media",) else "media" for entity in ENTITIES}
 SINGULAR["categories"] = "categoria"
 
 #: Entidades que se **publicam** (têm estado, agendamento e endereço no site).
-PUBLISHABLE: Tuple[str, ...] = ("pages", "posts", "municipios")
+PUBLISHABLE: Tuple[str, ...] = ("pages", "posts", "municipios", "pesquisas")
+
+#: Rótulo de cada entidade publicável, para listagens e para o `overview`.
+ENTITY_LABELS: Dict[str, str] = {
+    "pages": "página",
+    "posts": "artigo",
+    "municipios": "município",
+    "pesquisas": "pesquisa",
+}
+
+#: Filtros de uma pesquisa (municípios) que se podem congelar numa página.
+FILTROS_PESQUISA: Dict[str, Any] = {
+    "q": "",
+    "distrito": "",
+    "nuts": "",
+    "ano_contratos": None,
+    "ordenar": "despesas",
+    "ordem": "desc",
+    "min_despesas": None,
+    "limite": 25,
+}
 
 STATUSES: Tuple[str, ...] = ("rascunho", "agendado", "publicado", "arquivado")
 STATUS_LABELS: Dict[str, str] = {
@@ -443,6 +463,39 @@ def _status(value: Any, fallback: str = "rascunho") -> str:
     return status if status in STATUSES else fallback
 
 
+def _cor(value: Any) -> str:
+    """Cor de destaque (#rrggbb). Vazio ou inválida = usar a do site."""
+    texto = str(value or "").strip()
+    if not texto:
+        return ""
+    if not texto.startswith("#"):
+        texto = f"#{texto}"
+    return texto if re.fullmatch(r"#[0-9a-fA-F]{6}", texto) else ""
+
+
+def normalizar_filtros(value: Any) -> Dict[str, Any]:
+    """Filtros de uma pesquisa: só os conhecidos, com tipos certos."""
+    filtros = value if isinstance(value, dict) else {}
+    limpo: Dict[str, Any] = {}
+    for campo, padrao in FILTROS_PESQUISA.items():
+        actual = filtros.get(campo, padrao)
+        if campo in ("ano_contratos", "min_despesas"):
+            try:
+                limpo[campo] = int(float(actual)) if actual not in (None, "") else None
+            except (TypeError, ValueError):
+                limpo[campo] = None
+        elif campo == "limite":
+            try:
+                limpo[campo] = max(1, min(200, int(float(actual))))
+            except (TypeError, ValueError):
+                limpo[campo] = int(FILTROS_PESQUISA["limite"])
+        elif campo == "ordem":
+            limpo[campo] = "asc" if str(actual).lower() == "asc" else "desc"
+        else:
+            limpo[campo] = str(actual or "").strip()
+    return limpo
+
+
 def _page_path(store: Dict[str, Any], doc: Dict[str, Any]) -> str:
     """Caminho de uma página: os slugs dos ascendentes + o próprio.
 
@@ -500,11 +553,11 @@ def _refresh_content_usage(store: Dict[str, Any]) -> None:
 # --------------------------------------------------------------------------
 def _summary(entity: str, doc: Dict[str, Any]) -> Dict[str, Any]:
     """Versão leve de um documento para listagens."""
-    item = {key: value for key, value in doc.items() if key not in ("blocks", "markdown", "data", "dados")}
+    item = {key: value for key, value in doc.items() if key not in ("blocks", "markdown", "data", "dados", "intro")}
     # `entity_label` e não `kind`: nos conteúdos e nos media `kind` é um campo real.
     item["entity"] = entity
-    item["entity_label"] = "página" if entity == "pages" else "artigo" if entity == "posts" else "município" if entity == "municipios" else entity
-    if entity in ("pages", "municipios"):
+    item["entity_label"] = ENTITY_LABELS.get(entity, entity)
+    if entity in ("pages", "municipios", "pesquisas"):
         item["blocks_count"] = len(doc.get("blocks") or [])
     if entity == "posts":
         item["reading_minutes"] = doc.get("reading_minutes") or reading_minutes(doc.get("markdown") or "")
@@ -667,6 +720,32 @@ def municipio_path(doc: Dict[str, Any]) -> str:
     return f"/municipio/{slug}" if slug else ""
 
 
+def pesquisa_by_slug(slug: str, published_only: bool = True) -> Optional[Dict[str, Any]]:
+    """Página de pesquisa pelo endereço público (`/pesquisa/{slug}`)."""
+    store = _load()
+    wanted = (slug or "").strip().lower()
+    for item in store["pesquisas"]:
+        if published_only and item.get("status") != "publicado":
+            continue
+        if str(item.get("slug") or "").lower() == wanted:
+            return copy.deepcopy(item)
+    return None
+
+
+def published_pesquisas() -> List[Dict[str, Any]]:
+    """Páginas de pesquisa publicadas (mais recentes primeiro)."""
+    store = _load()
+    items = [item for item in store["pesquisas"] if item.get("status") == "publicado"]
+    items.sort(key=lambda item: str(item.get("published_at") or item.get("created_at") or ""), reverse=True)
+    return copy.deepcopy(items)
+
+
+def pesquisa_path(doc: Dict[str, Any]) -> str:
+    """Caminho público de uma página de pesquisa (`/pesquisa/{slug}`)."""
+    slug = str(doc.get("slug") or "").strip("/")
+    return f"/pesquisa/{slug}" if slug else ""
+
+
 def media_url(media_id: Optional[str]) -> str:
     return f"/cms/media/{media_id}/raw" if media_id else ""
 
@@ -726,6 +805,22 @@ def _normalise(entity: str, payload: Dict[str, Any], existing: Optional[Dict[str
         doc["dados"] = copy.deepcopy(dados) if isinstance(dados, dict) else {}
         if not doc["excerpt"]:
             doc["excerpt"] = _excerpt(_blocks_text(doc["blocks"]))
+
+    if entity == "pesquisas":
+        # Página de uma **pesquisa congelada**: os filtros sobre os municípios
+        # ficam no documento e os números são a fotografia lida quando o editor
+        # os mandou ler (`POST /cms/pesquisas/{id}/dados`). A marca (cor, logótipo
+        # e imagem de capa) é do documento, não das definições do site.
+        dados = pick("dados")
+        doc["filtros"] = normalizar_filtros(pick("filtros"))
+        doc["descricao_filtros"] = str(pick("descricao_filtros") or "")
+        doc["intro"] = str(pick("intro") or "")
+        doc["blocks"] = _normalise_blocks(pick("blocks", []))
+        doc["dados"] = copy.deepcopy(dados) if isinstance(dados, dict) else {}
+        doc["capa_id"] = pick("capa_id") or None
+        doc["logo_id"] = pick("logo_id") or None
+        doc["cor"] = _cor(pick("cor"))
+        doc["excerpt"] = str(pick("excerpt") or "") or _excerpt(doc["intro"] or doc["descricao_filtros"])
 
     if entity == "contents":
         doc["title"] = str(pick("title") or "").strip()
@@ -876,6 +971,7 @@ def _id_prefix(entity: str) -> str:
         "pages": "pag",
         "posts": "post",
         "municipios": "mun",
+        "pesquisas": "pes",
         "contents": "ctd",
         "media": "med",
         "categories": "cat",
@@ -1187,6 +1283,13 @@ def media_usage(media_id: str) -> List[Dict[str, str]]:
     for post in store["posts"]:
         if post.get("cover_id") == media_id or post.get("seo", {}).get("image_id") == media_id:
             usage.append({"entity": "posts", "id": post["id"], "title": post.get("title") or "", "where": "capa/SEO"})
+    for pesquisa in store["pesquisas"]:
+        if pesquisa.get("capa_id") == media_id:
+            usage.append({"entity": "pesquisas", "id": pesquisa["id"], "title": pesquisa.get("title") or "", "where": "capa"})
+        if pesquisa.get("logo_id") == media_id:
+            usage.append({"entity": "pesquisas", "id": pesquisa["id"], "title": pesquisa.get("title") or "", "where": "logótipo"})
+        if pesquisa.get("seo", {}).get("image_id") == media_id:
+            usage.append({"entity": "pesquisas", "id": pesquisa["id"], "title": pesquisa.get("title") or "", "where": "SEO"})
     if (store["settings"].get("seo") or {}).get("image_id") == media_id:
         usage.append({"entity": "settings", "id": "settings", "title": "Definições do site", "where": "imagem"})
     return usage
@@ -1423,6 +1526,7 @@ def overview() -> Dict[str, Any]:
     pages = counts("pages")
     posts = counts("posts")
     municipios = counts("municipios")
+    pesquisas = counts("pesquisas")
     published_pages = [page for page in store["pages"] if page.get("status") == "publicado"]
     published_posts = [post for post in store["posts"] if post.get("status") == "publicado"]
     scheduled = [
@@ -1452,6 +1556,7 @@ def overview() -> Dict[str, Any]:
         "pages": {"total": len(store["pages"]), "by_status": pages, "published": pages["publicado"]},
         "posts": {"total": len(store["posts"]), "by_status": posts, "published": posts["publicado"]},
         "municipios": {"total": len(store["municipios"]), "by_status": municipios, "published": municipios["publicado"]},
+        "pesquisas": {"total": len(store["pesquisas"]), "by_status": pesquisas, "published": pesquisas["publicado"]},
         "contents": len(store["contents"]),
         "media": {"total": len(store["media"]), "bytes": sum(int(item.get("size") or 0) for item in store["media"])},
         "categories": len(store["categories"]),
@@ -1476,7 +1581,7 @@ def search(query: str, limit: int = 30) -> Dict[str, Any]:
         return {"query": query, "total": 0, "items": []}
     store = _load()
     hits: List[Dict[str, Any]] = []
-    for entity in ("pages", "posts", "municipios", "contents", "media", "categories", "templates"):
+    for entity in ("pages", "posts", "municipios", "pesquisas", "contents", "media", "categories", "templates"):
         for doc in store[entity]:
             haystack = " ".join(
                 str(doc.get(field) or "")
