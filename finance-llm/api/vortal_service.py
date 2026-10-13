@@ -25,7 +25,10 @@ Este módulo:
 - extrai o texto (PDF com `pymupdf`, DOCX com `zipfile`+`xml`, XLSX com
   `openpyxl`, XML/CSV/TXT como texto, ZIP por dentro);
 - **indexa no Elasticsearch** (`finance_vortal_pecas`, um documento por peça,
-  com o texto pesquisável), de forma idempotente (o `_id` inclui o `sha256`).
+  com o texto pesquisável), de forma idempotente (o `_id` inclui o `sha256`);
+- recolhe **em lote por mês e ano**: as ligações das peças já estão publicadas
+  nos contratos do índice `contratos` (`linkPecasProc`), pelo que não é preciso
+  colar centenas de URLs — escolhe-se o período e o módulo avança em lotes.
 
 Notas de segurança e de limites:
 - só se descarrega de anfitriões do domínio `vortal.biz` (guarda contra SSRF,
@@ -55,7 +58,7 @@ from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 
 from api.contract_document import _docx_text, _pdf_text, _read_archive
-from api.elasticsearch_client import VORTAL_PECAS_INDEX, ensure_indices, get_es_client
+from api.elasticsearch_client import CONTRACTS_INDEX, VORTAL_PECAS_INDEX, ensure_indices, get_es_client
 
 logger = logging.getLogger(__name__)
 

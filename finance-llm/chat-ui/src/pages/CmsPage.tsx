@@ -60,6 +60,14 @@ export function cmsPathForSection(section: CmsSection): string {
   return CMS_SECTIONS.find((entry) => entry.id === section)?.path ?? "/cms";
 }
 
+/** Entidade do CMS que uma secção abre, quando a ligação traz o item (`?id=`). */
+const CMS_FOCUS_ENTITIES: Partial<Record<CmsSection, string>> = {
+  paginas: "pages",
+  blog: "posts",
+  municipios: "municipios",
+  pesquisas: "pesquisas",
+};
+
 export default function CmsPage() {
   const [section, setSection] = useState<CmsSection>(() => (typeof window === "undefined" ? "painel" : cmsSectionFromPath(window.location.pathname)));
   const [catalogue, setCatalogue] = useState<CmsCatalogue | null>(null);
@@ -110,6 +118,17 @@ export default function CmsPage() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
+  // Ligação direta a um item (`/cms/municipios?id=mun_…`): vem das outras
+  // páginas da aplicação (por exemplo, das despesas municipais) para abrir já o
+  // editor do item certo.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const id = new URLSearchParams(window.location.search).get("id");
+    if (!id) return;
+    const entidade = CMS_FOCUS_ENTITIES[cmsSectionFromPath(window.location.pathname)];
+    if (entidade) setFocus({ entity: entidade, id });
+  }, []);
+
   const changeSection = useCallback((next: CmsSection) => {
     setSection(next);
     if (typeof window !== "undefined") {
@@ -149,6 +168,11 @@ export default function CmsPage() {
       setQuery("");
       if (hit.entity === "pages" || hit.entity === "posts") {
         changeSection(hit.entity === "pages" ? "paginas" : "blog");
+        setFocus({ entity: hit.entity, id: hit.id });
+        return;
+      }
+      if (hit.entity === "municipios" || hit.entity === "pesquisas") {
+        changeSection(hit.entity === "municipios" ? "municipios" : "pesquisas");
         setFocus({ entity: hit.entity, id: hit.id });
         return;
       }

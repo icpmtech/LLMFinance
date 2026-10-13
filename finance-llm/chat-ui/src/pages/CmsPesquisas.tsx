@@ -558,6 +558,47 @@ export function CmsPesquisasPanel({
                   Carregue em «Reler dados» para ler os números da pesquisa.
                 </p>
               )}
+
+              {dados?.graficos?.length ? (
+                <p className="mt-3 text-[11px] text-muted-foreground">
+                  Gráficos na página: {dados.graficos.map((grafico) => grafico.titulo).join(" · ")}.
+                </p>
+              ) : null}
+
+              {dados?.adjudicatarios?.itens?.length ? (
+                <div className="mt-3">
+                  <p className="text-[12px] font-semibold">
+                    Principais adjudicatários
+                    {dados.adjudicatarios.ano ? ` em ${dados.adjudicatarios.ano}` : ""}
+                    <span className="ml-2 font-normal text-muted-foreground">
+                      {dados.adjudicatarios.total?.toLocaleString("pt-PT")} no total ·{" "}
+                      {milhões(dados.adjudicatarios.valor)}
+                    </span>
+                  </p>
+                  <div className="mt-1 max-h-56 overflow-auto">
+                    <table className="w-full min-w-[320px] text-[11px]">
+                      <thead className="sticky top-0 bg-background/95">
+                        <tr className="text-left text-muted-foreground">
+                          <th className="py-1 pr-2 font-medium">Adjudicatário</th>
+                          <th className="py-1 pr-2 text-right font-medium">Contratos</th>
+                          <th className="py-1 text-right font-medium">Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dados.adjudicatarios.itens.slice(0, 12).map((linha) => (
+                          <tr key={linha.nome} className="border-t border-white/5">
+                            <td className="py-1 pr-2">{linha.nome}</td>
+                            <td className="py-1 pr-2 text-right tabular-nums">
+                              {linha.contratos.toLocaleString("pt-PT")}
+                            </td>
+                            <td className="py-1 text-right tabular-nums">{milhões(linha.valor)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {draft.id && (

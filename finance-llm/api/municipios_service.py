@@ -880,6 +880,54 @@ def fornecedores(
     }
 
 
+def fornecedores_de_varios(
+    nomes_adjudicante: Iterable[str],
+    *,
+    ano: Optional[int] = None,
+    maximo: int = 20000,
+) -> Dict[str, Any]:
+    """Fornecedores (adjudicatários) de **vários** adjudicantes ao mesmo tempo.
+
+    Serve as páginas de pesquisa, onde o filtro abrange dezenas de municípios: a
+    lista vem inteira do índice `contratos` e os nomes que só diferem na caixa
+    ou nos acentos («Construções Corte Recto» e «CONSTRUÇÕES CORTE RECTO») são
+    somados num só, para o ranking não ficar partido em dois.
+    """
+    from api.elasticsearch_client import fornecedores_do_municipio
+
+    nomes = [str(nome) for nome in (nomes_adjudicante or []) if nome]
+    ano_limpo = int(ano) if ano else None
+    if not nomes:
+        return {"total": 0, "itens": [], "valor": 0.0, "ano": ano_limpo}
+
+    dados = fornecedores_do_municipio(nomes, ano=ano_limpo, maximo=maximo)
+    if dados.get("error"):
+        return {"error": dados["error"], "total": 0, "itens": [], "valor": 0.0, "ano": ano_limpo}
+
+    agrupados: Dict[str, Dict[str, Any]] = {}
+    for linha in dados.get("fornecedores") or []:
+        nome = str(linha.get("nome") or "")
+        chave = _chave(nome)
+        contratos = int(linha.get("contratos") or 0)
+        valor = float(linha.get("valor") or 0.0)
+        atual = agrupados.get(chave)
+        if atual:
+            atual["contratos"] += contratos
+            atual["valor"] += valor
+            atual["variantes"] = int(atual.get("variantes") or 1) + 1
+        else:
+            agrupados[chave] = {"nome": nome, "contratos": contratos, "valor": valor, "variantes": 1}
+
+    itens = sorted(agrupados.values(), key=lambda item: -float(item["valor"]))
+    return {
+        "total": len(itens),
+        "itens": itens,
+        "valor": sum(float(item["valor"]) for item in itens),
+        "ano": ano_limpo,
+        "municipios": len(nomes),
+    }
+
+
 def ficha(
     nome_ou_codigo: str,
     detalhar_contratos: bool = True,

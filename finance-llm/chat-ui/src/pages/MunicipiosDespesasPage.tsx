@@ -20,6 +20,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Building2,
+  ExternalLink,
+  Globe2,
   Info,
   Loader2,
   MapPin,
@@ -30,6 +32,17 @@ import {
   X,
 } from "lucide-react";
 
+import {
+  createCmsMunicipio,
+  createCmsPesquisa,
+  cmsAppUrl,
+  cmsMunicipioUrl,
+  cmsPesquisaUrl,
+  listCmsMunicipios,
+  publishCmsItem,
+  type CmsMunicipio,
+  type CmsPesquisa,
+} from "../cmsApi";
 import {
   euroCompacto,
   getMunicipioFicha,
@@ -44,6 +57,9 @@ import {
   type MunicipiosDespesasMeta,
   type MunicipiosDespesasResponse,
 } from "../municipiosApi";
+
+/** Ficha de um município que já existe no CMS (para não se criar duas). */
+type FichaNoCms = { id: string; slug?: string | null; status?: string | null };
 
 /* ------------------------------------------------------------------ opções */
 
@@ -131,10 +147,15 @@ function Barra({
 function FichaMunicipio({
   ficha,
   anoSelecionado,
+  fichaCms,
+  aoPublicarCms,
 }: {
   ficha: MunicipioFicha;
   /** Ano escolhido no filtro da lista: fica destacado na série. */
   anoSelecionado?: string;
+  /** Ficha que já existe no CMS para este município, se existir. */
+  fichaCms?: FichaNoCms | null;
+  aoPublicarCms?: (municipio: string, ficha: FichaNoCms) => void;
 }) {
   const [todosFornecedores, setTodosFornecedores] = useState(false);
   const [fornecedores, setFornecedores] = useState<MunicipioFornecedores | null>(null);
@@ -143,6 +164,12 @@ function FichaMunicipio({
   const [termoFornecedor, setTermoFornecedor] = useState("");
   const [paginaFornecedores, setPaginaFornecedores] = useState(1);
   const [erroFornecedores, setErroFornecedores] = useState<string | null>(null);
+  const [paginaCmsCriada, setPaginaCmsCriada] = useState<FichaNoCms | null>(null);
+  const [aCriarPagina, setACriarPagina] = useState(false);
+  const [erroPagina, setErroPagina] = useState<string | null>(null);
+  // A ficha do CMS tanto pode já existir (vem do mapa da página) como ter sido
+  // criada agora, neste cartão: o que foi criado aqui manda.
+  const paginaCms = paginaCmsCriada ?? fichaCms ?? null;
   const classificadores = ficha.classificadores ?? {};
   const valores = useMemo(() => {
     const linhas = CLASSIFICADORES_FICHA.map((codigo) => ({
@@ -234,6 +261,26 @@ function FichaMunicipio({
   const totalPaginasFornecedores = fornecedores
     ? Math.max(1, Math.ceil(fornecedores.total / Math.max(1, fornecedores.size)))
     : 1;
+
+  // Criar a página da ficha no CMS a partir daqui: os números entram já lidos
+  // (INE + Portal BASE) e a página fica publicada, sem passar pelo editor.
+  const criarPaginaNoCms = useCallback(async () => {
+    setACriarPagina(true);
+    setErroPagina(null);
+    try {
+      const criada = await createCmsMunicipio({ municipio: ficha.nome });
+      const publicada = await publishCmsItem("municipios", criada.item.id);
+      const item = publicada.item as unknown as CmsMunicipio;
+      const registo: FichaNoCms = { id: item.id, slug: item.slug, status: item.status };
+      setPaginaCmsCriada(registo);
+      aoPublicarCms?.(ficha.nome, registo);
+    } catch (excecao) {
+      setErroPagina(excecao instanceof Error ? excecao.message : String(excecao));
+    } finally {
+      setACriarPagina(false);
+    }
+  }, [ficha.nome, aoPublicarCms]);
+
   const correntes = ficha.despesas_correntes ?? 0;
   const capital = ficha.despesas_capital ?? 0;
   const totalCorrenteCapital = correntes + capital;
@@ -260,6 +307,41 @@ function FichaMunicipio({
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+            {paginaCms ? (
+              <>
+                <a
+                  href={cmsMunicipioUrl(paginaCms.slug ?? "")}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex min-h-[26px] items-center gap-1 rounded-full border border-teal-400/30 bg-teal-400/10 px-2 py-0.5 text-[11px] text-teal-200 transition hover:bg-teal-400/20"
+                  title={`Página pública da ficha (${paginaCms.status ?? "publicado"}).`}
+                >
+                  <ExternalLink size={11} /> página no site
+                </a>
+                <a
+                  href={cmsAppUrl("municipios", paginaCms.id)}
+                  className="inline-flex min-h-[26px] items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-muted-foreground transition hover:text-foreground"
+                  title="Abrir a ficha no CMS (texto, blocos, SEO e marca)."
+                >
+                  <Globe2 size={11} /> CMS
+                </a>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void criarPaginaNoCms()}
+                disabled={aCriarPagina}
+                className="inline-flex min-h-[26px] items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+                title="Criar a ficha pública deste município no CMS, com os números já lidos, e publicá-la."
+              >
+                {aCriarPagina ? (
+                  <Loader2 size={11} className="animate-spin" />
+                ) : (
+                  <Globe2 size={11} />
+                )}
+                {aCriarPagina ? "a criar página…" : "criar página no CMS"}
+              </button>
+            )}
             {anoDoFiltro ? (
               <span
                 className="rounded-full bg-sky-400/10 px-2 py-0.5 text-[11px] text-sky-200"
@@ -373,6 +455,11 @@ function FichaMunicipio({
         {ficha.contratos_primeiro_ano && ficha.contratos_ultimo_ano ? (
           <p className="mt-2 text-[10px] text-muted-foreground">
             Contratação no Portal BASE de {ficha.contratos_primeiro_ano} a {ficha.contratos_ultimo_ano}.
+          </p>
+        ) : null}
+        {erroPagina ? (
+          <p className="mt-1 text-[10px] text-rose-300" role="alert">
+            Não foi possível criar a página: {erroPagina}
           </p>
         ) : null}
       </Cartao>
@@ -707,6 +794,10 @@ export default function MunicipiosDespesasPage() {
   const [ordenar, setOrdenar] = useState<string>("despesas");
   const [ordem, setOrdem] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
+  const [fichasCms, setFichasCms] = useState<Record<string, FichaNoCms>>({});
+  const [aPublicar, setAPublicar] = useState(false);
+  const [pesquisaNoCms, setPesquisaNoCms] = useState<{ id: string; title: string; slug: string } | null>(null);
+  const [erroPublicar, setErroPublicar] = useState<string | null>(null);
 
   const carregar = useCallback(
     async (pagina = 1) => {
@@ -747,6 +838,52 @@ export default function MunicipiosDespesasPage() {
 
   const abrir = useCallback((municipio: MunicipioDespesas) => {
     setAlvoDetalhe(municipio.geocod || municipio.nome);
+  }, []);
+
+  // Fichas de município que já existem no CMS: é o que permite trocar o botão
+  // «criar página» por uma ligação à página publicada, sem duplicar fichas.
+  useEffect(() => {
+    listCmsMunicipios({ limit: 300 })
+      .then((payload) => {
+        const mapa: Record<string, FichaNoCms> = {};
+        for (const item of payload.items) {
+          if (item.municipio) {
+            mapa[item.municipio] = { id: item.id, slug: item.slug, status: item.status };
+          }
+        }
+        setFichasCms(mapa);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  // Publicar no CMS a pesquisa que está no ecrã: os filtros ficam congelados na
+  // página e os números entram já lidos (gráficos, municípios e adjudicatários).
+  const publicarPesquisa = useCallback(async () => {
+    setAPublicar(true);
+    setErroPublicar(null);
+    try {
+      const criada = await createCmsPesquisa({
+        filtros: {
+          q: q.trim(),
+          distrito,
+          ano_contratos: anoContratos ? Number(anoContratos) : null,
+          ordenar,
+          ordem,
+          limite: 50,
+        },
+      });
+      const publicada = await publishCmsItem("pesquisas", criada.item.id);
+      const item = publicada.item as unknown as CmsPesquisa;
+      setPesquisaNoCms({ id: item.id, title: item.title, slug: item.slug });
+    } catch (excecao) {
+      setErroPublicar(excecao instanceof Error ? excecao.message : String(excecao));
+    } finally {
+      setAPublicar(false);
+    }
+  }, [q, distrito, anoContratos, ordenar, ordem]);
+
+  const registarFichaCms = useCallback((municipio: string, ficha: FichaNoCms) => {
+    setFichasCms((atual) => ({ ...atual, [municipio]: ficha }));
   }, []);
 
   useEffect(() => {
@@ -810,16 +947,68 @@ export default function MunicipiosDespesasPage() {
               .
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void recolher()}
-            disabled={aRecolher}
-            className="flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-white/10 px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-40"
-          >
-            {aRecolher ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-            Recolher de novo
-          </button>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void publicarPesquisa()}
+              disabled={aPublicar}
+              className="flex min-h-[40px] items-center gap-1.5 rounded-xl border border-white/10 px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+              title="Criar no CMS uma página pública com estes filtros (gráficos, municípios e principais adjudicatários) e publicá-la."
+            >
+              {aPublicar ? <Loader2 size={13} className="animate-spin" /> : <Globe2 size={13} />}
+              {aPublicar ? "a publicar…" : "Publicar pesquisa no CMS"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void recolher()}
+              disabled={aRecolher}
+              className="flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-white/10 px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-40"
+            >
+              {aRecolher ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+              Recolher de novo
+            </button>
+          </div>
         </header>
+
+        {pesquisaNoCms ? (
+          <Cartao className="flex flex-wrap items-center justify-between gap-2 border-teal-400/20">
+            <p className="text-xs">
+              <strong className="text-foreground">{pesquisaNoCms.title}</strong> publicada no site.
+            </p>
+            <span className="flex flex-wrap items-center gap-2">
+              <a
+                href={cmsPesquisaUrl(pesquisaNoCms.slug)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex min-h-[28px] items-center gap-1 rounded-lg border border-teal-400/30 bg-teal-400/10 px-2 py-1 text-xs text-teal-200 transition hover:bg-teal-400/20"
+              >
+                <ExternalLink size={12} /> ver página
+              </a>
+              <a
+                href={cmsAppUrl("pesquisas", pesquisaNoCms.id)}
+                className="inline-flex min-h-[28px] items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-xs text-muted-foreground transition hover:text-foreground"
+              >
+                <Globe2 size={12} /> abrir no CMS
+              </a>
+              <button
+                type="button"
+                onClick={() => setPesquisaNoCms(null)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+                aria-label="Fechar aviso"
+              >
+                <X size={13} />
+              </button>
+            </span>
+          </Cartao>
+        ) : null}
+
+        {erroPublicar ? (
+          <Cartao className="border-rose-400/20">
+            <p className="text-xs text-rose-300" role="alert">
+              Não foi possível publicar a pesquisa: {erroPublicar}
+            </p>
+          </Cartao>
+        ) : null}
 
         <section className="grid grid-cols-2 gap-3 @3xl:grid-cols-4">
           <Kpi label="Municípios" valor={numero(indice?.documents ?? meta?.diagnostico?.municipios)} />
@@ -1113,6 +1302,8 @@ export default function MunicipiosDespesasPage() {
                 key={detalhe.nome}
                 ficha={detalhe}
                 anoSelecionado={anoContratos || undefined}
+                fichaCms={fichasCms[detalhe.nome] ?? null}
+                aoPublicarCms={registarFichaCms}
               />
             ) : (
               <Cartao>

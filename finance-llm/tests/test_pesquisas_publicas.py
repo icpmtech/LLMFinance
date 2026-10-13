@@ -86,6 +86,13 @@ def _resposta(monkeypatch: pytest.MonkeyPatch) -> None:
                     "distrito": "Porto",
                     "ano_despesas": 2023,
                     "despesas_total": 317_577_000.0,
+                    "despesas_pessoal": 120_000_000.0,
+                    "despesas_por_ano": {
+                        "2021": {"D": 280_000_000.0},
+                        "2022": {"D": 300_000_000.0},
+                        "2023": {"D": 317_577_000.0},
+                    },
+                    "adjudicantes": ["Município do Porto"],
                     "contratos_total": 5375,
                     "contratos_valor": 429_200_000.0,
                     "contratos_ano_total": 1468,
@@ -103,7 +110,19 @@ def _resposta(monkeypatch: pytest.MonkeyPatch) -> None:
             "distritos": [{"key": "Porto", "count": 18}],
         }
 
+    def falso_fornecedores(*_args: Any, **_kwargs: Any) -> Dict[str, Any]:
+        return {
+            "total": 3892,
+            "valor": 888_105_537.0,
+            "ano": 2024,
+            "itens": [
+                {"nome": "Edilages", "contratos": 42, "valor": 48_737_249.0},
+                {"nome": "GERTAL", "contratos": 1, "valor": 38_355_621.0},
+            ],
+        }
+
     monkeypatch.setattr(pesquisas.municipios, "listar", falso_listar)
+    monkeypatch.setattr(pesquisas.municipios, "fornecedores_de_varios", falso_fornecedores)
 
 
 def test_dados_da_pesquisa_monta_a_fotografia(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -122,6 +141,31 @@ def test_dados_da_pesquisa_monta_a_fotografia(monkeypatch: pytest.MonkeyPatch) -
     assert dados["itens"][0]["anos_recentes"][0]["ano"] == "2026"
     assert dados["descricao"].startswith("distrito de Porto")
     assert [fonte["documento"] for fonte in dados["fontes"]]
+
+
+def test_dados_da_pesquisa_traz_graficos_e_adjudicatarios(monkeypatch: pytest.MonkeyPatch) -> None:
+    _resposta(monkeypatch)
+
+    dados = pesquisas.dados_da_pesquisa({"distrito": "Porto", "ano_contratos": 2024, "ordenar": "contratos"})
+
+    municipios_grafico = next(g for g in dados["graficos"] if g["id"] == "municipios")
+    assert municipios_grafico["subtitulo"] == "Valor contratado em 2024"
+    assert municipios_grafico["unidade"] == "euros"
+    assert municipios_grafico["itens"][0]["rotulo"] == "Porto"
+    assert municipios_grafico["itens"][0]["valor"] == 140_360_316.0
+
+    anos = next(g for g in dados["graficos"] if g["id"] == "anos_contratos")
+    assert [linha["rotulo"] for linha in anos["itens"]] == ["2025", "2026"]
+    assert anos["itens"][0]["contratos"] == 556
+
+    despesas = next(g for g in dados["graficos"] if g["id"] == "anos_despesas")
+    assert [linha["rotulo"] for linha in despesas["itens"]] == ["2021", "2022", "2023"]
+    assert despesas["itens"][-1]["valor"] == 317_577_000.0
+
+    assert dados["adjudicatarios"]["total"] == 3892
+    assert dados["adjudicatarios"]["ano"] == 2024
+    assert dados["adjudicatarios"]["itens"][0]["nome"] == "Edilages"
+    assert "adjudicatários" in pesquisas.resumo_dos_dados(dados)
 
 
 def test_resumo_dos_dados_fala_do_filtro_e_do_ano(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -198,6 +242,38 @@ def _pagina(**extra: Any) -> Dict[str, Any]:
                 }
             ],
             "fontes": [{"documento": "INE · indicador 0013909", "url": "https://www.ine.pt"}],
+            "graficos": [
+                {
+                    "id": "municipios",
+                    "titulo": "Municípios do filtro",
+                    "subtitulo": "Valor contratado em 2024",
+                    "unidade": "euros",
+                    "itens": [
+                        {"rotulo": "Porto", "valor": 140_360_316.0, "nota": "1 468 contratos"},
+                        {"rotulo": "Matosinhos", "valor": 70_000_000.0, "nota": None},
+                    ],
+                },
+                {
+                    "id": "anos_contratos",
+                    "titulo": "Contratado por ano",
+                    "subtitulo": "Portal BASE",
+                    "unidade": "euros",
+                    "itens": [
+                        {"rotulo": "2025", "valor": 113_903_101.0, "contratos": 556},
+                        {"rotulo": "2026", "valor": 105_197_241.0, "contratos": 425},
+                    ],
+                },
+            ],
+            "adjudicatarios": {
+                "ano": 2024,
+                "total": 3892,
+                "valor": 888_105_537.0,
+                "municipios": 18,
+                "itens": [
+                    {"nome": "Edilages", "contratos": 42, "valor": 48_737_249.0},
+                    {"nome": "GERTAL", "contratos": 1, "valor": 38_355_621.0},
+                ],
+            },
             "gerado_em": "2026-10-13T21:30:00Z",
         },
     }
@@ -234,6 +310,54 @@ def test_pagina_de_pesquisa_sem_titulo_falha(cms_limpo: Any) -> None:
         store.save_item("pesquisas", {"title": "", "slug": "sem-titulo"}, "qa@teste.pt")
 
 
+# ---------------------------------------------------------------------------
+# Trilha de navegação (breadcrumbs)
+# ---------------------------------------------------------------------------
+
+def test_trilha_da_pagina_de_pesquisa(cms_limpo: Any) -> None:
+    item = store.save_item("pesquisas", _pagina(), "qa@teste.pt")
+
+    html = cms_render.render_pesquisa(item)
+
+    assert 'class="breadcrumb"' in html
+    assert '<a href="/site">Início</a>' in html
+    assert ">Pesquisas</span>" in html
+    assert 'aria-current="page">Maiores contratações do distrito do Porto em 2024</span>' in html
+    assert '"@type": "BreadcrumbList"' in html
+    assert '"position": 2' in html
+
+
+def test_trilha_da_ficha_de_municipio(cms_limpo: Any) -> None:
+    html = cms_render.render_municipio(
+        {"title": "Despesas da Câmara Municipal de Braga", "slug": "braga", "municipio": "Braga"}
+    )
+
+    assert ">Municípios</span>" in html
+    assert 'aria-current="page">Braga</span>' in html
+
+
+def test_trilha_das_paginas_sobe_pelos_ascendentes(cms_limpo: Any) -> None:
+    pai = store.save_item("pages", {"title": "Secção", "slug": "seccao"}, "qa@teste.pt")
+    filho = store.save_item(
+        "pages", {"title": "Página", "slug": "pagina", "parent_id": pai["id"]}, "qa@teste.pt"
+    )
+
+    html = cms_render.render_page(filho)
+
+    assert '<a href="/site">Início</a>' in html
+    assert '<a href="/site/seccao">Secção</a>' in html
+    assert 'aria-current="page">Página</span>' in html
+
+
+def test_pagina_inicial_nao_leva_trilha(cms_limpo: Any) -> None:
+    inicial = store.save_item("pages", {"title": "Início do site", "slug": "home"}, "qa@teste.pt")
+    store.save_settings({"home_page_id": inicial["id"]}, "qa@teste.pt")
+
+    html = cms_render.render_page(store.get_item("pages", inicial["id"]))
+
+    assert 'class="breadcrumb"' not in html
+
+
 def test_render_da_pagina_tem_seo_marca_e_tabela(cms_limpo: Any) -> None:
     capa = store.save_media({"title": "Capa", "url": "https://exemplo.test/capa.jpg"}, "qa@teste.pt")
     logo = store.save_media({"title": "Logótipo", "url": "https://exemplo.test/logo.png"}, "qa@teste.pt")
@@ -256,3 +380,19 @@ def test_render_da_pagina_tem_seo_marca_e_tabela(cms_limpo: Any) -> None:
     assert "Contratado em 2024" in html and "868,8 M€" in html
     assert "1 468" in html  # linha do Porto (contratos de 2024)
     assert "INE · indicador 0013909" in html  # proveniência
+
+
+def test_render_da_pagina_tem_graficos_e_adjudicatarios(cms_limpo: Any) -> None:
+    item = store.save_item("pesquisas", _pagina(), "qa@teste.pt")
+
+    html = cms_render.render_pesquisa(item)
+
+    assert '<ul class="barras">' in html
+    assert '<i style="width:100%"></i>' in html  # a maior barra do gráfico
+    assert "Valor contratado em 2024" in html
+    assert "Contratado por ano" in html and "113,9 M€" in html
+
+    assert "Principais adjudicatários" in html
+    assert "3 892 adjudicatários" in html
+    assert "Edilages" in html and "48 737 249" not in html and "48,7 M€" in html
+    assert "GERTAL" in html

@@ -134,6 +134,13 @@ nav.main a {{
 }}
 nav.main a:hover {{ background: var(--code); text-decoration: none; }}
 nav.main a[aria-current="page"] {{ background: var(--accent); color: #fff; }}
+.breadcrumb {{ margin: 0 0 18px; font-size: .88rem; }}
+.breadcrumb ol {{ display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; padding: 0; list-style: none; }}
+.breadcrumb li {{ display: flex; align-items: center; gap: 10px; color: var(--muted); }}
+.breadcrumb li + li::before {{ content: "›"; color: var(--muted); opacity: .7; }}
+.breadcrumb a {{ color: var(--muted); }}
+.breadcrumb a:hover {{ color: var(--accent); }}
+.breadcrumb [aria-current="page"] {{ color: var(--text); font-weight: 600; }}
 main {{ padding: 32px 0 72px; }}
 .card {{
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
@@ -453,6 +460,43 @@ def _footer(settings: Dict[str, Any]) -> str:
     )
 
 
+def _breadcrumb(dados: Optional[List[Dict[str, str]]]) -> str:
+    """Trilha de navegação («Início › Secção › Página»).
+
+    O último passo é sempre o texto da página (sem link); os anteriores levam a
+    `href` quando existe (uma secção sem índice próprio, como «Municípios», não
+    leva).
+    """
+    if not dados or len(dados) < 2:
+        return ""
+    passos: List[str] = []
+    for posicao, passo in enumerate(dados, start=1):
+        etiqueta = _esc(str(passo.get("label") or ""))
+        href = str(passo.get("href") or "").strip()
+        if href and posicao < len(dados):
+            passos.append(f'<li><a href="{_esc(href)}">{etiqueta}</a></li>')
+        else:
+            passos.append(f'<li><span aria-current="page">{etiqueta}</span></li>')
+    return f'<nav class="breadcrumb" aria-label="Caminho"><ol>{"".join(passos)}</ol></nav>'
+
+
+def _breadcrumb_json_ld(dados: List[Dict[str, str]], base_url: str) -> Dict[str, Any]:
+    """A mesma trilha em `BreadcrumbList`, para os motores de busca."""
+    return {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": posicao,
+                "name": str(passo.get("label") or ""),
+                **({"item": _absolute(str(passo["href"]), base_url)} if passo.get("href") else {}),
+            }
+            for posicao, passo in enumerate(dados, start=1)
+        ],
+    }
+
+
 def _layout(
     *,
     title: str,
@@ -468,6 +512,7 @@ def _layout(
     preview: bool = False,
     noindex: bool = False,
     extra_css: str = "",
+    breadcrumb: Optional[List[Dict[str, str]]] = None,
 ) -> str:
     base_url = str(settings.get("base_url") or "")
     site_name = _esc(settings.get("site_name") or "Site")
@@ -501,6 +546,11 @@ def _layout(
         )
     if json_ld:
         meta.append(f'<script type="application/ld+json">{json.dumps(json_ld, ensure_ascii=False)}</script>')
+    if breadcrumb and len(breadcrumb) >= 2:
+        meta.append(
+            f'<script type="application/ld+json">'
+            f'{json.dumps(_breadcrumb_json_ld(breadcrumb, base_url), ensure_ascii=False)}</script>'
+        )
     favicon = _media_url(settings.get("favicon_id"))
     if favicon:
         meta.append(f'<link rel="icon" href="{_esc(favicon)}">')
@@ -512,7 +562,7 @@ def _layout(
         + "".join(meta)
         + f"<style>{_css(settings)}{extra_css}</style></head><body>"
         + _header(settings, current_path=current_path, preview=preview)
-        + f"<main><div class=\"wrap\">{body}</div></main>"
+        + f"<main><div class=\"wrap\">{_breadcrumb(breadcrumb)}{body}</div></main>"
         + _footer(settings)
         + "</body></html>"
     )
@@ -530,6 +580,39 @@ def _plain_excerpt(doc: Dict[str, Any]) -> str:
     text = doc.get("excerpt") or doc.get("markdown") or ""
     plain = re.sub(r"[#*`>_|]", " ", str(text))
     return re.sub(r"\s+", " ", plain).strip()[:200]
+
+
+def _trilha_da_pagina(page: Dict[str, Any]) -> List[Dict[str, str]]:
+    """«Início › Secção › Página»: sobe pelos ascendentes da página.
+
+    A página inicial não leva trilha (é o próprio «Início»).
+    """
+    settings = store.get_settings()
+    if page.get("id") and str(page.get("id")) == str(settings.get("home_page_id") or ""):
+        return []
+    trilha: List[Dict[str, str]] = [{"label": "Início", "href": "/site"}]
+    acima: List[Dict[str, str]] = []
+    parent_id = page.get("parent_id")
+    vistos: set = set()
+    while parent_id and parent_id not in vistos:
+        vistos.add(parent_id)
+        try:
+            pai = store.get_item("pages", str(parent_id))
+        except KeyError:
+            break
+        caminho = str(pai.get("path") or "")
+        acima.insert(
+            0,
+            {
+                "label": str(pai.get("menu_label") or pai.get("title") or ""),
+                "href": f"/site/{caminho}" if caminho else "/site",
+            },
+        )
+        parent_id = pai.get("parent_id")
+    trilha.extend(acima)
+    if page.get("title"):
+        trilha.append({"label": str(page["title"])})
+    return trilha
 
 
 def render_page(
@@ -564,6 +647,7 @@ def render_page(
         json_ld=json_ld,
         preview=preview,
         noindex=bool(seo.get("noindex")),
+        breadcrumb=_trilha_da_pagina(page),
     )
 
 
@@ -597,6 +681,14 @@ def _numero(valor: Any) -> str:
         return f"{int(valor or 0):,}".replace(",", " ")
     except (TypeError, ValueError):
         return "0"
+
+
+def _para_float(valor: Any) -> float:
+    """Converte para número sem rebentar (o que chega pode ser nulo ou texto)."""
+    try:
+        return float(valor or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _tabela(titulo: str, cabecalho: List[str], linhas: List[List[str]]) -> str:
@@ -720,6 +812,11 @@ def render_municipio(
         json_ld=json_ld,
         preview=preview,
         noindex=bool(seo.get("noindex")),
+        breadcrumb=[
+            {"label": "Início", "href": "/site"},
+            {"label": "Municípios"},
+            {"label": municipio},
+        ],
     )
 
 
@@ -734,6 +831,16 @@ _CSS_PESQUISA = """
 .pesquisa-tabela { overflow-x: auto; }
 .pesquisa-tabela th, .pesquisa-tabela td { white-space: nowrap; }
 .pesquisa-anos { color: var(--muted); font-size: .85rem; }
+.grafico { margin: 0 0 26px; }
+.grafico h3 { margin: 0 0 2px; font-size: 1rem; }
+.grafico p.sub { margin: 0 0 12px; color: var(--muted); font-size: .82rem; }
+.barras { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.barras li { display: grid; grid-template-columns: minmax(90px, 190px) 1fr auto; align-items: center; gap: 10px; font-size: .88rem; }
+.barras .rotulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.barras .barra { background: color-mix(in srgb, var(--muted) 22%, transparent); border-radius: 999px; height: 9px; }
+.barras .barra i { display: block; height: 9px; border-radius: 999px; background: var(--accent); min-width: 2px; }
+.barras .valor { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.barras .valor small { display: block; color: var(--muted); font-weight: 400; font-size: .78rem; }
 """
 
 
@@ -839,7 +946,9 @@ def _corpo_da_pesquisa(dados: Dict[str, Any], doc: Dict[str, Any], *, preview: b
         )
     partes.append(_kpis_da_pesquisa(dados))
     partes.append(blocks_to_html(doc.get("blocks") or [], preview=preview))
+    partes.append(_graficos_da_pesquisa(dados))
     partes.append(_tabela_da_pesquisa(dados))
+    partes.append(_adjudicatarios_da_pesquisa(dados))
 
     fontes = [fonte.get("documento") for fonte in (dados.get("fontes") or []) if fonte.get("documento")]
     if fontes:
@@ -849,6 +958,80 @@ def _corpo_da_pesquisa(dados: Dict[str, Any], doc: Dict[str, Any], *, preview: b
             nota += f" · valores lidos a {recolhido}"
         partes.append(f'<div class="section aviso">{_esc(nota)}</div>')
     return "".join(parte for parte in partes if parte)
+
+
+def _barra_de_valor(valor: float, maximo: float) -> int:
+    """A largura da barra, em percentagem do maior valor da série."""
+    if maximo <= 0 or valor <= 0:
+        return 0
+    return max(2, int(round(100 * valor / maximo)))
+
+
+def _barras(itens: List[Dict[str, Any]], *, unidade: Optional[str] = None) -> str:
+    """Gráfico de barras em HTML/CSS.
+
+    Não é uma imagem nem um canvas: o valor e o rótulo ficam **em texto**, por
+    isso o gráfico lê-se (e imprime-se) sem cor, e o que está escrito é o mesmo
+    número que a tabela mostra.
+    """
+    valores = [_para_float(item.get("valor")) for item in itens]
+    maximo = max(valores) if valores else 0.0
+    linhas = []
+    for item, valor in zip(itens, valores):
+        nota = str(item.get("nota") or "")
+        texto = _numero(valor) if unidade == "contratos" else _euros_curto(valor)
+        linhas.append(
+            f'<li><span class="rotulo">{_esc(item.get("rotulo"))}</span>'
+            f'<span class="barra"><i style="width:{_barra_de_valor(valor, maximo)}%"></i></span>'
+            f'<span class="valor">{_esc(texto)}'
+            + (f"<small>{_esc(nota)}</small>" if nota else "")
+            + "</span></li>"
+        )
+    return f'<ul class="barras">{"".join(linhas)}</ul>'
+
+
+def _graficos_da_pesquisa(dados: Dict[str, Any]) -> str:
+    """As séries da pesquisa (municípios do topo, contratado e despesa por ano)."""
+    partes = []
+    for grafico in dados.get("graficos") or []:
+        itens = grafico.get("itens") or []
+        if not itens:
+            continue
+        partes.append(
+            f'<section class="section grafico"><h3>{_esc(grafico.get("titulo"))}</h3>'
+            f'<p class="sub">{_esc(grafico.get("subtitulo") or "")}</p>'
+            f'{_barras(itens, unidade=grafico.get("unidade"))}</section>'
+        )
+    return "".join(partes)
+
+
+def _adjudicatarios_da_pesquisa(dados: Dict[str, Any]) -> str:
+    """Os maiores adjudicatários do filtro: barras por cima, tabela por baixo."""
+    bloco = dados.get("adjudicatarios") or {}
+    itens = bloco.get("itens") or []
+    if not itens:
+        return ""
+    ano = bloco.get("ano")
+    titulo = "Principais adjudicatários" + (f" em {ano}" if ano else "")
+    subtitulo = (
+        f"{_numero(bloco.get('total'))} adjudicatários"
+        + (f" nos {_numero(bloco.get('municipios'))} municípios do filtro" if bloco.get("municipios") else "")
+        + f" · {_euros_curto(bloco.get('valor'))} adjudicados · "
+        "um contrato com vários adjudicatários conta em cada um"
+    )
+    cabecalho = ["Adjudicatário", "Contratos", "Valor"]
+    linhas = [
+        [str(item.get("nome") or ""), _numero(item.get("contratos")), _euros_curto(item.get("valor"))]
+        for item in itens
+    ]
+    return (
+        '<section class="section grafico"><h3>'
+        + _esc(titulo)
+        + f'</h3><p class="sub">{_esc(subtitulo)}</p>'
+        + _barras(itens[:12])
+        + "</section>"
+        + _tabela(titulo, cabecalho, linhas)
+    )
 
 
 def render_pesquisa(
@@ -895,6 +1078,11 @@ def render_pesquisa(
         preview=preview,
         noindex=bool(seo.get("noindex")),
         extra_css=extra_css,
+        breadcrumb=[
+            {"label": "Início", "href": "/site"},
+            {"label": "Pesquisas"},
+            {"label": titulo},
+        ],
     )
 
 
@@ -929,8 +1117,9 @@ def _posts_with_meta(posts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def render_post(post: Dict[str, Any], *, preview: bool = False, settings: Optional[Dict[str, Any]] = None) -> str:
     settings = settings or store.get_settings()
     seo = post.get("seo") or {}
-    categories = {item.get("id"): item.get("name") for item in store.taxonomy()["categories"]}
-    names = [categories.get(cid) for cid in (post.get("category_ids") or [])]
+    categorias = store.taxonomy()["categories"]
+    por_id = {item.get("id"): item for item in categorias}
+    names = [str((por_id.get(cid) or {}).get("name") or "") for cid in (post.get("category_ids") or [])]
     names = [name for name in names if name]
     cover = _media_url(post.get("cover_id"))
     hero = ""
@@ -972,6 +1161,14 @@ def render_post(post: Dict[str, Any], *, preview: bool = False, settings: Option
     }
     if cover:
         json_ld["image"] = _absolute(cover, base_url)
+    trilha: List[Dict[str, str]] = [
+        {"label": "Início", "href": "/site"},
+        {"label": "Blog", "href": "/site/blog"},
+    ]
+    primeira = next((item for item in categorias if item.get("name") == names[0]), None) if names else None
+    if primeira and primeira.get("slug"):
+        trilha.append({"label": names[0], "href": f"/site/categoria/{primeira['slug']}"})
+    trilha.append({"label": str(post.get("title") or "")})
     return _layout(
         title=str(seo.get("title") or post.get("title") or ""),
         description=str(seo.get("description") or post.get("excerpt") or _plain_excerpt(post)),
@@ -985,6 +1182,7 @@ def render_post(post: Dict[str, Any], *, preview: bool = False, settings: Option
         json_ld=json_ld,
         preview=preview,
         noindex=bool(seo.get("noindex")),
+        breadcrumb=trilha,
     )
 
 
@@ -1056,6 +1254,12 @@ def render_blog(
         f'<section class="section">{cards}</section>{pager}'
     )
     path = base_path + (f"?page={page_no}" if page_no > 1 else "")
+    trilha: List[Dict[str, str]] = [{"label": "Início", "href": "/site"}]
+    if category or tag:
+        trilha.append({"label": "Blog", "href": "/site/blog"})
+        trilha.append({"label": str((category or {}).get("name") or tag or "")})
+    else:
+        trilha.append({"label": "Blog"})
     return _layout(
         title=title,
         description=str((category or {}).get("description") or intro),
@@ -1064,6 +1268,7 @@ def render_blog(
         settings=settings,
         canonical=base_path if page_no == 1 else base_path,
         preview=preview,
+        breadcrumb=trilha,
     )
 
 

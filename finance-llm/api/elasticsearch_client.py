@@ -17852,7 +17852,14 @@ def fornecedores_do_municipio(
         bloco = ((resp.get("aggregations", {}).get("adjudicatarios", {}) or {}).get("nomes", {}) or {})
         baldes = bloco.get("buckets") or []
         for balde in baldes:
-            nome = str(balde["key"])
+            # O `composite` devolve a chave como objeto (`{"nome": "…"}`) mesmo
+            # com uma só origem: sem isto o fornecedor vinha como texto do dicionário.
+            chave = balde.get("key")
+            if isinstance(chave, dict):
+                chave = chave.get("nome") or next(iter(chave.values()), "")
+            nome = str(chave or "")
+            if not nome:
+                continue
             raiz = balde.get("raiz", {}) or {}
             actual = fornecedores.get(nome)
             contratos = int(raiz.get("doc_count") or 0)

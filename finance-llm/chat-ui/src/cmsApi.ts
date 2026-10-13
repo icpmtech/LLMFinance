@@ -231,6 +231,34 @@ export type CmsPesquisaLinha = {
   anos_recentes?: { ano: string; contratos: number; valor: number }[];
 };
 
+/** Uma barra de um gráfico da página (`graficos`). */
+export type CmsPesquisaBarra = {
+  rotulo: string;
+  valor: number;
+  /** O número que acompanha a barra (contratos, quando a barra é um valor). */
+  nota?: string | null;
+  contratos?: number | null;
+};
+
+/** Uma série desenhada na página (municípios do topo, contratado/despesa por ano). */
+export type CmsPesquisaGrafico = {
+  id: string;
+  titulo: string;
+  subtitulo?: string;
+  unidade?: "euros" | "contratos";
+  itens: CmsPesquisaBarra[];
+};
+
+/** Os maiores adjudicatários do filtro (lidos do índice dos contratos). */
+export type CmsPesquisaAdjudicatarios = {
+  ano?: number | null;
+  total?: number;
+  valor?: number;
+  municipios?: number;
+  itens?: { nome: string; contratos: number; valor: number }[];
+  error?: string;
+};
+
 /** A fotografia que a página mostra (lida quando o editor a mandou ler). */
 export type CmsPesquisaDados = {
   filtros?: CmsPesquisaFiltros;
@@ -245,6 +273,8 @@ export type CmsPesquisaDados = {
   contratos_ano_somados?: number;
   contratos_ano_total_somados?: number;
   distritos?: { key: string; count: number }[];
+  graficos?: CmsPesquisaGrafico[];
+  adjudicatarios?: CmsPesquisaAdjudicatarios | null;
   origem?: string;
   gerado_em?: string | null;
   fontes?: { documento?: string | null; url?: string | null }[];
@@ -740,6 +770,16 @@ export function cmsPreviewUrl(entity: "pages" | "posts" | "municipios" | "pesqui
 /** URL do site público correspondente (abre numa janela do browser). */
 export function cmsPublicUrl(path: string): string {
   return `${API_BASE}/site${path ? (path.startsWith("/") ? path : `/${path}`) : ""}`;
+}
+
+/**
+ * Ligação para um item **dentro da aplicação do CMS** (`/cms/municipios?id=…`).
+ *
+ * O caminho é da própria SPA (não passa pelo `/api`): serve para saltar de outra
+ * página da aplicação para o editor certo, sem o utilizador ter de o procurar.
+ */
+export function cmsAppUrl(section: "municipios" | "pesquisas" | "paginas" | "blog", id: string): string {
+  return `/cms/${section}?id=${encodeURIComponent(id)}`;
 }
 
 /** Lê um ficheiro do disco do utilizador e devolve base64 (sem o prefixo `data:`). */
