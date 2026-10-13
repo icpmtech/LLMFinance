@@ -107,7 +107,16 @@ function Send-FicheiroTexto {
 
 # Uma parte vazia e um frame gzip de ~30-60 bytes. Nao vale a pena enviar isso
 # nem pedir a VM para o importar.
-$MINIMO_BYTES = 1000
+#
+# 200, e nao 1000. O limite tem de separar "vazio" de "pequeno mas real", e um
+# gzip vazio sao ~60 bytes -- qualquer valor muito acima disso comeca a engolir
+# partes legitimas de indices pequenos.
+#
+# Aconteceu com `finance_vereadores` (2 documentos, parte de **438 bytes**): o
+# envio saltou-a, anunciou "0 partes enviadas", e o indice ficou a zero na VM sem
+# um unico aviso. Um indice pequeno nao e um erro -- e o normal num sistema em
+# construcao, onde metade dos indices tem dezenas de documentos.
+$MINIMO_BYTES = 200
 
 # A chave que decide "ja enviei isto" inclui o TAMANHO, nao so o nome.
 #
@@ -297,6 +306,17 @@ try {
         Write-Host ''
         Write-Host ("  {0} partes enviadas, {1}, {2} falhadas" -f `
             $enviados.Count, (Format-Bytes $totalGz), $falhados.Count) -ForegroundColor Green
+
+        # Partes ignoradas por serem abaixo do limite. Antes isto era silencioso, e
+        # um indice inteiro ficava a zero com a corrida a dizer que estava tudo
+        # bem. Agora aparece, com o tamanho, para se ver logo o que ficou de fora.
+        $ignoradas = @(Get-ChildItem $ExportDir -File -Filter '*-part-*.ndjson.gz' -ErrorAction SilentlyContinue |
+            Where-Object { $_.Length -le $MINIMO_BYTES -and (Testa-Indice $_) })
+        if ($ignoradas.Count -gt 0) {
+            Write-Host ("  ATENCAO: {0} partes ignoradas por terem {1} bytes ou menos:" -f `
+                $ignoradas.Count, $MINIMO_BYTES) -ForegroundColor Yellow
+            $ignoradas | ForEach-Object { Write-Host ("    {0}  ({1} bytes)" -f $_.Name, $_.Length) -ForegroundColor Yellow }
+        }
 
         if ($falhados.Count -gt 0) {
             Write-Host '  partes falhadas (voltar a correr com -SaltarExport -SaltarImport):' -ForegroundColor Yellow
