@@ -325,6 +325,91 @@ def test_lista_por_ano_de_contratos_filtra_por_distrito(monkeypatch: pytest.Monk
     assert resposta["items"][0]["nome"] == "Beta"
 
 
+def test_contratos_dos_anos_recentes_usa_os_anos_do_municipio() -> None:
+    """O município mostra os anos dele (desc), não zeros dos anos em que não contratou."""
+    pontos = municipios.contratos_dos_anos_recentes(_ficha())
+
+    assert [(ponto["ano"], ponto["contratos"]) for ponto in pontos] == [
+        ("2024", 120),
+        ("2015", 69),
+    ]
+    assert pontos[0]["valor"] == 6_500_000.0
+
+
+def test_contratos_dos_anos_recentes_limita_a_serie() -> None:
+    ficha = {
+        **_ficha(),
+        "contratos_por_ano": {
+            str(ano): {"contratos": ano, "valor": float(ano)} for ano in range(2015, 2026)
+        },
+    }
+
+    pontos = municipios.contratos_dos_anos_recentes(ficha)
+
+    assert [ponto["ano"] for ponto in pontos] == ["2025", "2024", "2023", "2022", "2021"]
+    assert len(pontos) == municipios.ANOS_RECENTES
+
+
+def test_totais_dos_anos_recentes_somam_os_municipios() -> None:
+    fichas = [
+        {**_ficha("Alfa"), "contratos_por_ano": {"2024": {"contratos": 2, "valor": 200.0}}},
+        {
+            **_ficha("Beta"),
+            "contratos_por_ano": {
+                "2024": {"contratos": 9, "valor": 900.0},
+                "2023": {"contratos": 4, "valor": 400.0},
+            },
+        },
+    ]
+
+    totais = municipios.totais_dos_anos_recentes(fichas)
+
+    assert totais == [
+        {"ano": "2024", "contratos": 11, "valor": 1100.0},
+        {"ano": "2023", "contratos": 4, "valor": 400.0},
+    ]
+
+
+def test_anos_recentes_sao_o_arranque_da_serie_completa() -> None:
+    anos = municipios.anos_de_contratos(municipios.fichas_locais())
+
+    assert municipios.anos_recentes(municipios.fichas_locais()) == anos[: municipios.ANOS_RECENTES]
+
+
+def test_lista_por_ano_de_contratos_traz_os_anos_recentes(monkeypatch: pytest.MonkeyPatch) -> None:
+    fichas = [{**_ficha("Alfa"), "contratos_por_ano": {"2024": {"contratos": 2, "valor": 200.0}}}]
+    monkeypatch.setattr(municipios, "fichas_locais", lambda: fichas)
+
+    resposta = municipios.listar_por_ano_contratos(ano_contratos=2024)
+
+    assert resposta["items"][0]["contratos_recentes"] == [
+        {"ano": "2024", "contratos": 2, "valor": 200.0}
+    ]
+
+
+def test_listar_traz_os_anos_recentes_vindos_do_indice(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A lista do Elasticsearch também sai com os anos recentes de cada município."""
+    from api import elasticsearch_client
+
+    ficha = {
+        **_ficha("Alfa"),
+        "contratos_por_ano": {
+            "2024": {"contratos": 2, "valor": 200.0},
+            "2019": {"contratos": 1, "valor": 10.0},
+        },
+    }
+    monkeypatch.setattr(
+        elasticsearch_client,
+        "search_municipios_despesas",
+        lambda **_kwargs: {"total": 1, "items": [ficha]},
+    )
+
+    resposta = municipios.listar()
+
+    assert resposta["origem"] == "elasticsearch"
+    assert [ponto["ano"] for ponto in resposta["items"][0]["contratos_recentes"]] == ["2024", "2019"]
+
+
 def test_ficha_real_do_municipio_traz_a_serie_de_contratos() -> None:
     """A fonte real em disco tem de ter a série anual — é o que a página mostra."""
     fichas = municipios.fichas_locais()

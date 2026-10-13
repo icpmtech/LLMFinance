@@ -8,7 +8,8 @@ Duas fontes independentes são juntas numa ficha por município (308):
 2. **Contratação** — agregação do índice `contratos` (Portal BASE) por
    **adjudicante**, para os adjudicantes que são o próprio município
    («Município de Lisboa», «Câmara Municipal da Guarda», «Serviços
-   Municipalizados … de Abrantes»).
+   Municipalizados … de Abrantes»). A série é anual (2012→2026) e, em cada
+   município, destacam-se os `ANOS_RECENTES` mais recentes com contratação.
 
 O resultado é indexado em `finance_municipios_despesas` e guardado em JSON
 (`data/municipios/`), para a página «Despesas das câmaras municipais» e para a
@@ -555,6 +556,59 @@ def contratos_do_ano(ficha: Dict[str, Any], ano: Any) -> Dict[str, float]:
         return {"contratos": 0, "valor": 0.0}
 
 
+#: Quantos anos recentes são calculados **por município** (o seletor de ano
+#: continua a dar acesso a toda a série, 2012→2026).
+ANOS_RECENTES = 5
+
+
+def anos_recentes(fichas: Optional[List[Dict[str, Any]]] = None) -> List[str]:
+    """Os `ANOS_RECENTES` anos mais recentes com contratação no Portal BASE."""
+    return anos_de_contratos(fichas)[:ANOS_RECENTES]
+
+
+def contratos_dos_anos_recentes(
+    ficha: Dict[str, Any],
+    limite: int = ANOS_RECENTES,
+) -> List[Dict[str, Any]]:
+    """Os anos mais recentes **de um município**, do mais recente para o mais antigo.
+
+    Sai da série anual do Portal BASE (a mesma que está no índice): um município
+    que só tenha contratado até 2019 mostra os anos dele, em vez de zeros nos
+    anos em que não contratou.
+    """
+    serie = ficha.get("contratos_por_ano") or {}
+    anos = sorted((str(ano) for ano in serie if str(ano).isdigit()), reverse=True)[:limite]
+    return [
+        {
+            "ano": ano,
+            "contratos": int((serie.get(ano) or {}).get("contratos") or 0),
+            "valor": float((serie.get(ano) or {}).get("valor") or 0.0),
+        }
+        for ano in anos
+    ]
+
+
+def totais_dos_anos_recentes(fichas: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+    """Contratação do Portal BASE nos anos recentes, somada por todos os municípios."""
+    lista = fichas if fichas is not None else fichas_locais()
+    anos = anos_recentes(lista)
+    totais = {ano: {"ano": ano, "contratos": 0, "valor": 0.0} for ano in anos}
+    for ficha in lista:
+        serie = ficha.get("contratos_por_ano") or {}
+        for ano in anos:
+            dados = serie.get(ano) or {}
+            totais[ano]["contratos"] += int(dados.get("contratos") or 0)
+            totais[ano]["valor"] += float(dados.get("valor") or 0.0)
+    return list(totais.values())
+
+
+def _com_anos_recentes(itens: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Junta a cada linha os anos mais recentes de contratação do município."""
+    for item in itens:
+        item["contratos_recentes"] = contratos_dos_anos_recentes(item)
+    return itens
+
+
 #: Ordenações da lista quando se escolhe um ano de contratos: as de contratação
 #: passam a ser **do ano escolhido** (é o valor que a coluna mostra).
 ORDENACOES_ANO_CONTRATOS: Dict[str, str] = {
@@ -627,7 +681,7 @@ def listar_por_ano_contratos(
     inicio = max(0, (max(1, page) - 1) * max(1, size))
     return {
         "total": len(itens),
-        "items": itens[inicio : inicio + max(1, size)],
+        "items": _com_anos_recentes(itens[inicio : inicio + max(1, size)]),
         "page": page,
         "size": size,
         "origem": "json-local",
@@ -684,6 +738,7 @@ def listar(
     )
     if resposta.get("items") or not resposta.get("error"):
         resposta["origem"] = "elasticsearch"
+        resposta["items"] = _com_anos_recentes(resposta.get("items") or [])
         return resposta
 
     fichas = fichas_locais()
@@ -697,7 +752,7 @@ def listar(
     inicio = max(0, (max(1, page) - 1) * size)
     return {
         "total": len(itens),
-        "items": itens[inicio:inicio + size],
+        "items": _com_anos_recentes(itens[inicio:inicio + size]),
         "page": page,
         "size": size,
         "origem": "json-local",
@@ -748,6 +803,8 @@ def meta() -> Dict[str, Any]:
         "diagnostico": dados.get("diagnostico"),
         "classificadores": [{"codigo": c, "etiqueta": e} for c, _, e in CLASSIFICADORES],
         "anos_contratos": anos_de_contratos(),
+        "anos_recentes": anos_recentes(),
+        "totais_recentes": totais_dos_anos_recentes(),
         "indice": municipios_despesas_status(),
     }
 

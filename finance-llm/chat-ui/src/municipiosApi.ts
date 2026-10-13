@@ -53,6 +53,12 @@ export type MunicipioDespesas = {
   /** Contratos e valor **do ano escolhido** (Portal BASE). */
   contratos_ano_total?: number | null;
   contratos_ano_valor?: number | null;
+  /**
+   * Anos mais recentes de contratação **deste município** (Portal BASE), do
+   * mais recente para o mais antigo — são os anos dele, não zeros dos anos em
+   * que não contratou.
+   */
+  contratos_recentes?: { ano: string; contratos: number; valor: number }[];
   /** Nomes com que a câmara aparece no Portal BASE. */
   adjudicantes?: string[];
   fonte_despesas?: string | null;
@@ -111,6 +117,10 @@ export type MunicipiosDespesasMeta = {
   anos?: string[];
   /** Anos com contratação registada no Portal BASE (do mais recente para o mais antigo). */
   anos_contratos?: string[];
+  /** Os anos recentes em destaque (os mesmos para toda a lista). */
+  anos_recentes?: string[];
+  /** Contratação dos anos recentes, somada por todos os municípios. */
+  totais_recentes?: { ano: string; contratos: number; valor: number }[];
   atualizado_no_ine?: string | null;
   ultimo_periodo?: string | null;
   recolhido_em?: string | null;

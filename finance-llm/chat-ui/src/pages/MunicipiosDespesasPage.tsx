@@ -13,7 +13,9 @@
  *
  * A lista ordena-se por qualquer uma das duas (no Elasticsearch, não no
  * browser), para se poder responder a «onde se gasta mais» e «onde se contrata
- * mais» sem trocar de ecrã.
+ * mais» sem trocar de ecrã. Cada linha mostra ainda os **anos mais recentes**
+ * de contratação do município (Portal BASE), para o ano escolhido no filtro não
+ * ser a única janela sobre a série.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -124,7 +126,14 @@ function Barra({
 
 /* ------------------------------------------------------------------- ficha */
 
-function FichaMunicipio({ ficha }: { ficha: MunicipioFicha }) {
+function FichaMunicipio({
+  ficha,
+  anoSelecionado,
+}: {
+  ficha: MunicipioFicha;
+  /** Ano escolhido no filtro da lista: fica destacado na série. */
+  anoSelecionado?: string;
+}) {
   const classificadores = ficha.classificadores ?? {};
   const valores = useMemo(() => {
     const linhas = CLASSIFICADORES_FICHA.map((codigo) => ({
@@ -176,7 +185,10 @@ function FichaMunicipio({ ficha }: { ficha: MunicipioFicha }) {
             </p>
           </div>
           {ano ? (
-            <span className="shrink-0 rounded-full bg-teal-400/10 px-2 py-0.5 text-[11px] text-teal-200">
+            <span
+              className="shrink-0 rounded-full bg-teal-400/10 px-2 py-0.5 text-[11px] text-teal-200"
+              title={`A despesa do INE é a do ano ${ano} (o único que o INE publica); o ano do filtro aplica-se à contratação do Portal BASE.`}
+            >
               despesa de {ano}
             </span>
           ) : (
@@ -249,28 +261,42 @@ function FichaMunicipio({ ficha }: { ficha: MunicipioFicha }) {
 
         <Cartao>
           <h3 className="text-xs font-semibold">Contratação pública por ano</h3>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Portal BASE
+            {anoSelecionado ? ` · ${anoSelecionado} é o ano escolhido no filtro` : ""}
+          </p>
           {serie.length ? (
             <>
               <div className="mt-3 space-y-1.5">
-                {serie.map((ponto) => (
-                  <div key={ponto.ano} className="flex items-center gap-2">
-                    <span className="w-10 shrink-0 text-[10px] tabular-nums text-muted-foreground">
-                      {ponto.ano}
-                    </span>
-                    <div className="h-2 min-w-0 flex-1 rounded-full bg-white/5">
-                      <div
-                        className="h-2 rounded-full bg-sky-400/60"
-                        style={{ width: `${(ponto.valor / maxSerie) * 100}%` }}
-                      />
+                {serie.map((ponto) => {
+                  const ativo = Boolean(anoSelecionado) && ponto.ano === anoSelecionado;
+                  return (
+                    <div
+                      key={ponto.ano}
+                      className={`flex items-center gap-2 ${ativo ? "rounded bg-teal-400/10" : ""}`}
+                    >
+                      <span
+                        className={`w-10 shrink-0 text-[10px] tabular-nums ${
+                          ativo ? "text-teal-200" : "text-muted-foreground"
+                        }`}
+                      >
+                        {ponto.ano}
+                      </span>
+                      <div className="h-2 min-w-0 flex-1 rounded-full bg-white/5">
+                        <div
+                          className={`h-2 rounded-full ${ativo ? "bg-teal-300/80" : "bg-sky-400/60"}`}
+                          style={{ width: `${(ponto.valor / maxSerie) * 100}%` }}
+                        />
+                      </div>
+                      <span className="w-20 shrink-0 text-right text-[10px] tabular-nums">
+                        {euroCompacto(ponto.valor)}
+                      </span>
+                      <span className="w-14 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
+                        {numero(ponto.contratos)}
+                      </span>
                     </div>
-                    <span className="w-20 shrink-0 text-right text-[10px] tabular-nums">
-                      {euroCompacto(ponto.valor)}
-                    </span>
-                    <span className="w-14 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
-                      {numero(ponto.contratos)}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <div className="mt-2 flex justify-end gap-2 text-[10px] text-muted-foreground">
                 <span className="w-20 text-right">valor</span>
@@ -454,8 +480,13 @@ export default function MunicipiosDespesasPage() {
               A despesa de cada município pelo classificador económico —{" "}
               {meta?.fonte_despesas ?? "INE · indicador 0013909 (DGAL)"} — cruzada com a
               contratação pública em que o município é adjudicante ({meta?.fonte_contratos ?? "Portal BASE"}).
-              {meta?.designacao ? ` ${meta.designacao}` : ""} Valores em euros
-              {meta?.ultimo_periodo ? `, ano ${meta.ultimo_periodo}` : ""}.
+              {meta?.designacao ? ` ${meta.designacao}` : ""} Valores em euros: despesa de{" "}
+              {meta?.ultimo_periodo ? `ano ${meta.ultimo_periodo}` : "um ano"} — o único que o INE publica —
+              e contratação de{" "}
+              {meta?.anos_contratos?.length
+                ? `${meta.anos_contratos[meta.anos_contratos.length - 1]} a ${meta.anos_contratos[0]}`
+                : "vários anos"}
+              .
             </p>
           </div>
           <button
@@ -591,6 +622,32 @@ export default function MunicipiosDespesasPage() {
             ) : null}
             {meta?.atualizado_no_ine ? ` INE atualizado em ${meta.atualizado_no_ine}.` : null}
           </p>
+
+          {(meta?.totais_recentes ?? []).length ? (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground">
+                Portal BASE, anos mais recentes:
+              </span>
+              {(meta?.totais_recentes ?? []).map((total) => {
+                const ativo = anoContratos === total.ano;
+                return (
+                  <button
+                    key={total.ano}
+                    type="button"
+                    onClick={() => setAnoContratos(ativo ? "" : total.ano)}
+                    title={`${numero(total.contratos)} contratos, ${euroCompacto(total.valor)} em ${total.ano} — clique para escolher este ano`}
+                    className={`rounded-full border px-2 py-0.5 text-[10px] tabular-nums transition ${
+                      ativo
+                        ? "border-teal-400/40 bg-teal-400/10 text-teal-200"
+                        : "border-white/10 text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {total.ano} · {euroCompacto(total.valor)}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
         </section>
 
         {erro ? (
@@ -602,18 +659,37 @@ export default function MunicipiosDespesasPage() {
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,min(46%,860px))]">
           <div className="min-w-0 space-y-3">
             <Cartao className="overflow-x-auto p-0">
-              <table className="w-full min-w-[560px] text-[11px]">
+              <table className="w-full min-w-[860px] text-[11px]">
                 <thead>
                   <tr className="text-left text-muted-foreground">
                     <th className="px-3 py-2 font-medium">Município</th>
                     <th className="px-3 py-2 font-medium">Distrito</th>
-                    <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Despesa total</th>
-                    <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Com pessoal</th>
+                    <th
+                      className="px-3 py-2 text-right font-medium whitespace-nowrap"
+                      title={`${meta?.fonte_despesas ?? "INE · indicador 0013909 (DGAL)"} — o INE só publica o ano ${meta?.ultimo_periodo ?? "mais recente"}`}
+                    >
+                      Despesa total
+                      {meta?.ultimo_periodo ? (
+                        <span className="font-normal opacity-60"> {meta.ultimo_periodo}</span>
+                      ) : null}
+                    </th>
+                    <th
+                      className="px-3 py-2 text-right font-medium whitespace-nowrap"
+                      title="Despesas com pessoal, do mesmo ano do INE"
+                    >
+                      Com pessoal
+                    </th>
                     <th className="px-3 py-2 text-right font-medium whitespace-nowrap">
                       {dados?.ano_contratos ? `Contratos ${dados.ano_contratos}` : "Contratos"}
                     </th>
                     <th className="px-3 py-2 text-right font-medium whitespace-nowrap">
                       {dados?.ano_contratos ? `Contratado ${dados.ano_contratos}` : "Valor contratado"}
+                    </th>
+                    <th
+                      className="px-3 py-2 text-right font-medium whitespace-nowrap"
+                      title="Os anos mais recentes de contratação de cada município (Portal BASE)"
+                    >
+                      Anos mais recentes
                     </th>
                   </tr>
                 </thead>
@@ -646,11 +722,27 @@ export default function MunicipiosDespesasPage() {
                       <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">
                         {euroCompacto(m.contratos_ano_valor ?? m.contratos_valor)}
                       </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">
+                        {m.contratos_recentes?.length ? (
+                          m.contratos_recentes.map((ponto) => (
+                            <span
+                              key={ponto.ano}
+                              className="ml-2 first:ml-0"
+                              title={`${numero(ponto.contratos)} contratos em ${ponto.ano}`}
+                            >
+                              <span className="text-muted-foreground">{ponto.ano}</span>{" "}
+                              {euroCompacto(ponto.valor)}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {dados && dados.items.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
+                      <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
                         Nenhum município com os filtros atuais.
                       </td>
                     </tr>
@@ -696,7 +788,11 @@ export default function MunicipiosDespesasPage() {
                 <Loader2 size={14} className="mr-2 animate-spin" /> A carregar o município…
               </Cartao>
             ) : detalhe ? (
-              <FichaMunicipio key={detalhe.nome} ficha={detalhe} />
+              <FichaMunicipio
+                key={detalhe.nome}
+                ficha={detalhe}
+                anoSelecionado={anoContratos || undefined}
+              />
             ) : (
               <Cartao>
                 <p className="flex items-center gap-1.5 text-sm font-semibold">

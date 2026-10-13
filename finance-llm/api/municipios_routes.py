@@ -5,9 +5,11 @@ Uma **área por município**, com duas coisas que se cruzam:
 - a **despesa** anual do indicador 0013909 do INE (origem DGAL), por
   classificador económico (`D`, `D1`, `D11`, …), em euros;
 - a **contratação pública** em que o município é adjudicante, agregada do
-  Portal BASE — total, valor, série anual e principais fornecedores.
+  Portal BASE — total, valor, série anual, os anos mais recentes de cada
+  município e os principais fornecedores.
 
 - `GET  /municipios/despesas`            — lista de municípios, com filtros e ordenação
+  (cada linha traz `contratos_recentes`: os anos mais recentes desse município)
 - `GET  /municipios/despesas/meta`       — proveniência dos dados e volumetria
 - `GET  /municipios/despesas/mapa`       — todos os municípios com os valores para o mapa
 - `GET  /municipios/despesas/{municipio}`— ficha de um município (nome ou código INE)
