@@ -764,6 +764,302 @@ def recolher(
 
 
 # ---------------------------------------------------------------------------
+# Lotes por período (mês e ano) a partir do índice de contratos
+# ---------------------------------------------------------------------------
+#: Ligação da página pública de peças publicada no contrato. No índice de
+#: contratos o campo é `text`, por isso a seleção dos anfitriões é por
+#: `wildcard` (o mesmo caminho da sonda `_probe_contratos_pecas.py`).
+CAMPO_LIGACAO = "linkPecasProc"
+FILTRO_VORTAL: Dict[str, Any] = {"wildcard": {CAMPO_LIGACAO: "*vortal.biz*"}}
+
+#: Avisos por lote, lotes por pedido e teto de contratos lidos do índice.
+LOTE_PADRAO = 10
+LOTE_MAXIMO = 100
+LOTES_POR_VEZ = 20
+ESCANEAR_PADRAO = 5000
+ESCANEAR_MAXIMO = 20000
+#: Bloco de leitura ao índice (a paginação é feita com `search_after`).
+PAGINA_ES = 2000
+#: Contratos guardados por aviso (o mesmo token repete-se em vários contratos).
+CONTRATOS_POR_AVISO = 5
+
+
+def _intervalo_periodo(ano: int, mes: Optional[int] = None) -> Tuple[str, str]:
+    """Intervalo `[início, fim)` do período em ISO (o índice de contratos usa datas)."""
+    if mes:
+        inicio = datetime(int(ano), int(mes), 1)
+        fim = datetime(int(ano) + (int(mes) // 12), (int(mes) % 12) + 1, 1)
+    else:
+        inicio = datetime(int(ano), 1, 1)
+        fim = datetime(int(ano) + 1, 1, 1)
+    return inicio.date().isoformat(), fim.date().isoformat()
+
+
+def periodos(*, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Anos e meses com avisos Vortal publicados (para escolher o período do lote).
+
+    A contagem é sobre `dataPublicacao` dos contratos com ligação Vortal — é o
+    mesmo critério da recolha, para os números baterem com o que se recolhe.
+    """
+    cliente = es or get_es_client()
+    if cliente is None:
+        return {"disponivel": False, "total": 0, "anos": [], "meses": [], "erro": "Elasticsearch indisponível"}
+    corpo = {
+        "size": 0,
+        "track_total_hits": True,
+        "query": {"bool": {"filter": [FILTRO_VORTAL]}},
+        "aggs": {
+            "anos": {"date_histogram": {"field": "dataPublicacao", "calendar_interval": "year", "format": "yyyy", "min_doc_count": 1}},
+            "meses": {"date_histogram": {"field": "dataPublicacao", "calendar_interval": "month", "format": "yyyy-MM", "min_doc_count": 1}},
+        },
+    }
+    try:
+        resposta = cliente.search(index=CONTRACTS_INDEX, body=corpo)
+    except Exception as erro:  # noqa: BLE001
+        logger.warning("Vortal: períodos indisponíveis (%s)", erro)
+        return {"disponivel": True, "total": 0, "anos": [], "meses": [], "erro": str(erro)}
+    agregados = resposta.get("aggregations") or {}
+    return {
+        "disponivel": True,
+        "total": int(((resposta.get("hits") or {}).get("total") or {}).get("value") or 0),
+        "anos": [
+            {"ano": int(bucket["key_as_string"]), "avisos": int(bucket["doc_count"])}
+            for bucket in (agregados.get("anos") or {}).get("buckets") or []
+        ],
+        "meses": [
+            {"mes": str(bucket["key_as_string"]), "avisos": int(bucket["doc_count"])}
+            for bucket in (agregados.get("meses") or {}).get("buckets") or []
+        ],
+    }
+
+
+def avisos_do_periodo(
+    *,
+    ano: int,
+    mes: Optional[int] = None,
+    limite: int = 20,
+    escanear: int = ESCANEAR_PADRAO,
+    destino_base: Optional[Path] = None,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Avisos Vortal publicados num mês/ano, a partir do índice de contratos.
+
+    Uma linha por **aviso** (o mesmo token repete-se em vários contratos, um por
+    lote/adjudicação), com a ligação pública, o token e o que já está em disco.
+    Nada é descarregado: é a leitura que precede a recolha em lote.
+    """
+    inicio, fim = _intervalo_periodo(ano, mes)
+    base: Dict[str, Any] = {
+        "ano": int(ano),
+        "mes": int(mes) if mes else None,
+        "inicio": inicio,
+        "fim": fim,
+    }
+    raiz = Path(destino_base or DESTINO_DIR)
+    em_disco = {
+        str(aviso.get("token")): aviso.get("uid")
+        for aviso in listar_avisos_em_disco(destino_base=raiz)
+        if aviso.get("token")
+    }
+
+    cliente = es or get_es_client()
+    if cliente is None:
+        return {**base, "disponivel": False, "erro": "Elasticsearch indisponível", "total": 0, "lidos": 0, "unicos": 0, "em_disco": 0, "pendentes": 0, "avisos": []}
+
+    teto = max(1, min(int(escanear or ESCANEAR_PADRAO), ESCANEAR_MAXIMO))
+    corpo: Dict[str, Any] = {
+        "size": PAGINA_ES,
+        "track_total_hits": True,
+        "_source": ["idcontrato", "objectoContrato", CAMPO_LIGACAO, "dataPublicacao", "Ano"],
+        "query": {"bool": {"filter": [FILTRO_VORTAL, {"range": {"dataPublicacao": {"gte": inicio, "lt": fim}}}]}},
+        "sort": [{"dataPublicacao": "asc"}, {"idcontrato": "asc"}],
+    }
+
+    encontrados: Dict[str, Dict[str, Any]] = {}
+    total = 0
+    lidos = 0
+    try:
+        while lidos < teto:
+            resposta = cliente.search(index=CONTRACTS_INDEX, body=corpo)
+            hits = (resposta.get("hits") or {}).get("hits") or []
+            total = int(((resposta.get("hits") or {}).get("total") or {}).get("value") or total)
+            if not hits:
+                break
+            for hit in hits:
+                lidos += 1
+                fonte = hit.get("_source") or {}
+                url = str(fonte.get(CAMPO_LIGACAO) or "").strip()
+                token = token_de_url(url)
+                if not token or not _host_permitido(url):
+                    continue
+                aviso = encontrados.setdefault(
+                    token,
+                    {
+                        "token": token,
+                        "url": url,
+                        "uid": em_disco.get(token),
+                        "data_publicacao": fonte.get("dataPublicacao"),
+                        "em_disco": token in em_disco,
+                        "contratos": [],
+                    },
+                )
+                if len(aviso["contratos"]) < CONTRATOS_POR_AVISO:
+                    aviso["contratos"].append(
+                        {
+                            "idcontrato": fonte.get("idcontrato"),
+                            "data_publicacao": fonte.get("dataPublicacao"),
+                            "ano": fonte.get("Ano"),
+                            "objecto": str(fonte.get("objectoContrato") or "")[:160] or None,
+                        }
+                    )
+            seguinte = hits[-1].get("sort")
+            if len(hits) < PAGINA_ES or not seguinte:
+                break
+            corpo["search_after"] = seguinte
+    except Exception as erro:  # noqa: BLE001
+        logger.warning("Vortal: falhou a leitura do período %s/%s (%s)", ano, mes, erro)
+        return {**base, "disponivel": True, "erro": str(erro), "total": total, "lidos": lidos, "unicos": 0, "em_disco": 0, "pendentes": 0, "avisos": []}
+
+    avisos = list(encontrados.values())
+    com_disco = [aviso for aviso in avisos if aviso["em_disco"]]
+    return {
+        **base,
+        "disponivel": True,
+        "total": total,
+        "lidos": lidos,
+        "truncado": total > lidos,
+        "unicos": len(avisos),
+        "em_disco": len(com_disco),
+        "pendentes": len(avisos) - len(com_disco),
+        "avisos": avisos[: max(1, int(limite))],
+    }
+
+
+def recolher_lote(
+    *,
+    ano: int,
+    mes: Optional[int] = None,
+    lote: int = LOTE_PADRAO,
+    lotes: int = 1,
+    indexar: bool = True,
+    extrair: bool = True,
+    forcar: bool = False,
+    saltar_em_disco: Optional[bool] = None,
+    idioma: str = "pt-PT",
+    escanear: int = ESCANEAR_PADRAO,
+    destino_base: Optional[Path] = None,
+    cliente: Optional[requests.Session] = None,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Recolhe (e indexa) em lotes os avisos Vortal publicados num mês/ano.
+
+    Cada lote é um pedido de `lote` avisos e podem correr até `lotes` lotes por
+    chamada. Por omissão só entram os avisos que **ainda não estão em disco**
+    (`saltar_em_disco`), para que repetir a chamada avance no período em vez de
+    voltar ao princípio; com `forcar` volta-se a descarregar tudo.
+
+    A resposta traz o que ficou feito e `restantes`, para a página mostrar o
+    progresso e pedir o lote seguinte.
+    """
+    raiz = Path(destino_base or DESTINO_DIR)
+    tamanho = max(1, min(int(lote or LOTE_PADRAO), LOTE_MAXIMO))
+    quantos = max(1, min(int(lotes or 1), LOTES_POR_VEZ))
+    comecou = time.time()
+    periodo = avisos_do_periodo(
+        ano=ano, mes=mes, limite=ESCANEAR_MAXIMO, escanear=escanear, destino_base=raiz, es=es
+    )
+    resumo = {chave: periodo.get(chave) for chave in ("ano", "mes", "inicio", "fim")}
+    if not periodo.get("disponivel"):
+        erro = str(periodo.get("erro") or "Elasticsearch indisponível")
+        return {
+            "ok": False,
+            "erro": erro,
+            "periodo": resumo,
+            "lote": tamanho,
+            "lotes": [],
+            "avisos": 0,
+            "pecas": 0,
+            "bytes": 0,
+            "indexados": 0,
+            "processados": 0,
+            "restantes": 0,
+            "candidatos": 0,
+            "erros": [erro],
+            "detalhe": [],
+            "destino": str(raiz),
+            "duracao_s": 0.0,
+        }
+
+    candidatos = list(periodo.get("avisos") or [])
+    saltar = (not forcar) if saltar_em_disco is None else bool(saltar_em_disco)
+    if saltar:
+        candidatos = [aviso for aviso in candidatos if not aviso.get("em_disco")]
+
+    executados: List[Dict[str, Any]] = []
+    detalhe: List[Dict[str, Any]] = []
+    erros: List[str] = []
+    pecas = total_bytes = indexados = falhas = 0
+    for numero in range(quantos):
+        fatia = candidatos[numero * tamanho : (numero + 1) * tamanho]
+        if not fatia:
+            break
+        resultado = recolher(
+            [aviso["url"] for aviso in fatia],
+            destino_base=raiz,
+            indexar=indexar,
+            extrair=extrair,
+            forcar=forcar,
+            idioma=idioma,
+            cliente=cliente,
+            es=es,
+        )
+        indice = resultado.get("indice") or {}
+        pecas += int(resultado.get("pecas") or 0)
+        total_bytes += int(resultado.get("bytes") or 0)
+        indexados += int(indice.get("indexados") or 0)
+        falhas += int(indice.get("falhas") or 0)
+        erros.extend(str(erro) for erro in (resultado.get("erros") or []))
+        detalhe.extend(resultado.get("detalhe") or [])
+        executados.append(
+            {
+                "n": numero + 1,
+                "avisos": len(fatia),
+                "pecas": int(resultado.get("pecas") or 0),
+                "bytes": int(resultado.get("bytes") or 0),
+                "indexados": int(indice.get("indexados") or 0),
+                "erros": len(resultado.get("erros") or []),
+                "urls": [aviso["url"] for aviso in fatia],
+            }
+        )
+        if len(fatia) < tamanho:
+            break
+
+    processados = sum(int(item["avisos"]) for item in executados)
+    return {
+        "ok": True,
+        "periodo": resumo,
+        "total_periodo": int(periodo.get("total") or 0),
+        "unicos_periodo": int(periodo.get("unicos") or 0),
+        "em_disco_periodo": int(periodo.get("em_disco") or 0),
+        "truncado": bool(periodo.get("truncado")),
+        "lote": tamanho,
+        "lotes": executados,
+        "candidatos": len(candidatos),
+        "processados": processados,
+        "restantes": max(0, len(candidatos) - processados),
+        "avisos": len(detalhe),
+        "pecas": pecas,
+        "bytes": total_bytes,
+        "indexados": indexados,
+        "erros": erros[:20],
+        "detalhe": detalhe[:20],
+        "indice": {"ok": True, "index": VORTAL_PECAS_INDEX, "indexados": indexados, "falhas": falhas},
+        "destino": str(raiz),
+        "duracao_s": round(time.time() - comecou, 2),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Índice Elasticsearch
 # ---------------------------------------------------------------------------
 def documento_para_indice(peca: Dict[str, Any], aviso: Dict[str, Any], *, destino_base: Optional[Path] = None) -> Tuple[str, Dict[str, Any]]:
@@ -1162,11 +1458,24 @@ def meta() -> Dict[str, Any]:
             "chars_por_peca": MAX_TEXTO,
             "timeout_s": TIMEOUT,
         },
+        "lotes": {
+            "indice_contratos": CONTRACTS_INDEX,
+            "campo_ligacao": CAMPO_LIGACAO,
+            "lote_padrao": LOTE_PADRAO,
+            "lote_maximo": LOTE_MAXIMO,
+            "lotes_por_vez": LOTES_POR_VEZ,
+            "escanear_padrao": ESCANEAR_PADRAO,
+            "escanear_maximo": ESCANEAR_MAXIMO,
+        },
         "notas": [
             "A lista de peças é pública: não é preciso sessão na Vortal (validado na sonda).",
             "O `downloadUrl` traz um token próprio e devolve o ficheiro com `Content-Disposition`.",
             "Só se descarrega de anfitriões `*.vortal.biz`.",
             "As peças são dados de terceiros: guardar em disco é a fonte de verdade; o índice serve para pesquisa.",
+            (
+                f"As ligações das peças estão no índice de contratos (`{CONTRACTS_INDEX}.{CAMPO_LIGACAO}`): "
+                "escolher o mês e o ano recolhe em lotes, sem colar URLs."
+            ),
             "PDF digitalizado (imagem sem camada de texto) fica marcado `pdf-sem-texto`/`precisa_ocr`: a plataforma não faz OCR.",
         ],
     }

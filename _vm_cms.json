@@ -1,0 +1,991 @@
+﻿{
+  "version": 1,
+  "pages": [
+    {
+      "title": "Fnack",
+      "slug": "fnack",
+      "status": "arquivado",
+      "scheduled_at": null,
+      "updated_by": "teste@teste.com",
+      "seo": {
+        "title": "",
+        "description": "Benchmark de preços de Fnack: melhor loja, dispersão e poupança.",
+        "keywords": [
+          "benchmark",
+          "preços",
+          "produtos"
+        ],
+        "image_id": null,
+        "noindex": false
+      },
+      "parent_id": "pag_710f9b866292",
+      "template": "pagina-padrao",
+      "blocks": [
+        {
+          "id": "blk_d462e90c05ab",
+          "type": "hero",
+          "hidden": false,
+          "data": {
+            "title": "Fnack",
+            "subtitle": "0 produtos em 0 lojas"
+          }
+        },
+        {
+          "id": "blk_342b084c1799",
+          "type": "destaques",
+          "hidden": false,
+          "data": {
+            "title": "O que este estudo mostra",
+            "items": [
+              {
+                "title": "0",
+                "text": "ofertas recolhidas"
+              },
+              {
+                "title": "0",
+                "text": "produtos no estudo"
+              },
+              {
+                "title": "0",
+                "text": "produtos em duas ou mais lojas"
+              },
+              {
+                "title": "—",
+                "text": "poupança somada escolhendo sempre o mais barato"
+              }
+            ]
+          }
+        },
+        {
+          "id": "blk_76eb3d146a03",
+          "type": "aviso",
+          "hidden": false,
+          "data": {
+            "tone": "amber",
+            "text": "Ainda não há ofertas recolhidas neste benchmark. Corra a recolha antes de publicar."
+          }
+        },
+        {
+          "id": "blk_df7dc01c812f",
+          "type": "texto",
+          "hidden": false,
+          "data": {
+            "title": "Metodologia",
+            "markdown": "Os preços são recolhidos automaticamente dos sites das lojas e normalizados por **nome**. Última recolha: **2026-10-11T13:47:23**. Preços com IVA incluído quando o site o indica. Este estudo não é uma recomendação de compra."
+          }
+        },
+        {
+          "id": "blk_3b1f17627adf",
+          "type": "cta",
+          "hidden": false,
+          "data": {
+            "title": "Comparar ao vivo",
+            "text": "Filtre por loja, procure um produto e veja todas as ofertas recolhidas.",
+            "button_label": "Abrir a pesquisa do benchmark",
+            "button_href": "/site/benchmarks/fnack/pesquisa"
+          }
+        }
+      ],
+      "show_in_menu": true,
+      "menu_order": 0,
+      "menu_label": "",
+      "excerpt": "Comparação de preços: 0 produtos em 0 lojas.",
+      "path": "benchmarks/fnack",
+      "id": "pag_1d9d6c5cd46d",
+      "created_at": "2026-10-11T13:47:24.687588+00:00",
+      "updated_at": "2026-10-11T13:47:48.633305+00:00",
+      "published_at": "2026-10-11T13:47:24.687613+00:00"
+    },
+    {
+      "title": "Benchmarks",
+      "slug": "benchmarks",
+      "status": "publicado",
+      "scheduled_at": null,
+      "updated_by": "teste@teste.com",
+      "seo": {
+        "title": "",
+        "description": "",
+        "keywords": [],
+        "image_id": null,
+        "noindex": false
+      },
+      "parent_id": null,
+      "template": "pagina-padrao",
+      "blocks": [
+        {
+          "id": "blk_52b8f3c325b6",
+          "type": "hero",
+          "hidden": false,
+          "data": {
+            "title": "Benchmarks de produtos",
+            "subtitle": "O mesmo produto comparado entre lojas, com o preço e a data de recolha à vista."
+          }
+        },
+        {
+          "id": "blk_257a2acc1502",
+          "type": "texto",
+          "hidden": false,
+          "data": {
+            "title": "Como ler estes estudos",
+            "markdown": "Cada benchmark recolhe os preços publicados por várias lojas, normaliza-os para o mesmo produto e mostra o melhor preço, a dispersão entre lojas e quanto se poupa ao escolher a oferta mais barata. Os dados são recolhidos automaticamente dos sites e podem estar desactualizados — confirme sempre na loja antes de decidir."
+          }
+        }
+      ],
+      "show_in_menu": true,
+      "menu_order": 30,
+      "menu_label": "",
+      "excerpt": "Estudos de preço: o mesmo produto comparado em várias lojas.",
+      "path": "benchmarks",
+      "id": "pag_710f9b866292",
+      "created_at": "2026-10-11T13:47:24.676595+00:00",
+      "updated_at": "2026-10-11T13:47:24.676613+00:00",
+      "published_at": "2026-10-11T13:47:24.676618+00:00"
+    },
+    {
+      "id": "pag_inicio",
+      "title": "Início",
+      "slug": "inicio",
+      "path": "",
+      "parent_id": null,
+      "template": "pagina-inicial",
+      "status": "publicado",
+      "published_at": "2026-10-10T07:12:35.079900+00:00",
+      "scheduled_at": null,
+      "show_in_menu": true,
+      "menu_order": 1,
+      "menu_label": "Início",
+      "excerpt": "O IQ OS junta contratos públicos, empresas, mercado e investigação assistida numa só plataforma.",
+      "blocks": [
+        {
+          "id": "blk_seed_hero",
+          "type": "hero",
+          "data": {
+            "title": "Inteligência financeira e contratual, num só sítio",
+            "subtitle": "Contratos públicos de Portugal e Espanha, cadastro de empresas, mercado e investigação com evidências citadas.",
+            "cta_label": "Explorar o blog",
+            "cta_href": "/site/blog",
+            "align": "centro"
+          }
+        },
+        {
+          "id": "blk_seed_texto",
+          "type": "texto",
+          "data": {
+            "title": "O que é o IQ OS",
+            "markdown": "O **IQ OS** reúne recolha de dados abertos, ontologia de entidades e assistentes de investigação.\n\nTudo o que se escreve aqui é publicado por blocos: páginas, artigos de blog, media e menus — com rascunho, agendamento e histórico de revisões."
+          }
+        },
+        {
+          "id": "blk_seed_cards",
+          "type": "destaques",
+          "data": {
+            "title": "Por onde começar",
+            "items": [
+              {
+                "title": "Contratos públicos",
+                "text": "Pesquise adjudicantes, adjudicatários e valores por região."
+              },
+              {
+                "title": "Empresas",
+                "text": "Cadastro, relações societárias e sinais de risco."
+              },
+              {
+                "title": "Investigação",
+                "text": "Perguntas com resposta citada e grafo de evidências."
+              }
+            ]
+          }
+        },
+        {
+          "id": "blk_seed_blog",
+          "type": "blog",
+          "data": {
+            "title": "Últimos artigos",
+            "limit": 3
+          }
+        }
+      ],
+      "seo": {
+        "title": "IQ OS — inteligência financeira e contratual",
+        "description": "Contratos públicos, empresas, mercado e investigação assistida.",
+        "keywords": [],
+        "image_id": null,
+        "noindex": false
+      },
+      "created_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_by": "sistema"
+    },
+    {
+      "id": "pag_sobre",
+      "title": "Sobre",
+      "slug": "sobre",
+      "path": "sobre",
+      "parent_id": null,
+      "template": "pagina-padrao",
+      "status": "publicado",
+      "published_at": "2026-10-10T07:12:35.079900+00:00",
+      "scheduled_at": null,
+      "show_in_menu": true,
+      "menu_order": 2,
+      "menu_label": "",
+      "excerpt": "Como trabalhamos os dados abertos e o que pode esperar da plataforma.",
+      "blocks": [
+        {
+          "id": "blk_seed_sobre_hero",
+          "type": "hero",
+          "data": {
+            "title": "Sobre o IQ OS",
+            "subtitle": "Dados abertos, ontologia e assistentes de investigação.",
+            "align": "esquerda"
+          }
+        },
+        {
+          "id": "blk_seed_sobre_texto",
+          "type": "texto",
+          "data": {
+            "markdown": "## Princípios\n\n- **Fonte aberta** — todo o dado bruto vem de fontes públicas.\n- **Rasto** — cada resposta cita a evidência que a sustenta.\n- **Reutilização** — o mesmo conteúdo serve a plataforma, o site e o blog."
+          }
+        },
+        {
+          "id": "blk_seed_sobre_cta",
+          "type": "cta",
+          "data": {
+            "title": "Tem uma pergunta?",
+            "text": "Use o Hermes para investigar com evidências citadas.",
+            "button_label": "Abrir o Hermes",
+            "button_href": "/hermes"
+          }
+        }
+      ],
+      "seo": {
+        "title": "Sobre o IQ OS",
+        "description": "Princípios e métodos da plataforma.",
+        "keywords": [],
+        "image_id": null,
+        "noindex": false
+      },
+      "created_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_by": "sistema"
+    },
+    {
+      "id": "pag_blog",
+      "title": "Blog",
+      "slug": "blog",
+      "path": "blog",
+      "parent_id": null,
+      "template": "lista-de-artigos",
+      "status": "publicado",
+      "published_at": "2026-10-10T07:12:35.079900+00:00",
+      "scheduled_at": null,
+      "show_in_menu": true,
+      "menu_order": 3,
+      "menu_label": "Blog",
+      "excerpt": "Análises, notas de método e novidades da plataforma.",
+      "blocks": [
+        {
+          "id": "blk_seed_blog_hero",
+          "type": "hero",
+          "data": {
+            "title": "Blog",
+            "subtitle": "Análises, método e novidades.",
+            "align": "esquerda"
+          }
+        },
+        {
+          "id": "blk_seed_blog_list",
+          "type": "blog",
+          "data": {
+            "title": "",
+            "limit": 12
+          }
+        }
+      ],
+      "seo": {
+        "title": "Blog",
+        "description": "Análises, notas de método e novidades da plataforma.",
+        "keywords": [],
+        "image_id": null,
+        "noindex": false
+      },
+      "created_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_by": "sistema"
+    }
+  ],
+  "posts": [
+    {
+      "id": "post_bemvindo",
+      "title": "Bem-vindo ao blog do IQ OS",
+      "slug": "bem-vindo-ao-blog",
+      "excerpt": "O que vai encontrar aqui: análises de contratos públicos, notas sobre empresas e o método por detrás dos números.",
+      "markdown": "## Porquê um blog\n\nOs dados só valem quando se sabe **de onde vêm** e **o que dizem**. Aqui escrevemos as duas coisas: a leitura dos números e o método que a sustenta.\n\n### O que vai encontrar\n\n1. **Análises** de contratos públicos em Portugal e Espanha.\n2. **Notas de mercado** sobre empresas, setores e concentração.\n3. **Novidades do produto**, sempre com exemplos reais.\n\n> Cada artigo pode citar contratos, empresas e dossiês da plataforma.\n\nSe procura um tema, comece pela pesquisa 360.",
+      "blocks": [],
+      "cover_id": null,
+      "category_ids": [
+        "cat_analises"
+      ],
+      "tags": [
+        "contratos públicos",
+        "método"
+      ],
+      "author": "Equipa IQ OS",
+      "status": "publicado",
+      "published_at": "2026-10-10T07:12:35.079900+00:00",
+      "scheduled_at": null,
+      "featured": true,
+      "reading_minutes": 3,
+      "seo": {
+        "title": "",
+        "description": "",
+        "keywords": [],
+        "image_id": null,
+        "noindex": false
+      },
+      "created_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_by": "sistema"
+    },
+    {
+      "id": "post_contratos_2026",
+      "title": "Contratos públicos em 2026: o que os dados mostram",
+      "slug": "contratos-publicos-2026",
+      "excerpt": "Volume, valor e concentração nos contratos já publicados este ano — e as três leituras que interessam.",
+      "markdown": "Os dados de 2026 ainda estão a fechar, mas já deixam ver três padrões.\n\n## 1. O valor concentra-se em poucos adjudicatários\n\nA cauda longa é grande, mas o valor não: os primeiros adjudicatários levam a maior fatia.\n\n## 2. O procedimento explica o preço\n\nAjuste direto e concurso público não competem em pé de igualdade.\n\n## 3. O território pesa\n\nDistrito de execução continua a ser a melhor chave para ler o mercado local.\n\n_Em preparação: a análise por CPV._",
+      "blocks": [],
+      "cover_id": null,
+      "category_ids": [
+        "cat_analises",
+        "cat_mercado"
+      ],
+      "tags": [
+        "contratos públicos",
+        "2026",
+        "mercado"
+      ],
+      "author": "Equipa IQ OS",
+      "status": "publicado",
+      "published_at": "2026-10-06T07:12:35.079939+00:00",
+      "scheduled_at": null,
+      "featured": false,
+      "reading_minutes": 4,
+      "seo": {
+        "title": "",
+        "description": "",
+        "keywords": [],
+        "image_id": null,
+        "noindex": false
+      },
+      "created_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_by": "sistema"
+    }
+  ],
+  "municipios": [],
+  "contents": [
+    {
+      "id": "ctd_rodape",
+      "title": "Rodapé institucional",
+      "kind": "rodape",
+      "body": "**IQ OS** — inteligência financeira e contratual.\n\nDados de fontes abertas, com rasto e evidência.",
+      "data": {},
+      "tags": [
+        "institucional"
+      ],
+      "notes": "Usado nos rodapés das páginas.",
+      "uses": 0,
+      "created_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_at": "2026-10-10T07:12:35.079900+00:00"
+    },
+    {
+      "id": "ctd_contactos",
+      "title": "Contactos gerais",
+      "kind": "contactos",
+      "body": "Fale connosco para propostas, dados ou imprensa.",
+      "data": {
+        "email": "geral@iqos.pt",
+        "phone": "",
+        "address": ""
+      },
+      "tags": [
+        "institucional"
+      ],
+      "notes": "",
+      "uses": 0,
+      "created_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_at": "2026-10-10T07:12:35.079900+00:00"
+    }
+  ],
+  "media": [],
+  "categories": [
+    {
+      "id": "cat_analises",
+      "name": "Análises",
+      "slug": "analises",
+      "description": "Leituras de dados e tendências.",
+      "parent_id": null,
+      "color": "#0ea5a4",
+      "created_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_at": "2026-10-10T07:12:35.079900+00:00"
+    },
+    {
+      "id": "cat_mercado",
+      "name": "Mercado",
+      "slug": "mercado",
+      "description": "Empresas, setores e mercado.",
+      "parent_id": null,
+      "color": "#6366f1",
+      "created_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_at": "2026-10-10T07:12:35.079900+00:00"
+    },
+    {
+      "id": "cat_produto",
+      "name": "Produto",
+      "slug": "produto",
+      "description": "Novidades da plataforma.",
+      "parent_id": null,
+      "color": "#f59e0b",
+      "created_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_at": "2026-10-10T07:12:35.079900+00:00"
+    }
+  ],
+  "templates": [
+    {
+      "id": "tpl_pagina_padrao",
+      "name": "Página padrão",
+      "kind": "page",
+      "description": "Hero, texto, cartões e chamada à ação.",
+      "builtin": true,
+      "blocks": [
+        {
+          "id": "t1",
+          "type": "hero",
+          "data": {
+            "title": "Título da página",
+            "subtitle": "Uma frase que diz o essencial.",
+            "align": "esquerda"
+          }
+        },
+        {
+          "id": "t2",
+          "type": "texto",
+          "data": {
+            "title": "Secção",
+            "markdown": "Escreva aqui o corpo da página em Markdown."
+          }
+        },
+        {
+          "id": "t3",
+          "type": "cta",
+          "data": {
+            "title": "Próximo passo",
+            "text": "Explique o que o leitor deve fazer.",
+            "button_label": "Saber mais",
+            "button_href": "#"
+          }
+        }
+      ],
+      "created_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_at": "2026-10-10T07:12:35.079900+00:00"
+    },
+    {
+      "id": "tpl_landing",
+      "name": "Landing de captação",
+      "kind": "page",
+      "description": "Hero, cartões de valor, prova e chamada à ação.",
+      "builtin": true,
+      "blocks": [
+        {
+          "id": "l1",
+          "type": "hero",
+          "data": {
+            "title": "Uma promessa clara",
+            "subtitle": "Para quem é e o que resolve.",
+            "cta_label": "Começar",
+            "cta_href": "#",
+            "align": "centro"
+          }
+        },
+        {
+          "id": "l2",
+          "type": "destaques",
+          "data": {
+            "title": "Porque é diferente",
+            "items": [
+              {
+                "title": "Ponto 1",
+                "text": "Explicação curta."
+              },
+              {
+                "title": "Ponto 2",
+                "text": "Explicação curta."
+              },
+              {
+                "title": "Ponto 3",
+                "text": "Explicação curta."
+              }
+            ]
+          }
+        },
+        {
+          "id": "l3",
+          "type": "faq",
+          "data": {
+            "title": "Perguntas frequentes",
+            "items": [
+              {
+                "question": "Pergunta?",
+                "answer": "Resposta."
+              }
+            ]
+          }
+        },
+        {
+          "id": "l4",
+          "type": "cta",
+          "data": {
+            "title": "Pronto para começar?",
+            "text": "",
+            "button_label": "Falar connosco",
+            "button_href": "#"
+          }
+        }
+      ],
+      "created_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_at": "2026-10-10T07:12:35.079900+00:00"
+    },
+    {
+      "id": "tpl_artigo",
+      "name": "Artigo de blog",
+      "kind": "post",
+      "description": "Estrutura de um artigo com introdução, secções e fecho.",
+      "builtin": true,
+      "blocks": [],
+      "created_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_at": "2026-10-10T07:12:35.079900+00:00"
+    }
+  ],
+  "menus": [
+    {
+      "id": "menu_header",
+      "name": "Menu principal",
+      "location": "header",
+      "items": [
+        {
+          "id": "mi_291ad207482a",
+          "label": "Início",
+          "href": "",
+          "page_id": "pag_inicio",
+          "new_tab": false
+        },
+        {
+          "id": "mi_aa913788d536",
+          "label": "Sobre",
+          "href": "",
+          "page_id": "pag_sobre",
+          "new_tab": false
+        },
+        {
+          "id": "mi_b7536e3c063d",
+          "label": "Blog",
+          "href": "",
+          "page_id": "pag_blog",
+          "new_tab": false
+        }
+      ],
+      "created_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_at": "2026-10-13T20:21:26.399813+00:00"
+    },
+    {
+      "id": "menu_footer",
+      "name": "Menu de rodapé",
+      "location": "footer",
+      "items": [
+        {
+          "id": "mi_9d4208e3e0d4",
+          "label": "Blog",
+          "href": "/site/blog",
+          "page_id": null,
+          "new_tab": false
+        }
+      ],
+      "created_at": "2026-10-10T07:12:35.079900+00:00",
+      "updated_at": "2026-10-10T07:12:35.079900+00:00"
+    }
+  ],
+  "revisions": [
+    {
+      "id": "rev_a51c9b2753f9",
+      "entity": "menus",
+      "entity_id": "menu_header",
+      "title": "Menu principal",
+      "snapshot": {
+        "id": "menu_header",
+        "name": "Menu principal",
+        "location": "header",
+        "items": [
+          {
+            "id": "mi_291ad207482a",
+            "label": "Início",
+            "href": "",
+            "page_id": "pag_inicio",
+            "new_tab": false
+          },
+          {
+            "id": "mi_aa913788d536",
+            "label": "Sobre",
+            "href": "",
+            "page_id": "pag_sobre",
+            "new_tab": false
+          },
+          {
+            "id": "mi_b7536e3c063d",
+            "label": "Blog",
+            "href": "",
+            "page_id": "pag_blog",
+            "new_tab": false
+          }
+        ],
+        "created_at": "2026-10-10T07:12:35.079900+00:00",
+        "updated_at": "2026-10-10T07:12:35.079900+00:00"
+      },
+      "author": "teste@teste.com",
+      "note": "antes de guardar",
+      "at": "2026-10-13T20:21:26.399790+00:00"
+    },
+    {
+      "id": "rev_be0eba02f4e0",
+      "entity": "pages",
+      "entity_id": "pag_1d9d6c5cd46d",
+      "title": "Fnack",
+      "snapshot": {
+        "title": "Fnack",
+        "slug": "fnack",
+        "status": "rascunho",
+        "scheduled_at": null,
+        "updated_by": "teste@teste.com",
+        "seo": {
+          "title": "",
+          "description": "Benchmark de preços de Fnack: melhor loja, dispersão e poupança.",
+          "keywords": [
+            "benchmark",
+            "preços",
+            "produtos"
+          ],
+          "image_id": null,
+          "noindex": false
+        },
+        "parent_id": "pag_710f9b866292",
+        "template": "pagina-padrao",
+        "blocks": [
+          {
+            "id": "blk_d462e90c05ab",
+            "type": "hero",
+            "hidden": false,
+            "data": {
+              "title": "Fnack",
+              "subtitle": "0 produtos em 0 lojas"
+            }
+          },
+          {
+            "id": "blk_342b084c1799",
+            "type": "destaques",
+            "hidden": false,
+            "data": {
+              "title": "O que este estudo mostra",
+              "items": [
+                {
+                  "title": "0",
+                  "text": "ofertas recolhidas"
+                },
+                {
+                  "title": "0",
+                  "text": "produtos no estudo"
+                },
+                {
+                  "title": "0",
+                  "text": "produtos em duas ou mais lojas"
+                },
+                {
+                  "title": "—",
+                  "text": "poupança somada escolhendo sempre o mais barato"
+                }
+              ]
+            }
+          },
+          {
+            "id": "blk_76eb3d146a03",
+            "type": "aviso",
+            "hidden": false,
+            "data": {
+              "tone": "amber",
+              "text": "Ainda não há ofertas recolhidas neste benchmark. Corra a recolha antes de publicar."
+            }
+          },
+          {
+            "id": "blk_df7dc01c812f",
+            "type": "texto",
+            "hidden": false,
+            "data": {
+              "title": "Metodologia",
+              "markdown": "Os preços são recolhidos automaticamente dos sites das lojas e normalizados por **nome**. Última recolha: **2026-10-11T13:47:23**. Preços com IVA incluído quando o site o indica. Este estudo não é uma recomendação de compra."
+            }
+          },
+          {
+            "id": "blk_3b1f17627adf",
+            "type": "cta",
+            "hidden": false,
+            "data": {
+              "title": "Comparar ao vivo",
+              "text": "Filtre por loja, procure um produto e veja todas as ofertas recolhidas.",
+              "button_label": "Abrir a pesquisa do benchmark",
+              "button_href": "/site/benchmarks/fnack/pesquisa"
+            }
+          }
+        ],
+        "show_in_menu": true,
+        "menu_order": 0,
+        "menu_label": "",
+        "excerpt": "Comparação de preços: 0 produtos em 0 lojas.",
+        "path": "benchmarks/fnack",
+        "id": "pag_1d9d6c5cd46d",
+        "created_at": "2026-10-11T13:47:24.687588+00:00",
+        "updated_at": "2026-10-11T13:47:48.631506+00:00",
+        "published_at": "2026-10-11T13:47:24.687613+00:00"
+      },
+      "author": "teste@teste.com",
+      "note": "antes de guardar",
+      "at": "2026-10-11T13:47:48.633292+00:00"
+    },
+    {
+      "id": "rev_10ca88f7169f",
+      "entity": "pages",
+      "entity_id": "pag_1d9d6c5cd46d",
+      "title": "Fnack",
+      "snapshot": {
+        "title": "Fnack",
+        "slug": "fnack",
+        "status": "publicado",
+        "scheduled_at": null,
+        "updated_by": "teste@teste.com",
+        "seo": {
+          "title": "",
+          "description": "Benchmark de preços de Fnack: melhor loja, dispersão e poupança.",
+          "keywords": [
+            "benchmark",
+            "preços",
+            "produtos"
+          ],
+          "image_id": null,
+          "noindex": false
+        },
+        "parent_id": "pag_710f9b866292",
+        "template": "pagina-padrao",
+        "blocks": [
+          {
+            "id": "blk_d462e90c05ab",
+            "type": "hero",
+            "hidden": false,
+            "data": {
+              "title": "Fnack",
+              "subtitle": "0 produtos em 0 lojas"
+            }
+          },
+          {
+            "id": "blk_342b084c1799",
+            "type": "destaques",
+            "hidden": false,
+            "data": {
+              "title": "O que este estudo mostra",
+              "items": [
+                {
+                  "title": "0",
+                  "text": "ofertas recolhidas"
+                },
+                {
+                  "title": "0",
+                  "text": "produtos no estudo"
+                },
+                {
+                  "title": "0",
+                  "text": "produtos em duas ou mais lojas"
+                },
+                {
+                  "title": "—",
+                  "text": "poupança somada escolhendo sempre o mais barato"
+                }
+              ]
+            }
+          },
+          {
+            "id": "blk_76eb3d146a03",
+            "type": "aviso",
+            "hidden": false,
+            "data": {
+              "tone": "amber",
+              "text": "Ainda não há ofertas recolhidas neste benchmark. Corra a recolha antes de publicar."
+            }
+          },
+          {
+            "id": "blk_df7dc01c812f",
+            "type": "texto",
+            "hidden": false,
+            "data": {
+              "title": "Metodologia",
+              "markdown": "Os preços são recolhidos automaticamente dos sites das lojas e normalizados por **nome**. Última recolha: **2026-10-11T13:47:23**. Preços com IVA incluído quando o site o indica. Este estudo não é uma recomendação de compra."
+            }
+          },
+          {
+            "id": "blk_3b1f17627adf",
+            "type": "cta",
+            "hidden": false,
+            "data": {
+              "title": "Comparar ao vivo",
+              "text": "Filtre por loja, procure um produto e veja todas as ofertas recolhidas.",
+              "button_label": "Abrir a pesquisa do benchmark",
+              "button_href": "/site/benchmarks/fnack/pesquisa"
+            }
+          }
+        ],
+        "show_in_menu": true,
+        "menu_order": 0,
+        "menu_label": "",
+        "excerpt": "Comparação de preços: 0 produtos em 0 lojas.",
+        "path": "benchmarks/fnack",
+        "id": "pag_1d9d6c5cd46d",
+        "created_at": "2026-10-11T13:47:24.687588+00:00",
+        "updated_at": "2026-10-11T13:47:24.687607+00:00",
+        "published_at": "2026-10-11T13:47:24.687613+00:00"
+      },
+      "author": "teste@teste.com",
+      "note": "antes de publicar",
+      "at": "2026-10-11T13:47:24.689505+00:00"
+    }
+  ],
+  "activity": [
+    {
+      "id": "act_3ee5e6b12bbd",
+      "at": "2026-10-13T20:21:29.556076+00:00",
+      "action": "alterar",
+      "entity": "settings",
+      "entity_id": "settings",
+      "label": "Definições do site",
+      "actor": "teste@teste.com",
+      "detail": ""
+    },
+    {
+      "id": "act_4904f23d144d",
+      "at": "2026-10-13T20:21:26.399826+00:00",
+      "action": "alterar",
+      "entity": "menus",
+      "entity_id": "menu_header",
+      "label": "Menu principal",
+      "actor": "teste@teste.com",
+      "detail": ""
+    },
+    {
+      "id": "act_baaceefa56ff",
+      "at": "2026-10-13T20:20:37.960927+00:00",
+      "action": "alterar",
+      "entity": "settings",
+      "entity_id": "settings",
+      "label": "Definições do site",
+      "actor": "teste@teste.com",
+      "detail": ""
+    },
+    {
+      "id": "act_026d8af4326e",
+      "at": "2026-10-11T13:47:48.633346+00:00",
+      "action": "alterar",
+      "entity": "pages",
+      "entity_id": "pag_1d9d6c5cd46d",
+      "label": "Fnack",
+      "actor": "teste@teste.com",
+      "detail": ""
+    },
+    {
+      "id": "act_ccf918f865cf",
+      "at": "2026-10-11T13:47:48.631543+00:00",
+      "action": "despublicar",
+      "entity": "pages",
+      "entity_id": "pag_1d9d6c5cd46d",
+      "label": "Fnack",
+      "actor": "teste@teste.com",
+      "detail": ""
+    },
+    {
+      "id": "act_2609055a5a4f",
+      "at": "2026-10-11T13:47:24.689559+00:00",
+      "action": "publicar",
+      "entity": "pages",
+      "entity_id": "pag_1d9d6c5cd46d",
+      "label": "Fnack",
+      "actor": "teste@teste.com",
+      "detail": ""
+    },
+    {
+      "id": "act_331c2f56f225",
+      "at": "2026-10-11T13:47:24.687669+00:00",
+      "action": "criar",
+      "entity": "pages",
+      "entity_id": "pag_1d9d6c5cd46d",
+      "label": "Fnack",
+      "actor": "teste@teste.com",
+      "detail": ""
+    },
+    {
+      "id": "act_7c336c1040c8",
+      "at": "2026-10-11T13:47:24.676677+00:00",
+      "action": "criar",
+      "entity": "pages",
+      "entity_id": "pag_710f9b866292",
+      "label": "Benchmarks",
+      "actor": "teste@teste.com",
+      "detail": ""
+    },
+    {
+      "id": "act_d8b5735080ae",
+      "at": "2026-10-10T07:12:35.079900+00:00",
+      "action": "criar",
+      "entity": "settings",
+      "entity_id": "settings",
+      "label": "Site inicial",
+      "actor": "sistema",
+      "detail": "conteúdo de exemplo do CMS"
+    }
+  ],
+  "settings": {
+    "site_name": "IQ OS",
+    "tagline": "Inteligência financeira e contratual",
+    "description": "Plataforma de inteligência financeira: contratos públicos, empresas, mercado e investigação assistida.",
+    "base_url": "",
+    "language": "pt-PT",
+    "home_page_id": "pag_inicio",
+    "blog_page_id": "pag_blog",
+    "posts_per_page": 9,
+    "theme": "claro",
+    "accent": "#0ea5a4",
+    "radius": 14,
+    "footer_text": "© IQ OS — todos os direitos reservados.",
+    "logo_id": null,
+    "favicon_id": null,
+    "social": {
+      "email": "",
+      "linkedin": "",
+      "x": "",
+      "github": ""
+    },
+    "seo": {
+      "title": "",
+      "description": "",
+      "image_id": null,
+      "keywords": []
+    },
+    "robots": "index, follow",
+    "analytics_id": "G-YBD1H9CGGS",
+    "updated_at": "2026-10-13T20:21:29.555939+00:00",
+    "updated_by": "teste@teste.com"
+  },
+  "updated_at": "2026-10-13T20:21:29.556090+00:00"
+}

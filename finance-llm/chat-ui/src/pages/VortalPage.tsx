@@ -11,7 +11,9 @@
  * 1. **Recolher** — cola-se o URL da página pública de peças do procedimento
  *    (ou o token/UID) e o motor resolve o aviso, descarrega as peças para disco,
  *    extrai o texto e (opcionalmente) indexa. Há um botão para **rever** o aviso
- *    antes de descarregar nada.
+ *    antes de descarregar nada. Para muitos avisos, escolhe-se o **mês e o ano**
+ *    (as ligações já estão nos contratos, em `linkPecasProc`) e a recolha corre
+ *    em lotes, sem colar centenas de URLs.
  * 2. **Peças** — o que está indexado (por aviso), com tipo, tamanho, texto
  *    extraído e ligação à página oficial do aviso.
  * 3. **Pesquisa** — pesquisa no texto das peças, com trechos do documento.
@@ -23,6 +25,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import {
   AlertTriangle,
   BarChart3,
+  CalendarDays,
   CheckCircle2,
   CloudDownload,
   Database,
@@ -31,6 +34,7 @@ import {
   FileText,
   FolderDown,
   HardDrive,
+  Layers,
   Loader2,
   Play,
   RefreshCw,
@@ -47,14 +51,21 @@ import {
   getVortalMeta,
   getVortalMonitorizacao,
   getVortalPecas,
+  getVortalPeriodo,
+  getVortalPeriodos,
   indexarVortal,
   pesquisarVortal,
   recolherVortal,
+  recolherVortalLote,
   reverVortalAviso,
+  type VortalAvisoPeriodo,
   type VortalEstado,
+  type VortalLote,
   type VortalMeta,
   type VortalMonitorizacao,
   type VortalPeca,
+  type VortalPeriodo,
+  type VortalPeriodos,
   type VortalRecolha,
   type VortalResultadoPeca,
 } from "../vortalApi";
@@ -81,6 +92,14 @@ function formatDataHora(valor?: string | null): string {
   const data = new Date(valor);
   return Number.isNaN(data.getTime()) ? valor : data.toLocaleString("pt-PT");
 }
+
+function formatData(valor?: string | null): string {
+  if (!valor) return "—";
+  const data = new Date(valor);
+  return Number.isNaN(data.getTime()) ? valor : data.toLocaleDateString("pt-PT");
+}
+
+const NOMES_MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
 /** Trecho do `highlight` do Elasticsearch: `<em>` passa a destaque visual. */
 function Trecho({ html }: { html: string }) {
@@ -491,6 +510,19 @@ export default function VortalPage() {
               ) : null}
             </SectionCard>
 
+            <LotePorPeriodo
+              meta={meta}
+              indexar={indexar}
+              extrair={extrair}
+              forcar={forcar}
+              aoRecolher={async () => {
+                setPecas(null);
+                setResultados(null);
+                await carregarEstado();
+                if (admin) setMonitor(null);
+              }}
+            />
+
             {meta ? (
               <SectionCard title="Como este módulo recolhe" subtitle={meta.titulo} icon={FileText}>
                 <div className="grid gap-4 lg:grid-cols-2">
@@ -873,6 +905,299 @@ function TabelaPecas({ pecas }: { pecas: VortalPeca[] }) {
                   <Chip tone="neutral">só ficheiro</Chip>
                 )}
               </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Recolha em lote: um mês (ou um ano inteiro) de avisos do índice de contratos. */
+function LotePorPeriodo({
+  meta,
+  indexar,
+  extrair,
+  forcar,
+  aoRecolher,
+}: {
+  meta: VortalMeta | null;
+  indexar: boolean;
+  extrair: boolean;
+  forcar: boolean;
+  aoRecolher: () => Promise<void>;
+}) {
+  const [periodos, setPeriodos] = useState<VortalPeriodos | null>(null);
+  const [ano, setAno] = useState("");
+  const [mes, setMes] = useState("");
+  const [lote, setLote] = useState(10);
+  const [lotesVez, setLotesVez] = useState(1);
+  const [saltarEmDisco, setSaltarEmDisco] = useState(true);
+  const [periodo, setPeriodo] = useState<VortalPeriodo | null>(null);
+  const [resultado, setResultado] = useState<VortalLote | null>(null);
+  const [aRever, setARever] = useState(false);
+  const [aRecolher, setARecolher] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    getVortalPeriodos()
+      .then((resposta) => {
+        if (cancelado) return;
+        setPeriodos(resposta);
+        const anos = resposta.anos;
+        const ultimo = anos.length ? anos[anos.length - 1].ano : null;
+        if (ultimo === null) return;
+        setAno(String(ultimo));
+        const meses = resposta.meses.filter((item) => item.mes.startsWith(`${ultimo}-`));
+        if (meses.length) setMes(String(Number(meses[meses.length - 1].mes.slice(5, 7))));
+      })
+      .catch((falha) => {
+        if (!cancelado) setErro(falha instanceof Error ? falha.message : "Erro ao listar os períodos");
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  const mesesDoAno = useMemo(
+    () => (periodos?.meses ?? []).filter((item) => item.mes.startsWith(`${ano}-`)),
+    [ano, periodos],
+  );
+
+  const parametros = useMemo(() => ({ ano: Number(ano), mes: mes ? Number(mes) : undefined }), [ano, mes]);
+  const pronto = Number(ano) >= 2000 && Number(ano) <= 2100;
+
+  const reverPeriodo = useCallback(async () => {
+    if (!pronto) return;
+    setARever(true);
+    setErro(null);
+    try {
+      setPeriodo(await getVortalPeriodo({ ...parametros, limite: 20 }));
+    } catch (falha) {
+      setErro(falha instanceof Error ? falha.message : "Erro ao ler o período");
+    } finally {
+      setARever(false);
+    }
+  }, [parametros, pronto]);
+
+  const recolherLote = useCallback(async () => {
+    if (!pronto) return;
+    setARecolher(true);
+    setErro(null);
+    try {
+      setResultado(
+        await recolherVortalLote({
+          ...parametros,
+          lote,
+          lotes: lotesVez,
+          indexar,
+          extrair,
+          forcar,
+          saltar_em_disco: forcar ? false : saltarEmDisco,
+        }),
+      );
+      await aoRecolher();
+      if (periodo) setPeriodo(await getVortalPeriodo({ ...parametros, limite: 20 }));
+    } catch (falha) {
+      setErro(falha instanceof Error ? falha.message : "Erro na recolha em lote");
+    } finally {
+      setARecolher(false);
+    }
+  }, [aoRecolher, extrair, forcar, indexar, lote, lotesVez, parametros, periodo, pronto, saltarEmDisco]);
+
+  return (
+    <SectionCard
+      title="Recolher em lote por mês e ano"
+      subtitle={`As ligações das peças já estão nos contratos (${meta?.lotes?.indice_contratos ?? "contratos"}.${
+        meta?.lotes?.campo_ligacao ?? "linkPecasProc"
+      }): escolher o período evita colar centenas de URLs.`}
+      icon={Layers}
+      actions={
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => void reverPeriodo()}
+            disabled={aRever || !pronto}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1 text-[11.5px] hover:bg-white/[0.09] disabled:opacity-50"
+          >
+            {aRever ? <Loader2 size={12} className="animate-spin" /> : <CalendarDays size={12} />} Rever período
+          </button>
+          <button
+            type="button"
+            onClick={() => void recolherLote()}
+            disabled={aRecolher || !pronto}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-teal-400/30 bg-teal-400/15 px-3 py-1 text-[11.5px] text-teal-100 hover:bg-teal-400/25 disabled:opacity-50"
+          >
+            {aRecolher ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />} Recolher lote
+          </button>
+        </div>
+      }
+    >
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+          Ano de publicação
+          <select
+            value={ano}
+            onChange={(evento) => {
+              setAno(evento.target.value);
+              setMes("");
+              setPeriodo(null);
+            }}
+            className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11.5px] text-foreground outline-none"
+          >
+            {[...(periodos?.anos ?? [])].reverse().map((item) => (
+              <option key={item.ano} value={item.ano}>
+                {item.ano} · {formatNumber(item.avisos)} avisos
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+          Mês
+          <select
+            value={mes}
+            onChange={(evento) => {
+              setMes(evento.target.value);
+              setPeriodo(null);
+            }}
+            className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11.5px] text-foreground outline-none"
+          >
+            <option value="">todos os meses</option>
+            {mesesDoAno.map((item) => {
+              const numero = Number(item.mes.slice(5, 7));
+              return (
+                <option key={item.mes} value={numero}>
+                  {NOMES_MESES[numero - 1]} · {formatNumber(item.avisos)}
+                </option>
+              );
+            })}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+          Avisos por lote
+          <input
+            type="number"
+            min={1}
+            max={meta?.lotes?.lote_maximo ?? 100}
+            value={lote}
+            onChange={(evento) => setLote(Math.max(1, Math.min(Number(evento.target.value) || 1, meta?.lotes?.lote_maximo ?? 100)))}
+            className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 font-mono text-[11.5px] text-foreground outline-none"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+          Lotes por vez
+          <input
+            type="number"
+            min={1}
+            max={meta?.lotes?.lotes_por_vez ?? 20}
+            value={lotesVez}
+            onChange={(evento) => setLotesVez(Math.max(1, Math.min(Number(evento.target.value) || 1, meta?.lotes?.lotes_por_vez ?? 20)))}
+            className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 font-mono text-[11.5px] text-foreground outline-none"
+          />
+        </label>
+      </div>
+
+      <label className="mt-3 inline-flex items-center gap-2 text-[11.5px]">
+        <input
+          type="checkbox"
+          checked={forcar ? false : saltarEmDisco}
+          disabled={forcar}
+          onChange={(evento) => setSaltarEmDisco(evento.target.checked)}
+          className="accent-teal-400"
+        />
+        Só avisos ainda não recolhidos
+        {forcar ? <span className="text-muted-foreground">— com «Forçar nova descarga» o período é refeito desde o início</span> : null}
+      </label>
+
+      {erro ? (
+        <p className="mt-3 flex items-center gap-1.5 text-[11.5px] text-rose-200">
+          <AlertTriangle size={13} /> {erro}
+        </p>
+      ) : null}
+
+      {periodos && !periodos.anos.length ? (
+        <div className="mt-3">
+          <EmptyState tone="warn">O índice de contratos não devolveu avisos Vortal — confirme que está acessível.</EmptyState>
+        </div>
+      ) : null}
+
+      {periodo ? (
+        <div className="mt-4 space-y-2">
+          <p className="text-[11.5px] text-muted-foreground">
+            {periodo.mes ? `${NOMES_MESES[periodo.mes - 1]} de ${periodo.ano}` : `todo o ano ${periodo.ano}`} · {formatNumber(periodo.total)} contrato(s) com peças
+            Vortal · {formatNumber(periodo.unicos)} aviso(s) · {formatNumber(periodo.em_disco)} já em disco ·{" "}
+            <span className="text-foreground">{formatNumber(periodo.pendentes)} por recolher</span>
+            {periodo.truncado ? ` · lidos os primeiros ${formatNumber(periodo.lidos ?? 0)} contratos` : ""}
+          </p>
+          <TabelaPeriodo avisos={periodo.avisos} />
+        </div>
+      ) : null}
+
+      {resultado ? (
+        <div className="mt-4 space-y-2">
+          <p className="text-[11.5px] text-muted-foreground">
+            {resultado.lotes.length} lote(s) · {formatNumber(resultado.processados)} aviso(s) · {formatNumber(resultado.pecas)} peça(s) ·{" "}
+            {formatBytes(resultado.bytes)} · {formatNumber(resultado.indexados)} indexada(s) · {resultado.duracao_s} s · faltam{" "}
+            {formatNumber(resultado.restantes)} neste período
+          </p>
+          <ul className="space-y-1 text-[11px] text-muted-foreground">
+            {resultado.lotes.map((item) => (
+              <li key={item.n}>
+                · lote {item.n}: {item.avisos} aviso(s), {item.pecas} peça(s), {formatBytes(item.bytes)}, {item.indexados} indexada(s)
+                {item.erros ? `, ${item.erros} erro(s)` : ""}
+              </li>
+            ))}
+          </ul>
+          {resultado.erros.length ? (
+            <ul className="space-y-1 text-[11px] text-amber-200">
+              {resultado.erros.slice(0, 5).map((item) => (
+                <li key={item}>· {item}</li>
+              ))}
+            </ul>
+          ) : null}
+          {resultado.restantes ? (
+            <p className="text-[11px] text-teal-200">
+              O período continua a ter avisos por recolher: repita «Recolher lote» para avançar (a lista acima é atualizada a cada lote).
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </SectionCard>
+  );
+}
+
+/** Avisos de um período: ligação pública, contratos de origem e estado em disco. */
+function TabelaPeriodo({ avisos }: { avisos: VortalAvisoPeriodo[] }) {
+  if (!avisos.length) return <EmptyState>Este período não tem avisos Vortal com peças publicadas.</EmptyState>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[760px] text-[11.5px]">
+        <thead className="text-left text-muted-foreground">
+          <tr className="border-b border-white/10">
+            <th className="py-1">Publicação</th>
+            <th className="py-1">Aviso</th>
+            <th className="py-1">Contratos</th>
+            <th className="py-1">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {avisos.map((item) => (
+            <tr key={item.token} className="border-b border-white/5">
+              <td className="whitespace-nowrap py-1">{formatData(item.data_publicacao)}</td>
+              <td className="max-w-[420px] py-1">
+                <a href={item.url} target="_blank" rel="noreferrer" className="font-mono hover:text-teal-200" title={item.url}>
+                  {item.uid ?? `${item.token.slice(0, 24)}…`}
+                </a>
+                {item.contratos[0]?.objecto ? (
+                  <p className="truncate text-[10.5px] text-muted-foreground">{item.contratos[0].objecto}</p>
+                ) : null}
+              </td>
+              <td className="py-1 font-mono">
+                {item.contratos.length}
+                {item.contratos[0]?.idcontrato ? ` · ${item.contratos[0].idcontrato}` : ""}
+              </td>
+              <td className="py-1">{item.em_disco ? <Chip tone="teal">em disco</Chip> : <Chip tone="neutral">por recolher</Chip>}</td>
             </tr>
           ))}
         </tbody>

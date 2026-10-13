@@ -6,6 +6,10 @@
  * (PDF/DOCX/XLSX/XML) e indexa-as em `finance_vortal_pecas` — onde ficam
  * pesquisáveis por dentro dos documentos.
  *
+ * Além da recolha aviso a aviso, o módulo recolhe **em lote por mês e ano**: as
+ * ligações das peças já estão nos contratos (`contratos.linkPecasProc`), pelo
+ * que basta escolher o período e o servidor avança em lotes.
+ *
  * A monitorização (`/vortal/admin/*`) exige papel `admin` no servidor.
  */
 import { API_BASE } from "./api";
@@ -24,6 +28,15 @@ export type VortalMeta = {
   tipos: Record<string, string>;
   extensoes_texto: string[];
   limites: { bytes_por_peca: number; chars_por_peca: number; timeout_s: number };
+  lotes?: {
+    indice_contratos: string;
+    campo_ligacao: string;
+    lote_padrao: number;
+    lote_maximo: number;
+    lotes_por_vez: number;
+    escanear_padrao: number;
+    escanear_maximo: number;
+  };
   notas: string[];
 };
 
@@ -128,6 +141,63 @@ export type VortalResultadoPeca = VortalPeca & {
   recolhido_em?: string;
 };
 
+export type VortalPeriodos = {
+  disponivel: boolean;
+  total: number;
+  anos: { ano: number; avisos: number }[];
+  meses: { mes: string; avisos: number }[];
+  erro?: string;
+};
+
+export type VortalAvisoPeriodo = {
+  token: string;
+  url: string;
+  uid?: string | null;
+  data_publicacao?: string | null;
+  em_disco: boolean;
+  contratos: { idcontrato?: string | null; data_publicacao?: string | null; ano?: number | null; objecto?: string | null }[];
+};
+
+export type VortalPeriodo = {
+  ano: number;
+  mes?: number | null;
+  inicio: string;
+  fim: string;
+  disponivel: boolean;
+  total: number;
+  lidos?: number;
+  truncado?: boolean;
+  unicos: number;
+  em_disco: number;
+  pendentes: number;
+  avisos: VortalAvisoPeriodo[];
+  erro?: string;
+};
+
+export type VortalLote = {
+  ok: boolean;
+  erro?: string;
+  periodo: { ano: number; mes?: number | null; inicio: string; fim: string };
+  total_periodo: number;
+  unicos_periodo: number;
+  em_disco_periodo: number;
+  truncado?: boolean;
+  lote: number;
+  lotes: { n: number; avisos: number; pecas: number; bytes: number; indexados: number; erros: number; urls: string[] }[];
+  candidatos: number;
+  processados: number;
+  restantes: number;
+  avisos: number;
+  pecas: number;
+  bytes: number;
+  indexados: number;
+  erros: string[];
+  detalhe: VortalAviso[];
+  indice?: { ok: boolean; index: string; indexados: number; falhas?: number };
+  destino: string;
+  duracao_s: number;
+};
+
 /* ----------------------------------------------------------------- pedidos */
 
 async function pedir<T>(caminho: string, init?: RequestInit): Promise<T> {
@@ -193,6 +263,31 @@ export function reverVortalAviso(url: string, idioma = "pt-PT") {
 /** Descarrega as peças para disco e, se pedido, indexa-as. */
 export function recolherVortal(payload: { urls: string[]; indexar?: boolean; extrair?: boolean; forcar?: boolean; idioma?: string }) {
   return pedir<VortalRecolha>("/vortal/recolha", comCorpo("POST", payload));
+}
+
+/** Anos e meses com avisos Vortal publicados (para escolher o período do lote). */
+export function getVortalPeriodos() {
+  return pedir<VortalPeriodos>("/vortal/periodos");
+}
+
+/** O que há num mês/ano: avisos, o que já está em disco e o que falta (sem descarregar nada). */
+export function getVortalPeriodo(params: { ano: number; mes?: number; limite?: number; escanear?: number }) {
+  return pedir<VortalPeriodo>(`/vortal/periodo${query(params)}`);
+}
+
+/** Recolhe (e indexa) em lotes os avisos Vortal publicados num mês/ano. */
+export function recolherVortalLote(payload: {
+  ano: number;
+  mes?: number;
+  lote?: number;
+  lotes?: number;
+  indexar?: boolean;
+  extrair?: boolean;
+  forcar?: boolean;
+  saltar_em_disco?: boolean;
+  escanear?: number;
+}) {
+  return pedir<VortalLote>("/vortal/lote", comCorpo("POST", payload));
 }
 
 export function indexarVortal(payload: { uid?: string; recriar?: boolean } = {}) {

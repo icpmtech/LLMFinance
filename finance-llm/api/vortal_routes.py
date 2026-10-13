@@ -3,9 +3,14 @@
 Descarga das peças para disco e indexação no Elasticsearch:
 
 - Leitura pública: `GET /vortal/meta`, `/vortal/estado`, `/vortal/aviso`,
-  `/vortal/pecas`, `/vortal/pesquisa`, `/vortal/avisos`.
+  `/vortal/pecas`, `/vortal/pesquisa`, `/vortal/avisos`, `/vortal/periodos`,
+  `/vortal/periodo`.
 - Escrita (exige sessão): `POST /vortal/recolha`, `POST /vortal/indexar`,
-  `DELETE /vortal/aviso/{uid}`.
+  `POST /vortal/lote`, `DELETE /vortal/aviso/{uid}`.
+
+As ligações das peças estão publicadas nos contratos (`contratos.linkPecasProc`),
+pelo que `POST /vortal/lote` recolhe por **mês e ano** — em lotes, sem colar
+URLs.
 
 O token do aviso é público (vem do URL da página de peças do procedimento); a
 recolha escreve em disco (`data/vortal/<uid>/`) e, se pedido, no índice
@@ -44,6 +49,29 @@ class IndexarRequest(BaseModel):
 
     uid: Optional[str] = Field(None, description="Aviso a indexar (por omissão, todos os que estão em disco)")
     recriar: bool = Field(False, description="Apagar o índice antes de indexar")
+
+
+class LoteRequest(BaseModel):
+    """Recolha em lote: um mês (ou um ano inteiro) do índice de contratos."""
+
+    ano: int = Field(..., ge=2000, le=2100, description="Ano de publicação dos contratos")
+    mes: Optional[int] = Field(None, ge=1, le=12, description="Mês (por omissão, o ano inteiro)")
+    lote: int = Field(vortal.LOTE_PADRAO, ge=1, le=vortal.LOTE_MAXIMO, description="Avisos por lote")
+    lotes: int = Field(1, ge=1, le=vortal.LOTES_POR_VEZ, description="Quantos lotes correr nesta chamada")
+    indexar: bool = Field(True, description="Indexar no Elasticsearch depois de descarregar")
+    extrair: bool = Field(True, description="Extrair o texto das peças (PDF/DOCX/XLSX/XML)")
+    forcar: bool = Field(False, description="Voltar a descarregar mesmo que o aviso já esteja em disco")
+    saltar_em_disco: Optional[bool] = Field(
+        None,
+        description="Só avisos ainda não recolhidos (por omissão, sim; com `forcar` não)",
+    )
+    escanear: int = Field(
+        vortal.ESCANEAR_PADRAO,
+        ge=100,
+        le=vortal.ESCANEAR_MAXIMO,
+        description="Contratos a ler do índice para montar a lista do período",
+    )
+    idioma: str = Field("pt-PT", max_length=10)
 
 
 # ------------------------------------------------------------------ metadados
@@ -123,6 +151,31 @@ def vortal_recolha(pedido: RecolhaRequest, session: Session = None) -> Dict[str,
     return resultado
 
 
+@router.post("/lote", summary="Recolher e indexar, em lotes, os avisos Vortal de um mês/ano (exige sessão)")
+def vortal_lote(pedido: LoteRequest, session: Session = None) -> Dict[str, Any]:
+    resultado = vortal.recolher_lote(
+        ano=pedido.ano,
+        mes=pedido.mes,
+        lote=pedido.lote,
+        lotes=pedido.lotes,
+        indexar=pedido.indexar,
+        extrair=pedido.extrair,
+        forcar=pedido.forcar,
+        saltar_em_disco=pedido.saltar_em_disco,
+        idioma=pedido.idioma,
+        escanear=pedido.escanear,
+    )
+    vortal.registar_recolha(
+        resultado,
+        autor=getattr(session.user, "email", None),
+        tipo="lote",
+        urls=[f"{pedido.ano}-{pedido.mes or 'ano'}"],
+    )
+    if not resultado.get("ok"):
+        raise HTTPException(status_code=502, detail=str(resultado.get("erro") or "recolha em lote falhou"))
+    return resultado
+
+
 @router.post("/indexar", summary="Indexar no Elasticsearch o que já está em disco (exige sessão)")
 def vortal_indexar(pedido: IndexarRequest, session: Session = None) -> Dict[str, Any]:
     resultado = vortal.indexar_em_disco(uid=pedido.uid)
@@ -135,6 +188,22 @@ def vortal_indexar(pedido: IndexarRequest, session: Session = None) -> Dict[str,
         urls=[pedido.uid] if pedido.uid else [],
     )
     return resultado
+
+
+# ------------------------------------------------------------------ períodos
+@router.get("/periodos", summary="Anos e meses com avisos Vortal publicados (para escolher o lote)")
+def vortal_periodos() -> Dict[str, Any]:
+    return vortal.periodos()
+
+
+@router.get("/periodo", summary="O que há num mês/ano: avisos, o que já está em disco e o que falta")
+def vortal_periodo(
+    ano: int = Query(..., ge=2000, le=2100, description="Ano de publicação dos contratos"),
+    mes: Optional[int] = Query(None, ge=1, le=12, description="Mês (por omissão, o ano inteiro)"),
+    limite: int = Query(20, ge=1, le=200),
+    escanear: int = Query(vortal.ESCANEAR_PADRAO, ge=100, le=vortal.ESCANEAR_MAXIMO),
+) -> Dict[str, Any]:
+    return vortal.avisos_do_periodo(ano=ano, mes=mes, limite=limite, escanear=escanear)
 
 
 # ------------------------------------------------------------------ consulta
