@@ -56,6 +56,51 @@ export type ErcOcs = {
   distrito?: string | null;
 };
 
+/** Um exercício financeiro publicado (`geral=dafin`). */
+export type ErcFinanceiroAno = {
+  ano: number;
+  ano_comparacao?: number | null;
+  ativo_total?: number | null;
+  passivo_total?: number | null;
+  passivos_totais?: number | null;
+  capital_proprio?: number | null;
+  rendimentos_totais?: number | null;
+  resultados_antes_custos?: number | null;
+  resultados_operacionais_depreciacoes?: number | null;
+  resultados_liquidos?: number | null;
+  responsabilidades_nao_inscritas?: number | null;
+  /** Rácios calculados no backend (fração, não percentagem). */
+  autonomia_financeira?: number | null;
+  endividamento?: number | null;
+  margem_liquida?: number | null;
+  crescimento_rendimentos?: number | null;
+  confidencialidade?: boolean;
+  /** Texto que o portal publica no lugar das contas (exceção de divulgação). */
+  nota?: string | null;
+};
+
+/** Um indicador da análise, com os pontos que valeu. */
+export type ErcIndicador = {
+  chave: string;
+  nome: string;
+  valor?: string | number | boolean | null;
+  pontos: number;
+  maximo: number;
+  detalhe?: string;
+};
+
+/** Análise de risco de uma entidade (transparência, crédito e risco). */
+export type ErcAnalise = {
+  transparencia: { score: number; nivel: string; indicadores: ErcIndicador[] };
+  credito: { score: number | null; nivel: string; disponivel: boolean; indicadores: ErcIndicador[] };
+  risco: { score: number; banda: string; componentes: ErcIndicador[] };
+  alertas: string[];
+  cobertura: { anos_financeiros: number; primeiro_ano?: number | null; ultimo_ano?: number | null; confidencialidade?: boolean };
+  limitacoes?: string;
+  fonte?: string;
+  atualizado_em?: string | null;
+};
+
 /** Ficha de uma entidade proprietária de OCS. */
 export type ErcEntidade = {
   doc_id: string;
@@ -80,6 +125,24 @@ export type ErcEntidade = {
   ocs_designacoes?: string[];
   detentores?: ErcParticipacao[];
   detidas?: ErcParticipacao[];
+  /** Série financeira, do exercício mais recente para o mais antigo. */
+  financeiro?: ErcFinanceiroAno[];
+  n_anos_financeiro?: number | null;
+  primeiro_ano_financeiro?: number | null;
+  ultimo_ano_financeiro?: number | null;
+  ultimo_ativo?: number | null;
+  ultimo_passivo?: number | null;
+  ultimo_capital_proprio?: number | null;
+  ultimo_rendimentos?: number | null;
+  ultimo_resultados?: number | null;
+  ultimo_autonomia?: number | null;
+  ultimo_endividamento?: number | null;
+  ultimo_crescimento_rendimentos?: number | null;
+  anos_resultados_positivos?: number | null;
+  anos_resultados_negativos?: number | null;
+  confidencialidade?: boolean | null;
+  /** Transparência, crédito e risco (calculados a partir do que o portal publica). */
+  analise?: ErcAnalise | null;
   recolhido_em?: string | null;
 };
 
@@ -124,6 +187,10 @@ export type ErcMeta = {
     recolhas: number;
     distritos: number;
     tipos_orgao: string[];
+    entidades_com_financeiro?: number;
+    anos_financeiro?: number[];
+    recolhas_por_tipo?: Record<string, number>;
+    bandas_risco?: Record<string, number>;
   };
   listagem: { cached_at?: string | null; total_portal?: number | null };
   ficheiros: Record<string, string>;
@@ -135,6 +202,11 @@ export type ErcResumo = {
   ocs: number;
   entidades_sem_ocs: number;
   entidades_com_pessoas: number;
+  entidades_com_financeiro?: number;
+  anos_financeiro?: ErcFaceta[];
+  bandas_risco?: ErcFaceta[];
+  niveis_transparencia?: ErcFaceta[];
+  niveis_credito?: ErcFaceta[];
   pessoas_com_cargos: number;
   pessoas_com_participacoes: number;
   distritos: ErcFaceta[];
@@ -142,6 +214,25 @@ export type ErcResumo = {
   actividades: ErcFaceta[];
   funcoes: ErcFaceta[];
   tipos_ocs: ErcFaceta[];
+};
+
+/** Painel financeiro: entidades com contas, totais por exercício e risco. */
+export type ErcPainelFinanceiro = {
+  com_financeiro: number;
+  por_banda: ErcFaceta[];
+  por_transparencia: ErcFaceta[];
+  por_credito: ErcFaceta[];
+  anos: {
+    ano: number;
+    balancos: number;
+    rendimentos: number;
+    resultados: number;
+    ativo: number;
+    capital_proprio: number;
+    com_prejuizo: number;
+  }[];
+  origem?: "elasticsearch" | "jsonl";
+  error?: string;
 };
 
 export type ErcEntidadeResumo = {
@@ -155,7 +246,7 @@ export type ErcEntidadeResumo = {
 
 export type ErcJob = {
   job_id: string;
-  tipo: "recolher" | "indexar";
+  tipo: "recolher" | "recolher_financeiro" | "analisar" | "indexar";
   status: "running" | "done" | "error";
   started_at?: string | null;
   finished_at?: string | null;
@@ -171,6 +262,8 @@ export type ErcJob = {
     registos?: number;
     current?: string | null;
     listagem_em_cache?: boolean;
+    com_dados?: number;
+    anos?: number[];
   };
   result?: Record<string, unknown> | null;
 };
@@ -188,6 +281,45 @@ export type ErcRecolherParams = {
   saltar_existentes?: boolean;
   indexar?: boolean;
 };
+
+export type ErcRecolherFinanceiroParams = {
+  limite?: number;
+  ano_inicio?: number;
+  ano_fim?: number;
+  vazios_seguidos?: number;
+  pausa?: number;
+  trabalhadores?: number;
+  apenas_sem_financeiro?: boolean;
+  indexar?: boolean;
+};
+
+export type ErcAnaliseQuery = {
+  q?: string;
+  banda?: string;
+  nivel_transparencia?: string;
+  nivel_credito?: string;
+  distrito?: string;
+  risco_min?: number;
+  risco_max?: number;
+  transparencia_min?: number;
+  credito_min?: number;
+  com_financeiro?: boolean;
+  ordenar?: ErcOrdenacaoAnalise;
+  page?: number;
+  size?: number;
+};
+
+/** Ordenações aceites pelo ranking de análise. */
+export type ErcOrdenacaoAnalise =
+  | "risco"
+  | "transparencia"
+  | "credito"
+  | "rendimentos"
+  | "resultados"
+  | "capital_proprio"
+  | "autonomia"
+  | "recentes"
+  | "nome";
 
 export type ErcEntidadeQuery = {
   q?: string;
@@ -277,6 +409,31 @@ export function indexarErc(params: { forcar?: boolean } = {}): Promise<ErcJob> {
   return post<ErcJob>("/erc/indexar", params);
 }
 
+/**
+ * Recolhe os dados financeiros por exercício (segundo plano).
+ *
+ * A secção `dafin` do portal só responde exercício a exercício, por isso a
+ * janela `ano_inicio`..`ano_fim` é sondada ano a ano.
+ */
+export function recolherFinanceiroErc(params: ErcRecolherFinanceiroParams = {}): Promise<ErcJob> {
+  return post<ErcJob>("/erc/financeiro/recolher", params);
+}
+
+/** Recalcula transparência, crédito e risco de todas as entidades (sem rede). */
+export function analisarErc(params: { indexar?: boolean } = {}): Promise<ErcJob> {
+  return post<ErcJob>("/erc/analisar", params);
+}
+
+/** Painel financeiro: entidades com contas, totais por exercício e risco. */
+export function getErcPainelFinanceiro(): Promise<ErcPainelFinanceiro> {
+  return request<ErcPainelFinanceiro>("/erc/financeiro");
+}
+
+/** Ranking de risco, transparência e crédito. */
+export function buscarAnalise(params: ErcAnaliseQuery = {}): Promise<ErcLista<ErcEntidade>> {
+  return request<ErcLista<ErcEntidade>>(`/erc/analise${queryString({ ...params })}`);
+}
+
 export function getErcJobs(): Promise<{ total: number; items: ErcJob[] }> {
   return request("/erc/jobs");
 }
@@ -311,7 +468,9 @@ export function buscarOcs(params: ErcOcsQuery = {}): Promise<ErcLista<ErcOcs>> {
 }
 
 /** Endereço do CSV (abre num separador; o backend define o ficheiro). */
-export function ercExportUrl(tipo: "entidades" | "pessoas" | "ocs" = "entidades"): string {
+export function ercExportUrl(
+  tipo: "entidades" | "pessoas" | "ocs" | "analise" | "financeiro" = "entidades",
+): string {
   return `${API_BASE}/erc/export.csv${queryString({ tipo })}`;
 }
 

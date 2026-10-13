@@ -306,6 +306,10 @@ from api.citacoes_routes import router as citacoes_router
 from api.people_routes import router as people_router
 from api.autarquicas_routes import router as autarquicas_router
 from api.vereadores_routes import router as vereadores_router
+# Abonos dos eleitos locais (Lei n.º 11/96): a tabela oficial por escalão de
+# eleitores cruzada com o recenseamento do MAI, para se saber quanto cabe a cada
+# concelho e a cada freguesia; `finance_remuneracoes` + `finance_remuneracoes_territorios`.
+from api.remuneracoes_routes import router as remuneracoes_router
 from api.contribuintes_routes import router as contribuintes_router
 from api.gleif_routes import router as gleif_router
 from api.world_routes import router as world_router
@@ -690,6 +694,9 @@ app.include_router(citacoes_router)
 app.include_router(people_router)
 app.include_router(autarquicas_router)
 app.include_router(vereadores_router)
+# Remunerações dos eleitos locais: tabela de abonos + eleitores/polígonos por
+# concelho e freguesia (recenseamento do MAI).
+app.include_router(remuneracoes_router)
 app.include_router(contribuintes_router)
 app.include_router(gleif_router)
 # World Model: estado do mundo, rede neuronal dinâmica (grafo), motor de

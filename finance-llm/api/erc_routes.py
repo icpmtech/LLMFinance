@@ -18,7 +18,11 @@ Endpoints:
 - `GET  /erc/pessoas`           — pesquisa de pessoas reguladas
 - `GET  /erc/pessoas/{id}`      — ficha da pessoa (cargos e participações)
 - `GET  /erc/ocs`               — pesquisa de órgãos de comunicação social
-- `GET  /erc/export.csv`        — exportação em CSV (entidades, pessoas ou OCS)
+- `GET  /erc/analise`           — ranking de risco, transparência e crédito
+- `POST /erc/financeiro/recolher` — recolhe os dados financeiros por exercício
+- `GET  /erc/financeiro`        — painel financeiro (totais por exercício e risco)
+- `POST /erc/analisar`          — recalcula a análise de risco de todas as entidades
+- `GET  /erc/export.csv`        — exportação em CSV (entidades, pessoas, OCS, análise, financeiro)
 """
 from __future__ import annotations
 
@@ -68,6 +72,28 @@ class ErcIndexarRequest(BaseModel):
     forcar: bool = Field(False, description="Reindexar mesmo o que já está indexado")
 
 
+class ErcRecolherFinanceiroRequest(BaseModel):
+    """Recolha dos dados financeiros (`geral=dafin`), exercício a exercício."""
+
+    limite: Optional[int] = Field(None, ge=1, description="Entidades a varrer (por omissão, todas)")
+    ano_inicio: Optional[int] = Field(None, ge=1990, le=2100, description="Primeiro exercício a sondar")
+    ano_fim: Optional[int] = Field(None, ge=1990, le=2100, description="Último exercício a sondar")
+    vazios_seguidos: int = Field(
+        0, ge=0, le=20,
+        description="Parar o varrimento após N exercícios vazios seguidos (0 = varrer a janela toda)",
+    )
+    pausa: Optional[float] = Field(None, ge=0, le=10, description="Pausa entre pedidos, em segundos")
+    trabalhadores: int = Field(8, ge=1, le=16, description="Pedidos em paralelo (o portal satura acima de 8)")
+    apenas_sem_financeiro: bool = Field(True, description="Só as entidades que ainda não têm dados financeiros")
+    indexar: bool = Field(True, description="Indexar no Elasticsearch no fim")
+
+
+class ErcAnalisarRequest(BaseModel):
+    """Recálculo da análise de risco."""
+
+    indexar: bool = Field(True, description="Indexar no Elasticsearch no fim")
+
+
 @router.get("/meta")
 def erc_meta(session: ReadSession = None) -> Dict[str, Any]:
     """Pasta dos dados, contagens em disco, listagem em cache e índices usados."""
@@ -103,6 +129,58 @@ def erc_recolher(payload: ErcRecolherRequest, session: Session = None) -> Dict[s
 def erc_indexar(payload: ErcIndexarRequest, session: Session = None) -> Dict[str, Any]:
     """Indexa o que está em disco nos índices `finance_erc_*` (segundo plano)."""
     return erc.start_job("indexar", payload.model_dump())
+
+
+@router.post("/financeiro/recolher")
+def erc_recolher_financeiro(payload: ErcRecolherFinanceiroRequest, session: Session = None) -> Dict[str, Any]:
+    """Recolhe os dados financeiros por exercício em segundo plano.
+
+    O portal não publica a lista de exercícios de cada entidade, por isso a
+    janela (`ano_inicio`..`ano_fim`) é sondada ano a ano: um pedido por ano e por
+    entidade, com os anos sem publicação a devolverem vazio.
+    """
+    return erc.start_job("recolher_financeiro", payload.model_dump())
+
+
+@router.post("/analisar")
+def erc_analisar(payload: ErcAnalisarRequest, session: Session = None) -> Dict[str, Any]:
+    """Recalcula transparência, crédito e risco de todas as entidades (sem rede)."""
+    return erc.start_job("analisar", payload.model_dump())
+
+
+@router.get("/financeiro")
+def erc_financeiro(session: ReadSession = None) -> Dict[str, Any]:
+    """Painel financeiro: entidades com contas, totais por exercício e risco."""
+    return erc.painel_financeiro()
+
+
+@router.get("/analise")
+def erc_analise(
+    q: Optional[str] = Query(None, description="Nome, tipo de sociedade, actividade ou distrito"),
+    banda: Optional[str] = Query(None, description="Banda de risco (`baixo`, `moderado`, `elevado`, `critico`)"),
+    nivel_transparencia: Optional[str] = Query(None, description="`alta`, `media`, `baixa`, `muito_baixa`"),
+    nivel_credito: Optional[str] = Query(None, description="`A`..`E` ou `sem dados`"),
+    distrito: Optional[str] = Query(None, description="Distrito"),
+    risco_min: Optional[float] = Query(None, ge=0, le=100, description="Risco mínimo (0-100, maior = pior)"),
+    risco_max: Optional[float] = Query(None, ge=0, le=100, description="Risco máximo"),
+    transparencia_min: Optional[float] = Query(None, ge=0, le=100),
+    credito_min: Optional[float] = Query(None, ge=0, le=100),
+    com_financeiro: Optional[bool] = Query(None, description="Só entidades com (ou sem) contas publicadas"),
+    ordenar: str = Query(
+        "risco",
+        pattern="^(risco|transparencia|credito|rendimentos|resultados|capital_proprio|autonomia|recentes|nome)$",
+        description="Campo de ordenação (desc, excepto `nome`)",
+    ),
+    page: int = Query(1, ge=1),
+    size: int = Query(25, ge=1, le=500),
+    session: ReadSession = None,
+) -> Dict[str, Any]:
+    """Ranking das entidades por risco, transparência, crédito ou números publicados."""
+    return erc.listar_analise(
+        q=q, banda=banda, nivel_transparencia=nivel_transparencia, nivel_credito=nivel_credito, distrito=distrito,
+        risco_min=risco_min, risco_max=risco_max, transparencia_min=transparencia_min, credito_min=credito_min,
+        com_financeiro=com_financeiro, ordenar=ordenar, page=page, size=size,
+    )
 
 
 @router.get("/jobs")
@@ -181,11 +259,11 @@ def erc_ocs(
 
 @router.get("/export.csv")
 def erc_export(
-    tipo: str = Query("entidades", pattern="^(entidades|pessoas|ocs)$", description="O que exportar"),
+    tipo: str = Query("entidades", pattern="^(entidades|pessoas|ocs|analise|financeiro)$", description="O que exportar"),
     maximo: int = Query(50000, ge=1, le=200000, description="Máximo de registos"),
     session: ReadSession = None,
 ) -> Response:
-    """Exporta entidades, pessoas ou OCS em CSV."""
+    """Exporta entidades, pessoas, OCS, a análise de risco ou a série financeira em CSV."""
     conteudo = erc.export_csv(tipo, maximo=maximo)
     return Response(
         content=conteudo.encode("utf-8"),

@@ -24,34 +24,45 @@ import {
   Download,
   ExternalLink,
   FileSpreadsheet,
+  Landmark,
   Loader2,
   Percent,
   Play,
   RefreshCw,
   Search,
+  ShieldAlert,
   Tv,
   Users,
 } from "lucide-react";
 
 import {
+  analisarErc,
+  buscarAnalise,
   buscarEntidades,
   buscarOcs,
   buscarPessoas,
   count,
   getErcJobs,
   getErcMeta,
+  getErcPainelFinanceiro,
   getErcResumo,
   indexarErc,
   percentagem,
   recolherErc,
+  recolherFinanceiroErc,
   relacaoLabel,
   shortDate,
   ercExportUrl,
+  type ErcAnalise,
   type ErcEntidade,
   type ErcFaceta,
+  type ErcFinanceiroAno,
+  type ErcIndicador,
   type ErcJob,
   type ErcMeta,
   type ErcOcs,
+  type ErcOrdenacaoAnalise,
+  type ErcPainelFinanceiro,
   type ErcParticipacao,
   type ErcPessoa,
   type ErcResumo,
@@ -59,14 +70,61 @@ import {
 
 const PAGE_SIZE = 20;
 
-type Aba = "painel" | "entidades" | "pessoas" | "ocs";
+type Aba = "painel" | "entidades" | "pessoas" | "ocs" | "risco";
 
 const ABAS: { id: Aba; label: string }[] = [
   { id: "painel", label: "Painel" },
   { id: "entidades", label: "Entidades" },
   { id: "pessoas", label: "Pessoas" },
   { id: "ocs", label: "Órgãos de comunicação social" },
+  { id: "risco", label: "Risco e financeiro" },
 ];
+
+/** Cores por banda de risco (o tom acompanha a gravidade). */
+const TONS_RISCO: Record<string, "emerald" | "sky" | "amber" | "rose"> = {
+  baixo: "emerald",
+  moderado: "sky",
+  elevado: "amber",
+  critico: "rose",
+};
+
+const TONS_CREDITO: Record<string, "emerald" | "sky" | "amber" | "rose"> = {
+  A: "emerald",
+  B: "emerald",
+  C: "sky",
+  D: "amber",
+  E: "rose",
+};
+
+/** Rótulos legíveis para os níveis guardados em `snake_case`. */
+const ROTULOS: Record<string, string> = {
+  muito_baixa: "muito baixa",
+  media: "média",
+  alta: "alta",
+  baixa: "baixa",
+  sem_dados: "sem dados",
+  "sem dados": "sem dados",
+  baixo: "baixo",
+  moderado: "moderado",
+  elevado: "elevado",
+  critico: "crítico",
+};
+
+function rotulo(valor?: string | null): string {
+  const chave = String(valor ?? "").toLowerCase();
+  return ROTULOS[chave] ?? (chave || "—");
+}
+
+/** Euros sem decimais (as contas do portal são em euros). */
+function euros(valor?: number | null): string {
+  if (valor === null || valor === undefined || Number.isNaN(valor)) return "—";
+  return `${valor.toLocaleString("pt-PT", { maximumFractionDigits: 0 })} €`;
+}
+
+function percent(valor?: number | null): string {
+  if (valor === null || valor === undefined || Number.isNaN(valor)) return "—";
+  return `${(valor * 100).toLocaleString("pt-PT", { maximumFractionDigits: 1 })}%`;
+}
 
 /* ------------------------------------------------------------- primitivas */
 
@@ -83,9 +141,11 @@ function Kpi({ label, value, hint }: { label: string; value: string | number; hi
 function Badge({
   children,
   tone = "neutral",
+  title,
 }: {
   children: React.ReactNode;
-  tone?: "neutral" | "sky" | "emerald" | "violet" | "amber";
+  tone?: "neutral" | "sky" | "emerald" | "violet" | "amber" | "rose";
+  title?: string;
 }) {
   const tones: Record<string, string> = {
     neutral: "border-white/10 bg-white/5 text-muted-foreground",
@@ -93,9 +153,15 @@ function Badge({
     emerald: "border-emerald-400/30 bg-emerald-400/10 text-emerald-200",
     violet: "border-violet-400/30 bg-violet-400/10 text-violet-200",
     amber: "border-amber-400/30 bg-amber-400/10 text-amber-200",
+    rose: "border-rose-400/30 bg-rose-400/10 text-rose-200",
   };
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${tones[tone]}`}>{children}</span>
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${tones[tone]}`}
+      title={title}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -167,6 +233,208 @@ function Participacoes({ titulo, itens }: { titulo: string; itens?: ErcParticipa
   );
 }
 
+/** Análise de risco da entidade: transparência, crédito e risco, com o porquê. */
+function AnaliseBloco({ analise }: { analise?: ErcAnalise | null }) {
+  if (!analise) {
+    return (
+      <div>
+        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Análise de risco</h4>
+        <p className="mt-1 text-[11px] text-muted-foreground">Ainda sem análise calculada para esta entidade.</p>
+      </div>
+    );
+  }
+  const { transparencia, credito, risco } = analise;
+  return (
+    <div>
+      <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Análise de risco</h4>
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <Badge tone={TONS_RISCO[risco.banda] ?? "neutral"} title={`${risco.score}/100`}>
+          Risco {rotulo(risco.banda)} · {risco.score}/100
+        </Badge>
+        <Badge tone={transparencia.score >= 50 ? "emerald" : transparencia.score >= 25 ? "amber" : "rose"}>
+          Transparência {rotulo(transparencia.nivel)} · {transparencia.score}/100
+        </Badge>
+        <Badge tone={credito.disponivel ? TONS_CREDITO[credito.nivel] ?? "neutral" : "neutral"}>
+          {credito.disponivel ? `Crédito ${credito.nivel} · ${credito.score}/100` : "Crédito sem dados"}
+        </Badge>
+        <Badge>
+          {analise.cobertura.anos_financeiros} exercício(s)
+          {analise.cobertura.ultimo_ano ? ` · até ${analise.cobertura.ultimo_ano}` : ""}
+        </Badge>
+      </div>
+
+      <div className="mt-2 grid gap-x-4 gap-y-2 sm:grid-cols-3">
+        <Indicadores titulo="Transparência" itens={transparencia.indicadores} />
+        <Indicadores titulo="Crédito" itens={credito.indicadores} />
+        <Indicadores titulo="Risco (quanto mais baixo melhor)" itens={risco.componentes} />
+      </div>
+
+      {analise.alertas.length ? (
+        <ul className="mt-2 space-y-0.5 text-[11px] text-amber-200">
+          {analise.alertas.map((alerta) => (
+            <li key={alerta}>• {alerta}</li>
+          ))}
+        </ul>
+      ) : null}
+      {analise.limitacoes ? <p className="mt-2 text-[10px] text-muted-foreground">{analise.limitacoes}</p> : null}
+    </div>
+  );
+}
+
+/** Indicadores de um dos scores, com os pontos de cada um. */
+function Indicadores({ titulo, itens }: { titulo: string; itens: ErcIndicador[] }) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{titulo}</p>
+      <ul className="mt-1 space-y-1 text-[11px]">
+        {itens.map((item) => (
+          <li key={item.chave}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate" title={item.nome}>
+                {item.nome}
+              </span>
+              <span className="shrink-0 tabular-nums text-muted-foreground">
+                {item.pontos}/{item.maximo}
+              </span>
+            </div>
+            <div className="mt-0.5 h-1 w-full rounded-full bg-white/5">
+              <div
+                className={`h-1 rounded-full ${item.pontos >= item.maximo * 0.6 ? "bg-emerald-400/70" : item.pontos > 0 ? "bg-amber-400/70" : "bg-rose-400/70"}`}
+                style={{ width: `${Math.min(100, (item.pontos / item.maximo) * 100)}%` }}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Contas publicadas, exercício a exercício (o mais recente primeiro). */
+function FinanceiroTabela({ serie }: { serie?: ErcFinanceiroAno[] }) {
+  if (!serie?.length) return null;
+  return (
+    <div>
+      <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Dados financeiros ({serie.length})
+      </h4>
+      <div className="mt-1 overflow-x-auto">
+        <table className="w-full min-w-[560px] text-[11px]">
+          <thead className="text-muted-foreground">
+            <tr>
+              <th className="py-1 text-left font-medium">Exercício</th>
+              <th className="py-1 text-right font-medium">Activo</th>
+              <th className="py-1 text-right font-medium">Capital próprio</th>
+              <th className="py-1 text-right font-medium">Rendimentos</th>
+              <th className="py-1 text-right font-medium">Resultado líquido</th>
+              <th className="py-1 text-right font-medium">Autonomia</th>
+              <th className="py-1 text-right font-medium">Endividamento</th>
+            </tr>
+          </thead>
+          <tbody>
+            {serie.map((item) => (
+              <tr key={item.ano} className="border-t border-white/5">
+                <td className="py-1 pr-2">
+                  {item.ano}
+                  {item.confidencialidade ? (
+                    <span
+                      className="ml-1 cursor-help text-amber-200"
+                      title={item.nota ?? "Exercício marcado como confidencial no portal"}
+                    >
+                      •
+                    </span>
+                  ) : null}
+                </td>
+                <td className="py-1 text-right tabular-nums">{euros(item.ativo_total)}</td>
+                <td className="py-1 text-right tabular-nums">{euros(item.capital_proprio)}</td>
+                <td className="py-1 text-right tabular-nums">
+                  {euros(item.rendimentos_totais)}
+                  {item.crescimento_rendimentos !== null && item.crescimento_rendimentos !== undefined ? (
+                    <span className={item.crescimento_rendimentos >= 0 ? "ml-1 text-emerald-200" : "ml-1 text-rose-200"}>
+                      {item.crescimento_rendimentos >= 0 ? "▲" : "▼"}
+                      {percent(Math.abs(item.crescimento_rendimentos))}
+                    </span>
+                  ) : null}
+                </td>
+                <td className={`py-1 text-right tabular-nums ${(item.resultados_liquidos ?? 0) < 0 ? "text-rose-200" : ""}`}>
+                  {euros(item.resultados_liquidos)}
+                </td>
+                <td className="py-1 text-right tabular-nums">{percent(item.autonomia_financeira)}</td>
+                <td className="py-1 text-right tabular-nums">{percent(item.endividamento)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/** Painel financeiro: cobertura, distribuição de risco e totais por exercício. */
+function PainelFinanceiro({ painel }: { painel: ErcPainelFinanceiro | null }) {
+  if (!painel || painel.error) return null;
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Kpi label="Com contas" value={count(painel.com_financeiro)} hint="entidades com exercícios publicados" />
+        <Kpi
+          label="Exercícios"
+          value={painel.anos.length}
+          hint={painel.anos.length ? `${painel.anos[painel.anos.length - 1].ano}–${painel.anos[0].ano}` : undefined}
+        />
+        <Kpi
+          label="Balanços"
+          value={count(painel.anos.reduce((soma, item) => soma + item.balancos, 0))}
+          hint="documentos por exercício"
+        />
+        <Kpi
+          label="Com prejuízo"
+          value={count(painel.anos.reduce((soma, item) => soma + item.com_prejuizo, 0))}
+          hint="exercícios com resultado negativo"
+        />
+      </div>
+      <div className="grid gap-3 lg:grid-cols-4">
+        <BarList titulo="Banda de risco" itens={painel.por_banda} />
+        <BarList titulo="Transparência" itens={painel.por_transparencia} />
+        <BarList titulo="Crédito" itens={painel.por_credito} />
+        <div className="glass-card rounded-2xl p-4">
+          <h3 className="text-xs font-semibold">Totais por exercício</h3>
+          {painel.anos.length === 0 ? (
+            <p className="mt-2 text-[11px] text-muted-foreground">Sem contas recolhidas.</p>
+          ) : (
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full min-w-[420px] text-[11px]">
+                <thead className="text-muted-foreground">
+                  <tr>
+                    <th className="py-1 text-left font-medium">Ano</th>
+                    <th className="py-1 text-right font-medium">Balanços</th>
+                    <th className="py-1 text-right font-medium">Rendimentos</th>
+                    <th className="py-1 text-right font-medium">Resultados</th>
+                    <th className="py-1 text-right font-medium">Prejuízos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {painel.anos.map((item) => (
+                    <tr key={item.ano} className="border-t border-white/5">
+                      <td className="py-1">{item.ano}</td>
+                      <td className="py-1 text-right tabular-nums">{count(item.balancos)}</td>
+                      <td className="py-1 text-right tabular-nums">{euros(item.rendimentos)}</td>
+                      <td className={`py-1 text-right tabular-nums ${item.resultados < 0 ? "text-rose-200" : ""}`}>
+                        {euros(item.resultados)}
+                      </td>
+                      <td className="py-1 text-right tabular-nums">{count(item.com_prejuizo)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Cartão de uma entidade, com as listas que o portal publica por separadores. */
 function EntidadeCard({ entidade }: { entidade: ErcEntidade }) {
   const [aberto, setAberto] = useState(false);
@@ -182,6 +450,19 @@ function EntidadeCard({ entidade }: { entidade: ErcEntidade }) {
           </p>
         </button>
         <div className="flex flex-wrap items-center gap-1.5">
+          {entidade.analise ? (
+            <Badge
+              tone={TONS_RISCO[entidade.analise.risco.banda] ?? "neutral"}
+              title={`Risco ${entidade.analise.risco.score}/100 · transparência ${entidade.analise.transparencia.score}/100`}
+            >
+              <ShieldAlert size={10} /> Risco {rotulo(entidade.analise.risco.banda)}
+            </Badge>
+          ) : null}
+          {entidade.n_anos_financeiro ? (
+            <Badge tone="emerald" title={`Contas publicadas: ${entidade.n_anos_financeiro} exercício(s)`}>
+              <Landmark size={10} /> {entidade.n_anos_financeiro} exercícios
+            </Badge>
+          ) : null}
           <Badge tone="violet">
             <Tv size={10} /> {count(entidade.n_ocs)} OCS
           </Badge>
@@ -264,6 +545,8 @@ function EntidadeCard({ entidade }: { entidade: ErcEntidade }) {
 
           <Participacoes titulo="Entidades detentoras" itens={entidade.detentores} />
           <Participacoes titulo="Entidades detidas" itens={entidade.detidas} />
+          <FinanceiroTabela serie={entidade.financeiro} />
+          <AnaliseBloco analise={entidade.analise} />
 
           {entidade.recolhido_em ? (
             <p className="text-[10px] text-muted-foreground">Recolhido em {shortDate(entidade.recolhido_em)}</p>
@@ -417,9 +700,25 @@ export default function ErcPage() {
   const [entidades, setEntidades] = useState<ErcEntidade[]>([]);
   const [pessoas, setPessoas] = useState<ErcPessoa[]>([]);
   const [ocs, setOcs] = useState<ErcOcs[]>([]);
+  const [analises, setAnalises] = useState<ErcEntidade[]>([]);
+  const [painelFin, setPainelFin] = useState<ErcPainelFinanceiro | null>(null);
   const [total, setTotal] = useState(0);
   const [origem, setOrigem] = useState<string | null>(null);
   const [aCarregar, setACarregar] = useState(false);
+
+  // Filtros da vista de risco (os mesmos nomes da API `GET /erc/analise`).
+  const [banda, setBanda] = useState("");
+  const [nivelTransparencia, setNivelTransparencia] = useState("");
+  const [comContas, setComContas] = useState<"todos" | "sim" | "nao">("todos");
+  const [ordenar, setOrdenar] = useState<ErcOrdenacaoAnalise>("risco");
+
+  const carregarPainelFinanceiro = useCallback(async () => {
+    try {
+      setPainelFin(await getErcPainelFinanceiro());
+    } catch {
+      /* o painel financeiro é complementar */
+    }
+  }, []);
 
   const carregarPainel = useCallback(async () => {
     try {
@@ -454,7 +753,8 @@ export default function ErcPage() {
   useEffect(() => {
     void carregarPainel();
     void carregarJobs();
-  }, [carregarPainel, carregarJobs]);
+    void carregarPainelFinanceiro();
+  }, [carregarPainel, carregarJobs, carregarPainelFinanceiro]);
 
   const aCorrer = useMemo(() => jobs.some((job) => job.status === "running"), [jobs]);
 
@@ -470,9 +770,10 @@ export default function ErcPage() {
     if (!aCorrer) return;
     const id = window.setInterval(() => {
       void carregarPainel();
+      void carregarPainelFinanceiro();
     }, 15000);
     return () => window.clearInterval(id);
-  }, [aCorrer, carregarPainel]);
+  }, [aCorrer, carregarPainel, carregarPainelFinanceiro]);
 
   const consulta = useMemo(
     () => ({
@@ -497,7 +798,18 @@ export default function ErcPage() {
         ? buscarEntidades({ q: consulta.q, distrito: consulta.distrito, tipo_sociedade: consulta.tipo_sociedade, page: consulta.page, size: consulta.size })
         : aba === "pessoas"
           ? buscarPessoas({ q: consulta.q, distrito: consulta.distrito, empresa: consulta.empresa, funcao: consulta.funcao, page: consulta.page, size: consulta.size })
-          : buscarOcs({ q: consulta.q, distrito: consulta.distrito, tipo: consulta.tipo, page: consulta.page, size: consulta.size });
+          : aba === "ocs"
+            ? buscarOcs({ q: consulta.q, distrito: consulta.distrito, tipo: consulta.tipo, page: consulta.page, size: consulta.size })
+            : buscarAnalise({
+                q: consulta.q,
+                distrito: consulta.distrito,
+                banda: banda || undefined,
+                nivel_transparencia: nivelTransparencia || undefined,
+                com_financeiro: comContas === "todos" ? undefined : comContas === "sim",
+                ordenar,
+                page: consulta.page,
+                size: consulta.size,
+              });
 
     pedido
       .then((resultado) => {
@@ -507,7 +819,8 @@ export default function ErcPage() {
         setOrigem(resultado.origem ?? null);
         if (aba === "entidades") setEntidades((resultado.items ?? []) as ErcEntidade[]);
         else if (aba === "pessoas") setPessoas((resultado.items ?? []) as ErcPessoa[]);
-        else setOcs((resultado.items ?? []) as ErcOcs[]);
+        else if (aba === "ocs") setOcs((resultado.items ?? []) as ErcOcs[]);
+        else setAnalises((resultado.items ?? []) as ErcEntidade[]);
       })
       .catch((err) => {
         if (!cancelado) setErro(err instanceof Error ? err.message : "Falha na pesquisa.");
@@ -518,7 +831,7 @@ export default function ErcPage() {
     return () => {
       cancelado = true;
     };
-  }, [aba, consulta]);
+  }, [aba, consulta, banda, nivelTransparencia, comContas, ordenar]);
 
   const submeter = (event?: React.FormEvent) => {
     event?.preventDefault();
@@ -534,6 +847,9 @@ export default function ErcPage() {
     setEmpresa("");
     setFuncao("");
     setTipoOcs("");
+    setBanda("");
+    setNivelTransparencia("");
+    setComContas("todos");
     setPagina(0);
   };
 
@@ -571,6 +887,47 @@ export default function ErcPage() {
       setErro(null);
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Não foi possível arrancar a indexação.");
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  const [anosJanela, setAnosJanela] = useState("4");
+  const [soSemDados, setSoSemDados] = useState(true);
+  const [vazios, setVazios] = useState(0);
+
+  /** Varrimento dos exercícios financeiros — um pedido ao portal por ano e entidade. */
+  const recolherFinanceiro = async () => {
+    setOcupado(true);
+    try {
+      const ultimo = new Date().getFullYear() - 1;
+      const anos = Math.max(1, Math.min(30, Number(anosJanela) || 4));
+      await recolherFinanceiroErc({
+        ano_fim: ultimo,
+        ano_inicio: ultimo - anos + 1,
+        vazios_seguidos: vazios,
+        trabalhadores: 8,
+        apenas_sem_financeiro: soSemDados,
+        indexar: true,
+      });
+      await carregarJobs();
+      setErro(null);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Não foi possível arrancar a recolha financeira.");
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  /** Recalcula a análise de risco a partir do que já está em disco (sem rede). */
+  const analisar = async () => {
+    setOcupado(true);
+    try {
+      await analisarErc({ indexar: true });
+      await carregarJobs();
+      setErro(null);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : "Não foi possível arrancar a análise.");
     } finally {
       setOcupado(false);
     }
@@ -708,6 +1065,80 @@ export default function ErcPage() {
         </form>
       ) : null}
 
+      <details className="glass-card rounded-2xl p-3 text-[11px]">
+        <summary className="cursor-pointer text-xs font-semibold">
+          Financeiro e risco (recolher contas, recalcular, indexar)
+        </summary>
+        <div className="mt-3 space-y-3">
+          <p className="text-muted-foreground">
+            A secção financeira do portal só responde exercício a exercício, por isso a janela é sondada ano a ano (um
+            pedido por ano e entidade). A análise de risco usa apenas os dados autodeclarados ao regulador.
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-1 text-muted-foreground">
+              Exercícios
+              <input
+                value={anosJanela}
+                onChange={(event) => setAnosJanela(event.target.value)}
+                inputMode="numeric"
+                className="w-20 rounded-xl border border-white/10 bg-black/20 px-2 py-2 text-xs text-foreground"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-muted-foreground">
+              Parar após anos vazios
+              <input
+                value={vazios}
+                onChange={(event) => setVazios(Math.max(0, Number(event.target.value) || 0))}
+                inputMode="numeric"
+                className="w-20 rounded-xl border border-white/10 bg-black/20 px-2 py-2 text-xs text-foreground"
+              />
+            </label>
+            <label className="flex items-center gap-2 text-muted-foreground">
+              <input type="checkbox" checked={soSemDados} onChange={(event) => setSoSemDados(event.target.checked)} />
+              Só entidades sem contas
+            </label>
+            <button
+              type="button"
+              disabled={ocupado}
+              onClick={() => void recolherFinanceiro()}
+              className="inline-flex items-center gap-2 rounded-xl border border-sky-400/30 bg-sky-400/10 px-3 py-2 text-xs text-sky-100 hover:bg-sky-400/20 disabled:opacity-50"
+            >
+              {ocupado ? <Loader2 size={13} className="animate-spin" /> : <Landmark size={13} />} Recolher financeiro
+            </button>
+            <button
+              type="button"
+              disabled={ocupado}
+              onClick={() => void analisar()}
+              className="inline-flex items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100 hover:bg-amber-400/20 disabled:opacity-50"
+            >
+              <ShieldAlert size={13} /> Recalcular análise
+            </button>
+            <button
+              type="button"
+              disabled={ocupado}
+              onClick={() => void indexar()}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10 disabled:opacity-50"
+            >
+              <RefreshCw size={13} /> Indexar
+            </button>
+          </div>
+          <p className="text-muted-foreground">
+            Exportar:{" "}
+            <a href={ercExportUrl("analise")} className="text-sky-200 hover:text-sky-100">
+              análise
+            </a>{" "}
+            ·{" "}
+            <a href={ercExportUrl("financeiro")} className="text-sky-200 hover:text-sky-100">
+              série financeira
+            </a>{" "}
+            ·{" "}
+            <a href={ercExportUrl("entidades")} className="text-sky-200 hover:text-sky-100">
+              entidades
+            </a>
+          </p>
+        </div>
+      </details>
+
       <nav className="flex flex-wrap gap-1.5">
         {ABAS.map((item) => (
           <button
@@ -751,6 +1182,8 @@ export default function ErcPage() {
           <BarList titulo="Tipos de OCS" itens={resumo?.tipos_ocs ?? []} />
           <BarList titulo="Tipos de sociedade" itens={resumo?.tipos_sociedade ?? []} />
           <BarList titulo="Atividade principal" itens={resumo?.actividades ?? []} />
+          <BarList titulo="Banda de risco" itens={resumo?.bandas_risco ?? []} />
+          <BarList titulo="Exercícios com contas" itens={resumo?.anos_financeiro ?? []} />
           <div className="glass-card rounded-2xl p-4 text-[11px] text-muted-foreground">
             <h3 className="text-xs font-semibold text-foreground">Índices</h3>
             <ul className="mt-2 space-y-1">
@@ -792,7 +1225,9 @@ export default function ErcPage() {
                       ? "Nome, OCS detido ou pessoa dos órgãos sociais…"
                       : aba === "pessoas"
                         ? "Nome, empresa ou participação…"
-                        : "Designação ou entidade proprietária…"
+                        : aba === "risco"
+                          ? "Nome, tipo de sociedade, actividade ou distrito…"
+                          : "Designação ou entidade proprietária…"
                   }
                   className="w-full rounded-xl border border-white/10 bg-black/20 py-2 pl-7 pr-2 text-xs text-foreground"
                 />
@@ -874,6 +1309,71 @@ export default function ErcPage() {
               </label>
             ) : null}
 
+            {aba === "risco" ? (
+              <>
+                <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+                  Banda de risco
+                  <select
+                    value={banda}
+                    onChange={(event) => setBanda(event.target.value)}
+                    className="rounded-xl border border-white/10 bg-black/20 px-2 py-2 text-xs text-foreground"
+                  >
+                    <option value="">Todas</option>
+                    {["baixo", "moderado", "elevado", "critico"].map((item) => (
+                      <option key={item} value={item}>
+                        {rotulo(item)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+                  Transparência
+                  <select
+                    value={nivelTransparencia}
+                    onChange={(event) => setNivelTransparencia(event.target.value)}
+                    className="rounded-xl border border-white/10 bg-black/20 px-2 py-2 text-xs text-foreground"
+                  >
+                    <option value="">Todos</option>
+                    {["alta", "media", "baixa", "muito_baixa"].map((item) => (
+                      <option key={item} value={item}>
+                        {rotulo(item)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+                  Contas publicadas
+                  <select
+                    value={comContas}
+                    onChange={(event) => setComContas(event.target.value as "todos" | "sim" | "nao")}
+                    className="rounded-xl border border-white/10 bg-black/20 px-2 py-2 text-xs text-foreground"
+                  >
+                    <option value="todos">Todas</option>
+                    <option value="sim">Com contas</option>
+                    <option value="nao">Sem contas</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+                  Ordenar por
+                  <select
+                    value={ordenar}
+                    onChange={(event) => setOrdenar(event.target.value as ErcOrdenacaoAnalise)}
+                    className="rounded-xl border border-white/10 bg-black/20 px-2 py-2 text-xs text-foreground"
+                  >
+                    <option value="risco">Risco (maior primeiro)</option>
+                    <option value="transparencia">Transparência</option>
+                    <option value="credito">Crédito</option>
+                    <option value="rendimentos">Rendimentos</option>
+                    <option value="resultados">Resultados</option>
+                    <option value="capital_proprio">Capital próprio</option>
+                    <option value="autonomia">Autonomia financeira</option>
+                    <option value="recentes">Exercício mais recente</option>
+                    <option value="nome">Nome</option>
+                  </select>
+                </label>
+              </>
+            ) : null}
+
             <button
               type="submit"
               className="inline-flex items-center gap-2 rounded-xl border border-sky-400/30 bg-sky-400/10 px-3 py-2 text-xs text-sky-100 hover:bg-sky-400/20"
@@ -895,7 +1395,7 @@ export default function ErcPage() {
               {origem ? ` · fonte: ${origem}` : ""}
             </span>
             <span className="flex items-center gap-1.5">
-              <a href={ercExportUrl(aba === "pessoas" ? "pessoas" : aba === "ocs" ? "ocs" : "entidades")} className="inline-flex items-center gap-1 hover:text-foreground">
+              <a href={ercExportUrl(aba === "pessoas" ? "pessoas" : aba === "ocs" ? "ocs" : aba === "risco" ? "analise" : "entidades")} className="inline-flex items-center gap-1 hover:text-foreground">
                 <Download size={11} /> Exportar este conjunto
               </a>
             </span>
@@ -907,12 +1407,16 @@ export default function ErcPage() {
             </p>
           ) : null}
 
+          {aba === "risco" ? <PainelFinanceiro painel={painelFin} /> : null}
+
           <div className="space-y-2">
             {aba === "entidades"
               ? entidades.map((item) => <EntidadeCard key={item.doc_id} entidade={item} />)
               : aba === "pessoas"
                 ? pessoas.map((item) => <PessoaCard key={item.doc_id} pessoa={item} />)
-                : ocs.map((item) => <OcsCard key={item.doc_id ?? item.designacao} ocs={item} />)}
+                : aba === "ocs"
+                  ? ocs.map((item) => <OcsCard key={item.doc_id ?? item.designacao} ocs={item} />)
+                  : analises.map((item) => <EntidadeCard key={item.doc_id} entidade={item} />)}
             {!aCarregar && total === 0 ? (
               <p className="glass-card rounded-2xl p-4 text-xs text-muted-foreground">
                 Sem resultados. {semDados ? "Comece por correr a recolha." : "Tente outro termo ou limpe os filtros."}

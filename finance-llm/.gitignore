@@ -67,3 +67,12 @@ data/partidos/pdf/
 # e fica só em disco — `POST /erc/recolher` volta a buscá-lo. O que fica
 # versionado são os JSONL normalizados, já apanhados por `*.jsonl`.
 data/erc/raw/
+
+# Abonos dos eleitos locais (Lei n.º 11/96). A tabela oficial de 2026 é um **dado
+# de referência escrito à mão** (transcrito do PDF do despacho anual), não uma
+# recolha: tem de ficar versionada, apesar do `*.json` acima — sem ela o módulo
+# ficava sem os valores, e não há nada de onde os volte a buscar. Já a árvore
+# territorial e o progresso da recolha do MAI (`mai_territorios.json`,
+# `mai_recolha.json`, ~17 MB de polígonos) são re-descarregáveis com
+# `POST /remuneracoes/refresh` e ficam só em disco.
+!data/remuneracoes/abonos_eleitos_locais.json

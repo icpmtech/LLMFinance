@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1026 operações** em **41 grupos**.
+Versão `0.4.0` · **1158 operações** em **43 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -44,6 +44,8 @@ Versão `0.4.0` · **1026 operações** em **41 grupos**.
 - **contribuintes** — Contribuintes: índice único com todos os NIF/NIPC do sistema (agregado dos contratos PT/ES, cadastro de entidades, publicações societárias, CIRE, PessoasIQ, firmas, marcas e CRM), pesquisa e ficha por NIF, e sincronização manual/agendada (cron) a partir de todos os índices da plataforma.
 - **devedores** — Listas públicas de devedores (Autoridade Tributária e Segurança Social): recolha dos PDF oficiais para PDF + JSON com a data da recolha, indexação em `finance_devedores` e área de pesquisa por nome/NIF, tipo, escalão e data.
 - **subvencoes** — Subvenções públicas (Lei n.º 64/2013, de 27/08): leitura das listagens anuais da IGF em `data/subvencoes` (um `.ods` por ano, ou uma subpasta por ano), normalização para JSONL, indexação em `finance_subvencoes`, pesquisa por ano/entidade/beneficiário/valor, painel, fichas por NIF, amostra lida do disco e exportação CSV.
+- **partidos** — Partidos políticos e as suas contas. Recolhe as páginas anuais do financiamento partidário do Tribunal Constitucional (contas anuais dos partidos, listas de ações e meios de propaganda política, relatórios, acórdãos e decisões da ECFP) e o registo oficial dos partidos na CNE; indexa em `finance_partidos`, `finance_partidos_registo` e `finance_partidos_recolhas`, e serve painel, pesquisa (com o texto dos PDF), fichas por partido, ligação às pessoas do PessoasIQ e exportação CSV.
+- **erc** — Portal da Transparência da ERC: entidades proprietárias de órgãos de comunicação social, as pessoas dos seus órgãos sociais e os OCS detidos. Recolhe a listagem, as fichas de cada entidade e de cada pessoa (cargos e participações diretas) e a estrutura de propriedade; indexa em `finance_erc_entidades`, `finance_erc_pessoas` e `finance_erc_ocs`, e serve painel, pesquisa, fichas e exportação CSV.
 - **gleif** — GLEIF / LEI: registos *Legal Entity Identifier* do *Golden Copy* (Golden Copy em ficheiro `data/gleif/lei.jsonl` e índice `finance_gleif_lei`), pesquisa por nome/LEI/cidade com facetas, agregado por país/região para o mapa e ingestão a partir da API oficial ou dos ficheiros Golden Copy (LEI-CDF).
 - **world** — World Model: estado materializado do mundo da contratação pública (entidades, contratos, relações, eventos e histórico), rede neuronal dinâmica (crescimento, poda, memória e previsão — mostrada como grafo), motor de grafo/tempo (relações, timestamps e causalidade candidata), simulador de futuro (t0 → t3 com cenários e Monte Carlo) e agente de investigação (Observe → Hypothesize → Search → Validate → Simulate → Evidence Report).
 - **spa** — Páginas da interface (single-page app). Devolvem o `index.html` e existem para permitir abrir os ecrãs diretamente pelo endereço — não são endpoints de dados.
@@ -55,6 +57,13 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | Método | Caminho | Resumo |
 | --- | --- | --- |
 | `GET` | `/` | Read Root |
+| `GET` | `/base-impic/amostra/{ano}` | Base Amostra |
+| `GET` | `/base-impic/anos` | Base Anos |
+| `POST` | `/base-impic/cancelar/{ano}` | Base Cancelar |
+| `GET` | `/base-impic/estado` | Base Estado |
+| `GET` | `/base-impic/formato/{ano}` | Base Formato |
+| `POST` | `/base-impic/importar` | Base Importar |
+| `GET` | `/base-impic/recursos` | Base Recursos |
 | `GET` | `/benchmark` | Serve Benchmark Spa Page |
 | `GET` | `/benchmark/anomalies` | Benchmark Anomalies |
 | `GET` | `/benchmark/buyer-graph` | Benchmark Buyer Graph |
@@ -72,7 +81,10 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/benchmark/seller-graph` | Benchmark Seller Graph |
 | `GET` | `/benchmark/{path}` | Serve Benchmark Spa Page |
 | `POST` | `/benchmarks` | Benchmark Criar |
+| `GET` | `/benchmarks/configuracao` | Benchmarks Configuracao |
+| `PUT` | `/benchmarks/configuracao` | Benchmarks Guardar Configuracao |
 | `GET` | `/benchmarks/lista` | Benchmarks Lista |
+| `GET` | `/benchmarks/lojas` | Benchmarks Lojas |
 | `GET` | `/benchmarks/meta` | Benchmarks Meta |
 | `GET` | `/benchmarks/modelo/{template_id}` | Benchmarks Modelo |
 | `GET` | `/benchmarks/publico/lista` | Benchmarks Publicos |
@@ -87,10 +99,12 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `POST` | `/benchmarks/{slug}/publicar` | Benchmark Publicar |
 | `DELETE` | `/benchmarks/{slug}/publicar` | Benchmark Despublicar |
 | `POST` | `/benchmarks/{slug}/recolher` | Benchmark Recolher |
+| `POST` | `/benchmarks/{slug}/sonda` | Benchmarks Sonda Estudo |
 | `GET` | `/cae/autocomplete` | Autocomplete Cae |
 | `GET` | `/cae/list` | List Cae |
 | `GET` | `/cae/{code}` | Get Cae |
 | `POST` | `/chat` | Chat |
+| `GET` | `/chat/backends` | Chat Backends |
 | `POST` | `/chat/stream` | Chat Stream Post |
 | `GET` | `/chat/stream` | Chat Stream Get |
 | `GET` | `/cire` | Serve Spa Page |
@@ -153,9 +167,26 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `POST` | `/deep-search/ontology` | Deep Search Ontology |
 | `GET` | `/deep-search/search` | Deep Search Sources |
 | `GET` | `/deep-search/suggest` | Deep Search Suggest |
+| `GET` | `/descoberta/conjunto` | Compara várias empresas (NIFs ou nomes) |
+| `POST` | `/descoberta/conjunto` | Compara várias empresas (corpo JSON) |
+| `GET` | `/descoberta/empresa/{nif}` | Recolha completa de uma empresa |
+| `POST` | `/descoberta/empresa/{nif}/analise` | Análise da empresa pelo Hermes |
+| `GET` | `/descoberta/empresa/{nif}/decisao` | Painel de decisão da empresa |
+| `GET` | `/descoberta/empresa/{nif}/grafo` | Grafo de informação da empresa |
+| `GET` | `/descoberta/empresa/{nif}/ontologia` | Projeção da empresa sobre a ontologia |
+| `GET` | `/descoberta/meta` | Fontes, grupos e limites do painel de descoberta |
+| `POST` | `/descoberta/pessoas/analise` | Análise do conjunto de pessoas pelo Hermes |
+| `GET` | `/descoberta/pessoas/descobrir` | Descobre as pessoas ligadas às empresas (query) |
+| `POST` | `/descoberta/pessoas/descobrir` | Descobre as pessoas ligadas às empresas (corpo JSON) |
+| `GET` | `/descoberta/pessoas/meta` | Fontes e limites da descoberta de pessoas |
+| `GET` | `/descoberta/pessoas/pessoa/{nif}` | Ficha de uma pessoa em todo o universo |
+| `GET` | `/descoberta/pessoas/resolver` | Resolve um nome ou NIF na empresa certa |
+| `GET` | `/descoberta/resolver` | Resolve um nome ou NIF na empresa certa |
+| `GET` | `/descoberta/skills` | Skills que o Hermes segue (e a que serviria uma pergunta) |
 | `GET` | `/docs/document/{nome}` | Servir Documento |
 | `GET` | `/docs/documents` | Listar Documentos |
 | `GET` | `/docs/markdown/{nome}` | Ler Markdown |
+| `GET` | `/empresas-global/{path}` | Serve Spa Page |
 | `GET` | `/empresas-recolha` | Serve Empresas Recolha Spa Page |
 | `GET` | `/empresas-recolha/catalogo` | Recolha Catalogo |
 | `GET` | `/empresas-recolha/concelhos/{distrito}` | Recolha Concelhos |
@@ -173,6 +204,7 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/empresas-recolha/meta` | Recolha Meta |
 | `POST` | `/empresas-recolha/sync` | Recolha Sync |
 | `GET` | `/empresas-risco` | Serve Spa Page |
+| `GET` | `/favicon.svg` | Serve Favicon Svg |
 | `GET` | `/health` | Health |
 | `GET` | `/loja` | Loja Home |
 | `POST` | `/loja/avaliacoes` | Loja Review |
@@ -188,6 +220,36 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/loja/produtos` | Loja Products |
 | `GET` | `/loja/robots.txt` | Loja Robots |
 | `GET` | `/loja/sitemap.xml` | Loja Sitemap |
+| `GET` | `/lorenz/areas` | Áreas de contratação disponíveis (prefixos de CPV) |
+| `PUT` | `/lorenz/areas` | Substituir as áreas e/ou os parâmetros (exige sessão) |
+| `GET` | `/lorenz/cenarios` | Comparação 7/30/60 dias e elasticidade ao choque |
+| `GET` | `/lorenz/cpv` | Fragilidade e concentração por classe de CPV |
+| `GET` | `/lorenz/entidades` | Compradores mais frágeis e fornecedores mais expostos |
+| `GET` | `/lorenz/evidencias` | Contratos que sustentam uma relação ou um CPV |
+| `POST` | `/lorenz/execucoes` | Calcular e guardar um panorama (exige sessão) |
+| `GET` | `/lorenz/execucoes` | Execuções guardadas |
+| `GET` | `/lorenz/execucoes/{run_id}` | Execução guardada (fotografia completa) |
+| `GET` | `/lorenz/grafo` | Grafo comprador↔fornecedor (formato do canvas) |
+| `GET` | `/lorenz/meta` | Metamodelo do módulo (arquitetura, áreas, parâmetros) |
+| `GET` | `/lorenz/panorama` | Estado, regime, dependências, CPV e alertas do escopo |
+| `GET` | `/lorenz/propagacao` | Cenário de propagação de um fornecedor (7/30/60 dias) |
+| `GET` | `/lorenz/serie` | Série por período com o estado observado |
+| `GET` | `/mercado/benchmark` | Benchmark entre empresas do mesmo mercado |
+| `GET` | `/mercado/cenarios` | Eventos simulados (World Model) + sensibilidade (Lorenz) |
+| `GET` | `/mercado/compatibilidade` | Grau de compatibilidade entre um CAE e um CPV |
+| `GET` | `/mercado/dependencias` | Dependências recíprocas: empresa→entidades e entidade→fornecedores |
+| `GET` | `/mercado/empresa/{nif}` | Ficha de mercado de uma empresa |
+| `GET` | `/mercado/evidencias` | Contratos que sustentam um indicador |
+| `POST` | `/mercado/execucoes` | Calcular e guardar um benchmark (exige sessão) |
+| `GET` | `/mercado/execucoes` | Execuções guardadas |
+| `GET` | `/mercado/execucoes/{run_id}` | Execução guardada (fotografia completa) |
+| `GET` | `/mercado/grafo` | Grafo temporal empresa → contrato → entidade → CPV → CAE |
+| `GET` | `/mercado/mercados` | Mercados comparáveis (classe de CPV × CAE × período) |
+| `GET` | `/mercado/meta` | Metamodelo: camadas, indicadores, eventos e tabela CPV↔CAE |
+| `GET` | `/mercado/pares` | Empresas comparáveis (mesmos CPV, CAE compatível, mesmo período) |
+| `GET` | `/mercado/sensibilidade` | Motor Lorenz aplicado à série do mercado |
+| `GET` | `/mercado/tabela` | Tabela CPV↔CAE atual e parâmetros |
+| `PUT` | `/mercado/tabela` | Substituir a tabela CPV↔CAE e/ou os parâmetros (exige sessão) |
 | `GET` | `/mirofish/diagnose` | Diagnose |
 | `GET` | `/mirofish/jobs` | List Jobs |
 | `GET` | `/mirofish/jobs/{job_id}` | Get Job |
@@ -269,6 +331,10 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `PATCH` | `/padroes/regras/{regra_id}/ativo` | Ligar/desligar uma regra |
 | `POST` | `/padroes/regras/{regra_id}/duplicar` | Duplicar uma regra |
 | `GET` | `/padroes/relations` | Rede de relações e concentração |
+| `GET` | `/people/autarquicas/candidates` | Lista de candidatos às autárquicas 2025 |
+| `GET` | `/people/autarquicas/candidates/{name}` | Detalhe de um candidato |
+| `POST` | `/people/autarquicas/refresh` | Forçar recolha nova dos candidatos |
+| `GET` | `/people/autarquicas/stats` | Resumo dos candidatos indexados |
 | `GET` | `/people/autocomplete` | People Autocomplete Route |
 | `GET` | `/people/companies` | People Companies Route |
 | `GET` | `/people/companies/{company_nif}` | People Company Route |
@@ -284,6 +350,12 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/people/status` | People Status Route |
 | `GET` | `/people/summary` | Node Summary Get Route |
 | `POST` | `/people/summary` | Node Summary Post Route |
+| `GET` | `/people/vereadores` | Lista de vereadores e presidentes de câmara |
+| `GET` | `/people/vereadores/concelhos` | Concelhos conhecidos |
+| `POST` | `/people/vereadores/import` | Importar vereadores via JSON |
+| `POST` | `/people/vereadores/import/csv` | Importar vereadores via CSV |
+| `POST` | `/people/vereadores/refresh` | Atualizar dados base das autárquicas |
+| `GET` | `/people/vereadores/stats` | Resumo dos vereadores indexados |
 | `GET` | `/people/{nif}` | People Detail Route |
 | `GET` | `/people/{nif}/360` | People 360 Route |
 | `GET` | `/people/{nif}/graph` | People Person Graph Route |
@@ -297,6 +369,19 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/pessoas-iq/politicos` | Serve Spa Page |
 | `GET` | `/racius/meta` | Racius Meta |
 | `GET` | `/racius/search` | Racius Search |
+| `GET` | `/racius/{nif}` | Racius Detail |
+| `GET` | `/remuneracoes/concelhos` | Concelhos com eleitores, escalão e abonos |
+| `GET` | `/remuneracoes/concelhos/{concelho}` | Ficha de um concelho e das suas freguesias |
+| `GET` | `/remuneracoes/escaloes` | Escalões de eleitores de um nível |
+| `GET` | `/remuneracoes/freguesias` | Freguesias com eleitores, escalão e abonos |
+| `GET` | `/remuneracoes/mapa` | Coordenadas, eleitores e abonos por território |
+| `GET` | `/remuneracoes/meta` | Proveniência dos dados e volumetria da tabela |
+| `POST` | `/remuneracoes/refresh` | Recolher de novo do MAI e reindexar |
+| `POST` | `/remuneracoes/reindex` | Indexar no Elasticsearch sem recolher dados novos |
+| `GET` | `/remuneracoes/simular` | Abonos de um território com N eleitores |
+| `GET` | `/remuneracoes/stats` | Volumetria do que está recolhido |
+| `GET` | `/remuneracoes/tabelas` | Tabela de abonos dos eleitos locais |
+| `POST` | `/remuneracoes/tabelas/import` | Importar/substituir uma tabela de abonos |
 | `POST` | `/reports/admin/catalogue` | Reports Admin Save Package |
 | `DELETE` | `/reports/admin/catalogue/{package_id}` | Reports Admin Delete Package |
 | `GET` | `/reports/admin/export.csv` | Reports Admin Export |
@@ -332,6 +417,7 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/risco/meta` | Cartão do modelo de risco, features e fontes |
 | `GET` | `/risco/pesquisa` | Pesquisa de empresas com nível de risco |
 | `GET` | `/risco/sugestoes` | Sugestões de empresas para a caixa de pesquisa |
+| `GET` | `/robots.txt` | Serve Robots Txt |
 | `GET` | `/search/analysis/contracts` | Contracts Analysis |
 | `POST` | `/search/chat` | Search Chat Ask |
 | `GET` | `/search/chat/status` | Search Chat Status |
@@ -372,6 +458,7 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/shop/{entity}/{item_id}/revisions` | Shop Revisions |
 | `POST` | `/shop/{entity}/{item_id}/status` | Shop Status |
 | `POST` | `/shop/{entity}/{item_id}/unpublish` | Shop Unpublish |
+| `GET` | `/sitemap.xml` | Serve Sitemap Xml |
 | `GET` | `/social` | Serve Spa Page |
 | `GET` | `/social/agenda` | Serve Spa Page |
 | `GET` | `/social/canais` | Serve Spa Page |
@@ -380,6 +467,18 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/social/pesquisa` | Serve Spa Page |
 | `POST` | `/translate` | Translate |
 | `GET` | `/translate/{ticker}` | Get Ticker Translation |
+| `GET` | `/vortal/admin/indice` | Estado do índice das peças no Elasticsearch (só administradores) |
+| `GET` | `/vortal/admin/monitorizacao` | Monitorização do módulo (só administradores) |
+| `GET` | `/vortal/admin/recolhas` | Histórico de recolhas e indexações (só administradores) |
+| `GET` | `/vortal/aviso` | Resolve um aviso (token/URL/UID) e lista as peças sem descarregar |
+| `DELETE` | `/vortal/aviso/{uid}` | Remover um aviso do índice (e do disco, se pedido) — exige sessão |
+| `GET` | `/vortal/avisos` | Avisos já recolhidos para disco (pelos manifestos) |
+| `GET` | `/vortal/estado` | O que está em disco e o que está indexado |
+| `POST` | `/vortal/indexar` | Indexar no Elasticsearch o que já está em disco (exige sessão) |
+| `GET` | `/vortal/meta` | Metamodelo: endpoints públicos usados, índice, tipos e limites |
+| `GET` | `/vortal/pecas` | Peças indexadas (por aviso ou todas) |
+| `GET` | `/vortal/pesquisa` | Pesquisa no texto das peças recolhidas |
+| `POST` | `/vortal/recolha` | Descarregar as peças para disco e (opcionalmente) indexar (exige sessão) |
 
 ## auth
 
@@ -539,6 +638,7 @@ Cadastro de entidades e empresas: pesquisa (GET/POST), estatísticas, países, a
 | Método | Caminho | Resumo |
 | --- | --- | --- |
 | `POST` | `/companies/role-summary` | Companies Role Summary |
+| `GET` | `/companies/search` | Companies Search |
 | `POST` | `/companies/search` | Companies Search |
 | `GET` | `/companies/{nif}` | Companies Detail |
 | `GET` | `/companies/{nif}/analytics` | Companies Analytics |
@@ -1175,6 +1275,55 @@ Subvenções públicas (Lei n.º 64/2013, de 27/08): leitura das listagens anuai
 | `GET` | `/subvencoes/resumo` | Subvencoes Resumo |
 | `GET` | `/subvencoes/search` | Subvencoes Search |
 
+## partidos
+
+Partidos políticos e as suas contas. Recolhe as páginas anuais do financiamento partidário do Tribunal Constitucional (contas anuais dos partidos, listas de ações e meios de propaganda política, relatórios, acórdãos e decisões da ECFP) e o registo oficial dos partidos na CNE; indexa em `finance_partidos`, `finance_partidos_registo` e `finance_partidos_recolhas`, e serve painel, pesquisa (com o texto dos PDF), fichas por partido, ligação às pessoas do PessoasIQ e exportação CSV.
+
+| Método | Caminho | Resumo |
+| --- | --- | --- |
+| `GET` | `/partidos/amostra/{ano}` | Partidos Amostra |
+| `GET` | `/partidos/anos` | Partidos Anos |
+| `GET` | `/partidos/documento/markdown` | Partidos Documento Markdown |
+| `GET` | `/partidos/documento/pdf` | Partidos Documento Pdf |
+| `GET` | `/partidos/export.csv` | Partidos Export |
+| `GET` | `/partidos/ficheiros` | Partidos Ficheiros |
+| `GET` | `/partidos/fontes` | Partidos Fontes |
+| `POST` | `/partidos/indexar` | Partidos Indexar |
+| `GET` | `/partidos/jobs` | Partidos Jobs |
+| `GET` | `/partidos/jobs/{job_id}` | Partidos Job |
+| `GET` | `/partidos/meta` | Partidos Meta |
+| `GET` | `/partidos/partido/{termo}` | Partidos Partido |
+| `GET` | `/partidos/partido/{termo}/pessoas` | Partidos Partido Pessoas |
+| `GET` | `/partidos/pessoa/{nif}` | Partidos Pessoa |
+| `POST` | `/partidos/recolher` | Partidos Recolher |
+| `GET` | `/partidos/registo` | Partidos Registo |
+| `GET` | `/partidos/resumo` | Partidos Resumo |
+| `GET` | `/partidos/search` | Partidos Search |
+
+## erc
+
+Portal da Transparência da ERC: entidades proprietárias de órgãos de comunicação social, as pessoas dos seus órgãos sociais e os OCS detidos. Recolhe a listagem, as fichas de cada entidade e de cada pessoa (cargos e participações diretas) e a estrutura de propriedade; indexa em `finance_erc_entidades`, `finance_erc_pessoas` e `finance_erc_ocs`, e serve painel, pesquisa, fichas e exportação CSV.
+
+| Método | Caminho | Resumo |
+| --- | --- | --- |
+| `POST` | `/erc/analisar` | Erc Analisar |
+| `GET` | `/erc/analise` | Erc Analise |
+| `GET` | `/erc/entidades` | Erc Entidades |
+| `GET` | `/erc/entidades/{entidade_id}` | Erc Entidade |
+| `GET` | `/erc/export.csv` | Erc Export |
+| `GET` | `/erc/financeiro` | Erc Financeiro |
+| `POST` | `/erc/financeiro/recolher` | Erc Recolher Financeiro |
+| `POST` | `/erc/indexar` | Erc Indexar |
+| `GET` | `/erc/jobs` | Erc Jobs |
+| `GET` | `/erc/jobs/{job_id}` | Erc Job |
+| `GET` | `/erc/listagem` | Erc Listagem |
+| `GET` | `/erc/meta` | Erc Meta |
+| `GET` | `/erc/ocs` | Erc Ocs |
+| `GET` | `/erc/pessoas` | Erc Pessoas |
+| `GET` | `/erc/pessoas/{pessoa_id}` | Erc Pessoa |
+| `POST` | `/erc/recolher` | Erc Recolher |
+| `GET` | `/erc/resumo` | Erc Resumo |
+
 ## gleif
 
 GLEIF / LEI: registos *Legal Entity Identifier* do *Golden Copy* (Golden Copy em ficheiro `data/gleif/lei.jsonl` e índice `finance_gleif_lei`), pesquisa por nome/LEI/cidade com facetas, agregado por país/região para o mapa e ingestão a partir da API oficial ou dos ficheiros Golden Copy (LEI-CDF).
@@ -1258,7 +1407,6 @@ Páginas da interface (single-page app). Devolvem o `index.html` e existem para 
 | `GET` | `/adjudicatarios` | Serve Entities Spa Page |
 | `GET` | `/companies` | Serve Companies Spa Page |
 | `GET` | `/companies/dashboard` | Serve Companies Spa Page |
-| `GET` | `/companies/search` | Serve Companies Spa Page |
 | `GET` | `/contracts` | Página da interface (SPA) |
 | `GET` | `/contracts/dashboard` | Página da interface (SPA) |
 | `GET` | `/contracts/map` | Página da interface (SPA) |

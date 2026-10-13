@@ -535,6 +535,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "244,63,94",
   },
   {
+    id: "remuneracoes",
+    label: "Remunerações dos eleitos locais",
+    hint: "Tabela de abonos dos eleitos locais (Lei n.º 11/96) por escalão de eleitores, cruzada com o n.º de eleitores de cada concelho e freguesia — com mapa",
+    icon: Scale,
+    gradient: "from-teal-200 via-cyan-500 to-indigo-700",
+    accent: "20,184,166",
+  },
+  {
     id: "simulador",
     label: "Simulador IQ OS",
     hint: "Simulações de previsão por enxame de agentes com os dados do sistema, com resultados, relatório e elenco",

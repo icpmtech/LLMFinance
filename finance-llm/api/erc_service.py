@@ -35,6 +35,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
 
+from api import erc_risco
 from collectors import erc_transparencia as erc
 from collectors.erc_transparencia import (
     parse_entity_geral,
@@ -71,7 +72,7 @@ _JOBS_LOCK = threading.Lock()
 _JOBS_KEEP = 20
 _RUNNING = "running"
 
-TIPOS_JOB = ("recolher", "indexar")
+TIPOS_JOB = ("recolher", "recolher_financeiro", "analisar", "indexar")
 
 _ESPACOS = re.compile(r"\s+")
 
@@ -576,6 +577,171 @@ def recolher(
     }
 
 
+#: Exercícios sondados por omissão na recolha financeira (os mais recentes).
+ANOS_FINANCEIRO_JANELA = int(os.getenv("ERC_ANOS_FINANCEIRO", "4"))
+
+
+def anos_a_varrer(ano_inicio: Optional[int] = None, ano_fim: Optional[int] = None) -> List[int]:
+    """Exercícios a sondar, do mais recente para o mais antigo.
+
+    O portal não publica a lista de exercícios de uma entidade (o `select` da
+    secção só traz o ano pedido), por isso a janela é varrida ano a ano. Por
+    omissão vai até ao exercício anterior ao corrente.
+    """
+    fim = int(ano_fim) if ano_fim else datetime.now(timezone.utc).year - 1
+    inicio = int(ano_inicio) if ano_inicio else fim - ANOS_FINANCEIRO_JANELA + 1
+    if inicio > fim:
+        inicio, fim = fim, inicio
+    return list(range(fim, inicio - 1, -1))
+
+
+def recolher_financeiro(
+    *,
+    limite: Optional[int] = None,
+    ano_inicio: Optional[int] = None,
+    ano_fim: Optional[int] = None,
+    vazios_seguidos: int = 0,
+    pausa: float = PAUSA_PADRAO,
+    trabalhadores: int = 8,
+    apenas_sem_financeiro: bool = True,
+    guardar_html: bool = False,
+    progresso: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Recolhe a secção financeira (`geral=dafin`) das entidades já em disco.
+
+    Cada exercício custa um pedido à API (`GetDadosFinanceira`), que só responde
+    a ano a ano: a janela é varrida toda e os anos sem publicação devolvem vazio.
+    `vazios_seguidos` corta o varrimento depois de N anos vazios consecutivos
+    (0 = varrer a janela inteira) — útil para estender o histórico para trás sem
+    pagar os anos vazios.
+
+    Os documentos são fundidos com o que já existe (`financeiro` por ano) e a
+    análise de risco é recalculada na mesma passagem.
+    """
+    progresso = progresso if progresso is not None else {}
+    trabalhadores = max(1, min(int(trabalhadores or 1), 16))
+    anos = anos_a_varrer(ano_inicio, ano_fim)
+    erros: List[str] = []
+
+    docs = list(_iter_jsonl(entidades_jsonl()))
+    if not docs:
+        raise RuntimeError("Não há entidades em disco: corra primeiro a recolha principal (POST /erc/recolher).")
+    alvos = [doc for doc in docs if not (doc.get("financeiro") or [])] if apenas_sem_financeiro else list(docs)
+    if limite:
+        alvos = alvos[: int(limite)]
+    progresso["phase"] = "a ler os dados financeiros"
+    progresso["entidades_total"] = len(alvos)
+    progresso["entidades_done"] = 0
+    progresso["anos"] = anos
+    progresso["registos"] = 0
+
+    pendentes: List[Dict[str, Any]] = []
+    recolhas_pendentes: List[Dict[str, Any]] = []
+    com_dados = 0
+
+    with erc.make_client() as client:
+
+        def _financeira(doc: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+            entidade_id = doc["doc_id"]
+            serie: List[Dict[str, Any]] = []
+            recolhas: List[Dict[str, Any]] = []
+            vazios = 0
+            for ano in anos:
+                time.sleep(pausa)
+                dados = erc.fetch_financeiro(client, entidade_id, ano)
+                if not dados:
+                    vazios += 1
+                    if vazios_seguidos and serie and vazios >= vazios_seguidos:
+                        break
+                    continue
+                vazios = 0
+                for item in dados:
+                    serie.append(item)
+                    recolhas.append(_registar_recolha_doc({
+                        "tipo": "financeiro", "entidade_id": entidade_id, "nome": doc.get("nome"), "ano": item.get("ano"),
+                        "url": f"{erc.BASE_URL}{erc.API_FINANCEIRA}",
+                        "sha256": _sha256(json.dumps(item, sort_keys=True, ensure_ascii=False).encode("utf-8")),
+                        "bytes": len(json.dumps(item, ensure_ascii=False).encode("utf-8")), "itens": 1,
+                    }))
+            return serie, recolhas
+
+        feitas = 0
+        for doc, resultado in _em_paralelo(_financeira, alvos, trabalhadores):
+            feitas += 1
+            progresso["entidades_done"] = feitas
+            progresso["current"] = doc.get("nome")
+            if isinstance(resultado, Exception):
+                logger.warning("Dados financeiros de %s falharam: %s", doc.get("doc_id"), resultado)
+                erros.append(f"financeiro {doc.get('doc_id')}: {resultado}")
+            else:
+                serie, recolhas = resultado
+                if serie:
+                    com_dados += 1
+                    antigos = {int(item["ano"]): item for item in (doc.get("financeiro") or []) if item.get("ano")}
+                    pedidos = {int(item["ano"]): item for item in serie if item.get("ano")}
+                    fundido = [*pedidos.values(), *[v for k, v in antigos.items() if k not in pedidos]]
+                    pendentes.append(erc_risco.aplicar({**doc, "financeiro": fundido}))
+                    recolhas_pendentes.extend(recolhas)
+            progresso["registos"] = len(pendentes)
+            progresso["com_dados"] = com_dados
+            if feitas % LOTE_FLUSH == 0 or feitas == len(alvos):
+                if pendentes:
+                    _merge_jsonl(entidades_jsonl(), pendentes, chaves=("doc_id",))
+                    pendentes.clear()
+                if recolhas_pendentes:
+                    _append_jsonl(recolhas_jsonl(), recolhas_pendentes)
+                    recolhas_pendentes.clear()
+
+    progresso["phase"] = "a recalcular a análise de risco"
+    analise = recalcular_analises(progresso=progresso)
+    progresso["phase"] = "concluído"
+    progresso["current"] = None
+    return {
+        "fonte": FONTE,
+        "anos": {"inicio": anos[-1], "fim": anos[0], "total": len(anos)},
+        "varridas": progresso.get("entidades_done", 0),
+        "com_dados": com_dados,
+        "pessoas": len(list(_iter_jsonl(pessoas_jsonl()))),
+        "ocs": len(list(_iter_jsonl(ocs_jsonl()))),
+        "analise": analise,
+        "trabalhadores": trabalhadores,
+        "errors": erros,
+        "data_dir": str(data_dir()),
+    }
+
+
+def recalcular_analises(*, progresso: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Recalcula o resumo financeiro e a análise de risco de todas as entidades.
+
+    Não vai ao portal: parte dos JSONL e reescreve-os. Serve para pontuar
+    entidades que já tinham dados financeiros antes de a análise existir, e para
+    afinar pesos sem repetir a recolha.
+    """
+    progresso = progresso if progresso is not None else {}
+    docs = [erc_risco.aplicar(doc) for doc in _iter_jsonl(entidades_jsonl())]
+    if docs:
+        _merge_jsonl(entidades_jsonl(), docs, chaves=("doc_id",))
+    bandas: Dict[str, int] = {}
+    transparencias: Dict[str, int] = {}
+    com_credito = 0
+    for doc in docs:
+        analise = doc.get("analise") or {}
+        banda = str((analise.get("risco") or {}).get("banda") or "sem dados")
+        bandas[banda] = bandas.get(banda, 0) + 1
+        nivel = str((analise.get("transparencia") or {}).get("nivel") or "sem dados")
+        transparencias[nivel] = transparencias.get(nivel, 0) + 1
+        if (analise.get("credito") or {}).get("disponivel"):
+            com_credito += 1
+    return {
+        "entidades": len(docs),
+        "com_dados_financeiros": sum(1 for doc in docs if doc.get("n_anos_financeiro")),
+        "com_credito": com_credito,
+        "por_banda": dict(sorted(bandas.items(), key=lambda kv: -kv[1])),
+        "por_nivel_transparencia": dict(sorted(transparencias.items(), key=lambda kv: -kv[1])),
+        "atualizado_em": _now(),
+    }
+
+
 def _em_paralelo(
     funcao: Any,
     itens: List[Dict[str, Any]],
@@ -630,7 +796,12 @@ def indexar(
     forcar: bool = False,
     progresso: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Indexa os JSONL do módulo nos índices `finance_erc_*`."""
+    """Indexa os JSONL do módulo nos índices `finance_erc_*`.
+
+    `forcar` recria os índices antes de indexar (apaga e volta a criar), o que é
+    necessário quando o *mapping* muda: o Elasticsearch não deixa alterar o tipo
+    de um campo já criado e os dados vêm sempre dos JSONL.
+    """
     from api.elasticsearch_client import (
         ERC_ENTIDADES_INDEX,
         ERC_OCS_INDEX,
@@ -658,7 +829,7 @@ def indexar(
         if chave == "recolhas":
             # As recolhas não têm `doc_id` próprio: usa-se o `recolha_id`.
             docs = [{**doc, "doc_id": doc.get("doc_id") or doc.get("recolha_id") or uuid.uuid4().hex} for doc in docs]
-        resultado = index_erc_bulk(index, docs)
+        resultado = index_erc_bulk(index, docs, recriar=forcar)
         resultado["docs"] = len(docs)
         saida[chave] = resultado
         if resultado.get("error"):
@@ -697,12 +868,26 @@ def meta() -> Dict[str, Any]:
             listagem = {}
     orgaos = set()
     distritos = set()
+    anos_financeiro: set = set()
+    com_financeiro = 0
+    bandas: Dict[str, int] = {}
     for entidade in entidades:
         if entidade.get("distrito"):
             distritos.add(entidade["distrito"])
+        if int(entidade.get("n_anos_financeiro") or 0) > 0:
+            com_financeiro += 1
+        for item in entidade.get("financeiro") or []:
+            if item.get("ano"):
+                anos_financeiro.add(int(item["ano"]))
+        banda = str(((entidade.get("analise") or {}).get("risco") or {}).get("banda") or "sem dados")
+        bandas[banda] = bandas.get(banda, 0) + 1
         for pessoa in entidade.get("pessoas") or []:
             if pessoa.get("tipo_orgao"):
                 orgaos.add(pessoa["tipo_orgao"])
+    por_tipo: Dict[str, int] = {}
+    for recolha in recolhas:
+        chave = str(recolha.get("tipo") or "outro")
+        por_tipo[chave] = por_tipo.get(chave, 0) + 1
     return {
         "fonte": FONTE,
         "portal": erc.BASE_URL,
@@ -720,6 +905,10 @@ def meta() -> Dict[str, Any]:
             "recolhas": len(recolhas),
             "distritos": len(distritos),
             "tipos_orgao": sorted(orgaos),
+            "entidades_com_financeiro": com_financeiro,
+            "anos_financeiro": sorted(anos_financeiro, reverse=True),
+            "recolhas_por_tipo": dict(sorted(por_tipo.items(), key=lambda kv: -kv[1])),
+            "bandas_risco": dict(sorted(bandas.items(), key=lambda kv: -kv[1])),
         },
         "listagem": {
             "cached_at": listagem.get("cached_at"),
@@ -875,6 +1064,178 @@ def listar_ocs(
     return {"total": len(docs), "items": docs[inicio: inicio + size], "page": page, "size": size, "origem": "jsonl"}
 
 
+def listar_analise(
+    *,
+    q: Optional[str] = None,
+    banda: Optional[str] = None,
+    nivel_transparencia: Optional[str] = None,
+    nivel_credito: Optional[str] = None,
+    distrito: Optional[str] = None,
+    risco_min: Optional[float] = None,
+    risco_max: Optional[float] = None,
+    transparencia_min: Optional[float] = None,
+    credito_min: Optional[float] = None,
+    com_financeiro: Optional[bool] = None,
+    ordenar: str = "risco",
+    page: int = 1,
+    size: int = 25,
+    usar_es: bool = True,
+) -> Dict[str, Any]:
+    """Ranking de análise de risco (Elasticsearch quando disponível, JSONL em recurso)."""
+    if usar_es:
+        from api.elasticsearch_client import search_erc_analise
+
+        resultado = search_erc_analise(
+            q=q, banda=banda, nivel_transparencia=nivel_transparencia, nivel_credito=nivel_credito, distrito=distrito,
+            risco_min=risco_min, risco_max=risco_max, transparencia_min=transparencia_min, credito_min=credito_min,
+            com_financeiro=com_financeiro, ordenar=ordenar, size=size, page=page,
+        )
+        if not resultado.get("error"):
+            resultado["origem"] = "elasticsearch"
+            return resultado
+    docs = _analise_no_disco(
+        _iter_jsonl(entidades_jsonl()),
+        q=q, banda=banda, nivel_transparencia=nivel_transparencia, nivel_credito=nivel_credito, distrito=distrito,
+        risco_min=risco_min, risco_max=risco_max, transparencia_min=transparencia_min, credito_min=credito_min,
+        com_financeiro=com_financeiro, ordenar=ordenar,
+    )
+    inicio = max(0, (page - 1) * size)
+    return {"total": len(docs), "items": docs[inicio: inicio + size], "page": page, "size": size, "origem": "jsonl"}
+
+
+def _ordem_doc(doc: Dict[str, Any], ordenar: str) -> Any:
+    """Chave de ordenação local (o ES faz o mesmo com os campos homónimos)."""
+    analise = doc.get("analise") or {}
+    campos = {
+        "risco": (analise.get("risco") or {}).get("score"),
+        "transparencia": (analise.get("transparencia") or {}).get("score"),
+        "credito": (analise.get("credito") or {}).get("score"),
+        "rendimentos": doc.get("ultimo_rendimentos"),
+        "resultados": doc.get("ultimo_resultados"),
+        "capital_proprio": doc.get("ultimo_capital_proprio"),
+        "autonomia": doc.get("ultimo_autonomia"),
+        "recentes": doc.get("ultimo_ano_financeiro"),
+    }
+    valor = campos.get(str(ordenar or "risco").lower())
+    if valor is None:
+        return (1, 0.0, str(doc.get("nome") or ""))
+    return (0, -float(valor), str(doc.get("nome") or "")) if ordenar != "nome" else (0, float(valor), str(doc.get("nome") or ""))
+
+
+def _analise_no_disco(
+    docs: Iterable[Dict[str, Any]],
+    *,
+    q: Optional[str] = None,
+    banda: Optional[str] = None,
+    nivel_transparencia: Optional[str] = None,
+    nivel_credito: Optional[str] = None,
+    distrito: Optional[str] = None,
+    risco_min: Optional[float] = None,
+    risco_max: Optional[float] = None,
+    transparencia_min: Optional[float] = None,
+    credito_min: Optional[float] = None,
+    com_financeiro: Optional[bool] = None,
+    ordenar: str = "risco",
+) -> List[Dict[str, Any]]:
+    """Filtragem e ordenação da análise sem Elasticsearch."""
+    def _um_de(valor: Optional[str], alvo: Any) -> bool:
+        if valor is None:
+            return True
+        return str(alvo or "") in [parte.strip() for parte in str(valor).split(",") if parte.strip()]
+
+    termo = (q or "").strip().lower()
+    distrito_l = (distrito or "").strip().lower()
+    out: List[Dict[str, Any]] = []
+    for doc in docs:
+        analise = doc.get("analise") or {}
+        risco = (analise.get("risco") or {}).get("score")
+        transparencia = (analise.get("transparencia") or {}).get("score") or 0
+        credito = (analise.get("credito") or {}).get("score")
+        anos = int(doc.get("n_anos_financeiro") or 0)
+        if not _um_de(banda, (analise.get("risco") or {}).get("banda")):
+            continue
+        if not _um_de(nivel_transparencia, (analise.get("transparencia") or {}).get("nivel")):
+            continue
+        if not _um_de(nivel_credito, (analise.get("credito") or {}).get("nivel")):
+            continue
+        if distrito_l and distrito_l not in str(doc.get("distrito") or "").lower():
+            continue
+        if risco_min is not None and (risco is None or risco < risco_min):
+            continue
+        if risco_max is not None and (risco is None or risco > risco_max):
+            continue
+        if transparencia_min is not None and transparencia < transparencia_min:
+            continue
+        if credito_min is not None and (credito is None or credito < credito_min):
+            continue
+        if com_financeiro is True and not anos:
+            continue
+        if com_financeiro is False and anos:
+            continue
+        if termo:
+            haystack = " | ".join(str(doc.get(campo) or "") for campo in ("nome", "tipo_sociedade", "actividade_principal", "distrito")).lower()
+            if termo not in haystack:
+                continue
+        out.append(doc)
+    if str(ordenar or "risco").lower() == "nome":
+        out.sort(key=lambda d: str(d.get("nome") or ""))
+    else:
+        out.sort(key=lambda d: _ordem_doc(d, ordenar))
+    return out
+
+
+def painel_financeiro() -> Dict[str, Any]:
+    """Painel financeiro do módulo (agregações no ES; JSONL quando não há ES)."""
+    from api.elasticsearch_client import erc_financeiro_painel
+
+    painel = erc_financeiro_painel()
+    if not painel.get("error"):
+        painel["origem"] = "elasticsearch"
+        return painel
+
+    entidades = _ler_jsonl(entidades_jsonl())
+    por_ano: Dict[int, Dict[str, float]] = {}
+    bandas: Dict[str, int] = {}
+    transparencias: Dict[str, int] = {}
+    creditos: Dict[str, int] = {}
+    com_financeiro = 0
+    for doc in entidades:
+        analise = doc.get("analise") or {}
+        banda = str((analise.get("risco") or {}).get("banda") or "sem dados")
+        bandas[banda] = bandas.get(banda, 0) + 1
+        nivel = str((analise.get("transparencia") or {}).get("nivel") or "sem dados")
+        transparencias[nivel] = transparencias.get(nivel, 0) + 1
+        nivel_c = str((analise.get("credito") or {}).get("nivel") or "sem dados")
+        creditos[nivel_c] = creditos.get(nivel_c, 0) + 1
+        for item in doc.get("financeiro") or []:
+            ano = int(item.get("ano") or 0)
+            if not ano:
+                continue
+            com_financeiro += 0 if ano in por_ano else 0
+            balde = por_ano.setdefault(ano, {"balancos": 0, "rendimentos": 0.0, "resultados": 0.0, "ativo": 0.0, "capital_proprio": 0.0, "com_prejuizo": 0})
+            balde["balancos"] += 1
+            for campo, chave in (("rendimentos_totais", "rendimentos"), ("resultados_liquidos", "resultados"), ("ativo_total", "ativo"), ("capital_proprio", "capital_proprio")):
+                valor = item.get(campo)
+                if isinstance(valor, (int, float)):
+                    balde[chave] += float(valor)
+            if isinstance(item.get("resultados_liquidos"), (int, float)) and item["resultados_liquidos"] < 0:
+                balde["com_prejuizo"] += 1
+    com_financeiro = sum(1 for doc in entidades if int(doc.get("n_anos_financeiro") or 0))
+    anos = [
+        {"ano": ano, **{**balde, "rendimentos": round(balde["rendimentos"], 2), "resultados": round(balde["resultados"], 2),
+                        "ativo": round(balde["ativo"], 2), "capital_proprio": round(balde["capital_proprio"], 2)}}
+        for ano, balde in sorted(por_ano.items(), reverse=True)
+    ]
+    return {
+        "com_financeiro": com_financeiro,
+        "por_banda": [{"key": k, "count": v} for k, v in sorted(bandas.items(), key=lambda kv: -kv[1])],
+        "por_transparencia": [{"key": k, "count": v} for k, v in sorted(transparencias.items(), key=lambda kv: -kv[1])],
+        "por_credito": [{"key": k, "count": v} for k, v in sorted(creditos.items(), key=lambda kv: -kv[1])],
+        "anos": anos,
+        "origem": "jsonl",
+    }
+
+
 def resumo() -> Dict[str, Any]:
     """Painel do módulo: contagens, distritos, tipos de sociedade e top detentores."""
     entidades = _ler_jsonl(entidades_jsonl())
@@ -887,6 +1248,11 @@ def resumo() -> Dict[str, Any]:
     funcoes: Dict[str, int] = {}
     tipos_ocs: Dict[str, int] = {}
     sem_ocs = 0
+    com_financeiro = 0
+    bandas: Dict[str, int] = {}
+    transparencias: Dict[str, int] = {}
+    creditos: Dict[str, int] = {}
+    anos_financeiro: Dict[int, int] = {}
     empresas_com_pessoas = 0
     for entidade in entidades:
         if entidade.get("distrito"):
@@ -899,6 +1265,19 @@ def resumo() -> Dict[str, Any]:
             sem_ocs += 1
         if int(entidade.get("n_pessoas") or 0) > 0:
             empresas_com_pessoas += 1
+        if int(entidade.get("n_anos_financeiro") or 0) > 0:
+            com_financeiro += 1
+        for ano_item in entidade.get("financeiro") or []:
+            ano_chave = int(ano_item.get("ano") or 0)
+            if ano_chave:
+                anos_financeiro[ano_chave] = anos_financeiro.get(ano_chave, 0) + 1
+        analise = entidade.get("analise") or {}
+        banda = str((analise.get("risco") or {}).get("banda") or "sem dados")
+        bandas[banda] = bandas.get(banda, 0) + 1
+        nivel_t = str((analise.get("transparencia") or {}).get("nivel") or "sem dados")
+        transparencias[nivel_t] = transparencias.get(nivel_t, 0) + 1
+        nivel_c = str((analise.get("credito") or {}).get("nivel") or "sem dados")
+        creditos[nivel_c] = creditos.get(nivel_c, 0) + 1
         for pessoa in entidade.get("pessoas") or []:
             if pessoa.get("funcao"):
                 funcoes[pessoa["funcao"]] = funcoes.get(pessoa["funcao"], 0) + 1
@@ -917,6 +1296,11 @@ def resumo() -> Dict[str, Any]:
         "ocs": len(ocs),
         "entidades_sem_ocs": sem_ocs,
         "entidades_com_pessoas": empresas_com_pessoas,
+        "entidades_com_financeiro": com_financeiro,
+        "anos_financeiro": [{"key": str(ano), "count": count} for ano, count in sorted(anos_financeiro.items(), reverse=True)],
+        "bandas_risco": _top(bandas, 10),
+        "niveis_transparencia": _top(transparencias, 10),
+        "niveis_credito": _top(creditos, 10),
         "pessoas_com_cargos": pessoas_com_empresa,
         "pessoas_com_participacoes": pessoas_com_participacao,
         "distritos": _top(distritos),
@@ -928,7 +1312,7 @@ def resumo() -> Dict[str, Any]:
 
 
 def export_csv(tipo: str = "entidades", *, maximo: int = 50000) -> str:
-    """Exporta entidades, pessoas ou OCS em CSV (texto pronto a descarregar)."""
+    """Exporta entidades, pessoas, OCS, análise de risco ou série financeira."""
     tipo = (tipo or "entidades").lower()
     buffer = io.StringIO()
     writer = csv.writer(buffer)
@@ -944,14 +1328,55 @@ def export_csv(tipo: str = "entidades", *, maximo: int = 50000) -> str:
         writer.writerow(["id", "designacao", "tipo", "entidade_proprietaria", "distrito"])
         for doc in _ler_jsonl(ocs_jsonl())[:maximo]:
             writer.writerow([doc.get("doc_id"), doc.get("designacao"), doc.get("tipo"), doc.get("entidade_proprietaria"), doc.get("distrito")])
-    else:
-        writer.writerow(["id", "nome", "tipo_sociedade", "actividade_principal", "distrito", "detem_ocs", "capital_social", "n_ocs", "n_pessoas", "ocs", "pessoas"])
+    elif tipo == "financeiro":
+        writer.writerow([
+            "id", "nome", "distrito", "ano", "ativo_total", "passivo_total", "capital_proprio", "rendimentos_totais",
+            "resultados_liquidos", "responsabilidades_nao_inscritas", "autonomia_financeira", "endividamento",
+            "crescimento_rendimentos", "confidencialidade",
+        ])
         for doc in _ler_jsonl(entidades_jsonl())[:maximo]:
+            for item in doc.get("financeiro") or []:
+                writer.writerow([
+                    doc.get("doc_id"), doc.get("nome"), doc.get("distrito"), item.get("ano"), item.get("ativo_total"),
+                    item.get("passivo_total") or item.get("passivos_totais"), item.get("capital_proprio"),
+                    item.get("rendimentos_totais"), item.get("resultados_liquidos"), item.get("responsabilidades_nao_inscritas"),
+                    item.get("autonomia_financeira"), item.get("endividamento"), item.get("crescimento_rendimentos"),
+                    item.get("confidencialidade"),
+                ])
+    elif tipo == "analise":
+        writer.writerow([
+            "id", "nome", "distrito", "transparencia", "nivel_transparencia", "credito", "nivel_credito",
+            "risco", "banda_risco", "n_anos_financeiro", "ultimo_ano", "alertas",
+        ])
+        for doc in _ler_jsonl(entidades_jsonl())[:maximo]:
+            analise = doc.get("analise") or {}
+            writer.writerow([
+                doc.get("doc_id"), doc.get("nome"), doc.get("distrito"),
+                (analise.get("transparencia") or {}).get("score"), (analise.get("transparencia") or {}).get("nivel"),
+                (analise.get("credito") or {}).get("score"), (analise.get("credito") or {}).get("nivel"),
+                (analise.get("risco") or {}).get("score"), (analise.get("risco") or {}).get("banda"),
+                doc.get("n_anos_financeiro"), doc.get("ultimo_ano_financeiro"),
+                "; ".join(analise.get("alertas") or []),
+            ])
+    else:
+        writer.writerow([
+            "id", "nome", "tipo_sociedade", "actividade_principal", "distrito", "detem_ocs", "capital_social",
+            "n_ocs", "n_pessoas", "ocs", "pessoas", "transparencia", "nivel_transparencia", "credito",
+            "nivel_credito", "risco", "banda_risco", "n_anos_financeiro", "ultimo_ano_financeiro",
+            "ultimo_rendimentos", "ultimo_resultados", "ultimo_autonomia",
+        ])
+        for doc in _ler_jsonl(entidades_jsonl())[:maximo]:
+            analise = doc.get("analise") or {}
             writer.writerow([
                 doc.get("doc_id"), doc.get("nome"), doc.get("tipo_sociedade"), doc.get("actividade_principal"),
                 doc.get("distrito"), doc.get("detem_ocs"), doc.get("capital_social"),
                 doc.get("n_ocs"), doc.get("n_pessoas"),
                 "; ".join(doc.get("ocs_designacoes") or []), "; ".join(doc.get("pessoas_nomes") or []),
+                (analise.get("transparencia") or {}).get("score"), (analise.get("transparencia") or {}).get("nivel"),
+                (analise.get("credito") or {}).get("score"), (analise.get("credito") or {}).get("nivel"),
+                (analise.get("risco") or {}).get("score"), (analise.get("risco") or {}).get("banda"),
+                doc.get("n_anos_financeiro"), doc.get("ultimo_ano_financeiro"),
+                doc.get("ultimo_rendimentos"), doc.get("ultimo_resultados"), doc.get("ultimo_autonomia"),
             ])
     return buffer.getvalue()
 
@@ -1020,6 +1445,26 @@ def _run_job(job: Dict[str, Any]) -> None:
                 trabalhadores=int(payload.get("trabalhadores") or 1),
                 progresso=progresso,
             )
+            if payload.get("indexar"):
+                progresso["phase"] = "a indexar"
+                resultado["indexacao"] = indexar(progresso=progresso)
+        elif job["tipo"] == "recolher_financeiro":
+            resultado = recolher_financeiro(
+                limite=payload.get("limite"),
+                ano_inicio=payload.get("ano_inicio"),
+                ano_fim=payload.get("ano_fim"),
+                vazios_seguidos=int(payload.get("vazios_seguidos") or 0),
+                pausa=float(payload.get("pausa") or PAUSA_PADRAO),
+                trabalhadores=int(payload.get("trabalhadores") or 8),
+                apenas_sem_financeiro=bool(payload.get("apenas_sem_financeiro", True)),
+                guardar_html=bool(payload.get("guardar_html", False)),
+                progresso=progresso,
+            )
+            if payload.get("indexar"):
+                progresso["phase"] = "a indexar"
+                resultado["indexacao"] = indexar(progresso=progresso)
+        elif job["tipo"] == "analisar":
+            resultado = recalcular_analises(progresso=progresso)
             if payload.get("indexar"):
                 progresso["phase"] = "a indexar"
                 resultado["indexacao"] = indexar(progresso=progresso)

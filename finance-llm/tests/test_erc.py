@@ -16,6 +16,7 @@ import json
 
 import pytest
 
+from api import erc_risco
 from api import erc_service as erc
 from collectors import erc_transparencia as coletor
 
@@ -194,6 +195,8 @@ def test_parse_financeiro_anos_e_dados():
         "Erc_ativototal": "8948803,2400",
         "Erc_capitalproprio": "8124957,0400",
         "Erc_resultadosliquidos": "2404694,8400",
+        "Erc_resultadosoperacionaisdepreciacoes": "1500000,0000",
+        "Erc_responsabilidadesnaoinscritas": "250000,0000",
         "Erc_solicitopedidoconfidencialidade": "False",
     }])
     assert dados == [{
@@ -204,9 +207,69 @@ def test_parse_financeiro_anos_e_dados():
         "capital_proprio": 8124957.04,
         "rendimentos_totais": None,
         "resultados_antes_custos": None,
+        "resultados_operacionais_depreciacoes": 1500000.0,
         "resultados_liquidos": 2404694.84,
+        "responsabilidades_nao_inscritas": 250000.0,
+        "nota": None,
         "confidencialidade": False,
     }]
+
+
+def test_parse_money_recusa_texto():
+    """O portal publica deliberações no lugar das contas: não são números."""
+    assert coletor.parse_money("5 100,00 €") == 5100.0
+    assert coletor.parse_money("1.234.567,89") == 1234567.89
+    assert coletor.parse_money("50%") == 50.0
+    assert coletor.parse_money("-1.234,56") == -1234.56
+    assert coletor.parse_money(None) is None
+    assert coletor.parse_money("") is None
+    assert coletor.parse_money("n.d.") is None
+    # Sem a validação, os dígitos da deliberação davam 20 mil milhões de euros.
+    assert coletor.parse_money("Deliberação ERC/2024/532 - Defere a exceção de divulgação") is None
+
+
+def test_parse_financeiro_guarda_nota_de_excecao():
+    """Exceção de divulgação: os valores ficam vazios, a nota e o sinal ficam."""
+    dados = coletor.parse_financeiro([{
+        "Erc_ano": "2023",
+        "Erc_ativototal": "123456,0000",
+        "Erc_passivototal": "Deliberação ERC/2024/532 - Defere a exceção\nde divulgação dos fluxos",
+    }])
+    assert dados[0]["ativo_total"] == 123456.0
+    assert dados[0]["passivo_total"] is None
+    assert dados[0]["nota"] == "Deliberação ERC/2024/532 - Defere a exceção de divulgação dos fluxos"
+    assert dados[0]["confidencialidade"] is True
+
+
+def test_parse_financeiro_ignora_marcadores_de_vazio():
+    """«True» e «Não aplicável» não são notas: o portal usa-os para dizer vazio."""
+    dados = coletor.parse_financeiro([{
+        "Erc_ano": "2022",
+        "Erc_ativototal": "1000,0000",
+        "Erc_resultadosoperacionaisdepreciacoes": "True",
+        "Erc_passivototal": "Não aplicável",
+        "Erc_solicitopedidoconfidencialidade": "False",
+    }])
+    assert dados[0]["nota"] is None
+    assert dados[0]["resultados_operacionais_depreciacoes"] is None
+    assert dados[0]["passivo_total"] is None
+    assert dados[0]["ativo_total"] == 1000.0
+    assert dados[0]["confidencialidade"] is False
+
+
+def test_analise_assinala_excecao_de_divulgacao():
+    entidade = {
+        "nome": "Exceção, Lda.",
+        "financeiro": [
+            {"ano": 2024, "nota": "Deliberação ERC/2024/532 - Defere a exceção de divulgação", "confidencialidade": True},
+            {"ano": 2023, "ativo_total": 1000.0, "passivo_total": 400.0, "capital_proprio": 600.0,
+             "rendimentos_totais": 900.0, "resultados_liquidos": 50.0, "confidencialidade": False},
+        ],
+    }
+    analise = erc_risco.analisar(entidade)
+    assert any("Exceção de divulgação deferida pela ERC em 2024" in alerta for alerta in analise["alertas"])
+    componentes = {item["chave"]: item for item in analise["risco"]["componentes"]}
+    assert "2024" in componentes["confidencialidade"]["detalhe"]
 
 
 def test_iter_pessoas_deduplica():
@@ -297,6 +360,10 @@ class _ClienteFalso:
         caminho = url.split("?")[0]
         chave = "/".join(caminho.split("/")[3:])
         if "Umbraco/Api" in url:
+            # A API financeira distingue-se pelo exercício pedido.
+            especifica = (caminho, (params or {}).get("anoFinanceiro"))
+            if especifica in self.api:
+                return _Resposta("", self.api[especifica])
             return _Resposta("", self.api.get(caminho))
         geral = (params or {}).get("geral")
         return _Resposta(self.paginas.get((chave, geral), "<html></html>"))
@@ -496,3 +563,244 @@ def test_meta_lista_indices(data_dir_tmp):
 def test_slug_normaliza_acentos():
     assert erc._slug("Rádio Regional do Centro, Lda.") == "radio-regional-do-centro-lda"
     assert erc._slug("") == "sem-nome"
+
+
+# ---------------------------------------------------------------------------
+# Dados financeiros (secção `dafin`) e análise de risco
+# ---------------------------------------------------------------------------
+
+SERIE = [
+    {"ano": 2024, "ativo_total": 3204.72, "passivo_total": 2000.0, "capital_proprio": 1204.72,
+     "rendimentos_totais": 3900.0, "resultados_liquidos": 180.0, "confidencialidade": False},
+    {"ano": 2025, "ativo_total": 2403.31, "passivo_total": 900.0, "capital_proprio": 1503.31,
+     "rendimentos_totais": 4200.0, "resultados_liquidos": 320.0, "confidencialidade": False},
+]
+
+
+def test_enriquecer_serie_ordena_e_calcula_racios():
+    serie = erc_risco.enriquecer_serie(SERIE)
+    assert [item["ano"] for item in serie] == [2025, 2024]
+    assert serie[0]["autonomia_financeira"] == pytest.approx(1503.31 / 2403.31)
+    assert serie[0]["endividamento"] == pytest.approx(900.0 / 2403.31)
+    assert serie[0]["margem_liquida"] == pytest.approx(320.0 / 4200.0)
+    # O crescimento compara com o exercício publicado anterior (2024), não com o ano civil.
+    assert serie[0]["ano_comparacao"] == 2024
+    assert serie[0]["crescimento_rendimentos"] == pytest.approx((4200.0 - 3900.0) / 3900.0)
+    assert serie[1]["crescimento_rendimentos"] is None
+
+
+def test_resumo_financeiro_conta_positivos_e_negativos():
+    resumo = erc_risco.resumo_financeiro([
+        {"ano": 2025, "resultados_liquidos": 10.0},
+        {"ano": 2024, "resultados_liquidos": -5.0},
+        {"ano": 2023, "resultados_liquidos": 7.0},
+    ])
+    assert resumo["n_anos_financeiro"] == 3
+    assert resumo["primeiro_ano_financeiro"] == 2023
+    assert resumo["ultimo_ano_financeiro"] == 2025
+    assert resumo["anos_resultados_positivos"] == 2
+    assert resumo["anos_resultados_negativos"] == 1
+
+
+def test_analise_sem_contas_nao_inventa_credito():
+    analise = erc_risco.analisar({"nome": "Sem contas", "financeiro": [], "n_pessoas": 0, "n_ocs": 0})
+    assert analise["credito"]["disponivel"] is False
+    assert analise["credito"]["score"] is None
+    assert analise["credito"]["nivel"] == "sem dados"
+    assert analise["transparencia"]["score"] < 25
+    # Sem contas publicadas o risco sobe: é a opacidade que está a ser medida.
+    assert analise["risco"]["banda"] in {"elevado", "critico"}
+    assert any("Sem contas publicadas" in alerta for alerta in analise["alertas"])
+    assert "autodeclarados" in analise["limitacoes"]
+
+
+def test_analise_entidade_solida_fica_com_risco_baixo():
+    entidade = {
+        "nome": "Sólida, Lda.", "contabilidade_organizada": True, "detem_ocs": True, "n_ocs": 3,
+        "n_pessoas": 4, "n_detentores": 2, "n_detidas": 1, "capital_social": "100 000,00 €",
+        "capital_social_eur": 100000.0, "financeiro": SERIE,
+    }
+    analise = erc_risco.analisar(entidade)
+    assert analise["transparencia"]["score"] >= 75
+    assert analise["credito"]["nivel"] in {"A", "B"}
+    assert analise["risco"]["banda"] == "baixo"
+    assert analise["alertas"] == []
+    assert analise["cobertura"]["anos_financeiros"] == 2
+
+
+def test_analise_prejuizo_e_endividamento_sobem_o_risco():
+    entidade = {
+        "nome": "Endividada, Lda.", "financeiro": [
+            {"ano": 2025, "ativo_total": 1000.0, "passivo_total": 980.0, "capital_proprio": 20.0,
+             "rendimentos_totais": 500.0, "resultados_liquidos": -120.0, "confidencialidade": True},
+            {"ano": 2024, "ativo_total": 1000.0, "passivo_total": 950.0, "capital_proprio": 50.0,
+             "rendimentos_totais": 700.0, "resultados_liquidos": -30.0, "confidencialidade": False},
+        ],
+    }
+    analise = erc_risco.analisar(entidade)
+    chaves = {item["chave"] for item in analise["risco"]["componentes"]}
+    assert {"resultado_negativo", "prejuizos_repetidos", "capital_proprio_baixo", "endividamento_critico", "confidencialidade"} <= chaves
+    assert analise["risco"]["banda"] in {"elevado", "critico"}
+    assert any("Prejuízo no exercício 2025" in alerta for alerta in analise["alertas"])
+
+
+def test_aplicar_acrescenta_resumo_e_analise_ao_documento():
+    doc = erc_risco.aplicar({"doc_id": "x", "nome": "Exemplo", "financeiro": SERIE, "n_pessoas": 1})
+    assert doc["n_anos_financeiro"] == 2
+    assert doc["ultimo_ano_financeiro"] == 2025
+    assert doc["ultimo_rendimentos"] == 4200.0
+    assert doc["financeiro"][0]["ano"] == 2025
+    assert doc["analise"]["transparencia"]["score"] > 0
+
+
+def test_recalcular_analises_escreve_nos_jsonl(data_dir_tmp):
+    erc.entidades_jsonl().write_text(
+        "\n".join(json.dumps(doc, ensure_ascii=False) for doc in (
+            {"doc_id": "a", "nome": "Com contas", "financeiro": SERIE},
+            {"doc_id": "b", "nome": "Sem contas", "financeiro": []},
+        )),
+        encoding="utf-8",
+    )
+    resultado = erc.recalcular_analises()
+    assert resultado["entidades"] == 2
+    assert resultado["com_dados_financeiros"] == 1
+    assert resultado["com_credito"] == 1
+    docs = {json.loads(linha)["doc_id"]: json.loads(linha) for linha in erc.entidades_jsonl().read_text(encoding="utf-8").splitlines()}
+    assert docs["a"]["analise"]["credito"]["disponivel"] is True
+    assert docs["b"]["analise"]["credito"]["disponivel"] is False
+
+
+def test_recolher_financeiro_funde_series_e_regista_recolhas(data_dir_tmp, monkeypatch):
+    """A janela é varrida ano a ano e só o que existe entra no documento."""
+    caminho = "https://portaltransparencia.erc.pt/Umbraco/Api/CaracterizacaoFinanceira/GetDadosFinanceira"
+    cliente = _ClienteFalso(
+        paginas={},
+        api={
+            (caminho, 2025): [{"Erc_ano": "2025", "Erc_ativototal": "2403,3100", "Erc_capitalproprio": "1503,3100",
+                               "Erc_rendimentostotais": "4200,0000", "Erc_resultadosliquidos": "320,0000"}],
+            (caminho, 2024): [{"Erc_ano": "2024", "Erc_ativototal": "3204,7200", "Erc_capitalproprio": "1204,7200",
+                               "Erc_rendimentostotais": "3900,0000", "Erc_resultadosliquidos": "180,0000"}],
+            # 2023 e 2022 não têm publicação: a API devolve vazio.
+        },
+    )
+    monkeypatch.setattr(erc.erc, "make_client", lambda timeout=60.0: cliente)
+    erc.entidades_jsonl().write_text(
+        json.dumps({"doc_id": "a", "nome": "7Graus, Lda.", "n_pessoas": 2}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    resultado = erc.recolher_financeiro(ano_inicio=2022, ano_fim=2025, pausa=0.0, trabalhadores=1)
+    assert resultado["errors"] == []
+    assert resultado["varridas"] == 1
+    assert resultado["com_dados"] == 1
+    assert resultado["anos"] == {"inicio": 2022, "fim": 2025, "total": 4}
+
+    doc = json.loads(erc.entidades_jsonl().read_text(encoding="utf-8").splitlines()[0])
+    assert [item["ano"] for item in doc["financeiro"]] == [2025, 2024]
+    assert doc["n_anos_financeiro"] == 2
+    assert doc["analise"]["credito"]["disponivel"] is True
+    recolhas = [json.loads(linha) for linha in erc.recolhas_jsonl().read_text(encoding="utf-8").splitlines()]
+    assert [r["ano"] for r in recolhas] == [2025, 2024]
+    assert all(r["tipo"] == "financeiro" for r in recolhas)
+
+    # Segunda passagem: a entidade já tem contas, por isso é saltada.
+    segunda = erc.recolher_financeiro(ano_inicio=2022, ano_fim=2025, pausa=0.0, trabalhadores=1)
+    assert segunda["varridas"] == 0
+    assert segunda["com_dados"] == 0
+
+
+def test_recolher_financeiro_para_depois_de_anos_vazios(data_dir_tmp, monkeypatch):
+    """`vazios_seguidos` corta o varrimento depois de N exercícios sem publicação."""
+    caminho = "https://portaltransparencia.erc.pt/Umbraco/Api/CaracterizacaoFinanceira/GetDadosFinanceira"
+    cliente = _ClienteFalso(
+        paginas={},
+        api={(caminho, 2025): [{"Erc_ano": "2025", "Erc_ativototal": "100,0000"}]},
+    )
+    monkeypatch.setattr(erc.erc, "make_client", lambda timeout=60.0: cliente)
+    erc.entidades_jsonl().write_text(json.dumps({"doc_id": "a", "nome": "Curta", "n_pessoas": 0}) + "\n", encoding="utf-8")
+
+    erc.recolher_financeiro(ano_inicio=2015, ano_fim=2025, vazios_seguidos=3, pausa=0.0, trabalhadores=1)
+    anos_pedidos = [params.get("anoFinanceiro") for _, params in cliente.pedidos]
+    assert anos_pedidos == [2025, 2024, 2023, 2022]  # para aos 3 vazios depois do último com dados
+
+
+def test_listar_analise_sem_es(data_dir_tmp):
+    docs = [
+        erc_risco.aplicar({"doc_id": "a", "nome": "Alfa, Lda.", "distrito": "Lisboa", "financeiro": SERIE, "n_pessoas": 3}),
+        erc_risco.aplicar({"doc_id": "b", "nome": "Beta, Lda.", "distrito": "Porto", "financeiro": []}),
+    ]
+    erc.entidades_jsonl().write_text("\n".join(json.dumps(doc, ensure_ascii=False) for doc in docs), encoding="utf-8")
+
+    todos = erc.listar_analise(usar_es=False, ordenar="nome")
+    assert todos["origem"] == "jsonl"
+    assert [item["doc_id"] for item in todos["items"]] == ["a", "b"]
+
+    sem_contas = erc.listar_analise(usar_es=False, com_financeiro=False)
+    assert [item["doc_id"] for item in sem_contas["items"]] == ["b"]
+
+    so_lisboa = erc.listar_analise(usar_es=False, distrito="Lisboa")
+    assert [item["doc_id"] for item in so_lisboa["items"]] == ["a"]
+
+    # Ordenar por risco traz primeiro o pior (Beta não publica contas).
+    por_risco = erc.listar_analise(usar_es=False, ordenar="risco")
+    assert por_risco["items"][0]["doc_id"] == "b"
+    assert por_risco["items"][0]["analise"]["risco"]["score"] >= por_risco["items"][1]["analise"]["risco"]["score"]
+
+
+def test_export_csv_inclui_analise_e_serie(data_dir_tmp):
+    doc = erc_risco.aplicar({"doc_id": "a", "nome": "Alfa, Lda.", "financeiro": SERIE, "n_pessoas": 1})
+    erc.entidades_jsonl().write_text(json.dumps(doc, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    csv_entidades = erc.export_csv("entidades")
+    assert "risco,banda_risco" in csv_entidades.splitlines()[0]
+    assert "Alfa, Lda." in csv_entidades
+
+    csv_analise = erc.export_csv("analise")
+    assert "transparencia,nivel_transparencia,credito,nivel_credito" in csv_analise.splitlines()[0]
+
+    csv_financeiro = erc.export_csv("financeiro")
+    linhas = csv_financeiro.splitlines()
+    assert linhas[0].startswith("id,nome,distrito,ano,ativo_total")
+    assert len(linhas) == 3  # cabeçalho + dois exercícios
+
+
+def test_meta_e_resumo_contam_financeiro(data_dir_tmp):
+    docs = [
+        erc_risco.aplicar({"doc_id": "a", "nome": "Alfa", "distrito": "Lisboa", "financeiro": SERIE, "n_pessoas": 0}),
+        erc_risco.aplicar({"doc_id": "b", "nome": "Beta", "distrito": "Porto", "financeiro": []}),
+    ]
+    erc.entidades_jsonl().write_text("\n".join(json.dumps(doc, ensure_ascii=False) for doc in docs), encoding="utf-8")
+
+    info = erc.meta()
+    assert info["contagens"]["entidades_com_financeiro"] == 1
+    assert info["contagens"]["anos_financeiro"] == [2025, 2024]
+    assert sum(info["contagens"]["bandas_risco"].values()) == 2
+
+    painel = erc.resumo()
+    assert painel["entidades_com_financeiro"] == 1
+    assert {item["key"] for item in painel["anos_financeiro"]} == {"2024", "2025"}
+
+
+def test_painel_financeiro_sem_es(data_dir_tmp, monkeypatch):
+    from api import elasticsearch_client as es
+
+    monkeypatch.setattr(es, "erc_financeiro_painel", lambda es=None: {"error": "Elasticsearch indisponível"})
+    doc = erc_risco.aplicar({"doc_id": "a", "nome": "Alfa", "financeiro": SERIE, "n_pessoas": 0})
+    erc.entidades_jsonl().write_text(json.dumps(doc, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    painel = erc.painel_financeiro()
+    assert painel["origem"] == "jsonl"
+    assert painel["com_financeiro"] == 1
+    anos = {item["ano"]: item for item in painel["anos"]}
+    assert anos[2025]["balancos"] == 1
+    assert anos[2025]["rendimentos"] == 4200.0
+    assert anos[2025]["com_prejuizo"] == 0
+
+
+def test_anos_a_varrer_por_omissao_e_janela():
+    from datetime import datetime
+
+    atual = datetime.now().year
+    assert erc.anos_a_varrer() == [atual - 1, atual - 2, atual - 3, atual - 4]
+    assert erc.anos_a_varrer(2018, 2020) == [2020, 2019, 2018]
+    assert erc.anos_a_varrer(2020, 2018) == [2020, 2019, 2018]  # inverte se vierem trocados

@@ -1,5 +1,10 @@
 # Migra os contratos do ES do PC para o ES da VM, em tres fases sobrepostas.
 #
+# `-Indices` aceita qualquer familia de indices (ex.: `finance_erc_*`, migrada
+# assim porque o `_reindex` remoto do `migrar.sh` deixou de servir: o ES da VM
+# esta em bridge e nao alcanca o `127.0.0.1:9201` do tunel -- ver o cabecalho do
+# `compose.yml`).
+#
 # Contexto
 # --------
 # A migracao geral deixou 47 indices na VM com 3,5 M documentos, mas `contratos`
@@ -150,7 +155,7 @@ if (-not (Test-Path $scriptImporter)) { throw "falta o $scriptImporter" }
 if (-not (Test-Path $ExportDir)) { New-Item -ItemType Directory -Path $ExportDir -Force | Out-Null }
 
 Write-Host ''
-Write-Host '=== Migracao dos contratos ===' -ForegroundColor Cyan
+Write-Host '=== Migracao de indices para a VM ===' -ForegroundColor Cyan
 Write-Host ("  indices      : {0}" -f ($Indices -join ', '))
 Write-Host ("  fatias       : {0} por indice" -f $Fatias)
 Write-Host ("  nivel gzip   : {0}" -f $Nivel)

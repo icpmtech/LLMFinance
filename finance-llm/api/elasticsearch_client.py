@@ -258,6 +258,17 @@ PARTIDOS_INDEX = "finance_partidos"
 # pelas câmaras municipais.
 VEREADORES_INDEX = "finance_vereadores"
 
+# Abonos dos eleitos locais. Um documento por **linha da tabela oficial**
+# (ano × nível × regime × verba × cargo × modalidade), com os valores por escalão
+# de eleitores — é o direito aplicável, não a pessoa. Alimentado por
+# `api/remuneracoes_service.py` a partir de `data/remuneracoes/`.
+REMUNERACOES_INDEX = "finance_remuneracoes"
+
+# O mesmo direito aplicado ao **território**: um documento por concelho e por
+# freguesia, com o número de eleitores inscritos (recenseamento), o escalão em
+# que caem e as remunerações que lhes correspondem, mais o polígono do mapa.
+REMUNERACOES_TERRITORIOS_INDEX = "finance_remuneracoes_territorios"
+
 # Registo oficial dos partidos na **CNE**: denominação, sigla, data de inscrição,
 # situação (`inscrito`/`extinto`), sítio na Internet, símbolo e descrição. É a
 # chave que liga os documentos das contas ao partido. `_id` = `<chave>` (slug).
@@ -458,6 +469,28 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
         }
     },
     VEREADORES_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    REMUNERACOES_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    REMUNERACOES_TERRITORIOS_INDEX: {
         "analysis": {
             "analyzer": {
                 "world_folding": {
@@ -2586,6 +2619,143 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         }
     }
 
+    # Abonos dos eleitos locais: uma linha da tabela oficial por documento.
+    remuneracoes_mappings = {
+        "properties": {
+            "doc_id": {"type": "keyword"},
+            "ano": {"type": "integer"},
+            "nivel": {"type": "keyword"},
+            "tabela_titulo": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "regime": {"type": "keyword", "ignore_above": 64},
+            "grupo": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "cargo": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "modalidade": {"type": "keyword", "ignore_above": 128},
+            "natureza": {"type": "keyword", "ignore_above": 64},
+            "base_legal": {"type": "keyword", "ignore_above": 512, "index": False},
+            "fonte": {"type": "keyword", "ignore_above": 512, "index": False},
+            # Valores por escalão de eleitores, com os limites e a percentagem da
+            # remuneração do Presidente da República que lhes dá origem.
+            "valores": {
+                "type": "nested",
+                "properties": {
+                    "escalao_id": {"type": "keyword"},
+                    "escalao": {"type": "keyword", "ignore_above": 512},
+                    "min_eleitores": {"type": "long"},
+                    "max_eleitores": {"type": "long"},
+                    "percentagem_pr": {"type": "double"},
+                    "valor": {"type": "double"},
+                    "percentagem": {"type": "double"},
+                },
+            },
+            "valor_minimo": {"type": "double"},
+            "valor_maximo": {"type": "double"},
+            "ingested_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
+    # Os abonos aplicados ao território (concelho e freguesia).
+    remuneracoes_territorios_mappings = {
+        "properties": {
+            "doc_id": {"type": "keyword"},
+            "territory_id": {"type": "integer"},
+            "nome": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "nome_keyword": {"type": "keyword", "ignore_above": 512},
+            "nivel": {"type": "keyword"},
+            "tipo_territorio": {"type": "integer"},
+            "distrito": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "distrito_keyword": {"type": "keyword", "ignore_above": 512},
+            "concelho": {
+                "type": "text",
+                "analyzer": "world_folding",
+                "search_analyzer": "world_folding",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 512}},
+            },
+            "concelho_keyword": {"type": "keyword", "ignore_above": 512},
+            "concelho_id": {"type": "integer"},
+            "eleitores": {"type": "long"},
+            "votantes": {"type": "long"},
+            "abstencao_percentagem": {"type": "double"},
+            "mandatos": {"type": "integer"},
+            # Eleitos nas autárquicas de 2025: o presidente de câmara tem nome e
+            # lista; a câmara traz os mandatos e os vereadores de cada partido.
+            "presidente": {"type": "text", "fields": {"keyword": {"type": "keyword", "ignore_above": 256}}},
+            "partido": {"type": "keyword", "ignore_above": 128},
+            "partido_descricao": {"type": "keyword", "ignore_above": 256},
+            "vereadores": {"type": "integer"},
+            "camara": {
+                "type": "object",
+                "properties": {
+                    "sigla": {"type": "keyword", "ignore_above": 128},
+                    "votos": {"type": "long"},
+                    "percentagem": {"type": "double"},
+                    "mandatos": {"type": "integer"},
+                    "presidentes": {"type": "integer"},
+                    "vereadores": {"type": "integer"},
+                },
+            },
+            "escalao_id": {"type": "keyword"},
+            "escalao": {"type": "keyword", "ignore_above": 512},
+            # Remuneração mensal do presidente (exclusividade, tempo inteiro) e as
+            # restantes verbas do escalão, com o nome da rubrica que as origina.
+            "remuneracao_mensal": {"type": "double"},
+            "verbas": {
+                "type": "nested",
+                "properties": {
+                    "id": {"type": "keyword"},
+                    "grupo": {"type": "keyword", "ignore_above": 512},
+                    "cargo": {"type": "keyword", "ignore_above": 512},
+                    "modalidade": {"type": "keyword", "ignore_above": 128},
+                    "natureza": {"type": "keyword", "ignore_above": 64},
+                    "valor": {"type": "double"},
+                },
+            },
+            # Polígono desenhável no mapa, no sistema de coordenadas SVG da
+            # própria fonte (pontos «x,y» já normalizados para 0-1000).
+            "poligono": {"type": "keyword", "index": False, "doc_values": False},
+            "poligono_pontos": {"type": "integer"},
+            "centroide": {
+                "type": "object",
+                "properties": {"x": {"type": "double"}, "y": {"type": "double"}},
+            },
+            # Coordenadas geográficas (Wikidata/OSM) — permitem pintar o
+            # território num mapa real e fazer consultas por caixa/raio.
+            "lat": {"type": "double"},
+            "lon": {"type": "double"},
+            "localizacao": {"type": "geo_point"},
+            "fonte": {"type": "keyword", "ignore_above": 128},
+            "fonte_url": {"type": "keyword", "ignore_above": 512, "index": False},
+            "recolhido_em": {"type": "date"},
+            "ingested_at": {"type": "date"},
+            "updated_at": {"type": "date"},
+        }
+    }
+
     # Portal da Transparência da ERC. As sub-listas (pessoas dos órgãos sociais,
     # OCS detidos e participações) são `nested` para poderem ser agregadas sem
     # misturar valores de documentos diferentes.
@@ -2665,7 +2835,93 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
             "ocs_designacoes": {"type": "keyword", "ignore_above": 512},
             "detentores": _erc_participacao,
             "detidas": _erc_participacao,
-            "financeiro": {"type": "object", "enabled": False},
+            # Série financeira (secção `dafin`), um objecto por exercício. `nested`
+            # porque os rácios e os valores só fazem sentido dentro do mesmo ano.
+            "financeiro": {
+                "type": "nested",
+                "properties": {
+                    "ano": {"type": "integer"},
+                    "ano_comparacao": {"type": "integer"},
+                    "ativo_total": {"type": "double"},
+                    "passivo_total": {"type": "double"},
+                    "passivos_totais": {"type": "double"},
+                    "capital_proprio": {"type": "double"},
+                    "rendimentos_totais": {"type": "double"},
+                    "resultados_antes_custos": {"type": "double"},
+                    "resultados_operacionais_depreciacoes": {"type": "double"},
+                    "resultados_liquidos": {"type": "double"},
+                    "responsabilidades_nao_inscritas": {"type": "double"},
+                    "autonomia_financeira": {"type": "double"},
+                    "endividamento": {"type": "double"},
+                    "margem_liquida": {"type": "double"},
+                    "crescimento_rendimentos": {"type": "double"},
+                    "confidencialidade": {"type": "boolean"},
+                    "nota": {"type": "text", "index": False},
+                },
+            },
+            # Indicadores de topo do último exercício: existem como campos próprios
+            # para ordenar e agregar sem passar por `nested`.
+            "n_anos_financeiro": {"type": "integer"},
+            "primeiro_ano_financeiro": {"type": "integer"},
+            "ultimo_ano_financeiro": {"type": "integer"},
+            "ultimo_ativo": {"type": "double"},
+            "ultimo_passivo": {"type": "double"},
+            "ultimo_capital_proprio": {"type": "double"},
+            "ultimo_rendimentos": {"type": "double"},
+            "ultimo_resultados": {"type": "double"},
+            "ultimo_autonomia": {"type": "double"},
+            "ultimo_endividamento": {"type": "double"},
+            "ultimo_crescimento_rendimentos": {"type": "double"},
+            "anos_resultados_positivos": {"type": "integer"},
+            "anos_resultados_negativos": {"type": "integer"},
+            "confidencialidade": {"type": "boolean"},
+            "financeiro_atualizado_em": {"type": "date"},
+            # Análise de risco: os scores são campos próprios (para filtrar e
+            # ordenar) e os indicadores que os justificam ficam por indexar, já
+            # que o `valor` tanto é número como texto ou booleano.
+            "analise": {
+                "type": "object",
+                "properties": {
+                    "transparencia": {
+                        "type": "object",
+                        "properties": {
+                            "score": {"type": "integer"},
+                            "nivel": {"type": "keyword"},
+                            "indicadores": {"type": "object", "enabled": False},
+                        },
+                    },
+                    "credito": {
+                        "type": "object",
+                        "properties": {
+                            "score": {"type": "integer"},
+                            "nivel": {"type": "keyword"},
+                            "disponivel": {"type": "boolean"},
+                            "indicadores": {"type": "object", "enabled": False},
+                        },
+                    },
+                    "risco": {
+                        "type": "object",
+                        "properties": {
+                            "score": {"type": "integer"},
+                            "banda": {"type": "keyword"},
+                            "componentes": {"type": "object", "enabled": False},
+                        },
+                    },
+                    "alertas": {"type": "keyword", "ignore_above": 512},
+                    "cobertura": {
+                        "type": "object",
+                        "properties": {
+                            "anos_financeiros": {"type": "integer"},
+                            "primeiro_ano": {"type": "integer"},
+                            "ultimo_ano": {"type": "integer"},
+                            "confidencialidade": {"type": "boolean"},
+                        },
+                    },
+                    "limitacoes": {"type": "text", "index": False},
+                    "fonte": {"type": "keyword"},
+                    "atualizado_em": {"type": "date"},
+                },
+            },
             "fonte": {"type": "keyword"},
             "recolhido_em": {"type": "date"},
             "ingested_at": {"type": "date"},
@@ -2926,6 +3182,10 @@ def ensure_indices(es: Optional[Elasticsearch] = None) -> bool:
         (PARTIDOS_REGISTO_INDEX, partidos_registo_mappings),
         (PARTIDOS_RECOLHAS_INDEX, partidos_recolhas_mappings),
         (VEREADORES_INDEX, vereadores_mappings),
+        # Abonos dos eleitos locais: a tabela oficial e o mesmo direito aplicado
+        # a cada concelho e freguesia (eleitores, escalão e polígono do mapa).
+        (REMUNERACOES_INDEX, remuneracoes_mappings),
+        (REMUNERACOES_TERRITORIOS_INDEX, remuneracoes_territorios_mappings),
         # Portal da Transparência da ERC: entidades proprietárias de OCS, pessoas
         # dos órgãos sociais, OCS detidos e o histórico das recolhas.
         (ERC_ENTIDADES_INDEX, erc_entidades_mappings),
@@ -17151,6 +17411,288 @@ def vereadores_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Abonos dos eleitos locais (remunerações)
+# ---------------------------------------------------------------------------
+
+def index_remuneracoes_bulk(
+    items: Iterable[Dict[str, Any]],
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa as linhas da tabela de abonos no índice `finance_remuneracoes`.
+
+    Cada item deve ter `doc_id`, `ano`, `nivel`, `regime`, `grupo`, `cargo` e a
+    lista `valores` (por escalão de eleitores).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed": 0}
+    ensure_indices(client)
+    actions = []
+    now = datetime.utcnow().isoformat()
+    for doc in items:
+        if not doc.get("doc_id"):
+            continue
+        source = dict(doc)
+        source.setdefault("ingested_at", now)
+        source.setdefault("updated_at", now)
+        valorados = [v["valor"] for v in (source.get("valores") or []) if v.get("valor") is not None]
+        source["valor_minimo"] = min(valorados) if valorados else None
+        source["valor_maximo"] = max(valorados) if valorados else None
+        actions.append({
+            "_op_type": "index",
+            "_index": REMUNERACOES_INDEX,
+            "_id": source["doc_id"],
+            **source,
+        })
+    if not actions:
+        return {"indexed": 0}
+    try:
+        indexed, errors = bulk(client, actions, raise_on_error=False)
+        client.indices.refresh(index=REMUNERACOES_INDEX)
+        return {"indexed": indexed, "errors": len(errors) if errors else 0}
+    except Exception as exc:
+        return {"error": str(exc), "indexed": 0}
+
+
+def search_remuneracoes(
+    ano: Optional[int] = None,
+    nivel: Optional[str] = None,
+    regime: Optional[str] = None,
+    q: Optional[str] = None,
+    size: int = 200,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa linhas da tabela de abonos (todas as que existirem, por omissão)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+    ensure_indices(client)
+
+    filters: List[Dict[str, Any]] = []
+    if ano:
+        filters.append({"term": {"ano": int(ano)}})
+    if nivel:
+        filters.append({"term": {"nivel": nivel}})
+    if regime:
+        filters.append({"term": {"regime": regime}})
+
+    must: List[Dict[str, Any]] = []
+    if q:
+        must.append({
+            "bool": {
+                "should": [
+                    {"match_phrase": {"cargo": {"query": q, "boost": 4}}},
+                    {"match": {"grupo": {"query": q, "operator": "and", "boost": 2}}},
+                    {"match": {"tabela_titulo": {"query": q, "operator": "and"}}},
+                ],
+                "minimum_should_match": 1,
+            }
+        })
+
+    bool_query: Dict[str, Any] = {}
+    if must:
+        bool_query["must"] = must
+    if filters:
+        bool_query["filter"] = filters
+    query = {"bool": bool_query} if bool_query else {"match_all": {}}
+
+    body = {
+        "query": query,
+        "size": max(1, min(size, 500)),
+        "sort": [
+            {"ano": {"order": "desc"}},
+            {"nivel": {"order": "asc"}},
+            {"regime": {"order": "asc"}},
+            {"cargo.keyword": {"order": "asc"}},
+        ],
+        "track_total_hits": True,
+    }
+    try:
+        resp = client.search(index=REMUNERACOES_INDEX, body=body)
+        return {
+            "total": resp["hits"]["total"]["value"],
+            "items": [{**hit["_source"], "doc_id": hit["_id"]} for hit in resp["hits"]["hits"]],
+        }
+    except Exception as exc:
+        return {"error": str(exc), "items": [], "total": 0}
+
+
+def index_remuneracoes_territorios_bulk(
+    items: Iterable[Dict[str, Any]],
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa os abonos aplicados a cada concelho/freguesia."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed": 0}
+    ensure_indices(client)
+    actions = []
+    now = datetime.utcnow().isoformat()
+    for doc in items:
+        if not doc.get("doc_id"):
+            continue
+        source = dict(doc)
+        source.setdefault("ingested_at", now)
+        source.setdefault("updated_at", now)
+        actions.append({
+            "_op_type": "index",
+            "_index": REMUNERACOES_TERRITORIOS_INDEX,
+            "_id": source["doc_id"],
+            **source,
+        })
+    if not actions:
+        return {"indexed": 0}
+    try:
+        indexed, errors = bulk(client, actions, raise_on_error=False)
+        client.indices.refresh(index=REMUNERACOES_TERRITORIOS_INDEX)
+        return {"indexed": indexed, "errors": len(errors) if errors else 0}
+    except Exception as exc:
+        return {"error": str(exc), "indexed": 0}
+
+
+def search_remuneracoes_territorios(
+    q: Optional[str] = None,
+    nivel: Optional[str] = None,
+    distrito: Optional[str] = None,
+    concelho: Optional[str] = None,
+    escalao_id: Optional[str] = None,
+    min_eleitores: Optional[int] = None,
+    max_eleitores: Optional[int] = None,
+    size: int = 500,
+    page: int = 1,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa os abonos por concelho/freguesia (eleitores, escalão e verbas)."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+    ensure_indices(client)
+
+    filters: List[Dict[str, Any]] = []
+    if nivel:
+        filters.append({"term": {"nivel": nivel}})
+    if escalao_id:
+        filters.append({"term": {"escalao_id": escalao_id}})
+    if distrito:
+        filters.append({"wildcard": {"distrito_keyword": {"value": f"*{distrito}*", "case_insensitive": True}}})
+    if concelho:
+        filters.append({"wildcard": {"concelho_keyword": {"value": f"*{concelho}*", "case_insensitive": True}}})
+    if min_eleitores is not None or max_eleitores is not None:
+        rng: Dict[str, Any] = {}
+        if min_eleitores is not None:
+            rng["gte"] = int(min_eleitores)
+        if max_eleitores is not None:
+            rng["lte"] = int(max_eleitores)
+        filters.append({"range": {"eleitores": rng}})
+
+    must: List[Dict[str, Any]] = []
+    if q:
+        must.append({
+            "bool": {
+                "should": [
+                    {"match_phrase": {"nome": {"query": q, "boost": 6}}},
+                    {"match": {"nome": {"query": q, "operator": "and", "boost": 3}}},
+                    {"wildcard": {"concelho_keyword": {"value": f"*{q}*", "case_insensitive": True}}},
+                    {"wildcard": {"distrito_keyword": {"value": f"*{q}*", "case_insensitive": True}}},
+                ],
+                "minimum_should_match": 1,
+            }
+        })
+
+    bool_query: Dict[str, Any] = {}
+    if must:
+        bool_query["must"] = must
+    if filters:
+        bool_query["filter"] = filters
+    query = {"bool": bool_query} if bool_query else {"match_all": {}}
+
+    from_ = max(0, (page - 1) * size)
+    body = {
+        "query": query,
+        "from": from_,
+        "size": max(1, min(size, 1000)),
+        "sort": [
+            {"nivel": {"order": "asc"}},
+            {"eleitores": {"order": "desc"}},
+        ],
+        "track_total_hits": True,
+    }
+    try:
+        resp = client.search(index=REMUNERACOES_TERRITORIOS_INDEX, body=body)
+        return {
+            "total": resp["hits"]["total"]["value"],
+            "items": [{**hit["_source"], "doc_id": hit["_id"]} for hit in resp["hits"]["hits"]],
+            "page": page,
+            "size": size,
+        }
+    except Exception as exc:
+        return {"error": str(exc), "items": [], "total": 0}
+
+
+def remuneracoes_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Volumetria dos índices de remunerações, por ano, nível e escalão."""
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    ensure_indices(client)
+    out: Dict[str, Any] = {"indices": {}}
+    try:
+        out["indices"][REMUNERACOES_INDEX] = client.count(index=REMUNERACOES_INDEX).get("count", 0)
+        out["indices"][REMUNERACOES_TERRITORIOS_INDEX] = client.count(
+            index=REMUNERACOES_TERRITORIOS_INDEX
+        ).get("count", 0)
+    except Exception as exc:
+        return {"error": str(exc)}
+
+    def _buckets(resp: Dict[str, Any], name: str) -> List[Dict[str, Any]]:
+        return [
+            {"key": b["key"], "count": b["doc_count"]}
+            for b in (resp.get("aggregations", {}).get(name, {}) or {}).get("buckets", [])
+        ]
+
+    try:
+        if out["indices"][REMUNERACOES_INDEX]:
+            resp = client.search(
+                index=REMUNERACOES_INDEX,
+                body={
+                    "size": 0,
+                    "aggs": {
+                        "by_ano": {"terms": {"field": "ano", "size": 20}},
+                        "by_nivel": {"terms": {"field": "nivel", "size": 10}},
+                        "by_regime": {"terms": {"field": "regime", "size": 10}},
+                        "by_natureza": {"terms": {"field": "natureza", "size": 20}},
+                    },
+                },
+            )
+            out["by_ano"] = _buckets(resp, "by_ano")
+            out["by_nivel"] = _buckets(resp, "by_nivel")
+            out["by_regime"] = _buckets(resp, "by_regime")
+            out["by_natureza"] = _buckets(resp, "by_natureza")
+        if out["indices"][REMUNERACOES_TERRITORIOS_INDEX]:
+            resp = client.search(
+                index=REMUNERACOES_TERRITORIOS_INDEX,
+                body={
+                    "size": 0,
+                    "aggs": {
+                        "by_nivel": {"terms": {"field": "nivel", "size": 10}},
+                        "by_escalao": {"terms": {"field": "escalao_id", "size": 20}},
+                        "by_distrito": {"terms": {"field": "distrito_keyword", "size": 30}},
+                        "eleitores": {"sum": {"field": "eleitores"}},
+                    },
+                },
+            )
+            out["territorios_by_nivel"] = _buckets(resp, "by_nivel")
+            out["territorios_by_escalao"] = _buckets(resp, "by_escalao")
+            out["territorios_by_distrito"] = _buckets(resp, "by_distrito")
+            out["total_eleitores"] = int(
+                (resp.get("aggregations", {}).get("eleitores", {}) or {}).get("value", 0)
+            )
+    except Exception as exc:
+        out["agg_error"] = str(exc)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Portal da Transparência da ERC
 # ---------------------------------------------------------------------------
 
@@ -17158,15 +17700,29 @@ def _erc_wildcard(field: str, value: str) -> Dict[str, Any]:
     return {"wildcard": {field: {"value": f"*{value}*", "case_insensitive": True}}}
 
 
-def index_erc_bulk(index: str, items: Iterable[Dict[str, Any]], es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+def index_erc_bulk(
+    index: str,
+    items: Iterable[Dict[str, Any]],
+    es: Optional[Elasticsearch] = None,
+    *,
+    recriar: bool = False,
+) -> Dict[str, Any]:
     """Indexa documentos da ERC num dos índices `finance_erc_*`.
 
     Cada item tem de trazer `doc_id` (usado como `_id`, para reindexar sem
     duplicar); reindexar o mesmo portal sobrepõe-se em vez de acumular.
+    `recriar` apaga e volta a criar o índice — é o que se quer quando o mapping
+    mudou, porque o Elasticsearch não deixa alterar tipos de campos existentes
+    (os dados vêm sempre dos JSONL, por isso não se perde nada).
     """
     client = es or get_es_client()
     if not client:
         return {"error": "Elasticsearch indisponível", "indexed": 0}
+    if recriar:
+        try:
+            client.indices.delete(index=index, ignore_unavailable=True)
+        except Exception as exc:  # noqa: BLE001 - um índice inexistente não impede nada
+            logger.debug("Não foi possível apagar %s: %s", index, exc)
     ensure_indices(client)
     now = datetime.utcnow().isoformat()
     actions = []
@@ -17360,6 +17916,149 @@ def search_erc_ocs(
         page=page,
         es=es,
     )
+
+
+#: Ordenações aceites pelo ranking de análise de risco e de financeiro.
+#: `unmapped_type` evita o erro do Elasticsearch quando o índice ainda não tem os
+#: campos (ex.: antes da primeira indexação da análise): devolve vazio, não falha.
+ERC_ORDENACOES: Dict[str, List[Dict[str, Any]]] = {
+    "risco": [{"analise.risco.score": {"order": "desc", "missing": "_last", "unmapped_type": "integer"}}, {"nome.keyword": {"order": "asc"}}],
+    "transparencia": [{"analise.transparencia.score": {"order": "desc", "missing": "_last", "unmapped_type": "integer"}}, {"nome.keyword": {"order": "asc"}}],
+    "credito": [{"analise.credito.score": {"order": "desc", "missing": "_last", "unmapped_type": "integer"}}, {"nome.keyword": {"order": "asc"}}],
+    "rendimentos": [{"ultimo_rendimentos": {"order": "desc", "missing": "_last", "unmapped_type": "double"}}, {"nome.keyword": {"order": "asc"}}],
+    "resultados": [{"ultimo_resultados": {"order": "desc", "missing": "_last", "unmapped_type": "double"}}, {"nome.keyword": {"order": "asc"}}],
+    "capital_proprio": [{"ultimo_capital_proprio": {"order": "desc", "missing": "_last", "unmapped_type": "double"}}, {"nome.keyword": {"order": "asc"}}],
+    "autonomia": [{"ultimo_autonomia": {"order": "desc", "missing": "_last", "unmapped_type": "double"}}, {"nome.keyword": {"order": "asc"}}],
+    "recentes": [{"ultimo_ano_financeiro": {"order": "desc", "missing": "_last", "unmapped_type": "integer"}}, {"nome.keyword": {"order": "asc"}}],
+    "nome": [{"nome.keyword": {"order": "asc"}}],
+}
+
+
+def _erc_valores(valor: Any) -> List[str]:
+    """Aceita um valor ou uma lista em texto (`a`, `a,b`) para os filtros `terms`."""
+    if valor is None:
+        return []
+    if isinstance(valor, (list, tuple, set)):
+        itens = [str(v).strip() for v in valor]
+    else:
+        itens = [parte.strip() for parte in str(valor).split(",")]
+    return [item for item in itens if item]
+
+
+def search_erc_analise(
+    q: Optional[str] = None,
+    banda: Optional[str] = None,
+    nivel_transparencia: Optional[str] = None,
+    nivel_credito: Optional[str] = None,
+    distrito: Optional[str] = None,
+    risco_min: Optional[float] = None,
+    risco_max: Optional[float] = None,
+    transparencia_min: Optional[float] = None,
+    credito_min: Optional[float] = None,
+    com_financeiro: Optional[bool] = None,
+    ordenar: str = "risco",
+    size: int = 25,
+    page: int = 1,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Ranking das entidades por risco, transparência, crédito ou números."""
+    filters: List[Dict[str, Any]] = []
+    for campo, valor in (
+        ("analise.risco.banda", banda),
+        ("analise.transparencia.nivel", nivel_transparencia),
+        ("analise.credito.nivel", nivel_credito),
+    ):
+        itens = _erc_valores(valor)
+        if itens:
+            filters.append({"terms": {campo: itens}})
+    if distrito:
+        filters.append(_erc_wildcard("distrito_keyword", distrito))
+    for campo, minimo, maximo in (
+        ("analise.risco.score", risco_min, risco_max),
+        ("analise.transparencia.score", transparencia_min, None),
+        ("analise.credito.score", credito_min, None),
+    ):
+        if minimo is None and maximo is None:
+            continue
+        intervalo: Dict[str, Any] = {}
+        if minimo is not None:
+            intervalo["gte"] = minimo
+        if maximo is not None:
+            intervalo["lte"] = maximo
+        filters.append({"range": {campo: intervalo}})
+    if com_financeiro is True:
+        filters.append({"range": {"n_anos_financeiro": {"gte": 1}}})
+    elif com_financeiro is False:
+        filters.append({"bool": {"must_not": [{"range": {"n_anos_financeiro": {"gte": 1}}}]}})
+    return _erc_search(
+        ERC_ENTIDADES_INDEX,
+        q=q,
+        text_fields=("nome", "tipo_sociedade", "actividade_principal", "distrito"),
+        keyword_fields=("nome.keyword", "pessoas_nomes", "ocs_designacoes"),
+        filters=filters,
+        sort=ERC_ORDENACOES.get(str(ordenar or "risco").lower(), ERC_ORDENACOES["risco"]),
+        size=size,
+        page=page,
+        es=es,
+    )
+
+
+def erc_financeiro_painel(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
+    """Painel financeiro: totais por exercício e distribuição de risco.
+
+    Os valores por ano saem de agregações `nested` sobre `financeiro` — é o mesmo
+    documento, mas cada exercício soma-se por si (sem misturar anos).
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível"}
+    ensure_indices(client)
+    out: Dict[str, Any] = {}
+    try:
+        resp = client.search(
+            index=ERC_ENTIDADES_INDEX,
+            body={"size": 0, "aggs": {
+                "com_financeiro": {"filter": {"range": {"n_anos_financeiro": {"gte": 1}}}},
+                "por_banda": {"terms": {"field": "analise.risco.banda", "size": 10}},
+                "por_transparencia": {"terms": {"field": "analise.transparencia.nivel", "size": 10}},
+                "por_credito": {"terms": {"field": "analise.credito.nivel", "size": 10}},
+                "anos": {
+                    "nested": {"path": "financeiro"},
+                    "aggs": {
+                        "por_ano": {
+                            "terms": {"field": "financeiro.ano", "size": 30, "order": {"_key": "desc"}},
+                            "aggs": {
+                                "rendimentos": {"sum": {"field": "financeiro.rendimentos_totais"}},
+                                "resultados": {"sum": {"field": "financeiro.resultados_liquidos"}},
+                                "ativo": {"sum": {"field": "financeiro.ativo_total"}},
+                                "capital_proprio": {"sum": {"field": "financeiro.capital_proprio"}},
+                                "com_prejuizo": {"filter": {"range": {"financeiro.resultados_liquidos": {"lt": 0}}}},
+                            },
+                        },
+                    },
+                },
+            }},
+        )
+        aggs = resp.get("aggregations", {})
+        out["com_financeiro"] = aggs.get("com_financeiro", {}).get("doc_count", 0)
+        out["por_banda"] = [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("por_banda", {}).get("buckets", [])]
+        out["por_transparencia"] = [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("por_transparencia", {}).get("buckets", [])]
+        out["por_credito"] = [{"key": b["key"], "count": b["doc_count"]} for b in aggs.get("por_credito", {}).get("buckets", [])]
+        anos = []
+        for balde in aggs.get("anos", {}).get("por_ano", {}).get("buckets", []):
+            anos.append({
+                "ano": int(balde["key"]),
+                "balancos": balde["doc_count"],
+                "rendimentos": round(balde["rendimentos"]["value"] or 0, 2),
+                "resultados": round(balde["resultados"]["value"] or 0, 2),
+                "ativo": round(balde["ativo"]["value"] or 0, 2),
+                "capital_proprio": round(balde["capital_proprio"]["value"] or 0, 2),
+                "com_prejuizo": balde["com_prejuizo"]["doc_count"],
+            })
+        out["anos"] = anos
+    except Exception as exc:
+        out["error"] = str(exc)
+    return out
 
 
 def erc_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:

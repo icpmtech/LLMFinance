@@ -53,6 +53,20 @@ LISTING_PARAMS = {"idActividade": "all"}
 API_CAPITAL_SOCIAL = "/Umbraco/Api/EstruturaCapitalSocial/"
 API_FINANCEIRA = "/Umbraco/Api/CaracterizacaoFinanceira/GetDadosFinanceira"
 
+#: Campos do balanço: nome normalizado → campo do portal.
+CAMPOS_MONETARIOS = {
+    "ativo_total": "Erc_ativototal",
+    "passivo_total": "Erc_passivototal",
+    "passivos_totais": "Erc_passivostotais",
+    "capital_proprio": "Erc_capitalproprio",
+    "rendimentos_totais": "Erc_rendimentostotais",
+    "resultados_antes_custos": "Erc_resultadosantescustos",
+    "resultados_operacionais_depreciacoes": "Erc_resultadosoperacionaisdepreciacoes",
+    "resultados_liquidos": "Erc_resultadosliquidos",
+    # Garantias e outros compromissos fora do balanço: contam para o risco.
+    "responsabilidades_nao_inscritas": "Erc_responsabilidadesnaoinscritas",
+}
+
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
@@ -96,7 +110,12 @@ _ACTIVIDADE_LABELS = {
 }
 
 _ESPACOS = re.compile(r"\s+")
-_MOEDA_LIXO = re.compile(r"[^\d.,]")
+#: Limpeza tolerada num valor monetário: espaços, símbolo de euro e percentagem.
+_MOEDA_LIXO = re.compile(r"[\s\u00a0\u20ac]|%")
+#: O que resta tem de ser um número (senão é texto, não um valor).
+_SO_NUMERO = re.compile(r"^[+-]?\d{1,3}(\.\d{3})*(,\d+)?$|^[+-]?\d+(,\d+)?$")
+_TEM_LETRA = re.compile(r"[A-Za-z\u00c0-\u00ff]")
+_TEM_DIGITO = re.compile(r"\d")
 
 
 def _clean(value: Any) -> str:
@@ -105,11 +124,19 @@ def _clean(value: Any) -> str:
 
 
 def parse_money(value: Any) -> Optional[float]:
-    """Converte «5 100,00 €» no número ``5100.0`` (formato português)."""
-    if value is None:
+    """Converte «5 100,00 €» no número ``5100.0`` (formato português).
+
+    Devolve ``None`` quando o campo não é um número. É o que acontece quando o
+    portal publica uma deliberação em vez de contas («Deliberação ERC/2024/532 -
+    Defere a exceção de divulgação…»): extrair-lhe os dígitos produziria valores
+    absurdos, como 20 mil milhões de euros num exercício.
+    """
+    if value is None or isinstance(value, bool):
         return None
+    if isinstance(value, (int, float)):
+        return float(value)
     raw = _MOEDA_LIXO.sub("", str(value))
-    if not raw:
+    if not raw or not _SO_NUMERO.match(raw):
         return None
     # «1.234.567,89» → 1234567.89: o ponto é separador de milhares.
     raw = raw.replace(".", "").replace(",", ".")
@@ -117,6 +144,21 @@ def parse_money(value: Any) -> Optional[float]:
         return float(raw)
     except ValueError:
         return None
+
+
+def _texto_onde_devia_haver_numero(value: Any) -> Optional[str]:
+    """Texto livre num campo numérico (deliberações, exceções de divulgação).
+
+    O portal usa estes campos para marcar vazio («True») e para escrever notas
+    que não são números («Não aplicável»). Só interessa o texto que cita um
+    processo ou deliberação — isto é, o que traz dígitos e letras ao mesmo tempo.
+    """
+    if not isinstance(value, str):
+        return None
+    texto = _ESPACOS.sub(" ", value).strip()
+    if len(texto) < 5 or not _TEM_DIGITO.search(texto) or not _TEM_LETRA.search(texto):
+        return None
+    return texto
 
 
 def _checked_radio(soup: BeautifulSoup, prefix: str) -> Optional[str]:
@@ -453,16 +495,19 @@ def parse_financeiro(payload: Any) -> List[Dict[str, Any]]:
             ano_int = int(str(ano))
         except (TypeError, ValueError):
             continue
+        # Quando o ERC defere uma exceção de divulgação, o portal escreve a
+        # deliberação no lugar dos valores: fica em `nota`, os números ficam
+        # vazios e o exercício conta como confidencial.
+        nota = next(
+            (texto for texto in (_texto_onde_devia_haver_numero(item.get(origem)) for origem in CAMPOS_MONETARIOS.values()) if texto),
+            None,
+        )
+        pedido = str(item.get("Erc_solicitopedidoconfidencialidade") or "").lower() == "true"
         out.append({
             "ano": ano_int,
-            "ativo_total": parse_money(item.get("Erc_ativototal")),
-            "passivo_total": parse_money(item.get("Erc_passivototal")),
-            "passivos_totais": parse_money(item.get("Erc_passivostotais")),
-            "capital_proprio": parse_money(item.get("Erc_capitalproprio")),
-            "rendimentos_totais": parse_money(item.get("Erc_rendimentostotais")),
-            "resultados_antes_custos": parse_money(item.get("Erc_resultadosantescustos")),
-            "resultados_liquidos": parse_money(item.get("Erc_resultadosliquidos")),
-            "confidencialidade": str(item.get("Erc_solicitopedidoconfidencialidade") or "").lower() == "true",
+            **{chave: parse_money(item.get(origem)) for chave, origem in CAMPOS_MONETARIOS.items()},
+            "nota": nota,
+            "confidencialidade": pedido or bool(nota),
         })
     return out
 

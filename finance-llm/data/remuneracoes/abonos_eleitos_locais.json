@@ -1,0 +1,319 @@
+{
+  "fonte": {
+    "documento": "Tabela de Abonos dos Eleitos Locais — Ano 2026",
+    "ficheiro": "Tabela_Abonos_eleitos_locais 2026.pdf",
+    "base_legal": "Artigos 5.º, 5.º-A, 7.º e 8.º da Lei n.º 11/96, de 18 de abril",
+    "atualizacao": "Atualizado de acordo com a alínea b) do artigo 4.º do Decreto-Lei n.º 29-A/2026, de 30 de janeiro (acréscimo de 2,15%).",
+    "unidade": "EUR"
+  },
+  "referencias": {
+    "remuneracao_presidente_republica": 8550.1,
+    "remuneracao_presidente_camara_municipio_10mil_ou_menos_eleitores": 3421.0,
+    "subsidio_refeicao": 6.15
+  },
+  "tabelas": [
+    {
+      "ano": 2026,
+      "nivel": "freguesia",
+      "titulo": "ABONOS DOS ELEITOS LOCAIS - FREGUESIA - ANO 2026",
+      "estado": "verificada",
+      "nota": "Tabela transcrita integralmente do PDF oficial de 2026. Cada escalão de eleitores recebe a remuneração do presidente da junta em percentagem da remuneração do Presidente da República (coluna «Exclusividade (% PR)»).",
+      "escaloes": [
+        {
+          "id": "freg-20mil-ou-mais",
+          "designacao": "20 mil ou mais eleitores",
+          "ordem": 1,
+          "min_eleitores": 20000,
+          "max_eleitores": null,
+          "percentagem_pr": 25.0
+        },
+        {
+          "id": "freg-10mil-a-20mil",
+          "designacao": "10 mil eleitores e menos de 20 mil",
+          "ordem": 2,
+          "min_eleitores": 10000,
+          "max_eleitores": 20000,
+          "percentagem_pr": 22.0
+        },
+        {
+          "id": "freg-7mil-e-100km2",
+          "designacao": "7 mil eleitores e 100Km2",
+          "ordem": 3,
+          "min_eleitores": 7000,
+          "max_eleitores": 10000,
+          "percentagem_pr": 19.0
+        },
+        {
+          "id": "freg-5mil-ate-10mil",
+          "designacao": "5 mil eleitores até 10 mil",
+          "ordem": 4,
+          "min_eleitores": 5000,
+          "max_eleitores": 10000,
+          "percentagem_pr": 19.0
+        },
+        {
+          "id": "freg-menos-de-5mil",
+          "designacao": "Menos de 5 mil eleitores",
+          "ordem": 5,
+          "min_eleitores": null,
+          "max_eleitores": 5000,
+          "percentagem_pr": 16.0
+        }
+      ],
+      "rubricas": [
+        {
+          "id": "freg-ti-remuneracao-presidentes-exclusividade",
+          "regime": "Tempo Inteiro",
+          "grupo": "Remuneração mensal e subsídio extraordinário de junho e novembro",
+          "cargo": "Presidentes (ou vogais por atribuição do Presidente)",
+          "modalidade": "Exclusividade",
+          "natureza": "remuneracao",
+          "percentagens": null,
+          "valores": {
+            "freg-20mil-ou-mais": 2137.53,
+            "freg-10mil-a-20mil": 1881.02,
+            "freg-7mil-e-100km2": 1624.52,
+            "freg-5mil-ate-10mil": 1624.52,
+            "freg-menos-de-5mil": 1368.02
+          }
+        },
+        {
+          "id": "freg-ti-remuneracao-presidentes-nao-exclusividade",
+          "regime": "Tempo Inteiro",
+          "grupo": "Remuneração mensal e subsídio extraordinário de junho e novembro",
+          "cargo": "Presidentes (ou vogais por atribuição do Presidente)",
+          "modalidade": "Não exclusividade (50% da exclusividade)",
+          "natureza": "remuneracao",
+          "percentagens": null,
+          "valores": {
+            "freg-20mil-ou-mais": 1068.77,
+            "freg-10mil-a-20mil": 940.51,
+            "freg-7mil-e-100km2": 812.26,
+            "freg-5mil-ate-10mil": 812.26,
+            "freg-menos-de-5mil": 684.01
+          }
+        },
+        {
+          "id": "freg-ti-representacao-presidentes-exclusividade",
+          "regime": "Tempo Inteiro",
+          "grupo": "Despesas de representação ( 12 meses )",
+          "cargo": "Presidentes",
+          "modalidade": "Exclusividade",
+          "natureza": "despesas_representacao",
+          "percentagens": null,
+          "valores": {
+            "freg-20mil-ou-mais": 641.26,
+            "freg-10mil-a-20mil": 564.31,
+            "freg-7mil-e-100km2": 487.36,
+            "freg-5mil-ate-10mil": 487.36,
+            "freg-menos-de-5mil": 410.4
+          }
+        },
+        {
+          "id": "freg-ti-representacao-presidentes-nao-exclusividade",
+          "regime": "Tempo Inteiro",
+          "grupo": "Despesas de representação ( 12 meses )",
+          "cargo": "Presidentes",
+          "modalidade": "Não exclusividade",
+          "natureza": "despesas_representacao",
+          "percentagens": null,
+          "valores": {
+            "freg-20mil-ou-mais": 320.63,
+            "freg-10mil-a-20mil": 282.16,
+            "freg-7mil-e-100km2": 243.68,
+            "freg-5mil-ate-10mil": 243.68,
+            "freg-menos-de-5mil": 205.2
+          }
+        },
+        {
+          "id": "freg-ti-representacao-vogais-exclusividade",
+          "regime": "Tempo Inteiro",
+          "grupo": "Despesas de representação ( 12 meses )",
+          "cargo": "Vogais",
+          "modalidade": "Exclusividade",
+          "natureza": "despesas_representacao",
+          "percentagens": null,
+          "valores": {
+            "freg-20mil-ou-mais": 427.51,
+            "freg-10mil-a-20mil": 376.2,
+            "freg-7mil-e-100km2": 324.9,
+            "freg-5mil-ate-10mil": 324.9,
+            "freg-menos-de-5mil": 273.6
+          }
+        },
+        {
+          "id": "freg-ti-representacao-vogais-nao-exclusividade",
+          "regime": "Tempo Inteiro",
+          "grupo": "Despesas de representação ( 12 meses )",
+          "cargo": "Vogais",
+          "modalidade": "Não exclusividade",
+          "natureza": "despesas_representacao",
+          "percentagens": null,
+          "valores": {
+            "freg-20mil-ou-mais": 213.76,
+            "freg-10mil-a-20mil": 188.1,
+            "freg-7mil-e-100km2": 162.45,
+            "freg-5mil-ate-10mil": 162.45,
+            "freg-menos-de-5mil": 136.8
+          }
+        },
+        {
+          "id": "freg-mt-remuneracao-presidentes-nao-exclusividade",
+          "regime": "Meio Tempo",
+          "grupo": "Remuneração mensal e subsídio extraordinário de junho e novembro",
+          "cargo": "Presidentes (ou vogais por atribuição do Presidente)",
+          "modalidade": "Não exclusividade",
+          "natureza": "remuneracao",
+          "percentagens": null,
+          "valores": {
+            "freg-20mil-ou-mais": 1068.77,
+            "freg-10mil-a-20mil": 940.51,
+            "freg-7mil-e-100km2": 812.26,
+            "freg-5mil-ate-10mil": 812.26,
+            "freg-menos-de-5mil": 684.01
+          }
+        },
+        {
+          "id": "freg-mt-representacao-presidentes-nao-exclusividade",
+          "regime": "Meio Tempo",
+          "grupo": "Despesas de representação ( 12 meses )",
+          "cargo": "Presidentes",
+          "modalidade": "Não exclusividade",
+          "natureza": "despesas_representacao",
+          "percentagens": null,
+          "valores": {
+            "freg-20mil-ou-mais": 320.63,
+            "freg-10mil-a-20mil": 282.16,
+            "freg-7mil-e-100km2": 243.68,
+            "freg-5mil-ate-10mil": 243.68,
+            "freg-menos-de-5mil": 205.2
+          }
+        },
+        {
+          "id": "freg-mt-representacao-vogais",
+          "regime": "Meio Tempo",
+          "grupo": "Despesas de representação ( 12 meses )",
+          "cargo": "Vogais",
+          "modalidade": "",
+          "natureza": "despesas_representacao",
+          "percentagens": null,
+          "valores": {
+            "freg-20mil-ou-mais": 213.76,
+            "freg-10mil-a-20mil": 188.1,
+            "freg-7mil-e-100km2": 162.45,
+            "freg-5mil-ate-10mil": 162.45,
+            "freg-menos-de-5mil": 136.8
+          }
+        },
+        {
+          "id": "freg-np-compensacao-presidentes",
+          "regime": "Não permanência",
+          "grupo": "Compensação para encargos (12 meses)",
+          "cargo": "Presidentes (% da remuneração do Presidente da Câmara de Município com 10 mil ou menos eleitores)",
+          "modalidade": "",
+          "natureza": "compensacao_encargos",
+          "percentagens": {
+            "freg-20mil-ou-mais": 12.0,
+            "freg-10mil-a-20mil": 10.0,
+            "freg-7mil-e-100km2": null,
+            "freg-5mil-ate-10mil": null,
+            "freg-menos-de-5mil": 9.0
+          },
+          "valores": {
+            "freg-20mil-ou-mais": 410.52,
+            "freg-10mil-a-20mil": 342.1,
+            "freg-7mil-e-100km2": null,
+            "freg-5mil-ate-10mil": null,
+            "freg-menos-de-5mil": 307.89
+          }
+        },
+        {
+          "id": "freg-np-compensacao-secretarios-tesoureiros",
+          "regime": "Não permanência",
+          "grupo": "Compensação para encargos (12 meses)",
+          "cargo": "Secretários e Tesoureiros (80% do Presidente)",
+          "modalidade": "",
+          "natureza": "compensacao_encargos",
+          "percentagens": null,
+          "valores": {
+            "freg-20mil-ou-mais": 328.42,
+            "freg-10mil-a-20mil": 273.68,
+            "freg-7mil-e-100km2": null,
+            "freg-5mil-ate-10mil": null,
+            "freg-menos-de-5mil": 246.31
+          }
+        },
+        {
+          "id": "freg-np-senhas-vogais",
+          "regime": "Não permanência",
+          "grupo": "Senhas de presença",
+          "cargo": "Vogais, exceto Secretários e Tesoureiros (7% da compensação do Presidente da Junta respetiva que não exerça funções em permanência)",
+          "modalidade": "",
+          "natureza": "senha_presenca",
+          "percentagens": null,
+          "valores": {
+            "freg-20mil-ou-mais": 28.74,
+            "freg-10mil-a-20mil": 23.95,
+            "freg-7mil-e-100km2": null,
+            "freg-5mil-ate-10mil": null,
+            "freg-menos-de-5mil": null
+          }
+        },
+        {
+          "id": "freg-np-senhas-assembleia",
+          "regime": "Não permanência",
+          "grupo": "Senhas de presença",
+          "cargo": "Membros da Assembleia de Freguesia (5% da compensação do Presidente da Junta respetiva)",
+          "modalidade": "",
+          "natureza": "senha_presenca",
+          "percentagens": null,
+          "valores": {
+            "freg-20mil-ou-mais": 20.53,
+            "freg-10mil-a-20mil": 17.11,
+            "freg-7mil-e-100km2": null,
+            "freg-5mil-ate-10mil": null,
+            "freg-menos-de-5mil": 15.39
+          }
+        }
+      ]
+    },
+    {
+      "ano": 2026,
+      "nivel": "municipio",
+      "titulo": "ABONOS DOS ELEITOS LOCAIS - MUNICÍPIO - ANO 2026",
+      "estado": "por_importar",
+      "nota": "O PDF fornecido só contém a tabela das freguesias. Os escalões abaixo ficam definidos (o próprio PDF refere «Município com 10 mil ou menos eleitores»), mas as percentagens e os valores têm de ser importados da tabela oficial dos municípios — não são inventados.",
+      "escaloes": [
+        {
+          "id": "mun-20mil-ou-mais",
+          "designacao": "20 mil ou mais eleitores",
+          "ordem": 1,
+          "min_eleitores": 20000,
+          "max_eleitores": null,
+          "percentagem_pr": null,
+          "inferido": true
+        },
+        {
+          "id": "mun-10mil-a-20mil",
+          "designacao": "10 mil eleitores e menos de 20 mil",
+          "ordem": 2,
+          "min_eleitores": 10000,
+          "max_eleitores": 20000,
+          "percentagem_pr": null,
+          "inferido": true
+        },
+        {
+          "id": "mun-10mil-ou-menos",
+          "designacao": "10 mil ou menos eleitores",
+          "ordem": 3,
+          "min_eleitores": null,
+          "max_eleitores": 10000,
+          "percentagem_pr": null,
+          "inferido": true
+        }
+      ],
+      "rubricas": []
+    }
+  ],
+  "gerado_em": "2026-10-13T09:03:08Z"
+}
