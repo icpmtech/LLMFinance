@@ -80,7 +80,24 @@ def _codigo(valor: Any) -> str:
     texto = str(valor).strip()
     if texto.isdigit():
         return texto.zfill(6)
-    return f"{int(texto):06d}" if texto.replace(".", "", 1).isdigit() else texto
+    try:
+        # O Excel devolve o código tanto como número inteiro como em vírgula
+        # flutuante (`10100.0`), e o mapa tem de dar o mesmo nos dois casos.
+        return f"{int(float(texto)):06d}"
+    except ValueError:
+        return texto
+
+
+def _eh_codigo(valor: Any) -> bool:
+    """O CÓD do mapa vem como número (`10100`), às vezes em vírgula flutuante."""
+    texto = str(valor).strip()
+    if not texto or len(texto) > 8:
+        return False
+    try:
+        float(texto)
+    except ValueError:
+        return False
+    return True
 
 
 def _sigla_like(valor: str) -> bool:
@@ -141,7 +158,7 @@ def ler_blocos(caminho: Path) -> List[Dict[str, Any]]:
             continue
         primeira = "" if _vazio(colunas[0]) else str(colunas[0]).strip()
         # O cabeçalho do bloco é a linha cujo CÓD é numérico.
-        if primeira.isdigit() and len(colunas) > 3:
+        if _eh_codigo(primeira) and len(colunas) > 3:
             if atual:
                 fechar_grupo()
                 blocos.append(atual)

@@ -121,6 +121,13 @@ export type RemuneracoesFreguesia = RemuneracoesResumo & {
   concelho_id?: number | null;
   votantes?: number | null;
   mandatos?: number | null;
+  /** Quem preside a junta e quantos membros tem a assembleia (Mapa Oficial da CNE). */
+  presidente_nome?: string | null;
+  presidente_sigla?: string | null;
+  votos_presidente?: number | null;
+  total_membros_assembleia?: number;
+  /** Quanto recebe cada pessoa da freguesia, pela tabela oficial (papel → valor). */
+  pessoas_valores?: Record<string, number | null>;
   /** Coordenadas geográficas (Wikidata/OSM) — para o mapa. */
   lat?: number | null;
   lon?: number | null;
@@ -156,6 +163,8 @@ export type RemuneracoesCamaraPartido = {
   mandatos?: number | null;
   presidentes?: number | null;
   vereadores?: number | null;
+  /** Quem foi eleito por esta lista (Mapa Oficial da CNE). */
+  nomes?: (string | null)[] | null;
 };
 
 export type RemuneracoesEleitos = {
@@ -165,10 +174,24 @@ export type RemuneracoesEleitos = {
     total_mandatos: number;
     por_partido: RemuneracoesCamaraPartido[];
   };
+  /** Presidente e vereadores, com nome, lista e o que cada um recebe. */
+  pessoas?: RemuneracoesPessoa[];
+  /** De onde vêm os nomes dos eleitos (Mapa Oficial da CNE). */
+  nomes?: {
+    fonte?: string | null;
+    fonte_url?: string | null;
+    recolhido_em?: string | null;
+    total_eleitos?: number | null;
+    total_mandatos?: number | null;
+    /** Municípios em que o mapa oficial não publica todos os nomes. */
+    lacuna?: { concelho?: string; mandatos?: number; nomes?: number; faltam?: number } | null;
+    /** Divergências entre o MAI e o Mapa Oficial. */
+    divergencia?: { concelho?: string; aviso?: string; nome_no_mai?: string; nome_no_mapa?: string } | null;
+  } | null;
   fonte?: string | null;
   fonte_url?: string | null;
   eleicao?: string | null;
-  /** O MAI não publica os nomes dos vereadores — só os presidentes de câmara. */
+  /** O MAI não publica os nomes dos vereadores — os nomes vêm do Mapa Oficial. */
   nota?: string | null;
   recolhido_em?: string | null;
 };
@@ -289,6 +312,52 @@ export type RemuneracoesEleitoConcelho = {
   por_partido: RemuneracoesCamaraPartido[];
 };
 
+/** Uma pessoa eleita: presidente, vereador, presidente de junta ou assembleia. */
+export type RemuneracoesPessoa = {
+  nome: string;
+  cargo: string;
+  tipo: string;
+  nivel: "municipio" | "freguesia";
+  sigla?: string | null;
+  concelho?: string | null;
+  concelho_id?: number | null;
+  freguesia?: string | null;
+  distrito?: string | null;
+  eleitores?: number | null;
+  escalao?: string | null;
+  remuneracao_mensal?: number | null;
+  remuneracao_descricao?: string | null;
+  despesas_representacao?: number | null;
+  senhas?: number | null;
+  compensacao?: number | null;
+  mandato?: string | null;
+  origem?: string | null;
+};
+
+/** O edifício da câmara municipal: foto (com créditos), coordenadas e património. */
+export type RemuneracoesCamara = {
+  wikidata: string;
+  designacao?: string | null;
+  imagem?: string | null;
+  localizacao?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+  patrimonio?: string | null;
+  sipa?: string | null;
+  artigo?: string | null;
+  municipio?: string | null;
+  municipio_id?: number | null;
+  distrito?: string | null;
+  eleitores?: number | null;
+  credito?: {
+    url?: string | null;
+    autor?: string | null;
+    licenca?: string | null;
+    licenca_url?: string | null;
+    pagina?: string | null;
+  } | null;
+};
+
 /* ------------------------------------------------------------------ pedidos */
 
 function queryString(params: Record<string, string | number | boolean | undefined | null>): string {
@@ -345,6 +414,45 @@ export function buscarConcelhos(params: {
 
 export function getConcelho(id: string | number): Promise<RemuneracoesConcelhoDetail> {
   return pedir<RemuneracoesConcelhoDetail>(`/remuneracoes/concelhos/${encodeURIComponent(String(id))}`);
+}
+
+export function buscarPessoas(params: {
+  q?: string;
+  distrito?: string;
+  concelho?: string;
+  cargo?: string;
+  partido?: string;
+  nivel?: string;
+  page?: number;
+  size?: number;
+} = {}): Promise<
+  RemuneracoesLista<RemuneracoesPessoa> & {
+    por_tipo?: Record<string, number>;
+    eleicao?: string | null;
+    recolhido_em?: string | null;
+    fonte?: string | null;
+    fonte_url?: string | null;
+  }
+> {
+  return pedir(`/remuneracoes/pessoas${queryString({ ...params })}`);
+}
+
+export function getCamaras(params: {
+  q?: string;
+  distrito?: string;
+  apenas_com_foto?: boolean;
+} = {}): Promise<{
+  total: number;
+  total_edificios: number;
+  com_foto: number;
+  sem_municipio: number;
+  fonte?: string | null;
+  fonte_url?: string | null;
+  pagina?: string | null;
+  recolhido_em?: string | null;
+  items: RemuneracoesCamara[];
+}> {
+  return pedir(`/remuneracoes/camaras${queryString({ ...params })}`);
 }
 
 export function buscarEleitos(params: {

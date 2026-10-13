@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1160 operações** em **43 grupos**.
+Versão `0.4.0` · **1167 operações** em **43 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -370,14 +370,21 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/racius/meta` | Racius Meta |
 | `GET` | `/racius/search` | Racius Search |
 | `GET` | `/racius/{nif}` | Racius Detail |
+| `GET` | `/remuneracoes/camaras` | Câmaras municipais (edifício, foto e créditos) |
+| `POST` | `/remuneracoes/camaras/recolher` | Recolher as câmaras municipais (fotos do Commons) |
 | `GET` | `/remuneracoes/concelhos` | Concelhos com eleitores, escalão e abonos |
 | `GET` | `/remuneracoes/concelhos/{concelho}` | Ficha de um concelho e das suas freguesias |
 | `GET` | `/remuneracoes/eleitos` | Presidentes de câmara e vereadores eleitos (2025) |
+| `GET` | `/remuneracoes/eleitos/executivo` | Cobertura dos nomes do executivo municipal |
+| `POST` | `/remuneracoes/eleitos/executivo` | Importar os nomes do executivo de um município |
+| `GET` | `/remuneracoes/eleitos/nomes` | Nomes dos eleitos (Mapa Oficial da CNE) e cobertura |
+| `POST` | `/remuneracoes/eleitos/nomes/recolher` | Recolher os nomes dos eleitos do Mapa Oficial da CNE |
 | `POST` | `/remuneracoes/eleitos/recolher` | Recolher os eleitos do MAI e reindexar |
 | `GET` | `/remuneracoes/escaloes` | Escalões de eleitores de um nível |
 | `GET` | `/remuneracoes/freguesias` | Freguesias com eleitores, escalão e abonos |
 | `GET` | `/remuneracoes/mapa` | Coordenadas, eleitores e abonos por território |
 | `GET` | `/remuneracoes/meta` | Proveniência dos dados e volumetria da tabela |
+| `GET` | `/remuneracoes/pessoas` | Quem foi eleito, onde e quanto recebe |
 | `POST` | `/remuneracoes/refresh` | Recolher de novo do MAI e reindexar |
 | `POST` | `/remuneracoes/reindex` | Indexar no Elasticsearch sem recolher dados novos |
 | `GET` | `/remuneracoes/simular` | Abonos de um território com N eleitores |

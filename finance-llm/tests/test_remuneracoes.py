@@ -22,6 +22,8 @@ from typing import Any, Dict
 
 import pytest
 
+from api import camaras_wikidata
+from api import mapa_oficial_cne
 from api import remuneracoes_service as remuneracoes
 
 TABELA_REAL = (
@@ -722,6 +724,414 @@ def test_stats_contam_os_vereadores(pasta_eleitos: Path) -> None:
     assert stats["eleitos"]["com_presidente"] == 2
     assert stats["eleitos"]["total_vereadores"] == 10
     assert stats["eleitos"]["partidos_com_presidente"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Nomes do Mapa Oficial, câmaras e pessoas
+# ---------------------------------------------------------------------------
+
+def _cne_nomes() -> Dict[str, Any]:
+    """Os nomes dos eleitos como o `collect_eleitos_nomes` os deixa em disco."""
+    return {
+        "cached_at": "2026-01-02T00:00:00Z",
+        "fonte": "CNE (teste)",
+        "fonte_url": "https://example.invalid/mapa",
+        "eleicao": "Autárquicas 2025",
+        "orgao": "Câmara Municipal",
+        "total_concelhos": 1,
+        "total_com_presidente": 1,
+        "total_vereadores": 2,
+        "lacunas": [],
+        "divergencias": [],
+        "concelhos": {
+            "10": {
+                "concelho_id": 10,
+                "concelho": "Teste",
+                "distrito": "Porto",
+                "codigo_ine": "131000",
+                "presidente": {
+                    "nome": "Ana Presidente Silva",
+                    "sigla": "PS",
+                    "votos": 9000,
+                    "cargo": "Presidente da Câmara Municipal",
+                },
+                "vereadores": [
+                    {"nome": "Bruno Costa Dias", "sigla": "PS"},
+                    {"nome": "Carla Nunes Reis", "sigla": "PPD/PSD"},
+                ],
+                "total_eleitos": 3,
+            },
+        },
+        "freguesias": {
+            "total": 1,
+            "com_presidente": 1,
+            "por_freguesia": {
+                "11": {
+                    "freguesia_id": 11,
+                    "freguesia": "Sé",
+                    "concelho": "Teste",
+                    "concelho_id": 10,
+                    "codigo_ine": "131011",
+                    "presidente": {
+                        "nome": "Duarte Melo Faria",
+                        "sigla": "PS",
+                        "votos": 1200,
+                        "cargo": "Presidente da Junta de Freguesia",
+                    },
+                    "membros": [
+                        {"nome": "Eva Pires Lopes", "sigla": "PS"},
+                        {"nome": "Filipe Sá Rocha", "sigla": "PPD/PSD"},
+                    ],
+                },
+            },
+        },
+    }
+
+
+def _tabela_com_vereadores() -> Dict[str, Any]:
+    """A tabela mínima com as rubricas que faltavam (vereadores e senhas)."""
+    tabela = _tabela_minima()
+    municipio = next(t for t in tabela["tabelas"] if t["nivel"] == "municipio")
+    municipio["rubricas"].append(
+        {
+            "id": "mun-ti-remuneracao-vereadores",
+            "regime": "Tempo Inteiro",
+            "grupo": "Remuneração mensal",
+            "cargo": "Vereadores a tempo inteiro",
+            # A modalidade fala do presidente — é exatamente a armadilha que fazia
+            # os vereadores aparecerem com a remuneração do presidente.
+            "modalidade": "Permanência (exclusividade); 80 % da remuneração do presidente da câmara",
+            "natureza": "remuneracao",
+            "valores": {
+                "mun-lisboa-porto": 3762.40,
+                "mun-grande": 3420.80,
+                "mun-medio": 3078.40,
+                "mun-pequeno": 2736.80,
+            },
+        }
+    )
+    freguesia = next(t for t in tabela["tabelas"] if t["nivel"] == "freguesia")
+    freguesia["rubricas"].append(
+        {
+            "id": "freg-np-senhas-assembleia",
+            "regime": "Não permanência",
+            "grupo": "Senhas de presença",
+            "cargo": "Membros da Assembleia de Freguesia (5% da compensação)",
+            "natureza": "senha_presenca",
+            "valores": {"grande": 98.00, "media": 92.00, "pequena": 76.96},
+        }
+    )
+    return tabela
+
+
+@pytest.fixture
+def pasta_nomes(pasta: Path) -> Path:
+    """A pasta de dados com os nomes do Mapa Oficial e as verbas todas."""
+    (pasta / remuneracoes.ELEITOS_NOMES_FILE).write_text(
+        json.dumps(_cne_nomes(), ensure_ascii=False), encoding="utf-8"
+    )
+    (pasta / remuneracoes.TABELA_FILE).write_text(
+        json.dumps(_tabela_com_vereadores(), ensure_ascii=False), encoding="utf-8"
+    )
+    remuneracoes.limpar_cache()
+    yield pasta
+    remuneracoes.limpar_cache()
+
+
+def _camaras() -> Dict[str, Any]:
+    """Edifícios como a Wikidata os devolve, com o crédito da fotografia."""
+    return {
+        "recolhido_em": "2026-01-03T00:00:00Z",
+        "fonte": "Wikidata (teste)",
+        "pagina_wikipedia": "https://example.invalid/camaras",
+        "camaras": [
+            {
+                "designacao": "Câmara Municipal de Teste",
+                "localizacao": "Sé",
+                "imagem": "Camara de Teste.jpg",
+                "lat": 41.0,
+                "lon": -8.0,
+                "patrimonio": "Imóvel de Interesse Público",
+            },
+            {
+                "designacao": "Câmara Municipal de Outro",
+                "localizacao": "Outro",
+                "lat": 37.0,
+                "lon": -7.9,
+            },
+        ],
+        "creditos": {
+            "Camara de Teste.jpg": {
+                "url": "https://upload.invalid/teste-480.jpg",
+                "autor": "Ana Fotógrafa",
+                "licenca": "CC BY-SA 4.0",
+                "pagina": "https://commons.invalid/teste",
+            },
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    ("valor", "esperado"),
+    [(10100, "010100"), ("010100", "010100"), ("10100.0", "010100"), ("50101", "050101")],
+)
+def test_codigo_do_mapa_oficial_fica_com_seis_digitos(valor: Any, esperado: str) -> None:
+    """O `mapa_1` traz o código como texto e o `mapa_3` como número: tem de dar o mesmo."""
+    assert mapa_oficial_cne._codigo(valor) == esperado
+
+
+def test_ler_blocos_abre_um_grupo_para_as_listas_a_mais(tmp_path: Path) -> None:
+    """Quando as candidaturas não cabem nas colunas, o mapa reabre as siglas."""
+    openpyxl = pytest.importorskip("openpyxl")
+    caminho = tmp_path / "mapa_3_eleitos.xlsx"
+    livro = openpyxl.Workbook()
+    folha = livro.active
+    for linha in (
+        ["CÓD", "CONC", "FREG", "ÓRG"],
+        [10100, "ÁGUEDA", None, "CM"],
+        ["PPD/PSD", "PS", "CH", "BE"],
+        ["Jorge Almeida Antunes", "Maria Costa Dias", "Ana Rita Pires", "Rui Melo Nunes"],
+        ["Pedro Alves Sousa", "Clara Pinto Reis", None, None],
+        ["IL"],
+        ["Vasco Guerreiro Lima"],
+    ):
+        folha.append(linha)
+    livro.save(caminho)
+
+    blocos = mapa_oficial_cne.ler_blocos(caminho)
+
+    assert len(blocos) == 1
+    bloco = blocos[0]
+    assert bloco["cod"] == "010100"
+    assert bloco["concelho"] == "ÁGUEDA"
+    assert bloco["org"] == "CM"
+    assert [lista["sigla"] for lista in bloco["listas"]] == ["PPD/PSD", "PS", "CH", "BE", "IL"]
+    assert bloco["listas"][0]["nomes"] == ["Jorge Almeida Antunes", "Pedro Alves Sousa"]
+    assert bloco["listas"][4]["nomes"] == ["Vasco Guerreiro Lima"]
+
+
+def test_concelho_do_mapa_desambigua_os_homonimos_com_a_regiao() -> None:
+    """«Calheta» existe na Madeira e nos Açores: quem decide é o sufixo da região."""
+    concelhos = [
+        {"nome": "Calheta", "distrito": "Região Autónoma dos Açores", "id": 1},
+        {"nome": "Calheta", "distrito": "Região Autónoma da Madeira", "id": 2},
+        {"nome": "Lagoa", "distrito": "Faro", "id": 3},
+        {"nome": "Lagoa", "distrito": "Região Autónoma dos Açores", "id": 4},
+    ]
+    assert mapa_oficial_cne._codigo("010100") == "010100"
+    assert remuneracoes._concelho_do_mapa("CALHETA (R.A.M.)", concelhos)["id"] == 2
+    assert remuneracoes._concelho_do_mapa("CALHETA (R.A.A.)", concelhos)["id"] == 1
+    assert remuneracoes._concelho_do_mapa("LAGOA (R.A.A)", concelhos)["id"] == 4
+    assert remuneracoes._concelho_do_mapa("LAGOA", concelhos)["id"] == 3
+
+
+@pytest.mark.parametrize(
+    ("mai", "mapa"),
+    [
+        ("Sónia Iasabel Fernandes", "Sónia Isabel Fernandes"),
+        ("Ana Bejinha Costa", "Ana Beijinha Costa"),
+        ("Rui Menezes Alves", "Rui Meneses Alves"),
+        ("Carla Bolana Dias", "Carla Balona Dias"),
+        ("Jorge Gaudinho Sousa", "Jorge Gaudino Sousa"),
+    ],
+)
+def test_nomes_parecidos_tolera_as_gralhas_de_uma_das_fontes(mai: str, mapa: str) -> None:
+    """As duas fontes escrevem o mesmo nome com gralhas diferentes."""
+    assert remuneracoes.nomes_parecidos(mai, mapa)
+    assert remuneracoes.nomes_parecidos(mapa, mai)
+
+
+@pytest.mark.parametrize(
+    ("primeiro", "segundo"),
+    [
+        ("Ana Maria Silva Costa", "Rui Melo Nunes Pires"),
+        ("Ana Maria Silva", "Ana Rita Costa"),
+        ("João Pedro", "Joana Pedro"),
+    ],
+)
+def test_nomes_parecidos_recusa_pessoas_diferentes(primeiro: str, segundo: str) -> None:
+    """Tolerar gralhas não pode dar nomes diferentes como a mesma pessoa."""
+    assert not remuneracoes.nomes_parecidos(primeiro, segundo)
+
+
+def test_sigla_partes_nao_deixa_o_ps_entrar_na_coligacao() -> None:
+    """«PS» está dentro de «ppdpsdcdsppil» como texto, mas não é uma parte dela."""
+    coligacao = "PPD/PSD.CDS-PP.IL"
+    assert remuneracoes._sigla_chave("PS") in remuneracoes._sigla_chave(coligacao)
+    assert not remuneracoes._sigla_partes("PS") & remuneracoes._sigla_partes(coligacao)
+    assert remuneracoes._sigla_partes(coligacao) == {"ppd", "psd", "cds", "pp", "il"}
+    assert "psd" in remuneracoes._sigla_partes(coligacao)
+
+
+@pytest.mark.parametrize(
+    ("verba", "esperado"),
+    [
+        ({"cargo": "Vogais", "natureza": "senha_presenca"}, "senha_vogal"),
+        ({"cargo": "Membros da Assembleia de Freguesia (5%)", "natureza": "senha_presenca"}, "senha_assembleia"),
+        ({"cargo": "Vereadores a tempo inteiro", "natureza": "despesas_representacao"}, "despesas_vereador"),
+        ({"cargo": "Vogais", "natureza": "despesas_representacao"}, "despesas_vogal"),
+        ({"cargo": "Secretários e Tesoureiros (80%)", "natureza": "compensacao_encargos"}, "compensacao_secretario"),
+        ({"cargo": "Vereadores da Câmara Municipal (2 %)", "natureza": "senha_presenca"}, "senha_vereador"),
+        ({"cargo": "Presidentes da Assembleia Municipal (3 %)", "natureza": "senha_presenca"}, "senha_presidente_assembleia"),
+        ({"cargo": "Restantes membros da Assembleia Municipal (2 %)", "natureza": "senha_presenca"}, "senha_assembleia"),
+        ({"cargo": "Vereadores a tempo inteiro", "natureza": "remuneracao"}, "vereador"),
+        ({"cargo": "Vereadores a meio tempo", "natureza": "remuneracao", "regime": "Meio Tempo"}, "vereador_meio_tempo"),
+        ({"cargo": "Presidentes da Câmara Municipal", "natureza": "remuneracao"}, "presidente"),
+    ],
+)
+def test_papel_da_verba_reconhece_os_plurais(verba: Dict[str, Any], esperado: str) -> None:
+    """A classificação é pelo cargo: «vogais» e «vereadores» não são presidentes."""
+    assert remuneracoes._papel_da_verba(verba) == esperado
+
+
+def test_municipio_do_edificio_prefere_o_nome_mais_longo(pasta: Path) -> None:
+    """A Câmara do Porto não pode ser atribuída a Porto de Mós (nem o contrário)."""
+    por_chave = {remuneracoes.chave_territorio(nome): {"nome": nome} for nome in ("Porto", "Porto de Mós")}
+    edificio = {"designacao": "Câmara Municipal de Porto de Mós", "localizacao": "Porto de Mós"}
+    assert remuneracoes._municipio_do_edificio(edificio, por_chave)["nome"] == "Porto de Mós"
+
+    porto = {"designacao": "Edifício da Câmara Municipal do Porto", "localizacao": "Cedofeita"}
+    assert remuneracoes._municipio_do_edificio(porto, por_chave)["nome"] == "Porto"
+
+    # Sem o município na designação, é a freguesia que situa o edifício.
+    generico = {"designacao": "Edifício dos Paços do Concelho", "localizacao": "Sé"}
+    assert remuneracoes._municipio_do_edificio(generico, por_chave) is None
+    assert remuneracoes._indice_freguesias()[remuneracoes.chave_territorio("Sé")] == "Teste"
+
+
+def test_listar_camaras_liga_a_fotografia_ao_municipio(
+    pasta: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cada edifício fica com o município, a foto e o crédito de quem a fez."""
+    monkeypatch.setattr(camaras_wikidata, "coletar", lambda forcar=False, pasta=None: _camaras())
+
+    dados = remuneracoes.listar_camaras()
+
+    assert dados["total"] == 2
+    assert dados["com_foto"] == 1
+    assert dados["sem_municipio"] == 0
+    por_nome = {item["municipio"]: item for item in dados["items"]}
+    assert set(por_nome) == {"Teste", "Outro"}
+    assert por_nome["Teste"]["imagem"] == "Camara de Teste.jpg"
+    assert por_nome["Teste"]["credito"]["autor"] == "Ana Fotógrafa"
+    assert por_nome["Teste"]["credito"]["licenca"] == "CC BY-SA 4.0"
+    assert por_nome["Teste"]["eleitores"] == 37000
+    assert por_nome["Outro"].get("imagem") is None
+    assert por_nome["Outro"]["credito"] is None
+
+    assert remuneracoes.listar_camaras(apenas_com_foto=True)["total"] == 1
+    assert remuneracoes.listar_camaras(distrito="Faro")["total"] == 1
+    assert remuneracoes.listar_camaras(q="paços")["total"] == 0
+    assert remuneracoes.camara_do_municipio("Teste")["designacao"] == "Câmara Municipal de Teste"
+    assert remuneracoes.camara_do_municipio("Inexistente") is None
+
+
+def test_autor_do_commons_sem_o_texto_da_licenca() -> None:
+    """Há quem deixe a licença inteira no campo do autor: fica só o nome."""
+    licenca = (
+        "<a href='//commons.invalid'>Kolforn</a> ( Kolforn ) I'd appreciate if you could mail me "
+        "(Kolforn@gmail.com) if you want to use this picture out of the Wikimedia project scope. "
+        "This file is licensed under the Creative Commons Attribution-Share Alike 4.0 International "
+        "license. You are free: to share – to copy, distribute and transmit the work"
+    )
+    assert camaras_wikidata._autor({"value": licenca}) == "Kolforn"
+    # Um nome normal — mesmo longo — passa tal e qual.
+    assert camaras_wikidata._autor({"value": "José Luís Ávila Silveira/Pedro Noronha e Costa"}) == (
+        "José Luís Ávila Silveira/Pedro Noronha e Costa"
+    )
+    assert camaras_wikidata._autor(None) is None
+
+
+def test_listar_pessoas_junta_nome_territorio_e_remuneracao(pasta_nomes: Path) -> None:
+    """Cada pessoa com o nome (CNE), o território (MAI) e o valor da tabela."""
+    dados = remuneracoes.listar_pessoas(size=500)
+
+    assert dados["total"] == 6
+    assert dados["por_tipo"] == {
+        "assembleia_freguesia": 2,
+        "presidente": 1,
+        "presidente_junta": 1,
+        "vereador": 2,
+    }
+    por_nome = {p["nome"]: p for p in dados["items"]}
+
+    presidente = por_nome["Ana Presidente Silva"]
+    assert presidente["tipo"] == "presidente"
+    assert presidente["concelho"] == "Teste"
+    assert presidente["remuneracao_mensal"] == 3848.00
+    assert presidente["escalao"] == "Mais de 10 mil e menos de 40 mil"
+    assert presidente["eleitores"] == 37000
+
+    # O vereador a tempo inteiro vale 80 % do presidente — e não o valor do presidente.
+    vereador = por_nome["Bruno Costa Dias"]
+    assert vereador["tipo"] == "vereador"
+    assert vereador["remuneracao_mensal"] == 3078.40
+    assert vereador["sigla"] == "PS"
+
+    junta = por_nome["Duarte Melo Faria"]
+    assert junta["nivel"] == "freguesia"
+    assert junta["freguesia"] == "Sé"
+    assert junta["remuneracao_mensal"] == 2137.53
+
+    membro = por_nome["Eva Pires Lopes"]
+    assert membro["tipo"] == "assembleia_freguesia"
+    assert membro["remuneracao_mensal"] == 98.00
+    assert membro["remuneracao_descricao"]
+
+
+def test_listar_pessoas_filtra_por_cargo_nivel_e_texto(pasta_nomes: Path) -> None:
+    """Os filtros da lista: cargo, nível, partido e texto livre."""
+    assert remuneracoes.listar_pessoas(cargo="vereador")["total"] == 2
+    assert remuneracoes.listar_pessoas(nivel="freguesia")["total"] == 3
+    assert remuneracoes.listar_pessoas(nivel="municipio")["total"] == 3
+    assert remuneracoes.listar_pessoas(q="Bruno")["total"] == 1
+    assert remuneracoes.listar_pessoas(q="Sé")["total"] == 3
+    assert remuneracoes.listar_pessoas(partido="PPD/PSD")["total"] == 2
+    assert remuneracoes.listar_pessoas(distrito="Faro")["total"] == 0
+
+    pagina = remuneracoes.listar_pessoas(size=2, page=2)
+    assert pagina["total"] == 6
+    assert len(pagina["items"]) == 2
+    assert pagina["items"][0]["nome"] != remuneracoes.listar_pessoas(size=2)["items"][0]["nome"]
+
+
+def test_freguesias_trazem_o_presidente_e_o_valor_de_cada_papel(pasta_nomes: Path) -> None:
+    """Na tabela das freguesias: quem preside e quanto recebe cada membro."""
+    dados = remuneracoes.freguesias(concelho="Teste")
+    por_nome = {f["nome"]: f for f in dados["items"]}
+
+    se = por_nome["Sé"]
+    assert se["presidente_nome"] == "Duarte Melo Faria"
+    assert se["presidente_sigla"] == "PS"
+    assert se["pessoas_valores"]["presidente"] == 2137.53
+    assert se["pessoas_valores"]["senha_assembleia"] == 98.00
+
+    # Sem nomes recolhidos para a freguesia, o presidente fica por identificar.
+    assert por_nome["Freguesia Pequena"]["presidente_nome"] is None
+
+
+def test_docs_das_pessoas_para_indexar(pasta_nomes: Path) -> None:
+    """Os documentos a indexar: uma pessoa por documento, com o mandato e a fonte."""
+    documentos = remuneracoes._docs_pessoas()
+
+    assert len(documentos) == 6
+    por_doc = {documento["doc_id"]: documento for documento in documentos}
+    assert "municipio-10-ana-presidente-silva" in por_doc
+    assert "freguesia-11-filipe-sa-rocha" in por_doc
+
+    presidente = por_doc["municipio-10-ana-presidente-silva"]
+    assert presidente["nivel"] == "municipio"
+    assert presidente["cargo"] == "Presidente da Câmara Municipal"
+    assert presidente["remuneracao_mensal"] == 3848.00
+    assert presidente["senhas"] == 3848.00
+    assert presidente["mandato"] == "2025-2029"
+    assert presidente["fonte"] == "CNE (teste)"
+    assert presidente["concelho"] == "Teste" and presidente["freguesia"] is None
+
+    membro = por_doc["freguesia-11-eva-pires-lopes"]
+    assert membro["freguesia"] == "Sé"
+    assert membro["concelho"] == "Teste"
+    assert membro["senhas"] == 98.00
 
 
 # ---------------------------------------------------------------------------

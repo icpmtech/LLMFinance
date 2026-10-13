@@ -34,7 +34,9 @@ import MapaOSM, { type MapaPonto, type MetricaMapa } from "../components/remuner
 import {
   buscarConcelhos,
   buscarFreguesias,
+  buscarPessoas,
   euro,
+  getCamaras,
   getConcelho,
   getMapaRemuneracoes,
   getRemuneracoesMeta,
@@ -44,6 +46,7 @@ import {
   numero,
   percentagem,
   recolherRemuneracoes,
+  type RemuneracoesCamara,
   type RemuneracoesConcelho,
   type RemuneracoesConcelhoDetail,
   type RemuneracoesEleitos,
@@ -51,6 +54,7 @@ import {
   type RemuneracoesFreguesia,
   type RemuneracoesMapa,
   type RemuneracoesMeta,
+  type RemuneracoesPessoa,
   type RemuneracoesRubrica,
   type RemuneracoesStats,
   type RemuneracoesTabela,
@@ -59,12 +63,14 @@ import {
 
 const PAGE_SIZE = 500;
 
-type Aba = "mapa" | "concelhos" | "freguesias" | "tabela";
+type Aba = "mapa" | "concelhos" | "freguesias" | "eleitos" | "camaras" | "tabela";
 
 const ABAS: { id: Aba; label: string }[] = [
   { id: "mapa", label: "Mapa" },
   { id: "concelhos", label: "Concelhos" },
   { id: "freguesias", label: "Freguesias" },
+  { id: "eleitos", label: "Eleitos" },
+  { id: "camaras", label: "Câmaras" },
   { id: "tabela", label: "Tabela de abonos" },
 ];
 
@@ -116,6 +122,12 @@ function pontoDoMapa(feature: {
   distrito?: string | null;
   concelho?: string | null;
   nivel?: string;
+  camara?: {
+    foto?: string | null;
+    autor?: string | null;
+    licenca?: string | null;
+    pagina?: string | null;
+  } | null;
 }): MapaPonto {
   const contexto =
     feature.nivel === "freguesia" ? feature.concelho ?? null : feature.distrito ?? null;
@@ -129,15 +141,19 @@ function pontoDoMapa(feature: {
     escalao: feature.escalao,
     remuneracao_mensal: feature.remuneracao_mensal,
     contexto,
+    foto: feature.camara?.foto ?? null,
+    foto_autor: feature.camara?.autor ?? null,
+    foto_licenca: feature.camara?.licenca ?? null,
+    foto_pagina: feature.camara?.pagina ?? null,
   };
 }
 
 /**
- * Quem foi eleito em 2025: presidente da câmara e vereadores.
+ * Quem foi eleito em 2025: presidente da câmara, vereadores e o que cada um recebe.
  *
- * O MAI publica o nome do presidente eleito e os mandatos de cada lista em cada
- * câmara; os nomes dos vereadores não constam dos dados abertos, pelo que a
- * composição aparece por partido (mandatos da lista menos a presidência).
+ * Os nomes são os do **Mapa Oficial da CNE** (é o único sítio onde saem os nomes
+ * dos vereadores); os mandatos de cada lista e o número de vereadores por partido
+ * vêm do MAI. O que o mapa oficial não publicar é dito — nunca inventado.
  */
 function EleitosConcelho({ eleitos }: { eleitos?: RemuneracoesEleitos | null }) {
   if (!eleitos || (!eleitos.presidente && !eleitos.vereadores?.por_partido?.length)) {
@@ -151,6 +167,7 @@ function EleitosConcelho({ eleitos }: { eleitos?: RemuneracoesEleitos | null }) 
 
   const presidente = eleitos.presidente ?? null;
   const partidos = eleitos.vereadores?.por_partido ?? [];
+  const pessoas = eleitos.pessoas ?? [];
   const maior = Math.max(1, ...partidos.map((p) => p.vereadores ?? 0));
 
   return (
@@ -201,12 +218,351 @@ function EleitosConcelho({ eleitos }: { eleitos?: RemuneracoesEleitos | null }) 
                 style={{ width: `${((partido.vereadores ?? 0) / maior) * 100}%` }}
               />
             </div>
+            {partido.nomes?.length ? (
+              <p className="mt-1 flex flex-wrap gap-1">
+                {partido.nomes.map((nome) =>
+                  nome ? (
+                    <span
+                      key={nome}
+                      className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                    >
+                      {nome}
+                    </span>
+                  ) : null,
+                )}
+              </p>
+            ) : null}
           </li>
         ))}
       </ul>
 
-      {eleitos.nota ? (
+      {pessoas.length ? (
+        <div className="mt-3">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Quem foi eleito e quanto recebe
+          </p>
+          <ul className="mt-1 divide-y divide-white/5">
+            {pessoas.map((pessoa) => (
+              <li
+                key={`${pessoa.nome}-${pessoa.tipo}`}
+                className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-1 text-[11px]"
+              >
+                <span className="inline-flex flex-wrap items-center gap-1.5">
+                  <span className="font-medium">{pessoa.nome}</span>
+                  <Etiqueta tom={pessoa.tipo === "presidente" ? "amber" : "sky"}>
+                    {pessoa.sigla ?? "—"}
+                  </Etiqueta>
+                  <span className="text-muted-foreground">{pessoa.cargo ?? "Vereador"}</span>
+                </span>
+                <span className="tabular-nums text-muted-foreground">
+                  {euro(pessoa.remuneracao_mensal)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {eleitos.nomes?.fonte ? (
+        <p className="mt-2 text-[10px] text-muted-foreground">
+          Nomes: {eleitos.nomes.fonte}
+          {eleitos.nomes.total_eleitos
+            ? ` — ${numero(eleitos.nomes.total_eleitos)} eleitos para a câmara`
+            : ""}
+          . Mandatos por lista: MAI (Autárquicas 2025).
+        </p>
+      ) : eleitos.nota ? (
         <p className="mt-2 text-[10px] text-muted-foreground">{eleitos.nota}</p>
+      ) : null}
+
+      {eleitos.nomes?.lacuna?.faltam ? (
+        <p className="mt-1 text-[10px] text-amber-200/80">
+          O Mapa Oficial não publica {numero(eleitos.nomes.lacuna.faltam)} dos{" "}
+          {numero(eleitos.nomes.lacuna.mandatos)} mandatos deste município: por isso faltam nomes à
+          lista.
+        </p>
+      ) : null}
+
+      {eleitos.nomes?.divergencia ? (
+        <p className="mt-1 text-[10px] text-amber-200/80">
+          Divergência entre fontes: o MAI indica {eleitos.nomes.divergencia.nome_no_mai} e o Mapa
+          Oficial {eleitos.nomes.divergencia.nome_no_mapa}. Vale o Mapa Oficial.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ pessoas */
+
+const CARGOS: { id: string; label: string }[] = [
+  { id: "", label: "Todos os cargos" },
+  { id: "presidente", label: "Presidentes de câmara" },
+  { id: "vereador", label: "Vereadores" },
+  { id: "presidente_junta", label: "Presidentes de junta" },
+  { id: "assembleia_freguesia", label: "Assembleias de freguesia" },
+];
+
+/** Quem foi eleito, onde e quanto recebe — a lista de pessoas, pesquisável. */
+function ListaPessoas() {
+  const [pessoas, setPessoas] = useState<RemuneracoesPessoa[]>([]);
+  const [total, setTotal] = useState(0);
+  const [porTipo, setPorTipo] = useState<Record<string, number>>({});
+  const [busca, setBusca] = useState("");
+  const [cargo, setCargo] = useState("");
+  const [nivel, setNivel] = useState("");
+  const [aCarregar, setACarregar] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [fonte, setFonte] = useState<{ fonte?: string | null; url?: string | null; recolhido?: string | null }>({});
+
+  useEffect(() => {
+    const temporizador = window.setTimeout(async () => {
+      setACarregar(true);
+      try {
+        const resposta = await buscarPessoas({
+          q: busca || undefined,
+          cargo: cargo || undefined,
+          nivel: nivel || undefined,
+          size: 200,
+        });
+        setPessoas(resposta.items);
+        setTotal(resposta.total);
+        setPorTipo(resposta.por_tipo ?? {});
+        setFonte({ fonte: resposta.fonte, url: resposta.fonte_url, recolhido: resposta.recolhido_em });
+        setErro(null);
+      } catch (excecao) {
+        setErro(excecao instanceof Error ? excecao.message : String(excecao));
+      } finally {
+        setACarregar(false);
+      }
+    }, 300);
+    return () => window.clearTimeout(temporizador);
+  }, [busca, cargo, nivel]);
+
+  return (
+    <div className="space-y-3">
+      <div className="glass-card rounded-2xl p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search size={13} className="pointer-events-none absolute left-2.5 top-2.5 text-muted-foreground" />
+            <input
+              value={busca}
+              onChange={(evento) => setBusca(evento.target.value)}
+              placeholder="Procurar por nome, município, freguesia ou partido"
+              className="w-full rounded-lg border border-white/10 bg-white/5 py-1.5 pl-8 pr-3 text-xs outline-none placeholder:text-muted-foreground focus:border-teal-400/40"
+            />
+          </div>
+          <select
+            value={cargo}
+            onChange={(evento) => setCargo(evento.target.value)}
+            className="rounded-lg border border-white/10 bg-[#07151b] px-2 py-1.5 text-xs"
+          >
+            {CARGOS.map((opcao) => (
+              <option key={opcao.id} value={opcao.id}>
+                {opcao.label}
+              </option>
+            ))}
+          </select>
+          <select
+            value={nivel}
+            onChange={(evento) => setNivel(evento.target.value)}
+            className="rounded-lg border border-white/10 bg-[#07151b] px-2 py-1.5 text-xs"
+          >
+            <option value="">Municípios e freguesias</option>
+            <option value="municipio">Só municípios</option>
+            <option value="freguesia">Só freguesias</option>
+          </select>
+          {aCarregar ? <Loader2 size={14} className="animate-spin text-muted-foreground" /> : null}
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          <strong className="text-foreground">{numero(total)}</strong> pessoas eleitas
+          {Object.keys(porTipo).length
+            ? ` — ${Object.entries(porTipo)
+                .map(([tipo, quantos]) => `${numero(quantos)} ${rotuloTipo(tipo)}`)
+                .join(" · ")}`
+            : ""}
+          . {fonte.fonte ? <>Fonte: {fonte.recolhido ? `${fonte.fonte}, recolhido em ${fonte.recolhido.slice(0, 10)}` : fonte.fonte}.</> : null}
+        </p>
+      </div>
+
+      {erro ? <p className="text-[11px] text-rose-300">{erro}</p> : null}
+
+      <div className="glass-card overflow-x-auto rounded-2xl p-3">
+        <table className="w-full min-w-[760px] text-[11px]">
+          <thead>
+            <tr className="text-left text-muted-foreground">
+              <th className="py-1.5 pr-3 font-medium">Nome</th>
+              <th className="py-1.5 pr-3 font-medium">Cargo</th>
+              <th className="py-1.5 pr-3 font-medium">Município</th>
+              <th className="py-1.5 pr-3 font-medium">Freguesia</th>
+              <th className="py-1.5 pr-3 font-medium">Lista</th>
+              <th className="py-1.5 pr-3 text-right font-medium">Remuneração mensal</th>
+              <th className="py-1.5 text-right font-medium">Eleitores</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pessoas.map((pessoa, indice) => (
+              <tr key={`${pessoa.nome}-${pessoa.concelho}-${indice}`} className="border-t border-white/5">
+                <td className="py-1.5 pr-3 font-medium">{pessoa.nome}</td>
+                <td className="py-1.5 pr-3 text-muted-foreground">{pessoa.cargo}</td>
+                <td className="py-1.5 pr-3">{pessoa.concelho ?? "—"}</td>
+                <td className="py-1.5 pr-3 text-muted-foreground">{pessoa.freguesia ?? "—"}</td>
+                <td className="py-1.5 pr-3">{pessoa.sigla ?? "—"}</td>
+                <td className="py-1.5 pr-3 text-right tabular-nums">{euro(pessoa.remuneracao_mensal)}</td>
+                <td className="py-1.5 text-right tabular-nums text-muted-foreground">
+                  {numero(pessoa.eleitores)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {pessoas.length === 0 && !aCarregar ? (
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Sem resultados. Se a lista estiver vazia no total, recolha os nomes com{" "}
+            <code>POST /remuneracoes/eleitos/nomes/recolher</code>.
+          </p>
+        ) : null}
+        {total > pessoas.length ? (
+          <p className="mt-2 text-[10px] text-muted-foreground">
+            A mostrar {numero(pessoas.length)} de {numero(total)} — refine a pesquisa para ver as restantes.
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function rotuloTipo(tipo: string): string {
+  const rotulos: Record<string, string> = {
+    presidente: "presidentes de câmara",
+    vereador: "vereadores",
+    presidente_junta: "presidentes de junta",
+    assembleia_freguesia: "membros de assembleias de freguesia",
+  };
+  return rotulos[tipo] ?? tipo;
+}
+
+/* ------------------------------------------------------------- câmaras */
+
+/** Os edifícios das câmaras, com foto, créditos e ligação à Wikipédia. */
+function GaleriaCamaras() {
+  const [camaras, setCamaras] = useState<RemuneracoesCamara[]>([]);
+  const [total, setTotal] = useState(0);
+  const [busca, setBusca] = useState("");
+  const [apenasComFoto, setApenasComFoto] = useState(true);
+  const [aCarregar, setACarregar] = useState(false);
+  const [fonte, setFonte] = useState<{ nome?: string | null; pagina?: string | null }>({});
+
+  useEffect(() => {
+    const temporizador = window.setTimeout(async () => {
+      setACarregar(true);
+      try {
+        const resposta = await getCamaras({
+          q: busca || undefined,
+          apenas_com_foto: apenasComFoto,
+        });
+        setCamaras(resposta.items);
+        setTotal(resposta.total);
+        setFonte({ nome: resposta.fonte, pagina: resposta.pagina });
+      } catch {
+        setCamaras([]);
+      } finally {
+        setACarregar(false);
+      }
+    }, 300);
+    return () => window.clearTimeout(temporizador);
+  }, [busca, apenasComFoto]);
+
+  return (
+    <div className="space-y-3">
+      <div className="glass-card rounded-2xl p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search size={13} className="pointer-events-none absolute left-2.5 top-2.5 text-muted-foreground" />
+            <input
+              value={busca}
+              onChange={(evento) => setBusca(evento.target.value)}
+              placeholder="Procurar câmara municipal ou município"
+              className="w-full rounded-lg border border-white/10 bg-white/5 py-1.5 pl-8 pr-3 text-xs outline-none placeholder:text-muted-foreground focus:border-teal-400/40"
+            />
+          </div>
+          <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={apenasComFoto}
+              onChange={(evento) => setApenasComFoto(evento.target.checked)}
+              className="accent-teal-400"
+            />
+            Só com fotografia
+          </label>
+          {aCarregar ? <Loader2 size={14} className="animate-spin text-muted-foreground" /> : null}
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          <strong className="text-foreground">{numero(total)}</strong> edifícios.{" "}
+          {fonte.nome ? <>Fonte: {fonte.nome}. </> : null}
+          {fonte.pagina ? (
+            <a className="underline hover:text-foreground" href={fonte.pagina} target="_blank" rel="noreferrer">
+              Lista das câmaras municipais (Wikipédia)
+            </a>
+          ) : null}
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {camaras.map((camara) => (
+          <figure key={camara.wikidata} className="glass-card overflow-hidden rounded-2xl">
+            {camara.credito?.url ? (
+              <img
+                src={camara.credito.url}
+                alt={camara.designacao ?? "Câmara municipal"}
+                loading="lazy"
+                className="h-40 w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-40 w-full items-center justify-center bg-white/5 text-[11px] text-muted-foreground">
+                Sem fotografia
+              </div>
+            )}
+            <figcaption className="space-y-1 p-3">
+              <p className="text-xs font-semibold">{camara.municipio ?? camara.designacao}</p>
+              <p className="text-[11px] text-muted-foreground">{camara.designacao}</p>
+              {camara.patrimonio ? <Etiqueta tom="violet">{camara.patrimonio}</Etiqueta> : null}
+              <p className="text-[10px] text-muted-foreground">
+                {camara.lat !== null && camara.lat !== undefined
+                  ? `${camara.lat.toFixed(4)}, ${camara.lon?.toFixed(4)}`
+                  : "sem coordenadas"}
+                {camara.sipa ? ` · SIPA ${camara.sipa}` : ""}
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                {camara.credito?.autor ? <>© {camara.credito.autor} </> : null}
+                {camara.credito?.licenca ? <>· {camara.credito.licenca}</> : null}
+                {camara.credito?.pagina ? (
+                  <>
+                    {" "}
+                    ·{" "}
+                    <a className="underline hover:text-foreground" href={camara.credito.pagina} target="_blank" rel="noreferrer">
+                      Commons
+                    </a>
+                  </>
+                ) : null}
+                {camara.artigo ? (
+                  <>
+                    {" "}
+                    ·{" "}
+                    <a className="underline hover:text-foreground" href={camara.artigo} target="_blank" rel="noreferrer">
+                      Wikipédia
+                    </a>
+                  </>
+                ) : null}
+              </p>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+      {camaras.length === 0 && !aCarregar ? (
+        <p className="text-[11px] text-muted-foreground">
+          Sem fotografias para mostrar. Recolha-as com <code>POST /remuneracoes/camaras/recolher</code>.
+        </p>
       ) : null}
     </div>
   );
@@ -961,9 +1317,11 @@ export default function RemuneracoesPage() {
         <div className="glass-card overflow-x-auto rounded-2xl p-4">
           <p className="mb-3 text-[11px] text-muted-foreground">
             {numero(totalFreguesias)} freguesias
-            {distrito ? ` no distrito de ${distrito}` : ""}.
+            {distrito ? ` no distrito de ${distrito}` : ""}. Cada linha traz quem preside a junta e
+            quanto recebe cada pessoa da freguesia — presidente, vogais e assembleia — pela tabela
+            oficial do ano.
           </p>
-          <table className="w-full min-w-[760px] text-[11px]">
+          <table className="w-full min-w-[1180px] text-[11px]">
             <thead>
               <tr className="text-left text-muted-foreground">
                 <th className="py-1.5 pr-3 font-medium">Freguesia</th>
@@ -971,24 +1329,61 @@ export default function RemuneracoesPage() {
                 <th className="py-1.5 pr-3 font-medium">Distrito</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Eleitores</th>
                 <th className="py-1.5 pr-3 font-medium">Escalão</th>
-                <th className="py-1.5 text-right font-medium">Presidente (mensal)</th>
+                <th className="py-1.5 pr-3 font-medium">Presidente da junta</th>
+                <th className="py-1.5 pr-3 text-right font-medium">Presidente (mensal)</th>
+                <th className="py-1.5 pr-3 text-right font-medium">Vogal (senha)</th>
+                <th className="py-1.5 pr-3 text-right font-medium">Secretário (compensação)</th>
+                <th className="py-1.5 pr-3 text-right font-medium">Assembleia (senha)</th>
+                <th className="py-1.5 text-right font-medium">Membros</th>
               </tr>
             </thead>
             <tbody>
-              {freguesias.map((freguesia) => (
-                <tr key={freguesia.id} className="border-t border-white/5">
-                  <td className="py-1.5 pr-3 font-medium">{freguesia.nome}</td>
-                  <td className="py-1.5 pr-3 text-muted-foreground">{freguesia.concelho}</td>
-                  <td className="py-1.5 pr-3 text-muted-foreground">{freguesia.distrito}</td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums">{numero(freguesia.eleitores)}</td>
-                  <td className="py-1.5 pr-3">{freguesia.escalao ?? "—"}</td>
-                  <td className="py-1.5 text-right tabular-nums">
-                    {euro(freguesia.remuneracao_mensal)}
-                  </td>
-                </tr>
-              ))}
+              {freguesias.map((freguesia) => {
+                const valores = freguesia.pessoas_valores ?? {};
+                return (
+                  <tr key={freguesia.id} className="border-t border-white/5">
+                    <td className="py-1.5 pr-3 font-medium">{freguesia.nome}</td>
+                    <td className="py-1.5 pr-3 text-muted-foreground">{freguesia.concelho}</td>
+                    <td className="py-1.5 pr-3 text-muted-foreground">{freguesia.distrito}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums">{numero(freguesia.eleitores)}</td>
+                    <td className="py-1.5 pr-3">{freguesia.escalao ?? "—"}</td>
+                    <td className="py-1.5 pr-3">
+                      {freguesia.presidente_nome ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          {freguesia.presidente_nome}
+                          {freguesia.presidente_sigla ? (
+                            <Etiqueta tom="sky">{freguesia.presidente_sigla}</Etiqueta>
+                          ) : null}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums">
+                      {euro(freguesia.remuneracao_mensal)}
+                    </td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums">
+                      {euro(valores.senha_vogal ?? valores.compensacao_vogal)}
+                    </td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums">
+                      {euro(valores.compensacao_secretario ?? valores.secretario)}
+                    </td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums">
+                      {euro(valores.senha_assembleia)}
+                    </td>
+                    <td className="py-1.5 text-right tabular-nums text-muted-foreground">
+                      {numero(freguesia.total_membros_assembleia)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+          <p className="mt-2 text-[10px] text-muted-foreground">
+            «—» nas colunas de vogais, secretários e assembleia quer dizer que a tabela oficial de
+            2026 não fixa valor para o escalão dessa freguesia (as senhas e compensações são
+            fixadas apenas nalguns escalões).
+          </p>
           {freguesias.length === 0 ? (
             <p className="mt-3 text-[11px] text-muted-foreground">
               Sem freguesias recolhidas (a recolha das ~3259 freguesias é a parte mais demorada).
@@ -996,6 +1391,10 @@ export default function RemuneracoesPage() {
           ) : null}
         </div>
       ) : null}
+
+      {aba === "eleitos" ? <ListaPessoas /> : null}
+
+      {aba === "camaras" ? <GaleriaCamaras /> : null}
 
       {aba === "tabela" ? (
         <div className="space-y-4">

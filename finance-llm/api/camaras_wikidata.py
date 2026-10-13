@@ -15,6 +15,7 @@ edifícios, o original pode ter dezenas de megabytes.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Dict, List
 from urllib.parse import unquote
 
@@ -140,7 +141,7 @@ def creditos_imagens(nomes: List[str], largura: int = 480, lote: int = 50) -> Di
             meta = info.get("extmetadata", {})
             creditos[pagina["title"][len("File:") :].replace("_", " ")] = {
                 "url": info.get("thumburl") or info.get("url"),
-                "autor": _texto(meta.get("Artist")),
+                "autor": _autor(meta.get("Artist")),
                 "licenca": _texto(meta.get("LicenseShortName")),
                 "licenca_url": _texto(meta.get("LicenseUrl")),
                 "pagina": info.get("descriptionurl"),
@@ -156,10 +157,37 @@ def _texto(campo: Any) -> str | None:
     valor = campo.get("value") if isinstance(campo, dict) else campo
     if not valor:
         return None
-    import re
-
     sem_tags = re.sub(r"<[^>]+>", " ", str(valor))
     return re.sub(r"\s+", " ", sem_tags).strip() or None
+
+
+# Onde começa o texto da licença quando ele vem colado ao nome do autor.
+_INICIO_LICENCA = re.compile(
+    r"(licensed under|this file is|creative ?commons|you are free|share ?alike"
+    r"|public domain|attribution|cc[ -]?by)",
+    re.IGNORECASE,
+)
+
+
+def _autor(campo: Any) -> str | None:
+    """O autor da imagem, sem o texto da licença nem etiquetas HTML.
+
+    Alguns carregadores deixam o **template inteiro da licença** no campo do
+    autor (é o caso do utilizador «Kolforn»), o que dava créditos de centenas de
+    caracteres. Acima de 100 caracteres corta-se no início da licença e, se ainda
+    sobrar frase a mais, fica só o nome antes do parêntese. A licença em si vem
+    no campo próprio (`LicenseShortName`), pelo que nada se perde.
+    """
+    texto = _texto(campo)
+    if not texto or len(texto) <= 100:
+        return texto
+    inicio = _INICIO_LICENCA.search(texto)
+    if inicio:
+        texto = texto[: inicio.start()].strip(" .,;:—-") or texto
+    if len(texto) > 100:
+        parentese = texto.find("(")
+        texto = texto[:parentese].strip() if parentese >= 3 else texto[:97].rstrip() + "…"
+    return texto or None
 
 
 def coletar(forcar: bool = False, pasta=None) -> Dict[str, Any]:

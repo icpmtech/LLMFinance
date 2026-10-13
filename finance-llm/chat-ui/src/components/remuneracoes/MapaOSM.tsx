@@ -33,6 +33,11 @@ export type MapaPonto = {
   remuneracao_mensal?: number | null;
   /** Linha secundária do balão (distrito, ou concelho no mapa das freguesias). */
   contexto?: string | null;
+  /** Foto da câmara municipal (Wikimedia Commons), com créditos. */
+  foto?: string | null;
+  foto_autor?: string | null;
+  foto_licenca?: string | null;
+  foto_pagina?: string | null;
 };
 
 export type MetricaMapa = "eleitores" | "votantes" | "remuneracao";
@@ -355,7 +360,22 @@ export default function MapaOSM({
         </div>
 
         {sobre ? (
-          <div className="pointer-events-none absolute left-3 top-3 z-20 max-w-[260px] rounded-xl border border-white/10 bg-[#04121a]/95 p-3 text-[11px] shadow-lg">
+          <div className="pointer-events-none absolute left-3 top-3 z-20 max-w-[280px] rounded-xl border border-white/10 bg-[#04121a]/95 p-3 text-[11px] shadow-lg">
+            {sobre.foto ? (
+              <figure className="mb-2 overflow-hidden rounded-lg">
+                <img src={sobre.foto} alt={`Câmara municipal de ${sobre.nome}`} className="h-28 w-full object-cover" />
+                <figcaption className="mt-1 text-[9px] leading-tight text-muted-foreground">
+                  {sobre.foto_autor ? `© ${sobre.foto_autor}` : null}
+                  {sobre.foto_licenca ? ` · ${sobre.foto_licenca}` : null}
+                  {sobre.foto_pagina ? (
+                    <>
+                      {" "}
+                      · <span className="underline">Commons</span>
+                    </>
+                  ) : null}
+                </figcaption>
+              </figure>
+            ) : null}
             <p className="text-sm font-semibold">{sobre.nome}</p>
             {sobre.contexto ? <p className="text-muted-foreground">{sobre.contexto}</p> : null}
             <dl className="mt-2 space-y-0.5">

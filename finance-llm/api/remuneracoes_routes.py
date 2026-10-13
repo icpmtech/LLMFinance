@@ -22,10 +22,15 @@ partido) e a mesma conta para cada uma das suas freguesias.
 - `GET  /remuneracoes/freguesias`        — pesquisa de freguesias
 - `GET  /remuneracoes/mapa`              — coordenadas + eleitores + abono (mapa OSM)
 - `GET  /remuneracoes/eleitos`           — presidentes de câmara e vereadores eleitos em 2025
+- `GET  /remuneracoes/eleitos/nomes`     — quem foi eleito (Mapa Oficial da CNE) e o que a fonte não traz
+- `GET  /remuneracoes/pessoas`           — quem foi eleito, onde e quanto recebe (todas as pessoas)
+- `GET  /remuneracoes/camaras`           — os edifícios das câmaras, com foto e créditos
 - `GET  /remuneracoes/eleitos/executivo` — cobertura dos nomes do executivo (sites dos municípios)
 - `GET  /remuneracoes/simular`           — quanto vale um território com N eleitores
 - `POST /remuneracoes/refresh`           — recolher do MAI, georreferenciar e reindexar
 - `POST /remuneracoes/eleitos/recolher`  — recolher os eleitos e reindexar
+- `POST /remuneracoes/eleitos/nomes/recolher` — recolher os nomes do Mapa Oficial da CNE
+- `POST /remuneracoes/camaras/recolher`  — recolher as câmaras municipais (fotos)
 - `POST /remuneracoes/eleitos/executivo` — importar os nomes do executivo de um município
 - `POST /remuneracoes/reindex`           — reindexar sem recolher
 - `POST /remuneracoes/tabelas/import`    — importar/substituir uma tabela (ex.: municípios)
@@ -245,6 +250,115 @@ def remuneracoes_eleitos(
 @router.get("/eleitos/executivo", summary="Cobertura dos nomes do executivo municipal")
 def remuneracoes_cobertura_executivo(session: Session = None) -> Dict[str, Any]:
     return remuneracoes.cobertura_executivo()
+
+
+@router.get("/eleitos/nomes", summary="Nomes dos eleitos (Mapa Oficial da CNE) e cobertura")
+def remuneracoes_nomes_eleitos(
+    freguesia: Optional[str] = Query(None, description="Ficha dos eleitos de uma freguesia (id)"),
+    session: Session = None,
+) -> Dict[str, Any]:
+    if freguesia:
+        detalhe = remuneracoes.eleitos_freguesia(freguesia)
+        return detalhe or {"error": "Freguesia sem eleitos transcritos", "freguesia": freguesia}
+    nomes = remuneracoes.nomes_eleitos()
+    freguesias_doc = nomes.get("freguesias") or {}
+    return {
+        "fonte": nomes.get("fonte"),
+        "fonte_url": nomes.get("fonte_url"),
+        "fonte_pagina": nomes.get("fonte_pagina"),
+        "eleicao": nomes.get("eleicao"),
+        "recolhido_em": nomes.get("cached_at"),
+        "nota": nomes.get("nota"),
+        "municipios": {
+            "total": nomes.get("total_concelhos"),
+            "com_presidente": nomes.get("total_com_presidente"),
+            "total_vereadores": nomes.get("total_vereadores"),
+        },
+        "freguesias": {
+            "total": freguesias_doc.get("total"),
+            "com_presidente": freguesias_doc.get("com_presidente"),
+            "total_sem_correspondencia": freguesias_doc.get("total_sem_correspondencia"),
+            "sem_correspondencia": freguesias_doc.get("sem_correspondencia"),
+        },
+        # O que a fonte oficial não traz, dito por palavras: mandatos sem nome no
+        # mapa (lacunas) e nomes em que as duas fontes divergem (divergências).
+        "lacunas": nomes.get("lacunas"),
+        "divergencias": nomes.get("divergencias"),
+        "sem_correspondencia": nomes.get("sem_correspondencia"),
+    }
+
+
+@router.get("/pessoas", summary="Quem foi eleito, onde e quanto recebe")
+def remuneracoes_pessoas(
+    q: Optional[str] = Query(None, description="Nome, município, freguesia ou partido"),
+    distrito: Optional[str] = Query(None),
+    concelho: Optional[str] = Query(None),
+    cargo: Optional[str] = Query(None, description="`presidente`, `vereador`, `presidente_junta`, `assembleia_freguesia`"),
+    partido: Optional[str] = Query(None, description="Sigla da candidatura"),
+    nivel: Optional[str] = Query(None, description="`municipio` ou `freguesia`"),
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=500),
+    session: Session = None,
+) -> Dict[str, Any]:
+    return remuneracoes.listar_pessoas(
+        q=q, distrito=distrito, concelho=concelho, cargo=cargo, partido=partido,
+        nivel=nivel, page=page, size=size,
+    )
+
+
+@router.get("/camaras", summary="Câmaras municipais (edifício, foto e créditos)")
+def remuneracoes_camaras(
+    q: Optional[str] = Query(None, description="Designação ou município"),
+    distrito: Optional[str] = Query(None),
+    apenas_com_foto: bool = Query(False, description="Só as que têm fotografia"),
+    session: Session = None,
+) -> Dict[str, Any]:
+    return remuneracoes.listar_camaras(q=q, distrito=distrito, apenas_com_foto=apenas_com_foto)
+
+
+@router.post("/eleitos/nomes/recolher", summary="Recolher os nomes dos eleitos do Mapa Oficial da CNE")
+def remuneracoes_recolher_nomes(
+    forcar: bool = Query(False, description="Voltar a descarregar o mapa oficial"),
+    reindexar: bool = Query(True),
+    session: Session = None,
+) -> Dict[str, Any]:
+    dados = remuneracoes.collect_eleitos_nomes(forcar=forcar)
+    freguesias_doc = dados.get("freguesias") or {}
+    saida: Dict[str, Any] = {
+        "recolhido_em": dados.get("cached_at"),
+        "municipios": {
+            "total": dados.get("total_concelhos"),
+            "com_presidente": dados.get("total_com_presidente"),
+            "total_vereadores": dados.get("total_vereadores"),
+        },
+        "freguesias": {
+            "total": freguesias_doc.get("total"),
+            "com_presidente": freguesias_doc.get("com_presidente"),
+        },
+        "lacunas": dados.get("lacunas"),
+        "divergencias": dados.get("divergencias"),
+    }
+    if reindexar:
+        saida["indexado"] = remuneracoes.indexar()
+    return saida
+
+
+@router.post("/camaras/recolher", summary="Recolher as câmaras municipais (fotos do Commons)")
+def remuneracoes_recolher_camaras(
+    forcar: bool = Query(False),
+    reindexar: bool = Query(True),
+    session: Session = None,
+) -> Dict[str, Any]:
+    dados = remuneracoes.camaras(forcar=forcar)
+    saida: Dict[str, Any] = {
+        "recolhido_em": dados.get("recolhido_em"),
+        "total_edificios": len(dados.get("camaras") or []),
+        "com_foto": sum(1 for c in dados.get("camaras") or [] if c.get("imagem")),
+        "com_coordenadas": sum(1 for c in dados.get("camaras") or [] if c.get("lat") is not None),
+    }
+    if reindexar:
+        saida["indexado"] = remuneracoes.indexar()
+    return saida
 
 
 @router.post("/eleitos/executivo", summary="Importar os nomes do executivo de um município")
