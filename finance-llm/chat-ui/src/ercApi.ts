@@ -178,12 +178,14 @@ export type ErcJob = {
 export type ErcRecolherParams = {
   limite?: number;
   pausa?: number;
+  trabalhadores?: number;
   com_pessoas?: boolean;
   com_estrutura?: boolean;
   com_ocs?: boolean;
   com_financeiro?: boolean;
   guardar_html?: boolean;
   forcar?: boolean;
+  saltar_existentes?: boolean;
   indexar?: boolean;
 };
 

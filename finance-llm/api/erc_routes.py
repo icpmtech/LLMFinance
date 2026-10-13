@@ -53,6 +53,12 @@ class ErcRecolherRequest(BaseModel):
     com_financeiro: bool = Field(False, description="Ler também os dados financeiros por exercício (mais lento)")
     guardar_html: bool = Field(True, description="Guardar o HTML de cada página em data/erc/raw")
     forcar: bool = Field(False, description="Reler a listagem em vez de usar a cache em disco")
+    saltar_existentes: bool = Field(
+        False, description="Ignorar as entidades já recolhidas (retomar sem repetir)"
+    )
+    trabalhadores: int = Field(
+        1, ge=1, le=8, description="Pedidos em paralelo (o portal é público: 1 é o mais cortês)"
+    )
     indexar: bool = Field(False, description="Indexar no Elasticsearch no fim da recolha")
 
 

@@ -87,19 +87,30 @@ O portal tem ~1 440 entidades e vários pedidos por ficha, por isso há:
 
 - `limite` — recolher só as primeiras *N* entidades (amostras, execuções faseadas);
 - `pausa` — segundos entre pedidos (por omissão 0,4 s; cortesia com o portal);
+- `trabalhadores` — pedidos em paralelo (1 por omissão; 3 já reduz a recolha
+  completa de horas para uma fração do tempo — o portal é público, não abuse);
+- `saltar_existentes` — ignora as entidades já em `entidades.jsonl`, pelo que
+  **retomar depois de uma paragem não repete o que já foi lido**;
 - `com_pessoas` / `com_estrutura` / `com_ocs` / `com_financeiro` — ligar ou
   desligar partes (os dados financeiros são o mais lento e vêm desligados);
 - `guardar_html` — guardar o HTML de cada página em `raw/`;
 - `forcar` — reler a listagem em vez de usar a cache.
+
+O que está lido é gravado em lotes (por omissão a cada 20 itens), portanto uma
+paragem a meio perde no máximo esse lote.
 
 ```bash
 # amostra rápida de 5 entidades, sem guardar HTML
 curl -X POST localhost:8000/erc/recolher -H 'Content-Type: application/json' \
   -d '{"limite": 5, "guardar_html": false}'
 
-# recolha completa e indexação no fim
+# recolha completa (3 pedidos em paralelo) e indexação no fim
 curl -X POST localhost:8000/erc/recolher -H 'Content-Type: application/json' \
-  -d '{"indexar": true}'
+  -d '{"trabalhadores": 3, "indexar": true}'
+
+# retomar de onde parou, sem repetir o que já está em disco
+curl -X POST localhost:8000/erc/recolher -H 'Content-Type: application/json' \
+  -d '{"trabalhadores": 3, "saltar_existentes": true, "indexar": true}'
 ```
 
 `POST /erc/indexar` indexa o que está em disco, sem ir ao portal.

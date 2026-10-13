@@ -330,10 +330,9 @@ def test_ficha_entidade_e_pessoa(data_dir_tmp):
                 {"data": [_ligacao("guid-7graus", "7Graus, Lda.", _DETIDA, "guid-adriano", "Adriano Guimarães Frazão", _DETEM)]},
         },
     )
-    recolhas: list = []
     item = {"id": "a28f2a03-1124-eb11-8111-00505684056e", "nome": "7Graus, Lda.", "slug": "7graus-lda"}
-    doc, orgs, ocs = erc._ficha_entidade(
-        cliente, item, pausa=0.0, com_estrutura=True, com_financeiro=False, guardar_html=True, recolhas=recolhas,
+    doc, orgs, ocs, recolhas = erc._ficha_entidade(
+        cliente, item, pausa=0.0, com_estrutura=True, com_financeiro=False, guardar_html=True,
     )
     assert doc["doc_id"] == item["id"]
     assert doc["nome"] == "7Graus, Lda."
@@ -346,7 +345,7 @@ def test_ficha_entidade_e_pessoa(data_dir_tmp):
     assert len(recolhas) == 3  # geral + orgs + ocs
 
     pessoas = coletor.iter_pessoas(orgs)
-    doc_p = erc._ficha_pessoa(cliente, pessoas[0], pausa=0.0, guardar_html=True, recolhas=[])
+    doc_p, _ = erc._ficha_pessoa(cliente, pessoas[0], pausa=0.0, guardar_html=True)
     assert doc_p["doc_id"] == "03c7532d-1a24-eb11-8111-00505684056e"
     assert doc_p["nome"] == "Adriano Guimarães Frazão"
     assert doc_p["n_empresas"] == 1
@@ -393,6 +392,37 @@ def test_recolher_grava_jsonl_e_recolhas(data_dir_tmp, monkeypatch):
     erc.recolher(limite=1, pausa=0.0, guardar_html=False, forcar=True)
     entidades = [json.loads(linha) for linha in erc.entidades_jsonl().read_text(encoding="utf-8").splitlines()]
     assert len(entidades) == 1
+
+
+def test_recolher_salta_existentes_e_usa_varios_trabalhadores(data_dir_tmp, monkeypatch):
+    """`saltar_existentes` retoma sem repetir; `trabalhadores>1` corre em paralelo."""
+    cliente = _ClienteFalso(
+        paginas={
+            ("entidades-ocs/7graus-lda/", "geral"): ENTIDADE_GERAL,
+            ("entidades-ocs/7graus-lda/", "orgs"): ENTIDADE_ORGS,
+            ("entidades-ocs/7graus-lda/", "ocs"): ENTIDADE_OCS,
+            ("entidades-ocs/outra-lda/", "geral"): ENTIDADE_GERAL,
+            ("entidades-ocs/outra-lda/", "orgs"): ENTIDADE_ORGS,
+            ("entidades-ocs/outra-lda/", "ocs"): ENTIDADE_OCS,
+        },
+        api={
+            "https://portaltransparencia.erc.pt/Umbraco/Api/EstruturaCapitalSocial/GetEmpresasQueDetemEstaEmpresa": {"data": []},
+        },
+    )
+    monkeypatch.setattr(erc.erc, "make_client", lambda timeout=60.0: cliente)
+    monkeypatch.setattr(erc, "ler_listagem", lambda *, forcar=False, progresso=None: [
+        {"id": "a28f2a03-1124-eb11-8111-00505684056e", "nome": "7Graus, Lda.", "slug": "7graus-lda"},
+        {"id": "bbbbbbbb-1124-eb11-8111-00505684056e", "nome": "Outra, Lda.", "slug": "outra-lda"},
+    ])
+
+    primeira = erc.recolher(limite=1, pausa=0.0, guardar_html=False, com_pessoas=False, forcar=True)
+    assert primeira["recolhidas_agora"]["entidades"] == 1
+
+    segunda = erc.recolher(pausa=0.0, guardar_html=False, com_pessoas=False, forcar=True, saltar_existentes=True, trabalhadores=2)
+    assert segunda["recolhidas_agora"]["saltadas"] == 1  # a primeira entidade não é relida
+    assert segunda["recolhidas_agora"]["entidades"] == 1
+    assert segunda["entidades"] == 2
+    assert segunda["trabalhadores"] == 2
 
 
 # ---------------------------------------------------------------------------

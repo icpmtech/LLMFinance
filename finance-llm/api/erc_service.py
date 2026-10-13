@@ -30,6 +30,7 @@ import threading
 import time
 import unicodedata
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
@@ -57,6 +58,8 @@ TENTATIVAS = int(os.getenv("ERC_TENTATIVAS", "3"))
 MAX_HTML_BYTES = 4 * 1024 * 1024
 #: Validade da listagem em cache (uma listagem nova muda de dia para dia).
 CACHE_TTL_SEGUNDOS = int(os.getenv("ERC_CACHE_TTL", str(24 * 60 * 60)))
+#: Itens recolhidos antes de gravar o lote em disco (retomada + menos escrita).
+LOTE_FLUSH = int(os.getenv("ERC_LOTE_FLUSH", "20"))
 
 DEFAULT_DATA_DIR = Path(
     os.getenv("ERC_DATA_DIR") or (Path(__file__).resolve().parents[1] / "data" / "erc")
@@ -242,15 +245,23 @@ def _ficha_entidade(
     com_estrutura: bool,
     com_financeiro: bool,
     guardar_html: bool,
-    recolhas: List[Dict[str, Any]],
-) -> Tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Lê a ficha de uma entidade; devolve (documento, pessoas, documentos de OCS)."""
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Lê a ficha de uma entidade.
+
+    Devolve ``(documento, pessoas, documentos de OCS, entradas de recolha)``. As
+    recolhas são devolvidas (e não escritas num acumulador partilhado) para a
+    leitura poder correr em paralelo sem estado partilhado.
+    """
     entidade_id = item["id"]
     slug = item.get("slug") or _slug(item.get("nome"))
     url = f"{erc.BASE_URL}{erc.ENTIDADES_PATH}{slug}/?IdEntidade={entidade_id}"
     recolhido_em = _now()
+    recolhas: List[Dict[str, Any]] = []
 
-    geral_html = client.get(url, params={"IdEntidade": entidade_id, "geral": "geral"}).text
+    def _pedido(secao: str) -> str:
+        return client.get(url, params={"IdEntidade": entidade_id, "geral": secao}).text
+
+    geral_html = _pedido("geral")
     geral = parse_entity_geral(geral_html)
     tabs = parse_entity_tabs(geral_html)
     if guardar_html:
@@ -264,7 +275,7 @@ def _ficha_entidade(
     orgs: List[Dict[str, Any]] = []
     if not tabs or "orgs" in tabs:
         time.sleep(pausa)
-        orgs_html = client.get(url, params={"IdEntidade": entidade_id, "geral": "orgs"}).text
+        orgs_html = _pedido("orgs")
         orgs = parse_entity_orgs(orgs_html)
         if guardar_html:
             _guardar_html(f"entidade-{entidade_id}-orgs", orgs_html)
@@ -277,7 +288,7 @@ def _ficha_entidade(
     ocs: List[Dict[str, Any]] = []
     if not tabs or "ocs" in tabs:
         time.sleep(pausa)
-        ocs_html = client.get(url, params={"IdEntidade": entidade_id, "geral": "ocs"}).text
+        ocs_html = _pedido("ocs")
         ocs = parse_entity_ocs(ocs_html)
         if guardar_html:
             _guardar_html(f"entidade-{entidade_id}-ocs", ocs_html)
@@ -336,7 +347,7 @@ def _ficha_entidade(
     }
     doc["nome_keyword"] = (doc["nome"] or "").strip()
     doc["distrito_keyword"] = (doc["distrito"] or "").strip()
-    return doc, orgs, ocs
+    return doc, orgs, ocs, recolhas
 
 
 def _ficha_pessoa(
@@ -345,15 +356,21 @@ def _ficha_pessoa(
     *,
     pausa: float,
     guardar_html: bool,
-    recolhas: List[Dict[str, Any]],
-) -> Dict[str, Any]:
-    """Lê a ficha de uma pessoa regulada (dados gerais, cargos e participações)."""
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    """Lê a ficha de uma pessoa regulada (dados gerais, cargos e participações).
+
+    Devolve ``(documento, entradas de recolha)``.
+    """
     pessoa_id = pessoa["id"]
     nome = pessoa.get("nome")
     url = f"{erc.BASE_URL}{erc.PESSOAS_PATH}"
     recolhido_em = _now()
+    recolhas: List[Dict[str, Any]] = []
 
-    geral_html = client.get(url, params={"idEntidade": pessoa_id, "geral": "geral"}).text
+    def _pedido(secao: str) -> str:
+        return client.get(url, params={"idEntidade": pessoa_id, "geral": secao}).text
+
+    geral_html = _pedido("geral")
     geral = parse_person_geral(geral_html)
     tabs = parse_person_tabs(geral_html)
     if guardar_html:
@@ -367,7 +384,7 @@ def _ficha_pessoa(
     orgaos: List[Dict[str, Any]] = []
     if not tabs or "orgs" in tabs:
         time.sleep(pausa)
-        orgaos_html = client.get(url, params={"idEntidade": pessoa_id, "geral": "orgs"}).text
+        orgaos_html = _pedido("orgs")
         orgaos = parse_person_orgs(orgaos_html)
         if guardar_html:
             _guardar_html(f"pessoa-{pessoa_id}-orgs", orgaos_html)
@@ -399,7 +416,7 @@ def _ficha_pessoa(
     }
     doc["nome_keyword"] = (doc["nome"] or "").strip()
     doc["distrito_keyword"] = (doc["distrito"] or "").strip()
-    return doc
+    return doc, recolhas
 
 
 def _doc_ocs(entidade: Dict[str, Any], item: Dict[str, Any], recolhido_em: str) -> Dict[str, Any]:
@@ -429,73 +446,114 @@ def recolher(
     com_financeiro: bool = False,
     guardar_html: bool = True,
     forcar: bool = False,
+    saltar_existentes: bool = False,
+    trabalhadores: int = 1,
     progresso: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Recolhe o portal da ERC: entidades, pessoas dos órgãos sociais e OCS.
 
     `limite` corta a listagem (amostras e execuções faseadas); `forcar` relê a
-    listagem em vez de usar a cache. O resultado é guardado por *upsert* nos
-    JSONL do módulo, para uma nova execução não duplicar nem perder o já lido.
+    listagem em vez de usar a cache; `saltar_existentes` ignora as entidades que
+    já estão em `entidades.jsonl` (retoma sem repetir o que já foi lido, o que
+    torna uma paragem a meio inofensiva); `trabalhadores` abre mais do que um
+    pedido em paralelo (o portal é público: 1 é o mais cortês, 3 já reduz a
+    recolha completa de horas para uma fração do tempo).
+
+    O resultado é guardado por *upsert* nos JSONL do módulo, para uma nova
+    execução não duplicar nem perder o já lido.
     """
     progresso = progresso if progresso is not None else {}
+    trabalhadores = max(1, min(int(trabalhadores or 1), 8))
     erros: List[str] = []
 
     progresso["phase"] = "a ler a listagem"
     entidades = ler_listagem(forcar=forcar, progresso=progresso)
     selecionadas = entidades[: int(limite)] if limite else entidades
+    if saltar_existentes:
+        feitas = {str(doc.get("doc_id") or "") for doc in _iter_jsonl(entidades_jsonl())}
+        antes = len(selecionadas)
+        selecionadas = [item for item in selecionadas if str(item.get("id")) not in feitas]
+        progresso["saltadas"] = antes - len(selecionadas)
     progresso["entidades_total"] = len(selecionadas)
     progresso["entidades_done"] = 0
 
-    docs_entidades: List[Dict[str, Any]] = []
-    docs_ocs: List[Dict[str, Any]] = []
     pessoas: Dict[str, Dict[str, Any]] = {}
-    recolhas: List[Dict[str, Any]] = []
+    # Lote em curso: gravado a cada `LOTE_FLUSH` itens (e no fim), para a recolha
+    # poder retomar sem perder o que já leu nem reescrever o JSONL item a item.
+    _pendentes: Dict[str, List[Dict[str, Any]]] = {"entidades": [], "pessoas": [], "ocs": [], "recolhas": []}
 
     with erc.make_client() as client:
-        for indice, item in enumerate(selecionadas, start=1):
+        progresso["phase"] = "a ler as entidades"
+
+        def _entidade(item: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+            return _ficha_entidade(
+                client,
+                item,
+                pausa=pausa,
+                com_estrutura=com_estrutura,
+                com_financeiro=com_financeiro,
+                guardar_html=guardar_html,
+            )
+
+        feitas = 0
+        for item, resultado in _em_paralelo(_entidade, selecionadas, trabalhadores):
+            feitas += 1
+            progresso["entidades_done"] = feitas
             progresso["current"] = item.get("nome")
-            try:
-                doc, orgs, ocs = _ficha_entidade(
-                    client,
-                    item,
-                    pausa=pausa,
-                    com_estrutura=com_estrutura,
-                    com_financeiro=com_financeiro,
-                    guardar_html=guardar_html,
-                    recolhas=recolhas,
-                )
-                docs_entidades.append(doc)
+            if isinstance(resultado, Exception):
+                logger.warning("Entidade %s falhou: %s", item.get("id"), resultado)
+                erros.append(f"entidade {item.get('id')}: {resultado}")
+                _pendentes["recolhas"].append(_registar_recolha_doc({
+                    "tipo": "entidade", "entidade_id": item.get("id"), "nome": item.get("nome"), "erro": str(resultado),
+                }))
+            else:
+                doc, orgs, ocs, recolhas_item = resultado
+                _pendentes["entidades"].append(doc)
+                _pendentes["recolhas"].extend(recolhas_item)
                 if com_ocs:
-                    for ocs_item in ocs:
-                        docs_ocs.append(_doc_ocs(doc, ocs_item, doc["recolhido_em"]))
+                    _pendentes["ocs"].extend(_doc_ocs(doc, ocs_item, doc["recolhido_em"]) for ocs_item in ocs)
                 if com_pessoas:
                     for pessoa in erc.iter_pessoas(orgs):
                         pessoas.setdefault(pessoa["id"], pessoa)
-            except Exception as exc:  # noqa: BLE001 - uma entidade falhada não trava a recolha
-                logger.warning("Entidade %s falhou: %s", item.get("id"), exc)
-                erros.append(f"entidade {item.get('id')}: {exc}")
-                recolhas.append(_registar_recolha_doc({"tipo": "entidade", "entidade_id": item.get("id"), "nome": item.get("nome"), "erro": str(exc)}))
-            progresso["entidades_done"] = indice
-            progresso["registos"] = len(docs_entidades)
-            _flush(docs_entidades, docs_ocs, [], recolhas)
-            docs_entidades, docs_ocs, recolhas = [], [], []
+            progresso["registos"] = feitas
+            if feitas % LOTE_FLUSH == 0 or feitas == len(selecionadas):
+                _flush(_pendentes["entidades"], _pendentes["ocs"], _pendentes["pessoas"], _pendentes["recolhas"])
+                for lista in _pendentes.values():
+                    lista.clear()
 
         progresso["phase"] = "a ler as fichas das pessoas"
-        progresso["pessoas_total"] = len(pessoas)
+        pessoas_ordenadas = sorted(pessoas.values(), key=lambda p: str(p.get("nome") or ""))
+        progresso["pessoas_total"] = len(pessoas_ordenadas)
         progresso["pessoas_done"] = 0
-        docs_pessoas: List[Dict[str, Any]] = []
-        for indice, pessoa in enumerate(sorted(pessoas.values(), key=lambda p: str(p.get("nome") or "")), start=1):
+
+        def _pessoa(pessoa: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+            return _ficha_pessoa(client, pessoa, pausa=pausa, guardar_html=guardar_html)
+
+        feitas = 0
+        for pessoa, resultado in _em_paralelo(_pessoa, pessoas_ordenadas, trabalhadores):
+            feitas += 1
+            progresso["pessoas_done"] = feitas
             progresso["current"] = pessoa.get("nome")
-            try:
-                docs_pessoas.append(_ficha_pessoa(client, pessoa, pausa=pausa, guardar_html=guardar_html, recolhas=recolhas))
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Pessoa %s (%s) falhou: %s", pessoa.get("nome"), pessoa.get("id"), exc)
-                erros.append(f"pessoa {pessoa.get('id')}: {exc}")
-                recolhas.append(_registar_recolha_doc({"tipo": "pessoa", "entidade_id": pessoa.get("id"), "nome": pessoa.get("nome"), "erro": str(exc)}))
-            progresso["pessoas_done"] = indice
-            progresso["registos"] = len(docs_pessoas)
-            _flush([], [], docs_pessoas, recolhas)
-            docs_pessoas, recolhas = [], []
+            if isinstance(resultado, Exception):
+                logger.warning("Pessoa %s (%s) falhou: %s", pessoa.get("nome"), pessoa.get("id"), resultado)
+                erros.append(f"pessoa {pessoa.get('id')}: {resultado}")
+                _pendentes["recolhas"].append(_registar_recolha_doc({
+                    "tipo": "pessoa", "entidade_id": pessoa.get("id"), "nome": pessoa.get("nome"), "erro": str(resultado),
+                }))
+            else:
+                doc_pessoa, recolhas_item = resultado
+                _pendentes["pessoas"].append(doc_pessoa)
+                _pendentes["recolhas"].extend(recolhas_item)
+            progresso["registos"] = feitas
+            if feitas % LOTE_FLUSH == 0 or feitas == len(pessoas_ordenadas):
+                _flush(_pendentes["entidades"], _pendentes["ocs"], _pendentes["pessoas"], _pendentes["recolhas"])
+                for lista in _pendentes.values():
+                    lista.clear()
+
+    # O que ficou no lote em curso (menos de `LOTE_FLUSH` itens).
+    _flush(_pendentes["entidades"], _pendentes["ocs"], _pendentes["pessoas"], _pendentes["recolhas"])
+    for lista in _pendentes.values():
+        lista.clear()
 
     progresso["phase"] = "concluído"
     progresso["current"] = None
@@ -507,10 +565,42 @@ def recolher(
         "entidades": total_entidades,
         "pessoas": total_pessoas,
         "ocs": total_ocs,
-        "recolhidas_agora": {"entidades": progresso.get("entidades_done", 0), "pessoas": progresso.get("pessoas_done", 0)},
+        "recolhidas_agora": {
+            "entidades": progresso.get("entidades_done", 0),
+            "pessoas": progresso.get("pessoas_done", 0),
+            "saltadas": progresso.get("saltadas", 0),
+        },
+        "trabalhadores": trabalhadores,
         "errors": erros,
         "data_dir": str(data_dir()),
     }
+
+
+def _em_paralelo(
+    funcao: Any,
+    itens: List[Dict[str, Any]],
+    trabalhadores: int,
+) -> Iterator[Tuple[Dict[str, Any], Any]]:
+    """Aplica `funcao` a cada item, devolvendo `(item, resultado|exceção)`.
+
+    Com um trabalhador corre em série (mantém a ordem); com mais, usa um
+    `ThreadPoolExecutor` e devolve à medida que cada pedido termina.
+    """
+    if trabalhadores <= 1:
+        for item in itens:
+            try:
+                yield item, funcao(item)
+            except Exception as exc:  # noqa: BLE001 - o erro é reportado ao chamador
+                yield item, exc
+        return
+    with ThreadPoolExecutor(max_workers=trabalhadores, thread_name_prefix="erc") as pool:
+        futuros = {pool.submit(funcao, item): item for item in itens}
+        for futuro in as_completed(futuros):
+            item = futuros[futuro]
+            try:
+                yield item, futuro.result()
+            except Exception as exc:  # noqa: BLE001
+                yield item, exc
 
 
 def _flush(
@@ -926,6 +1016,8 @@ def _run_job(job: Dict[str, Any]) -> None:
                 com_financeiro=bool(payload.get("com_financeiro", False)),
                 guardar_html=bool(payload.get("guardar_html", True)),
                 forcar=bool(payload.get("forcar")),
+                saltar_existentes=bool(payload.get("saltar_existentes")),
+                trabalhadores=int(payload.get("trabalhadores") or 1),
                 progresso=progresso,
             )
             if payload.get("indexar"):

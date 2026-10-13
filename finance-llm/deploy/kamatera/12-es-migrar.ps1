@@ -25,6 +25,10 @@
 .EXAMPLE
     # Refazer indices que ja existam
     .\12-es-migrar.ps1 -MaxGB 3 -Force
+
+.EXAMPLE
+    # Migrar so uma familia de indices (os do modulo ERC, por exemplo)
+    .\12-es-migrar.ps1 -Indices '^finance_erc_' -MaxGB 1 -Dry
 #>
 [CmdletBinding()]
 param(
@@ -37,7 +41,11 @@ param(
     [switch]$Force,
     # So os indices cuja contagem diverge da origem. E o modo para realinhar o
     # espelho depois de o sistema ter escrito coisas novas.
-    [switch]$Sync
+    [switch]$Sync,
+    # Filtro (expressao regular, `grep -E`) sobre o nome do indice. Vazio migra
+    # todos, como sempre; e o que permite trazer so uma familia (ex.: os indices
+    # novos de um modulo) sem tocar no resto.
+    [string]$Indices = ''
 )
 
 $ErrorActionPreference = 'Stop'

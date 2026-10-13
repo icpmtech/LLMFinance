@@ -11,6 +11,8 @@
 #   FORCE=1                        refaz indices que ja existam no destino
 #   SYNC=1                         so os indices cuja contagem diverge da origem
 #                                  (implica FORCE; e o modo para realinhar)
+#   PATTERN='^finance_erc_'        migra so os indices que casam (grep -E);
+#                                  vazio = todos (comportamento normal)
 #
 # Ordem: do mais leve para o mais pesado -- e o que permite comecar já, e o que
 # deixa para o fim o `contratos` (20 GB), que so cabe depois de crescer o disco.
@@ -22,6 +24,12 @@ MAX_MB="${MAX_MB:-3072}"
 DRY="${DRY:-0}"
 FORCE="${FORCE:-0}"
 SYNC="${SYNC:-0}"
+PATTERN="${PATTERN:-}"
+
+# Um indice passa o filtro quando nao ha `PATTERN` ou quando casa com ele.
+selecionado() {
+    [ -z "$PATTERN" ] || printf '%s\n' "$1" | grep -Eq "$PATTERN"
+}
 
 MAX_BYTES=$(( MAX_MB * 1024 * 1024 ))
 
@@ -34,6 +42,7 @@ command -v jq >/dev/null || { echo "falta o jq nesta maquina"; exit 1; }
 echo "origem  : $SOURCE"
 echo "destino : $DEST"
 echo "limite  : ${MAX_MB} MB por indice"
+[ -n "$PATTERN" ] && echo "filtro  : $PATTERN"
 [ "$SYNC" = "1" ] && echo "modo    : sincronizacao (so o que divergir)"
 echo
 
@@ -55,6 +64,7 @@ if [ "$SYNC" = "1" ]; then
     PLANO=$(
         curl -fsS "$DEST/_cat/indices?h=index" | grep -v '^$' | LC_ALL=C sort \
         | while read -r idx; do
+            selecionado "$idx" || continue
             o=$(curl -fsS -m 60 "$SOURCE/$idx/_count" 2>/dev/null | jq -r '.count // "?"')
             d=$(curl -fsS -m 60 "$DEST/$idx/_count"   2>/dev/null | jq -r '.count // "?"')
             if [ "$o" != "$d" ]; then
@@ -68,7 +78,11 @@ if [ "$SYNC" = "1" ]; then
 else
     # `bytes=b` da o tamanho do primario em bytes, para comparar com o limite.
     PLANO=$(curl -fsS "$SOURCE/_cat/indices?h=index,pri.store.size&bytes=b&s=pri.store.size:asc" \
-            | awk -v max="$MAX_BYTES" 'NF==2 && $2+0 <= max { printf "%s %s\n", $1, $2 }')
+            | awk -v max="$MAX_BYTES" 'NF==2 && $2+0 <= max { printf "%s %s\n", $1, $2 }' \
+            | while read -r idx bytes; do
+                selecionado "$idx" || continue
+                echo "$idx $bytes"
+            done)
     TOTAL=$(echo "$PLANO" | grep -c . || true)
     echo "indices dentro do limite: $TOTAL"
 fi

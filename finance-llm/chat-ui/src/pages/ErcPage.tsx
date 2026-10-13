@@ -537,10 +537,23 @@ export default function ErcPage() {
     setPagina(0);
   };
 
+  const [abordagem, setAbordagem] = useState(false);
+  const [limite, setLimite] = useState("");
+  const [trabalhadores, setTrabalhadores] = useState(3);
+  const [guardarHtml, setGuardarHtml] = useState(false);
+  const [comFinanceiro, setComFinanceiro] = useState(false);
+  const [retomar, setRetomar] = useState(true);
+
   const recolher = async () => {
     setOcupado(true);
     try {
-      await recolherErc({ pausa: 0.3, indexar: false });
+      await recolherErc({
+        limite: limite ? Number(limite) : undefined,
+        trabalhadores,
+        guardar_html: guardarHtml,
+        com_financeiro: comFinanceiro,
+        saltar_existentes: retomar,
+      });
       await carregarJobs();
       setErro(null);
     } catch (err) {
@@ -591,12 +604,13 @@ export default function ErcPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={recolher}
-            disabled={ocupado}
-            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10 disabled:opacity-50"
-            title="Recolher entidades, pessoas e OCS do portal (segundo plano)"
+            onClick={() => setAbordagem((valor) => !valor)}
+            className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs ${
+              abordagem ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-100" : "border-white/10 bg-white/5 hover:bg-white/10"
+            }`}
+            title="Opções da recolha do portal (segundo plano)"
           >
-            {ocupado ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />} Recolher
+            <Play size={13} /> Recolher
           </button>
           <button
             type="button"
@@ -629,6 +643,70 @@ export default function ErcPage() {
       {erro ? <div className="glass-card rounded-2xl border-red-400/20 p-3 text-[11px] text-red-200">{erro}</div> : null}
 
       {jobVisivel ? <ProgressoJob job={jobVisivel} /> : null}
+
+      {abordagem ? (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void recolher();
+          }}
+          className="glass-card space-y-3 rounded-2xl p-4"
+        >
+          <h2 className="text-xs font-semibold">Recolha do portal da ERC</h2>
+          <p className="text-[11px] text-muted-foreground">
+            Corre em segundo plano no servidor; o progresso aparece acima. Com <strong>retomar</strong> ligado, o que já
+            está gravado não é relido — parar e recomeçar não repete trabalho.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+              Limite de entidades
+              <input
+                value={limite}
+                onChange={(event) => setLimite(event.target.value.replace(/\D/g, ""))}
+                placeholder="todas"
+                className="w-28 rounded-xl border border-white/10 bg-black/20 px-2 py-1.5 text-xs text-foreground"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+              Pedidos em paralelo
+              <select
+                value={trabalhadores}
+                onChange={(event) => setTrabalhadores(Number(event.target.value))}
+                className="rounded-xl border border-white/10 bg-black/20 px-2 py-1.5 text-xs text-foreground"
+              >
+                {[1, 2, 3, 4].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <input type="checkbox" checked={retomar} onChange={(event) => setRetomar(event.target.checked)} />
+              Retomar (ignorar o que já está gravado)
+            </label>
+            <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <input type="checkbox" checked={guardarHtml} onChange={(event) => setGuardarHtml(event.target.checked)} />
+              Guardar o HTML das páginas
+            </label>
+            <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={comFinanceiro}
+                onChange={(event) => setComFinanceiro(event.target.checked)}
+              />
+              Incluir dados financeiros (mais lento)
+            </label>
+            <button
+              type="submit"
+              disabled={ocupado}
+              className="inline-flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-100 hover:bg-emerald-400/20 disabled:opacity-50"
+            >
+              {ocupado ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />} Arrancar recolha
+            </button>
+          </div>
+        </form>
+      ) : null}
 
       <nav className="flex flex-wrap gap-1.5">
         {ABAS.map((item) => (
