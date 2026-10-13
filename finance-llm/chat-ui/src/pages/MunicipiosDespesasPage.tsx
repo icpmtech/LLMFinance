@@ -33,12 +33,14 @@ import {
 import {
   euroCompacto,
   getMunicipioFicha,
+  getMunicipioFornecedores,
   getMunicipiosDespesas,
   getMunicipiosDespesasMeta,
   numero,
   recolherMunicipiosDespesas,
   type MunicipioDespesas,
   type MunicipioFicha,
+  type MunicipioFornecedores,
   type MunicipiosDespesasMeta,
   type MunicipiosDespesasResponse,
 } from "../municipiosApi";
@@ -134,6 +136,13 @@ function FichaMunicipio({
   /** Ano escolhido no filtro da lista: fica destacado na série. */
   anoSelecionado?: string;
 }) {
+  const [todosFornecedores, setTodosFornecedores] = useState(false);
+  const [fornecedores, setFornecedores] = useState<MunicipioFornecedores | null>(null);
+  const [aCarregarFornecedores, setACarregarFornecedores] = useState(false);
+  const [buscaFornecedor, setBuscaFornecedor] = useState("");
+  const [termoFornecedor, setTermoFornecedor] = useState("");
+  const [paginaFornecedores, setPaginaFornecedores] = useState(1);
+  const [erroFornecedores, setErroFornecedores] = useState<string | null>(null);
   const classificadores = ficha.classificadores ?? {};
   const valores = useMemo(() => {
     const linhas = CLASSIFICADORES_FICHA.map((codigo) => ({
@@ -157,12 +166,15 @@ function FichaMunicipio({
         valor?: number;
         por_ano?: Record<string, { contratos: number; valor: number }>;
         fornecedores?: { nome: string; contratos: number; valor: number }[];
-        tipos?: { key: string; count: number }[];
+        tipos?: { key: string; count: number; valor?: number }[];
+        cpv?: { divisao: string; descricao?: string | null; tipo?: string; contratos: number; valor: number }[];
         ano?: number;
         ano_total?: number;
         ano_valor?: number;
+        ano_maximo?: number | null;
         ano_fornecedores?: { nome: string; contratos: number; valor: number }[];
-        ano_tipos?: { key: string; count: number }[];
+        ano_tipos?: { key: string; count: number; valor?: number }[];
+        ano_cpv?: { divisao: string; descricao?: string | null; tipo?: string; contratos: number; valor: number }[];
       }
     | undefined;
 
@@ -171,7 +183,8 @@ function FichaMunicipio({
   // ano); sem ano, são os totais de 2012 até hoje. A despesa do INE não segue o
   // ano: o indicador só publica um ano e fica identificado como tal.
   const anoDoFiltro = anoSelecionado && contratos?.ano === Number(anoSelecionado) ? anoSelecionado : null;
-  const fornecedores = (anoDoFiltro ? contratos?.ano_fornecedores : contratos?.fornecedores) ?? [];
+  const principaisFornecedores =
+    (anoDoFiltro ? contratos?.ano_fornecedores : contratos?.fornecedores) ?? [];
   const tipos = (anoDoFiltro ? contratos?.ano_tipos : contratos?.tipos) ?? [];
 
   const serie = useMemo(() => {
@@ -183,10 +196,53 @@ function FichaMunicipio({
   }, [contratos, ficha.contratos_por_ano]);
 
   const maxSerie = useMemo(() => Math.max(1, ...serie.map((s) => s.valor)), [serie]);
+  // Tipos de despesa: as divisões de CPV do ano escolhido (ou de todo o período).
+  const tiposDespesa = (anoDoFiltro ? contratos?.ano_cpv : contratos?.cpv) ?? [];
+  const maxTiposDespesa = useMemo(
+    () => Math.max(1, ...tiposDespesa.map((t) => t.valor)),
+    [tiposDespesa],
+  );
+
+  // A lista completa de fornecedores é pedida ao índice quando o utilizador a
+  // abre (e de novo quando muda o ano, a pesquisa ou a página): a ficha só traz
+  // os maiores, que é o que interessa à primeira vista.
+  useEffect(() => {
+    if (!todosFornecedores) return;
+    let ativo = true;
+    setACarregarFornecedores(true);
+    setErroFornecedores(null);
+    getMunicipioFornecedores(ficha.geocod || ficha.nome, {
+      ano: anoSelecionado || undefined,
+      q: termoFornecedor || undefined,
+      size: 50,
+      page: paginaFornecedores,
+    })
+      .then((resposta) => {
+        if (ativo) setFornecedores(resposta);
+      })
+      .catch((excecao) => {
+        if (ativo) setErroFornecedores(excecao instanceof Error ? excecao.message : String(excecao));
+      })
+      .finally(() => {
+        if (ativo) setACarregarFornecedores(false);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [todosFornecedores, ficha.nome, ficha.geocod, anoSelecionado, termoFornecedor, paginaFornecedores]);
+
+  const totalPaginasFornecedores = fornecedores
+    ? Math.max(1, Math.ceil(fornecedores.total / Math.max(1, fornecedores.size)))
+    : 1;
   const correntes = ficha.despesas_correntes ?? 0;
   const capital = ficha.despesas_capital ?? 0;
   const totalCorrenteCapital = correntes + capital;
   const ano = ficha.ano_despesas ?? null;
+  // O INE só tem a despesa do ano que publica: com outro ano escolhido — ou num
+  // município sem despesa publicada —, mostra-se a contratação do Portal BASE,
+  // que é a plataforma com o dado por ano (índice `contratos`).
+  const mostraIne =
+    ficha.despesas_total != null && (!anoSelecionado || Number(anoSelecionado) === Number(ano));
 
   return (
     <div className="space-y-4">
@@ -212,7 +268,7 @@ function FichaMunicipio({
                 contratação de {anoDoFiltro}
               </span>
             ) : null}
-            {ano ? (
+            {mostraIne ? (
               <span
                 className="rounded-full bg-teal-400/10 px-2 py-0.5 text-[11px] text-teal-200"
                 title={`Despesa do INE do ano ${ano} — o indicador 0013909 só publica um ano (2021→2023). O ano da página vem do Portal BASE.`}
@@ -220,8 +276,15 @@ function FichaMunicipio({
                 despesa INE de {ano}
               </span>
             ) : (
-              <span className="rounded-full bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-200">
-                sem despesa publicada
+              <span
+                className="rounded-full bg-violet-400/10 px-2 py-0.5 text-[11px] text-violet-200"
+                title={
+                  ficha.despesas_total == null
+                    ? "O INE não publica despesa para este município — os valores mostrados são do Portal BASE."
+                    : `O INE não publica despesa para ${anoSelecionado} — os valores mostrados são do Portal BASE.`
+                }
+              >
+                sem INE · Portal BASE
               </span>
             )}
           </div>
@@ -254,18 +317,58 @@ function FichaMunicipio({
               </p>
             ) : null}
           </div>
-          <div>
-            <p className="text-muted-foreground">
-              Despesa total <span className="opacity-60">· INE {ano ?? ""}</span>
-            </p>
-            <p className="text-base font-semibold tabular-nums">{euroCompacto(ficha.despesas_total)}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">
-              Com pessoal <span className="opacity-60">· INE {ano ?? ""}</span>
-            </p>
-            <p className="text-base font-semibold tabular-nums">{euroCompacto(ficha.despesas_pessoal)}</p>
-          </div>
+          {mostraIne ? (
+            <>
+              <div>
+                <p className="text-muted-foreground">
+                  Despesa total <span className="opacity-60">· INE {ano ?? ""}</span>
+                </p>
+                <p className="text-base font-semibold tabular-nums">{euroCompacto(ficha.despesas_total)}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">
+                  Com pessoal <span className="opacity-60">· INE {ano ?? ""}</span>
+                </p>
+                <p className="text-base font-semibold tabular-nums">
+                  {euroCompacto(ficha.despesas_pessoal)}
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <p className="text-muted-foreground">
+                  Maior contrato {anoDoFiltro ?? ""} <span className="opacity-60">· Portal BASE</span>
+                </p>
+                <p className="text-base font-semibold tabular-nums">
+                  {anoDoFiltro
+                    ? euroCompacto(contratos?.ano_maximo ?? 0)
+                    : euroCompacto(principaisFornecedores[0]?.valor)}
+                </p>
+                {!anoDoFiltro && principaisFornecedores[0] ? (
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">maior fornecedor</p>
+                ) : null}
+              </div>
+              <div>
+                <p className="text-muted-foreground">
+                  Principal fornecedor {anoDoFiltro ?? ""}{" "}
+                  <span className="opacity-60">· Portal BASE</span>
+                </p>
+                <p
+                  className="truncate text-base font-semibold"
+                  title={principaisFornecedores[0]?.nome}
+                >
+                  {principaisFornecedores[0]?.nome ?? "—"}
+                </p>
+                {anoDoFiltro && principaisFornecedores[0] ? (
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    {numero(principaisFornecedores[0].contratos)} contratos ·{" "}
+                    {euroCompacto(principaisFornecedores[0].valor)}
+                  </p>
+                ) : null}
+              </div>
+            </>
+          )}
         </div>
         {ficha.contratos_primeiro_ano && ficha.contratos_ultimo_ano ? (
           <p className="mt-2 text-[10px] text-muted-foreground">
@@ -276,45 +379,72 @@ function FichaMunicipio({
 
       <div className="grid gap-4 @3xl:grid-cols-2">
         <Cartao>
-          <h3 className="text-xs font-semibold">
-            Despesa por classificador económico{ano ? ` · INE ${ano}` : ""}
-          </h3>
-          {anoDoFiltro ? (
-            <p className="mt-1 text-[10px] text-muted-foreground">
-              O INE só publica {ano} (2021→2023): a despesa não existe para {anoDoFiltro}. A
-              contratação de {anoDoFiltro} está nos cartões de cima e na série, calculada no índice
-              do Portal BASE.
-            </p>
-          ) : null}
-          {totalCorrenteCapital > 0 ? (
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Corrente{" "}
-              <strong className="text-foreground">
-                {((correntes / totalCorrenteCapital) * 100).toLocaleString("pt-PT", { maximumFractionDigits: 0 })} %
-              </strong>{" "}
-              · Capital{" "}
-              <strong className="text-foreground">
-                {((capital / totalCorrenteCapital) * 100).toLocaleString("pt-PT", { maximumFractionDigits: 0 })} %
-              </strong>
-            </p>
-          ) : null}
-          <div className="mt-3 space-y-2">
-            {valores.map((linha) => (
-              <Barra
-                key={linha.codigo}
-                rotulo={`${linha.codigo} · ${linha.etiqueta}`}
-                valor={linha.valor}
-                maximo={maximo}
-                tom={
-                  linha.codigo === "D"
-                    ? "amber"
-                    : linha.codigo.startsWith("D2")
-                      ? "violet"
-                      : "teal"
-                }
-              />
-            ))}
-          </div>
+          {mostraIne ? (
+            <>
+              <h3 className="text-xs font-semibold">
+                Despesa por classificador económico{ano ? ` · INE ${ano}` : ""}
+              </h3>
+              {totalCorrenteCapital > 0 ? (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Corrente{" "}
+                  <strong className="text-foreground">
+                    {((correntes / totalCorrenteCapital) * 100).toLocaleString("pt-PT", { maximumFractionDigits: 0 })} %
+                  </strong>{" "}
+                  · Capital{" "}
+                  <strong className="text-foreground">
+                    {((capital / totalCorrenteCapital) * 100).toLocaleString("pt-PT", { maximumFractionDigits: 0 })} %
+                  </strong>
+                </p>
+              ) : null}
+              <div className="mt-3 space-y-2">
+                {valores.map((linha) => (
+                  <Barra
+                    key={linha.codigo}
+                    rotulo={`${linha.codigo} · ${linha.etiqueta}`}
+                    valor={linha.valor}
+                    maximo={maximo}
+                    tom={
+                      linha.codigo === "D"
+                        ? "amber"
+                        : linha.codigo.startsWith("D2")
+                          ? "violet"
+                          : "teal"
+                    }
+                  />
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <h3 className="text-xs font-semibold">
+                Tipos de despesa (CPV){anoDoFiltro ? ` · ${anoDoFiltro}` : ""}
+              </h3>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                {ficha.despesas_total == null
+                  ? "Este município não tem despesa publicada pelo INE — a contratação é classificada pelas divisões de CPV do Portal BASE."
+                  : `O INE só publica a despesa de ${ano} (2021→2023): mostramos a contratação de ${anoSelecionado}, pelas divisões de CPV do Portal BASE.`}
+              </p>
+              <div className="mt-3 space-y-2">
+                {tiposDespesa.length ? (
+                  tiposDespesa.map((linha) => (
+                    <Barra
+                      key={linha.divisao}
+                      rotulo={`${linha.divisao} · ${linha.tipo ?? linha.descricao ?? "CPV"} (${numero(
+                        linha.contratos,
+                      )})`}
+                      valor={linha.valor}
+                      maximo={maxTiposDespesa}
+                      tom="violet"
+                    />
+                  ))
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    Sem contratos com CPV atribuído a este município neste período.
+                  </p>
+                )}
+              </div>
+            </>
+          )}
         </Cartao>
 
         <Cartao>
@@ -369,37 +499,144 @@ function FichaMunicipio({
         </Cartao>
       </div>
 
-      {fornecedores.length ? (
+      {principaisFornecedores.length ? (
         <Cartao>
-          <h3 className="text-xs font-semibold">
-            Principais fornecedores{anoDoFiltro ? ` em ${anoDoFiltro}` : " do município"}
-          </h3>
-          <p className="mt-1 text-[10px] text-muted-foreground">
-            Portal BASE
-            {anoDoFiltro ? " · contratos celebrados nesse ano" : " · desde 2012"}
-          </p>
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full min-w-[380px] text-[11px]">
-              <thead>
-                <tr className="text-left text-muted-foreground">
-                  <th className="py-1 pr-2 font-medium">Fornecedor</th>
-                  <th className="py-1 pl-2 text-right font-medium whitespace-nowrap">Contratos</th>
-                  <th className="py-1 pl-2 text-right font-medium whitespace-nowrap">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fornecedores.map((f) => (
-                  <tr key={f.nome} className="border-t border-white/5">
-                    <td className="py-1 pr-2">{f.nome}</td>
-                    <td className="py-1 pl-2 text-right align-top tabular-nums">{numero(f.contratos)}</td>
-                    <td className="py-1 pl-2 text-right align-top tabular-nums whitespace-nowrap">
-                      {euroCompacto(f.valor)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="text-xs font-semibold">
+                Principais fornecedores{anoDoFiltro ? ` em ${anoDoFiltro}` : " do município"}
+              </h3>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Portal BASE
+                {anoDoFiltro ? " · contratos celebrados nesse ano" : " · desde 2012"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setTodosFornecedores((aberto) => !aberto);
+                setPaginaFornecedores(1);
+              }}
+              className="min-h-[28px] rounded-lg border border-input px-2 py-1 text-[11px] text-muted-foreground transition hover:text-foreground"
+            >
+              {todosFornecedores ? "Ver só os maiores" : "Ver todos os fornecedores"}
+            </button>
           </div>
+
+          {todosFornecedores ? (
+            <>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <div className="relative min-w-[180px] flex-1">
+                  <Search
+                    size={13}
+                    className="pointer-events-none absolute left-2.5 top-2.5 text-muted-foreground"
+                  />
+                  <input
+                    value={buscaFornecedor}
+                    onChange={(evento) => setBuscaFornecedor(evento.target.value)}
+                    onKeyDown={(evento) => {
+                      if (evento.key !== "Enter") return;
+                      setTermoFornecedor(buscaFornecedor);
+                      setPaginaFornecedores(1);
+                    }}
+                    placeholder="Procurar fornecedor (Enter)"
+                    className="w-full rounded-lg border border-input bg-background py-1.5 pl-8 pr-2 text-xs"
+                  />
+                </div>
+                <span className="text-[10px] text-muted-foreground">
+                  {aCarregarFornecedores
+                    ? "a carregar…"
+                    : `${numero(fornecedores?.total ?? 0)} fornecedores${
+                        fornecedores?.valor_somado
+                          ? ` · ${euroCompacto(fornecedores.valor_somado)} atribuídos`
+                          : ""
+                      }`}
+                </span>
+              </div>
+              {erroFornecedores ? (
+                <p className="mt-2 text-[11px] text-rose-300">{erroFornecedores}</p>
+              ) : null}
+              <div className="mt-2 max-h-72 overflow-auto">
+                <table className="w-full min-w-[380px] text-[11px]">
+                  <thead className="sticky top-0 bg-background/95">
+                    <tr className="text-left text-muted-foreground">
+                      <th className="py-1 pr-2 font-medium">Fornecedor</th>
+                      <th className="py-1 pl-2 text-right font-medium whitespace-nowrap">Contratos</th>
+                      <th className="py-1 pl-2 text-right font-medium whitespace-nowrap">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(fornecedores?.items ?? []).map((f) => (
+                      <tr key={f.nome} className="border-t border-white/5">
+                        <td className="py-1 pr-2">{f.nome}</td>
+                        <td className="py-1 pl-2 text-right align-top tabular-nums">
+                          {numero(f.contratos)}
+                        </td>
+                        <td className="py-1 pl-2 text-right align-top tabular-nums whitespace-nowrap">
+                          {euroCompacto(f.valor)}
+                        </td>
+                      </tr>
+                    ))}
+                    {!aCarregarFornecedores && !(fornecedores?.items ?? []).length ? (
+                      <tr>
+                        <td colSpan={3} className="py-3 text-center text-muted-foreground">
+                          Nenhum fornecedor com esse nome.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                <span>
+                  página {fornecedores?.page ?? 1} de {totalPaginasFornecedores}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaginaFornecedores((pagina) => Math.max(1, pagina - 1))}
+                    disabled={(fornecedores?.page ?? 1) <= 1 || aCarregarFornecedores}
+                    className="rounded-lg border border-white/10 px-2 py-1 transition hover:text-foreground disabled:opacity-40"
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaginaFornecedores((pagina) => pagina + 1)}
+                    disabled={
+                      (fornecedores?.page ?? 1) >= totalPaginasFornecedores || aCarregarFornecedores
+                    }
+                    className="rounded-lg border border-white/10 px-2 py-1 transition hover:text-foreground disabled:opacity-40"
+                  >
+                    Seguinte
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full min-w-[380px] text-[11px]">
+                <thead>
+                  <tr className="text-left text-muted-foreground">
+                    <th className="py-1 pr-2 font-medium">Fornecedor</th>
+                    <th className="py-1 pl-2 text-right font-medium whitespace-nowrap">Contratos</th>
+                    <th className="py-1 pl-2 text-right font-medium whitespace-nowrap">Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {principaisFornecedores.map((f) => (
+                    <tr key={f.nome} className="border-t border-white/5">
+                      <td className="py-1 pr-2">{f.nome}</td>
+                      <td className="py-1 pl-2 text-right align-top tabular-nums">{numero(f.contratos)}</td>
+                      <td className="py-1 pl-2 text-right align-top tabular-nums whitespace-nowrap">
+                        {euroCompacto(f.valor)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           {tipos.length ? (
             <p className="mt-2 text-[10px] text-muted-foreground">
               Tipos: {tipos.slice(0, 4).map((t) => `${t.key} (${t.count})`).join(" · ")}

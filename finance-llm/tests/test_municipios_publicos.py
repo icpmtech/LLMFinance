@@ -410,6 +410,29 @@ def test_listar_traz_os_anos_recentes_vindos_do_indice(monkeypatch: pytest.Monke
     assert [ponto["ano"] for ponto in resposta["items"][0]["contratos_recentes"]] == ["2024", "2019"]
 
 
+def test_tipo_de_despesa_usa_a_divisao_de_cpv() -> None:
+    assert municipios.tipo_de_despesa("45") == "Obras de construção"
+    assert municipios.tipo_de_despesa("55", "Serviços de mesa") == "Hotelaria, restauração e catering"
+
+
+def test_tipo_de_despesa_cai_na_descricao_do_base() -> None:
+    """Divisão desconhecida não fica sem nome: usa a descrição do contrato."""
+    assert municipios.tipo_de_despesa("99", "Serviços diversos") == "Serviços diversos"
+    assert municipios.tipo_de_despesa("", None) == "CPV —"
+
+
+def test_nomear_tipos_de_despesa_completa_a_ficha() -> None:
+    detalhe: Dict[str, Any] = {
+        "cpv": [{"divisao": "45", "descricao": "Obras", "contratos": 3, "valor": 30.0}],
+        "ano_cpv": [{"divisao": "79", "descricao": "Consultoria", "contratos": 1, "valor": 10.0}],
+    }
+
+    municipios._nomear_tipos_de_despesa(detalhe)
+
+    assert detalhe["cpv"][0]["tipo"] == "Obras de construção"
+    assert detalhe["ano_cpv"][0]["tipo"] == "Serviços profissionais, de gestão e consultoria"
+
+
 def test_ficha_real_do_municipio_traz_a_serie_de_contratos() -> None:
     """A fonte real em disco tem de ter a série anual — é o que a página mostra."""
     fichas = municipios.fichas_locais()

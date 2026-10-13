@@ -79,6 +79,27 @@ async def municipios_recolher(
     return await run_in_threadpool(municipios.recolher, forcar)
 
 
+@router.get("/despesas/{municipio}/fornecedores", summary="Todos os fornecedores de um município")
+async def municipio_fornecedores(
+    municipio: str,
+    ano: Optional[int] = Query(
+        None, description="Ano da contratação no Portal BASE; sem ano, todo o período (2012→2026)"
+    ),
+    q: Optional[str] = Query(None, description="Filtro pelo nome do fornecedor"),
+    size: int = Query(100, ge=1, le=500),
+    page: int = Query(1, ge=1),
+    session: Session = None,
+) -> Dict[str, Any]:
+    """Lista **completa** dos fornecedores, com pesquisa e paginação.
+
+    A ficha mostra os maiores (`contratos_detalhe.fornecedores`); este endpoint
+    dá a lista toda, para se poder ver e procurar qualquer fornecedor.
+    """
+    return await run_in_threadpool(
+        municipios.fornecedores, municipio, ano=ano, q=q, size=size, page=page
+    )
+
+
 @router.get("/despesas/{municipio}", summary="Ficha de um município")
 async def municipio_ficha(
     municipio: str,

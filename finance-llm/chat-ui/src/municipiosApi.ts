@@ -84,12 +84,16 @@ export type MunicipioFicha = MunicipioDespesas & {
     valor?: number;
     por_ano?: Record<string, { contratos: number; valor: number }>;
     fornecedores?: { nome: string; contratos: number; valor: number }[];
-    tipos?: { key: string; count: number }[];
+    tipos?: { key: string; count: number; valor?: number }[];
+    /** Tipos de despesa: divisões de CPV, com contratos e valor. */
+    cpv?: { divisao: string; descricao?: string | null; tipo?: string; contratos: number; valor: number }[];
     ano?: number;
     ano_total?: number;
     ano_valor?: number;
+    ano_maximo?: number | null;
     ano_fornecedores?: { nome: string; contratos: number; valor: number }[];
-    ano_tipos?: { key: string; count: number }[];
+    ano_tipos?: { key: string; count: number; valor?: number }[];
+    ano_cpv?: { divisao: string; descricao?: string | null; tipo?: string; contratos: number; valor: number }[];
     error?: string;
   } | null;
   recolhido_em?: string | null;
@@ -211,6 +215,35 @@ export function getMunicipiosDespesasMapa(): Promise<MunicipiosMapaResposta> {
 export function getMunicipioFicha(municipio: string, ano?: string | number): Promise<MunicipioFicha> {
   const sufixo = ano ? `?ano=${encodeURIComponent(String(ano))}` : "";
   return pedir<MunicipioFicha>(`/municipios/despesas/${encodeURIComponent(municipio)}${sufixo}`);
+}
+
+/** Fornecedores de um município (lista completa, com pesquisa e paginação). */
+export type MunicipioFornecedores = {
+  municipio?: string | null;
+  geocod?: string | null;
+  /** Ano da contratação; `null` quando é todo o período. */
+  ano?: number | null;
+  total: number;
+  items: { nome: string; contratos: number; valor: number }[];
+  page: number;
+  size: number;
+  valor_somado?: number;
+  error?: string | null;
+};
+
+export function getMunicipioFornecedores(
+  municipio: string,
+  parametros: { ano?: string | number; q?: string; size?: number; page?: number } = {},
+): Promise<MunicipioFornecedores> {
+  const sufixo = queryString({
+    ano: parametros.ano || undefined,
+    q: parametros.q?.trim() || undefined,
+    size: parametros.size,
+    page: parametros.page,
+  });
+  return pedir<MunicipioFornecedores>(
+    `/municipios/despesas/${encodeURIComponent(municipio)}/fornecedores${sufixo}`,
+  );
 }
 
 export function recolherMunicipiosDespesas(forcar = false): Promise<{

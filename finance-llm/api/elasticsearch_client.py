@@ -17786,6 +17786,91 @@ def search_municipios_despesas(
         return {"error": str(exc), "items": [], "total": 0}
 
 
+def fornecedores_do_municipio(
+    nomes_adjudicante: Iterable[str],
+    *,
+    ano: Optional[int] = None,
+    maximo: int = 20000,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """**Todos** os fornecedores (adjudicatários) de um município, e não só o topo.
+
+    A lista completa exige percorrer o `composite` (paginado por `after_key`),
+    porque os `terms` só devolvem os N maiores. O filtro do ano vai na consulta
+    (raiz), para o `composite` nunca contar contratos de outros anos.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "fornecedores": [], "total": 0}
+    nomes = [str(n) for n in (nomes_adjudicante or []) if n]
+    if not nomes:
+        return {"total": 0, "fornecedores": [], "ano": ano}
+
+    filtros: List[Dict[str, Any]] = [
+        {"nested": {"path": "adjudicantes.parsed", "query": {"terms": {"adjudicantes.parsed.nome": nomes}}}}
+    ]
+    if ano:
+        filtros.append(
+            {"range": {"dataCelebracaoContrato": {"gte": f"{int(ano)}-01-01", "lte": f"{int(ano)}-12-31"}}}
+        )
+
+    fornecedores: Dict[str, Dict[str, Any]] = {}
+    after: Optional[Dict[str, Any]] = None
+    paginas = 0
+    while paginas < 40:
+        composite: Dict[str, Any] = {
+            "size": 1000,
+            "sources": [{"nome": {"terms": {"field": "adjudicatarios.parsed.nome"}}}],
+        }
+        if after:
+            composite["after"] = after
+        body = {
+            "size": 0,
+            "query": {"bool": {"filter": filtros}},
+            "aggs": {
+                "adjudicatarios": {
+                    "nested": {"path": "adjudicatarios.parsed"},
+                    "aggs": {
+                        "nomes": {
+                            "composite": composite,
+                            "aggs": {
+                                "raiz": {
+                                    "reverse_nested": {},
+                                    "aggs": {"valor": {"sum": {"field": "precoContratual"}}},
+                                }
+                            },
+                        }
+                    },
+                }
+            },
+        }
+        try:
+            resp = client.search(index=CONTRACTS_INDEX, body=body)
+        except Exception as exc:
+            logger.warning("Fornecedores do município falharam: %s", exc)
+            return {"error": str(exc), "fornecedores": [], "total": 0}
+        bloco = ((resp.get("aggregations", {}).get("adjudicatarios", {}) or {}).get("nomes", {}) or {})
+        baldes = bloco.get("buckets") or []
+        for balde in baldes:
+            nome = str(balde["key"])
+            raiz = balde.get("raiz", {}) or {}
+            actual = fornecedores.get(nome)
+            contratos = int(raiz.get("doc_count") or 0)
+            valor = (raiz.get("valor", {}) or {}).get("value") or 0.0
+            if actual:
+                actual["contratos"] += contratos
+                actual["valor"] += valor
+            else:
+                fornecedores[nome] = {"nome": nome, "contratos": contratos, "valor": valor}
+        after = bloco.get("after_key")
+        paginas += 1
+        if not after or not baldes or len(fornecedores) >= maximo:
+            break
+
+    lista = sorted(fornecedores.values(), key=lambda linha: -linha["valor"])
+    return {"total": len(lista), "fornecedores": lista, "ano": int(ano) if ano else None, "paginas": paginas}
+
+
 def get_municipio_despesas(nome_ou_codigo: str, es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
     """Ficha de um município, pelo código INE ou pelo nome (tolerante a acentos)."""
     client = es or get_es_client()
@@ -17930,6 +18015,39 @@ def contratos_do_municipio(
             },
         }
 
+    def _tipos() -> Dict[str, Any]:
+        return {
+            "terms": {"field": "tipoContrato", "size": 10},
+            "aggs": {"valor": {"sum": {"field": "precoContratual"}}},
+        }
+
+    def _cpv() -> Dict[str, Any]:
+        """Tipos de despesa pela **divisão do CPV** (os 2 primeiros dígitos).
+
+        O CPV é a classificação europeia do objeto do contrato: `45…` é obra,
+        `30…` equipamento informático, `55…` restauração, `79…` serviços
+        profissionais. Agrupar pela divisão dá o «tipo de despesa»; o `top_hits`
+        traz uma descrição real do BASE para servir de exemplo.
+        """
+        return {
+            "nested": {"path": "cpv"},
+            "aggs": {
+                "divisoes": {
+                    "terms": {
+                        "script": {"source": "doc['cpv.code'].value.substring(0,2)"},
+                        "size": 25,
+                    },
+                    "aggs": {
+                        "contratos": {
+                            "reverse_nested": {},
+                            "aggs": {"valor": {"sum": {"field": "precoContratual"}}},
+                        },
+                        "exemplo": {"top_hits": {"size": 1, "_source": ["cpv.description"]}},
+                    },
+                }
+            },
+        }
+
     aggs: Dict[str, Any] = {
         "valor": {"sum": {"field": "precoContratual"}},
         "por_ano": {
@@ -17942,7 +18060,8 @@ def contratos_do_municipio(
             "aggs": {"valor": {"sum": {"field": "precoContratual"}}},
         },
         "fornecedores": _fornecedores(),
-        "tipos": {"terms": {"field": "tipoContrato", "size": 10}},
+        "tipos": _tipos(),
+        "cpv": _cpv(),
     }
     if ano:
         aggs["ano"] = {
@@ -17953,8 +18072,10 @@ def contratos_do_municipio(
             },
             "aggs": {
                 "valor": {"sum": {"field": "precoContratual"}},
+                "maximo": {"max": {"field": "precoContratual"}},
                 "fornecedores": _fornecedores(),
-                "tipos": {"terms": {"field": "tipoContrato", "size": 10}},
+                "tipos": _tipos(),
+                "cpv": _cpv(),
             },
         }
 
@@ -17982,12 +18103,44 @@ def contratos_do_municipio(
         }
         for b in ((aggs.get("fornecedores", {}) or {}).get("nomes", {}) or {}).get("buckets", [])
     ]
+    def _lista_tipos(bloco: Dict[str, Any]) -> List[Dict[str, Any]]:
+        return [
+            {
+                "key": b["key"],
+                "count": b["doc_count"],
+                "valor": (b.get("valor", {}) or {}).get("value") or 0.0,
+            }
+            for b in (bloco.get("buckets", []) or [])
+        ]
+
+    def _lista_cpv(bloco: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Tipos de despesa por divisão de CPV, do maior valor para o menor."""
+        linhas = []
+        for b in ((bloco.get("divisoes", {}) or {}).get("buckets") or []):
+            contratos_cpv = b.get("contratos", {}) or {}
+            exemplos = ((b.get("exemplo", {}) or {}).get("hits", {}) or {}).get("hits") or []
+            descricao = None
+            if exemplos:
+                cpvs = (exemplos[0].get("_source") or {}).get("cpv") or []
+                if cpvs:
+                    descricao = cpvs[0].get("description")
+            linhas.append(
+                {
+                    "divisao": str(b["key"]),
+                    "descricao": descricao,
+                    "contratos": int(contratos_cpv.get("doc_count") or 0),
+                    "valor": (contratos_cpv.get("valor", {}) or {}).get("value") or 0.0,
+                }
+            )
+        return sorted(linhas, key=lambda linha: -linha["valor"])
+
     resposta = {
         "total": total,
         "valor": (aggs.get("valor", {}) or {}).get("value") or 0.0,
         "por_ano": dict(sorted(serie.items(), reverse=True)[: max(1, anos)]),
         "fornecedores": tops,
-        "tipos": [{"key": b["key"], "count": b["doc_count"]} for b in (aggs.get("tipos", {}) or {}).get("buckets", [])],
+        "tipos": _lista_tipos(aggs.get("tipos", {}) or {}),
+        "cpv": _lista_cpv(aggs.get("cpv", {}) or {}),
     }
 
     bloco_ano = aggs.get("ano") or {}
@@ -17995,6 +18148,7 @@ def contratos_do_municipio(
         resposta["ano"] = int(ano)
         resposta["ano_total"] = int(bloco_ano.get("doc_count") or 0)
         resposta["ano_valor"] = (bloco_ano.get("valor", {}) or {}).get("value") or 0.0
+        resposta["ano_maximo"] = (bloco_ano.get("maximo", {}) or {}).get("value")
         resposta["ano_fornecedores"] = [
             {
                 "nome": b["key"],
@@ -18003,10 +18157,8 @@ def contratos_do_municipio(
             }
             for b in ((bloco_ano.get("fornecedores", {}) or {}).get("nomes", {}) or {}).get("buckets", [])
         ]
-        resposta["ano_tipos"] = [
-            {"key": b["key"], "count": b["doc_count"]}
-            for b in (bloco_ano.get("tipos", {}) or {}).get("buckets", [])
-        ]
+        resposta["ano_tipos"] = _lista_tipos(bloco_ano.get("tipos", {}) or {})
+        resposta["ano_cpv"] = _lista_cpv(bloco_ano.get("cpv", {}) or {})
     return resposta
 
 

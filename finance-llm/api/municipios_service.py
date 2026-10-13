@@ -612,6 +612,76 @@ def _com_anos_recentes(itens: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return itens
 
 
+#: Divisões do CPV (os 2 primeiros dígitos do código) → **tipo de despesa**. O
+#: CPV já classifica o objeto do contrato, por isso é a taxonomia certa para
+#: dizer em que se gasta, sem se inventar uma classificação própria.
+CPV_DIVISOES: Dict[str, str] = {
+    "03": "Produtos agrícolas, hortícolas e florestais",
+    "09": "Derivados de petróleo e combustíveis",
+    "14": "Produtos minerais",
+    "15": "Produtos alimentares e bebidas",
+    "18": "Vestuário e acessórios",
+    "19": "Couro, peles e calçado",
+    "20": "Madeira e cortiça",
+    "22": "Impressos e material gráfico",
+    "24": "Produtos químicos",
+    "28": "Máquinas e equipamento",
+    "30": "Equipamento informático e material de escritório",
+    "31": "Máquinas e material elétrico",
+    "32": "Equipamento de rádio, televisão e comunicações",
+    "33": "Equipamento médico e produtos farmacêuticos",
+    "34": "Equipamento de transporte",
+    "35": "Equipamento de segurança e defesa",
+    "37": "Instrumentos musicais, desporto e lazer",
+    "38": "Equipamento de laboratório e de precisão",
+    "39": "Mobiliário e equipamento doméstico",
+    "41": "Água recolhida e tratada",
+    "42": "Máquinas industriais",
+    "43": "Máquinas de minas, obras e construção",
+    "44": "Materiais de construção",
+    "45": "Obras de construção",
+    "48": "Programas e licenças de software",
+    "50": "Reparação e manutenção",
+    "51": "Serviços de instalação",
+    "55": "Hotelaria, restauração e catering",
+    "60": "Transportes",
+    "63": "Serviços de apoio aos transportes",
+    "64": "Serviços de telecomunicações",
+    "65": "Serviços públicos (energia, água, gás)",
+    "66": "Serviços financeiros e de seguros",
+    "70": "Serviços imobiliários",
+    "71": "Arquitetura, engenharia e fiscalização",
+    "72": "Serviços de informática",
+    "73": "Investigação e desenvolvimento",
+    "75": "Serviços de administração pública",
+    "76": "Serviços de exploração de recursos",
+    "77": "Serviços agrícolas, florestais e de jardinagem",
+    "79": "Serviços profissionais, de gestão e consultoria",
+    "80": "Serviços de educação e formação",
+    "85": "Serviços de saúde e ação social",
+    "90": "Serviços de ambiente e saneamento",
+    "92": "Serviços de cultura, desporto e lazer",
+    "98": "Outros serviços",
+}
+
+
+def tipo_de_despesa(divisao: Any, descricao: Optional[str] = None) -> str:
+    """Nome do tipo de despesa de uma divisão de CPV.
+
+    Sem divisão conhecida na tabela, cai na descrição que o próprio contrato traz
+    do Portal BASE (nunca fica sem nome).
+    """
+    codigo = str(divisao or "").strip()
+    return CPV_DIVISOES.get(codigo) or (descricao or "").strip() or f"CPV {codigo or '—'}"
+
+
+def _nomear_tipos_de_despesa(detalhe: Dict[str, Any]) -> None:
+    """Dá nome ao tipo de despesa de cada divisão de CPV (na própria estrutura)."""
+    for campo in ("cpv", "ano_cpv"):
+        for linha in detalhe.get(campo) or []:
+            linha["tipo"] = tipo_de_despesa(linha.get("divisao"), linha.get("descricao"))
+
+
 #: Ordenações da lista quando se escolhe um ano de contratos: as de contratação
 #: passam a ser **do ano escolhido** (é o valor que a coluna mostra).
 ORDENACOES_ANO_CONTRATOS: Dict[str, str] = {
@@ -763,6 +833,53 @@ def listar(
     }
 
 
+def fornecedores(
+    nome_ou_codigo: str,
+    *,
+    ano: Optional[int] = None,
+    q: Optional[str] = None,
+    size: int = 100,
+    page: int = 1,
+) -> Dict[str, Any]:
+    """**Todos** os fornecedores de um município (ou só de um ano), para a ficha.
+
+    A lista completa vem do índice `contratos` — todos os adjudicatários dos
+    contratos em que o município é adjudicante — e é filtrada e paginada aqui:
+    são dezenas/centenas de nomes, faz-se em memória e poupa-se uma consulta por
+    página.
+    """
+    from api.elasticsearch_client import fornecedores_do_municipio, get_municipio_despesas
+
+    doc = get_municipio_despesas(nome_ou_codigo)
+    if doc.get("error"):
+        alvo = _chave(nome_ou_codigo)
+        for ficha_local in fichas_locais():
+            if _chave(ficha_local.get("nome", "")) == alvo or ficha_local.get("geocod") == nome_ou_codigo:
+                doc = ficha_local
+                break
+    if doc.get("error"):
+        return {**doc, "items": [], "total": 0}
+
+    nomes = doc.get("adjudicantes") or []
+    dados = fornecedores_do_municipio(nomes, ano=ano) if nomes else {"total": 0, "fornecedores": []}
+    if dados.get("error"):
+        return {"error": dados["error"], "items": [], "total": 0}
+
+    alvo = _chave(q) if q else ""
+    itens = [linha for linha in dados["fornecedores"] if not alvo or alvo in _chave(linha["nome"])]
+    inicio = max(0, (max(1, page) - 1) * max(1, size))
+    return {
+        "municipio": doc.get("nome"),
+        "geocod": doc.get("geocod"),
+        "ano": int(ano) if ano else None,
+        "total": len(itens),
+        "items": itens[inicio : inicio + max(1, size)],
+        "page": page,
+        "size": size,
+        "valor_somado": sum(float(linha["valor"]) for linha in itens),
+    }
+
+
 def ficha(
     nome_ou_codigo: str,
     detalhar_contratos: bool = True,
@@ -789,7 +906,10 @@ def ficha(
                 break
 
     if detalhar_contratos and not doc.get("error") and doc.get("adjudicantes"):
-        doc["contratos_detalhe"] = contratos_do_municipio(doc["adjudicantes"], ano=ano)
+        detalhe = contratos_do_municipio(doc["adjudicantes"], ano=ano)
+        if not detalhe.get("error"):
+            _nomear_tipos_de_despesa(detalhe)
+        doc["contratos_detalhe"] = detalhe
     return doc
 
 
