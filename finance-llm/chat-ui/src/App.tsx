@@ -3,7 +3,7 @@ import { ChatLayout } from "./components/ChatLayout";
 import { AppNav, type AppView as AppNavView } from "./components/AppNav";
 import { Dock } from "./components/Dock";
 import { WindowManager } from "./components/WindowManager";
-import { useDockSpacer, updateDockPrefs, dockApp } from "./dock";
+import { useDockSpacer, updateDockPrefs, dockApp, useJarvisWidget } from "./dock";
 import { clearSidebarAccess, loadSidebarAccess } from "./sidebarAccess";
 import { getSidebarMode, setSidebarHidden, setSidebarMode, setWindowMode, useSidebarShortcut, useWindowMode } from "./layout";
 import { openWindow, closeWindow, restoreWindow, windowFor } from "./windows";
@@ -243,14 +243,9 @@ const REGION_DETAIL_KEY = "finance-llm-region-detail";
 
 /* Páginas onde o widget do Jarvis (o Control Center flutuante) se esconde.
    Na `/jarvis` a conversa toda já está no ecrã; no `/visualizador` o painel
-   tapa o trabalho — o painel de campos, os filtros e os visuais. */
+   tapa o trabalho — o painel de campos, os filtros e os visuais. Fora disso, é
+   o «Widget do Jarvis» nas preferências do dock que o liga e desliga. */
 const VIEWS_WITHOUT_JARVIS_WIDGET = new Set<string>(["jarvis", "visualizador"]);
-
-/* O widget flutuante do Jarvis está **desligado em toda a plataforma**: o
-   Jarvis vive na página `/jarvis` e na barra lateral (`Investigação e IA` →
-   `Jarvis`), que também está no Menu Iniciar. Pôr isto a `true` devolve o botão
-   — e ele volta a esconder-se nas páginas de `VIEWS_WITHOUT_JARVIS_WIDGET`. */
-const JARVIS_WIDGET_ENABLED: boolean = false;
 
 /** Divisão do mapa GLEIF cujas empresas estão abertas (vista/janela `gleif-region`). */
 type GleifRegionTarget = { level: GleifRegionLevel; code: string; label?: string };
@@ -1233,6 +1228,8 @@ export default function App() {
   };
 
   const dockSpacer = useDockSpacer();
+  /** O dock liga/desliga o botão flutuante do Jarvis («Preferências do dock»). */
+  const jarvisWidgetVisible = useJarvisWidget();
   useSidebarShortcut();
 
   // Ao ligar o modo janelas, a página atual passa a estar aberta numa janela
@@ -1872,9 +1869,9 @@ export default function App() {
     <Dock active={windowMode && focusedWindowView ? focusedWindowView : view} onOpen={(id) => handleDockOpen(id)} />
   );
 
-  /** O botão flutuante do Jarvis — ou nada, enquanto `JARVIS_WIDGET_ENABLED` for falso. */
+  /** O botão flutuante do Jarvis — escondido nas páginas que o dispensam e quando o dock o desliga. */
   const renderJarvisWidget = (hidden: boolean) =>
-    JARVIS_WIDGET_ENABLED ? <JarvisWidget hidden={hidden} onNavigate={handleJarvisNavigate} /> : null;
+    jarvisWidgetVisible && !hidden ? <JarvisWidget onNavigate={handleJarvisNavigate} /> : null;
 
   /* ------------------------------------------------- modo janelas (macOS) */
   if (windowMode) {

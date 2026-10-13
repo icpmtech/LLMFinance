@@ -11,10 +11,12 @@
  * porque aí já está a conversa toda; no `/visualizador` também, para o painel
  * flutuante não tapar o painel de campos, os filtros e os visuais.
  *
- * **Desligado em toda a plataforma**: quem o monta é o `App.tsx`, atrás de
- * `JARVIS_WIDGET_ENABLED` (a `false`), pelo que o Jarvis se usa pela página
- * `/jarvis` e pela barra lateral (`Investigação e IA` → `Jarvis`). Ligar o
- * interruptor traz o botão de volta, com os esconderijos acima.
+ * **Liga-se e desliga-se nas preferências do dock** («Preferências do dock» →
+ * *Interface* → *Widget do Jarvis*): desligado, o botão flutuante não aparece em
+ * página nenhuma e o Jarvis usa-se pela página `/jarvis` e pela barra lateral.
+ * Nem nesse caso aparece na página `/jarvis` nem no `/visualizador`, onde a
+ * conversa toda já está no ecrã e o painel taparia o painel de campos, os
+ * filtros e os visuais.
  *
  * A voz está sempre disponível: o microfone no compositor e a leitura das
  * respostas em voz alta, com as mesmas preferências da página.

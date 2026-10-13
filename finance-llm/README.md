@@ -272,7 +272,9 @@ página numa dessas rotas devolvia `{"detail":"Not Found"}`.
   (`/` ou `Ctrl+K`), secção de recentes, secções *Aplicações* / *Ferramentas* com triângulo de
   divulgação e ponto nas aplicações com janela aberta. Cada linha abre (ou foca) a aplicação;
   a **largura é redimensionável** arrastando a divisória (`196`–`384` px, duplo clique repõe `268` px).
-  `Ctrl+B` esconde/mostra. As páginas internas de cada aplicação vivem dentro da própria
+  `Ctrl+B` esconde/mostra. Os **recentes são por janela** (a ordem só muda quando se navega ali),
+  para que vários separadores abertos não façam a lista saltar; as visitas dos outros separadores
+  entram na visita seguinte. As páginas internas de cada aplicação vivem dentro da própria
   aplicação — por exemplo, o EmpresasIQ usa **separadores (segmented control) no topo**, em vez de
   uma barra lateral própria, e nenhuma janela duplica a barra da plataforma.
 - **Ecrã inteiro** e **PWA** (instalável, funciona sem ligação): `manifest.webmanifest` + `sw.js`;
@@ -1436,14 +1438,15 @@ alta. A resposta é construída em direto — os passos (skill, plano, ferrament
 aparecem à medida que acontecem.
 
 O Jarvis está **sempre à mão**: a página `/jarvis` e a entrada **Jarvis** na barra lateral
-(*Investigação e IA*), que também aparece no Menu Iniciar. Além disso, o código traz um **widget
-flutuante** — um botão só com o ícone que abre o **Control Center** — mas está **desligado**
-(`JARVIS_WIDGET_ENABLED` em `chat-ui/src/App.tsx`): o painel flutuante tapava o trabalho nas
-páginas de dados. O painel tem o *estado do sistema* num relance (modelo, quantas ferramentas
-expõe cada gateway, estado da voz), quatro atalhos para os pedidos mais comuns (*maiores
-contratos*, *ficha de empresa*, *notícias de mercado*, *estado do sistema*) e a conversa completa
-com passos, fontes e sugestões. O botão arrasta-se (a posição fica guardada), o microfone está
-sempre no compositor e o histórico é **o mesmo** da página — os dois sincronizam-se.
+(*Investigação e IA*), que também aparece no Menu Iniciar. Além disso, um **widget flutuante** — um
+botão só com o ícone que abre o **Control Center** — acompanha a plataforma; liga-se e desliga-se em
+**Preferências do dock → Widget do Jarvis** (desligado, o Jarvis fica na página e na barra lateral).
+O painel tem o *estado do sistema* num relance (modelo, quantas ferramentas expõe cada gateway,
+estado da voz), quatro atalhos para os pedidos mais comuns (*maiores contratos*, *ficha de empresa*,
+*notícias de mercado*, *estado do sistema*) e a conversa completa com passos, fontes e sugestões. O
+botão arrasta-se (a posição fica guardada), o microfone está sempre no compositor e o histórico é
+**o mesmo** da página — os dois sincronizam-se. Esconde-se na página `/jarvis` (aí já está a conversa
+toda) e no `/visualizador` (para o painel não tapar o painel de campos, os filtros e os visuais).
 
 Voz, por ordem de preferência e sempre com degradação:
 

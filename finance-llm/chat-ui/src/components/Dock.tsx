@@ -1777,6 +1777,12 @@ function DockPreferences({
             checked={windowMode}
             onChange={onWindowModeChange}
           />
+          <ToggleRow
+            label="Widget do Jarvis"
+            hint="O botão flutuante do Control Center, no canto inferior direito. Desligado, o Jarvis fica na página /jarvis e na barra lateral."
+            checked={prefs.jarvisWidget}
+            onChange={(jarvisWidget) => onChange({ jarvisWidget })}
+          />
           <div className="space-y-1.5">
             <span className="text-xs text-muted-foreground">Barra lateral</span>
             <div className="flex gap-1 rounded-xl bg-white/5 p-1">

@@ -614,33 +614,42 @@ function readRecent(): string[] {
 
 let recentCache = readRecent();
 
-/** Memoriza uma vista visitada (mais recente primeiro, sem duplicados). */
+function sameOrder(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((item, index) => item === b[index]);
+}
+
+/**
+ * Memoriza uma vista visitada (mais recente primeiro, sem duplicados).
+ *
+ * Parte sempre do que está **guardado** (pode trazer entradas de outros
+ * separadores, que assim se preservam), mas o que a barra lateral mostra só é
+ * substituído quando a ordem muda **aqui**: reagir às escritas dos outros
+ * separadores reordenava a secção «Recentes» a cada escrita alheia e, com
+ * vários separadores abertos, a lista trocava de ordem sem parar — a barra
+ * lateral parecia piscar.
+ */
 export function recordRecentView(id: string) {
   if (!id) return;
-  const next = [id, ...recentCache.filter((item) => item !== id)].slice(0, RECENT_LIMIT);
-  if (next.length === recentCache.length && next.every((item, index) => item === recentCache[index])) return;
-  recentCache = next;
-  try {
-    window.localStorage.setItem(RECENT_KEY, JSON.stringify(next));
-  } catch {
-    // Sem persistência.
+  const stored = readRecent();
+  const next = [id, ...stored.filter((item) => item !== id)].slice(0, RECENT_LIMIT);
+  if (!sameOrder(next, stored)) {
+    try {
+      window.localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+    } catch {
+      // Sem persistência.
+    }
   }
+  if (sameOrder(next, recentCache)) return;
+  recentCache = next;
   window.dispatchEvent(new Event(RECENT_EVENT));
 }
 
 function subscribeRecent(onChange: () => void) {
   if (typeof window === "undefined") return () => {};
-  const onStorage = (event: StorageEvent) => {
-    if (event.key && event.key !== RECENT_KEY) return;
-    recentCache = readRecent();
-    onChange();
-  };
+  /* Sem ouvinte de `storage` de propósito: cada separador mantém a sua ordem e
+     funde o que os outros fizeram na visita seguinte (ver `recordRecentView`). */
   window.addEventListener(RECENT_EVENT, onChange);
-  window.addEventListener("storage", onStorage);
-  return () => {
-    window.removeEventListener(RECENT_EVENT, onChange);
-    window.removeEventListener("storage", onStorage);
-  };
+  return () => window.removeEventListener(RECENT_EVENT, onChange);
 }
 
 /** Últimas vistas visitadas (mais recentes primeiro). */

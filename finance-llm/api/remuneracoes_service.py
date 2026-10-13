@@ -1231,33 +1231,111 @@ def _brasao(item: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     }
 
 
-def _indice_municipios() -> Dict[str, Dict[str, Any]]:
-    """Chave do município → brasão, data de criação, código e população.
+# A lista da Wikipédia desambigua os municípios homónimos pelo nome da região
+# («Calheta (Açores)», «Lagoa (Algarve)»); o MAI dá o distrito. Este mapa liga os
+# dois: o distrito de Faro é o Algarve.
+REGIOES_MUNICIPIO = {
+    "acores": "acores",
+    "madeira": "madeira",
+    "algarve": "algarve",
+    "faro": "algarve",
+}
 
-    Como o dos edifícios das câmaras, é construído uma só vez: a lista serve o
-    mapa (308 concelhos de uma vez) e a ficha de cada um.
+
+def _sem_parenteses(nome: str) -> str:
+    """«Calheta (Açores)» → «Calheta»; «Miranda do Douro (Miranda de l Douro)» → idem."""
+    return re.sub(r"\s*\([^)]*\)\s*$", "", (nome or "").strip()).strip()
+
+
+def _regiao(texto: Optional[str]) -> Optional[str]:
+    """A região que desambigua homónimos: Açores, Madeira ou Algarve (distrito de Faro)."""
+    dobrado = _fold(texto or "")
+    for marca, regiao in REGIOES_MUNICIPIO.items():
+        if marca in dobrado:
+            return regiao
+    return None
+
+
+def _indice_municipios() -> Dict[str, Any]:
+    """Como encontrar o registo de um município pelo nome do concelho.
+
+    Devolve três leituras da mesma lista: `por_nome` (o caso comum, um município
+    por nome), `por_regiao` (os homónimos, que só o distrito decide) e `lista`
+    (o último recurso, para nomes que a Wikipédia escreve de outra maneira).
+
+    Um nome com mais do que um município («Calheta», «Lagoa») **sai** do
+    `por_nome`: mais vale não mostrar brasão do que mostrar o de outro concelho.
     """
     with _LOCK:
         if "indice_municipios" in _CACHE:
             return _CACHE["indice_municipios"]
-    indice: Dict[str, Dict[str, Any]] = {}
+
+    por_nome: Dict[str, Dict[str, Any]] = {}
+    por_regiao: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    registos: List[tuple] = []
+    repetidos: set = set()
     for item in municipios().get("municipios") or []:
-        chave = chave_territorio(item.get("municipio") or "")
-        if chave and chave not in indice:
-            indice[chave] = item
+        bruto = item.get("municipio") or ""
+        chave = chave_territorio(_sem_parenteses(bruto))
+        if not chave:
+            continue
+        registos.append((chave, item))
+        regiao = _regiao(bruto)
+        if regiao:
+            por_regiao[(chave, regiao)] = item
+        if chave in por_nome:
+            repetidos.add(chave)
+        else:
+            por_nome[chave] = item
+    for chave in repetidos:
+        por_nome.pop(chave, None)
+    # O recurso aos nomes compostos não inclui os homónimos: «Calheta» sozinha
+    # não pode virar brasão de uma das Calhetas por ordem alfabética.
+    lista = [item for chave, item in registos if chave not in repetidos]
+
+    indice = {"por_nome": por_nome, "por_regiao": por_regiao, "lista": lista}
     with _LOCK:
         _CACHE["indice_municipios"] = indice
     return indice
 
 
-def municipio_do_concelho(nome: str) -> Optional[Dict[str, Any]]:
-    """O registo do município (brasão, criação) pelo nome do concelho."""
-    return _indice_municipios().get(chave_territorio(nome or ""))
+def _municipio_por_nome_composto(lista: List[Dict[str, Any]], nome: str) -> Optional[Dict[str, Any]]:
+    """O último recurso do casamento: «Vila da Praia da Vitória» ↔ «Praia da Vitória».
+
+    Só corre para os nomes que não resolveram por chave, pelo que a tolerância a
+    nomes contidos não pode trocar o brasão de um município pelo de outro.
+    """
+    for item in lista:
+        candidato = _sem_parenteses(item.get("municipio") or "")
+        if _mesmo_nome(nome, candidato) or _mesmo_nome(candidato, nome):
+            return item
+    return None
 
 
-def _dados_do_municipio(nome: Optional[str]) -> Dict[str, Any]:
+def municipio_do_concelho(nome: str, distrito: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """O registo do município (brasão, criação) pelo nome do concelho.
+
+    O `distrito` não é decorativo: «Calheta» existe na Madeira e nos Açores e
+    «Lagoa» nos Açores e no Algarve, e é ele que escolhe o brasão certo.
+    """
+    indice = _indice_municipios()
+    chave = chave_territorio(nome or "")
+    if not chave:
+        return None
+    regiao = _regiao(distrito)
+    if regiao:
+        achado = indice["por_regiao"].get((chave, regiao))
+        if achado:
+            return achado
+    achado = indice["por_nome"].get(chave)
+    if achado:
+        return achado
+    return _municipio_por_nome_composto(indice["lista"], nome or "")
+
+
+def _dados_do_municipio(nome: Optional[str], distrito: Optional[str] = None) -> Dict[str, Any]:
     """Brasão e data de criação de um concelho, prontos a mostrar."""
-    item = municipio_do_concelho(nome or "")
+    item = municipio_do_concelho(nome or "", distrito)
     return {
         "brasao": _brasao(item),
         "criacao": (item or {}).get("criacao"),
@@ -1278,41 +1356,40 @@ def listar_municipios(
     """Os 308 municípios com o brasão, a data de criação e o que cada um recebe.
 
     Junta as três peças que interessam a quem olha para um município: a
-    identidade (brasão, criação, código), o território (eleitores, votantes,
-    freguesias) e o abono que lhe cabe pelo escalão.
+    identidade (brasão, criação, código), o território (eleitores, votantes) e o
+    abono que lhe cabe pelo escalão. A lista é a dos **concelhos** — e não a da
+    Wikipédia —, para que os homónimos apareçam os dois, cada um com o seu brasão.
     """
     dados = municipios()
-    por_chave = {chave_territorio(c.get("nome") or ""): c for c in territorios().get("concelhos") or []}
-    regiao = {chave_territorio(c["nome"]): c.get("distrito") for c in territorios().get("concelhos") or []}
-
     itens = []
-    for item in dados.get("municipios") or []:
-        nome = item.get("municipio") or ""
-        concelho = por_chave.get(chave_territorio(nome)) or {}
-        if apenas_com_brasao and not (item.get("credito") or {}).get("url"):
+    for concelho in territorios().get("concelhos") or []:
+        nome = concelho.get("nome") or ""
+        registo = municipio_do_concelho(nome, concelho.get("distrito"))
+        item = _dados_do_municipio(nome, concelho.get("distrito"))
+        if apenas_com_brasao and not (item["brasao"] or {}).get("foto"):
             continue
-        distrito_item = concelho.get("distrito") or regiao.get(chave_territorio(nome))
-        if distrito and _fold(distrito) not in _fold(distrito_item or ""):
+        if distrito and _fold(distrito) not in _fold(concelho.get("distrito") or ""):
             continue
         if q:
             termo = _fold(q)
-            alvo = f"{nome} {distrito_item or ''} {item.get('codigo') or ''}"
+            alvo = f"{nome} {concelho.get('distrito') or ''} {item.get('codigo') or ''}"
             if termo not in _fold(alvo):
                 continue
         escalao = escalao_por_eleitores("municipio", concelho.get("eleitores"), nome) or {}
         itens.append({
             "nome": nome,
             "concelho_id": concelho.get("id"),
-            "distrito": distrito_item,
-            "codigo": item.get("codigo"),
-            "brasao": _brasao(item),
-            "criacao": item.get("criacao"),
-            "criacao_ano": item.get("ano"),
-            "populacao_2021": item.get("populacao_2021"),
+            "distrito": concelho.get("distrito"),
+            "codigo": item["codigo"],
+            "brasao": item["brasao"],
+            "criacao": item["criacao"],
+            "criacao_ano": item["criacao_ano"],
+            "populacao_2021": item["populacao_2021"],
             "eleitores": concelho.get("eleitores"),
             "votantes": concelho.get("votantes"),
             "escalao": escalao.get("designacao"),
             "remuneracao_mensal": _remuneracao_mensal("municipio", concelho.get("eleitores"), None, nome),
+            "nome_wikipedia": (registo or {}).get("municipio"),
         })
 
     if ordem == "criacao":
@@ -2428,7 +2505,7 @@ def listar_concelhos(
 
     def linha(c: Dict[str, Any]) -> Dict[str, Any]:
         nome = c.get("nome") or ""
-        identidade = _dados_do_municipio(nome)
+        identidade = _dados_do_municipio(nome, c.get("distrito"))
         escalao = escalao_por_eleitores("municipio", c.get("eleitores"), nome) or {}
         ponto = coordenadas("municipio", nome, c.get("distrito")) or {}
         return {
@@ -2514,7 +2591,7 @@ def concelho_detail(concelho: str) -> Dict[str, Any]:
     doc["total_eleitores_freguesias"] = sum((f.get("eleitores") or 0) for f in freguesias_doc)
     doc["remuneracoes_freguesias"] = _agregado_freguesias(freguesias_doc)
     doc["eleitos"] = eleitos_concelho(encontrado.get("id"))
-    doc.update(_dados_do_municipio(encontrado.get("nome")))
+    doc.update(_dados_do_municipio(encontrado.get("nome"), encontrado.get("distrito")))
     doc["fonte"] = dados.get("fonte")
     doc["fonte_url"] = dados.get("fonte_url")
     doc["fonte_geo"] = (geo() or {}).get("fonte")
@@ -2595,7 +2672,9 @@ def mapa(
             sem_coordenadas.append(item.get("nome"))
         camara_do_edificio = camara_do_municipio(item.get("nome") or "") if nivel == "municipio" else None
         credito = (camara_do_edificio or {}).get("credito") or {}
-        identidade = _dados_do_municipio(item.get("nome")) if nivel == "municipio" else {}
+        identidade = (
+            _dados_do_municipio(item.get("nome"), item.get("distrito")) if nivel == "municipio" else {}
+        )
         features.append({
             "id": item.get("id"),
             "nome": item.get("nome"),
@@ -2895,7 +2974,11 @@ def _docs_territorios() -> List[Dict[str, Any]]:
         executivo = (eleitos_doc or {}).get("executivo") or {}
         nomes_doc = (eleitos_doc or {}).get("nomes") or {}
         camara_edificio = (eleitos_doc or {}).get("camara_municipal") or {}
-        identidade = municipio_do_concelho(territorio.get("nome") or "") if prefixo == "concelho" else None
+        identidade = (
+            municipio_do_concelho(territorio.get("nome") or "", territorio.get("distrito"))
+            if prefixo == "concelho"
+            else None
+        )
         return {
             "doc_id": f"{prefixo}-{territorio.get('id')}",
             "territory_id": territorio.get("id"),

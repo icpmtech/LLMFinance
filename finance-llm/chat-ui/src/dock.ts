@@ -1023,6 +1023,8 @@ export type DockPrefs = {
   items: string[];
   /** Ícones removidos do dock. */
   parked: string[];
+  /** Mostrar o botão flutuante do Jarvis (o Control Center), em qualquer página. */
+  jarvisWidget: boolean;
   /** Versão da ordem do dock (migrações de arrumação). */
   version?: number;
 };
@@ -1048,6 +1050,7 @@ export const DEFAULT_DOCK_PREFS: DockPrefs = {
   overflow: true,
   items: DEFAULT_ITEMS,
   parked: DEFAULT_PARKED,
+  jarvisWidget: true,
   version: ORDER_VERSION,
 };
 
@@ -1151,6 +1154,7 @@ function sanitize(raw: Partial<DockPrefs> | null): DockPrefs {
     overflow: typeof raw?.overflow === "boolean" ? raw.overflow : DEFAULT_DOCK_PREFS.overflow,
     items: items.length ? [...items, ...newVisible] : DEFAULT_DOCK_PREFS.items,
     parked: [...parked, ...newParked],
+    jarvisWidget: typeof raw?.jarvisWidget === "boolean" ? raw.jarvisWidget : DEFAULT_DOCK_PREFS.jarvisWidget,
     version: ORDER_VERSION,
   };
 }
@@ -1303,4 +1307,14 @@ export function useDockSpacer() {
   if (prefs.position === "bottom") return { bottom: "pb-[112px]", sides: "" };
   if (prefs.position === "left") return { bottom: "", sides: "pl-[104px]" };
   return { bottom: "", sides: "pr-[104px]" };
+}
+
+/**
+ * O botão flutuante do Jarvis mostra-se? É uma preferência do **dock**
+ * («Preferências do dock» → Interface), para se poder esconder sem tocar no
+ * código: o Jarvis fica sempre na página `/jarvis` e na barra lateral.
+ */
+export function useJarvisWidget(): boolean {
+  const prefs = useSyncExternalStore(subscribe, getDockPrefs, getDockPrefs);
+  return prefs.jarvisWidget;
 }

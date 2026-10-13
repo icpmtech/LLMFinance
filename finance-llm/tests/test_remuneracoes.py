@@ -1415,6 +1415,76 @@ def test_documentos_indexados_trazem_o_brasao_e_a_criacao(pasta_municipios: Path
     assert documentos["concelho-20"]["criacao_ano"] == 1914
 
 
+def _municipios_compostos() -> Dict[str, Any]:
+    """Os nomes difíceis da lista: homónimos, parênteses e um nome por extenso."""
+    return {
+        "recolhido_em": "2026-01-04T00:00:00Z",
+        "fonte": "Wikipédia (teste)",
+        "municipios": [
+            {"municipio": "Calheta (Açores)", "imagem": "CHT.png", "criacao": "1534", "ano": 1534, "codigo": "CHT"},
+            {"municipio": "Calheta (Madeira)", "imagem": "CLT.png", "criacao": "1502", "ano": 1502, "codigo": "CLT"},
+            {"municipio": "Lagoa (Algarve)", "imagem": "LGA.png", "criacao": "1773", "ano": 1773, "codigo": "LGA"},
+            {"municipio": "Lagoa (Açores)", "imagem": "LAG.png", "criacao": "1522", "ano": 1522, "codigo": "LAG"},
+            {
+                "municipio": "Miranda do Douro (Miranda de l Douro)",
+                "imagem": "MDR.png",
+                "criacao": "1136",
+                "ano": 1136,
+                "codigo": "MDR",
+            },
+            {"municipio": "Praia da Vitória", "imagem": "VPV.png", "criacao": "1480", "ano": 1480, "codigo": "VPV"},
+        ],
+        "total": 6,
+    }
+
+
+@pytest.fixture
+def pasta_compostos(pasta: Path) -> Path:
+    """A pasta de dados com os nomes difíceis da lista da Wikipédia."""
+    (pasta / remuneracoes.MUNICIPIOS_FILE).write_text(
+        json.dumps(_municipios_compostos(), ensure_ascii=False), encoding="utf-8"
+    )
+    remuneracoes.limpar_cache()
+    yield pasta
+    remuneracoes.limpar_cache()
+
+
+@pytest.mark.parametrize(
+    ("nome", "esperado"),
+    [
+        ("Calheta (Açores)", "Calheta"),
+        ("Lagoa (Algarve)", "Lagoa"),
+        ("Miranda do Douro (Miranda de l Douro)", "Miranda do Douro"),
+        ("Abrantes", "Abrantes"),
+    ],
+)
+def test_sem_parenteses(nome: str, esperado: str) -> None:
+    """O parêntese da lista é a desambiguação ou o nome antigo — não o nome."""
+    assert remuneracoes._sem_parenteses(nome) == esperado
+
+
+def test_municipio_do_concelho_desambigua_homonimos(pasta_compostos: Path) -> None:
+    """«Calheta» e «Lagoa» só têm brasão com o distrito à frente."""
+    madeira = remuneracoes.municipio_do_concelho("Calheta", "Região Autónoma da Madeira")
+    acores = remuneracoes.municipio_do_concelho("Calheta", "Região Autónoma dos Açores")
+    assert madeira["codigo"] == "CLT"
+    assert acores["codigo"] == "CHT"
+
+    assert remuneracoes.municipio_do_concelho("Lagoa", "Faro")["codigo"] == "LGA"
+    assert remuneracoes.municipio_do_concelho("Lagoa", "Região Autónoma dos Açores")["codigo"] == "LAG"
+
+    # Sem distrito não se adivinha: mais vale nenhum brasão do que o errado.
+    assert remuneracoes.municipio_do_concelho("Calheta") is None
+    assert remuneracoes.municipio_do_concelho("Lagoa") is None
+
+
+def test_municipio_do_concelho_liga_nomes_diferentes(pasta_compostos: Path) -> None:
+    """A lista escreve «Praia da Vitória» onde o MAI diz «Vila da Praia da Vitória»."""
+    assert remuneracoes.municipio_do_concelho("Vila da Praia da Vitória", "Açores")["codigo"] == "VPV"
+    assert remuneracoes.municipio_do_concelho("Miranda do Douro", "Bragança")["codigo"] == "MDR"
+    assert remuneracoes.municipio_do_concelho("Inexistente", "Faro") is None
+
+
 def test_stats_contam_os_brasoes(pasta_municipios: Path) -> None:
     """O painel diz quantos municípios têm brasão e data de criação."""
     dados = remuneracoes.stats()
