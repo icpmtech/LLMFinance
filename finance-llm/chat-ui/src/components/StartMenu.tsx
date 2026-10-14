@@ -52,9 +52,9 @@ export function StartMenu({ active, onClose, onOpenView }: StartMenuProps) {
       // quando as páginas iframe ou os acessos por perfil mudam.
       void iframeRevision;
       void sidebarAccess;
-      return { items: itemsFor(user?.role), groups: groupsFor(user?.role) };
+      return { items: itemsFor(user?.role, user ?? null), groups: groupsFor(user?.role, user ?? null) };
     },
-    [user?.role, iframeRevision, sidebarAccess],
+    [user, user?.role, iframeRevision, sidebarAccess],
   );
 
   /** Afixadas: as aplicações do dock, na ordem do dock. */

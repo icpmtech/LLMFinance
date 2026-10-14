@@ -34,7 +34,8 @@ class ConfirmPayload(BaseModel):
 
 
 class CapturePayload(BaseModel):
-    order_id: str
+    payment_id: str = ""
+    order_id: str = ""
 
 
 @router.get("/plans")
@@ -90,21 +91,35 @@ def mbway_status(payload: ConfirmPayload, session: Session) -> Dict[str, Any]:
 
 @router.post("/paypal/capture")
 def paypal_capture(payload: CapturePayload, session: Session) -> Dict[str, Any]:
-    """Captura uma ordem PayPal e ativa a subscrição."""
-    try:
-        from api import paypal_payments
+    """Captura a ordem PayPal de um pagamento e ativa a subscrição.
 
-        result = paypal_payments.capture_order(payload.order_id)
-        if result.get("ok") and result.get("payment_id"):
-            billing.confirm_payment(session.user.id, result["payment_id"])
-        return result
+    Aceita `payment_id` (o que o PayPal devolve no URL de retorno) ou, em
+    alternativa, `order_id` do próprio PayPal.
+    """
+    try:
+        payment_id = payload.payment_id or payload.order_id
+        if not payment_id:
+            raise HTTPException(status_code=422, detail="Indique o pagamento a confirmar.")
+        return billing.capture_paypal_payment(session.user.id, payment_id)
     except auth.AuthError as error:
         raise HTTPException(status_code=error.status_code, detail=error.message) from error
 
 
 @router.post("/confirm")
 def confirm(payload: ConfirmPayload, session: Session) -> Dict[str, Any]:
-    """Confirma manualmente um pagamento (admin ou transferência confirmada)."""
+    """Confirma um pagamento do próprio utilizador.
+
+    Serve os pagamentos **verificados automaticamente** (a captura do PayPal e a
+    consulta do estado do MB Way já confirmam sozinhos). Confirmar uma
+    transferência à mão é uma decisão de crédito e por isso é reservada aos
+    administradores (`POST /admin/payments/{id}/confirm`) — aqui, um utilizador
+    comum não pode ativar a própria subscrição sem pagar.
+    """
+    if (session.user.role or "member") != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="A confirmação manual de pagamentos é feita pela administração.",
+        )
     try:
         return billing.confirm_payment(session.user.id, payload.payment_id, admin_confirmed=True)
     except auth.AuthError as error:

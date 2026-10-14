@@ -21,6 +21,7 @@ import {
 import { DOCK_CATALOG, IFRAME_PAGES_APP, type DockApp } from "../dock";
 import { CRM_SUITE_GROUPS } from "../crmSuite";
 import { dropHidden, hiddenModules, useSidebarAccess } from "../sidebarAccess";
+import { canAccessDockApp } from "../billingAccess";
 import { APP_MODULES, CRM_VIEW_IDS, TOOL_APP_IDS, dockAppById } from "../sidebarCatalog";
 import {
   benchmarkMenuItems,
@@ -41,6 +42,7 @@ import {
   useWindowMode,
 } from "../layout";
 import { useAuth } from "../auth";
+import type { AuthUser } from "../authApi";
 import { Avatar } from "../pages/SettingsPage";
 import { getIframeRevision, iframeDockApps, subscribeIframePages } from "../iframePages";
 
@@ -163,6 +165,8 @@ interface NavGroup {
   items: NavItem[];
   /** Secções do menu de aplicações ficam abertas por omissão. */
   defaultOpen?: boolean;
+  /** Identificador de módulo para filtro de plano (ex.: "crm"). */
+  planFilter?: string;
 }
 interface AppNavProps {
   active: AppView;
@@ -259,6 +263,7 @@ const CRM_NAV_GROUPS: NavGroup[] = CRM_SUITE_GROUPS.map((area) => {
     items: area.sections
       .map((section) => crmItem(section.view))
       .filter((item): item is NavItem => Boolean(item)),
+    planFilter: "crm",
   };
 });
 
@@ -379,30 +384,43 @@ export function buildGroups(): NavGroup[] {
   ];
 }
 
+/** Papel `admin` (a área de administração é a única restrita). */
+function isAdminRole(role?: string | null) {
+  return (role ?? "member") === "admin";
+}
+
+/** Filtra itens de navegação pelo plano de subscrição do utilizador. */
+function filterPlanItems(items: NavItem[], user: AuthUser | null | undefined): NavItem[] {
+  if (!user || isAdminRole(user.role)) return items;
+  return items.filter((item) => canAccessDockApp(user, item.id));
+}
+
+/** Filtra itens agrupados pelo plano de subscrição do utilizador. */
+function filterPlanGroupItems(items: { item: NavItem; group: NavGroup }[], user: AuthUser | null | undefined): { item: NavItem; group: NavGroup }[] {
+  if (!user || isAdminRole(user.role)) return items;
+  return items.filter(({ item }) => canAccessDockApp(user, item.id));
+}
+
 /** Todos os itens de navegação, associados ao respetivo grupo. */
-function allItems(role?: string | null) {
+function allItems(role?: string | null, user?: AuthUser | null) {
   const items = buildGroups().flatMap((group) => group.items.map((item) => ({ item, group })));
   const allowed = isAdminRole(role) ? items : items.filter(({ item }) => !item.adminOnly);
   // Módulos escondidos por perfil (definidos na página de administração).
   const hidden = hiddenModules();
-  return allowed.filter(({ item }) => !hidden.has(item.id));
-}
-
-/** Papel `admin` (a área de administração é a única restrita). */
-function isAdminRole(role?: string | null) {
-  return (role ?? "member") === "admin";
+  const visible = allowed.filter(({ item }) => !hidden.has(item.id));
+  return filterPlanGroupItems(visible, user);
 }
 
 /** Item de navegação (peça partilhada com o menu Iniciar). */
 export type { NavItem, NavGroup };
 
 /** Itens de navegação permitidos ao papel indicado. */
-export function itemsFor(role?: string | null) {
-  return allItems(role);
+export function itemsFor(role?: string | null, user?: AuthUser | null) {
+  return allItems(role, user);
 }
 
 /** Grupos de navegação permitidos ao papel indicado (sem grupos vazios). */
-export function groupsFor(role?: string | null): NavGroup[] {
+export function groupsFor(role?: string | null, user?: AuthUser | null): NavGroup[] {
   const groups = buildGroups();
   const allowed = isAdminRole(role)
     ? groups
@@ -411,8 +429,24 @@ export function groupsFor(role?: string | null): NavGroup[] {
         .filter((group) => group.items.length > 0);
   // Módulos escondidos por perfil: o grupo desaparece quando fica sem itens.
   return allowed
-    .map((group) => ({ ...group, items: dropHidden(group.items) }))
+    .map((group) => {
+      let items = dropHidden(group.items);
+      // CRM é um grupo especial: todas as entradas dependem do módulo "crm".
+      if (!isAdminRole(role) && group.planFilter === "crm" && user) {
+        if (!canAccessDockApp(user, "crm")) {
+          items = [];
+        }
+      } else {
+        items = filterPlanItems(items, user);
+      }
+      return { ...group, items };
+    })
     .filter((group) => group.items.length > 0);
+}
+
+/** Exporta a função de filtro para uso externo (ex.: dock). */
+export function filterItemsByPlan(items: NavItem[], user: AuthUser | null | undefined): NavItem[] {
+  return filterPlanItems(items, user);
 }
 
 /** Remove acentos e baixa para minúsculas, para pesquisa tolerante. */
@@ -493,9 +527,9 @@ export function AppNav({ active, onNavigate, onBackToChat }: AppNavProps) {
     // não os vê como dependências).
     void iframeRevision;
     void benchmarkRevision;
-    const allowed = itemsFor(user?.role);
-    return { items: allowed, groups: groupsFor(user?.role) };
-  }, [user?.role, iframeRevision, benchmarkRevision, sidebarAccess]);
+    const allowed = itemsFor(user?.role, user ?? null);
+    return { items: allowed, groups: groupsFor(user?.role, user ?? null) };
+  }, [user, user?.role, iframeRevision, benchmarkRevision, sidebarAccess]);
 
   /* Histórico de vistas (alimenta a secção «Recentes»). */
   const recentViewId = useMemo(() => resolveItem(active, context.items)?.id ?? null, [active, context.items]);

@@ -187,6 +187,39 @@ export function approveAdminUser(userId: string, trialDays = 5): Promise<{ ok: b
   return post(`/admin/users/${encodeURIComponent(userId)}/approve`, { trial_days: trialDays });
 }
 
+/* ------------------------------------------------------- pagamentos */
+
+export type AdminPayment = {
+  id: string;
+  plan_id: string;
+  interval: string;
+  amount: number;
+  currency: string;
+  method: string;
+  status: string;
+  created_at: string;
+  paid_at?: string | null;
+  user_id: string;
+  user_email: string;
+  user_name?: string;
+  user_status?: string;
+  reference_id?: string | null;
+};
+
+export type AdminPaymentsResponse = {
+  status: string;
+  total: number;
+  items: AdminPayment[];
+};
+
+export function listAdminPayments(status: "pending" | "paid" | "all" = "pending"): Promise<AdminPaymentsResponse> {
+  return request<AdminPaymentsResponse>(`/admin/payments?status=${status}`);
+}
+
+export function confirmAdminPayment(userId: string, paymentId: string): Promise<{ ok: boolean; subscription?: { plan_id: string } }> {
+  return post(`/admin/payments/${encodeURIComponent(paymentId)}/confirm?user_id=${encodeURIComponent(userId)}`);
+}
+
 export type EventQuery = {
   level?: string;
   source?: string;

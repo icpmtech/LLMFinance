@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field
 
 from api import crm_service as crm
 from api import events_service as events
-from api.auth_routes import CurrentSession, require_session
+from api.auth_routes import CurrentSession, require_module, require_session
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class CrmOwner:
         return {"id": self.id, "email": self.email, "see_all": self.see_all}
 
 
-def crm_owner(session: Annotated[CurrentSession, Depends(require_session)]) -> CrmOwner:
+def crm_owner(session: Annotated[CurrentSession, Depends(require_module("crm"))]) -> CrmOwner:
     return CrmOwner(
         id=session.user.id,
         email=session.user.email,

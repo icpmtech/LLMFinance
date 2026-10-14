@@ -49,11 +49,13 @@ from api import scraper_scheduler as scheduler
 from api import scraper_sentiment
 from api import scraper_service as scraper
 from api import scraper_templates as templates
-from api.auth_routes import CurrentSession, require_session
+from api.auth_routes import CurrentSession, require_module, require_session
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/scraper", tags=["scraper"])
+# A recolha é um módulo pago (plano Enterprise): todas as rotas exigem sessão
+# com um plano que o inclua.
+router = APIRouter(prefix="/scraper", tags=["scraper"], dependencies=[Depends(require_module("scraper"))])
 
 Session = Annotated[CurrentSession, Depends(require_session)]
 

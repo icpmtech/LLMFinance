@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from api import auth_service as auth
+from api import billing_service as billing_service_module
 from api import events_service as events
 from api import sidebar_access
 
@@ -106,6 +107,10 @@ class UserResponse(BaseModel):
     login_count: int = 0
     preferences: Dict[str, Any] = Field(default_factory=dict)
     password_updated_at: Optional[str] = None
+    trial_expires_at: Optional[str] = None
+    approved_at: Optional[str] = None
+    pending_approval: bool = False
+    subscription: Optional[Dict[str, Any]] = None
 
 
 class SessionResponse(BaseModel):
@@ -122,6 +127,8 @@ class AuthResponse(BaseModel):
     token: str
     expires_at: str
     user: UserResponse
+    ok: bool = True
+    error: Optional[str] = None
 
 
 class MessageResponse(BaseModel):
@@ -155,6 +162,21 @@ def _require_user_active(user: Dict[str, Any]) -> None:
         raise HTTPException(status_code=403, detail="Esta conta está suspensa.")
     if auth._is_trial_expired(user):
         raise HTTPException(status_code=403, detail="O período de trial de 5 dias expirou. Efetue o pagamento para reativar o acesso.")
+
+
+def require_module(module_id: str):
+    """Dependência que restringe um endpoint ao plano do utilizador."""
+    def _check(session: CurrentSession = Depends(require_session)) -> CurrentSession:
+        user = auth.get_user_by_id(session.user.id)
+        if not user:
+            raise HTTPException(status_code=401, detail="Conta não encontrada.")
+        if not billing_service_module.can_access_module(user, module_id):
+            raise HTTPException(
+                status_code=403,
+                detail=f"O seu plano não inclui o módulo '{module_id}'. Subscreva ou atualize o plano.",
+            )
+        return session
+    return _check
 
 
 def require_session(

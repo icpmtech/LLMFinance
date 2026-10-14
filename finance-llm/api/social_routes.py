@@ -50,11 +50,12 @@ from api import scraper_sentiment
 from api import social_collectors as collectors
 from api import social_scheduler as scheduler
 from api import social_service as social
-from api.auth_routes import CurrentSession, require_session
+from api.auth_routes import CurrentSession, require_module, require_session
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/social", tags=["social"])
+# A pesquisa social é um módulo pago (plano Enterprise).
+router = APIRouter(prefix="/social", tags=["social"], dependencies=[Depends(require_module("social"))])
 
 Session = Annotated[CurrentSession, Depends(require_session)]
 

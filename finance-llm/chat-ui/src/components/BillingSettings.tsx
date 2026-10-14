@@ -78,10 +78,10 @@ export function checkMbwayStatus(paymentId: string): Promise<Record<string, unkn
   });
 }
 
-export function capturePayPal(orderId: string): Promise<Record<string, unknown>> {
+export function capturePayPal(paymentId: string): Promise<Record<string, unknown>> {
   return request("/api/billing/paypal/capture", {
     method: "POST",
-    body: JSON.stringify({ order_id: orderId }),
+    body: JSON.stringify({ payment_id: paymentId }),
   });
 }
 
@@ -131,6 +131,43 @@ export function BillingSettings() {
     void load();
   }, [load]);
 
+  /* Regresso dos gateways: o Stripe volta com `billing=success` e o PayPal com
+     `billing=paypal&payment_id=...` (a ordem é capturada aqui). Limpa os
+     parâmetros do URL para o aviso não reaparecer num refresh. */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("billing");
+    if (!status) return;
+    const paymentId = params.get("payment_id") || "";
+    const clean = () => {
+      const url = new URL(window.location.href);
+      ["billing", "payment_id", "token"].forEach((key) => url.searchParams.delete(key));
+      window.history.replaceState({}, "", url.toString());
+    };
+    if (status === "paypal" && paymentId) {
+      void (async () => {
+        try {
+          const result = await capturePayPal(paymentId);
+          setMessage({
+            kind: result.ok ? "ok" : "error",
+            text: result.ok ? "Pagamento PayPal confirmado. Subscrição ativada." : "Não foi possível capturar o pagamento PayPal.",
+          });
+          await load();
+        } catch (error) {
+          setMessage({ kind: "error", text: error instanceof Error ? error.message : "Erro ao capturar o PayPal." });
+        }
+      })();
+    } else if (status === "success") {
+      setMessage({ kind: "ok", text: "Pagamento recebido. A subscrição é ativada assim que o gateway confirmar." });
+      void load();
+    } else if (status === "cancel") {
+      setMessage({ kind: "error", text: "Pagamento cancelado." });
+    }
+    clean();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSubscribe = async () => {
     if (!selectedPlan) return;
     setBusy(true);
@@ -138,35 +175,38 @@ export function BillingSettings() {
     try {
       const result = await subscribePlan(selectedPlan, interval, method);
       if (!result.ok) {
-        setMessage({ kind: "error", text: String(result.error || "Pagamento não iniciado.") });
+        const notConfigured = result.configured === false;
+        setMessage({
+          kind: "error",
+          text: notConfigured
+            ? `${String(result.error)} Um administrador pode configurar a chave em Administração → Chaves e integrações.`
+            : String(result.error || "Pagamento não iniciado."),
+        });
         setBusy(false);
         return;
       }
       if (method === "mbway") {
         setPendingPaymentId(String(result.payment_id));
-      } else if (method === "stripe" && result.url) {
-        window.location.href = String(result.url);
-        return;
-      } else if (method === "paypal" && result.id) {
-        setPendingPaymentId(String(result.payment_id));
-        // PayPal Smart Buttons precisam de SDK; aqui abrimos uma janela simples.
-        const width = 450;
-        const height = 600;
-        const left = window.screen.width / 2 - width / 2;
-        const top = window.screen.height / 2 - height / 2;
-        const paypalWindow = window.open(
-          `https://www.paypal.com/paypalme/sabemosstudio/${result.amount || 0}EUR`,
-          "paypal",
-          `width=${width},height=${height},left=${left},top=${top}`,
-        );
-        if (!paypalWindow) {
-          setMessage({
-            kind: "error",
-            text: "O popup do PayPal foi bloqueado. Contacte o administrador para ativar manualmente.",
-          });
+        setMessage({ kind: "ok", text: String(result.instructions || "Indique o telemóvel para receber o pedido MB Way.") });
+      } else if (method === "stripe") {
+        const url = result.checkout_url ? String(result.checkout_url) : "";
+        if (url) {
+          window.location.href = url;
+          return;
         }
+        setMessage({ kind: "error", text: "O Stripe não devolveu a página de pagamento." });
+      } else if (method === "paypal") {
+        const url = result.approval_url ? String(result.approval_url) : "";
+        if (url) {
+          window.location.href = url;
+          return;
+        }
+        setMessage({ kind: "error", text: "O PayPal não devolveu a página de aprovação." });
       } else if (method === "transfer") {
-        setMessage({ kind: "ok", text: String(result.instructions || "Transferência registada. Acesso ativado após confirmação.") });
+        setMessage({
+          kind: "ok",
+          text: String(result.instructions || "Transferência registada. O acesso é ativado após confirmação."),
+        });
       }
       await load();
     } catch (error) {

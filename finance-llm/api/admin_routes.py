@@ -6,6 +6,7 @@ Só acessíveis a contas com o papel `admin`. Dão suporte à aplicação
 - `GET  /admin/overview`            — saúde do sistema (API, Elasticsearch, índices, contas, eventos)
 - `GET  /admin/users`               — lista/pesquisa de contas
 - `PATCH /admin/users/{user_id}`    — alterar papel/estado/nome
+- `POST /admin/users/{user_id}/approve` — aprovar conta pendente (inicia trial de 5 dias)
 - `DELETE /admin/users/{user_id}`   — apagar conta
 - `POST /admin/users/{user_id}/revoke-sessions` — terminar sessões de um utilizador
 - `GET  /admin/events`              — visualizador de eventos (pesquisa + paginação)
@@ -19,6 +20,9 @@ Só acessíveis a contas com o papel `admin`. Dão suporte à aplicação
 - `GET  /admin/service-keys`         — chaves de serviços externos (2captcha…), estado mascarado
 - `PUT  /admin/service-keys`         — gravar chaves (gravadas no Elasticsearch)
 - `POST /admin/service-keys/{id}/test`— testar uma chave junto do fornecedor (saldo da 2captcha)
+- `POST /admin/users/{user_id}/approve` — aprovar uma conta pendente e iniciar o trial
+- `GET  /admin/payments`             — pagamentos de subscrição pendentes de confirmação
+- `POST /admin/payments/{id}/confirm`— confirmar um pagamento e ativar a subscrição
 
 As ações de administração ficam elas próprias registadas como eventos de
 auditoria (origem `admin`).
@@ -34,6 +38,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from api import auth_service as auth
+from api import billing_service as billing
 from api import events_service as events
 from api import notification_email
 from api import service_keys
@@ -334,6 +339,57 @@ def admin_approve_user(user_id: str, payload: ApprovePayload, session: AdminSess
         user_email=session.user.email,
     )
     return {"ok": True, "user": updated}
+
+
+@router.get("/payments")
+def admin_payments(
+    session: AdminSession,
+    status: str = Query("pending", pattern="^(pending|paid|all)$"),
+) -> Dict[str, Any]:
+    """Pagamentos de subscrição, por omissão apenas os pendentes de confirmação."""
+    if status in {"pending", "all"}:
+        items = billing.list_pending_payments(limit=200)
+    else:
+        items = []
+    return {
+        "status": status,
+        "total": len(items),
+        "items": items,
+        "planos": billing.list_plans(),
+    }
+
+
+@router.post("/payments/{payment_id}/confirm")
+def admin_confirm_payment(payment_id: str, session: AdminSession, user_id: str = Query(...)) -> Dict[str, Any]:
+    """Confirma um pagamento pendente e ativa/renova a subscrição do utilizador.
+
+    Usado para validar transferências bancárias e pagamentos MB Way recebidos
+    fora do fluxo automático.
+    """
+    try:
+        target = auth.get_user_by_id(user_id)
+        if not target:
+            raise HTTPException(status_code=404, detail="Conta não encontrada.")
+        before = billing.get_user_subscription(target)
+        result = billing.confirm_payment(user_id, payment_id, admin_confirmed=True)
+        after = billing.get_user_subscription(auth.get_user_by_id(user_id) or target)
+    except auth.AuthError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.message) from error
+
+    events.log_event(
+        "warning",
+        "admin",
+        f"Pagamento confirmado: {target.get('email')} · {before.get('plan_id')} → {after.get('plan_id')}",
+        data={
+            "target_user": target.get("email"),
+            "payment_id": payment_id,
+            "plan_id": after.get("plan_id"),
+            "confirmed_by": session.user.email,
+        },
+        user_id=session.user.id,
+        user_email=session.user.email,
+    )
+    return {"ok": True, "user": result.get("user"), "subscription": after}
 
 
 @router.post("/users/{user_id}/revoke-sessions")

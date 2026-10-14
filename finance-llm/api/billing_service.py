@@ -16,6 +16,7 @@ pagamento, a conta passa a `suspended` e só volta a `active` após pagamento.
 from __future__ import annotations
 
 import logging
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
@@ -25,6 +26,7 @@ from api import events_service as events
 from api import notification_email
 from api import reports_payments
 from api import service_keys
+from api.elasticsearch_client import AUTH_USERS_INDEX, get_es_client
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,9 @@ PLAN_PRO = "pro"
 PLAN_ENTERPRISE = "enterprise"
 
 CURRENCY = "EUR"
+
+#: URL público da aplicação, usado nos retornos dos gateways (Stripe/PayPal).
+PUBLIC_APP_URL = (os.getenv("PUBLIC_APP_URL") or "http://127.0.0.1:4180").rstrip("/")
 
 PLANS: List[Dict[str, Any]] = [
     {
@@ -192,11 +197,50 @@ def list_payments(user_id: str) -> List[Dict[str, Any]]:
     return [_public_payment(payment) for payment in payments]
 
 
+def list_pending_payments(limit: int = 100) -> List[Dict[str, Any]]:
+    """Pagamentos por confirmar de todos os utilizadores (para a administração)."""
+    es = get_es_client()
+    if not es:
+        return []
+    try:
+        resp = es.search(
+            index=AUTH_USERS_INDEX,
+            body={
+                "query": {"exists": {"field": "payments"}},
+                "size": max(1, min(limit, 500)),
+                "_source": ["id", "email", "name", "status", "payments"],
+            },
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Não foi possível listar pagamentos pendentes: %s", exc)
+        return []
+
+    pending: List[Dict[str, Any]] = []
+    for hit in resp.get("hits", {}).get("hits", []):
+        source = hit.get("_source") or {}
+        for payment in source.get("payments") or []:
+            if not isinstance(payment, dict) or payment.get("status") != "pending":
+                continue
+            entry = _public_payment(payment)
+            entry["user_id"] = source.get("id")
+            entry["user_email"] = source.get("email")
+            entry["user_name"] = source.get("name")
+            entry["user_status"] = source.get("status")
+            entry["reference_id"] = (payment.get("metadata") or {}).get("mbway_request_id")
+            pending.append(entry)
+    pending.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    return pending[:limit]
+
+
 def can_access_module(user: Dict[str, Any], module_id: str) -> bool:
-    """True se o utilizador tiver um plano ativo que inclua o módulo."""
+    """True se o utilizador tiver um plano ativo que inclua o módulo.
+
+    Os administradores têm sempre acesso a tudo — gerem a plataforma e não
+    podem ficar bloqueados pelo próprio plano.
+    """
+    if (user.get("role") or "member") == "admin":
+        return True
     status = user.get("status") or auth.USER_STATUS_ACTIVE
-    if status == auth.USER_STATUS_PENDING:
-        return False
     if status != auth.USER_STATUS_ACTIVE:
         return False
     subscription = user.get("subscription") or {}
@@ -298,9 +342,23 @@ def create_payment(user_id: str, *, plan_id: str, interval: str, method: str) ->
             from api import stripe_payments
 
             session = stripe_payments.create_checkout_session(payment_id, amount, plan_id, interval)
+            if not session.get("ok"):
+                return {
+                    "ok": False,
+                    "payment_id": payment_id,
+                    "method": method,
+                    "configured": bool(session.get("configured", False)),
+                    "error": session.get("error") or "Não foi possível iniciar o pagamento com cartão.",
+                }
             payment["metadata"] = {"stripe_session_id": session.get("id")}
             _add_payment(user_id, payment)
-            return {"ok": True, "payment_id": payment_id, "method": method, **session}
+            return {
+                "ok": True,
+                "payment_id": payment_id,
+                "method": method,
+                "checkout_url": session.get("url"),
+                "amount": amount,
+            }
         except Exception as exc:  # noqa: BLE001
             logger.warning("Stripe checkout falhou: %s", exc)
             return {"ok": False, "payment_id": payment_id, "method": method, "error": str(exc)}
@@ -308,10 +366,30 @@ def create_payment(user_id: str, *, plan_id: str, interval: str, method: str) ->
         try:
             from api import paypal_payments
 
-            order = paypal_payments.create_order(payment_id, amount)
+            order = paypal_payments.create_order(
+                payment_id,
+                amount,
+                return_url=f"{PUBLIC_APP_URL}/settings?billing=paypal&payment_id={payment_id}",
+                cancel_url=f"{PUBLIC_APP_URL}/settings?billing=cancel&payment_id={payment_id}",
+            )
+            if not order.get("ok"):
+                return {
+                    "ok": False,
+                    "payment_id": payment_id,
+                    "method": method,
+                    "configured": bool(order.get("configured", False)),
+                    "error": order.get("error") or "Não foi possível criar a ordem PayPal.",
+                }
             payment["metadata"] = {"paypal_order_id": order.get("id")}
             _add_payment(user_id, payment)
-            return {"ok": True, "payment_id": payment_id, "method": method, **order}
+            return {
+                "ok": True,
+                "payment_id": payment_id,
+                "method": method,
+                "order_id": order.get("id"),
+                "approval_url": order.get("approval_url"),
+                "amount": amount,
+            }
         except Exception as exc:  # noqa: BLE001
             logger.warning("PayPal order falhou: %s", exc)
             return {"ok": False, "payment_id": payment_id, "method": method, "error": str(exc)}
@@ -430,6 +508,32 @@ def _billing_settings() -> Dict[str, Any]:
         "mbway_api_url": service_keys.resolver("mbway_api_url") or "",
         "mbway_number": service_keys.resolver("mbway_number") or "",
     }
+
+
+def capture_paypal_payment(user_id: str, payment_id: str) -> Dict[str, Any]:
+    """Captura a ordem PayPal associada a um pagamento e ativa a subscrição."""
+    from api import paypal_payments
+
+    user = auth.get_user_by_id(user_id)
+    if not user:
+        raise auth.AuthError("Conta não encontrada.", status_code=404, code="not_found")
+    payments = list(user.get("payments") or [])
+    payment = next((item for item in payments if item.get("id") == payment_id), None)
+    if not payment:
+        raise auth.AuthError("Pagamento não encontrado.", status_code=404, code="not_found")
+    order_id = (payment.get("metadata") or {}).get("paypal_order_id")
+    if not order_id:
+        raise auth.AuthError("Este pagamento não tem uma ordem PayPal associada.", status_code=422, code="no_order")
+
+    result = paypal_payments.capture_order(str(order_id))
+    if not result.get("ok"):
+        return {
+            "ok": False,
+            "error": result.get("error") or "Não foi possível capturar o pagamento PayPal.",
+            "status": result.get("status"),
+        }
+    confirmed = confirm_payment(user_id, payment_id)
+    return {"ok": True, "payment_id": payment_id, "status": result.get("status"), "user": confirmed.get("user")}
 
 
 def webhook_stripe(payload: Dict[str, Any]) -> Dict[str, Any]:

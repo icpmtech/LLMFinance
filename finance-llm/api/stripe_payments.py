@@ -16,6 +16,12 @@ from api import service_keys
 logger = logging.getLogger(__name__)
 
 
+def _app_url() -> str:
+    from api.billing_service import PUBLIC_APP_URL
+
+    return PUBLIC_APP_URL
+
+
 def _api_key() -> Optional[str]:
     return service_keys.resolver("stripe_secret_key")
 
@@ -24,7 +30,7 @@ def create_checkout_session(payment_id: str, amount: float, plan_id: str, interv
     """Cria uma sessão Stripe Checkout para a subscrição."""
     key = _api_key()
     if not key:
-        return {"ok": False, "error": "Stripe não configurado."}
+        return {"ok": False, "configured": False, "error": "Stripe não configurado. Defina a secret key na administração."}
     try:
         import stripe  # type: ignore
 
@@ -42,14 +48,14 @@ def create_checkout_session(payment_id: str, amount: float, plan_id: str, interv
                 }
             ],
             mode="payment",
-            success_url=f"http://127.0.0.1:4180/settings?billing=success&payment_id={payment_id}",
-            cancel_url=f"http://127.0.0.1:4180/settings?billing=cancel&payment_id={payment_id}",
+            success_url=f"{_app_url()}/settings?billing=success&payment_id={payment_id}",
+            cancel_url=f"{_app_url()}/settings?billing=cancel&payment_id={payment_id}",
             metadata={"payment_id": payment_id, "plan_id": plan_id, "interval": interval},
         )
-        return {"ok": True, "id": session.id, "url": session.url}
+        return {"ok": True, "configured": True, "id": session.id, "url": session.url}
     except Exception as exc:  # noqa: BLE001
         logger.warning("Stripe checkout falhou: %s", exc)
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "configured": True, "error": f"Stripe recusou o pedido: {exc}"}
 
 
 def handle_webhook(payload: Dict[str, Any]) -> Dict[str, Any]:

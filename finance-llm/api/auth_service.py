@@ -301,6 +301,7 @@ def public_user(source: Dict[str, Any]) -> Dict[str, Any]:
         "trial_expires_at": trial_expires_at,
         "approved_at": source.get("approved_at") or None,
         "pending_approval": status == USER_STATUS_PENDING,
+        "subscription": source.get("subscription") or None,
     }
 
 

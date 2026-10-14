@@ -33,11 +33,12 @@ from api import world_model as model
 from api import world_neural as neural
 from api import world_scheduler as scheduler
 from api import world_simulator as simulator
-from api.auth_routes import CurrentSession, require_session
+from api.auth_routes import CurrentSession, require_module, require_session
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/world", tags=["world"])
+# O World Model é um módulo pago (plano Enterprise).
+router = APIRouter(prefix="/world", tags=["world"], dependencies=[Depends(require_module("world"))])
 
 Session = Annotated[CurrentSession, Depends(require_session)]
 

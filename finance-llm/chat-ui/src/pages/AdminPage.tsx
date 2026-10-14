@@ -40,6 +40,7 @@ import {
   Server,
   ShieldCheck,
   ShieldOff,
+  CreditCard,
   Trash2,
   UserCog,
   Users,
@@ -47,17 +48,20 @@ import {
 } from "lucide-react";
 import {
   approveAdminUser,
+  confirmAdminPayment,
   deleteAdminUser,
   getAdminEventStats,
   getAdminOverview,
   listAdminEvents,
   listAdminLogs,
+  listAdminPayments,
   listAdminUsers,
   logAdminEvent,
   revokeAdminUserSessions,
   tailAdminLog,
   updateAdminUser,
   type AdminOverview,
+  type AdminPayment,
   type AdminUser,
   type EventLevel,
   type EventQuery,
@@ -72,7 +76,7 @@ import { AdminSidebarAccessTab } from "./AdminSidebarAccess";
 import { AdminReportsTab } from "./AdminReports";
 import { AdminBaseImpicTab } from "./AdminBaseImpic";
 
-type Tab = "overview" | "users" | "events" | "logs" | "sidebar" | "keys" | "reports" | "base-impic";
+type Tab = "overview" | "users" | "payments" | "events" | "logs" | "sidebar" | "keys" | "reports" | "base-impic";
 
 const LEVEL_STYLES: Record<string, { color: string; label: string; icon: typeof Info }> = {
   debug: { color: "bg-slate-500/15 text-slate-300 border-slate-400/20", label: "debug", icon: Bug },
@@ -769,6 +773,154 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
   );
 }
 
+/* --------------------------------------------------------- pagamentos */
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  mbway: "MB Way",
+  transfer: "Transferência",
+  stripe: "Cartão (Stripe)",
+  paypal: "PayPal",
+};
+
+/** Pagamentos de subscrição por confirmar (transferências e MB Way manuais). */
+function PaymentsTab({ onError }: { onError: (message: string | null) => void }) {
+  const [items, setItems] = useState<AdminPayment[]>([]);
+  const [status, setStatus] = useState<"pending" | "paid" | "all">("pending");
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await listAdminPayments(status);
+      setItems(response.items);
+      onError(null);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "Erro ao carregar pagamentos.");
+    } finally {
+      setLoading(false);
+    }
+  }, [onError, status]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const confirm = async (payment: AdminPayment) => {
+    if (!window.confirm(`Confirmar o pagamento ${payment.id} de ${payment.user_email} (${payment.amount.toFixed(2)} EUR)?`)) {
+      return;
+    }
+    setBusy(payment.id);
+    setNotice(null);
+    try {
+      const result = await confirmAdminPayment(payment.user_id, payment.id);
+      setNotice(
+        `Pagamento de ${payment.user_email} confirmado${result.subscription?.plan_id ? ` · plano ${result.subscription.plan_id}` : ""}.`,
+      );
+      await load();
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "Erro ao confirmar o pagamento.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <section className="flex flex-wrap items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.02] p-2">
+        <select
+          value={status}
+          onChange={(event) => setStatus(event.target.value as "pending" | "paid" | "all")}
+          className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11.5px]"
+        >
+          <option value="pending">Pendentes</option>
+          <option value="paid">Confirmados</option>
+          <option value="all">Todos</option>
+        </select>
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11.5px] transition hover:bg-white/[0.09]"
+        >
+          <RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Atualizar
+        </button>
+        <span className="ml-auto text-[11px] text-muted-foreground">{items.length} pagamento(s)</span>
+      </section>
+
+      {notice && (
+        <p className="rounded-xl border border-teal-400/20 bg-teal-400/10 px-3 py-1.5 text-[11.5px] text-teal-200">{notice}</p>
+      )}
+
+      <section className="min-h-0 flex-1 overflow-auto rounded-xl border border-white/10">
+        <table className="w-full border-collapse text-[12px]">
+          <thead className="sticky top-0 z-10 bg-[#12141a]/95 text-[10px] uppercase tracking-wide text-muted-foreground backdrop-blur">
+            <tr>
+              <th className="px-3 py-1.5 text-left font-medium">Conta</th>
+              <th className="px-3 py-1.5 text-left font-medium">Plano</th>
+              <th className="px-3 py-1.5 text-left font-medium">Método</th>
+              <th className="px-3 py-1.5 text-right font-medium">Valor</th>
+              <th className="px-3 py-1.5 text-left font-medium">Referência</th>
+              <th className="px-3 py-1.5 text-left font-medium">Criado</th>
+              <th className="px-3 py-1.5 text-right font-medium">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.length === 0 && !loading && (
+              <tr>
+                <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
+                  Sem pagamentos para este filtro.
+                </td>
+              </tr>
+            )}
+            {items.map((payment) => (
+              <tr key={payment.id} className="border-t border-white/6">
+                <td className="max-w-[220px] px-3 py-1.5">
+                  <span className="block truncate font-medium" title={payment.user_email}>
+                    {payment.user_name || payment.user_email}
+                  </span>
+                  <span className="block truncate text-[11px] text-muted-foreground">{payment.user_email}</span>
+                </td>
+                <td className="px-3 py-1.5">
+                  {payment.plan_id} · {payment.interval === "yearly" ? "anual" : "mensal"}
+                </td>
+                <td className="px-3 py-1.5">{PAYMENT_METHOD_LABELS[payment.method] ?? payment.method}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">
+                  {payment.amount.toFixed(2)} {payment.currency}
+                </td>
+                <td className="max-w-[180px] truncate px-3 py-1.5 font-mono text-[11px] text-muted-foreground" title={payment.id}>
+                  {payment.reference_id || payment.id}
+                </td>
+                <td className="whitespace-nowrap px-3 py-1.5 text-[11px] text-muted-foreground">
+                  {formatTime(payment.created_at)}
+                </td>
+                <td className="px-3 py-1.5">
+                  <div className="flex items-center justify-end gap-1">
+                    {payment.status === "pending" ? (
+                      <button
+                        type="button"
+                        disabled={busy === payment.id}
+                        title="Confirmar pagamento"
+                        onClick={() => void confirm(payment)}
+                        className="flex items-center gap-1.5 rounded-md border border-teal-400/30 bg-teal-400/10 px-2 py-1 text-[10.5px] text-teal-200 transition hover:bg-teal-400/20 disabled:opacity-40"
+                      >
+                        {busy === payment.id ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
+                        Confirmar
+                      </button>
+                    ) : (
+                      <span className="rounded-full bg-teal-400/15 px-2 py-0.5 text-[10px] text-teal-200">pago</span>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    </div>
+  );
+}
+
 /* -------------------------------------------------------------- logs */
 
 function LogsTab({ onError }: { onError: (message: string | null) => void }) {
@@ -1065,6 +1217,7 @@ export default function AdminPage() {
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "overview", label: "Visão geral", icon: <Server size={13} /> },
     { id: "users", label: "Utilizadores", icon: <UserCog size={13} /> },
+    { id: "payments", label: "Pagamentos", icon: <CreditCard size={13} /> },
     { id: "reports", label: "Relatórios", icon: <ReceiptText size={13} /> },
     { id: "base-impic", label: "Portal Base", icon: <HardDriveDownload size={13} /> },
     { id: "events", label: "Eventos", icon: <Activity size={13} /> },
@@ -1124,6 +1277,7 @@ export default function AdminPage() {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
         {tab === "overview" && <OverviewTab overview={overview} onError={setError} />}
         {tab === "users" && <UsersTab onError={setError} currentUserId={user?.id} />}
+        {tab === "payments" && <PaymentsTab onError={setError} />}
       {tab === "reports" && <AdminReportsTab onError={setError} />}
         {tab === "base-impic" && <AdminBaseImpicTab onError={setError} />}
         {tab === "events" && <EventsTab onError={setError} />}

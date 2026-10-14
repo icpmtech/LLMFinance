@@ -133,6 +133,35 @@ services:
       - JARVIS_WAKE_MODEL=${JARVIS_WAKE_MODEL:-tiny}
       - JARVIS_STT_MODEL=${JARVIS_STT_MODEL:-small}
       - JARVIS_VOICE=${JARVIS_VOICE:-pt-PT-RaquelNeural}
+      # --- Subscrições e pagamentos ---
+      # A resolução das chaves é **índice → ambiente → `.env`**
+      # (`api/service_keys.py`): o caminho normal é gravá-las em
+      # Administração → Chaves e integrações (efeito imediato, sem reiniciar).
+      # Estas entradas existem como *fallback* — sem elas, o contentor só as veria
+      # pelo `.env` copiado para dentro da imagem, que fica desatualizado
+      # relativamente ao `.env` do host depois da build.
+      #
+      # URL público usado nos retornos do Stripe e do PayPal.
+      - PUBLIC_APP_URL=${PUBLIC_APP_URL:-http://127.0.0.1:4180}
+      # Stripe (cartão): chave secreta da conta.
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      # PayPal: credenciais da aplicação (sandbox ou produção).
+      - PAYPAL_CLIENT_ID=${PAYPAL_CLIENT_ID:-}
+      - PAYPAL_CLIENT_SECRET=${PAYPAL_CLIENT_SECRET:-}
+      - PAYPAL_BASE_URL=${PAYPAL_BASE_URL:-https://api-m.sandbox.paypal.com}
+      # Transferência bancária e MB Way manual.
+      - TRANSFER_IBAN=${TRANSFER_IBAN:-}
+      - MBWAY_NUMBER=${MBWAY_NUMBER:-}
+      # MB Way automático (IFTThenPay).
+      - MBWAY_API_KEY=${MBWAY_API_KEY:-}
+      - MBWAY_API_URL=${MBWAY_API_URL:-}
+      # --- Email transacional (aprovação de contas, trial e subscrições) ---
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURITY=${SMTP_SECURITY:-starttls}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-}
     depends_on:
       elasticsearch:
         condition: service_healthy
