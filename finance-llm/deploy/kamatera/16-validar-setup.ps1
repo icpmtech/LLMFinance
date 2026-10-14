@@ -50,13 +50,20 @@ $ESPERADO = @(
 )
 
 # Portas que NAO devem estar abertas a Internet. As do mailserver entram aqui
-# com excecao da 25, que tem de estar aberta (o MX aponta para la): e por onde o
-# mundo entrega correio. 587/465/993 so servem o backend, pela rede Docker, e o
-# diagnostico a partir da VM -- nao a Internet.
-$NAO_EXPOR = @(9200, 9300, 8090, 8888, 5678, 4180, 8642, 9119, 6110, 9111, 8894, 8765, 5001, 465, 587, 993)
+# com as excecoes que se explicam abaixo: a 25 (o MX aponta para la -- e por onde
+# o mundo entrega correio) e a 993/587 (leitura e submissao autenticadas, para o
+# stack do PC e para qualquer cliente de correio). A 465 (SMTPS) continua presa ao
+# loopback: nao ha cliente nenhum a usa-la.
+$NAO_EXPOR = @(9200, 9300, 8090, 8888, 5678, 4180, 8642, 9119, 6110, 9111, 8894, 8765, 5001, 465)
 
-# Portas que devem estar acessiveis de fora (a 25 entra aqui com a 22/80/443).
-$ESPERADO_EXPOR = @(22, 80, 443, 25)
+# Portas que devem estar acessiveis de fora (com a 22/80/443). A 25 e a 587
+# precisam tambem da regra no firewall da Kamatera; a 993 tambem.
+$ESPERADO_EXPOR = @(22, 80, 443, 25, 993, 587)
+
+# Sondar estas a partir do PC nao prova nada: muitos ISP bloqueiam a saida para
+# as portas de correio e o teste morre antes de sair. Falham aqui sem serem um
+# problema -- ver a sonda de dentro da VM (seccao 2).
+$NAO_CONCLUSIVA = @(25, 587)
 
 function Invoke-Vm {
     param([Parameter(Mandatory)][string]$RemoteCommand)
@@ -171,11 +178,13 @@ if ($aExp.Count -eq 0) {
 foreach ($p in $ESPERADO_EXPOR) {
     $r = Test-NetConnection -ComputerName $SshHost -Port $p -WarningAction SilentlyContinue
     Write-Host ("  :{0,-4} {1}" -f $p, $(if ($r.TcpTestSucceeded) { 'aberta (esperado)' } else { 'FECHADA -- inesperado' })) -ForegroundColor $(if ($r.TcpTestSucceeded) { 'Gray' } else { 'Red' })
-    # A 25 falhar daqui nao prova nada: muitos ISP bloqueiam a saida para a 25, e
-    # o teste morre antes de sair do PC. Para confirmar mesmo, ver de outra rede
-    # (ex.: mxtoolbox) ou usar a sonda de dentro da VM (a seccao 2).
-    if ($p -eq 25 -and -not $r.TcpTestSucceeded) {
-        Write-Host '        (pode ser o ISP a bloquear a sua saida da 25; ver a seccao 2)' -ForegroundColor DarkGray
+    # A 25 e a 587 falharem daqui nao prova nada: muitos ISP bloqueiam a saida
+    # para as portas de correio, e o teste morre antes de sair do PC. Para
+    # confirmar mesmo, ver de outra rede ou usar a sonda de dentro da VM (a
+    # seccao 2). A 993 nao tem essa desculpa: se falhar, falta a regra no
+    # firewall da Kamatera.
+    if ($NAO_CONCLUSIVA -contains $p -and -not $r.TcpTestSucceeded) {
+        Write-Host ("        (pode ser o ISP a bloquear a sua saida da {0}; ver a seccao 2)" -f $p) -ForegroundColor DarkGray
     }
 }
 

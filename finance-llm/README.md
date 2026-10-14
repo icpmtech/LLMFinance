@@ -307,6 +307,8 @@ página numa dessas rotas devolvia `{"detail":"Not Found"}`.
   atalhos para páginas do IQ OS e fontes de mercado e integração com a pesquisa global (ver abaixo).
 - **Administração** (`/admin`) — sistema, utilizadores, eventos e logs; visível apenas a contas
   com papel `admin` (ver abaixo).
+- **Permissões** (`/permissoes`) — matriz de leitura/escrita por papel e por área de rotas; visível
+  a administradores e gestores de plataforma (só o administrador grava — ver «Papéis e permissões»).
 
 ### Administração da solução
 
@@ -317,12 +319,45 @@ dock escondem-na aos restantes), com quatro separadores:
   Elasticsearch (versão, *cluster*, saúde, nós), **índices** com nº de documentos e tamanho
   (`finance_users`, `finance_sessions`, `finance_events`, `contratos`, `finance_entities`, …),
   contas por papel/estado, sessões ativas e eventos das últimas 24 h por nível, origem e caminho.
-- **Utilizadores** — pesquisa por nome/email, filtros por papel (`admin`/`member`) e estado
-  (`active`/`suspended`), sessões ativas e nº de logins por conta; alterar papel/estado, terminar
-  sessões de um utilizador e apagar contas (as ações ficam registadas como eventos de auditoria).
+- **Utilizadores** — pesquisa por nome/email, filtros por papel (`admin`/`manager`/`member`) e
+  estado (`active`/`suspended`/`pending`), **plano** (subscrição paga, trial em curso ou sem plano),
+  sessões ativas e nº de logins por conta; **aprovar** contas pendentes (inicia o trial de 5 dias),
+  alterar papel/estado, terminar sessões de um utilizador e apagar contas (as ações ficam
+  registadas como eventos de auditoria).
 - **Eventos** — o *event logger viewer* descrito abaixo.
 - **Ficheiros de log** — lista de `logs/*.log|.err|.out|.jsonl` com tamanho e data, pré-visualização
   das últimas linhas (100–3000), modo «Direto» (atualiza a cada 5 s) e quebra de linhas.
+
+### Papéis e permissões
+
+Há **três papéis** (`role` da conta, em `api/auth_service.py`):
+
+| Papel | Lê | Escreve |
+|---|---|---|
+| `admin` (Administrador) | tudo | tudo, incluindo administração da plataforma |
+| `manager` (Gestor de plataforma) | tudo | conteúdo — contratos, CRM, CMS, recolha… |
+| `member` (Utilizador) | tudo | **apenas o seu próprio estado** (sessão, subscrição, favoritos, pastas) |
+
+A regra-base é que **um utilizador comum só consulta dados**. A matriz vive no documento
+`permissions` do índice `finance_settings` (como o «Menu lateral») e edita-se em **Permissões**
+(`/permissoes`), um módulo próprio visível a administradores e gestores — só o administrador grava.
+
+A verificação é feita num **único ponto**, um *middleware* em `api/main.py`
+(`_enforce_write_permissions`), em vez de uma dependência por endpoint: são ~460 operações de
+escrita. Três decisões que evitam falsos bloqueios:
+
+- **POST nem sempre é escrita.** Pesquisas (`POST /contracts/search`), exportações, análises e
+  **previsões** (`POST /forecast`) levam o pedido no corpo; estão em `READ_LIKE`
+  (`api/permissions_service.py`) e passam sempre — senão o `member` perdia a leitura.
+- **Sem sessão, passa.** Encomendas da loja, *newsletter*, formulário de contacto e webhooks do
+  Stripe/PayPal não têm sessão; quem decide é a própria rota.
+- **Do lado do frontend** não há controlo duplicado a decidir: `/permissions/me` devolve o que a
+  conta pode escrever. Ler está sempre permitido — o que limita a leitura é o plano de subscrição
+  e o «Menu lateral».
+
+O módulo de administração é sempre exclusivo do `admin`, mesmo que a matriz seja gravada ao
+contrário. Contas com o **mesmo token** perdem o acesso no pedido seguinte quando o estado muda para
+`pending`/`suspended` (`require_session` revalida o estado em cada pedido).
 
 #### Registo de eventos (event logger)
 

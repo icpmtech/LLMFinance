@@ -25,14 +25,18 @@
 #
 # Portas
 # ------
-# So a 25 fica em `0.0.0.0`, e de proposito: e por onde o mundo entrega correio
-# (o MX aponta para ca). As restantes ficam presas a 127.0.0.1, no seguimento da
-# regra das outras pecas -- esta VM nao tem firewall, logo o que nao estiver no
-# loopback fica acessivel a Internet inteira.
+# A 25, a 993 e a 587 ficam em `0.0.0.0`, de proposito:
 #
-# O backend **nao** usa estas publicacoes: fala com o contentor pelo FQDN dentro
-# da `iqos-net`. As publicacoes no loopback existem para diagnostico a partir da
-# propria VM (`swaks`, `openssl s_client`).
+#   * 25 -- e por onde o mundo entrega correio (o MX aponta para ca);
+#   * 993 (IMAPS) e 587 (submissao autenticada) -- leitura e envio autenticados,
+#     para o stack do PC (desenvolvimento) e para qualquer cliente de correio.
+#     O backend **nao** precisa delas abertas: fala com o contentor pelo FQDN
+#     dentro da `iqos-net`. Exigi-las aqui foi uma decisao explicita: as duas
+#     portas obrigam a autenticacao (o `mynetworks` esta vazio, logo nao ha relay
+#     aberto) e o Fail2Ban esta ligado.
+#
+# A 465 (SMTPS) fica presa a 127.0.0.1, no seguimento da regra das outras pecas:
+# nao ha cliente nenhum a usa-la, so o diagnostico a partir da propria VM.
 #
 # Certificado
 # -----------
@@ -67,11 +71,13 @@ services:
     ports:
       # Entrada de correio do mundo. Publica de proposito -- ver o cabecalho.
       - "25:25"
-      # Diagnostico a partir da VM. Nao ha clientes de correio externos: quem
-      # envia e o backend, pela rede Docker.
+      # Submissao e leitura de fora: quem envia e o backend, mas o stack do PC
+      # (desenvolvimento) le e envia pelo mesmo sitio -- ver abaixo o porque de a
+      # 993 e a 587 estarem abertas a internet. A 465 (SMTPS) so serve para
+      # diagnostico a partir da VM e continua presa ao loopback.
+      - "993:993"
+      - "587:587"
       - "127.0.0.1:465:465"
-      - "127.0.0.1:587:587"
-      - "127.0.0.1:993:993"
     volumes:
       # Contas, chaves DKIM e afinacoes do Postfix. Bind mount (e nao volume) de
       # proposito: as chaves DKIM e o `postfix-accounts.cf` ficam numa pasta que se

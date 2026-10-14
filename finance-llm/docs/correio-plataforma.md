@@ -139,11 +139,11 @@ Novas caixas criam-se no servidor de correio — `deploy/kamatera` →
 
 ## Armadilhas
 
-- **Porta 993 fechada à internet, de propósito** (`127.0.0.1:993` no
-  `servicos/mailserver/compose.yml`): quem lê o correio é o backend, pela rede
-  Docker, onde `mail.sabemos.studio` resolve para o mailserver. Uma stack que
-  corra fora dessa rede (por exemplo o stack do PC) **não consegue** ler o
-  correio — o IMAP tem de estar acessível de onde o backend corre.
+- **Portas do correio**: 25, 993 e 587 estão publicadas na VM (leitura e envio
+  autenticados, para o stack do PC e para clientes de correio; a 465 fica no
+  loopback). O backend continua a usar o FQDN (`mail.sabemos.studio`) na
+  `iqos-net` — não depende das publicações. Sem as regras de firewall para a 993
+  e a 587, só a rede da VM alcança o correio.
 - **`mynetworks` vazio no DMS**: não há relay interno; o envio é sempre
   autenticado com a conta da caixa.
 - **A caixa da plataforma não guarda credenciais**: se o SMTP mudar, o IMAP

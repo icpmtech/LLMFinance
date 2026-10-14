@@ -58,7 +58,7 @@ Tudo numa VM so, com o Caddy a servir HTTPS na frente:
         |   iqos-elasticsearch  8.11 (2 GB de heap)        |
         |   iqos-mcp     :8765                             |
         |   iqos-osif-*  /  iqos-n8n  /  iqos-searxng      |
-        |   iqos-mailserver  :25 (aberta) / :587 (loopback)|
+        |   iqos-mailserver  :25 :587 :993 (abertas)     |
         +--------------------------------------------------+
                       rede Docker partilhada: iqos-net
 ```
@@ -693,9 +693,10 @@ indice, conversas, e um editor para escrever. A documentacao do modulo (rotas,
 indices, agenda e armadilhas) esta em `../../docs/correio-plataforma.md`.
 
 O que importa para o deploy: o backend le o IMAP **por dentro da `iqos-net`**,
-onde `mail.sabemos.studio` resolve para o mailserver — a 993 continua presa a
-`127.0.0.1` na VM, como os outros servicos. Se o backend correr fora dessa rede
-(o stack do PC, por exemplo), nao consegue chegar ao IMAP.
+onde `mail.sabemos.studio` resolve para o mailserver. A 993 e a 587 ficam tambem
+publicas (autenticadas, com Fail2Ban), para o stack do PC e para qualquer cliente
+de correio poder ler e enviar — ver a seccao das portas no
+`servicos/mailserver/compose.yml`. A 465 continua presa ao loopback.
 
 ### Armadilhas
 

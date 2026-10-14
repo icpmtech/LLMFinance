@@ -412,8 +412,8 @@ Write-Host '  Depois (VM):'
 Show-Vm 'free -m | sed -n 2p; df -h / | tail -1' | Out-Null
 Write-Host ''
 if ($cfg.SondaTipo -eq 'smtp') {
-    Write-Host '  A porta 25 esta aberta a Internet de proposito (o MX aponta para la);' -ForegroundColor DarkGray
-    Write-Host "  as restantes ($($cfg.Porta), 465, 993) so no loopback." -ForegroundColor DarkGray
+    Write-Host '  A 25 (entrada de correio), a 993 (IMAP) e a 587 (submissao) estao abertas' -ForegroundColor DarkGray
+    Write-Host '  a Internet de proposito -- a 465 fica no loopback. Ver o compose do servico.' -ForegroundColor DarkGray
     Write-Host '  Falta o DNS e o PTR, e a chave DKIM: ver o README desta pasta.' -ForegroundColor DarkGray
 } else {
     Write-Host "  O servico escuta so em 127.0.0.1:$($cfg.Porta) -- nao esta exposto." -ForegroundColor DarkGray
