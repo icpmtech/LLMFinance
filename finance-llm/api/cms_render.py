@@ -930,6 +930,15 @@ def _breadcrumb_json_ld(dados: List[Dict[str, str]], base_url: str) -> Dict[str,
 
 
 # --------------------------------------------------------------------------
+# Sitemap, RSS e robots
+# --------------------------------------------------------------------------
+#: Origem canónica, usada quando as definições do site não têm `base_url`. Um
+#: `<loc>` relativo é inválido num sitemap (o motor de busca rejeita o ficheiro
+#: inteiro), e sem origem não se escreve a linha `Sitemap:` no `robots.txt`.
+DEFAULT_BASE_URL = "https://sabemos.studio"
+
+
+# --------------------------------------------------------------------------
 # PWA (site instalável)
 # --------------------------------------------------------------------------
 #: Ícones do PWA, gerados por `scripts/generate_site_pwa_icons.py` e servidos em
@@ -2570,7 +2579,9 @@ def _rfc822(value: Optional[str]) -> str:
 
 def render_sitemap(settings: Optional[Dict[str, Any]] = None) -> str:
     settings = settings or store.get_settings()
-    base_url = str(settings.get("base_url") or "").rstrip("/")
+    # Sem `base_url` configurado os `<loc>` sairiam relativos, e um sitemap com
+    # endereços relativos é inválido (o motor de busca rejeita-o por inteiro).
+    base_url = str(settings.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
     entries: List[str] = []
     for page in store.published_pages():
         if (page.get("seo") or {}).get("noindex"):
@@ -2617,7 +2628,7 @@ def render_sitemap(settings: Optional[Dict[str, Any]] = None) -> str:
 
 def render_robots(settings: Optional[Dict[str, Any]] = None) -> str:
     settings = settings or store.get_settings()
-    base_url = str(settings.get("base_url") or "").rstrip("/")
+    base_url = str(settings.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
     lines = [
         "User-agent: *",
         "Allow: /site/",

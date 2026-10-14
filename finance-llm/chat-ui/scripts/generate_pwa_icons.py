@@ -1,8 +1,10 @@
 """Gera os ícones do PWA (IQ OS) em `public/`.
 
-Desenha uma marca simples e legível mesmo a 16 px — duas barras ascendentes e
-um "spark" (dados + IA) sobre um gradiente teal → azul, igual ao badge da
-plataforma.
+Desenha a marca **Sabemos Studio** — três barras ascendentes sobre o gradiente
+teal → azul da marca — legível mesmo a 16 px. A geometria e as cores são as do
+`api/site_assets/icone-sabemos-studio.svg`, que é o favicon vectorial: os dois
+têm de dizer o mesmo, ou a aplicação e o site mostram marcas diferentes (foi o
+que aconteceu, com um raio roxo na aba do browser).
 
 Uso:
     python scripts/generate_pwa_icons.py
@@ -16,8 +18,9 @@ from PIL import Image, ImageDraw
 PUBLIC = Path(__file__).resolve().parent.parent / "public"
 
 SS = 4  # super-amostragem, para suavizar as bordas
-GRADIENT_START = (18, 184, 134)   # teal
-GRADIENT_END = (37, 99, 235)      # azul
+# As cores do SVG da marca (`#0ea5a4` → `#1d4ed8`), e não uma aproximação.
+GRADIENT_START = (14, 165, 164)  # #0ea5a4
+GRADIENT_END = (29, 78, 216)  # #1d4ed8
 
 
 def gradient(size: int) -> Image.Image:
@@ -36,33 +39,22 @@ def gradient(size: int) -> Image.Image:
     return image
 
 
-def sparkle_points(cx: float, cy: float, radius: float, waist: float = 0.26) -> list[tuple[float, float]]:
-    """Spark de quatro pontas com arestas retas (igual ao ícone `Sparkles`)."""
-    w = radius * waist
-    return [
-        (cx, cy - radius),
-        (cx + w, cy - w),
-        (cx + radius, cy),
-        (cx + w, cy + w),
-        (cx, cy + radius),
-        (cx - w, cy + w),
-        (cx - radius, cy),
-        (cx - w, cy - w),
-    ]
-
-
 def draw_mark(draw: ImageDraw.ImageDraw, size: int) -> None:
-    """Marca: duas barras ascendentes + spark, a branco (coordenadas em %)."""
+    """As três barras da marca, a branco (coordenadas em % do lado).
+
+    Os números são o SVG da marca (num `viewBox` de 64) dividido por 64: as
+    barras acabam todas na mesma linha de base (49/64 = 76,6%) e crescem para a
+    esquerda, como no ícone.
+    """
     u = size / 100.0
+    branco = (255, 255, 255, 255)
 
-    def bar(x0: float, y0: float, x1: float, y1: float, fill) -> None:
-        draw.rounded_rectangle([x0 * u, y0 * u, x1 * u, y1 * u], radius=4.6 * u, fill=fill)
+    def barra(x0: float, y0: float, x1: float, y1: float) -> None:
+        draw.rounded_rectangle([x0 * u, y0 * u, x1 * u, y1 * u], radius=4.7 * u, fill=branco)
 
-    soft = (255, 255, 255, 205)
-    white = (255, 255, 255, 255)
-    bar(28, 58, 37.5, 74, soft)
-    bar(41.5, 47, 51, 74, white)
-    draw.polygon([(x * u, y * u) for x, y in sparkle_points(65, 37, 17)], fill=white)
+    barra(23.4, 53.1, 35.9, 76.6)
+    barra(43.8, 37.5, 56.3, 76.6)
+    barra(64.1, 23.4, 76.6, 76.6)
 
 
 def render(size: int, *, scale: float = 1.0, rounded: bool) -> Image.Image:

@@ -2119,9 +2119,21 @@ def render_not_found(*, settings: Optional[Dict[str, Any]] = None, message: str 
 # --------------------------------------------------------------------------
 # Sitemap e robots
 # --------------------------------------------------------------------------
-def render_sitemap(*, settings: Optional[Dict[str, Any]] = None) -> str:
+#: Origem canónica, usada quando as configurações da loja ainda não têm
+#: `base_url`. Um `<loc>` relativo é **inválido** no protocolo dos sitemaps — o
+#: motor de busca rejeita o ficheiro por inteiro — e sem origem não se escreve
+#: sequer a linha `Sitemap:` no `robots.txt`. Foi o que aconteceu: o sitemap da
+#: loja saía com `<loc>/loja/produto/…</loc>`.
+DEFAULT_BASE_URL = "https://sabemos.studio"
+
+
+def _base_url(settings: Optional[Dict[str, Any]] = None) -> str:
     settings = settings or store.get_settings()
-    base = str(settings.get("base_url") or "").rstrip("/")
+    return str(settings.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
+
+
+def render_sitemap(*, settings: Optional[Dict[str, Any]] = None) -> str:
+    base = _base_url(settings)
     urls = ["/loja", "/loja/produtos"]
     for category in store.public_categories():
         urls.append(f'/loja/categoria/{category.get("slug")}')
@@ -2135,9 +2147,7 @@ def render_sitemap(*, settings: Optional[Dict[str, Any]] = None) -> str:
 
 
 def render_robots(*, settings: Optional[Dict[str, Any]] = None) -> str:
-    settings = settings or store.get_settings()
-    base = str(settings.get("base_url") or "").rstrip("/")
+    base = _base_url(settings)
     lines = ["User-agent: *", "Disallow: /shop", "Disallow: /loja/carrinho", "Disallow: /loja/encomenda"]
-    if base:
-        lines.append(f"Sitemap: {base}/loja/sitemap.xml")
+    lines.append(f"Sitemap: {base}/loja/sitemap.xml")
     return "\n".join(lines) + "\n"
