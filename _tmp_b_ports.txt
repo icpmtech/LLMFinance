@@ -1,0 +1,25 @@
+ When configuring SMTP to send your emails, you need to choose an SMTP port. SMTP is a widely used protocol for sending email messages between servers, and it relies on specific port numbers to establish communication channels. The choice of SMTP port can affect the deliverability and security of your emails, so choosing the right port for your needs is essential. 
+ What is an SMTP port? 
+ An SMTP port is a communication endpoint that is responsible for transferring information from one server to another . While SMTP guarantees most emails are being sent on the web, a port ensures that emails are sent accurately to their intended destinations .
+ Which SMTP ports are available in Brevo?
+ Three ports are available for configuring Brevo SMTP relay services:
+ Port 587 
+ Port 587 is the primary port used for submitting emails via SMTP on the modern web. Although there are alternative ports available for submission, it is recommended to start with port 587 as the default .
+ Only consider using a different port if necessary , such as when port 587 is blocked by your hosting provider.
+ Port 2525 
+ Port 2525 is not an officially recognized SMTP port by IETF or IANA. Nevertheless, it is commonly utilized as an alternative to port 587 for SMTP submission, and it is supported by most ISPs and cloud hosting providers.
+ When port 587 is blocked , port 2525 serves as a viable alternative option.
+ Port 465 
+ Port 465 was initially designated for SMTPS (SMTP over SSL) but has since been deprecated and repurposed. However, despite its deprecation, many ISPs and cloud hosting providers continue to support port 465 for SMTP submission. 
+ When you want to create an encrypted connection with SSL encryption , this port serves as a viable alternative option.
+ Which SMTP port should I use?
+ Let’s recap how to choose the right SMTP port:
+ If you want to create an encrypted connection with TLS encryption , you should use port 587 . When configuring your website or email client to send emails through SMTP, it is recommended to use port 587 as the default option.
+ However, if port 587 is unavailable due to certain restrictions, a common alternative is port 2525 . While port 2525 is not officially recognized as an SMTP port, most service providers widely use and support it.
+ If you want to create an encrypted connection with SSL encryption , you should use port 465 for SMTP. 
+ 💡 Good to know
+SSL (Secure Sockets Layer) and TLS (Transport Layer Security) are technologies that add a security layer to SMTP and create a private channel between mail servers for sending and receiving of emails.
+ ⏩ What's next?
+ Check if an SMTP port is open on a server 
+ Send transactional emails using Brevo SMTP 
+ 

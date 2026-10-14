@@ -1,0 +1,9 @@
+ If you do not want your clients to know that you are using Brevo to send your email campaigns,   delete the Brevo logo and/or customize your DKIM signature . 
+ Delete the Brevo logo from your footer
+ Depending on the Monthly Plan you subscribed to, the Brevo logo might be displayed in the footer of your emails:
+ If you have a free plan , the logo will always be displayed in your footer.
+ If you have a Starter plan, you can purchase this option for an additional cost .
+ If you have a Standard, Professional,  or Enterprise plan, the Brevo logo does not appear in your email campaigns.
+ Customize your DKIM signature
+ If you did not authenticate your domain signature, your recipients might see Brevo's domain signature instead of yours when receiving your email:
+ After customizing your DKIM signature, the Brevo domain signature will be replaced by your custom one. To learn more, check our dedicated article Customize your DKIM signature .

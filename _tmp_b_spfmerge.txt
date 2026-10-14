@@ -1,0 +1,43 @@
+ In this article, we will explain how to merge multiple SPF records.  
+ Why would I need to merge multiple SPF records?
+ An SPF record is used to certify that the issuing IP has the right to send emails. It helps prevent fraudulent use of your domain name and is particularly effective against phishing attacks. 
+ A domain can only have one SPF record. Having more than one SPF record can negatively impact your domain reputation, as well as lead to deliverability issues and fraud opportunities. If you need to include multiple SPF records for your domain, you should merge them into a single record. 
+ Syntax of an SPF record
+ Let’s look at the different parts of an SPF record in the following example:
+ 🟢 Version 
+ An SPF record always starts with the version number "v=spf1" (version 1). This part defines the record as SPF. There used to be a second version of SPF (called "SenderID") but it was discontinued.
+ 🔵   Mechanism 
+ The second part of the SPF record consists of the mechanisms. They specify different rules on how to check for SPF and can also include a prefix (called a "qualifier").
+ ip4 — Specifies the IPv4 network range that is authorized to send emails, e.g., ip4:<ip4-address> or ip4:<ip4-network>/<prefix-length>.
+ If no prefix-length is given, /32 is assumed (singling out an individual host address). Make sure to include a prefix length greater than /16, as delivery to some smaller receivers may be impacted.
+ ip6  — Specifies the IPv6 network range that is authorized to send emails, e.g., ip6:<ip6-address> or ip6:<ip6-network>/<prefix-length>.
+The argument for the “ip6” mechanism is an IPv6 network range. If no prefix-length is given, /128 is assumed (singling out an individual host address).
+ a — Specifies the domain name of the mail server authorized to send emails by referring to a domain A record, e.g., a:brevo.com.
+The A records have to exactly match the client IP unless a prefix length is provided. In that case, each IP address returned by the A lookup will be expanded to its corresponding CIDR prefix, and the client IP will be sought within that subnet.
+ mx — Specifies the mail server s hould be used to relay emails by referring to a domain MX record, e.g., mail.brevo.com.
+The A records have to exactly match the client IP unless a prefix length is provided. In that case, each IP address returned by the A lookup will be expanded to its corresponding CIDR prefix, and the client IP will be sought within that subnet.
+ include — Specifies the mail server allowed to send emails on behalf of the domain ( third-party mail senders). It should always be placed in the middle of the SPF record. 
+The specified domain is searched for a match. If the lookup does not return a match or an error, processing proceeds to the next directive. If the domain does not have a valid SPF record, the result is a permanent error. Some mail receivers will reject based on a PermError.
+ all — Matches all mail servers and specifies how an email should be treated when a sender does not match any preceding mechanisms.  It is used with a qualifier and should always be placed at the end of the SPF record.
+ 🔴   Qualifier 
+ A qualifier is a prefix that can be included in front of a mechanism and specifies how an email should be treated when a sender does not match any of the preceding mechanisms.
+ Here are the available qualifiers:
+ +  — It is the default qualifier and refers to Pass . The server with an IP address or domain that matches a mechanism with this qualifier will pass SPF and be allowed to send for the domain.
+ -  — It refers to Fail . The server with an IP address or domain that matches a mechanism with this qualifier will fail SPF and not be allowed to send for the domain.
+ ~  — It refers to Soft fail . The server with an IP address or domain address that matches a mechanism with this qualifier will soft-fail SPF and might be allowed to send for the domain. The recipient server will accept the email but tag it as an SPF failure.
+ ?  — It refers to Neutral . The server with an IP address or domain that matches a mechanism with this qualifier will neither pass nor fail SPF as the record doesn't explicitly declare if the IP address or domain can send for the domain.
+ Merge multiple SPF records
+ To merge multiple SPF records, you need to combine the different parts of the records. Here's how to combine the following example SPF records for Google Workspace and Brevo:
+ v=spf1 include:_spf.google.com ~ all 
+ v=spf1 include:spf.brevo.com mx ~ all 
+ An SPF record always starts with the version.
+ v=spf1 
+ Then, we add both "include" mechanisms to our new record.
+ v=spf1 include:_spf.google.com include:spf.brevo.com 
+ The Brevo SPF record contains an "mx" mechanism, so we need to include it in our new record also.
+ v=spf1 include:_spf.google.com include:spf.brevo.com mx 
+ Finally, we must define how emails should be treated when a sender does not match any of the preceding mechanisms. This is done using the "all" mechanism.
+ v=spf1 include:_spf.google.com include:spf.brevo.com mx ~ all 
+ This new SPF record now replaces the old record. It allows both Google Workspace and Brevo to send emails using your domain name, while all other senders are blocked using "~all".
+ 💡 Good to know
+After making your changes, use an SPF record checker to validate your new SPF record.

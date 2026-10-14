@@ -1,0 +1,766 @@
+ 
+ 💡 Good to know
+ Brevo is gradually rolling out a new domain setup flow that covers authentication,
+ branded subdomain setup, and dedicated IP association in one guided experience.
+ If your account has access to it, check our dedicated article
+ Set up your domain in Brevo 
+ instead.
+ Domain authentication helps improve email deliverability and protects your domain from spoofing and phishing . If you’re not familiar with domain authentication, we recommend starting with our FAQ article About domain authentication (Brevo code, DKIM, DMARC) to learn more about what it is and common terms used. 
+ 📹 Watch the video below or follow the written instructions to authenticate your domain with Brevo:
+ Before you start
+ You can only authenticate a domain that you or your business own and control. Domains from free email services, such as Gmail or Yahoo (e.g., @gmail.com or @yahoo.com), cannot be authenticated .
+ If you don’t have your own domain yet, you will need to purchase one. To learn more, check our dedicated article Why you need to replace your free email address with a professional one .
+ Step 1: Add your domain to Brevo
+ First, add the domain you use to send emails to the Domains page in Brevo:
+ In Brevo, click the account dropdown and select Settings > Senders, Domains, IPs > Domains .
+ Click Add a domain . If your domain already appears on the page, click Authenticate next to it instead.
+ Enter the name of your domain. This is typically the part of your email address that comes after the "@" symbol. For example, if your email address is marketing@mycompany.com , the domain you need to add is mycompany.com .
+ Click Add domain .
+ Step 2: Authenticate your domain
+ We strongly recommend using automatic authentication whenever it’s available. Manual authentication should be used only if automatic setup is not available with your domain provider or if you prefer to configure DNS records yourself.
+ Brevo offers two methods to authenticate your domain:
+ Authenticate the domain automatically (default and recommended option) 
+In most cases, Brevo can authenticate your domain in a few clicks by connecting securely to your domain provider. Automatic authentication is faster, safer, and avoids common DNS configuration errors.
+ Authenticate the domain manually 
+Manual authentication is only needed if Brevo cannot authenticate your domain automatically . You will need to copy and paste each DNS record from Brevo to your domain’s settings. Alternatively, you can ask someone else , such as your IT team or domain provider’s support team, to complete the authentication.
+ Option 1: Authenticate the domain automatically (default and recommended option)
+ To authenticate your domain automatically, simply log in to your domain provider’s account directly from Brevo. Brevo will detect your provider, add the required DNS records (Brevo code, DKIM, DMARC), and verify the configuration. No manual DNS changes are needed.
+ To authenticate your domain automatically:
+ Select Authenticate the domain automatically .
+ Click Continue . A pop-up window appears.
+ Click Continue . Brevo automatically detects your domain provider.
+ Enter the credentials of your domain provider's account. If you're unsure what your domain provider is, check our dedicated article Identify your domain provider .
+ Click Continue . All required DNS records are added to your domain. 
+ ❗️ Important
+ If your domain already has a DMARC record, you'll be asked
+ if you want to replace it with Brevo's DMARC record. If you don't
+ want to replace your existing DMARC record with
+ Brevo's, you need to
+ authenticate your domain manually 
+ instead.
+ From the confirmation page, click Back to domain listing .
+ Your domain is now authenticated, and you do not need to do anything else.
+ Option 2: Authenticate the domain manually
+ 💡 Good to know
+ Manual authentication is
+ only required if Brevo cannot authenticate your domain automatically .
+ Alternatively, you can select
+ Ask someone else to authenticate the domain to have
+ instructions
+ sent to another person, such as your IT team or your domain provider’s
+ support.
+ No Brevo account is needed, but they need access to your domain provider
+ account.
+ To authenticate your domain manually, select Authenticate the domain yourself . You will need to copy and paste specific DNS records from Brevo into your domain provider's account. Depending on your Brevo account, you may need to add three or four records.
+ The table below outlines the DNS records used to authenticate a domain in Brevo and their respective purposes:
+ Name 
+ Type 
+ Purpose 
+ Brevo code 
+ TXT 
+ Verifies that you own and control your sending domain 
+ DKIM record 
+ 1 TXT or 2 CNAME 
+ Digitally signs emails to ensure they aren’t modified after sending 
+ DMARC record 
+ TXT 
+ Tells mail servers how to handle suspicious emails based on your DMARC policy (none, quarantine, or reject) 
+ Step 1: Add the Brevo code, DKIM, and DMARC to your domain
+ 💡 Good to know
+ Some steps of this process happen outside of Brevo ,
+ directly in your domain provider’s account.
+ Depending on your provider, the exact steps and information needed to add DNS records may vary.
+ Use the following dropdowns to find step-by-step instructions for your domain provider. If your provider isn’t listed, select the Other option for generic guidance ⬇️. 
+ Amazon Route 53 
+ ❗️ Important
+ Amazon Route 53 doesn't allow adding a record with the same
+ type
+ and name twice. If you have to add an extra record with the
+ same
+ type and name as another, enter the value of the extra record
+ on a separate line below the first record.
+ To authenticate your domain in Amazon Route 53:
+ Open a new tab in your web browser and log in to your Amazon Web Services account.
+ Open the Route 53 console .
+ In the left-side panel, select Hosted zones . This is where you'll add your DNS records.
+ Select the domain you want to authenticate.
+ Add the Brevo code
+ In Amazon Route 53, click Create record .
+ In Brevo, click Copy Brevo code name next to the Record name field and paste it into the Record name field in Amazon Route 53, or leave the field empty if instructed to do so.
+ In Amazon Route 53, select TXT from the Record type dropdown.
+ In Brevo, click Copy Brevo code value from the Value field and paste it into the Value field in Amazon Route 53.
+ In Amazon Route 53, leave the TTL and Routing policy fields as is.
+ In Amazon Route 53, click Create record .
+ Add the DKIM record
+ You will follow the same process for the DKIM record as you did for the Brevo code.
+ Different types of DKIM records may appear in your Brevo account:
+ DKIM 1 record and DKIM 2 record (CNAME type)
+ DKIM record (TXT type)
+ Select the tab that matches the DKIM records shown on your screen to view the correct instructions ⬇️:
+ DKIM 1 record and DKIM 2 record (CNAME type) DKIM record (TXT type) 
+ Add two DKIM records of CNAME type:
+ DKIM 1 record
+ In Amazon Route 53, click Create record .
+ In Brevo, click Copy DKIM 1 record name next to the Record name field and paste it into the Record name field in Amazon Route 53.
+ In Amazon Route 53, select CNAME from the  Record type dropdown.
+ In Brevo, click Copy DKIM record value next to the Value field and paste it into the Value field in Amazon Route 53.
+ In Amazon Route 53, leave the TTL and Routing policy fields as they are.
+ In Amazon Route 53, click Create record .
+ DKIM 2 record
+ In Amazon Route 53, click Create record .
+ In Brevo, click Copy DKIM 2 record name next to the Record name field and paste it into the Record name field in Amazon Route 53.
+ In Amazon Route 53, select CNAME from the Record type dropdown.
+ In Brevo, copy Copy DKIM 2 record value next to the Value field and paste it into the Value field in Amazon Route 53.
+ In Amazon Route 53, leave the TTL and Routing policy fields as they are.
+ In Amazon Route 53, click Create record .
+ Add one DKIM record of TXT type:
+ In Amazon Route 53, click Create record .
+ In Brevo, click Copy DKIM record name next to the Record name field and paste it into the Record name field in Amazon Route 53.
+ In Amazon Route 53, select TXT from the Record type dropdown.
+ In Brevo, copy Copy DKIM record value next to the Value field and paste it into the Value field in Amazon Route 53. 
+ In Amazon Route 53, leave the TTL and Routing policy fields as is.
+ In Amazon Route 53, click Create record .
+ Add the DMARC record
+ You will follow the same process for the DMARC record as you did for the Brevo code and DKIM record.
+ In Amazon Route 53, click Create record .
+ In Brevo, click Copy DMARC record name next to the Record name field and paste it into the Record name field in Amazon Route 53.
+ In Amazon Route 53, select TXT from the Record type dropdown.
+ In Brevo, click Copy DMARC record value next to the Value field and paste it into the Value field in Amazon Route 53.
+ In Amazon Route 53, leave the TTL and Routing policy fields as is.
+ In Amazon Route 53, click Create record .
+ You have added the values for the Brevo code, DKIM, and DMARC . Now, verify if your domain is authenticated in the next section .
+ Amen 
+ To authenticate your domain in Amen:
+ Open a new tab in your web browser and log in to your Amen account.
+ Under Domaines (Domain) , select the domain you want to authenticate.
+ Select Domaines et DNS (Domains and DNS) .
+ Select Configuration DNS (DNS configuration) .
+ Go to the Gestion avancée (Advanced management) tab. This is where you'll add your DNS records.
+ Add the Brevo code
+ In Amen, click Ajouter un enregistrement (Add a record) .
+ In Brevo, click Copy Brevo code name next to the Name field and paste it into the Nom (Name) field in Amen.
+ In Amen, select TXT .
+ In Brevo, click Copy Brevo code value from the Value field and paste it into the Valeur (Value) field in Amen.
+ In Amen, leave the Type/Valeur par défaut (Type/Default value) field as is.
+ In Amen, click Valider (Confirm) .
+ Add the DKIM record
+ You will follow the same process for the DKIM record as you did for the Brevo code.
+ Different types of DKIM records may appear in your Brevo account:
+ DKIM 1 record and DKIM 2 record (CNAME type)
+ DKIM record (TXT type)
+ Select the tab that matches the DKIM records shown on your screen to view the correct instructions.
+ DKIM 1 record and DKIM 2 record (CNAME type) DKIM record (TXT type) 
+ Add two DKIM records of CNAME type:
+ DKIM 1 record
+ In Amen, click Ajouter un enregistrement (Add a record) .
+ In Brevo, click Copy DKIM 1 record name next to the Name field and paste it into the Nom (Name) field in Amen.
+ In Amen, select CNAME .
+ In Brevo, click Copy DKIM 1 record value next to the Value field and paste it into the Valeur (Value) field in Amen.
+ In Amen, leave the Type/Valeur par défaut (Type/Default value) field as is.
+ In Amen, click Valider (Confirm) .
+ DKIM 2 record
+ In Amen, click Ajouter un enregistrement (Add a record) .
+ In Brevo, click Copy DKIM 2 record name next to the Name field and paste it into the Nom (Name) field in Amen.
+ In Amen, select CNAME .
+ In Brevo, click Copy DKIM 2 record value next to the Value field and paste it into the Valeur (Value) field in Amen.
+ In Amen, leave the Type/Valeur par défaut (Type/Default value) field as is.
+ In Amen, click Valider (Confirm) .
+ Add one DKIM record of TXT type:
+ In Amen, click Ajouter un enregistrement (Add a record) .
+ In Brevo, click Copy DKIM record name next to the Name field and paste it into the Nom (Name) field in Amen.
+ In Amen, select TXT .
+ In Brevo, click Copy DKIM record value next to the Value field and paste it into the Valeur (Value) field in Amen.
+ In Amen, leave the Type/Valeur par défaut (Type/Default value) field as is.
+ In Amen, click Valider (Confirm) .
+ Add the DMARC record
+ You will follow the same process for the DMARC record as you did for the Brevo code and DKIM record.
+ In Amen, click Ajouter un enregistrement (Add a record) .
+ In Brevo, click Copy the DMARC record name next to the Name field and paste it into the Nom (Name) field in Amen.
+ In Amen, select TXT .
+ In Brevo, click Copy the DMARC record value next to the Value field and paste it into the Valeur (Value) field in Amen. 
+ In Amen, leave the Type/Valeur par défaut (Type/Default value) field as is.
+ In Amen, click Valider (Confirm) .
+ You have added the values for the Brevo code, DKIM, and DMARC . Now, verify if your domain is authenticated in the next section .
+ Bluehost 
+ To authenticate your domain in Bluehost:
+ Open a new tab in your web browser and log in to your Bluehost account.
+ In the left-side panel, click Domains .
+ At the bottom of the page, open the Advanced Tools dropdown.
+ Next to Advanced DNS Records , click Manage . This is where you'll add your DNS records.
+ (Optional) If a warning message is shown, click Continue .
+ Add the Brevo code
+ In Bluehost, click + Add Record .
+ In Bluehost, click TXT from the Type dropdown.
+ In Brevo, locate the value in the Host Record field and select the same value from the Refers to dropdown in Bluehost. If the value isn't listed, select Other Hosts . Then, in Brevo, click Copy Brevo code host record and paste it into the Host Name field in Bluehost.
+ In Brevo, click Copy Brevo code TXT value next to the TXT value field and paste it into the TXT value field in Bluehost.
+ In Bluehost, select 1 Hour from the TTL dropdown.
+ In Bluehost, click Add .
+ Add the DKIM record
+ You will follow the same process for the DKIM record as you did for the Brevo code.
+ Different types of DKIM records may appear in your Brevo account:
+ DKIM 1 record and DKIM 2 record (CNAME type)
+ DKIM record (TXT type)
+ Select the tab that matches the DKIM records shown on your screen to view the correct instructions ⬇️:
+ DKIM 1 record and DKIM 2 record (CNAME type) DKIM record (TXT type) 
+ Add two DKIM records of CNAME type:
+ DKIM 1 record
+ In Bluehost, click + Add Record .
+ In Bluehost, select CNAME from the Type dropdown.
+ In Bluehost, select Other Host from the Refers to dropdown.
+ In Brevo, click Copy DKIM 1 record host record  next to the Host Record field and paste it into the Host Name field in Bluehost.
+ In Brevo, click Copy DKIM 1 record TXT value next to the TXT Value field and paste it into the Alias to field in Bluehost.
+ In Bluehost, select 1 Hour from the TTL dropdown.
+ In Bluehost, click Add .
+ DKIM 2 record
+ In Bluehost, click + Add Record .
+ In Bluehost, select CNAME from the Type dropdown.
+ In Bluehost, select Other Host from the Refers to dropdown.
+ In Brevo, click Copy DKIM 2 record host record  next to the Host Record field and paste it into the Host Name field in Bluehost.
+ In Brevo, click Copy DKIM 2 record TXT value next to the TXT Value field and paste it into the Alias to field in Bluehost.
+ In Bluehost, select 1 Hour from the TTL dropdown.
+ In Bluehost, click Add .
+ Add one DKIM record of TXT type:
+ Click + Add Record .
+ From the Type dropdown, select TXT .
+ From the Refers to dropdown, select Other Host .
+ In Brevo, click Copy DKIM record host record  next to the Host Record field and paste it into the Host Name field in Bluehost.
+ In Brevo, click Copy DKIM record TXT value next to the TXT Value field and paste it into the Alias to field in Bluehost.
+ From the TTL dropdown, select 1 Hour .
+ Click Add .
+ Add the DMARC record
+ You will follow the same process for the DMARC record as you did for the Brevo code and DKIM record.
+ Click + Add Record .
+ From the Type dropdown, select TXT .
+ From the Refers to dropdown, select Other Host .
+ In Brevo, click Copy DMARC record host record next to the Host Record field and paste it into the Host Name field in Bluehost.
+ In Brevo, click Copy DMARC record TXT value next to the TXT value field and paste it into the TXT value  field in Bluehost.
+ From the TTL dropdown, select 1 Hour .
+ Click Add .
+ You have added the values for the Brevo code, DKIM, and DMARC . Now, verify if your domain is authenticated in the next section .
+ Cloudflare 
+ To authenticate your domain in Cloudflare:
+ Open a new tab in your web browser and log in to your Cloudflare account.
+ From your account home page, select the domain you want to authenticate.
+ In the left-side panel, click DNS > Records . This is where you'll add your DNS records.
+ Add the Brevo code
+ In Cloudflare, click Add record .
+ In Cloudflare, select TXT from the Type dropdown.
+ In Brevo, click Copy Brevo code name next to the Name field and paste it into the Name field in Cloudflare.
+ In Cloudflare, leave the TTL field as is.
+ In Brevo, click Copy Brevo code content  next to the Content field and paste it into the Content field in Cloudflare.
+ In Cloudfare, click Save .
+ Add the DKIM record
+ You will follow the same process for the DKIM record as you did for the Brevo code.
+ Different types of DKIM records may appear in your Brevo account:
+ DKIM 1 record and DKIM 2 record (CNAME type)
+ DKIM record (TXT type)
+ Select the tab that matches the DKIM records shown on your screen to view the correct instructions ⬇️:
+ DKIM 1 record and DKIM 2 record (CNAME type) DKIM record (TXT type) 
+ ❗️ Important
+ When using DKIM records of CNAME type,
+ deactivate CNAME flattening 
+ in Cloudflare.
+ If CNAME flattening is activated, Cloudflare converts
+ the
+ record
+ to a TXT record, and DKIM authentication will fail.
+ To learn more, check
+ Cloudflare's documentation .
+ Add two DKIM records of CNAME type:
+ DKIM 1 record
+ Click Add record .
+ In Cloudflare, select CNAME  from the Type dropdown.
+ In Brevo, click Copy DKIM record 1 name next to the Name field and paste it into the Name field in Cloudflare.
+ In Brevo, click Copy DKIM record 1 content next to the Content field and paste it into the Target field in Cloudflare.
+ In Cloudflare, deactivate the Proxy status toggle.
+ Click Save .
+ DKIM 2 record
+ Click Add record .
+ In Cloudflare, select CNAME  from the Type dropdown.
+ In Brevo, click Copy DKIM record 2 name next to the Name field and paste it into the Name field in Cloudflare.
+ In Brevo, click Copy DKIM record 2 content next to the Content field and paste it into the Target field in Cloudflare.
+ In Cloudflare, deactivate the Proxy status toggle. 
+ Click Save .
+ Add one DKIM record of TXT type:
+ In Cloudflare, click Add record .
+ In Cloudflare, select TXT from the Type dropdown.
+ In Brevo, click Copy DKIM record name  next to the Name field and paste it into the Name field in Cloudflare.
+ In Cloudflare, leave the TTL field as is.
+ In Brevo, click Copy DKIM record content  next to the Content field and paste it into the Content field in Cloudflare.
+ In Cloudflare, click Save .
+ Add the DMARC record
+ You will follow the same process for the DMARC record as you did for the Brevo code and DKIM record.
+ In Cloudflare, click Add record .
+ In Cloudflare, select TXT  from the Type dropdown.
+ In Brevo, click Copy DMARC record name  next to the Name field and paste it into the Name field in Cloudflare.
+ In Cloudflare, leave the TTL field as is.
+ In Brevo, click Copy DMARC record content  next to the Content field and paste it into the Content field in Cloudflare.
+ In Cloudflare, click Save .
+ You have added the values for the Brevo code, DKIM, and DMARC . Now, verify if your domain is authenticated in the next section .
+ Gandi 
+ To authenticate your domain in Gandi:
+ Open a new tab in your web browser and log in to your Gandi account.
+ In the left-side panel, select Domain .
+ Select the domain you want to authenticate.
+ Go to the DNS Records tab. This is where you'll add your DNS records.
+ Add the Brevo code
+ In Gandi, click Add record .
+ In Gandi, select TXT from the Type dropdown.
+ In Gandi, leave the TTL and Unit fields as they are.
+ In Brevo, click Copy Brevo code name next to the Name field and paste it into the Name field in Gandi.
+ In Brevo, click Copy Brevo code text value next to the Text value field and paste it into the Text value field in Gandi.
+ In Gandi, click Save .
+ Add the DKIM record
+ You will follow the same process for the DKIM record as you did for the Brevo code.
+ Different types of DKIM records may appear in your Brevo account:
+ DKIM 1 record and DKIM 2 record (CNAME type)
+ DKIM record (TXT type)
+ Select the tab that matches the DKIM records shown on your screen to view the correct instructions ⬇️:
+ DKIM 1 record and DKIM 2 record (CNAME type) DKIM record (TXT type) 
+ Add two DKIM records of CNAME type:
+ DKIM 1 record
+ Click Add record .
+ From the Type dropdown, select CNAME .
+ Leave the TTL and Unit fields as they are.
+ In Brevo, click Copy DKIM record 1 name next to the Name field and paste it into the Name field in Gandi.
+ In Brevo, click Copy DKIM record 1 text value next to the Text value field and paste it into the Hostname field in Gandi.
+ Click Save .
+ DKIM 2 record
+ Click Add record .
+ From the Type dropdown, select CNAME .
+ Leave the TTL and Unit fields as they are.
+ In Brevo, click Copy DKIM record 2 name next to the Name field and paste it into the Name field in Gandi.
+ In Brevo, click Copy DKIM record 2 text value next to the Text value field and paste it into the Hostname field in Gandi.
+ Click Save .
+ Add one DKIM record of TXT type:
+ Click Add record .
+ From the Type dropdown, select TXT .
+ Leave the TTL and Unit fields as they are.
+ In Brevo, click Copy DKIM record name next to the Name field and paste it into the Name field in Gandi.
+ In Brevo, click Copy DKIM record text value next to the Text value field and paste it into the Hostname field in Gandi.
+ Click Save .
+ Add the DMARC record
+ You will follow the same process for the DMARC record as you did for the Brevo code and DKIM record.
+ Click Add record .
+ From the Type dropdown, select TXT .
+ Leave the TTL and Unit fields as they are.
+ In Brevo, click Copy DMARC record name next to the Name field and paste it into the Name field in Gandi.
+ In Brevo, click Copy DMARC record text value next to the Text value field and paste it into the Text value field in Gandi.
+ Click Save .
+ You have added the values for the Brevo code, DKIM, and DMARC . Now, verify if your domain is authenticated in the next section .
+ GoDaddy 
+ To authenticate your domain in GoDaddy:
+ Open a new tab in your web browser and log in to your GoDaddy account. 
+ Under All Products and Services , click DNS next to the domain you want to authenticate. This is where you'll add your DNS records.
+ Add the Brevo code
+ In GoDaddy, click Add More Records .
+ In GoDaddy, select TXT from the Type dropdown.
+ In Brevo, click Copy Brevo code name next to the Name field and paste it into the Name field in GoDaddy.
+ In Brevo, click Copy Brevo code value next to the Value field and paste it into the Value field in GoDaddy.
+ In GoDaddy, leave the TTL field as is.
+ In GoDaddy, click Save .
+ Add the DKIM record
+ You will follow the same process for the DKIM record as you did for the Brevo code.
+ Different types of DKIM records may appear in your Brevo account:
+ DKIM 1 record and DKIM 2 record (CNAME type)
+ DKIM record (TXT type)
+ Select the tab that matches the DKIM records shown on your screen to view the correct instructions ⬇️:
+ DKIM 1 record and DKIM 2 record (CNAME type) DKIM record (TXT type) 
+ Add two DKIM records of CNAME type:
+ DKIM 1 record
+ In GoDaddy, click Add New Record .
+ In GoDaddy, select CNAME from the Type dropdown.
+ In Brevo, click Copy DKIM 1 record name next to the Name field and paste it into the Name field in GoDaddy.
+ In Brevo, click Copy DKIM 1 record value next to the Value field and paste it into the Value field in GoDaddy.
+ In GoDaddy, leave the TTL field as is.
+ In GoDaddy, click Save .
+ DKIM 2 record
+ In GoDaddy, click Add New Record .
+ In GoDaddy, select CNAME from the Type dropdown.
+ In Brevo, click Copy DKIM 2 record name next to the Name field and paste it into the Name field in GoDaddy.
+ In Brevo, click Copy DKIM 2 record value next to the Value field and paste it into the Value field in GoDaddy. 
+ In GoDaddy, leave the TTL field as is.
+ In GoDaddy, click Save .
+ Add one DKIM record of TXT type:
+ In GoDaddy, click Add New Record .
+ In GoDaddy, select TXT from the Type dropdown.
+ In Brevo, click Copy DKIM record name next to the Name field and paste it into the Name field in GoDaddy.
+ In Brevo, click Copy DKIM record value next to the Value field and paste it into the Value field in GoDaddy. 
+ In GoDaddy, leave the TTL field as is.
+ In GoDaddy, click Save .
+ Add the DMARC record
+ You will follow the same process for the DMARC record as you did for the Brevo code and DKIM record.
+ In GoDaddy, click Add New Record .
+ In GoDaddy, select TXT from the Type dropdown.
+ In Brevo, click Copy DMARC record name next to the Name field and paste it into the Name field in GoDaddy.
+ In Brevo, click Copy DMARC record value next to the Value field and paste it into the Value field in GoDaddy.
+ In GoDaddy, leave the TTL field as is.
+ In GoDaddy, click Save .
+ You have added the values for the Brevo code, DKIM, and DMARC . Now, verify if your domain is authenticated in the next section .
+ Google Domains 
+ ❗️ Important
+ Google Domains doesn't allow adding a record with the same
+ type
+ and name twice. If you have to add an extra record with the
+ same
+ type and name as another, add it below the first one by clicking
+ + Add more to this record and pasting the
+ data
+ in the new field.
+ To authenticate your domain in Google Domains:
+ Open a new tab in your web browser and log in to your Google Domains account.
+ Click Manage next to the domain you want to authenticate.
+ In the sidebar menu, select DNS .
+ Go to the Custom resource records section at the bottom of the page. This is where you'll add your DNS records.
+ Add the Brevo code
+ In Brevo, click Copy Brevo code hostname next to the Host name field and paste it into the Name  field in Google Domains.
+ In Google Domains, select TXT from the Type dropdown.
+ In Google Domains, leave the TTL field as is.
+ In Brevo, click Copy Brevo code data next to the Data field and paste it into the Data field in Google Domains.
+ In Google Domains, click Add .
+ Add the DKIM record
+ You will follow the same process for the DKIM record as you did for the Brevo code.
+ Different types of DKIM records may appear in your Brevo account:
+ DKIM 1 record and DKIM 2 record (CNAME type)
+ DKIM record (TXT type)
+ Select the tab that matches the DKIM records shown on your screen to view the correct instructions ⬇️:
+ DKIM 1 record and DKIM 2 record (CNAME type) DKIM record (TXT type) 
+ Add two DKIM records of CNAME type:
+ DKIM 1 record
+ In Brevo, click Copy DKIM 1 record hostname next to the Host name field and paste it into the Host name  field in Google Domains.
+ In Google Domains, select CNAME from the Type dropdown.
+ In Google Domains, leave the TTL field as is.
+ In Brevo, click Copy DKIM 1 record data next to the Data field and paste it into the Data field in Google Domains.
+ In Google Domains, click Save .
+ DKIM 2 record
+ In Brevo, click Copy DKIM 2 record hostname next to the Host name field and paste it into the Host name  field in Google Domains.
+ In Google Domains, select CNAME from the Type dropdown.
+ In Google Domains, leave the TTL field as is.
+ In Brevo, click Copy DKIM 2 record data next to the Data field and paste it into the Data field in Google Domains. 
+ In Google Domains, click Save .
+ Add one DKIM record of TXT type:
+ In Brevo, click Copy DKIM record hostname next to the Host name field and paste it into the Host name  field in Google Domains.
+ In Google Domains, select CNAME from the Type dropdown.
+ In Google Domains, leave the TTL field as is.
+ In Brevo, click Copy DKIM record data next to the Data field and paste it into the Data field in Google Domains. 
+ In Google Domains, click Save .
+ Add the DMARC record
+ You will follow the same process for the DMARC record as you did for the Brevo code and DKIM record.
+ In Brevo, click Copy DMARC record hostname next to the Host name field and paste it into the Host name  field in Google Domains.
+ In Google Domains, select TXT from the Type dropdown.
+ In Google Domains, leave the TTL field as is.
+ In Brevo, click Copy DMARC record data next to the Data field and paste it into the Data field in Google Domains.
+ In Google Domains, click Save .
+ You have added the values for the Brevo code, DKIM, and DMARC . Now, verify if your domain is authenticated in the next section .
+ Hostinger 
+ To authenticate your domain in Hostinger:
+ Open a new tab in your web browser and log in to your Hostinger account.
+ Under Domain , click Manage next to the domain you want to authenticate.
+ In the left-side panel, click DNS/Nameservers . This is where you'll add your DNS records.
+ Add the Brevo code
+ In Hostinger, under Manage DNS records , select TXT from the Type dropdown.
+ In Brevo, click Copy Brevo code name next to the Name field and paste it into the Name  field in Hostinger.
+ In Brevo, click Copy Brevo code TXT value next to the TXT value field and paste it into the TXT value  field in Hostinger.
+ In Hostinger, leave the TTL field as is.
+ In Hostinger, click Add Record .
+ Add the DKIM record
+ You will follow the same process for the DKIM record as you did for the Brevo code.
+ Different types of DKIM records may appear in your Brevo account:
+ DKIM 1 record and DKIM 2 record (CNAME type)
+ DKIM record (TXT type)
+ Select the tab that matches the DKIM records shown on your screen to view the correct instructions ⬇️:
+ DKIM 1 record and DKIM 2 record (CNAME type) DKIM record (TXT type) 
+ Add two DKIM records of CNAME type:
+ DKIM 1 record
+ In Hostinger, under Manage DNS records , select CNAME from the Type dropdown.
+ In Brevo, click Copy DKIM 1 record name next to the Name field and paste it into the Name  field in Hostinger.
+ In Brevo, click Copy DKIM 1 record TXT value next to the TXT value field and paste it into the TXT value  field in Hostinger.
+ In Hostinger, leave the TTL field as is.
+ In Hostinger, click Add Record .
+ DKIM 2 record
+ In Hostinger, under Manage DNS records , select CNAME from the Type dropdown.
+ In Brevo, click Copy DKIM 2 record name next to the Name field and paste it into the Name  field in Hostinger.
+ In Brevo, click Copy DKIM 2 record TXT value next to the TXT value field and paste it into the TXT value  field in Hostinger. 
+ In Hostinger, leave the TTL field as is.
+ In Hostinger, click Add Record .
+ Add one DKIM record of TXT type:
+ In Hostinger, under Manage DNS records , select TXT from the Type dropdown.
+ In Brevo, click Copy DKIM record name next to the Name field and paste it into the Name  field in Hostinger.
+ In Brevo, click Copy DKIM record TXT value next to the TXT value field and paste it into the TXT value  field in Hostinger. 
+ In Hostinger, leave the TTL field as is.
+ In Hostinger, click Add Record .
+ Add the DMARC record
+ You will follow the same process for the DMARC record as you did for the Brevo code and DKIM record.
+ In Hostinger, under Manage DNS records , select TXT from the Type dropdown.
+ In Brevo, click Copy DKIM record name next to the Name field and paste it into the Name  field in Hostinger.
+ In Brevo, click Copy DKIM record data next to the TXT value field and paste it into the TXT value  field in Hostinger.
+ In Hostinger, leave the TTL field as is.
+ In Hostinger, click Add Record .
+ You have added the values for the Brevo code, DKIM, and DMARC . Now, verify if your domain is authenticated in the next section .
+ IONOS 
+ To authenticate your domain in IONOS:
+ Open a new tab in your web browser and log in to your IONOS account.
+ Click Domains & SSL .
+ Next to the domain you want to authenticate, click the ⚙️ gear icon and select DNS . This is where you'll add your DNS records.
+ Add the Brevo code
+ Click Add record .
+ Select TXT .
+ In Brevo, click Copy Brevo code hostname next to the Hostname field and paste it into the Host name field in IONOS.
+ In Brevo, click Copy Brevo code value next to the Value field and paste it into the Value field in IONOS.
+ Leave the TTL field as is.
+ Click Save .
+ Add the DKIM record
+ You will follow the same process for the DKIM record as you did for the Brevo code.
+ Different types of DKIM records may appear in your Brevo account:
+ DKIM 1 record and DKIM 2 record (CNAME type)
+ DKIM record (TXT type)
+ Select the tab that matches the DKIM records shown on your screen to view the correct instructions ⬇️:
+ DKIM 1 record and DKIM 2 record (CNAME type) DKIM record (TXT type) 
+ Add two DKIM records of CNAME type:
+ DKIM 1 record
+ Click Add record .
+ Select CNAME .
+ In Brevo, click Copy DKIM 1 record hostname next to the Hostname field and paste it into the Host name field in IONOS.
+ In Brevo, click Copy DKIM 1 record value next to the Value field and paste it into the Points to field in IONOS.
+ Leave the TTL field as is.
+ Click Save .
+ DKIM 2 record
+ Click Add record .
+ Select CNAME .
+ In Brevo, click Copy DKIM 2 record hostname next to the Hostname field and paste it into the Host name field in IONOS.
+ In Brevo, click Copy DKIM 2 record value next to the Value field and paste it into the Points to field in IONOS. 
+ Leave the TTL field as is.
+ Click Save .
+ Add one DKIM record of TXT type:
+ Click Add record .
+ Select TXT .
+ In Brevo, click Copy DKIM record hostname next to the Hostname field and paste it into the Host name field in IONOS.
+ In Brevo, click Copy DKIM record value next to the Value field and paste it into the Points to field in IONOS. 
+ Leave the TTL field as is.
+ Click Save .
+ Add the DMARC record
+ You will follow the same process for the DMARC record as you did for the Brevo code and DKIM record.
+ Click Add record .
+ Select TXT .
+ In Brevo, click Copy DMARC record hostname next to the Hostname field and paste it into the Host name field in IONOS.
+ In Brevo, click Copy DMARC record value next to the Value field and paste it into the Value field in IONOS.
+ Leave the TTL field as is.
+ Click Save .
+ You have added the values for the Brevo code, DKIM, and DMARC . Now, verify if your domain is authenticated in the next section .
+ OVH 
+ To authenticate your domain in OVH:
+ Open a new tab in your web browser and log in to your OVH account.
+ Go to the Web Cloud tab.
+ In the left-side panel, under Domain names , select the domain you want to authenticate.
+ Go to the DNS zone tab. This is where you'll add your DNS records.
+ Add the Brevo code
+ On the right-hand side, click Add an entry .
+ Select TXT .
+ In Brevo, click Copy Brevo code sub-domain next to the Sub-domain field and paste it into the Sub-domain field in OVH, or leave the field empty if instructed to do so.
+ Leave the TTL field as is.
+ In Brevo, click Copy Brevo code value next to the Value field and paste it into the Value field in OVH.
+ Click Next .
+ Verify your information and click Confirm .
+ Add the DKIM record
+ You will follow the same process for the DKIM record as you did for the Brevo code.
+ Different types of DKIM records may appear in your Brevo account:
+ DKIM 1 record and DKIM 2 record (CNAME type)
+ DKIM record (TXT type)
+ Select the tab that matches the DKIM records shown on your screen to view the correct instructions ⬇️:
+ DKIM 1 record and DKIM 2 record (CNAME type) DKIM record (TXT type) 
+ Add two DKIM records of CNAME type:
+ DKIM 1 record
+ On the right-hand side, click Add an entry .
+ Select CNAME .
+ In Brevo, click Copy DKIM 1 record sub-domain next to the Sub-domain field and paste it into the Sub-domain  field in OVH.
+ Leave the TTL field as is.
+ In Brevo, click Copy DKIM 1 record value next to the Value field and paste it into the Target field in OVH.
+ Click Next .
+ Verify your information and click  Confirm .
+ DKIM 2 record
+ On the right-hand side, click Add an entry .
+ Select CNAME .
+ In Brevo, click Copy DKIM 2 record sub-domain next to the Sub-domain field and paste it into the Sub-domain  field in OVH.
+ Leave the TTL field as is.
+ In Brevo, click Copy DKIM 2 record value next to the Value field and paste it into the Target field in OVH. 
+ Click Next .
+ Verify your information and click  Confirm .
+ Add one DKIM record of TXT type:
+ On the right-hand side, click Add an entry .
+ Select TXT .
+ In Brevo, click Copy DKIM record sub-domain next to the Sub-domain field and paste it into the Sub-domain  field in OVH.
+ Leave the TTL field as is.
+ In Brevo, click Copy DKIM record value next to the Value field and paste it into the Target field in OVH.
+ Click Next .
+ Verify your information and click  Confirm .
+ Add the DMARC record
+ You will follow the same process for the DMARC record as you did for the Brevo code and DKIM record.
+ On the right-hand side, click Add an entry .
+ Select TXT .
+ In Brevo, click Copy DMARC record sub-domain next to the Sub-domain field and paste it into the Sub-domain  field in OVH.
+ Leave the TTL field as is.
+ In Brevo, click Copy DMARC record value next to the Value field and paste it into the Value field in OVH.
+ Click Next .
+ Verify your information and click  Confirm .
+ You have added the values for the Brevo code, DKIM, and DMARC . Now, verify if your domain is authenticated in the next section .
+ Wix 
+ To authenticate your domain on Wix:
+ Open a new tab in your web browser and log in to your Wix account.
+ Click your account dropdown and select Domains .
+ Next to the domain you want to authenticate, click the three dots icon and select Manage DNS records . This is where you'll add your DNS records.
+ Add the Brevo code
+ Under TXT (Text) , click + Add Record .
+ In Brevo, click Copy Brevo code host name next to the Host name  field and paste it into the Host name field in Wix, or leave the field empty if instructed to do so.
+ In Brevo, click Copy Brevo code value next to the Value field and paste it into the Value field in Wix.
+ Leave the TTL field as is.
+ Click Save .
+ Add the DKIM record
+ You will follow the same process for the DKIM record as you did for the Brevo code.
+ Different types of DKIM records may appear in your Brevo account:
+ DKIM 1 record and DKIM 2 record (CNAME type)
+ DKIM record (TXT type)
+ Select the tab that matches the DKIM records shown on your screen to view the correct instructions ⬇️:
+ DKIM 1 record and DKIM 2 record (CNAME type) DKIM record (TXT type) 
+ Add two DKIM records of CNAME type:
+ DKIM 1 record
+ Under CNAME (Aliases) , click + Add Record .
+ In Brevo, click Copy DKIM 1 record host name next to the Host name  field and paste it into the Host name field in Wix.
+ In Brevo, click Copy DKIM 1 record value next to the Value field and paste it into the Value field in Wix.
+ Leave the TTL field as is.
+ Click Save .
+ DKIM 2 record
+ Under CNAME (Aliases) , click + Add Record .
+ In Brevo, click Copy DKIM 2 record host name next to the Host name  field and paste it into the Host name field in Wix.
+ In Brevo, click Copy DKIM 2 record value next to the Value field and paste it into the Value field in Wix. 
+ Leave the TTL field as is.
+ Click Save .
+ Add one DKIM record of TXT type:
+ Under TXT (Text) , click + Add Record .
+ In Brevo, click Copy DKIM record host name next to the Host name  field and paste it into the Host name field in Wix.
+ In Brevo, click Copy DKIM record value next to the Value field and paste it into the Value field in Wix. 
+ Leave the TTL field as is.
+ Click Save .
+ Add the DMARC record
+ You will follow the same process for the DMARC record as you did for the Brevo code and DKIM record.
+ Under TXT (Text) , click + Add Record .
+ In Brevo, click Copy DMARC record host name next to the Host name  field and paste it into the Host name field in Wix.
+ In Brevo, click Copy DMARC record value next to the Value field and paste it into the Value field in Wix.
+ Leave the TTL field as is.
+ Click Save .
+ You have added the values for the Brevo code, DKIM, and DMARC . Now, verify if your domain is authenticated in the next section .
+ Other 
+ ❗️ Important
+ The values provided below
+ may vary depending on your specific domain provider .
+ If you encounter issues while authenticating your domain,
+ we
+ suggest contacting your domain provider's support team for
+ assistance
+ to clarify the required format. If you're unsure what your
+ domain
+ provider is, check our dedicated article
+ Identify your domain provider .
+ To authenticate your domain:
+ Open a new tab in your web browser and log in to your domain provider account.
+ Navigate to the page where you can view the DNS records for the domain you want to authenticate.
+ Add the Brevo code
+ Create a new DNS record of TXT type.
+ In Brevo, click Copy Brevo code name next to the Hostname field and paste it into the corresponding field of your domain provider. 
+ ❗️ Important
+ If your domain provider does not support this
+ value,
+ try entering "@", your domain name, or leaving
+ the
+ field blank.
+ In Brevo, click Copy Brevo code value next to the Data field and paste it into the corresponding field of your domain provider.
+ Save your DNS record.
+ Add the DKIM record
+ You will follow the same process for the DKIM record as you did for the Brevo code.
+ Different types of DKIM records may appear in your Brevo account:
+ DKIM 1 record and DKIM 2 record (CNAME type)
+ DKIM record (TXT type)
+ Select the tab that matches the DKIM records shown on your screen to view the correct instructions ⬇️:
+ DKIM 1 record and DKIM 2 record (CNAME type) DKIM record (TXT type) 
+ Add two DKIM records of CNAME type:
+ DKIM 1 record
+ Create a new DNS record of CNAME type.
+ In Brevo, click Copy DKIM 1 record name next to the Name field and paste it into the corresponding field of your domain provider.
+ In Brevo, click Copy DKIM 1 record value next to the Value field and paste it into the corresponding field of your domain provider.
+ Save your DNS record.
+ DKIM 2 record
+ Create a new DNS record of CNAME type.
+ In Brevo, click Copy DKIM 2 record name next to the Name field and paste it into the corresponding field of your domain provider.
+ In Brevo, click Copy DKIM 2 record value next to the Value field and paste it into the corresponding field of your domain provider. 
+ Save your DNS record.
+ Add one DKIM record of TXT type:
+ Create a new DNS record of TXT type.
+ In Brevo, click Copy DKIM record name next to the Name field and paste it into the corresponding field of your domain provider.
+ In Brevo, click Copy DKIM record value next to the Value field and paste it into the corresponding field of your domain provider. 
+ Save your DNS record.
+ Add the DMARC record
+ You will follow the same process for the DMARC record as you did for the Brevo code and DKIM record.
+ Create a new DNS record of TXT type.
+ In Brevo, click Copy DMARC record name next to the Hostname field and paste it into the corresponding field of your domain provider.
+ In Brevo, click Copy DMARC record value next to the Data field and paste it into the corresponding field of your domain provider.
+ Save your DNS record.
+ You have added the values for the Brevo code, DKIM, and DMARC . Now, verify if your domain is authenticated in the next section .
+ Step 2: Verify if your domain is authenticated
+ ❗️ Important
+ It can sometimes take up to 48 hours for DNS changes
+ to propagate and for your domain to appear as authenticated in Brevo.
+ This is normal, as DNS records need time to fully update across the internet.
+ After manually adding your DNS records, you can verify if your domain is authenticated.
+ In Brevo, click Authenticate this email domain at the bottom of the page with the DNS records.
+ Check your domain status: 
+ ✅ Authenticated: Your domain is now authenticated, and you do not need to do anything else.
+ ❌ Not authenticated: A pop-up will appear saying "The domain is not authenticated yet". You can repeat this process over the next 48 hours until your domain appears as Authenticated .
+ 💡 Good to know
+ If your domain is still not authenticated after 48 hours,
+ check our help article
+ Troubleshooting issues with domain authentication 
+ or
+ contact our support team 
+ for help.
+ FAQs - Domain authentication
+ How can I switch from one TXT record to two CNAME records for DKIM? 
+ To learn how to switch to two CNAME records for DKIM, check our dedicated section in the article Troubleshooting - Domain authentication .
+ I've authenticated my domain, but it still appears as "Not authenticated". What should I do? 
+ It can sometimes take up to 48 hours for DNS changes to propagate and for your domain to appear as authenticated in Brevo. This is normal, as DNS records need time to fully update across the internet.
+ If it's been less than 48 hours since you authenticated your domain, we recommend you verify its status again:
+ In Brevo, click the account dropdown and select Settings > Senders, Domains, IPs > Domains .
+ Click Authenticate next to the domain you authenticated.
+ Select Authenticate the domain yourself .
+ Click Continue .
+ Click Authenticate this email domain at the bottom of the page.
+ You can repeat this process over the next 48 hours until your domain appears as Authenticated . process a few times again during the next 48 hours.
+ If your domain still does not appear as authenticated after 48 hours , check our troubleshooting article Troubleshooting issues with domain authentication or contact our support team for help.
+ Which domain should I authenticate? 
+ Authenticate the domain or subdomain you use to send emails through Brevo (the sender domain). For example, if your email is marketing@mycompany.com , your sender domain is mycompany.com . If you send from multiple domains, authenticate each one.
+ It says my DMARC record is missing a rua tag. What should I do? 
+ To comply with Gmail, Yahoo, and Microsoft's requirements for email senders , your domain should have one DMARC record with a rua tag . If your domain already has a DMARC record but is missing a rua tag, you’ll need to update the existing record.
+ Open a new tab in your web browser and log in to your domain provider account.
+ Go to the DNS settings.
+ Locate and edit your existing DMARC record.
+ Add Brevo's rua tag at the end of the value:
+ ; rua=mailto:rua@dmarc.brevo.com 
+ Save your DMARC record.
+ Your DMARC record should now look like:
+ v=DMARC1; p=none; rua=mailto:rua@dmarc.brevo.com 
+ ❗️ Important
+ Your domain should have only one DMARC record .
+ If you have multiple DMARC records, check our dedicated section
+ in the article
+ Troubleshooting issues with domain authentication (Brevo code, DKIM, DMARC) .
+ Do I need to add an SPF or MX record to authenticate my domain?  
+ The SPF and MX records are not required to authenticate a domain. We only provide these records when setting up a dedicated IP .
+ Can I use a 2048-bit key for my DKIM record? 
+ By default, DKIM records of TXT type use a 1024-bit DKIM key . If you want to use a 2048-bit DKIM key to enhance your email security, you'll need to switch to using 2 DKIM records of CNAME type . To learn how to switch, check our dedicated section in the article Troubleshooting - Domain authentication .
+ How to verify if my emails have been signed with DKIM? 
+ Webmail services allow you to check if your email has been signed with your domain by reviewing your email headers and looking for the reference dkim=pass . If you need help finding your email headers, check our dedicated article How do I find email headers? .
+ In the above example from a Gmail email header, the reference dkim=pass confirms that the email is signed with the domain thegreenyoga.com .
+ Can I modify or delete the DNS records from my domain provider once it is authenticated? 
+ To ensure your emails are correctly sent, keep the DNS records as they are in your domain provider as long as you are using Brevo to send emails. Modifying or deleting these DNS records may lead to email delivery problems or your emails being marked as spam.
+ ⏭️ What's next?
+ Troubleshooting issues with domain authentication (Brevo code, DKIM, DMARC) 
+ Create a new sender 
+ 

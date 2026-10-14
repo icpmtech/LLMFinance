@@ -1,0 +1,570 @@
+ 
+ 💡 Good to know
+ This article covers the new domain setup flow, which
+ is being gradually rolled out and is only available to some accounts .
+ If your interface looks different, check the article
+ Authenticate your domain with Brevo (Brevo code, DKIM, DMARC) 
+ instead.
+ Setting up your domain in Brevo helps improve email deliverability, protect your sender reputation, and build trust with email providers and recipients. Brevo guides you through everything in one flow and generates all the DNS records you need to add to your domain at once.
+ The flow covers up to three aspects of your domain configuration. The following table shows which ones apply to you, depending on your IP type:
+ Domain configuration 
+ Shared IP 
+ Dedicated IP 
+ Authenticating your domain 
+Verify that you own it and allow Brevo to send emails on your behalf. 
+ Required 
+ Required 
+ Setting up a branded subdomain 
+Replace Brevo's default tracking links with your own domain, keeping your brand visible in every email. 
+ Optional 
+ Required 
+ Associating your dedicated IP with your domain 
+Get full control over your sending reputation. 
+ Not applicable 
+ Optional 
+ Before you start
+ Make sure you own the domains you want to use and know how you want to structure your setup. Check our dedicated article Domain setup for better email deliverability for guidance on choosing the right sending domain, branded subdomain, and dedicated IP configuration for your situation. If you don't have a domain yet, you will need to purchase one first.
+ Step 1: Add your sending domain
+ Add your sending domain, which is the domain that appears after the @ in your sender email address (e.g., if you send from marketing@yourcompany.com , your sending domain is yourcompany.com ).
+ In Brevo, click the account dropdown and select Settings > Senders, Domains, IPs > Domains .
+ Click Add a domain .
+ Enter your sending domain. It can be a root domain (e.g., yourcompany.com ) or a subdomain (e.g., emails.yourcompany.com ), but it must be a domain you own and not used on any other platform or email service . Enter the domain name only, without http://, https://, or www. 
+ ❗️ Important
+ If your sending domain is a root domain (e.g.,
+ yourcompany.com ), only
+ Individual DNS records will be available. Brevo-managed
+ setup (NS records) requires a subdomain because delegating DNS
+ control at root domain level would affect your entire domain,
+ including your website and other services that rely on it.
+ Click Continue .
+ Step 2: Set up a branded subdomain
+ 💡 Good to know
+ This step is
+ only required if you are on a dedicated IP . If you
+ are
+ on a shared IP and don't want to set up a branded domain, you can skip
+ to
+ Step 4 .
+ A branded subdomain replaces Brevo's default click-tracking and image-tracking URLs in your marketing emails with your own domain (e.g., img.mail.yourcompany.com instead of img.brevolinks.com ), keeping your brand visible to recipients. It also enables full SPF alignment on your sending domain, which strengthens your DMARC setup and improves deliverability. It also protects your root domain if any deliverability issues arise.
+ In the Branded subdomain field, enter a prefix for your subdomain. Choose a prefix that relates to email and is not currently used as a subdomain of your domain (e.g., send , mail , em ).
+ Click Continue .
+ Step 3: Associate your domain with a dedicated IP
+ 💡 Good to know
+ This step is only shown if you are on a dedicated IP .
+ If you
+ are
+ on a shared IP, skip to
+ Step 4 .
+ Associate your domain with one of your dedicated IPs. Your domain will then appear as the mailed-by and return-path domain in emails sent from that IP.
+ Select the dedicated IP you want to associate with your domain, or select Do not associate with a dedicated IP to send from this domain using shared IPs instead.
+ Click Continue .
+ Step 4: Choose how to authenticate and brand your domain
+ 💡 Good to know
+ This step is only shown
+ if your sending domain is a subdomain (e.g.,
+ emails.yourcompany.com ). If your sending domain is a root domain,
+ you can only add individual DNS records to it. This is because delegating
+ DNS control at root domain level would affect your entire domain,
+ including your website and any other services that rely on it. In this
+ case, skip to Step 5 .
+ Choose between adding DNS records individually or delegating your subdomain configuration to Brevo:
+ Individual DNS records 
+You add up to seven DNS records yourself in your domain provider's settings using the values Brevo provides.
+ Brevo-managed setup (recommended) 
+You add only two NS records to your domain provider, then Brevo manages all required DNS records automatically on your behalf, including any future updates.
+ Select your preferred option and click Continue .
+ Step 5: Choose how the records will be added
+ Select how you want to add the DNS records to your domain provider:
+ Automatic (recommended) 
+In most cases, Brevo can authenticate and brand your domain in a few clicks by connecting securely to your domain provider and adding the records for you. The automatic option is faster, safer, and avoids common DNS configuration errors.
+ Manual 
+The manual option is only needed if the automatic option is not available or if your domain provider does not support it. You will need to copy and paste each DNS record from Brevo to your domain's settings.
+ Delegate 
+Enter the email address of the person who manages your domain's DNS settings (e.g., your IT team or your domain provider's support). They will receive a secure link to your DNS records so that they can add them on your behalf. No Brevo account is needed, but they need access to your domain provider account.
+ Select your preferred option and click Continue .
+ Step 6: Add your DNS records
+ The records Brevo shows you depend on the options you selected in the previous steps. Follow the instructions for your chosen setup method below:
+ Option 1: Add the records automatically (recommended) 
+ Option 2: Add the records manually 
+ Option 3: Delegate to someone else 
+ Option 1: Add the records automatically (recommended)
+ Brevo detects your domain provider and adds all required DNS records automatically. No manual changes are needed.
+ In the popup window, click Continue . Brevo automatically detects your domain provider.
+ Enter the credentials for your domain provider account. If you're unsure what your domain provider is, check our dedicated article Identify your domain provider .
+ Click Continue . All required DNS records are added to your domain.
+ ❗️ Important
+ If your domain already has a DMARC record, you'll be asked whether
+ you want to replace it with Brevo's DMARC record. If you don't
+ want to replace your existing DMARC record, select
+ Manually instead to add the records yourself.
+ Click Go to domains from the confirmation page.
+ Your domain is now set up. Skip to Step 7 to verify your configuration.
+ Option 2: Add the records manually
+ 💡 Good to know
+ Some steps of this process happen outside of Brevo ,
+ directly in your domain provider account. Depending on your provider,
+ the exact steps and field names may vary.
+ The table below outlines the DNS records Brevo may show and their purposes. The records shown depend on your domain configuration and the option you selected in Step 4 :
+ Individual DNS records Brevo-managed setup 
+ Name 
+ Type 
+ Purpose 
+ A record 
+ A 
+ Associates your dedicated IP with a subdomain of your branded subdomain used as the return-path for that IP (e.g., ip1.mail.yourcompany.com )
+ 💡 Good to know
+ An A record is only required if you have
+ a dedicated
+ IP and chose to associate
+ your domain with it during
+ Step 3 .
+ Branded record 
+ CNAME 
+ Links your branded subdomain to Brevo's infrastructure for SPF and return-path 
+ DKIM 1 record 
+ CNAME 
+ Digitally signs emails to ensure they aren't modified after sending (periodically rotated with DKIM 2) 
+ DKIM 2 record 
+ CNAME 
+ Digitally signs emails to ensure they aren't modified after sending (periodically rotated with DKIM 1) 
+ DMARC record 
+ TXT 
+ Tells mail servers how to handle emails that fail authentication, based on your DMARC policy 
+ Image Redirection Record 
+ CNAME 
+ Routes image links in your emails through your own domain instead of Brevo's 
+ Redirection Record 
+ CNAME 
+ Routes tracking and click links in your emails through your own domain instead of Brevo's 
+ Name 
+ Type 
+ Purpose 
+ NS record 1 
+ NS 
+ Delegates DNS management of your branded subdomain to Brevo, so all required records are created and maintained automatically 
+ NS record 2 
+ NS 
+ Use the following dropdowns to find step-by-step instructions for your domain provider. If your provider isn't listed, select Other for generic guidance ⬇️.
+ Amazon Route 53 
+ ❗️ Important
+ Amazon Route 53 doesn't allow adding a record with the same
+ type and name twice. If you need to add an extra record with
+ the same type and name as an existing one, enter the value
+ on a separate line below the first record.
+ To add your DNS records in Amazon Route 53:
+ Open a new browser tab and log in to your
+ Amazon Web Services 
+ account.
+ Open the
+ Route 53 console .
+ In the left-side panel, select Hosted zones .
+ Select the domain you want to set up.
+ For each record shown in Brevo, repeat the following steps:
+ In Amazon Route 53, click Create record .
+ In Brevo, click Copy next to the
+ Record name field and paste the value into
+ the Record name field in Amazon Route 53,
+ or leave the field empty if instructed to do so.
+ In Amazon Route 53, select the correct record type from the
+ Record type dropdown (A, TXT, CNAME, or
+ NS records based on what is shown in Brevo).
+ In Brevo, click Copy next to the
+ Value field and paste it into the
+ Value field in Amazon Route 53.
+ Leave the TTL and Routing policy 
+ fields as they are.
+ Click Create record .
+ Repeat until all records shown in Brevo have been added. Then
+ verify your configuration .
+ Amen 
+ To add your DNS records in Amen:
+ Open a new browser tab and log in to your
+ Amen 
+ account.
+ Under Domaines (Domain) , select the domain
+ you want to set up.
+ Select Domaines et DNS (Domains and DNS) .
+ Select Configuration DNS (DNS configuration) .
+ Go to the Gestion avancée (Advanced management) 
+ tab.
+ For each record shown in Brevo, repeat the following steps:
+ In Amen, click
+ Ajouter un enregistrement (Add a record) .
+ In Brevo, click Copy next to the
+ Name field and paste it into the
+ Nom (Name) field in Amen.
+ Select the correct record type (A, TXT, CNAME, or NS records
+ based on what is shown in Brevo).
+ In Brevo, click Copy next to the
+ Value field and paste it into the
+ Valeur (Value) field in Amen.
+ Leave the
+ Type/Valeur par défaut (Type/Default value) 
+ field as is.
+ Click Valider (Confirm) .
+ Repeat until all records shown in Brevo have been added. Then
+ verify your configuration .
+ Bluehost 
+ To add your DNS records in Bluehost:
+ Open a new browser tab and log in to your
+ Bluehost 
+ account.
+ In the left-side panel, click Domains .
+ At the bottom of the page, open the Advanced Tools 
+ dropdown.
+ Next to Advanced DNS Records , click
+ Manage .
+ (Optional) If a warning message is shown, click
+ Continue .
+ For each record shown in Brevo, repeat the following steps:
+ In Bluehost, click + Add Record .
+ Select the correct record type from the Type 
+ dropdown (A, TXT, CNAME, or NS records based on what is shown
+ in Brevo).
+ In Brevo, select Other Hosts in the
+ Refers to dropdown.
+ In Brevo, click Copy next to the
+ Host Record field and paste it into the
+ Host Name field in Bluehost.
+ In Brevo, click Copy next to the
+ Value field and paste it into the corresponding
+ field in Bluehost.
+ Select 1 Hour from the TTL 
+ dropdown.
+ Click Add .
+ Repeat until all records shown in Brevo have been added. Then
+ verify your configuration .
+ Cloudflare 
+ ❗️ Important
+ If you are adding DKIM records of CNAME type,
+ deactivate CNAME flattening in Cloudflare.
+ If CNAME flattening is activated, Cloudflare converts the
+ record to a TXT record and DKIM authentication will fail.
+ To learn more, check
+ Cloudflare's documentation .
+ To add your DNS records in Cloudflare:
+ Open a new browser tab and log in to your
+ Cloudflare 
+ account.
+ From your account home, select the domain you want to set
+ up.
+ In the left-side panel, click DNS > Records .
+ For each record shown in Brevo, repeat the following steps:
+ In Cloudflare, click Add record .
+ Select the correct record type from the Type 
+ dropdown (A, TXT, CNAME, or NS records based on what is shown
+ in Brevo).
+ In Brevo, click Copy next to the
+ Name field and paste it into the
+ Name field in Cloudflare.
+ In Brevo, click Copy next to the
+ Content field and paste it into the
+ Content field in Cloudflare.
+ Leave the TTL field as is.
+ Click Save .
+ Repeat until all records shown in Brevo have been added. Then
+ verify your configuration .
+ GoDaddy 
+ To add your DNS records in GoDaddy:
+ Open a new browser tab and log in to your
+ GoDaddy 
+ account.
+ Under All Products and Services , click
+ DNS next to the domain you want to set up.
+ For each record shown in Brevo, repeat the following steps:
+ In GoDaddy, click Add New Record .
+ Select the correct record type from the Type 
+ dropdown (A, TXT, CNAME, or NS records based on what is shown
+ in Brevo).
+ In Brevo, click Copy next to the
+ Name field and paste it into the
+ Name field in GoDaddy.
+ In Brevo, click Copy next to the
+ Value field and paste it into the
+ Value field in GoDaddy.
+ Leave the TTL field as is.
+ Click Save .
+ Repeat until all records shown in Brevo have been added. Then
+ verify your configuration .
+ Gandi 
+ To add your DNS records in Gandi:
+ Open a new browser tab and log in to your
+ Gandi 
+ account.
+ In the left-side panel, select Domain .
+ Select the domain you want to set up.
+ Go to the DNS Records tab.
+ For each record shown in Brevo, repeat the following steps:
+ In Gandi, click Add record .
+ Select the correct record type from the Type 
+ dropdown (A, TXT, CNAME, or NS records based on what is shown
+ in Brevo).
+ Leave the TTL and Unit 
+ fields as they are.
+ In Brevo, click Copy next to the
+ Name field and paste it into the
+ Name field in Gandi.
+ In Brevo, click Copy next to the
+ Value field and paste it into the
+ Text value or Hostname 
+ field in Gandi.
+ Click Save .
+ Repeat until all records shown in Brevo have been added. Then
+ verify your configuration .
+ Google Domains 
+ ❗️ Important
+ Google Domains doesn't allow adding a record with the same
+ type and name twice. If you need to add an extra record with
+ the same type and name as an existing one, click
+ + Add more to this record and paste the
+ value in the new field.
+ To add your DNS records in Google Domains:
+ Open a new browser tab and log in to your
+ Google Domains 
+ account.
+ Click Manage next to the domain you want
+ to set up.
+ In the sidebar menu, select DNS .
+ Go to the Custom resource records section
+ at the bottom of the page.
+ For each record shown in Brevo, repeat the following steps:
+ In Brevo, click Copy next to the
+ Name or Hostname field
+ and paste it into the Name field in Google
+ Domains.
+ Select the correct record type from the Type 
+ dropdown (A, TXT, CNAME, or NS records based on what is shown
+ in Brevo).
+ Leave the TTL field as is.
+ In Brevo, click Copy next to the
+ Value or Data field and
+ paste it into the Data field in Google Domains.
+ Click Add or Save .
+ Repeat until all records shown in Brevo have been added. Then
+ verify your configuration .
+ Hostinger 
+ To add your DNS records in Hostinger:
+ Open a new browser tab and log in to your
+ Hostinger 
+ account.
+ Under Domain , click Manage 
+ next to the domain you want to set up.
+ In the left-side panel, click DNS/Nameservers .
+ For each record shown in Brevo, repeat the following steps:
+ Under Manage DNS records , select the correct
+ record type from the Type dropdown (A, TXT,
+ CNAME, or NS records based on what is shown in Brevo).
+ In Brevo, click Copy next to the
+ Name field and paste it into the
+ Name field in Hostinger.
+ In Brevo, click Copy next to the
+ Value field and paste it into the
+ TXT value field in Hostinger.
+ Leave the TTL field as is.
+ Click Add Record .
+ Repeat until all records shown in Brevo have been added. Then
+ verify your configuration .
+ IONOS 
+ To add your DNS records in IONOS:
+ Open a new browser tab and log in to your
+ IONOS 
+ account.
+ Click Domains & SSL .
+ Next to the domain you want to set up, click the ⚙️ gear
+ icon and select DNS .
+ For each record shown in Brevo, repeat the following steps:
+ Click Add record .
+ Select the correct record type (A, TXT, CNAME, or NS records
+ based on what is shown in Brevo).
+ In Brevo, click Copy next to the
+ Hostname field and paste it into the
+ Host name field in IONOS.
+ In Brevo, click Copy next to the
+ Value field and paste it into the
+ Value or Points to field
+ in IONOS.
+ Leave the TTL field as is.
+ Click Save .
+ Repeat until all records shown in Brevo have been added. Then
+ verify your configuration .
+ OVH 
+ To add your DNS records in OVH:
+ Open a new browser tab and log in to your
+ OVH 
+ account.
+ Go to the Web Cloud tab.
+ In the left-side panel, under Domain names ,
+ select the domain you want to set up.
+ Go to the DNS zone tab.
+ For each record shown in Brevo, repeat the following steps:
+ On the right-hand side, click Add an entry .
+ Select the correct record type (A, TXT, CNAME, or NS records
+ based on what is shown in Brevo).
+ In Brevo, click Copy next to the
+ Sub-domain field and paste it into the
+ Sub-domain field in OVH, or leave the field
+ empty if instructed to do so.
+ Leave the TTL field as is.
+ In Brevo, click Copy next to the
+ Value field and paste it into the
+ Value or Target field in
+ OVH.
+ Click Next , then verify your information
+ and click Confirm .
+ Repeat until all records shown in Brevo have been added. Then
+ verify your configuration .
+ Wix 
+ To add your DNS records in Wix:
+ Open a new browser tab and log in to your
+ Wix 
+ account.
+ Click your account dropdown and select Domains .
+ Next to the domain you want to set up, click the three dots
+ icon and select Manage DNS records .
+ For each record shown in Brevo, repeat the following steps:
+ Under the correct record type section (A, TXT, CNAME, or
+ NS records based on what is shown in Brevo), click
+ + Add Record .
+ In Brevo, click Copy next to the
+ Host name field and paste it into the
+ Host name field in Wix, or leave the field
+ empty if instructed to do so.
+ In Brevo, click Copy next to the
+ Value field and paste it into the
+ Value field in Wix.
+ Leave the TTL field as is.
+ Click Save .
+ Repeat until all records shown in Brevo have been added. Then
+ verify your configuration .
+ Other 
+ ❗️ Important
+ The steps below are generic guidance. The exact field names
+ and steps may vary depending on your domain provider. If
+ you encounter issues, contact your domain provider's support
+ team for assistance. If you're unsure what your domain provider
+ is, check our dedicated article
+ Identify your domain provider .
+ To add your DNS records:
+ Open a new browser tab and log in to your domain provider
+ account.
+ Navigate to the DNS settings for the domain you want to set
+ up.
+ For each record shown in Brevo, repeat the following steps:
+ Create a new DNS record.
+ Set the record type to match what is shown in Brevo (A, TXT,
+ CNAME, or NS records based on what is shown in Brevo).
+ In Brevo, click Copy next to the
+ Name or Hostname field
+ and paste it into the corresponding field of your domain
+ provider.
+ ❗️ Important
+ If your domain provider does not accept the name
+ value, try entering "@", your domain name, or leaving
+ the field blank.
+ In Brevo, click Copy next to the
+ Value field and paste it into the corresponding
+ field of your domain provider.
+ Save the DNS record.
+ Repeat until all records shown in Brevo have been added. Then
+ verify your configuration .
+ Option 3: Delegate to someone else
+ Enter the email address of the person who will add the DNS records (e.g., your IT team or your domain provider's support) and click Send request . They will receive an email with the records and instructions to add them. No Brevo account is needed, but they need access to your domain provider account.
+ Once the records have been added, proceed to verify your configuration .
+ Step 7: Verify your configuration
+ ❗️ Important
+ It can sometimes take up to 48 hours for DNS changes
+ to propagate and for your domain to appear as authenticated and branded
+ in Brevo.
+ This is normal, as DNS records need time to fully update across the internet.
+ To verify your configuration:
+ In Brevo, click Authenticate domain at the bottom of the records page.
+ Check your domain statuses:
+ Available statuses 
+ Domain status 
+ ✅ Authenticated: Your domain is now authenticated. You do not need to do anything else.
+ ❌ Not authenticated: A message will appear saying the domain is not authenticated yet. You can repeat this process over the next 48 hours until your domain appears as Authenticated .
+ Branding status 
+ ✅ Branded: Your branded subdomain is now active. Tracking links, image links, and return-path in your emails now use your own domain.
+ ❌ Not branded: The branded subdomain records have not been detected yet. Wait a few hours and try again. If the issue persists after 48 hours, check that the records were added correctly.
+ 💡 Good to know
+ If your domain is still not authenticated and branded after 48 hours,
+ check our article
+ Troubleshooting issues with domain authentication 
+ or
+ contact our support team .
+ FAQs
+ What is the difference between Individual DNS records and Brevo-managed setup? 
+ Both options result in a fully authenticated and configured domain,
+ but they differ in how DNS records are managed:
+ With Individual DNS records , you add each
+ DNS
+ record
+ yourself using the values Brevo provides. You retain full
+ control
+ over your DNS configuration. This method is available for
+ all
+ sending domains.
+ With Brevo-managed setup , you add two NS
+ records
+ that hand DNS authority for your branded subdomain to Brevo.
+ Brevo then manages all required records automatically, including
+ any future updates. This method is only available if your
+ sending
+ domain is a subdomain.
+ If you're unsure which to choose, Brevo-managed setup 
+ is recommended as it requires less ongoing maintenance.
+ Which domain should I use as my sending domain? 
+ Use the domain that appears after the @ in your sender email
+ address. For example, if your sender address is
+ marketing@yourcompany.com , your sending domain is
+ yourcompany.com . It can be a root domain or a subdomain,
+ but it must be a domain you own and that is not used on any other
+ platform or email service.
+ For guidance on choosing the right domain configuration for your
+ situation, check our dedicated article
+ Domain setup for better email deliverability .
+ My domain still appears as "Not authenticated" and/or "Not branded" after adding the DNS records. What should I do? 
+ It can sometimes take up to 48 hours for DNS
+ changes to propagate. If it has been less than 48 hours, try
+ verifying again:
+ In Brevo, click the account dropdown and select
+ Settings > Senders, Domains, IPs > Domains .
+ Click Authenticate domain next to your domain
+ name.
+ Click Authenticate domain at the bottom
+ of the records page.
+ You can repeat this over the next 48 hours. If the domain is
+ still not authenticated and branded after 48 hours, check our
+ article
+ Troubleshooting issues with domain authentication 
+ or
+ contact our support team .
+ It says my DMARC record is missing a rua tag. What should I do? 
+ To
+ comply with Gmail, Yahoo, and Microsoft's requirements for email senders ,
+ your domain should have
+ one DMARC record with a rua tag . If your domain
+ already has a DMARC record but is missing a rua tag, you need
+ to update it.
+ Log in to your domain provider account.
+ Go to the DNS settings.
+ Locate and edit your existing DMARC record.
+ Add Brevo's rua tag at the end of the value:
+ ; rua=mailto:rua@dmarc.brevo.com 
+ Save your DMARC record.
+ Your DMARC record should now look like:
+ v=DMARC1; p=none; rua=mailto:rua@dmarc.brevo.com 
+ ❗️ Important
+ Your domain should have only one DMARC record .
+ If you have multiple DMARC records, check our article
+ Troubleshooting issues with domain authentication .
+ Can I modify or delete my DNS records once my domain is authenticated and branded? 
+ Keep your DNS records as they are in your domain provider for
+ as
+ long as you use Brevo to send emails. Modifying or deleting these
+ records may cause delivery issues or result in emails being marked
+ as spam.
+ ⏭️ What's next?
+ Domain setup for better email deliverability 
+ Create a new sender 
+ 

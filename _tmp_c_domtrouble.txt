@@ -1,0 +1,237 @@
+ 
+ Since February 1, 2024,
+ domain authentication is mandatory 
+ as part of Gmail and Yahoo's requirements for email senders. On May 5,
+ 2025,
+ Microsoft announced it would adopt similar standards. To learn more,
+ check
+ our dedicated article
+ Comply with Gmail, Yahoo, and Microsoft's requirements for email senders .
+ Domain authentication issues can cause your emails to be rejected or sent to the spam folder . This article covers the most common issues you might face when authenticating your domain with Brevo, and how to resolve them.
+ Before you start
+ We recommend confirming that your DNS records are published correctly before diving into troubleshooting . This quick check helps you verify that your DKIM, DMARC, or other required records are visible on the public DNS and can help identify where the issue might be.
+ You can use an external DNS lookup tool to do this, such as:
+ Google Admin Toolbox Dig 
+A basic DNS lookup tool that shows the records currently published for your domain.
+ MX Toolbox 
+A more advanced tool that provides detailed information about your domain’s DNS records and how they resolve publicly.
+ WhatsMyDNS 
+A propagation checker that shows whether your DNS records are visible in different regions of the world.
+ After entering your domain name in the tool, make sure the DNS records appear, the values match what you added in Brevo, and there are no duplicates.
+ Find your issue
+ The following table matches what you are seeing to the section that helps you fix it:
+ What you are seeing 
+ Go to 
+ Your sender email address appears as @brevosend.com, or Brevo says one of your senders or domains is not complying with sender requirements 
+ Domain/sender not complying or email address replaced when sending an email 
+ Brevo says the domain is invalid 
+ Domain is invalid 
+ The Brevo code, DKIM record, or DMARC record is not detected or does not match, or your domain still shows as not authenticated after you added the records 
+ DNS records mismatch or are not detected 
+ Your domain provider rejects a record or a value, or a DKIM record with the same value already exists 
+ Domain provider doesn't accept the new DNS records 
+ A banner asks you to add two new DKIM records, you want a 2048-bit DKIM key, or your DKIM value is too long for your domain provider 
+ Switch to DKIM records of CNAME type 
+ Brevo detected multiple DMARC records in your domain 
+ Multiple DMARC records 
+ Brevo says your DMARC record lacks a rua tag 
+ Missing rua tag for DMARC record 
+ Brevo says your DMARC policy requires your domain to be authenticated 
+ DMARC policy requires authentication 
+ DMARC fails even though your DNS records exist 
+ DMARC fails because of a sender domain mismatch 
+ SPF fails and you send from a dedicated IP 
+ SPF fails on a dedicated IP 
+ Your domain is authenticated, but your emails still end up in the spam folder 
+ Emails still end up in spam after authenticating 
+ Domain/sender not complying or email address replaced when sending an email
+ ❌  One or several of your senders are not compliant
+ with Google and Yahoo's new requirements for senders. For each sender,
+ check their DKIM signature and DMARC status and take the recommended
+ action to be able to use it for email sending.
+ ❌  You have one or more domains not complying with
+ Google and Yahoo’s new sender requirements. We’re here to guide you through
+ the changes. Review your senders and take the necessary actions for compliance.
+ ❌  As your domain is not authenticated, we'll auto-replace
+ your domain with [@brevosend.com]. We're taking this proactive step to
+ maximize your email deliverability to Gmail and Yahoo recipients due to
+ their new sender requirements.
+ Ideally, your domain should have been authenticated since February 1, 2024 , to prevent your emails from being marked as spam or facing delivery issues. 
+ If you haven’t authenticated your domain yet, Brevo will temporarily help maintain your deliverability by replacing the domain part of your email address with @brevosend.com . This means your email address will appear with a format similar to mycompany@5000001.brevosend.com in your recipients' inboxes.
+ Brevo also replaces email addresses from free email providers, such as gmail.com, because they cannot be authenticated. To learn more, check our dedicated section in this article.
+ We strongly recommend authenticating your domain as soon as possible.
+ ➡️ To learn how to authenticate your domain to prevent your sender domain from being automatically replaced, check our dedicated article Authenticate your domain with Brevo .
+ Domain is invalid
+ ❌  This domain is invalid. Add another domain.
+ ❌   Invalid domain. The domain name should not include
+ “http”, “https”, “www”, “\” or special characters (except -, . , /).
+ Expand the following accordions to discover possible reasons why your domain might be invalid:
+ You are trying to authenticate a free domain 
+ You can only authenticate a domain that you or your business owns and manages . If your email address is from a public email provider, such as gmail.com, yahoo.com, or orange.fr, this is considered a free domain, which cannot be authenticated . To authenticate, you’ll need to purchase a domain that you own and manage through a service such as GoDaddy or OVH .
+ ➡️ To learn more about why you should avoid using a free email address, check our dedicated article  Why you need to replace your free email address with a professional one .
+ You included special characters in your domain name 
+ When entering your domain name in Brevo, use a format like domain.com or sub.domain.com and do not include special characters, except for - , . , and / .
+ DNS records mismatch or are not detected
+ ❌  The Brevo code values in Brevo and in your domain
+ provider account mismatch. Add this Brevo code value to your domain provider
+ account to authenticate this domain.
+ ❌  The DKIM record values in Brevo and in your
+ domain provider account mismatch. Add this DKIM record value to your
+ domain provider account to authenticate this domain.
+ ❌  We could not detect a DMARC policy in your domain.
+ Add this DMARC record in your domain.
+ Expand the following accordions to discover possible reasons why your DNS records mismatch or are not detected:
+ The DNS records have not been added to your domain yet 
+ To authenticate your domain, you need to add the following DNS records to your domain provider account:
+ Brevo code
+ DKIM record, which can be one record of TXT type or two records of CNAME type
+ DMARC record
+ Brevo will provide the required values for each record. Note that if any of these records are missing, your domain authentication won't be complete .
+ ➡️ To learn how to add these DNS records to your domain provider, check our dedicated article Authenticate your domain with Brevo .
+ You haven't verified your domain, or it's been less than 48 hours since you added the records 
+ After you add the DNS records to your domain provider account, you need to ask Brevo to verify them. It can then take up to 48 hours for the changes to take effect and for your domain to be authenticated. This timing is managed by your domain provider, and Brevo cannot control or speed up the process. To check whether your records have propagated, you can use WhatsMyDNS .
+ To verify your domain's authentication status in Brevo:
+ In Brevo, click the account dropdown and select Settings > Senders, Domains, IPs > Domains .
+ Click Authenticate next to the domain you authenticated.
+ Select Authenticate the domain yourself .
+ Click Continue .
+ Click Authenticate this email domain at the bottom of the page.
+ You can repeat this process a few times in the next 48 hours. If your domain still does not appear as authenticated after 48 hours , contact our support team for help.
+ The DNS records in your domain provider don't match the values in Brevo 
+ Brevo automatically identifies the most popular domain providers. If your domain provider is recognized, we will provide the exact values needed to create the required DNS records . To avoid any typos or formatting errors, we recommend copying and pasting these values directly from Brevo into your domain provider.
+ If we can’t identify your domain provider, Brevo will provide generic values that might not fully match your provider's specific requirements . If your records are still not detected after you copy the values, check the accordion about hostname formats.
+ Your domain provider formats the hostname differently 
+ Some domain providers automatically add your domain name to the end of the hostname, while others expect the full hostname . If Brevo doesn't detect a record, try both formats.
+ The following table shows the hostnames to try for each record:
+ Record 
+ Hostname to try first 
+ Hostname to try next 
+ Brevo code 
+ yourdomain.com 
+ @ , or leave the field empty 
+ DKIM 1 record 
+ brevo1._domainkey 
+ brevo1._domainkey.yourdomain.com 
+ DKIM 2 record 
+ brevo2._domainkey 
+ brevo2._domainkey.yourdomain.com 
+ DMARC record 
+ _dmarc 
+ _dmarc.yourdomain.com 
+ Replace yourdomain.com with your actual domain name. For the value of each record, always use the exact value shown in Brevo. Also check the following cases:
+ Subdomain prefix only 
+When you authenticate a subdomain, some domain providers expect only the subdomain prefix and automatically add the root domain. For example, if you enter send.yourdomain.com , it might turn into send.yourdomain.com.yourdomain.com . In this case, enter only send .
+ Dot at the end of the hostname 
+Some domain providers require a dot at the end of the hostname. Without it, they might add the root domain at the end. For example, if you enter brevo1._domainkey.yourdomain.com , it might turn into brevo1._domainkey.yourdomain.com.yourdomain.com . In this case, enter brevo1._domainkey.yourdomain.com. with a dot at the end.
+ You use Cloudflare to manage your DNS records 
+ If you use Cloudflare, the following settings can prevent Brevo from detecting your DKIM records of CNAME type:
+ Proxy status 
+Deactivate the Proxy status toggle for both DKIM records.
+ CNAME flattening 
+Deactivate CNAME flattening. If it is activated, Cloudflare converts the record to a TXT record and DKIM authentication fails.
+ To learn more, check Cloudflare's documentation .
+ You modified or deleted the DNS records after your domain was authenticated 
+ If your domain was authenticated successfully but its status later changes to "Not authenticated" after a day or a few days, it's possible that the DNS records you added were modified or deleted.
+ Once you add the DNS records for domain authentication to your domain provider, you need to keep them unchanged for as long as you are using Brevo to send emails . Modifying or deleting these records can result in email delivery issues or cause your emails to be delivered to the spam folder.
+ ➡️ To re-authenticate your domain, check our dedicated article Authenticate your domain with Brevo .
+ Domain provider doesn't accept the new DNS records
+ Expand the following accordions to discover possible reasons why you can't add the DNS records or why your domain provider doesn't accept them:
+ Domain provider doesn’t allow duplicate records of the same type and name 
+ Some domain providers do not allow adding a record with the same type and name twice . This means that if you already have a TXT record on your domain, your domain provider may not allow you to add the records provided by Brevo.
+ ➡️ To fix this, add the extra TXT values to your existing record instead of creating a new record. The following examples show how to do it in Amazon Route 53 and Google Domains.
+ Amazon Route 53 
+ Enter the value of the extra record on a separate line in your existing TXT record.
+ Google Domains 
+ In your existing TXT record, click + Add more to this record .
+ Paste the data of the extra record in the new field.
+ Your domain provider doesn't allow you to add the records yourself or doesn't support the ":" symbol 
+ Some domain providers, such as Jimdo, do not allow you to add certain DNS records yourself . Others, such as Alfahosting, may not accept the ":" symbol in the value fields.
+ ➡️ To fix this, we recommend contacting your domain provider's support team and requesting their assistance in adding the necessary DNS records on your behalf. You can use a message like the following:
+ "I am looking to authenticate my domain domain.com  hosted with you in Brevo, and I need your assistance in setting up the following DNS records:
+ Brevo code  
+ DKIM record  
+ DMARC record "
+ Make sure to replace domain.com with your actual domain name and include the required DNS records and their corresponding values. You can find these values by following our dedicated article Authenticate your domain with Brevo and selecting the option to authenticate the domain yourself.
+ Your domain provider doesn't support values longer than 255 characters 
+ Most domain providers set a maximum limit of 255 characters for their TXT record field . A DKIM record of TXT type that uses a 2048-bit key is longer than 255 characters, so your domain provider might not accept it.
+ ➡️ To fix this, we recommend switching to DKIM records of CNAME type . They use a 2048-bit key by default and are not affected by the 255-character limit. To learn how, check our dedicated section in this article.
+ If you can't switch right now, you can split your DKIM value into multiple chunks of 255 characters instead. To make this easy, you can use a DNS record splitter tool:
+ Go to DNS record splitter .
+ Insert your DKIM value into the textbox. It will then split your record into two lines.
+ Copy and paste the results into a document.
+ Enclose the two text strings in double quotes.
+ Copy the enclosed text strings to your domain provider as a TXT record.
+ A DKIM record with the same value already exists on your domain 
+ If a DKIM record with the same value as the one provided by Brevo already exists on your domain provider, you have two options:
+ Replace your existing DKIM record with the value provided by Brevo. This is only recommended if you're no longer using the other service that required the previous DKIM record.
+ Contact our support team to request an update to your DKIM record with a new value. If you have multiple domains in your Brevo account, you’ll need to update the DKIM records for all of them with the new value.
+ Switch to DKIM records of CNAME type
+ DKIM records of CNAME type are the newer way to authenticate your domain with DKIM. If your domain was authenticated with one DKIM record of TXT type , you might see a banner on the Domains page asking you to add two new DKIM records of CNAME type . 
+ Your current DKIM record keeps working, your emails keep sending, and your domain stays authenticated. You are not forced to switch right now, but we recommend doing it soon. It is a one-time change that only takes a few minutes.
+ Switching to DKIM records of CNAME type also:
+ Gives you a 2048-bit DKIM key by default. DKIM records of TXT type use a 1024-bit key by default.
+ Avoids the 255-character limit that some domain providers set for TXT records.
+ Lets Brevo rotate your DKIM keys periodically without any action from you.
+ To switch to the new DKIM records:
+ In Brevo, click the account dropdown and select Settings > Senders, Domains, IPs > Domains .
+ Open your domain. 
+ In your domain provider account, add the two DKIM records of CNAME type shown in Brevo, using the exact names and values provided.
+ Leave your current DKIM record unchanged until your domain shows as authenticated.
+ In Brevo, click Authenticate this email domain at the bottom of the page. 
+ If you don't see a banner, contact our support team to switch your domain to DKIM records of CNAME type.
+ DNS changes can take up to 48 hours to take effect. If Brevo doesn't detect your new records, check our dedicated section in this article. If someone else manages your domain, such as your IT team or web agency, you can forward them the records shown in Brevo.
+ ➡️ To learn how to add DNS records in your domain provider, check our dedicated article Authenticate your domain with Brevo (Brevo code, DKIM, DMARC) .
+ DMARC issues
+ To comply with Gmail, Yahoo, and Microsoft's requirements for email senders , your domain should have a single DMARC record with a rua tag . Check the following sections based on the issue you are seeing.
+ Multiple DMARC records
+ ❌  We have detected multiple DMARC records in your
+ domain. For optimal deliverability, keep only one DMARC.
+ Having more than one DMARC record can interfere with domain authentication. Expand the following accordions to explore the three options for resolving this issue:
+ Keep only one valid DMARC record and delete any others on your domain 
+ To keep only one valid DMARC record and delete any others on your domain:
+ Open a new tab in your web browser and log in to your domain provider account.
+ Navigate to the section where you can manage the DNS records for the domain you want to authenticate.
+ Locate your existing DMARC records.
+ Choose which DMARC records you want to keep and delete all others. We recommend you keep Brevo's DMARC record, which looks like this: v=DMARC1; p=none; rua=mailto:rua@dmarc.brevo.com .
+ Create different subdomains for each DMARC record 
+ If you need multiple DMARC records because you use several email providers and cannot delete the other records, you'll need to create different subdomains for each provider. This will allow you to configure separate DMARC records .
+ Merge your DMARC records to use a single record and receive reports at multiple email addresses 
+ If you want to receive DMARC reports at multiple email addresses, you can merge the email addresses of your rua tags into a single DMARC record, like:
+ v=DMARC1; p=none ; rua=mailto:rua@dmarc.brevo.com, mailto:dmarcreports@mydomain.com . 
+ Missing rua tag for DMARC record
+ ❌  Please note that your sender domain's DMARC
+ record lacks a rua tag. To improve your deliverability, we recommend
+ you set up a rua tag for your DMARC record.
+ If your domain already has a DMARC record but lacks a rua tag, you’ll need to update the existing record by adding Brevo's rua tag at the end:
+ Open a new tab in your web browser and log in to your domain provider account.
+ Navigate to the section where you can manage the DNS records for the domain you want to authenticate.
+ Locate and edit your existing DMARC record.
+ In the DMARC record’s value field, add Brevo's rua tag at the end:
+ ; rua=mailto:rua@dmarc.brevo.com .
+ Save your DMARC record.
+ Your DMARC record should now look like this:
+ v=DMARC1; p=none; rua=mailto:rua@dmarc.brevo.com 
+ DMARC policy requires authentication
+ ❌  Your DMARC policy requires for your domain to
+ be authenticated. Learn more about how to authenticate your domain. If
+ you have authenticated your domain and still have issues, contact our
+ support team.
+ If your sender domain has a DMARC policy of p=quarantine or p=reject , you need to authenticate your domain before creating a sender. Authenticate your domain and try creating the sender again.
+ If your domain doesn't have a DMARC policy yet, start with a policy of p=none . Once authentication passes consistently, you may move to p=quarantine and then p=reject . To learn more, check our dedicated article FAQs - What is a DMARC policy and how does it affect the sending of my emails? .
+ ➡️ To learn how to authenticate your domain, check our dedicated article  Authenticate your domain with Brevo .
+ DMARC fails because of a sender domain mismatch
+ DMARC can fail even though your DNS records exist. This happens when the domain in your "From" address does not match the domain you authenticated with DKIM in Brevo. Email providers such as Gmail, Yahoo, and Microsoft can reject or filter emails that fail DMARC.
+ ➡️ To fix this, send from an address that uses the domain you authenticated, or authenticate the domain you send from. To learn more about alignment, check our dedicated section in the article Comply with Gmail, Yahoo, and Microsoft's requirements for email senders .
+ SPF fails on a dedicated IP
+ You only need to set up SPF yourself if you send from a dedicated IP. If SPF fails, email providers such as Gmail, Yahoo, and Microsoft can reject or filter your emails .
+ ➡️ To fix this, make sure your SPF record is correctly set up. If you already have an SPF record on your domain, you may need to merge it into a single record. To learn more, check our dedicated articles Set up your dedicated IP in Brevo and Merge multiple SPF records .
+ Emails still end up in spam after authenticating
+ If you've authenticated your domain but your emails still end up in the spam folder, keep in mind that spam filters consider multiple factors when deciding if an email should reach the inbox . While domain authentication improves your sending reputation, it’s not a complete solution or a guaranteed fix.
+ ➡️ To learn more, check our dedicated article FAQs - Why are emails being delivered to the spam folder? .
+ If the issue affects a specific email provider, check our dedicated articles:
+ Troubleshooting - Deliverability issues with Gmail 
+ Troubleshooting - Deliverability issues with Yahoo and AOL 
+ Troubleshooting - Deliverability issues with Microsoft (Outlook, Hotmail, Live, MSN) 
+ ⏭️ What's next?
+ If you've followed our troubleshooting tips and are still having issues authenticating your domain, contact our support team  and  include a screenshot of the DNS records you have added to your domain provider.
+ For domain provider-specific requirements, we recommend you reach out to your domain provider's support team.

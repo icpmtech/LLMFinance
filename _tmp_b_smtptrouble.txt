@@ -1,0 +1,158 @@
+ If you are experiencing issues with Brevo SMTP, such as authentication errors, emails not being sent, or rejected messages, this article covers the most common causes and how to fix them.
+ Find the right section
+ Use this table to match what you're seeing to the right section:
+ What you are seeing 
+ Go to 
+ Can't connect, or authentication fails when connecting 
+ Unable to log into Brevo SMTP relay 
+ Emails are rejected because of the sender or "From" address 
+ Sender is invalid 
+ Connection and sender are fine, but emails still aren't delivered 
+ Emails are not sent 
+ Unable to log into Brevo SMTP relay
+ If you cannot establish a connection to Brevo SMTP or receive an authentication error, the cause is usually related to your credentials, your IP authorization settings, or a network-level restriction.
+ Check the following sections to identify and fix the issue:
+ 535 error for invalid credentials 
+ 525 error for unauthorized IP address 
+ Wrong SMTP port 
+ SMTP port is not open or the connection drops before authentication 
+ Brevo SMTP service is temporarily unavailable 
+ 535 error for invalid credentials
+ A 535 5.7.8 Authentication failed error means the username or password sent to the SMTP server could not be verified. Expand the following accordions to discover the most common causes:
+ Wrong SMTP login format 
+ 💡 Good to know
+ Depending on when your account was created, your SMTP
+ login is either
+ your Brevo account login email address or an automatically
+ generated
+ address in the format
+ [ID]@smtp-brevo.com .
+ Changing your account's login email does not change your
+ SMTP login.
+ To find your SMTP login, go to Settings > SMTP & API and copy the value shown in the Login field.
+ ❗️ Important
+ Do not use
+ smtp-relay.brevo.com 
+ as your SMTP login. That is the relay host address, not your
+ login. Using
+ the relay host address in the username field is one of the
+ most common causes
+ of the 535 error.
+ Wrong SMTP password 
+ The SMTP password is your SMTP key , not your account password or an API key. Since the key is only visible once at the moment of creation, you may need to generate a new one if you did not save it.
+ ➡️ To learn more, check our dedicated article Create and manage your SMTP keys .
+ Your SMTP client truncates the password field 
+ Some SMTP clients or business software silently truncate long password fields. If this happens, the standard 64-character SMTP key gets cut off before it reaches Brevo, and authentication fails with no indication of why.
+ If you suspect this is happening, generate a short SMTP key (15 characters) instead of the standard one.
+ ➡️ To learn more, check our dedicated article Create and manage your SMTP keys .
+ Extra spaces or line breaks 
+ When copying your SMTP key, make sure there are no trailing spaces, leading spaces, or line breaks included . Even a single extra character causes a 535 error. Paste the key into a plain-text editor first to verify it before using it in your configuration.
+ Encryption mismatch 
+ The encryption type must match the port you are using. Using the wrong encryption type causes authentication to fail even when your credentials are correct.
+ ➡️ To learn more, check our dedicated article Which SMTP port should I use? (Port 587, 465, or 2525) 
+ SMTP key has been invalidated 
+ If you received a security alert from Brevo about suspicious activity or a compromised key, your SMTP credentials may have been invalidated. We recommend you generate a new SMTP key and update your configuration.
+ ➡️ To learn more, check our dedicated article Create and manage your SMTP keys .
+ 525 error for unauthorized IP address
+ A 525 5.7.1 Unauthorized IP address error means that you have activated the blocking of unknown IP addresses for SMTP keys on your account, and the IP address you are using is not on the authorized list. To fix this error, add the missing IP address to your authorized IPs list.
+ ➡️ To learn more, check our dedicated article Authorize and block IP addresses for API and SMTP security .
+ 💡 Good to know
+ If your application runs in a containerized or cloud environment (for
+ example Docker, Kubernetes, AWS, or Azure), the outbound IP address may
+ differ from your server's public IP. The connection to Brevo may leave
+ from a private overlay IP or a shared NAT gateway rather than the IP
+ you added to your authorized list. Check your outbound IP in your hosting
+ or network configuration before adding it to Brevo.
+ Wrong SMTP port
+ Brevo SMTP supports ports 587, 465, and 2525. Make sure you use the right port for your needs.
+ ➡️ To learn more, check our dedicated article Which SMTP port should I use? (Port 587, 465, or 2525) 
+ SMTP port is not open or the connection drops before authentication
+ If the connection succeeds on the correct port but you receive no response at all (no 220 banner), the problem is almost certainly on your network side, not with your credentials. Authentication can't begin until the server sends that initial banner.
+ Common causes:
+ Firewall blocking outbound SMTP : Some corporate firewalls allow the TCP connection but silently drop SMTP traffic before the server banner is sent.
+ Cloud provider restrictions : AWS, Azure, and Google Cloud Platform restrict outbound SMTP by default on new accounts. Check with your hosting provider to request the restriction to be lifted, or use port 2525 as an alternative.
+ ➡️ To learn more, check our dedicated article Check if an SMTP port is open on a server .
+ Brevo SMTP service is temporarily unavailable
+ If you have verified your credentials and port configuration but still cannot connect, check the Brevo status page to see whether there is an ongoing incident affecting the SMTP relay service.
+ Sender is invalid
+ If your emails are rejected with a sender-related error, the cause is usually a missing verification step or an incorrectly configured From address. 
+ Check the following sections to identify and fix the issue:
+ Sender domain has not been authenticated 
+ Sender has not been verified 
+ SMTP login is used as the sender's address 
+ Sender domain has not been authenticated
+ Domain authentication is mandatory as part of Gmail, Yahoo, and Microsoft's requirements for email senders . If your sender domain is not authenticated, your emails may be rejected or fail authentication checks.
+ ➡️ To learn more, check our dedicated article Authenticate your domain with Brevo (Brevo code, DKIM, DMARC) .
+ Sender has not been verified
+ When creating a new sender, you need to verify it by entering the 6-digit code sent to the sender's email address. If the sender isn’t verified, it cannot be used to send transactional emails.
+ 💡 Good to know
+ If your sender domain is authenticated, you don’t need to verify individual
+ senders.
+ SMTP login is used as the sender's address
+ Your SMTP login ( xxx@smtp-brevo.com ) is a technical authentication identifier, not a sender address. It must not be used in the From field of your emails. Use a verified sender address or a domain-authenticated address instead.
+ ➡️ To learn more, check our dedicated article Create a new sender (From name and From email) .
+ Emails are not sent
+ If your SMTP connection and sender are correctly configured but emails are still not delivered, the issue is likely related to your account status, your contact list, or the recipient's mail provider. 
+ Check the following sections to identify and fix the issue:
+ All email credits have been used 
+ Transactional platform not activated or temporarily suspended 
+ Dedicated IP not configured for transactional emails 
+ Contacts are blocked 
+ The recipient's mail provider is not accepting your emails 
+ Emails bounce for a formatting or RFC compliance reason 
+ 400 response generated by the API 
+ All email credits have been used
+ If your account has run out of email credits, emails queued via SMTP will not be sent. Brevo pauses these emails and adds them to a queue until you have more credits.
+ To check your remaining credits and see how many emails are paused in the queue:
+ Go to Transactional > Real time .
+ Click Usage and plan at the top.
+ Check the Email queue section to see how many emails are paused.
+ To resume sending, purchase more credits or upgrade your plan.
+ Transactional platform not activated or temporarily suspended
+ The error 450 Your SMTP account is not yet activated or Your sending platform is currently disabled can have different causes that require different fixes.
+ Platform not yet activated (new account) 
+ Transactional email sending requires a separate activation step from Brevo. If you've never sent transactional emails from your account, contact our support team by creating a ticket from your account to request activation.
+ Platform suspended due to a bot attack on a form 
+ If an unprotected form on your account was targeted by bots submitting fake or fraudulent sign-ups, Brevo may suspend your sending platform automatically to protect shared IP reputation. To resolve this:
+ Follow our best practices to protect your forms from bots and spam signups. To learn more, check our dedicated article Protect your forms from bots and spam signups .
+ Contact our support team by creating a ticket from your account and include the link to your updated, now-protected form. 
+ Platform suspended because of a compromised account 
+ If your account shows signs of being compromised, such as unauthorized access or unusual sending activity, Brevo will suspend the transactional platform until you investigate and secure your account. 
+ ➡️ To learn more, check our dedicated article My account has been compromised, what should I do? .
+ Dedicated IP not configured for transactional emails
+ If you use a dedicated IP, your transactional emails may be added to the queue if the IP is not configured to send transactional emails.
+ To check and fix this:
+ In Brevo, click the account dropdown and select Settings > Senders, Domains, IPs > Dedicated IPs .
+ Confirm whether the IP is configured for Marketing and Transactional emails or only for Marketing emails .
+ If it is only configured for Marketing emails , you have two options: 
+ If you want to use the same IP for both marketing and transactional emails, click the three-dot icon next to the IP and select Use this IP for transactional emails . 
+ If you want to use different IPs for marketing and transactional emails , purchase a second IP and select Use this IP for transactional emails only for the second IP. Make sure to use separate senders for both IPs. To learn more, check our dedicated article Separate the routing of your transactional and marketing emails .
+ Contacts are blocked
+ When reviewing your transactional logs , you may encounter "Blocked" events. These occur because you sent emails to blocked contacts and these emails cannot be delivered.
+ A contact may be blocked for the following reasons:
+ They previously marked one of your emails as spam
+ They unsubscribed from your emails
+ Their address generated a hard bounce
+ They were manually blocked
+ To view the list of blocked contacts or domains, go to Blocked or Unsubscribed contacts or Blocked domains .
+ The recipient's mail provider is not accepting your emails
+ When reviewing your transactional logs , you might encounter "Deferred" and “Soft Bounce” events. These can occur when an email is sent successfully from Brevo but is rejected or delayed by the recipient's mail provider.
+ To address this issue, we recommend:
+ Whitelisting Brevo IP ranges and domains 
+Ask the recipient's organization to whitelist Brevo's IP ranges and domains to improve B2B email deliverability. To learn more, check our dedicated article Brevo IP ranges: improve the deliverability of B2B emails .
+ Authenticating your domain 
+Authenticate your sender domain on Brevo to help ISPs recognize the source of your emails. To learn more, check our dedicated article Authenticate your domain with Brevo .
+ Emails bounce for a formatting or RFC compliance reason
+ 💡 Good to know
+ This mainly applies if you send through a custom SMTP or API integration
+ rather than the Brevo interface.
+ If a bounce message references a formatting or compliance problem, your email may not comply with the standards that govern message transmission and formatting: RFC 5321 and RFC 5322 . Common causes include duplicate headers, an incorrect MIME type, or a sending domain missing a required DNS record.
+ To fix this, review how your integration formats outgoing emails against RFC 5321 and RFC 5322.
+ 400 response generated by the API
+ A 400 response indicates that the request was malformed or that required parameters are missing. Review the API request body to ensure all required fields are present and correctly formatted. 
+ ➡️ To learn more, check our dedicated Brevo API documentation .
+ ⏭️ What's next?
+ Create and manage your SMTP keys 
+ Check if an SMTP port is open on a server 
+ Authorize and block IP addresses for API and SMTP security 
+ 

@@ -384,6 +384,16 @@ OSINT_INDEX = "finance_osint"
 # com o texto extraído para pesquisa).
 VORTAL_PECAS_INDEX = "finance_vortal_pecas"
 
+# Caixas de correio do próprio IQ OS geridas em Administração → Correio: a
+# configuração de cada caixa (servidores, contas, pastas a sincronizar) e o
+# estado da sincronização.
+PLATFORM_MAIL_ACCOUNTS_INDEX = "finance_mail_accounts"
+
+# Arquivo pesquisável do correio da plataforma: uma entrada por mensagem
+# sincronizada (assunto, participantes, corpo, anexos e fios de conversa). É este
+# índice que serve a lista, a pesquisa e as contagens — o IMAP fica para o detalhe.
+PLATFORM_MAIL_MESSAGES_INDEX = "finance_mail_messages"
+
 # Definições (settings) específicas de determinados índices — nomeadamente
 # analisadores usados em subcampos de pesquisa por prefixo.
 INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {

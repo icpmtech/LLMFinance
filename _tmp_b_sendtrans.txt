@@ -1,0 +1,62 @@
+ Brevo SMTP is the SMTP relay of Brevo . It integrates with any website or email client to both trigger the email and incorporate data stored outside of Brevo , such as shipping information or the total price of an order. Brevo SMTP allows you to send transactional emails through your website, email client, or automation  after a user performs a specific action. 
+ Before you start
+ Add and authenticate your domain . Learn more in our dedicated article Authenticate your domain to improve the deliverability of your emails (DKIM) .
+ Create and configure your transactional senders . Learn more in our dedicated article Create a new sender .
+ Create your transactional email templates . Learn more in our dedicated articles Create an email template and How to customize your transactional emails .
+ ⚙️ Configure Brevo SMTP
+ To get transactional emails up and running for your website or app using Brevo SMTP, you have 2 options:
+ Option 1: Configure Brevo SMTP with a plugin
+ A plugin is the easiest way to set up Brevo SMTP on your website. Our plugins override the default email settings of your website to automatically send your transactional emails over Brevo SMTP. All it takes is a few simple clicks, no coding is required.
+ Brevo and other apps provide plugins that allow you to route your website’s emails through Brevo SMTP. To find the list of plugins available in Brevo, check our dedicated section Plugins & Integrations .
+ Option 2: Manually configure Brevo SMTP
+ 💡 Good to know
+ If you’re already sending transactional emails for your website or email
+ client through SMTP, you can simply update your current SMTP configuration with your Brevo SMTP credentials 
+ to begin sending immediately.
+ If no plugin is available, you can manually configure your SMTP settings . Depending on your use case, you might be setting up SMTP for your email client (e.g., Outlook, Thunderbird) or integrating it into your website . Use the provided Brevo SMTP credentials to configure the SMTP settings in your application. Once done, you will be able to send transactional messages over our SMTP server.
+ Retrieve your SMTP credentials from the SMTP  page.
+ Configure your SMTP settings in your email client or website: 
+ SMTP server : enter smtp-relay.brevo.com .
+ SMTP user : enter your SMTP login email address.
+ 💡 Good to know
+ Depending on when your account was created, your SMTP
+ login is either
+ your Brevo account login email address or an automatically
+ generated
+ address in the format
+ [ID]@smtp-brevo.com .
+ Changing your account's login email does not change your
+ SMTP login.
+ You can find your current SMTP login anytime on the
+ SMTP 
+ page.
+ SMTP password : enter your SMTP key. 
+ ❗️ Important
+ Make sure you are using an SMTP key and not 
+ an API key. If you don't have one yet, you can generate
+ one from the
+ SMTP 
+ page. To learn more about SMTP keys, check our
+ dedicated article
+ Create and manage your SMTP keys .
+ Port: select the port you want to use for sending transactional emails. To learn more about which SMTP port to use, check our dedicated article Which SMTP port should I use? (Port 587, 465, or 2525) .
+ Encryption : leave this field empty unless you’re using port 465, for which you should select SSL or TLS encryption. 
+ 💡 Good to know
+ If you are not able to authorize the domains, add the following Brevo
+ IPs to your whitelist:
+ Brevo IP ranges: improve the deliverability of B2B emails .
+ 📨 Send transactional emails using Brevo SMTP
+ Once you have configured Brevo SMTP, you can start sending your transactional emails. You have two options to send transactional emails through Brevo SMTP:
+ Option 1: Send transactional emails through your plugin
+ If you used a plugin to configure Brevo SMTP, you simply need to enable Brevo to send your website or app's emails and select which email templates should be sent . To learn more, check the dedicated article of your plugin .
+ Option 2: Send transactional emails through an automation
+ All emails sent through an automation are sent through Brevo SMTP. Using the Automations app, you can create customized customer journeys based on specific triggers, actions, and conditions of your choice. Once a user performs a specific action, the app  automatically sends the appropriate transactional email at optimal times . This allows you to focus on other aspects of your business while ensuring that your customers receive timely and relevant information.
+ Option 3: Send transactional emails with your programming language of choice
+ If you are developing your application using a framework or a set of third-party dependencies, the method for sending via SMTP in your language of choice will vary depending on what your language or framework supports. To get started, you can check our developer documentation for SMTP relay integration , Connecting Postfix to the SMTP relay , and our NodeJS SMTP relay example . For more information, we recommend you check the documentation of your third-party tools .
+ 🔎 Track the performance of your transactional emails
+ You can easily track the performance of your transactional emails with detailed reporting and analytics from the Transactional > Statistics or Logs pages. This provides valuable insights into open rates, click-through rates, and other important metrics and ensures that your transactional emails perform effectively . To learn more, check our dedicated article Reviewing your transactional email reports .
+ Additionally, you can also create webhooks to receive notifications about your transactional emails . To learn more, check our dedicated article Create webhooks to receive real-time updates about your emails and contacts .
+ ⏩ What's next
+ How to customize your transactional emails 
+ Troubleshooting issues with the SMTP 
+ 

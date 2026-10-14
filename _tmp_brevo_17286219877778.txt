@@ -1,0 +1,87 @@
+ 
+ ❗️ Important
+ Since February 1, 2024,
+ domain authentication is mandatory as part of Gmail
+ and Yahoo's requirements for email senders. On May 5, 2025, Microsoft
+ announced it would adopt similar standards. To learn more, check our
+ dedicated article
+ Comply with Gmail, Yahoo, and Microsoft's requirements for email senders .
+ Authenticating your domain is essential to help email providers recognize your emails as legitimate and improve the chances of reaching your recipients’ inboxes. It also adds a layer of protection for your recipients by preventing phishing and other malicious attempts to impersonate your brand.
+ Glossary
+ If you're not familiar with domain authentication, here's a quick glossary of common terms you might encounter while setting it up:
+ Term 
+ Definition 
+ Domain (or sender domain) 
+ A domain is your website’s address on the internet, such as yourcompany.com . For domain authentication, you need to authenticate the domain you're sending emails from, also called your sender domain. This could look like email.yourcompany.com or marketing.yourcompany.com . 
+ Domain provider (or domain host) 
+ The company where you registered your domain. Popular domain providers include GoDaddy, Google Domains, and Namecheap, for example.
+ If you're unsure what your domain provider is, check our dedicated article Identify your domain provider .
+ DNS records 
+ Small pieces of information you add to your domain's settings (usually within your domain provider or web host). They act as instructions to the internet, telling it how to manage services like email. 
+ TXT record 
+ A type of DNS record that holds simple text information. 
+ CNAME record 
+ A type of DNS record used to link your domain to another service (like Brevo's email servers). 
+ DKIM (DomainKeys Identified Mail) 
+ A security check that signs and secures your emails with a digital signature (DKIM) to make sure they aren't modified after you send them. 
+ DMARC (Domain-based Message Authentication, Reporting, and Conformance) 
+ An additional layer of protection that tells mail servers what to do if an email looks suspicious based on the DMARC policy you've chosen (either none, quarantine, or reject). 
+ What is domain authentication?
+ When you send emails to your customers or subscribers, you use an email address that represents your company, like marketing@email.yourcompany.com. The part that comes after the “@” symbol is called your sender domain .
+ To confirm that you own this domain and aren’t impersonating another organization, email providers such as Gmail, Yahoo, and Microsoft require you to authenticate it. Domain authentication secures your emails with a digital signature , helping these providers verify that your messages are legitimate rather than spam or phishing attempts.
+ In our example on the right, the email is sent from contact@thegreenyoga.com .
+ Because we’ve authenticated our sender domain ( thegreenyoga.com ), each message is digitally signed and lets mail providers verify that the email truly comes from The Green Yoga organization ➡️.
+ Domain authentication also protects your sender reputation by telling mail servers how to handle unauthenticated messages sent from your domain, whether to deliver them, mark them as spam, or reject them entirely.
+ As a result, you improve your chances of reaching your recipients' inboxes instead of getting filtered out as spam or rejected.
+ Why is Brevo requesting that I authenticate my domain?
+ Since February 1, 2024, domain authentication is mandatory as part of Gmail and Yahoo's requirements for email senders. On May 5, 2025, Microsoft announced it would adopt similar standards. This means that regardless of the email provider you use, whether it's Brevo or another service, you'll need to authenticate your domain .
+ ➡️ To learn more, check our dedicated article Comply with Gmail and Yahoo's requirements for email senders .
+ How does domain authentication work?
+ Domain authentication works by adding small pieces of information, called DNS records, to your domain's settings (usually within your domain provider or web host). 
+ There are three types of DNS records required to authenticate your domain with Brevo:
+ Name 
+ Type 
+ Purpose 
+ Brevo code 
+ TXT 
+ Verifies that you own and control your sending domain 
+ DKIM record (DomainKeys Identified Mail) 
+ 1 TXT or 2 CNAME 
+ Signs and secures your emails with a digital signature (DKIM) to make sure they aren't modified after you send them 
+ DMARC record (Domain-based Message Authentication, Reporting & Conformance) 
+ TXT 
+ Tells mail servers what to do if an email looks suspicious based on the DMARC policy you've chosen (either none, quarantine, or reject) 
+ Together, these records give email providers the information they need to trust your emails. Without them, your messages are more likely to get filtered out as spam or rejected.
+ Once your domain is authenticated, your emails are more secure, your brand is better protected, and your messages have a much better chance of reaching your audience’s inbox.
+ Why is domain authentication important?
+ Authenticating your domain has several key benefits:
+ Improves deliverability 
+Emails sent from an authenticated domain are more likely to reach the inbox rather than the spam folder.
+ Protects your brand 
+Authentication helps prevent attackers from sending fake emails pretending to be you.
+ Builds trust 
+Email providers like Gmail, Outlook, and others trust authenticated senders more, which improves your reputation over time.
+ Without authentication, your emails might be filtered out as spam or rejected by mail servers.
+ Which domain do I need to authenticate?
+ You need to authenticate the domain you use to send emails to your customers or subscribers through Brevo, also called your sender domain . For example, if you use an email address like marketing@email.yourcompany.com to send your emails, your sender domain is the part that comes after the “@” symbol, email.yourcompany.com .
+ If you use multiple domains to send your emails, you should authenticate each of them.
+ ❗️ Important
+ You can only authenticate a domain that you or your business owns and
+ controls. Domains from free email services like Gmail and Yahoo
+ cannot be authenticated . If you don't have your own
+ domain yet, you'll need to purchase one. To learn more, check our dedicated
+ article
+ Why you need to replace your free email address with a professional one .
+ How can I authenticate my domain?
+ You can authenticate your domain from the Domains page in Brevo. We guide you through the steps to authenticate your domain in our dedicated article Authenticate your domain (Brevo code, DKIM, DMARC) .
+ 💡 Good to know
+ Brevo is gradually rolling out a new domain setup flow that covers authentication,
+ branded subdomain setup, and dedicated IP association in one guided experience.
+ If your account has access to it, check our dedicated article
+ Set up your domain in Brevo 
+ instead.
+ ⏭️ What's next? 
+ Comply with Gmail, Yahoo, and Microsoft's requirements for email senders 
+ Authenticate your domain with Brevo (Brevo code, DKIM, DMARC) 
+ Set up your domain in Brevo 
+ 

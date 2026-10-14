@@ -1,0 +1,73 @@
+ The Free plan is best for individuals who want to explore Brevo and start building an online presence. It offers access to essential features at no cost, for as long as you need. Some limitations apply, which we outline in this article.
+ ❓Is the Free plan limited in time?
+ No. The Free plan has no time limit . You can use it for as long as you want.
+ ❓Are there limits on the number of emails I can send with the Free plan?
+ The Free plan includes 300 email sends per day . The daily limit resets every day, and unused emails do not roll over to the next day.
+ ❗️ Important
+ Transactional emails: once you reach your daily limit, up to
+ 1,000 additional emails are held in a retry queue.
+ Emails beyond this queue are not delivered. This limit does not affect how
+ many contacts you can add to a campaign.
+ Campaign emails: there is no limit on the number of contacts
+ you can include in a single campaign. However, if you send a campaign to
+ more than 300 recipients , only 300 contacts will receive it
+ on the scheduled day. To reach the remaining contacts, you need to
+ manually resend the campaign (up to 300 email sends per day)
+ with the
+ Requeue option 
+ until all contacts receive it.
+ ➡️ To remove the daily limit or send more emails, upgrade to a Starter, Standard, Professional, or Enterprise plan . Upgrading raises your daily limit right away, but only applies to emails sent after the upgrade.
+ ❓Are there limits on the number of contacts I can store in my account with the Free plan?
+ The Free plan allows you to store up to 100,000 contacts in your account.
+ ❓Can I remove the Sent with Brevo sticker on emails with the Free plan?
+ No. Emails sent from the Free plan always include the Sent with Brevo sticker.
+ ➡️ To remove it, upgrade to a Starter (with the Remove Brevo branding add-on), Standard, Professional, or Enterprise plan. 
+ ❓Can I schedule a campaign for the next day if I’ve already reached my daily email sends limit with the Free plan?
+ No. Once you reach the daily limit of 300 emails, you cannot schedule a campaign in advance for the next day. You need to wait until your quota resets.
+ ❓Are there limits to the statistics I can access with the Free plan?
+ Yes. The Free plan provides access to basic statistics only.
+ ➡️ To access advanced reporting and detailed analytics, such as click heatmaps or
+geography reports, upgrade to a Standard, Professional, or Enterprise plan.
+ ❓Are there limits on the number of contacts that can enter my automations with the Free plan?
+ Yes. With the Free plan, up to 2,000 unique contacts can enter your active automations. Once this limit is reached, no additional contacts can enter . Automations remain active, and contacts already in them continue to move through the workflows.
+ Brevo will send you an email notification when:
+ You reach 80% of the limit.
+ You reach the full limit.
+ ➡️ To allow more contacts to enter your automations, upgrade to a Standard, Professional, or Enterprise plan. 
+ ❓Can I have multiple users with the Free plan?
+ The Free plan allows only one user  (the account owner).
+ ➡️ To add more users, upgrade to a Standard (with an add-on), Professional, or Enterprise plan.
+ ❓ Are there limits to the sales features I have access to with the Free plan?
+ Yes. The Free plan includes several free sales features, but with limits:
+ Number of open deals
+ The Free plan is limited to 50 open deals . If you reach or are above this limit, you will not lose your open deals, but you cannot create new ones.
+ ➡️ To create new deals, you can either:
+ Close some of your open deals and stay under the 50-deal limit, or
+ Upgrade to at least a Starter plan with the Sales Essentials add-on to unlock unlimited open deals.
+ Number of pipelines
+ The Free plan is limited to 1 pipeline . If you reach or are above this limit, you will not lose your deals, but you cannot create new ones.
+ ➡️ To create new deals, you can either:
+ Delete extra pipelines and keep only one, or
+ Upgrade to at least a Starter plan with the Sales Essentials add-on to unlock unlimited pipelines.
+ Connected calendars and inboxes
+ The Free plan is limited to 1 connected calendar and 1 connected inbox.
+ ➡️ To unlock unlimited connected calendars and inboxes, upgrade to at least a Starter plan with the Sales Essentials add-on.
+ Deal currencies
+ The Free plan is limited to 1 currency for your deals.
+ ➡️ To unlock unlimited currencies, upgrade to at least a Professional  plan with the Sales Advanced add-on.
+ ❓Which features are not included in the Free plan?
+ Here are some of the features that are not included on the Free plan:
+ Email A/B testing
+ Dedicated IPs
+ Landing pages
+ Popups
+ Mobile and web push notifications
+ WhatsApp
+ Sales workflows
+ Instagram DMs or Facebook Messenger
+ Phone support
+ ➡️ To learn more about which features are included or not in the Free plan , check our dedicated article About Brevo pricing and plans  or see our pricing page .
+ ⏩ What's next?
+ About Brevo pricing and plans 
+ Upgrade your plan 
+ 

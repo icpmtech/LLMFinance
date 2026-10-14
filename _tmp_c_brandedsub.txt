@@ -1,0 +1,59 @@
+ 
+ 💡 Good to know
+ The branded subdomain is part of the
+ new domain setup flow ,
+ which is
+ being gradually rolled out and is not yet available
+ to all
+ users.
+ A branded subdomain lets you replace Brevo's default tracking links and return-path domain with your own domain in your emails.
+ Glossary
+ Here's a quick glossary of terms you might encounter when setting up a branded subdomain:
+ Term 
+ Definition 
+ Branded subdomain 
+ A subdomain of your sending domain that Brevo uses for return-path, tracking links, and image links in your emails. For example, if your sending domain is yourcompany.com , your branded subdomain might be mail.yourcompany.com . 
+ Subdomain 
+ A subdivision of a domain. For example, mail.yourcompany.com is a subdomain of yourcompany.com . Subdomains are created by adding a prefix to a root domain. 
+ Return-path 
+ The address used to handle bounced emails. When an email cannot be delivered, the bounce notification is sent to the return-path address. It appears in email headers as the mailed-by domain rather than being directly visible to recipients. 
+ Tracking links 
+ URLs in your emails that Brevo uses to track clicks and opens. By default, these links use Brevo's own domain. With a branded subdomain, they use your own domain instead. 
+ What is a branded subdomain?
+ By default, Brevo uses its own domains for tracking links, bounce handling, and the return-path in your emails (such as brevosend.com ). This means your domain is not visible in those parts of your email.
+ A branded subdomain changes this. It is a subdomain of your sending domain, such as mail.yourcompany.com , that Brevo uses instead. Once configured, your domain appears throughout your emails, not Brevo's.
+ Email component 
+ Without branded subdomain 
+ With branded subdomain 
+ Mailed-by and return-path 
+ brevosend.com 
+ mail.yourcompany.com 
+ Tracking and click links 
+ r.brevolinks.com 
+ r.mail.yourcompany.com 
+ Image links 
+ img.brevolinks.com 
+ img.mail.yourcompany.com 
+ Why does a branded subdomain matter?
+ Setting up a branded subdomain has three key benefits:
+ 🔐 Full SPF alignment 
+Without a branded subdomain, SPF passes via Brevo's infrastructure, not your own domain. Branding moves SPF alignment onto your sending domain, which means you can safely enforce a strict DMARC policy ( p=quarantine or p=reject ) and rely on two independent authentication signals instead of one.
+ 👀 Brand visibility 
+Links and images in your emails use your own domain instead of a Brevo domain, which builds trust with recipients and keeps your brand visible throughout the email experience.
+ 🔒 Reputation isolation 
+Using a subdomain separates your email sending infrastructure from your root domain. If deliverability issues arise on the branded subdomain, your root domain stays unaffected.
+ Is a branded subdomain required?
+ A branded subdomain is required only for dedicated IP users when setting up a domain using the new domain setup flow in Brevo. Share IP users can skip it if needed.
+ Even outside of these cases, setting up a branded subdomain is strongly recommended . It enables full SPF alignment on your sending domain, strengthens your DMARC setup, and improves your overall deliverability.
+ What are the rules for a branded subdomain?
+ You can have one branded subdomain per sending domain .
+ The branded subdomain must be a subdomain of your sending domain . For example, if your sending domain is yourcompany.com , your branded subdomain could be mail.yourcompany.com . If your sending domain is itself a subdomain (e.g. emails.yourcompany.com ), your branded subdomain would be something like mail.emails.yourcompany.com .
+ The prefix you choose (e.g. mail , send , em ) should not already be in use as a subdomain of your domain.
+ How do I set up a branded subdomain?
+ Branded subdomain setup is part of the domain setup flow in Brevo. It requires adding a few DNS records to your domain host. Brevo guides you through the process as part of the new domain setup flow and provides an automatic option to add the records for you in a few clicks.
+ ➡️ To learn more, check our dedicated article Set up your domain in Brevo .
+ ⏭️ What's next?
+ Set up your domain in Brevo 
+ Domain setup for better email deliverability 
+ About domain authentication (Brevo code, DKIM, DMARC) 
+ 

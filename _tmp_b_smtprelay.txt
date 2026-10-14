@@ -1,0 +1,3 @@
+ To guarantee minimal latency, we have SMTP relays in several different geographical locations. When you use smtp-relay.brevo.com you will be automatically connected to the best-performing SMTP relay available.
+ If the servers that contact our SMTP relay are in Europe, the SMTP servers used are generally located in Europe. 
+ The SMTP relays do not store any of the data; they simply pass it on to our data centers in Europe.

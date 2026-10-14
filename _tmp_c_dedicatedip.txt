@@ -1,0 +1,683 @@
+ 
+ ✅ Plan availability
+ In the Enterprise plan, one dedicated IP is included
+ at no additional cost. Additional dedicated IPs can be purchased as add-ons.
+ 💡 Good to know
+ Brevo is gradually rolling out a new domain setup flow that covers authentication,
+ branded subdomain setup, and dedicated IP association in one guided experience.
+ If your account has access to it, check our dedicated article
+ Set up your domain in Brevo 
+ instead.
+ If you send a high volume of emails and want greater control over your email-sending reputation, you can purchase and set up a dedicated IP for sending emails through Brevo.
+ Good to know
+ If you're on an Enterprise plan and want to set up a dedicated IP from an Admin account , check our dedicated article New Admin account - Set up your dedicated IP in Brevo or Classic Admin account - Set up your dedicated IP in Brevo .
+ Classic Admin account   
+ New Admin account 
+ Even if you are using a dedicated IP to send emails, you have to comply with Brevo's Anti-Spam Policy . Non-compliance may result in the immediate suspension of your email campaigns or entire account. To learn more about suspension, check our dedicated article Why have my account been suspended or email campaigns ejected? .
+ Before you start
+ A dedicated IP is only beneficial under specific conditions , such as sending a high volume of emails. Before purchasing and setting one up for your account, ensure that a dedicated IP is the right choice for your needs. To learn more, check our dedicated article Introduction to dedicated IP .
+ Ensure you have access to your domain host's account credentials , as you will need to log in during this process.
+ Step 1: Purchase a dedicated IP in Brevo
+ 💡 Good to know
+ Only dedicated IPs purchased from Brevo can be added to your account.
+ Similarly, Brevo dedicated IPs cannot be transferred to other platforms.
+ You can purchase a dedicated IP directly from your Brevo account.
+ Click the account dropdown and select My Plan .
+ Under the Add-ons section at the bottom of the page, click Add dedicated IP . 
+ Click Proceed to checkout .
+ Enter your billing information and payment method.
+ Read the Terms of Service and Anti Spam Policy of Brevo and check the box to confirm: I agree to the Terms of Service and Anti Spam Policy of Brevo .
+ Click Pay now .
+ The dedicated IP has been added to your account.
+ ❗️ Important
+ You should not send any emails before you start
+ warming up the IP .
+ Step 2: Create a subdomain of your primary domain
+ To set up your dedicated IP, you’ll need to associate it with a subdomain. This subdomain, known as the sending domain , will appear as the mailed-by or return-path domain in your email headers. If you don’t have a suitable subdomain available, you’ll need to create one through your domain host account.
+ Here are some key guidelines to follow when choosing or creating your subdomain:
+ Use a subdomain of your primary domain , not the primary domain itself (e.g., emails.yourdomain.com). If you have several dedicated IPs, use a different subdomain for each IP (e.g., emails.yourdomain.com, emails1.domain.com, emails2.domain.com, etc.).
+ Make it as similar to your primary domain as possible to make sure your brand is recognizable. 
+ Dedicate it solely to sending your emails from Brevo and do not use it for other purposes (e.g., website, webmail).
+ Expand the following accordion to view a more detailed example of how you can setup your subdomain and dedicated IP:
+ ⚙️ Setup example for your subdomain and dedicated IP 
+ Sender 
+ Email type 
+ Sending domain 
+ Dedicated IP 
+ marketing@emails.yourdomain.com 
+ Marketing 
+ emails1.yourdomain.com 
+ IP 1 
+ transactional@emails.yourdomain.com 
+ Transactional 
+ emails2.yourdomain.com 
+ IP 2 
+ ❗️ Important
+ Do not include "brevo" in your sender domain name, as this could lead
+ ISPs to mistakenly think you're impersonating another company.
+ Step 3: Associate the subdomain with your dedicated IP
+ Once you've chosen the subdomain to associate with your dedicated IP, you'll need to add specific values, called DNS records, in your domain host account. During this process, you'll copy and paste these values from your Brevo account into the corresponding fields in your domain host account .
+ Add the name of the subdomain to Brevo
+ First, add the name of the subdomain to Brevo:
+ Click the account dropdown and select Settings > Senders, Domains, IPs > Dedicated IPs .
+ Under the dedicated IP address you purchased, click Associate a domain .
+ Enter the name of your subdomain you want to associate with your dedicated IP. This is the subdomain you created in Step 2: Create a subdomain of your primary domain .
+ Click Associate .
+ Add the DNS record to your domain host
+ You will now see a page with the DNS records you need to add to your domain host account. Depending on your domain host and configuration, you have to choose between two options to associate your subdomain with your dedicated IP:
+ Simple 
+Create two DNS records of NS type in your domain host account.
+ Advanced 
+Create seven DNS records of various types (A, MX, CNAME, DKIM, SPF, DMARC) in your domain host account.
+ Use the tabs and accordions below to find step-by-step instructions for your preferred option and domain host ⬇️.
+ If you're unsure what your domain host is, check our article Identify your domain host . If you can't find your domain host in the lists, select the Other dropdown for generic instructions.
+ Simple Advanced 
+ With the Simple option, you only need to create two DNS records of NS type in your domain host account. Choose this option if the subdomain associated with your dedicated IP is exclusively used for sending emails through Brevo and you don’t have any other DNS records in your domain host account.
+ GoDaddy 
+ Open a new tab in your web browser and log in to your GoDaddy account.
+ Under All Products and Services , click DNS next to the primary domain of your subdomain. This is where you'll add the DNS records.
+ Add the first NS record
+ Click Add New Record .
+ From the Type dropdown, select NS .
+ In Brevo, copy the value from the Name field and paste it into the Name field in GoDaddy.
+ In Brevo, copy the value from the Value field (ns1.sendinblue.com) and paste it into the Value field in GoDaddy.
+ Leave the TTL field as is.
+ Add the second NS record
+ You'll repeat the same process for the second NS record:
+ To add the second NS record:
+ Click Add More Records . 
+ From the Type dropdown, select NS .
+ In Brevo, copy the value from the Name field and paste it into the Name field in GoDaddy.
+ In Brevo, copy the value from the Value field (ns2.sendinblue.com) and paste it into the Value field in GoDaddy.
+ Leave the TTL field as is.
+ Click Save .
+ IONOS 
+ Open a new tab in your web browser and log in to your IONOS account.
+ Click Domains & SSL .
+ Next to the primary domain of your subdomain, click the ⚙️ gear icon and select DNS . This is where you'll add your DNS records.
+ Add the first NS record
+ Click Add record .
+ From the Type dropdown, select NS .
+ In Brevo, copy the value from the Hostname field and paste it into the Host name field in IONOS.
+ In Brevo, copy the value from the Value field (ns1.sendinblue.com) and paste it into the Value field in IONOS.
+ Leave the TTL field as is.
+ Click Save .
+ Add the second NS record
+ You'll repeat the same process for the second NS record:
+ Click Add record .
+ From the Type dropdown, select NS .
+ In Brevo, copy the value from the Hostname field and paste it into the Host name field in IONOS.
+ In Brevo, copy the value from the Value field (ns2.sendinblue.com) and paste it into the Value field in IONOS.
+ Leave the TTL field as is.
+ Click Save .
+ OVH 
+ Open a new tab in your web browser and log in to your OVH account.
+ Go to the Web Cloud tab.
+ In the left-side panel, under Domain names , select the primary domain of your subdomain.
+ Go to the DNS zone tab. This is where you'll add your DNS records.
+ Add the first NS record
+ Click Add an entry .
+ Select NS .
+ In Brevo, copy the value from the Sub-domain field and paste it into the Sub-domain  field in OVH.
+ In Brevo, copy the value from the Value field (ns1.sendinblue.com) and paste it into the Target  field in OVH.
+ Leave the TTL field as is.
+ Click Next .
+ Verify your information and click Confirm .
+ Add the second NS record
+ You'll repeat the same process for the second NS record:
+ To add the second NS record:
+ Click Add an entry .
+ Select NS .
+ In Brevo, copy the value from the Sub-domain field and paste it into the Sub-domain  field in OVH.
+ In Brevo, copy the value from the Value field (ns2.sendinblue.com) and paste it into the Target  field in OVH.
+ Leave the TTL field as is.
+ Click Next .
+ Verify your information and click Confirm .
+ Google Domains 
+ Open a new tab in your web browser and log in to your Google Domains account.
+ Click Manage next to the primary domain of your subdomain.
+ In the sidebar menu, select DNS .
+ Under Resource records , open the Custom records dropdown and click Manage custom records . This is where you'll add your DNS records.
+ Add the first NS record
+ Click Create new record .
+ In Brevo, copy the value from the Host name field and paste it into the Name  field in Google Domains.
+ From the Type dropdown, select NS .
+ Leave the TTL field as is.
+ In Brevo, copy the value from the Data field (ns1.sendinblue.com) and paste it into the Data field in Google Domains.
+ Add the second NS record
+ You'll repeat the same process for the second NS record:
+ Click + Add more to this record below the first NS record.
+ In Brevo, copy the value from the Host name field and paste it into the Name  field in Google Domains.
+ From the Type dropdown, select NS .
+ Leave the TTL field as is.
+ In Brevo, copy the value from the Data field (ns2.sendinblue.com) and paste it into the Data field in Google Domains.
+ Click Save .
+ Gandi 
+ Open a new tab in your web browser and log in to your Gandi account.
+ In the sidebar menu, select Domain .
+ Select the primary domain of your subdomain.
+ Go to the DNS Records tab. This is where you'll add your DNS records.
+ Add the first NS record
+ Click Add record .
+ From the Type dropdown, select NS .
+ Leave the TTL and Unit fields as they are.
+ In Brevo, copy the value from the Name field and paste it into the Name field in Gandi.
+ In Brevo, copy the value from the Text value field (ns1.sendinblue.com.) and paste it into the Text value field in Gandi.
+ Click Create .
+ Add the second NS record
+ You'll repeat the same process for the second NS record:
+ Click Add record .
+ From the Type dropdown, select NS .
+ Leave the TTL and Unit fields as is.
+ In Brevo, copy the value from the Name field and paste it into the Name field in Gandi.
+ In Brevo, copy the value from the Text value field (ns2.sendinblue.com.) and paste it into the Text value field in Gandi.
+ Click Create .
+ Amen 
+ Open a new tab in your web browser and log in to your Amen account.
+ Under Domaines (Domain) , select the primary domain of your subdomain.
+ Go to Domaines et DNS (Domains and DNS) > Configuration DNS (DNS configuration) > Gestion avancée (Advanced management) . This is where you'll add your DNS records.
+ Add the first NS record
+ Click  Ajouter un enregistrement (Add a record) .
+ In Brevo, copy the value from the Name field and paste it into the Nom (Name) field in Amen.
+ Leave the TTL field as is.
+ From the Type dropdown, select NS .
+ In Brevo, copy the value from the Value field (ns1.sendinblue.com.) and paste it into the Valeur (Value) field in Amen.
+ Click Valider (Confirm) . 
+ Add the second NS record
+ You'll repeat the same process for the second NS record:
+ Click  Ajouter un enregistrement (Add a record) .
+ In Brevo, copy the value from the Name field and paste it into the Nom (Name) field in Amen.
+ Leave the TTL field as is.
+ From the Type dropdown, select NS .
+ In Brevo, copy the value from the Value field (ns2.sendinblue.com.) and paste it into the Valeur (Value) field in Amen.
+ Click Valider (Confirm) . 
+ Other 
+ ❗️ Important
+ The values provided below
+ may vary depending on your domain host .
+ If you encounter any issues while associating
+ your subdomain with your dedicated IP, we recommend
+ contacting your domain host's support team 
+ for assistance with the correct format.
+ Open a new tab in your web browser and log in to your domain host account.
+ Navigate to the DNS management page for the primary domain of your subdomain. This is where you'll add your DNS records.
+ Add the first NS record
+ Create a new DNS record of NS type.
+ In Brevo, copy the value from the Hostname / Name field and paste it into the corresponding field of your domain host.
+ In Brevo, copy the value from the Data / Value field and paste it into the corresponding field of your domain host.
+ Leave the TTL field as is.
+ Save your DNS record.
+ Add the second NS record
+ You'll repeat the same process for the second NS record:
+ Create a new DNS record of NS type.
+ In Brevo, copy the value from the Hostname / Name field and paste it into the corresponding field of your domain host.
+ In Brevo, copy the value from the Data / Value field and paste it into the corresponding field of your domain host.
+ Leave the TTL field as is.
+ Save your DNS record.
+ With the Advanced option, you need to create seven DNS records of various types in your domain host account. Choose this option if:
+ Your domain host doesn't allow you to add new NS records,
+ You already have DNS records in your domain host account, or
+ The subdomain you associate with your dedicated IP is used for multiple services for which you need to add DNS entries (though this configuration is not recommended).
+ GoDaddy 
+ Open a new tab in your web browser and log in to your GoDaddy account.
+ Under All Products and Services , click DNS next to the primary domain of your subdomain. This is where you'll add the DNS records.
+ Add the A record
+ Click Add New Record .
+ From the Type dropdown, select A .
+ In Brevo, copy the value from the Sub-domain field and paste it into the Name field in GoDaddy.
+ In Brevo, copy the value from the Value field and paste it into the Value field in GoDaddy.
+ Leave the TTL field as is.
+ Add the MX record
+ You'll repeat the same process for the MX record:
+ Click Add New Record .
+ From the Type dropdown, select MX .
+ In Brevo, copy the value from the Sub-domain field and paste it into the Name field in GoDaddy.
+ In the Priority field, enter 10 .
+ In Brevo, copy the value from the Value field and paste it into the Value field in GoDaddy.
+ Leave the TTL field as is.
+ Add the first CNAME record
+ You'll repeat the same process for the first CNAME record:
+ Click Add New Record .
+ From the Type dropdown, select CNAME .
+ In Brevo, copy the value from the Sub-domain field and paste it into the Name field in GoDaddy.
+ In Brevo, copy the value from the Value field and paste it into the Value field in GoDaddy.
+ Leave the TTL field as is.
+ Add the second CNAME record
+ You'll repeat the same process for the second CNAME record:
+ Click Add New Record .
+ From the Type dropdown, select CNAME .
+ In Brevo, copy the value from the Sub-domain field and paste it into the Name field in GoDaddy.
+ In Brevo, copy the value from the Value field and paste it into the Value field in GoDaddy.
+ Leave the TTL field as is.
+ Add the DKIM record
+ You'll repeat the same process for the DKIM record:
+ Click Add New Record .
+ From the Type dropdown, select TXT .
+ In Brevo, copy the value from the Sub-domain field and paste it into the Name field in GoDaddy.
+ In Brevo, copy the value from the Value field and paste it into the Value field in GoDaddy.
+ Leave the TTL field as is.
+ Add the SPF record
+ You'll repeat the same process for the SPF record:
+ From the Type dropdown, select TXT .
+ In Brevo, copy the value from the Sub-domain field and paste it into the Name field in GoDaddy.
+ In Brevo, copy the value from the Value field and paste it into the Value field in GoDaddy.
+ Leave the TTL field as is.
+ Add the DMARC record
+ You'll repeat the same process for the DMARC record:
+ From the Type dropdown, select TXT .
+ In Brevo, copy the value from the Sub-domain field and paste it into the Name field in GoDaddy.
+ In Brevo, copy the value from the Value field and paste it into the Value field in GoDaddy.
+ Leave the TTL field as is.
+ IONOS 
+ Open a new tab in your web browser and log in to your IONOS account.
+ Click Domains & SSL .
+ Next to the primary domain of your subdomain, click the ⚙️ gear icon and select DNS . This is where you'll add your DNS records.
+ Add the A record
+ Click Add record .
+ From the Type dropdown, select A .
+ In Brevo, copy the value from the Hostname field and paste it into the Host Name field in IONOS.
+ In Brevo, copy the value from the Value field and paste it into the Points to field in IONOS.
+ Leave the TTL field as is.
+ Click Save .
+ Add the MX record
+ You'll repeat the same process for the MX record:
+ Click Add record .
+ From the Type dropdown, select MX .
+ In Brevo, copy the value from the Hostname field and paste it into the Host Name field in IONOS.
+ In Brevo, copy the value from the Value field and paste it into the Points to field in IONOS.
+ In the Priority field, enter 10 .
+ Leave the TTL field as is.
+ Click Save .
+ Add the first CNAME record
+ You'll repeat the same process for the first CNAME record:
+ Click Add record .
+ From the Type dropdown, select CNAME .
+ In Brevo, copy the value from the Hostname field and paste it into the Host Name field in IONOS.
+ In Brevo, copy the value from the Value field and paste it into the Points to field in IONOS.
+ Leave the TTL field as is.
+ Click Save .
+ Add the second CNAME record
+ You'll repeat the same process for the second CNAME record:
+ Click Add record .
+ From the Type dropdown, select CNAME .
+ In Brevo, copy the value from the Hostname field and paste it into the Host Name field in IONOS.
+ In Brevo, copy the value from the Value field and paste it into the Points to field in IONOS.
+ Leave the TTL field as is.
+ Click Save .
+ Add the DKIM record
+ You'll repeat the same process for the DKIM record:
+ Click Add record .
+ From the Type dropdown, select TXT .
+ In Brevo, copy the value from the Hostname field and paste it into the Host Name field in IONOS.
+ In Brevo, copy the value from the Value field and paste it into the Points to field in IONOS.
+ Leave the TTL field as is.
+ Click Save .
+ Add the SPF record
+ You'll repeat the same process for the SPF record:
+ Click Add record .
+ From the Type dropdown, select TXT .
+ In Brevo, copy the value from the Hostname field and paste it into the Host Name field in IONOS.
+ In Brevo, copy the value from the Value field and paste it into the Points to field in IONOS.
+ Leave the TTL field as is.
+ Click Save .
+ Add the DMARC record
+ You'll repeat the same process for the DMARC record:
+ Click Add record .
+ From the Type dropdown, select TXT .
+ In Brevo, copy the value from the Hostname field and paste it into the Host Name field in IONOS.
+ In Brevo, copy the value from the Value field and paste it into the Points to field in IONOS.
+ Leave the TTL field as is.
+ Click Save .
+ OVH 
+ Open a new tab in your web browser and log in to your OVH account.
+ Go to the Web Cloud tab.
+ In the left-side panel, under Domain names , select the primary domain of your subdomain.
+ Go to the DNS zone tab. This is where you'll add your DNS records.
+ Add the A record
+ Click Add an entry .
+ Select A .
+ In Brevo, copy the value from the Sub-domain field and paste it into the Sub-domain  field in OVH.
+ Leave the TTL field as is.
+ In Brevo, copy the value from the Value field and paste it into the Target field in OVH.
+ Click Next .
+ Verify your information and click Confirm .
+ Add the MX record
+ You'll repeat the same process for the MX record:
+ Click Add an entry .
+ Select MX .
+ In Brevo, copy the value from the Sub-domain field and paste it into the Sub-domain  field in OVH.
+ Leave the TTL field as is.
+ In the Priority field, enter 10 .
+ In Brevo, copy the value from the Value field and paste it into the Target field in OVH.
+ Click Next .
+ Verify your information and click Confirm .
+ Add the first CNAME record
+ You'll repeat the same process for the first CNAME record:
+ Click Add an entry .
+ Select CNAME .
+ In Brevo, copy the value from the Sub-domain field and paste it into the Hostname  field in OVH.
+ Leave the TTL field as is.
+ In Brevo, copy the value from the Value field and paste it into the Target  field in OVH.
+ Click Next .
+ Verify your information and click Confirm .
+ Add the second CNAME record
+ You'll repeat the same process for the second CNAME record:
+ Click Add an entry .
+ Select CNAME .
+ In Brevo, copy the value from the Sub-domain field and paste it into the Hostname  field in OVH.
+ Leave the TTL field as is.
+ In Brevo, copy the value from the Value field and paste it into the Target  field in OVH.
+ Click Next .
+ Verify your information and click Confirm .
+ Add the DKIM record
+ You'll repeat the same process for the DKIM record:
+ Click Add an entry .
+ Select TXT .
+ In Brevo, copy the value from the Sub-domain field and paste it into the Sub-domain  field in OVH.
+ Leave the TTL field as is.
+ In Brevo, copy the value from the Value field and paste it into the Value field in OVH.
+ Click Next .
+ Verify your information and click  Confirm .
+ Add the SPF record
+ You'll repeat the same process for the SPF record:
+ Click Add an entry .
+ Select TXT .
+ In Brevo, copy the value from the Sub-domain field and paste it into the Sub-domain  field in OVH.
+ Leave the TTL field as is.
+ In Brevo, copy the value from the Value field and paste it into the Value field in OVH.
+ Click Next .
+ Verify your information and click  Confirm .
+ Add the DMARC record
+ You'll repeat the same process for the DMARC record:
+ Click Add an entry .
+ Select TXT .
+ In Brevo, copy the value from the Sub-domain field and paste it into the Sub-domain  field in OVH.
+ Leave the TTL field as is.
+ In Brevo, copy the value from the Value field and paste it into the Value field in OVH.
+ Click Next .
+ Verify your information and click  Confirm .
+ Google Domains 
+ Open a new tab in your web browser and log into your Google Domains account.
+ Click Manage next to the domain you want to authenticate.
+ In the sidebar menu, select DNS .
+ Go to the Custom resource records section at the bottom of the page. This is where you'll add your DNS records. 
+ Add the A record
+ In Brevo, copy the value from the Host name field and paste it into the Name  field in Google Domains.
+ From the Type dropdown, select A .
+ Leave the TTL field as is.
+ In Brevo, copy the value from the Data field and paste it into the Data field in Google Domains.
+ Click Add .
+ Add the MX record
+ You'll repeat the same process for the MX record:
+ In Brevo, copy the value from the Host name field and paste it into the Name  field in Google Domains.
+ From the Type dropdown, select MX .
+ Leave the TTL field as is.
+ In the Data field, enter 10 followed by a space.
+ In Brevo, copy the value from the Data field and paste it into the Data field in Google Domains, right after 10 .
+ Click Add .
+ Add the first CNAME record
+ You'll repeat the same process for the first CNAME record:
+ In Brevo, copy the value from the Host name field and paste it into the Name  field in Google Domains.
+ From the Type dropdown, select CNAME .
+ Leave the TTL field as is.
+ In Brevo, copy the value from the Data field and paste it into the Data field in Google Domains.
+ Click Add .
+ Add the second CNAME record
+ You'll repeat the same process for the second CNAME record:
+ In Brevo, copy the value from the Host name field and paste it into the Name  field in Google Domains.
+ From the Type dropdown, select CNAME .
+ Leave the TTL field as is.
+ In Brevo, copy the value from the Data field and paste it into the Data field in Google Domains.
+ Click Add .
+ Add the DKIM record
+ You'll repeat the same process for the DKIM record:
+ In Brevo, copy the value from the Host name field and paste it into the Name  field in Google Domains.
+ From the Type dropdown, select TXT .
+ Leave the TTL field as is.
+ In Brevo, copy the value from the Data field and paste it into the Data field in Google Domains.
+ Click Add .
+ Add the SPF record
+ You'll repeat the same process for the SPF record:
+ In Brevo, copy the value from the Host name field and paste it into the Name  field in Google Domains.
+ From the Type dropdown, select TXT .
+ Leave the TTL field as is.
+ In Brevo, copy the value from the Data field and paste it into the Data field in Google Domains.
+ Click Add .
+ Add the DMARC record
+ You'll repeat the same process for the DMARC record:
+ In Brevo, copy the value from the Host name field and paste it into the Name  field in Google Domains.
+ From the Type dropdown, select TXT .
+ Leave the TTL field as is.
+ In Brevo, copy the value from the Data field and paste it into the Data field in Google Domains.
+ Click Add .
+ Gandi 
+ Open a new tab in your navigator and log into your Gandi account.
+ In the sidebar menu, select Domain .
+ Select the domain you want to associate with your dedicated IP.
+ Go to the DNS Records tab. This is where you'll add your DNS records.
+ Add the A record
+ Click Add record .
+ From the Type dropdown, select A .
+ Leave the TTL and Unit fields as they are.
+ In Brevo, copy the value from the Name field and paste it into the Name field in Gandi.
+ In Brevo, copy the value from the Text value field and paste it into the IPv4 Address field in Gandi.
+ Click Save .
+ Add the MX record
+ You'll repeat the same process for the MX record:
+ Click Add record .
+ From the Type dropdown, select MX .
+ Leave the TTL and Unit fields as they are.
+ In Brevo, copy the value from the Name field and paste it into the Name field in Gandi.
+ In the Priority field, enter 10.
+ In Brevo, copy the value from the Text value field and paste it into the Hostname field in Gandi.
+ Click Save .
+ Add the first CNAME record
+ You'll repeat the same process for the first CNAME record:
+ Click Add record .
+ From the Type dropdown, select CNAME .
+ Leave the TTL and Unit fields as they are.
+ In Brevo, copy the value from the Name field and paste it into the Name field in Gandi.
+ In Brevo, copy the value from the Text value field and paste it into the Hostname field in Gandi.
+ Click Save .
+ Add the second CNAME record
+ You'll repeat the same process for the second CNAME record:
+ Click Add record .
+ From the Type dropdown, select CNAME .
+ Leave the TTL and Unit fields as they are.
+ In Brevo, copy the value from the Name field and paste it into the Name field in Gandi.
+ In Brevo, copy the value from the Text value field and paste it into the Hostname field in Gandi.
+ Click Save .
+ Add the DKIM record
+ You'll repeat the same process for the DKIM record:
+ Click Add record .
+ From the Type dropdown, select TXT .
+ Leave the TTL and Unit fields as they are.
+ In Brevo, copy the value from the Name field and paste it into the Name field in Gandi.
+ In Brevo, copy the value from the Text value field and paste it into the Text value field in Gandi.
+ Click Save .
+ Add the SPF record
+ You'll repeat the same process for the SPF record:
+ Click Add record .
+ From the Type dropdown, select TXT .
+ Leave the TTL and Unit fields as they are.
+ In Brevo, copy the value from the Name field and paste it into the Name field in Gandi.
+ In Brevo, copy the value from the Text value field and paste it into the Text value field in Gandi.
+ Click Save .
+ Add the DMARC record
+ You'll repeat the same process for the DMARC record:
+ Click Add record .
+ From the Type dropdown, select TXT .
+ Leave the TTL and Unit fields as they are.
+ In Brevo, copy the value from the Name field and paste it into the Name field in Gandi.
+ In Brevo, copy the value from the Text value field and paste it into the Text value field in Gandi.
+ Click Save .
+ Amen 
+ Open a new tab in your web browser and log into your Amen account.
+ Under Domaines (Domain) , select the domain you want to authenticate.
+ Select Domaines et DNS (Domains and DNS) .
+ Select Configuration DNS (DNS configuration) .
+ Go to the Gestion avancée (Advanced management) tab. This is where you'll add your DNS records.
+ Add the A record
+ Click  Ajouter un enregistrement (Add a record) .
+ In Brevo, copy the value from the Name field and paste it into the Nom (Name) field in Amen.
+ Select A .
+ In Brevo, copy the value from the Value field and paste it into the Valeur (Value) field in Amen.
+ Leave the Type/Valeur par défaut (Type/Default value) field as is.
+ Click Valider (Confirm) .
+ Add the MX record
+ You'll repeat the same process for the MX record:
+ Click  Ajouter un enregistrement (Add a record) .
+ In Brevo, copy the value from the Name field and paste it into the Nom (Name) field in Amen.
+ Select MX .
+ In the Value field, enter 10 followed by a space.
+ In Brevo, copy the value from the Value field and paste it into the Valeur (Value) field in Amen, right after 10 . 
+ Leave the Type/Valeur par défaut (Type/Default value) field as is.
+ Click Valider (Confirm) .
+ Add the first CNAME record
+ You'll repeat the same process for the first CNAME record:
+ Click  Ajouter un enregistrement (Add a record) .
+ In Brevo, copy the value from the Name field and paste it into the Nom (Name) field in Amen.
+ Select CNAME .
+ In Brevo, copy the value from the Value field and paste it into the Valeur (Value) field in Amen.
+ Leave the Type/Valeur par défaut (Type/Default value) field as is.
+ Click Valider (Confirm) .
+ Add the second CNAME record
+ You'll repeat the same process for the second CNAME record:
+ Click  Ajouter un enregistrement (Add a record) .
+ In Brevo, copy the value from the Name field and paste it into the Nom (Name) field in Amen.
+ Select CNAME .
+ In Brevo, copy the value from the Value field and paste it into the Valeur (Value) field in Amen.
+ Leave the Type/Valeur par défaut (Type/Default value) field as is.
+ Click Valider (Confirm) .
+ Add the DKIM record
+ You'll repeat the same process for the DKIM record:
+ Click  Ajouter un enregistrement (Add a record) .
+ In Brevo, copy the value from the Name field and paste it into the Nom (Name) field in Amen.
+ Select TXT .
+ In Brevo, copy the value from the Value field and paste it into the Valeur (Value) field in Amen.
+ Leave the Type/Valeur par défaut (Type/Default value) field as is.
+ Click Valider (Confirm) .
+ Add the SPF record
+ You'll repeat the same process for the SPF record:
+ Click  Ajouter un enregistrement (Add a record) .
+ In Brevo, copy the value from the Name field and paste it into the Nom (Name) field in Amen.
+ Select TXT .
+ In Brevo, copy the value from the Value field and paste it into the Valeur (Value) field in Amen.
+ Leave the Type/Valeur par défaut (Type/Default value) field as is.
+ Click Valider (Confirm) .
+ Add the DMARC record
+ You'll repeat the same process for the DMARC record:
+ Click  Ajouter un enregistrement (Add a record) .
+ In Brevo, copy the value from the Name field and paste it into the Nom (Name) field in Amen.
+ Select TXT .
+ In Brevo, copy the value from the Value field and paste it into the Valeur (Value) field in Amen.
+ Leave the Type/Valeur par défaut (Type/Default value) field as is.
+ Click Valider (Confirm) .
+ Other 
+ ❗️ Important
+ The values provided below
+ may vary depending on your specific domain host .
+ If you encounter issues, we suggest contacting your
+ domain host's support team for assistance to clarify
+ the required format. If you're unsure what your domain
+ host is, check our dedicated article
+ Identify your domain host .
+ Open a new tab in your web browser and log into your domain host account.
+ From your domain host account, go to the page where you can find the DNS records of the domain you want to authenticate. 
+ Add the A record
+ Create a new DNS record of A type.
+ In Brevo, copy the value from the Hostname field and paste it into the corresponding field of your domain host.
+ In Brevo, copy the value from the Data field and paste it into the corresponding field of your domain host.
+ Save your DNS record.
+ Add the MX record
+ You'll repeat the same process for the MX record:
+ Create a new DNS record of MX type.
+ In Brevo, copy the value from the Hostname field and paste it into the corresponding field of your domain host.
+ In Brevo, copy the value from the Data field and paste it into the corresponding field of your domain host.
+ If there is a Priority field, enter 10 .
+ Save your DNS record.
+ Add the first CNAME record
+ You'll repeat the same process for the first CNAME record:
+ Create a new DNS record of CNAME type.
+ In Brevo, copy the value from the Hostname field and paste it into the corresponding field of your domain host.
+ In Brevo, copy the value from the Data field and paste it into the corresponding field of your domain host.
+ Save your DNS record.
+ Add the second CNAME record
+ You'll repeat the same process for the second CNAME record:
+ Create a new DNS record of CNAME type.
+ In Brevo, copy the value from the Hostname field and paste it into the corresponding field of your domain host.
+ In Brevo, copy the value from the Data field and paste it into the corresponding field of your domain host.
+ Save your DNS record.
+ Add the DKIM record
+ You'll repeat the same process for the DKIM record:
+ Create a new DNS record of TXT type.
+ In Brevo, copy the value from the Hostname field and paste it into the corresponding field of your domain host.
+ In Brevo, copy the value from the Data field and paste it into the corresponding field of your domain host.
+ Save your DNS record.
+ Add the SPF record
+ You'll repeat the same process for the SPF record:
+ Create a new DNS record of TXT type.
+ In Brevo, copy the value from the Hostname field and paste it into the corresponding field of your domain host.
+ In Brevo, copy the value from the Data field and paste it into the corresponding field of your domain host.
+ Save your DNS record.
+ Add the DMARC record
+ You'll repeat the same process for the DMARC record:
+ Create a new DNS record of TXT type.
+ In Brevo, copy the value from the Hostname field and paste it into the corresponding field of your domain host.
+ In Brevo, copy the value from the Data field and paste it into the corresponding field of your domain host.
+ Save your DNS record.
+ Verify if your dedicated IP has been associated with your subdomain
+ After adding the DNS records to your domain host account, you need to verify if your dedicated IP has been associated with your subdomain. 
+ Go back to Brevo and click Verify and associate at the bottom of the page . 
+ Once your dedicated IP was successfully associated with your subdomain, a ✅ Value matched message will appear next to each DNS record. 
+ ❗️ Important
+ It can take up to 48 hours for your dedicated IP to
+ be associated with your subdomain.
+ Step 4: Assign your dedicated IP to your senders
+ Next, assign your dedicated IP to your senders. When a dedicated IP is assigned to specific senders, all emails from those senders will be sent from that IP. If multiple IPs are assigned to a sender, you can set the sending rate for each IP.
+ How to choose my senders?
+ When choosing your senders, ensure the domain part of each email address (the part after the @, known as the sender domain ) is identical or closely related to the subdomain you associated with your dedicated IP in Step 3: Associate the subdomain with your dedicated IP . This consistency improves email deliverability and strengthens your domain’s reputation.
+ For example, if the subdomain you associated with your dedicated IP is emails.yourdomain.com , you could use @ emails.yourdomain.com (identical) or @info. yourdomain.com (closely related) as your sender domains. 
+ ❗️ Important
+ Using an unrelated domain can raise red flags with ISPs
+ and negatively impact your email deliverability. While it’s not a total
+ barrier, it’s best to closely align the subdomain associated with your
+ dedicated IP and your sender domains.
+ Assign your dedicated IP to your senders
+ To assign your dedicated IP to a sender:
+ Click the account dropdown and select Settings > Senders, Domains, IPs > Senders .
+ Create a new sender or edit an existing one.
+ Click Manage the pool of IPs .
+ Choose the dedicated IP(s) to assign to the sender.
+ (Optional) If you assign multiple IPs to the sender, you can adjust their sending rate and manage the percentage of emails sent from each IP. To learn more, check our dedicated article Use a pool of dedicated IPs .
+ Click Save .
+ Step 5: Authenticate your sender domain
+ 💡 Good to know
+ If your sender domain is identical to the subdomain
+ associated to your dedicated IP, you can skip to
+ Step 7: Warm up your dedicated IP ,
+ as the subdomain is automatically authenticated when associated with
+ a dedicated IP.
+ Now, you need to authenticate the sender domain that you used in Step 5: Assign your dedicated IP to your senders . Authentication allows you to verify that the email addresses you’ll use for sending emails to Brevo are authorized to send emails on behalf of your organization .
+ This process makes your emails appear more reliable to Internet Service Providers (ISPs) and webmail services like Gmail and Yahoo, improving the likelihood of your emails reaching the inbox.
+ ➡️ To learn more, check our dedicated article Authenticate your domain with Brevo .
+ Step 6: Warm up your dedicated IP
+ It's now time to warm up your dedicated IP and build a positive reputation with ISPs . You should start by sending small volumes of emails from your dedicated IP, then gradually increase the volume over time.
+ ➡️ To learn more, check our dedicated article Warm up your dedicated IP .
+ FAQs
+ 🌐 Can I associate my dedicated IP directly to a domain instead of a subdomain? 
+ You should never associate your dedicated IP with your primary domain.  Doing so could potentially disrupt your website, especially if it is hosted on your primary domain.
+ Additionally, we strongly advise against associating your dedicated IP with a cousin domain of your primary domain . For example, a cousin domain of the primary domain thegreenyoga.com would be news-thegreenyoga.com. Associating a dedicated IP to a cousin domain is a bad practice and is generally frowned upon in the mailing industry.
+ When emails are sent from a dedicated IP associated with a cousin domain, recipients may struggle to identify the familiar domain of the website they typically visit . This can raise concerns about phishing attempts, as users may question the legitimacy of the emails. Additionally, anti-spam filters tend to regard emails from cousin domains unfavorably, increasing the likelihood of these messages being flagged as spam or suspicious.
+ For optimal deliverability and to maintain a positive sender reputation, we strongly recommend you always associate your dedicated IP with a subdomain of your primary domain . This subdomain should only be dedicated to sending your emails from Brevo and should be as similar to your primary domain as possible. For example, if your website is thegreenyoga.com, you could choose news.thegreenyoga.com or marketing.thegreenyoga.com as your new subdomain. This ensures that your emails are recognized, trusted, and less likely to be flagged as suspicious or unwanted. 
+ 🧐 I already have an SPF record on my subdomain. How can I add Brevo's SPF record? 
+ There can only be one SPF record on a given domain or subdomain. If there is already an SPF record, you'll need to combine the value of that existing record with the Brevo value.
+ To learn more, check our dedicated article Merge multiple SPF records .
+ ⏳ My subdomain still hasn't been associated with my dedicated IP after 48 hours. What should I do? 
+ If your subdomain still hasn't been associated with your dedicated IP after 48 hours, contact our support team and include a screenshot of the DNS records you have added to your domain host.
+ For domain host-specific requirements, we recommend you reach out to your domain host support.
+ ⏭️ What's next?
+ Create an email campaign 
+ Best practices for email deliverability 
+ Best practices for managing a dedicated IP 
+ 

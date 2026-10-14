@@ -1,0 +1,125 @@
+ 
+ Need help meeting Gmail, Yahoo, and Microsoft's sender requirements?
+ Work with a Brevo Certified Expert to get your domain set up,
+ authenticated,
+ and fully compliant.
+ Hire a Brevo Expert 
+ Since February 2024, Gmail and Yahoo have implemented requirements for email senders to better protect users' inboxes from spam and ensure legitimate emails are delivered . Microsoft announced similar standards in May 2025. With the rest of the industry expected to follow, it is essential for all email senders to comply with these requirements as soon as possible.
+ Requirement 
+ Action to take 
+ Send from a custom domain 
+ Use a professional email address ending with your own domain instead of a free address (@gmail.com, @yahoo.com, @outlook.com, etc.). 
+ Authenticate your domain with DKIM and DMARC 
+ Set up and authenticate your domain on the Domains page in Brevo. 
+ Stay under a 0.3% spam complaint rate 
+ Follow our best practices for email deliverability and monitor your spam complaint rate using Gmail's Postmaster Tools. 
+ 🤝 Align your sending domain with the domain you authenticated (bulk senders with a dedicated IP) 
+ Make sure your sending domain matches or is a subdomain of the domain you authenticated with DKIM or SPF. 
+ What all senders should do
+ The following sections provide an overview of the requirements and the actions all senders need to take:
+ 🌐 Send from a custom domain
+ Sending from a free email address (@gmail.com, @yahoo.com, @outlook.com, etc.) will cause your emails to be rejected or filtered to spam. Use a professional email address ending with your own domain instead. You can set one up through providers like GoDaddy or OVH .
+ ➡️ To learn more, check our dedicated article Why you need to replace your free email address with a professional one .
+ 🔒 Authenticate your domain with DKIM and DMARC
+ ❗️ Important
+ If your domain is not authenticated with DMARC, all emails sent to Microsoft
+ recipients (@outlook.com, @hotmail.com, and @live.com) will be
+ marked as spam or rejected .
+ DKIM and DMARC are authentication methods that verify that your emails are genuinely from you, protecting against spam, phishing, and spoofing. They also increase the likelihood of your emails reaching your recipients' inboxes.
+ ➡️ To learn more, check our dedicated article Authenticate your domain with Brevo (Brevo code, DKIM, DMARC) .
+ 💡 Good to know
+ Brevo is gradually rolling out a new domain setup flow that covers authentication,
+ branded subdomain setup, and dedicated IP association in one guided experience.
+ If your account has access to it, check our dedicated article
+ Set up your domain in Brevo 
+ instead.
+ Expand the following accordions for additional guidance on domain authentication:
+ How to verify if my domain is authenticated with DKIM and DMARC 
+ In Brevo, go to the Senders page.
+ Next to each sender, make sure the DKIM signature and DMARC policy are marked with a green checkmark ✅.
+ If either is marked with an orange warning icon ⚠️, your domain has not been authenticated correctly. To learn more, check our dedicated article Troubleshooting - Domain authentication .
+ I only need to add a rua tag to my existing DMARC record. How can I do that? 
+ Update your existing DMARC record and add Brevo's rua tag at the end. Your DMARC record should have the following value:
+ v=DMARC1; p=none; rua=mailto:rua@dmarc.brevo.com 
+ 📉 Stay under a 0.3% spam complaint rate
+ Gmail, Yahoo, and Microsoft monitor how often recipients mark your emails as spam. Keeping your spam complaint rate below 0.3% is required to maintain inbox placement. If your rate exceeds this threshold, your emails are more likely to be filtered, and recovering your reputation can take significant time and effort.
+ ➡️ To learn more, check our dedicated articles Best practices for email deliverability and FAQs - Why are emails being delivered to the spam folder? 
+ Expand the following accordions for additional guidance on monitoring your reputation with Gmail, Yahoo, and Microsoft:
+ How to monitor my reputation with Gmail 
+ Postmaster Tools is Gmail's monitoring tool for email senders. It lets you track your spam complaint rate, domain reputation, and delivery errors for Gmail recipients. Setting it up is strongly recommended for any sender who regularly sends to Gmail addresses.
+ Step 1: Add your domain to Postmaster Tools
+ Go to Postmaster Tools .
+ Click Get Started .
+ Enter the domain you use to send your emails.
+ Copy the TXT record provided by Postmaster Tools.
+ Step 2: Verify your domain
+ Log in to your domain provider account in a new tab. If you are unsure which provider you use, check our dedicated article Identify your domain provider .
+ Go to the page where you manage DNS records.
+ Create a new TXT record.
+ Paste the value you copied from Postmaster Tools.
+ Save the DNS record.
+ Go back to Postmaster Tools and click Verify .
+ Once verified, you will be able to view your spam complaint rate from Gmail addresses, along with other email performance data. To learn more about how to use Postmaster Tools, check Google's dedicated help center section .
+ Yahoo and Microsoft also offer their own monitoring tools. Expand the following accordions to learn more.
+ How to monitor my reputation with Yahoo 
+ Use the Yahoo Postmaster portal to access sender metrics and register for the Yahoo Complaint Feedback Loop, which notifies you when Yahoo users mark your emails as spam.
+ How to monitor my reputation with Microsoft 
+ Use Smart Network Data Services (SNDS) to monitor your IP reputation with Outlook and Hotmail recipients.
+ 💡 Good to know
+ You can also monitor your spam complaint rates from Gmail, Yahoo, and Outlook addresses directly in your Brevo campaign statistics. To learn more, check our dedicated article Analyze an email campaign report . 
+ What bulk senders (more than 5,000 emails per day) with a dedicated IP should do
+ 💡 Good to know
+ Messages sent from the same primary domain count toward the 5,000 limit. For example, if you send 2,500 emails from mycompany.com and 2,500 from marketing.mycompany.com , you are considered a bulk sender because both subdomains share the same primary domain. 
+ 🤝 Align your sending domain with the domain you authenticated
+ For DMARC to pass on your emails, the domain you send from must be consistent with the domain you authenticated. If you send more than 5,000 emails per day on a dedicated IP, make sure the domain part of your sending email address matches or is a subdomain of the domain you authenticated with DKIM or SPF .
+ The following table shows examples of correct and incorrect alignments:
+ Authenticated domain 
+ Sender's email address 
+ Example 1 ✅ 
+ news.mycompany.com 
+ marketing@news.mycompany.com 
+ Example 2 ✅ 
+ mycompany.com 
+ marketing@mycompany.com 
+ Example 3 ❌ 
+ mycompany.com 
+ marketing@news.mycompany.com 
+ Example 4 ❌ 
+ news.mycompany.com 
+ marketing@mycompany.com 
+ What happens if you do not comply
+ If you are sending from a free email address or have not authenticated your domain, Brevo temporarily replaces your sender address with a compliant one. This is a stopgap measure to maintain basic deliverability, not a permanent solution. Recipients may not recognize the replaced address and mark your emails as spam, further damaging your sender reputation.
+ We strongly recommend making the required changes as soon as possible to send with your own domain and protect your deliverability long term.
+ What will my replaced email address look like? 
+ Email address 
+ Original 
+ mycompany@gmail.com 
+ Replaced (marketing emails) 
+ mycompany@5000001.brevosend.com 
+ Replaced (transactional emails) 
+ mycompany@5000001.t-sender-sib.com 
+ FAQs
+ Expand the following accordions to find answers to common questions about Gmail, Yahoo, and Microsoft's sender requirements.
+ When were these requirements implemented? 
+ Gmail and Yahoo have required compliance since February 1, 2024. Microsoft announced similar standards on May 5, 2025. With the rest of the industry expected to follow, we recommend that all senders comply with these requirements regardless of their current recipient base.
+ Do these requirements apply to all email providers, not just Brevo? 
+ Yes. These requirements are set by Gmail, Yahoo, and Microsoft and apply regardless of which email service provider you use.
+ Do these requirements apply to transactional emails? 
+ Yes. Transactional senders should also comply, particularly those sending more than 5,000 emails per day.
+ Do I need to comply even if I do not send to Gmail, Yahoo, or Microsoft recipients? 
+ Given that major mailbox providers have adopted these requirements, the rest of the industry is expected to follow. We recommend that all senders authenticate their domain and follow these practices regardless of their recipient base.
+ Will Brevo replace my email address even if I do not send to Gmail, Yahoo, or Microsoft recipients? 
+ Yes. Brevo replaces any free email address used for sending, regardless of the recipients.
+ Is there anything else I should do? 
+ No action is needed on your side for the following requirements, which Brevo already handles automatically:
+ Valid forward and reverse DNS records (PTR records) for sending domains and IPs.
+ Email formatting compliant with the Internet Message Format standard (RFC 5322).
+ One-click unsubscribe support for the list-unsubscribe header (RFC 8058) and a visible unsubscribe link in the body of marketing and subscribed emails.
+ SPF authentication for dedicated IP users, set up during the dedicated IP configuration process.
+ ⏭️ What's next?
+ Authenticate your domain with Brevo 
+ Best practices for email deliverability 
+ Google's email sender guidelines 
+ Yahoo's sender best practices 
+ Microsoft's sender requirements announcement 
+ 

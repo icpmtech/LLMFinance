@@ -1,0 +1,135 @@
+ SMTP keys let you securely connect your website, application, or other tool to Brevo's SMTP relay, so you can send transactional emails directly from your own systems. 
+ Good to know
+ Only the account owner or users with the SMTP permission can access the SMTP & API page, create a new SMTP key, or delete an existing SMTP key. To learn more about user permissions and permission levels, check our dedicated article Add users and assign permissions in Brevo .
+ Whenever an SMTP key is created or deleted from the account, the account owner will receive an email notification, including details such as the IP address and location.
+ What is an SMTP key?
+ To send transactional emails from your website or application, you need to configure your SMTP settings to point to Brevo SMTP, using the following credentials:
+ SMTP login: a unique email address that serves as your username.
+ SMTP key: a secret key that serves as your password.
+ Where can I find my SMTP keys?
+ To keep your SMTP keys secure, newly created keys are not fully visible in your Brevo account. On the SMTP & API page, only the last few digits of each key are displayed so you can identify them if needed.
+ Because of this, we strongly recommend storing your SMTP key in a secure location as soon as you create it. If you lose your key, you’ll need to generate a new one, store it safely, and replace the previous key in your configuration.
+ ❗️ Important
+ If the blocking of unknown IP addresses is activated
+ on your account
+ and Brevo detects an
+ SMTP or API call from an IP address you haven't used before,
+ you'll receive a security email asking you to confirm or deny the activity.
+ To learn more, check our dedicated article
+ Authorize and block IP addresses for API and SMTP security .
+ Create a new SMTP key
+ To create a new SMTP key in your Brevo account:
+ Click the account dropdown and select
+ Settings > SMTP & API .
+ Under the SMTP tab, click
+ Generate a new SMTP key .
+ Enter the verification code sent to your device and click
+ Verify . To learn more, check our dedicated article
+ Verify your identity for sensitive actions in Brevo .
+ Enter a name for your SMTP key. Include the integration name in the key’s
+ name to easily identify it.
+ Select the variant of SMTP key you want to generate:
+ [Recommended] Standard: default secure SMTP
+ key, 64 characters long.
+ Short: shorter key, 15 characters long.
+ ❗️ Important
+ The short SMTP key variant is only recommended if your
+ SMTP client does not support long passwords .
+ Note that some 
+ SMTP clients may silently truncate the
+ password
+ field
+ and fail authentication
+ with no clear error message. If you see an authentication
+ failure you can't otherwise explain, try generating a
+ short key instead.
+ Set an expiry date from 7 days to 1 year or choose no expiration for
+ the SMTP key.
+ ❗️ Important
+ Choosing No expiration only means the key
+ has
+ no fixed expiry date. It doesn't exempt it from Brevo's separate
+ inactivity policy:
+ Expiration date reached: you'll receive
+ an email reminder 3 days before and on the day the key
+ expires.
+ 90 days of inactivity: even with no
+ expiration
+ date set, the key is deactivated if it hasn't sent a
+ successful
+ email in 90 days. You'll receive an email reminder 7
+ days
+ before and on the day this happens.
+ Click Generate . The full SMTP key is displayed.
+ Copy the full key and save it in a secure location ,
+ such
+ as a password manager app or an internal storage system.
+ 💡 Good to know
+ The full key is displayed only once . Make sure
+ to
+ create a secure copy. This key is confidential 
+ and
+ should never be shared or published online.
+ Click OK .
+ You have successfully created a new SMTP key.
+ Deactivate an SMTP key
+ If you want to temporarily stop using an SMTP key, you can deactivate it:
+ Click the account dropdown and select Settings > SMTP & API .
+ Under the SMTP tab, select the SMTP key you want to deactivate.
+ Click Deactivate SMTP key .
+ Click Deactivate  to confirm.
+ Your SMTP key is now deactivated.
+ Reactivate an SMTP key
+ To reactivate a previously deactivated SMTP key:
+ Click the account dropdown and select Settings > SMTP & API .
+ Under the SMTP tab, select the SMTP key you want to reactivate.
+ Click Activate SMTP key .
+ Click Activate  to confirm.
+ Your SMTP key is now active again.
+ Delete an SMTP key
+ ❗️ Important
+ Deleting an SMTP key is irreversible . Before deleting
+ a key,
+ make sure it’s no longer used or that you’ve replaced it with a new one .
+ If you delete a key still in use, your transactional emails will
+ stop sending .
+ If your account has been compromised or you no longer use a specific integration, you can delete its SMTP key:
+ Click the account dropdown and select Settings > SMTP & API .
+ Under the SMTP tab, select the SMTP key you want to delete.
+ Click Delete SMTP key .
+ Click Delete to confirm.
+ You have successfully deleted your SMTP key.
+ Best practices for managing SMTP keys
+ Treat your SMTP keys with the same level of security as a password. Here are a few best practices:
+ Use a different SMTP key for each integration. Include the integration name in the key’s name to easily identify it. This makes it easier to revoke a single key if it’s compromised.
+ Store your keys securely , not in documents, emails, or sticky notes.
+ Never expose your SMTP key publicly. Hide or crop it in screenshots and videos.
+ Avoid sharing keys via email , in case your mailbox is compromised.
+ Regularly delete unused keys to minimize security risks.
+ Keep your active keys used by sending at least one email through the key every 90 days, even with no expiration date set, to avoid an unexpected deactivation. 
+ Activated IP address blocking so SMTP and API calls from unrecognized IP addresses are blocked until you authorize them. To learn more, check our dedicated article Authorize and block IP addresses for API and SMTP security .
+ Troubleshoot issues with your SMTP keys
+ If you're experiencing issues with your SMTP keys, review the following troubleshooting tips before contacting our support team.
+ My SMTP key shows "Expires: never" but I received an inactivity warning
+ You selected no expiration date when creating your SMTP key, but you still received an email warning that the key will be deactivated for inactivity.
+ Common causes and solutions
+ The expiration date and the inactivity rule are two separate settings 
+ Choosing No expiration only means the key has no fixed expiry date. It doesn't exempt the key from Brevo's inactivity policy: any SMTP key that hasn't sent a successful email in 90 days can still be deactivated, regardless of its expiration setting.
+ Solution: Confirm that your integration is actually using this specific key (it may be using a different key from your account) and that it sends at least one successful email before the 90-day window closes. If the key has already been deactivated, you can reactivate it .
+ Verify the fix
+ Send a test email using the key, then check on the SMTP & API page that its status shows as active.
+ If the issue persists, contact our support team and include the last digits of the key and the exact warning message you received.
+ I received a "Verify a new IP" security email
+ You received an email from Brevo asking you to confirm or deny an SMTP or API call made from an unrecognized IP address, and you're not sure whether it's legitimate or what to do next.
+ Common causes and solutions
+ An SMTP or API call was made from an IP address not previously used on your account 
+ If the blocking of unknown IP addresses is activated on your account, this email is sent whenever a call is detected from an IP address that hasn't been used before. It doesn't necessarily mean something is wrong: it can be triggered by a legitimate integration (for example, a new server or third-party tool) connecting for the first time.
+ Solution: If you recognize the activity, authorize the new IP address from the email or from the Authorized IPs page. If you don't recognize it, deny it and change the affected SMTP key immediately. To learn more, check our dedicated article Authorize and block IP addresses for API and SMTP security .
+ Verify the fix
+ Go to the Authorized IPs page and confirm the IP address shows the status you expect (authorized or removed).
+ If you keep receiving alerts for IP addresses you don't recognize after changing your SMTP key, contact our support team .
+ ⏭️ What's next?
+ Authorize and block IP addresses for API and SMTP security 
+ My account has been compromised, what should I do? 
+ Create and manage your API keys 
+ 

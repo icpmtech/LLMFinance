@@ -1,0 +1,237 @@
+ Your domain configuration directly affects whether your emails reach the inbox, how recipients identify your brand, and how well your sender reputation is protected. Understanding how the different components work together helps you make the right choices before you start.
+ Understanding your domain configuration
+ A complete domain setup in Brevo involves up to three components, each playing a different role in how your emails are sent and received.
+ The sending domain
+ The part of your sender email address that comes after the @ symbol is called your sending domain. For example, if you send from marketing@yourcompany.com , your sending domain is yourcompany.com . It can be either a root domain (e.g., yourcompany.com ) or a subdomain (e.g., emails.yourcompany.com ).
+ Authenticating your domain involves adding DNS records to it. DNS records are small pieces of information stored in your domain's settings that tell email providers who is authorized to send emails on your behalf. Without authentication, your emails are more likely to land in spam, and major providers like Gmail, Yahoo, and Microsoft may reject them entirely.
+ ❗️ Important
+ Domain authentication is mandatory as part of Gmail,
+ Yahoo, and Microsoft's requirements for email senders. To learn more,
+ check our dedicated article
+ Comply with Gmail, Yahoo, and Microsoft's requirements for email senders .
+ A few rules apply to your sending domain:
+ It must be a domain you own and control . Free email service domains, such as @gmail.com or @yahoo.com, cannot be authenticated.
+ It should not be used on any other platform or email service, to avoid conflicts and protect your sender reputation.
+ You can add multiple sending domains to your Brevo account. Each domain is configured independently.
+ The branded subdomain
+ 💡 Good to know
+ The branded subdomain is part of the new domain setup flow, which is being
+ gradually rolled out and is not yet available to all users.
+ When you authenticate your domain, Brevo still uses its own generic infrastructure for SPF, return-path, tracking links, and image links in your emails. A branded subdomain replaces all of these with your own domain, so recipients and email providers see your brand throughout, not Brevo's.
+ It is a subdomain of your sending domain that Brevo uses for:
+ SPF and return-path, which identify who is responsible for the email
+ Tracking and click links in your emails
+ Image links in your emails
+ Setting up a branded subdomain has three benefits:
+ Full SPF alignment 
+Without a branded subdomain, SPF passes via Brevo's infrastructure, not your own domain. Branding moves SPF alignment onto your sending domain, which means you can safely enforce a strict DMARC policy ( p=quarantine or p=reject ) and rely on two independent authentication signals instead of one.
+ Brand visibility 
+Links and images in your emails use your own domain instead of a Brevo domain, which builds trust with recipients.
+ Reputation isolation 
+If deliverability issues arise on the branded subdomain, your root domain stays unaffected.
+ 💡 Good to know
+ The branded subdomain is always built on top of your sending domain.
+ If your sending domain is a root domain (e.g., yourcompany.com ),
+ your
+ branded subdomain will look like mail.yourcompany.com . If your sending
+ domain is itself a subdomain (e.g., emails.yourcompany.com ), your
+ branded
+ subdomain will look like mail.emails.yourcompany.com . You can only
+ have
+ one branded subdomain per sending domain.
+ The dedicated IP subdomain
+ 💡 Good to know
+ This section is only relevant if you use a dedicated
+ IP to send your emails. If you don't have a dedicated IP, skip to
+ Choosing the right setup .
+ A dedicated IP is an IP address used exclusively by you or your organization for sending emails. To associate a dedicated IP with your domain, your domain must first be fully set up with a branded subdomain. Each dedicated IP then needs a unique subdomain with an A record pointing to it and a PTR record managed by Brevo. 
+ If you set up your branded subdomain using managed delegation (NS records), Brevo can manage your dedicated IP records automatically within the delegated DNS zone (e.g., ip1.mail.yourcompany.com ). This is especially useful if you have multiple dedicated IPs, as it eliminates the need to manually add and maintain A records for each one.
+ Choosing the right setup
+ The examples below show what your full domain configuration should look like. The right setup depends on whether you use a shared or dedicated IP. Select your option below:
+ Shared IP Dedicated IP 
+ ⭐ Recommended — Authenticate and send from a subdomain
+ Using a subdomain as your sending domain enables managed delegation and
+ keeps your root domain unaffected by any deliverability issues.
+ Example 
+ Sender address 
+ hello@news.yourcompany.com 
+ Authenticated domain 
+ news.yourcompany.com 
+ Reply-to address 
+ hello@yourcompany.com 
+ Branded subdomain (SPF, return-path) 
+ mail.news.yourcompany.com 
+ Tracking and click links 
+ r.mail.news.yourcompany.com 
+ Image links 
+ img.mail.news.yourcompany.com 
+ 🟢 Acceptable — Authenticate and send from your root domain
+ This works but managed delegation is not available, and your root domain
+ is more exposed if deliverability issues arise.
+ ❗️ Important
+ High-volume senders and Enterprise users should avoid sending from
+ a root domain. Root domain reputation is harder to rebuild if
+ deliverability issues arise.
+ Example 
+ Sender address 
+ hello@yourcompany.com 
+ Authenticated domain 
+ yourcompany.com 
+ Reply-to address 
+ hello@yourcompany.com 
+ Branded subdomain (SPF, return-path) 
+ mail.yourcompany.com 
+ Tracking and click links 
+ r.mail.yourcompany.com 
+ Image links 
+ img.mail.yourcompany.com 
+ ❌ Not recommended
+ Example 
+ Why to avoid it 
+ Sender address 
+ hello@news.yourcompany.com 
+ Since the DKIM check is performed on
+ news.yourcompany.com , the DKIM validation
+ will fail. As a result, while sending emails, the sender
+ domain will be replaced with the brevosend.com 
+ domain.
+ Domain authenticated in Brevo 
+ yourcompany.com 
+ Reply-to address 
+ hello@yourcompany.com 
+ Example 
+ Why to avoid it 
+ Sender address 
+ hello@gmail.com 
+ Using a free email address as your sender means you cannot
+ authenticate your domain. Your emails are highly likely
+ to be rejected by Gmail, Yahoo, and Microsoft.
+ Authenticated domain 
+ other-domain.com 
+ Reply-to address 
+ hello@gmail.com 
+ Example 
+ Why to avoid it 
+ Sender address 
+ hello@yourcompany.com 
+ Using a completely different domain for authentication
+ than the one in your sender address breaks DMARC alignment.
+ Your emails will fail authentication checks.
+ Authenticated domain 
+ other-domain.com 
+ Reply-to address 
+ hello@yourcompany.com 
+ ⭐ Recommended — Strict alignment
+ Use the same subdomain for your sender address, authenticated domain,
+ and IP domain. This is the cleanest setup for DMARC alignment and
+ the easiest to maintain with managed delegation.
+ Example 
+ Sender address 
+ hello@news.yourcompany.com 
+ Authenticated domain 
+ news.yourcompany.com 
+ Reply-to address 
+ hello@yourcompany.com 
+ Branded subdomain (SPF, return-path) 
+ mail.news.yourcompany.com 
+ Tracking and click links 
+ r.mail.news.yourcompany.com 
+ Image links 
+ img.mail.news.yourcompany.com 
+ IP domain 
+ ip1.news.yourcompany.com 
+ ⭐ Recommended — Split subdomains
+ Use the same IP domain across several sending subdomains. This lets you
+ run multiple brands or newsletters from one dedicated IP while keeping
+ full DMARC alignment. Each sending subdomain only needs to share the
+ same root domain as the IP domain.
+ Sender 1 
+ Sender 2 
+ Sender address 
+ hello@info.yourcompany.com 
+ hello@news.yourcompany.com 
+ Authenticated domain 
+ info.yourcompany.com 
+ news.yourcompany.com 
+ Reply-to address 
+ hello@info.yourcompany.com or
+ hello@yourcompany.com 
+ hello@news.yourcompany.com or
+ hello@yourcompany.com 
+ Branded subdomain (SPF, return-path) 
+ mail.info.yourcompany.com 
+ mail.news.yourcompany.com 
+ Tracking and click links 
+ r.mail.info.yourcompany.com 
+ r.mail.news.yourcompany.com 
+ Image links 
+ img.mail.info.yourcompany.com 
+ img.news.yourcompany.com 
+ IP domain 
+ ip1.sub.yourcompany.com 
+ ip1.sub.yourcompany.com 
+ 🟢 Acceptable — Root domain sending
+ Send from your root domain and use a subdomain for the IP. This works
+ well but limits you to individual records and managed
+ delegation is not available with a root domain.
+ Example 
+ Sender address 
+ hello@yourcompany.com 
+ Authenticated domain 
+ yourcompany.com 
+ Reply-to address 
+ hello@yourcompany.com 
+ Branded subdomain (SPF, return-path) 
+ mail.yourcompany.com 
+ Tracking and click links 
+ r.mail.yourcompany.com 
+ Image links 
+ img.mail.yourcompany.com 
+ IP domain 
+ ip1.sub.yourcompany.com 
+ ❌ Not recommended
+ Example 
+ Why to avoid it 
+ Sender address 
+ hello@gmail.com 
+ Using a free email address as your sender means you cannot
+ authenticate your domain. Sending from a dedicated IP
+ without full domain authentication will result in emails
+ not being delivered.
+ Authenticated domain 
+ other-domain.com 
+ Reply-to address 
+ hello@gmail.com 
+ IP domain 
+ other-domain.com 
+ Example 
+ Why to avoid it 
+ Sender address 
+ hello@yourcompany.com 
+ Using a completely different domain for authentication
+ than the one in your sender address breaks DMARC alignment.
+ Your emails will fail authentication checks.
+ Authenticated domain 
+ other-domain.com 
+ Reply-to address 
+ hello@yourcompany.com 
+ IP domain 
+ other-domain.com 
+ Example 
+ Why to avoid it 
+ Sender address 
+ hello@yourcompany.com 
+ Authenticating a completely different domain from your
+ sending domain breaks DMARC alignment. The authenticated
+ domain and the sending domain must share the same root
+ domain.
+ Authenticated domain 
+ sub.other-domain.com 
+ Reply-to address 
+ hello@yourcompany.com 
+ IP domain 
+ sub.other-domain.com 
+ ⏭️ What's next?
+ Set up your domain in Brevo 
+ About domain authentication (Brevo code, DKIM, DMARC) 
+ 

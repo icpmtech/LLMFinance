@@ -1,0 +1,75 @@
+ Choosing the right sender for your emails is an important step. The sender name and address appear in the inboxes of your recipients, helping them recognize who you are and trust your messages.
+ You can create multiple senders if you send emails from different teams, brands, or purposes.
+ Before you start
+ We recommend authenticating your domain before creating a sender. Once your domain is authenticated, all senders using that domain are automatically verified. To learn more, check our dedicated article Authenticate your domain with Brevo (Brevo code, DKIM, DMARC) .
+ If you’re using a dedicated IP , make sure it’s properly configured before adding new senders. To learn more, check our dedicated article Set up your dedicated IP in Brevo .
+ What is a sender?
+ A sender is the person or organization that sends an email. It includes two key elements:
+ Sender name (From name) 
+The name displayed in the "From" field, such as "Abby from The Green Yoga".
+ Sender email address (From email) 
+The email address displayed in the "From" field, such as abby@the-green-yoga.com . It contains an @ followed by your domain name (also called the sender domain).
+ Best practices for creating a new sender
+ When creating a sender, there are a few best practices to follow to make your emails professional and trustworthy. Expand the dropdowns below to view each best practice in detail:
+ 👀 Make your brand instantly recognizable 
+ Recipients are more likely to open emails from a name they recognize.
+ Use a sender name and email address that clearly represent your
+ brand.
+ The sender name is often the first thing recipients see. It should
+ inspire trust and be closely linked to your brand. Use one of
+ these common and effective formats:
+ Company name (e.g., The Green Yoga)
+ First name from/at/@ company (e.g., Abby from The Green Yoga)
+ ❗️ Important
+ Most inboxes display only 20–30 characters of the sender
+ name. To prevent it from being cut off, try to keep it under
+ 20 characters when possible.
+ 💼 Use a professional email address 
+ Using your own domain name instead of a free email service (like
+ Gmail or Yahoo) looks more trustworthy and improves deliverability.
+ In fact,
+ over 75% of consumers expect business emails to match the company’s domain 
+ (source: GoDaddy).
+ For example, if your website is www.the-green-yoga.com ,
+ use a sender address such as abby@the-green-yoga.com 
+ or abby@news.the-green-yoga.com . This consistency
+ strengthens your brand identity and your domain’s reputation.
+ ➡️ To learn more, check our dedicated article
+ Why you need to replace your free email address with a professional one .
+ Create a sender
+ Creating a new sender in Brevo is quick and easy, and only involves a few simple steps.
+ 📹 Watch the video below or follow the written instructions to create your sender step by step:
+ To create a new sender in Brevo:
+ Click the account dropdown and select Settings > Senders, Domains, IPs > Senders .
+ Under the Senders tab, click Add a sender .
+ In the From name field, enter the name that will appear in the inboxes of your recipients.
+ In the From email field, enter the email address that will appear in the inboxes of your recipients.
+ (Optional) If you have multiple dedicated IPs, click Manage the pool of IPs to select the dedicated IP(s) to associate with this sender. To learn more, check our dedicated article Use a pool of dedicated IPs .
+ Click Save .
+ If your sender domain is not authenticated, you’ll be prompted to verify it by entering the 6-digit code sent to the sender address: 
+ Copy the verification code sent to the sender address.
+ Paste it in Brevo.
+ Click Verify sender .
+ Your sender is now created and ready to use.
+ Select a sender for your email campaigns
+ After creating one or more senders, you can choose which sender to use during the Sender  step when setting up your email campaign:
+ ❗️ Important
+ You can assign a custom sender to each of your contact
+ lists. This sender will override the default sender set in your email
+ campaign, ensuring that every contact receives the email from the sender
+ designated for their list. To learn more, check our dedicated article
+ Manage your list settings .
+ ❓ FAQs
+ Why is there a warning icon next the DKIM signature and/or DMARC of my sender? 
+ A warning icon will appear next to the DKIM signature and/or DMARC status of your sender if:
+ Your sender domain has not been authenticated, or
+ You are using a free sender domain (such as gmail.com or yahoo.com).
+ The sender domain is the part of your email address after the @ . Authenticating it is required to comply with Gmail and Yahoo's requirements for email senders and helps reassure recipients that your emails are legitimate, reducing the risk of spam, phishing, and other malicious activity. Note that free sender domains cannot be authenticated, so you’ll need to purchase your own domain.
+ ➡️ To learn more, check our dedicated articles Why you need to replace your free email address with a professional one and Authenticate your domain with Brevo .
+ Can I use different senders in a single email campaign? 
+ Yes, you can set a custom sender for each of your contact lists. This custom sender will override the default sender chosen in the email campaign, ensuring that all contacts receive the email from the specific sender designated for their list.
+ ➡️ To learn more, check our dedicated article Manage your list settings .
+ ⏭️ What's next?
+ Authenticate your domain with Brevo 
+ Create an email campaign 
+ 

@@ -1,0 +1,16 @@
+ 📨 What is SMTP?
+ SMTP (Simple Mail Transfer Protocol) is the protocol that enables you to send and receive emails .
+ Similar to how a standardized form of addressing an envelope allows the postal service to operate, SMTP standardizes how email travels from sender to recipient . By determining which servers will receive your relay messages, it makes widespread email delivery possible.
+ What is an SMTP server?
+ An SMTP server is an application used by mail servers to send, receive, and relay outgoing emails between senders and recipients.
+ Think of these servers as real-life post offices. When you send a letter from City A to City B, it first reaches a local post office in City A. Here, it gets processed and sent to the post office in City B, which is in charge of delivering it to its final destination. SMTP servers work in a similar way, but the process takes only a few minutes at most.
+ What is an SMTP relay?
+ If the SMTP server is used to send emails, then we can define SMTP relay as a process of transferring an email from one server to another . It is mainly used to deliver emails from one domain to another, which differs from the user’s domain .
+ Most email service providers (ESPs) set up SMTP servers to provide an SMTP relay service to their users . This helps them send their emails using infrastructures with a good reputation. The use of an SMTP relay service can help resolve issues such as email deliverability and IP blocklisting.
+ 📩 What is Brevo SMTP?
+ Brevo SMTP is the SMTP relay service of Brevo . With Brevo SMTP, you can automatically send marketing and transactional emails to your contacts after they place an order or perform a specific action on your website, such as visiting a particular page. 
+ Just like for your regular email campaigns, you can view statistics for all your emails sent through Brevo SMTP , but you can also keep track of your emails using real-time analytics .
+ If an email sent via Brevo SMTP results in a hard bounce , the contact will automatically be blocklisted from receiving your future emails. Learn more about blocklisted contacts in our dedicated article What are the different types of blocklisted contacts? .
+ ⏩ What's next?
+ Send transactional emails using Brevo SMTP 
+ 
