@@ -24,7 +24,7 @@ import { syncIframePagesFromUser } from "./iframePages";
 
 installAuthFetch();
 
-type Status = "loading" | "anonymous" | "authenticated";
+type Status = "loading" | "anonymous" | "authenticated" | "pending_approval";
 
 type AuthContextValue = {
   status: Status;
@@ -106,8 +106,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const register = useCallback(
-    async (data: { name: string; email: string; password: string; title?: string; organization?: string }) =>
-      acceptResult(await authApi.register(data)),
+    async (data: { name: string; email: string; password: string; title?: string; organization?: string }) => {
+      const result = await authApi.register(data);
+      // Se a conta ficou pendente, não iniciamos sessão; devolvemos o resultado
+      // para a página mostrar a mensagem apropriada.
+      if (result.user.pending_approval) {
+        setStatus("pending_approval");
+        return result.user;
+      }
+      return acceptResult(result);
+    },
     [acceptResult],
   );
 

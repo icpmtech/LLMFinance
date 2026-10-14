@@ -1,0 +1,168 @@
+"""Email transacional do IQ OS.
+
+Envio de mensagens transacionais (aprovação de conta, início de trial,
+lembrete de pagamento) através de um servidor SMTP configurável na
+administração ou em variáveis de ambiente.
+
+A configuração segue a mesma hierarquia do resto da plataforma:
+parâmetro → índice (`finance_settings/service-keys`) → ambiente → `.env`.
+Se não houver servidor configurado, o envio falha silenciosamente e regista
+um aviso nos logs — nunca bloqueia a aprovação ou o login.
+"""
+from __future__ import annotations
+
+import logging
+import smtplib
+import ssl
+from datetime import datetime, timezone
+from email.message import EmailMessage
+from email.utils import formataddr
+from typing import Any, Dict, Optional
+
+from api import service_keys
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_SMTP_PORT = 587
+DEFAULT_SMTP_SECURITY = "starttls"
+
+
+def _smtp_config() -> Dict[str, Any]:
+    """Lê a configuração SMTP efetiva."""
+    host = (service_keys.resolver("smtp_host") or "").strip()
+    port_raw = service_keys.resolver("smtp_port") or "587"
+    try:
+        port = int(port_raw)
+    except ValueError:
+        port = DEFAULT_SMTP_PORT
+    security = (service_keys.resolver("smtp_security") or "starttls").strip().lower()
+    if security not in {"starttls", "ssl", "plain"}:
+        security = DEFAULT_SMTP_SECURITY
+    user = (service_keys.resolver("smtp_user") or "").strip()
+    password = service_keys.resolver("smtp_password") or ""
+    from_ = (service_keys.resolver("smtp_from") or user or "").strip()
+    return {
+        "host": host,
+        "port": port,
+        "security": security,
+        "user": user,
+        "password": password,
+        "from": from_,
+    }
+
+
+def _parse_from(raw: str) -> tuple[str, str]:
+    """Interpreta 'Nome <email@example.com>' ou apenas 'email@example.com'."""
+    raw = (raw or "").strip()
+    if raw.endswith(">") and "<" in raw:
+        name, _, address = raw.rpartition("<")
+        return name.strip(), address.rstrip(">").strip()
+    return "", raw
+
+
+def _send(
+    to: str,
+    subject: str,
+    text: str,
+    html: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Envia um email transacional. Devolve {"ok": bool, ...}."""
+    cfg = _smtp_config()
+    if not cfg["host"] or not cfg["from"]:
+        logger.warning("Email transacional não enviado: SMTP não configurado.")
+        return {"ok": False, "configured": False, "message": "SMTP não configurado."}
+    if not to.strip():
+        return {"ok": False, "configured": True, "message": "Destinatário em falta."}
+
+    from_name, from_address = _parse_from(cfg["from"])
+    if not from_address:
+        return {"ok": False, "configured": True, "message": "Remetente inválido."}
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = formataddr((from_name, from_address)) if from_name else from_address
+    msg["To"] = to.strip()
+    msg.set_content(text)
+    if html:
+        msg.add_alternative(html, subtype="html")
+
+    try:
+        if cfg["security"] == "ssl":
+            server = smtplib.SMTP_SSL(cfg["host"], cfg["port"], timeout=20, context=ssl.create_default_context())
+        else:
+            server = smtplib.SMTP(cfg["host"], cfg["port"], timeout=20)
+        if cfg["security"] == "starttls":
+            server.starttls(context=ssl.create_default_context())
+        if cfg["user"]:
+            server.login(cfg["user"], cfg["password"])
+        server.send_message(msg)
+        server.quit()
+        return {"ok": True, "configured": True, "message": "Email enviado."}
+    except Exception as exc:  # noqa: BLE001 - envio nunca deve travar a aprovação
+        logger.warning("Falha ao enviar email transacional para %s: %s", to, exc)
+        return {"ok": False, "configured": True, "message": f"Falha de envio: {exc}"}
+
+
+def _format_date(iso: Optional[str]) -> str:
+    if not iso:
+        return "—"
+    try:
+        dt = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+        return dt.astimezone(timezone.utc).strftime("%d/%m/%Y às %H:%M")
+    except ValueError:
+        return str(iso)
+
+
+def send_approval_email(to: str, name: str, trial_expires_at: str) -> Dict[str, Any]:
+    """Email enviado quando um administrador aprova uma conta."""
+    expires = _format_date(trial_expires_at)
+    subject = "A sua conta IQ OS foi aprovada — trial de 5 dias"
+    text = f"""Olá {name},
+
+A sua conta no IQ OS foi aprovada por um administrador.
+
+Tem agora acesso a um trial de 5 dias, até {expires}.
+
+Passado esse período, será necessário efetuar o pagamento para manter o acesso ativo.
+
+A equipa IQ OS
+"""
+    html = f"""\
+<html>
+<body style="font-family: sans-serif; color: #111;">
+<p>Olá {name},</p>
+<p>A sua conta no IQ OS foi <strong>aprovada</strong> por um administrador.</p>
+<p>Tem agora acesso a um <strong>trial de 5 dias</strong>, até <strong>{expires}</strong>.</p>
+<p>Passado esse período, será necessário efetuar o pagamento para manter o acesso ativo.</p>
+<br>
+<p>A equipa IQ OS</p>
+</body>
+</html>
+"""
+    return _send(to, subject, text, html)
+
+
+def send_trial_expiring_email(to: str, name: str, trial_expires_at: str) -> Dict[str, Any]:
+    """Email de lembrete quando o trial está prestes a expirar."""
+    expires = _format_date(trial_expires_at)
+    subject = "O seu trial do IQ OS expira em breve"
+    text = f"""Olá {name},
+
+O seu período de trial no IQ OS termina {expires}.
+
+Para continuar a usar a plataforma, efetue o pagamento antes do prazo. Caso contrário, o acesso será desativado.
+
+A equipa IQ OS
+"""
+    html = f"""\
+<html>
+<body style="font-family: sans-serif; color: #111;">
+<p>Olá {name},</p>
+<p>O seu período de trial no IQ OS termina <strong>{expires}</strong>.</p>
+<p>Para continuar a usar a plataforma, efetue o pagamento antes do prazo. Caso contrário, o acesso será <strong>desativado</strong>.</p>
+<br>
+<p>A equipa IQ OS</p>
+</body>
+</html>
+"""
+    return _send(to, subject, text, html)

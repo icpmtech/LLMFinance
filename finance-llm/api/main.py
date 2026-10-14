@@ -483,6 +483,15 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logging.getLogger(__name__).warning("Agendador do World Model não arrancou: %s", exc)
 
+    # Agendador de expiração de trials: verifica de hora a hora se alguma conta
+    # ativa já excedeu o prazo de 5 dias e suspende o acesso.
+    try:
+        from api import trial_scheduler
+
+        trial_scheduler.start()
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Agendador de trial não arrancou: %s", exc)
+
     # Módulo GLEIF / LEI: cria o índice (se faltar) sem bloquear o arranque.
     def _preload_gleif():
         try:
@@ -530,6 +539,12 @@ async def lifespan(app: FastAPI):
         from api import world_scheduler
 
         world_scheduler.shutdown()
+    except Exception:
+        pass
+    try:
+        from api import trial_scheduler
+
+        trial_scheduler.shutdown()
     except Exception:
         pass
 

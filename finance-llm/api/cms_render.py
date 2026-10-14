@@ -17,7 +17,7 @@ import logging
 import re
 import unicodedata
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import quote
 
 import markdown as markdown_lib
@@ -106,8 +106,8 @@ def _media_url(media_id: Optional[str]) -> str:
     return str(_media(media_id).get("url") or "")
 
 
-def _variante_movel(media_id: Optional[str]) -> str:
-    """URL da versão em coluna do mesmo gráfico, se ela existir na biblioteca.
+def _variante_movel(media_id: Optional[str]) -> Tuple[str, str]:
+    """URL e id da versão em coluna do mesmo gráfico, se ela existir.
 
     Um diagrama de 1100px de largura fica com o texto a 4px num telefone. Ao
     lado de `diagrama-x.svg` vive `diagrama-x-movel.svg`, desenhado em coluna, e
@@ -116,15 +116,15 @@ def _variante_movel(media_id: Optional[str]) -> str:
     """
     nome = str(_media(media_id).get("filename") or "")
     if not nome or nome.endswith("-movel.svg"):
-        return ""
+        return "", ""
     raiz, ponto, extensao = nome.rpartition(".")
     if not ponto or not raiz:
-        return ""
+        return "", ""
     alvo = f"{raiz}-movel.{extensao}"
     for item in store.list_items("media", limit=1000).get("items") or []:
         if str(item.get("filename") or "") == alvo:
-            return str(item.get("url") or "")
-    return ""
+            return str(item.get("url") or ""), str(item.get("id") or "")
+    return "", ""
 
 
 def _dimensoes(media_id: Optional[str]) -> str:
@@ -138,6 +138,21 @@ def _dimensoes(media_id: Optional[str]) -> str:
     if not largura or not altura:
         return ""
     return f' width="{int(largura)}" height="{int(altura)}"'
+
+
+def _proporcao_movel(media_id: Optional[str]) -> str:
+    """Proporção da variante em coluna, para o CSS reservar a altura certa.
+
+    Vai como valor completo de `aspect-ratio` (e não só como a proporção) para o
+    `var()` do CSS nunca ficar inválido. A variante em coluna é bem mais alta do
+    que o gráfico largo — sem isto, num telefone a caixa reservava uma faixa
+    baixa e a figura dava um salto de centenas de pixels ao aparecer.
+    """
+    media = _media(media_id)
+    largura, altura = media.get("width"), media.get("height")
+    if not largura or not altura:
+        return ""
+    return f' style="--proporcao-movel: auto {int(largura)} / {int(altura)}"'
 
 
 def _absolute(url: str, base_url: str = "") -> str:
@@ -401,6 +416,14 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
   .grid.galeria {{ gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }}
   .cta {{ flex-direction: row; align-items: center; justify-content: space-between; padding: 24px 26px; }}
 }}
+@media (max-width: 899px) {{
+  /* O `<img>` traz `width`/`height` do ficheiro largo — é o que reserva o espaço
+     antes de a figura carregar. No telefone quem carrega é a variante em
+     coluna, com uma proporção bem mais alta: a proporção dela vem no próprio
+     `<img>` e substitui a dos atributos, senão a caixa reservava uma faixa
+     baixa e a figura dava um salto de centenas de pixels ao aparecer. */
+  main > .wrap > figure > picture > img {{ aspect-ratio: var(--proporcao-movel, auto); }}
+}}
 @media (min-width: 641px) and (max-width: 899px) {{
   /* No intervalo em que ainda se usa a versão em coluna, ela é um vetor: sem
      travão esticava a 1400px de altura num tablet. Fica centrada na medida de
@@ -657,11 +680,11 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
         caption = f"<figcaption>{_esc(data.get('caption'))}</figcaption>" if data.get("caption") else ""
         alt = _esc(data.get("alt"))
         medidas = _dimensoes(media_id)
-        movel = _variante_movel(media_id)
+        movel, movel_id = _variante_movel(media_id)
         if movel:
             imagem = (
                 f'<picture><source media="(max-width: 899px)" srcset="{_esc(movel)}">'
-                f'<img src="{_esc(url)}" alt="{alt}"{medidas} loading="lazy"></picture>'
+                f'<img src="{_esc(url)}" alt="{alt}"{medidas}{_proporcao_movel(movel_id)} loading="lazy"></picture>'
             )
         else:
             imagem = f'<img src="{_esc(url)}" alt="{alt}"{medidas} loading="lazy">'

@@ -35,6 +35,7 @@ from pydantic import BaseModel, Field
 
 from api import auth_service as auth
 from api import events_service as events
+from api import notification_email
 from api import service_keys
 from api import sidebar_access
 from api.auth_routes import CurrentSession, require_session
@@ -70,10 +71,15 @@ AdminSession = Annotated[CurrentSession, Depends(require_admin)]
 # ------------------------------------------------------------------- modelos
 class UserPatch(BaseModel):
     role: Optional[str] = Field(None, description="admin | member")
-    status: Optional[str] = Field(None, description="active | suspended")
+    status: Optional[str] = Field(None, description="active | suspended | pending")
     name: Optional[str] = None
     title: Optional[str] = None
     organization: Optional[str] = None
+
+
+class ApprovePayload(BaseModel):
+    trial_days: int = Field(5, ge=1, le=90, description="Duração do trial em dias após aprovação")
+
 
 
 class ManualEvent(BaseModel):
@@ -244,11 +250,11 @@ def admin_update_user(user_id: str, payload: UserPatch, session: AdminSession) -
     """Altera papel, estado ou dados básicos de uma conta."""
     if payload.role is not None and payload.role not in {"admin", "member"}:
         raise HTTPException(status_code=422, detail="Papel inválido (use admin ou member).")
-    if payload.status is not None and payload.status not in {"active", "suspended"}:
-        raise HTTPException(status_code=422, detail="Estado inválido (use active ou suspended).")
+    if payload.status is not None and payload.status not in auth.USER_STATUSES:
+        raise HTTPException(status_code=422, detail=f"Estado inválido (use {', '.join(sorted(auth.USER_STATUSES))}).")
     if user_id == session.user.id and payload.role == "member":
         raise HTTPException(status_code=422, detail="Não pode remover o seu próprio papel de administrador.")
-    if user_id == session.user.id and payload.status == "suspended":
+    if user_id == session.user.id and payload.status == auth.USER_STATUS_SUSPENDED:
         raise HTTPException(status_code=422, detail="Não pode suspender a sua própria conta.")
 
     patch = {key: value for key, value in payload.model_dump().items() if value is not None}
@@ -294,6 +300,40 @@ def admin_delete_user(user_id: str, session: AdminSession) -> Dict[str, Any]:
         user_email=session.user.email,
     )
     return {"ok": True, "message": f"Conta {target.get('email')} apagada."}
+
+
+@router.post("/users/{user_id}/approve")
+def admin_approve_user(user_id: str, payload: ApprovePayload, session: AdminSession) -> Dict[str, Any]:
+    """Aprova uma conta pendente e inicia o trial de N dias."""
+    if user_id == session.user.id:
+        raise HTTPException(status_code=422, detail="Não pode aprovar a sua própria conta por aqui.")
+    try:
+        target = auth.get_user_by_id(user_id)
+        if not target:
+            raise HTTPException(status_code=404, detail="Conta não encontrada.")
+        updated = auth.approve_user(user_id, days=payload.trial_days)
+    except auth.AuthError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.message) from error
+
+    notification_email.send_approval_email(
+        to=updated["email"],
+        name=updated.get("name") or updated["email"],
+        trial_expires_at=updated.get("trial_expires_at") or "",
+    )
+
+    events.log_event(
+        "warning",
+        "admin",
+        f"Conta aprovada: {updated.get('email')} (trial até {updated.get('trial_expires_at')})",
+        data={
+            "target_user": updated.get("email"),
+            "trial_expires_at": updated.get("trial_expires_at"),
+            "approved_by": session.user.email,
+        },
+        user_id=session.user.id,
+        user_email=session.user.email,
+    )
+    return {"ok": True, "user": updated}
 
 
 @router.post("/users/{user_id}/revoke-sessions")

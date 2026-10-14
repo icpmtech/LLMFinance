@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Building2,
   Check,
+  CheckCircle2,
   Eye,
   EyeOff,
   Loader2,
@@ -63,10 +64,13 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
     }
   };
 
+  const [pendingInfo, setPendingInfo] = useState<{ email: string; trialUntil?: string } | null>(null);
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (busy) return;
     setError(null);
+    setPendingInfo(null);
 
     if (mode === "register") {
       if (name.trim().length < 2) return setError("Indique o seu nome completo.");
@@ -79,16 +83,20 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
       if (mode === "login") {
         await login(email.trim(), password, remember);
       } else {
-        await register({
+        const user = await register({
           name: name.trim(),
           email: email.trim(),
           password,
           title: title.trim() || undefined,
           organization: organization.trim() || undefined,
         });
+        if (user.pending_approval) {
+          setPendingInfo({ email: user.email });
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível concluir o pedido.");
+    } finally {
       setBusy(false);
     }
   };
@@ -261,6 +269,21 @@ export function LoginPage({ initialMode = "login" }: { initialMode?: Mode }) {
                   <AlertCircle size={14} className="mt-0.5 shrink-0" />
                   {error}
                 </p>
+              )}
+
+              {pendingInfo && (
+                <div className="rounded-xl border border-teal-400/25 bg-teal-500/10 px-3 py-2 text-xs text-teal-100">
+                  <p className="flex items-start gap-2">
+                    <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-teal-300" />
+                    <span>
+                      Conta criada com sucesso. O acesso está <strong>pendente de aprovação</strong> por um
+                      administrador.
+                    </span>
+                  </p>
+                  <p className="mt-1 pl-6 text-[11px] text-teal-200/80">
+                    Assim que aprovada, receberá um email com o início do trial de 5 dias.
+                  </p>
+                </div>
               )}
 
               <button

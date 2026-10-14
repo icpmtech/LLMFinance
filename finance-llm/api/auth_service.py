@@ -33,6 +33,8 @@ from api.elasticsearch_client import (
     get_es_client,
 )
 
+TRIAL_DAYS = 5
+
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -262,6 +264,12 @@ DEFAULT_PREFERENCES: Dict[str, Any] = {
 ALLOWED_PREFERENCES = set(DEFAULT_PREFERENCES)
 
 
+USER_STATUS_PENDING = "pending"
+USER_STATUS_ACTIVE = "active"
+USER_STATUS_SUSPENDED = "suspended"
+USER_STATUSES = {USER_STATUS_PENDING, USER_STATUS_ACTIVE, USER_STATUS_SUSPENDED}
+
+
 def public_user(source: Dict[str, Any]) -> Dict[str, Any]:
     """Documento de utilizador tal como sai da API (sem o hash da palavra-passe)."""
     preferences = {**DEFAULT_PREFERENCES, **(source.get("preferences") or {})}
@@ -270,13 +278,15 @@ def public_user(source: Dict[str, Any]) -> Dict[str, Any]:
     user_id = source.get("id")
     if not user_id:
         user_id = source.get("email") or ""
+    status = source.get("status") or USER_STATUS_ACTIVE
+    trial_expires_at = source.get("trial_expires_at")
     return {
         "id": str(user_id),
         "email": email,
         "name": name,
         "initials": _initials(name, email),
         "role": source.get("role") or "member",
-        "status": source.get("status") or "active",
+        "status": status,
         "title": source.get("title") or "",
         "organization": source.get("organization") or "",
         "phone": source.get("phone") or "",
@@ -288,6 +298,9 @@ def public_user(source: Dict[str, Any]) -> Dict[str, Any]:
         "login_count": int(source.get("login_count") or 0),
         "preferences": preferences,
         "password_updated_at": (source.get("password") or {}).get("updated_at"),
+        "trial_expires_at": trial_expires_at,
+        "approved_at": source.get("approved_at") or None,
+        "pending_approval": status == USER_STATUS_PENDING,
     }
 
 
@@ -346,6 +359,9 @@ def register_user(
     key = normalize_email(email)
     now = _now_iso()
     is_first = _count_users(es) == 0
+    # O primeiro utilizador é auto-aprovado; todos os outros ficam pendentes
+    # até aprovação de um administrador.
+    status = USER_STATUS_ACTIVE if is_first else USER_STATUS_PENDING
     document = {
         "id": secrets.token_hex(16),
         "email": key,
@@ -354,7 +370,9 @@ def register_user(
         "organization": (organization or "").strip()[:160],
         "phone": (phone or "").strip()[:40],
         "role": "admin" if is_first else "member",
-        "status": "active",
+        "status": status,
+        "approved_at": now if is_first else None,
+        "trial_expires_at": None,
         "locale": "pt-PT",
         "timezone": "Europe/Lisbon",
         "preferences": {**DEFAULT_PREFERENCES, **(preferences or {})},
@@ -377,13 +395,30 @@ def register_user(
     return public_user(document)
 
 
+def _is_trial_expired(user: Dict[str, Any]) -> bool:
+    """True se a conta ativa ainda tem trial e este já expirou."""
+    trial_expires_at = user.get("trial_expires_at")
+    if not trial_expires_at:
+        return False
+    try:
+        expires = datetime.fromisoformat(str(trial_expires_at).replace("Z", "+00:00"))
+        return expires <= datetime.now(timezone.utc)
+    except ValueError:
+        return False
+
+
 def authenticate(email: str, password: str) -> Dict[str, Any]:
     """Valida as credenciais e devolve a conta (com o hash, para uso interno)."""
     user = get_user_by_email(email)
     if not user or not verify_password(password, user.get("password")):
         raise AuthError("Email ou palavra-passe incorretos.", status_code=401, code="invalid_credentials")
-    if (user.get("status") or "active") != "active":
+    status = user.get("status") or USER_STATUS_ACTIVE
+    if status == USER_STATUS_PENDING:
+        raise AuthError("A conta está pendente de aprovação por um administrador.", status_code=403, code="pending_approval")
+    if status != USER_STATUS_ACTIVE:
         raise AuthError("Esta conta está suspensa.", status_code=403, code="suspended")
+    if _is_trial_expired(user):
+        raise AuthError("O período de trial de 5 dias expirou. Efetue o pagamento para reativar o acesso.", status_code=403, code="trial_expired")
     return user
 
 
@@ -417,8 +452,8 @@ def update_user(
             document["role"] = str(role)
         account_status = patch.get("status")
         if account_status is not None:
-            if str(account_status) not in {"active", "suspended"}:
-                raise AuthError("Estado inválido (use active ou suspended).", status_code=422, code="invalid_input")
+            if str(account_status) not in USER_STATUSES:
+                raise AuthError(f"Estado inválido (use {', '.join(sorted(USER_STATUSES))}).", status_code=422, code="invalid_input")
             document["status"] = str(account_status)
 
     for field in allowed:
@@ -520,6 +555,83 @@ def delete_account(user_id: str) -> None:
     except Exception as error:  # noqa: BLE001
         raise AuthError("Não foi possível apagar a conta.", status_code=502, code="es_error") from error
     revoke_all_sessions(user_id, client=es)
+
+
+def approve_user(
+    user_id: str,
+    *,
+    days: int = TRIAL_DAYS,
+    client: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Aprova uma conta pendente, ativa-a e inicia um trial de N dias."""
+    es = client or _client()
+    user = get_user_by_id(user_id, es)
+    if not user:
+        raise AuthError("Conta não encontrada.", status_code=404, code="not_found")
+    status = user.get("status") or USER_STATUS_ACTIVE
+    if status == USER_STATUS_ACTIVE and user.get("trial_expires_at"):
+        raise AuthError("A conta já foi aprovada e está em trial/ativa.", status_code=409, code="already_approved")
+    key = normalize_email(user.get("email") or "")
+    now = datetime.now(timezone.utc)
+    trial_expires = (now + timedelta(days=max(1, days))).isoformat()
+    document = {
+        "status": USER_STATUS_ACTIVE,
+        "approved_at": now.isoformat(),
+        "trial_expires_at": trial_expires,
+        "updated_at": now.isoformat(),
+    }
+    try:
+        es.update(index=AUTH_USERS_INDEX, id=key, doc=document, refresh=True)
+    except Exception as error:  # noqa: BLE001
+        logger.exception("Falha ao aprovar utilizador")
+        raise AuthError("Não foi possível aprovar a conta.", status_code=502, code="es_error") from error
+    updated = {**user, **document}
+    return public_user(updated)
+
+
+def suspend_trial_expired_users(*, client: Optional[Elasticsearch] = None) -> List[Dict[str, Any]]:
+    """Suspende contas ativas cujo trial tenha expirado. Devolve as afetadas."""
+    es = client or _client()
+    now = _now_iso()
+    try:
+        resp = es.search(
+            index=AUTH_USERS_INDEX,
+            body={
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {"term": {"status": USER_STATUS_ACTIVE}},
+                            {"exists": {"field": "trial_expires_at"}},
+                            {"range": {"trial_expires_at": {"lte": now}}},
+                        ]
+                    }
+                },
+                "size": 500,
+            },
+        )
+    except Exception as error:  # noqa: BLE001
+        logger.warning("Falha ao pesquisar trials expirados: %s", error)
+        return []
+
+    affected: List[Dict[str, Any]] = []
+    for hit in resp.get("hits", {}).get("hits", []):
+        source = dict(hit.get("_source") or {})
+        user_id = source.get("id")
+        key = normalize_email(source.get("email") or "")
+        if not user_id or not key:
+            continue
+        try:
+            es.update(
+                index=AUTH_USERS_INDEX,
+                id=key,
+                doc={"status": USER_STATUS_SUSPENDED, "updated_at": now},
+                refresh=True,
+            )
+            revoke_all_sessions(str(user_id), client=es)
+            affected.append(public_user({**source, "status": USER_STATUS_SUSPENDED}))
+        except Exception as inner:  # noqa: BLE001
+            logger.warning("Não foi possível suspender trial expirado de %s: %s", key, inner)
+    return affected
 
 
 def list_users(limit: int = 200) -> List[Dict[str, Any]]:

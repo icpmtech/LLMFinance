@@ -146,6 +146,17 @@ class CurrentSession(BaseModel):
     token: str
 
 
+def _require_user_active(user: Dict[str, Any]) -> None:
+    """Garante que a conta não está pendente ou com trial expirado."""
+    status = user.get("status") or auth.USER_STATUS_ACTIVE
+    if status == auth.USER_STATUS_PENDING:
+        raise HTTPException(status_code=403, detail="A conta está pendente de aprovação por um administrador.")
+    if status != auth.USER_STATUS_ACTIVE:
+        raise HTTPException(status_code=403, detail="Esta conta está suspensa.")
+    if auth._is_trial_expired(user):
+        raise HTTPException(status_code=403, detail="O período de trial de 5 dias expirou. Efetue o pagamento para reativar o acesso.")
+
+
 def require_session(
     authorization: Annotated[Optional[str], Header()] = None,
 ) -> CurrentSession:
@@ -163,6 +174,7 @@ def require_session(
     user = auth.get_user_by_id(str(payload.get("sub")))
     if not user:
         raise HTTPException(status_code=401, detail="Conta não encontrada.")
+    _require_user_active(user)
     auth.touch_session(session_id)
     return CurrentSession(
         user=UserResponse(**auth.public_user(user)),
@@ -200,7 +212,8 @@ def optional_session(
 # -------------------------------------------------------------------- rotas
 @router.post("/register", response_model=AuthResponse, status_code=201)
 def register(payload: RegisterRequest, request: Request):
-    """Cria a conta e inicia sessão automaticamente."""
+    """Cria a conta. Se for o primeiro utilizador, inicia sess?o; caso contr?rio,
+    fica pendente de aprova??o administrativa."""
     try:
         user = auth.register_user(
             name=payload.name,
@@ -209,22 +222,38 @@ def register(payload: RegisterRequest, request: Request):
             title=payload.title or "",
             organization=payload.organization or "",
         )
-        auth.record_login(str(user["id"]))
-        session = auth.create_session(user, **_client_info(request))
-        refreshed = auth.get_user_by_id(str(user["id"])) or user
+        is_first = user.get("role") == "admin"
+        if is_first:
+            auth.record_login(str(user["id"]))
+            session = auth.create_session(user, **_client_info(request))
+            refreshed = auth.get_user_by_id(str(user["id"])) or user
+            events.log_event(
+                "warning",
+                "auth",
+                f"Primeira conta/admin criada: {auth.public_user(refreshed).get('email')}",
+                request=request,
+                user_id=str(user["id"]),
+                user_email=auth.public_user(refreshed).get("email"),
+                data={"role": auth.public_user(refreshed).get("role")},
+            )
+            return AuthResponse(
+                token=session["token"],
+                expires_at=session["expires_at"],
+                user=UserResponse(**auth.public_user(refreshed)),
+            )
+
+        # Contas subsequentes ficam pendentes: n?o iniciam sess?o.
         events.log_event(
             "warning",
             "auth",
-            f"Nova conta criada: {auth.public_user(refreshed).get('email')}",
+            f"Registo pendente de aprova??o: {user.get('email')}",
             request=request,
-            user_id=str(user["id"]),
-            user_email=auth.public_user(refreshed).get("email"),
-            data={"role": auth.public_user(refreshed).get("role")},
+            data={"email": user.get("email"), "role": user.get("role")},
         )
         return AuthResponse(
-            token=session["token"],
-            expires_at=session["expires_at"],
-            user=UserResponse(**auth.public_user(refreshed)),
+            token="",
+            expires_at="",
+            user=UserResponse(**user),
         )
     except auth.AuthError as error:
         raise _auth_error(error) from error

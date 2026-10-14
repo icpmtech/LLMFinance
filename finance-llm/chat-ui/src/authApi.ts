@@ -39,6 +39,9 @@ export type AuthUser = {
   login_count: number;
   preferences: Record<string, unknown>;
   password_updated_at: string | null;
+  trial_expires_at?: string | null;
+  approved_at?: string | null;
+  pending_approval?: boolean;
 };
 
 export type AuthSession = {

@@ -183,6 +183,10 @@ export function revokeAdminUserSessions(userId: string): Promise<{ ok: boolean; 
   return post(`/admin/users/${encodeURIComponent(userId)}/revoke-sessions`);
 }
 
+export function approveAdminUser(userId: string, trialDays = 5): Promise<{ ok: boolean; user: AdminUser }> {
+  return post(`/admin/users/${encodeURIComponent(userId)}/approve`, { trial_days: trialDays });
+}
+
 export type EventQuery = {
   level?: string;
   source?: string;

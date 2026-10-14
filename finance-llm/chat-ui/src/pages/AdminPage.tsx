@@ -46,6 +46,7 @@ import {
   XCircle,
 } from "lucide-react";
 import {
+  approveAdminUser,
   deleteAdminUser,
   getAdminEventStats,
   getAdminOverview,
@@ -637,6 +638,7 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
           <option value="">Todos os estados</option>
           <option value="active">Ativos</option>
           <option value="suspended">Suspensos</option>
+          <option value="pending">Pendentes</option>
         </select>
         <button
           type="button"
@@ -707,6 +709,7 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
                     >
                       <option value="active">active</option>
                       <option value="suspended">suspended</option>
+                      <option value="pending">pending</option>
                     </select>
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{user.active_sessions ?? 0}</td>
@@ -719,6 +722,20 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
                   </td>
                   <td className="px-3 py-1.5">
                     <div className="flex items-center justify-end gap-1">
+                      {user.status === "pending" && (
+                        <button
+                          type="button"
+                          disabled={disabled || isSelf}
+                          title="Aprovar conta e iniciar trial de 5 dias"
+                          onClick={() =>
+                            void act(`Conta ${user.email} aprovada`, () => approveAdminUser(user.id), user.id)
+                          }
+                          className="rounded-md border border-teal-400/30 bg-teal-400/10 p-1 text-teal-300 transition hover:bg-teal-400/20 disabled:opacity-40"
+                        >
+                          {disabled ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />}
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         disabled={disabled}
