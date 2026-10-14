@@ -544,7 +544,9 @@ def loja_product(slug: str) -> HTMLResponse:
     product = store.product_by_slug(slug, published_only=True)
     if not product:
         return HTMLResponse(render.render_not_found(settings=settings, message="Este produto já não está à venda."), status_code=404, headers=_PUBLIC_HEADERS)
-    return HTMLResponse(render.render_product(product, settings=settings), headers=_PUBLIC_HEADERS)
+    # A ficha precisa da disponibilidade calculada: sem ela a página diria
+    # «esgotado» e não deixava comprar.
+    return HTMLResponse(render.render_product(store.product_view(product), settings=settings), headers=_PUBLIC_HEADERS)
 
 
 @router.get("/loja/carrinho", response_class=HTMLResponse)

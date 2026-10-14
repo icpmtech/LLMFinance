@@ -1300,6 +1300,21 @@ def category_by_slug(slug: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def product_view(product: Dict[str, Any]) -> Dict[str, Any]:
+    """Produto como a ficha pública precisa dele: o documento + o que é calculado.
+
+    `product_by_slug` devolve o que está guardado; a disponibilidade, a etiqueta
+    de stock e as imagens são calculadas (como no índice da gestão e no catálogo).
+    """
+    item = copy.deepcopy(product)
+    item["available"] = is_available(item)
+    item["stock_label"] = stock_label(item)
+    item["image_url"] = first_image_url(item)
+    item["images"] = image_urls(item)
+    item["url"] = f"/loja/produto/{item.get('slug')}"
+    return item
+
+
 def product_name(product_id: Optional[str]) -> str:
     if not product_id:
         return ""

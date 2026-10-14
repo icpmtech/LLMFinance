@@ -9,6 +9,7 @@ sem relatório nenhum, ou o PDF de um relatório sair para quem não é o compra
 """
 from __future__ import annotations
 
+import re
 from types import SimpleNamespace
 from typing import Any, Dict, List
 
@@ -85,6 +86,17 @@ def test_so_relatorios_conhecidos_sao_automaticos(loja):
     )
     assert doc["auto_report"] == ""
     assert store.has_auto_report({"items": [{"product_id": doc["id"]}]}) is False
+
+
+def test_ficha_do_produto_deixa_comprar(loja):
+    """A ficha não pode dizer «esgotado» num produto digital sem controlo de stock."""
+    produto = store.product_by_slug(SLUG)
+    html = shop_routes.loja_product(SLUG).body.decode("utf-8")
+    assert '<div class="notice warn">Este produto está esgotado.</div>' not in html
+    botoes = re.findall(r"<button[^>]*data-(?:buy-now|add-to-cart)[^>]*>", html)
+    assert len(botoes) >= 2
+    assert all("disabled" not in botao for botao in botoes)
+    assert f'data-buy-now="{produto["id"]}"' in html
 
 
 # ------------------------------------------------------------------ geração
