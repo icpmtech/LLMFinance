@@ -1,7 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Sitemap da aplicação (as páginas da SPA). O `/sitemap.xml` é o índice que o
+<!-- Sitemap da aplica??o (as p?ginas da SPA). O `/sitemap.xml` ? o ?ndice que o
      junta aos do site (`/site/sitemap.xml`) e da loja (`/loja/sitemap.xml`):
-     este endereço sozinho não cobre as páginas públicas todas. -->
+     este endere?o sozinho n?o cobre as p?ginas p?blicas todas.
+
+     S? entram aqui as rotas com meta pr?pria no `<head>` (o mesmo conjunto de
+     `api/spa_routes.py::ROTAS_INDEXAVEIS`), servido pelo backend com t?tulo,
+     descri??o e can?nica de cada uma. As restantes rotas da interface s?o uma
+     casca preenchida por JavaScript: saem com `noindex` e n?o se anunciam a um
+     motor de busca. Para tornar uma p?gina p?blica, d?-se-lhe meta em
+     `_seo_meta_for_path` (`api/main.py`) e junta-se aqui ? h? um teste que
+     compara as duas listas. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://sabemos.studio/</loc>
@@ -57,40 +65,5 @@
     <loc>https://sabemos.studio/administracao-central</loc>
     <priority>0.7</priority>
     <changefreq>weekly</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/empresas-iq</loc>
-    <priority>0.7</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/tickers</loc>
-    <priority>0.7</priority>
-    <changefreq>hourly</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/search360</loc>
-    <priority>0.6</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/reports</loc>
-    <priority>0.6</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/world</loc>
-    <priority>0.5</priority>
-    <changefreq>hourly</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/osint</loc>
-    <priority>0.5</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/mercado</loc>
-    <priority>0.5</priority>
-    <changefreq>daily</changefreq>
   </url>
 </urlset>

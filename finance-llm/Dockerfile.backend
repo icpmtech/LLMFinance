@@ -54,6 +54,12 @@ RUN scrapling install || playwright install --with-deps chromium
 # Copiar código do projeto
 COPY . .
 
+# A SPA construída, para o backend escrever o `<head>` das páginas da interface
+# (metadados por rota, `noindex` nas rotas privadas e 404 no que não existe). O
+# `.dockerignore` exclui `chat-ui/dist`, e sem isto o backend devolvia 404 às
+# rotas da aplicação — ver o comentário em `Dockerfile.backend.incremental`.
+COPY _frontend_dist /app/chat-ui/dist
+
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python -c "import requests; requests.get('http://127.0.0.1:8000/health', timeout=5)" || exit 1

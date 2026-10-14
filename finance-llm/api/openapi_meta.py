@@ -515,7 +515,6 @@ SPA_PATHS: Tuple[str, ...] = (
     "/rag",
     "/forecast",
     "/trading",
-    "/ticker-detail",
 )
 
 # Prefixo → grupo, aplicado por ordem (o mais específico primeiro).
@@ -559,7 +558,6 @@ PATH_TAG_RULES: Sequence[Tuple[str, str]] = (
     ("/tickers", "market"),
     ("/forecast", "market"),
     ("/trading", "spa"),
-    ("/ticker-detail", "spa"),
     ("/sentiment/analyze", "market"),
     ("/sentiment", "sentiment"),
     ("/favorites", "dossier"),

@@ -25,6 +25,17 @@ FROM ${BASE}
 # WORKDIR (/app), ENTRYPOINT (/entrypoint.sh) e HEALTHCHECK vêm da base.
 COPY . .
 
+# A SPA construída, para o backend poder escrever o `<head>` das páginas da
+# interface (`_render_seo_index`, em `api/main.py`) — metadados por rota,
+# `noindex` nas rotas privadas e 404 nos endereços que não existem.
+#
+# O `.dockerignore` exclui `chat-ui/dist` do contexto, por isso este `COPY` vem
+# de `_frontend_dist` (o mesmo build que a imagem do frontend serve, produzido
+# pelo `19-deploy-codigo.ps1` antes das builds). Sem isto o backend **da VM** não
+# tinha `/app/chat-ui/dist/index.html` e respondia 404 a todas as rotas da SPA
+# (localmente não se via: o compose monta `./chat-ui`, que lá tem o `dist`).
+COPY _frontend_dist /app/chat-ui/dist
+
 # Dependências que o incremental tem de acrescentar à parte. São poucas e leves:
 # o `requirements.txt` já as traz, mas uma build a frio resolveria também
 # `pandas`/`transformers`/`numpy` **sem versões fixas** e mudaria o ambiente que

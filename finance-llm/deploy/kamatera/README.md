@@ -513,6 +513,42 @@ um `extra_hosts: backend:host-gateway` a dar-lhe um destino. **Quando o backend
 migrar para a rede `iqos-net`, essa linha tem de sair**, senao o nome fica preso
 ao gateway e nunca chega ao backend.
 
+### SEO: quem serve o `<head>` das paginas da interface
+
+O `<head>` da SPA (titulo, descricao, keywords, canonicas e `robots`) e escrito
+**pelo backend** (`_render_seo_index`, em `api/main.py`). Por isso o
+`location /` do `docker/nginx.conf` termina em `try_files $uri $uri/ @spa`, e o
+`@spa` faz `proxy_pass http://backend:8000`. Antes terminava em `/index.html` e o
+nginx respondia sozinho com o ficheiro do disco -- todo aquele SEO nunca corria
+(medido a 2026-10-14: `/`, `/benchmark` e `/administracao-central` devolviam os
+mesmos 4520 bytes, com a canónica da home, e um endereco inexistente dava 200).
+
+A politica vive em `api/spa_routes.py`:
+
+| Endereco | Resposta |
+|---|---|
+| páginas públicas com meta própria (`ROTAS_INDEXAVEIS`) | 200 + titulo/descricao/canonica da rota, `index, follow` |
+| rotas da aplicação (casca JavaScript, muitas atras de sessao) | 200 + `noindex, follow` |
+| endereco que nao e rota nenhuma | **404** com `noindex` -- e nao um 200 com a casca, que o Google chama *soft 404* |
+
+O `sitemap-app.xml` lista exactamente as rotas indexáveis e o `/sitemap.xml` e o
+indice que junta a aplicação, o site (`/site/sitemap.xml`) e a loja
+(`/loja/sitemap.xml`); o `robots.txt` **da raiz** aponta para esse indice. O
+`robots.txt` de `/site/` e o de `/loja/` existem para cada modulo se descrever,
+mas os motores de busca só lêem o da raiz.
+
+Duas coisas a nao partir: se a `location /` voltar a servir `/index.html`,
+perdem-se os metadados por rota, o `noindex` das rotas privadas **e** o 404
+(passa tudo a responder 200 com a casca). E `tests/test_spa_rotas.py` compara
+`SEGMENTOS_DA_APP` com as rotas declaradas em `chat-ui/src/App.tsx`: uma rota nova
+fora dessa lista faz o backend devolver 404 ao recarregar a página.
+
+O backend precisa do build da SPA dentro da imagem: o `.dockerignore` exclui
+`chat-ui/dist`, e os dois `Dockerfile.backend*` copiam `_frontend_dist` para
+`/app/chat-ui/dist`. Sem isso, o stack local nao se queixava (o compose monta
+`./chat-ui`, que tem o `dist`) mas o backend **da VM** respondia 404 a todas as
+rotas da SPA — foi o que se viu no primeiro deploy desta mudanca.
+
 ### Recursos da VM
 
 A VM foi redimensionada **pelo painel** da Kamatera (a API nao serve para isto,

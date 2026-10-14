@@ -380,6 +380,7 @@ from api.base_impic_routes import router as base_impic_router
 from api import auth_service as auth
 from api import events_service as events
 from api import permissions_service as permissions
+from api import spa_routes as spa_routes
 from api import ontology_registry as ontology_registry
 
 
@@ -798,15 +799,15 @@ app.include_router(descoberta_pessoas_router)
 
 
 @app.get("/societario")
-def serve_societario_spa_page():
+def serve_societario_spa_page(request: Request):
     """Página do módulo **Recolha Societária** (recolha massiva → JSON → Elasticsearch)."""
-    return spa_index_response()
+    return spa_page_response(str(request.url.path))
 
 
 @app.get("/empresas-recolha")
-def serve_empresas_recolha_spa_page():
+def serve_empresas_recolha_spa_page(request: Request):
     """Página do módulo **Recolha de Empresas** (diretórios web → JSON)."""
-    return spa_index_response()
+    return spa_page_response(str(request.url.path))
 app.include_router(cire_router)
 app.include_router(citacoes_router)
 app.include_router(people_router)
@@ -875,19 +876,19 @@ def serve_benchmark_spa_page(path: str = ""):
 
     Serve o index.html com meta tags de SEO adaptadas à sub-rota.
     """
-    return spa_index_response(path=f"/benchmark/{path}" if path else "/benchmark")
+    return spa_page_response(f"/benchmark/{path}" if path else "/benchmark")
 
 
 @app.get("/osint")
-def serve_osint_spa_page():
+def serve_osint_spa_page(request: Request):
     """Página do módulo OSINT."""
-    return spa_index_response()
+    return spa_page_response(str(request.url.path))
 
 
 @app.get("/osint/{path:path}")
-def serve_osint_spa_page_deep(path: str):
+def serve_osint_spa_page_deep(request: Request, path: str):
     """Deep links da página OSINT."""
-    return spa_index_response()
+    return spa_page_response(str(request.url.path))
 
 
 # Cache curta de `user_id → email`, para o registo de pedidos identificar quem
@@ -1187,36 +1188,39 @@ def _seo_meta_for_path(path: str) -> Dict[str, str]:
     return base
 
 
-def _render_seo_index(path: str = "") -> HTMLResponse:
-    """Devolve o `index.html` com título e meta tags adaptados à rota."""
+def _render_seo_index(path: str = "", *, noindex: bool = False) -> HTMLResponse:
+    """Devolve o `index.html` com título e meta tags adaptados à rota.
+
+    `noindex` é para as rotas da **aplicação** (ver `api/spa_routes.py`): existem
+    para quem as abre, mas o HTML que servem é uma casca preenchida por
+    JavaScript — deixá-las indexáveis enchia o índice de páginas iguais e sem
+    conteúdo.
+    """
     html = _load_spa_index_html()
     if not html:
         raise HTTPException(status_code=404, detail="Interface não construída.")
 
     meta = _seo_meta_for_path(path)
     canonical = f"https://sabemos.studio{path}" if path else "https://sabemos.studio/"
+    robots = "noindex, follow" if noindex else "index, follow"
 
     html = html.replace("<title>IQ OS — Plataforma de Inteligência Financeira</title>", f"<title>{meta['title']}</title>", 1)
     desc_original = 'content="Contratos públicos, empresas, mercados, previsões e chat com modelos de linguagem numa única plataforma."'
     desc_novo = f'content="{meta["description"]}"'
     html = html.replace(desc_original, desc_novo, 1)
-
-    head_inject = f'''
-    <meta name="keywords" content="{meta['keywords']}" />
-    <meta name="robots" content="index, follow" />
-    <link rel="canonical" href="{canonical}" />
-    <meta property="og:title" content="{meta['og_title']}" />
-    <meta property="og:description" content="{meta['og_description']}" />
-    <meta property="og:type" content="{meta.get('og_type', 'website')}" />
-    <meta property="og:url" content="{canonical}" />
-    <meta property="og:site_name" content="IQ OS" />
-    <meta property="og:image" content="https://sabemos.studio/icon-512.png" />
-    <meta property="og:locale" content="pt_PT" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="{meta['og_title']}" />
-    <meta name="twitter:description" content="{meta['og_description']}" />
-    <meta name="twitter:image" content="https://sabemos.studio/icon-512.png" />
-    '''
+    # As `keywords` e o `robots` do build são genéricos (uma folha para todas as
+    # rotas). Substituem-se — e não se acrescentam — para não ficarem duas metas
+    # `robots` no `<head>`, com o browser a ter de escolher.
+    html = html.replace(
+        '<meta name="keywords" content="contratos públicos, empresas, concorrência, preço de referência, CPV, fornecedores, compradores, Portugal, Espanha, França, mercados, finanças, IA" />',
+        f'<meta name="keywords" content="{meta["keywords"]}" />',
+        1,
+    )
+    html = html.replace(
+        '<meta name="robots" content="index, follow" />',
+        f'<meta name="robots" content="{robots}" />',
+        1,
+    )
     # Substitui o canonical e as OG tags genéricas do build pelas da rota.
     html = html.replace(
         '<link rel="canonical" href="https://sabemos.studio/" />',
@@ -1253,17 +1257,74 @@ def _render_seo_index(path: str = "") -> HTMLResponse:
     return HTMLResponse(content=html, headers={"Cache-Control": "no-store, must-revalidate"})
 
 
-def spa_index_response(path: str = "") -> FileResponse:
+def spa_index_response(path: str = "", *, noindex: bool = False) -> FileResponse:
     """`index.html` da SPA **sem cache**.
 
-    Quando `path` é fornecido, renderiza meta tags específicas da rota.
+    Quando `path` é fornecido, renderiza meta tags específicas da rota (e
+    `noindex` quando a rota é da aplicação, e não uma página pública).
     """
     if path:
-        return _render_seo_index(path)  # type: ignore[return-value]
+        return _render_seo_index(path, noindex=noindex)  # type: ignore[return-value]
     return FileResponse(
         str(UI_BUILD_DIR / "index.html"),
         headers={"Cache-Control": "no-store, must-revalidate"},
     )
+
+
+def spa_not_found_response() -> HTMLResponse:
+    """404 a sério para endereços que não são rota nenhuma.
+
+    Um endereço inexistente servido com 200 é um *soft 404*, e o Google pede
+    explicitamente um 404 verdadeiro (ver `docs` do Search Essentials). A página
+    vai sozinha — sem a aplicação — para o rastreador não gastar um render do
+    JavaScript só para descobrir que não há nada aqui.
+    """
+    return HTMLResponse(
+        content="""<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, follow">
+    <title>Página não encontrada · IQ OS</title>
+    <style>
+      body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+             background:#0f1115; color:#e6edf2;
+             font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+      main { max-width:520px; padding:32px; text-align:center; }
+      h1 { margin:0 0 8px; font-size:22px; }
+      p { margin:0 0 20px; color:#94a3b8; line-height:1.6; }
+      a { color:#5eead4; text-decoration:none; margin:0 8px; }
+      a:hover { text-decoration:underline; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Página não encontrada</h1>
+      <p>O endereço que pediu não existe nesta plataforma. Pode continuar a partir daqui:</p>
+      <p><a href="/">Plataforma</a> <a href="/benchmark">Benchmark</a> <a href="/contracts/search">Contratos</a>
+         <a href="/site/">Site</a> <a href="/loja">Loja</a></p>
+    </main>
+  </body>
+</html>
+""",
+        status_code=404,
+        headers={"Cache-Control": "no-store, must-revalidate"},
+    )
+
+
+def spa_page_response(path: str) -> Response:
+    """Resposta para um endereço da interface, com a política de `spa_routes`.
+
+    Existe porque alguns endereços da interface têm rota própria — colidem com
+    prefixos da API (`/companies/search`, `/osint`, `/entities/dashboard`) — e sem
+    isto respondiam de forma diferente dos restantes: sem a meta da rota, sem
+    `noindex` e com 200 mesmo quando o endereço não existe.
+    """
+    classe = spa_routes.classificar(path)
+    if classe == spa_routes.DESCONHECIDA:
+        return spa_not_found_response()
+    return spa_index_response(path=path, noindex=classe == spa_routes.APP)
 
 
 @app.get("/companies")
@@ -1271,7 +1332,7 @@ def spa_index_response(path: str = "") -> FileResponse:
 @app.get("/companies/dashboard")
 def serve_companies_spa_page(request: Request):
     path = str(request.url.path) or "/companies"
-    return spa_index_response(path=path)
+    return spa_page_response(path)
 
 
 @app.post("/companies/search", response_model=CompanySearchResponse)
@@ -1279,7 +1340,7 @@ def serve_companies_spa_page(request: Request):
 def companies_search(req: CompanySearchRequest, request: Request):
     """Pesquisa empresas/entidades (POST); GET serve a SPA."""
     if request.method == "GET":
-        return spa_index_response(path="/companies/search")
+        return spa_page_response("/companies/search")
 
 
 # Os dashboards e o comparador de entidades vivem em `/entities/...`, mas
@@ -1292,8 +1353,8 @@ def companies_search(req: CompanySearchRequest, request: Request):
 @app.get("/entities/compare")
 @app.get("/adjudicantes")
 @app.get("/adjudicatarios")
-def serve_entities_spa_page():
-    return spa_index_response()
+def serve_entities_spa_page(request: Request):
+    return spa_page_response(str(request.url.path))
 
 
 def _accepts_html(request: Request) -> bool:
@@ -1334,7 +1395,7 @@ def _is_api_path(path: str) -> bool:
 def companies_detail(request: Request, nif: str, year: Optional[int] = Query(None)):
     """Detalhes de uma entidade (por NIF), incluindo resumo de papéis e contratos recentes."""
     if UI_BUILD_DIR.is_dir() and _accepts_html(request):
-        return spa_index_response()
+        return spa_page_response(f"/companies/{nif}")
     company = get_company_by_nif(nif)
 
     # Fallback para o diretório Racius quando a entidade não existe no cadastro
@@ -2123,7 +2184,7 @@ def entities_report_dossie_pdf(nif: str):
 @app.get("/import")
 def serve_spa_page(request: Request):
     path = str(request.url.path) or "/"
-    return spa_index_response(path=path)
+    return spa_page_response(path)
 
 
 @app.get("/robots.txt")
@@ -2157,7 +2218,7 @@ def serve_favicon_svg():
 def read_root(request: Request):
     """Raiz: a aplicação para quem navega no browser, o estado da API para clientes."""
     if UI_BUILD_DIR.is_dir() and _accepts_html(request):
-        return spa_index_response(path="/")
+        return spa_page_response("/")
     return {
         "status": "ok",
         "service": "IQ OS API",
@@ -3668,7 +3729,12 @@ _ASSET_SUFFIXES = {
 
 @app.get("/{full_path:path}")
 def serve_spa_deep_link(request: Request, full_path: str):
-    """Devolve o `index.html` para endereços da interface abertos diretamente."""
+    """Devolve o `index.html` para endereços da interface abertos diretamente.
+
+    Decide o que fazer com o endereço (ver `api/spa_routes.py`): página pública
+    com meta própria, rota da aplicação com `noindex`, ou 404 se não for rota
+    nenhuma — um endereço inexistente com 200 é um *soft 404*.
+    """
     if Path(full_path or "").suffix.lower() in _ASSET_SUFFIXES:
         raise HTTPException(status_code=404, detail="Not Found")
     if not _accepts_html(request):
@@ -3678,8 +3744,5 @@ def serve_spa_deep_link(request: Request, full_path: str):
     # Nesses casos servemos 404 para não devolver HTML a chamadas de API.
     if _is_api_path(full_path):
         raise HTTPException(status_code=404, detail="Not Found")
-    index = UI_BUILD_DIR / "index.html"
-    if not index.is_file():
-        raise HTTPException(status_code=404, detail="Interface não construída.")
     path = f"/{full_path}" if full_path else "/"
-    return spa_index_response(path=path)
+    return spa_page_response(path)

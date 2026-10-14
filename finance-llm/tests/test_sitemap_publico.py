@@ -189,3 +189,22 @@ def test_robots_do_site_indica_o_sitemap_sem_base_url(instalacao_limpa) -> None:
     robots = cms_render.render_robots({})
     assert "Sitemap: https://sabemos.studio/site/sitemap.xml" in robots
     assert "Allow: /site/" in robots
+
+
+# ------------------------------------------------------- canónicas com origem
+def test_pagina_da_loja_sai_com_canonica_e_og_url_absolutos(instalacao_limpa) -> None:
+    """Sem `base_url`, a canónica e o `og:url` têm de sair absolutos na mesma —
+    o Open Graph exige URL absoluto, e o valor tem de bater com o do sitemap."""
+    shop_store.reset_seed()
+    produto = shop_store.get_item("products", shop_store.list_items("products")["items"][0]["id"])
+
+    pagina = shop_render.render_product(produto, settings={})
+
+    assert f'<link rel="canonical" href="{shop_render.DEFAULT_BASE_URL}/loja/produto/' in pagina
+    assert f'<meta property="og:url" content="{shop_render.DEFAULT_BASE_URL}/loja/produto/' in pagina
+    assert 'content="/loja/produto/' not in pagina
+
+
+def test_canonica_da_loja_respeita_o_base_url_configurado(instalacao_limpa) -> None:
+    pagina = shop_render.render_home(settings={"base_url": "https://loja.exemplo.pt/"})
+    assert '<link rel="canonical" href="https://loja.exemplo.pt/loja">' in pagina

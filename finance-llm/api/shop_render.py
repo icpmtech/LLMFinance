@@ -52,6 +52,21 @@ _THEMES: Dict[str, Dict[str, str]] = {
 
 _CART_KEY = "iqos-loja-carrinho"
 
+#: Origem canónica da loja, usada quando as definições ainda não têm `base_url`
+#: (é o caso por omissão numa instalação nova). Daqui saem os `<loc>` do sitemap,
+#: a linha `Sitemap:` do `robots.txt`, a canónica e o `og:url` das páginas — e
+#: nenhum desses sítios aceita bem um valor relativo: o protocolo dos sitemaps
+#: rejeita o ficheiro inteiro por causa de um `<loc>` relativo, e o Open Graph
+#: exige URL absoluto. O certo é configurar o endereço em *Loja → Definições*;
+#: isto é a rede de segurança.
+DEFAULT_BASE_URL = "https://sabemos.studio"
+
+
+def _base_url(settings: Optional[Dict[str, Any]] = None) -> str:
+    """Origem absoluta da loja, das definições ou da canónica do projeto."""
+    settings = settings or store.get_settings()
+    return str(settings.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
+
 
 # --------------------------------------------------------------------------
 # Utilidades
@@ -1334,10 +1349,10 @@ def _layout(
 ) -> str:
     store_name = _esc(settings.get("store_name") or "Loja")
     full_title = f"{title} · {store_name}" if title and store_name not in title else (title or store_name)
-    base_url = str(settings.get("base_url") or "")
+    base_url = _base_url(settings)
     canonical_url = canonical or "/loja"
-    if base_url and not canonical_url.startswith("http"):
-        canonical_url = f"{base_url.rstrip('/')}{canonical_url}"
+    if not canonical_url.startswith("http"):
+        canonical_url = f"{base_url}{canonical_url}"
     robots = "noindex, nofollow" if (noindex or preview) else str(settings.get("robots") or "index, follow")
     meta = [
         f'<meta name="description" content="{_esc(description)}">',
@@ -2119,19 +2134,6 @@ def render_not_found(*, settings: Optional[Dict[str, Any]] = None, message: str 
 # --------------------------------------------------------------------------
 # Sitemap e robots
 # --------------------------------------------------------------------------
-#: Origem canónica, usada quando as configurações da loja ainda não têm
-#: `base_url`. Um `<loc>` relativo é **inválido** no protocolo dos sitemaps — o
-#: motor de busca rejeita o ficheiro por inteiro — e sem origem não se escreve
-#: sequer a linha `Sitemap:` no `robots.txt`. Foi o que aconteceu: o sitemap da
-#: loja saía com `<loc>/loja/produto/…</loc>`.
-DEFAULT_BASE_URL = "https://sabemos.studio"
-
-
-def _base_url(settings: Optional[Dict[str, Any]] = None) -> str:
-    settings = settings or store.get_settings()
-    return str(settings.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
-
-
 def render_sitemap(*, settings: Optional[Dict[str, Any]] = None) -> str:
     base = _base_url(settings)
     urls = ["/loja", "/loja/produtos"]
