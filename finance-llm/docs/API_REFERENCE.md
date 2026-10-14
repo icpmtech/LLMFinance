@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1230 operações** em **44 grupos**.
+Versão `0.4.0` · **1244 operações** em **44 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -101,6 +101,15 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `DELETE` | `/benchmarks/{slug}/publicar` | Benchmark Despublicar |
 | `POST` | `/benchmarks/{slug}/recolher` | Benchmark Recolher |
 | `POST` | `/benchmarks/{slug}/sonda` | Benchmarks Sonda Estudo |
+| `POST` | `/billing/confirm` | Confirm |
+| `POST` | `/billing/mbway/request` | Mbway Request |
+| `POST` | `/billing/mbway/status` | Mbway Status |
+| `POST` | `/billing/paypal/capture` | Paypal Capture |
+| `GET` | `/billing/plans` | List Plans |
+| `POST` | `/billing/subscribe` | Subscribe |
+| `GET` | `/billing/subscription` | Get Subscription |
+| `POST` | `/billing/webhooks/paypal` | Paypal Webhook |
+| `POST` | `/billing/webhooks/stripe` | Stripe Webhook |
 | `GET` | `/cae/autocomplete` | Autocomplete Cae |
 | `GET` | `/cae/list` | List Cae |
 | `GET` | `/cae/{code}` | Get Cae |
@@ -215,6 +224,7 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/loja/conta/encomendas` | Loja Account Orders |
 | `POST` | `/loja/cupoes/validar` | Loja Validate Coupon |
 | `GET` | `/loja/encomenda/{number}` | Loja Order |
+| `GET` | `/loja/encomenda/{number}/ficheiros/{file_id}` | Loja Order File |
 | `POST` | `/loja/encomendas` | Loja Checkout |
 | `POST` | `/loja/newsletter` | Loja Newsletter |
 | `GET` | `/loja/produto/{slug}` | Loja Product |
@@ -478,6 +488,7 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `POST` | `/shop/orders/{item_id}/note` | Shop Order Note |
 | `POST` | `/shop/orders/{item_id}/payment` | Shop Order Payment |
 | `GET` | `/shop/orders/{item_id}/print` | Shop Order Print |
+| `POST` | `/shop/orders/{item_id}/relatorios` | Shop Order Reports |
 | `POST` | `/shop/orders/{item_id}/status` | Shop Order Status |
 | `GET` | `/shop/overview` | Shop Overview |
 | `POST` | `/shop/revisions/{revision_id}/restore` | Shop Restore |
@@ -554,6 +565,8 @@ Consola de administração: panorama geral, gestão de contas e sessões, visual
 | `GET` | `/admin/logs` | Admin Logs |
 | `GET` | `/admin/logs/{name}` | Admin Log Tail |
 | `GET` | `/admin/overview` | Admin Overview |
+| `GET` | `/admin/payments` | Admin Payments |
+| `POST` | `/admin/payments/{payment_id}/confirm` | Admin Confirm Payment |
 | `GET` | `/admin/service-keys` | Admin Service Keys |
 | `PUT` | `/admin/service-keys` | Admin Service Keys Save |
 | `POST` | `/admin/service-keys/{key_id}/test` | Admin Service Keys Test |
@@ -563,6 +576,7 @@ Consola de administração: panorama geral, gestão de contas e sessões, visual
 | `GET` | `/admin/users` | Admin Users |
 | `PATCH` | `/admin/users/{user_id}` | Admin Update User |
 | `DELETE` | `/admin/users/{user_id}` | Admin Delete User |
+| `POST` | `/admin/users/{user_id}/approve` | Admin Approve User |
 | `POST` | `/admin/users/{user_id}/revoke-sessions` | Admin Revoke Sessions |
 
 ## rag
