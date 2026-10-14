@@ -17,8 +17,22 @@
  * lá e não são estimados.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BookOpen, Building2, Calculator, Landmark, Loader2, RefreshCw, Search, Table2, TrendingUp, X } from "lucide-react";
+import {
+  BookOpen,
+  Building2,
+  Calculator,
+  ExternalLink,
+  Globe2,
+  Landmark,
+  Loader2,
+  RefreshCw,
+  Search,
+  Table2,
+  TrendingUp,
+  X,
+} from "lucide-react";
 
+import { cmsAppUrl, cmsRemuneracaoUrl, createCmsRemuneracao, publishCmsItem } from "../cmsApi";
 import {
   euroExato,
   numero,
@@ -95,6 +109,11 @@ export default function RemuneracoesApPage() {
   const [aCarregar, setACarregar] = useState(false);
   const [aRecolher, setARecolher] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  // Publicação no CMS: a página pública do quadro deste ano.
+  const [aPublicar, setAPublicar] = useState(false);
+  const [erroPublicar, setErroPublicar] = useState<string | null>(null);
+  const [paginaNoCms, setPaginaNoCms] = useState<{ id: string; title: string; slug: string; ano: number } | null>(null);
 
   // Simulador: nível, carreira/posição ou cargo dirigente escolhido.
   const [nivelSimulado, setNivelSimulado] = useState<string>("");
@@ -254,6 +273,26 @@ export default function RemuneracoesApPage() {
     }
   }, [ano, carregarNucleo]);
 
+  // A página pública nasce já com a fotografia do ano que está no ecrã (tabelas,
+  // série, carreiras, dirigentes, notas e base legal) e é publicada de imediato;
+  // o SEO, a marca e as imagens editam-se depois no CMS.
+  const publicarNoCms = useCallback(async () => {
+    const anoEscolhido = Number(ano);
+    if (!anoEscolhido) return;
+    setAPublicar(true);
+    setErroPublicar(null);
+    try {
+      const criada = await createCmsRemuneracao({ ano: anoEscolhido });
+      const publicada = await publishCmsItem("remuneracoes", criada.item.id);
+      const item = publicada.item as unknown as { id: string; title: string; slug: string };
+      setPaginaNoCms({ id: item.id, title: item.title, slug: item.slug, ano: anoEscolhido });
+    } catch (excecao) {
+      setErroPublicar(excecao instanceof Error ? excecao.message : String(excecao));
+    } finally {
+      setAPublicar(false);
+    }
+  }, [ano]);
+
   const anos = meta?.anos ?? [];
   const contagens = meta?.stats?.contagens ?? {};
 
@@ -295,6 +334,16 @@ export default function RemuneracoesApPage() {
             ) : null}
             <button
               type="button"
+              onClick={() => void publicarNoCms()}
+              disabled={aPublicar || !ano}
+              className="flex min-h-[36px] items-center gap-1.5 rounded-xl border border-teal-400/30 bg-teal-400/10 px-3 py-1.5 text-xs text-teal-200 transition hover:bg-teal-400/20 disabled:opacity-40"
+              title="Criar no CMS a página pública do quadro deste ano (tabelas, série, carreiras, dirigentes, simulador, notas e base legal) e publicá-la."
+            >
+              {aPublicar ? <Loader2 size={13} className="animate-spin" /> : <Globe2 size={13} />}
+              {aPublicar ? "a publicar…" : "Publicar no CMS"}
+            </button>
+            <button
+              type="button"
               onClick={() => void recolher()}
               disabled={aRecolher}
               className="flex min-h-[36px] items-center gap-1.5 rounded-xl border border-white/10 px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-40"
@@ -305,6 +354,39 @@ export default function RemuneracoesApPage() {
             </button>
           </div>
         </header>
+
+        {erroPublicar ? (
+          <Cartao className="border-rose-400/20">
+            <p className="text-sm text-rose-300">Não foi possível publicar no CMS: {erroPublicar}</p>
+          </Cartao>
+        ) : null}
+
+        {paginaNoCms ? (
+          <Cartao className="border-teal-400/20">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                Página <strong className="text-foreground">{paginaNoCms.title}</strong> publicada no CMS com o quadro de{" "}
+                {paginaNoCms.ano}. O SEO, as imagens, a marca e o que a página mostra editam-se lá.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href={cmsRemuneracaoUrl(paginaNoCms.slug)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-muted-foreground transition hover:text-foreground"
+                >
+                  <ExternalLink size={13} /> Página no site
+                </a>
+                <a
+                  href={cmsAppUrl("remuneracoes", paginaNoCms.id)}
+                  className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-muted-foreground transition hover:text-foreground"
+                >
+                  <Globe2 size={13} /> Editar no CMS
+                </a>
+              </div>
+            </div>
+          </Cartao>
+        ) : null}
 
         {erro ? (
           <Cartao className="border-rose-400/20">

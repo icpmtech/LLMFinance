@@ -309,6 +309,8 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
   box-shadow: var(--shadow);
 }}
 .cta h2 {{ margin: 0 0 4px; }}
+/* Uma faixa pode ter mais do que um botão (ex.: entrar e loja). */
+.cta .actions {{ display: flex; gap: 10px; flex-wrap: wrap; }}
 .aviso {{ border-left: 4px solid var(--accent); background: var(--code); padding: 14px 16px; border-radius: 8px; }}
 .aviso.amber {{ border-color: #f59e0b; }}
 .aviso.red {{ border-color: #ef4444; }}
@@ -457,7 +459,7 @@ def _render_content_block(content_id: str) -> str:
         return (
             f'<div class="cta"><div><h2>{_esc(data.get("title") or content.get("title"))}</h2>'
             f'<p>{_esc(data.get("text") or "")}</p></div>'
-            f'<a class="btn" href="{_esc(data.get("button_href") or "#")}">{_esc(data.get("button_label") or "Saber mais")}</a></div>'
+            f'<div class="actions">{_cta_botoes(data)}</div></div>'
         )
     if kind == "hero":
         return (
@@ -606,6 +608,22 @@ def render_contacto(
     )
 
 
+def _cta_botoes(data: Dict[str, Any]) -> str:
+    """Botões de uma chamada à ação: o principal e os secundários (`buttons`)."""
+    botoes = [
+        f'<a class="btn" href="{_esc(data.get("button_href") or "#")}">'
+        f'{_esc(data.get("button_label") or "Saber mais")}</a>'
+    ]
+    for extra in data.get("buttons") or []:
+        if not isinstance(extra, dict):
+            continue
+        botoes.append(
+            f'<a class="btn ghost" href="{_esc(extra.get("href") or "#")}">'
+            f'{_esc(extra.get("label") or "Saber mais")}</a>'
+        )
+    return "".join(botoes)
+
+
 def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
     if block.get("hidden"):
         return ""
@@ -697,7 +715,7 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
         return (
             f'<div class="section cta"><div><h2>{_esc(data.get("title"))}</h2>'
             f'<p>{_esc(data.get("text") or "")}</p></div>'
-            f'<a class="btn" href="{_esc(data.get("button_href") or "#")}">{_esc(data.get("button_label") or "Saber mais")}</a></div>'
+            f'<div class="actions">{_cta_botoes(data)}</div></div>'
         )
 
     if block_type == "faq":

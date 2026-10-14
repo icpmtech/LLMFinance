@@ -938,7 +938,7 @@ export function cmsPublicUrl(path: string): string {
  * O caminho é da própria SPA (não passa pelo `/api`): serve para saltar de outra
  * página da aplicação para o editor certo, sem o utilizador ter de o procurar.
  */
-export function cmsAppUrl(section: "municipios" | "pesquisas" | "paginas" | "blog", id: string): string {
+export function cmsAppUrl(section: "municipios" | "pesquisas" | "paginas" | "blog" | "remuneracoes", id: string): string {
   return `/cms/${section}?id=${encodeURIComponent(id)}`;
 }
 

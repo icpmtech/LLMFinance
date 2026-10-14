@@ -1080,6 +1080,475 @@ def _cargos_para_simulacao(cargos: List[Dict[str, Any]]) -> List[Dict[str, Any]]
 
 
 # --------------------------------------------------------------------------
+# Grafo: dimensões, relações e métricas
+# --------------------------------------------------------------------------
+#: Dimensões que o grafo sabe ligar. `familia` dá a legenda de cada lado e
+#: `tipo` é o pictograma do nó (ver `GraphCanvas` no frontend).
+DIMENSOES_GRAFO: Tuple[Dict[str, str], ...] = (
+    {"key": "seccao", "label": "Secção do quadro", "tipo": "seccao", "familia": "Quadro das carreiras"},
+    {"key": "carreira", "label": "Carreira", "tipo": "carreira", "familia": "Quadro das carreiras"},
+    {"key": "categoria", "label": "Categoria", "tipo": "categoria", "familia": "Quadro das carreiras"},
+    {"key": "posicao", "label": "Posição remuneratória", "tipo": "posicao", "familia": "Quadro das carreiras"},
+    {"key": "nivel", "label": "Nível da TRU", "tipo": "nivel", "familia": "Tabela Remuneratória Única"},
+    {"key": "ano", "label": "Ano do quadro", "tipo": "ano", "familia": "Série anual"},
+    {"key": "ambito", "label": "Âmbito (dirigentes)", "tipo": "ambito", "familia": "Cargos dirigentes"},
+    {"key": "grupo", "label": "Serviço/grupo (dirigentes)", "tipo": "grupo", "familia": "Cargos dirigentes"},
+    {"key": "cargo", "label": "Cargo dirigente", "tipo": "cargo", "familia": "Cargos dirigentes"},
+)
+
+#: Métricas do grafo. `remuneracao` usa o valor mais alto do nó/ligação (o topo
+#: da carreira, do nível ou do cargo); `posicoes` conta as ocorrências.
+METRICAS_GRAFO: Tuple[Dict[str, str], ...] = (
+    {"key": "remuneracao", "label": "Remuneração base mensal (topo)", "unidade": "€/mês"},
+    {"key": "posicoes", "label": "Posições e cargos", "unidade": "posições"},
+)
+
+#: Grafos prontos: cada receita responde a uma pergunta distinta do quadro.
+RECEITAS_GRAFO: Tuple[Dict[str, Any], ...] = (
+    {
+        "id": "carreira-nivel",
+        "label": "Carreiras por nível da TRU",
+        "descricao": "Cada carreira ligada aos níveis da TRU que as suas posições remuneratórias usam.",
+        "dimensao_a": "carreira",
+        "dimensao_b": "nivel",
+        "metrica": "remuneracao",
+        "limite": 60,
+        "vista": "network",
+    },
+    {
+        "id": "seccao-carreira",
+        "label": "Secções e carreiras",
+        "descricao": "Como o quadro se organiza: cada secção com as carreiras que a compõem.",
+        "dimensao_a": "seccao",
+        "dimensao_b": "carreira",
+        "metrica": "posicoes",
+        "limite": 60,
+        "vista": "hierarchical",
+    },
+    {
+        "id": "carreira-categoria",
+        "label": "Carreiras e categorias",
+        "descricao": "As categorias de cada carreira (com quantas posições cada uma).",
+        "dimensao_a": "carreira",
+        "dimensao_b": "categoria",
+        "metrica": "posicoes",
+        "limite": 60,
+        "vista": "hierarchical",
+    },
+    {
+        "id": "ambito-cargo",
+        "label": "Dirigentes por âmbito",
+        "descricao": "Cada âmbito (universidades, administração local, …) com os cargos que paga.",
+        "dimensao_a": "ambito",
+        "dimensao_b": "cargo",
+        "metrica": "remuneracao",
+        "limite": 60,
+        "vista": "network",
+    },
+    {
+        "id": "grupo-cargo",
+        "label": "Serviços e cargos dirigentes",
+        "descricao": "Os cargos de cada serviço/grupo dentro do âmbito.",
+        "dimensao_a": "grupo",
+        "dimensao_b": "cargo",
+        "metrica": "remuneracao",
+        "limite": 60,
+        "vista": "hierarchical",
+    },
+    {
+        "id": "nivel-ano",
+        "label": "A TRU ano a ano",
+        "descricao": "Cada nível da TRU ligado aos anos em que foi publicado (2020–2026).",
+        "dimensao_a": "nivel",
+        "dimensao_b": "ano",
+        "metrica": "remuneracao",
+        "limite": 60,
+        "vista": "circular",
+    },
+    {
+        "id": "carreira-partilha",
+        "label": "Carreiras que partilham níveis",
+        "descricao": "Carreiras ligadas entre si quando usam o mesmo nível da TRU (quem fica ao mesmo nível).",
+        "dimensao_a": "carreira",
+        "dimensao_b": "carreira",
+        "via": "nivel",
+        "metrica": "posicoes",
+        "limite": 50,
+        "vista": "network",
+    },
+    {
+        "id": "cargo-partilha",
+        "label": "Cargos que partilham níveis",
+        "descricao": "Cargos dirigentes ligados entre si quando pagam o mesmo nível da TRU.",
+        "dimensao_a": "cargo",
+        "dimensao_b": "cargo",
+        "via": "nivel",
+        "metrica": "posicoes",
+        "limite": 40,
+        "vista": "network",
+    },
+)
+
+
+def dimensoes_do_grafo() -> Dict[str, Any]:
+    """Dimensões, métricas e receitas que o grafo aceita."""
+    return {
+        "dimensoes": [dict(item) for item in DIMENSOES_GRAFO],
+        "metricas": [dict(item) for item in METRICAS_GRAFO],
+        "receitas": [dict(item) for item in RECEITAS_GRAFO],
+        "anos": anos_disponiveis(),
+        "fonte": FONTE,
+        "nota": (
+            "O grafo lê o mesmo modelo publicado pela DGAEP: níveis da TRU, posições "
+            "remuneratórias das carreiras, cargos dirigentes e a série anual."
+        ),
+    }
+
+
+def _no(dimensao: str, valor: Any, chave: Optional[str] = None) -> Optional[Dict[str, str]]:
+    """Um valor de uma dimensão (etiqueta legível + chave estável)."""
+    if valor is None:
+        return None
+    texto = _limpar(valor)
+    if not texto:
+        return None
+    return {"dim": dimensao, "key": _limpar(chave) if chave else texto, "label": texto}
+
+
+def _factos_do_ano(ano: int) -> List[Dict[str, Any]]:
+    """Um facto por nível da TRU, por posição remuneratória de carreira e por cargo dirigente.
+
+    Cada facto é um conjunto de valores de dimensões (o que co-ocorre) com a
+    remuneração base mensal que lhe corresponde — é daqui que saem as ligações
+    do grafo.
+    """
+    dados = modelo(ano) or {}
+    factos: List[Dict[str, Any]] = []
+
+    for item in dados.get("niveis") or []:
+        valor = item.get("valor")
+        if valor is None:
+            continue
+        factos.append(
+            {
+                "nivel": _no("nivel", f"Nível {item['nivel']}", str(item["nivel"])),
+                "valor": float(valor),
+                "fonte": "TRU",
+            }
+        )
+
+    for registo in dados.get("carreiras") or []:
+        for posicao in registo.get("posicoes") or []:
+            valor = posicao.get("remuneracao")
+            if valor is None and posicao.get("nivel"):
+                valor = nivel_valor(ano, int(posicao["nivel"]))
+            if valor is None:
+                continue
+            facto = {
+                "seccao": _no("seccao", registo.get("seccao")),
+                "carreira": _no("carreira", registo.get("carreira")),
+                "categoria": _no("categoria", registo.get("categoria")),
+                "posicao": _no("posicao", posicao.get("posicao"), str(posicao.get("posicao"))),
+                "nivel": _no("nivel", f"Nível {posicao['nivel']}", str(posicao.get("nivel")))
+                if posicao.get("nivel")
+                else None,
+                "valor": float(valor),
+                "fonte": "Carreiras",
+            }
+            factos.append({chave: item for chave, item in facto.items() if item is not None})
+
+    for registo in dados.get("dirigentes") or []:
+        valor = registo.get("remuneracao")
+        if valor is None and registo.get("nivel"):
+            valor = nivel_valor(ano, int(registo["nivel"]))
+        if valor is None:
+            continue
+        facto = {
+            "ambito": _no("ambito", registo.get("ambito")),
+            "grupo": _no("grupo", registo.get("grupo")),
+            "cargo": _no("cargo", registo.get("cargo")),
+            "nivel": _no("nivel", f"Nível {registo['nivel']}", str(registo.get("nivel")))
+            if registo.get("nivel")
+            else None,
+            "valor": float(valor),
+            "fonte": "Dirigentes",
+        }
+        factos.append({chave: item for chave, item in facto.items() if item is not None})
+
+    return factos
+
+
+def _factos_da_serie() -> List[Dict[str, Any]]:
+    """Um facto por nível e ano: é o que liga a TRU ao tempo (2020–2026)."""
+    factos: List[Dict[str, Any]] = []
+    for ano in sorted(anos_disponiveis()):
+        for item in niveis(ano, com_valor=True):
+            factos.append(
+                {
+                    "ano": _no("ano", str(ano), str(ano)),
+                    "nivel": _no("nivel", f"Nível {item['nivel']}", str(item["nivel"])),
+                    "valor": float(item["valor"]),
+                    "fonte": "TRU",
+                }
+            )
+    return factos
+
+
+def _factos_para(dimensoes: Iterable[str], ano: int) -> List[Dict[str, Any]]:
+    """Factos certos para as dimensões pedidas (a série anual só quando há anos)."""
+    return _factos_da_serie() if "ano" in set(dimensoes) else _factos_do_ano(ano)
+
+
+def _metricas_do_facto(facto: Dict[str, Any]) -> Tuple[int, float]:
+    """(ocorrências, valor) de um facto — a contribuição para nós e ligações."""
+    return 1, float(facto.get("valor") or 0.0)
+
+
+def _juntar(destino: Dict[str, Any], ocorrencias: int, valor: float, metrica: str) -> None:
+    """Acumula um facto num nó/ligação: conta ocorrências e guarda o topo (ou o total)."""
+    destino["count"] += ocorrencias
+    if metrica == "remuneracao":
+        destino["value"] = max(float(destino.get("value") or 0.0), valor)
+    else:
+        destino["value"] = destino["count"]
+
+
+def grafo(
+    ano: Optional[int] = None,
+    *,
+    dimensao_a: str = "carreira",
+    dimensao_b: Optional[str] = "nivel",
+    metrica: str = "remuneracao",
+    via: Optional[str] = None,
+    limite: int = 60,
+    limite_ligacoes: int = 400,
+) -> Dict[str, Any]:
+    """Constrói o grafo de remunerações para um par de dimensões.
+
+    Dois modos, os mesmos nomes do estúdio de grafos da plataforma:
+
+    * **bipartido** (`dimensao_a` ≠ `dimensao_b`) — liga os valores das duas
+      dimensões que aparecem no mesmo facto (ex.: carreira → nível da TRU);
+    * **partilha** (`dimensao_a` = `dimensao_b`, com `via`) — liga entre si os
+      valores da dimensão quando partilham um valor de `via` (ex.: carreiras que
+      usam o mesmo nível da TRU).
+
+    A resposta segue a forma do estúdio de grafos (`nodes`/`edges`/`meta`), para
+    a plataforma a poder desenhar com o mesmo componente dos contratos.
+    """
+    alvo = ano_de_referencia(ano)
+    if not alvo:
+        return {"nodes": [], "edges": [], "meta": {"error": "Sem modelo recolhido."}, "error": "Sem modelo recolhido para este ano."}
+
+    chaves = {item["key"] for item in DIMENSOES_GRAFO}
+    for pedida in (dimensao_a, dimensao_b, via):
+        if pedida and pedida not in chaves:
+            return {
+                "nodes": [],
+                "edges": [],
+                "meta": {"error": f"Dimensão desconhecida: {pedida}"},
+                "error": f"Dimensão desconhecida: {pedida}",
+                "dimensoes": sorted(chaves),
+            }
+    if metrica not in {item["key"] for item in METRICAS_GRAFO}:
+        return {
+            "nodes": [],
+            "edges": [],
+            "meta": {"error": f"Métrica desconhecida: {metrica}"},
+            "error": f"Métrica desconhecida: {metrica}",
+            "metricas": [item["key"] for item in METRICAS_GRAFO],
+        }
+    if dimensao_b and dimensao_b == dimensao_a and not via:
+        return {
+            "nodes": [],
+            "edges": [],
+            "meta": {"error": "Para ligar uma dimensão a si mesma indique a dimensão de ligação (`via`)."},
+            "error": "Indique a dimensão que liga os nós (por exemplo `via=nivel`).",
+        }
+
+    rotulos = {item["key"]: item for item in DIMENSOES_GRAFO}
+    factos = _factos_para([d for d in (dimensao_a, dimensao_b, via) if d], alvo)
+    partilha = bool(dimensao_b) and dimensao_b == dimensao_a
+
+    nos: Dict[str, Dict[str, Any]] = {}
+    ligacoes: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    usados = 0
+
+    def criar_no(dimensao: str, valor: Dict[str, str], ocorrencias: int, valor_metrico: float) -> str:
+        identificador = f"{dimensao}:{valor['key']}"
+        no = nos.setdefault(
+            identificador,
+            {
+                "id": identificador,
+                "key": valor["key"],
+                "label": valor["label"],
+                "dimension": dimensao,
+                "type": rotulos[dimensao]["tipo"],
+                "role": rotulos[dimensao]["familia"],
+                "count": 0,
+                "total_value": 0.0,
+            },
+        )
+        if metrica == "remuneracao":
+            no["count"] += ocorrencias
+            no["total_value"] = max(float(no["total_value"] or 0.0), valor_metrico)
+        else:
+            no["count"] += ocorrencias
+            no["total_value"] = float(no["count"])
+        return identificador
+
+    def criar_ligacao(origem: str, destino: str, ocorrencias: int, valor_metrico: float, relacao: str) -> None:
+        if origem == destino:
+            return
+        ligacao = ligacoes.setdefault(
+            (origem, destino),
+            {"source": origem, "target": destino, "count": 0, "value": 0.0, "relation": relacao},
+        )
+        ligacao["count"] += ocorrencias
+        if metrica == "remuneracao":
+            ligacao["value"] = max(float(ligacao["value"] or 0.0), valor_metrico)
+        else:
+            ligacao["value"] = float(ligacao["count"])
+
+    relacao = (
+        f"{rotulos[dimensao_a]['label']} → {rotulos[dimensao_b]['label']}"
+        if dimensao_b and not partilha
+        else f"partilham {_minuscula(rotulos[via]['label'])}"
+        if partilha and via
+        else rotulos[dimensao_a]["label"]
+    )
+
+    grupos_ignorados = 0
+    for facto in factos:
+        if partilha:
+            valor_a = facto.get(dimensao_a)
+            if not valor_a:
+                continue
+            usados += 1
+            criar_no(dimensao_a, valor_a, *_metricas_do_facto(facto))
+            continue
+        valor_a = facto.get(dimensao_a)
+        if not valor_a:
+            continue
+        if dimensao_b and not facto.get(dimensao_b):
+            continue
+        usados += 1
+        ocorrencias, valor_metrico = _metricas_do_facto(facto)
+        identificador_a = criar_no(dimensao_a, valor_a, ocorrencias, valor_metrico)
+        if dimensao_b:
+            valor_b = facto[dimensao_b]
+            identificador_b = criar_no(dimensao_b, valor_b, ocorrencias, valor_metrico)
+            criar_ligacao(identificador_a, identificador_b, ocorrencias, valor_metrico, relacao)
+
+    if partilha:
+        # Cada valor de `via` agrupa os valores da dimensão: dentro do grupo,
+        # todos se ligam entre si (o peso é quantos valores de `via` partilham).
+        grupos: Dict[str, List[str]] = {}
+        for facto in factos:
+            valor_a = facto.get(dimensao_a)
+            valor_via = facto.get(via) if via else None
+            if not valor_a or not valor_via:
+                continue
+            grupos.setdefault(valor_via["key"], []).append(f"{dimensao_a}:{valor_a['key']}")
+        for identificadores in grupos.values():
+            unicos = sorted(set(identificadores))
+            if len(unicos) < 2:
+                continue
+            if len(unicos) > 40:
+                # Grupos enormes (níveis com dezenas de carreiras) ligariam tudo a
+                # tudo e não se liam: ficam de fora e a nota di-lo.
+                grupos_ignorados += 1
+                continue
+            for indice, origem in enumerate(unicos):
+                for destino in unicos[indice + 1 :]:
+                    criar_ligacao(origem, destino, 1, 1.0, relacao)
+
+    total_nos, total_ligacoes = len(nos), len(ligacoes)
+
+    # Orçamento de desenho: metade para cada lado, e o lado que não gasta tudo
+    # passa o resto ao outro — é o que mantém os grafos bipartidos legíveis.
+    por_lado = max(1, limite // 2)
+    ordenados = sorted(nos.values(), key=lambda item: float(item.get("total_value") or 0), reverse=True)
+    if dimensao_b and not partilha:
+        lado_a = [no for no in ordenados if no["dimension"] == dimensao_a]
+        lado_b = [no for no in ordenados if no["dimension"] == dimensao_b]
+        escolhidos = lado_a[:por_lado] + lado_b[: max(1, limite - min(len(lado_a), por_lado))]
+        if len(escolhidos) < limite:
+            ja_escolhidos = {no["id"] for no in escolhidos}
+            escolhidos += [no for no in ordenados if no["id"] not in ja_escolhidos][: limite - len(escolhidos)]
+    else:
+        escolhidos = ordenados[:limite]
+    mantidos = {no["id"] for no in escolhidos}
+
+    arestas = [ligacao for ligacao in ligacoes.values() if ligacao["source"] in mantidos and ligacao["target"] in mantidos]
+    arestas.sort(key=lambda item: float(item.get("value") or 0), reverse=True)
+    truncadas = len(arestas) > limite_ligacoes
+    arestas = arestas[:limite_ligacoes]
+
+    nos_finais: List[Dict[str, Any]] = []
+    for no in escolhidos:
+        nos_finais.append(
+            {
+                "id": no["id"],
+                "key": no["key"],
+                "label": no["label"],
+                "dimension": no["dimension"],
+                "type": no["type"],
+                "role": no["role"],
+                "count": int(no["count"]),
+                "total_value": round(float(no["total_value"] or 0.0), 2),
+            }
+        )
+
+    nota = (
+        "A remuneração é a base mensal publicada pela DGAEP; sem suplementos nem subsídio de refeição."
+        if metrica == "remuneracao"
+        else "Cada ligação conta posições remuneratórias (carreiras) ou cargos (dirigentes) do quadro."
+    )
+    if dimensao_b and dimensao_b == dimensao_a:
+        nota += " Nesta vista os nós ligam-se por partilharem o mesmo valor da dimensão indicada."
+
+    return {
+        "ano": alvo,
+        "nodes": nos_finais,
+        "edges": [
+            {
+                "source": ligacao["source"],
+                "target": ligacao["target"],
+                "count": int(ligacao["count"]),
+                "value": round(float(ligacao["value"] or 0.0), 2),
+                "relation": ligacao["relation"],
+            }
+            for ligacao in arestas
+        ],
+        "meta": {
+            "dimension_a": dimensao_a,
+            "dimension_b": dimensao_b,
+            "dimension_a_label": rotulos[dimensao_a]["label"],
+            "dimension_b_label": rotulos[dimensao_b]["label"] if dimensao_b else None,
+            "via": via,
+            "metric": metrica,
+            "mode": "partilha" if partilha else "bipartido",
+            "complete": True,
+            "truncated": bool(total_nos > len(mantidos) or truncadas),
+            "scan_capped": False,
+            "sample_order": "agregação completa do modelo do ano (sem amostragem)",
+            "sample_limit": None,
+            "documents_scanned": len(factos),
+            "documents_matching": usados,
+            "scanned_value": round(sum(float(facto.get("valor") or 0.0) for facto in factos), 2),
+            "nodes_total": total_nos,
+            "edges_total": total_ligacoes,
+            "kept_nodes": len(mantidos),
+            "kept_edges": len(arestas),
+            "limit": limite,
+            "ano": alvo,
+            "nota": nota,
+        },
+    }
+
+
+# --------------------------------------------------------------------------
 # Metamodelo e indexação
 # --------------------------------------------------------------------------
 def stats(ano: Optional[int] = None) -> Dict[str, Any]:

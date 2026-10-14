@@ -185,11 +185,27 @@ SEED_MEDIA: Sequence[Sequence[str]] = (
         "Do estúdio à plataforma: o Sabemos Studio publica leitura verificável com o IQ OS",
         "O que o estúdio faz e onde a plataforma entra.",
     ),
+    (
+        "ilustracao-iq-os-interior.svg",
+        "Ilustração · interior do IQ OS",
+        "Interior do IQ OS: módulos, indicadores, gráfico e assistente com fontes citadas",
+        "O que se vê ao entrar: os módulos à esquerda, os indicadores em cima, o gráfico e o assistente com as fontes citadas.",
+    ),
+    (
+        "ilustracao-iq-os-interior-movel.svg",
+        "Ilustração móvel · interior do IQ OS",
+        "Interior do IQ OS: módulos, indicadores, gráfico e assistente com fontes citadas",
+        "Versão em coluna, para ecrãs estreitos.",
+    ),
     # Ícones: usados no campo `icon_id` dos itens de um bloco de cartões.
     ("icone-fonte-nomeada.svg", "Ícone · fonte nomeada", "Fonte nomeada: cada número com origem", ""),
     ("icone-entidades-ligadas.svg", "Ícone · entidades ligadas", "Entidades ligadas pela identidade", ""),
     ("icone-fotografia-datada.svg", "Ícone · fotografia datada", "Fotografia datada: o número com o dia da leitura", ""),
     ("icone-conta-refazivel.svg", "Ícone · conta refazível", "Conta refazível: o critério publicado", ""),
+    ("icone-mercados-previsoes.svg", "Ícone · mercados e previsões", "Mercados e previsões: séries, indicadores e previsão", ""),
+    ("icone-contratos-empresas.svg", "Ícone · contratos e empresas", "Contratos e empresas: contratos ligados ao cadastro", ""),
+    ("icone-pesquisa-assistentes.svg", "Ícone · pesquisa e assistentes", "Pesquisa e assistentes: perguntas com resposta citada", ""),
+    ("icone-visualizacao-gestao.svg", "Ícone · visualização e gestão", "Visualização e gestão: painéis, grafos e CRM", ""),
 )
 
 #: Menu do site: rótulo e caminho da página, pela ordem em que aparece. O
@@ -271,8 +287,13 @@ class _Blocos:
     def faq(self, title: str, items: Sequence[Sequence[str]]) -> Dict[str, Any]:
         return self.add("faq", {"title": title, "items": [{"question": pergunta, "answer": resposta} for pergunta, resposta in items]})
 
-    def cta(self, title: str, text: str, label: str, href: str) -> Dict[str, Any]:
-        return self.add("cta", {"title": title, "text": text, "button_label": label, "button_href": href})
+    def cta(self, title: str, text: str, label: str, href: str, botoes: Sequence[Sequence[str]] = ()) -> Dict[str, Any]:
+        """Faixa de chamada à ação. `botoes` acrescenta botões secundários: `(texto, ligação)`."""
+        data: Dict[str, Any] = {"title": title, "text": text, "button_label": label, "button_href": href}
+        extras = [{"label": texto, "href": ligacao} for texto, ligacao in botoes if texto and ligacao]
+        if extras:
+            data["buttons"] = extras
+        return self.add("cta", data)
 
     def citacao(self, quote: str, author: str = "") -> Dict[str, Any]:
         return self.add("citacao", {"quote": quote, "author": author})
@@ -451,6 +472,57 @@ def conteudo_da_inicio(media: Dict[str, str]) -> List[Dict[str, Any]]:
                     media.get("icone-conta-refazivel.svg", ""),
                 ),
             ],
+        ),
+        # A plataforma, apresentada a quem lê o site: o que se vê lá dentro e as
+        # duas portas de entrada (a conta e a loja).
+        b.texto(
+            "A plataforma por dentro: o IQ OS",
+            "Se quiser trabalhar os dados em vez de os ler, é aqui que entra o **IQ OS** — a plataforma "
+            "do Sabemos Studio, no browser e sem instalação.\n\n"
+            "Lá dentro estão os mesmos dados que alimentam este site, ainda em bruto: cotações e mercados, "
+            "contratos públicos, cadastro de entidades e assistentes de investigação, lado a lado — para não "
+            "se perder o contexto entre o número e a sua origem.",
+        ),
+        b.imagem(
+            media.get("ilustracao-iq-os-interior.svg", ""),
+            alt="Interior do IQ OS: módulos, indicadores, gráfico e assistente com fontes citadas",
+            caption="Por dentro: os módulos, os indicadores, o gráfico e o assistente com as fontes citadas.",
+        ),
+        b.cartoes_com_icone(
+            "O que encontra na plataforma",
+            [
+                (
+                    "Mercados e previsões",
+                    "Cotações e histórico, indicadores técnicos, sentimento das notícias e previsão com ARIMA e Kronos.",
+                    media.get("icone-mercados-previsoes.svg", ""),
+                ),
+                (
+                    "Contratos e empresas",
+                    "Os mesmos contratos de Portugal, Espanha e França, ligados às fichas de empresa, marcas, "
+                    "firmas e relações adjudicante–adjudicatário.",
+                    media.get("icone-contratos-empresas.svg", ""),
+                ),
+                (
+                    "Pesquisa e assistentes",
+                    "Pesquisa total e dossiês de tema, respostas do Hermes com citação à vista e agentes "
+                    "configuráveis com os seus próprios documentos.",
+                    media.get("icone-pesquisa-assistentes.svg", ""),
+                ),
+                (
+                    "Visualização e gestão",
+                    "Painéis, grafos de entidades, mapas e visualizador, com o CRM e a agenda comercial ligados "
+                    "ao mesmo cadastro.",
+                    media.get("icone-visualizacao-gestao.svg", ""),
+                ),
+            ],
+        ),
+        b.cta(
+            "Entrar na plataforma ou visitar a loja",
+            "A conta é gratuita e abre no browser: a palavra-passe é derivada com scrypt e as sessões ficam "
+            "auditadas. Na loja encontra relatórios, dossiês, formação e a assinatura da plataforma.",
+            "Entrar na plataforma",
+            "/login",
+            botoes=(("Visitar a loja", "/loja"),),
         ),
         b.cartoes("Por onde começar", [(titulo, texto, f"/site/{caminho}") for titulo, texto, caminho in CAPACIDADES]),
         b.passos(

@@ -478,6 +478,7 @@ const itemDefaults: Record<string, Record<string, string>> = {
   faq: { question: "Pergunta?", answer: "" },
   passos: { title: "Passo", text: "" },
   numeros: { value: "0", label: "Indicador", note: "" },
+  cta: { label: "", href: "" },
 };
 
 /** Nome de cada campo de um item, por chave (o resto cai em «Texto»). */
@@ -499,11 +500,14 @@ function ItemsEditor({
   items,
   onChange,
   media,
+  labels,
 }: {
   block: CmsBlockLike;
   items: Record<string, unknown>[];
   onChange: (next: Record<string, unknown>[]) => void;
   media: MediaOption[];
+  /** Nomes dos campos deste bloco, quando os genéricos não servem. */
+  labels?: Record<string, string>;
 }) {
   const template = itemDefaults[block.type] ?? { title: "", text: "" };
   const keys = Object.keys(template);
@@ -531,7 +535,7 @@ function ItemsEditor({
                 return <MediaPicker key={key} label="Ícone" value={String(item[key] ?? "")} onChange={atualizar} media={media} placeholder="— sem ícone —" />;
               }
               return (
-                <Field key={key} label={itemFieldLabels[key] ?? "Texto"} wide={key === "title" || key === "question" || key === "value"}>
+                <Field key={key} label={labels?.[key] ?? itemFieldLabels[key] ?? "Texto"} wide={key === "title" || key === "question" || key === "value"}>
                   <input className={inputClass} value={String(item[key] ?? "")} onChange={(event) => atualizar(event.target.value)} />
                 </Field>
               );
@@ -635,11 +639,21 @@ function BlockForm({
       );
     case "cta":
       return (
-        <div className="grid gap-2 sm:grid-cols-2">
-          <TextInput label="Título" value={text("title")} onChange={(next) => set("title", next)} wide />
-          <TextInput label="Texto" value={text("text")} onChange={(next) => set("text", next)} wide />
-          <TextInput label="Botão — texto" value={text("button_label")} onChange={(next) => set("button_label", next)} />
-          <TextInput label="Botão — ligação" value={text("button_href")} onChange={(next) => set("button_href", next)} placeholder="/site/contactos" />
+        <div className="space-y-2">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <TextInput label="Título" value={text("title")} onChange={(next) => set("title", next)} wide />
+            <TextInput label="Texto" value={text("text")} onChange={(next) => set("text", next)} wide />
+            <TextInput label="Botão — texto" value={text("button_label")} onChange={(next) => set("button_label", next)} />
+            <TextInput label="Botão — ligação" value={text("button_href")} onChange={(next) => set("button_href", next)} placeholder="/site/contactos" />
+          </div>
+          {/* Botões secundários (o principal é o de cima): ex.: «Entrar» e «Loja». */}
+          <ItemsEditor
+            block={block}
+            items={list("buttons")}
+            onChange={(next) => set("buttons", next)}
+            media={media}
+            labels={{ label: "Botão secundário — texto", href: "Botão secundário — ligação" }}
+          />
         </div>
       );
     case "tabela":
