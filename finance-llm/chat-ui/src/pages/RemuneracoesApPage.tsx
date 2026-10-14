@@ -96,10 +96,11 @@ export default function RemuneracoesApPage() {
   const [aRecolher, setARecolher] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  // Simulador: nível, carreira/posição ou valor escolhido à mão.
+  // Simulador: nível, carreira/posição ou cargo dirigente escolhido.
   const [nivelSimulado, setNivelSimulado] = useState<string>("");
   const [carreiraSimulada, setCarreiraSimulada] = useState("");
   const [posicaoSimulada, setPosicaoSimulada] = useState("");
+  const [cargoSimulado, setCargoSimulado] = useState("");
   const [simulacao, setSimulacao] = useState<RemuneracoesApSimulacao | null>(null);
   const [aSimular, setASimular] = useState(false);
 
@@ -158,9 +159,11 @@ export default function RemuneracoesApPage() {
   }, [aba, carregarCarreiras]);
 
   useEffect(() => {
-    if (aba !== "dirigentes") return;
+    if (aba !== "dirigentes" && aba !== "simulador") return;
     let ativo = true;
-    getRemuneracoesApDirigentes({ ano: ano ? Number(ano) : undefined, ambito: ambito || undefined })
+    // O filtro de âmbito é da tabela; o simulador precisa da lista completa.
+    const filtro = aba === "dirigentes" ? ambito || undefined : undefined;
+    getRemuneracoesApDirigentes({ ano: ano ? Number(ano) : undefined, ambito: filtro })
       .then((resposta) => {
         if (!ativo) return;
         setDirigentes(resposta.itens);
@@ -200,15 +203,28 @@ export default function RemuneracoesApPage() {
     return mapa;
   }, [niveis]);
 
+  /** Chave estável de um cargo dirigente (o mesmo cargo existe em vários âmbitos). */
+  const chaveDoCargo = (item: DirigenteAp) =>
+    [item.ambito ?? "", item.grupo ?? "", item.cargo, item.indice ?? ""].join(" · ");
+
+  const cargoEscolhido = useMemo(
+    () => dirigentes.find((item) => chaveDoCargo(item) === cargoSimulado) ?? null,
+    [dirigentes, cargoSimulado],
+  );
+
   const simular = useCallback(async () => {
     setASimular(true);
     setErro(null);
     try {
       const resultado = await simularRemuneracaoAp({
         ano: ano ? Number(ano) : undefined,
-        nivel: !carreiraSimulada && nivelSimulado ? Number(nivelSimulado) : undefined,
+        nivel: !carreiraSimulada && !cargoEscolhido && nivelSimulado ? Number(nivelSimulado) : undefined,
         carreira: carreiraSimulada || undefined,
         posicao: posicaoSimulada || undefined,
+        cargo: cargoEscolhido?.cargo || undefined,
+        ambito: cargoEscolhido?.ambito || undefined,
+        grupo: cargoEscolhido?.grupo || undefined,
+        indice: cargoEscolhido?.indice ?? undefined,
         pagamentos: PAGAMENTOS,
       });
       setSimulacao(resultado);
@@ -218,7 +234,7 @@ export default function RemuneracoesApPage() {
     } finally {
       setASimular(false);
     }
-  }, [ano, nivelSimulado, carreiraSimulada, posicaoSimulada]);
+  }, [ano, nivelSimulado, carreiraSimulada, posicaoSimulada, cargoEscolhido]);
 
   useEffect(() => {
     if (aba !== "simulador") return;
@@ -537,6 +553,7 @@ export default function RemuneracoesApPage() {
                       <th className="px-3 py-2 text-right font-medium">Índice</th>
                       <th className="px-3 py-2 text-right font-medium">Nível TRU</th>
                       <th className="px-3 py-2 text-right font-medium">Remuneração base</th>
+                      <th className="px-3 py-2 text-right font-medium">Simulador</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -548,6 +565,26 @@ export default function RemuneracoesApPage() {
                         <td className="px-3 py-1.5 text-right tabular-nums">{item.indice ?? "—"}</td>
                         <td className="px-3 py-1.5 text-right tabular-nums">{item.niveis_texto ?? "—"}</td>
                         <td className="px-3 py-1.5 text-right tabular-nums">{euroExato(item.remuneracao)}</td>
+                        <td className="px-3 py-1.5 text-right">
+                          {item.remuneracao != null ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNivelSimulado("");
+                                setCarreiraSimulada("");
+                                setPosicaoSimulada("");
+                                setCargoSimulado(chaveDoCargo(item));
+                                setAba("simulador");
+                              }}
+                              className="rounded-lg border border-teal-400/30 bg-teal-400/10 px-2 py-1 text-[11px] text-teal-200 transition hover:bg-teal-400/20"
+                              title="Ver esta remuneração no simulador, com o valor do ano."
+                            >
+                              Simular
+                            </button>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">sem valor</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -562,9 +599,9 @@ export default function RemuneracoesApPage() {
             <Cartao>
               <p className="text-sm font-semibold">Quanto vale uma posição</p>
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Escolha um nível da TRU ou uma carreira com a posição remuneratória. A conta é a remuneração base
-                mensal publicada, mais o valor do ano ({PAGAMENTOS} pagamentos: 12 mensalidades, subsídio de férias e
-                subsídio de Natal).
+                Escolha um nível da TRU, uma carreira com a posição remuneratória ou um cargo dirigente. A conta é a
+                remuneração base mensal publicada, mais o valor do ano ({PAGAMENTOS} pagamentos: 12 mensalidades,
+                subsídio de férias e subsídio de Natal).
               </p>
               <div className="mt-3 space-y-2">
                 <label className="block text-[11px] text-muted-foreground">
@@ -575,6 +612,7 @@ export default function RemuneracoesApPage() {
                       setNivelSimulado(evento.target.value);
                       setCarreiraSimulada("");
                       setPosicaoSimulada("");
+                      setCargoSimulado("");
                     }}
                     className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-1.5 text-xs text-foreground"
                   >
@@ -596,6 +634,7 @@ export default function RemuneracoesApPage() {
                       setCarreiraSimulada(evento.target.value);
                       setPosicaoSimulada("");
                       setNivelSimulado("");
+                      setCargoSimulado("");
                     }}
                     className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-1.5 text-xs text-foreground"
                   >
@@ -628,6 +667,26 @@ export default function RemuneracoesApPage() {
                     </select>
                   </label>
                 ) : null}
+                <label className="block text-[11px] text-muted-foreground">
+                  Cargo dirigente
+                  <select
+                    value={cargoSimulado}
+                    onChange={(evento) => {
+                      setCargoSimulado(evento.target.value);
+                      setNivelSimulado("");
+                      setCarreiraSimulada("");
+                      setPosicaoSimulada("");
+                    }}
+                    className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-1.5 text-xs text-foreground"
+                  >
+                    <option value="">— escolher —</option>
+                    {dirigentes.map((item) => (
+                      <option key={`${item.ambito}-${item.grupo}-${item.cargo}-${item.indice}`} value={chaveDoCargo(item)}>
+                        {item.cargo} · {item.grupo ?? "—"} ({item.ambito ?? "—"}) — {euroExato(item.remuneracao)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <button
                   type="button"
                   onClick={() => void simular()}
@@ -664,8 +723,15 @@ export default function RemuneracoesApPage() {
                     {simulacao.origem.nivel ? ` · nível ${simulacao.origem.nivel}` : ""}
                     {simulacao.origem.posicao ? ` · posição ${simulacao.origem.posicao}` : ""}
                     {simulacao.origem.carreira ? ` · ${simulacao.origem.carreira}` : ""}
+                    {simulacao.origem.cargo ? ` · ${simulacao.origem.cargo}` : ""}
+                    {simulacao.origem.indice ? ` · índice ${simulacao.origem.indice}` : ""}
                     {simulacao.origem.seccao ? ` · ${simulacao.origem.seccao}` : ""}
                   </p>
+                  {simulacao.origem.niveis ? (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Níveis da TRU do cargo: {simulacao.origem.niveis}
+                    </p>
+                  ) : null}
                   {simulacao.origem.nota ? (
                     <p className="mt-1 text-[11px] text-amber-200">Nota do quadro: {simulacao.origem.nota}</p>
                   ) : null}

@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1206 operações** em **44 grupos**.
+Versão `0.4.0` · **1230 operações** em **44 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -384,6 +384,21 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/racius/meta` | Racius Meta |
 | `GET` | `/racius/search` | Racius Search |
 | `GET` | `/racius/{nif}` | Racius Detail |
+| `GET` | `/remuneracoes-ap/anos` | Anos com modelo recolhido |
+| `GET` | `/remuneracoes-ap/base-legal` | Base legal por carreira e grau |
+| `GET` | `/remuneracoes-ap/carreiras` | Carreiras/categorias e posições remuneratórias |
+| `GET` | `/remuneracoes-ap/dirigentes` | Cargos dirigentes e equiparados |
+| `POST` | `/remuneracoes-ap/indexar` | Indexar o modelo que já está em disco (exige sessão) |
+| `GET` | `/remuneracoes-ap/meta` | Proveniência, anos recolhidos e metamodelo do módulo |
+| `GET` | `/remuneracoes-ap/niveis` | Tabela Remuneratória Única do ano |
+| `GET` | `/remuneracoes-ap/notas` | Notas da DGAEP por secção |
+| `GET` | `/remuneracoes-ap/parametros` | BRAP do ano (nível 5) e limites da tabela |
+| `GET` | `/remuneracoes-ap/pesquisa` | Pesquisa no quadro indexado (níveis, posições e dirigentes) |
+| `POST` | `/remuneracoes-ap/refresh` | Recolher os PDF da DGAEP e gravar o modelo (exige sessão) |
+| `GET` | `/remuneracoes-ap/seccoes` | Secções de carreiras do ano |
+| `GET` | `/remuneracoes-ap/serie` | A TRU ano a ano (evolução de cada nível) |
+| `GET` | `/remuneracoes-ap/simular` | Quanto vale uma posição (mensal e no ano) |
+| `GET` | `/remuneracoes-ap/stats` | Volumetria do modelo de um ano |
 | `GET` | `/remuneracoes/camaras` | Câmaras municipais (edifício, foto e créditos) |
 | `POST` | `/remuneracoes/camaras/recolher` | Recolher as câmaras municipais (fotos do Commons) |
 | `GET` | `/remuneracoes/concelhos` | Concelhos com eleitores, escalão e abonos |
@@ -956,6 +971,10 @@ CMS: páginas por blocos, conteúdos reutilizáveis, blog com taxonomia, media, 
 | `PATCH` | `/cms/pesquisas/{item_id}` | Cms Patch Pesquisa |
 | `POST` | `/cms/pesquisas/{item_id}/dados` | Cms Pesquisa Dados |
 | `GET` | `/cms/preview/{entity}/{item_id}` | Cms Preview |
+| `POST` | `/cms/remuneracoes` | Cms Create Remuneracao |
+| `GET` | `/cms/remuneracoes/opcoes` | Cms Remuneracoes Opcoes |
+| `PATCH` | `/cms/remuneracoes/{item_id}` | Cms Patch Remuneracao |
+| `POST` | `/cms/remuneracoes/{item_id}/modelo` | Cms Remuneracao Modelo |
 | `POST` | `/cms/revisions/{revision_id}/restore` | Cms Restore |
 | `GET` | `/cms/search` | Cms Search |
 | `GET` | `/cms/settings` | Cms Get Settings |
@@ -978,11 +997,16 @@ CMS: páginas por blocos, conteúdos reutilizáveis, blog com taxonomia, media, 
 | `GET` | `/site/categoria/{slug}` | Site Category |
 | `POST` | `/site/contacto` | Site Contacto |
 | `GET` | `/site/etiqueta/{tag}` | Site Tag |
+| `GET` | `/site/manifest.webmanifest` | Site Manifest |
 | `GET` | `/site/municipio/{slug}` | Site Municipio |
+| `GET` | `/site/offline` | Site Offline |
 | `GET` | `/site/pesquisa/{slug}` | Site Pesquisa |
+| `GET` | `/site/pwa/{ficheiro}` | Site Pwa Icon |
+| `GET` | `/site/remuneracoes/{slug}` | Site Remuneracoes |
 | `GET` | `/site/robots.txt` | Site Robots |
 | `GET` | `/site/rss.xml` | Site Rss |
 | `GET` | `/site/sitemap.xml` | Site Sitemap |
+| `GET` | `/site/sw.js` | Site Service Worker |
 | `GET` | `/site/{path}` | Site Page |
 
 ## rss

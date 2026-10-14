@@ -151,7 +151,7 @@ def remuneracoes_ap_dirigentes(
         "ano": alvo,
         "total": len(itens),
         "itens": itens,
-        "ambitos": sorted({str(item.get("ambito")) for item in itens if item.get("ambito")}),
+        "ambitos": sorted({str(item.get("ambito")) for item in ap.dirigentes(alvo) if item.get("ambito")}),
     }
 
 
@@ -215,6 +215,10 @@ def remuneracoes_ap_simular(
     carreira: Optional[str] = Query(None, description="Carreira (ex.: `Técnico superior`)."),
     categoria: Optional[str] = Query(None, description="Categoria dentro da carreira."),
     posicao: Optional[str] = Query(None, description="Posição remuneratória (ex.: `1`, `7-A`)."),
+    cargo: Optional[str] = Query(None, description="Cargo dirigente (ex.: `Reitor`, `Diretor-geral`)."),
+    ambito: Optional[str] = Query(None, description="Âmbito do cargo dirigente."),
+    grupo: Optional[str] = Query(None, description="Grupo/serviço do cargo dirigente."),
+    indice: Optional[int] = Query(None, description="Índice do cargo dirigente."),
     pagamentos: int = Query(ap.PAGAMENTOS_POR_ANO, ge=1, le=14, description="Pagamentos por ano (12 + subsídios)."),
 ) -> Dict[str, Any]:
     resultado = ap.simular(
@@ -223,6 +227,10 @@ def remuneracoes_ap_simular(
         carreira=carreira,
         categoria=categoria,
         posicao=posicao,
+        cargo=cargo,
+        ambito=ambito,
+        grupo=grupo,
+        indice=indice,
         pagamentos=pagamentos,
     )
     if resultado.get("error"):

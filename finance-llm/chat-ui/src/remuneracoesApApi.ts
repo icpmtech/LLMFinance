@@ -110,11 +110,25 @@ export type RemuneracoesApSimulacao = {
     posicao?: string | null;
     seccao?: string | null;
     nota?: string | null;
+    ambito?: string | null;
+    grupo?: string | null;
+    cargo?: string | null;
+    indice?: number | null;
+    niveis?: string | null;
   };
   remuneracao_base_mensal: number;
   pagamentos_por_ano: number;
   remuneracao_base_anual: number;
   posicoes_disponiveis: { posicao?: string; nivel?: number | null; remuneracao?: number | null; carreira?: string | null; categoria?: string | null }[];
+  cargos_disponiveis?: {
+    ambito?: string | null;
+    grupo?: string | null;
+    cargo?: string | null;
+    indice?: number | null;
+    nivel?: number | null;
+    niveis_texto?: string | null;
+    remuneracao?: number | null;
+  }[];
   notas: string[];
   error?: string;
 };
@@ -176,6 +190,10 @@ export function simularRemuneracaoAp(params: {
   carreira?: string;
   categoria?: string;
   posicao?: string;
+  cargo?: string;
+  ambito?: string;
+  grupo?: string;
+  indice?: number;
   pagamentos?: number;
 }): Promise<RemuneracoesApSimulacao> {
   return pedir(`/remuneracoes-ap/simular${consulta(params)}`);

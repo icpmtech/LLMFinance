@@ -921,13 +921,21 @@ def simular(
     carreira: Optional[str] = None,
     categoria: Optional[str] = None,
     posicao: Optional[str] = None,
+    cargo: Optional[str] = None,
+    ambito: Optional[str] = None,
+    grupo: Optional[str] = None,
+    indice: Optional[int] = None,
     pagamentos: int = PAGAMENTOS_POR_ANO,
 ) -> Dict[str, Any]:
     """Quanto vale uma posição: a remuneração base mensal e o ano.
 
+    Aceita três caminhos: o **nível da TRU**, a **posição remuneratória de uma
+    carreira/categoria** ou um **cargo dirigente** (pelo cargo, filtrado por
+    âmbito/grupo/índice).
+
     A conta usa **só** o que a tabela da DGAEP publica — o valor mensal do nível
-    da TRU (ou da posição remuneratória escolhida). As componentes que não estão
-    na tabela (suplementos, ajudas de custo, subsídio de refeição) não entram: a
+    da TRU (ou da posição/cargo escolhido). As componentes que não estão na
+    tabela (suplementos, ajudas de custo, subsídio de refeição) não entram: a
     resposta di-lo, em vez de as estimar.
     """
     alvo = ano_de_referencia(ano)
@@ -937,8 +945,43 @@ def simular(
     mensal: Optional[float] = None
     origem: Dict[str, Any] = {"ano": alvo}
     posicoes: List[Dict[str, Any]] = []
+    cargos: List[Dict[str, Any]] = []
+    pediu_cargo = bool(cargo) or indice is not None
 
-    if nivel:
+    if pediu_cargo:
+        alvo_cargo = _chave(cargo or "")
+        alvo_ambito = _chave(ambito or "")
+        alvo_grupo = _chave(grupo or "")
+        for registo in dados.get("dirigentes") or []:
+            if alvo_cargo and alvo_cargo not in _chave(registo.get("cargo") or ""):
+                continue
+            if alvo_ambito and alvo_ambito != _chave(registo.get("ambito") or ""):
+                continue
+            if alvo_grupo and alvo_grupo != _chave(registo.get("grupo") or ""):
+                continue
+            if indice is not None and str(registo.get("indice")) != str(indice):
+                continue
+            cargos.append(registo)
+        if cargos:
+            exatos = [registo for registo in cargos if _chave(registo.get("cargo") or "") == alvo_cargo]
+            escolhido = (exatos or cargos)[0]
+            mensal = escolhido.get("remuneracao")
+            origem.update(
+                {
+                    "seccao": escolhido.get("seccao"),
+                    "ambito": escolhido.get("ambito"),
+                    "grupo": escolhido.get("grupo"),
+                    "cargo": escolhido.get("cargo"),
+                    "indice": escolhido.get("indice"),
+                    "nivel": escolhido.get("nivel"),
+                    "niveis": escolhido.get("niveis_texto"),
+                    "via": "Cargo dirigente e equiparado",
+                }
+            )
+            if mensal is None and escolhido.get("nivel"):
+                mensal = nivel_valor(alvo, int(escolhido["nivel"]))
+                origem["via"] = "Nível da TRU do cargo dirigente"
+    elif nivel:
         mensal = nivel_valor(alvo, int(nivel))
         origem["nivel"] = int(nivel)
         origem["via"] = "Tabela Remuneratória Única"
@@ -977,11 +1020,20 @@ def simular(
                 origem["via"] = "Nível da TRU da posição escolhida"
                 origem["nivel_origem"] = escolhida.get("niveis_texto")
     if mensal is None:
+        if pediu_cargo:
+            erro = (
+                "Esse cargo dirigente não tem remuneração publicada no quadro deste ano."
+                if cargos
+                else "Não encontrei esse cargo dirigente na tabela deste ano."
+            )
+        else:
+            erro = "Não encontrei essa posição na tabela deste ano."
         return {
-            "error": "Não encontrei essa posição na tabela deste ano.",
+            "error": erro,
             "ano": alvo,
             "origem": origem,
             "posicoes_disponiveis": posicoes[:20],
+            "cargos_disponiveis": _cargos_para_simulacao(cargos or (dados.get("dirigentes") or [])),
         }
     mensal = float(mensal)
     duodecimos = False
@@ -1002,12 +1054,29 @@ def simular(
             }
             for linha in posicoes[:20]
         ],
+        "cargos_disponiveis": _cargos_para_simulacao(cargos),
         "notas": [
             "remuneração base mensal lida da tabela da DGAEP para este ano",
             f"{int(pagamentos)} pagamentos por ano (12 mensalidades + subsídio de férias + subsídio de Natal)",
             "suplementos, subsídio de refeição e outras componentes não fazem parte desta tabela",
         ],
     }
+
+
+def _cargos_para_simulacao(cargos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Alternativas de cargos dirigentes devolvidas com o resultado (até 20)."""
+    return [
+        {
+            "ambito": registo.get("ambito"),
+            "grupo": registo.get("grupo"),
+            "cargo": registo.get("cargo"),
+            "indice": registo.get("indice"),
+            "nivel": registo.get("nivel"),
+            "niveis_texto": registo.get("niveis_texto"),
+            "remuneracao": registo.get("remuneracao"),
+        }
+        for registo in cargos[:20]
+    ]
 
 
 # --------------------------------------------------------------------------

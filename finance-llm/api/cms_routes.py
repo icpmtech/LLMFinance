@@ -883,6 +883,51 @@ def site_robots() -> PlainTextResponse:
     return PlainTextResponse(render.render_robots(store.get_settings()), headers=_PUBLIC_HEADERS)
 
 
+@router.get("/site/manifest.webmanifest")
+def site_manifest() -> Response:
+    """Manifesto do PWA do site (nome, ícones e destino da aplicação instalada)."""
+    return Response(
+        render.render_manifest(store.get_settings()),
+        media_type="application/manifest+json; charset=utf-8",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@router.get("/site/sw.js")
+def site_service_worker() -> Response:
+    """Service worker do site: cache das páginas visitadas e leitura sem rede."""
+    return Response(
+        render.render_service_worker(store.get_settings()),
+        media_type="text/javascript; charset=utf-8",
+        headers={
+            # Um worker antigo preso no cache do browser nunca mais é substituído.
+            "Cache-Control": "no-cache, must-revalidate",
+            "Service-Worker-Allowed": "/site/",
+        },
+    )
+
+
+@router.get("/site/pwa/{ficheiro}")
+def site_pwa_icon(ficheiro: str) -> Response:
+    """Ícones do PWA (PNG gerados por `scripts/generate_site_pwa_icons.py`).
+
+    A lista de nomes aceites é fixa — é o que impede que o caminho sirva
+    qualquer ficheiro da pasta de imagens.
+    """
+    if ficheiro not in render.PWA_ICONS and ficheiro != render.PWA_IOS_ICON:
+        raise HTTPException(status_code=404, detail="Ícone inexistente.")
+    caminho = store.SITE_ASSETS_DIR / ficheiro
+    if not caminho.is_file():
+        raise HTTPException(status_code=404, detail="Ícone inexistente.")
+    return FileResponse(caminho, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@router.get("/site/offline", response_class=HTMLResponse)
+def site_offline() -> HTMLResponse:
+    """Página de recurso, mostrada pelo service worker quando não há ligação."""
+    return HTMLResponse(render.render_offline(settings=store.get_settings()), headers={"Cache-Control": "no-cache"})
+
+
 @router.get("/site/{path:path}", response_class=HTMLResponse)
 def site_page(path: str) -> HTMLResponse:
     """Qualquer página publicada, pelo seu caminho (pode ter várias pastas)."""

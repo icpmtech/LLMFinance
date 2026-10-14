@@ -14,7 +14,7 @@
  *
  * Ao alterar este ficheiro, incrementar `VERSION`.
  */
-const VERSION = "v5";
+const VERSION = "v6";
 /** Prefixos de cache do IQ OS (e o antigo, para limpar instalações anteriores). */
 const CACHE_PREFIXES = ["iq-os-", "finance-llm-"];
 const SHELL_CACHE = `iq-os-shell-${VERSION}`;
@@ -29,6 +29,11 @@ const BYPASS = [
   // visitante (ja aconteceu: o `/lp/app.js` antigo foi servido de cache).
   "/lp/",
   "/landing",
+  // Site publico do CMS: tem o seu proprio service worker (`/site/sw.js`, com
+  // o ambito `/site/`). Sem isto, uma pagina do site visitada por quem ja tem
+  // o IQ OS instalado era guardada na cache do shell (`/index.html`), e a SPA
+  // abria sem rede a mostrar a pagina do site.
+  "/site/",
 ];
 
 const SHELL = [

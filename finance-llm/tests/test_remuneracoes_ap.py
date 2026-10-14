@@ -10,6 +10,9 @@ O que se verifica:
 """
 from __future__ import annotations
 
+import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -199,6 +202,34 @@ def test_simular_sem_posicao_na_tabela(modelo_falso: Dict[str, Any]) -> None:
     assert resultado["ano"] == 2025
 
 
+def test_simular_cargo_dirigente(modelo_falso: Dict[str, Any]) -> None:
+    resultado = ap.simular(ano=2025, cargo="reitor")
+
+    assert resultado["remuneracao_base_mensal"] == 6733.24
+    assert resultado["remuneracao_base_anual"] == round(6733.24 * 14, 2)
+    assert resultado["origem"]["via"] == "Cargo dirigente e equiparado"
+    assert resultado["origem"]["cargo"] == "Reitor"
+    assert resultado["origem"]["ambito"] == "UNIVERSIDADES"
+    assert resultado["origem"]["niveis"] == "[110 e 111]"
+    assert resultado["cargos_disponiveis"][0]["cargo"] == "Reitor"
+
+
+def test_simular_cargo_dirigente_por_indice(modelo_falso: Dict[str, Any]) -> None:
+    resultado = ap.simular(ano=2025, indice=375)
+
+    assert resultado["origem"]["cargo"] == "Reitor"
+    assert resultado["remuneracao_base_mensal"] == 6733.24
+
+
+def test_simular_cargo_dirigente_inexistente(modelo_falso: Dict[str, Any]) -> None:
+    resultado = ap.simular(ano=2025, cargo="cargo que não existe")
+
+    assert "error" in resultado
+    assert "cargo dirigente" in resultado["error"]
+    # Sem candidatos, a resposta devolve todos os cargos do ano como alternativas.
+    assert [item["cargo"] for item in resultado["cargos_disponiveis"]] == ["Reitor"]
+
+
 def test_parametros_e_stats(modelo_falso: Dict[str, Any]) -> None:
     parametros = ap.parametros_do_ano(2025)
     assert parametros["brap"] == 878.41
@@ -323,6 +354,8 @@ def test_render_da_pagina_do_modelo_tem_seo_tabelas_e_simulador(cms_limpo: Any) 
     assert "Tabela Remuneratória Única" in html
     assert "878,41" in html  # BRAP do ano
     assert 'data-papel="nivel"' in html  # simulador
+    assert 'data-papel="cargo"' in html  # cargos dirigentes no simulador
+    assert "Reitor · Reitoria · UNIVERSIDADES" in html
     assert "Base legal" in html
     assert 'class="breadcrumb"' in html
     assert '"@type": "BreadcrumbList"' in html
@@ -341,3 +374,33 @@ def test_render_do_modelo_respeita_o_que_esta_desligado(cms_limpo: Any) -> None:
     assert "Cargos dirigentes e equiparados" not in html
     assert "Notas da DGAEP" not in html
     assert "Tabela Remuneratória Única" in html  # esta continua ligada
+
+
+def _scripts_js(html: str) -> List[str]:
+    """JavaScript embutido no HTML (deixa de fora os blocos `ld+json`)."""
+    codigos: List[str] = []
+    for atributos, corpo in re.findall(r"<script([^>]*)>(.*?)</script>", html, re.S):
+        tipo = re.search(r'type=["\']([^"\']+)["\']', atributos)
+        if tipo and tipo.group(1) not in ("text/javascript", "module", "application/javascript"):
+            continue
+        if corpo.strip():
+            codigos.append(corpo)
+    return codigos
+
+
+def test_javascript_da_pagina_publica_e_valido(cms_limpo: Any, tmp_path: Any) -> None:
+    """O simulador é JavaScript embutido: um erro de sintaxe desligava-o em silêncio."""
+    item = store.save_item("remuneracoes", _pagina(), "qa@teste.pt")
+    html = cms_render.render_remuneracao(item)
+    scripts = _scripts_js(html)
+
+    assert scripts, "a página devia trazer o JavaScript do simulador"
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node não está disponível para validar o JavaScript embutido.")
+
+    for indice, codigo in enumerate(scripts):
+        ficheiro = tmp_path / f"script-{indice}.js"
+        ficheiro.write_text(codigo, encoding="utf-8")
+        resultado = subprocess.run([node, "--check", str(ficheiro)], capture_output=True, text=True)
+        assert resultado.returncode == 0, f"script {indice} com erro de sintaxe: {resultado.stderr[:400]}"

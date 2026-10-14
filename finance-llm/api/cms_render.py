@@ -295,8 +295,10 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
 .prose pre {{ background: var(--code); padding: 16px; border-radius: var(--radius); overflow: auto; }}
 .prose pre code {{ background: none; padding: 0; }}
 /* Tabelas: as estreitas cabem no ecrã; as de muitas colunas rolam em vez de
-   esmagarem o texto numa coluna de três letras. */
+   esmagarem o texto numa coluna de três letras. A largura mínima é da base
+   (telefone) — de 700px para cima a tabela já cabe e não precisa dela. */
 .tabela-rolavel {{ overflow-x: auto; -webkit-overflow-scrolling: touch; }}
+.tabela-rolavel.larga table {{ min-width: 40rem; }}
 .prose table {{ width: 100%; border-collapse: collapse; font-size: .9rem; }}
 .prose th, .prose td {{ border: 1px solid var(--border); padding: 9px 10px; text-align: left; }}
 .prose th {{ background: var(--code); }}
@@ -397,6 +399,12 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
   .grid.galeria {{ gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }}
   .cta {{ flex-direction: row; align-items: center; justify-content: space-between; padding: 24px 26px; }}
 }}
+@media (min-width: 641px) and (max-width: 899px) {{
+  /* No intervalo em que ainda se usa a versão em coluna, ela é um vetor: sem
+     travão esticava a 1400px de altura num tablet. Fica centrada na medida de
+     leitura. */
+  main > .wrap > figure > picture > img {{ max-width: 560px; margin-left: auto; margin-right: auto; }}
+}}
 @media (min-width: 700px) {{
   :root {{ --gutter: 20px; }}
   main {{ padding: 32px 0 72px; }}
@@ -411,7 +419,8 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
   .tile-icon {{ width: 44px; height: 44px; margin-bottom: 12px; }}
   .steps .step {{ padding-left: 52px; }}
   .steps .step::before {{ width: 34px; height: 34px; font-size: .9rem; }}
-  .tabela-rolavel.larga table {{ min-width: 40rem; }}
+  /* A partir daqui há largura para a tabela larga caber inteira. */
+  .tabela-rolavel.larga table {{ min-width: 0; }}
 }}
 @media (min-width: 900px) {{
   /* Cabeçalho de uma linha: o menu volta a ser uma fila de pastilhas. */
@@ -866,6 +875,259 @@ def _breadcrumb_json_ld(dados: List[Dict[str, str]], base_url: str) -> Dict[str,
     }
 
 
+# --------------------------------------------------------------------------
+# PWA (site instalável)
+# --------------------------------------------------------------------------
+#: Ícones do PWA, gerados por `scripts/generate_site_pwa_icons.py` e servidos em
+#: `/site/pwa/<ficheiro>`. Um caminho fixo é o que permite ao manifesto
+#: referenciá-los: os ids da biblioteca de media são aleatórios em cada
+#: instalação.
+PWA_ICONS: Dict[str, Dict[str, str]] = {
+    "pwa-icone-192.png": {"sizes": "192x192", "purpose": "any"},
+    "pwa-icone-512.png": {"sizes": "512x512", "purpose": "any"},
+    "pwa-icone-maskable-512.png": {"sizes": "512x512", "purpose": "maskable"},
+}
+
+#: Ícone tocado com o dedo em ecrãs iOS (o manifest não precisa dele).
+PWA_IOS_ICON = "pwa-icone-180.png"
+PWA_ICON_PATH = "/site/pwa/"
+MANIFEST_PATH = "/site/manifest.webmanifest"
+SW_PATH = "/site/sw.js"
+OFFLINE_PATH = "/site/offline"
+
+#: Nome das caches do site e versão do service worker. O prefixo é o que
+#: permite apagar só as caches do site na ativação — o PWA da plataforma, que
+#: vive no mesmo domínio, não é tocado. Ao mudar a estratégia, subir a versão.
+PWA_CACHE_PREFIX = "sabemos-site-"
+PWA_SW_VERSION = "v1"
+
+
+def _pwa_cores(settings: Dict[str, Any]) -> Dict[str, str]:
+    """Cor da barra de estado (destaque) e fundo do ecrã de arranque."""
+    theme_name = str(settings.get("theme") or "claro")
+    palette = _THEMES.get(theme_name) or _THEMES["claro"]
+    return {
+        "accent": str(settings.get("accent") or "#0ea5a4"),
+        "background": palette["bg"],
+    }
+
+
+def _pwa_atalhos() -> List[Dict[str, str]]:
+    """Atalhos do manifest: os primeiros itens do menu principal do cabeçalho."""
+    atalhos: List[Dict[str, str]] = []
+    for item in store.menu_for("header").get("items") or []:
+        href = str(item.get("href") or "")
+        label = str(item.get("label") or "")
+        if not label or not href.startswith("/site"):
+            continue
+        atalhos.append({"name": label, "url": href})
+        if len(atalhos) == 4:
+            break
+    return atalhos
+
+
+def render_manifest(settings: Optional[Dict[str, Any]] = None) -> str:
+    """Manifesto do PWA: é o que faz o browser oferecer "instalar"."""
+    settings = settings or store.get_settings()
+    cores = _pwa_cores(settings)
+    nome = str(settings.get("site_name") or "Site")
+    # O `short_name` fica debaixo do ícone no ecrã inicial: sendo o nome
+    # comprido, só a primeira palavra ("Sabemos Studio" → "Sabemos").
+    curto = nome if len(nome) <= 12 else nome.split()[0]
+    manifest: Dict[str, Any] = {
+        "id": "/site/",
+        "name": nome,
+        "short_name": curto,
+        "description": str(settings.get("description") or settings.get("tagline") or ""),
+        "lang": str(settings.get("language") or "pt-PT"),
+        "dir": "ltr",
+        "start_url": "/site/",
+        "scope": "/site/",
+        "display": "standalone",
+        "background_color": cores["background"],
+        "theme_color": cores["accent"],
+        "icons": [
+            {"src": f"{PWA_ICON_PATH}{ficheiro}", "type": "image/png", **dados}
+            for ficheiro, dados in PWA_ICONS.items()
+        ],
+        "categories": ["finance", "news", "education"],
+    }
+    atalhos = _pwa_atalhos()
+    if atalhos:
+        manifest["shortcuts"] = atalhos
+    return json.dumps(manifest, ensure_ascii=False, indent=2)
+
+
+#: Service worker do site. Escrito como modelo (e não como f-string) porque o
+#: corpo é JavaScript, cheio de chaves.
+_SW_TEMPLATE = """/**
+ * Service worker do site público (Sabemos Studio).
+ *
+ * Estratégia:
+ * - Navegações: rede primeiro, porque as páginas são geradas pelo CMS e mudam
+ *   com frequência; sem ligação, abre a última cópia guardada dessa página e,
+ *   em último recurso, a página offline.
+ * - Imagens do CMS e ícones do site: cache com revalidação em segundo plano —
+ *   responde já com a cópia guardada e atualiza-a para a visita seguinte.
+ * - A área de gestão (`/cms/`) e a API (`/api/`) nunca passam pelo cache: o
+ *   painel e os dados não podem ficar presos numa versão antiga.
+ * - Tudo o resto segue direto para a rede.
+ *
+ * Ao alterar este ficheiro, subir PWA_SW_VERSION em `api/cms_render.py`.
+ */
+const VERSAO = "__VERSAO__";
+const CACHE_PAGINAS = "__CACHE_PAGINAS__";
+const CACHE_RECURSOS = "__CACHE_RECURSOS__";
+const OFFLINE = "__OFFLINE__";
+
+const PAGINAS = ["/site/", "__OFFLINE__"];
+const RECURSOS = [__RECURSOS__];
+
+/** Pedidos que nunca devem vir do cache. */
+const BYPASS = ["/api/", "/cms/", "/lp/", "/landing"];
+
+/** Exceções ao BYPASS: conteúdo público do site, seguro de guardar. */
+const GUARDAVEIS = ["/cms/media/", "/site/pwa/"];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    (async () => {
+      const paginas = await caches.open(CACHE_PAGINAS);
+      const recursos = await caches.open(CACHE_RECURSOS);
+      // Um recurso em falta não pode impedir a instalação: guarda um a um.
+      // O `cache: "reload"` salta o cache HTTP (as páginas só valem 15 s lá).
+      await Promise.all(
+        PAGINAS.map((url) => paginas.add(new Request(url, { cache: "reload" })).catch(() => undefined)),
+      );
+      await Promise.all(
+        RECURSOS.map((url) => recursos.add(new Request(url, { cache: "reload" })).catch(() => undefined)),
+      );
+      await self.skipWaiting();
+    })(),
+  );
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    (async () => {
+      const chaves = await caches.keys();
+      await Promise.all(
+        chaves
+          .filter(
+            (chave) =>
+              chave.startsWith("__PREFIXO__") && chave !== CACHE_PAGINAS && chave !== CACHE_RECURSOS,
+          )
+          .map((chave) => caches.delete(chave)),
+      );
+      // Sem isto, a primeira visita só ficaria servida pelo worker na seguinte.
+      await self.clients.claim();
+    })(),
+  );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data === "skip-waiting") self.skipWaiting();
+});
+
+function ignorar(pathname) {
+  if (GUARDAVEIS.some((prefixo) => pathname.startsWith(prefixo))) return false;
+  if (pathname === "__SW__") return true;
+  return BYPASS.some((prefixo) => pathname.startsWith(prefixo));
+}
+
+/** Navegação: rede primeiro, com a cópia guardada como reserva. */
+async function pagina(request) {
+  const cache = await caches.open(CACHE_PAGINAS);
+  try {
+    const resposta = await fetch(request);
+    if (resposta && resposta.ok) await cache.put(request, resposta.clone());
+    return resposta;
+  } catch {
+    const guardada = await cache.match(request);
+    if (guardada) return guardada;
+    return (
+      (await cache.match(OFFLINE)) ||
+      new Response(
+        "<!doctype html><meta charset=\\"utf-8\\"><title>Sem ligação</title><p>Sem ligação.</p>",
+        { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } },
+      )
+    );
+  }
+}
+
+/** Imagem ou ícone: responde do cache e revalida em segundo plano. */
+async function revalidar(request) {
+  const cache = await caches.open(CACHE_RECURSOS);
+  const guardada = await cache.match(request);
+  const rede = fetch(request)
+    .then((resposta) => {
+      if (resposta && resposta.ok) cache.put(request, resposta.clone());
+      return resposta;
+    })
+    .catch(() => undefined);
+  return guardada || (await rede) || Response.error();
+}
+
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  if (request.method !== "GET") return;
+
+  const url = new URL(request.url);
+  // Outros domínios (o email, as redes sociais) não passam por aqui.
+  if (url.origin !== self.location.origin) return;
+  if (ignorar(url.pathname)) return;
+
+  if (request.mode === "navigate") {
+    event.respondWith(pagina(request));
+    return;
+  }
+  if (GUARDAVEIS.some((prefixo) => url.pathname.startsWith(prefixo))) {
+    event.respondWith(revalidar(request));
+  }
+});
+"""
+
+
+def render_service_worker(settings: Optional[Dict[str, Any]] = None) -> str:
+    """Service worker do site: cache das páginas visitadas e leitura sem rede."""
+    settings = settings or store.get_settings()
+    recursos = [MANIFEST_PATH] + [f"{PWA_ICON_PATH}{ficheiro}" for ficheiro in PWA_ICONS]
+    valores = {
+        "__VERSAO__": PWA_SW_VERSION,
+        "__CACHE_PAGINAS__": f"{PWA_CACHE_PREFIX}paginas-{PWA_SW_VERSION}",
+        "__CACHE_RECURSOS__": f"{PWA_CACHE_PREFIX}recursos-{PWA_SW_VERSION}",
+        "__PREFIXO__": PWA_CACHE_PREFIX,
+        "__OFFLINE__": OFFLINE_PATH,
+        "__SW__": SW_PATH,
+        "__RECURSOS__": ", ".join(f'"{caminho}"' for caminho in recursos),
+    }
+    js = _SW_TEMPLATE
+    for chave, valor in valores.items():
+        js = js.replace(chave, valor)
+    return js
+
+
+def render_offline(*, settings: Optional[Dict[str, Any]] = None) -> str:
+    """Página de recurso, mostrada pelo service worker quando não há ligação."""
+    settings = settings or store.get_settings()
+    body = (
+        '<section class="section hero centro"><h1>Sem ligação</h1>'
+        '<p class="lead">Não foi possível chegar ao servidor. As páginas que já visitou '
+        "continuam a abrir sem rede.</p>"
+        '<div class="actions" style="justify-content:center">'
+        '<a class="btn" href="/site/">Voltar ao início</a></div></section>'
+    )
+    return _layout(
+        title="Sem ligação",
+        description="Sem ligação à rede.",
+        body=body,
+        current_path=OFFLINE_PATH,
+        settings=settings,
+        canonical=OFFLINE_PATH,
+        noindex=True,
+    )
+
+
 def _layout(
     *,
     title: str,
@@ -930,6 +1192,20 @@ def _layout(
     favicon = _media_url(settings.get("favicon_id"))
     if favicon:
         meta.append(f'<link rel="icon" href="{_esc(favicon)}">')
+    cores = _pwa_cores(settings)
+    meta.extend(
+        [
+            f'<link rel="manifest" href="{MANIFEST_PATH}">',
+            # Cor da barra do sistema: a do destaque, igual à do logótipo.
+            f'<meta name="theme-color" content="{_esc(cores["accent"])}">',
+            f'<link rel="apple-touch-icon" href="{_esc(PWA_ICON_PATH + PWA_IOS_ICON)}">',
+            # Instalado no ecrã inicial (iOS e Android), abre sem a barra do browser.
+            '<meta name="mobile-web-app-capable" content="yes">',
+            '<meta name="apple-mobile-web-app-capable" content="yes">',
+            f'<meta name="apple-mobile-web-app-title" content="{site_name}">',
+            '<meta name="apple-mobile-web-app-status-bar-style" content="default">',
+        ]
+    )
     return (
         "<!doctype html><html lang=\""
         + _esc(str(settings.get("language") or "pt-PT"))
@@ -940,6 +1216,16 @@ def _layout(
         + _header(settings, current_path=current_path, preview=preview)
         + f"<main><div class=\"wrap\">{_breadcrumb(breadcrumb)}{body}</div></main>"
         + _footer(settings)
+        # Registo do service worker (dá o funcionamento sem ligação e o cache
+        # das imagens). Falha em silêncio: sem HTTPS ou num browser antigo, o
+        # site continua a funcionar normalmente.
+        + (
+            ""
+            if preview
+            else "<script>if(\"serviceWorker\" in navigator){window.addEventListener(\"load\","
+            "function(){navigator.serviceWorker.register(\"" + SW_PATH + "\")"
+            ".catch(function(){});});}</script>"
+        )
         + "</body></html>"
     )
 
@@ -1585,8 +1871,10 @@ _CSS_REMUNERACOES = """
 .rem-tabela th, .rem-tabela td { white-space: nowrap; }
 .rem-niveis { max-height: 420px; overflow: auto; }
 .rem-sim { display: grid; gap: 12px; grid-template-columns: minmax(180px, 260px) 1fr; align-items: start; }
+.rem-sim .campos { display: grid; gap: 10px; }
 .rem-sim .saida { display: flex; flex-wrap: wrap; gap: 18px; }
 .rem-sim .saida strong { display: block; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.rem-sim .saida em { display: block; font-style: normal; font-variant-numeric: tabular-nums; }
 .rem-sim select, .rem-sim input { width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: inherit; }
 .rem-notas summary { cursor: pointer; font-weight: 600; }
 @media (max-width: 640px) { .rem-sim { grid-template-columns: 1fr; } }
@@ -1748,7 +2036,7 @@ def _rem_dirigentes(dados: Dict[str, Any]) -> str:
 
 
 def _rem_simulador(dados: Dict[str, Any]) -> str:
-    """Simulador da posição remuneratória (nível da TRU → mensal e anual).
+    """Simulador da posição remuneratória (nível da TRU ou cargo dirigente).
 
     O valor anual são os 14 pagamentos (12 mensalidades, subsídio de férias e
     subsídio de Natal); as componentes que o quadro não publica ficam de fora e
@@ -1757,31 +2045,58 @@ def _rem_simulador(dados: Dict[str, Any]) -> str:
     niveis = {str(item["nivel"]): item["valor"] for item in (dados.get("niveis") or []) if item.get("valor")}
     if not niveis:
         return ""
+    cargos: Dict[str, float] = {}
+    for registo in dados.get("dirigentes") or []:
+        valor = registo.get("remuneracao")
+        if not valor:
+            continue
+        etiqueta = " · ".join(
+            str(parte) for parte in (registo.get("cargo"), registo.get("grupo"), registo.get("ambito")) if parte
+        )
+        if registo.get("indice"):
+            etiqueta += f" (índice {registo['indice']})"
+        cargos.setdefault(etiqueta, float(valor))
     opcoes = "".join(
         f'<option value="{_esc(nivel)}">{_esc(nivel)} — {_euros(valor)}</option>'
         for nivel, valor in sorted(niveis.items(), key=lambda par: int(par[0]))
     )
+    opcoes_cargos = "".join(
+        f'<option value="{_esc(etiqueta)}">{_esc(etiqueta)} — {_euros(valor)}</option>'
+        for etiqueta, valor in cargos.items()
+    )
     atual = next(iter(sorted(niveis, key=lambda chave: int(chave))), "")
     dados_json = _esc(json.dumps(niveis, ensure_ascii=False))
+    cargos_json = _esc(json.dumps(cargos, ensure_ascii=False))
+    campos = f'<label>Nível da TRU<select data-papel="nivel">{opcoes}</select></label>'
+    if cargos:
+        campos += f'<label>Cargo dirigente<select data-papel="cargo"><option value="">— usar o nível —</option>{opcoes_cargos}</select></label>'
     return (
         '<section class="section"><h2>Simulador de posição remuneratória</h2>'
-        '<p class="sub">Escolha o nível da TRU para ver a remuneração base mensal e o valor do ano '
-        f"({PAGAMENTOS_PUBLICO} pagamentos: 12 mensalidades, subsídio de férias e subsídio de Natal).</p>"
-        f'<div class="rem-sim" data-niveis="{dados_json}" data-pagamentos="{PAGAMENTOS_PUBLICO}">'
-        f'<label>Nível da TRU<select data-papel="nivel">{opcoes}</select></label>'
+        '<p class="sub">Escolha o nível da TRU ou um cargo dirigente para ver a remuneração base mensal e o valor do '
+        f"ano ({PAGAMENTOS_PUBLICO} pagamentos: 12 mensalidades, subsídio de férias e subsídio de Natal).</p>"
+        f'<div class="rem-sim" data-niveis="{dados_json}" data-cargos="{cargos_json}" data-pagamentos="{PAGAMENTOS_PUBLICO}">'
+        f'<div class="campos">{campos}</div>'
         '<div class="saida">'
         f'<div><span>Remuneração base mensal</span><strong data-papel="mensal">{_euros(niveis.get(atual))}</strong></div>'
         f'<div><span>Valor anual ({PAGAMENTOS_PUBLICO} pagamentos)</span><strong data-papel="anual">{_euros((niveis.get(atual) or 0) * PAGAMENTOS_PUBLICO)}</strong></div>'
+        '<div><span>O que está a ser simulado</span><em data-papel="origem">Nível '
+        f"{_esc(atual)} da TRU</em></div>"
         "</div></div>"
         '<p class="meta">O quadro da DGAEP não publica suplementos nem subsídio de refeição: a conta é só a '
-        "remuneração base do nível escolhido.</p>"
+        "remuneração base do nível ou do cargo escolhido.</p>"
         "<script>(function(){var c=document.currentScript.parentNode.querySelector('.rem-sim');"
         "if(!c)return;var n=JSON.parse(c.getAttribute('data-niveis')||'{}');"
-        "var p=parseInt(c.getAttribute('data-pagamentos')||'14',10);var s=c.querySelector('[data-papel=\"nivel\"]');"
+        "var g=JSON.parse(c.getAttribute('data-cargos')||'{}');"
+        "var p=parseInt(c.getAttribute('data-pagamentos')||'14',10);"
+        "var s=c.querySelector('[data-papel=\"nivel\"]');var k=c.querySelector('[data-papel=\"cargo\"]');"
+        "var o=c.querySelector('[data-papel=\"origem\"]');"
         "function f(v){return v.toLocaleString('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2})+' \u20ac'}"
-        "function u(){var v=n[s.value]||0;c.querySelector('[data-papel=\"mensal\"]').textContent=f(v);"
+        "function u(){var v=0;if(k&&k.value){v=g[k.value]||0;if(o)o.textContent='Cargo dirigente: '+k.value}"
+        "else{v=n[s.value]||0;if(o)o.textContent='Nível '+s.value+' da TRU'}"
+        "c.querySelector('[data-papel=\"mensal\"]').textContent=f(v);"
         "c.querySelector('[data-papel=\"anual\"]').textContent=f(v*p)}"
-        "if(s){s.addEventListener('change',u);u()}})();</script></section>"
+        "if(s)s.addEventListener('change',function(){if(k)k.value='';u()});"
+        "if(k)k.addEventListener('change',function(){u()});u()})();</script></section>"
     )
 
 
