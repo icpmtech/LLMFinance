@@ -165,6 +165,7 @@ export type PlatformMailMeta = {
   };
   platform_account_configured: boolean;
   accounts: number;
+  signature: { text: string; html: string };
   es: { available: boolean; index: string; documents: number };
   limits: { initial_batch: number; sync_batch: number; full_sync_cap: number; max_limit: number; max_message_bytes: number };
   settings: PlatformMailSettings;

@@ -4,6 +4,10 @@ Envio de mensagens transacionais (aprovação de conta, início de trial,
 lembrete de pagamento) através de um servidor SMTP configurável na
 administração ou em variáveis de ambiente.
 
+Todas as mensagens terminam com a **assinatura de marca** (`api/email_signature`):
+logótipo, «Sabemos Studio» e a ligação para o site. É aplicada num só sítio
+(`build_message`), pelo que nenhum envio se esquece dela nem a repete.
+
 A configuração segue a mesma hierarquia do resto da plataforma:
 parâmetro → índice (`finance_settings/service-keys`) → ambiente → `.env`.
 Se não houver servidor configurado, o envio falha silenciosamente e regista
@@ -19,6 +23,7 @@ from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 from typing import Any, Dict, Optional
 
+from api import email_signature
 from api import service_keys
 
 logger = logging.getLogger(__name__)
@@ -60,6 +65,37 @@ def _parse_from(raw: str) -> tuple[str, str]:
     return "", raw
 
 
+def build_message(
+    *,
+    sender_name: str,
+    sender_address: str,
+    to: str,
+    subject: str,
+    text: str,
+    html: Optional[str] = None,
+) -> EmailMessage:
+    """Compõe a mensagem transacional, com a assinatura de marca já aplicada.
+
+    Está separado do envio para se poder verificar (em teste) o que sai daqui sem
+    precisar de um servidor de correio.
+    """
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = formataddr((sender_name, sender_address)) if sender_name else sender_address
+    msg["To"] = to.strip()
+    # `Date` e `Message-ID` não são opcionais na prática: um `EmailMessage` do
+    # `smtplib` não os acrescenta sozinho, e a falta deles é pontuação de spam em
+    # qualquer filtro (o RFC 5322 exige a data). O domínio do `Message-ID` sai do
+    # remetente, e não do nome do contentor, que é o que o `make_msgid` usaria.
+    dominio = sender_address.rpartition("@")[2]
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain=dominio) if dominio else make_msgid()
+    msg.set_content(email_signature.append_to_text(text))
+    if html:
+        msg.add_alternative(email_signature.append_to_html(html), subtype="html")
+    return msg
+
+
 def _send(
     to: str,
     subject: str,
@@ -78,20 +114,14 @@ def _send(
     if not from_address:
         return {"ok": False, "configured": True, "message": "Remetente inválido."}
 
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = formataddr((from_name, from_address)) if from_name else from_address
-    msg["To"] = to.strip()
-    # `Date` e `Message-ID` não são opcionais na prática: um `EmailMessage` do
-    # `smtplib` não os acrescenta sozinho, e a falta deles é pontuação de spam em
-    # qualquer filtro (o RFC 5322 exige a data). O domínio do `Message-ID` sai do
-    # remetente, e não do nome do contentor, que é o que o `make_msgid` usaria.
-    dominio = from_address.rpartition("@")[2]
-    msg["Date"] = formatdate(localtime=True)
-    msg["Message-ID"] = make_msgid(domain=dominio) if dominio else make_msgid()
-    msg.set_content(text)
-    if html:
-        msg.add_alternative(html, subtype="html")
+    msg = build_message(
+        sender_name=from_name,
+        sender_address=from_address,
+        to=to,
+        subject=subject,
+        text=text,
+        html=html,
+    )
 
     try:
         if cfg["security"] == "ssl":
@@ -131,8 +161,6 @@ A sua conta no IQ OS foi aprovada por um administrador.
 Tem agora acesso a um trial de 5 dias, até {expires}.
 
 Passado esse período, será necessário efetuar o pagamento para manter o acesso ativo.
-
-A equipa IQ OS
 """
     html = f"""\
 <html>
@@ -141,8 +169,6 @@ A equipa IQ OS
 <p>A sua conta no IQ OS foi <strong>aprovada</strong> por um administrador.</p>
 <p>Tem agora acesso a um <strong>trial de 5 dias</strong>, até <strong>{expires}</strong>.</p>
 <p>Passado esse período, será necessário efetuar o pagamento para manter o acesso ativo.</p>
-<br>
-<p>A equipa IQ OS</p>
 </body>
 </html>
 """
@@ -158,8 +184,6 @@ def send_trial_expiring_email(to: str, name: str, trial_expires_at: str) -> Dict
 O seu período de trial no IQ OS termina {expires}.
 
 Para continuar a usar a plataforma, efetue o pagamento antes do prazo em Definições → Perfil → Billing. Caso contrário, o acesso será desativado.
-
-A equipa IQ OS
 """
     html = f"""\
 <html>
@@ -167,8 +191,6 @@ A equipa IQ OS
 <p>Olá {name},</p>
 <p>O seu período de trial no IQ OS termina <strong>{expires}</strong>.</p>
 <p>Para continuar a usar a plataforma, efetue o pagamento antes do prazo em <strong>Definições → Perfil → Billing</strong>. Caso contrário, o acesso será <strong>desativado</strong>.</p>
-<br>
-<p>A equipa IQ OS</p>
 </body>
 </html>
 """
@@ -184,8 +206,6 @@ def send_subscription_activated_email(to: str, name: str, plan_name: str, period
 A sua subscrição IQ OS {plan_name} foi ativada com sucesso e está válida até {expires}.
 
 Pode consultar os detalhes em Definições → Perfil → Billing.
-
-A equipa IQ OS
 """
     html = f"""\
 <html>
@@ -193,8 +213,6 @@ A equipa IQ OS
 <p>Olá {name},</p>
 <p>A sua subscrição IQ OS <strong>{plan_name}</strong> foi ativada com sucesso e está válida até <strong>{expires}</strong>.</p>
 <p>Pode consultar os detalhes em <strong>Definições → Perfil → Billing</strong>.</p>
-<br>
-<p>A equipa IQ OS</p>
 </body>
 </html>
 """

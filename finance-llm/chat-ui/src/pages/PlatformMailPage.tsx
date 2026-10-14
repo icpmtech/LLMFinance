@@ -314,16 +314,39 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/**
+ * Mostra a assinatura que vai seguir no email. O corpo é HTML de fora (marca ou
+ * caixa), por isso vai num `iframe` com `sandbox` vazio: mostra-se sem lhe dar
+ * qualquer poder — a pré-visualização não executa nem navega.
+ *
+ * O fundo é branco de propósito: é assim que a assinatura aparece em quem a
+ * recebe (os clientes de correio são claros), e não como no tema escuro da
+ * plataforma.
+ */
+function SignaturePreview({ html }: { html: string }) {
+  return (
+    <iframe
+      title="Assinatura que vai no email"
+      sandbox=""
+      srcDoc={`<base target="_blank"><style>body{margin:12px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.5;color:#475569;background:#fff}img{max-width:100%;height:auto}a{color:#1d4ed8}table{max-width:100%}</style>${html}`}
+      className="h-[118px] w-full rounded-lg border border-white/10 bg-white"
+    />
+  );
+}
+
 function ComposeWindow({
   accounts,
   accountId,
   compose,
+  brandSignature,
   onClose,
   onSent,
 }: {
   accounts: PlatformMailAccount[];
   accountId: string;
   compose: ComposeState;
+  /** Assinatura de marca, do servidor (`/admin/mail/meta`). */
+  brandSignature: string;
   onClose: () => void;
   onSent: (mensagem: string) => void;
 }) {
@@ -345,6 +368,17 @@ function ComposeWindow({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const account = accounts.find((item) => item.id === fromId) ?? null;
+
+  // A assinatura não entra no corpo escrito: quem a junta é o servidor, no
+  // envio (uma só cópia, a mesma dos emails transacionais). Aqui mostra-se
+  // exactamente o que vai sair — a da caixa, se a caixa tiver uma.
+  const assinaturaPropria = (account?.signature ?? "").trim();
+  const assinaturaHtml = assinaturaPropria
+    ? assinaturaPropria.includes("<")
+      ? assinaturaPropria
+      : `<pre style="font-family:inherit;white-space:pre-wrap;margin:0">${escapeHtml(assinaturaPropria)}</pre>`
+    : brandSignature;
+  const assinaturaFonte = assinaturaPropria ? "da caixa" : "de marca · Sabemos Studio";
 
   const addFiles = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -503,6 +537,13 @@ function ComposeWindow({
           <RichTextEditor value={html} onChange={setHtml} disabled={sending} />
         </div>
 
+        {includeSignature && assinaturaHtml && (
+          <div>
+            <span className={LABEL}>Assinatura ({assinaturaFonte})</span>
+            <SignaturePreview html={assinaturaHtml} />
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-3">
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-[12px] text-muted-foreground transition hover:bg-white/8 hover:text-foreground">
             <Paperclip size={13} />
@@ -519,7 +560,7 @@ function ComposeWindow({
           </label>
           <label className="inline-flex items-center gap-2 text-[12px] text-muted-foreground">
             <input type="checkbox" checked={includeSignature} onChange={(event) => setIncludeSignature(event.target.checked)} />
-            Incluir assinatura da caixa
+            Incluir assinatura
           </label>
         </div>
 
@@ -881,8 +922,13 @@ function MailboxDialog({
                 className={FIELD}
                 value={form.signature ?? ""}
                 onChange={(event) => setForm({ ...form, signature: event.target.value })}
-                placeholder="IQ OS — Inteligência Financeira"
+                placeholder="Vazio: assinatura de marca Sabemos Studio"
               />
+              <p className="mt-1 text-[12px] text-muted-foreground">
+                Sem assinatura própria, os emails saem com a assinatura de marca (logótipo, nome e ligação para
+                sabemos.studio), a mesma dos emails transacionais. Pode escrever aqui uma assinatura da caixa; aceita
+                HTML.
+              </p>
             </div>
           </div>
 
@@ -1275,6 +1321,7 @@ export default function PlatformMailPage() {
   const { user } = useAuth();
   const [accounts, setAccounts] = useState<PlatformMailAccount[]>([]);
   const [defaults, setDefaults] = useState<PlatformMailMetaDefaults | null>(null);
+  const [brandSignature, setBrandSignature] = useState("");
   const [stats, setStats] = useState<PlatformMailStats | null>(null);
   const [accountId, setAccountId] = useState<string>(() => {
     if (typeof window === "undefined") return "";
@@ -1340,6 +1387,7 @@ export default function PlatformMailPage() {
   const carregarContas = useCallback(async () => {
     const [meta, contas] = await Promise.all([getPlatformMailMeta(), listPlatformMailAccounts()]);
     setDefaults(meta.defaults);
+    setBrandSignature(meta.signature?.html ?? "");
     setAccounts(contas.items);
     setAccountId((current) => {
       if (current && contas.items.some((item) => item.id === current)) return current;
@@ -1808,6 +1856,7 @@ export default function PlatformMailPage() {
           accounts={accounts}
           accountId={accountId || accounts[0]?.id || ""}
           compose={compose}
+          brandSignature={brandSignature}
           onClose={() => setCompose({ open: false, mode: "new", source: null })}
           onSent={(mensagem) => {
             setNotice(mensagem);

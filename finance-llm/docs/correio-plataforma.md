@@ -26,12 +26,42 @@ cada utilizador e liga contas externas (Gmail, Outlook…): aqui gere-se o corre
   descarregar, e a **conversa** da mensagem. Ações: responder, responder a
   todos, reencaminhar, destacar, marcar lida/não lida, mover e apagar.
 - **Compor** — editor de texto formatado (negrito, itálico, sublinhado, listas,
-  citação, links) com alternância para **HTML**, CC/BCC, assinatura da caixa,
-  anexos e encadeamento (`In-Reply-To`/`References`). A cópia enviada é
-  arquivada na pasta **Sent** por `APPEND` e entra logo no índice.
+  citação, links) com alternância para **HTML**, CC/BCC, assinatura da caixa (sem
+  assinatura própria, sai a assinatura de marca — ver abaixo), anexos e
+  encadeamento (`In-Reply-To`/`References`). A cópia enviada é arquivada na pasta
+  **Sent** por `APPEND` e entra logo no índice.
 - **Agenda** — de quanto em quanto tempo o correio novo é trazido (`auto_sync`,
   `sync_seconds`; **0 desliga**). A sincronização manual («Sincronizar» e
   «Reindexar tudo») funciona mesmo sem APScheduler.
+
+## Assinatura
+
+Todos os emails da plataforma terminam com a **mesma assinatura de marca**:
+logótipo, «Sabemos Studio», o produto e a ligação para o site. O bloco está num
+só sítio, `api/email_signature.py`, e é usado pelos dois caminhos:
+
+- **Email transacional** (`api/notification_email.py`) — aprovação de conta, fim
+  de trial, subscrição ativada. A assinatura entra em `build_message`, pelo que
+  não se repete em cada mensagem (o texto continua a ser só o texto).
+- **Correio da plataforma** (`api/platform_mail_service.build_message`) — uma
+  caixa **sem assinatura própria** usa a de marca. Se a caixa tiver assinatura
+  (em *Caixas → Assinatura*), é essa que sai; se tiver marcação, é interpretada
+  como HTML.
+
+Duas decisões que não são estéticas:
+
+- **O logótipo vai em PNG e por URL absoluto** (`LOGO_URL`). Os clientes de
+  correio não desenham SVG (o Gmail descarta-o) e uma imagem embutida por `cid:`
+  exigiria uma parte `related`, que alguns clientes não mostram por omissão. O
+  PNG é o mesmo ícone de marca do PWA, servido pelo próprio backend em
+  `/site/pwa/` — **tem de continuar público**, senão a assinatura sai com a
+  imagem partida.
+- **O HTML é uma tabela com estilos embutidos.** Muitos clientes descartam
+  `<style>` e classes, e o Outlook não implementa flexbox. A assinatura é
+  inserida **antes do `</body>`**, para o documento continuar válido.
+
+Para mudar a assinatura basta editar `api/email_signature.py` (`BRAND`,
+`PRODUCT`, `LOGO_URL`, cores). Não há cópias em frontend.
 
 ## Índices
 

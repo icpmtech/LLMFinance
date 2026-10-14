@@ -48,6 +48,7 @@ from email.utils import formataddr, formatdate, make_msgid, parseaddr, parsedate
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from api import email_service
+from api import email_signature
 from api import service_keys
 from api.elasticsearch_client import (
     PLATFORM_MAIL_ACCOUNTS_INDEX,
@@ -1610,10 +1611,25 @@ def build_message(
         mensagem["References"] = referencias
 
     assinatura = _text(account.get("signature"))
-    if assinatura and payload.get("include_signature", True):
-        texto = f"{texto.rstrip()}\n\n{assinatura}\n"
+    if payload.get("include_signature", True):
+        if assinatura and "<" in assinatura and ">" in assinatura:
+            # Assinatura com marcação: entra tal e qual no HTML, e em texto
+            # simples no corpo alternativo (quem lê em texto não perde o que lá
+            # está escrito nem vê as etiquetas).
+            html_assinatura = assinatura
+            texto_assinatura = email_service._html_to_text(assinatura)  # noqa: SLF001
+        elif assinatura:
+            html_assinatura = f'<pre style="font-family:inherit">{assinatura}</pre>'
+            texto_assinatura = assinatura
+        else:
+            # Sem assinatura própria, a caixa usa a **assinatura de marca** da
+            # plataforma (logótipo, marca e ligação), a mesma dos emails
+            # transacionais.
+            html_assinatura = email_signature.html_block()
+            texto_assinatura = email_signature.text_block()
+        texto = f"{texto.rstrip()}\n\n{texto_assinatura}"
         if html:
-            html = f'{html}<br><br><pre style="font-family:inherit">{assinatura}</pre>'
+            html = f"{html}<br>{html_assinatura}"
 
     if html:
         mensagem.set_content(texto or email_service._html_to_text(html))  # noqa: SLF001
@@ -1789,6 +1805,10 @@ def meta() -> Dict[str, Any]:
         },
         "platform_account_configured": _platform_account() is not None,
         "accounts": len(accounts()),
+        # A assinatura de marca vem daqui para a aplicação mostrar, ao compor, o
+        # que vai mesmo sair: quem a junta ao corpo é o servidor (uma só cópia,
+        # ver `api/email_signature.py`), e a caixa pode ter a sua.
+        "signature": {"text": email_signature.text_block(), "html": email_signature.html_block()},
         "es": {"available": cliente is not None, "index": PLATFORM_MAIL_MESSAGES_INDEX, "documents": documentos},
         "limits": {
             "initial_batch": INITIAL_BATCH,

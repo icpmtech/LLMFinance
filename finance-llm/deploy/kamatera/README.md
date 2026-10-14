@@ -627,6 +627,36 @@ Antes de existir DNS de correio, um envio autenticado e assinado a partir da VM
 Sem PTR o correio costuma ser aceite mas cai no spam. Nenhuma das duas coisas se
 resolve na VM: e DNS e IP.
 
+### Medido: auditoria externa com o DNS completo (sem relay)
+
+Com SPF, DKIM e DMARC publicados e entrega **direta** (sem relay), a mensagem foi
+enviada para um verificador externo de entregabilidade. Veredicto do lado de quem
+recebe:
+
+```
+Score: 7.9/10
+Received-SPF: Pass (mailfrom) identity=mailfrom; client-ip=45.147.251.188; helo=mail.sabemos.studio
+X-Spam-Test-Scores: DKIM_SIGNED, DKIM_VALID, DKIM_VALID_AU, DKIM_VALID_EF, SPF_PASS
+Authentication-Results: dmarc=pass (p=none dis=none) header.from=sabemos.studio
+SpamAssassin: -2.1 (abaixo de -5 e que e spam)
+```
+
+As duas deduções que sobraram **nao se resolvem no servidor**:
+
+| Dedução | Pontos | Causa | Como se resolve |
+|---|---|---|---|
+| `RDNS_NONE` | -1.27 | o IP nao tem DNS inverso | pedir o PTR a Kamatera, ou enviar por relay (Brevo) |
+| `FROM_FMBLA_NEWDOM14` | -1.00 | dominio registado ha poucos dias | só o tempo (a reputacao do dominio aquece) |
+
+A assinatura foi confirmada tambem **dentro do servidor**, sem intermediarios:
+`opendkim-testkey -d sabemos.studio -s mail` diz `key OK` (a chave privada bate
+certo com o TXT publicado) e `opendkim-testmsg`, corrido sobre uma mensagem ja
+entregue na caixa, sai com `0`.
+
+Opcional (cosmetico, 0.0 pontos): `SPF_HELO_NONE` — o nome de HELO
+(`mail.sabemos.studio`) nao publica SPF proprio. Um TXT
+`mail.sabemos.studio = "v=spf1 a -all"` limpa a nota; nao muda o veredicto.
+
 ### Sem PTR: entrega por relay
 
 Se a Kamatera nao poe PTR neste IP, a saida faz-se por um fornecedor com
@@ -697,6 +727,26 @@ onde `mail.sabemos.studio` resolve para o mailserver. A 993 e a 587 ficam tambem
 publicas (autenticadas, com Fail2Ban), para o stack do PC e para qualquer cliente
 de correio poder ler e enviar — ver a seccao das portas no
 `servicos/mailserver/compose.yml`. A 465 continua presa ao loopback.
+
+### Assinatura dos emails
+
+Todos os emails que a plataforma envia — transacionais e os escritos no Correio
+da plataforma — terminam com a mesma assinatura de marca: logotipo, «Sabemos
+Studio», o produto e a ligacao para `sabemos.studio`. O bloco esta num so sitio,
+`api/email_signature.py`, e a decisao que interessa ao deploy e esta:
+
+* **O logotipo e um PNG servido por URL publica**
+  (`https://sabemos.studio/site/pwa/pwa-icone-192.png`, o mesmo icone do PWA).
+  Nao e um SVG — o Gmail descarta SVG — nem um anexo embutido por `cid:`, que
+  exigiria uma parte `related` na mensagem. **Se esse URL deixar de responder, a
+  assinatura sai com a imagem partida**: e a unica dependencia externa que a
+  assinatura tem, e vem do proprio backend, portanto so falha se o site estiver
+  em baixo.
+* **A assinatura tambem entra no corpo em texto simples** (sem imagem), pelo que
+  uma mensagem lida sem HTML continua identificavel.
+
+Para mudar a assinatura edita-se `api/email_signature.py` e faz-se o deploy
+incremental do backend (`19-deploy-codigo.ps1 -Servico backend`).
 
 ### Armadilhas
 
