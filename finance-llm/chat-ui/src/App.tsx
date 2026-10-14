@@ -134,6 +134,7 @@ import DocsPage from "./pages/DocsPage";
 import FinderPage from "./pages/FinderPage";
 import EmailPage from "./pages/EmailPage";
 import PlatformMailPage from "./pages/PlatformMailPage";
+import PermissionsPage from "./pages/PermissionsPage";
 import CmsPage from "./pages/CmsPage";
 import ShopPage from "./pages/ShopPage";
 import RssPage from "./pages/RssPage";
@@ -204,6 +205,7 @@ type AppView =
   | "compare"
   | "admin"
   | "admin-mail"
+  | "permissions"
   | "agents"
   | "gleif-region"
   | "world"
@@ -359,6 +361,7 @@ function pathForView(
   if (view === "settings") return "/settings";
   if (view === "admin") return "/admin";
   if (view === "admin-mail") return "/admin/correio";
+  if (view === "permissions") return "/permissoes";
   if (view === "cli") return "/cli";
   if (view === "empresas-iq") return "/empresas-iq";
   if (view === "pessoas-iq") return "/pessoas-iq";
@@ -714,6 +717,7 @@ export default function App() {
     if (path === "/settings") return "settings";
     if (path === "/admin") return "admin";
     if (path === "/admin/correio") return "admin-mail";
+    if (path === "/permissoes") return "permissions";
     if (path === "/cli") return "cli";
     if (path === "/contracts-list" || path.startsWith("/contracts-list/")) return "contracts-list";
     if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) return "empresas-iq";
@@ -856,6 +860,7 @@ export default function App() {
       else if (path === "/settings") next = "settings";
       else if (path === "/admin") next = "admin";
       else if (path === "/admin/correio") next = "admin-mail";
+      else if (path === "/permissoes") next = "permissions";
       else if (path === "/cli") next = "cli";
       else if (path === "/contracts-list" || path.startsWith("/contracts-list/")) next = "contracts-list";
       else if (path === "/empresas-iq" || path.startsWith("/empresas-iq/")) next = "empresas-iq";
@@ -1621,6 +1626,7 @@ export default function App() {
     if (target === "settings") return <SettingsPage />;
     if (target === "admin") return <AdminPage />;
     if (target === "admin-mail") return <PlatformMailPage />;
+    if (target === "permissions") return <PermissionsPage />;
     if (target === "cli") return <CliPage />;
     if (target === "contracts-list") return <ContractsListPage onSwitchView={() => setViewAndHistory("dashboard")} />;
     if (target === "iframe-pages") {
@@ -1958,6 +1964,7 @@ export default function App() {
       "ticker-chart": "Gráfico Tempo Real",
       "admin": "Administração",
       "admin-mail": "Correio da plataforma",
+      "permissions": "Permissões",
       "companies-search": "Entidades (Contratos)",
       "companies-dashboard": "Dashboard de Empresas",
       "contracts-list": "Contratos",

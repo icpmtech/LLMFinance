@@ -253,8 +253,11 @@ def admin_users(
 @router.patch("/users/{user_id}")
 def admin_update_user(user_id: str, payload: UserPatch, session: AdminSession) -> Dict[str, Any]:
     """Altera papel, estado ou dados básicos de uma conta."""
-    if payload.role is not None and payload.role not in {"admin", "member"}:
-        raise HTTPException(status_code=422, detail="Papel inválido (use admin ou member).")
+    if payload.role is not None and payload.role not in auth.USER_ROLES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Papel inválido (use {', '.join(auth.USER_ROLES)}).",
+        )
     if payload.status is not None and payload.status not in auth.USER_STATUSES:
         raise HTTPException(status_code=422, detail=f"Estado inválido (use {', '.join(sorted(auth.USER_STATUSES))}).")
     if user_id == session.user.id and payload.role == "member":

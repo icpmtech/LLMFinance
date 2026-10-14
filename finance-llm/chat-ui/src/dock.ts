@@ -60,6 +60,7 @@ import {
   Settings,
   ShieldAlert,
   ShieldCheck,
+  SlidersHorizontal,
   ShoppingBag,
   ShoppingCart,
   Sparkles,
@@ -953,6 +954,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: Mailbox,
     gradient: "from-teal-200 via-sky-500 to-indigo-600",
     accent: "56,189,248",
+  },
+  {
+    id: "permissions",
+    label: "Permissões",
+    hint: "Quem lê e quem pode criar conteúdo",
+    icon: SlidersHorizontal,
+    gradient: "from-amber-200 via-orange-500 to-rose-600",
+    accent: "251,146,60",
   },
   {
     id: "cli",

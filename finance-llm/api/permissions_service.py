@@ -54,8 +54,8 @@ WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 READ_LIKE = re.compile(
     r"/(search|pesquisa|export|exportar|analy[sz]e|analise|preview|report|relatorio|summary|resumo"
     r"|chat|explain|estimate|estimativa|simulate|simulacao|validate|validar|check|lookup|render|plot"
-    r"|download|compare|comparar|aggregate|agregacao|stats|estatisticas|overview|list|meta"
-    r"|autocomplete|suggest|translate|historico|history|detail|ficha|query|filter|resolve)\b",
+    r"|download|compare|comparar|aggregate|agregacao|stats|estatisticas|overview|list|meta|match"
+    r"|forecast|previsao|previsoes|autocomplete|suggest|translate|historico|history|detail|ficha|query|filter|resolve)\b",
     re.IGNORECASE,
 )
 
@@ -64,7 +64,7 @@ READ_LIKE = re.compile(
 SELF_SERVICE: Tuple[str, ...] = ("auth", "billing", "chat", "favorites", "workspace", "search")
 
 # Módulos reservados à administração da plataforma, mesmo para `manager`.
-ADMIN_ONLY: Tuple[str, ...] = ("admin",)
+ADMIN_ONLY: Tuple[str, ...] = ("admin", "permissions")
 
 # Áreas de rotas. O `id` é o primeiro segmento do caminho; `label` e `group` são
 # só para a página de permissões. `content=False` marca `SELF_SERVICE`.
@@ -72,6 +72,7 @@ MODULES: Tuple[Dict[str, Any], ...] = (
     {"id": "auth", "label": "Contas e sessões", "group": "Plataforma", "content": False},
     {"id": "billing", "label": "Subscrições e pagamentos", "group": "Plataforma", "content": False},
     {"id": "admin", "label": "Administração", "group": "Plataforma", "content": True},
+    {"id": "permissions", "label": "Permissões", "group": "Plataforma", "content": True},
     {"id": "chat", "label": "Chat IA", "group": "Plataforma", "content": False},
     {"id": "rag", "label": "RAG · documentos", "group": "Plataforma", "content": True},
     {"id": "favorites", "label": "Favoritos", "group": "Plataforma", "content": False},

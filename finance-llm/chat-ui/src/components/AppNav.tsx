@@ -156,7 +156,17 @@ export type AppView =
   | "deep-search"
   | "researcher";
 
-type NavItem = { id: AppView; label: string; icon: React.ReactNode; match?: AppView[]; keywords?: string; adminOnly?: boolean };
+type NavItem = {
+  id: AppView;
+  label: string;
+  icon: React.ReactNode;
+  match?: AppView[];
+  keywords?: string;
+  /** Só contas com papel `admin`. */
+  adminOnly?: boolean;
+  /** Só `admin` e `manager` (gestor de plataforma). */
+  staffOnly?: boolean;
+};
 
 interface NavGroup {
   id: string;
@@ -219,8 +229,9 @@ function appItem(app: DockApp): NavItem {
     match: APP_MATCH[app.id],
     keywords: app.hint,
     // A administração da solução e o correio da plataforma só aparecem a contas
-    // com papel `admin`.
+    // com papel `admin`; a página de permissões também ao gestor de plataforma.
     adminOnly: app.id === "admin" || app.id === "admin-mail",
+    staffOnly: app.id === "permissions",
   };
 }
 
@@ -390,6 +401,19 @@ function isAdminRole(role?: string | null) {
   return (role ?? "member") === "admin";
 }
 
+/** Papel `admin` ou `manager` — quem pode criar conteúdo. */
+export function isStaffRole(role?: string | null) {
+  const valor = role ?? "member";
+  return valor === "admin" || valor === "manager";
+}
+
+/** Aplica a restrição de papel de um item: `admin` ou `admin`+`manager`. */
+function allowedForRole(item: NavItem, role?: string | null) {
+  if (item.adminOnly) return isAdminRole(role);
+  if (item.staffOnly) return isStaffRole(role);
+  return true;
+}
+
 /** Filtra itens de navegação pelo plano de subscrição do utilizador. */
 function filterPlanItems(items: NavItem[], user: AuthUser | null | undefined): NavItem[] {
   if (!user || isAdminRole(user.role)) return items;
@@ -405,7 +429,7 @@ function filterPlanGroupItems(items: { item: NavItem; group: NavGroup }[], user:
 /** Todos os itens de navegação, associados ao respetivo grupo. */
 function allItems(role?: string | null, user?: AuthUser | null) {
   const items = buildGroups().flatMap((group) => group.items.map((item) => ({ item, group })));
-  const allowed = isAdminRole(role) ? items : items.filter(({ item }) => !item.adminOnly);
+  const allowed = items.filter(({ item }) => allowedForRole(item, role));
   // Módulos escondidos por perfil (definidos na página de administração).
   const hidden = hiddenModules();
   const visible = allowed.filter(({ item }) => !hidden.has(item.id));
@@ -423,11 +447,9 @@ export function itemsFor(role?: string | null, user?: AuthUser | null) {
 /** Grupos de navegação permitidos ao papel indicado (sem grupos vazios). */
 export function groupsFor(role?: string | null, user?: AuthUser | null): NavGroup[] {
   const groups = buildGroups();
-  const allowed = isAdminRole(role)
-    ? groups
-    : groups
-        .map((group) => ({ ...group, items: group.items.filter((item) => !item.adminOnly) }))
-        .filter((group) => group.items.length > 0);
+  const allowed = groups
+    .map((group) => ({ ...group, items: group.items.filter((item) => allowedForRole(item, role)) }))
+    .filter((group) => group.items.length > 0);
   // Módulos escondidos por perfil: o grupo desaparece quando fica sem itens.
   return allowed
     .map((group) => {

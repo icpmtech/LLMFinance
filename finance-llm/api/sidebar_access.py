@@ -35,11 +35,12 @@ DOC_KIND = "sidebar_access"
 # Papéis da plataforma (campo `role` da conta de autenticação).
 PLATFORM_ROLES: Tuple[Tuple[str, str], ...] = (
     ("admin", "Administrador (plataforma)"),
+    ("manager", "Gestor de plataforma"),
     ("member", "Utilizador (plataforma)"),
 )
 
 # Módulos que nunca podem ser escondidos (trancariam o acesso à plataforma).
-PROTECTED: Tuple[str, ...] = ("chat", "finder", "settings", "admin")
+PROTECTED: Tuple[str, ...] = ("chat", "finder", "settings", "admin", "permissions")
 
 PROFILE_KINDS: Tuple[Tuple[str, str], ...] = (("plataforma", "Papel da plataforma"), ("crm", "Perfil de CRM"))
 

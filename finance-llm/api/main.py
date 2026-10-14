@@ -36,7 +36,7 @@ _carregar_env_do_projeto()
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Body, Request, UploadFile, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from api.models import (
@@ -252,6 +252,7 @@ from sentiment.feature_engineering import generate_sentiment_blended_forecast
 
 
 from api.rag_routes import router as rag_router
+from api.permissions_routes import router as permissions_router
 from api.auth_routes import router as auth_router, optional_session, CurrentSession
 from api.billing_routes import router as billing_router
 from api.cli_routes import router as cli_router
@@ -378,6 +379,7 @@ from api.benchmarks_routes import router as benchmarks_router, site_router as be
 from api.base_impic_routes import router as base_impic_router
 from api import auth_service as auth
 from api import events_service as events
+from api import permissions_service as permissions
 from api import ontology_registry as ontology_registry
 
 
@@ -668,8 +670,73 @@ async def _no_store_for_management(request: Request, call_next):
         response.headers["Cache-Control"] = "no-store, must-revalidate"
     return response
 
+
+@app.middleware("http")
+async def _enforce_write_permissions(request: Request, call_next):
+    """Impede quem só lê de criar ou alterar conteúdo.
+
+    Um `member` apenas lê dados; escrever é de `admin` e `manager`. As decisões
+    que interessam a este bloqueio:
+
+    * **POST nem sempre é escrita.** As pesquisas, exportações e análises usam
+      POST com o pedido no corpo. São leitura e passam sempre.
+    * **Sem sessão, passa.** As encomendas da loja, o formulário de contacto e os
+      webhooks do Stripe/PayPal não têm sessão — quem decide é a própria rota.
+    * **Só se bloqueia o que se sabe classificar.** Se o módulo do caminho não
+      está no catálogo, a escrita é negada a quem não é administrador ou gestor.
+    """
+    caminho = request.url.path
+    if not permissions.is_write_operation(request.method, caminho):
+        return await call_next(request)
+
+    autorizacao = request.headers.get("authorization")
+    if not autorizacao:
+        return await call_next(request)
+
+    utilizador = _utilizador_da_sessao(autorizacao)
+    if not utilizador:
+        # Token inválido ou sessão terminada: a rota responde 401 como sempre.
+        return await call_next(request)
+
+    modulo = permissions.module_for_path(caminho)
+    if permissions.can(utilizador, modulo):
+        return await call_next(request)
+
+    return JSONResponse(
+        status_code=403,
+        content={
+            "detail": (
+                f"A sua conta só pode consultar dados. Escrever em «{modulo}» é reservado a "
+                "administradores e gestores de plataforma."
+            ),
+            "code": "read_only",
+            "module": modulo,
+        },
+    )
+
+
+def _utilizador_da_sessao(autorizacao: str) -> Optional[dict]:
+    """Utilizador da sessão do pedido; `None` se o token não servir.
+
+    Vale-se do mesmo caminho do `require_session`, mas devolve `None` em vez de
+    levantar, para deixar a rota responder com o erro que já lhe é próprio.
+    """
+    try:
+        token = autorizacao.split(" ", 1)[1].strip() if " " in autorizacao else ""
+        payload = auth.read_token(token) if token else None
+        if not payload:
+            return None
+        sessao = auth.get_session(str(payload.get("sid")))
+        if not sessao:
+            return None
+        return auth.get_user_by_id(str(payload.get("sub")))
+    except Exception as exc:  # noqa: BLE001 - nunca deve derrubar o pedido
+        logger.debug("Permissões: sessão do pedido não resolvida: %s", exc)
+        return None
+
 app.include_router(rag_router)
 app.include_router(auth_router)
+app.include_router(permissions_router)
 app.include_router(billing_router)
 app.include_router(cli_router)
 app.include_router(admin_router)
