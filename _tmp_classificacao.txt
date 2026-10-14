@@ -1,0 +1,605 @@
+﻿=== POST/PUT/PATCH/DELETE classificados como LEITURA (63) ===
+  POST    /benchmark/compare
+  POST    /benchmark/report
+  POST    /chat
+  POST    /chat/stream
+  POST    /companies/search
+  POST    /contracts-es/search
+  POST    /contracts-fr/search
+  POST    /contracts-fr/translate
+  POST    /contracts/chat
+  POST    /contracts/export/excel
+  POST    /contracts/export/pdf
+  POST    /contracts/search
+  POST    /contracts/{idcontrato}/analyze
+  POST    /contracts/{idcontrato}/report/pdf
+  POST    /descoberta/empresa/{nif}/analise
+  POST    /descoberta/pessoas/analise
+  POST    /elastic/analyze/news/{ticker}
+  POST    /elastic/vectors/search
+  POST    /empresas-recolha/detail
+  POST    /entities/search
+  POST    /firmas/search
+  POST    /import/preview
+  POST    /loja/cupoes/validar
+  POST    /mirofish/runs/{simulation_id}/graph/search
+  POST    /mirofish/runs/{simulation_id}/report
+  POST    /mirofish/runs/{simulation_id}/report/chat
+  POST    /ontology/actions/{action_id}/resolve
+  POST    /ontology/ai/suggest-links
+  POST    /ontology/ai/validate
+  POST    /ontology/objects/{type_id}/query
+  POST    /ontology/resolve
+  POST    /osint/search
+  POST    /padroes/empresas/analise-multipla
+  POST    /padroes/empresas/multipla/relatorio
+  POST    /people/summary
+  POST    /rag/chat
+  POST    /rag/chat/stream
+  POST    /risco/comparar
+  POST    /scraper/preview
+  POST    /scraper/sources/{source_id}/preview
+  POST    /scraper/suggest
+  POST    /scraper/templates/{template_id}/preview
+  POST    /search/chat
+  POST    /search/favorites
+  DELETE  /search/favorites/{kind}/{item_id}
+  POST    /search/portfolio
+  DELETE  /search/portfolio/{item_id}
+  POST    /search/report/excel
+  POST    /search/report/pdf
+  POST    /search360/search
+  POST    /sentiment/analyze
+  POST    /sentiment/analyze/{ticker}
+  POST    /sentiment/market/report/office
+  POST    /social/channels/{channel_id}/preview
+  POST    /social/preview
+  POST    /social/templates/{template_id}/preview
+  POST    /trademarks/search
+  POST    /translate
+  POST    /visualizador/export/csv
+  POST    /visualizador/export/xlsx
+  POST    /visualizador/query
+  PUT     /workspace/history
+  POST    /world/simulate
+
+=== classificados como ESCRITA (397) por prefixo ===
+
+  /ontology (27)
+    POST    /ontology/ai/answer
+    POST    /ontology/ai/context
+    POST    /ontology/ai/design
+    POST    /ontology/ai/dossier
+    POST    /ontology/ai/extract
+    POST    /ontology/dossiers
+    DELETE  /ontology/dossiers/{dossier_id}
+    POST    /ontology/dossiers/{dossier_id}/draft
+    POST    /ontology/dossiers/{dossier_id}/facts
+    POST    /ontology/graph/explore
+    POST    /ontology/link-types
+    PATCH   /ontology/link-types/{link_id}
+    DELETE  /ontology/link-types/{link_id}
+    POST    /ontology/object-types
+    PATCH   /ontology/object-types/{type_id}
+    DELETE  /ontology/object-types/{type_id}
+    POST    /ontology/objects/{type_id}/{object_id}/links
+    POST    /ontology/ontologies
+    PATCH   /ontology/ontologies/{ontology_id}
+    DELETE  /ontology/ontologies/{ontology_id}
+    POST    /ontology/projects
+    DELETE  /ontology/projects/{project_id}
+    POST    /ontology/reset
+    POST    /ontology/sources
+    DELETE  /ontology/sources/{source_id}
+    POST    /ontology/sources/{source_id}/infer
+    POST    /ontology/sources/{source_id}/probe
+
+  /rss (25)
+    POST    /rss/articles/digest
+    POST    /rss/articles/purge-read
+    POST    /rss/articles/read-all
+    PATCH   /rss/articles/{article_id}
+    POST    /rss/articles/{article_id}/crm
+    POST    /rss/articles/{article_id}/digest
+    POST    /rss/articles/{article_id}/office
+    POST    /rss/articles/{article_id}/rag
+    POST    /rss/articles/{article_id}/sentiment
+    POST    /rss/feeds
+    PATCH   /rss/feeds/{feed_id}
+    DELETE  /rss/feeds/{feed_id}
+    POST    /rss/feeds/{feed_id}/fetch
+    POST    /rss/feeds/{feed_id}/purge-read
+    POST    /rss/feeds/{feed_id}/read-all
+    POST    /rss/fetch
+    POST    /rss/folders
+    PATCH   /rss/folders/{folder_id}
+    DELETE  /rss/folders/{folder_id}
+    POST    /rss/opml/import
+    PUT     /rss/rules
+    POST    /rss/rules/apply
+    PUT     /rss/schedule
+    POST    /rss/schedule/reload
+    POST    /rss/suggestions/subscribe
+
+  /cms (22)
+    POST    /cms/menus
+    PATCH   /cms/menus/{menu_id}
+    DELETE  /cms/menus/{menu_id}
+    POST    /cms/municipios
+    PATCH   /cms/municipios/{item_id}
+    POST    /cms/municipios/{item_id}/dados
+    POST    /cms/municipios/{item_id}/texto
+    POST    /cms/pesquisas
+    PATCH   /cms/pesquisas/{item_id}
+    POST    /cms/pesquisas/{item_id}/dados
+    POST    /cms/remuneracoes
+    PATCH   /cms/remuneracoes/{item_id}
+    POST    /cms/remuneracoes/{item_id}/modelo
+    POST    /cms/revisions/{revision_id}/restore
+    PUT     /cms/settings
+    POST    /cms/{entity}
+    PATCH   /cms/{entity}/{item_id}
+    DELETE  /cms/{entity}/{item_id}
+    POST    /cms/{entity}/{item_id}/duplicate
+    POST    /cms/{entity}/{item_id}/publish
+    POST    /cms/{entity}/{item_id}/status
+    POST    /cms/{entity}/{item_id}/unpublish
+
+  /admin (19)
+    POST    /admin/events
+    POST    /admin/mail/accounts
+    POST    /admin/mail/accounts/test
+    DELETE  /admin/mail/accounts/{account_id}
+    DELETE  /admin/mail/messages/{message_id}
+    POST    /admin/mail/messages/{message_id}/flags
+    POST    /admin/mail/messages/{message_id}/move
+    POST    /admin/mail/send
+    PUT     /admin/mail/settings
+    POST    /admin/mail/sync
+    POST    /admin/payments/{payment_id}/confirm
+    PUT     /admin/service-keys
+    POST    /admin/service-keys/{key_id}/test
+    PUT     /admin/sidebar-access
+    POST    /admin/sidebar-access/reset
+    PATCH   /admin/users/{user_id}
+    DELETE  /admin/users/{user_id}
+    POST    /admin/users/{user_id}/approve
+    POST    /admin/users/{user_id}/revoke-sessions
+
+  /shop (17)
+    POST    /shop/customers/{item_id}/crm
+    POST    /shop/media
+    POST    /shop/orders/{item_id}/note
+    POST    /shop/orders/{item_id}/payment
+    POST    /shop/orders/{item_id}/relatorios
+    POST    /shop/orders/{item_id}/status
+    POST    /shop/revisions/{revision_id}/restore
+    PUT     /shop/settings
+    PUT     /shop/theme
+    POST    /shop/theme/reset
+    POST    /shop/{entity}
+    PATCH   /shop/{entity}/{item_id}
+    DELETE  /shop/{entity}/{item_id}
+    POST    /shop/{entity}/{item_id}/duplicate
+    POST    /shop/{entity}/{item_id}/publish
+    POST    /shop/{entity}/{item_id}/status
+    POST    /shop/{entity}/{item_id}/unpublish
+
+  /padroes (15)
+    POST    /padroes/cache/clear
+    POST    /padroes/empresas/browser
+    DELETE  /padroes/empresas/guardada/{doc_id}
+    POST    /padroes/empresas/guardar
+    POST    /padroes/empresas/ia
+    POST    /padroes/global/sincronizar
+    POST    /padroes/global/sincronizar/agora
+    POST    /padroes/regras
+    POST    /padroes/regras/repor
+    POST    /padroes/regras/templates
+    DELETE  /padroes/regras/templates/{template_id}
+    POST    /padroes/regras/templates/{template_id}/aplicar
+    DELETE  /padroes/regras/{regra_id}
+    PATCH   /padroes/regras/{regra_id}/ativo
+    POST    /padroes/regras/{regra_id}/duplicar
+
+  /crm (13)
+    POST    /crm/accounts/from-entity
+    POST    /crm/accounts/{account_id}/sync-entity
+    POST    /crm/ai/ask
+    POST    /crm/ai/insights/generate
+    POST    /crm/analytics/cross-sell
+    POST    /crm/analytics/opportunities
+    POST    /crm/mod/{module}
+    PATCH   /crm/mod/{module}/{record_id}
+    DELETE  /crm/mod/{module}/{record_id}
+    POST    /crm/rbac/sync
+    POST    /crm/{kind}
+    PATCH   /crm/{kind}/{record_id}
+    DELETE  /crm/{kind}/{record_id}
+
+  /reports (13)
+    POST    /reports/admin/catalogue
+    DELETE  /reports/admin/catalogue/{package_id}
+    PUT     /reports/admin/settings
+    PATCH   /reports/backoffice/requests/{request_id}
+    POST    /reports/backoffice/requests/{request_id}/files
+    POST    /reports/backoffice/requests/{request_id}/files/base64
+    DELETE  /reports/backoffice/requests/{request_id}/files/{file_id}
+    POST    /reports/backoffice/requests/{request_id}/note
+    POST    /reports/backoffice/requests/{request_id}/payment
+    POST    /reports/notifications/read
+    POST    /reports/requests
+    POST    /reports/requests/{request_id}/cancel
+    POST    /reports/requests/{request_id}/payment
+
+  /sentiment (12)
+    POST    /sentiment/corpus
+    POST    /sentiment/market/brief/office
+    POST    /sentiment/market/build
+    PUT     /sentiment/market/schedule
+    POST    /sentiment/market/schedule/reload
+    DELETE  /sentiment/market/series
+    POST    /sentiment/market/tickers
+    DELETE  /sentiment/market/tickers/{ticker}
+    POST    /sentiment/market/watchlist
+    DELETE  /sentiment/market/watchlist/{ticker}
+    POST    /sentiment/save/dossier
+    POST    /sentiment/save/office
+
+  /search360 (11)
+    POST    /search360/ai/synthesis
+    POST    /search360/cache/clear
+    POST    /search360/dossiers
+    PATCH   /search360/dossiers/{dossier_id}
+    DELETE  /search360/dossiers/{dossier_id}
+    POST    /search360/dossiers/{dossier_id}/refresh
+    POST    /search360/graph
+    POST    /search360/library
+    POST    /search360/projects
+    DELETE  /search360/projects/{project_id}
+    POST    /search360/topic
+
+  /societario (11)
+    POST    /societario/collect
+    POST    /societario/collect-entities
+    POST    /societario/companies/{nif}/timeline
+    POST    /societario/ingest
+    POST    /societario/recolha/empresas/{nif}/obter
+    POST    /societario/recolha/exports/ingest
+    DELETE  /societario/recolha/exports/{nif}
+    POST    /societario/recolha/jobs
+    POST    /societario/recolha/jobs/{job_id}/pause
+    POST    /societario/recolha/jobs/{job_id}/resume
+    POST    /societario/recolha/jobs/{job_id}/stop
+
+  /people (10)
+    POST    /people/autarquicas/refresh
+    POST    /people/exists
+    POST    /people/ingest-cire
+    POST    /people/ingest/{nif}
+    POST    /people/municipio/refresh
+    POST    /people/vereadores/import
+    POST    /people/vereadores/import/csv
+    POST    /people/vereadores/refresh
+    POST    /people/{nif}/politician/enrich
+    POST    /people/{nif}/social-collect
+
+  /mirofish (10)
+    POST    /mirofish/runs/{simulation_id}/environment/close
+    POST    /mirofish/runs/{simulation_id}/interview
+    POST    /mirofish/runs/{simulation_id}/interview/batch
+    POST    /mirofish/runs/{simulation_id}/start
+    POST    /mirofish/runs/{simulation_id}/stop
+    POST    /mirofish/seed
+    POST    /mirofish/seed/office
+    PUT     /mirofish/settings
+    POST    /mirofish/settings/apply
+    POST    /mirofish/simulations
+
+  /benchmarks (9)
+    POST    /benchmarks
+    PUT     /benchmarks/configuracao
+    POST    /benchmarks/sonda
+    PUT     /benchmarks/{slug}
+    DELETE  /benchmarks/{slug}
+    POST    /benchmarks/{slug}/publicar
+    DELETE  /benchmarks/{slug}/publicar
+    POST    /benchmarks/{slug}/recolher
+    POST    /benchmarks/{slug}/sonda
+
+  /auth (8)
+    POST    /auth/login
+    POST    /auth/logout
+    PATCH   /auth/me
+    DELETE  /auth/me
+    POST    /auth/password
+    POST    /auth/register
+    DELETE  /auth/sessions
+    DELETE  /auth/sessions/{session_id}
+
+  /scraper (8)
+    POST    /scraper/jobs/reload
+    POST    /scraper/sentiment
+    POST    /scraper/sources
+    PATCH   /scraper/sources/{source_id}
+    DELETE  /scraper/sources/{source_id}
+    POST    /scraper/sources/{source_id}/apply-template
+    POST    /scraper/sources/{source_id}/run
+    POST    /scraper/templates/{template_id}/source
+
+  /email (8)
+    POST    /email/accounts
+    POST    /email/accounts/test
+    DELETE  /email/accounts/{account_id}
+    DELETE  /email/accounts/{account_id}/messages/{uid}
+    POST    /email/accounts/{account_id}/messages/{uid}/flags
+    POST    /email/accounts/{account_id}/messages/{uid}/move
+    POST    /email/accounts/{account_id}/send
+    POST    /email/accounts/{account_id}/test
+
+  /remuneracoes (8)
+    POST    /remuneracoes/camaras/recolher
+    POST    /remuneracoes/eleitos/executivo
+    POST    /remuneracoes/eleitos/nomes/recolher
+    POST    /remuneracoes/eleitos/recolher
+    POST    /remuneracoes/municipios/recolher
+    POST    /remuneracoes/refresh
+    POST    /remuneracoes/reindex
+    POST    /remuneracoes/tabelas/import
+
+  /billing (7)
+    POST    /billing/confirm
+    POST    /billing/mbway/request
+    POST    /billing/mbway/status
+    POST    /billing/paypal/capture
+    POST    /billing/subscribe
+    POST    /billing/webhooks/paypal
+    POST    /billing/webhooks/stripe
+
+  /office (7)
+    POST    /office/documents
+    POST    /office/documents/from-dossier/{dossier_id}
+    PATCH   /office/documents/{document_id}
+    DELETE  /office/documents/{document_id}
+    POST    /office/documents/{document_id}/duplicate
+    POST    /office/folders
+    DELETE  /office/folders/{folder_id}
+
+  /world (7)
+    POST    /world/agent/run
+    PUT     /world/config
+    POST    /world/investigate
+    POST    /world/network/train
+    POST    /world/rebuild
+    PUT     /world/schedule
+    PUT     /world/sources
+
+  /social (6)
+    POST    /social/channels
+    PATCH   /social/channels/{channel_id}
+    DELETE  /social/channels/{channel_id}
+    POST    /social/channels/{channel_id}/run
+    POST    /social/jobs/reload
+    POST    /social/templates/{template_id}/channel
+
+  /skills (6)
+    POST    /skills
+    DELETE  /skills
+    POST    /skills/ensure
+    POST    /skills/match
+    PATCH   /skills/{skill_id}
+    DELETE  /skills/{skill_id}
+
+  /visualizador (6)
+    POST    /visualizador/dashboards
+    DELETE  /visualizador/dashboards/{dashboard_id}
+    POST    /visualizador/dashboards/{dashboard_id}/duplicate
+    POST    /visualizador/records
+    POST    /visualizador/templates/{template_id}/dashboard
+    POST    /visualizador/values
+
+  /elastic (6)
+    POST    /elastic/ingest/news/{ticker}
+    POST    /elastic/ingest/prices/{ticker}
+    POST    /elastic/ingest/{ticker}
+    DELETE  /elastic/tickers/{ticker}
+    POST    /elastic/vectors/ensure-mappings
+    POST    /elastic/vectors/index
+
+  /jarvis (6)
+    POST    /jarvis/actions/run
+    POST    /jarvis/ask
+    POST    /jarvis/ask/stream
+    POST    /jarvis/speak
+    POST    /jarvis/transcribe
+    POST    /jarvis/wake
+
+  /rag (5)
+    PATCH   /rag/documents/{doc_id}
+    DELETE  /rag/documents/{doc_id}
+    POST    /rag/documents/{doc_id}/reprocess
+    POST    /rag/explain
+    POST    /rag/upload
+
+  /empresas (5)
+    POST    /empresas/perfil/config
+    POST    /empresas/perfil/resolver
+    POST    /empresas/perfil/sincronizar
+    DELETE  /empresas/perfil/{chave}
+    POST    /empresas/perfil/{chave}/site
+
+  /citacoes (5)
+    POST    /citacoes/collect
+    POST    /citacoes/ingest
+    POST    /citacoes/jobs/{job_id}/stop
+    DELETE  /citacoes/runs/{run_id}
+    POST    /citacoes/runs/{run_id}/documentos
+
+  /deep-search (4)
+    POST    /deep-search/analogies
+    POST    /deep-search/analysis
+    POST    /deep-search/ask
+    POST    /deep-search/ontology
+
+  /agents (4)
+    POST    /agents
+    DELETE  /agents/{agent_id}
+    POST    /agents/{agent_id}/run
+    POST    /agents/{agent_id}/stream
+
+  /empresas-recolha (4)
+    POST    /empresas-recolha/distrito
+    POST    /empresas-recolha/distrito/sync
+    POST    /empresas-recolha/jobs
+    POST    /empresas-recolha/sync
+
+  /cire (4)
+    POST    /cire/collect
+    POST    /cire/ingest
+    POST    /cire/jobs/{job_id}/stop
+    DELETE  /cire/runs/{run_id}
+
+  /vortal (4)
+    DELETE  /vortal/aviso/{uid}
+    POST    /vortal/indexar
+    POST    /vortal/lote
+    POST    /vortal/recolha
+
+  /erc (4)
+    POST    /erc/analisar
+    POST    /erc/financeiro/recolher
+    POST    /erc/indexar
+    POST    /erc/recolher
+
+  /providers (3)
+    PUT     /providers/defaults
+    PUT     /providers/keys
+    POST    /providers/test
+
+  /contracts-fr (3)
+    POST    /contracts-fr/import
+    POST    /contracts-fr/ingest
+    POST    /contracts-fr/sirene/enrich
+
+  /loja (3)
+    POST    /loja/avaliacoes
+    POST    /loja/encomendas
+    POST    /loja/newsletter
+
+  /contribuintes (3)
+    DELETE  /contribuintes/index
+    PUT     /contribuintes/schedule
+    POST    /contribuintes/sync
+
+  /favorites (3)
+    PUT     /favorites
+    DELETE  /favorites
+    DELETE  /favorites/{kind}/{item_id}
+
+  /base-impic (2)
+    POST    /base-impic/cancelar/{ano}
+    POST    /base-impic/importar
+
+  /descoberta (2)
+    POST    /descoberta/conjunto
+    POST    /descoberta/pessoas/descobrir
+
+  /remuneracoes-ap (2)
+    POST    /remuneracoes-ap/indexar
+    POST    /remuneracoes-ap/refresh
+
+  /gleif (2)
+    DELETE  /gleif/index
+    POST    /gleif/ingest
+
+  /lorenz (2)
+    PUT     /lorenz/areas
+    POST    /lorenz/execucoes
+
+  /mercado (2)
+    POST    /mercado/execucoes
+    PUT     /mercado/tabela
+
+  /risco (2)
+    POST    /risco/cache/clear
+    POST    /risco/empresa/ia
+
+  /devedores (2)
+    POST    /devedores/collect
+    POST    /devedores/ingest
+
+  /hermes-agent (2)
+    PUT     /hermes-agent/settings
+    POST    /hermes-agent/settings/apply
+
+  /osint (2)
+    DELETE  /osint/saved/{doc_id}
+    POST    /osint/scan
+
+  /subvencoes (2)
+    POST    /subvencoes/indexar
+    POST    /subvencoes/ler
+
+  /partidos (2)
+    POST    /partidos/indexar
+    POST    /partidos/recolher
+
+  /companies (2)
+    POST    /companies/role-summary
+    POST    /companies/{nif}/enrich
+
+  /entities (2)
+    POST    /entities/ingest
+    POST    /entities/{nif}/enrich
+
+  /workspace (2)
+    PUT     /workspace/folders/{folder_id}
+    DELETE  /workspace/folders/{folder_id}
+
+  /cli (1)
+    POST    /cli/run
+
+  /proxy (1)
+    POST    /proxy
+
+  /contracts-es (1)
+    POST    /contracts-es/import
+
+  /hermes (1)
+    POST    /hermes/ask
+
+  /site (1)
+    POST    /site/contacto
+
+  /news (1)
+    POST    /news/collect
+
+  /researcher (1)
+    POST    /researcher/investigate
+
+  /municipios (1)
+    POST    /municipios/despesas/recolher
+
+  /benchmark (1)
+    POST    /benchmark/cross
+
+  /administracao-central (1)
+    POST    /administracao-central/reindexar
+
+  /trademarks (1)
+    POST    /trademarks/ingest
+
+  /firmas (1)
+    POST    /firmas/ingest
+
+  /forecast (1)
+    POST    /forecast
+
+  /tickers (1)
+    POST    /tickers/add
+
+  /contracts (1)
+    POST    /contracts/ingest
+
+  /import (1)
+    POST    /import/ingest

@@ -17,13 +17,13 @@ import { DOCK_CATALOG, type DockApp } from "./dock";
 import { CRM_SUITE_GROUPS, CRM_SUITE_SECTIONS } from "./crmSuite";
 
 /** Ferramentas: aparecem no grupo «Ferramentas» da barra lateral. */
-export const TOOL_APP_IDS = ["elastic", "import", "cli", "settings", "admin", "iframe-pages"];
+export const TOOL_APP_IDS = ["elastic", "import", "cli", "settings", "admin", "admin-mail", "iframe-pages"];
 
 /** Vistas de CRM: cada secção da arquitetura tem a sua entrada. */
 export const CRM_VIEW_IDS: string[] = CRM_SUITE_SECTIONS.map((section) => section.view);
 
 /** Módulos que nunca podem ser escondidos (trancariam o acesso à plataforma). */
-export const RESERVED_MODULES = ["chat", "finder", "settings", "admin"];
+export const RESERVED_MODULES = ["chat", "finder", "settings", "admin", "admin-mail"];
 
 export type SidebarModule = {
   id: string;
@@ -240,7 +240,7 @@ export function sidebarCatalog(): SidebarModuleGroup[] {
   groups.push({
     id: "tools",
     label: "Ferramentas",
-    hint: "Elasticsearch, importação, terminal, definições e administração",
+    hint: "Elasticsearch, importação, terminal, definições, administração e correio da plataforma",
     kind: "tools",
     items: DOCK_CATALOG.filter((app) => TOOL_APP_IDS.includes(app.id)).map(fromApp),
   });

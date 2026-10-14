@@ -171,15 +171,14 @@ border-radius:999px;padding:9px 13px;font-size:13px;white-space:nowrap;min-heigh
 .account-pill:hover{color:var(--text);border-color:var(--accent)}
 /* conta do comprador */
 .orders{display:flex;flex-direction:column;gap:10px}
-.order{display:grid;grid-template-columns:minmax(140px,.7fr) minmax(0,1.6fr) auto;gap:14px;align-items:center;background:var(--surface);
+.order{display:grid;grid-template-columns:1fr;gap:10px;align-items:center;background:var(--surface);
 border:1px solid var(--border);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
 .order .num{font-weight:700;font-size:15px}
 .order .items{color:var(--muted);font-size:13px;margin-top:4px}
-.order .side{text-align:right;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.order .side{text-align:left;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .steps{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .steps span{border:1px solid var(--border);border-radius:999px;padding:2px 9px;font-size:11.5px;color:var(--muted);background:var(--soft)}
 .steps span.done{border-color:color-mix(in srgb,var(--accent) 45%%,transparent);background:color-mix(in srgb,var(--accent) 16%%,transparent);color:var(--text);font-weight:600}
-@media (max-width:820px){ .order{grid-template-columns:1fr} .order .side{align-items:flex-start;text-align:left} }
 .cart-pill[data-count]:not([data-count="0"])::after{content:attr(data-count);position:absolute;top:-6px;right:-6px;background:#0f172a;color:#fff;
 border-radius:999px;min-width:19px;height:19px;display:grid;place-items:center;font-size:11px;padding:0 5px}
 .nav-pills{display:flex;gap:2px;flex-wrap:nowrap;border-top:1px solid var(--border);overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none}
@@ -365,6 +364,8 @@ font-size:13.5px;opacity:0;transition:.22s;pointer-events:none;z-index:80;max-wi
 }
 @media (min-width:900px){
  .header-main{gap:16px;min-height:72px;padding:0}
+ .order{grid-template-columns:minmax(140px,.7fr) minmax(0,1.6fr) auto;gap:14px}
+ .order .side{text-align:right;align-items:flex-end}
  .search{order:0;flex:1 1 auto;min-width:180px}
  .nav-pills{flex-wrap:wrap;overflow:visible}
  .nav-pills a{padding:9px 11px}
@@ -396,6 +397,252 @@ font-size:13.5px;opacity:0;transition:.22s;pointer-events:none;z-index:80;max-wi
         "accent": accent,
         "radius": radius,
     }
+
+
+# --------------------------------------------------------------------------
+# PWA (loja instalável)
+# --------------------------------------------------------------------------
+#: Ícones do PWA: os PNG da marca que viajam com o código
+#: (`scripts/generate_site_pwa_icons.py`), servidos em `/loja/pwa/<ficheiro>`.
+#: Um caminho fixo é o que permite ao manifesto referenciá-los: os ids da
+#: biblioteca de media são aleatórios em cada instalação.
+PWA_ICONS: Dict[str, Dict[str, str]] = {
+    "pwa-icone-192.png": {"sizes": "192x192", "purpose": "any"},
+    "pwa-icone-512.png": {"sizes": "512x512", "purpose": "any"},
+    "pwa-icone-maskable-512.png": {"sizes": "512x512", "purpose": "maskable"},
+}
+
+#: Ícone tocado com o dedo em ecrãs iOS (o manifest não precisa dele).
+PWA_IOS_ICON = "pwa-icone-180.png"
+PWA_ICON_PATH = "/loja/pwa/"
+MANIFEST_PATH = "/loja/manifest.webmanifest"
+SW_PATH = "/loja/sw.js"
+OFFLINE_PATH = "/loja/offline"
+
+#: Nome das caches da loja e versão do service worker. O prefixo é o que permite
+#: apagar só as caches da loja na ativação — o PWA da plataforma e o do site
+#: público, que vivem no mesmo domínio, não são tocados. Ao mudar a estratégia
+#: (ou o `_SW_TEMPLATE`), subir a versão.
+PWA_CACHE_PREFIX = "sabemos-loja-"
+PWA_SW_VERSION = "v1"
+
+
+def _pwa_cores(settings: Dict[str, Any]) -> Dict[str, str]:
+    """Cor da barra do sistema (destaque) e fundo do ecrã de arranque."""
+    theme = _THEMES.get(str(settings.get("theme") or "claro"), _THEMES["claro"])
+    return {
+        "accent": str(settings.get("accent") or "#0ea5a4"),
+        "background": theme["bg"],
+    }
+
+
+def render_manifest(settings: Optional[Dict[str, Any]] = None) -> str:
+    """Manifesto do PWA da loja: é o que faz o browser oferecer «instalar»."""
+    settings = settings or store.get_settings()
+    cores = _pwa_cores(settings)
+    nome = str(settings.get("store_name") or "Loja")
+    # O `short_name` fica debaixo do ícone no ecrã inicial: sendo o nome
+    # comprido, só a primeira palavra.
+    curto = nome if len(nome) <= 12 else nome.split()[0]
+    manifest: Dict[str, Any] = {
+        "id": "/loja/",
+        "name": nome,
+        "short_name": curto,
+        "description": str(settings.get("description") or settings.get("tagline") or ""),
+        "lang": str(settings.get("language") or "pt-PT"),
+        "dir": "ltr",
+        "start_url": "/loja/",
+        "scope": "/loja/",
+        "display": "standalone",
+        "display_override": ["standalone", "minimal-ui"],
+        "background_color": cores["background"],
+        "theme_color": cores["accent"],
+        "icons": [
+            {"src": f"{PWA_ICON_PATH}{ficheiro}", "type": "image/png", **dados}
+            for ficheiro, dados in PWA_ICONS.items()
+        ],
+        "categories": ["shopping", "business", "finance"],
+        "shortcuts": [
+            {"name": "Montra", "url": "/loja"},
+            {"name": "Todos os produtos", "url": "/loja/produtos"},
+            {"name": "Carrinho", "url": "/loja/carrinho"},
+            {"name": "As minhas encomendas", "url": "/loja/conta"},
+        ],
+    }
+    return json.dumps(manifest, ensure_ascii=False, indent=2)
+
+
+#: Service worker da loja. Escrito como modelo (e não como f-string) porque o
+#: corpo é JavaScript, cheio de chaves.
+_SW_TEMPLATE = r"""/**
+ * Service worker da loja (Sabemos).
+ *
+ * Estratégia:
+ * - Navegações: rede primeiro, porque o catálogo, os preços e o stock mudam no
+ *   servidor; sem ligação, abre a última cópia guardada da página e, em último
+ *   recurso, a página offline.
+ * - Imagens dos produtos e ícones da loja: cache com revalidação em segundo
+ *   plano — responde já com a cópia guardada e atualiza-a para a visita
+ *   seguinte, que é o que faz a montra abrir depressa num telefone.
+ * - Carrinho, finalização de compra, conta, gestão (`/shop/`) e API (`/api/`)
+ *   nunca passam pelo cache: são pedidos com estado e não podem ficar presos
+ *   numa versão antiga.
+ * - Tudo o resto segue direto para a rede.
+ *
+ * Ao alterar este ficheiro, subir PWA_SW_VERSION em `api/shop_render.py`.
+ */
+const VERSAO = "__VERSAO__";
+const CACHE_PAGINAS = "__CACHE_PAGINAS__";
+const CACHE_RECURSOS = "__CACHE_RECURSOS__";
+const OFFLINE = "__OFFLINE__";
+
+const PAGINAS = ["/loja", "__OFFLINE__"];
+const RECURSOS = [__RECURSOS__];
+
+/** Pedidos que nunca devem vir do cache. */
+const BYPASS = ["/api/", "/cms/", "/shop/", "/lp/", "/landing", "/loja/carrinho", "/loja/encomenda", "/loja/conta"];
+
+/** Exceções ao BYPASS: conteúdo de leitura, seguro de guardar. */
+const GUARDAVEIS = ["/loja/pwa/", "/cms/media/", "/loja/produto/", "/loja/categoria/"];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    (async () => {
+      const paginas = await caches.open(CACHE_PAGINAS);
+      const recursos = await caches.open(CACHE_RECURSOS);
+      // Um recurso em falta não pode impedir a instalação: guarda um a um.
+      // O `cache: "reload"` salta o cache HTTP.
+      await Promise.all(
+        PAGINAS.map((url) => paginas.add(new Request(url, { cache: "reload" })).catch(() => undefined)),
+      );
+      await Promise.all(
+        RECURSOS.map((url) => recursos.add(new Request(url, { cache: "reload" })).catch(() => undefined)),
+      );
+      await self.skipWaiting();
+    })(),
+  );
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    (async () => {
+      const chaves = await caches.keys();
+      await Promise.all(
+        chaves
+          .filter(
+            (chave) => chave.startsWith("__PREFIXO__") && chave !== CACHE_PAGINAS && chave !== CACHE_RECURSOS,
+          )
+          .map((chave) => caches.delete(chave)),
+      );
+      // Sem isto, a primeira visita só ficaria servida pelo worker na seguinte.
+      await self.clients.claim();
+    })(),
+  );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data === "skip-waiting") self.skipWaiting();
+});
+
+function ignorar(pathname) {
+  if (GUARDAVEIS.some((prefixo) => pathname.startsWith(prefixo))) return false;
+  if (pathname === "__SW__" || pathname === "__MANIFEST__") return true;
+  return BYPASS.some((prefixo) => pathname.startsWith(prefixo));
+}
+
+/** Navegação: rede primeiro, com a cópia guardada como reserva. */
+async function pagina(request) {
+  const cache = await caches.open(CACHE_PAGINAS);
+  try {
+    const resposta = await fetch(request);
+    if (resposta && resposta.ok) await cache.put(request, resposta.clone());
+    return resposta;
+  } catch {
+    const guardada = await cache.match(request);
+    if (guardada) return guardada;
+    return (
+      (await cache.match(OFFLINE)) ||
+      new Response(
+        "<!doctype html><meta charset=\"utf-8\"><title>Sem ligação</title><p>Sem ligação à loja.</p>",
+        { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } },
+      )
+    );
+  }
+}
+
+/** Imagem ou ícone: responde do cache e revalida em segundo plano. */
+async function revalidar(request) {
+  const cache = await caches.open(CACHE_RECURSOS);
+  const guardada = await cache.match(request);
+  const rede = fetch(request)
+    .then((resposta) => {
+      if (resposta && resposta.ok) cache.put(request, resposta.clone());
+      return resposta;
+    })
+    .catch(() => undefined);
+  return guardada || (await rede) || Response.error();
+}
+
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  if (request.method !== "GET") return;
+
+  const url = new URL(request.url);
+  // Outros domínios (as imagens de partilha, o email) não passam por aqui.
+  if (url.origin !== self.location.origin) return;
+  if (ignorar(url.pathname)) return;
+
+  if (request.mode === "navigate") {
+    event.respondWith(pagina(request));
+    return;
+  }
+  if (GUARDAVEIS.some((prefixo) => url.pathname.startsWith(prefixo))) {
+    event.respondWith(revalidar(request));
+  }
+});
+"""
+
+
+def render_service_worker(settings: Optional[Dict[str, Any]] = None) -> str:
+    """Service worker da loja: catálogo com cópia local e leitura sem rede."""
+    settings = settings or store.get_settings()
+    recursos = [MANIFEST_PATH] + [f"{PWA_ICON_PATH}{ficheiro}" for ficheiro in PWA_ICONS]
+    valores = {
+        "__VERSAO__": PWA_SW_VERSION,
+        "__CACHE_PAGINAS__": f"{PWA_CACHE_PREFIX}paginas-{PWA_SW_VERSION}",
+        "__CACHE_RECURSOS__": f"{PWA_CACHE_PREFIX}recursos-{PWA_SW_VERSION}",
+        "__PREFIXO__": PWA_CACHE_PREFIX,
+        "__OFFLINE__": OFFLINE_PATH,
+        "__SW__": SW_PATH,
+        "__MANIFEST__": MANIFEST_PATH,
+        "__RECURSOS__": ", ".join(f'"{caminho}"' for caminho in recursos),
+    }
+    js = _SW_TEMPLATE
+    for chave, valor in valores.items():
+        js = js.replace(chave, valor)
+    return js
+
+
+def render_offline(*, settings: Optional[Dict[str, Any]] = None) -> str:
+    """Página de recurso, mostrada pelo service worker quando não há ligação."""
+    settings = settings or store.get_settings()
+    body = (
+        '<section class="block" style="text-align:center">'
+        "<h1>Sem ligação</h1>"
+        '<p class="muted">Não foi possível chegar ao servidor. A montra, as fichas de produto e as '
+        "imagens que já visitou continuam a abrir sem rede.</p>"
+        '<p><a class="btn" href="/loja">Voltar à loja</a></p></section>'
+    )
+    return _layout(
+        title="Sem ligação",
+        description="Sem ligação à loja.",
+        body=body,
+        settings=settings,
+        products=[],
+        shipping=[],
+        canonical=OFFLINE_PATH,
+        noindex=True,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -1115,6 +1362,20 @@ def _layout(
             '<script async src="https://www.googletagmanager.com/gtag/js?id=' + _esc(analytics) + '"></script>'
             '<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag("js",new Date());gtag("config","' + _esc(analytics) + '");</script>'
         )
+    cores = _pwa_cores(settings)
+    meta.extend(
+        [
+            f'<link rel="manifest" href="{MANIFEST_PATH}">',
+            # Cor da barra do sistema: a do destaque, igual à da marca.
+            f'<meta name="theme-color" content="{_esc(cores["accent"])}">',
+            f'<link rel="apple-touch-icon" href="{_esc(PWA_ICON_PATH + PWA_IOS_ICON)}">',
+            # Instalada no ecrã inicial (iOS e Android), a loja abre sem barra do browser.
+            '<meta name="mobile-web-app-capable" content="yes">',
+            '<meta name="apple-mobile-web-app-capable" content="yes">',
+            f'<meta name="apple-mobile-web-app-title" content="{store_name}">',
+            '<meta name="apple-mobile-web-app-status-bar-style" content="default">',
+        ]
+    )
     theme = theme if theme is not None else store.get_theme()
     # O carrinho vive no browser e precisa de conhecer **todo** o catálogo
     # publicado: em páginas filtradas (pesquisa, categoria, produto) a lista
@@ -1128,7 +1389,7 @@ def _layout(
     preview_flag = '<div class="preview-flag">Pré-visualização da vitrine</div>' if preview else ""
     return (
         '<!doctype html><html lang="' + _esc(str(settings.get("language") or "pt-PT")) + '">'
-        '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
         f"<title>{_esc(full_title)}</title>"
         + "".join(meta)
         + f"<style>{_css(settings)}</style></head>"
@@ -1138,6 +1399,15 @@ def _layout(
         + _footer(settings, theme=theme)
         + f'<script type="application/json" id="loja-dados">{data}</script>'
         + f"<script>{_CART_JS}</script>"
+        # Registo do service worker (catálogo e imagens com cópia local, leitura
+        # sem rede). Falha em silêncio: sem HTTPS ou num browser antigo, a loja
+        # continua a funcionar como sempre.
+        + (
+            ""
+            if preview
+            else '<script>if("serviceWorker" in navigator){window.addEventListener("load",function(){'
+            f'navigator.serviceWorker.register("{SW_PATH}").catch(function(){{}});}});}}</script>'
+        )
         + preview_flag
         + "</body></html>"
     )

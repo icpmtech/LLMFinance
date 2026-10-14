@@ -685,6 +685,18 @@ O DMARC comeca em `p=none` de proposito: primeiro leem-se os relatorios da caixa
 vez de `~all`) e o aperto final — se um dia a plataforma enviar por outro
 fornecedor, entra no SPF antes do aperto.
 
+### Gestor do correio na plataforma
+
+O correio da plataforma le-se e envia-se na aplicacao **Correio da plataforma**
+(`/admin/correio`, so para `admin`) — caixas do dominio, lista, pesquisa sobre o
+indice, conversas, e um editor para escrever. A documentacao do modulo (rotas,
+indices, agenda e armadilhas) esta em `../../docs/correio-plataforma.md`.
+
+O que importa para o deploy: o backend le o IMAP **por dentro da `iqos-net`**,
+onde `mail.sabemos.studio` resolve para o mailserver — a 993 continua presa a
+`127.0.0.1` na VM, como os outros servicos. Se o backend correr fora dessa rede
+(o stack do PC, por exemplo), nao consegue chegar ao IMAP.
+
 ### Armadilhas
 
 * **Sem conta de correio o contentor desliga-se** (120 s). Ver acima.

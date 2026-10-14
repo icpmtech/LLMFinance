@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1244 operações** em **44 grupos**.
+Versão `0.4.0` · **1264 operações** em **44 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -226,11 +226,15 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/loja/encomenda/{number}` | Loja Order |
 | `GET` | `/loja/encomenda/{number}/ficheiros/{file_id}` | Loja Order File |
 | `POST` | `/loja/encomendas` | Loja Checkout |
+| `GET` | `/loja/manifest.webmanifest` | Loja Manifest |
 | `POST` | `/loja/newsletter` | Loja Newsletter |
+| `GET` | `/loja/offline` | Loja Offline |
 | `GET` | `/loja/produto/{slug}` | Loja Product |
 | `GET` | `/loja/produtos` | Loja Products |
+| `GET` | `/loja/pwa/{ficheiro}` | Loja Pwa Icon |
 | `GET` | `/loja/robots.txt` | Loja Robots |
 | `GET` | `/loja/sitemap.xml` | Loja Sitemap |
+| `GET` | `/loja/sw.js` | Loja Service Worker |
 | `GET` | `/lorenz/areas` | Áreas de contratação disponíveis (prefixos de CPV) |
 | `PUT` | `/lorenz/areas` | Substituir as áreas e/ou os parâmetros (exige sessão) |
 | `GET` | `/lorenz/cenarios` | Comparação 7/30/60 dias e elasticidade ao choque |
@@ -564,6 +568,22 @@ Consola de administração: panorama geral, gestão de contas e sessões, visual
 | `GET` | `/admin/events/stats` | Admin Events Stats |
 | `GET` | `/admin/logs` | Admin Logs |
 | `GET` | `/admin/logs/{name}` | Admin Log Tail |
+| `GET` | `/admin/mail/accounts` | List Accounts |
+| `POST` | `/admin/mail/accounts` | Save Account |
+| `POST` | `/admin/mail/accounts/test` | Test Account |
+| `DELETE` | `/admin/mail/accounts/{account_id}` | Delete Account |
+| `GET` | `/admin/mail/accounts/{account_id}/folders` | Folders |
+| `GET` | `/admin/mail/messages` | List Messages |
+| `GET` | `/admin/mail/messages/{message_id}` | Get Message |
+| `DELETE` | `/admin/mail/messages/{message_id}` | Delete Message |
+| `POST` | `/admin/mail/messages/{message_id}/flags` | Set Flags |
+| `POST` | `/admin/mail/messages/{message_id}/move` | Move Message |
+| `GET` | `/admin/mail/meta` | Meta |
+| `POST` | `/admin/mail/send` | Send |
+| `GET` | `/admin/mail/settings` | Get Settings |
+| `PUT` | `/admin/mail/settings` | Put Settings |
+| `GET` | `/admin/mail/stats` | Stats |
+| `POST` | `/admin/mail/sync` | Sync |
 | `GET` | `/admin/overview` | Admin Overview |
 | `GET` | `/admin/payments` | Admin Payments |
 | `POST` | `/admin/payments/{payment_id}/confirm` | Admin Confirm Payment |

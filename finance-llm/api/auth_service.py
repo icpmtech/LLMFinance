@@ -269,6 +269,20 @@ USER_STATUS_ACTIVE = "active"
 USER_STATUS_SUSPENDED = "suspended"
 USER_STATUSES = {USER_STATUS_PENDING, USER_STATUS_ACTIVE, USER_STATUS_SUSPENDED}
 
+# Papéis da conta, do mais para o menos permissivo:
+#   admin   — administra a plataforma (contas, chaves, permissões);
+#   manager — cria e edita conteúdo, mas não administra a plataforma;
+#   member  — só lê dados (as escritas de self-service ficam nas permissões).
+ROLE_ADMIN = "admin"
+ROLE_MANAGER = "manager"
+ROLE_MEMBER = "member"
+USER_ROLES = (ROLE_ADMIN, ROLE_MANAGER, ROLE_MEMBER)
+ROLE_LABELS = {
+    ROLE_ADMIN: "Administrador",
+    ROLE_MANAGER: "Gestor de plataforma",
+    ROLE_MEMBER: "Utilizador",
+}
+
 
 def public_user(source: Dict[str, Any]) -> Dict[str, Any]:
     """Documento de utilizador tal como sai da API (sem o hash da palavra-passe)."""
@@ -448,8 +462,12 @@ def update_user(
     if admin_fields:
         role = patch.get("role")
         if role is not None:
-            if str(role) not in {"admin", "member"}:
-                raise AuthError("Papel inválido (use admin ou member).", status_code=422, code="invalid_input")
+            if str(role) not in USER_ROLES:
+                raise AuthError(
+                    f"Papel inválido (use {', '.join(USER_ROLES)}).",
+                    status_code=422,
+                    code="invalid_input",
+                )
             document["role"] = str(role)
         account_status = patch.get("status")
         if account_status is not None:

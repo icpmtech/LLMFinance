@@ -270,8 +270,8 @@ def _thread_key(message_id: str, in_reply_to: str, references: str, subject: str
 
 
 def _subject_key(subject: str) -> str:
-    """Assunto sem os prefixos de resposta (`Re:`, `Fwd:`…)."""
-    return re.sub(r"^(?:(?:re|fw|fwd|enc|res)\s*(\[\d+\])?\s*:\s*)+", "", _text(subject)).strip()
+    """Assunto sem os prefixos de resposta (`Re:`, `Fwd:`, `Re[2]:`…)."""
+    return re.sub(r"^(?:(?:re|fw|fwd|enc|res)\s*(\[\d+\])?\s*:\s*)+", "", _text(subject), flags=re.IGNORECASE).strip()
 
 
 def _imap_defaults() -> Dict[str, Any]:
@@ -666,8 +666,20 @@ def _sync_states() -> Dict[str, Dict[str, Any]]:
 
 
 def sync_state(account_id: str) -> Dict[str, Any]:
-    """Estado da sincronização de uma caixa (pastas e último UID visto)."""
-    return _sync_states().get(account_id) or {"account": account_id, "folders": {}}
+    """Estado da sincronização de uma caixa (pastas e último UID visto).
+
+    O mapa das pastas vive no campo `state` do documento — o campo `folders` está
+    mapeado como `keyword` (é a lista de pastas a sincronizar de uma caixa) e não
+    aceita objetos.
+    """
+    documento = _sync_states().get(account_id) or {}
+    pastas = documento.get("state")
+    return {
+        "account": account_id,
+        "folders": pastas if isinstance(pastas, dict) else {},
+        "last_sync_at": documento.get("last_sync_at"),
+        "last_error": documento.get("last_error"),
+    }
 
 
 def _save_sync_state(account_id: str, *, folders: Dict[str, Any], error: Optional[str] = None) -> None:
@@ -678,7 +690,7 @@ def _save_sync_state(account_id: str, *, folders: Dict[str, Any], error: Optiona
         "kind": KIND_SYNC,
         "id": _state_doc_id(account_id),
         "account": account_id,
-        "folders": folders,
+        "state": folders,
         "last_sync_at": _now(),
         "last_error": error,
     }
@@ -803,26 +815,40 @@ def _indexed_counts(account_id: str) -> Dict[str, int]:
 # ---------------------------------------------------------------------------
 # Mensagens: leitura do servidor
 # ---------------------------------------------------------------------------
+def _attachment_parts(message: Any) -> List[Tuple[str, str, bytes]]:
+    """Anexos de uma mensagem: `(nome, tipo de conteúdo, conteúdo)`.
+
+    Uma só implementação da deteção de anexos — é ela que decide a ordem com que
+    aparecem na lista, pelo que o índice da lista é o índice do descarregamento.
+    """
+    anexos: List[Tuple[str, str, bytes]] = []
+    for part in message.walk():
+        if part.is_multipart():
+            continue
+        disposition = (part.get_content_disposition() or "").lower()
+        filename = part.get_filename()
+        if disposition != "attachment" and not (filename and disposition != "inline"):
+            continue
+        anexos.append(
+            (
+                email_service._decode_header(filename) or "anexo",  # noqa: SLF001
+                part.get_content_type(),
+                part.get_payload(decode=True) or b"",
+            )
+        )
+    return anexos
+
+
 def _extract_bodies(message: Any) -> Tuple[str, str, List[Dict[str, Any]]]:
     """Corpo em texto, corpo HTML e metadados dos anexos de uma mensagem."""
     textos: List[str] = []
     htmls: List[str] = []
-    anexos: List[Dict[str, Any]] = []
     for part in message.walk():
         if part.is_multipart():
             continue
         disposition = (part.get_content_disposition() or "").lower()
         filename = part.get_filename()
         if disposition == "attachment" or (filename and disposition != "inline"):
-            payload = part.get_payload(decode=True) or b""
-            anexos.append(
-                {
-                    "filename": email_service._decode_header(filename) or "anexo",  # noqa: SLF001
-                    "content_type": part.get_content_type(),
-                    "size": len(payload),
-                    "inline": disposition == "inline",
-                }
-            )
             continue
         if part.get_content_maintype() != "text":
             continue
@@ -835,6 +861,10 @@ def _extract_bodies(message: Any) -> Tuple[str, str, List[Dict[str, Any]]]:
     html_final = "\n".join(parte for parte in htmls if parte.strip()).strip()
     if not texto_final and html_final:
         texto_final = email_service._html_to_text(html_final)  # noqa: SLF001
+    anexos = [
+        {"filename": nome, "content_type": tipo, "size": len(conteudo)}
+        for nome, tipo, conteudo in _attachment_parts(message)
+    ]
     return texto_final, html_final, anexos
 
 
@@ -1389,6 +1419,35 @@ def _update_index(doc_id: str, patch: Dict[str, Any]) -> bool:
     except Exception as exc:  # noqa: BLE001
         logger.warning("Não foi possível atualizar %s no índice: %s", doc_id, exc)
         return False
+
+
+def attachment(doc_id: str, index: int) -> Tuple[str, str, bytes]:
+    """Conteúdo de um anexo, por ordem de aparecimento na mensagem.
+
+    Os anexos ficam no servidor (o índice só guarda o nome, o tipo e o tamanho),
+    por isso o conteúdo é lido da mensagem sempre que é pedido.
+    """
+    account_id, uid, folder = _parse_doc_id(doc_id)
+    conta = get_account(account_id)
+    conn = None
+    try:
+        conn = email_service._imap_connect(conta)  # noqa: SLF001
+        status, _ = conn.select(email_service._utf7_encode(folder), readonly=True)  # noqa: SLF001
+        if status != "OK":
+            raise MailError(f"Não foi possível abrir a pasta «{folder}».", status=404)
+        obtido = _fetch_message(conn, uid)
+        if not obtido:
+            raise MailError("Mensagem não encontrada.", status=404)
+        anexos = _attachment_parts(message_from_bytes(obtido[0]))
+        if index < 0 or index >= len(anexos):
+            raise MailError("Anexo não encontrado.", status=404)
+        return anexos[index]
+    except MailError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise MailError(f"Não foi possível ler o anexo: {exc}", status=502) from exc
+    finally:
+        email_service._imap_close(conn)  # noqa: SLF001
 
 
 def set_flags(doc_id: str, action: str) -> Dict[str, Any]:

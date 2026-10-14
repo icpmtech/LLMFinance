@@ -18,6 +18,7 @@ editor e anexos, e o panorama do que está arquivado.
 - `POST   /admin/mail/sync`                        — sincronizar (uma caixa ou todas)
 - `GET    /admin/mail/messages`                    — lista/pesquisa (Elasticsearch)
 - `GET    /admin/mail/messages/{message_id}`       — mensagem completa (IMAP)
+- `GET    /admin/mail/messages/{message_id}/attachments/{index}` — descarregar um anexo
 - `POST   /admin/mail/messages/{message_id}/flags` — lida/não lida, destacada
 - `POST   /admin/mail/messages/{message_id}/move`  — mover para outra pasta
 - `DELETE /admin/mail/messages/{message_id}`       — apagar
@@ -31,8 +32,9 @@ from __future__ import annotations
 
 import logging
 from typing import Annotated, Any, Dict, Optional
+from urllib.parse import quote
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query, Response
 
 from api import events_service as events
 from api import platform_mail_service as service
@@ -48,13 +50,13 @@ def _fail(exc: service.MailError) -> HTTPException:
     return HTTPException(status_code=exc.status, detail=exc.message)
 
 
-def _audit(session: Any, message: str, **data: Any) -> None:
+def _audit(session: Any, acao: str, **data: Any) -> None:
     """Registo de auditoria das operações sobre o correio (nunca falha)."""
     try:
         events.log_event(
             "info",
             "admin",
-            f"Correio: {message}",
+            f"Correio: {acao}",
             data={"module": "mail", **data},
             user_id=getattr(getattr(session, "user", None), "id", None),
             user_email=getattr(getattr(session, "user", None), "email", None),
@@ -214,6 +216,26 @@ def list_messages(
         return service.list_messages(parametros)
     except service.MailError as exc:
         raise _fail(exc)
+
+
+@router.get("/messages/{message_id:path}/attachments/{index}")
+def get_attachment(message_id: str, index: int, session: AdminSession) -> Response:
+    """Descarrega um anexo (o conteúdo vem da mensagem, no servidor de correio).
+
+    Esta rota tem de ficar **antes** da que abre a mensagem: o identificador usa o
+    conversor `path` e engoliria também o sufixo do anexo.
+    """
+    try:
+        nome, tipo, conteudo = service.attachment(message_id, index)
+    except service.MailError as exc:
+        raise _fail(exc)
+    simples = nome.encode("ascii", "ignore").decode("ascii").replace('"', "") or "anexo"
+    cabecalho = f"attachment; filename=\"{simples}\"; filename*=UTF-8''{quote(nome)}"
+    return Response(
+        content=conteudo,
+        media_type=tipo or "application/octet-stream",
+        headers={"Content-Disposition": cabecalho, "Content-Length": str(len(conteudo))},
+    )
 
 
 @router.get("/messages/{message_id:path}")

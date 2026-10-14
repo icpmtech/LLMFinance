@@ -218,8 +218,9 @@ function appItem(app: DockApp): NavItem {
     icon: <Icon size={16} />,
     match: APP_MATCH[app.id],
     keywords: app.hint,
-    // A administração da solução só aparece a contas com papel `admin`.
-    adminOnly: app.id === "admin",
+    // A administração da solução e o correio da plataforma só aparecem a contas
+    // com papel `admin`.
+    adminOnly: app.id === "admin" || app.id === "admin-mail",
   };
 }
 

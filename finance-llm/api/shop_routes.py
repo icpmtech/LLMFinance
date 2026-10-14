@@ -32,6 +32,14 @@
 - `POST /loja/cupoes/validar` — valida um cupão
 - `POST /loja/avaliacoes` — envia uma avaliação (fica pendente de moderação)
 - `GET  /loja/sitemap.xml`, `/loja/robots.txt`
+
+**Loja instalável (PWA)**: manifesto, service worker, ícones e a página de
+recurso sem rede — o catálogo e as imagens ficam com cópia local no telefone.
+
+- `GET  /loja/manifest.webmanifest` — manifesto (nome, ícones e atalhos)
+- `GET  /loja/sw.js` — service worker (catálogo visitado e imagens em cache)
+- `GET  /loja/pwa/{ficheiro}` — ícones do PWA (PNG da marca)
+- `GET  /loja/offline` — página mostrada quando não há ligação
 """
 from __future__ import annotations
 
@@ -39,7 +47,7 @@ import logging
 from typing import Annotated, Any, Dict, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 
 from api import shop_render as render
 from api import shop_store as store
@@ -673,6 +681,53 @@ def loja_newsletter(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
         return store.newsletter_signup(payload)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.get("/loja/manifest.webmanifest")
+def loja_manifest() -> Response:
+    """Manifesto do PWA da loja (nome, ícones e destino da aplicação instalada)."""
+    return Response(
+        render.render_manifest(store.get_settings()),
+        media_type="application/manifest+json; charset=utf-8",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@router.get("/loja/sw.js")
+def loja_service_worker() -> Response:
+    """Service worker da loja: catálogo com cópia local e leitura sem rede."""
+    return Response(
+        render.render_service_worker(store.get_settings()),
+        media_type="text/javascript; charset=utf-8",
+        headers={
+            # Um worker antigo preso no cache do browser nunca mais é substituído.
+            "Cache-Control": "no-cache, must-revalidate",
+            "Service-Worker-Allowed": "/loja/",
+        },
+    )
+
+
+@router.get("/loja/pwa/{ficheiro}")
+def loja_pwa_icon(ficheiro: str) -> Response:
+    """Ícones do PWA da loja (os PNG de marca de `api/site_assets/`).
+
+    A lista de nomes aceites é fixa — é o que impede que o caminho sirva
+    qualquer ficheiro da pasta de imagens.
+    """
+    if ficheiro not in render.PWA_ICONS and ficheiro != render.PWA_IOS_ICON:
+        raise HTTPException(status_code=404, detail="Ícone inexistente.")
+    from api import cms_store  # import tardio: a loja funciona sem o CMS carregado
+
+    caminho = cms_store.SITE_ASSETS_DIR / ficheiro
+    if not caminho.is_file():
+        raise HTTPException(status_code=404, detail="Ícone inexistente.")
+    return FileResponse(caminho, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@router.get("/loja/offline", response_class=HTMLResponse)
+def loja_offline() -> HTMLResponse:
+    """Página de recurso, mostrada pelo service worker quando não há ligação."""
+    return HTMLResponse(render.render_offline(settings=store.get_settings()), headers={"Cache-Control": "no-cache"})
 
 
 @router.get("/loja/sitemap.xml")

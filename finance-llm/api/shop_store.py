@@ -1420,7 +1420,7 @@ def instalar_imagens_de_produto(author: str = "") -> Dict[str, Any]:
     ligados: List[str] = []
     for product in store["products"]:
         media_id = _imagem_do_produto(str(product.get("slug") or ""), media)
-        if not media_id or media_id in (product.get("image_ids") or []):
+        if not media_id or product.get("image_ids") or product.get("image_urls"):
             continue
         product["image_ids"] = [media_id]
         product["updated_at"] = _now()

@@ -70,6 +70,7 @@ import {
   Upload,
   Users,
   Microscope,
+  Mailbox,
   Waves,
 } from "lucide-react";
 import { getIframePages, iframeDockApps, iframeToDockApp, subscribeIframePages } from "./iframePages";
@@ -944,6 +945,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: ShieldCheck,
     gradient: "from-slate-200 via-slate-400 to-slate-600",
     accent: "203,213,225",
+  },
+  {
+    id: "admin-mail",
+    label: "Correio da plataforma",
+    hint: "Caixas do domínio, mensagens e envio",
+    icon: Mailbox,
+    gradient: "from-teal-200 via-sky-500 to-indigo-600",
+    accent: "56,189,248",
   },
   {
     id: "cli",
