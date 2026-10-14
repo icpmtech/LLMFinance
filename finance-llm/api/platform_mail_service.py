@@ -44,7 +44,7 @@ import uuid
 from datetime import datetime, timezone
 from email import message_from_bytes
 from email.message import EmailMessage
-from email.utils import formataddr, formatdate, make_msgid, parseaddr, parsedate_to_datetime
+from email.utils import formataddr, formatdate, parseaddr, parsedate_to_datetime
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from api import email_service
@@ -1597,13 +1597,14 @@ def build_message(
     """Compõe a mensagem: texto, HTML, assinatura, anexos e encadeamento."""
     mensagem = EmailMessage()
     nome = account.get("display_name") or account.get("label") or ""
-    mensagem["From"] = formataddr((nome, account.get("email_address") or account.get("username") or ""))
+    endereco = account.get("email_address") or account.get("username") or ""
+    mensagem["From"] = formataddr((nome, endereco))
     mensagem["To"] = ", ".join(destinatarios)
     if cc:
         mensagem["Cc"] = ", ".join(cc)
     mensagem["Subject"] = _text(payload.get("subject")) or "(sem assunto)"
     mensagem["Date"] = formatdate(localtime=True)
-    mensagem["Message-ID"] = make_msgid()
+    mensagem["Message-ID"] = email_service.make_message_id(endereco)
     if payload.get("in_reply_to"):
         mensagem["In-Reply-To"] = str(payload["in_reply_to"])
     referencias = _text(payload.get("references")) or _text(payload.get("in_reply_to"))

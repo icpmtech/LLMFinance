@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 from email import message_from_bytes
 from email.header import decode_header, make_header
 from email.message import EmailMessage
-from email.utils import formataddr, formatdate, make_msgid, parsedate_to_datetime
+from email.utils import formataddr, formatdate, make_msgid, parseaddr, parsedate_to_datetime
 from html import unescape as _unescape_html
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -987,6 +987,23 @@ def _smtp_connect(account: Dict[str, Any]) -> smtplib.SMTP:
     return conn
 
 
+def make_message_id(remetente: str) -> str:
+    """Identificador de mensagem no domínio do remetente.
+
+    O `make_msgid` sem domínio escreve o nome da máquina (`<…@34b8cc2b8e02>`, o
+    nome do contentor), e um identificador sem domínio é pontuação de spam em
+    qualquer filtro. Todas as mensagens que a plataforma compõe passam por aqui
+    — é a única regra, para nenhum envio ficar com o nome da máquina. Sem
+    domínio utilizável cai-se no comportamento de origem (melhor imperfeito do
+    que ausente: o RFC 5322 exige o cabeçalho).
+    """
+    endereco = parseaddr(str(remetente or ""))[1] or str(remetente or "")
+    dominio = re.sub(r"[^A-Za-z0-9.-]", "", endereco.rpartition("@")[2])
+    if "." not in dominio or dominio.startswith(".") or dominio.endswith("."):
+        return make_msgid()
+    return make_msgid(domain=dominio)
+
+
 def _attachment_payload(item: Dict[str, Any]) -> Tuple[str, bytes, str]:
     filename = (item.get("filename") or "anexo").strip()
     content_type = item.get("content_type") or mimetypes.guess_type(filename)[0] or "application/octet-stream"
@@ -1027,7 +1044,7 @@ def send_message(account: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, 
     bcc = payload.get("bcc")
     bcc_list = bcc if isinstance(bcc, list) else [part for part in re.split(r"[;,]", str(bcc or "")) if part.strip()]
     message["Date"] = formatdate(localtime=True)
-    message["Message-ID"] = make_msgid()
+    message["Message-ID"] = make_message_id(account.get("email_address") or account.get("username") or "")
     if payload.get("in_reply_to"):
         message["In-Reply-To"] = str(payload["in_reply_to"])
     if payload.get("references"):

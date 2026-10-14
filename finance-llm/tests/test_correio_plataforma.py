@@ -26,6 +26,7 @@ if str(RAIZ) not in sys.path:
     sys.path.insert(0, str(RAIZ))
 
 import api.main as api_main  # noqa: E402
+from api import email_service  # noqa: E402
 from api import platform_mail_service as service  # noqa: E402
 from api.admin_routes import require_admin  # noqa: E402
 from api.auth_routes import CurrentSession, UserResponse, require_session  # noqa: E402
@@ -203,6 +204,9 @@ def test_compor_mensagem_com_assinatura_anexo_e_encadeamento() -> None:
     assert mensagem["In-Reply-To"] == "<fatura-42@fornecedor.pt>"
     assert mensagem["References"] == "<fatura-42@fornecedor.pt>"
     assert mensagem["Date"] and mensagem["Message-ID"].startswith("<")
+    # O domínio sai do remetente, e não do nome do contentor (`<…@34b8cc2b8e02>`),
+    # que é o que o `make_msgid` sem domínio escrevia.
+    assert mensagem["Message-ID"].endswith("@sabemos.studio>")
 
     texto = mensagem.get_body(("plain")).get_content()
     assert "Recebido, obrigado." in texto
@@ -500,3 +504,18 @@ def test_apagar_conta_da_plataforma_e_recusado(admin: TestClient, monkeypatch: p
     monkeypatch.setattr(service, "delete_account", _apagar)
     resposta = admin.delete("/admin/mail/accounts/plataforma")
     assert resposta.status_code == 409
+
+
+def test_identificador_de_mensagem_no_dominio_do_remetente() -> None:
+    """O `make_msgid` sem domínio escrevia o nome do contentor (`<…@34b8cc2b8e02>`).
+
+    É o mesmo identificador para todo o correio da plataforma (email transacional,
+    Correio da plataforma e caixas do webmail): uma só regra, num só sítio.
+    """
+    assert email_service.make_message_id("suporte@sabemos.studio").endswith("@sabemos.studio>")
+    assert email_service.make_message_id("Suporte <suporte@sabemos.studio>").endswith("@sabemos.studio>")
+    assert email_service.make_message_id("  no-reply@sabemos.studio  ").endswith("@sabemos.studio>")
+    # Sem domínio utilizável, o cabeçalho sai na mesma: o RFC 5322 exige-o, e a
+    # falta dele é pontuação de spam — pior do que o nome da máquina.
+    for invalido in ("", "sem-dominio", "a@localhost", "...@.", "a@b.pt>"):
+        assert email_service.make_message_id(invalido).startswith("<")

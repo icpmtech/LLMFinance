@@ -20,9 +20,10 @@ import smtplib
 import ssl
 from datetime import datetime, timezone
 from email.message import EmailMessage
-from email.utils import formataddr, formatdate, make_msgid
+from email.utils import formataddr, formatdate
 from typing import Any, Dict, Optional
 
+from api import email_service
 from api import email_signature
 from api import service_keys
 
@@ -86,10 +87,10 @@ def build_message(
     # `Date` e `Message-ID` não são opcionais na prática: um `EmailMessage` do
     # `smtplib` não os acrescenta sozinho, e a falta deles é pontuação de spam em
     # qualquer filtro (o RFC 5322 exige a data). O domínio do `Message-ID` sai do
-    # remetente, e não do nome do contentor, que é o que o `make_msgid` usaria.
-    dominio = sender_address.rpartition("@")[2]
+    # remetente, e não do nome do contentor — a regra é a mesma para todo o
+    # correio da plataforma (`email_service.make_message_id`).
     msg["Date"] = formatdate(localtime=True)
-    msg["Message-ID"] = make_msgid(domain=dominio) if dominio else make_msgid()
+    msg["Message-ID"] = email_service.make_message_id(sender_address)
     msg.set_content(email_signature.append_to_text(text))
     if html:
         msg.add_alternative(email_signature.append_to_html(html), subtype="html")

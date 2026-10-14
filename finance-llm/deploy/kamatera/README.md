@@ -649,13 +649,37 @@ Cada passo depende do anterior; pela ordem errada o servico nao arranca.
 O passo 6 cria a conta de envio a partir do `SMTP_USER`/`SMTP_PASSWORD` do `.env`
 — e a mesma conta que o backend usa. Sem **nenhuma** conta o DMS desliga-se ao fim
 de 120 s (`You need at least one mail account to start Dovecot`, no log): e o
-primeiro tropeco de quem corre isto sem credenciais no `.env`. As outras duas
-caixas (avisos e relatorios de DMARC) criam-se a mao, dentro do contentor:
+primeiro tropeco de quem corre isto sem credenciais no `.env`. As outras caixas do
+dominio criam-se a mao, dentro do contentor — `postmaster@` (avisos e relatorios
+DKIM/DMARC), `dmarc@` (agregacao dos relatorios) e `suporte@` (correio de
+atendimento):
 
 ```bash
 docker exec -ti iqos-mailserver setup email add postmaster@sabemos.studio
 docker exec -ti iqos-mailserver setup email add dmarc@sabemos.studio
+docker exec -ti iqos-mailserver setup email add suporte@sabemos.studio
+# a `support@` e a mesma caixa, escrita em ingles: um alias entrega-lhe o correio
+docker exec -ti iqos-mailserver setup alias add support@sabemos.studio suporte@sabemos.studio
+docker exec -ti iqos-mailserver setup email list   # confere as contas
+docker exec -ti iqos-mailserver setup alias list   # confere os aliases
 ```
+
+O alias cobre so a **entrada**: quem autentica (IMAP 993, submissao 587) e sempre
+a `suporte@` — no DMS um alias nao tem caixa nem palavra-passe propria. Da mesma
+forma, enviar *com* o `From` da `support@` a partir da `suporte@` funciona porque o
+`SPOOF_PROTECTION` esta desligado; com ele ligado teria de ser o mesmo endereco.
+
+As palavras-passe destas caixas **nao entram no repositorio**: ficam no `.env`
+(`MAIL_POSTMASTER_PASSWORD`, `MAIL_DMARC_PASSWORD`, `MAIL_SUPORTE_PASSWORD`), que
+e o unico sitio onde vivem. Nenhum codigo as le — sao o registo do operador para
+entrar nas caixas por IMAP. A `suporte@` e a excecao: tambem fica registada em
+**Administracao → Correio** (Correio da plataforma), que guarda as credenciais no
+indice (`finance_mail_accounts`) para a aplicacao poder sincronizar as pastas e
+enviar em nome dela. Sao, por isso, dois sitios com a mesma credencial, por duas
+razoes: no servidor de correio vive o correio; no indice, o que a aplicacao le.
+Para as criar a partir da propria aplicacao (sem passar pelo `setup`), a
+Administracao → Correio aceita o endereco e a palavra-passe e testa-os antes de
+gravar — o que nao dispensa o `setup email add`: a **caixa** e sempre do DMS.
 
 ### Validado localmente, antes de ir para a VM
 
