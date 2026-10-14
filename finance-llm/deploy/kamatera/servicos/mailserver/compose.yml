@@ -43,6 +43,10 @@
 # o bloco `mail.sabemos.studio` no `Caddyfile`; sem certificado o DMS recusa
 # arrancar (e diz por que, no log).
 #
+# Nota: o DMS **sem `SSL_TYPE` nao liga TLS nenhum** -- no log diz "SSL configured
+# with plain text access - DO NOT USE FOR PRODUCTION DEPLOYMENT" -- e a porta de
+# submissao exige TLS, o que deixaria o envio do backend sem por onde passar.
+#
 # Isto importa ao backend: o `notification_email.py` abre TLS com
 # `ssl.create_default_context()`, que **verifica o nome do host**. Um certificado
 # auto-assinado, ou o nome do servico (`mailserver`), faria a verificacao falhar
@@ -111,6 +115,27 @@ services:
       # rejected`.
       - SPOOF_PROTECTION=0
       - TZ=Europe/Lisbon
+      # --- Relay (smarthost) de saida, opcional ---
+      #
+      # Sem PTR no IP da VM, os grandes fornecedores aceitam o correio mas
+      # mandam-no para o spam: um IP sem nome inverso nao tem como provar a quem
+      # pertence. A saida por um fornecedor com reputacao resolve isso sem tocar
+      # na aplicacao -- o backend continua a falar com este servidor, e este
+      # entrega por relay. Preencher no `.env` do PC:
+      #
+      #   MAIL_RELAY_HOST=[smtp-relay.brevo.com]:587    <-- com `[` `]` e a porta
+      #   MAIL_RELAY_USER=...
+      #   MAIL_RELAY_PASSWORD=...
+      #
+      # Vazio (o estado atual) = entrega direta, como esta.
+      #
+      # No DMS, `DEFAULT_RELAY_HOST` encaminha **tudo**; o `RELAY_HOST` (sem o
+      # `DEFAULT_`) so se aplica por dominio de remetente. Os `[]` a envolver o
+      # nome impedem o Postfix de procurar o MX do fornecedor -- sem eles, o
+      # relay nao funciona.
+      - DEFAULT_RELAY_HOST=${MAIL_RELAY_HOST:-}
+      - RELAY_USER=${MAIL_RELAY_USER:-}
+      - RELAY_PASSWORD=${MAIL_RELAY_PASSWORD:-}
     cap_add:
       # Para o Fail2Ban mexer nas regras de firewall do proprio contentor.
       - NET_ADMIN

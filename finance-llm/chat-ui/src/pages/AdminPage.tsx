@@ -6,7 +6,8 @@
  * - **Visão geral** — saúde da API e do Elasticsearch, índices (documentos e
  *   tamanho), contas por papel/estado, eventos das últimas 24 h e ficheiros de log.
  * - **Utilizadores** — pesquisa, papel (`admin`/`member`), estado
- *   (`active`/`suspended`), sessões ativas e ações (suspender, promover, terminar
+ *   (`active`/`suspended`/`pending`), plano (subscrição paga, trial em curso ou
+ *   sem plano), sessões ativas e ações (aprovar, suspender, promover, terminar
  *   sessões, apagar).
  * - **Eventos** — o *event logger viewer*: filtros por nível/origem/utilizador/
  *   texto, fonte (tempo real em memória ou arquivo no Elasticsearch), atualização
@@ -70,6 +71,7 @@ import {
   type SystemEvent,
 } from "../adminApi";
 import { useAuth } from "../auth";
+import { planName } from "../billingAccess";
 import { useWindowMode } from "../layout";
 import { AdminServiceKeysTab } from "./AdminServiceKeys";
 import { AdminSidebarAccessTab } from "./AdminSidebarAccess";
@@ -571,6 +573,40 @@ function EventsTab({ onError }: { onError: (message: string | null) => void }) {
 
 /* ---------------------------------------------------------- utilizadores */
 
+/**
+ * Plano da conta: subscrição paga, trial em curso ou nada.
+ *
+ * O estado sozinho não distinguia quem está em trial de quem paga — e no trial
+ * sem pagamento o acesso cai ao fim dos 5 dias, por isso a data é o que importa.
+ */
+function planLabel(user: AdminUser): { texto: string; detalhe?: string; tom: string } {
+  const subscricao = user.subscription;
+  if (subscricao?.plan_id) {
+    const intervalo = subscricao.interval === "yearly" ? "anual" : "mensal";
+    return {
+      texto: planName(subscricao.plan_id),
+      detalhe: intervalo,
+      tom: "border-teal-400/25 bg-teal-400/10 text-teal-200",
+    };
+  }
+  if (user.trial_expires_at) {
+    const fim = new Date(user.trial_expires_at);
+    const dias = Math.ceil((fim.getTime() - Date.now()) / 86_400_000);
+    if (dias > 0) {
+      return {
+        texto: "Trial",
+        detalhe: `${dias} dia${dias === 1 ? "" : "s"}`,
+        tom: "border-amber-400/25 bg-amber-400/10 text-amber-200",
+      };
+    }
+    return { texto: "Trial terminado", tom: "border-rose-400/25 bg-rose-400/10 text-rose-200" };
+  }
+  if (user.pending_approval) {
+    return { texto: "—", tom: "" };
+  }
+  return { texto: "Sem plano", tom: "border-white/10 bg-white/[0.03] text-muted-foreground" };
+}
+
 function UsersTab({ onError, currentUserId }: { onError: (message: string | null) => void; currentUserId?: string }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [total, setTotal] = useState(0);
@@ -665,6 +701,7 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
               <th className="px-3 py-1.5 text-left font-medium">Conta</th>
               <th className="px-3 py-1.5 text-left font-medium">Papel</th>
               <th className="px-3 py-1.5 text-left font-medium">Estado</th>
+              <th className="px-3 py-1.5 text-left font-medium">Plano</th>
               <th className="px-3 py-1.5 text-right font-medium">Sessões</th>
               <th className="px-3 py-1.5 text-right font-medium">Logins</th>
               <th className="px-3 py-1.5 text-left font-medium">Último login</th>
@@ -675,7 +712,7 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
           <tbody>
             {users.length === 0 && !loading && (
               <tr>
-                <td colSpan={8} className="px-3 py-8 text-center text-muted-foreground">
+                <td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">
                   Sem contas para os filtros escolhidos.
                 </td>
               </tr>
@@ -683,6 +720,7 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
             {users.map((user) => {
               const isSelf = user.id === currentUserId;
               const disabled = busy === user.id;
+              const plano = planLabel(user);
               return (
                 <tr key={user.id} className="border-t border-white/6">
                   <td className="max-w-[260px] px-3 py-1.5">
@@ -715,6 +753,21 @@ function UsersTab({ onError, currentUserId }: { onError: (message: string | null
                       <option value="suspended">suspended</option>
                       <option value="pending">pending</option>
                     </select>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-1.5">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10.5px] ${plano.tom}`}
+                      title={
+                        user.subscription?.current_period_end
+                          ? `Pago até ${formatTime(user.subscription.current_period_end)}`
+                          : user.trial_expires_at
+                            ? `Trial até ${formatTime(user.trial_expires_at)}`
+                            : undefined
+                      }
+                    >
+                      {plano.texto}
+                      {plano.detalhe ? <span className="text-[9.5px] opacity-70">· {plano.detalhe}</span> : null}
+                    </span>
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{user.active_sessions ?? 0}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{user.login_count ?? 0}</td>

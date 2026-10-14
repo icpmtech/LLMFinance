@@ -64,6 +64,15 @@ export type AdminUser = {
   last_login_at?: string;
   login_count?: number;
   active_sessions?: number;
+  trial_expires_at?: string | null;
+  approved_at?: string | null;
+  pending_approval?: boolean;
+  subscription?: {
+    plan_id?: string;
+    status?: string;
+    interval?: string;
+    current_period_end?: string;
+  } | null;
 };
 
 export type IndexSummary = {

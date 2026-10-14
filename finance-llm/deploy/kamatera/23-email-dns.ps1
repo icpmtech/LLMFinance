@@ -56,20 +56,42 @@ function Invoke-Vm {
     return @{ ExitCode = $code; Output = (($out | Out-String).TrimEnd()) }
 }
 
-# Le uma resposta do DNS-over-HTTPS do Google. Vai pela Internet e nao pelo
-# resolver do PC de proposito: e para ver o que o **mundo** ve, com os mesmos
-# caches que um servidor de correio externo vai consultar.
+# Le uma resposta do DNS-over-HTTPS e devolve os valores encontrados. Vai pela
+# Internet e nao pelo resolver do PC de proposito: e para ver o que o **mundo**
+# ve, com os mesmos caches que um servidor de correio externo vai consultar.
+#
+# Pergunta a **dois** resolvers (Google e Cloudflare) e junta as respostas: o cache
+# negativo de um deles nao deve fazer o script dizer que falta um registo que ja
+# esta publicado -- foi o que aconteceu com o DKIM, publicado e invisivel para o
+# `dns.google` durante uns minutos.
 function Resolve-Dns {
     param([Parameter(Mandatory)][string]$Nome, [Parameter(Mandatory)][string]$Tipo)
-    try {
-        $r = Invoke-RestMethod -Uri "https://dns.google/resolve?name=$Nome&type=$Tipo" -TimeoutSec 15
-    } catch {
-        Write-Host "    (falhou a consulta DNS de $Nome $Tipo : $($_.Exception.Message))" -ForegroundColor DarkGray
-        return @()
+    $urls = @(
+        "https://dns.google/resolve?name=$Nome&type=$Tipo",
+        "https://cloudflare-dns.com/dns-query?name=$Nome&type=$Tipo"
+    )
+    $valores = New-Object System.Collections.Generic.List[string]
+    foreach ($url in $urls) {
+        try {
+            $r = Invoke-RestMethod -Uri $url -Headers @{ Accept = 'application/dns-json' } -TimeoutSec 15
+        } catch {
+            Write-Host "    (falhou a consulta DNS de $Nome $Tipo : $($_.Exception.Message))" -ForegroundColor DarkGray
+            continue
+        }
+        if (-not $r.Answer) { continue }
+        foreach ($a in $r.Answer) {
+            $dados = "$($a.data)"
+            # Um TXT com mais de 255 caracteres vem **partido em varios pedacos
+            # entre aspas** (e o limite de um `<character-string>` do DNS). Quem
+            # valida o DKIM junta os pedacos, e o mesmo tem de ser feito aqui: sem
+            # isto o valor publicado parecia diferente da chave da VM (e era so o
+            # mesmo valor cortado a meio).
+            $partes = [regex]::Matches($dados, '"([^"]*)"') | ForEach-Object { $_.Groups[1].Value }
+            $valor = if ($partes.Count -gt 0) { $partes -join '' } else { $dados.Trim('"') }
+            if ($valor -and -not $valores.Contains($valor)) { $valores.Add($valor) }
+        }
     }
-    if (-not $r.Answer) { return @() }
-    # O valor de um TXT vem entre aspas na resposta.
-    return @($r.Answer | ForEach-Object { "$($_.data)".Trim('"') })
+    return @($valores)
 }
 
 $problemas = 0
@@ -95,7 +117,13 @@ function Check {
 # ---------------------------------------------------------------------------
 Write-Host ''
 Write-Host '=== 1. Chave DKIM ===' -ForegroundColor Cyan
-$caminhoChave = "/tmp/docker-mailserver/opendkim/keys/$Dominio/$Seletor.txt"
+# Le-se o ficheiro **no anfitriao da VM** e nao dentro do contentor: o `config/` do
+# servico e um bind mount, logo o ficheiro esta nos dois sitios, e assim a leitura
+# nao depende de o contentor estar arrancado (logo a seguir a um
+# `--force-recreate` ele ainda pode nao aceitar `docker exec`, o que dava um
+# registo DKIM vazio -- foi o que aconteceu na primeira migracao para a VM).
+$dirChave = "/opt/iqos/servicos/mailserver/config/opendkim/keys/$Dominio"
+$caminhoChave = "$dirChave/$Seletor.txt"
 $valorDkim = ''
 $temChave = $false
 
@@ -103,40 +131,51 @@ if (-not (docker ps --filter "name=$TunnelContainer" --format '{{.Names}}')) {
     Write-Host "  o container $TunnelContainer nao esta a correr (ver 07-origin-tunnel.ps1)." -ForegroundColor Yellow
     Write-Host '  Sem VM nao ha chave para ler: sigo para a verificacao do DNS.' -ForegroundColor Yellow
 } else {
-    $aCorrer = (Invoke-Vm "docker ps --filter name=^$Contentor`$ --format '{{.Names}}'").Output.Trim()
-    if (-not $aCorrer) {
-        Write-Host "  o $Contentor nao esta a correr na VM: corre primeiro" -ForegroundColor Yellow
-        Write-Host '    .\14-servico-vm.ps1 -Nome mailserver' -ForegroundColor Yellow
-    } else {
-        $existe = (Invoke-Vm "test -f $caminhoChave && echo sim").Output.Trim()
-        if ($existe -ne 'sim') {
+    $tamanho = (Invoke-Vm "cat $caminhoChave 2>/dev/null | wc -c").Output.Trim()
+    if ($tamanho -notmatch '^[1-9]') {
+        $aCorrer = (Invoke-Vm "docker ps --filter name=^$Contentor`$ --format '{{.Names}}'").Output.Trim()
+        if (-not $aCorrer) {
+            Write-Host "  o $Contentor nao esta a correr na VM e nao ha chave em $caminhoChave." -ForegroundColor Yellow
+            Write-Host '  Corre primeiro o deploy:' -ForegroundColor Yellow
+            Write-Host '    .\14-servico-vm.ps1 -Nome mailserver' -ForegroundColor Yellow
+        } else {
             Write-Host "  sem chave em $caminhoChave -- a gerar (setup config dkim)"
             $gerar = Invoke-Vm "docker exec $Contentor setup config dkim 2>&1 | tail -3"
             $gerar.Output -split "`n" | ForEach-Object { Write-Host "  $_" }
             # O DMS so passa a assinar depois de reiniciar: a chave e lida no
             # arranque e o OpenDKIM nao a vai buscar sozinho.
             Write-Host '  a recriar o contentor (so se assina depois de reiniciar)'
-            Invoke-Vm "cd /opt/iqos/servicos/mailserver && docker compose up -d --force-recreate 2>&1 | tail -2" |
-                Select-Object -ExpandProperty Output | ForEach-Object { Write-Host "  $_" }
+            # Sem `| Select-Object -ExpandProperty Output`: canalizar um hashtable
+            # (o que o `Invoke-Vm` devolve) nao da o campo, da os valores todos.
+            $recriar = Invoke-Vm "cd /opt/iqos/servicos/mailserver && docker compose up -d --force-recreate 2>&1 | tail -2"
+            $recriar.Output -split "`n" | ForEach-Object { Write-Host "  $_" }
+            # A chave acaba de ser escrita; dar tempo a que o ficheiro esteja la.
+            Start-Sleep -Seconds 3
         }
+    }
 
-        # O ficheiro do DMS e um bloco de zona:
-        #
-        #     mail._domainkey	IN	TXT	( "v=DKIM1; h=sha256; k=rsa; "
-        #     	  "p=MIIB...primeira metade"
-        #     	  "...segunda metade" )  ; ----- DKIM key mail for sabemos.studio
-        #
-        # Num painel de DNS cola-se o **valor**, numa linha, sem aspas nem
-        # parenteses. Vai-se buscar o que esta **entre aspas**: e a unica forma
-        # que aguenta o comentario do fim da linha sem lhe tocar -- um corte pelo
-        # `;` comia tambem o `v=DKIM1; h=sha256;` do principio do valor. Os
-        # pedacos juntam-se sem espaco entre eles (o base64 vem partido a meio) e
-        # os espacos de dentro de cada pedaco ficam como estao, que e o que
-        # separa `k=rsa;` de `p=`.
-        $bruto = (Invoke-Vm "cat $caminhoChave").Output
-        if ($bruto) {
-            $pedacos = [regex]::Matches($bruto, '"([^"]*)"') | ForEach-Object { $_.Groups[1].Value }
-            $valorDkim = ($pedacos -join '').Trim()
+    # O ficheiro do DMS e um bloco de zona:
+    #
+    #     mail._domainkey	IN	TXT	( "v=DKIM1; h=sha256; k=rsa; "
+    #     	  "p=MIIB...primeira metade"
+    #     	  "...segunda metade" )  ; ----- DKIM key mail for sabemos.studio
+    #
+    # Num painel de DNS cola-se o **valor**, numa linha, sem aspas nem parenteses.
+    # Vai-se buscar o que esta **entre aspas**: e a unica forma que aguenta o
+    # comentario do fim da linha sem lhe tocar -- um corte pelo `;` comia tambem o
+    # `v=DKIM1; h=sha256;` do principio do valor. Os pedacos juntam-se sem espaco
+    # entre eles (o base64 vem partido a meio) e os espacos de dentro de cada
+    # pedaco ficam como estao, que e o que separa `k=rsa;` de `p=`.
+    $bruto = (Invoke-Vm "cat $caminhoChave 2>/dev/null").Output
+    if ($bruto) {
+        $pedacos = [regex]::Matches($bruto, '"([^"]*)"') | ForEach-Object { $_.Groups[1].Value }
+        $valorDkim = ($pedacos -join '').Trim()
+        if ($valorDkim -notmatch '^v=DKIM1') {
+            Write-Host "  nao consegui ler a chave em $caminhoChave (conteudo inesperado)." -ForegroundColor Red
+            Write-Host "  O ficheiro devia ter o bloco de zona do DMS; ver:" -ForegroundColor Yellow
+            Write-Host "    docker exec iqos-origin-tunnel ssh root@$SshHost `"cat $caminhoChave`"" -ForegroundColor Yellow
+            $valorDkim = ''
+        } else {
             $temChave = $true
             Write-Host ("  registo DKIM ({0} caracteres, {1} pedacos):" -f $valorDkim.Length, $pedacos.Count) -ForegroundColor Green
             Write-Host ''

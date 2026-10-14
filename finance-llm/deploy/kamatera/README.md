@@ -58,6 +58,7 @@ Tudo numa VM so, com o Caddy a servir HTTPS na frente:
         |   iqos-elasticsearch  8.11 (2 GB de heap)        |
         |   iqos-mcp     :8765                             |
         |   iqos-osif-*  /  iqos-n8n  /  iqos-searxng      |
+        |   iqos-mailserver  :25 (aberta) / :587 (loopback)|
         +--------------------------------------------------+
                       rede Docker partilhada: iqos-net
 ```
@@ -66,6 +67,10 @@ Quase tudo escuta em `127.0.0.1` e e publicado pelo Caddy. Isso **nao e
 cosmetico**: esta VM nao tem firewall, por isso o que nao estiver preso ao
 loopback fica acessivel a Internet inteira. Vale para o painel de monitorizacao
 como para o resto — ver o `MONITOR_BIND` no `edge/monitor/server.py`.
+
+Ha uma excecao, e uma so: a porta **25 do `iqos-mailserver`**, que fica em
+`0.0.0.0` porque e por onde o mundo entrega correio (o MX aponta para la). Ver a
+seccao [Servidor de email](#servidor-de-email-docker-mailserver).
 
 O Caddy le a origem de `ORIGEM_UPSTREAM` no `edge/.env`, que muda com o
 `17-origem.ps1`:
@@ -145,7 +150,8 @@ com a stack na VM, o tunel so serve para o modo `pc` do `17-origem.ps1`.
 | `20-teste-painel.ps1` | PC | Renderiza o painel de fora, com dados reais, para se ver o que desenha |
 | `_limpar_nomes_cr.py` | VM | Limpa nomes com retorno de carro (simula por omissao) |
 | `es/` | PC | Ferramentas da migracao do Elasticsearch (exportar, importar, auditar) |
-| `servicos/` | VM | Um compose por servico migrado (backend, frontend, mcp, es, osif, n8n, searxng) |
+| `servicos/` | VM | Um compose por servico migrado (backend, frontend, mcp, es, osif, n8n, searxng, mailserver) |
+| `23-email-dns.ps1` | PC | Gera a chave DKIM, escreve o registo numa linha e verifica SPF/DKIM/DMARC/PTR no DNS publico |
 | `origin/` | PC | tunel SSH reverso: `Dockerfile`, `tunnel.sh`, `compose.yml` |
 | `edge/` | VM | O que fica **fora da aplicacao**: o Caddy (HTTPS proprio), o `landing` (pagina publica + registos) e o `monitor` (painel de estado com login) |
 | `DEPLOY.md` | — | Como pôr codigo novo na VM (deploy incremental) |
@@ -520,18 +526,191 @@ por ordem de peso (medido no PC):
 | Servico | RAM | Imagem | Nota |
 |---|---|---|---|
 | mcp | 20 MB | 13,7 GB | reusa a imagem do backend |
+| mailserver | 65 MB | 1,0 GB | sem Amavis nem antivirus (medidos no PC, com o servico a enviar) |
 | mirofish | 82 MB | 14,2 GB | imagem publica no ghcr |
 | osif (6 contentores) | 243 MB | 1,4 GB (construidas) | stack autonoma |
 | hermes-agent | 358 MB | 4,0 GB | imagem publica |
 | backend | 791 MB | 13,7 GB (construida) | precisa tambem de `data/` 37 GB + `model/` 3 GB |
 
-Somados dao 1506 MB, muito abaixo dos 6088 MB livres. O cuidado que fica e o CPU
+Somados dao 1571 MB, muito abaixo dos 6088 MB livres. O cuidado que fica e o CPU
 de 1 core a partilhar tudo -- e o `backend`, com torch e scipy, e o que mais o
 vai sentir.
 
 Nota: estas instancias **nao sao copias**. Os volumes comecam vazios (o n8n da
 VM nao tem fluxos, o searxng nao tem cache). E infraestrutura pronta a receber
 dados, nao um clone do que corre no PC.
+
+## Servidor de email (Docker Mailserver)
+
+O email transacional do IQ OS (aprovacao de conta, aviso de trial, subscricao
+ativada — `api/notification_email.py`) passa a sair de um servidor **desta VM**:
+o `iqos-mailserver`, uma instancia do
+[Docker Mailserver (DMS)](https://docker-mailserver.github.io/), com o compose em
+`servicos/mailserver/`.
+
+```
+   iqos-backend ──587 STARTTLS+AUTH──▶ iqos-mailserver ──25──▶ Gmail, Outlook, ...
+                                              ▲
+                    MX sabemos.studio ────────┘   (o correio de fora entra aqui)
+```
+
+Duas decisoes explicam o resto:
+
+* o backend fala com o servidor pelo **FQDN** (`mail.sabemos.studio:587`), nao
+  pelo nome do servico. O certificado e de `mail.sabemos.studio` e o
+  `notification_email.py` abre TLS com `ssl.create_default_context()`, que
+  **valida o nome do host**: com `mailserver` a verificacao falhava e o `_send`
+  engolia a excecao — o sintoma seria "os emails nao chegam", sem nada a vermelho.
+  Dentro da `iqos-net` o FQDN resolve para o contentor por um **alias**. Para o
+  mesmo efeito do lado do remetente (bounces, avisos de quota), o `Message-ID` e o
+  `Date` passaram a ser escritos pelo remetente — sem eles um filtro de spam
+  pontua contra, e um `EmailMessage` do `smtplib` nao os poem sozinho;
+* o certificado nao e pedido duas vezes: quem o obtem e renova e o **Caddy do
+  edge** (bloco `mail.sabemos.studio` no `Caddyfile`), e o DMS le-o do volume
+  `edge_caddy_data` com `SSL_TYPE=manual`. Dois emissores a competir pela mesma
+  porta 80, para o mesmo nome, era uma fonte de falhas de renovacao silenciosas.
+
+### Ordem das operacoes
+
+Cada passo depende do anterior; pela ordem errada o servico nao arranca.
+
+| # | O que | Como |
+|---|---|---|
+| 1 | DNS: `A mail.sabemos.studio -> 45.147.251.188` | painel da Hostinger (o Caddy precisa disto para o desafio HTTP-01) |
+| 2 | Certificado | `.\03-configure-edge.ps1` (reenvia o Caddyfile e recria o Caddy) |
+| 3 | Firewall Kamatera: **TCP 25 de entrada e de saida** | painel da Kamatera. A 25 vem **bloqueada** na VM (medido: com um ouvinte a escutar na VM, uma ligacao de fora nao passa, enquanto a 443 passa); nao ha nada na VM que abra esta porta |
+| 4 | PTR do IP | pedir a Kamatera: `PTR 45.147.251.188 -> mail.sabemos.studio` |
+| 5 | Credenciais no `.env` | `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` (ver `.env.example`) |
+| 6 | Arrancar o servico | `.\14-servico-vm.ps1 -Nome mailserver` |
+| 7 | Chave DKIM + o que falta no DNS | `.\23-email-dns.ps1` |
+| 8 | MX, SPF, DKIM e DMARC publicados | o script do passo 7 imprime-os prontos a colar |
+| 9 | Validar | `.\16-validar-setup.ps1` |
+
+O passo 6 cria a conta de envio a partir do `SMTP_USER`/`SMTP_PASSWORD` do `.env`
+— e a mesma conta que o backend usa. Sem **nenhuma** conta o DMS desliga-se ao fim
+de 120 s (`You need at least one mail account to start Dovecot`, no log): e o
+primeiro tropeco de quem corre isto sem credenciais no `.env`. As outras duas
+caixas (avisos e relatorios de DMARC) criam-se a mao, dentro do contentor:
+
+```bash
+docker exec -ti iqos-mailserver setup email add postmaster@sabemos.studio
+docker exec -ti iqos-mailserver setup email add dmarc@sabemos.studio
+```
+
+### Validado localmente, antes de ir para a VM
+
+O compose foi corrido numa maquina de desenvolvimento (com uma CA de teste no
+lugar do certificado Let's Encrypt, para o caminho ser o mesmo — `manual` a ler um
+ficheiro, com verificacao do nome do host pelo cliente):
+
+* submissao autenticada em `mail.sabemos.studio:587` com TLS 1.3, certificado
+  validado e `TLSv1.3` no handshake; o envio do **codigo do produto**
+  (`api.notification_email.send_approval_email`, com o `service_keys` a apontar
+  para o servidor de teste) respondeu `{'ok': True}`;
+* `DKIM-Signature: ... d=sabemos.studio; s=mail` na mensagem entregue — o nome do
+  seletor e o do registo que o `23-email-dns.ps1` imprime;
+* sem autenticacao, o RCPT leva `554 ... Relay access denied` (nao e relay
+  aberto), e a entrega local sai por LMTP para a caixa do `postmaster@`.
+
+### Medido: o que acontece sem SPF e DKIM
+
+Antes de existir DNS de correio, um envio autenticado e assinado a partir da VM
+**chega ao Gmail e e recusado** — ou seja, o problema nunca esteve no servidor:
+
+```
+550-5.7.26 Your email has been blocked because the sender is unauthenticated.
+550-5.7.26 Gmail requires all senders to authenticate with either SPF or DKIM.
+550-5.7.26  DKIM = did not pass
+550-5.7.26  SPF [sabemos.studio] with ip: [45.147.251.188] = did not pass
+```
+
+Sem PTR o correio costuma ser aceite mas cai no spam. Nenhuma das duas coisas se
+resolve na VM: e DNS e IP.
+
+### Sem PTR: entrega por relay
+
+Se a Kamatera nao poe PTR neste IP, a saida faz-se por um fornecedor com
+reputacao (smarthost). O servidor continua a receber correio normalmente; so a
+**saida** passa pelo fornecedor:
+
+```
+   iqos-mailserver ──587──▶ fornecedor (Brevo, Mailjet, SES, ...) ──▶ Gmail, ...
+```
+
+Fica tudo em variaveis do `.env` (o compose ja as le, vazias por omissao):
+
+```
+MAIL_RELAY_HOST=[smtp-relay.brevo.com]:587
+MAIL_RELAY_USER=...
+MAIL_RELAY_PASSWORD=...
+```
+
+Depois do fornecedor escolhido, faltam duas coisas no DNS: o `include` dele no SPF
+(`v=spf1 mx include:spf.brevo.com -all`) e a chave DKIM que ele proprio pede para
+verificar o dominio. A nossa assinatura DKIM continua a ser feita e verificada --
+o relay so acrescenta a dele.
+
+O que **nao** muda: a aplicacao (o backend continua a falar em
+`mail.sabemos.studio:587`), a assinatura DKIM, os limites de caudal, o Fail2Ban e o
+certificado. Quando houver PTR, apaga-se o `MAIL_RELAY_HOST` e volta a entrega
+direta.
+
+### Operacao
+
+```powershell
+.\16-validar-setup.ps1                      # estado de tudo (inclui o banner SMTP e o certificado)
+.\14-servico-vm.ps1 -Nome mailserver -Logs  # log do servidor (a resposta do destino aparece aqui)
+.\23-email-dns.ps1                          # gera a chave DKIM e diz o que falta no DNS
+python .\_teste_correio.py                   # entrada de fora + prova de que nao e relay aberto
+```
+
+O teste ponta-a-ponta e o do proprio produto: aprovar um registo na administracao
+(ou ativar uma subscricao) e ver o email chegar — o log diz a resposta do
+fornecedor do destinatario (`status=sent`, `status=bounced`, `dsn=5.7.26`...).
+A imagem traz o `swaks` para testes manuais de SMTP, e o `openssl s_client
+-starttls smtp` para confirmar o certificado.
+
+### Registos de DNS
+
+| Tipo | Nome | Valor |
+|---|---|---|
+| A | `mail.sabemos.studio` | `45.147.251.188` |
+| MX | `sabemos.studio` | `10 mail.sabemos.studio.` |
+| TXT | `sabemos.studio` | `v=spf1 mx -all` |
+| TXT | `mail._domainkey.sabemos.studio` | o valor que o `23-email-dns.ps1` imprime — 420 caracteres, **numa linha**, sem aspas nem parenteses |
+| TXT | `_dmarc.sabemos.studio` | `v=DMARC1; p=none; rua=mailto:dmarc@sabemos.studio; adkim=s; aspf=s; fo=1` |
+
+O DMARC comeca em `p=none` de proposito: primeiro leem-se os relatorios da caixa
+`dmarc@`, so depois se aperta para `quarantine` e `reject`. O `-all` do SPF (em
+vez de `~all`) e o aperto final — se um dia a plataforma enviar por outro
+fornecedor, entra no SPF antes do aperto.
+
+### Armadilhas
+
+* **Sem conta de correio o contentor desliga-se** (120 s). Ver acima.
+* **Sem certificado o contentor nao arranca** (ciclo de reinicio). Com
+  `SSL_TYPE=manual` o DMS exige os ficheiros: se o Caddy ainda nao os tem (falta
+  o registo A), o log diz `SSL_KEY_PATH or SSL_CERT_PATH`. E o motivo de o passo 1
+  vir antes do 6.
+* **O DMS sem `SSL_TYPE` nao liga TLS nenhum** — no log escreve `SSL configured
+  with plain text access - DO NOT USE FOR PRODUCTION DEPLOYMENT`. Como a porta 587
+  exige TLS, a submissao ficaria inutil. (O `self-signed` do DMS tambem nao gera
+  nada: exige os ficheiros ja feitos.) Aqui usa-se `manual`.
+* **As chaves DKIM so contam depois de reiniciar** o contentor: o
+  `setup config dkim` escreve em `config/opendkim/` e o `23-email-dns.ps1` recria
+  o contentor por isso.
+* **O `mynetworks` do DMS vem vazio** (`postconf -n | grep mynetworks`): nem de
+  dentro do proprio contentor se retransmite sem autenticacao. E bom — e por isso
+  que o envio do backend e autenticado, e nao um relay interno.
+* **Os bounces vao para o remetente do envelope** (`SMTP_FROM`). Com
+  `no-reply@` ninguem os le; o `POSTMASTER_ADDRESS` (no compose) e a caixa que
+  interessa olhar.
+* **O PTR nao esta no DNS do dominio.** Na Hostinger ficam o A, o MX e os TXT; o
+  inverso do IP e do dono do IP (Kamatera), e e o registo que se esquece.
+* **A porta 25 vem bloqueada da Kamatera.** Medido: com um `nc -l -p 25` a
+  escutar na VM, uma ligacao vinda de fora nao passa (a 443, essa, passa). E o
+  passo 3 da tabela; sem ele o servidor envia (as saidas estao abertas) mas nao
+  recebe nada.
 
 ## API Kamatera (para referencia)
 

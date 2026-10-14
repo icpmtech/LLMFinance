@@ -10,6 +10,18 @@ import type { AuthUser } from "./authApi";
 
 export type PlanModuleMap = Record<string, string[]>;
 
+/** Nomes apresentáveis dos planos, alinhados com `PLANS` no backend. */
+export const PLAN_NAMES: Record<string, string> = {
+  basic: "Básico",
+  pro: "Profissional",
+  enterprise: "Enterprise",
+};
+
+export function planName(planId?: string | null): string {
+  if (!planId) return "—";
+  return PLAN_NAMES[planId] || planId;
+}
+
 const DEFAULT_PLAN_MODULES: PlanModuleMap = {
   basic: [
     "dashboard",

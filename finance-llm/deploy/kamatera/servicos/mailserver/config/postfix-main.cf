@@ -3,11 +3,12 @@
 # O DMS junta este ficheiro ao `main.cf` (ver `ENABLE_...` no compose). Fica aqui
 # so o que tem razao para ser diferente da omissao.
 #
-# O que **nao** fica aqui, de proposito: `mynetworks` (por omissao, apenas o
-# loopback do contentor -- os outros contentores da `iqos-net` nao retransmitem
-# sem autenticacao), `smtpd_helo_required`, `reject_unknown_sender_domain` e as
-# restantes restricoes: o DMS ja as define com criterio, e reescreve-las a mao so
-# criaria divergencia entre este ficheiro e a imagem.
+# O que **nao** fica aqui, de proposito: `mynetworks` (no DMS v16 vem **vazio** --
+# nem o proprio loopback do contentor pode retransmitir sem autenticacao, o que se
+# confirma com `docker exec iqos-mailserver postconf -n | grep mynetworks`),
+# `smtpd_helo_required`, `reject_unknown_sender_domain` e as restantes restricoes:
+# o DMS ja as define com criterio, e reescreve-las a mao so criaria divergencia
+# entre este ficheiro e a imagem.
 #
 # O que fica: limites de caudal. O que vale este servidor e a reputacao do IP da
 # VM, e a forma mais rapida de a perder e emitir rajadas -- seja por uma conta

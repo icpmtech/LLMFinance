@@ -115,8 +115,9 @@ foreach ($s in $ESPERADO) {
     if ($s.Tipo -eq 'smtp') {
         # Banner do Postfix. O stdin vai de `/dev/null`: a ligacao cai logo depois
         # do banner. (Escrever `QUIT` no pipe dava `554 ... SMTP protocol
-        # synchronization`, porque o pedido chega antes de o banner ser lido.)
-        $resposta = (Invoke-Vm "nc -w 5 127.0.0.1:$($s.Porta) < /dev/null").Output.Trim()
+        # synchronization`, porque o pedido chega antes de o banner ser lido.) A
+        # porta vai separada por espaco -- o `nc` nao aceita `127.0.0.1:587`.
+        $resposta = (Invoke-Vm "nc -w 5 127.0.0.1 $($s.Porta) < /dev/null").Output.Trim()
         $ok = $resposta -match '^220'
         if (-not $ok) { $problemas++ }
         $cor = if ($ok) { 'Green' } else { 'Red' }
