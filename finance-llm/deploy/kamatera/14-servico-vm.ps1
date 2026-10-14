@@ -48,6 +48,10 @@ $raiz = Join-Path $here '..\..'   # finance-llm/
 
 # Cada servico: porta local na VM, ficheiros de configuracao a enviar, e o
 # caminho a sondar para validar. Acrescentar aqui ao migrar o proximo.
+#
+# `SondaTipo` distingue as duas formas de validar: `http` (o normal, sonda-se o
+# caminho e espera-se 2xx/3xx/4xx) e `smtp` (o mailserver nao tem HTTP nenhum:
+# le-se o banner do Postfix na porta de submissao).
 $SERVICOS = @{
     'searxng' = @{
         Porta = 8888
@@ -128,6 +132,25 @@ $SERVICOS = @{
         Sonda = '/health'
         Extra = @()
     }
+    # Remetente do email transacional (Docker Mailserver). Sem sonda HTTP: a
+    # `SondaTipo` muda-a para o banner do Postfix na porta de submissao.
+    #
+    # O primeiro arranque nao chega para enviar: falta a chave DKIM e a conta de
+    # envio, ambas criadas a mao depois (`setup config dkim`, `setup email add`)
+    # -- e falta o resto do DNS. Ver o README.
+    #
+    # Nao envia o `./config` inteiro: as chaves DKIM e o `postfix-accounts.cf`
+    # sao gerados **na VM** e ficam la. O que vem do repositorio e so a afinacao
+    # do Postfix.
+    'mailserver' = @{
+        Porta = 587
+        Sonda = $null
+        SondaTipo = 'smtp'
+        Extra = @(
+            @{ Local = (Join-Path $here 'servicos\mailserver\config\postfix-main.cf')
+               Remote = "$BaseDir/mailserver/config/postfix-main.cf" }
+        )
+    }
 }
 
 function Invoke-Vm {
@@ -149,6 +172,24 @@ function Show-Vm {
     $r = Invoke-Vm $RemoteCommand
     if ($r.Output) { $r.Output -split "`n" | ForEach-Object { Write-Host "  $_" } }
     return $r
+}
+
+# Sonda de vida do servico. Duas formas, porque ha servicos que nao falam HTTP:
+#
+#   * `http` (o normal) -- le o codigo de estado do caminho declarado;
+#   * `smtp` -- le o banner do Postfix na porta de submissao.
+#
+# No caso do SMTP o stdin vai de `/dev/null` de proposito: assim que o `nc` liga
+# e o stdin fecha, a ligacao cai logo a seguir ao banner. Se em vez disso se
+# escrevesse `QUIT` no pipe, o pedido chegava antes do `nc` ler o banner e o
+# Postfix respondia `554 5.5.0 Error: SMTP protocol synchronization` -- uma sonda
+# a dizer que o servico esta morto quando ele esta bom.
+function Get-Sonda {
+    param([Parameter(Mandatory)][hashtable]$Cfg)
+    if ($Cfg.SondaTipo -eq 'smtp') {
+        return (Invoke-Vm "nc -w 5 127.0.0.1:$($Cfg.Porta) < /dev/null").Output.Trim()
+    }
+    return (Invoke-Vm "curl -s -o /dev/null -m 5 -w %{http_code} http://127.0.0.1:$($Cfg.Porta)$($Cfg.Sonda)").Output.Trim()
 }
 
 function Send-VmFile {
@@ -181,8 +222,12 @@ if ($Listar) {
     Write-Host 'Servicos disponiveis em servicos/:' -ForegroundColor Cyan
     foreach ($k in $SERVICOS.Keys | Sort-Object) {
         $porta = $SERVICOS[$k].Porta
-        Write-Host ("  {0,-12} porta 127.0.0.1:{1}" -f $k, $porta)
+        $sonda = if ($SERVICOS[$k].SondaTipo -eq 'smtp') { 'banner SMTP' } else { 'HTTP' }
+        Write-Host ("  {0,-12} porta 127.0.0.1:{1,-5} sonda {2}" -f $k, $porta, $sonda)
     }
+    Write-Host ''
+    Write-Host '  Nota: o mailserver publica tambem a 25 em 0.0.0.0 (e por onde recebe' -ForegroundColor DarkGray
+    Write-Host '  correio do mundo: o MX aponta para la).' -ForegroundColor DarkGray
     Write-Host ''
     return
 }
@@ -237,19 +282,21 @@ Show-Vm "cd $remoteDir && docker compose up -d 2>&1" | Out-Null
 
 Write-Host ''
 Write-Host '=== 3. A aguardar resposta ===' -ForegroundColor Cyan
-# Valida por HTTP e nao pelo healthcheck: nem todos os servicos do stack tem um
-# (`services/*/compose.yml` pode nao definir `healthcheck`), e um healthcheck mal
-# escrito faria isto esperar para sempre por um servico que esta bom.
+# Valida por sonda propria e nao pelo healthcheck: nem todos os servicos do stack
+# tem um (`servicos/*/compose.yml` pode nao definir `healthcheck`), e um
+# healthcheck mal escrito faria isto esperar para sempre por um servico que esta
+# bom. A sonda muda com o servico -- ver o `Get-Sonda`.
 $vivo = $false
 for ($i = 1; $i -le 24; $i++) {
     $estado = (Invoke-Vm "cd $remoteDir && docker compose ps --format '{{.Status}}'").Output
-    $codigo = (Invoke-Vm "curl -s -o /dev/null -m 5 -w %{http_code} http://127.0.0.1:$($cfg.Porta)$($cfg.Sonda)").Output.Trim()
-    if ($codigo -match '^[234]') {
-        Write-Host "  respondeu HTTP $codigo na tentativa $i" -ForegroundColor Green
+    $resposta = Get-Sonda -Cfg $cfg
+    $ok = if ($cfg.SondaTipo -eq 'smtp') { $resposta -match '^220' } else { $resposta -match '^[234]' }
+    if ($ok) {
+        Write-Host "  respondeu '$resposta' na tentativa $i" -ForegroundColor Green
         $vivo = $true
         break
     }
-    Write-Host "  tentativa $i : HTTP $codigo / $estado"
+    Write-Host "  tentativa $i : '$resposta' / $estado"
     Start-Sleep -Seconds 10
 }
 if (-not $vivo) {
@@ -262,12 +309,26 @@ Write-Host ''
 Write-Host '=== 4. Validacao ===' -ForegroundColor Cyan
 Show-Vm 'docker container ls --format table --filter name=iqos-' | Out-Null
 Write-Host ''
-Write-Host "  sonda   http://127.0.0.1:$($cfg.Porta)$($cfg.Sonda)"
-Write-Host "    HTTP $codigo  (2xx/3xx/4xx provam que o servico esta vivo)"
+if ($cfg.SondaTipo -eq 'smtp') {
+    Write-Host "  sonda   banner SMTP em 127.0.0.1:$($cfg.Porta)"
+    Write-Host "    $resposta  (220 = Postfix a responder)"
+    Write-Host ''
+    Write-Host '  certificado apresentado na submissao:' -ForegroundColor DarkGray
+    Show-Vm "printf '' | openssl s_client -starttls smtp -connect 127.0.0.1:$($cfg.Porta) -servername mail.sabemos.studio 2>/dev/null | openssl x509 -noout -subject -issuer -dates" | Out-Null
+} else {
+    Write-Host "  sonda   http://127.0.0.1:$($cfg.Porta)$($cfg.Sonda)"
+    Write-Host "    HTTP $resposta  (2xx/3xx/4xx provam que o servico esta vivo)"
+}
 
 Write-Host ''
 Write-Host '  Depois (VM):'
 Show-Vm 'free -m | sed -n 2p; df -h / | tail -1' | Out-Null
 Write-Host ''
-Write-Host "  O servico escuta so em 127.0.0.1:$($cfg.Porta) -- nao esta exposto." -ForegroundColor DarkGray
+if ($cfg.SondaTipo -eq 'smtp') {
+    Write-Host '  A porta 25 esta aberta a Internet de proposito (o MX aponta para la);' -ForegroundColor DarkGray
+    Write-Host "  as restantes ($($cfg.Porta), 465, 993) so no loopback." -ForegroundColor DarkGray
+    Write-Host '  Falta o DNS e o PTR, e a chave DKIM: ver o README desta pasta.' -ForegroundColor DarkGray
+} else {
+    Write-Host "  O servico escuta so em 127.0.0.1:$($cfg.Porta) -- nao esta exposto." -ForegroundColor DarkGray
+}
 Write-Host ''

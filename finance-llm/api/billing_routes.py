@@ -1,6 +1,7 @@
 """Rotas de billing e subscrições (`/billing/*`)."""
 from __future__ import annotations
 
+import json
 import logging
 from typing import Annotated, Any, Dict, List, Optional
 
@@ -128,19 +129,26 @@ def confirm(payload: ConfirmPayload, session: Session) -> Dict[str, Any]:
 
 @router.post("/webhooks/stripe")
 async def stripe_webhook(request: Request) -> Dict[str, Any]:
-    """Webhook assíncrono do Stripe."""
+    """Webhook assíncrono do Stripe.
+
+    A assinatura é validada sobre o **corpo cru** — reserializar o JSON mudaria
+    os bytes e invalidaria o HMAC — por isso o corpo é lido antes de qualquer
+    interpretação.
+    """
+    corpo = await request.body()
     try:
-        payload = dict(await request.json())
+        payload = dict(json.loads(corpo.decode("utf-8") or "{}"))
     except Exception:
         raise HTTPException(status_code=400, detail="Payload inválido.")
-    return billing.webhook_stripe(payload)
+    return billing.webhook_stripe(payload, corpo, request.headers.get("stripe-signature"))
 
 
 @router.post("/webhooks/paypal")
 async def paypal_webhook(request: Request) -> Dict[str, Any]:
-    """Webhook assíncrono do PayPal."""
+    """Webhook assíncrono do PayPal (notificação verificada junto do PayPal)."""
+    corpo = await request.body()
     try:
-        payload = dict(await request.json())
+        payload = dict(json.loads(corpo.decode("utf-8") or "{}"))
     except Exception:
         raise HTTPException(status_code=400, detail="Payload inválido.")
-    return billing.webhook_paypal(payload)
+    return billing.webhook_paypal(payload, dict(request.headers))

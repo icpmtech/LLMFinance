@@ -15,6 +15,7 @@
 - `POST /shop/orders/{id}/payment` — regista um pagamento manual
 - `POST /shop/orders/{id}/note` — nota interna
 - `GET  /shop/orders/{id}/print` — encomenda em HTML, pronta a imprimir
+- `POST /shop/orders/{id}/relatorios` — (re)gera os relatórios automáticos da encomenda
 - `POST /shop/media` — carrega um ficheiro para a biblioteca do CMS
 - `POST /shop/customers/{id}/crm` — liga o cliente a uma conta do CRM
 
@@ -26,6 +27,7 @@
 - `GET  /loja/produto/{slug}` — ficha do produto, com avaliações
 - `GET  /loja/carrinho` — carrinho e finalização de compra
 - `GET  /loja/encomenda/{numero}` — recibo (exige o email do comprador)
+- `GET  /loja/encomenda/{numero}/ficheiros/{id}` — descarrega um relatório gerado
 - `POST /loja/encomendas` — cria a encomenda a partir do carrinho
 - `POST /loja/cupoes/validar` — valida um cupão
 - `POST /loja/avaliacoes` — envia uma avaliação (fica pendente de moderação)
@@ -214,6 +216,24 @@ def shop_order_note(item_id: str, payload: Dict[str, Any] = Body(...), session: 
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     return {"saved": True, "item": item}
+
+
+@router.post("/shop/orders/{item_id}/relatorios")
+def shop_order_reports(item_id: str, session: Session = None) -> Dict[str, Any]:
+    """Gera (ou repete) os PDFs dos relatórios automáticos de uma encomenda paga.
+
+    É a rede de segurança do backoffice: se a geração falhar no momento do
+    pagamento (por exemplo com o Elasticsearch indisponível), repete-se aqui sem
+    o cliente pagar outra vez.
+    """
+    author = _writer(session)
+    try:
+        resultado = store.gerar_relatorios(item_id, author)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return {"saved": True, "order": resultado["order"], "files": resultado["files"], "generated": len(resultado["files"])}
 
 
 @router.get("/shop/orders/{item_id}/print", response_class=HTMLResponse)
@@ -569,6 +589,32 @@ def loja_order(number: str, email: str = Query("")) -> HTMLResponse:
             headers={"Cache-Control": "no-store, must-revalidate"},
         )
     return HTMLResponse(render.render_order(order, settings=settings), headers={"Cache-Control": "no-store, must-revalidate"})
+
+
+@router.get("/loja/encomenda/{number}/ficheiros/{file_id}")
+def loja_order_file(number: str, file_id: str, email: str = Query("")) -> Response:
+    """Descarrega um relatório gerado da encomenda (número + email da compra).
+
+    É o mesmo resguardo do recibo: o PDF de um relatório só sai para quem indica
+    o número da encomenda **e** o email usado na compra.
+    """
+    order = store.find_order_by_number(number)
+    wanted = str(email or "").strip().lower()
+    buyer = str((order or {}).get("customer", {}).get("email") or "").strip().lower()
+    if not order or not wanted or wanted != buyer:
+        raise HTTPException(status_code=404, detail="Confirme o número da encomenda e o email usado na compra.")
+    found = store.order_file_of(str(order.get("id")), file_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail="Esse relatório não está nesta encomenda.")
+    path, item = found
+    return Response(
+        content=path.read_bytes(),
+        media_type=str(item.get("mime") or "application/pdf"),
+        headers={
+            "Content-Disposition": f'attachment; filename="{item.get("name")}"',
+            "Cache-Control": "no-store, must-revalidate",
+        },
+    )
 
 
 @router.post("/loja/encomendas")

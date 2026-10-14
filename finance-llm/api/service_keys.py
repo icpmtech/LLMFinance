@@ -87,6 +87,7 @@ CHAVES: List[Dict[str, Any]] = [
         "onde": "Porta do servidor SMTP",
         "secreto": False,
         "exemplo": "587",
+        "default": "587",
         "testavel": False,
     },
     {
@@ -98,6 +99,7 @@ CHAVES: List[Dict[str, Any]] = [
         "onde": "starttls | ssl | plain",
         "secreto": False,
         "exemplo": "starttls",
+        "default": "starttls",
         "testavel": False,
     },
     {
@@ -153,6 +155,7 @@ CHAVES: List[Dict[str, Any]] = [
         "onde": "URL fornecida pelo IFTThenPay",
         "secreto": False,
         "exemplo": "https://mbway.ifthenpay.com/ifthenpaymbw.ashx",
+        "default": "https://mbway.ifthenpay.com/ifthenpaymbw.ashx",
         "testavel": False,
     },
     {
@@ -219,6 +222,37 @@ CHAVES: List[Dict[str, Any]] = [
         "onde": "Sandbox ou produção PayPal",
         "secreto": False,
         "exemplo": "https://api-m.sandbox.paypal.com",
+        "default": "https://api-m.sandbox.paypal.com",
+        "testavel": False,
+    },
+    {
+        "id": "paypal_webhook_id",
+        "label": "PayPal — id do webhook",
+        "grupo": "Pagamentos e subscrições",
+        "descricao": (
+            "Identificador do webhook criado na aplicação PayPal (ex.: 8PT597110X687430LKGECATA). "
+            "Sem ele, o PayPal não consegue notificar a plataforma e os webhooks são recusados — os "
+            "pagamentos continuam a ser confirmados pela captura no regresso do cliente."
+        ),
+        "env": ["PAYPAL_WEBHOOK_ID"],
+        "onde": "PayPal Developer → aplicação → Webhooks → Webhook ID",
+        "secreto": False,
+        "exemplo": "8PT597110X687430LKGECATA",
+        "testavel": False,
+    },
+    {
+        "id": "stripe_webhook_secret",
+        "label": "Stripe — segredo de assinatura do webhook",
+        "grupo": "Pagamentos e subscrições",
+        "descricao": (
+            "Segredo `whsec_…` que valida a assinatura dos eventos do Stripe. É obrigatório para aceitar "
+            "webhooks: sem ele a plataforma recusa-os, em vez de ativar subscrições com base em pedidos "
+            "não verificados."
+        ),
+        "env": ["STRIPE_WEBHOOK_SECRET"],
+        "onde": "Stripe Dashboard → Developers → Webhooks → Signing secret",
+        "secreto": True,
+        "exemplo": "whsec_…",
         "testavel": False,
     },
 ]
@@ -328,7 +362,7 @@ def _do_env_file(nomes: Iterable[str]) -> Optional[str]:
 
 
 def origem(chave_id: str) -> Dict[str, Any]:
-    """Onde está a chave neste momento: índice, ambiente, `.env` ou lado nenhum."""
+    """Onde está a chave neste momento: índice, ambiente, `.env`, padrão ou lado nenhum."""
     chave = CHAVE_BY_ID.get(chave_id)
     if not chave:
         raise ValueError(f"Chave desconhecida: {chave_id}")
@@ -343,6 +377,10 @@ def origem(chave_id: str) -> Dict[str, Any]:
     valor = _do_env_file(chave.get("env") or [])
     if valor:
         return {"origem": "env_file", "valor": valor}
+    # Há chaves cujo valor por omissão já é o correto (porta, segurança, URL base):
+    # a integração funciona sem configuração, por isso não podem aparecer como por definir.
+    if chave.get("default"):
+        return {"origem": "padrao", "valor": chave["default"]}
     return {"origem": "ausente", "valor": None}
 
 
@@ -395,7 +433,8 @@ def estado() -> Dict[str, Any]:
         "atualizado_por": documento.get("updated_by"),
         "notas": (
             "As chaves ficam guardadas no Elasticsearch (documento `service-keys` de `finance_settings`) e são "
-            "usadas imediatamente pela recolha; o ambiente e o `.env` de `finance-llm/` servem de fallback."
+            "usadas imediatamente pela recolha; o ambiente, o `.env` de `finance-llm/` e o valor por omissão da "
+            "aplicação servem de fallback, por essa ordem."
         ),
     }
 

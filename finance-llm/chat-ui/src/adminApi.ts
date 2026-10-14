@@ -274,10 +274,12 @@ export type ServiceKey = {
   onde?: string;
   secreto: boolean;
   exemplo?: string;
+  /** Valor usado quando nada está configurado; nesse caso a chave conta como definida. */
+  default?: string;
   testavel: boolean;
-  /** Já há valor (no índice, no ambiente ou no `.env`). */
+  /** Já há valor (no índice, no ambiente, no `.env` ou por omissão). */
   definida: boolean;
-  /** `indice` | `ambiente` | `env_file` | `ausente`. */
+  /** `indice` | `ambiente` | `env_file` | `padrao` | `ausente`. */
   origem: string;
   variavel?: string | null;
   valor_mascarado?: string | null;

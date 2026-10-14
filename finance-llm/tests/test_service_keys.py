@@ -94,6 +94,44 @@ def test_estado_mascara_a_chave(monkeypatch):
     assert estado["doc_id"] == "service-keys"
 
 
+def test_estado_mostra_valor_por_omissao_como_definido(monkeypatch):
+    """Chaves com padrão da aplicação (porta, segurança, URLs) não ficam «por definir».
+
+    A integração já funciona sem configuração — mostrá-las como por definir fazia
+    parecer que faltava configurar serviços que estão operacionais.
+    """
+    _cliente_falso(monkeypatch)
+    for nome in ("SMTP_PORT", "SMTP_SECURITY", "MBWAY_API_URL", "PAYPAL_BASE_URL"):
+        monkeypatch.delenv(nome, raising=False)
+    monkeypatch.setattr(service_keys, "_do_env_file", lambda nomes: None)
+
+    for identificador, esperado in (
+        ("smtp_port", "587"),
+        ("smtp_security", "starttls"),
+        ("mbway_api_url", "https://mbway.ifthenpay.com/ifthenpaymbw.ashx"),
+        ("paypal_base_url", "https://api-m.sandbox.paypal.com"),
+    ):
+        chave = _por_id(identificador)
+        assert chave["definida"] is True, identificador
+        assert chave["origem"] == "padrao", identificador
+        assert chave["valor_mascarado"] == esperado, identificador
+        assert service_keys.resolver(identificador) == esperado
+
+    # Sem padrão nem ambiente, continua a faltar configurar.
+    ausente = _por_id("stripe_secret_key")
+    assert ausente["definida"] is False
+    assert ausente["origem"] == "ausente"
+
+    # O ambiente continua a ganhar ao padrão.
+    monkeypatch.setenv("SMTP_PORT", "465")
+    assert _por_id("smtp_port")["origem"] == "ambiente"
+    assert service_keys.resolver("smtp_port") == "465"
+
+
+def _por_id(identificador: str) -> dict:
+    return next(item for item in service_keys.estado()["chaves"] if item["id"] == identificador)
+
+
 def test_cliente_do_mj_usa_a_chave_do_indice(monkeypatch):
     """Sem variáveis de ambiente, o cliente resolve a chave guardada no índice."""
     _cliente_falso(monkeypatch)

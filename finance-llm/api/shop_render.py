@@ -19,6 +19,7 @@ import logging
 import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 import markdown as markdown_lib
 
@@ -73,6 +74,16 @@ def _euros(value: Any) -> str:
     amount = store.money(value)
     text = f"{amount:,.2f}".replace(",", " ").replace(".", ",")
     return f"{text} €"
+
+
+def _tamanho(value: Any) -> str:
+    """Tamanho de um ficheiro, legível (`18 KB`, `1,2 MB`)."""
+    size = store.to_int(value)
+    if size >= 1024 * 1024:
+        return f"{size / (1024 * 1024):.1f} MB".replace(".", ",")
+    if size >= 1024:
+        return f"{size / 1024:.0f} KB"
+    return f"{size} B"
 
 
 def _date(value: Optional[str], with_time: bool = False) -> str:
@@ -1708,6 +1719,28 @@ def render_order(order: Dict[str, Any], *, settings: Optional[Dict[str, Any]] = 
     else:
         instrucoes = str((settings.get("payment_instructions") or {}).get(str(payment.get("method")), ""))
         aviso_pagamento = f'<div class="notice">{_esc(instrucoes)}</div>' if instrucoes else ""
+    # Os relatórios gerados pela plataforma são o que o comprador veio buscar:
+    # ficam logo abaixo do aviso de pagamento, prontos a descarregar.
+    ficheiros = [item for item in (order.get("files") or []) if isinstance(item, dict)]
+    if ficheiros:
+        email_comprador = quote(str((order.get("customer") or {}).get("email") or ""))
+        numero = quote(str(order.get("number") or ""))
+        lista = "".join(
+            f'<li><a href="/loja/encomenda/{numero}/ficheiros/{_esc(item.get("id"))}?email={email_comprador}">{_esc(item.get("name"))}</a>'
+            + (f' <small>{_esc(item.get("label"))}</small>' if item.get("label") else "")
+            + (f' <small>({_tamanho(item.get("size"))})</small>' if item.get("size") else "")
+            + "</li>"
+            for item in ficheiros
+        )
+        bloco_relatorios = (
+            '<section class="block"><h2>Os seus relatórios</h2>'
+            f"<ul>{lista}</ul>"
+            '<p class="muted">PDF pronto a guardar. O link fica sempre nesta página.</p></section>'
+        )
+    elif store.order_paid(order) and store.has_auto_report(order):
+        bloco_relatorios = '<div class="notice">O seu relatório está a ser gerado — recarregue esta página dentro de instantes.</div>'
+    else:
+        bloco_relatorios = ""
     body = (
         '<div class="receipt" style="margin:22px 0">'
         f'<div class="num">Encomenda {_esc(order.get("number"))}</div>'
@@ -1722,6 +1755,7 @@ def render_order(order: Dict[str, Any], *, settings: Optional[Dict[str, Any]] = 
         + f'<div class="grand"><span>Total (IVA incluído)</span><span>{_euros(totals.get("total"))}</span></div>'
         "</div>"
         + aviso_pagamento
+        + bloco_relatorios
         + (f'<section class="block"><h2>Seguimento</h2><ul>{timeline}</ul></section>' if timeline else "")
         + '<p><a class="btn ghost small" href="/loja/produtos">Continuar a comprar</a></p>'
         "</div>"

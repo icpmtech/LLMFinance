@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = "https://api-m.sandbox.paypal.com"
 
+# A captura concluída é o que confirma o dinheiro; a ordem aprovada ainda não é pagamento.
+_EVENTOS_RELEVANTES = ("PAYMENT.CAPTURE.COMPLETED",)
+
 
 def _client_id() -> Optional[str]:
     return service_keys.resolver("paypal_client_id")
@@ -142,14 +145,77 @@ def capture_order(order_id: str) -> Dict[str, Any]:
 
 
 def handle_webhook(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Processa webhook PayPal (evento CAPTURE.COMPLETED)."""
+    """Extrai o id da ordem de uma notificação do PayPal.
+
+    Não valida nada — quem chama tem de confirmar a assinatura primeiro
+    (`verify_webhook`). O evento relevante é `PAYMENT.CAPTURE.COMPLETED`: a
+    captura traz o id da ordem em `supplementary_data.related_ids.order_id`.
+    """
     try:
         event_type = payload.get("event_type")
-        if event_type != "CAPTURE.COMPLETED":
-            return {"ok": False, "error": "Evento ignorado."}
-        resource = payload.get("resource", {})
-        purchase = (resource.get("purchase_units") or [{}])[0]
-        return {"ok": True, "payment_id": purchase.get("reference_id")}
+        if event_type not in _EVENTOS_RELEVANTES:
+            return {"ok": False, "event_type": event_type, "error": "Evento ignorado."}
+        resource = payload.get("resource") or {}
+        relacionadas = (resource.get("supplementary_data") or {}).get("related_ids") or {}
+        order_id = relacionadas.get("order_id") or resource.get("id")
+        return {
+            "ok": bool(order_id),
+            "event_type": event_type,
+            "order_id": order_id,
+            "error": None if order_id else "A notificação não identifica a ordem.",
+        }
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Webhook PayPal inválido: %s", exc)
+        logger.warning("Notificação PayPal inválida: %s", exc)
         return {"ok": False, "error": str(exc)}
+
+
+def verify_webhook(payload: Dict[str, Any], headers: Dict[str, str]) -> Optional[str]:
+    """Confirma a autenticidade da notificação junto do PayPal. `None` se for autêntica.
+
+    Sem isto, qualquer pedido HTTP que imitasse o corpo de uma notificação ativava
+    uma subscrição sem pagamento — o webhook é público e não tem sessão.
+    """
+    webhook_id = (service_keys.resolver("paypal_webhook_id") or "").strip()
+    if not webhook_id:
+        return (
+            "Webhook do PayPal recusado: o id do webhook não está configurado "
+            "(PayPal — id do webhook, na administração)."
+        )
+    obrigatorios = (
+        "paypal-transmission-id",
+        "paypal-transmission-time",
+        "paypal-cert-url",
+        "paypal-auth-algo",
+        "paypal-transmission-sig",
+    )
+    normalizados = {str(k).lower(): v for k, v in (headers or {}).items()}
+    faltam = [nome for nome in obrigatorios if not normalizados.get(nome)]
+    if faltam:
+        return f"Webhook do PayPal recusado: faltam cabeçalhos de autenticação ({', '.join(faltam)})."
+
+    token, error = _access_token()
+    if not token:
+        return f"Webhook do PayPal por verificar: {error}"
+    try:
+        response = requests.post(
+            f"{_base_url()}/v1/notifications/verify-webhook-signature",
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+            json={
+                "transmission_id": normalizados["paypal-transmission-id"],
+                "transmission_time": normalizados["paypal-transmission-time"],
+                "cert_url": normalizados["paypal-cert-url"],
+                "auth_algo": normalizados["paypal-auth-algo"],
+                "transmission_sig": normalizados["paypal-transmission-sig"],
+                "webhook_id": webhook_id,
+                "webhook_event": payload,
+            },
+            timeout=20,
+        )
+        response.raise_for_status()
+        estado = (response.json() or {}).get("verification_status")
+        if estado != "SUCCESS":
+            return f"Webhook do PayPal recusado: a assinatura não foi confirmada ({estado})."
+        return None
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Verificação de webhook PayPal falhou: %s", exc)
+        return f"Webhook do PayPal por verificar: falha de comunicação ({exc})."

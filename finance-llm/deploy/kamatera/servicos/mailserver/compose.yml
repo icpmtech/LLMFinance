@@ -1,0 +1,163 @@
+# Servidor de email do IQ OS na VM -- o remetente do email transacional
+# (aprovacao de conta, aviso de trial, subscricao ativada; ver
+# `api/notification_email.py`).
+#
+#     .\14-servico-vm.ps1 -Nome mailserver
+#
+# E uma instancia do Docker Mailserver (DMS): Postfix + Dovecot + OpenDKIM, sem
+# base de dados, com a configuracao em ficheiros dentro de `./config`.
+#
+# Porque e que isto existe
+# ------------------------
+# O email transacional do IQ OS sai por SMTP. Sem servidor proprio, a plataforma
+# depende de um fornecedor externo e da reputacao do IP de outro. Com o DMS, o
+# remetente e do dominio (`sabemos.studio`) e o IP e o desta VM -- o que so
+# funciona se o DNS e o PTR estiverem certos. O que isso exige esta no `README.md`
+# desta pasta (seccao "Servidor de email"), em detalhe:
+#
+#   * registo A `mail.sabemos.studio` -> 45.147.251.188 (o IP **estatico** da VM);
+#   * MX `sabemos.studio` -> `mail.sabemos.studio` (e o que permite receber);
+#   * SPF, DKIM e DMARC no DNS; DKIM gerado depois do primeiro arranque;
+#   * PTR (DNS inverso) do IP da VM a apontar para `mail.sabemos.studio`, pedido
+#     ao suporte da Kamatera. **Sem PTR, os grandes fornecedores classificam isto
+#     como spam** -- e nao ha nada na VM que o resolva.
+#   * porta 25 (TCP, entrada e saida) aberta no firewall da Kamatera.
+#
+# Portas
+# ------
+# So a 25 fica em `0.0.0.0`, e de proposito: e por onde o mundo entrega correio
+# (o MX aponta para ca). As restantes ficam presas a 127.0.0.1, no seguimento da
+# regra das outras pecas -- esta VM nao tem firewall, logo o que nao estiver no
+# loopback fica acessivel a Internet inteira.
+#
+# O backend **nao** usa estas publicacoes: fala com o contentor pelo FQDN dentro
+# da `iqos-net`. As publicacoes no loopback existem para diagnostico a partir da
+# propria VM (`swaks`, `openssl s_client`).
+#
+# Certificado
+# -----------
+# `SSL_TYPE=manual` a ler o certificado que o **Caddy do edge** ja obtem e renova
+# (`edge_caddy_data`, montado so de leitura). Nao se pede um segundo certificado:
+# o mesmo nome (`mail.sabemos.studio`) e o mesmo desafio HTTP-01, e ter dois
+# emissores a competir pela porta 80 seria uma fonte de falhas. O Caddy tem de ter
+# o bloco `mail.sabemos.studio` no `Caddyfile`; sem certificado o DMS recusa
+# arrancar (e diz por que, no log).
+#
+# Isto importa ao backend: o `notification_email.py` abre TLS com
+# `ssl.create_default_context()`, que **verifica o nome do host**. Um certificado
+# auto-assinado, ou o nome do servico (`mailserver`), faria a verificacao falhar
+# -- o `_send` engole a excecao e fica so um aviso no log, ou seja, a aprovacao de
+# contas deixava de avisar o cliente sem ninguem dar por isso. E por isso que a
+# publicacao usa o alias `mail.sabemos.studio` abaixo.
+services:
+  mailserver:
+    # Versao fixa, ao contrario do `searxng`. Entre versoes maiores o DMS muda a
+    # forma de assinar DKIM (`ENABLE_RSPAMD` vs `ENABLE_OPENDKIM`) e o formato da
+    # configuracao: um `latest` que subisse num `docker compose pull` deixaria de
+    # assinar correio sem aviso. Subir de versao e uma decisao, nao um efeito.
+    image: mailserver/docker-mailserver:16.0.1
+    container_name: iqos-mailserver
+    # FQDN do servidor de correio. E este o nome no HELO/EHLO, o nome do
+    # certificado, e o que o MX aponta. Tem de ser igual ao PTR.
+    hostname: mail.sabemos.studio
+    ports:
+      # Entrada de correio do mundo. Publica de proposito -- ver o cabecalho.
+      - "25:25"
+      # Diagnostico a partir da VM. Nao ha clientes de correio externos: quem
+      # envia e o backend, pela rede Docker.
+      - "127.0.0.1:465:465"
+      - "127.0.0.1:587:587"
+      - "127.0.0.1:993:993"
+    volumes:
+      # Contas, chaves DKIM e afinacoes do Postfix. Bind mount (e nao volume) de
+      # proposito: as chaves DKIM e o `postfix-accounts.cf` ficam numa pasta que se
+      # copia e se inspeciona, e e para la que o `14-servico-vm.ps1` envia o
+      # `config/postfix-main.cf`.
+      - ./config:/tmp/docker-mailserver
+      - mail-data:/var/mail
+      - mail-state:/var/mail-state
+      - mail-logs:/var/log/mail
+      - /etc/localtime:/etc/localtime:ro
+      # Certificado Let's Encrypt obtido pelo Caddy do edge (projeto `edge`).
+      - caddy-data:/caddy-data:ro
+    environment:
+      - SSL_TYPE=manual
+      # ATENCAO: o caminho por baixo de `caddy-data` e o layout interno do Caddy
+      # (`<acme-directory>/<dominio>/<dominio>.crt|.key`). Se o Caddy mudar o
+      # armazenamento, e esta linha que tem de mudar -- sintoma: o contentor entra
+      # em ciclo de reinicio a queixar-se de `SSL_KEY_PATH or SSL_CERT_PATH`.
+      - SSL_CERT_PATH=/caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/mail.sabemos.studio/mail.sabemos.studio.crt
+      - SSL_KEY_PATH=/caddy-data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/mail.sabemos.studio/mail.sabemos.studio.key
+      # Para onde vao os relatorios de DMARC/DKIM e os avisos de quota.
+      - POSTMASTER_ADDRESS=postmaster@sabemos.studio
+      # Filtro de conteudo (Amavis). Ligado por omissao no DMS, mas aqui nao ha
+      # valor nenhum: este servidor envia texto nosso e recebe o que o postmaster
+      # enderecar. Fica desligado para nao gastar RAM (a VM tem 8 GB, com o
+      # Elasticsearch e o backend a viver neles).
+      - ENABLE_AMAVIS=0
+      # Antivirus: ja vem desligado (comer ~1 GB de RAM para nada).
+      - ENABLE_CLAMAV=0
+      # Fail2Ban: bane 6 tentativas falhadas ao longo de uma semana (omissao do
+      # DMS). Exige a capacidade NET_ADMIN abaixo -- sem ela nao arranca.
+      - ENABLE_FAIL2BAN=1
+      # Assinatura DKIM: OpenDKIM (omissao nesta versao). A chave e gerada depois
+      # do primeiro arranque com `setup config dkim` -- ver o README da pasta.
+      - ENABLE_OPENDKIM=1
+      # `SPOOF_PROTECTION=1` impede enviar com um `From` de outra conta local, o que
+      # e mais apertado (e exige `SMTP_USER` == `SMTP_FROM`). Fica desligado porque
+      # a plataforma deixa o remetente ser configurado na administracao (ex.:
+      # `geral@sabemos.studio`) com a conta de envio a ser outra: ligar isto sem
+      # alinhar os dois transforma um envio valido num `550 Sender address
+      # rejected`.
+      - SPOOF_PROTECTION=0
+      - TZ=Europe/Lisbon
+    cap_add:
+      # Para o Fail2Ban mexer nas regras de firewall do proprio contentor.
+      - NET_ADMIN
+    # O limite existe para um contentor descontrolado nao arrastar o
+    # Elasticsearch para o swap; o Amavis (desligado acima) e o que costuma
+    # empurrar isto para cima.
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      # Ficheiro que vem na imagem: confirma que os servicos geridos pelo
+      # supervisor estao RUNNING (Postfix, Dovecot, OpenDKIM, Fail2Ban).
+      test: ["CMD", "dms-healthcheck"]
+      interval: 30s
+      timeout: 10s
+      start_period: 90s
+      retries: 3
+    # O DMS guarda estado em ficheiros: dar-lhe tempo para fechar limpo no
+    # `docker compose down` (sem isto ficam maquinas de correio a meio).
+    stop_grace_period: 1m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      default:
+        # O backend do IQ OS chega aqui pelo **FQDN**, e nao pelo nome do servico,
+        # porque e o FQDN que esta no certificado: o
+        # `ssl.create_default_context()` valida o nome do host. Este alias e o que
+        # faz `mail.sabemos.studio` resolver para este contentor na `iqos-net`.
+        aliases:
+          - mail.sabemos.studio
+
+networks:
+  default:
+    name: iqos-net
+    external: true
+
+volumes:
+  mail-data:
+  mail-state:
+  mail-logs:
+  # Volume do Caddy (projeto `edge`), so de leitura. O nome e explicito porque o
+  # projeto deste compose nao e esse.
+  caddy-data:
+    external: true
+    name: edge_caddy_data

@@ -37,13 +37,16 @@ $ram = [ordered]@{
     'n8n (base)'                = 206
     'searxng (base)'            = 33
     'frontend (base)'           = 12
+    # Sem Amavis (desligado no compose) e sem antivirus: 65 MB medidos com o
+    # servico em cima, a receber e a enviar. O limite do contentor e 512 MB.
+    'mailserver (base)'         = 65
     'hermes-agent (perfil)'     = 358
     'osif (6 contentores)'      = 243
     'mirofish (perfil)'         = 82
     'mcp (perfil)'              = 20
 }
 $ramSistema = 420                                   # Ubuntu + dockerd
-$ramBase = 880 + 791 + 206 + 33 + 12
+$ramBase = 880 + 791 + 206 + 33 + 12 + 65
 $ramFull = $ramBase + 358 + 243 + 82 + 20
 
 # Disco (GB). Dados medidos com `du`/`Measure-Object`; imagens com `docker images`.
@@ -60,6 +63,7 @@ $discosImagens = [ordered]@{
     'elasticsearch + frontend + nginx' = 2.6
     'n8n'                             = 1.7
     'searxng'                         = 0.4
+    'mailserver'                      = 1.0
 }
 $discosOpcionais = [ordered]@{
     'mirofish'                             = 14.6

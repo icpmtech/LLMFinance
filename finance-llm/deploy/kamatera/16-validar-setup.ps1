@@ -28,6 +28,8 @@ $ErrorActionPreference = 'Stop'
 
 # Servico -> contentor esperado, porta na VM, caminho a sondar.
 # `Exposto` marca os que devem estar acessiveis de fora (80/443 no Caddy).
+# `Tipo = 'smtp'` muda a sonda: o mailserver nao tem HTTP nenhum, le-se o banner
+# do Postfix na porta de submissao.
 $ESPERADO = @(
     @{ Nome = 'caddy (edge)';      Contentor = 'iqos-caddy';          Porta = $null; Sonda = $null }
     @{ Nome = 'landing';           Contentor = 'iqos-landing';        Porta = 8090;  Sonda = '/' }
@@ -44,10 +46,17 @@ $ESPERADO = @(
     @{ Nome = 'osif-backend';      Contentor = 'iqos-osif-backend';   Porta = 6110;  Sonda = '/health' }
     @{ Nome = 'osif-worker';       Contentor = 'iqos-osif-worker';    Porta = $null; Sonda = $null }
     @{ Nome = 'osif-frontend';     Contentor = 'iqos-osif-frontend';  Porta = 8894;  Sonda = '/' }
+    @{ Nome = 'mailserver';        Contentor = 'iqos-mailserver';     Porta = 587;   Sonda = $null; Tipo = 'smtp' }
 )
 
-# Portas que NAO devem estar abertas a Internet.
-$NAO_EXPOR = @(9200, 9300, 8090, 8888, 5678, 4180, 8642, 9119, 6110, 9111, 8894, 8765, 5001)
+# Portas que NAO devem estar abertas a Internet. As do mailserver entram aqui
+# com excecao da 25, que tem de estar aberta (o MX aponta para la): e por onde o
+# mundo entrega correio. 587/465/993 so servem o backend, pela rede Docker, e o
+# diagnostico a partir da VM -- nao a Internet.
+$NAO_EXPOR = @(9200, 9300, 8090, 8888, 5678, 4180, 8642, 9119, 6110, 9111, 8894, 8765, 5001, 465, 587, 993)
+
+# Portas que devem estar acessiveis de fora (a 25 entra aqui com a 22/80/443).
+$ESPERADO_EXPOR = @(22, 80, 443, 25)
 
 function Invoke-Vm {
     param([Parameter(Mandatory)][string]$RemoteCommand)
@@ -103,12 +112,34 @@ Write-Host ''
 Write-Host '=== 2. Resposta de cada servico (de dentro da VM) ===' -ForegroundColor Cyan
 foreach ($s in $ESPERADO) {
     if (-not $s.Porta) { continue }
+    if ($s.Tipo -eq 'smtp') {
+        # Banner do Postfix. O stdin vai de `/dev/null`: a ligacao cai logo depois
+        # do banner. (Escrever `QUIT` no pipe dava `554 ... SMTP protocol
+        # synchronization`, porque o pedido chega antes de o banner ser lido.)
+        $resposta = (Invoke-Vm "nc -w 5 127.0.0.1:$($s.Porta) < /dev/null").Output.Trim()
+        $ok = $resposta -match '^220'
+        if (-not $ok) { $problemas++ }
+        $cor = if ($ok) { 'Green' } else { 'Red' }
+        Write-Host ("  {0,-24} :{1,-6} {2}" -f $s.Nome, $s.Porta, $(if ($ok) { $resposta } else { "SEM BANNER ($resposta)" })) -ForegroundColor $cor
+        continue
+    }
     $cmd = "curl -s -o /dev/null -m 8 -w %{http_code} http://127.0.0.1:$($s.Porta)$($s.Sonda)"
     $codigo = (Invoke-Vm $cmd).Output.Trim()
     $ok = $codigo -match '^[234]'
     if (-not $ok) { $problemas++ }
     $cor = if ($ok) { 'Green' } else { 'Red' }
     Write-Host ("  {0,-24} :{1,-6} {2}" -f $s.Nome, $s.Porta, $(if ($ok) { "HTTP $codigo" } else { "SEM RESPOSTA ($codigo)" })) -ForegroundColor $cor
+}
+
+# O mailserver tem uma verificacao que os outros nao tem: o certificado. O
+# backend valida o nome do host no handshake (`ssl.create_default_context`), e se
+# estiver errado o envio **falha em silencio** -- fica so um aviso no log e a
+# aprovacao de contas deixa de avisar o cliente. Aqui falha alto.
+if ($estado.ContainsKey('iqos-mailserver')) {
+    $assunto = (Invoke-Vm "printf '' | openssl s_client -starttls smtp -connect 127.0.0.1:587 -servername mail.sabemos.studio 2>/dev/null | openssl x509 -noout -subject").Output.Trim()
+    $ok = $assunto -match 'mail\.sabemos\.studio'
+    if (-not $ok) { $problemas++ }
+    Write-Host ("  {0,-24} {1}" -f 'mailserver (TLS)', $(if ($ok) { "certificado: $assunto" } else { "CERTIFICADO ERRADO/NENHUM ($assunto)" })) -ForegroundColor $(if ($ok) { 'Green' } else { 'Red' })
 }
 
 # --- 3. Dados do Elasticsearch ----------------------------------------------
@@ -136,9 +167,15 @@ if ($aExp.Count -eq 0) {
     Write-Host ("  EXPOSTAS: {0}" -f ($aExp -join ', ')) -ForegroundColor Red
     $problemas++
 }
-foreach ($p in @(22, 80, 443)) {
+foreach ($p in $ESPERADO_EXPOR) {
     $r = Test-NetConnection -ComputerName $SshHost -Port $p -WarningAction SilentlyContinue
     Write-Host ("  :{0,-4} {1}" -f $p, $(if ($r.TcpTestSucceeded) { 'aberta (esperado)' } else { 'FECHADA -- inesperado' })) -ForegroundColor $(if ($r.TcpTestSucceeded) { 'Gray' } else { 'Red' })
+    # A 25 falhar daqui nao prova nada: muitos ISP bloqueiam a saida para a 25, e
+    # o teste morre antes de sair do PC. Para confirmar mesmo, ver de outra rede
+    # (ex.: mxtoolbox) ou usar a sonda de dentro da VM (a seccao 2).
+    if ($p -eq 25 -and -not $r.TcpTestSucceeded) {
+        Write-Host '        (pode ser o ISP a bloquear a sua saida da 25; ver a seccao 2)' -ForegroundColor DarkGray
+    }
 }
 
 # --- 5. Site publico --------------------------------------------------------

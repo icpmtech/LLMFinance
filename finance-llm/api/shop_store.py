@@ -23,6 +23,12 @@ encomenda como paga quando o total está coberto e deixa tudo no histórico.
 
 O stock é descontado na criação da encomenda (`stock_reserved`) e devolvido
 quando a encomenda é cancelada ou reembolsada.
+
+Os produtos digitais que são **relatórios** — hoje o «Relatório de Benchmark»
+(`auto_report: benchmark`) — não precisam de ninguém: assim que a encomenda fica
+paga, o PDF é gerado a partir dos mesmos dados do módulo de benchmark e anexado
+à encomenda (`files`, gravados em `data/shop/files/<encomenda>/`), ficando
+disponível para descarregar no recibo do comprador.
 """
 from __future__ import annotations
 
@@ -43,6 +49,8 @@ logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[1]
 SHOP_DIR = ROOT / "data" / "shop"
 SHOP_PATH = SHOP_DIR / "shop.json"
+#: Ficheiros gerados para as encomendas (os PDFs dos relatórios automáticos).
+FILES_DIR = SHOP_DIR / "files"
 SHOP_VERSION = 1
 
 # Entidades da loja: as listas dentro do documento.
@@ -89,6 +97,14 @@ PRODUCT_TYPES: List[Dict[str, str]] = [
     {"id": "servico", "label": "Serviço", "hint": "Prestação, formação ou subscrição"},
 ]
 
+#: Produtos cujo ficheiro é **produzido pela plataforma**: o produto traz
+#: `auto_report` com uma destas chaves e o PDF é gerado quando a encomenda fica
+#: paga, a partir dos mesmos dados do módulo de benchmark (não há uma segunda
+#: implementação dos números). Os restantes produtos digitais são entregues à mão.
+AUTO_REPORTS: Dict[str, str] = {
+    "benchmark": "Relatório de Benchmark (Portugal, Espanha e França)",
+}
+
 ORDER_STATUSES: Tuple[str, ...] = ("pendente", "pago", "em_preparacao", "enviado", "entregue", "cancelado", "reembolsado")
 ORDER_LABELS: Dict[str, str] = {
     "pendente": "Pendente",
@@ -120,6 +136,9 @@ ORDER_FLOW: Dict[str, List[str]] = {
 }
 # Estados em que a encomenda deixa de contar para as vendas.
 ORDER_CLOSED_LOST: Tuple[str, ...] = ("cancelado", "reembolsado")
+# Estados em que a encomenda está paga (o pagamento pode ter sido registado sem
+# o estado avançar, e o estado pode avançar antes de o pagamento ser registado).
+ORDER_PAID_STATES: Tuple[str, ...] = ("pago", "em_preparacao", "enviado", "entregue")
 # Passos que uma encomenda segue (usados no seguimento mostrado ao cliente).
 ORDER_FLOW_STEPS: Tuple[str, ...] = ("pendente", "pago", "em_preparacao", "enviado", "entregue")
 
@@ -172,6 +191,8 @@ MAX_REVISIONS = 30
 MAX_ACTIVITY = 400
 MAX_ORDER_ITEMS = 60
 MAX_THEME_SECTIONS = 20
+MAX_ORDER_FILES = 12
+MAX_FILE_BYTES = 25 * 1024 * 1024
 PER_PAGE = 12
 
 # --------------------------------------------------------------------------
@@ -847,6 +868,8 @@ def _normalise(entity: str, payload: Dict[str, Any], existing: Optional[Dict[str
         doc["height_cm"] = money(pick("height_cm"))
         doc["internal_notes"] = str(pick("internal_notes") or "")
         doc["seo"] = _normalise_seo(pick("seo"))
+        auto = str(pick("auto_report") or "").strip().lower()
+        doc["auto_report"] = auto if auto in AUTO_REPORTS else ""
 
     if entity == "categories":
         doc["name"] = str(pick("name") or "").strip()
@@ -926,6 +949,7 @@ def _normalise(entity: str, payload: Dict[str, Any], existing: Optional[Dict[str
         doc["stock_reserved"] = _bool(pick("stock_reserved"), bool(existing.get("stock_reserved")))
         doc["placed_at"] = pick("placed_at") or existing.get("placed_at") or None
         doc["tracking"] = str(pick("tracking") or "")
+        doc["files"] = _normalise_order_files(pick("files", []) or [])
 
     if entity == "coupons":
         doc["code"] = str(pick("code") or "").strip().upper().replace(" ", "")
@@ -1648,6 +1672,9 @@ def set_order_status(order_id: str, status: str, author: str = "", note: str = "
     ]
     _log(store, "estado", "orders", order, actor or author, ORDER_LABELS[value])
     _write_store(store)
+    # Marcar a encomenda como paga também liberta os relatórios automáticos.
+    if order_paid(order):
+        _gerar_relatorios(store, order, actor or author or "plataforma")
     return get_item("orders", order_id)
 
 
@@ -1691,6 +1718,8 @@ def register_payment(order_id: str, payload: Dict[str, Any], author: str = "", a
         order["status"] = "pago"
     _log(store, "pagamento", "orders", order, actor or author, f"{PAYMENT_LABELS.get(status, status)} · {amount or total} €")
     _write_store(store)
+    # Encomenda paga: o que a plataforma produz sozinha (os relatórios) sai agora.
+    _gerar_relatorios(store, order, actor or author or "plataforma")
     return get_item("orders", order_id)
 
 
@@ -1711,6 +1740,221 @@ def add_order_note(order_id: str, note: str, author: str = "", internal: bool = 
     _log(store, "nota", "orders", order, author, text[:120])
     _write_store(store)
     return get_item("orders", order_id)
+
+
+# --------------------------------------------------------------------------
+# Ficheiros das encomendas e relatórios gerados
+# --------------------------------------------------------------------------
+def _safe_filename(name: str, fallback: str = "relatorio.pdf") -> str:
+    """Nome de ficheiro sem acentos nem caracteres que o sistema não aceite."""
+    plain = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode("ascii")
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", Path(plain).name).strip("-._")
+    return cleaned[:120] or fallback
+
+
+def order_files_dir(order_id: str) -> Path:
+    """Pasta dos ficheiros de uma encomenda (`data/shop/files/<id>/`)."""
+    return FILES_DIR / str(order_id)
+
+
+def _normalise_order_files(value: Any) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+    if not isinstance(value, list):
+        return items
+    for raw in value[:MAX_ORDER_FILES]:
+        if not isinstance(raw, dict):
+            continue
+        name = _safe_filename(raw.get("name"))
+        items.append(
+            {
+                "id": str(raw.get("id") or _new_id("fch")),
+                "name": name,
+                "stored_name": _safe_filename(raw.get("stored_name") or name, name),
+                "label": str(raw.get("label") or "").strip(),
+                "code": str(raw.get("code") or "").strip(),
+                "size": _int(raw.get("size"), 0, minimum=0),
+                "mime": str(raw.get("mime") or "application/pdf"),
+                "created_at": raw.get("created_at") or _now(),
+                "created_by": str(raw.get("created_by") or ""),
+            }
+        )
+    return items
+
+
+def files_view(order: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Ficheiros da encomenda como o comprador precisa deles (sem o nome no disco)."""
+    return [
+        {
+            "id": item["id"],
+            "name": item["name"],
+            "label": item["label"],
+            "size": item["size"],
+            "mime": item["mime"],
+            "created_at": item["created_at"],
+        }
+        for item in _normalise_order_files(order.get("files"))
+    ]
+
+
+def order_paid(order: Dict[str, Any]) -> bool:
+    """A encomenda está paga? O pagamento registado manda; o estado confirma-o."""
+    if str(order.get("status")) in ORDER_CLOSED_LOST:
+        return False
+    if str((order.get("payment") or {}).get("status")) == "pago":
+        return True
+    return str(order.get("status")) in ORDER_PAID_STATES
+
+
+def add_order_file(order_id: str, actor: str, *, name: str, data: bytes, mime: str = "", label: str = "", code: str = "") -> Dict[str, Any]:
+    """Anexa um ficheiro a uma encomenda e grava-o em `data/shop/files/<id>/`."""
+    if not data:
+        raise ValueError("O ficheiro está vazio.")
+    if len(data) > MAX_FILE_BYTES:
+        raise ValueError("O ficheiro excede 25 MB.")
+    with _lock:
+        store_data = _load()
+        order = _find(store_data, "orders", order_id)
+        if order is None:
+            raise KeyError(f"Encomenda {order_id} não encontrada.")
+        files = _normalise_order_files(order.get("files"))
+        if len(files) >= MAX_ORDER_FILES:
+            raise ValueError("Demasiados ficheiros nesta encomenda.")
+        safe = _safe_filename(name)
+        file_id = _new_id("fch")
+        target_dir = order_files_dir(str(order.get("id")))
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / f"{file_id}-{safe}"
+        target.write_bytes(data)
+        item = {
+            "id": file_id,
+            "name": safe,
+            "stored_name": target.name,
+            "label": str(label or "").strip(),
+            "code": str(code or "").strip(),
+            "size": len(data),
+            "mime": str(mime or "application/pdf"),
+            "created_at": _now(),
+            "created_by": actor or "plataforma",
+        }
+        files.append(item)
+        order["files"] = files
+        order["updated_at"] = _now()
+        order["updated_by"] = actor or "plataforma"
+        order["timeline"] = list(order.get("timeline") or []) + [
+            {"at": _now(), "status": order.get("status"), "note": f"Ficheiro «{safe}» disponível para descarregar.", "actor": actor or "plataforma"}
+        ]
+        _log(store_data, "ficheiro", "orders", order, actor, safe)
+        _write_store(store_data)
+        return copy.deepcopy(item)
+
+
+def order_file_of(order_id: str, file_id: str) -> Optional[Tuple[Path, Dict[str, Any]]]:
+    """(caminho, ficha) de um ficheiro da encomenda, se ele existir no disco."""
+    try:
+        order = get_item("orders", order_id)
+    except KeyError:
+        return None
+    for item in _normalise_order_files(order.get("files")):
+        if str(item.get("id")) == str(file_id):
+            path = order_files_dir(str(order.get("id"))) / str(item["stored_name"])
+            return (path, item) if path.exists() else None
+    return None
+
+
+def _linhas_com_relatorio(store_data: Dict[str, Any], order: Dict[str, Any]) -> List[Tuple[Dict[str, Any], Dict[str, Any]]]:
+    """(linha, produto) das linhas cujo ficheiro a plataforma produz sozinha."""
+    linhas: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
+    for line in order.get("items") or []:
+        produto = _find(store_data, "products", str(line.get("product_id") or ""))
+        if produto and str(produto.get("auto_report") or "") in AUTO_REPORTS:
+            linhas.append((line, produto))
+    return linhas
+
+
+def has_auto_report(order: Dict[str, Any]) -> bool:
+    """A encomenda traz algum produto com relatório gerado automaticamente?"""
+    return bool(_linhas_com_relatorio(_load(), order))
+
+
+def _benchmark_params() -> Dict[str, Any]:
+    """Âmbito do benchmark vendido na loja: os três países, por CPV."""
+    return {"mode": "mercado", "countries": ["pt", "es", "fr"], "role": "adjudicatario", "top": 40}
+
+
+def _gerar_pdf(order: Dict[str, Any], produto: Dict[str, Any]) -> Tuple[str, bytes, str]:
+    """Gera o PDF do produto — `(nome, bytes, mime)`. Import tardio do relatório."""
+    from api import benchmark_report
+
+    comprador = order.get("customer") or {}
+    requerente = str(comprador.get("name") or comprador.get("email") or "")
+    return benchmark_report.render(
+        _benchmark_params(),
+        reference=str(order.get("number") or ""),
+        requester=requerente,
+    )
+
+
+def _gerar_relatorios(store_data: Dict[str, Any], order: Dict[str, Any], actor: str) -> List[Dict[str, Any]]:
+    """Gera (e anexa) os PDFs em falta de uma encomenda paga. É idempotente."""
+    if not order_paid(order):
+        return []
+    por_fazer = _linhas_com_relatorio(store_data, order)
+    if not por_fazer:
+        return []
+    feitos = {(str(item.get("code")), str(item.get("label"))) for item in _normalise_order_files(order.get("files"))}
+    gerados: List[Dict[str, Any]] = []
+    for _linha, produto in por_fazer:
+        chave = (str(produto.get("auto_report") or ""), str(produto.get("name") or ""))
+        if chave in feitos:
+            continue
+        try:
+            nome, dados, mime = _gerar_pdf(order, produto)
+        except Exception as exc:  # noqa: BLE001 - a encomenda não pode ficar presa
+            logger.warning("Falha ao gerar «%s» da encomenda %s: %s", produto.get("name"), order.get("number"), exc)
+            # Nota interna (não vai para o recibo): o backoffice pode repetir.
+            nota = f"[{_now()[:10]} · sistema] Não foi possível gerar «{produto.get('name')}»: {exc}"
+            order["internal_notes"] = f"{str(order.get('internal_notes') or '').strip()}\n{nota}".strip()
+            continue
+        gerados.append(
+            add_order_file(
+                str(order.get("id")),
+                actor,
+                name=nome,
+                data=dados,
+                mime=mime,
+                label=str(produto.get("name") or ""),
+                code=str(produto.get("auto_report") or ""),
+            )
+        )
+        feitos.add(chave)
+    return gerados
+
+
+def gerar_relatorios(order_id: str, actor: str = "plataforma") -> Dict[str, Any]:
+    """Gera os relatórios automáticos em falta numa encomenda (para o backoffice)."""
+    with _lock:
+        store_data = _load()
+        order = _find(store_data, "orders", order_id)
+        if order is None:
+            raise KeyError(f"Encomenda {order_id} não encontrada.")
+        gerados = _gerar_relatorios(store_data, order, actor)
+    return {"order": get_item("orders", order_id), "files": gerados}
+
+
+def gerar_relatorios_pendentes(limit: int = 20) -> List[Dict[str, Any]]:
+    """Rede de segurança: gera os PDFs em falta das encomendas já pagas.
+
+    Serve para repetir a geração sem o cliente pagar outra vez quando ela falhou
+    no momento do pagamento (por exemplo com o Elasticsearch indisponível).
+    """
+    gerados: List[Dict[str, Any]] = []
+    with _lock:
+        store_data = _load()
+        for order in list(store_data["orders"]):
+            if len(gerados) >= limit:
+                break
+            gerados.extend(_gerar_relatorios(store_data, order, "sistema (loja)"))
+    return gerados
 
 
 # --------------------------------------------------------------------------
@@ -2381,6 +2625,7 @@ def checkout(payload: Dict[str, Any], actor: str = "loja") -> Dict[str, Any]:
         "stock_reserved": False,
         "placed_at": _now(),
         "tracking": "",
+        "files": [],
         "timeline": [{"at": _now(), "status": "pendente", "note": "Encomenda recebida na loja online", "actor": "loja"}],
         "created_at": _now(),
         "updated_at": _now(),
@@ -2414,6 +2659,7 @@ def public_order_view(order: Dict[str, Any], settings: Optional[Dict[str, Any]] 
     settings = settings or get_settings()
     payload = copy.deepcopy(order)
     payload.pop("internal_notes", None)
+    payload["files"] = files_view(payload)
     payload["totals"] = _order_totals(payload, settings)
     payload["payment_label"] = PAYMENT_LABELS.get(str((payload.get("payment") or {}).get("status")), "")
     payload["status_label"] = ORDER_LABELS.get(str(payload.get("status")), "")
@@ -2817,6 +3063,39 @@ def _seed(store: Dict[str, Any]) -> None:
                 {"label": "Periodicidade", "value": "Trimestral"},
                 {"label": "Atualização", "value": "12 meses"},
             ],
+        },
+        {
+            "name": "Relatório de Benchmark — Portugal, Espanha e França",
+            "slug": "relatorio-benchmark-portugal-espanha-franca",
+            "sku": "BENCH-PT-ES-FR",
+            "category_ids": [by_slug["relatorios"]],
+            "short_description": "Preços de referência, concorrência e perfil de CPV do mesmo segmento em Portugal, Espanha e França, com o cruzamento entre países.",
+            "description": (
+                "## O que inclui\n\n"
+                "- Preço de referência do segmento (mediana, quartis, média)\n"
+                "- A empresa no mercado (índice de preço, posição e quota)\n"
+                "- Concorrentes e contrapartes do segmento\n"
+                "- Historial, oportunidades e contratos recentes\n"
+                "- Perfil de CPV da empresa\n"
+                "- Portugal, Espanha e França — incluindo o cruzamento entre países\n\n"
+                "**PDF gerado automaticamente** assim que a encomenda fica paga e disponível "
+                "para descarregar no recibo da encomenda."
+            ),
+            "price": 14.9,
+            "tax_rate": 23.0,
+            "type": "digital",
+            "status": "publicado",
+            "featured": True,
+            "order": 2,
+            "track_stock": False,
+            "stock": 0,
+            "tags": ["benchmark", "preços", "relatório", "ibéria"],
+            "attributes": [
+                {"label": "Formato", "value": "PDF"},
+                {"label": "Países", "value": "Portugal, Espanha e França"},
+                {"label": "Entrega", "value": "Automática após o pagamento"},
+            ],
+            "auto_report": "benchmark",
         },
         {
             "name": "Dossiê de empresa — investigação completa",

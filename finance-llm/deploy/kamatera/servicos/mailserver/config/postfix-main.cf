@@ -1,0 +1,28 @@
+# Afinacoes do Postfix no servidor de email do IQ OS.
+#
+# O DMS junta este ficheiro ao `main.cf` (ver `ENABLE_...` no compose). Fica aqui
+# so o que tem razao para ser diferente da omissao.
+#
+# O que **nao** fica aqui, de proposito: `mynetworks` (por omissao, apenas o
+# loopback do contentor -- os outros contentores da `iqos-net` nao retransmitem
+# sem autenticacao), `smtpd_helo_required`, `reject_unknown_sender_domain` e as
+# restantes restricoes: o DMS ja as define com criterio, e reescreve-las a mao so
+# criaria divergencia entre este ficheiro e a imagem.
+#
+# O que fica: limites de caudal. O que vale este servidor e a reputacao do IP da
+# VM, e a forma mais rapida de a perder e emitir rajadas -- seja por uma conta
+# apanhada, seja por um ciclo no backend. Os limites sao por cliente e impostos
+# pelo `anvil`, que o DMS ja arranca; o `anvil_rate_time_unit` e 60 s.
+
+# Mensagens por minuto e por cliente. O backend envia um email por evento
+# (aprovacao de conta, aviso de trial, subscricao), logo a margem e folgada num
+# dia normal e apertada num dia ma.
+smtpd_client_message_rate_limit = 60
+
+# Ligacoes por minuto e por cliente. Cada email e uma ligacao, e por isso o
+# mesmo numero: sem isto, um cliente em ciclo abria ligacoes sem enviar nada.
+smtpd_client_connection_rate_limit = 60
+
+# Destinatarios por mensagem. O backend envia sempre um de cada vez; o limite
+# existe para o servidor nao servir de difusor a quem tenha a conta de envio.
+smtpd_recipient_limit = 100

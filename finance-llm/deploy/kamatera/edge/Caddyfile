@@ -24,6 +24,11 @@
 #         ssh -N -R 127.0.0.1:8082:127.0.0.1:8892 root@45.147.251.188
 #
 # Nao ha Cloudflare: o unico ponto publico e este Caddy.
+#
+# Alem do site, este Caddy serve de **emissor de certificados**: o bloco
+# `mail.sabemos.studio` no fim do ficheiro nao serve conteudo nenhum, existe para
+# obter e renovar (desafio HTTP-01, porta 80) o certificado que o servidor de
+# email da VM le do volume `edge_caddy_data`. Ver `servicos/mailserver/compose.yml`.
 
 # Redireciona www para o apex.
 www.sabemos.studio {
@@ -102,5 +107,34 @@ sabemos.studio {
             reverse_proxy http://127.0.0.1:8090
         }
         respond "{err.status_code} {err.status_text}"
+    }
+}
+
+# Servidor de email — **so para o certificado**.
+#
+# Nao serve a aplicacao nem conteudo nenhum: a existencia deste bloco e o que faz
+# o Caddy pedir (e renovar sozinho) o certificado Let's Encrypt de
+# `mail.sabemos.studio`, guardando-o no volume `edge_caddy_data`. O contentor do
+# Docker Mailserver monta esse volume so de leitura e usa-o com `SSL_TYPE=manual`,
+# o que lhe da um certificado de confianca publica para o SMTP — era o que faltava
+# para o backend poder enviar com TLS verificado.
+#
+# Alternativa descartada: o DMS obter o certificado sozinho. Exigiria a porta 80,
+# que aqui tem dono (este Caddy, em `network_mode: host`), e dois emissores a
+# competir pela mesma porta e uma fonte de falhas silenciosas de renovacao.
+#
+# Pre-requisito: o registo A `mail.sabemos.studio` tem de apontar para o IP da VM
+# **antes** de o certificado poder ser emitido (o desafio HTTP-01 chega a esta
+# porta 80). Sem o registo, o Caddy repete a tentativa; sem certificado, o
+# mailserver nao arranca.
+mail.sabemos.studio {
+    # Sonda barata, para se poder confirmar do PC que o bloco esta publicado.
+    handle /healthz {
+        respond "mail-ok" 200
+    }
+
+    # Nada mais: 204 em qualquer outro caminho.
+    handle {
+        respond "" 204
     }
 }

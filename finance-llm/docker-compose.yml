@@ -143,12 +143,17 @@ services:
       #
       # URL público usado nos retornos do Stripe e do PayPal.
       - PUBLIC_APP_URL=${PUBLIC_APP_URL:-http://127.0.0.1:4180}
-      # Stripe (cartão): chave secreta da conta.
+      # Stripe (cartão): chave secreta da conta e segredo que valida os webhooks.
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
-      # PayPal: credenciais da aplicação (sandbox ou produção).
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      # PayPal: credenciais da aplicação (sandbox ou produção) e id do webhook.
       - PAYPAL_CLIENT_ID=${PAYPAL_CLIENT_ID:-}
       - PAYPAL_CLIENT_SECRET=${PAYPAL_CLIENT_SECRET:-}
-      - PAYPAL_BASE_URL=${PAYPAL_BASE_URL:-https://api-m.sandbox.paypal.com}
+      # Sem omissão **de propósito**: o sandbox já é a omissão do código, e um
+      # valor aqui faria a chave aparecer como «vinda do ambiente» em vez de
+      # «valor por omissão da aplicação» na administração.
+      - PAYPAL_BASE_URL=${PAYPAL_BASE_URL:-}
+      - PAYPAL_WEBHOOK_ID=${PAYPAL_WEBHOOK_ID:-}
       # Transferência bancária e MB Way manual.
       - TRANSFER_IBAN=${TRANSFER_IBAN:-}
       - MBWAY_NUMBER=${MBWAY_NUMBER:-}
@@ -156,9 +161,13 @@ services:
       - MBWAY_API_KEY=${MBWAY_API_KEY:-}
       - MBWAY_API_URL=${MBWAY_API_URL:-}
       # --- Email transacional (aprovação de contas, trial e subscrições) ---
+      # Sem valores por omissão **de propósito**: um default aqui faria a chave
+      # aparecer como «definida» na administração sem estar configurada. A porta
+      # (587) e a segurança (starttls) têm omissão no próprio código
+      # (`api/notification_email.py`), usada só quando o SMTP_HOST existe.
       - SMTP_HOST=${SMTP_HOST:-}
-      - SMTP_PORT=${SMTP_PORT:-587}
-      - SMTP_SECURITY=${SMTP_SECURITY:-starttls}
+      - SMTP_PORT=${SMTP_PORT:-}
+      - SMTP_SECURITY=${SMTP_SECURITY:-}
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - SMTP_FROM=${SMTP_FROM:-}

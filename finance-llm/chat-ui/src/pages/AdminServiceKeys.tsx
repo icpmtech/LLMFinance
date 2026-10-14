@@ -4,9 +4,9 @@
  * As credenciais dos serviços externos (a **2captcha**, que resolve o reCAPTCHA
  * da recolha societária do MJ) ficam guardadas no Elasticsearch — documento
  * `service-keys` do índice `finance_settings` — e são lidas em cada utilização,
- * pela ordem **índice → ambiente → `.env`**. Alterar aqui a chave passa a valer
- * de imediato, sem reiniciar o backend; deixar o campo vazio devolve o serviço
- * ao valor do ambiente/`.env`.
+ * pela ordem **índice → ambiente → `.env` → valor por omissão**. Alterar aqui a
+ * chave passa a valer de imediato, sem reiniciar o backend; deixar o campo vazio
+ * devolve o serviço ao valor do ambiente/`.env`/padrão.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, ExternalLink, KeyRound, Loader2, PlugZap, Save, ShieldCheck, X } from "lucide-react";
@@ -24,6 +24,7 @@ const ORIGEM_LABELS: Record<string, string> = {
   indice: "guardada na plataforma",
   ambiente: "variável de ambiente",
   env_file: "ficheiro .env",
+  padrao: "valor por omissão da aplicação",
   ausente: "não definida",
   indisponivel: "índice indisponível",
 };
@@ -61,7 +62,13 @@ export function AdminServiceKeysTab({ onError }: { onError: (message: string | n
     void carregar();
   }, [carregar]);
 
-  const chaves = useMemo<ServiceKey[]>(() => state?.chaves ?? [], [state]);
+  const todas = useMemo<ServiceKey[]>(() => state?.chaves ?? [], [state]);
+  /* Filtro rápido: ver só o que falta configurar é o caso mais frequente. */
+  const [soPendentes, setSoPendentes] = useState(false);
+  const chaves = useMemo(
+    () => (soPendentes ? todas.filter((chave) => !chave.definida) : todas),
+    [todas, soPendentes],
+  );
   const grupos = useMemo(() => {
     const mapa = new Map<string, ServiceKey[]>();
     chaves.forEach((chave) => {
@@ -108,9 +115,23 @@ export function AdminServiceKeysTab({ onError }: { onError: (message: string | n
 
   const porGravar = Object.values(valores).some((valor) => valor !== undefined);
 
+  /* Resumo por origem: torna evidente o que está configurado e onde, já que um
+     valor pode vir do índice (gravado aqui), do ambiente do contentor ou do
+     `.env` — e só a combinação dos três é que conta. */
+  const resumo = useMemo(() => {
+    const contagem = { indice: 0, ambiente: 0, env_file: 0, padrao: 0, ausente: 0 } as Record<string, number>;
+    todas.forEach((chave) => {
+      const origem = chave.definida ? chave.origem : "ausente";
+      contagem[origem] = (contagem[origem] ?? 0) + 1;
+    });
+    return contagem;
+  }, [todas]);
+
   return (
-    <div className="space-y-4">
-      <div className="glass-card gradient-border rounded-2xl p-5">
+    /* `overflow-y-auto` é obrigatório: o pai é `overflow-hidden`, e sem isto os
+       grupos de chaves que não cabem no ecrã ficavam cortados sem forma de lá chegar. */
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
+      <div className="glass-card gradient-border shrink-0 rounded-2xl p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="flex items-center gap-2 text-base font-semibold">
@@ -144,6 +165,42 @@ export function AdminServiceKeysTab({ onError }: { onError: (message: string | n
           </p>
         )}
 
+        {state && (
+          <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+            <p className="text-[11px] text-muted-foreground">
+              <strong className="text-foreground">
+                {todas.filter((chave) => chave.definida).length} de {todas.length}
+              </strong>{" "}
+              chaves configuradas · a resolução é{" "}
+              <span className="font-mono">índice → ambiente → .env → padrão</span>, pelo que uma chave marcada como{" "}
+              <em>definida</em> já está a ser usada, mesmo que não tenha sido gravada aqui.
+            </p>
+            <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[10.5px]">
+              <span className="text-teal-200">
+                {resumo.indice ?? 0} guardada(s) na plataforma
+              </span>
+              <span className="text-sky-200">
+                {(resumo.ambiente ?? 0) + (resumo.env_file ?? 0)} vinda(s) do ambiente/.env
+              </span>
+              {resumo.padrao ? (
+                <span className="text-violet-200">{resumo.padrao} com valor por omissão</span>
+              ) : null}
+              <span className={resumo.ausente ? "text-amber-200" : "text-muted-foreground"}>
+                {resumo.ausente ?? 0} por definir
+              </span>
+            </p>
+            {(resumo.ausente ?? 0) > 0 && (
+              <button
+                type="button"
+                onClick={() => setSoPendentes((atual) => !atual)}
+                className="mt-2 rounded-lg border border-white/10 px-2.5 py-1 text-[10.5px] text-muted-foreground transition hover:border-white/25 hover:text-foreground"
+              >
+                {soPendentes ? "Mostrar todas as chaves" : "Mostrar apenas as que faltam configurar"}
+              </button>
+            )}
+          </div>
+        )}
+
         {aviso && (
           <p className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-3 py-2 text-[11.5px] text-emerald-200">
             <CheckCircle2 size={13} /> {aviso}
@@ -157,8 +214,14 @@ export function AdminServiceKeysTab({ onError }: { onError: (message: string | n
         </p>
       )}
 
+      {soPendentes && grupos.length === 0 && (
+        <p className="rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-3 py-2 text-[12px] text-emerald-200">
+          Todas as chaves estão configuradas.
+        </p>
+      )}
+
       {grupos.map(([grupo, itens]) => (
-        <div key={grupo} className="glass-card gradient-border rounded-2xl p-5">
+        <div key={grupo} className="glass-card gradient-border shrink-0 rounded-2xl p-5">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <ShieldCheck size={14} className="text-teal-300" /> {grupo}
           </h3>
@@ -222,7 +285,7 @@ export function AdminServiceKeysTab({ onError }: { onError: (message: string | n
                       }
                       placeholder={
                         chave.definida
-                          ? "Escreva o novo valor (apagar o campo remove a chave e volta ao .env)"
+                          ? "Escreva o novo valor (apagar o campo devolve a chave ao ambiente/.env/padrão)"
                           : chave.exemplo || "Novo valor"
                       }
                       autoComplete="off"

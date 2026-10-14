@@ -15,7 +15,9 @@
 #   2. entra na `iqos-net`, onde resolve `elasticsearch` por nome (validado);
 #   3. porta presa a 127.0.0.1;
 #   4. `extra_hosts: host.docker.internal:host-gateway` para o Ollama, que por
-#      omissao corre no anfitriao.
+#      omissao corre no anfitriao;
+#   5. o email transacional aponta para o **`mailserver` desta VM** (abaixo), em
+#      vez de depender de um servidor externo configurado a mao.
 #
 # Os volumes `data/`, `model/`, `rag/` e `logs/` ficam **vazios de proposito**
 # (o `data/` sao 37 GB, deixados para depois). O backend arranca e serve o que
@@ -91,6 +93,29 @@ services:
       - JARVIS_WAKE_WORDS=${JARVIS_WAKE_WORDS:-}
       - JARVIS_WAKE_MODEL=${JARVIS_WAKE_MODEL:-tiny}
       - JARVIS_STT_MODEL=${JARVIS_STT_MODEL:-small}
+      # --- Email transacional: o remetente e o `mailserver` desta VM ---
+      #
+      # O host e o **FQDN** e nao o nome do servico (`mailserver`): o certificado
+      # do mailserver e de `mail.sabemos.studio`, e o `notification_email.py`
+      # abre TLS com `ssl.create_default_context()`, que valida o nome do host no
+      # certificado. Com `mailserver` o handshake falhava -- e o `_send` engole a
+      # excecao, logo o sintoma seria "os emails nao chegam" sem nada a vermelho.
+      # O alias que resolve o FQDN dentro da `iqos-net` esta no compose do
+      # mailserver.
+      - SMTP_HOST=${SMTP_HOST:-mail.sabemos.studio}
+      # Porta e seguranca ficam **vazias** de proposito: o codigo assume 587 e
+      # `starttls` quando ha servidor, e um valor escrito aqui faria a chave
+      # aparecer como «definida» na administracao sem estar configurada (a mesma
+      # razao do `docker-compose.yml` da raiz).
+      - SMTP_PORT=${SMTP_PORT:-}
+      - SMTP_SECURITY=${SMTP_SECURITY:-}
+      # Conta de envio. Cria-se no mailserver (`setup email add`) e vem do `.env`
+      # do PC, que o `14-servico-vm.ps1` envia para o lado deste compose.
+      # Sem ela o Postfix recusa retransmitir (`554 Relay access denied`), que e o
+      # comportamento certo: a 25 destes contentores nao serve para retransmitir.
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-}
       - TZ=Europe/Lisbon
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://127.0.0.1:8000/health', timeout=5)"]

@@ -341,7 +341,7 @@ def create_payment(user_id: str, *, plan_id: str, interval: str, method: str) ->
         try:
             from api import stripe_payments
 
-            session = stripe_payments.create_checkout_session(payment_id, amount, plan_id, interval)
+            session = stripe_payments.create_checkout_session(payment_id, amount, plan_id, interval, user_id)
             if not session.get("ok"):
                 return {
                     "ok": False,
@@ -536,29 +536,87 @@ def capture_paypal_payment(user_id: str, payment_id: str) -> Dict[str, Any]:
     return {"ok": True, "payment_id": payment_id, "status": result.get("status"), "user": confirmed.get("user")}
 
 
-def webhook_stripe(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Processa evento checkout.session.completed do Stripe."""
-    try:
-        from api import stripe_payments
+def _find_payment_by_order_id(order_id: str, *, campo: str = "paypal_order_id") -> Optional[Dict[str, str]]:
+    """Encontra o pagamento pendente cuja ordem corresponde a `order_id`.
 
+    O webhook não traz sessão nem `user_id` fidedignos — só a ordem, que fomos
+    nós que guardámos. É por ela que se chega ao dono do pagamento.
+    """
+    es = get_es_client()
+    if not es:
+        return None
+    try:
+        resp = es.search(
+            index=AUTH_USERS_INDEX,
+            body={
+                "query": {"exists": {"field": "payments"}},
+                "size": 500,
+                "_source": ["id", "payments"],
+            },
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Não foi possível procurar o pagamento da ordem %s: %s", order_id, exc)
+        return None
+
+    for hit in resp.get("hits", {}).get("hits", []):
+        source = hit.get("_source") or {}
+        for payment in source.get("payments") or []:
+            if not isinstance(payment, dict):
+                continue
+            if (payment.get("metadata") or {}).get(campo) == order_id:
+                return {
+                    "user_id": str(source.get("id")),
+                    "payment_id": str(payment.get("id")),
+                    "status": str(payment.get("status") or ""),
+                }
+    return None
+
+
+def webhook_stripe(
+    payload: Dict[str, Any],
+    raw_body: bytes = b"",
+    signature: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Processa evento checkout.session.completed do Stripe, depois de verificar a assinatura."""
+    from api import stripe_payments
+
+    recusa = stripe_payments.verify_webhook(raw_body, signature)
+    if recusa:
+        logger.warning("Webhook Stripe recusado: %s", recusa)
+        return {"ok": False, "verified": False, "error": recusa}
+    try:
         result = stripe_payments.handle_webhook(payload)
-        if result.get("payment_id"):
-            confirm_payment(result["user_id"], result["payment_id"])
-        return {"ok": True}
+        if not result.get("ok"):
+            return {"ok": True, "verified": True, "ignored": True}
+        user_id = result.get("user_id")
+        payment_id = result.get("payment_id")
+        if not user_id or not payment_id:
+            return {"ok": True, "verified": True, "ignored": True}
+        confirm_payment(str(user_id), str(payment_id))
+        return {"ok": True, "verified": True, "payment_id": payment_id}
     except Exception as exc:  # noqa: BLE001
         logger.warning("Webhook Stripe falhou: %s", exc)
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "verified": True, "error": str(exc)}
 
 
-def webhook_paypal(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Processa captura do PayPal."""
+def webhook_paypal(payload: Dict[str, Any], headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """Processa uma captura do PayPal, depois de confirmar a autenticidade da notificação."""
+    from api import paypal_payments
+
+    recusa = paypal_payments.verify_webhook(payload, headers or {})
+    if recusa:
+        logger.warning("Webhook PayPal recusado: %s", recusa)
+        return {"ok": False, "verified": False, "error": recusa}
     try:
-        from api import paypal_payments
-
         result = paypal_payments.handle_webhook(payload)
-        if result.get("payment_id"):
-            confirm_payment(result["user_id"], result["payment_id"])
-        return {"ok": True}
+        if not result.get("ok"):
+            return {"ok": True, "verified": True, "ignored": True}
+        encontrado = _find_payment_by_order_id(str(result["order_id"]))
+        if not encontrado:
+            logger.warning("Webhook PayPal: ordem %s sem pagamento correspondente.", result["order_id"])
+            return {"ok": True, "verified": True, "ignored": True}
+        confirm_payment(encontrado["user_id"], encontrado["payment_id"])
+        return {"ok": True, "verified": True, "payment_id": encontrado["payment_id"]}
     except Exception as exc:  # noqa: BLE001
         logger.warning("Webhook PayPal falhou: %s", exc)
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "verified": True, "error": str(exc)}
