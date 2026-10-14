@@ -1,88 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://sabemos.studio/</loc>
-    <priority>1.0</priority>
-    <changefreq>daily</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/benchmark</loc>
-    <priority>0.9</priority>
-    <changefreq>daily</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/benchmark/portugal</loc>
-    <priority>0.9</priority>
-    <changefreq>daily</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/benchmark/espanha</loc>
-    <priority>0.9</priority>
-    <changefreq>daily</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/benchmark/franca</loc>
-    <priority>0.9</priority>
-    <changefreq>daily</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/benchmark/cruzar</loc>
-    <priority>0.8</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/benchmark/comprador</loc>
-    <priority>0.8</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/benchmark/vendedor</loc>
-    <priority>0.8</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/contracts/search</loc>
-    <priority>0.8</priority>
-    <changefreq>daily</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/companies/search</loc>
-    <priority>0.8</priority>
-    <changefreq>daily</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/empresas-iq</loc>
-    <priority>0.7</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/tickers</loc>
-    <priority>0.7</priority>
-    <changefreq>hourly</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/search360</loc>
-    <priority>0.6</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/reports</loc>
-    <priority>0.6</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/world</loc>
-    <priority>0.5</priority>
-    <changefreq>hourly</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/osint</loc>
-    <priority>0.5</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  <url>
-    <loc>https://sabemos.studio/mercado</loc>
-    <priority>0.5</priority>
-    <changefreq>daily</changefreq>
-  </url>
-</urlset>
+<!-- Índice de sitemaps do domínio.
+
+     As páginas públicas vivem em três sítios diferentes — a aplicação (este
+     ficheiro, em `/sitemap-app.xml`), o site do CMS (`/site/sitemap.xml`) e a
+     loja (`/loja/sitemap.xml`) — e cada um gera o seu sitemap a partir dos
+     dados que tem (as páginas do site e os produtos da loja são dinâmicos, e
+     não caberiam numa lista escrita à mão). O índice junta-os no endereço que
+     o `robots.txt` indica. -->
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>https://sabemos.studio/sitemap-app.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://sabemos.studio/site/sitemap.xml</loc>
+  </sitemap>
+  <sitemap>
+    <loc>https://sabemos.studio/loja/sitemap.xml</loc>
+  </sitemap>
+</sitemapindex>
