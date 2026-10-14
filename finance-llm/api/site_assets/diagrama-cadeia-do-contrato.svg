@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 420" width="1100" height="420" role="img" aria-label="Cadeia do contrato: anúncio, concurso, adjudicação, contrato, aditivos e preço final">
+  <rect width="1100" height="420" fill="#f1f5f9"/>
+  <path d="M36 79 L1014 79" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="7 7"/>
+  <g>
+    <rect x="36" y="44" width="158" height="70" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="115" y="76" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Anúncio</text>
+    <text x="115" y="98" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b" text-anchor="middle">o que se quer comprar</text>
+  </g>
+  <g>
+    <rect x="208" y="44" width="158" height="70" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="287" y="76" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Concurso</text>
+    <text x="287" y="98" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b" text-anchor="middle">quem concorre</text>
+  </g>
+  <g>
+    <rect x="380" y="44" width="158" height="70" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="459" y="76" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Adjudicação</text>
+    <text x="459" y="98" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b" text-anchor="middle">quem ganha</text>
+  </g>
+  <g>
+    <rect x="552" y="44" width="158" height="70" rx="14" fill="#dbeafe" stroke="#93c5fd"/>
+    <text x="631" y="76" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Contrato</text>
+    <text x="631" y="98" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#475569" text-anchor="middle">por quanto e com quem</text>
+  </g>
+  <g>
+    <rect x="724" y="44" width="158" height="70" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="803" y="76" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Aditivos</text>
+    <text x="803" y="98" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b" text-anchor="middle">o que mudou depois</text>
+  </g>
+  <g>
+    <rect x="896" y="44" width="158" height="70" rx="14" fill="#0f172a"/>
+    <text x="975" y="76" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff" text-anchor="middle">Preço final</text>
+    <text x="975" y="98" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#94a3b8" text-anchor="middle">o valor que se paga</text>
+  </g>
+  <path d="M115 136 L115 330" stroke="#e2e8f0" stroke-width="1.5" stroke-dasharray="5 5"/>
+  <path d="M287 136 L287 330" stroke="#e2e8f0" stroke-width="1.5" stroke-dasharray="5 5"/>
+  <path d="M459 136 L459 330" stroke="#e2e8f0" stroke-width="1.5" stroke-dasharray="5 5"/>
+  <path d="M631 136 L631 330" stroke="#e2e8f0" stroke-width="1.5" stroke-dasharray="5 5"/>
+  <path d="M803 136 L803 330" stroke="#e2e8f0" stroke-width="1.5" stroke-dasharray="5 5"/>
+  <path d="M975 136 L975 330" stroke="#e2e8f0" stroke-width="1.5" stroke-dasharray="5 5"/>
+  <rect x="70" y="288" width="90" height="42" rx="10" fill="#a5f3fc"/>
+  <rect x="242" y="266" width="90" height="64" rx="10" fill="#7dd3fc"/>
+  <rect x="414" y="244" width="90" height="86" rx="10" fill="#38bdf8"/>
+  <rect x="586" y="208" width="90" height="122" rx="10" fill="#0ea5a4"/>
+  <rect x="758" y="178" width="90" height="152" rx="10" fill="#f59e0b"/>
+  <rect x="930" y="156" width="90" height="174" rx="10" fill="#0f172a"/>
+  <path d="M70 330 L1014 330" stroke="#94a3b8" stroke-width="2"/>
+  <path d="M115 282 L287 260 L459 238 L631 202 L803 172 L975 150" fill="none" stroke="#0f172a" stroke-width="2" stroke-dasharray="4 5" opacity=".35"/>
+  <g fill="#0f172a">
+    <circle cx="115" cy="282" r="5"/>
+    <circle cx="287" cy="260" r="5"/>
+    <circle cx="459" cy="238" r="5"/>
+    <circle cx="631" cy="202" r="5"/>
+    <circle cx="803" cy="172" r="5"/>
+    <circle cx="975" cy="150" r="5"/>
+  </g>
+  <text x="40" y="360" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#64748b">Cada passo deixa rasto: o anúncio, a decisão, o contrato e o que se acrescentou depois.</text>
+  <rect x="40" y="376" width="1014" height="34" rx="12" fill="#ffffff" stroke="#dbe3ec"/>
+  <text x="549" y="398" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#475569" text-anchor="middle">O que se mede: valor  ·  procedimento  ·  prazo até à assinatura  ·  número de concorrentes  ·  CPV</text>
+</svg>

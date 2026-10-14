@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 440" width="1100" height="440" role="img" aria-label="Indicadores de um concelho comparados com a média nacional">
+  <rect width="1100" height="440" fill="#f1f5f9"/>
+  <rect x="760" y="30" width="320" height="46" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+  <rect x="782" y="45" width="16" height="16" rx="4" fill="#0ea5a4"/>
+  <text x="808" y="58" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#0f172a">Concelho</text>
+  <rect x="920" y="45" width="16" height="16" rx="4" fill="#94a3b8"/>
+  <text x="946" y="58" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#0f172a">Média nacional</text>
+  <path d="M60 330 L1040 330" stroke="#94a3b8" stroke-width="2"/>
+  <g>
+    <rect x="80" y="140" width="64" height="190" rx="10" fill="#0ea5a4"/>
+    <rect x="168" y="180" width="64" height="150" rx="10" fill="#94a3b8"/>
+    <text x="112" y="132" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f766e" text-anchor="middle">+27%</text>
+    <text x="200" y="172" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#64748b" text-anchor="middle">base</text>
+  </g>
+  <g>
+    <rect x="320" y="180" width="64" height="150" rx="10" fill="#0ea5a4"/>
+    <rect x="408" y="210" width="64" height="120" rx="10" fill="#94a3b8"/>
+    <text x="352" y="172" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f766e" text-anchor="middle">+25%</text>
+    <text x="440" y="202" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#64748b" text-anchor="middle">base</text>
+  </g>
+  <g>
+    <rect x="560" y="210" width="64" height="120" rx="10" fill="#0ea5a4"/>
+    <rect x="648" y="234" width="64" height="96" rx="10" fill="#94a3b8"/>
+    <text x="592" y="202" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f766e" text-anchor="middle">+25%</text>
+    <text x="680" y="226" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#64748b" text-anchor="middle">base</text>
+  </g>
+  <g>
+    <rect x="800" y="230" width="64" height="100" rx="10" fill="#0ea5a4"/>
+    <rect x="888" y="218" width="64" height="112" rx="10" fill="#94a3b8"/>
+    <text x="832" y="222" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f766e" text-anchor="middle">−11%</text>
+    <text x="920" y="210" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#64748b" text-anchor="middle">base</text>
+  </g>
+  <text x="156" y="356" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a" text-anchor="middle">Despesa total</text>
+  <text x="156" y="376" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b" text-anchor="middle">INE</text>
+  <text x="396" y="356" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a" text-anchor="middle">Despesas correntes</text>
+  <text x="396" y="376" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b" text-anchor="middle">INE</text>
+  <text x="636" y="356" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a" text-anchor="middle">Despesas com pessoal</text>
+  <text x="636" y="376" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b" text-anchor="middle">INE</text>
+  <text x="876" y="356" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a" text-anchor="middle">Contratos celebrados</text>
+  <text x="876" y="376" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b" text-anchor="middle">Portal BASE</text>
+  <rect x="40" y="392" width="1020" height="34" rx="12" fill="#0f172a"/>
+  <text x="550" y="414" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#e2e8f0" text-anchor="middle">A mesma grelha para os 308 concelhos · despesa (INE) e contratação (Portal BASE)</text>
+</svg>

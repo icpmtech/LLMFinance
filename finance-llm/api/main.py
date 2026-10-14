@@ -312,6 +312,11 @@ from api.municipio_pessoas_routes import router as municipio_pessoas_router
 # eleitores cruzada com o recenseamento do MAI, para se saber quanto cabe a cada
 # concelho e a cada freguesia; `finance_remuneracoes` + `finance_remuneracoes_territorios`.
 from api.remuneracoes_routes import router as remuneracoes_router
+# Remunerações da Administração Pública (DGAEP): a Tabela Remuneratória Única,
+# as carreiras/categorias, os cargos dirigentes e a base legal de cada carreira,
+# lidos dos PDF `SRAP_<ano>.pdf` para `data/remuneracoes-ap` e
+# `finance_remuneracoes_ap`.
+from api.remuneracoes_ap_routes import router as remuneracoes_ap_router
 from api.contribuintes_routes import router as contribuintes_router
 from api.gleif_routes import router as gleif_router
 from api.world_routes import router as world_router
@@ -710,6 +715,9 @@ app.include_router(municipio_pessoas_router)
 # Remunerações dos eleitos locais: tabela de abonos + eleitores/polígonos por
 # concelho e freguesia (recenseamento do MAI).
 app.include_router(remuneracoes_router)
+# Remunerações da Administração Pública: quadro consolidado da DGAEP (TRU,
+# carreiras, dirigentes e base legal), com o simulador de posições.
+app.include_router(remuneracoes_ap_router)
 app.include_router(contribuintes_router)
 app.include_router(gleif_router)
 # World Model: estado do mundo, rede neuronal dinâmica (grafo), motor de

@@ -372,7 +372,9 @@ OPERATIONS: List[Operation] = _ops(
         "jarvis",
         PAY(),
     ),
-    _write("jarvis_speak", "POST", "/jarvis/speak", "Sintetiza texto em áudio (mp3) com a voz do servidor.", "jarvis", PAY()),
+    _write("jarvis_speak", "POST", "/jarvis/speak",
+           "Sintetiza texto em áudio com a voz do servidor (Piper local, WAV; ou a voz neural da edge-tts, mp3).",
+           "jarvis", PAY()),
     # -- researcher ------------------------------------------------------
     _read("researcher_tools", "GET", "/researcher/tools", "Catálogo fechado de ferramentas do investigador.", "researcher"),
     _write("researcher_investigate", "POST", "/researcher/investigate", "Executa uma investigação e devolve relatório com audit trail.", "researcher", PAY()),

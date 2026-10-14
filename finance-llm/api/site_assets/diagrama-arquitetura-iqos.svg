@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 520" width="1100" height="520" role="img" aria-label="Arquitetura do IQ OS: dados abertos, ontologia de entidades e produtos">
+  <rect width="1100" height="520" fill="#f1f5f9"/>
+  <text x="40" y="46" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#64748b" letter-spacing="1.4">DADOS ABERTOS</text>
+  <g>
+    <rect x="40" y="58" width="176" height="66" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="128" y="88" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Portal BASE</text>
+    <text x="128" y="108" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b" text-anchor="middle">contratos</text>
+  </g>
+  <g>
+    <rect x="228" y="58" width="176" height="66" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="316" y="88" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">INE</text>
+    <text x="316" y="108" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b" text-anchor="middle">finanças locais</text>
+  </g>
+  <g>
+    <rect x="416" y="58" width="176" height="66" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="504" y="88" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Registos</text>
+    <text x="504" y="108" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b" text-anchor="middle">empresas e pessoas</text>
+  </g>
+  <g>
+    <rect x="604" y="58" width="176" height="66" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="692" y="88" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Boletins</text>
+    <text x="692" y="108" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b" text-anchor="middle">diários oficiais</text>
+  </g>
+  <g>
+    <rect x="792" y="58" width="268" height="66" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="926" y="88" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Plataformas de contratação</text>
+    <text x="926" y="108" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b" text-anchor="middle">Espanha e França</text>
+  </g>
+  <path d="M549 128 L549 156" stroke="#94a3b8" stroke-width="2.5"/>
+  <path d="M542 152 l7 10 7 -10" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="40" y="166" width="1020" height="150" rx="20" fill="#0f172a"/>
+  <text x="70" y="200" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#7dd3fc" letter-spacing="1.4">IQ OS · ONTOLOGIA DE ENTIDADES</text>
+  <g>
+    <rect x="70" y="218" width="228" height="72" rx="14" fill="#13233b" stroke="#2b4565"/>
+    <text x="184" y="250" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">Empresas</text>
+    <text x="184" y="272" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#94a3b8" text-anchor="middle">NIF · sócios · gerentes</text>
+  </g>
+  <g>
+    <rect x="316" y="218" width="228" height="72" rx="14" fill="#13233b" stroke="#2b4565"/>
+    <text x="430" y="250" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">Municípios</text>
+    <text x="430" y="272" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#94a3b8" text-anchor="middle">despesa · contratos</text>
+  </g>
+  <g>
+    <rect x="562" y="218" width="228" height="72" rx="14" fill="#13233b" stroke="#2b4565"/>
+    <text x="676" y="250" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">Pessoas</text>
+    <text x="676" y="272" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#94a3b8" text-anchor="middle">cargos · benefício efetivo</text>
+  </g>
+  <g>
+    <rect x="808" y="218" width="222" height="72" rx="14" fill="#0ea5a4"/>
+    <text x="919" y="250" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#ffffff" text-anchor="middle">Ligação por identidade</text>
+    <text x="919" y="272" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#d7fbf6" text-anchor="middle">não por nome parecido</text>
+  </g>
+  <path d="M549 316 L549 344" stroke="#94a3b8" stroke-width="2.5"/>
+  <path d="M542 340 l7 10 7 -10" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="40" y="378" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#64748b" letter-spacing="1.4">PRODUTOS</text>
+  <g>
+    <rect x="40" y="390" width="242" height="94" rx="16" fill="#ffffff" stroke="#dbe3ec"/>
+    <rect x="62" y="408" width="26" height="26" rx="8" fill="#0ea5a4"/>
+    <text x="100" y="428" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Fichas por entidade</text>
+    <text x="62" y="462" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b">contrato a contrato, com evidência</text>
+  </g>
+  <g>
+    <rect x="298" y="390" width="242" height="94" rx="16" fill="#ffffff" stroke="#dbe3ec"/>
+    <rect x="320" y="408" width="26" height="26" rx="8" fill="#38bdf8"/>
+    <text x="358" y="428" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Indicadores</text>
+    <text x="320" y="462" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b">comparações e séries datadas</text>
+  </g>
+  <g>
+    <rect x="556" y="390" width="242" height="94" rx="16" fill="#ffffff" stroke="#dbe3ec"/>
+    <rect x="578" y="408" width="26" height="26" rx="8" fill="#6366f1"/>
+    <text x="616" y="428" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Investigação assistida</text>
+    <text x="578" y="462" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b">respostas com fontes citadas</text>
+  </g>
+  <g>
+    <rect x="814" y="390" width="246" height="94" rx="16" fill="#ffffff" stroke="#dbe3ec"/>
+    <rect x="836" y="408" width="26" height="26" rx="8" fill="#f59e0b"/>
+    <text x="874" y="428" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Site e blog</text>
+    <text x="836" y="462" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b">a leitura editorial dos números</text>
+  </g>
+</svg>

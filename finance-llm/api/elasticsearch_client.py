@@ -288,6 +288,13 @@ REMUNERACOES_TERRITORIOS_INDEX = "finance_remuneracoes_territorios"
 # tem cada lista vem do MAI. `_id` = `<concelho_id>-<slug do nome>`.
 REMUNERACOES_PESSOAS_INDEX = "finance_remuneracoes_pessoas"
 
+# **Remunerações da Administração Pública**: um documento por linha do quadro da
+# DGAEP — nível da Tabela Remuneratória Única, posição remuneratória de uma
+# carreira/categoria ou cargo dirigente — com o valor mensal publicado para
+# cada ano. Alimentado por `api/remuneracoes_ap_service.py` a partir dos PDF
+# `SRAP_<ano>.pdf`. `_id` = `<tipo>-<ano>-<chave>`.
+REMUNERACOES_AP_INDEX = "finance_remuneracoes_ap"
+
 # Registo oficial dos partidos na **CNE**: denominação, sigla, data de inscrição,
 # situação (`inscrito`/`extinto`), sítio na Internet, símbolo e descrição. É a
 # chave que liga os documentos das contas ao partido. `_id` = `<chave>` (slug).
@@ -544,6 +551,17 @@ INDEX_SETTINGS: Dict[str, Dict[str, Any]] = {
         }
     },
     REMUNERACOES_PESSOAS_INDEX: {
+        "analysis": {
+            "analyzer": {
+                "world_folding": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    },
+    REMUNERACOES_AP_INDEX: {
         "analysis": {
             "analyzer": {
                 "world_folding": {
@@ -18477,6 +18495,115 @@ def search_remuneracoes_pessoas(
         return {"error": str(exc), "items": [], "total": 0}
 
 
+def index_remuneracoes_ap_bulk(
+    items: Iterable[Dict[str, Any]],
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Indexa as linhas do quadro de remunerações da AP.
+
+    Cada item é um nível da TRU, uma posição remuneratória de uma carreira ou um
+    cargo dirigente, com o ano e o valor mensal publicado (`tipo` distingue os
+    três). O `doc_id` é estável por ano, para uma recolha nova substituir a
+    anterior em vez de duplicar.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "indexed": 0}
+    ensure_indices(client)
+    actions = []
+    now = datetime.utcnow().isoformat()
+    for doc in items:
+        if not doc.get("doc_id"):
+            continue
+        source = dict(doc)
+        source.setdefault("ingested_at", now)
+        source.setdefault("updated_at", now)
+        actions.append({
+            "_op_type": "index",
+            "_index": REMUNERACOES_AP_INDEX,
+            "_id": source["doc_id"],
+            **source,
+        })
+    if not actions:
+        return {"indexed": 0}
+    try:
+        indexed, errors = bulk(client, actions, raise_on_error=False)
+        client.indices.refresh(index=REMUNERACOES_AP_INDEX)
+        return {"indexed": indexed, "errors": len(errors) if errors else 0}
+    except Exception as exc:
+        return {"error": str(exc), "indexed": 0}
+
+
+def search_remuneracoes_ap(
+    q: Optional[str] = None,
+    *,
+    ano: Optional[int] = None,
+    tipo: Optional[str] = None,
+    nivel: Optional[int] = None,
+    remuneracao_minima: Optional[float] = None,
+    remuneracao_maxima: Optional[float] = None,
+    size: int = 40,
+    page: int = 1,
+    es: Optional[Elasticsearch] = None,
+) -> Dict[str, Any]:
+    """Pesquisa no quadro de remunerações da AP (por ano, tipo e texto).
+
+    Serve o simulador e a pesquisa da página: «assistente técnico», «chefe de
+    divisão», «nível 40» — cada linha traz o valor mensal publicado e a secção
+    do quadro de onde saiu.
+    """
+    client = es or get_es_client()
+    if not client:
+        return {"error": "Elasticsearch indisponível", "items": [], "total": 0}
+    ensure_indices(client)
+
+    must: List[Dict[str, Any]] = []
+    filters: List[Dict[str, Any]] = []
+    if q:
+        must.append({
+            "multi_match": {
+                "query": str(q).strip(),
+                "fields": ["texto^3", "carreira^2", "categoria^2", "cargo^2", "ambito", "seccao"],
+                "type": "best_fields",
+            }
+        })
+    if ano:
+        filters.append({"term": {"ano": int(ano)}})
+    if tipo:
+        filters.append({"term": {"tipo": str(tipo)}})
+    if nivel:
+        filters.append({"term": {"nivel": int(nivel)}})
+    if remuneracao_minima is not None:
+        filters.append({"range": {"remuneracao": {"gte": float(remuneracao_minima)}}})
+    if remuneracao_maxima is not None:
+        filters.append({"range": {"remuneracao": {"lte": float(remuneracao_maxima)}}})
+
+    bool_query: Dict[str, Any] = {}
+    if must:
+        bool_query["must"] = must
+    if filters:
+        bool_query["filter"] = filters
+    query = {"bool": bool_query} if bool_query else {"match_all": {}}
+
+    body = {
+        "query": query,
+        "from": max(0, (max(1, page) - 1) * max(1, size)),
+        "size": max(1, min(size, 500)),
+        "sort": [{"remuneracao": {"order": "desc", "missing": "_last"}}, {"ano": {"order": "desc"}}],
+        "track_total_hits": True,
+    }
+    try:
+        resp = client.search(index=REMUNERACOES_AP_INDEX, body=body)
+        return {
+            "total": resp["hits"]["total"]["value"],
+            "items": [{**hit["_source"], "doc_id": hit["_id"]} for hit in resp["hits"]["hits"]],
+            "page": page,
+            "size": size,
+        }
+    except Exception as exc:
+        return {"error": str(exc), "items": [], "total": 0}
+
+
 def remuneracoes_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
     """Volumetria dos índices de remunerações, por ano, nível e escalão."""
     client = es or get_es_client()
@@ -18491,6 +18618,9 @@ def remuneracoes_status(es: Optional[Elasticsearch] = None) -> Dict[str, Any]:
         ).get("count", 0)
         out["indices"][REMUNERACOES_PESSOAS_INDEX] = client.count(
             index=REMUNERACOES_PESSOAS_INDEX
+        ).get("count", 0)
+        out["indices"][REMUNERACOES_AP_INDEX] = client.count(
+            index=REMUNERACOES_AP_INDEX
         ).get("count", 0)
     except Exception as exc:
         return {"error": str(exc)}

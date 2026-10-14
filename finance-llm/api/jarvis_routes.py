@@ -15,7 +15,7 @@ Rotas:
 - `POST /jarvis/ask/stream`        — o mesmo, em SSE (`passo`, `ferramenta`, `resposta`, `fim`)
 - `POST /jarvis/transcribe`        — áudio (multipart) → texto
 - `POST /jarvis/wake`              — trecho curto → texto + palavra de ativação (STT local)
-- `POST /jarvis/speak`             — texto → áudio (mp3)
+- `POST /jarvis/speak`             — texto → áudio (WAV no Piper, mp3 na edge-tts)
 
 O `ask` aceita:
 
@@ -194,7 +194,8 @@ async def ask(payload: AskPayload, session: Session = None) -> Dict[str, Any]:
     if payload.speak:
         try:
             audio, engine = await service.synthesize(result.get("speech") or result.get("answer") or "", voice=payload.voice)
-            result["audio"] = {"mime": "audio/mpeg", "engine": engine, "base64": base64.b64encode(audio).decode("ascii")}
+            mime = "audio/wav" if engine == "piper" else "audio/mpeg"
+            result["audio"] = {"mime": mime, "engine": engine, "base64": base64.b64encode(audio).decode("ascii")}
         except Exception as exc:
             logger.info("Síntese no servidor indisponível: %s", exc)
             result["audio_error"] = str(exc)
@@ -282,8 +283,10 @@ async def speak(payload: SpeakPayload) -> Response:
         audio, engine = await service.synthesize(payload.text, voice=payload.voice, rate=payload.rate)
     except RuntimeError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
+    # O Piper devolve WAV e a edge-tts mp3 — o browser toca os dois, mas o
+    # `Content-Type` tem de dizer a verdade: é ele que tipa o Blob no cliente.
     return Response(
         content=audio,
-        media_type="audio/mpeg",
+        media_type="audio/wav" if engine == "piper" else "audio/mpeg",
         headers={"X-Jarvis-Voice-Engine": engine, "Cache-Control": "no-store"},
     )

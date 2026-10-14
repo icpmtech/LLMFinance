@@ -692,6 +692,65 @@ def test_synthesize_sem_motor_falha_mas_nao_rebenta():
         pytest.skip("edge-tts instalado no ambiente")
 
 
+def test_speech_engine_prefere_o_piper_local(monkeypatch):
+    monkeypatch.setattr(service, "piper_available", lambda: True)
+    assert service.speech_engine(None) == "piper"
+    assert service.speech_engine("") == "piper"
+    assert service.speech_engine(service.PIPER_VOICE_ID) == "piper"
+    # A voz de omissão da plataforma fica no Piper: evita uma ida à rede (e um
+    # 403 da edge-tts) em cada resposta falada.
+    assert service.speech_engine(service.DEFAULT_VOICE) == "piper"
+
+
+def test_speech_engine_respeita_a_voz_escolhida(monkeypatch):
+    monkeypatch.setattr(service, "piper_available", lambda: True)
+    assert service.speech_engine("pt-PT-DuarteNeural") == "edge-tts"
+    assert service.speech_engine("pt-BR-FranciscaNeural") == "edge-tts"
+
+
+def test_speech_engine_sem_piper_cai_na_edge(monkeypatch):
+    monkeypatch.setattr(service, "piper_available", lambda: False)
+    assert service.speech_engine(None) == "edge-tts"
+
+
+def test_tts_status_aponta_para_o_piper_quando_ha_voz_local(monkeypatch):
+    monkeypatch.setattr(service, "piper_available", lambda: True)
+    estado = service.tts_status()
+    assert estado["engine"] == "piper"
+    assert estado["default_voice"] == service.PIPER_VOICE_ID
+    assert estado["voices"][0]["id"] == service.PIPER_VOICE_ID
+
+
+def test_synthesize_cai_na_edge_quando_o_piper_falha(monkeypatch):
+    monkeypatch.setattr(service, "piper_available", lambda: True)
+
+    def sem_voz(_texto):
+        raise RuntimeError("voz ausente")
+
+    async def edge_falsa(*_args, **_kwargs):
+        return b"mp3"
+
+    monkeypatch.setattr(service, "_synthesize_piper", sem_voz)
+    monkeypatch.setattr(service, "_synthesize_edge", edge_falsa)
+    assert asyncio.run(service.synthesize("olá")) == (b"mp3", "edge-tts")
+
+
+def test_synthesize_sem_motor_diz_qual_falhou(monkeypatch):
+    monkeypatch.setattr(service, "piper_available", lambda: True)
+
+    def sem_voz(_texto):
+        raise RuntimeError("voz ausente")
+
+    async def edge_falsa(*_args, **_kwargs):
+        raise RuntimeError("403")
+
+    monkeypatch.setattr(service, "_synthesize_piper", sem_voz)
+    monkeypatch.setattr(service, "_synthesize_edge", edge_falsa)
+    with pytest.raises(RuntimeError) as erro:
+        asyncio.run(service.synthesize("olá"))
+    assert "piper" in str(erro.value) and "edge-tts" in str(erro.value)
+
+
 # ---------------------------------------------------------------------------
 # Metamodelo
 # ---------------------------------------------------------------------------

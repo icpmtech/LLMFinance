@@ -133,12 +133,18 @@ Três formas de interagir, por ordem de preferência — todas degradam sem part
    e a página continua a funcionar por texto.
 2. **Falar (TTS).** Por omissão usa as vozes do sistema (`speechSynthesis`) —
    instantâneo. Com **Voz do servidor** ligado, a resposta vem de `/jarvis/speak`
-   com as vozes neurais `pt-PT` do `edge-tts` (`pt-PT-RaquelNeural` por omissão,
-   `pt-PT-DuarteNeural` como alternativa):
+   sintetizada **localmente pelo Piper** (voz `pt-PT` `pt_PT-tugão-medium`, sem
+   rede). O motor da `edge-tts` (`pt-PT-RaquelNeural`, `pt-PT-DuarteNeural`)
+   fica como alternativa — e é escolhido quando essa voz é pedida
+   explicitamente. O Piper responde em **WAV** e a `edge-tts` em **mp3** (o
+   cabeçalho `X-Jarvis-Voice-Engine` diz qual respondeu):
 
    ```powershell
-   docker compose exec backend python -c "from api import jarvis_service as s; print(s.tts_status()['engine'])"   # edge-tts
-   curl.exe -s -X POST http://127.0.0.1:4180/api/jarvis/speak -H "Content-Type: application/json" -d '{"text":"bom dia","voice":"pt-PT-RaquelNeural"}' -o fala.mp3
+   docker compose exec backend python -c "from api import jarvis_service as s; print(s.tts_status()['engine'])"   # piper
+   # Voz local por omissão (WAV):
+   curl.exe -s -X POST http://127.0.0.1:4180/api/jarvis/speak -H "Content-Type: application/json" -d '{"text":"bom dia"}' -o fala.wav
+   # Voz da edge-tts (mp3) — só onde a rede a deixar passar:
+   curl.exe -s -X POST http://127.0.0.1:4180/api/jarvis/speak -H "Content-Type: application/json" -d '{"text":"bom dia","voice":"pt-PT-DuarteNeural"}' -o fala.mp3
    ```
 3. **Painel de controlo**: profundidade da investigação (`rapida`/`profunda`,
    passada ao gateway do Hermes), «Falar» (ler as respostas), escolha da voz e a
@@ -555,11 +561,34 @@ Dicas:
 
 ## 7. Voz no servidor (opcional)
 
+No Docker não é preciso fazer nada: a imagem do backend já traz o
+`faster-whisper` (ouvir) e o `piper-tts` (falar), e a voz pt-PT do Piper fica em
+`/opt/piper-voices` — ver `Dockerfile.backend`.
+
+Para correr **fora** do Docker:
+
 ```powershell
-c:/LLMFinance/.venv/Scripts/pip.exe install edge-tts faster-whisper
+c:/LLMFinance/.venv/Scripts/pip.exe install piper-tts faster-whisper edge-tts
+# A voz do Piper não vem no pacote. Baixe-a para a pasta apontada por
+# `JARVIS_PIPER_VOICES_DIR` (por omissão /opt/piper-voices, que não existe fora
+# do Docker) e aponte a variável para lá:
+c:/LLMFinance/.venv/Scripts/python.exe -m piper.download_voices pt_PT-tugão-medium --download-dir C:\LLMFinance\data\piper-voices
+$env:JARVIS_PIPER_VOICES_DIR = "C:\LLMFinance\data\piper-voices"
 ```
 
-Com isto, `GET /jarvis/voice` passa a reportar `available: true` nos dois
-motores, a interface ganha a opção **Voz do servidor** e o microfone passa a
-funcionar em browsers sem `SpeechRecognition` (Firefox). Sem estes pacotes, o
-Jarvis não perde funcionalidade — muda só quem sintetiza e transcreve.
+Com isto, `GET /jarvis/voice` passa a reportar `available: true`, a interface
+ganha a opção **Voz do servidor** e o microfone passa a funcionar em browsers
+sem `SpeechRecognition` (Firefox). Sem estes pacotes, o Jarvis não perde
+funcionalidade — muda só quem sintetiza e transcreve.
+
+Variáveis de ambiente:
+
+| Variável | Por omissão | Para que serve |
+|---|---|---|
+| `JARVIS_PIPER_VOICE` | `pt_PT-tugão-medium` | Voz local (o `id` na API fica `piper:<voz>`). |
+| `JARVIS_PIPER_VOICES_DIR` | `/opt/piper-voices` | Onde estão os `.onnx` das vozes do Piper. |
+| `JARVIS_VOICE` | `pt-PT-RaquelNeural` | Voz da `edge-tts`, usada como alternativa. |
+
+⚠️ Baixar a voz com a CLI do Piper (`piper.download_voices`) falha para nomes
+não-ASCII — rebenta com `UnicodeEncodeError` no `ã` de `tugão`. Se acontecer,
+use o URL já percent-encoded, como o `Dockerfile.backend` faz.

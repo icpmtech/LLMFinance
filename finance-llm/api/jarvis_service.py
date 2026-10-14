@@ -8,8 +8,9 @@ O Jarvis é diferente dos outros assistentes da plataforma em três aspetos:
 2. **Segue uma skill** — como o Hermes e o Chat IA, escolhe (ou cria) o método
    antes de responder, na biblioteca partilhada (`api/skills_service.py`).
 3. **Fala e ouve** — transcreve áudio (STT) e devolve a resposta sintetizada
-   (TTS). O servidor usa `faster-whisper`/`edge-tts` quando existem; sem eles,
-   a interface usa as vozes nativas do browser (não bloqueia nada).
+   (TTS). O servidor usa `faster-whisper` para ouvir e **Piper** (local, sem
+   rede) para falar, com a `edge-tts` como alternativa; sem nenhum deles, a
+   interface usa as vozes nativas do browser (não bloqueia nada).
 
 O ciclo de uma pergunta:
 
@@ -28,6 +29,7 @@ import logging
 import os
 import re
 import tempfile
+import threading
 import time
 import unicodedata
 from pathlib import Path
@@ -55,6 +57,16 @@ SPEECH_MAX_CHARS = 900
 
 DEFAULT_VOICE = os.getenv("JARVIS_VOICE", "pt-PT-RaquelNeural")
 DEFAULT_STT_MODEL = os.getenv("JARVIS_STT_MODEL", "small")
+
+#: Síntese **local** do Piper (VITS, sem rede) — o motor preferido. O `.onnx` é
+#: posto na imagem pelo `Dockerfile.backend`: o download em runtime não é fiável,
+#: porque a CLI do próprio piper rebenta com nomes de voz não-ASCII
+#: (`UnicodeEncodeError` no `ã` de `tugão`). O `id` vai prefixado (`piper:`) para
+#: se distinguir das vozes da `edge-tts` no catálogo que a interface mostra.
+PIPER_VOICE = os.getenv("JARVIS_PIPER_VOICE", "pt_PT-tugão-medium")
+PIPER_VOICES_DIR = Path(os.getenv("JARVIS_PIPER_VOICES_DIR", "/opt/piper-voices"))
+PIPER_VOICE_PREFIX = "piper:"
+PIPER_VOICE_ID = f"{PIPER_VOICE_PREFIX}{PIPER_VOICE}"
 
 #: Palavras de ativação («wake words»). O modo de escuta contínua transcreve
 #: localmente com `faster-whisper` e só acorda quando ouve uma delas — o resto do
@@ -1277,48 +1289,167 @@ VOICES: List[Dict[str, str]] = [
     {"id": "en-GB-RyanNeural", "label": "Ryan (en-GB, masculina)", "locale": "en-GB"},
 ]
 
+#: Vozes conhecidas da `edge-tts` — distinguem uma voz *escolhida* da voz de
+#: omissão da plataforma (ver `speech_engine`).
+_EDGE_VOICE_IDS = {entry["id"] for entry in VOICES}
 
-def tts_status() -> Dict[str, Any]:
+#: O modelo Piper carrega-se uma vez (custa ~1 s) e reutiliza-se; a síntese é
+#: serializada pelo lock porque um `PiperVoice` não serve pedidos em paralelo.
+_piper_lock = threading.RLock()
+_piper_voices: Dict[str, Any] = {}
+
+
+def _piper_model_path() -> Optional[Path]:
+    """Caminho do `.onnx` da voz Piper, ou None quando a voz não está instalada."""
+    model = PIPER_VOICES_DIR / f"{PIPER_VOICE}.onnx"
+    return model if model.is_file() and model.with_suffix(".onnx.json").is_file() else None
+
+
+def piper_available() -> bool:
+    """Piper instalado **e** com a voz em disco — só então há síntese local."""
     try:
-        import edge_tts  # type: ignore[import-not-found]  # noqa: F401
-
-        available, engine = True, "edge-tts"
+        import piper  # type: ignore[import-not-found]  # noqa: F401
     except Exception:
-        available, engine = False, None
-    return {
-        "available": available,
-        "engine": engine,
-        "voices": VOICES,
-        "default_voice": DEFAULT_VOICE,
-        "browser_fallback": True,
-        "note": (
-            "Síntese de voz no servidor disponível (edge-tts)."
-            if available
-            else "Sem síntese no servidor — a interface usa as vozes do sistema (Web Speech API) para falar."
-        ),
-    }
+        return False
+    return _piper_model_path() is not None
 
 
-async def synthesize(text: str, *, voice: Optional[str] = None, rate: str = "+0%") -> Tuple[bytes, str]:
-    """Sintetiza `text` e devolve `(áudio mp3, engine)`. Levanta `RuntimeError` sem motor."""
+def _piper_voice_label() -> str:
+    """«pt_PT-tugão-medium» → «Tugão (pt-PT, local)»."""
+    parts = PIPER_VOICE.split("-")
+    name = parts[1] if len(parts) > 1 else PIPER_VOICE
+    return f"{name.capitalize()} ({(parts[0] or 'pt_PT').replace('_', '-')}, local)"
+
+
+def _load_piper_voice() -> Any:
+    """Carrega (uma vez) a voz do Piper."""
+    from piper import PiperVoice  # type: ignore[import-not-found]
+
+    model = _piper_model_path()
+    if model is None:
+        raise RuntimeError(f"Voz Piper ausente em {PIPER_VOICES_DIR} ({PIPER_VOICE}).")
+    key = str(model)
+    with _piper_lock:
+        voice = _piper_voices.get(key)
+        if voice is None:
+            voice = PiperVoice.load(key)
+            _piper_voices[key] = voice
+        return voice
+
+
+def _synthesize_piper(text: str) -> bytes:
+    """Sintetiza localmente e devolve um WAV — o `piper-tts` só produz WAV."""
+    import io
+    import wave
+
+    voice = _load_piper_voice()
+    buffer = io.BytesIO()
+    with _piper_lock:
+        with wave.open(buffer, "wb") as wav:
+            voice.synthesize_wav(text, wav, set_wav_format=True)
+    return buffer.getvalue()
+
+
+async def _synthesize_edge(text: str, *, voice: Optional[str] = None, rate: str = "+0%") -> bytes:
+    """Sintetiza com a `edge-tts` (vozes neurais na nuvem) e devolve mp3."""
     try:
         import edge_tts  # type: ignore[import-not-found]
     except Exception as exc:  # pragma: no cover - depende do ambiente
-        raise RuntimeError(
-            "Sem síntese de voz no servidor. Instale `edge-tts` ou use a voz do sistema na interface."
-        ) from exc
+        raise RuntimeError("`edge-tts` não instalado no servidor.") from exc
 
-    clean = speech_text(text)
-    if not clean:
-        raise RuntimeError("Não há texto para sintetizar.")
-    communicate = edge_tts.Communicate(clean, voice or DEFAULT_VOICE, rate=rate or "+0%")
+    communicate = edge_tts.Communicate(text, voice or DEFAULT_VOICE, rate=rate or "+0%")
     buffer = bytearray()
     async for chunk in communicate.stream():
         if chunk.get("type") == "audio" and chunk.get("data"):
             buffer.extend(chunk["data"])
     if not buffer:
         raise RuntimeError("A síntese não devolveu áudio.")
-    return bytes(buffer), "edge-tts"
+    return bytes(buffer)
+
+
+def speech_engine(voice: Optional[str] = None) -> str:
+    """Motor de síntese para *voice*: `piper` (local) por omissão, `edge-tts` nas outras.
+
+    Uma voz que não seja a de omissão nem do Piper é uma escolha explícita do
+    utilizador e é respeitada; a voz de omissão da plataforma fica no Piper, para
+    não gastar uma ida à rede (e um 403) em cada resposta falada.
+    """
+    requested = str(voice or "").strip()
+    if requested.startswith(PIPER_VOICE_PREFIX):
+        return "piper"
+    if requested and requested != DEFAULT_VOICE and requested in _EDGE_VOICE_IDS:
+        return "edge-tts"
+    return "piper" if piper_available() else "edge-tts"
+
+
+def tts_status() -> Dict[str, Any]:
+    """Estado da síntese: motor preferido, catálogo de vozes e voz de omissão."""
+    local = piper_available()
+    engine: Optional[str] = None
+    if local:
+        engine = "piper"
+        note = f"Síntese local (Piper, {PIPER_VOICE}) — sem rede e sem chaves."
+    else:
+        try:
+            import edge_tts  # type: ignore[import-not-found]  # noqa: F401
+
+            engine = "edge-tts"
+            note = "Síntese de voz no servidor disponível (edge-tts)."
+        except Exception:
+            note = (
+                "Sem síntese no servidor — a interface usa as vozes do sistema "
+                "(Web Speech API) para falar."
+            )
+    voices = (
+        [{"id": PIPER_VOICE_ID, "label": _piper_voice_label(), "locale": "pt-PT"}]
+        if local
+        else []
+    ) + VOICES
+    return {
+        "available": engine is not None,
+        "engine": engine,
+        "voices": voices,
+        "default_voice": PIPER_VOICE_ID if local else DEFAULT_VOICE,
+        "browser_fallback": True,
+        "note": note,
+    }
+
+
+async def synthesize(text: str, *, voice: Optional[str] = None, rate: str = "+0%") -> Tuple[bytes, str]:
+    """Sintetiza `text` e devolve `(áudio, motor)` — WAV no Piper, mp3 na edge-tts.
+
+    O Piper vem primeiro: é local e não depende da rede. A `edge-tts` fica como
+    alternativa — e, quando é ela que falha (devolve 403 a partir de vários
+    hosts), o Piper volta a ser a última tentativa: melhor falar do que silêncio.
+    """
+    clean = speech_text(text)
+    if not clean:
+        raise RuntimeError("Não há texto para sintetizar.")
+
+    engine = speech_engine(voice)
+    errors: List[str] = []
+
+    if engine == "piper":
+        try:
+            # CPU-bound: fora do event loop para não prender o servidor.
+            return await asyncio.to_thread(_synthesize_piper, clean), "piper"
+        except Exception as exc:
+            errors.append(f"piper: {exc}")
+            logger.warning("Piper indisponível (%s); a tentar a edge-tts.", exc)
+
+    try:
+        return await _synthesize_edge(clean, voice=voice, rate=rate), "edge-tts"
+    except Exception as exc:
+        errors.append(f"edge-tts: {exc}")
+        logger.warning("edge-tts indisponível (%s).", exc)
+
+    if engine != "piper" and piper_available():
+        try:
+            return await asyncio.to_thread(_synthesize_piper, clean), "piper"
+        except Exception as exc:
+            errors.append(f"piper: {exc}")
+
+    raise RuntimeError("Sem síntese de voz no servidor — " + "; ".join(errors))
 
 
 # ---------------------------------------------------------------------------
@@ -1388,7 +1519,9 @@ __all__ = [
     "ask",
     "clean_question",
     "meta",
+    "piper_available",
     "plan",
+    "speech_engine",
     "speech_text",
     "status",
     "stream",

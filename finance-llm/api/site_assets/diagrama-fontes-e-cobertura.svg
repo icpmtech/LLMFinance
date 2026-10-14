@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 460" width="1100" height="460" role="img" aria-label="Fontes usadas e respetiva cobertura de países e período">
+  <rect width="1100" height="460" fill="#f1f5f9"/>
+  <rect x="40" y="56" width="470" height="320" rx="18" fill="#ffffff" stroke="#dbe3ec"/>
+  <text x="70" y="94" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#0f172a">Fontes</text>
+  <g>
+    <rect x="70" y="126" width="16" height="16" rx="5" fill="#0ea5a4"/>
+    <text x="100" y="140" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#334155">Portal BASE — contratos</text>
+    <rect x="70" y="172" width="16" height="16" rx="5" fill="#14b8a6"/>
+    <text x="100" y="186" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#334155">INE — finanças locais</text>
+    <rect x="70" y="218" width="16" height="16" rx="5" fill="#38bdf8"/>
+    <text x="100" y="232" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#334155">Registos de empresas</text>
+    <rect x="70" y="264" width="16" height="16" rx="5" fill="#6366f1"/>
+    <text x="100" y="278" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#334155">Boletins e diários oficiais</text>
+    <rect x="70" y="310" width="16" height="16" rx="5" fill="#f59e0b"/>
+    <text x="100" y="324" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#334155">Recolhas próprias de preços</text>
+  </g>
+  <rect x="540" y="56" width="520" height="320" rx="18" fill="#ffffff" stroke="#dbe3ec"/>
+  <text x="570" y="94" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#0f172a">Cobertura</text>
+  <text x="570" y="134" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#64748b">PAÍSES</text>
+  <g>
+    <rect x="570" y="146" width="112" height="42" rx="12" fill="#f1f5f9" stroke="#e2e8f0"/>
+    <text x="626" y="173" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a" text-anchor="middle">Portugal</text>
+    <rect x="694" y="146" width="112" height="42" rx="12" fill="#f1f5f9" stroke="#e2e8f0"/>
+    <text x="750" y="173" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a" text-anchor="middle">Espanha</text>
+    <rect x="818" y="146" width="112" height="42" rx="12" fill="#f1f5f9" stroke="#e2e8f0"/>
+    <text x="874" y="173" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a" text-anchor="middle">França</text>
+  </g>
+  <text x="570" y="228" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#64748b">CONTRATOS DESDE</text>
+  <rect x="570" y="244" width="460" height="16" rx="8" fill="#e2e8f0"/>
+  <rect x="570" y="244" width="460" height="16" rx="8" fill="#0ea5a4"/>
+  <g font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#475569">
+    <text x="570" y="284">2012</text>
+    <text x="1030" y="284" text-anchor="end">hoje</text>
+  </g>
+  <rect x="570" y="300" width="220" height="34" rx="10" fill="#0f172a"/>
+  <text x="680" y="322" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">Recolha contínua</text>
+  <rect x="806" y="300" width="224" height="34" rx="10" fill="#fef3c7"/>
+  <text x="918" y="322" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#92400e" text-anchor="middle">Fotografia datada</text>
+  <rect x="40" y="404" width="1020" height="44" rx="14" fill="#0f172a"/>
+  <text x="550" y="432" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#e2e8f0" text-anchor="middle">O que a fonte não publica fica em branco — dizemo-lo, em vez de estimar.</text>
+</svg>

@@ -26,6 +26,23 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir markitdown[pdf]
 
+# Síntese local do Jarvis. Instala-se **aqui** — e não no `requirements.txt` —
+# pelo mesmo motivo que o `markitdown`: o `requirements.txt` não é versionado
+# neste repositório (`.gitignore`: `*.txt`), por isso o que fica no repositório
+# (e chega a um clone) é esta linha.
+RUN pip install --no-cache-dir piper-tts
+
+# Voz local do Jarvis (Piper, pt-PT): o `.onnx` fica **na imagem**, para a
+# síntese funcionar sem rede e sem depender da `edge-tts` (que devolve 403 a
+# partir de vários hosts). Não se usa o `python -m piper.download_voices` de
+# propósito — rebenta com nomes de voz não-ASCII (`UnicodeEncodeError` no `ã`
+# de `tugão`), daí o URL percent-encoded.
+RUN mkdir -p /opt/piper-voices && \
+    curl -fsSL --retry 2 -o "/opt/piper-voices/pt_PT-tugão-medium.onnx" \
+        "https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_PT/tug%C3%A3o/medium/pt_PT-tug%C3%A3o-medium.onnx?download=true" && \
+    curl -fsSL --retry 2 -o "/opt/piper-voices/pt_PT-tugão-medium.onnx.json" \
+        "https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_PT/tug%C3%A3o/medium/pt_PT-tug%C3%A3o-medium.onnx.json?download=true"
+
 # Browsers do Playwright **na imagem** (fetchers `dynamic` e `stealth` das sondas).
 # Instalá-los dentro do contentor (com `scrapling install`) perde-se quando o
 # contentor é recriado — e a sonda passava a falhar com «Executable doesn't
