@@ -1903,6 +1903,7 @@ def _gerar_relatorios(store_data: Dict[str, Any], order: Dict[str, Any], actor: 
         return []
     feitos = {(str(item.get("code")), str(item.get("label"))) for item in _normalise_order_files(order.get("files"))}
     gerados: List[Dict[str, Any]] = []
+    falhou = False
     for _linha, produto in por_fazer:
         chave = (str(produto.get("auto_report") or ""), str(produto.get("name") or ""))
         if chave in feitos:
@@ -1914,6 +1915,8 @@ def _gerar_relatorios(store_data: Dict[str, Any], order: Dict[str, Any], actor: 
             # Nota interna (não vai para o recibo): o backoffice pode repetir.
             nota = f"[{_now()[:10]} · sistema] Não foi possível gerar «{produto.get('name')}»: {exc}"
             order["internal_notes"] = f"{str(order.get('internal_notes') or '').strip()}\n{nota}".strip()
+            order["updated_at"] = _now()
+            falhou = True
             continue
         gerados.append(
             add_order_file(
@@ -1927,6 +1930,8 @@ def _gerar_relatorios(store_data: Dict[str, Any], order: Dict[str, Any], actor: 
             )
         )
         feitos.add(chave)
+    if falhou:
+        _write_store(store_data)
     return gerados
 
 

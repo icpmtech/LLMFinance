@@ -149,6 +149,9 @@ def test_geracao_falhada_fica_a_nota_e_recupera_depois(loja, monkeypatch):
     interna = store.get_item("orders", encomenda["id"])
     assert "Elasticsearch indisponível" in interna["internal_notes"]
     assert "internal_notes" not in store.public_order_view(interna)
+    # E fica gravada em disco, não só na memória do processo.
+    store._cache = None
+    assert "Elasticsearch indisponível" in store.get_item("orders", encomenda["id"])["internal_notes"]
 
     def funciona(params, *, reference="", requester="", es=None):
         return (f"benchmark-{reference}.pdf", b"%PDF-1.4 benchmark", "application/pdf")
