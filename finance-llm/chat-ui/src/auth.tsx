@@ -24,7 +24,7 @@ import { syncIframePagesFromUser } from "./iframePages";
 
 installAuthFetch();
 
-type Status = "loading" | "anonymous" | "authenticated" | "pending_approval";
+type Status = "loading" | "anonymous" | "authenticated" | "pending_approval" | "trial_expired";
 
 type AuthContextValue = {
   status: Status;
@@ -69,7 +69,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const profile = await authApi.me();
       setUser(profile);
       applyPreferences(profile);
-      setStatus("authenticated");
+      if (profile.status === "pending") {
+        setStatus("pending_approval");
+      } else if (profile.trial_expires_at && new Date(profile.trial_expires_at) <= new Date()) {
+        setStatus("trial_expired");
+      } else {
+        setStatus("authenticated");
+      }
     } catch (error) {
       // Só se termina a sessão quando o **servidor** diz que o token não serve
       // (revogado/expirado). Uma falha de rede — API a reiniciar, sem ligação —
@@ -110,9 +116,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = useCallback(
     async (data: { name: string; email: string; password: string; title?: string; organization?: string }) => {
       const result = await authApi.register(data);
-      // Se a conta ficou pendente, não iniciamos sessão; devolvemos o resultado
-      // para a página mostrar a mensagem apropriada.
+      // Se a conta ficou pendente, não iniciamos sessão; mostra a página
+      // correspondente.
       if (result.user.pending_approval) {
+        setUser(result.user);
         setStatus("pending_approval");
         return result.user;
       }

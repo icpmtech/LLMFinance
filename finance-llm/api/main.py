@@ -253,6 +253,7 @@ from sentiment.feature_engineering import generate_sentiment_blended_forecast
 
 from api.rag_routes import router as rag_router
 from api.auth_routes import router as auth_router, optional_session, CurrentSession
+from api.billing_routes import router as billing_router
 from api.cli_routes import router as cli_router
 from api.admin_routes import router as admin_router
 from api.providers_routes import router as providers_router
@@ -653,6 +654,7 @@ async def _no_store_for_management(request: Request, call_next):
 
 app.include_router(rag_router)
 app.include_router(auth_router)
+app.include_router(billing_router)
 app.include_router(cli_router)
 app.include_router(admin_router)
 app.include_router(providers_router)

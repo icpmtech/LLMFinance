@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProvidersSettings } from "../components/ProvidersSettings";
 import { InstallAppSettings } from "../components/InstallAppSettings";
+import { BillingSettings } from "../components/BillingSettings";
 import {
   AlertCircle,
   AppWindow,
@@ -431,6 +432,9 @@ export default function SettingsPage() {
 
       {/* Aplicação (instalação/offline) */}
       <InstallAppSettings />
+
+      {/* Billing */}
+      <BillingSettings />
 
       {/* Conta */}
       <Card title="Informação da conta" icon={<ShieldCheck size={15} className="text-teal-300" />}>

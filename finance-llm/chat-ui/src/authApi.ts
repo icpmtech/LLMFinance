@@ -42,6 +42,11 @@ export type AuthUser = {
   trial_expires_at?: string | null;
   approved_at?: string | null;
   pending_approval?: boolean;
+  subscription?: {
+    plan_id?: string;
+    status?: string;
+    current_period_end?: string | null;
+  };
 };
 
 export type AuthSession = {

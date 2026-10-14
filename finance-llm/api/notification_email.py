@@ -150,7 +150,7 @@ def send_trial_expiring_email(to: str, name: str, trial_expires_at: str) -> Dict
 
 O seu período de trial no IQ OS termina {expires}.
 
-Para continuar a usar a plataforma, efetue o pagamento antes do prazo. Caso contrário, o acesso será desativado.
+Para continuar a usar a plataforma, efetue o pagamento antes do prazo em Definições → Perfil → Billing. Caso contrário, o acesso será desativado.
 
 A equipa IQ OS
 """
@@ -159,7 +159,33 @@ A equipa IQ OS
 <body style="font-family: sans-serif; color: #111;">
 <p>Olá {name},</p>
 <p>O seu período de trial no IQ OS termina <strong>{expires}</strong>.</p>
-<p>Para continuar a usar a plataforma, efetue o pagamento antes do prazo. Caso contrário, o acesso será <strong>desativado</strong>.</p>
+<p>Para continuar a usar a plataforma, efetue o pagamento antes do prazo em <strong>Definições → Perfil → Billing</strong>. Caso contrário, o acesso será <strong>desativado</strong>.</p>
+<br>
+<p>A equipa IQ OS</p>
+</body>
+</html>
+"""
+    return _send(to, subject, text, html)
+
+
+def send_subscription_activated_email(to: str, name: str, plan_name: str, period_end: str) -> Dict[str, Any]:
+    """Email enviado após confirmação de pagamento."""
+    expires = _format_date(period_end)
+    subject = f"Subscrição IQ OS {plan_name} ativada"
+    text = f"""Olá {name},
+
+A sua subscrição IQ OS {plan_name} foi ativada com sucesso e está válida até {expires}.
+
+Pode consultar os detalhes em Definições → Perfil → Billing.
+
+A equipa IQ OS
+"""
+    html = f"""\
+<html>
+<body style="font-family: sans-serif; color: #111;">
+<p>Olá {name},</p>
+<p>A sua subscrição IQ OS <strong>{plan_name}</strong> foi ativada com sucesso e está válida até <strong>{expires}</strong>.</p>
+<p>Pode consultar os detalhes em <strong>Definições → Perfil → Billing</strong>.</p>
 <br>
 <p>A equipa IQ OS</p>
 </body>

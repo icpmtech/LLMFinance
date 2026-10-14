@@ -11,6 +11,7 @@ import { useAuth } from "./auth";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import PendingApprovalPage from "./pages/PendingApprovalPage";
+import TrialExpiredPage from "./pages/TrialExpiredPage";
 import SettingsPage from "./pages/SettingsPage";
 import CliPage from "./pages/CliPage";
 import { FileText, Fingerprint, Loader2, Network, Sparkles, Users } from "lucide-react";
@@ -1383,6 +1384,10 @@ export default function App() {
 
   if (authStatus === "pending_approval") {
     return <PendingApprovalPage />;
+  }
+
+  if (authStatus === "trial_expired") {
+    return <TrialExpiredPage />;
   }
 
   const renderView = (target: AppView) => {

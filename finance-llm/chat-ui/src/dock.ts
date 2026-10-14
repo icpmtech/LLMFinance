@@ -75,6 +75,8 @@ import {
 import { getIframePages, iframeDockApps, iframeToDockApp, subscribeIframePages } from "./iframePages";
 import { CRM_SUITE_GROUPS } from "./crmSuite";
 import { useSidebarAccess } from "./sidebarAccess";
+import { useAuth } from "./auth";
+import { canAccessDockApp } from "./billingAccess";
 
 export type DockPosition = "bottom" | "left" | "right";
 
@@ -1271,6 +1273,7 @@ function subscribe(onChange: () => void) {
 
 /** Configuração do dock e operações, com persistência automática. */
 export function useDock() {
+  const { user } = useAuth();
   const prefs = useSyncExternalStore(subscribe, getDockPrefs, getDockPrefs);
   /* As páginas iframe entram no catálogo: o dock volta a resolver os ícones
      sempre que a lista de páginas configuradas muda. */
@@ -1281,8 +1284,10 @@ export function useDock() {
   const apps = useMemo(() => {
     const all = [...DOCK_CATALOG, IFRAME_PAGES_APP, ...iframePages.filter((page) => page.enabled).map(iframeToDockApp)];
     const hidden = new Set(access.hidden || []);
-    return hidden.size === 0 ? all : all.filter((app) => !hidden.has(app.id));
-  }, [iframePages, access]);
+    const visibleApps = hidden.size === 0 ? all : all.filter((app) => !hidden.has(app.id));
+    if (!user) return visibleApps;
+    return visibleApps.filter((app) => canAccessDockApp(user, app.id));
+  }, [iframePages, access, user]);
 
   const visible = useMemo(
     () => prefs.items.map((id) => apps.find((app) => app.id === id)).filter((app): app is DockApp => Boolean(app)),
