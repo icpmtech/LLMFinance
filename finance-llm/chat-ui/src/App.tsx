@@ -10,6 +10,7 @@ import { openWindow, closeWindow, restoreWindow, windowFor } from "./windows";
 import { useAuth } from "./auth";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
+import PendingApprovalPage from "./pages/PendingApprovalPage";
 import SettingsPage from "./pages/SettingsPage";
 import CliPage from "./pages/CliPage";
 import { FileText, Fingerprint, Loader2, Network, Sparkles, Users } from "lucide-react";
@@ -1378,6 +1379,10 @@ export default function App() {
   if (authStatus === "anonymous") {
     if (view === "landing") return <LandingPage />;
     return <LoginPage initialMode={view === "register" ? "register" : "login"} />;
+  }
+
+  if (authStatus === "pending_approval") {
+    return <PendingApprovalPage />;
   }
 
   const renderView = (target: AppView) => {

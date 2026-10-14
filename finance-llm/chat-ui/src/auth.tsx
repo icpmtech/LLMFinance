@@ -41,6 +41,8 @@ type AuthContextValue = {
   revokeSession: (id: string) => Promise<void>;
 };
 
+export type { Status as AuthStatus };
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
