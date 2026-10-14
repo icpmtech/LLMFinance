@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" width="800" height="480" role="img" aria-label="Do estúdio à plataforma: o Sabemos Studio publica leitura verificável com o IQ OS">
+  <rect width="800" height="480" fill="#f1f5f9"/>
+  <rect x="56" y="112" width="300" height="256" rx="18" fill="#ffffff" stroke="#dbe3ec"/>
+  <rect x="88" y="144" width="128" height="14" rx="7" fill="#0ea5a4"/>
+  <g fill="#e2e8f0">
+    <rect x="88" y="184" width="236" height="12" rx="6"/>
+    <rect x="88" y="210" width="196" height="12" rx="6"/>
+    <rect x="88" y="236" width="220" height="12" rx="6"/>
+  </g>
+  <rect x="88" y="272" width="236" height="64" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="106" y="300" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Estúdio de produtos de dados</text>
+  <text x="106" y="324" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#0f172a">leitura verificável</text>
+  <path d="M376 242 H418" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M412 234 l10 8 -10 8" fill="none" stroke="#94a3b8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="444" y="72" width="300" height="336" rx="18" fill="#ffffff" stroke="#dbe3ec"/>
+  <text x="476" y="122" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#0f172a">IQ OS</text>
+  <text x="568" y="122" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#64748b">a plataforma</text>
+  <g>
+    <rect x="476" y="144" width="112" height="52" rx="12" fill="#f1f5f9" stroke="#e2e8f0"/>
+    <text x="532" y="175" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#334155" text-anchor="middle">contratos</text>
+    <rect x="600" y="144" width="112" height="52" rx="12" fill="#f1f5f9" stroke="#e2e8f0"/>
+    <text x="656" y="175" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#334155" text-anchor="middle">empresas</text>
+    <rect x="476" y="208" width="112" height="52" rx="12" fill="#f1f5f9" stroke="#e2e8f0"/>
+    <text x="532" y="239" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#334155" text-anchor="middle">municípios</text>
+    <rect x="600" y="208" width="112" height="52" rx="12" fill="#f1f5f9" stroke="#e2e8f0"/>
+    <text x="656" y="239" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#334155" text-anchor="middle">mercado</text>
+  </g>
+  <rect x="476" y="276" width="236" height="40" rx="12" fill="#0f172a"/>
+  <text x="594" y="301" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">Assistentes com evidência</text>
+  <rect x="476" y="332" width="110" height="40" rx="12" fill="#0ea5a4"/>
+  <text x="531" y="357" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">Fichas</text>
+  <rect x="596" y="332" width="116" height="40" rx="12" fill="#38bdf8"/>
+  <text x="654" y="357" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">Indicadores</text>
+</svg>

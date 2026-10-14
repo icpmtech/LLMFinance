@@ -45,8 +45,8 @@
   <g>
     <rect x="1014" y="174" width="24" height="24" rx="8" fill="#0ea5a4"/>
     <text x="1026" y="191" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
-    <rect x="1040" y="210" width="24" height="24" rx="8" fill="#0ea5a4"/>
-    <text x="1052" y="227" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+    <rect x="1030" y="210" width="24" height="24" rx="8" fill="#0ea5a4"/>
+    <text x="1042" y="227" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
     <rect x="992" y="246" width="24" height="24" rx="8" fill="#0ea5a4"/>
     <text x="1004" y="263" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
   </g>

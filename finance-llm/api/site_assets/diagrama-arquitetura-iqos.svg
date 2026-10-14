@@ -56,25 +56,25 @@
   <g>
     <rect x="40" y="390" width="242" height="94" rx="16" fill="#ffffff" stroke="#dbe3ec"/>
     <rect x="62" y="408" width="26" height="26" rx="8" fill="#0ea5a4"/>
-    <text x="100" y="428" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Fichas por entidade</text>
-    <text x="62" y="462" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b">contrato a contrato, com evidência</text>
+    <text x="100" y="428" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a">Fichas por entidade</text>
+    <text x="62" y="462" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b">contrato a contrato, com prova</text>
   </g>
   <g>
     <rect x="298" y="390" width="242" height="94" rx="16" fill="#ffffff" stroke="#dbe3ec"/>
     <rect x="320" y="408" width="26" height="26" rx="8" fill="#38bdf8"/>
-    <text x="358" y="428" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Indicadores</text>
+    <text x="358" y="428" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a">Indicadores</text>
     <text x="320" y="462" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b">comparações e séries datadas</text>
   </g>
   <g>
     <rect x="556" y="390" width="242" height="94" rx="16" fill="#ffffff" stroke="#dbe3ec"/>
     <rect x="578" y="408" width="26" height="26" rx="8" fill="#6366f1"/>
-    <text x="616" y="428" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Investigação assistida</text>
+    <text x="616" y="428" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a">Investigação assistida</text>
     <text x="578" y="462" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b">respostas com fontes citadas</text>
   </g>
   <g>
     <rect x="814" y="390" width="246" height="94" rx="16" fill="#ffffff" stroke="#dbe3ec"/>
     <rect x="836" y="408" width="26" height="26" rx="8" fill="#f59e0b"/>
-    <text x="874" y="428" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Site e blog</text>
+    <text x="874" y="428" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a">Site e blog</text>
     <text x="836" y="462" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#64748b">a leitura editorial dos números</text>
   </g>
 </svg>

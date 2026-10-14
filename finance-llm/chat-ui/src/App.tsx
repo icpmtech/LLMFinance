@@ -94,6 +94,7 @@ import ReportsPage from "./pages/ReportsPage";
 import SubvencoesPage from "./pages/SubvencoesPage";
 import AdministracaoCentralPage from "./pages/AdministracaoCentralPage";
 import RemuneracoesPage from "./pages/RemuneracoesPage";
+import RemuneracoesApPage from "./pages/RemuneracoesApPage";
 import MunicipiosDespesasPage from "./pages/MunicipiosDespesasPage";
 import PartidosPage from "./pages/PartidosPage";
 import ErcPage from "./pages/ErcPage";
@@ -213,6 +214,7 @@ type AppView =
   | "subvencoes"
   | "administracao-central"
   | "remuneracoes"
+  | "remuneracoes-ap"
   | "municipios-despesas"
   | "partidos"
   | "erc"
@@ -394,6 +396,8 @@ function pathForView(
   if (view === "subvencoes") return "/subvencoes";
   if (view === "administracao-central") return "/administracao-central";
   if (view === "remuneracoes") return "/remuneracoes";
+  // Remunerações da Administração Pública (DGAEP): vive dentro de `/remuneracoes`.
+  if (view === "remuneracoes-ap") return "/remuneracoes/ap";
   if (view === "municipios-despesas") return "/municipios/despesas";
   if (view === "partidos") return "/partidos";
   if (view === "erc") return "/erc";
@@ -638,6 +642,7 @@ export default function App() {
     if (path === "/reports" || path.startsWith("/reports/")) return "reports";
     if (path === "/subvencoes" || path.startsWith("/subvencoes/")) return "subvencoes";
     if (path === "/administracao-central" || path.startsWith("/administracao-central/")) return "administracao-central";
+    if (path === "/remuneracoes/ap" || path.startsWith("/remuneracoes/ap/")) return "remuneracoes-ap";
     if (path === "/remuneracoes" || path.startsWith("/remuneracoes/")) return "remuneracoes";
     if (path === "/municipios/despesas" || path.startsWith("/municipios/despesas/")) return "municipios-despesas";
     if (path === "/partidos" || path.startsWith("/partidos/")) return "partidos";
@@ -798,6 +803,7 @@ export default function App() {
       else if (path === "/reports" || path.startsWith("/reports/")) next = "reports";
       else if (path === "/subvencoes" || path.startsWith("/subvencoes/")) next = "subvencoes";
       else if (path === "/administracao-central" || path.startsWith("/administracao-central/")) next = "administracao-central";
+      else if (path === "/remuneracoes/ap" || path.startsWith("/remuneracoes/ap/")) next = "remuneracoes-ap";
       else if (path === "/remuneracoes" || path.startsWith("/remuneracoes/")) next = "remuneracoes";
       else if (path === "/municipios/despesas" || path.startsWith("/municipios/despesas/")) next = "municipios-despesas";
       else if (path === "/partidos" || path.startsWith("/partidos/")) next = "partidos";
@@ -1643,6 +1649,7 @@ export default function App() {
     // Remunerações dos eleitos locais: tabela de abonos (Lei n.º 11/96) cruzada
     // com o n.º de eleitores de cada concelho e freguesia, com mapa.
     if (target === "remuneracoes") return <RemuneracoesPage />;
+    if (target === "remuneracoes-ap") return <RemuneracoesApPage />;
     // Despesas das câmaras municipais: despesa por classificador económico
     // (INE/DGAL) e contratação pública por município (Portal BASE).
     if (target === "municipios-despesas") return <MunicipiosDespesasPage />;

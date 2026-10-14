@@ -474,7 +474,7 @@ export function formatBytes(bytes: number): string {
 /* ------------------------------------------------------------- blocos */
 
 const itemDefaults: Record<string, Record<string, string>> = {
-  destaques: { title: "Novo cartão", text: "", href: "" },
+  destaques: { title: "Novo cartão", text: "", href: "", icon_id: "" },
   faq: { question: "Pergunta?", answer: "" },
   passos: { title: "Passo", text: "" },
   numeros: { value: "0", label: "Indicador", note: "" },
@@ -489,6 +489,7 @@ const itemFieldLabels: Record<string, string> = {
   label: "Etiqueta",
   note: "Nota",
   href: "Ligação",
+  icon_id: "Ícone",
   text: "Texto",
 };
 
@@ -497,10 +498,12 @@ function ItemsEditor({
   block,
   items,
   onChange,
+  media,
 }: {
   block: CmsBlockLike;
   items: Record<string, unknown>[];
   onChange: (next: Record<string, unknown>[]) => void;
+  media: MediaOption[];
 }) {
   const template = itemDefaults[block.type] ?? { title: "", text: "" };
   const keys = Object.keys(template);
@@ -521,15 +524,18 @@ function ItemsEditor({
             </button>
           </div>
           <div className="mt-1 grid gap-2 sm:grid-cols-2">
-            {keys.map((key) => (
-              <Field key={key} label={itemFieldLabels[key] ?? "Texto"} wide={key === "title" || key === "question" || key === "value"}>
-                <input
-                  className={inputClass}
-                  value={String(item[key] ?? "")}
-                  onChange={(event) => onChange(items.map((entry, position) => (position === index ? { ...entry, [key]: event.target.value } : entry)))}
-                />
-              </Field>
-            ))}
+            {keys.map((key) => {
+              const atualizar = (valor: string) =>
+                onChange(items.map((entry, position) => (position === index ? { ...entry, [key]: valor } : entry)));
+              if (key === "icon_id") {
+                return <MediaPicker key={key} label="Ícone" value={String(item[key] ?? "")} onChange={atualizar} media={media} placeholder="— sem ícone —" />;
+              }
+              return (
+                <Field key={key} label={itemFieldLabels[key] ?? "Texto"} wide={key === "title" || key === "question" || key === "value"}>
+                  <input className={inputClass} value={String(item[key] ?? "")} onChange={(event) => atualizar(event.target.value)} />
+                </Field>
+              );
+            })}
           </div>
         </div>
       ))}
@@ -624,7 +630,7 @@ function BlockForm({
       return (
         <div className="space-y-2">
           <TextInput label="Título da secção" value={text("title")} onChange={(next) => set("title", next)} wide />
-          <ItemsEditor block={block} items={list("items")} onChange={(next) => set("items", next)} />
+          <ItemsEditor block={block} items={list("items")} onChange={(next) => set("items", next)} media={media} />
         </div>
       );
     case "cta":

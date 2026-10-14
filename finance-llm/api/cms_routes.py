@@ -56,6 +56,7 @@ from api import cms_render as render
 from api import cms_store as store
 from api import municipios_publicos as publicos
 from api import pesquisas_publicas as pesquisas
+from api import remuneracoes_publicas as remuneracoes_publicas
 from api.auth_routes import CurrentSession, optional_session
 
 logger = logging.getLogger(__name__)
@@ -106,7 +107,7 @@ def _privado(entity: str, session: Optional[CurrentSession]) -> None:
 # rotas colidem com `GET /cms/{entidade}` (e `/cms/media` com a listagem dos
 # media), pelo que uma **navegação do browser** (que pede HTML) tem de devolver a
 # SPA construída — senão recarregar a página dava JSON em vez da aplicação.
-UI_SECTION_SLUGS = frozenset({"paginas", "conteudos", "blog", "municipios", "pesquisas", "contactos", "media", "taxonomia", "modelos", "aparencia"})
+UI_SECTION_SLUGS = frozenset({"paginas", "conteudos", "blog", "municipios", "pesquisas", "remuneracoes", "contactos", "media", "taxonomia", "modelos", "aparencia"})
 
 
 def _is_browser_navigation(request: Request) -> bool:
@@ -417,6 +418,90 @@ def cms_pesquisa_dados(
     return {"saved": True, "item": item, "resumo_dos_dados": pesquisas.resumo_dos_dados(dados)}
 
 
+# Páginas do modelo de remunerações da Administração Pública (entidade
+# `remuneracoes`): o quadro consolidado da DGAEP de um ano, editável e publicável
+# como as restantes páginas do site.
+# ==========================================================================
+@router.get("/cms/remuneracoes/opcoes")
+def cms_remuneracoes_opcoes() -> Dict[str, Any]:
+    """Anos recolhidos, secções de carreiras e o que a página pode mostrar."""
+    return remuneracoes_publicas.opcoes()
+
+
+@router.post("/cms/remuneracoes")
+def cms_create_remuneracao(payload: Dict[str, Any] = Body(...), session: Session = None) -> Dict[str, Any]:
+    """Cria a página do modelo de remunerações.
+
+    O ano vem do editor e o modelo (**fotografia** do quadro desse ano) entra já
+    lido, para o documento não nascer vazio e a pré-visualização ter o que
+    mostrar. O endereço público é o ano quando o editor não escolhe outro.
+    """
+    author = _writer(session)
+    corpo = dict(payload)
+    ano = store._ano_valido(corpo.get("ano"))
+    if not ano:
+        raise HTTPException(status_code=422, detail="Escolha o ano do quadro da DGAEP.")
+    corpo["ano"] = ano
+    corpo.setdefault("title", f"Remunerações da Administração Pública {ano}")
+    corpo.setdefault("slug", f"administracao-publica-{ano}")
+    if not corpo.get("dados"):
+        dados = remuneracoes_publicas.dados_do_ano(ano)
+        if dados.get("error"):
+            raise HTTPException(status_code=404, detail=dados["error"])
+        corpo["dados"] = dados
+    try:
+        return {"saved": True, "item": store.save_item("remuneracoes", corpo, author)}
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.patch("/cms/remuneracoes/{item_id}")
+def cms_patch_remuneracao(item_id: str, payload: Dict[str, Any] = Body(...), session: Session = None) -> Dict[str, Any]:
+    """Altera a página do modelo (título, ano, texto, blocos, marca e SEO)."""
+    author = _writer(session)
+    try:
+        return {"saved": True, "item": store.save_item("remuneracoes", {**payload, "id": item_id}, author)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.post("/cms/remuneracoes/{item_id}/modelo")
+def cms_remuneracao_modelo(
+    item_id: str,
+    payload: Dict[str, Any] = Body(default_factory=dict),
+    session: Session = None,
+) -> Dict[str, Any]:
+    """Volta a ler o quadro da DGAEP (do ano pedido ou do que está guardado).
+
+    É este passo que atualiza a página publicada: a fotografia só muda quando o
+    editor manda ler outra vez.
+    """
+    author = _writer(session)
+    try:
+        doc = store.get_item("remuneracoes", item_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    ano = store._ano_valido(payload.get("ano"), doc.get("ano"))
+    if not ano:
+        raise HTTPException(status_code=422, detail="Escolha o ano do quadro da DGAEP.")
+    dados = remuneracoes_publicas.dados_do_ano(ano)
+    if dados.get("error"):
+        raise HTTPException(status_code=404, detail=dados["error"])
+    corpo = {**doc, "id": item_id, "ano": ano, "dados": dados}
+    if payload.get("guardar_ano"):
+        corpo["ano"] = ano
+    item = store.save_item("remuneracoes", corpo, author)
+    return {
+        "saved": True,
+        "item": item,
+        "ano": ano,
+        "resumo_dos_dados": remuneracoes_publicas.resumo_dos_dados(dados),
+    }
+
+
 # ==========================================================================
 # CRUD genérico por entidade
 # ==========================================================================
@@ -618,6 +703,8 @@ def cms_preview(entity: str, item_id: str, session: Session = None) -> HTMLRespo
         html = render.render_post(doc, preview=True, settings=settings)
     elif entity == "pesquisas":
         html = render.render_pesquisa(doc, preview=True, settings=settings)
+    elif entity == "remuneracoes":
+        html = render.render_remuneracao(doc, preview=True, settings=settings)
     else:
         html = render.render_municipio(doc, preview=True, settings=settings)
     return HTMLResponse(html, headers={"Cache-Control": "no-store, must-revalidate"})
@@ -718,6 +805,16 @@ def site_pesquisa(slug: str) -> HTMLResponse:
     if not doc:
         return HTMLResponse(render.render_not_found(settings=settings), status_code=404, headers=_PUBLIC_HEADERS)
     return HTMLResponse(render.render_pesquisa(doc, settings=settings), headers=_PUBLIC_HEADERS)
+
+
+@router.get("/site/remuneracoes/{slug}", response_class=HTMLResponse)
+def site_remuneracoes(slug: str) -> HTMLResponse:
+    """Página pública do modelo de remunerações da Administração Pública."""
+    settings = store.get_settings()
+    doc = store.remuneracao_by_slug(slug, published_only=True)
+    if not doc:
+        return HTMLResponse(render.render_not_found(settings=settings), status_code=404, headers=_PUBLIC_HEADERS)
+    return HTMLResponse(render.render_remuneracao(doc, settings=settings), headers=_PUBLIC_HEADERS)
 
 
 @router.post("/site/contacto", response_class=HTMLResponse)

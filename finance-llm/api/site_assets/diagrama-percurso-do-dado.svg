@@ -5,8 +5,8 @@
     <circle cx="78" cy="112" r="19" fill="#0ea5a4"/>
     <text x="78" y="119" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
     <text x="62" y="172" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#0f172a">Recolha</text>
-    <text x="62" y="208" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#64748b">Lemos dados abertos:</text>
-    <text x="62" y="230" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#64748b">Portal BASE, INE e registos.</text>
+    <text x="62" y="208" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Lemos dados abertos:</text>
+    <text x="62" y="230" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Portal BASE, INE e registos.</text>
     <rect x="62" y="272" width="72" height="8" rx="4" fill="#0ea5a4"/>
   </g>
   <path d="M281 186 l13 9 -13 9" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -15,8 +15,8 @@
     <circle cx="340" cy="112" r="19" fill="#14b8a6"/>
     <text x="340" y="119" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
     <text x="324" y="172" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#0f172a">Normalização</text>
-    <text x="324" y="208" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#64748b">Ligamos entidades pelo NIF:</text>
-    <text x="324" y="230" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#64748b">a mesma empresa é a mesma.</text>
+    <text x="324" y="208" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Ligamos entidades pelo NIF:</text>
+    <text x="324" y="230" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">a mesma empresa é a mesma.</text>
     <rect x="324" y="272" width="104" height="8" rx="4" fill="#14b8a6"/>
   </g>
   <path d="M543 186 l13 9 -13 9" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -25,8 +25,8 @@
     <circle cx="602" cy="112" r="19" fill="#38bdf8"/>
     <text x="602" y="119" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
     <text x="586" y="172" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#0f172a">Cálculo</text>
-    <text x="586" y="208" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#64748b">Indicadores com critério:</text>
-    <text x="586" y="230" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#64748b">mediana, percentis e rácios.</text>
+    <text x="586" y="208" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Indicadores com critério:</text>
+    <text x="586" y="230" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">mediana, percentis e rácios.</text>
     <rect x="586" y="272" width="136" height="8" rx="4" fill="#38bdf8"/>
   </g>
   <path d="M805 186 l13 9 -13 9" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -35,8 +35,8 @@
     <circle cx="864" cy="112" r="19" fill="#6366f1"/>
     <text x="864" y="119" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">4</text>
     <text x="848" y="172" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#0f172a">Evidência</text>
-    <text x="848" y="208" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#64748b">Cada valor com a fonte:</text>
-    <text x="848" y="230" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#64748b">o registo e a data da leitura.</text>
+    <text x="848" y="208" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Cada valor com a fonte:</text>
+    <text x="848" y="230" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">o registo e a sua data.</text>
     <rect x="848" y="272" width="168" height="8" rx="4" fill="#6366f1"/>
   </g>
   <rect x="38" y="352" width="1022" height="46" rx="16" fill="#0f172a"/>

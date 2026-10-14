@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img" aria-label="Fotografia datada">
+  <rect width="96" height="96" rx="24" fill="#eff9ff"/>
+  <rect x="20" y="28" width="52" height="46" rx="10" fill="#ffffff" stroke="#38bdf8" stroke-width="2.5"/>
+  <path d="M20 42 h52" stroke="#38bdf8" stroke-width="2.5"/>
+  <g stroke="#38bdf8" stroke-width="3" stroke-linecap="round">
+    <path d="M34 22 v10"/>
+    <path d="M58 22 v10"/>
+  </g>
+  <g fill="#bae6fd">
+    <rect x="30" y="52" width="12" height="7" rx="3"/>
+    <rect x="48" y="52" width="12" height="7" rx="3"/>
+    <rect x="30" y="64" width="12" height="7" rx="3"/>
+  </g>
+  <circle cx="70" cy="70" r="16" fill="#0f172a"/>
+  <path d="M70 62 v9 l6 4" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

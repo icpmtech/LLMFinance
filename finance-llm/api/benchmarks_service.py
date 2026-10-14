@@ -684,6 +684,18 @@ def _parent_page(autor: str) -> Dict[str, Any]:
     )
 
 
+def _media_por_ficheiro(nome: str) -> str:
+    """Id do media com este ficheiro na biblioteca do CMS (vazio se não existir).
+
+    Os diagramas entram com o código (`editorial.SEED_MEDIA`) mas o id é gerado
+    por instalação — por isso procura-se pelo nome do ficheiro e não por id.
+    """
+    for item in (cms.list_items("media").get("items") or []):
+        if str(item.get("filename") or "") == nome:
+            return str(item.get("id") or "")
+    return ""
+
+
 def publicar(slug: str, *, autor: str = "") -> Dict[str, Any]:
     """Publica o benchmark: página no CMS + marca-o como público."""
     estudo = analise(slug)
@@ -738,6 +750,19 @@ def publicar(slug: str, *, autor: str = "") -> Dict[str, Any]:
             },
         },
     ]
+    # Sem o diagrama instalado, o estudo sai sem figura em vez de rebentar.
+    diagrama = _media_por_ficheiro("diagrama-comparacao-lojas.svg")
+    if diagrama:
+        blocos.append(
+            {
+                "type": "imagem",
+                "data": {
+                    "media_id": diagrama,
+                    "alt": "Índice de preço por loja, com 100 a valer a média do estudo",
+                    "caption": "Como se lê um benchmark: dispersão entre lojas e melhor preço assinalado.",
+                },
+            }
+        )
     if linhas:
         blocos.append(
             {

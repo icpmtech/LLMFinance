@@ -319,6 +319,98 @@ export type CmsPesquisaOpcoes = {
   fonte_contratos?: string | null;
 };
 
+/* ------------------------------------------------------------------ remunerações da AP */
+
+/** Uma linha da Tabela Remuneratória Única, como o CMS a guarda. */
+export type CmsRemuneracaoNivel = { nivel: number; valor: number | null; nota?: string | null };
+
+/** Uma posição remuneratória dentro de uma carreira. */
+export type CmsRemuneracaoPosicao = {
+  posicao: string;
+  nivel?: number | null;
+  niveis_texto?: string | null;
+  remuneracao?: number | null;
+};
+
+/** Uma carreira/categoria com as suas posições. */
+export type CmsRemuneracaoCarreira = {
+  seccao?: string | null;
+  carreira?: string;
+  categoria?: string | null;
+  variante?: string | null;
+  minimo?: number | null;
+  maximo?: number | null;
+  posicoes?: CmsRemuneracaoPosicao[];
+};
+
+/** Um cargo dirigente. */
+export type CmsRemuneracaoDirigente = {
+  ambito?: string | null;
+  grupo?: string | null;
+  cargo?: string;
+  indice?: number | null;
+  niveis_texto?: string | null;
+  remuneracao?: number | null;
+};
+
+/** A fotografia do quadro de um ano (lida quando o editor a mandou ler). */
+export type CmsRemuneracaoDados = {
+  ano?: number | null;
+  versao?: string | null;
+  contagens?: Record<string, number>;
+  parametros?: { ano?: number; brap?: number | null; brap_nota?: string | null; nivel_maximo?: number | null } | null;
+  niveis?: CmsRemuneracaoNivel[];
+  tru_notas?: string[];
+  serie?: { nivel: number; valores: Record<string, number | null> }[];
+  carreiras?: CmsRemuneracaoCarreira[];
+  dirigentes?: CmsRemuneracaoDirigente[];
+  notas?: { seccao?: string | null; texto?: string[] }[];
+  base_legal?: { seccao?: string | null; linhas?: Record<string, string>[] }[];
+  fonte?: { documento?: string; url?: string; catalogo?: string; ficheiro?: string };
+  gerado_em?: string | null;
+  error?: string;
+};
+
+/** Página pública do modelo de remunerações da Administração Pública. */
+export type CmsRemuneracao = {
+  id: string;
+  title: string;
+  slug: string;
+  status: CmsStatus;
+  published_at?: string | null;
+  scheduled_at?: string | null;
+  excerpt?: string;
+  /** Ano do quadro da DGAEP que a página mostra. */
+  ano?: number | null;
+  intro?: string;
+  blocks: CmsBlock[];
+  dados?: CmsRemuneracaoDados | null;
+  /** O que a página mostra, além do texto e dos blocos. */
+  mostrar?: Record<string, boolean>;
+  /** Carreiras que ganham gráfico de posições. */
+  destacar?: string[];
+  capa_id?: string | null;
+  logo_id?: string | null;
+  cor?: string;
+  seo?: CmsSeo;
+  created_at?: string;
+  updated_at?: string;
+  updated_by?: string;
+};
+
+/** Escolhas para montar a página do modelo (anos e partes disponíveis). */
+export type CmsRemuneracaoOpcoes = {
+  anos: number[];
+  ano?: number | null;
+  mostrar: { id: string; label: string }[];
+  seccoes: string[];
+  parametros?: { ano?: number; brap?: number | null; brap_nota?: string | null } | null;
+  fonte?: string | null;
+  fonte_url?: string | null;
+  pagamentos_por_ano?: number;
+  limites?: Record<string, number>;
+};
+
 export type CmsMenuItem = {
   id: string;
   label: string;
@@ -642,6 +734,47 @@ export function cmsPesquisaUrl(slug: string): string {
   return cmsPublicUrl(`/pesquisa/${slug}`);
 }
 
+/* ------------------------------------------- remunerações da Administração Pública */
+
+export function listCmsRemuneracoes(options: ListOptions = {}): Promise<CmsListPayload<CmsRemuneracao>> {
+  return request(`/cms/remuneracoes${listQuery({ limit: 300, ...options })}`);
+}
+
+export function getCmsRemuneracao(id: string): Promise<{ item: CmsRemuneracao }> {
+  return request(`/cms/remuneracoes/${encodeURIComponent(id)}`);
+}
+
+/** Anos recolhidos da DGAEP e partes que a página pode mostrar. */
+export function getCmsRemuneracaoOpcoes(): Promise<CmsRemuneracaoOpcoes> {
+  return request("/cms/remuneracoes/opcoes");
+}
+
+/** Cria a página; o modelo do ano escolhido entra já lido. */
+export function createCmsRemuneracao(payload: {
+  title?: string;
+  slug?: string;
+  ano?: number;
+}): Promise<{ saved: boolean; item: CmsRemuneracao }> {
+  return request("/cms/remuneracoes", withBody("POST", payload));
+}
+
+export function updateCmsRemuneracao(id: string, payload: Partial<CmsRemuneracao>): Promise<{ saved: boolean; item: CmsRemuneracao }> {
+  return request(`/cms/remuneracoes/${encodeURIComponent(id)}`, withBody("PATCH", payload));
+}
+
+/** Volta a ler o quadro da DGAEP (do ano pedido) e guarda a fotografia nova. */
+export function refreshCmsRemuneracaoModelo(
+  id: string,
+  payload: { ano?: number; guardar_ano?: boolean } = {},
+): Promise<{ saved: boolean; item: CmsRemuneracao; ano: number; resumo_dos_dados: string }> {
+  return request(`/cms/remuneracoes/${encodeURIComponent(id)}/modelo`, withBody("POST", payload));
+}
+
+/** Endereço público da página do modelo (`/site/remuneracoes/{slug}`). */
+export function cmsRemuneracaoUrl(slug: string): string {
+  return cmsPublicUrl(`/remuneracoes/${slug}`);
+}
+
 export function listCmsContents(options: ListOptions = {}): Promise<CmsListPayload<CmsContent>> {
   return request(`/cms/contents${listQuery({ limit: 300, ...options })}`);
 }
@@ -790,7 +923,7 @@ export function cmsMediaUrl(media: { id: string; url: string; storage?: string }
 }
 
 /** URL da pré-visualização HTML (iframe com `?t=` para não apanhar cache). */
-export function cmsPreviewUrl(entity: "pages" | "posts" | "municipios" | "pesquisas", id: string, stamp = Date.now()): string {
+export function cmsPreviewUrl(entity: "pages" | "posts" | "municipios" | "pesquisas" | "remuneracoes", id: string, stamp = Date.now()): string {
   return `${API_BASE}/cms/preview/${entity}/${encodeURIComponent(id)}?t=${stamp}`;
 }
 

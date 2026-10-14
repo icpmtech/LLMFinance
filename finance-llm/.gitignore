@@ -85,3 +85,9 @@ data/erc/raw/
 # `POST /administracao-central/reindexar` (ou
 # `scripts/indexar_administracao_central.py`) volta a gerá-lo.
 !data/entidades-sector/administracao-central.json
+
+# Remunerações da Administração Pública (DGAEP): os PDF do quadro consolidado
+# (`SRAP_<ano>.pdf`, ~35 MB no total) são re-descarregáveis com
+# `POST /remuneracoes-ap/refresh` e ficam só em disco; o modelo que deles se lê
+# (`data/remuneracoes-ap/<ano>.json`) também é regenerável e não vai versionado.
+data/remuneracoes-ap/pdf/

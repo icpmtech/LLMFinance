@@ -23,6 +23,7 @@ import {
   CalendarClock,
   CandlestickChart,
   Compass,
+  Coins,
   Database,
   FileJson,
   FileText,
@@ -549,6 +550,14 @@ export const DOCK_CATALOG: DockApp[] = [
     icon: Scale,
     gradient: "from-teal-200 via-cyan-500 to-indigo-700",
     accent: "20,184,166",
+  },
+  {
+    id: "remuneracoes-ap",
+    label: "Remunerações da Administração Pública",
+    hint: "O quadro consolidado da DGAEP: Tabela Remuneratória Única (nível → remuneração base), carreiras e posições remuneratórias, cargos dirigentes, base legal e simulador de posição",
+    icon: Coins,
+    gradient: "from-amber-200 via-teal-500 to-indigo-700",
+    accent: "245,158,11",
   },
   {
     id: "municipios-despesas",

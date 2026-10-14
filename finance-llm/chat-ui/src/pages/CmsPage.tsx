@@ -32,6 +32,7 @@ import {
 import { CmsAppearancePanel, CmsContactosPanel, CmsContentsPanel, CmsMediaPanel, CmsTaxonomyPanel, CmsTemplatesPanel } from "./CmsLibrary";
 import { CmsMunicipiosPanel } from "./CmsMunicipios";
 import { CmsPesquisasPanel } from "./CmsPesquisas";
+import { CmsRemuneracoesPanel } from "./CmsRemuneracoes";
 import { CmsOverviewPanel, CmsPagesPanel, CmsPostsPanel, type CmsCtx, type CmsSection } from "./CmsPanels";
 import { Notice } from "../components/cms/CmsKit";
 import * as cms from "../cmsApi";
@@ -44,6 +45,7 @@ export const CMS_SECTIONS: { id: CmsSection; label: string; path: string; icon: 
   { id: "blog", label: "Blog", path: "/cms/blog", icon: <Newspaper size={13} />, hint: "Artigos, categorias, etiquetas e capas" },
   { id: "municipios", label: "Municípios", path: "/cms/municipios", icon: <Landmark size={13} />, hint: "Fichas públicas de município (despesa, contratação e texto)" },
   { id: "pesquisas", label: "Pesquisas", path: "/cms/pesquisas", icon: <Filter size={13} />, hint: "Páginas com uma pesquisa congelada (filtros, SEO, marca e imagens)" },
+  { id: "remuneracoes", label: "Remunerações AP", path: "/cms/remuneracoes", icon: <Landmark size={13} />, hint: "Páginas do modelo de remunerações da Administração Pública (quadro da DGAEP, marca e SEO)" },
   { id: "contactos", label: "Contactos", path: "/cms/contactos", icon: <Inbox size={13} />, hint: "Mensagens recebidas pelo formulário do site" },
   { id: "media", label: "Media", path: "/cms/media", icon: <BookOpen size={13} />, hint: "Biblioteca de imagens e documentos" },
   { id: "taxonomia", label: "Taxonomia", path: "/cms/taxonomia", icon: <Hash size={13} />, hint: "Categorias e etiquetas do blog" },
@@ -68,6 +70,7 @@ const CMS_FOCUS_ENTITIES: Partial<Record<CmsSection, string>> = {
   blog: "posts",
   municipios: "municipios",
   pesquisas: "pesquisas",
+  remuneracoes: "remuneracoes",
 };
 
 export default function CmsPage() {
@@ -318,6 +321,8 @@ export default function CmsPage() {
           <CmsMunicipiosPanel ctx={ctx} focusId={focus?.entity === "municipios" ? focus.id : null} onFocusHandled={() => setFocus(null)} />
         ) : section === "pesquisas" ? (
           <CmsPesquisasPanel ctx={ctx} focusId={focus?.entity === "pesquisas" ? focus.id : null} onFocusHandled={() => setFocus(null)} />
+        ) : section === "remuneracoes" ? (
+          <CmsRemuneracoesPanel ctx={ctx} focusId={focus?.entity === "remuneracoes" ? focus.id : null} onFocusHandled={() => setFocus(null)} />
         ) : section === "contactos" ? (
           <CmsContactosPanel ctx={ctx} />
         ) : section === "conteudos" ? (

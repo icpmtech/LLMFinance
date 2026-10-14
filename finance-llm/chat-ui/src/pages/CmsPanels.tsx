@@ -54,7 +54,7 @@ import {
 import * as cms from "../cmsApi";
 import type { CmsCatalogue, CmsCategory, CmsOverview, CmsPage, CmsPost, CmsRevision, CmsStatus } from "../cmsApi";
 
-export type CmsSection = "painel" | "paginas" | "conteudos" | "blog" | "municipios" | "pesquisas" | "contactos" | "media" | "taxonomia" | "modelos" | "aparencia";
+export type CmsSection = "painel" | "paginas" | "conteudos" | "blog" | "municipios" | "pesquisas" | "remuneracoes" | "contactos" | "media" | "taxonomia" | "modelos" | "aparencia";
 
 export type CmsCtx = {
   catalogue: CmsCatalogue;

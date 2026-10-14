@@ -15,6 +15,7 @@ import html
 import json
 import logging
 import re
+import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 from urllib.parse import quote
@@ -26,6 +27,10 @@ from api import cms_store as store
 logger = logging.getLogger(__name__)
 
 MD_EXTENSIONS = ["extra", "sane_lists", "nl2br", "toc"]
+
+#: Pagamentos de remuneração base num ano: 12 mensalidades, subsídio de férias e
+#: subsídio de Natal (Lei n.º 35/2014, LTFP, artigos 149.º a 152.º).
+PAGAMENTOS_PUBLICO = 14
 
 _THEMES: Dict[str, Dict[str, str]] = {
     "claro": {
@@ -166,6 +171,7 @@ p {{ margin: 0 0 14px; }}
 .grid {{ display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }}
 .tile {{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }}
 .tile h3 {{ margin: 0 0 6px; font-size: 1rem; }}
+.tile-icon {{ width: 44px; height: 44px; margin-bottom: 12px; display: block; }}
 .tile p {{ margin: 0; color: var(--muted); font-size: .94rem; }}
 /* Cartão que leva a algum lado: continua a parecer cartão, mas responde ao rato. */
 a.tile {{ display: block; color: inherit; }}
@@ -471,13 +477,19 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
         tiles = []
         for item in items:
             href = str(item.get("href") or "").strip()
+            # Ícone opcional: sem imagem o cartão fica como sempre foi, para o
+            # conteúdo escrito antes dos ícones continuar a servir.
+            icone_url = _media_url(item.get("icon_id"))
+            icone = (
+                f'<img class="tile-icon" src="{_esc(icone_url)}" alt="" width="44" height="44" loading="lazy">'
+                if icone_url
+                else ""
+            )
+            corpo = f'{icone}<h3>{_esc(item.get("title"))}</h3><p>{_esc(item.get("text"))}</p>'
             if href:
-                tiles.append(
-                    f'<a class="tile link" href="{_esc(href)}"><h3>{_esc(item.get("title"))}</h3>'
-                    f'<p>{_esc(item.get("text"))}</p></a>'
-                )
+                tiles.append(f'<a class="tile link" href="{_esc(href)}">{corpo}</a>')
             else:
-                tiles.append(f'<div class="tile"><h3>{_esc(item.get("title"))}</h3><p>{_esc(item.get("text"))}</p></div>')
+                tiles.append(f'<div class="tile">{corpo}</div>')
         title = f"<h2>{_esc(data.get('title'))}</h2>" if data.get("title") else ""
         return f'<div class="section">{title}<div class="grid">{"".join(tiles)}</div></div>'
 
@@ -1374,6 +1386,359 @@ def render_pesquisa(
     )
 
 
+# --------------------------------------------------------------------------
+# Página do modelo de remunerações da Administração Pública (`remuneracoes`)
+# --------------------------------------------------------------------------
+_CSS_REMUNERACOES = """
+.rem-marca { display: flex; align-items: center; gap: 14px; margin: 0 0 16px; }
+.rem-marca img { max-height: 54px; width: auto; }
+.rem-capa { margin: 0 0 22px; }
+.rem-capa img { width: 100%; border-radius: var(--radius); border: 1px solid var(--border); }
+.rem-tabela { overflow-x: auto; }
+.rem-tabela th, .rem-tabela td { white-space: nowrap; }
+.rem-niveis { max-height: 420px; overflow: auto; }
+.rem-sim { display: grid; gap: 12px; grid-template-columns: minmax(180px, 260px) 1fr; align-items: start; }
+.rem-sim .saida { display: flex; flex-wrap: wrap; gap: 18px; }
+.rem-sim .saida strong { display: block; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.rem-sim select, .rem-sim input { width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: inherit; }
+.rem-notas summary { cursor: pointer; font-weight: 600; }
+@media (max-width: 640px) { .rem-sim { grid-template-columns: 1fr; } }
+"""
+
+
+def _rem_marca(doc: Dict[str, Any]) -> str:
+    """Logótipo e imagem de capa da página (não os das definições do site)."""
+    partes: List[str] = []
+    logo = _media_url(doc.get("logo_id"))
+    if logo:
+        partes.append(
+            f'<div class="rem-marca"><img src="{_esc(logo)}" '
+            f'alt="{_esc(str(doc.get("title") or "Logótipo"))}"></div>'
+        )
+    capa = _media_url(doc.get("capa_id"))
+    if capa:
+        partes.append(
+            f'<figure class="rem-capa"><img src="{_esc(capa)}" alt="{_esc(str(doc.get("title") or ""))}"></figure>'
+        )
+    return "".join(partes)
+
+
+def _rem_kpis(dados: Dict[str, Any]) -> str:
+    """Os números que resumem o quadro do ano."""
+    contagens = dados.get("contagens") or {}
+    parametros = dados.get("parametros") or {}
+    cartoes = [
+        ("BRAP", _euros(parametros.get("brap")), f"nível 5 da TRU em {dados.get('ano')}"),
+        ("Níveis da TRU", _numero(contagens.get("niveis")), "do nível 5 ao 115"),
+        ("Posições remuneratórias", _numero(contagens.get("posicoes")), f"{_numero(contagens.get('carreiras'))} carreiras/categorias"),
+        ("Cargos dirigentes", _numero(contagens.get("dirigentes")), "índice, nível e remuneração"),
+    ]
+    abertos = "".join(
+        f'<div class="kpi"><span>{_esc(titulo)}</span><strong>{_esc(valor)}</strong>'
+        f'<small>{_esc(nota)}</small></div>'
+        for titulo, valor, nota in cartoes
+        if valor
+    )
+    return f'<div class="section kpis">{abertos}</div>'
+
+
+def _rem_tru(dados: Dict[str, Any]) -> str:
+    """Tabela Remuneratória Única: nível, valor mensal e nota."""
+    niveis = [item for item in (dados.get("niveis") or []) if item.get("nivel")]
+    if not niveis:
+        return ""
+    linhas = [
+        [_numero(item.get("nivel")), _euros(item.get("valor")) if item.get("valor") else "—", str(item.get("nota") or "")]
+        for item in niveis
+    ]
+    tabela = _tabela("Tabela Remuneratória Única", ["Nível", "Remuneração base mensal", "Nota"], linhas)
+    return f'<div class="rem-tabela rem-niveis">{tabela}</div>'
+
+
+def _rem_serie(dados: Dict[str, Any]) -> str:
+    """A TRU entre anos: o nível 5 (BRAP) e o último nível da tabela."""
+    serie = dados.get("serie") or []
+    if not serie:
+        return ""
+    anos = sorted({str(ano) for linha in serie for ano in (linha.get("valores") or {})})
+    if len(anos) < 2:
+        return ""
+    ultimo = max(serie, key=lambda linha: int(linha.get("nivel") or 0))
+    brap = next((linha for linha in serie if int(linha.get("nivel") or 0) == 5), None)
+    linhas = []
+    for ano in anos:
+        brap_ano = (brap or {}).get("valores", {}).get(str(ano))
+        ultimo_ano = (ultimo.get("valores") or {}).get(str(ano))
+        linhas.append([ano, _euros(brap_ano) if brap_ano else "—", _euros(ultimo_ano) if ultimo_ano else "—"])
+    tabela = _tabela(
+        f"Tabela entre anos ({anos[0]}–{anos[-1]})",
+        ["Ano", "Nível 5 (BRAP)", f"Nível {_numero(ultimo.get('nivel'))}"],
+        linhas,
+    )
+    barras = _barras(
+        [
+            {"rotulo": ano, "valor": ((brap or {}).get("valores") or {}).get(str(ano)) or 0.0}
+            for ano in anos
+        ]
+    )
+    return f'<section class="section grafico"><h3>Base Remuneratória da Administração Pública</h3><p class="sub">nível 5 da TRU, ano a ano</p>{barras}</section>{tabela}'
+
+
+def _rem_carreiras(dados: Dict[str, Any], doc: Dict[str, Any]) -> str:
+    """As carreiras com as suas posições remuneratórias.
+
+    O editor escolhe quais detalhar (`destacar`): o resto fica na tabela-resumo
+    (primeira posição, última posição e amplitude).
+    """
+    carreiras = dados.get("carreiras") or []
+    if not carreiras:
+        return ""
+    destacar = {_chave_nome(valor) for valor in (doc.get("destacar") or [])}
+    linhas = [
+        [
+            str(item.get("carreira") or ""),
+            str(item.get("categoria") or ""),
+            _numero((item.get("posicoes") or [{}])[0].get("posicao")) if item.get("posicoes") else "",
+            _euros(item.get("minimo")),
+            _euros(item.get("maximo")),
+            str(item.get("seccao") or ""),
+        ]
+        for item in carreiras
+    ]
+    tabela = _tabela(
+        "Carreiras e categorias",
+        ["Carreira", "Categoria", "1.ª posição", "Valor mínimo", "Valor máximo", "Secção"],
+        linhas,
+    )
+    blocos: List[str] = []
+    for item in carreiras:
+        chaves = {_chave_nome(item.get("carreira")), _chave_nome(item.get("categoria"))}
+        if destacar and not (chaves & destacar):
+            continue
+        posicoes = item.get("posicoes") or []
+        if not posicoes:
+            continue
+        barras = _barras(
+            [
+                {
+                    "rotulo": f"{posicao.get('posicao')} (nível {posicao.get('niveis_texto') or posicao.get('nivel')})",
+                    "valor": posicao.get("remuneracao") or 0.0,
+                }
+                for posicao in posicoes
+            ]
+        )
+        blocos.append(
+            f'<section class="section grafico"><h3>{_esc(item.get("carreira"))}'
+            + (f' · {_esc(item.get("categoria"))}' if item.get("categoria") != item.get("carreira") else "")
+            + f'</h3><p class="sub">{_esc(item.get("seccao") or "")} · posição remuneratória e remuneração base mensal</p>'
+            + barras
+            + "</section>"
+        )
+    return "".join(blocos) + tabela
+
+
+def _rem_dirigentes(dados: Dict[str, Any]) -> str:
+    """Cargos dirigentes: âmbito, serviço, cargo, índice, nível e remuneração."""
+    dirigentes = dados.get("dirigentes") or []
+    if not dirigentes:
+        return ""
+    linhas = [
+        [
+            str(item.get("ambito") or ""),
+            str(item.get("grupo") or ""),
+            str(item.get("cargo") or ""),
+            _numero(item.get("indice")) if item.get("indice") else "—",
+            str(item.get("niveis_texto") or ""),
+            _euros(item.get("remuneracao")),
+        ]
+        for item in dirigentes
+    ]
+    return _tabela(
+        "Cargos dirigentes e equiparados",
+        ["Âmbito", "Serviço", "Cargo", "Índice", "Nível da TRU", "Remuneração base"],
+        linhas,
+    )
+
+
+def _rem_simulador(dados: Dict[str, Any]) -> str:
+    """Simulador da posição remuneratória (nível da TRU → mensal e anual).
+
+    O valor anual são os 14 pagamentos (12 mensalidades, subsídio de férias e
+    subsídio de Natal); as componentes que o quadro não publica ficam de fora e
+    a nota di-lo.
+    """
+    niveis = {str(item["nivel"]): item["valor"] for item in (dados.get("niveis") or []) if item.get("valor")}
+    if not niveis:
+        return ""
+    opcoes = "".join(
+        f'<option value="{_esc(nivel)}">{_esc(nivel)} — {_euros(valor)}</option>'
+        for nivel, valor in sorted(niveis.items(), key=lambda par: int(par[0]))
+    )
+    atual = next(iter(sorted(niveis, key=lambda chave: int(chave))), "")
+    dados_json = _esc(json.dumps(niveis, ensure_ascii=False))
+    return (
+        '<section class="section"><h2>Simulador de posição remuneratória</h2>'
+        '<p class="sub">Escolha o nível da TRU para ver a remuneração base mensal e o valor do ano '
+        f"({PAGAMENTOS_PUBLICO} pagamentos: 12 mensalidades, subsídio de férias e subsídio de Natal).</p>"
+        f'<div class="rem-sim" data-niveis="{dados_json}" data-pagamentos="{PAGAMENTOS_PUBLICO}">'
+        f'<label>Nível da TRU<select data-papel="nivel">{opcoes}</select></label>'
+        '<div class="saida">'
+        f'<div><span>Remuneração base mensal</span><strong data-papel="mensal">{_euros(niveis.get(atual))}</strong></div>'
+        f'<div><span>Valor anual ({PAGAMENTOS_PUBLICO} pagamentos)</span><strong data-papel="anual">{_euros((niveis.get(atual) or 0) * PAGAMENTOS_PUBLICO)}</strong></div>'
+        "</div></div>"
+        '<p class="meta">O quadro da DGAEP não publica suplementos nem subsídio de refeição: a conta é só a '
+        "remuneração base do nível escolhido.</p>"
+        "<script>(function(){var c=document.currentScript.parentNode.querySelector('.rem-sim');"
+        "if(!c)return;var n=JSON.parse(c.getAttribute('data-niveis')||'{}');"
+        "var p=parseInt(c.getAttribute('data-pagamentos')||'14',10);var s=c.querySelector('[data-papel=\"nivel\"]');"
+        "function f(v){return v.toLocaleString('pt-PT',{minimumFractionDigits:2,maximumFractionDigits:2})+' \u20ac'}"
+        "function u(){var v=n[s.value]||0;c.querySelector('[data-papel=\"mensal\"]').textContent=f(v);"
+        "c.querySelector('[data-papel=\"anual\"]').textContent=f(v*p)}"
+        "if(s){s.addEventListener('change',u);u()}})();</script></section>"
+    )
+
+
+def _rem_notas(dados: Dict[str, Any]) -> str:
+    """Notas da DGAEP por secção (recolhidas, para não haver dúvidas de leitura)."""
+    notas = dados.get("notas") or []
+    if not notas:
+        return ""
+    blocos = []
+    for nota in notas:
+        texto = " ".join(nota.get("texto") or [])
+        if not texto:
+            continue
+        blocos.append(
+            f'<details class="rem-notas"><summary>{_esc(nota.get("seccao"))}</summary>'
+            f'<p class="meta">{_esc(texto)}</p></details>'
+        )
+    if not blocos:
+        return ""
+    return f'<section class="section"><h2>Notas da DGAEP</h2>{"".join(blocos)}</section>'
+
+
+def _rem_base_legal(dados: Dict[str, Any]) -> str:
+    """Base legal por carreira (estrutura da carreira, remuneratória e outras)."""
+    tabelas = dados.get("base_legal") or []
+    linhas: List[List[str]] = []
+    for tabela in tabelas:
+        for linha in tabela.get("linhas") or []:
+            linhas.append(
+                [
+                    str(linha.get("carreira") or ""),
+                    str(linha.get("grau") or ""),
+                    str(linha.get("estrutura_carreira") or ""),
+                    str(linha.get("estrutura_remuneratoria") or ""),
+                    str(linha.get("outras_componentes") or ""),
+                ]
+            )
+    if not linhas:
+        return ""
+    return _tabela(
+        "Base legal",
+        ["Carreira", "Grau", "Estrutura da carreira", "Estrutura remuneratória", "Outras componentes"],
+        linhas,
+    )
+
+
+def _chave_nome(texto: Any) -> str:
+    """Chave de comparação de nomes (sem acentos, minúsculas, espaços colapsados)."""
+    base = unicodedata.normalize("NFKD", str(texto or ""))
+    limpo = "".join(caractere for caractere in base if not unicodedata.combining(caractere))
+    return re.sub(r"\s+", " ", limpo.lower()).strip()
+
+
+def _corpo_do_modelo(dados: Dict[str, Any], doc: Dict[str, Any], *, preview: bool) -> str:
+    """Marca + texto editorial + os quadros do modelo que a página mostra."""
+    mostrar = doc.get("mostrar") if isinstance(doc.get("mostrar"), dict) else {}
+    ligado = lambda chave: mostrar.get(chave, True)  # noqa: E731
+
+    partes: List[str] = [_rem_marca(doc)]
+    if doc.get("intro"):
+        partes.append(f'<div class="section prose">{_md(str(doc["intro"]))}</div>')
+    partes.append(_rem_kpis(dados))
+    partes.append(blocks_to_html(doc.get("blocks") or [], preview=preview))
+    if ligado("niveis"):
+        partes.append(_rem_tru(dados))
+    if ligado("serie"):
+        partes.append(_rem_serie(dados))
+    if ligado("carreiras"):
+        partes.append(_rem_carreiras(dados, doc))
+    if ligado("dirigentes"):
+        partes.append(_rem_dirigentes(dados))
+    if ligado("simulador"):
+        partes.append(_rem_simulador(dados))
+    if ligado("notas"):
+        partes.append(_rem_notas(dados))
+    if ligado("parametros"):
+        partes.append(_rem_base_legal(dados))
+
+    fonte = dados.get("fonte") or {}
+    if fonte.get("documento"):
+        nota = f"{fonte['documento']} · {fonte.get('ficheiro') or ''}".strip(" ·")
+        recolhido = _date(dados.get("gerado_em")) if dados.get("gerado_em") else ""
+        if recolhido:
+            nota += f" · valores lidos a {recolhido}"
+        partes.append(f'<div class="section aviso">{_esc(nota)}</div>')
+    return "".join(parte for parte in partes if parte)
+
+
+def render_remuneracao(
+    doc: Dict[str, Any],
+    *,
+    preview: bool = False,
+    settings: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Página pública do modelo de remunerações da Administração Pública."""
+    settings = settings or store.get_settings()
+    seo = doc.get("seo") or {}
+    dados = doc.get("dados") if isinstance(doc.get("dados"), dict) else {}
+    titulo = str(doc.get("title") or "Remunerações da Administração Pública")
+    path = f"/site/remuneracoes/{doc.get('slug')}" if doc.get("slug") else "/site"
+    base_url = str(settings.get("base_url") or "")
+    parametros = dados.get("parametros") or {}
+    contagens = dados.get("contagens") or {}
+    descricao = str(seo.get("description") or doc.get("excerpt") or "").strip() or (
+        f"Remunerações da Administração Pública em {dados.get('ano')}: Tabela Remuneratória Única "
+        f"({_numero(contagens.get('niveis'))} níveis, BRAP de {_euros(parametros.get('brap'))}), "
+        f"carreiras e posições remuneratórias e cargos dirigentes, a partir do quadro da DGAEP."
+    )
+    cor = str(doc.get("cor") or "").strip()
+    extra_css = _CSS_REMUNERACOES + (f":root {{ --accent: {cor}; }}" if cor else "")
+    json_ld = {
+        "@context": "https://schema.org",
+        "@type": "Dataset",
+        "name": str(seo.get("title") or titulo),
+        "description": descricao,
+        "url": _absolute(path, base_url),
+        "spatialCoverage": {"@type": "Place", "name": "Portugal"},
+        "creator": {"@type": "Organization", "name": str(settings.get("site_name") or "")},
+        "isBasedOn": [url for url in [(dados.get("fonte") or {}).get("url"), (dados.get("fonte") or {}).get("catalogo")] if url],
+        "variableMeasured": "Remuneração base mensal por nível e posição remuneratória",
+    }
+    if dados.get("ano"):
+        json_ld["temporalCoverage"] = str(dados.get("ano"))
+    return _layout(
+        title=str(seo.get("title") or titulo),
+        description=descricao,
+        body=_corpo_do_modelo(dados, doc, preview=preview),
+        current_path=path,
+        settings=settings,
+        canonical=path,
+        og_image=_media_url(seo.get("image_id") or doc.get("capa_id")),
+        keywords=seo.get("keywords") or None,
+        json_ld=json_ld,
+        preview=preview,
+        noindex=bool(seo.get("noindex")),
+        extra_css=extra_css,
+        breadcrumb=[
+            {"label": "Início", "href": "/site"},
+            {"label": "Remunerações AP"},
+            {"label": titulo},
+        ],
+    )
+
+
 def _post_card(post: Dict[str, Any]) -> str:
     href = f"/site/blog/{post.get('slug')}"
     cover = _media_url(post.get("cover_id"))
@@ -1681,6 +2046,15 @@ def render_sitemap(settings: Optional[Dict[str, Any]] = None) -> str:
             continue
         loc = _absolute(f"/site/pesquisa/{slug}", base_url)
         lastmod = str(pesquisa.get("updated_at") or pesquisa.get("published_at") or "")[:10]
+        entries.append(f"<url><loc>{_esc(loc)}</loc>{f'<lastmod>{lastmod}</lastmod>' if lastmod else ''}<priority>0.8</priority></url>")
+    for remuneracao in store.published_remuneracoes():
+        if (remuneracao.get("seo") or {}).get("noindex"):
+            continue
+        slug = str(remuneracao.get("slug") or "")
+        if not slug:
+            continue
+        loc = _absolute(f"/site/remuneracoes/{slug}", base_url)
+        lastmod = str(remuneracao.get("updated_at") or remuneracao.get("published_at") or "")[:10]
         entries.append(f"<url><loc>{_esc(loc)}</loc>{f'<lastmod>{lastmod}</lastmod>' if lastmod else ''}<priority>0.8</priority></url>")
     return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join(entries) + "</urlset>"
 

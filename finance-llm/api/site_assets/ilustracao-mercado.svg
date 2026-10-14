@@ -9,7 +9,7 @@
   </g>
   <rect x="88" y="232" width="236" height="84" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
   <text x="106" y="264" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Mediana do segmento (CPV)</text>
-  <text x="106" y="296" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#0f172a">p50 · p75 · máximo</text>
+  <text x="106" y="296" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#0f172a">p50 · p75 · máximo</text>
   <g>
     <rect x="88" y="340" width="44" height="56" rx="8" fill="#a5f3fc"/>
     <rect x="144" y="322" width="44" height="74" rx="8" fill="#38bdf8"/>
@@ -30,6 +30,6 @@
   </g>
   <rect x="436" y="318" width="180" height="34" rx="10" fill="#fef3c7"/>
   <text x="526" y="340" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#92400e" text-anchor="middle">Concentração alta</text>
-  <circle cx="712" cy="120" r="34" fill="#0f172a"/>
-  <text x="712" y="131" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#ffffff" text-anchor="middle">%</text>
+  <circle cx="672" cy="120" r="34" fill="#0f172a"/>
+  <text x="672" y="131" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#ffffff" text-anchor="middle">%</text>
 </svg>

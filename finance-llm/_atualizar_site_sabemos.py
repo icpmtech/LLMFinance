@@ -164,6 +164,61 @@ def _aplicar_conteudos() -> None:
     print("  conteúdo ctd_rodape: marca atualizada")
 
 
+#: Diagrama e ilustração que as páginas de benchmark recebem por acréscimo.
+DIAGRAMA_BENCHMARK = "diagrama-comparacao-lojas.svg"
+ILUSTRACAO_BENCHMARK = "ilustracao-benchmarks.svg"
+
+
+def _referencias_de_media(blocos: List[Dict[str, Any]]) -> set:
+    """Id de todo o media já usado pelos blocos de uma página."""
+    referencias = {str((bloco.get("data") or {}).get("media_id") or "") for bloco in blocos}
+    referencias |= {
+        str(media_id) for bloco in blocos for media_id in ((bloco.get("data") or {}).get("media_ids") or [])
+    }
+    return referencias
+
+
+def _aplicar_paginas_de_benchmarks(media: Dict[str, str]) -> None:
+    """Acrescenta o diagrama de leitura às páginas de benchmark.
+
+    Estas páginas não vêm do `editorial` — nascem no `benchmarks_service`, na
+    primeira publicação de um estudo —, por isso o diagrama entra por
+    acréscimo: o que lá estiver fica como está e cada bloco novo só entra uma
+    vez, para correr isto duas vezes não duplicar nada.
+    """
+    diagrama = media.get(DIAGRAMA_BENCHMARK) or ""
+    ilustracao = media.get(ILUSTRACAO_BENCHMARK) or ""
+    for pagina in store.list_items("pages")["items"]:
+        caminho = str(pagina.get("path") or "")
+        if caminho != "benchmarks" and not caminho.startswith("benchmarks/"):
+            continue
+        blocos = list(pagina.get("blocks") or [])
+        referencias = _referencias_de_media(blocos)
+        novos: List[Dict[str, Any]] = []
+        if diagrama and diagrama not in referencias:
+            novos.append(
+                {
+                    "id": f"blk_{str(pagina.get('slug') or 'benchmark')}_imagem",
+                    "type": "imagem",
+                    "data": {
+                        "media_id": diagrama,
+                        "alt": "Índice de preço por loja, com 100 a valer a média do estudo",
+                        "caption": "Como se lê um benchmark: dispersão entre lojas e melhor preço assinalado.",
+                    },
+                }
+            )
+        # A ilustração da área é da página-mãe: em cada estudo seria repetição.
+        if caminho == "benchmarks" and ilustracao and ilustracao not in referencias:
+            novos.append(
+                {"id": "blk_benchmarks_galeria", "type": "galeria", "data": {"media_ids": [ilustracao]}}
+            )
+        if not novos:
+            print(f"  página {caminho}: já estava atualizada")
+            continue
+        store.save_item("pages", {**pagina, "blocks": blocos + novos}, AUTOR)
+        print(f"  página {caminho}: {len(novos)} blocos acrescentados")
+
+
 def main() -> None:
     media = store.instalar_media_de_marca()
     print(f"media de marca instalados: {len(media)} ficheiros")
@@ -211,10 +266,11 @@ def main() -> None:
     if sobre:
         _aplicar_pagina(
             str(sobre["id"]),
-            {"blocks": editorial.conteudo_da_sobre(), "seo": editorial.SOBRE_SEO, "menu_order": 6},
+            {"blocks": editorial.conteudo_da_sobre(media), "seo": editorial.SOBRE_SEO, "menu_order": 6},
         )
 
     _aplicar_paginas_do_site(media)
+    _aplicar_paginas_de_benchmarks(media)
     _aplicar_menus()
     _aplicar_posts(media)
     _aplicar_conteudos()

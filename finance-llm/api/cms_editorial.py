@@ -36,6 +36,97 @@ SEED_MEDIA: Sequence[Sequence[str]] = (
     ("ilustracao-benchmarks.svg", "Ilustração · benchmarks", "Benchmarks de preços por loja", ""),
     ("capa-post-bemvindo.svg", "Capa · bem-vindo ao blog", "Bem-vindo ao blog do Sabemos Studio", ""),
     ("capa-post-contratos-2026.svg", "Capa · contratos públicos em 2026", "Contratos públicos em 2026: o que os dados mostram", ""),
+    # Diagramas: explicam o método e a leitura dos números, página a página.
+    (
+        "diagrama-percurso-do-dado.svg",
+        "Diagrama · percurso do dado",
+        "Percurso do dado: recolha, normalização, cálculo e evidência",
+        "Como se chega ao número: do dado bruto à evidência citada.",
+    ),
+    (
+        "diagrama-arquitetura-iqos.svg",
+        "Diagrama · arquitetura do IQ OS",
+        "Arquitetura do IQ OS: dados abertos, ontologia de entidades e produtos",
+        "Os três andares da plataforma: o que entra, como se liga e o que sai.",
+    ),
+    (
+        "diagrama-cadeia-do-contrato.svg",
+        "Diagrama · cadeia do contrato",
+        "Cadeia do contrato público: anúncio, concurso, adjudicação, contrato, aditivos e preço final",
+        "O mesmo contrato visto em seis momentos, do anúncio ao valor que se paga.",
+    ),
+    (
+        "diagrama-grafo-de-entidades.svg",
+        "Diagrama · grafo de entidades",
+        "Grafo de entidades: a empresa ligada a sócios, contratos, municípios e registos oficiais",
+        "A empresa como nó central — cada ligação vem de uma fonte pública.",
+    ),
+    (
+        "diagrama-municipio-vs-media.svg",
+        "Diagrama · concelho e média nacional",
+        "Indicadores de um concelho comparados com a média nacional",
+        "A mesma grelha para os 308 concelhos, com a média nacional como referência.",
+    ),
+    (
+        "diagrama-concentracao-de-mercado.svg",
+        "Diagrama · concentração de mercado",
+        "Concentração de fornecedores e posição de preço dentro do mesmo CPV",
+        "O preço lido dentro do segmento e o peso dos maiores fornecedores.",
+    ),
+    (
+        "diagrama-comparacao-lojas.svg",
+        "Diagrama · índice de preço por loja",
+        "Índice de preço por loja, com 100 a valer a média do estudo",
+        "Como se lê um benchmark: dispersão entre lojas e melhor preço assinalado.",
+    ),
+    (
+        "diagrama-cadeia-de-evidencia.svg",
+        "Diagrama · cadeia de evidência",
+        "Da pergunta à resposta citada: sub-perguntas, registos nas fontes e fontes numeradas",
+        "O caminho de uma resposta: pergunta, registos e citação numerada.",
+    ),
+    (
+        "diagrama-fontes-e-cobertura.svg",
+        "Diagrama · fontes e cobertura",
+        "Fontes usadas e cobertura por país e período",
+        "Que fontes entram, para que países e desde quando.",
+    ),
+    (
+        "diagrama-metodo.svg",
+        "Diagrama · método em três passos",
+        "Método em três passos: recolher, ligar e provar",
+        "O método resumido: só fontes públicas, ligação por identidade e prova.",
+    ),
+    # Ilustrações que faltavam para completar o conjunto das seis áreas.
+    (
+        "ilustracao-mercado.svg",
+        "Ilustração · mercado e preços",
+        "Mercado e preços: posição dentro do segmento e concentração de fornecedores",
+        "",
+    ),
+    (
+        "ilustracao-fontes.svg",
+        "Ilustração · fontes de dados",
+        "Fontes de dados: registos verificados e cobertura por país e período",
+        "",
+    ),
+    (
+        "ilustracao-contactos.svg",
+        "Ilustração · contactos",
+        "Contactos: pedido escrito e resposta por email",
+        "",
+    ),
+    (
+        "ilustracao-plataforma.svg",
+        "Ilustração · do estúdio à plataforma",
+        "Do estúdio à plataforma: o Sabemos Studio publica leitura verificável com o IQ OS",
+        "O que o estúdio faz e onde a plataforma entra.",
+    ),
+    # Ícones: usados no campo `icon_id` dos itens de um bloco de cartões.
+    ("icone-fonte-nomeada.svg", "Ícone · fonte nomeada", "Fonte nomeada: cada número com origem", ""),
+    ("icone-entidades-ligadas.svg", "Ícone · entidades ligadas", "Entidades ligadas pela identidade", ""),
+    ("icone-fotografia-datada.svg", "Ícone · fotografia datada", "Fotografia datada: o número com o dia da leitura", ""),
+    ("icone-conta-refazivel.svg", "Ícone · conta refazível", "Conta refazível: o critério publicado", ""),
 )
 
 #: Menu do site: rótulo e caminho da página, pela ordem em que aparece. O
@@ -101,6 +192,16 @@ class _Blocos:
     def passos(self, title: str, items: Sequence[Sequence[str]]) -> Dict[str, Any]:
         return self.add("passos", {"title": title, "items": [{"title": titulo, "text": texto} for titulo, texto in items]})
 
+    def cartoes_com_icone(self, title: str, items: Sequence[Sequence[str]]) -> Dict[str, Any]:
+        """Cartões com ícone: `(título, texto, id do ícone)` — o ícone é opcional."""
+        cartoes = []
+        for item in items:
+            cartao = {"title": item[0], "text": item[1]}
+            if len(item) > 2 and item[2]:
+                cartao["icon_id"] = item[2]
+            cartoes.append(cartao)
+        return self.add("destaques", {"title": title, "items": cartoes})
+
     def tabela(self, title: str, head: Sequence[str], rows: Sequence[Sequence[str]]) -> Dict[str, Any]:
         return self.add("tabela", {"title": title, "head": list(head), "rows": [list(row) for row in rows]})
 
@@ -122,6 +223,15 @@ class _Blocos:
 
     def galeria(self, media: Sequence[str]) -> Dict[str, Any]:
         return self.add("galeria", {"media_ids": [item for item in media if item]})
+
+    def imagem(self, media: str, *, alt: str = "", caption: str = "") -> Dict[str, Any]:
+        """Figura isolada, com legenda — é por aqui que entram os diagramas."""
+        data: Dict[str, Any] = {"media_id": media}
+        if alt:
+            data["alt"] = alt
+        if caption:
+            data["caption"] = caption
+        return self.add("imagem", data)
 
     def formulario(self, title: str, intro: str, *, button_label: str = "Enviar mensagem") -> Dict[str, Any]:
         return self.add("formulario", {"title": title, "intro": intro, "button_label": button_label})
@@ -246,14 +356,38 @@ def conteudo_da_inicio(media: Dict[str, str]) -> List[Dict[str, Any]]:
             "contratos, contas e registos — e devolvemos leitura que se pode verificar.\n\n"
             "O **IQ OS** é a plataforma onde isso acontece: recolha contínua de contratos públicos e de "
             "finanças locais, uma ontologia de entidades (empresas, municípios e pessoas) e assistentes de "
-            "investigação que respondem com a evidência à vista.\n\n"
-            "O que nos distingue:\n\n"
-            "- **Fonte nomeada** — Portal BASE, INE, registos oficiais e boletins. Nenhum número aparece sem origem.\n"
-            "- **Entidades ligadas** — a mesma empresa, o mesmo município e a mesma pessoa são o mesmo objeto "
-            "em toda a plataforma, mesmo quando o nome aparece escrito de outra maneira.\n"
-            "- **Fotografia datada** — cada análise guarda o dia em que foi lida: o número citado continua a "
-            "ser o número que se viu.\n"
-            "- **Conta refazível** — publicamos o critério e o registo, para quem lê poder repetir o cálculo.",
+            "investigação que respondem com a evidência à vista.",
+        ),
+        b.imagem(
+            media.get("ilustracao-plataforma.svg", ""),
+            alt="Do estúdio à plataforma: o Sabemos Studio publica leitura verificável com o IQ OS",
+            caption="O estúdio publica; a plataforma liga contratos, empresas, municípios e mercado.",
+        ),
+        b.cartoes_com_icone(
+            "O que nos distingue",
+            [
+                (
+                    "Fonte nomeada",
+                    "Portal BASE, INE, registos oficiais e boletins. Nenhum número aparece sem origem.",
+                    media.get("icone-fonte-nomeada.svg", ""),
+                ),
+                (
+                    "Entidades ligadas",
+                    "A mesma empresa, o mesmo município e a mesma pessoa são o mesmo objeto em toda a "
+                    "plataforma, mesmo quando o nome aparece escrito de outra maneira.",
+                    media.get("icone-entidades-ligadas.svg", ""),
+                ),
+                (
+                    "Fotografia datada",
+                    "Cada análise guarda o dia em que foi lida: o número citado continua a ser o número que se viu.",
+                    media.get("icone-fotografia-datada.svg", ""),
+                ),
+                (
+                    "Conta refazível",
+                    "Publicamos o critério e o registo, para quem lê poder repetir o cálculo.",
+                    media.get("icone-conta-refazivel.svg", ""),
+                ),
+            ],
         ),
         b.cartoes("Por onde começar", [(titulo, texto, f"/site/{caminho}") for titulo, texto, caminho in CAPACIDADES]),
         b.passos(
@@ -265,12 +399,19 @@ def conteudo_da_inicio(media: Dict[str, str]) -> List[Dict[str, Any]]:
                 ("Evidência", "Cada resposta cita o documento e o registo de onde saiu, e pode ser reproduzida por quem a lê."),
             ],
         ),
+        b.imagem(
+            media.get("diagrama-percurso-do-dado.svg", ""),
+            alt="Percurso do dado: recolha, normalização, cálculo e evidência",
+            caption="Da fonte ao número: recolha, normalização, cálculo e evidência.",
+        ),
         b.galeria(
             [
                 media.get("ilustracao-contratos.svg", ""),
                 media.get("ilustracao-empresas.svg", ""),
                 media.get("ilustracao-municipios.svg", ""),
                 media.get("ilustracao-investigacao.svg", ""),
+                media.get("ilustracao-mercado.svg", ""),
+                media.get("ilustracao-fontes.svg", ""),
             ]
         ),
         b.cartoes(
@@ -311,7 +452,7 @@ def conteudo_da_inicio(media: Dict[str, str]) -> List[Dict[str, Any]]:
     ]
 
 
-def conteudo_da_sobre() -> List[Dict[str, Any]]:
+def conteudo_da_sobre(media: Dict[str, str]) -> List[Dict[str, Any]]:
     """Blocos da página «Sobre»."""
     b = _Blocos("sobre")
     return [
@@ -329,6 +470,11 @@ def conteudo_da_sobre() -> List[Dict[str, Any]]:
             "Recolhemos e ligamos dados de contratação pública, finanças locais, registos de empresas e "
             "boletins oficiais. Em cima disso construímos indicadores, fichas por entidade e assistentes que "
             "respondem com a fonte à vista — para quem tem de decidir e para quem tem de justificar.",
+        ),
+        b.imagem(
+            media.get("diagrama-metodo.svg", ""),
+            alt="Método em três passos: recolher, ligar e provar",
+            caption="O método em três passos: recolher, ligar e provar.",
         ),
         b.cartoes(
             "O que não fazemos",
@@ -375,6 +521,16 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                     cta=("Ver as fontes", "/site/fontes"),
                 ),
                 b.cartoes("As áreas", [(titulo, texto, f"/site/{caminho}") for titulo, texto, caminho in CAPACIDADES]),
+                b.galeria(
+                    [
+                        media.get("ilustracao-contratos.svg", ""),
+                        media.get("ilustracao-empresas.svg", ""),
+                        media.get("ilustracao-municipios.svg", ""),
+                        media.get("ilustracao-mercado.svg", ""),
+                        media.get("ilustracao-benchmarks.svg", ""),
+                        media.get("ilustracao-investigacao.svg", ""),
+                    ]
+                ),
                 b.passos(
                     "O que é igual em todas",
                     [
@@ -383,6 +539,11 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                         ("Resposta com rasto", "Cada valor sai com a fonte, o período e o critério."),
                         ("Fotografia datada", "O resultado fica guardado com a data da leitura."),
                     ],
+                ),
+                b.imagem(
+                    media.get("diagrama-arquitetura-iqos.svg", ""),
+                    alt="Arquitetura do IQ OS: dados abertos, ontologia de entidades e produtos",
+                    caption="Os três andares: o que entra, como se liga e o que sai.",
                 ),
                 b.numeros("O que já está indexado", NUMEROS_DA_PLATAFORMA),
                 b.cta("Não encontrou a sua área?", "Diga-nos a pergunta e verificamos se os dados abertos a respondem.", "Falar connosco", "/site/contactos"),
@@ -418,6 +579,11 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                     "- Que procedimento foi usado e o que isso faz ao preço.\n"
                     "- Como o valor se reparte ao longo do ano e por tipo de bem ou serviço (CPV).",
                 ),
+                b.imagem(
+                    media.get("diagrama-cadeia-do-contrato.svg", ""),
+                    alt="Cadeia do contrato público: anúncio, concurso, adjudicação, contrato, aditivos e preço final",
+                    caption="O mesmo contrato em seis momentos — do anúncio ao valor que se paga.",
+                ),
                 b.cartoes(
                     "O que pode ver",
                     [
@@ -429,6 +595,7 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                         ("Anomalias", "Preços fora do padrão do segmento e sinais de concentração."),
                     ],
                 ),
+                b.galeria([media.get("ilustracao-contratos.svg", "")]),
                 b.tabela(
                     "Exemplo de leitura",
                     ["Indicador", "O que diz"],
@@ -480,6 +647,11 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                     "- Que sinais existem — insolvência, dívida a fornecedores, alterações recentes.\n"
                     "- Quanto do negócio de uma empresa depende de compradores públicos.",
                 ),
+                b.imagem(
+                    media.get("diagrama-grafo-de-entidades.svg", ""),
+                    alt="Grafo de entidades: a empresa ligada a sócios, contratos, municípios e registos oficiais",
+                    caption="A empresa como nó central — cada ligação vem de uma fonte pública.",
+                ),
                 b.cartoes(
                     "O que pode ver",
                     [
@@ -500,6 +672,7 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                         ("Explicar", "Cada sinal mostra o documento que o sustenta."),
                     ],
                 ),
+                b.galeria([media.get("ilustracao-empresas.svg", "")]),
                 b.cta("Quer a ficha completa de uma empresa?", "Montamos a ficha com sócios, contratos e sinais, e dizemos de onde vem cada campo.", "Pedir uma análise", "/site/contactos"),
             ],
         )
@@ -537,6 +710,11 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                     "O que cobre",
                     [("308", "Municípios", "todos os concelhos de Portugal"), ("2", "Fontes oficiais", "INE e Portal BASE"), ("2012→", "Histórico de contratos", "com fotografia datada")],
                 ),
+                b.imagem(
+                    media.get("diagrama-municipio-vs-media.svg", ""),
+                    alt="Indicadores de um concelho comparados com a média nacional",
+                    caption="O concelho comparado com a média nacional — a mesma grelha para todos.",
+                ),
                 b.tabela(
                     "Indicadores da grelha",
                     ["Indicador", "Fonte"],
@@ -548,6 +726,7 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                         ["Adjudicatários do concelho", "Portal BASE"],
                     ],
                 ),
+                b.galeria([media.get("ilustracao-municipios.svg", "")]),
                 b.faq(
                     "Perguntas frequentes",
                     [
@@ -587,6 +766,11 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                     "- concentração do lado dos fornecedores e do lado dos compradores;\n"
                     "- sinais de anomalia: preços muito acima do padrão do segmento e aditivos sucessivos.",
                 ),
+                b.imagem(
+                    media.get("diagrama-concentracao-de-mercado.svg", ""),
+                    alt="Concentração de fornecedores e posição de preço dentro do mesmo CPV",
+                    caption="O preço lido dentro do segmento e o peso dos maiores fornecedores.",
+                ),
                 b.cartoes(
                     "O que pode ver",
                     [
@@ -598,6 +782,7 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                         ("Onde vender", "Que compradores compram algo que uma empresa ainda não lhes vende."),
                     ],
                 ),
+                b.galeria([media.get("ilustracao-mercado.svg", "")]),
                 b.aviso("**Leitura estatística.** Os sinais apontam para onde olhar; não são prova de irregularidade. Um preço alto pode ser um bem diferente, um prazo curto ou um mercado com um só fornecedor.", tone="amber"),
                 b.cta("Quer saber onde está no seu mercado?", "Damos a posição relativa, os concorrentes e os segmentos onde há espaço.", "Pedir uma análise", "/site/contactos"),
             ],
@@ -642,6 +827,11 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                         ("Aviso claro", "Preço publicado não é preço final: confirmar antes de decidir."),
                     ],
                 ),
+                b.imagem(
+                    media.get("diagrama-comparacao-lojas.svg", ""),
+                    alt="Índice de preço por loja, com 100 a valer a média do estudo",
+                    caption="Como se lê um benchmark: dispersão entre lojas e melhor preço assinalado.",
+                ),
                 b.galeria([media.get("ilustracao-benchmarks.svg", "")]),
                 b.cta("Quer um benchmark do seu mercado?", "Montamos a recolha, normalizamos os produtos e publicamos o estudo com a data à vista.", "Pedir um estudo", "/site/contactos"),
             ],
@@ -674,6 +864,11 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                     "O resultado é verificável: se a conta não fechar, vê-se logo onde. E fica guardado como "
                     "**dossiê**, com a data da leitura.",
                 ),
+                b.imagem(
+                    media.get("diagrama-cadeia-de-evidencia.svg", ""),
+                    alt="Da pergunta à resposta citada: sub-perguntas, registos nas fontes e fontes numeradas",
+                    caption="O caminho de uma resposta: pergunta, registos e citação numerada.",
+                ),
                 b.passos(
                     "Como responde",
                     [
@@ -683,6 +878,7 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                         ("Citar", "A resposta sai com as fontes numeradas, para abrir e conferir."),
                     ],
                 ),
+                b.galeria([media.get("ilustracao-investigacao.svg", "")]),
                 b.citacao("Cada número tem procedência: o documento, o ano e o contrato de onde saiu.", "Método Sabemos Studio"),
                 b.cta("Tem uma pergunta que ninguém responde?", "Diga-nos qual é. Construímos a resposta a partir dos dados abertos, com a evidência citada.", "Fazer uma pergunta", "/site/contactos"),
             ],
@@ -722,6 +918,11 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                         ["Recolhas próprias", "Preços de loja para os benchmarks", "Datado, loja a loja"],
                     ],
                 ),
+                b.imagem(
+                    media.get("diagrama-fontes-e-cobertura.svg", ""),
+                    alt="Fontes usadas e cobertura por país e período",
+                    caption="Que fontes entram, para que países e desde quando.",
+                ),
                 b.cartoes(
                     "Como tratamos o que entra",
                     [
@@ -731,6 +932,7 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                         ("Limites à vista", "Dizemos o que a fonte não cobre, antes que alguém tire a conclusão errada."),
                     ],
                 ),
+                b.galeria([media.get("ilustracao-fontes.svg", "")]),
                 b.faq(
                     "Perguntas frequentes",
                     [
@@ -768,6 +970,10 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                     "- **Correções** — um número que não bate certo. Damos prioridade e escrevemos a correção.\n"
                     "- **Dados** — saber o que temos, com que cobertura e em que formato.\n"
                     "- **Imprensa** — contexto, dados e a fonte primária por trás de cada número.",
+                ),
+                b.imagem(
+                    media.get("ilustracao-contactos.svg", ""),
+                    alt="Contactos: pedido escrito e resposta por email",
                 ),
                 b.formulario(
                     "Pedido de contacto",

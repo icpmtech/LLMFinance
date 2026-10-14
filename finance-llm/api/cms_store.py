@@ -54,12 +54,12 @@ SITE_ASSETS_DIR = Path(__file__).resolve().parent / "site_assets"
 CMS_VERSION = 1
 
 # Entidades do CMS: as listas dentro do documento.
-ENTITIES: Tuple[str, ...] = ("pages", "posts", "municipios", "pesquisas", "contents", "media", "categories", "templates", "menus", "contactos")
+ENTITIES: Tuple[str, ...] = ("pages", "posts", "municipios", "pesquisas", "remuneracoes", "contents", "media", "categories", "templates", "menus", "contactos")
 SINGULAR: Dict[str, str] = {entity: entity.rstrip("s") if entity not in ("media",) else "media" for entity in ENTITIES}
 SINGULAR["categories"] = "categoria"
 
 #: Entidades que se **publicam** (têm estado, agendamento e endereço no site).
-PUBLISHABLE: Tuple[str, ...] = ("pages", "posts", "municipios", "pesquisas")
+PUBLISHABLE: Tuple[str, ...] = ("pages", "posts", "municipios", "pesquisas", "remuneracoes")
 
 #: Entidades cujo conteúdo é **privado**: a leitura exige sessão (ao contrário
 #: das restantes, que o site público mostra de qualquer maneira). Os contactos
@@ -89,7 +89,54 @@ ENTITY_LABELS: Dict[str, str] = {
     "posts": "artigo",
     "municipios": "município",
     "pesquisas": "pesquisa",
+    "remuneracoes": "remuneração",
 }
+
+#: O que a página do **modelo de remunerações** mostra, além do texto e dos
+#: blocos editoriais. A ordem é a da página.
+MOSTRAR_REMUNERACOES: Tuple[Tuple[str, str], ...] = (
+    ("parametros", "Parâmetros do ano (BRAP, limites e base legal)"),
+    ("niveis", "Tabela Remuneratória Única"),
+    ("serie", "Evolução da tabela entre anos"),
+    ("carreiras", "Carreiras e posições remuneratórias"),
+    ("dirigentes", "Cargos dirigentes"),
+    ("simulador", "Simulador de posição remuneratória"),
+    ("notas", "Notas da DGAEP"),
+)
+MOSTRAR_REMUNERACOES_IDS = {chave for chave, _ in MOSTRAR_REMUNERACOES}
+
+
+def _mostrar_da_pagina(valor: Any) -> Dict[str, bool]:
+    """Que partes do modelo a página mostra (por omissão, todas)."""
+    dados = valor if isinstance(valor, dict) else {}
+    return {chave: bool(dados.get(chave, True)) for chave, _ in MOSTRAR_REMUNERACOES}
+
+
+def _ano_valido(valor: Any, alternativa: Any = None) -> Optional[int]:
+    """Ano do quadro (inteiro entre 2000 e 2100), ou o alternativo."""
+    for candidato in (valor, alternativa):
+        try:
+            ano = int(str(candidato).strip()[:4])
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if 2000 <= ano <= 2100:
+            return ano
+    return None
+
+
+def _resumo_do_modelo(dados: Dict[str, Any]) -> str:
+    """Resumo factual do modelo, para o excerto e para a IA."""
+    if not isinstance(dados, dict) or not dados:
+        return ""
+    contagens = dados.get("contagens") or {}
+    parametros = dados.get("parametros") or {}
+    partes = [f"{contagens.get('niveis', 0)} níveis da TRU"]
+    if parametros.get("brap"):
+        partes.append(f"BRAP {str(round(float(parametros['brap']), 2)).replace('.', ',')} €")
+    partes.append(f"{contagens.get('carreiras', 0)} carreiras")
+    partes.append(f"{contagens.get('dirigentes', 0)} cargos dirigentes")
+    return f"Quadro da DGAEP de {dados.get('ano')}: " + ", ".join(partes) + "."
+
 
 #: Filtros de uma pesquisa (municípios) que se podem congelar numa página.
 FILTROS_PESQUISA: Dict[str, Any] = {
@@ -123,7 +170,7 @@ BLOCK_TYPES: List[Dict[str, Any]] = [
     {"id": "texto", "label": "Texto", "hint": "Parágrafos em Markdown", "icon": "AlignLeft"},
     {"id": "imagem", "label": "Imagem", "hint": "Uma imagem com legenda", "icon": "Image"},
     {"id": "galeria", "label": "Galeria", "hint": "Conjunto de imagens em grelha", "icon": "Images"},
-    {"id": "destaques", "label": "Cartões", "hint": "Cartões de destaque em grelha", "icon": "LayoutGrid"},
+    {"id": "destaques", "label": "Cartões", "hint": "Cartões de destaque em grelha, com ícone opcional", "icon": "LayoutGrid"},
     {"id": "numeros", "label": "Números", "hint": "Indicadores em tiras (valor, etiqueta e nota)", "icon": "Gauge"},
     {"id": "cta", "label": "Chamada à ação", "hint": "Faixa com botão", "icon": "MousePointerClick"},
     {"id": "faq", "label": "Perguntas frequentes", "hint": "Perguntas e respostas", "icon": "HelpCircle"},
@@ -590,7 +637,7 @@ def _summary(entity: str, doc: Dict[str, Any]) -> Dict[str, Any]:
     # `entity_label` e não `kind`: nos conteúdos e nos media `kind` é um campo real.
     item["entity"] = entity
     item["entity_label"] = ENTITY_LABELS.get(entity, entity)
-    if entity in ("pages", "municipios", "pesquisas"):
+    if entity in ("pages", "municipios", "pesquisas", "remuneracoes"):
         item["blocks_count"] = len(doc.get("blocks") or [])
     if entity == "posts":
         item["reading_minutes"] = doc.get("reading_minutes") or reading_minutes(doc.get("markdown") or "")
@@ -779,6 +826,32 @@ def pesquisa_path(doc: Dict[str, Any]) -> str:
     return f"/pesquisa/{slug}" if slug else ""
 
 
+def remuneracao_by_slug(slug: str, published_only: bool = True) -> Optional[Dict[str, Any]]:
+    """Página do modelo de remunerações pelo endereço (`/remuneracoes/{slug}`)."""
+    store = _load()
+    wanted = (slug or "").strip().lower()
+    for item in store["remuneracoes"]:
+        if published_only and item.get("status") != "publicado":
+            continue
+        if str(item.get("slug") or "").lower() == wanted:
+            return copy.deepcopy(item)
+    return None
+
+
+def published_remuneracoes() -> List[Dict[str, Any]]:
+    """Páginas do modelo de remunerações publicadas (mais recentes primeiro)."""
+    store = _load()
+    items = [item for item in store["remuneracoes"] if item.get("status") == "publicado"]
+    items.sort(key=lambda item: str(item.get("published_at") or item.get("created_at") or ""), reverse=True)
+    return copy.deepcopy(items)
+
+
+def remuneracao_path(doc: Dict[str, Any]) -> str:
+    """Caminho público de uma página do modelo (`/remuneracoes/{slug}`)."""
+    slug = str(doc.get("slug") or "").strip("/")
+    return f"/remuneracoes/{slug}" if slug else ""
+
+
 def media_url(media_id: Optional[str]) -> str:
     return f"/cms/media/{media_id}/raw" if media_id else ""
 
@@ -854,6 +927,24 @@ def _normalise(entity: str, payload: Dict[str, Any], existing: Optional[Dict[str
         doc["logo_id"] = pick("logo_id") or None
         doc["cor"] = _cor(pick("cor"))
         doc["excerpt"] = str(pick("excerpt") or "") or _excerpt(doc["intro"] or doc["descricao_filtros"])
+
+    if entity == "remuneracoes":
+        # Página do **modelo de remunerações da Administração Pública**: o ano do
+        # quadro da DGAEP fica no documento e o `dados` é a fotografia desse ano
+        # (níveis da TRU, carreiras, dirigentes e base legal), lida quando o
+        # editor a mandou ler (`POST /cms/remuneracoes/{id}/modelo`). O que a
+        # página mostra escolhe-se aqui; a marca é do documento.
+        dados = pick("dados")
+        doc["ano"] = _ano_valido(pick("ano", existing.get("ano")))
+        doc["intro"] = str(pick("intro") or "")
+        doc["blocks"] = _normalise_blocks(pick("blocks", []))
+        doc["dados"] = copy.deepcopy(dados) if isinstance(dados, dict) else {}
+        doc["mostrar"] = _mostrar_da_pagina(pick("mostrar"))
+        doc["destacar"] = [str(valor) for valor in (pick("destacar", []) or []) if str(valor).strip()][:12]
+        doc["capa_id"] = pick("capa_id") or None
+        doc["logo_id"] = pick("logo_id") or None
+        doc["cor"] = _cor(pick("cor"))
+        doc["excerpt"] = str(pick("excerpt") or "") or _excerpt(doc["intro"] or _resumo_do_modelo(doc["dados"]))
 
     if entity == "contactos":
         # Mensagens do formulário do site: dados pessoais de quem escreve, por
@@ -1017,6 +1108,7 @@ def _id_prefix(entity: str) -> str:
         "posts": "post",
         "municipios": "mun",
         "pesquisas": "pes",
+        "remuneracoes": "rem",
         "contents": "ctd",
         "media": "med",
         "categories": "cat",
@@ -1336,6 +1428,13 @@ def media_usage(media_id: str) -> List[Dict[str, str]]:
             usage.append({"entity": "pesquisas", "id": pesquisa["id"], "title": pesquisa.get("title") or "", "where": "logótipo"})
         if pesquisa.get("seo", {}).get("image_id") == media_id:
             usage.append({"entity": "pesquisas", "id": pesquisa["id"], "title": pesquisa.get("title") or "", "where": "SEO"})
+    for modelo in store["remuneracoes"]:
+        if modelo.get("capa_id") == media_id:
+            usage.append({"entity": "remuneracoes", "id": modelo["id"], "title": modelo.get("title") or "", "where": "capa"})
+        if modelo.get("logo_id") == media_id:
+            usage.append({"entity": "remuneracoes", "id": modelo["id"], "title": modelo.get("title") or "", "where": "logótipo"})
+        if modelo.get("seo", {}).get("image_id") == media_id:
+            usage.append({"entity": "remuneracoes", "id": modelo["id"], "title": modelo.get("title") or "", "where": "SEO"})
     if (store["settings"].get("seo") or {}).get("image_id") == media_id:
         usage.append({"entity": "settings", "id": "settings", "title": "Definições do site", "where": "imagem"})
     return usage
@@ -1620,6 +1719,7 @@ def overview() -> Dict[str, Any]:
     pages = counts("pages")
     posts = counts("posts")
     municipios = counts("municipios")
+    remuneracoes = counts("remuneracoes")
     pesquisas = counts("pesquisas")
     published_pages = [page for page in store["pages"] if page.get("status") == "publicado"]
     published_posts = [post for post in store["posts"] if post.get("status") == "publicado"]
@@ -1651,6 +1751,11 @@ def overview() -> Dict[str, Any]:
         "posts": {"total": len(store["posts"]), "by_status": posts, "published": posts["publicado"]},
         "municipios": {"total": len(store["municipios"]), "by_status": municipios, "published": municipios["publicado"]},
         "pesquisas": {"total": len(store["pesquisas"]), "by_status": pesquisas, "published": pesquisas["publicado"]},
+        "remuneracoes": {
+            "total": len(store["remuneracoes"]),
+            "by_status": remuneracoes,
+            "published": remuneracoes["publicado"],
+        },
         "contents": len(store["contents"]),
         "media": {"total": len(store["media"]), "bytes": sum(int(item.get("size") or 0) for item in store["media"])},
         "categories": len(store["categories"]),
@@ -1812,7 +1917,7 @@ def _seed(store: Dict[str, Any]) -> None:
             "menu_order": 6,
             "menu_label": "",
             "excerpt": "Como trabalhamos os dados abertos e o que pode esperar da plataforma.",
-            "blocks": editorial.conteudo_da_sobre(),
+            "blocks": editorial.conteudo_da_sobre(media),
             "seo": editorial.SOBRE_SEO,
             "created_at": now,
             "updated_at": now,

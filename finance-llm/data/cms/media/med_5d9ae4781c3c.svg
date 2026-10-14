@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 440" width="1100" height="440" role="img" aria-label="Índice de preço por loja, com 100 igual à média do estudo">
+  <rect width="1100" height="440" fill="#f1f5f9"/>
+  <text x="60" y="52" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#64748b">Índice de preço · 100 = média do estudo</text>
+  <path d="M580 74 L580 340" stroke="#0f172a" stroke-width="2" stroke-dasharray="6 6"/>
+  <text x="580" y="66" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#0f172a" text-anchor="middle">média</text>
+  <g font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#0f172a">
+    <text x="60" y="105">Loja A</text>
+    <text x="60" y="157">Loja B</text>
+    <text x="60" y="209">Loja C</text>
+    <text x="60" y="261">Loja D</text>
+    <text x="60" y="313">Loja E</text>
+  </g>
+  <g>
+    <rect x="300" y="87" width="168" height="20" rx="10" fill="#94a3b8"/>
+    <rect x="300" y="139" width="336" height="20" rx="10" fill="#94a3b8"/>
+    <rect x="300" y="191" width="112" height="20" rx="10" fill="#0ea5a4"/>
+    <rect x="300" y="243" width="448" height="20" rx="10" fill="#94a3b8"/>
+    <rect x="300" y="295" width="266" height="20" rx="10" fill="#94a3b8"/>
+  </g>
+  <g font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#475569">
+    <text x="480" y="102">92</text>
+    <text x="648" y="154">104</text>
+    <text x="424" y="206" font-weight="700" fill="#0f766e">88 · mais barato</text>
+    <text x="760" y="258">112</text>
+    <text x="578" y="310">99</text>
+  </g>
+  <g font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#94a3b8">
+    <text x="300" y="344">80</text>
+    <text x="580" y="344" text-anchor="middle">100</text>
+    <text x="860" y="344" text-anchor="end">120</text>
+  </g>
+  <rect x="40" y="372" width="1020" height="44" rx="14" fill="#0f172a"/>
+  <text x="550" y="400" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#e2e8f0" text-anchor="middle">Melhor preço assinalado · data de recolha à vista · preço publicado não é preço final</text>
+</svg>
