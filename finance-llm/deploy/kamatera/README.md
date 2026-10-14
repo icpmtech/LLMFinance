@@ -670,16 +670,17 @@ forma, enviar *com* o `From` da `support@` a partir da `suporte@` funciona porqu
 `SPOOF_PROTECTION` esta desligado; com ele ligado teria de ser o mesmo endereco.
 
 As palavras-passe destas caixas **nao entram no repositorio**: ficam no `.env`
-(`MAIL_POSTMASTER_PASSWORD`, `MAIL_DMARC_PASSWORD`, `MAIL_SUPORTE_PASSWORD`), que
-e o unico sitio onde vivem. Nenhum codigo as le — sao o registo do operador para
-entrar nas caixas por IMAP. A `suporte@` e a excecao: tambem fica registada em
-**Administracao → Correio** (Correio da plataforma), que guarda as credenciais no
-indice (`finance_mail_accounts`) para a aplicacao poder sincronizar as pastas e
-enviar em nome dela. Sao, por isso, dois sitios com a mesma credencial, por duas
-razoes: no servidor de correio vive o correio; no indice, o que a aplicacao le.
-Para as criar a partir da propria aplicacao (sem passar pelo `setup`), a
-Administracao → Correio aceita o endereco e a palavra-passe e testa-os antes de
-gravar — o que nao dispensa o `setup email add`: a **caixa** e sempre do DMS.
+(`MAIL_POSTMASTER_PASSWORD`, `MAIL_DMARC_PASSWORD`, `MAIL_SUPORTE_PASSWORD`).
+Nenhum codigo le estas chaves — sao o registo do operador para entrar nas caixas
+por IMAP, que e como se leem os bounces e os relatorios. A `suporte@` e a excecao:
+tambem fica registada em **Administracao → Correio** (Correio da plataforma), que
+guarda as credenciais no indice (`finance_mail_accounts`) para a aplicacao poder
+sincronizar as pastas e enviar em nome dela. Sao, por isso, dois sitios com a mesma
+credencial, por duas razoes: no servidor de correio vive o correio; no indice, o
+que a aplicacao le. Para registar a caixa sem passar pelo `setup` (o caminho
+normal, dentro da aplicacao), a Administracao → Correio aceita o endereco e a
+palavra-passe e testa-os antes de gravar — o que **nao dispensa** o
+`setup email add`: a caixa e sempre do DMS, e sem ela nada disto funciona.
 
 ### Validado localmente, antes de ir para a VM
 
