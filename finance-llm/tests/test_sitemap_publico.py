@@ -74,6 +74,14 @@ def test_robots_da_raiz_aponta_para_o_indice_de_sitemaps() -> None:
     assert "Sitemap: https://sabemos.studio/sitemap.xml" in robots
 
 
+def test_robots_da_raiz_declara_tambem_os_tres_sitemaps() -> None:
+    """O índice é o caminho principal, mas cada sitemap vai declarado: se o índice
+    falhar, os motores ainda têm por onde encontrar as páginas."""
+    robots = (PUBLIC / "robots.txt").read_text(encoding="utf-8")
+    for sitemap in ("sitemap-app.xml", "site/sitemap.xml", "loja/sitemap.xml"):
+        assert f"Sitemap: https://sabemos.studio/{sitemap}" in robots
+
+
 def test_robots_da_raiz_deixa_passar_o_site_e_a_loja() -> None:
     robots = (PUBLIC / "robots.txt").read_text(encoding="utf-8")
     assert "Allow: /site/" in robots
