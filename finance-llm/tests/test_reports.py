@@ -35,11 +35,21 @@ def _pedido(package_id: str = "financeiro-resumido", **extra):
 
 # ------------------------------------------------------------------ catálogo
 def test_catalogo_por_omissao(loja):
-    """Os quatro pacotes anunciados e o número MB Way configurado de origem."""
+    """Os pacotes anunciados (incluindo o do benchmark, automático) e o MB Way de origem."""
     ids = [item["id"] for item in store.catalogue(only_active=True)]
-    assert ids == ["corporativo", "financeiro-resumido", "financeiro-detalhado", "concorrencia"]
+    assert ids == ["corporativo", "benchmark", "financeiro-resumido", "financeiro-detalhado", "concorrencia"]
     precos = {item["id"]: item["price"] for item in store.catalogue()}
-    assert precos == {"corporativo": 0.0, "financeiro-resumido": 18.0, "financeiro-detalhado": 24.0, "concorrencia": 130.0}
+    assert precos == {
+        "corporativo": 0.0,
+        "financeiro-resumido": 18.0,
+        "financeiro-detalhado": 24.0,
+        "concorrencia": 130.0,
+        "benchmark": 14.9,
+    }
+    # O do benchmark é o único produzido pela plataforma (sem passar pela equipa).
+    automaticos = {item["id"]: item.get("auto") for item in store.catalogue()}
+    assert automaticos["benchmark"] == "benchmark"
+    assert [chave for chave, valor in automaticos.items() if valor] == ["benchmark"]
     assert store.settings()["mbway_number"] == "919520386"
     # A chave de API nunca sai na vista pública.
     assert "mbway_api_key" not in store.public_settings()
