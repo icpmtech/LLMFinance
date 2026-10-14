@@ -543,6 +543,30 @@ perdem-se os metadados por rota, o `noindex` das rotas privadas **e** o 404
 `SEGMENTOS_DA_APP` com as rotas declaradas em `chat-ui/src/App.tsx`: uma rota nova
 fora dessa lista faz o backend devolver 404 ao recarregar a página.
 
+### SEO da loja
+
+A loja (`/loja/…`) e o site sao HTML gerado pelo backend, por isso o SEO e
+servido no `<head>` de cada pagina. As definicoes da loja (**Loja → Definicoes**)
+tem tres campos que passaram a valer:
+
+* **Endereco publico (base)** — origem absoluta usada nas canonicas, no `og:url`,
+  no JSON-LD e no sitemap. Sem ele a loja usa `DEFAULT_BASE_URL`
+  (`api/shop_render.py`), que e o mesmo do sitemap e do `robots.txt`;
+* **SEO → titulo e descricao** — substituem o nome da loja e a descricao no
+  `<title>` e na `<meta name="description">` da montra e das listas;
+* **SEO → palavras-chave** — vao na `<meta name="keywords">`.
+
+Cada produto e cada categoria tem o seu proprio bloco de SEO (na ficha do item):
+titulo, descricao, palavras-chave e **`noindex`** — um item com `noindex` sai com
+`noindex, nofollow` **e** desaparece do `sitemap.xml`, como no CMS. Isto estava
+guardado e ignorado ate agora (o editor gravava os campos e a montra continuava a
+usar o nome do produto), e `tests/test_loja_seo.py` e o que o impede de voltar.
+
+O que os motores pedem e ja sai assim: URLs **absolutos** no `og:image`, no
+`Store`, no `Product` (`image`, `offers.url`) e no `ItemList`; `BreadcrumbList`
+nas fichas de produto e nas categorias; `brand` no produto (para resultados de
+produto); e `<lastmod>` por produto no sitemap da loja.
+
 O backend precisa do build da SPA dentro da imagem: o `.dockerignore` exclui
 `chat-ui/dist`, e os dois `Dockerfile.backend*` copiam `_frontend_dist` para
 `/app/chat-ui/dist`. Sem isso, o stack local nao se queixava (o compose monta

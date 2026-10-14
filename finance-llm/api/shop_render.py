@@ -18,7 +18,7 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from urllib.parse import quote
 
 import markdown as markdown_lib
@@ -66,6 +66,49 @@ def _base_url(settings: Optional[Dict[str, Any]] = None) -> str:
     """Origem absoluta da loja, das definições ou da canónica do projeto."""
     settings = settings or store.get_settings()
     return str(settings.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
+
+
+def _url_absoluto(url: Any, base: str) -> str:
+    """URL absoluto para o que os motores exigem assim (`og:image`, JSON-LD)."""
+    valor = str(url or "")
+    if not valor:
+        return ""
+    return valor if valor.startswith("http") else f"{base}{valor}"
+
+
+def _seo_de(origem: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Campos de SEO de um documento (produto, categoria) ou das definições.
+
+    Existe porque os campos estavam a ser **guardados e ignorados**: o editor
+    gravava `seo.title`/`description`/`keywords`/`noindex` (nas definições e em
+    cada produto e categoria) e a montra continuava a usar o nome do produto e o
+    `description` da loja. Isto é o que os lê.
+    """
+    seo = (origem or {}).get("seo") or {}
+    palavras = seo.get("keywords") or []
+    if isinstance(palavras, str):
+        palavras = [parte for parte in palavras.replace(";", ",").split(",")]
+    return {
+        "title": str(seo.get("title") or "").strip(),
+        "description": str(seo.get("description") or "").strip(),
+        "keywords": [str(palavra).strip() for palavra in palavras if str(palavra).strip()],
+        "noindex": store._bool(seo.get("noindex")),  # noqa: SLF001 - mesma leitura do store
+    }
+
+
+def _breadcrumbs(itens: List[tuple], base: str) -> Dict[str, Any]:
+    """`BreadcrumbList` a partir de pares (nome, caminho) — o que a página mostra.
+
+    O último nível vai **sem `item`**: é o que a Google recomenda (a página actual
+    não precisa de se apontar a si própria) e evita um URL a mais no resultado.
+    """
+    elementos: List[Dict[str, Any]] = []
+    for posicao, (nome, caminho) in enumerate(itens, start=1):
+        elemento: Dict[str, Any] = {"@type": "ListItem", "position": posicao, "name": nome}
+        if caminho:
+            elemento["item"] = caminho if caminho.startswith("http") else f"{base}{caminho}"
+        elementos.append(elemento)
+    return {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": elementos}
 
 
 # --------------------------------------------------------------------------
@@ -440,6 +483,13 @@ OFFLINE_PATH = "/loja/offline"
 #: (ou o `_SW_TEMPLATE`), subir a versão.
 PWA_CACHE_PREFIX = "sabemos-loja-"
 PWA_SW_VERSION = "v1"
+
+#: Ícone grande (512, sem máscara) para o `image` do `Store` em JSON-LD: o Google
+#: usa-o na ficha da loja, e um URL relativo não serve para isso.
+_ICONE_LOJA = PWA_ICON_PATH + next(
+    (nome for nome, dados in PWA_ICONS.items() if dados.get("purpose") == "any" and "512" in nome),
+    "pwa-icone-512.png",
+)
 
 
 def _pwa_cores(settings: Dict[str, Any]) -> Dict[str, str]:
@@ -1342,7 +1392,7 @@ def _layout(
     og_type: str = "website",
     og_image: str = "",
     keywords: Optional[List[str]] = None,
-    json_ld: Optional[Dict[str, Any]] = None,
+    json_ld: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = None,
     preview: bool = False,
     noindex: bool = False,
     theme: Optional[Dict[str, Any]] = None,
@@ -1370,7 +1420,11 @@ def _layout(
     if keywords:
         meta.append(f'<meta name="keywords" content="{_esc(", ".join(keywords))}">')
     if json_ld:
-        meta.append(f'<script type="application/ld+json">{json.dumps(json_ld, ensure_ascii=False)}</script>')
+        # Um `<script>` por objecto (e não um array): é o formato que o Google
+        # espera, e cada bloco fica legível por si no validador de dados
+        # estruturados.
+        for bloco in json_ld if isinstance(json_ld, list) else [json_ld]:
+            meta.append(f'<script type="application/ld+json">{json.dumps(bloco, ensure_ascii=False)}</script>')
     analytics = str(settings.get("analytics_id") or "").strip()
     if analytics and not preview:
         meta.append(
@@ -1668,23 +1722,29 @@ def render_home(*, settings: Optional[Dict[str, Any]] = None, theme: Optional[Di
             title=str(settings.get("store_name") or "Loja"),
             description=str(settings.get("description") or ""),
         )
+    base = _base_url(settings)
+    seo = _seo_de(settings)
     json_ld = {
         "@context": "https://schema.org",
         "@type": "Store",
         "name": settings.get("store_name"),
-        "description": settings.get("description"),
-        "url": "/loja",
+        "description": seo["description"] or settings.get("description"),
+        "url": f"{base}/loja",
+        "image": f"{base}{_ICONE_LOJA}",
     }
     return _layout(
-        title=str(settings.get("store_name") or "Loja"),
-        description=str(settings.get("description") or ""),
+        title=seo["title"] or str(settings.get("store_name") or "Loja"),
+        description=seo["description"] or str(settings.get("description") or ""),
         body=body,
         settings=settings,
         theme=theme,
         products=store.public_products(limit=400),
         shipping=store.public_shipping_methods(),
         canonical="/loja",
+        og_image=_url_absoluto(_ICONE_LOJA, base),
+        keywords=seo["keywords"],
         json_ld=json_ld,
+        noindex=seo["noindex"],
         preview=preview,
     )
 
@@ -1786,25 +1846,34 @@ def render_catalogue(
     canonical = current_path or (f"/loja/categoria/{current_category.get('slug')}" if current_category else "/loja/produtos")
     if page > 1:
         canonical += f"?pagina={page}"
+    base = _base_url(settings)
+    # Numa categoria vale o SEO da categoria; nas listas, o da loja.
+    seo = _seo_de(current_category) if current_category else _seo_de(settings)
     json_ld = {
         "@context": "https://schema.org",
         "@type": "ItemList",
         "name": title,
         "numberOfItems": len(products),
         "itemListElement": [
-            {"@type": "ListItem", "position": index + 1, "url": str(product.get("url") or ""), "name": product.get("name")}
+            {"@type": "ListItem", "position": index + 1, "url": f"{base}{product.get('url') or ''}", "name": product.get("name")}
             for index, product in enumerate(products[:20])
         ],
     }
+    migalhas = [("Loja", "/loja")]
+    if current_category:
+        migalhas.append(("Produtos", "/loja/produtos"))
+        migalhas.append((str(current_category.get("name") or title), ""))
     return _layout(
-        title=title,
-        description=description or str(settings.get("description") or ""),
+        title=seo["title"] or title,
+        description=seo["description"] or description or str(settings.get("description") or ""),
         body=body,
         settings=settings,
         products=all_products if all_products is not None else products,
         shipping=store.public_shipping_methods(),
         canonical=canonical,
-        json_ld=json_ld,
+        keywords=seo["keywords"],
+        json_ld=[json_ld, _breadcrumbs(migalhas, base)] if current_category else json_ld,
+        noindex=seo["noindex"],
     )
 
 
@@ -1822,6 +1891,7 @@ def render_product(
     reviews = reviews if reviews is not None else store.approved_reviews(str(product.get("id")))
     related = related if related is not None else store.related_products(product)
     images = store.image_urls(product) or [""]
+    base = _base_url(settings)
     gallery = (
         '<div class="gallery"><div class="main" id="loja-imagem">'
         + _image(images[0], str(product.get("name") or ""), str(product.get("name") or ""), priority=True)
@@ -1905,13 +1975,14 @@ def render_product(
         "name": product.get("name"),
         "sku": product.get("sku"),
         "description": product.get("short_description") or store.text_excerpt(str(product.get("description") or "")),
-        "image": [str(url) for url in images if url],
+        "image": [_url_absoluto(url, base) for url in images if url],
+        "brand": {"@type": "Brand", "name": str(settings.get("store_name") or "Loja")},
         "offers": {
             "@type": "Offer",
             "price": store.money(product.get("price")),
             "priceCurrency": settings.get("currency") or "EUR",
             "availability": "https://schema.org/InStock" if product.get("available") else "https://schema.org/OutOfStock",
-            "url": f"/loja/produto/{product.get('slug')}",
+            "url": f"{base}/loja/produto/{product.get('slug')}",
         },
     }
     if store._int(product.get("rating_count")):
@@ -1920,17 +1991,21 @@ def render_product(
             "ratingValue": store.money(product.get("rating_avg")),
             "reviewCount": store._int(product.get("rating_count")),
         }
+    seo = _seo_de(product)
     return _layout(
-        title=f'{product.get("name")} — {_euros(product.get("price"))}',
-        description=str(product.get("short_description") or store.text_excerpt(str(product.get("description") or ""))),
+        title=seo["title"] or f'{product.get("name")} — {_euros(product.get("price"))}',
+        description=seo["description"]
+        or str(product.get("short_description") or store.text_excerpt(str(product.get("description") or ""))),
         body=body,
         settings=settings,
         products=[store.product_payload(product)] + related,
         shipping=store.public_shipping_methods(),
         canonical=f"/loja/produto/{product.get('slug')}",
         og_type="product",
-        og_image=images[0] if images and images[0] else "",
-        json_ld=json_ld,
+        og_image=_url_absoluto(images[0], base) if images and images[0] else "",
+        keywords=seo["keywords"],
+        json_ld=[json_ld, _breadcrumbs([("Loja", "/loja"), ("Produtos", "/loja/produtos"), (str(product.get("name") or ""), "")], base)],
+        noindex=seo["noindex"],
     )
 
 
@@ -2136,15 +2211,24 @@ def render_not_found(*, settings: Optional[Dict[str, Any]] = None, message: str 
 # --------------------------------------------------------------------------
 def render_sitemap(*, settings: Optional[Dict[str, Any]] = None) -> str:
     base = _base_url(settings)
-    urls = ["/loja", "/loja/produtos"]
+    # O `lastmod` diz ao rastreador o que mudou desde a última visita — sem ele,
+    # uma loja que muda de preços e descrições é recrawleada toda por igual.
+    entradas: List[tuple] = [("/loja", None), ("/loja/produtos", None)]
     for category in store.public_categories():
-        urls.append(f'/loja/categoria/{category.get("slug")}')
+        if _seo_de(category)["noindex"]:
+            continue
+        entradas.append((f'/loja/categoria/{category.get("slug")}', category.get("updated_at") or category.get("created_at")))
     for product in store.public_products(limit=1000):
-        urls.append(str(product.get("url")))
-    entries = "".join(f"<url><loc>{_esc(base + url)}</loc></url>" for url in urls)
+        if _seo_de(product)["noindex"]:
+            continue
+        entradas.append((str(product.get("url")), product.get("updated_at") or product.get("created_at")))
+    itens = []
+    for url, actualizado in entradas:
+        lastmod = f"<lastmod>{str(actualizado)[:10]}</lastmod>" if actualizado else ""
+        itens.append(f"<url><loc>{_esc(base + url)}</loc>{lastmod}</url>")
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + entries + "</urlset>"
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join(itens) + "</urlset>"
     )
 
 
