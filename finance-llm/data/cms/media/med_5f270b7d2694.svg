@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 1030" width="440" height="1030" role="img" aria-label="Arquitetura do IQ OS: dados abertos, ontologia de entidades e produtos">
+  <rect width="440" height="1030" fill="#f1f5f9"/>
+  <text x="16" y="30" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#64748b" letter-spacing="1.4">DADOS ABERTOS</text>
+  <g>
+    <rect x="16" y="44" width="408" height="58" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="36" y="68" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Portal BASE</text>
+    <text x="36" y="88" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b">contratos públicos</text>
+  </g>
+  <g>
+    <rect x="16" y="112" width="408" height="58" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="36" y="136" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">INE</text>
+    <text x="36" y="156" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b">finanças locais</text>
+  </g>
+  <g>
+    <rect x="16" y="180" width="408" height="58" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="36" y="204" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Registos de empresas</text>
+    <text x="36" y="224" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b">empresas e pessoas</text>
+  </g>
+  <g>
+    <rect x="16" y="248" width="408" height="58" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="36" y="272" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Boletins e diários</text>
+    <text x="36" y="292" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b">atos oficiais publicados</text>
+  </g>
+  <g>
+    <rect x="16" y="316" width="408" height="58" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="36" y="340" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Plataformas de contratação</text>
+    <text x="36" y="360" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b">Espanha e França</text>
+  </g>
+  <path d="M220 374 L220 392" stroke="#94a3b8" stroke-width="2.5"/>
+  <path d="M213 390 l7 10 7 -10" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="16" y="406" width="408" height="290" rx="20" fill="#0f172a"/>
+  <text x="36" y="438" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#7dd3fc" letter-spacing="1.4">IQ OS · ONTOLOGIA DE ENTIDADES</text>
+  <g>
+    <rect x="36" y="452" width="368" height="56" rx="14" fill="#13233b" stroke="#2b4565"/>
+    <text x="56" y="476" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">Empresas</text>
+    <text x="56" y="496" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#94a3b8">NIF · sócios · gerentes</text>
+  </g>
+  <g>
+    <rect x="36" y="516" width="368" height="56" rx="14" fill="#13233b" stroke="#2b4565"/>
+    <text x="56" y="540" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">Municípios</text>
+    <text x="56" y="560" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#94a3b8">despesa · contratos</text>
+  </g>
+  <g>
+    <rect x="36" y="580" width="368" height="56" rx="14" fill="#13233b" stroke="#2b4565"/>
+    <text x="56" y="604" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">Pessoas</text>
+    <text x="56" y="624" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#94a3b8">cargos · benefício efetivo</text>
+  </g>
+  <rect x="36" y="644" width="368" height="40" rx="14" fill="#0ea5a4"/>
+  <text x="220" y="670" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">Ligação por identidade, não por nome</text>
+  <path d="M220 696 L220 714" stroke="#94a3b8" stroke-width="2.5"/>
+  <path d="M213 712 l7 10 7 -10" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="16" y="740" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#64748b" letter-spacing="1.4">PRODUTOS</text>
+  <g>
+    <rect x="16" y="754" width="408" height="58" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <rect x="36" y="770" width="26" height="26" rx="8" fill="#0ea5a4"/>
+    <text x="76" y="790" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Fichas por entidade</text>
+  </g>
+  <g>
+    <rect x="16" y="822" width="408" height="58" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <rect x="36" y="838" width="26" height="26" rx="8" fill="#38bdf8"/>
+    <text x="76" y="858" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Indicadores e comparações</text>
+  </g>
+  <g>
+    <rect x="16" y="890" width="408" height="58" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <rect x="36" y="906" width="26" height="26" rx="8" fill="#6366f1"/>
+    <text x="76" y="926" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Investigação assistida</text>
+  </g>
+  <g>
+    <rect x="16" y="958" width="408" height="58" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <rect x="36" y="974" width="26" height="26" rx="8" fill="#f59e0b"/>
+    <text x="76" y="994" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Site e blog</text>
+  </g>
+</svg>

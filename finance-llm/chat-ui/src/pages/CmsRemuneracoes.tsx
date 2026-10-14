@@ -537,4 +537,5 @@ export function CmsRemuneracoesPanel({
   );
 }
 
-/** Botão de pré-visualização usado no cabeçalho das listagens 
+/** Botão de pré-visualização usado no cabeçalho das listagens (mantém o ícone). */
+export const CmsRemuneracoesPreviewIcon = Eye;

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 520" width="440" height="520" role="img" aria-label="Índice de preço por loja, com 100 igual à média do estudo">
+  <rect width="440" height="520" fill="#f1f5f9"/>
+  <text x="16" y="34" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#64748b">Índice de preço · 100 = média do estudo</text>
+  <path d="M220 56 L220 418" stroke="#0f172a" stroke-width="2" stroke-dasharray="6 6"/>
+  <text x="220" y="48" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#0f172a" text-anchor="middle">média</text>
+  <g font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a">
+    <text x="16" y="80">Loja A</text>
+    <text x="16" y="152">Loja B</text>
+    <text x="16" y="224">Loja C</text>
+    <text x="16" y="296">Loja D</text>
+    <text x="16" y="368">Loja E</text>
+  </g>
+  <g font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#475569">
+    <text x="424" y="80" text-anchor="end">92</text>
+    <text x="424" y="152" text-anchor="end">104</text>
+    <text x="424" y="224" text-anchor="end" fill="#0f766e" font-weight="700">88 · mais barato</text>
+    <text x="424" y="296" text-anchor="end">112</text>
+    <text x="424" y="368" text-anchor="end">99</text>
+  </g>
+  <g>
+    <rect x="16" y="90" width="408" height="20" rx="10" fill="#e2e8f0"/>
+    <rect x="16" y="90" width="122" height="20" rx="10" fill="#94a3b8"/>
+    <rect x="16" y="162" width="408" height="20" rx="10" fill="#e2e8f0"/>
+    <rect x="16" y="162" width="245" height="20" rx="10" fill="#94a3b8"/>
+    <rect x="16" y="234" width="408" height="20" rx="10" fill="#e2e8f0"/>
+    <rect x="16" y="234" width="82" height="20" rx="10" fill="#0ea5a4"/>
+    <rect x="16" y="306" width="408" height="20" rx="10" fill="#e2e8f0"/>
+    <rect x="16" y="306" width="326" height="20" rx="10" fill="#94a3b8"/>
+    <rect x="16" y="378" width="408" height="20" rx="10" fill="#e2e8f0"/>
+    <rect x="16" y="378" width="194" height="20" rx="10" fill="#94a3b8"/>
+  </g>
+  <g font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#94a3b8">
+    <text x="16" y="434">80</text>
+    <text x="220" y="434" text-anchor="middle">100</text>
+    <text x="424" y="434" text-anchor="end">120</text>
+  </g>
+  <rect x="16" y="452" width="408" height="48" rx="14" fill="#0f172a"/>
+  <text x="220" y="481" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#e2e8f0" text-anchor="middle">Melhor preço assinalado · data de recolha à vista</text>
+</svg>

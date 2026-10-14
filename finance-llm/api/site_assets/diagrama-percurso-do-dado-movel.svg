@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 920" width="440" height="920" role="img" aria-label="Percurso do dado: recolha, normalização, cálculo e evidência">
+  <rect width="440" height="920" fill="#f1f5f9"/>
+  <g>
+    <rect x="16" y="24" width="408" height="196" rx="18" fill="#ffffff" stroke="#dbe3ec"/>
+    <circle cx="52" cy="70" r="20" fill="#0ea5a4"/>
+    <text x="52" y="78" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+    <text x="88" y="78" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#0f172a">Recolha</text>
+    <text x="36" y="128" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Lemos dados abertos:</text>
+    <text x="36" y="156" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Portal BASE, INE e registos.</text>
+    <rect x="36" y="184" width="72" height="9" rx="4.5" fill="#0ea5a4"/>
+  </g>
+  <g>
+    <rect x="16" y="236" width="408" height="196" rx="18" fill="#ffffff" stroke="#dbe3ec"/>
+    <circle cx="52" cy="282" r="20" fill="#14b8a6"/>
+    <text x="52" y="290" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+    <text x="88" y="290" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#0f172a">Normalização</text>
+    <text x="36" y="340" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Ligamos entidades pelo NIF:</text>
+    <text x="36" y="368" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">a mesma empresa é a mesma.</text>
+    <rect x="36" y="396" width="104" height="9" rx="4.5" fill="#14b8a6"/>
+  </g>
+  <g>
+    <rect x="16" y="448" width="408" height="196" rx="18" fill="#ffffff" stroke="#dbe3ec"/>
+    <circle cx="52" cy="494" r="20" fill="#38bdf8"/>
+    <text x="52" y="502" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
+    <text x="88" y="502" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#0f172a">Cálculo</text>
+    <text x="36" y="552" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Indicadores com critério:</text>
+    <text x="36" y="580" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">mediana, percentis e rácios.</text>
+    <rect x="36" y="608" width="136" height="9" rx="4.5" fill="#38bdf8"/>
+  </g>
+  <g>
+    <rect x="16" y="660" width="408" height="196" rx="18" fill="#ffffff" stroke="#dbe3ec"/>
+    <circle cx="52" cy="706" r="20" fill="#6366f1"/>
+    <text x="52" y="714" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#ffffff" text-anchor="middle">4</text>
+    <text x="88" y="714" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#0f172a">Evidência</text>
+    <text x="36" y="764" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Cada valor com a fonte:</text>
+    <text x="36" y="792" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">o registo e a sua data.</text>
+    <rect x="36" y="820" width="168" height="9" rx="4.5" fill="#6366f1"/>
+  </g>
+  <rect x="16" y="872" width="408" height="44" rx="14" fill="#0f172a"/>
+  <text x="220" y="899" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e2e8f0" text-anchor="middle">Fonte nomeada · Datada · Conta refazível</text>
+</svg>

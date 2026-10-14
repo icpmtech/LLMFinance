@@ -1810,6 +1810,29 @@ def search(query: str, limit: int = 30) -> Dict[str, Any]:
 # --------------------------------------------------------------------------
 # Imagens de marca
 # --------------------------------------------------------------------------
+def _dimensoes_svg(blob: bytes) -> Dict[str, int]:
+    """Largura e altura declaradas num SVG (vazio se não as tiver).
+
+    Ficam na ficha do media para o site poder reservar o espaço da figura antes
+    de ela carregar: sem isto, num telefone a página salta inteira quando a
+    imagem aparece.
+    """
+    cabeca = blob[:800].decode("utf-8", "ignore")
+    tag = re.search(r"<svg\b[^>]*>", cabeca, re.I)
+    if not tag:
+        return {}
+    largura = re.search(r'\bwidth="(\d+(?:\.\d+)?)', tag.group(0), re.I)
+    altura = re.search(r'\bheight="(\d+(?:\.\d+)?)', tag.group(0), re.I)
+    if largura and altura:
+        return {"width": int(float(largura.group(1))), "height": int(float(altura.group(1)))}
+    vista = re.search(
+        r'viewBox="[-\d.]+[ ,]+[-\d.]+[ ,]+(\d+(?:\.\d+)?)[ ,]+(\d+(?:\.\d+)?)', tag.group(0), re.I
+    )
+    if vista:
+        return {"width": int(float(vista.group(1))), "height": int(float(vista.group(2)))}
+    return {}
+
+
 def _instalar_media(store: Dict[str, Any]) -> Dict[str, str]:
     """Acrescenta à biblioteca as imagens que vêm com o código (`editorial.SEED_MEDIA`).
 
@@ -1821,6 +1844,14 @@ def _instalar_media(store: Dict[str, Any]) -> Dict[str, str]:
     for filename, title, alt, caption in editorial.SEED_MEDIA:
         existente = next((item for item in store["media"] if item.get("filename") == filename), None)
         if existente is not None:
+            # Medidas de quem entrou na biblioteca antes desta informação
+            # existir: é o que evita o salto da página ao carregar a figura.
+            if not existente.get("width"):
+                origem = SITE_ASSETS_DIR / filename
+                try:
+                    existente.update(_dimensoes_svg(origem.read_bytes()))
+                except OSError:
+                    pass
             ids[filename] = str(existente.get("id"))
             continue
         origem = SITE_ASSETS_DIR / filename
@@ -1850,6 +1881,7 @@ def _instalar_media(store: Dict[str, Any]) -> Dict[str, str]:
                 "credit": "",
                 "tags": [],
                 "kind": "imagem",
+                **_dimensoes_svg(blob),
                 "created_at": _now(),
                 "updated_at": _now(),
                 "updated_by": "sistema",

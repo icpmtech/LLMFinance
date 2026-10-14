@@ -110,8 +110,13 @@ services:
       # (`http://127.0.0.1:8642`) já responde.
       - JARVIS_AGENT_URL=${JARVIS_AGENT_URL:-http://hermes-agent:8642}
       - JARVIS_AGENT_KEY=${HERMES_API_KEY:-iqos-hermes-api-key-please-change}
-      # Voz da síntese (edge-tts): pt-PT-RaquelNeural / pt-PT-DuarteNeural.
+      # Voz da síntese. O motor preferido é o **Piper**, local — a voz pt-PT
+      # (`pt_PT-tugão-medium`) vem gravada na imagem e não precisa de rede. A
+      # `JARVIS_VOICE` é a voz da `edge-tts`, usada como alternativa (e quando
+      # essa voz é escolhida na interface): pt-PT-RaquelNeural / pt-PT-DuarteNeural.
       - JARVIS_VOICE=${JARVIS_VOICE:-pt-PT-RaquelNeural}
+      - JARVIS_PIPER_VOICE=${JARVIS_PIPER_VOICE:-pt_PT-tugão-medium}
+      - JARVIS_PIPER_VOICES_DIR=${JARVIS_PIPER_VOICES_DIR:-/opt/piper-voices}
       - JARVIS_AGENT_TIMEOUT=${JARVIS_AGENT_TIMEOUT:-300}
       # Vazio => usa/reutiliza data/.auth_secret (sessões locais continuam válidas)
       - FINANCE_AUTH_SECRET=${FINANCE_AUTH_SECRET:-}

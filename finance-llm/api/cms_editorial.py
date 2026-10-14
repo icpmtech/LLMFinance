@@ -97,6 +97,69 @@ SEED_MEDIA: Sequence[Sequence[str]] = (
         "Método em três passos: recolher, ligar e provar",
         "O método resumido: só fontes públicas, ligação por identidade e prova.",
     ),
+    # As mesmas dez figuras, desenhadas em coluna para o telefone. O `imagem`
+    # do site procura o par pelo nome (`<nome>-movel.svg`) e serve-o com
+    # `<picture>` abaixo dos 900px — o CMS continua a apontar só para o largo.
+    (
+        "diagrama-percurso-do-dado-movel.svg",
+        "Diagrama móvel · percurso do dado",
+        "Percurso do dado: recolha, normalização, cálculo e evidência",
+        "Versão em coluna, para ecrãs estreitos.",
+    ),
+    (
+        "diagrama-arquitetura-iqos-movel.svg",
+        "Diagrama móvel · arquitetura do IQ OS",
+        "Arquitetura do IQ OS: dados abertos, ontologia de entidades e produtos",
+        "Versão em coluna, para ecrãs estreitos.",
+    ),
+    (
+        "diagrama-cadeia-do-contrato-movel.svg",
+        "Diagrama móvel · cadeia do contrato",
+        "Cadeia do contrato público: anúncio, concurso, adjudicação, contrato, aditivos e preço final",
+        "Versão em coluna, para ecrãs estreitos.",
+    ),
+    (
+        "diagrama-grafo-de-entidades-movel.svg",
+        "Diagrama móvel · grafo de entidades",
+        "Grafo de entidades: a empresa ligada a sócios, contratos, municípios e registos oficiais",
+        "Versão em coluna, para ecrãs estreitos.",
+    ),
+    (
+        "diagrama-municipio-vs-media-movel.svg",
+        "Diagrama móvel · concelho e média nacional",
+        "Indicadores de um concelho comparados com a média nacional",
+        "Versão em coluna, para ecrãs estreitos.",
+    ),
+    (
+        "diagrama-concentracao-de-mercado-movel.svg",
+        "Diagrama móvel · concentração de mercado",
+        "Concentração de fornecedores e posição de preço dentro do mesmo CPV",
+        "Versão em coluna, para ecrãs estreitos.",
+    ),
+    (
+        "diagrama-comparacao-lojas-movel.svg",
+        "Diagrama móvel · índice de preço por loja",
+        "Índice de preço por loja, com 100 a valer a média do estudo",
+        "Versão em coluna, para ecrãs estreitos.",
+    ),
+    (
+        "diagrama-cadeia-de-evidencia-movel.svg",
+        "Diagrama móvel · cadeia de evidência",
+        "Da pergunta à resposta citada: sub-perguntas, registos nas fontes e fontes numeradas",
+        "Versão em coluna, para ecrãs estreitos.",
+    ),
+    (
+        "diagrama-fontes-e-cobertura-movel.svg",
+        "Diagrama móvel · fontes e cobertura",
+        "Fontes usadas e cobertura por país e período",
+        "Versão em coluna, para ecrãs estreitos.",
+    ),
+    (
+        "diagrama-metodo-movel.svg",
+        "Diagrama móvel · método em três passos",
+        "Método em três passos: recolher, ligar e provar",
+        "Versão em coluna, para ecrãs estreitos.",
+    ),
     # Ilustrações que faltavam para completar o conjunto das seis áreas.
     (
         "ilustracao-mercado.svg",

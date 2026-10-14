@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 900" width="440" height="900" role="img" aria-label="Cadeia do contrato público: anúncio, concurso, adjudicação, contrato, aditivos e preço final">
+  <rect width="440" height="900" fill="#f1f5f9"/>
+  <g>
+    <rect x="16" y="24" width="408" height="64" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <circle cx="44" cy="56" r="16" fill="#94a3b8"/>
+    <text x="44" y="61" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+    <text x="74" y="52" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Anúncio</text>
+    <text x="74" y="73" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b">o que se quer comprar</text>
+  </g>
+  <g>
+    <rect x="16" y="112" width="408" height="64" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <circle cx="44" cy="144" r="16" fill="#94a3b8"/>
+    <text x="44" y="149" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+    <text x="74" y="140" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Concurso</text>
+    <text x="74" y="161" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b">quem concorre</text>
+  </g>
+  <g>
+    <rect x="16" y="200" width="408" height="64" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <circle cx="44" cy="232" r="16" fill="#94a3b8"/>
+    <text x="44" y="237" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
+    <text x="74" y="228" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Adjudicação</text>
+    <text x="74" y="249" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b">quem ganha</text>
+  </g>
+  <g>
+    <rect x="16" y="288" width="408" height="64" rx="14" fill="#dbeafe" stroke="#93c5fd"/>
+    <circle cx="44" cy="320" r="16" fill="#0ea5a4"/>
+    <text x="44" y="325" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">4</text>
+    <text x="74" y="316" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Contrato</text>
+    <text x="74" y="337" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#475569">por quanto e com quem</text>
+  </g>
+  <g>
+    <rect x="16" y="376" width="408" height="64" rx="14" fill="#ffffff" stroke="#dbe3ec"/>
+    <circle cx="44" cy="408" r="16" fill="#94a3b8"/>
+    <text x="44" y="413" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">5</text>
+    <text x="74" y="404" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Aditivos</text>
+    <text x="74" y="425" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b">o que mudou depois</text>
+  </g>
+  <g>
+    <rect x="16" y="464" width="408" height="64" rx="14" fill="#0f172a"/>
+    <circle cx="44" cy="496" r="16" fill="#0ea5a4"/>
+    <text x="44" y="501" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff" text-anchor="middle">6</text>
+    <text x="74" y="492" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#ffffff">Preço final</text>
+    <text x="74" y="513" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#94a3b8">o valor que se paga</text>
+  </g>
+  <g>
+    <rect x="48" y="560" width="376" height="22" rx="11" fill="#e2e8f0"/>
+    <rect x="48" y="560" width="72" height="22" rx="11" fill="#a5f3fc"/>
+    <rect x="48" y="598" width="376" height="22" rx="11" fill="#e2e8f0"/>
+    <rect x="48" y="598" width="108" height="22" rx="11" fill="#7dd3fc"/>
+    <rect x="48" y="636" width="376" height="22" rx="11" fill="#e2e8f0"/>
+    <rect x="48" y="636" width="144" height="22" rx="11" fill="#38bdf8"/>
+    <rect x="48" y="674" width="376" height="22" rx="11" fill="#e2e8f0"/>
+    <rect x="48" y="674" width="196" height="22" rx="11" fill="#0ea5a4"/>
+    <rect x="48" y="712" width="376" height="22" rx="11" fill="#e2e8f0"/>
+    <rect x="48" y="712" width="246" height="22" rx="11" fill="#f59e0b"/>
+    <rect x="48" y="750" width="376" height="22" rx="11" fill="#e2e8f0"/>
+    <rect x="48" y="750" width="304" height="22" rx="11" fill="#0f172a"/>
+  </g>
+  <g font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#94a3b8">
+    <text x="16" y="576">1</text>
+    <text x="16" y="614">2</text>
+    <text x="16" y="652">3</text>
+    <text x="16" y="690">4</text>
+    <text x="16" y="728">5</text>
+    <text x="16" y="766">6</text>
+  </g>
+  <text x="16" y="800" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b">Do anúncio ao preço final: o mesmo contrato em seis momentos.</text>
+  <rect x="16" y="820" width="408" height="56" rx="14" fill="#0f172a"/>
+  <text x="220" y="844" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#e2e8f0" text-anchor="middle">O que se mede: valor · procedimento</text>
+  <text x="220" y="864" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#e2e8f0" text-anchor="middle">prazo até à assinatura · concorrência · CPV</text>
+</svg>

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 840" width="440" height="840" role="img" aria-label="Grafo de entidades: a empresa ligada a sócios, contratos, municípios e registos">
+  <rect width="440" height="840" fill="#f1f5f9"/>
+  <circle cx="220" cy="150" r="62" fill="#0f172a"/>
+  <text x="220" y="145" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#ffffff" text-anchor="middle">Empresa</text>
+  <text x="220" y="169" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#94a3b8" text-anchor="middle">o NIF é a chave</text>
+  <circle cx="220" cy="150" r="76" fill="none" stroke="#0ea5a4" stroke-width="2" stroke-dasharray="6 7" opacity=".7"/>
+  <path d="M220 212 L40 212 L40 774" fill="none" stroke="#cbd5e1" stroke-width="2"/>
+  <g stroke="#cbd5e1" stroke-width="2">
+    <path d="M40 274 H64"/>
+    <path d="M40 374 H64"/>
+    <path d="M40 474 H64"/>
+    <path d="M40 574 H64"/>
+    <path d="M40 674 H64"/>
+    <path d="M40 774 H64"/>
+  </g>
+  <g>
+    <rect x="64" y="236" width="360" height="76" rx="16" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="84" y="268" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Sócios e gerentes</text>
+    <text x="84" y="290" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b">quem representa e quem detém</text>
+  </g>
+  <g>
+    <rect x="64" y="336" width="360" height="76" rx="16" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="84" y="368" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Contratos públicos</text>
+    <text x="84" y="390" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b">o que assinou e por quanto</text>
+  </g>
+  <g>
+    <rect x="64" y="436" width="360" height="76" rx="16" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="84" y="468" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Municípios e Estado</text>
+    <text x="84" y="490" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b">quem compra e onde</text>
+  </g>
+  <g>
+    <rect x="64" y="536" width="360" height="76" rx="16" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="84" y="568" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Grupo económico</text>
+    <text x="84" y="590" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b">morada e gerência comuns</text>
+  </g>
+  <g>
+    <rect x="64" y="636" width="360" height="76" rx="16" fill="#ffffff" stroke="#dbe3ec"/>
+    <text x="84" y="668" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Registos oficiais</text>
+    <text x="84" y="690" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b">situação, insolvências, atos</text>
+  </g>
+  <g>
+    <rect x="64" y="736" width="360" height="76" rx="16" fill="#0ea5a4"/>
+    <text x="84" y="768" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#ffffff">Sinais de risco</text>
+    <text x="84" y="790" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#d7fbf6">dependência de um cliente</text>
+  </g>
+</svg>

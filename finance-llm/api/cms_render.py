@@ -66,20 +66,78 @@ def _md(text: str) -> str:
     if not (text or "").strip():
         return ""
     try:
-        return markdown_lib.markdown(text, extensions=MD_EXTENSIONS, output_format="html5")
+        markup = markdown_lib.markdown(text, extensions=MD_EXTENSIONS, output_format="html5")
     except Exception as exc:  # pragma: no cover - markdown robusto
         logger.warning("Falha a converter Markdown (%s); a devolver texto.", exc)
         return f"<p>{_esc(text)}</p>"
+    return _envolver_tabelas(markup)
+
+
+_TABELA_RE = re.compile(r"<table>.*?</table>", re.S | re.I)
+
+
+def _envolver_tabelas(markup: str) -> str:
+    """Põe cada tabela dentro de um contentor que rola na horizontal.
+
+    Num telefone uma tabela de sete colunas não cabe no ecrã: sem isto, ou
+    esmaga o texto numa coluna de três letras, ou empurra a página toda para o
+    lado. A partir de quatro colunas o contentor ganha uma largura mínima, para
+    rolar em vez de apertar.
+    """
+
+    def troca(encontro: "re.Match[str]") -> str:
+        tabela = encontro.group(0)
+        classe = "tabela-rolavel larga" if tabela.lower().count("<th") >= 4 else "tabela-rolavel"
+        return f'<div class="{classe}">{tabela}</div>'
+
+    return _TABELA_RE.sub(troca, markup)
+
+
+def _media(media_id: Optional[str]) -> Dict[str, Any]:
+    if not media_id:
+        return {}
+    try:
+        return store.get_item("media", media_id) or {}
+    except KeyError:
+        return {}
 
 
 def _media_url(media_id: Optional[str]) -> str:
-    if not media_id:
+    return str(_media(media_id).get("url") or "")
+
+
+def _variante_movel(media_id: Optional[str]) -> str:
+    """URL da versão em coluna do mesmo gráfico, se ela existir na biblioteca.
+
+    Um diagrama de 1100px de largura fica com o texto a 4px num telefone. Ao
+    lado de `diagrama-x.svg` vive `diagrama-x-movel.svg`, desenhado em coluna, e
+    é o `<picture>` que escolhe: o computador continua a ver o diagrama largo e
+    o telefone vê o outro — sem o CMS ter de saber que os dois existem.
+    """
+    nome = str(_media(media_id).get("filename") or "")
+    if not nome or nome.endswith("-movel.svg"):
         return ""
-    try:
-        media = store.get_item("media", media_id)
-    except KeyError:
+    raiz, ponto, extensao = nome.rpartition(".")
+    if not ponto or not raiz:
         return ""
-    return str(media.get("url") or "")
+    alvo = f"{raiz}-movel.{extensao}"
+    for item in store.list_items("media", limit=1000).get("items") or []:
+        if str(item.get("filename") or "") == alvo:
+            return str(item.get("url") or "")
+    return ""
+
+
+def _dimensoes(media_id: Optional[str]) -> str:
+    """`width`/`height`, quando conhecidos.
+
+    Sem eles o texto salta quando a figura acaba de carregar — e num telefone,
+    onde a figura ocupa o ecrã todo, o salto é a página inteira.
+    """
+    media = _media(media_id)
+    largura, altura = media.get("width"), media.get("height")
+    if not largura or not altura:
+        return ""
+    return f' width="{int(largura)}" height="{int(altura)}"'
 
 
 def _absolute(url: str, base_url: str = "") -> str:
@@ -114,155 +172,264 @@ def _css(settings: Dict[str, Any]) -> str:
   --bg: {palette['bg']}; --surface: {palette['surface']}; --text: {palette['text']};
   --muted: {palette['muted']}; --border: {palette['border']}; --code: {palette['code']};
   --shadow: {palette['shadow']}; --accent: {accent}; --radius: {radius}px;
+  /* Uma só margem lateral, do telefone para cima. */
+  --gutter: 16px;
 }}
 *, *::before, *::after {{ box-sizing: border-box; }}
-html {{ scroll-behavior: smooth; }}
+html {{
+  scroll-behavior: smooth; -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+  /* O cabeçalho é `sticky`: sem isto, uma âncora fica escondida debaixo dele. */
+  scroll-padding-top: 84px;
+}}
 body {{
   margin: 0; background: var(--bg); color: var(--text);
   font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-  line-height: 1.65; font-size: 17px;
+  line-height: 1.65; font-size: 1rem; overflow-wrap: break-word;
 }}
+img, svg, video, iframe {{ max-width: 100%; }}
+img {{ height: auto; }}
 a {{ color: var(--accent); text-decoration: none; }}
 a:hover {{ text-decoration: underline; }}
-.wrap {{ max-width: 1100px; margin: 0 auto; padding: 0 20px; }}
+:focus-visible {{ outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }}
+.wrap {{
+  max-width: 1100px; margin: 0 auto;
+  padding-left: max(var(--gutter), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--gutter), env(safe-area-inset-right, 0px));
+}}
 .site-header {{
   position: sticky; top: 0; z-index: 20; backdrop-filter: blur(10px);
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
   border-bottom: 1px solid var(--border);
 }}
-.site-header .wrap {{ display: flex; align-items: center; gap: 16px; min-height: 64px; }}
-.brand {{ font-weight: 800; font-size: 1.05rem; color: var(--text); letter-spacing: -.01em; }}
-.brand small {{ display: block; font-weight: 500; font-size: .72rem; color: var(--muted); letter-spacing: 0; }}
-.brand .brand-mark {{ display: block; height: 34px; width: auto; }}
-nav.main {{ margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }}
-nav.main a {{
-  color: var(--text); font-size: .92rem; font-weight: 600; padding: 7px 12px; border-radius: 999px;
+/* Cabeçalho de telefone: marca e botão na mesma linha, menu por baixo. */
+.site-header .wrap {{
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  padding-top: 8px; padding-bottom: 8px;
 }}
-nav.main a:hover {{ background: var(--code); text-decoration: none; }}
+.brand {{ display: block; font-weight: 800; font-size: 1rem; color: var(--text); letter-spacing: -.01em; }}
+.brand small {{ display: none; font-weight: 500; font-size: .72rem; color: var(--muted); letter-spacing: 0; }}
+.brand .brand-mark {{ display: block; height: 32px; width: auto; }}
+/* Menu sem JavaScript: a caixa fica escondida e o rótulo abre o painel. */
+.menu-estado {{ position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }}
+.menu-botao {{
+  margin-left: auto; display: inline-flex; align-items: center; gap: 9px;
+  min-height: 44px; padding: 9px 15px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--text); font-size: .95rem; font-weight: 700;
+  cursor: pointer; user-select: none;
+}}
+.menu-botao:hover {{ border-color: var(--accent); }}
+.menu-barras, .menu-barras::before, .menu-barras::after {{
+  display: block; width: 18px; height: 2px; border-radius: 2px; background: currentColor; content: "";
+}}
+.menu-barras {{ position: relative; }}
+.menu-barras::before {{ position: absolute; top: -6px; }}
+.menu-barras::after {{ position: absolute; top: 6px; }}
+.menu-estado:checked + .menu-botao {{ background: var(--text); border-color: var(--text); color: var(--surface); }}
+nav.main {{
+  display: none; flex-basis: 100%; flex-direction: column; gap: 4px; margin: 0;
+  padding: 8px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); box-shadow: var(--shadow);
+}}
+.menu-estado:checked ~ nav.main {{ display: flex; }}
+/* Alvos de toque com pelo menos 44px nos links do menu. */
+nav.main a {{
+  display: flex; align-items: center; min-height: 46px; padding: 11px 14px;
+  border-radius: 10px; color: var(--text); font-size: 1rem; font-weight: 600;
+}}
+nav.main a:hover, nav.main a:focus-visible {{ background: var(--code); text-decoration: none; }}
 nav.main a[aria-current="page"] {{ background: var(--accent); color: #fff; }}
-.breadcrumb {{ margin: 0 0 18px; font-size: .88rem; }}
+.breadcrumb {{ margin: 0 0 16px; font-size: .86rem; }}
 .breadcrumb ol {{ display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; padding: 0; list-style: none; }}
 .breadcrumb li {{ display: flex; align-items: center; gap: 10px; color: var(--muted); }}
 .breadcrumb li + li::before {{ content: "›"; color: var(--muted); opacity: .7; }}
 .breadcrumb a {{ color: var(--muted); }}
 .breadcrumb a:hover {{ color: var(--accent); }}
 .breadcrumb [aria-current="page"] {{ color: var(--text); font-weight: 600; }}
-main {{ padding: 32px 0 72px; }}
+main {{ padding: 20px 0 56px; }}
 .card {{
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  box-shadow: var(--shadow); padding: 28px;
+  box-shadow: var(--shadow); padding: 20px;
 }}
-.section + .section {{ margin-top: 28px; }}
-h1 {{ font-size: clamp(1.8rem, 4vw, 2.6rem); line-height: 1.15; letter-spacing: -.02em; margin: 0 0 12px; }}
-h2 {{ font-size: 1.45rem; letter-spacing: -.01em; margin: 34px 0 10px; }}
-h3 {{ font-size: 1.12rem; margin: 24px 0 8px; }}
+.section + .section {{ margin-top: 24px; }}
+h1 {{ font-size: clamp(1.6rem, 6.4vw, 2.6rem); line-height: 1.14; letter-spacing: -.02em; margin: 0 0 12px; }}
+h2 {{ font-size: clamp(1.22rem, 4.4vw, 1.45rem); letter-spacing: -.01em; margin: 28px 0 10px; }}
+h3 {{ font-size: clamp(1.04rem, 3.2vw, 1.12rem); margin: 22px 0 8px; }}
 p {{ margin: 0 0 14px; }}
-.lead {{ font-size: 1.1rem; color: var(--muted); }}
-.hero {{ padding: 46px 32px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow); }}
-.hero .actions {{ margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; }}
+.lead {{ font-size: 1.06rem; color: var(--muted); }}
+.hero {{ padding: 26px 20px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow); }}
+.hero .actions {{ margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap; }}
 .hero.centro {{ text-align: center; }}
-.hero .cover {{ margin: 24px 0 0; }}
+.hero .cover {{ margin: 22px 0 0; }}
 .btn {{
-  display: inline-block; padding: 11px 20px; border-radius: 999px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; min-height: 46px;
+  padding: 11px 20px; border-radius: 999px; font-weight: 700;
   background: var(--accent); color: #fff; border: 1px solid transparent;
 }}
 .btn.ghost {{ background: transparent; color: var(--accent); border-color: var(--border); }}
 .btn:hover {{ text-decoration: none; filter: brightness(1.05); }}
-.grid {{ display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }}
-.tile {{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }}
+/* Uma coluna no telefone; a grelha só entra quando há largura para ela. */
+.grid {{ display: grid; gap: 14px; grid-template-columns: 1fr; }}
+.tile {{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }}
 .tile h3 {{ margin: 0 0 6px; font-size: 1rem; }}
-.tile-icon {{ width: 44px; height: 44px; margin-bottom: 12px; display: block; }}
+.tile-icon {{ width: 42px; height: 42px; margin-bottom: 10px; display: block; }}
 .tile p {{ margin: 0; color: var(--muted); font-size: .94rem; }}
 /* Cartão que leva a algum lado: continua a parecer cartão, mas responde ao rato. */
 a.tile {{ display: block; color: inherit; }}
 a.tile:hover {{ text-decoration: none; border-color: var(--accent); box-shadow: 0 1px 2px rgba(16,24,40,.06), 0 10px 28px rgba(16,24,40,.10); }}
 a.tile h3 {{ color: var(--accent); }}
-figure {{ margin: 22px 0; }}
+figure {{ margin: 20px 0; }}
 figure img, .prose img {{ max-width: 100%; height: auto; border-radius: calc(var(--radius) - 4px); display: block; }}
-/* A grelha da galeria parte de 240px por coluna: sem isto, o SVG de origem
-   (800px) estica a coluna e a página ganha barra horizontal. */
-.grid.galeria {{ grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }}
+figure > picture {{ display: block; }}
+/* Uma figura directa da página ocupa a largura toda: é assim que o diagrama
+   ganha o espaço que precisa para se ler num telefone. */
+main > .wrap > figure > img, main > .wrap > figure > picture > img {{ width: 100%; }}
+figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
+/* Duas colunas no telefone: uma só fazia destas páginas um rolo interminável. */
+.grid.galeria {{ grid-template-columns: repeat(2, 1fr); gap: 10px; }}
 .grid.galeria img {{ width: 100%; height: auto; border-radius: calc(var(--radius) - 4px); display: block; }}
-figcaption {{ color: var(--muted); font-size: .86rem; margin-top: 8px; }}
-.prose {{ max-width: 760px; }}
-.prose ul, .prose ol {{ padding-left: 22px; }}
+.prose ul, .prose ol {{ padding-left: 20px; }}
 .prose blockquote {{
   margin: 20px 0; padding: 6px 18px; border-left: 3px solid var(--accent); color: var(--muted); font-style: italic;
 }}
 .prose code {{ background: var(--code); padding: 2px 6px; border-radius: 6px; font-size: .9em; }}
 .prose pre {{ background: var(--code); padding: 16px; border-radius: var(--radius); overflow: auto; }}
 .prose pre code {{ background: none; padding: 0; }}
-.prose table {{ width: 100%; border-collapse: collapse; font-size: .93rem; }}
-.prose th, .prose td {{ border: 1px solid var(--border); padding: 8px 10px; text-align: left; }}
+/* Tabelas: as estreitas cabem no ecrã; as de muitas colunas rolam em vez de
+   esmagarem o texto numa coluna de três letras. */
+.tabela-rolavel {{ overflow-x: auto; -webkit-overflow-scrolling: touch; }}
+.prose table {{ width: 100%; border-collapse: collapse; font-size: .9rem; }}
+.prose th, .prose td {{ border: 1px solid var(--border); padding: 9px 10px; text-align: left; }}
 .prose th {{ background: var(--code); }}
 .cta {{
-  display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap;
-  padding: 26px 28px; border-radius: var(--radius); border: 1px solid var(--border);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 14px;
+  padding: 22px 20px; border-radius: var(--radius); border: 1px solid var(--border);
   background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, var(--surface)), var(--surface));
   box-shadow: var(--shadow);
 }}
 .cta h2 {{ margin: 0 0 4px; }}
-.aviso {{ border-left: 4px solid var(--accent); background: var(--code); padding: 14px 18px; border-radius: 8px; }}
+.aviso {{ border-left: 4px solid var(--accent); background: var(--code); padding: 14px 16px; border-radius: 8px; }}
 .aviso.amber {{ border-color: #f59e0b; }}
 .aviso.red {{ border-color: #ef4444; }}
 .aviso.green {{ border-color: #10b981; }}
-.faq details {{ border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; background: var(--surface); }}
-.faq summary {{ font-weight: 600; cursor: pointer; }}
+.faq details {{ border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; background: var(--surface); }}
+.faq summary {{ min-height: 46px; display: flex; align-items: center; padding: 12px 16px; font-weight: 600; cursor: pointer; }}
+.faq details > div {{ padding: 0 16px 14px; }}
 .pill {{
-  display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: .78rem; font-weight: 700;
+  display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: .78rem; font-weight: 700;
   background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
 }}
-.meta {{ color: var(--muted); font-size: .9rem; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }}
-.posts {{ display: grid; gap: 20px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }}
+.meta {{ color: var(--muted); font-size: .88rem; display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; }}
+.posts {{ display: grid; gap: 16px; grid-template-columns: 1fr; }}
 .post-card {{ display: flex; flex-direction: column; overflow: hidden; padding: 0; }}
 .post-card img {{ width: 100%; aspect-ratio: 16/9; object-fit: cover; }}
 .post-card .body {{ padding: 18px 20px 22px; display: flex; flex-direction: column; gap: 8px; flex: 1; }}
 .post-card h3 {{ margin: 0; font-size: 1.08rem; }}
 .post-card p {{ margin: 0; color: var(--muted); font-size: .93rem; }}
-.pager {{ display: flex; gap: 8px; justify-content: center; margin-top: 28px; }}
-.pager a, .pager span {{ padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 600; }}
+.pager {{ display: flex; gap: 8px; justify-content: center; margin-top: 26px; flex-wrap: wrap; }}
+.pager a, .pager span {{
+  min-height: 44px; display: inline-flex; align-items: center; padding: 10px 14px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 600;
+}}
 .pager span.current {{ background: var(--accent); color: #fff; border-color: transparent; }}
-.hr {{ height: 1px; background: var(--border); margin: 30px 0; border: 0; }}
-.contactos {{ display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }}
+.hr {{ height: 1px; background: var(--border); margin: 28px 0; border: 0; }}
+.contactos {{ display: grid; gap: 10px; grid-template-columns: 1fr; }}
 .contactos div {{ padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }}
 .formulario {{ max-width: 720px; }}
 .formulario form {{ display: grid; gap: 14px; margin-top: 18px; }}
 .formulario .campo {{ display: grid; gap: 6px; }}
 .formulario label {{ font-weight: 600; font-size: .93rem; }}
 .formulario input, .formulario textarea {{
-  width: 100%; padding: 11px 13px; border: 1px solid var(--border); border-radius: 10px;
+  width: 100%; min-height: 46px; padding: 11px 13px; border: 1px solid var(--border); border-radius: 10px;
   background: var(--surface); color: var(--text); font: inherit;
 }}
 .formulario input:focus, .formulario textarea:focus {{ outline: 2px solid var(--accent); outline-offset: 1px; }}
 .formulario textarea {{ resize: vertical; min-height: 140px; }}
 .formulario .erro {{ color: #b42318; font-size: .82rem; }}
 .formulario .consentimento {{ display: flex; align-items: flex-start; gap: 10px; }}
-.formulario .consentimento input {{ width: auto; margin-top: 4px; }}
+.formulario .consentimento input {{ width: auto; min-height: 0; margin-top: 4px; }}
 .formulario .consentimento label {{ font-weight: 500; font-size: .9rem; color: var(--muted); }}
 .formulario .acao {{ display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }}
 /* Campo-armadilha: invisível para quem lê, apetecível para quem preenche formulários em série. */
 .hp {{ position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }}
 .steps {{ counter-reset: step; display: grid; gap: 14px; }}
-.steps .step {{ position: relative; padding-left: 52px; }}
+.steps .step {{ position: relative; padding-left: 46px; }}
 .steps .step::before {{
   counter-increment: step; content: counter(step);
-  position: absolute; left: 0; top: 0; width: 34px; height: 34px; border-radius: 50%;
-  background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: .9rem;
+  position: absolute; left: 0; top: 0; width: 32px; height: 32px; border-radius: 50%;
+  background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: .88rem;
 }}
-.site-footer {{ border-top: 1px solid var(--border); background: var(--surface); padding: 30px 0; color: var(--muted); font-size: .9rem; }}
-.site-footer .wrap {{ display: flex; gap: 18px; flex-wrap: wrap; align-items: center; justify-content: space-between; }}
-.site-footer nav {{ display: flex; gap: 14px; flex-wrap: wrap; }}
-.site-footer a {{ color: var(--muted); }}
-.kpis {{ display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }}
-.kpi {{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }}
-.kpi span {{ display: block; color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }}
-.kpi strong {{ display: block; margin-top: 6px; font-size: 1.32rem; letter-spacing: -.02em; }}
+.site-footer {{ border-top: 1px solid var(--border); background: var(--surface); padding: 26px 0; color: var(--muted); font-size: .9rem; }}
+.site-footer .wrap {{ display: flex; gap: 16px; flex-wrap: wrap; align-items: center; justify-content: space-between; }}
+.site-footer nav {{ display: flex; gap: 8px 16px; flex-wrap: wrap; }}
+.site-footer a {{ color: var(--muted); min-height: 40px; display: inline-flex; align-items: center; }}
+.kpis {{ display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }}
+.kpi {{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 15px 16px; }}
+.kpi span {{ display: block; color: var(--muted); font-size: .76rem; text-transform: uppercase; letter-spacing: .05em; }}
+.kpi strong {{ display: block; margin-top: 6px; font-size: clamp(1.2rem, 5vw, 1.32rem); letter-spacing: -.02em; }}
 .kpi small {{ display: block; margin-top: 4px; color: var(--muted); font-size: .8rem; }}
 .draft-banner {{
   position: sticky; top: 0; z-index: 30; background: #f59e0b; color: #1f2937;
   text-align: center; font-size: .85rem; font-weight: 700; padding: 6px 12px;
 }}
-@media print {{ .site-header, .site-footer, .draft-banner {{ display: none; }} body {{ background: #fff; }} }}
+
+/* --------------------------------------------------------------------------
+   Tudo o que está acima é o telefone — a base. Daqui para baixo só se
+   acrescenta o que os ecrãs maiores permitem.
+   -------------------------------------------------------------------------- */
+@media (max-width: 640px) {{
+  /* A figura sai das margens laterais e ocupa o ecrã todo: num diagrama são
+     ~20% mais largura, que é a diferença entre ler e adivinhar. */
+  main > .wrap > figure {{
+    margin-left: calc(var(--gutter) * -1); margin-right: calc(var(--gutter) * -1);
+  }}
+  main > .wrap > figure > img, main > .wrap > figure > picture > img {{ border-radius: 0; }}
+  main > .wrap > figure > figcaption {{ padding-left: var(--gutter); padding-right: var(--gutter); }}
+}}
+@media (min-width: 480px) {{
+  .brand small {{ display: block; }}
+  .site-footer a {{ min-height: 0; }}
+}}
+@media (min-width: 560px) {{
+  .grid {{ gap: 18px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }}
+  .contactos {{ grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }}
+  .posts {{ gap: 20px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }}
+  .kpis {{ gap: 14px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }}
+  .grid.galeria {{ gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }}
+  .cta {{ flex-direction: row; align-items: center; justify-content: space-between; padding: 24px 26px; }}
+}}
+@media (min-width: 700px) {{
+  :root {{ --gutter: 20px; }}
+  main {{ padding: 32px 0 72px; }}
+  .card {{ padding: 28px; }}
+  .section + .section {{ margin-top: 28px; }}
+  .hero {{ padding: 46px 32px; }}
+  .hero .actions {{ margin-top: 20px; }}
+  .hero .cover {{ margin: 24px 0 0; }}
+  h2 {{ margin: 32px 0 10px; }}
+  h3 {{ margin: 24px 0 8px; }}
+  .tile {{ padding: 20px; }}
+  .tile-icon {{ width: 44px; height: 44px; margin-bottom: 12px; }}
+  .steps .step {{ padding-left: 52px; }}
+  .steps .step::before {{ width: 34px; height: 34px; font-size: .9rem; }}
+  .tabela-rolavel.larga table {{ min-width: 40rem; }}
+}}
+@media (min-width: 900px) {{
+  /* Cabeçalho de uma linha: o menu volta a ser uma fila de pastilhas. */
+  .site-header .wrap {{ flex-wrap: nowrap; gap: 18px; padding-top: 12px; padding-bottom: 12px; }}
+  .brand .brand-mark {{ height: 34px; }}
+  .menu-estado, .menu-botao {{ display: none; }}
+  nav.main {{
+    display: flex; flex-basis: auto; flex-direction: row; margin-left: auto; gap: 6px;
+    padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
+  }}
+  nav.main a {{ min-height: 0; padding: 8px 12px; font-size: .92rem; border-radius: 999px; }}
+  /* Linhas com medida de leitura: no telefone a largura toda, aqui 760px. */
+  .prose {{ max-width: 760px; }}
+}}
+@media (prefers-reduced-motion: reduce) {{
+  html {{ scroll-behavior: auto; }}
+}}
+@media print {{ .site-header, .site-footer, .draft-banner, .menu-botao {{ display: none; }} body {{ background: #fff; }} }}
 """
 
 
@@ -456,11 +623,22 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
         return f'<div class="section prose">{title}{_md(str(data.get("markdown") or data.get("body") or ""))}</div>'
 
     if block_type == "imagem":
-        url = _media_url(data.get("media_id")) or str(data.get("url") or "")
+        media_id = data.get("media_id")
+        url = _media_url(media_id) or str(data.get("url") or "")
         if not url:
             return ""
         caption = f"<figcaption>{_esc(data.get('caption'))}</figcaption>" if data.get("caption") else ""
-        return f'<figure><img src="{_esc(url)}" alt="{_esc(data.get("alt"))}" loading="lazy">{caption}</figure>'
+        alt = _esc(data.get("alt"))
+        medidas = _dimensoes(media_id)
+        movel = _variante_movel(media_id)
+        if movel:
+            imagem = (
+                f'<picture><source media="(max-width: 899px)" srcset="{_esc(movel)}">'
+                f'<img src="{_esc(url)}" alt="{alt}"{medidas} loading="lazy"></picture>'
+            )
+        else:
+            imagem = f'<img src="{_esc(url)}" alt="{alt}"{medidas} loading="lazy">'
+        return f"<figure>{imagem}{caption}</figure>"
 
     if block_type == "galeria":
         urls = [_media_url(item) for item in (data.get("media_ids") or [])]
@@ -540,7 +718,11 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
         thead = f"<tr>{''.join(f'<th>{_esc(cell)}</th>' for cell in head)}</tr>" if head else ""
         tbody = "".join(f"<tr>{''.join(f'<td>{_esc(cell)}</td>' for cell in row)}</tr>" for row in rows)
         title = f"<h2>{_esc(data.get('title'))}</h2>" if data.get("title") else ""
-        return f'<div class="section prose">{title}<table><thead>{thead}</thead><tbody>{tbody}</tbody></table></div>'
+        classe = "tabela-rolavel larga" if len(head) >= 4 else "tabela-rolavel"
+        return (
+            f'<div class="section prose">{title}<div class="{classe}">'
+            f"<table><thead>{thead}</thead><tbody>{tbody}</tbody></table></div></div>"
+        )
 
     if block_type == "citacao":
         author = f"<footer>— {_esc(data.get('author'))}</footer>" if data.get("author") else ""
@@ -612,7 +794,12 @@ def _header(settings: Dict[str, Any], *, current_path: str, preview: bool = Fals
         banner
         + '<header class="site-header"><div class="wrap">'
         + f'<a class="brand" href="/site">{brand}</a>'
-        + f'<nav class="main">{"".join(links)}</nav>'
+        # Menu de telefone sem JavaScript: a caixa escondida guarda o estado e o
+        # `:checked` mostra a lista. No ecrã grande o botão desaparece e a lista
+        # volta a ser uma fila de pastilhas (ver o `@media (min-width: 900px)`).
+        + '<input type="checkbox" id="menu-estado" class="menu-estado" aria-label="Abrir o menu">'
+        + '<label class="menu-botao" for="menu-estado"><span class="menu-barras" aria-hidden="true"></span>Menu</label>'
+        + f'<nav class="main" aria-label="Navegação principal">{"".join(links)}</nav>'
         + "</div></header>"
     )
 
@@ -746,7 +933,7 @@ def _layout(
     return (
         "<!doctype html><html lang=\""
         + _esc(str(settings.get("language") or "pt-PT"))
-        + '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+        + '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
         + f"<title>{_esc(full_title)}</title>"
         + "".join(meta)
         + f"<style>{_css(settings)}{extra_css}</style></head><body>"
@@ -992,7 +1179,7 @@ def _tabela(titulo: str, cabecalho: List[str], linhas: List[List[str]]) -> str:
     )
     return (
         f'<div class="section prose"><h2>{_esc(titulo)}</h2>'
-        f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>"
+        f'<div class="tabela-rolavel larga"><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div></div>'
     )
 
 

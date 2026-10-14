@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 720" width="440" height="720" role="img" aria-label="Fontes usadas e respetiva cobertura de países e período">
+  <rect width="440" height="720" fill="#f1f5f9"/>
+  <rect x="16" y="16" width="408" height="290" rx="18" fill="#ffffff" stroke="#dbe3ec"/>
+  <text x="36" y="54" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#0f172a">Fontes</text>
+  <g>
+    <rect x="36" y="67" width="16" height="16" rx="5" fill="#0ea5a4"/>
+    <text x="64" y="80" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#334155">Portal BASE — contratos</text>
+    <rect x="36" y="111" width="16" height="16" rx="5" fill="#14b8a6"/>
+    <text x="64" y="124" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#334155">INE — finanças locais</text>
+    <rect x="36" y="155" width="16" height="16" rx="5" fill="#38bdf8"/>
+    <text x="64" y="168" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#334155">Registos de empresas</text>
+    <rect x="36" y="199" width="16" height="16" rx="5" fill="#6366f1"/>
+    <text x="64" y="212" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#334155">Boletins e diários oficiais</text>
+    <rect x="36" y="243" width="16" height="16" rx="5" fill="#f59e0b"/>
+    <text x="64" y="256" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#334155">Recolhas próprias de preços</text>
+  </g>
+  <rect x="16" y="326" width="408" height="290" rx="18" fill="#ffffff" stroke="#dbe3ec"/>
+  <text x="36" y="364" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#0f172a">Cobertura</text>
+  <text x="36" y="396" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#64748b" letter-spacing="1.2">PAÍSES</text>
+  <g>
+    <rect x="36" y="408" width="112" height="40" rx="12" fill="#f1f5f9" stroke="#e2e8f0"/>
+    <text x="92" y="433" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a" text-anchor="middle">Portugal</text>
+    <rect x="164" y="408" width="112" height="40" rx="12" fill="#f1f5f9" stroke="#e2e8f0"/>
+    <text x="220" y="433" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a" text-anchor="middle">Espanha</text>
+    <rect x="292" y="408" width="112" height="40" rx="12" fill="#f1f5f9" stroke="#e2e8f0"/>
+    <text x="348" y="433" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a" text-anchor="middle">França</text>
+  </g>
+  <text x="36" y="478" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#64748b" letter-spacing="1.2">CONTRATOS DESDE</text>
+  <rect x="36" y="490" width="368" height="14" rx="7" fill="#0ea5a4"/>
+  <text x="36" y="524" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#475569">2012</text>
+  <text x="404" y="524" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#475569" text-anchor="end">hoje</text>
+  <rect x="36" y="540" width="176" height="36" rx="10" fill="#0f172a"/>
+  <text x="124" y="563" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#ffffff" text-anchor="middle">Recolha contínua</text>
+  <rect x="228" y="540" width="176" height="36" rx="10" fill="#fef3c7"/>
+  <text x="316" y="563" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#92400e" text-anchor="middle">Fotografia datada</text>
+  <rect x="16" y="636" width="408" height="60" rx="14" fill="#0f172a"/>
+  <text x="220" y="662" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#e2e8f0" text-anchor="middle">O que a fonte não publica fica em branco —</text>
+  <text x="220" y="684" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#e2e8f0" text-anchor="middle">dizemo-lo, em vez de estimar.</text>
+</svg>
