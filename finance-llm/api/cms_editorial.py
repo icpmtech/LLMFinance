@@ -209,7 +209,8 @@ SEED_MEDIA: Sequence[Sequence[str]] = (
 )
 
 #: Menu do site: rótulo e caminho da página, pela ordem em que aparece. O
-#: «Benchmarks» só entra se a página existir na instalação.
+#: «Benchmarks» só entra se a página existir na instalação. Os itens «Entrar»
+#: e «Loja» são links directos para a plataforma, não páginas do site.
 MENU_PRINCIPAL: Sequence[Sequence[str]] = (
     ("Início", ""),
     ("Soluções", "solucoes"),
@@ -218,6 +219,8 @@ MENU_PRINCIPAL: Sequence[Sequence[str]] = (
     ("Blog", "blog"),
     ("Contactos", "contactos"),
     ("Sobre", "sobre"),
+    ("Entrar", "/login"),
+    ("Loja", "/loja"),
 )
 
 #: Rodapé: o essencial, mais curto do que o cabeçalho.

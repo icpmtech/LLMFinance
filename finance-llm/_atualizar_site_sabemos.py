@@ -105,8 +105,9 @@ def _aplicar_menus() -> None:
         atuais = menu.get("items") or []
         # Itens que já existem e não estão na ordem editorial (ex.: uma página
         # própria, como «Benchmarks» numa instalação que a tenha criado) ficam
-        # no fim, para a migração não apagar trabalho de ninguém.
-        extras = [item for item in atuais if str(item.get("page_id") or "") not in pagina_por_id and not item.get("href")]
+        # no fim, para a migração não apagar trabalho de ninguém. Links directos
+        # também são comparados pela assinatura, por isso ajustam-se automaticamente.
+        extras = [item for item in atuais if str(item.get("page_id") or "") not in pagina_por_id]
         items = desejados + extras
         if _comparavel([_assinatura(item) for item in atuais]) == _comparavel([_assinatura(item) for item in items]):
             print(f"  menu {localizacao}: já estava atualizado")

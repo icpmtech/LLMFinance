@@ -1602,9 +1602,12 @@ def itens_de_menu(location: str, store: Optional[Dict[str, Any]] = None) -> List
     itens: List[Dict[str, Any]] = []
     for etiqueta, caminho in especificacao:
         pagina = por_caminho.get(caminho)
-        if pagina is None:
+        if pagina is not None:
+            itens.append({"id": _new_id("mi"), "label": etiqueta, "href": "", "page_id": pagina.get("id"), "new_tab": False})
             continue
-        itens.append({"id": _new_id("mi"), "label": etiqueta, "href": "", "page_id": pagina.get("id"), "new_tab": False})
+        # Links directos para fora do site (login, loja, URL externa).
+        if caminho.startswith(("/", "http://", "https://")):
+            itens.append({"id": _new_id("mi"), "label": etiqueta, "href": caminho, "page_id": None, "new_tab": False})
     return itens
 
 

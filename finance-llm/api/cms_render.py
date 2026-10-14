@@ -447,6 +447,15 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
   /* A partir daqui há largura para a tabela larga caber inteira. */
   .tabela-rolavel.larga table {{ min-width: 0; }}
 }}
+@media (min-width: 900px) and (max-width: 1160px) {{
+  /* Com 9 itens no menu, a fila de pastilhas encosta no logótipo em ecrãs de
+     900-1160px. Reduzir um pouco o tamanho das pastilhas e o separador evita
+     quebras de linha e mantém todos os links numa linha só. */
+  .site-header .wrap {{ gap: 8px; padding-left: 12px; padding-right: 12px; }}
+  .brand .brand-mark {{ height: 30px; }}
+  nav.main {{ gap: 2px; }}
+  nav.main a {{ padding: 7px 8px; font-size: .84rem; }}
+}}
 @media (min-width: 900px) {{
   /* Cabeçalho de uma linha: o menu volta a ser uma fila de pastilhas. */
   .site-header .wrap {{ flex-wrap: nowrap; gap: 18px; padding-top: 12px; padding-bottom: 12px; }}
@@ -825,9 +834,13 @@ def _header(settings: Dict[str, Any], *, current_path: str, preview: bool = Fals
     menu = store.menu_for("header")
     links = []
     for item in menu.get("items") or []:
-        active = ' aria-current="page"' if item.get("href") in (current_path, f"/site{current_path}") else ""
+        href = item.get("href") or ""
+        # Quando o item vem de uma página do site, o href já é o caminho
+        # completo (ex: "/site/solucoes"); quando é um link directo, o href
+        # contém a URL externa (ex: "/login" ou "https://...").
+        active = ' aria-current="page"' if href in (current_path, f"/site{current_path}") else ""
         target = ' target="_blank" rel="noopener"' if item.get("new_tab") else ""
-        links.append(f'<a href="{_esc(item.get("href"))}"{active}{target}>{_esc(item.get("label"))}</a>')
+        links.append(f'<a href="{_esc(href)}"{active}{target}>{_esc(item.get("label"))}</a>')
     tagline = f'<small>{_esc(settings.get("tagline"))}</small>' if settings.get("tagline") else ""
     # Com logótipo na biblioteca, o cabeçalho mostra a imagem (que já traz o
     # nome); sem ele, fica o nome em texto, como antes.
