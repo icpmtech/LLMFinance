@@ -408,9 +408,9 @@ DEFAULT_THEME: Dict[str, Any] = {
 }
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
-    "store_name": "Loja IQ OS",
+    "store_name": "Sabemos",
     "tagline": "Produtos e serviços de inteligência financeira",
-    "description": "Loja da plataforma: relatórios, dossiês, dados e formação para decisões informadas.",
+    "description": "Loja Sabemos: relatórios, dossiês, dados e formação para decisões informadas.",
     "base_url": "",
     "language": "pt-PT",
     "currency": "EUR",
@@ -433,7 +433,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "outro": "Combinamos consigo o melhor modo de pagamento — responda ao email de confirmação.",
     },
     "terms_url": "",
-    "footer_text": "© Loja IQ OS — todos os direitos reservados.",
+    "footer_text": "© Sabemos — todos os direitos reservados.",
     "theme": "claro",
     "accent": "#0ea5a4",
     "radius": 14,
@@ -1366,6 +1366,69 @@ def image_urls(doc: Dict[str, Any]) -> List[str]:
         if str(url).strip():
             urls.append(str(url).strip())
     return urls
+
+
+#: Imagem de marca de cada produto, pelo `slug` do produto. Os ficheiros vivem
+#: em `api/site_assets/` (viajam com o código) e ficam na biblioteca de media do
+#: CMS, pelo que o id é resolvido em cada instalação — nunca guardado aqui.
+IMAGENS_PRODUTO: Dict[str, str] = {
+    "relatorio-contratacao-publica-portugal": "produto-relatorio-contratacao-publica-portugal.svg",
+    "relatorio-benchmark-portugal-espanha-franca": "produto-relatorio-benchmark-portugal-espanha-franca.svg",
+    "dossie-de-empresa": "produto-dossie-de-empresa.svg",
+    "assinatura-analista": "produto-assinatura-analista.svg",
+    "creditos-investigacao-25": "produto-creditos-investigacao-25.svg",
+    "formacao-contratacao-publica": "produto-formacao-contratacao-publica.svg",
+    "relatorio-mercados-iberia": "produto-relatorio-mercados-iberia.svg",
+    "manual-inteligencia-contratos": "produto-manual-inteligencia-contratos.svg",
+    "dossie-de-mercado": "produto-dossie-de-mercado.svg",
+    "mala-de-arquivo": "produto-mala-de-arquivo.svg",
+}
+
+
+def _media_das_imagens_de_produto() -> Dict[str, str]:
+    """`{ficheiro: id}` do media de marca, garantindo que está instalado.
+
+    A biblioteca é a do CMS e o carregamento é idempotente, por isso serve tanto
+    o primeiro arranque como uma instalação já em uso (que não recebeu a pasta
+    `data/` no deploy). Sem CMS, a loja fica simplesmente sem imagens.
+    """
+    try:
+        from api import cms_store
+
+        return cms_store.instalar_media_de_marca()
+    except Exception as exc:  # pragma: no cover - CMS é opcional
+        logger.debug("Biblioteca de media do CMS indisponível (%s)", exc)
+        return {}
+
+
+def _imagem_do_produto(slug: str, media: Dict[str, str]) -> str:
+    """Id do media da imagem de marca de um produto (vazio se não houver)."""
+    return str(media.get(IMAGENS_PRODUTO.get(slug, "")) or "")
+
+
+def instalar_imagens_de_produto(author: str = "") -> Dict[str, Any]:
+    """Liga a cada produto a imagem de marca que vem com o código.
+
+    Só toca nos produtos que ainda não têm imagem, para não desfazer uma escolha
+    feita na loja. Corre no primeiro arranque (`_seed`) e na migração de
+    instalações já em uso.
+    """
+    media = _media_das_imagens_de_produto()
+    if not media:
+        return {"instalados": 0, "produtos": []}
+    store = _load()
+    ligados: List[str] = []
+    for product in store["products"]:
+        media_id = _imagem_do_produto(str(product.get("slug") or ""), media)
+        if not media_id or media_id in (product.get("image_ids") or []):
+            continue
+        product["image_ids"] = [media_id]
+        product["updated_at"] = _now()
+        _log(store, "alterar", "products", product, author, "imagem de marca")
+        ligados.append(str(product.get("id") or ""))
+    if ligados:
+        _write_store(store)
+    return {"instalados": len(ligados), "produtos": ligados}
 
 
 def is_available(doc: Dict[str, Any]) -> bool:
@@ -3288,11 +3351,14 @@ def _seed(store: Dict[str, Any]) -> None:
             "attributes": [{"label": "Cor", "value": "Preto"}],
         },
     ]
+    imagens = _media_das_imagens_de_produto()
     for index, product in enumerate(products):
         doc = _normalise("products", product)
         doc["id"] = _new_id("prd")
         doc["sku"] = _sku_for(store, doc)
         doc["slug"] = _unique(store, "products", str(doc["slug"]))
+        imagem = _imagem_do_produto(str(product["slug"]), imagens)
+        doc["image_ids"] = [imagem] if imagem else []
         doc["created_at"] = _now()
         doc["updated_at"] = _now()
         doc["updated_by"] = "plataforma"

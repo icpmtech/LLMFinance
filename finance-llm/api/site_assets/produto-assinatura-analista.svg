@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600" role="img" aria-label="Assinatura Analista: acesso mensal à plataforma">
+  <defs>
+    <linearGradient id="marca" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0ea5a4"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="#f1f5f9"/>
+  <rect x="48" y="56" width="704" height="404" rx="22" fill="#ffffff" stroke="#dbe3ec"/>
+  <text x="80" y="112" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="27" font-weight="700" fill="#0f172a">Assinatura Analista</text>
+  <text x="80" y="142" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Acesso mensal à plataforma: pesquisa 360, dossiês e exportações</text>
+  <rect x="80" y="176" width="640" height="204" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
+  <rect x="98" y="194" width="132" height="168" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+  <g fill="#cbd5e1">
+    <rect x="114" y="214" width="100" height="10" rx="5"/>
+    <rect x="114" y="238" width="78" height="10" rx="5"/>
+    <rect x="114" y="262" width="92" height="10" rx="5"/>
+    <rect x="114" y="286" width="66" height="10" rx="5"/>
+    <rect x="114" y="310" width="86" height="10" rx="5"/>
+  </g>
+  <polyline points="266,352 320,318 374,330 428,282 482,296 536,246 590,262 644,214" fill="none" stroke="#0ea5a4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="266,368 320,352 374,360 428,336 482,344 536,318 590,326 644,300" fill="none" stroke="#94a3b8" stroke-width="3" stroke-dasharray="7 7" stroke-linecap="round"/>
+  <circle cx="644" cy="214" r="6" fill="#0ea5a4"/>
+  <rect x="266" y="194" width="200" height="46" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="282" y="223" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Pesquisa 360</text>
+  <rect x="482" y="194" width="220" height="46" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="498" y="223" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">Grafo de entidades</text>
+  <rect x="80" y="398" width="104" height="32" rx="16" fill="#0ea5a4"/>
+  <text x="132" y="419" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#04252a">Mensal</text>
+  <text x="200" y="419" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13.5" fill="#64748b">Dossiês, exportações e alertas incluídos</text>
+  <rect x="48" y="500" width="30" height="30" rx="9" fill="url(#marca)"/>
+  <g fill="#ffffff">
+    <rect x="55" y="514" width="4.5" height="9" rx="2"/>
+    <rect x="61.5" y="509" width="4.5" height="14" rx="2"/>
+    <rect x="68" y="504" width="4.5" height="19" rx="2"/>
+  </g>
+  <text x="90" y="521" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Sabemos</text>
+  <text x="752" y="521" text-anchor="end" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Sem fidelização</text>
+</svg>

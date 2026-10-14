@@ -1844,7 +1844,7 @@ def _instalar_media(store: Dict[str, Any]) -> Dict[str, str]:
     `{ficheiro: id}` para quem monta o conteúdo as poder referenciar.
     """
     ids: Dict[str, str] = {}
-    for filename, title, alt, caption in editorial.SEED_MEDIA:
+    for filename, title, alt, caption in (*editorial.SEED_MEDIA, *editorial.SEED_MEDIA_LOJA):
         existente = next((item for item in store["media"] if item.get("filename") == filename), None)
         if existente is not None:
             # Medidas de quem entrou na biblioteca antes desta informação

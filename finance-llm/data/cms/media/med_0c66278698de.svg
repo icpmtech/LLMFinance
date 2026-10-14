@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600" role="img" aria-label="Relatório mensal de mercados ibéricos">
+  <defs>
+    <linearGradient id="marca" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0ea5a4"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="#f1f5f9"/>
+  <rect x="48" y="56" width="704" height="404" rx="22" fill="#ffffff" stroke="#dbe3ec"/>
+  <text x="80" y="112" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="27" font-weight="700" fill="#0f172a">Mercados ibéricos</text>
+  <text x="80" y="142" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Síntese mensal: setores, cotações e notícias que mexeram com o mês</text>
+  <g stroke="#e2e8f0" stroke-width="1.5">
+    <line x1="88" y1="200" x2="716" y2="200"/>
+    <line x1="88" y1="256" x2="716" y2="256"/>
+    <line x1="88" y1="312" x2="716" y2="312"/>
+    <line x1="88" y1="368" x2="716" y2="368"/>
+  </g>
+  <polyline points="88,352 208,326 328,336 448,282 568,296 716,222" fill="none" stroke="#0ea5a4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="88,372 208,358 328,300 448,318 568,268 716,252" fill="none" stroke="#6366f1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="716" cy="222" r="6" fill="#0ea5a4"/>
+  <circle cx="716" cy="252" r="6" fill="#6366f1"/>
+  <g font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#64748b">
+    <text x="88" y="396">jan</text>
+    <text x="212" y="396">fev</text>
+    <text x="333" y="396">mar</text>
+    <text x="454" y="396">abr</text>
+    <text x="575" y="396">mai</text>
+    <text x="696" y="396">jun</text>
+  </g>
+  <g font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
+    <text x="600" y="176" fill="#0f172a" font-weight="700">PSI 20</text>
+    <text x="666" y="176" fill="#64748b">+8,4%</text>
+    <text x="600" y="196" fill="#0f172a" font-weight="700">IBEX 35</text>
+    <text x="676" y="196" fill="#64748b">+5,1%</text>
+  </g>
+  <rect x="80" y="410" width="104" height="30" rx="15" fill="#0ea5a4"/>
+  <text x="132" y="430" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#04252a">Mensal</text>
+  <text x="200" y="430" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Assinatura anual disponível</text>
+  <rect x="48" y="500" width="30" height="30" rx="9" fill="url(#marca)"/>
+  <g fill="#ffffff">
+    <rect x="55" y="514" width="4.5" height="9" rx="2"/>
+    <rect x="61.5" y="509" width="4.5" height="14" rx="2"/>
+    <rect x="68" y="504" width="4.5" height="19" rx="2"/>
+  </g>
+  <text x="90" y="521" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Sabemos</text>
+  <text x="752" y="521" text-anchor="end" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Portugal e Espanha</text>
+</svg>

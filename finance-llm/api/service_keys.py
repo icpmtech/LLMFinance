@@ -255,6 +255,45 @@ CHAVES: List[Dict[str, Any]] = [
         "exemplo": "whsec_…",
         "testavel": False,
     },
+    {
+        "id": "mail_imap_host",
+        "label": "Correio da plataforma — servidor IMAP",
+        "grupo": "Correio da plataforma (Administração → Correio)",
+        "descricao": (
+            "Servidor onde a aplicação Correio da plataforma lê as caixas do domínio "
+            "(no-reply@, postmaster@, dmarc@…). Por omissão é o mesmo servidor do email "
+            "transacional — o Docker Mailserver serve SMTP e IMAP na mesma máquina."
+        ),
+        "env": ["MAIL_IMAP_HOST", "PLATFORM_MAIL_IMAP_HOST"],
+        "onde": "Servidor de correio da plataforma (ex.: mail.exemplo.pt)",
+        "secreto": False,
+        "exemplo": "mail.exemplo.pt",
+        "testavel": False,
+    },
+    {
+        "id": "mail_imap_port",
+        "label": "Correio da plataforma — porta IMAP",
+        "grupo": "Correio da plataforma (Administração → Correio)",
+        "descricao": "Porta do IMAP. Padrão: 993 (SSL) ou 143 (STARTTLS).",
+        "env": ["MAIL_IMAP_PORT", "PLATFORM_MAIL_IMAP_PORT"],
+        "onde": "Porta do servidor IMAP",
+        "secreto": False,
+        "exemplo": "993",
+        "default": "993",
+        "testavel": False,
+    },
+    {
+        "id": "mail_imap_security",
+        "label": "Correio da plataforma — segurança do IMAP",
+        "grupo": "Correio da plataforma (Administração → Correio)",
+        "descricao": "ssl | starttls | plain. Padrão: ssl (porta 993).",
+        "env": ["MAIL_IMAP_SECURITY", "PLATFORM_MAIL_IMAP_SECURITY"],
+        "onde": "ssl | starttls | plain",
+        "secreto": False,
+        "exemplo": "ssl",
+        "default": "ssl",
+        "testavel": False,
+    },
 ]
 
 CHAVE_BY_ID: Dict[str, Dict[str, Any]] = {chave["id"]: chave for chave in CHAVES}

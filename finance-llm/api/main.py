@@ -281,6 +281,7 @@ from api.shop_routes import router as shop_router
 from api.rss_routes import router as rss_router
 from api.news_routes import router as news_router
 from api.email_routes import router as email_router
+from api.platform_mail_routes import router as platform_mail_router
 from api.visualizador_routes import router as visualizador_router
 from api.researcher_routes import router as researcher_router
 from api.vector_routes import router as vector_router
@@ -493,6 +494,15 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logging.getLogger(__name__).warning("Agendador de trial não arrancou: %s", exc)
 
+    # Agendador do correio da plataforma: traz as mensagens novas das caixas da
+    # solução para o índice (o intervalo fica nas definições do módulo).
+    try:
+        from api import platform_mail_scheduler
+
+        platform_mail_scheduler.start()
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Agendador do correio da plataforma não arrancou: %s", exc)
+
     # Módulo GLEIF / LEI: cria o índice (se faltar) sem bloquear o arranque.
     def _preload_gleif():
         try:
@@ -546,6 +556,12 @@ async def lifespan(app: FastAPI):
         from api import trial_scheduler
 
         trial_scheduler.shutdown()
+    except Exception:
+        pass
+    try:
+        from api import platform_mail_scheduler
+
+        platform_mail_scheduler.shutdown()
     except Exception:
         pass
 
@@ -696,6 +712,8 @@ app.include_router(search_workspace_router)
 # Análise de custos, ontologia e relatórios da pesquisa em `/search/analysis|graph|report`.
 app.include_router(search_analysis_router)
 app.include_router(email_router)
+# Correio da plataforma: gestor das caixas do domínio (só administradores).
+app.include_router(platform_mail_router)
 app.include_router(visualizador_router)
 app.include_router(researcher_router)
 app.include_router(deep_search_router)

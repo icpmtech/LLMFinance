@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600" role="img" aria-label="Pacote de 25 créditos de investigação assistida">
+  <defs>
+    <linearGradient id="marca" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0ea5a4"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="#f1f5f9"/>
+  <rect x="48" y="56" width="704" height="404" rx="22" fill="#ffffff" stroke="#dbe3ec"/>
+  <text x="80" y="112" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="27" font-weight="700" fill="#0f172a">Créditos de investigação</text>
+  <text x="80" y="142" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Pacote de 25 investigações assistidas, sem prazo de validade</text>
+  <g fill="#0ea5a4">
+    <circle cx="100" cy="196" r="13"/><circle cx="144" cy="196" r="13"/><circle cx="188" cy="196" r="13"/><circle cx="232" cy="196" r="13"/><circle cx="276" cy="196" r="13"/>
+    <circle cx="100" cy="240" r="13"/><circle cx="144" cy="240" r="13"/><circle cx="188" cy="240" r="13"/><circle cx="232" cy="240" r="13"/><circle cx="276" cy="240" r="13"/>
+    <circle cx="100" cy="284" r="13"/><circle cx="144" cy="284" r="13"/><circle cx="188" cy="284" r="13"/><circle cx="232" cy="284" r="13"/><circle cx="276" cy="284" r="13"/>
+    <circle cx="100" cy="328" r="13"/><circle cx="144" cy="328" r="13"/><circle cx="188" cy="328" r="13"/><circle cx="232" cy="328" r="13"/><circle cx="276" cy="328" r="13"/>
+    <circle cx="100" cy="372" r="13"/><circle cx="144" cy="372" r="13"/><circle cx="188" cy="372" r="13"/><circle cx="232" cy="372" r="13"/>
+  </g>
+  <circle cx="276" cy="372" r="13" fill="#14b8a6"/>
+  <rect x="368" y="184" width="352" height="200" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="400" y="286" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="72" font-weight="800" fill="#0ea5a4">25</text>
+  <text x="400" y="322" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0f172a">investigações assistidas</text>
+  <g fill="#cbd5e1">
+    <rect x="400" y="344" width="248" height="10" rx="5"/>
+    <rect x="400" y="364" width="192" height="10" rx="5"/>
+  </g>
+  <rect x="80" y="398" width="146" height="32" rx="16" fill="#0ea5a4"/>
+  <text x="153" y="419" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#04252a">Sem validade</text>
+  <text x="242" y="419" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13.5" fill="#64748b">Use quando precisar, um a um</text>
+  <rect x="48" y="500" width="30" height="30" rx="9" fill="url(#marca)"/>
+  <g fill="#ffffff">
+    <rect x="55" y="514" width="4.5" height="9" rx="2"/>
+    <rect x="61.5" y="509" width="4.5" height="14" rx="2"/>
+    <rect x="68" y="504" width="4.5" height="19" rx="2"/>
+  </g>
+  <text x="90" y="521" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Sabemos</text>
+  <text x="752" y="521" text-anchor="end" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Pacote de créditos</text>
+</svg>

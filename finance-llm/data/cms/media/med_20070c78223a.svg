@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600" role="img" aria-label="Manual impresso de inteligência de contratos, 180 páginas">
+  <defs>
+    <linearGradient id="marca" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0ea5a4"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="#f1f5f9"/>
+  <rect x="48" y="56" width="704" height="404" rx="22" fill="#ffffff" stroke="#dbe3ec"/>
+  <text x="80" y="112" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="27" font-weight="700" fill="#0f172a">Manual impresso</text>
+  <text x="80" y="142" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Inteligência de contratos · 180 páginas, fichas destacáveis</text>
+  <rect x="120" y="184" width="240" height="216" rx="12" fill="#0f172a"/>
+  <rect x="120" y="184" width="22" height="216" rx="10" fill="#0ea5a4"/>
+  <text x="170" y="248" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="22" font-weight="800" fill="#ffffff">Inteligência</text>
+  <text x="170" y="278" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="22" font-weight="800" fill="#ffffff">de contratos</text>
+  <g fill="#334155">
+    <rect x="170" y="308" width="150" height="9" rx="4.5"/>
+    <rect x="170" y="328" width="112" height="9" rx="4.5"/>
+  </g>
+  <text x="170" y="372" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#5eead4">Sabemos</text>
+  <rect x="398" y="204" width="270" height="184" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+  <g fill="#cbd5e1">
+    <rect x="422" y="230" width="222" height="10" rx="5"/>
+    <rect x="422" y="254" width="170" height="10" rx="5"/>
+    <rect x="422" y="278" width="200" height="10" rx="5"/>
+    <rect x="422" y="302" width="140" height="10" rx="5"/>
+  </g>
+  <rect x="422" y="330" width="222" height="36" rx="10" fill="#0ea5a4"/>
+  <text x="533" y="354" text-anchor="middle" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#04252a">Ficha de trabalho</text>
+  <rect x="48" y="500" width="30" height="30" rx="9" fill="url(#marca)"/>
+  <g fill="#ffffff">
+    <rect x="55" y="514" width="4.5" height="9" rx="2"/>
+    <rect x="61.5" y="509" width="4.5" height="14" rx="2"/>
+    <rect x="68" y="504" width="4.5" height="19" rx="2"/>
+  </g>
+  <text x="90" y="521" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Sabemos</text>
+  <text x="752" y="521" text-anchor="end" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Enviado por correio</text>
+</svg>

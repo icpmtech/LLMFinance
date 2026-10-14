@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600" role="img" aria-label="Dossiê de mercado de um setor à escolha">
+  <defs>
+    <linearGradient id="marca" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0ea5a4"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="#f1f5f9"/>
+  <rect x="48" y="56" width="704" height="404" rx="22" fill="#ffffff" stroke="#dbe3ec"/>
+  <text x="80" y="112" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="27" font-weight="700" fill="#0f172a">Dossiê de mercado</text>
+  <text x="80" y="142" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#64748b">Dimensão, operadores, contratos e tendências do seu setor</text>
+  <g>
+    <rect x="80" y="176" width="248" height="140" rx="14" fill="#0ea5a4"/>
+    <rect x="80" y="326" width="150" height="98" rx="14" fill="#38bdf8"/>
+    <rect x="238" y="326" width="90" height="98" rx="14" fill="#6366f1"/>
+  </g>
+  <text x="104" y="216" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#04252a">Setor em análise</text>
+  <text x="104" y="256" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="30" font-weight="800" fill="#04252a">1,8 mM€</text>
+  <text x="104" y="286" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#0b3b38">volume contratado em 12 meses</text>
+  <text x="104" y="366" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="22" font-weight="800" fill="#04252a">42</text>
+  <text x="104" y="390" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#0b3b38">operadores</text>
+  <text x="262" y="366" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="22" font-weight="800" fill="#ffffff">9</text>
+  <text x="262" y="390" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#e5e9ff">novos</text>
+  <g fill="#cbd5e1">
+    <rect x="374" y="196" width="330" height="10" rx="5"/>
+    <rect x="374" y="220" width="264" height="10" rx="5"/>
+    <rect x="374" y="244" width="300" height="10" rx="5"/>
+    <rect x="374" y="268" width="210" height="10" rx="5"/>
+  </g>
+  <rect x="374" y="300" width="330" height="124" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="398" y="330" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#0f172a">Tendências do trimestre</text>
+  <g fill="#0ea5a4">
+    <rect x="398" y="352" width="86" height="10" rx="5"/>
+    <rect x="398" y="376" width="52" height="10" rx="5"/>
+  </g>
+  <g fill="#e2e8f0">
+    <rect x="500" y="352" width="180" height="10" rx="5"/>
+    <rect x="500" y="376" width="140" height="10" rx="5"/>
+  </g>
+  <rect x="48" y="500" width="30" height="30" rx="9" fill="url(#marca)"/>
+  <g fill="#ffffff">
+    <rect x="55" y="514" width="4.5" height="9" rx="2"/>
+    <rect x="61.5" y="509" width="4.5" height="14" rx="2"/>
+    <rect x="68" y="504" width="4.5" height="19" rx="2"/>
+  </g>
+  <text x="90" y="521" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0f172a">Sabemos</text>
+  <text x="752" y="521" text-anchor="end" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">Escolha o setor</text>
+</svg>

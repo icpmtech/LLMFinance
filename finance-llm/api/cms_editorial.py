@@ -208,6 +208,73 @@ SEED_MEDIA: Sequence[Sequence[str]] = (
     ("icone-visualizacao-gestao.svg", "Ícone · visualização e gestão", "Visualização e gestão: painéis, grafos e CRM", ""),
 )
 
+#: Imagens dos produtos da loja (`/loja`). São a capa de cada produto do
+#: catálogo de demonstração e ficam na mesma biblioteca de media do site; a
+#: ligação ao produto é feita pelo `slug` (ver `shop_store.IMAGENS_PRODUTO`),
+#: porque o `id` do media é aleatório em cada instalação.
+SEED_MEDIA_LOJA: Sequence[Sequence[str]] = (
+    (
+        "produto-relatorio-contratacao-publica-portugal.svg",
+        "Produto · Relatório de contratação pública",
+        "Relatório de contratação pública em Portugal: adjudicantes, valores e concorrência",
+        "",
+    ),
+    (
+        "produto-relatorio-benchmark-portugal-espanha-franca.svg",
+        "Produto · Relatório de benchmark",
+        "Benchmark de preços do mesmo segmento em Portugal, Espanha e França",
+        "",
+    ),
+    (
+        "produto-dossie-de-empresa.svg",
+        "Produto · Dossiê de empresa",
+        "Dossiê de empresa: contratos, sócios, contas, insolvências e reputação",
+        "",
+    ),
+    (
+        "produto-assinatura-analista.svg",
+        "Produto · Assinatura Analista",
+        "Assinatura Analista: acesso mensal à plataforma, com pesquisa, dossiês e exportações",
+        "",
+    ),
+    (
+        "produto-creditos-investigacao-25.svg",
+        "Produto · Créditos de investigação",
+        "Pacote de 25 créditos de investigação assistida, sem prazo de validade",
+        "",
+    ),
+    (
+        "produto-formacao-contratacao-publica.svg",
+        "Produto · Formação em contratação pública",
+        "Formação de um dia em contratação pública, presencial ou online",
+        "",
+    ),
+    (
+        "produto-relatorio-mercados-iberia.svg",
+        "Produto · Relatório de mercados",
+        "Relatório mensal dos mercados ibéricos: setores, cotações e notícias",
+        "",
+    ),
+    (
+        "produto-manual-inteligencia-contratos.svg",
+        "Produto · Manual impresso",
+        "Manual impresso de inteligência de contratos, com fichas de trabalho",
+        "",
+    ),
+    (
+        "produto-dossie-de-mercado.svg",
+        "Produto · Dossiê de mercado",
+        "Dossiê de mercado de um setor: dimensão, operadores, contratos e tendências",
+        "",
+    ),
+    (
+        "produto-mala-de-arquivo.svg",
+        "Produto · Mala de arquivo",
+        "Mala de arquivo Sabemos, com lombada larga, para dossiês impressos",
+        "",
+    ),
+)
+
 #: Menu do site: rótulo e caminho da página, pela ordem em que aparece. O
 #: «Benchmarks» só entra se a página existir na instalação. Os itens «Entrar»
 #: e «Loja» são links directos para a plataforma, não páginas do site.
