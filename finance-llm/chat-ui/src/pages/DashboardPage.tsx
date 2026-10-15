@@ -47,7 +47,9 @@ import {
   getSentimentMarketLive,
   getSentimentMarketWatchlist,
   removeSentimentMarketFavourite,
+  translateSentimentMarketHeadlines,
   type MarketLive,
+  type MarketLiveArticle,
   type MarketLiveOpportunity,
   type MarketLiveQuote,
 } from "../sentimentApi";
@@ -172,6 +174,11 @@ export function DashboardPage({
   const [collectProgress, setCollectProgress] = useState<string | null>(null);
   const [collectError, setCollectError] = useState<string | null>(null);
   const [collectNotice, setCollectNotice] = useState<string | null>(null);
+  /* ------------------------------------------- tradução das manchetes (IA) */
+  const [translations, setTranslations] = useState<Record<string, string>>({});
+  const [translating, setTranslating] = useState(false);
+  const [translationError, setTranslationError] = useState<string | null>(null);
+  const [translationAi, setTranslationAi] = useState<{ provider_label?: string; model?: string } | null>(null);
 
   /** Tickers à vista: os índices do topo + os favoritos guardados (sem repetições). */
   const liveTickers = useMemo(
@@ -424,6 +431,49 @@ export function DashboardPage({
     const ageDays = Math.floor((Date.now() - new Date(`${newest}T00:00:00Z`).getTime()) / 86_400_000);
     return { oldest: days[0], newest, ageDays, stale: ageDays > 3 };
   }, [live]);
+
+  /** Manchetes distintas ainda sem tradução — é isto que o botão «Traduzir com IA» envia. */
+  const untranslated = useMemo(() => {
+    const titles = new Set<string>();
+    for (const item of live?.news ?? []) {
+      const title = item.title.trim();
+      if (title && !(title in translations)) titles.add(title);
+    }
+    return Array.from(titles);
+  }, [live, translations]);
+
+  /** Tradução PT à vista: a pedida com IA ou a que a leitura fina já tinha trazido. */
+  const translationOf = useCallback(
+    (item: MarketLiveArticle) => {
+      const portuguese = (translations[item.title] ?? item.title_pt ?? "").trim();
+      return portuguese && portuguese !== item.title.trim() ? portuguese : null;
+    },
+    [translations],
+  );
+
+  /**
+   * Traduzir as manchetes com o fornecedor de IA da plataforma, a pedido.
+   *
+   * Traduzem-se **todas** as manchetes distintas da leitura (não só as oito à
+   * vista) e o servidor guarda o que traduziu: as próximas leituras mostram a
+   * tradução sem voltar a pagar o modelo.
+   */
+  const translateHeadlines = useCallback(async () => {
+    if (!untranslated.length || translating) return;
+    setTranslating(true);
+    setTranslationError(null);
+    try {
+      const payload = await translateSentimentMarketHeadlines(untranslated.slice(0, 60));
+      setTranslations((current) => ({ ...current, ...(payload.translations ?? {}) }));
+      setTranslationAi(payload.ai ?? null);
+    } catch (err) {
+      setTranslationError(
+        err instanceof Error ? err.message : "Não foi possível traduzir as manchetes com IA.",
+      );
+    } finally {
+      setTranslating(false);
+    }
+  }, [translating, untranslated]);
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground orbit-bg">
@@ -958,10 +1008,36 @@ export function DashboardPage({
                 </div>
                 <h3 className="font-semibold">Últimas Notícias</h3>
               </div>
-              <span className="text-[11px] text-muted-foreground">
-                {live?.news.length ?? 0} manchete(s) distintas
-              </span>
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                <span className="text-[11px] text-muted-foreground">
+                  {live?.news.length ?? 0} manchete(s) distintas
+                </span>
+                <button
+                  onClick={() => void translateHeadlines()}
+                  disabled={translating || !untranslated.length}
+                  title={
+                    untranslated.length
+                      ? `Traduzir ${untranslated.length} manchete(s) para português com o fornecedor de IA da plataforma`
+                      : "Não há manchetes por traduzir nesta leitura"
+                  }
+                  className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium text-muted-foreground transition hover:bg-white/[0.08] hover:text-foreground disabled:opacity-40"
+                >
+                  {translating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                  {translating ? "A traduzir…" : "Traduzir com IA"}
+                </button>
+              </div>
             </div>
+            {translationError ? (
+              <p className="mb-4 flex items-start gap-2 text-[11px] text-amber-200">
+                <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                <span>{translationError}</span>
+              </p>
+            ) : translationAi ? (
+              <p className="mb-4 text-[11px] text-muted-foreground">
+                Manchetes traduzidas com IA · {translationAi.provider_label ?? "fornecedor"}
+                {translationAi.model ? ` · ${translationAi.model}` : ""}
+              </p>
+            ) : null}
             <div className="space-y-3">
               {(live?.news ?? []).slice(0, 8).map((item, i) => (
                 <article
@@ -1004,8 +1080,10 @@ export function DashboardPage({
                       <span className="text-xs text-muted-foreground">{when(item.published) || item.source}</span>
                     </div>
                     <div className="text-sm font-medium mt-0.5 line-clamp-2">{item.title}</div>
-                    {item.title_pt ? (
-                      <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{item.title_pt}</div>
+                    {translationOf(item) ? (
+                      <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                        {translationOf(item)}
+                      </div>
                     ) : null}
                     <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
                       <span>{item.source}</span>

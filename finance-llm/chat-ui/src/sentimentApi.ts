@@ -770,6 +770,35 @@ export function getSentimentMarketLive(tickers: string[] = [], news = 5, transla
   return request<MarketLive>(`/sentiment/market/live?${query.join("&")}`);
 }
 
+/** Resultado da tradução das manchetes do panorama com o fornecedor de IA. */
+export type MarketHeadlineTranslation = {
+  /** Mapa manchete original → tradução PT (inclui as que já estavam em português). */
+  translations: Record<string, string>;
+  requested: number;
+  cached: number;
+  translated: number;
+  /** Manchetes que o modelo devolveu iguais ao original (já estavam em PT). */
+  unchanged: number;
+  failed: number;
+  ai?: { provider?: string; provider_label?: string; model?: string };
+  status?: { cached: number; path: string };
+};
+
+/**
+ * Traduz as manchetes do panorama em direto com o fornecedor de IA da plataforma
+ * (Definições → Fornecedores de IA). A tradução é a pedido e em lote; o mesmo
+ * texto só é traduzido uma vez (cache no servidor).
+ */
+export function translateSentimentMarketHeadlines(
+  texts: string[],
+  options: { provider?: string; model?: string } = {},
+) {
+  return request<MarketHeadlineTranslation>(
+    "/sentiment/market/translate",
+    withBody({ texts, ...options }),
+  );
+}
+
 /* ---------------------------------------------------------------------- *
  * Favoritos (`/sentiment/market/watchlist`)                               *
  *                                                                         *

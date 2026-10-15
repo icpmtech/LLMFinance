@@ -1181,6 +1181,7 @@ Análise de sentimento: fontes disponíveis, motores (léxico/neural), análise 
 | `GET` | `/sentiment/market/tickers` | Sentiment Market Tickers |
 | `POST` | `/sentiment/market/tickers` | Sentiment Market Follow |
 | `DELETE` | `/sentiment/market/tickers/{ticker}` | Sentiment Market Unfollow |
+| `POST` | `/sentiment/market/translate` | Sentiment Market Translate Headlines |
 | `GET` | `/sentiment/market/watchlist` | Sentiment Market Watchlist |
 | `POST` | `/sentiment/market/watchlist` | Sentiment Market Watchlist Add |
 | `DELETE` | `/sentiment/market/watchlist/{ticker}` | Sentiment Market Watchlist Remove |

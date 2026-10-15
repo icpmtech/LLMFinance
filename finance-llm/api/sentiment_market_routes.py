@@ -13,6 +13,8 @@
 - `GET  /sentiment/market/price/{ticker}?days=90` — tom × preço de um ticker (correlação e divergência)
 - `GET  /sentiment/market/tickers?days=30` — tickers seguidos e o estado de cada um
 - `GET  /sentiment/market/watchlist` — favoritos guardados (leitura leve, sem índices)
+- `POST /sentiment/market/translate` — traduzir as manchetes do panorama com IA
+  (a pedido, em lote, com cache persistente; devolve original→tradução)
 - `GET  /sentiment/market/brief?days=7` — boletim do mercado (Markdown pronto a ler)
 - `GET  /sentiment/market/schedule` — estado do agendador
 - `GET  /sentiment/market/export?format=csv|md` — descarregar o panorama
@@ -445,6 +447,42 @@ def sentiment_market_live(
         verify=_flag(verify, True),
         translate=_flag(translate, False),
     )
+
+
+@router.post("/translate")
+def sentiment_market_translate_headlines(
+    payload: Dict[str, Any],
+    session: Session = None,
+) -> Dict[str, Any]:
+    """Traduz as manchetes do panorama em direto com o fornecedor de IA da plataforma.
+
+    Corpo: `{"texts": ["..."], "provider": opcional, "model": opcional}`. Devolve
+    `{translations: {original: tradução}, requested, cached, translated, unchanged, failed, ai}`.
+    O mesmo texto só é traduzido uma vez (cache persistente em
+    `data/sentiment_market/manchetes-pt.json`).
+
+    A tradução é **a pedido** — o panorama em direto (`translate=1`) lê o tom com o
+    modelo local, que é imediato; aqui traduz-se o que a manchete diz, em lote.
+    Se houver sessão, usa o fornecedor/modelo predefinido do utilizador
+    (Definições → Fornecedores de IA); caso contrário usa a configuração global.
+    """
+    from api.manchetes_traducao import traduzir_manchetes
+
+    textos = payload.get("texts") if isinstance(payload, dict) else None
+    if not isinstance(textos, list) or not textos:
+        raise HTTPException(status_code=422, detail="Envie `texts` com pelo menos uma manchete.")
+    limpos = [str(item) for item in textos if isinstance(item, (str, int, float)) and str(item).strip()]
+    if not limpos:
+        raise HTTPException(status_code=422, detail="Nenhuma manchete utilizável em `texts`.")
+    resultado = traduzir_manchetes(
+        limpos[:200],
+        user_id=session.user.id if session else None,
+        provider=(payload.get("provider") or None),
+        model=(payload.get("model") or None),
+    )
+    if resultado.get("error"):
+        raise HTTPException(status_code=409, detail=resultado["error"])
+    return resultado
 
 
 @router.delete("/series")

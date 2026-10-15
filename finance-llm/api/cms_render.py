@@ -1108,21 +1108,24 @@ def _menu_theme_classes(menu: Dict[str, Any]) -> str:
     return " ".join(classes)
 
 
-#: Ícones do menu (traço, 20×20, `currentColor`). Poucos e simples: um menu com
-#: um desenho diferente por entrada cansa mais do que ajuda a ler.
+#: Ícones do menu. Geometria do Lucide (https://lucide.dev), licença ISC, copiada
+#: da versão que o `chat-ui` instala — vale a pena ter os mesmos desenhos dos dois
+#: lados da plataforma. Poucos: um desenho diferente por entrada cansa mais do que
+#: ajuda a ler. Só o conteúdo; as molduras ficam em `_svg`.
 _ICONES: Dict[str, str] = {
-    "inicio": '<path d="M4 9.5 10 4l6 5.5V17H4z"/><path d="M8.5 17v-5h3v5"/>',
-    "seccao": '<path d="M4 4h5v5H4zM11 4h5v5h-5zM4 11h5v5H4zM11 11h5v5h-5z"/>',
-    "documento": '<path d="M5.5 3H11l3.5 3.5V17h-9z"/><path d="M11 3v3.5h3.5"/><path d="M7.5 11h5M7.5 13.8h5"/>',
-    "estudo": '<path d="M4 16.5V11M8 16.5V5M12 16.5v-4M16 16.5V8"/>',
-    "base": '<ellipse cx="10" cy="5.5" rx="5.5" ry="2.5"/><path d="M4.5 5.5v9c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5v-9"/>',
-    "blog": '<path d="M4.5 4.5h11v11h-11z"/><path d="M7 8h6M7 11h6"/>',
-    "contacto": '<path d="M3.5 5h13v10h-13z"/><path d="m3.5 6 6.5 5 6.5-5"/>',
-    "informacao": '<circle cx="10" cy="10" r="6.5"/><path d="M10 9v5M10 6.8v.4"/>',
-    "conta": '<circle cx="10" cy="6.8" r="2.8"/><path d="M4.5 17c0-2.7 2.5-4.3 5.5-4.3s5.5 1.6 5.5 4.3"/>',
-    "registar": '<circle cx="8.6" cy="6.8" r="2.8"/><path d="M2.6 17c0-2.7 2.5-4.3 6-4.3"/><path d="M14.6 11.5v6M11.6 14.5h6"/>',
-    "loja": '<path d="M4 7h12l-1 10H5z"/><path d="M7.5 7V5.6a2.5 2.5 0 0 1 5 0V7"/>',
-    "pesquisa": '<circle cx="9" cy="9" r="4.6"/><path d="m12.6 12.6 3.4 3.4"/>',
+    "inicio": '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    "seccao": '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
+    "documento": '<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+    "estudo": '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+    "base": '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
+    "blog": '<path d="M15 18h-5"/><path d="M18 14h-8"/><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0v-9a2 2 0 0 1 2-2h2"/><rect width="8" height="4" x="10" y="6" rx="1"/>',
+    "contacto": '<path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/>',
+    "informacao": '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+    "conta": '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    "registar": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/>',
+    "loja": '<path d="M16 10a4 4 0 0 1-8 0"/><path d="M3.103 6.034h17.794"/><path d="M3.4 5.467a2 2 0 0 0-.4 1.2V20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6.667a2 2 0 0 0-.4-1.2l-2-2.667A2 2 0 0 0 17 2H7a2 2 0 0 0-1.6.8z"/>',
+    "pesquisa": '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+    "seta": '<path d="m6 9 6 6 6-6"/>',
 }
 
 #: Ícone por destino conhecido: vale a primeira palavra que apareça no caminho ou
@@ -1159,16 +1162,22 @@ _ICONE_POR_PALAVRA: Tuple[Tuple[str, str], ...] = (
 )
 
 
+def _svg(desenho: str, tamanho: int = 18, classe: Optional[str] = "menu-icone") -> str:
+    """SVG com a moldura do Lucide: quadro de 24, traço de 2, `currentColor`."""
+    atributo = f' class="{classe}"' if classe else ""
+    return (
+        f"<svg{atributo} viewBox=\"0 0 24 24\" width=\"{tamanho}\" height=\"{tamanho}\" "
+        'aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" '
+        f'stroke-linecap="round" stroke-linejoin="round">{desenho}</svg>'
+    )
+
+
 def _icone(nome: str) -> str:
     """SVG de um ícone do menu (vazio quando o nome não existe)."""
     desenho = _ICONES.get(nome)
     if not desenho:
         return ""
-    return (
-        '<svg class="menu-icone" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" '
-        f'focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" '
-        f'stroke-linecap="round" stroke-linejoin="round">{desenho}</svg>'
-    )
+    return _svg(desenho)
 
 
 def _icone_do_item(item: Dict[str, Any]) -> str:
@@ -1188,19 +1197,21 @@ def _botao_do_submenu(label: str) -> str:
     """
     nome = " ".join(str(label or "").split())
     return (
-        f'<button type="button" class="menu-abre" aria-expanded="false" '
+        '<button type="button" class="menu-abre" aria-expanded="false" '
         f'aria-label="Abrir {_esc(nome)}">'
-        '<svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" focusable="false" '
-        'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-        'stroke-linejoin="round"><path d="m5 8 5 5 5-5"/></svg></button>'
+        f"{_svg(_ICONES['seta'], 16, classe=None)}</button>"
     )
 
 
 def _form_de_pesquisa(termo: str = "", *, classe: str = "pesquisa-form") -> str:
-    """Campo de pesquisa do site (o menu do telemóvel e a página de resultados)."""
+    """Campo de pesquisa do site (o menu do telemóvel e a página de resultados).
+
+    A lupa não leva a classe dos ícones do menu: essa é escondida no ecrã grande,
+    e aqui ela aparece no telemóvel e no computador.
+    """
     return (
         f'<form class="{_esc(classe)}" action="/site/pesquisa" method="get" role="search">'
-        f'<span class="pesquisa-icone" aria-hidden="true">{_icone("pesquisa")}</span>'
+        f'<span class="pesquisa-icone" aria-hidden="true">{_svg(_ICONES["pesquisa"], classe=None)}</span>'
         f'<input type="search" name="q" value="{_esc(termo)}" placeholder="Pesquisar no site" '
         'aria-label="Pesquisar no site" autocomplete="off" enterkeyhint="search">'
         "<button type=\"submit\">Pesquisar</button></form>"

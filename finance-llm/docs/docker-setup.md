@@ -140,6 +140,20 @@ fora daí usa `VITE_API_URL`, senão o valor absoluto.)
 Sintoma de se publicar o errado: a página abre mas as chamadas à API dão 404 — ou a
 interface fica **antiga** porque o `_frontend_dist` não foi atualizado.
 
+Há ainda um sintoma que parece outra coisa: **uma rota interna recarregada** (`/register`,
+`/dashboard`) fica preta. O HTML dessas rotas é escrito pelo **backend** (título, canónica e
+`noindex` por rota), mas os `/assets/*` são servidos pelo nginx. Se o `index.html` do backend for
+de um build mais recente do que a cópia do nginx, o bundle principal (`/assets/index-<hash>.js`)
+não existe em disco aqui, o JavaScript não arranca e a página fica preta — foi o que se viu a
+2026-10-15 em `/register`, depois de um `npm run build` sem republicar a imagem do frontend.
+
+O `docker/nginx.conf` cobre isso: `location /assets/` tem `try_files $uri @assets_backend`, ou
+seja, um asset que falte aqui vem da cópia do backend (que é a do build que o browser está a
+usar — o nome tem o hash do conteúdo, por isso não mistura versões). A rota interna passa a
+funcionar; a **home** só muda com a republicação abaixo, porque `/` continua a sair do disco do
+nginx. Para confirmar sem browser: `python docker/smoke_test.py --ui-url http://127.0.0.1:4180`
+verifica o HTML **e** o bundle que ele referencia (um `200` no HTML, sozinho, não prova nada).
+
 ```powershell
 # 1) build para o nginx (o que se publica no frontend)
 $env:VITE_API_URL='/api'; npm --prefix chat-ui run build
