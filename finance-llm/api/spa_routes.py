@@ -134,6 +134,7 @@ SEGMENTOS_DA_APP = frozenset(
         "pessoas-iq",
         "racius",
         "rag",
+        "report-studio",
         "reports",
         "researcher",
         "rss",

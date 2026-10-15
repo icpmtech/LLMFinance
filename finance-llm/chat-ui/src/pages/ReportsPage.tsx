@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui";
 import { AdminReportsTab } from "./AdminReports";
+import { studioAvailable } from "./ReportsStudio";
 import {
   badgeVariant,
   bytes,
@@ -62,7 +63,7 @@ import {
 
 type Toast = { id: number; message: string; tone: "info" | "error" | "ok" };
 
-export default function ReportsPage() {
+export default function ReportsPage({ onNavigate }: { onNavigate?: (view: string) => void }) {
   const [catalogue, setCatalogue] = useState<ReportsCatalogue | null>(null);
   const [summary, setSummary] = useState<ReportsSummary | null>(null);
   const [items, setItems] = useState<ReportsRequest[]>([]);
@@ -71,6 +72,7 @@ export default function ReportsPage() {
   const [showBell, setShowBell] = useState(false);
   const [tab, setTab] = useState<"pedir" | "meus" | "backoffice">("pedir");
   const [backofficeAllowed, setBackofficeAllowed] = useState(false);
+  const [studioAllowed, setStudioAllowed] = useState(false);
   const [backofficePending, setBackofficePending] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -130,6 +132,11 @@ export default function ReportsPage() {
         setBackofficePending(Number(me.stats?.pending_payment || 0) + Number(me.stats?.awaiting_confirm || 0));
       })
       .catch(() => setBackofficeAllowed(false));
+  }, []);
+
+  /** O atalho para o estúdio só aparece a administradores e gestores de relatórios. */
+  useEffect(() => {
+    void studioAvailable().then(setStudioAllowed);
   }, []);
 
   /** Sondagem das notificações: é assim que o cliente é «avisado». */
@@ -323,7 +330,7 @@ export default function ReportsPage() {
         {error && <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
 
         {!loading && !error && (
-          <Tabs value={tab} onValueChange={(value) => setTab(value as "pedir" | "meus" | "backoffice")} className="w-full">
+          <Tabs value={tab} onValueChange={(value) => setTab(value as "pedir" | "meus" | "backoffice" | "estudio")} className="w-full">
             <TabsList className="mb-4">
               <TabsTrigger value="pedir" active={tab === "pedir"} onClick={() => setTab("pedir")}>
                 Pedir relatório
@@ -334,6 +341,11 @@ export default function ReportsPage() {
               {backofficeAllowed && (
                 <TabsTrigger value="backoffice" active={tab === "backoffice"} onClick={() => setTab("backoffice")}>
                   Backoffice{backofficePending > 0 ? ` (${backofficePending})` : ""}
+                </TabsTrigger>
+              )}
+              {studioAllowed && (
+                <TabsTrigger value="estudio" active={tab === "estudio"} onClick={() => setTab("estudio")}>
+                  Estúdio
                 </TabsTrigger>
               )}
             </TabsList>
@@ -534,6 +546,18 @@ export default function ReportsPage() {
                   onError={(message) => {
                     if (message) notify(message, "error");
                   }}
+                />
+              </TabsContent>
+            )}
+
+            {/* ------------------------------------------------------ estúdio */}
+            {studioAllowed && (
+              <TabsContent value="estudio" active={tab === "estudio"} className="flex min-h-0 flex-col">
+                <ReportsStudioTab
+                  onError={(message) => {
+                    if (message) notify(message, "error");
+                  }}
+                  onToast={(toast) => notify(toast.message, toast.tone)}
                 />
               </TabsContent>
             )}

@@ -351,6 +351,9 @@ from api.docs_routes import router as docs_router
 from api.cae_routes import router as cae_router
 # Relatórios a pedido: catálogo, pedidos, pagamento por MB Way e backoffice.
 from api.reports_routes import router as reports_router
+# Estúdio de relatórios: criação, publicação (plataforma e loja), preço e PDF,
+# reservado a administradores e gestores de relatórios (`/reports/studio/*`).
+from api.reports_studio_routes import router as reports_studio_router
 # Subvenções públicas (Lei n.º 64/2013, de 27/08): lê os `.ods` anuais da IGF
 # guardados em `data/subvencoes` (um ficheiro por ano, ou uma subpasta por ano),
 # indexa-os em `finance_subvencoes` e dá-lhes pesquisa, painel e exportação.
@@ -703,6 +706,22 @@ async def _enforce_write_permissions(request: Request, call_next):
     if permissions.can(utilizador, modulo):
         return await call_next(request)
 
+    # Os **gestores de relatórios** (lista `settings.report_managers` do módulo
+    # de relatórios) escrevem no estúdio mesmo sendo `member`: é o que lhes
+    # permite montar e publicar relatórios. As restantes áreas de `/reports`
+    # continuam com as regras de sempre (o backoffice e a administração têm
+    # dependências próprias que decidem quem entra).
+    if modulo == "reports" and caminho.startswith("/reports/studio"):
+        try:
+            from api import reports_store as reports_module  # noqa: PLC0415
+
+            if reports_module.is_report_manager(
+                str(utilizador.get("email") or ""), str(utilizador.get("role") or "member")
+            ):
+                return await call_next(request)
+        except Exception as exc:  # noqa: BLE001 - nunca deve derrubar o pedido
+            logger.debug("Permissões: gestores de relatórios não resolvidos: %s", exc)
+
     return JSONResponse(
         status_code=403,
         content={
@@ -858,6 +877,7 @@ app.include_router(cae_router)
 # Relatórios a pedido: área do cliente (`/reports/*`), backoffice de produção
 # (`/reports/backoffice/*`) e configuração na administração (`/reports/admin/*`).
 app.include_router(reports_router)
+app.include_router(reports_studio_router)
 app.include_router(subvencoes_router)
 # Partidos políticos e as suas contas: páginas anuais do financiamento partidário
 # do Tribunal Constitucional (contas anuais, listas de ações e meios, relatórios,

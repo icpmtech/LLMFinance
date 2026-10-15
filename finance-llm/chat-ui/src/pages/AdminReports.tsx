@@ -623,6 +623,7 @@ export function ReportsSettingsPanel({
     vat_rate: 23,
     default_delivery_days: 2,
     backoffice_users: "",
+    report_managers: "",
     notify_extra_emails: "",
   });
   const [busy, setBusy] = useState(false);
@@ -643,6 +644,7 @@ export function ReportsSettingsPanel({
       vat_rate: Number(data.vat_rate || 23),
       default_delivery_days: Number(data.default_delivery_days || 2),
       backoffice_users: (data.backoffice_users || []).join("\n"),
+      report_managers: (data.report_managers || []).join("\n"),
       notify_extra_emails: (data.notify_extra_emails || []).join("\n"),
     });
   }, [payload]);
@@ -673,6 +675,7 @@ export function ReportsSettingsPanel({
         vat_rate: Number(form.vat_rate),
         default_delivery_days: Number(form.default_delivery_days),
         backoffice_users: form.backoffice_users.split(/[\n,;]+/).map((item) => item.trim()).filter(Boolean),
+        report_managers: form.report_managers.split(/[\n,;]+/).map((item) => item.trim()).filter(Boolean),
         notify_extra_emails: form.notify_extra_emails.split(/[\n,;]+/).map((item) => item.trim()).filter(Boolean),
         ...(form.mbway_api_key ? { mbway_api_key: form.mbway_api_key } : {}),
       });
@@ -854,6 +857,22 @@ export function ReportsSettingsPanel({
             <p className="text-[11px] text-muted-foreground">Recebem os pedidos e podem tratá-los. Os administradores têm sempre acesso.</p>
           </div>
           <div className="space-y-2">
+            <Label htmlFor="report-managers">Gestores de relatórios (uma por linha)</Label>
+            <textarea
+              id="report-managers"
+              value={form.report_managers}
+              onChange={(event) => setForm((current) => ({ ...current, report_managers: event.target.value }))}
+              rows={4}
+              placeholder="relatorios@empresa.pt"
+              className="w-full rounded-xl border bg-background px-3 py-2 text-sm"
+              disabled={!canEdit}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Entram no <strong>Estúdio</strong> (criar, publicar e vender relatórios). Os administradores e gestores de plataforma
+              têm sempre acesso.
+            </p>
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="extra-emails">Emails extra avisados de cada pedido</Label>
             <textarea
               id="extra-emails"
@@ -988,6 +1007,19 @@ function CataloguePanel({
                   <option value="0">Inativo</option>
                 </select>
               </div>
+              <div className="space-y-2">
+                <Label>Entrega automática</Label>
+                <Input
+                  value={editing.auto || ""}
+                  onChange={(event) => setEditing({ ...editing, auto: event.target.value })}
+                  placeholder="vazio, benchmark ou estudio:<id>"
+                  autoComplete="off"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Com entrega automática, o PDF é gerado pela plataforma depois do pagamento. Os relatórios do estúdio ficam com{" "}
+                  <code>estudio:&lt;id&gt;</code>.
+                </p>
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Itens incluídos (um por linha)</Label>
@@ -1052,6 +1084,9 @@ function CataloguePanel({
               </div>
               <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                 <Badge variant={item.active ? "success" : "secondary"}>{item.active ? "Ativo" : "Inativo"}</Badge>
+                {item.auto ? (
+                  <Badge variant="info">{item.auto === "benchmark" ? "Automático (benchmark)" : "Automático (estúdio)"}</Badge>
+                ) : null}
                 <span>{item.delivery_days} dia(s)</span>
                 <span>· até {item.max_targets} empresa(s)</span>
                 <span>· {item.features.length} itens</span>

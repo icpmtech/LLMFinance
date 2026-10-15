@@ -10,12 +10,12 @@
  * imagem de capa) e o SEO são do documento.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ExternalLink, Eye, Loader2, Pencil, Plus, RefreshCw, Save, Search, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ExternalLink, Eye, Loader2, Newspaper, Pencil, Plus, RefreshCw, Save, Search, Trash2 } from "lucide-react";
 
 import { Button } from "../components/ui/Button";
-import { IconAction, ListRow, MediaPicker, Notice, PanelHeader, SelectInput, Sheet, StatusBadge, TextArea, TextInput, timeAgo } from "../components/cms/CmsKit";
+import { BlockEditor, IconAction, ListRow, MediaPicker, Notice, PanelHeader, SelectInput, Sheet, StatusBadge, TextArea, TextInput, timeAgo } from "../components/cms/CmsKit";
 import * as cms from "../cmsApi";
-import type { CmsRemuneracao, CmsRemuneracaoOpcoes, CmsStatus } from "../cmsApi";
+import type { CmsRemuneracao, CmsRemuneracaoOpcoes, CmsRemuneracaoSeccao, CmsStatus } from "../cmsApi";
 import { HistoryPanel, PublishBar, SeoFields, type CmsCtx } from "./CmsPanels";
 
 function openExternal(url: string) {
@@ -45,6 +45,7 @@ export function CmsRemuneracoesPanel({
   const [draft, setDraft] = useState<Partial<CmsRemuneracao> | null>(null);
   const [busy, setBusy] = useState(false);
   const [aReler, setAReler] = useState(false);
+  const [aBlog, setABlog] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -217,6 +218,72 @@ export function CmsRemuneracoesPanel({
   const carreiras = dados?.carreiras ?? [];
   const media = ctx.catalogue.media_index;
 
+  /** As secções pela ordem guardada; as que faltarem entram no fim. */
+  const ordemSeccoes = useMemo(() => {
+    const conhecidas = (opcoes?.mostrar ?? []).map((item) => item.id);
+    const guardada = (draft?.ordem ?? []).filter((chave) => conhecidas.includes(chave));
+    return [...new Set(guardada), ...conhecidas.filter((chave) => !guardada.includes(chave))];
+  }, [draft?.ordem, opcoes]);
+
+  const infoDaSeccao = useCallback(
+    (chave: string) => (opcoes?.mostrar ?? []).find((item) => item.id === chave),
+    [opcoes],
+  );
+
+  const valorDaSeccao = useCallback(
+    (chave: string): CmsRemuneracaoSeccao => draft?.seccoes?.[chave] ?? { titulo: "", sub: "" },
+    [draft],
+  );
+
+  const ligarSeccao = useCallback((chave: string, ligada: boolean) => {
+    setDraft((atual) => (atual ? { ...atual, mostrar: { ...(atual.mostrar ?? {}), [chave]: ligada } } : atual));
+  }, []);
+
+  /** Guarda o título ou o subtítulo de uma secção (o vazio volta ao do modelo). */
+  const definirSeccao = useCallback(
+    (chave: string, campo: "titulo" | "sub", valor: string) => {
+      setDraft((atual) => {
+        if (!atual) return atual;
+        const seccoes = atual.seccoes ?? {};
+        const padrao = infoDaSeccao(chave);
+        const base = seccoes[chave] ?? { titulo: padrao?.titulo ?? "", sub: padrao?.sub ?? "" };
+        return { ...atual, seccoes: { ...seccoes, [chave]: { ...base, [campo]: valor } } };
+      });
+    },
+    [infoDaSeccao],
+  );
+
+  const moverSeccao = useCallback(
+    (posicao: number, delta: number) => {
+      setDraft((atual) => {
+        if (!atual) return atual;
+        const destino = posicao + delta;
+        if (destino < 0 || destino >= ordemSeccoes.length) return atual;
+        const lista = [...ordemSeccoes];
+        [lista[posicao], lista[destino]] = [lista[destino], lista[posicao]];
+        return { ...atual, ordem: lista };
+      });
+    },
+    [ordemSeccoes],
+  );
+
+  /** Cria no blog o rascunho que anuncia esta página (o quadro fica na página). */
+  const criarArtigo = useCallback(async () => {
+    if (!draft?.id) return;
+    setABlog(true);
+    setError(null);
+    try {
+      const resultado = await cms.createCmsRemuneracaoArtigo(draft.id, {});
+      setDraft(resultado.item);
+      await load();
+      ctx.notify(resultado.resumo, "ok");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setABlog(false);
+    }
+  }, [draft, ctx, load]);
+
   return (
     <div className="space-y-3">
       <PanelHeader
@@ -385,24 +452,104 @@ export function CmsRemuneracoesPanel({
             )}
 
             <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-              <p className="text-[12px] font-semibold">O que a página mostra</p>
+              <p className="text-[12px] font-semibold">Marca e estilo</p>
               <p className="mt-0.5 text-[11px] text-muted-foreground">
-                Desligue o que não quiser publicar neste momento; o texto e os blocos acima aparecem sempre.
+                Capa, logótipo, cor de destaque e estilo das secções. Vale só para esta página — não muda o resto do
+                site.
               </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {(opcoes?.mostrar ?? []).map((item) => {
-                  const ligado = draft.mostrar?.[item.id] !== false;
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <MediaPicker
+                  label="Imagem de capa"
+                  value={String(draft.capa_id ?? "")}
+                  onChange={(next) => setDraft({ ...draft, capa_id: next || null })}
+                  media={media}
+                />
+                <MediaPicker
+                  label="Logótipo"
+                  value={String(draft.logo_id ?? "")}
+                  onChange={(next) => setDraft({ ...draft, logo_id: next || null })}
+                  media={media}
+                />
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <TextInput
+                      label="Cor de destaque"
+                      value={draft.cor ?? ""}
+                      onChange={(next) => setDraft({ ...draft, cor: next })}
+                      placeholder="#1d4ed8"
+                      hint="Aceita `#rrggbb`; vazio usa a cor do site."
+                    />
+                  </div>
+                  <input
+                    type="color"
+                    aria-label="Escolher a cor de destaque"
+                    value={/^#[0-9a-fA-F]{6}$/.test(draft.cor ?? "") ? String(draft.cor) : "#1d4ed8"}
+                    onChange={(event) => setDraft({ ...draft, cor: event.target.value })}
+                    className="h-9 w-12 cursor-pointer rounded-lg border border-white/10 bg-transparent"
+                  />
+                </div>
+                <SelectInput
+                  label="Estilo das secções"
+                  value={draft.estilo ?? opcoes?.estilos?.[0]?.id ?? "cartoes"}
+                  onChange={(next) => setDraft({ ...draft, estilo: next })}
+                  options={(opcoes?.estilos ?? []).map((item) => ({ value: item.id, label: item.label }))}
+                  hint="Muda só a superfície: cartões, linhas de separação ou cabeçalhos em faixa."
+                />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+              <p className="text-[12px] font-semibold">Secções da página</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Renomeie, desligue ou troque a ordem dos quadros. Deixe o título vazio para voltar ao do modelo. O texto
+                de entrada e os blocos aparecem antes das secções.
+              </p>
+              <div className="mt-2 space-y-1.5">
+                {ordemSeccoes.map((chave, posicao) => {
+                  const info = infoDaSeccao(chave);
+                  const valor = valorDaSeccao(chave);
+                  const ligada = draft.mostrar?.[chave] !== false;
                   return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setDraft({ ...draft, mostrar: { ...(draft.mostrar ?? {}), [item.id]: !ligado } })}
-                      className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
-                        ligado ? "border-teal-300/40 bg-teal-300/10 text-teal-100" : "border-white/10 text-muted-foreground"
+                    <div
+                      key={chave}
+                      className={`rounded-lg border p-2 transition ${
+                        ligada ? "border-white/10 bg-white/[0.02]" : "border-white/5 opacity-60"
                       }`}
                     >
-                      {item.label}
-                    </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          aria-pressed={ligada}
+                          onClick={() => ligarSeccao(chave, !ligada)}
+                          className={`rounded-full border px-2 py-0.5 text-[10.5px] transition ${
+                            ligada ? "border-teal-300/40 bg-teal-300/10 text-teal-100" : "border-white/10 text-muted-foreground"
+                          }`}
+                        >
+                          {ligada ? "Ligada" : "Desligada"}
+                        </button>
+                        <span className="flex-1 truncate text-[11.5px] font-medium">{info?.label ?? chave}</span>
+                        <IconAction title="Subir na página" onClick={() => moverSeccao(posicao, -1)}>
+                          <ArrowUp size={12} />
+                        </IconAction>
+                        <IconAction title="Descer na página" onClick={() => moverSeccao(posicao, 1)}>
+                          <ArrowDown size={12} />
+                        </IconAction>
+                      </div>
+                      <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+                        <TextInput
+                          label="Título da secção"
+                          value={valor.titulo}
+                          onChange={(next) => definirSeccao(chave, "titulo", next)}
+                          placeholder={info?.titulo}
+                        />
+                        <TextInput
+                          label="Subtítulo"
+                          value={valor.sub}
+                          onChange={(next) => definirSeccao(chave, "sub", next)}
+                          placeholder={info?.sub}
+                        />
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -492,27 +639,49 @@ export function CmsRemuneracoesPanel({
             </div>
 
             <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-              <p className="text-[12px] font-semibold">Marca e imagens</p>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                <MediaPicker
-                  label="Imagem de capa"
-                  value={String(draft.capa_id ?? "")}
-                  onChange={(next) => setDraft({ ...draft, capa_id: next || null })}
+              <p className="text-[12px] font-semibold">Blocos e imagens</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Texto, imagens, galerias e destaques na página. A ordem dos blocos é a ordem publicada, entre o texto de
+                entrada e as secções.
+              </p>
+              <div className="mt-2">
+                <BlockEditor
+                  blocks={(draft.blocks ?? []) as never}
+                  onChange={(next) => setDraft({ ...draft, blocks: next as CmsRemuneracao["blocks"] })}
+                  blockTypes={ctx.catalogue.block_types}
                   media={media}
+                  contents={ctx.catalogue.contents_index}
+                  categories={ctx.catalogue.categories_index}
                 />
-                <MediaPicker
-                  label="Logótipo"
-                  value={String(draft.logo_id ?? "")}
-                  onChange={(next) => setDraft({ ...draft, logo_id: next || null })}
-                  media={media}
-                />
-                <TextInput
-                  label="Cor de destaque"
-                  value={draft.cor ?? ""}
-                  onChange={(next) => setDraft({ ...draft, cor: next })}
-                  placeholder="#1d4ed8"
-                  hint="Aceita `#rrggbb`; vazio usa a cor do site."
-                />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+              <p className="text-[12px] font-semibold">Blog</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Cria no blog o artigo que anuncia este quadro: nasce rascunho, com a capa, o resumo e a ligação para a
+                página. Publica-se no blog como qualquer artigo.
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant={draft.artigo_id ? "secondary" : "primary"}
+                  icon={<Newspaper size={13} />}
+                  loading={aBlog}
+                  onClick={() => void criarArtigo()}
+                  disabled={!draft.id}
+                >
+                  {draft.artigo_id ? "Criar outro artigo" : "Criar artigo no blog"}
+                </Button>
+                {draft.artigo_id ? (
+                  <button
+                    type="button"
+                    className="text-[11.5px] text-teal-200 hover:underline"
+                    onClick={() => openExternal(`/cms/blog?id=${draft.artigo_id}`)}
+                  >
+                    Abrir o artigo no blog
+                  </button>
+                ) : null}
               </div>
             </div>
 

@@ -371,6 +371,9 @@ export type CmsRemuneracaoDados = {
   error?: string;
 };
 
+/** Título e subtítulo de uma secção da página (editáveis no CMS). */
+export type CmsRemuneracaoSeccao = { titulo: string; sub: string };
+
 /** Página pública do modelo de remunerações da Administração Pública. */
 export type CmsRemuneracao = {
   id: string;
@@ -387,22 +390,34 @@ export type CmsRemuneracao = {
   dados?: CmsRemuneracaoDados | null;
   /** O que a página mostra, além do texto e dos blocos. */
   mostrar?: Record<string, boolean>;
+  /** Título e subtítulo de cada secção, pela chave de `mostrar`. */
+  seccoes?: Record<string, CmsRemuneracaoSeccao>;
+  /** Ordem das secções na página. */
+  ordem?: string[];
+  /** Como as secções se apresentam (`cartoes`, `plano` ou `destaque`). */
+  estilo?: string;
   /** Carreiras que ganham gráfico de posições. */
   destacar?: string[];
   capa_id?: string | null;
   logo_id?: string | null;
   cor?: string;
+  /** Artigo de blog criado a partir desta página (`POST …/artigo`). */
+  artigo_id?: string | null;
   seo?: CmsSeo;
   created_at?: string;
   updated_at?: string;
   updated_by?: string;
 };
 
+/** Uma secção da página, com o rótulo do interruptor e os títulos por omissão. */
+export type CmsRemuneracaoSeccaoOpcao = { id: string; label: string; titulo: string; sub: string };
+
 /** Escolhas para montar a página do modelo (anos e partes disponíveis). */
 export type CmsRemuneracaoOpcoes = {
   anos: number[];
   ano?: number | null;
-  mostrar: { id: string; label: string }[];
+  mostrar: CmsRemuneracaoSeccaoOpcao[];
+  estilos: { id: string; label: string }[];
   seccoes: string[];
   parametros?: { ano?: number; brap?: number | null; brap_nota?: string | null } | null;
   fonte?: string | null;
@@ -768,6 +783,14 @@ export function refreshCmsRemuneracaoModelo(
   payload: { ano?: number; guardar_ano?: boolean } = {},
 ): Promise<{ saved: boolean; item: CmsRemuneracao; ano: number; resumo_dos_dados: string }> {
   return request(`/cms/remuneracoes/${encodeURIComponent(id)}/modelo`, withBody("POST", payload));
+}
+
+/** Cria no blog o rascunho que anuncia a página (capa, resumo e ligação). */
+export function createCmsRemuneracaoArtigo(
+  id: string,
+  payload: { title?: string; slug?: string; excerpt?: string; markdown?: string; category_ids?: string[]; tags?: string[] } = {},
+): Promise<{ saved: boolean; item: CmsRemuneracao; artigo: CmsPost; url: string; resumo: string }> {
+  return request(`/cms/remuneracoes/${encodeURIComponent(id)}/artigo`, withBody("POST", payload));
 }
 
 /** Endereço público da página do modelo (`/site/remuneracoes/{slug}`). */

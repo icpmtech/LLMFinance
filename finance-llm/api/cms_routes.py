@@ -34,6 +34,17 @@ municípios, com filtros, SEO, marca e imagens):
 - `PATCH /cms/pesquisas/{id}` — altera título, filtros, texto, marca e SEO
 - `POST /cms/pesquisas/{id}/dados` — volta a correr a pesquisa e guarda-a
 
+**Páginas do modelo de remunerações** (entidade `remuneracoes` — o quadro da
+DGAEP de um ano, com as secções editáveis, o texto, os blocos e a marca):
+
+- `GET  /cms/remuneracoes/opcoes` — anos recolhidos, secções (com os títulos por
+  omissão) e estilos de apresentação
+- `POST /cms/remuneracoes` — cria a página (o modelo do ano entra já lido)
+- `PATCH /cms/remuneracoes/{id}` — altera título, ano, texto, blocos, secções,
+  marca e SEO
+- `POST /cms/remuneracoes/{id}/modelo` — volta a ler o quadro da DGAEP
+- `POST /cms/remuneracoes/{id}/artigo` — cria no blog o rascunho que anuncia a página
+
 **Site público** (sem sessão):
 
 - `GET /site` — página inicial
@@ -499,6 +510,52 @@ def cms_remuneracao_modelo(
         "item": item,
         "ano": ano,
         "resumo_dos_dados": remuneracoes_publicas.resumo_dos_dados(dados),
+    }
+
+
+@router.post("/cms/remuneracoes/{item_id}/artigo")
+def cms_remuneracao_artigo(
+    item_id: str,
+    payload: Dict[str, Any] = Body(default_factory=dict),
+    session: Session = None,
+) -> Dict[str, Any]:
+    """Cria o artigo de blog que anuncia a página do modelo.
+
+    O artigo nasce **rascunho** (publica-se no editor do blog), com a capa, o
+    resumo e as etiquetas do modelo, e o corpo escrito a partir dos números
+    lidos — o quadro continua a ser a página: o artigo diz o que o ano traz e
+    liga para lá. O `artigo_id` fica guardado na página, para o editor não o
+    perder de vista nem o criar duas vezes.
+    """
+    author = _writer(session)
+    try:
+        doc = store.get_item("remuneracoes", item_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    sugestao = remuneracoes_publicas.artigo_do_modelo(doc)
+    corpo = {
+        "title": str(payload.get("title") or sugestao["title"]).strip() or sugestao["title"],
+        "slug": str(payload.get("slug") or sugestao["slug"]),
+        "status": "rascunho",
+        "excerpt": str(payload.get("excerpt") or sugestao["excerpt"]),
+        "markdown": str(payload.get("markdown") or sugestao["markdown"]),
+        "cover_id": payload.get("cover_id") or doc.get("capa_id"),
+        "category_ids": [str(valor) for valor in (payload.get("category_ids") or []) if str(valor).strip()],
+        "tags": payload.get("tags") or sugestao["tags"],
+        "author": author,
+    }
+    try:
+        artigo = store.save_item("posts", corpo, author)
+        item = store.save_item("remuneracoes", {**doc, "id": item_id, "artigo_id": artigo["id"]}, author)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return {
+        "saved": True,
+        "item": item,
+        "artigo": artigo,
+        "url": f"/cms/blog?id={artigo['id']}",
+        "resumo": f"Artigo «{artigo['title']}» criado como rascunho.",
     }
 
 

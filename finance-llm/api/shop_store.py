@@ -101,9 +101,24 @@ PRODUCT_TYPES: List[Dict[str, str]] = [
 #: `auto_report` com uma destas chaves e o PDF é gerado quando a encomenda fica
 #: paga, a partir dos mesmos dados do módulo de benchmark (não há uma segunda
 #: implementação dos números). Os restantes produtos digitais são entregues à mão.
+#:
+#: Os relatórios criados no **Estúdio** entram com a chave dinâmica
+#: `estudio:<id>` — é a mesma entrega automática, com o PDF montado a partir do
+#: relatório publicado (`is_auto_report` é quem valida ambas as formas).
 AUTO_REPORTS: Dict[str, str] = {
     "benchmark": "Relatório de Benchmark (Portugal, Espanha e França)",
 }
+
+
+def is_auto_report(value: Any) -> bool:
+    """Chave de entrega automática conhecida (`benchmark` ou `estudio:<id>`)."""
+    text = str(value or "").strip().lower()
+    if not text:
+        return False
+    if text in AUTO_REPORTS:
+        return True
+    return text.startswith("estudio:") and bool(text.split(":", 1)[1].strip())
+
 
 ORDER_STATUSES: Tuple[str, ...] = ("pendente", "pago", "em_preparacao", "enviado", "entregue", "cancelado", "reembolsado")
 ORDER_LABELS: Dict[str, str] = {
@@ -869,7 +884,7 @@ def _normalise(entity: str, payload: Dict[str, Any], existing: Optional[Dict[str
         doc["internal_notes"] = str(pick("internal_notes") or "")
         doc["seo"] = _normalise_seo(pick("seo"))
         auto = str(pick("auto_report") or "").strip().lower()
-        doc["auto_report"] = auto if auto in AUTO_REPORTS else ""
+        doc["auto_report"] = auto if is_auto_report(auto) else ""
 
     if entity == "categories":
         doc["name"] = str(pick("name") or "").strip()
@@ -1944,7 +1959,7 @@ def _linhas_com_relatorio(store_data: Dict[str, Any], order: Dict[str, Any]) -> 
     linhas: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
     for line in order.get("items") or []:
         produto = _find(store_data, "products", str(line.get("product_id") or ""))
-        if produto and str(produto.get("auto_report") or "") in AUTO_REPORTS:
+        if produto and is_auto_report(produto.get("auto_report")):
             linhas.append((line, produto))
     return linhas
 
@@ -1961,10 +1976,19 @@ def _benchmark_params() -> Dict[str, Any]:
 
 def _gerar_pdf(order: Dict[str, Any], produto: Dict[str, Any]) -> Tuple[str, bytes, str]:
     """Gera o PDF do produto — `(nome, bytes, mime)`. Import tardio do relatório."""
-    from api import benchmark_report
-
+    key = str(produto.get("auto_report") or "").strip().lower()
     comprador = order.get("customer") or {}
     requerente = str(comprador.get("name") or comprador.get("email") or "")
+    if key.startswith("estudio:"):
+        from api import reports_studio  # noqa: PLC0415
+
+        return reports_studio.render_for_key(
+            key,
+            reference=str(order.get("number") or ""),
+            requester=requerente,
+        )
+    from api import benchmark_report
+
     return benchmark_report.render(
         _benchmark_params(),
         reference=str(order.get("number") or ""),

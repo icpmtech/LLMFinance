@@ -74,6 +74,7 @@ export type AppView =
   | "vortal"
   | "osint"
   | "reports"
+    | "report-studio"
   | "subvencoes"
   | "administracao-central"
   | "remuneracoes"

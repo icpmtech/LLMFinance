@@ -15,12 +15,17 @@ página precisa de desenhar:
 A leitura é **verificável**: cada linha diz de que secção do documento veio, e o
 que o quadro não publica (suplementos, subsídio de refeição) é declarado como
 fora do modelo em vez de ser estimado.
+
+As **secções da página** (título, subtítulo, ordem e o que está ligado) vivem em
+`cms_store` — este módulo só lhes dá os valores por omissão, para o editor e a
+página pública dizerem o mesmo.
 """
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from api import cms_store as store
 from api import remuneracoes_ap_service as ap
 
 #: Quantas linhas de cada quadro a fotografia guarda (a página lista estas).
@@ -34,7 +39,8 @@ def opcoes() -> Dict[str, Any]:
     return {
         "anos": ap.anos_disponiveis(),
         "ano": ap.ano_de_referencia(),
-        "mostrar": [{"id": chave, "label": rotulo} for chave, rotulo in _mostrar_opcoes()],
+        "mostrar": _mostrar_opcoes(),
+        "estilos": [{"id": chave, "label": rotulo} for chave, rotulo in store.ESTILOS_REMUNERACOES],
         "seccoes": ap.secao_carreiras() if ap.ano_de_referencia() else [],
         "parametros": ap.parametros_do_ano(),
         "fonte": ap.FONTE,
@@ -48,16 +54,35 @@ def opcoes() -> Dict[str, Any]:
     }
 
 
-def _mostrar_opcoes() -> List[tuple]:
-    """Rótulos das partes do modelo, iguais aos do CMS (`cms_store`)."""
+def _mostrar_opcoes() -> List[Dict[str, Any]]:
+    """As secções da página, iguais às do CMS (`cms_store`).
+
+    Cada uma vem com o `id` (a chave guardada no documento), o `label` do
+    interruptor e os **títulos por omissão** — o editor mostra-os como exemplo
+    do que a página diz quando não reescreve nada.
+    """
     return [
-        ("parametros", "Parâmetros do ano"),
-        ("niveis", "Tabela Remuneratória Única"),
-        ("serie", "Evolução entre anos"),
-        ("carreiras", "Carreiras e posições"),
-        ("dirigentes", "Cargos dirigentes"),
-        ("simulador", "Simulador"),
-        ("notas", "Notas da DGAEP"),
+        {"id": chave, "label": titulo, "titulo": titulo, "sub": sub}
+        for chave, titulo, sub in store.SECCOES_REMUNERACOES
+    ]
+
+
+def _serie_da_pagina() -> List[Dict[str, Any]]:
+    """As linhas da série que a página compara: o nível 5 (BRAP) e o último nível.
+
+    A página lê a evolução **ano a ano** de dois pontos da tabela. Guardar as
+    últimas 60 linhas era guardar sessenta níveis que ninguém vê e deixar de
+    fora, precisamente, o nível 5 — o gráfico saía a zeros.
+    """
+    linhas = ap.serie_dos_niveis()
+    if not linhas:
+        return []
+    alvos = [5, max(int(linha.get("nivel") or 0) for linha in linhas)]
+    return [
+        linha
+        for alvo in dict.fromkeys(alvos)
+        for linha in linhas
+        if int(linha.get("nivel") or 0) == alvo
     ]
 
 
@@ -83,7 +108,7 @@ def dados_do_ano(ano: Optional[int] = None) -> Dict[str, Any]:
         "parametros": ap.parametros_do_ano(alvo),
         "niveis": modelo.get("niveis") or [],
         "tru_notas": modelo.get("tru_notas") or [],
-        "serie": ap.serie_dos_niveis(5, None)[-60:],
+        "serie": _serie_da_pagina(),
         "seccoes": ap.secao_carreiras(alvo),
         "carreiras": [_carreira(item) for item in carreiras[:LIMITE_CARREIRAS]],
         "dirigentes": [_dirigente(item) for item in dirigentes[:LIMITE_DIRIGENTES]],
@@ -148,6 +173,47 @@ def _dirigente(item: Dict[str, Any]) -> Dict[str, Any]:
         "indice": item.get("indice"),
         "niveis_texto": item.get("niveis_texto"),
         "remuneracao": item.get("remuneracao"),
+    }
+
+
+def artigo_do_modelo(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Rascunho do artigo de blog que anuncia a página do modelo.
+
+    O artigo não copia o quadro (é longo e muda quando a DGAEP publica outro):
+    diz o que o ano traz, com os números que a página publica, e **liga para
+    lá**. O título, o resumo e o corpo são editáveis no blog como em qualquer
+    artigo — isto são só os valores de partida.
+    """
+    dados = doc.get("dados") if isinstance(doc.get("dados"), dict) else {}
+    ano = dados.get("ano") or doc.get("ano")
+    contagens = dados.get("contagens") or {}
+    parametros = dados.get("parametros") or {}
+    fonte = dados.get("fonte") or {}
+    pagina = f"/site/remuneracoes/{doc.get('slug')}" if doc.get("slug") else "/site"
+    destaques = [
+        ("BRAP (nível 5 da TRU)", _euros(parametros.get("brap"))),
+        ("Níveis da TRU", str(contagens.get("niveis") or "—")),
+        ("Carreiras e categorias", str(contagens.get("carreiras") or "—")),
+        ("Posições remuneratórias", str(contagens.get("posicoes") or "—")),
+        ("Cargos dirigentes e equiparados", str(contagens.get("dirigentes") or "—")),
+    ]
+    corpo = [
+        f"O quadro da DGAEP de {ano} está publicado: a Tabela Remuneratória Única, as carreiras com as "
+        "suas posições remuneratórias e os cargos dirigentes da administração pública.",
+        "",
+        *[f"- **{rotulo}:** {valor}" for rotulo, valor in destaques],
+        "",
+        f"[Ver o quadro de {ano} completo]({pagina})",
+        "",
+    ]
+    if fonte.get("documento"):
+        corpo.append(f"Fonte: {fonte['documento']}" + (f" — {fonte['url']}" if fonte.get("url") else ""))
+    return {
+        "title": f"Remunerações da Administração Pública {ano}: o que o quadro da DGAEP mostra",
+        "slug": f"remuneracoes-administracao-publica-{ano}",
+        "excerpt": str(doc.get("excerpt") or resumo_dos_dados(dados)),
+        "markdown": "\n".join(corpo),
+        "tags": ["remunerações", "administração pública", "DGAEP"],
     }
 
 

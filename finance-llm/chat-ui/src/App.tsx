@@ -93,6 +93,7 @@ import MercadoCenariosPage from "./pages/MercadoCenariosPage";
 import VortalPage from "./pages/VortalPage";
 import OsintPage from "./pages/OsintPage";
 import ReportsPage from "./pages/ReportsPage";
+import ReportStudioPage from "./pages/ReportStudioPage";
 import SubvencoesPage from "./pages/SubvencoesPage";
 import AdministracaoCentralPage from "./pages/AdministracaoCentralPage";
 import RemuneracoesPage from "./pages/RemuneracoesPage";
@@ -401,6 +402,8 @@ function pathForView(
   if (view === "world-rede") return "/world/rede";
   if (view === "osint") return "/osint";
   if (view === "reports") return "/reports";
+  // O Estúdio de relatórios vive em página própria (criação, publicação e PDF).
+  if (view === "report-studio") return "/report-studio";
   if (view === "subvencoes") return "/subvencoes";
   if (view === "administracao-central") return "/administracao-central";
   if (view === "remuneracoes") return "/remuneracoes";
@@ -811,6 +814,7 @@ export default function App() {
       else if (path === "/vortal" || path.startsWith("/vortal/")) next = "vortal";
       else if (path === "/osint" || path.startsWith("/osint/")) next = "osint";
       else if (path === "/reports" || path.startsWith("/reports/")) next = "reports";
+      else if (path === "/report-studio" || path.startsWith("/report-studio/")) next = "report-studio";
       else if (path === "/subvencoes" || path.startsWith("/subvencoes/")) next = "subvencoes";
       else if (path === "/administracao-central" || path.startsWith("/administracao-central/")) next = "administracao-central";
       else if (path === "/remuneracoes/ap" || path.startsWith("/remuneracoes/ap/")) next = "remuneracoes-ap";
@@ -1663,7 +1667,10 @@ export default function App() {
     // Peças do procedimento (Vortal): recolha para disco, índice e pesquisa.
     if (target === "vortal") return <VortalPage />;
     if (target === "osint") return <OsintPage />;
-    if (target === "reports") return <ReportsPage />;
+    if (target === "reports") return <ReportsPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
+    // Estúdio de relatórios: página própria para criar, gerar o PDF e publicar
+    // com preço (reservada a administradores e gestores de relatórios).
+    if (target === "report-studio") return <ReportStudioPage onNavigate={(next) => setViewAndHistory(next as AppView)} />;
     if (target === "subvencoes") return <SubvencoesPage />;
     // Administração Central: o índice das entidades do setor institucional do INE
     // (SEC 2010) ligado aos contratos e às adjudicatárias de cada entidade.

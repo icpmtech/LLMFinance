@@ -174,6 +174,7 @@ class SettingsPatch(BaseModel):
     vat_rate: Optional[float] = None
     default_delivery_days: Optional[float] = None
     backoffice_users: Optional[List[str]] = None
+    report_managers: Optional[List[str]] = None
     notify_extra_emails: Optional[List[str]] = None
 
 
@@ -190,6 +191,7 @@ class CataloguePayload(BaseModel):
     max_targets: Optional[int] = None
     active: Optional[bool] = None
     features: Optional[List[str]] = None
+    auto: Optional[str] = Field(None, description="Entrega automática: `benchmark` ou `estudio:<id>` (vazio desliga)")
 
 
 def _fail(exc: ValueError) -> HTTPException:
@@ -218,6 +220,7 @@ def _admin_settings_view() -> Dict[str, Any]:
         "mbway_api_set": bool(key),
         "mbway_api_hint": (f"…{key[-4:]}" if len(key) > 4 else ("configurada" if key else "")),
         "backoffice_effective": store.backoffice_users(),
+        "report_managers_effective": store.report_managers(),
     }
 
 

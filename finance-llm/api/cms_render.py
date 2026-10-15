@@ -1518,18 +1518,43 @@ def _para_float(valor: Any) -> float:
         return 0.0
 
 
-def _tabela(titulo: str, cabecalho: List[str], linhas: List[List[str]]) -> str:
+def _tabela_nua(
+    cabecalho: List[str],
+    linhas: List[List[str]],
+    *,
+    classe: str = "",
+    atributos: Optional[List[Dict[str, str]]] = None,
+) -> str:
+    """A tabela sem título — para quem já desenha o cabeçalho da secção.
+
+    A rolagem horizontal e o `prose` (bordas, sombreado do cabeçalho) são os
+    mesmos da `_tabela`; o que fica de fora é o `<h2>` e o `section`. Os
+    `atributos` (uma lista alinhada com as linhas) saem como `data-*` na linha —
+    é por aí que a pesquisa das tabelas filtra (ver `_tabela_filtravel`).
+    """
     if not linhas:
         return ""
     head = "".join(f"<th>{_esc(celula)}</th>" for celula in cabecalho)
-    body = "".join(
-        "<tr>" + "".join(f"<td>{_esc(celula)}</td>" for celula in linha) + "</tr>"
-        for linha in linhas
-    )
+    corpo = []
+    for indice, linha in enumerate(linhas):
+        dados = (atributos[indice] if atributos and indice < len(atributos) else None) or {}
+        extra = "".join(
+            f' data-{_esc(chave)}="{_esc(valor)}"' for chave, valor in dados.items() if str(valor or "")
+        )
+        corpo.append(
+            f"<tr{extra}>" + "".join(f"<td>{_esc(celula)}</td>" for celula in linha) + "</tr>"
+        )
+    extra_classe = f" {classe}" if classe else ""
     return (
-        f'<div class="section prose"><h2>{_esc(titulo)}</h2>'
-        f'<div class="tabela-rolavel larga"><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div></div>'
+        f'<div class="tabela-rolavel larga{extra_classe} prose"><table>'
+        f"<thead><tr>{head}</tr></thead><tbody>{''.join(corpo)}</tbody></table></div>"
     )
+
+
+def _tabela(titulo: str, cabecalho: List[str], linhas: List[List[str]]) -> str:
+    if not linhas:
+        return ""
+    return f'<div class="section prose"><h2>{_esc(titulo)}</h2>{_tabela_nua(cabecalho, linhas)}</div>'
 
 
 def _kpis_do_municipio(dados: Dict[str, Any]) -> str:
@@ -1794,19 +1819,31 @@ def _barra_de_valor(valor: float, maximo: float) -> int:
     return max(2, int(round(100 * valor / maximo)))
 
 
-def _barras(itens: List[Dict[str, Any]], *, unidade: Optional[str] = None) -> str:
+def _barras(
+    itens: List[Dict[str, Any]],
+    *,
+    unidade: Optional[str] = None,
+    formatador: Optional[Any] = None,
+) -> str:
     """Gráfico de barras em HTML/CSS.
 
     Não é uma imagem nem um canvas: o valor e o rótulo ficam **em texto**, por
     isso o gráfico lê-se (e imprime-se) sem cor, e o que está escrito é o mesmo
     número que a tabela mostra.
+
+    O `formatador` deixa quem chama escolher a escala do valor: as despesas
+    municipais são milhões (formato curto), mas uma remuneração base mostra-se
+    com cêntimos («1 442,57 €»).
     """
     valores = [_para_float(item.get("valor")) for item in itens]
     maximo = max(valores) if valores else 0.0
     linhas = []
     for item, valor in zip(itens, valores):
         nota = str(item.get("nota") or "")
-        texto = _numero(valor) if unidade == "contratos" else _euros_curto(valor)
+        if formatador is not None:
+            texto = formatador(valor)
+        else:
+            texto = _numero(valor) if unidade == "contratos" else _euros_curto(valor)
         linhas.append(
             f'<li><span class="rotulo">{_esc(item.get("rotulo"))}</span>'
             f'<span class="barra"><i style="width:{_barra_de_valor(valor, maximo)}%"></i></span>'
@@ -1924,24 +1961,254 @@ def render_pesquisa(
 
 # --------------------------------------------------------------------------
 # Página do modelo de remunerações da Administração Pública (`remuneracoes`)
+#
+# A página é feita de **secções** (`cms_store.SECCOES_REMUNERACOES`): cada uma
+# tem título e subtítulo editáveis no CMS, pode ser desligada (`mostrar`) e
+# entra na ordem que o editor escolheu (`ordem`). O estilo (`estilo`) decide só
+# a superfície — cartões, linhas de separação ou cabeçalhos em faixa —, e o
+# acento do documento (`cor`) pinta os números e as âncoras.
 # --------------------------------------------------------------------------
 _CSS_REMUNERACOES = """
 .rem-marca { display: flex; align-items: center; gap: 14px; margin: 0 0 16px; }
 .rem-marca img { max-height: 54px; width: auto; }
 .rem-capa { margin: 0 0 22px; }
 .rem-capa img { width: 100%; border-radius: var(--radius); border: 1px solid var(--border); }
+/* Um quadro com oito secções precisa de um mapa no topo. */
+.rem-indice { margin: 0 0 18px; }
+.rem-indice ol { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.rem-indice a {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 8px 13px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+  color: var(--text); font-size: .88rem; font-weight: 600;
+}
+.rem-indice a:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+.rem-indice .num { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+/* Cada secção: cabeçalho editável (título e subtítulo) e âncora própria. */
+.rem-sec { scroll-margin-top: 92px; }
+.rem-sec-cabeca { display: grid; gap: 6px; margin: 0 0 14px; }
+.rem-sec h2 { margin: 0; }
+.rem-sec h2::before { content: ""; display: block; width: 36px; height: 3px; border-radius: 3px; background: var(--accent); margin: 0 0 10px; }
+.rem-sec .sub { margin: 0; color: var(--muted); font-size: .93rem; }
+.rem-sec h3 { margin: 0 0 2px; }
+.rem-carreira { margin: 0 0 22px; }
 .rem-tabela { overflow-x: auto; }
 .rem-tabela th, .rem-tabela td { white-space: nowrap; }
 .rem-niveis { max-height: 420px; overflow: auto; }
+.rem-niveis thead th { position: sticky; top: 0; z-index: 1; }
+/* Pesquisa e filtros das tabelas: quem lê filtra as linhas sem voltar ao servidor. */
+.rem-filtro-campos { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 0 0 10px; }
+.rem-filtro-campos input[type="search"], .rem-filtro-campos select {
+  min-height: 40px; padding: 8px 11px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); font: inherit; font-size: .9rem;
+}
+.rem-filtro-campos input[type="search"] { flex: 1 1 220px; min-width: 170px; }
+.rem-filtro-campos select { max-width: 320px; }
+.rem-filtro-campos :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rem-filtro-campo { display: grid; gap: 4px; }
+.rem-filtro-campo > span { color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.rem-filtro-limpar {
+  min-height: 40px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border);
+  background: transparent; color: var(--accent); font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer;
+}
+.rem-filtro-limpar:hover { border-color: var(--accent); }
+.rem-filtro-conta { margin-left: auto; color: var(--muted); font-size: .84rem; font-variant-numeric: tabular-nums; }
+.rem-filtro-vazio { margin: 10px 0 0; }
+/* Linhas escondidas pelos filtros (classe, e não `hidden`: vale para `<tr>`). */
+.rem-filtro-linha { display: none; }
+/* Os números do quadro ganham o acento da página: é o que liga a marca ao dado. */
+.rem-sec .kpi { border-left: 3px solid var(--accent); }
+.rem-sec .kpi strong { color: var(--accent); }
 .rem-sim { display: grid; gap: 12px; grid-template-columns: minmax(180px, 260px) 1fr; align-items: start; }
 .rem-sim .campos { display: grid; gap: 10px; }
 .rem-sim .saida { display: flex; flex-wrap: wrap; gap: 18px; }
-.rem-sim .saida strong { display: block; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.rem-sim .saida strong { display: block; font-size: 1.5rem; color: var(--accent); font-variant-numeric: tabular-nums; }
 .rem-sim .saida em { display: block; font-style: normal; font-variant-numeric: tabular-nums; }
 .rem-sim select, .rem-sim input { width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: inherit; }
 .rem-notas summary { cursor: pointer; font-weight: 600; }
+/* Estilo das secções, escolhido no editor: cada um muda só a superfície. */
+.rem-estilo-cartoes .rem-sec { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 16px; }
+.rem-estilo-plano .rem-sec { border-top: 1px solid var(--border); padding-top: 20px; }
+.rem-estilo-plano .rem-sec h2::before { display: none; }
+.rem-estilo-destaque .rem-sec { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.rem-estilo-destaque .rem-sec-cabeca {
+  margin: 0; padding: 16px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--surface)), var(--surface));
+}
+.rem-estilo-destaque .rem-sec-corpo { padding: 16px; }
+@media (min-width: 700px) {
+  .rem-estilo-cartoes .rem-sec { padding: 24px 22px; }
+  .rem-estilo-destaque .rem-sec-cabeca { padding: 22px 24px; }
+  .rem-estilo-destaque .rem-sec-corpo { padding: 22px 24px; }
+}
 @media (max-width: 640px) { .rem-sim { grid-template-columns: 1fr; } }
 """
+
+
+def _tabela_filtravel(
+    cabecalho: List[str],
+    linhas: List[List[str]],
+    *,
+    busca: str,
+    atributos: Optional[List[Dict[str, str]]] = None,
+    filtros: Optional[List[Dict[str, Any]]] = None,
+    classe: str = "",
+    unidade: str = "linhas",
+    unidade_singular: str = "",
+) -> str:
+    """Tabela com **pesquisa e filtros**, feitos pela própria página.
+
+    Quem lê filtra as linhas no browser (o JavaScript vai no fim da página, ver
+    `_JS_FILTROS_TABELAS`): a tabela é a fotografia publicada e não se volta a
+    ler do servidor a cada tecla.
+
+    Os filtros comparam **atributos da linha** (`data-*`), não o texto das
+    células — é o que permite filtrar por «secção» sem mostrar a coluna, e por
+    «com/sem valor publicado» sem depender do formato do número. As opções saem
+    dos valores que a tabela tem; quando o rótulo importa, são dadas à mão.
+    """
+    if not linhas:
+        return ""
+    atributos = atributos or []
+    singular = unidade_singular or unidade
+    rotulo = singular if len(linhas) == 1 else unidade
+    campos = [
+        f'<input type="search" data-papel="busca" placeholder="{_esc(busca)}" aria-label="{_esc(busca)}">'
+    ]
+    for filtro in filtros or []:
+        atributo = str(filtro.get("atributo") or "")
+        opcoes = filtro.get("opcoes")
+        if not opcoes:
+            valores: List[str] = []
+            for linha in atributos:
+                valor = str(linha.get(atributo) or "")
+                if valor and valor not in valores:
+                    valores.append(valor)
+            opcoes = [(valor, valor) for valor in sorted(valores, key=str.lower)]
+        if not opcoes or not atributo:
+            continue
+        itens = "".join(
+            f'<option value="{_esc(valor)}">{_esc(rotulo_opcao)}</option>' for valor, rotulo_opcao in opcoes
+        )
+        campos.append(
+            f'<label class="rem-filtro-campo"><span>{_esc(filtro.get("rotulo") or atributo)}</span>'
+            f'<select data-filtro="{_esc(atributo)}">'
+            f'<option value="">{_esc(filtro.get("todos") or "Todos")}</option>{itens}</select></label>'
+        )
+    campos.append(f'<span class="rem-filtro-conta" data-papel="conta">{len(linhas)} {_esc(rotulo)}</span>')
+    campos.append('<button type="button" class="rem-filtro-limpar" data-papel="limpar" hidden>Limpar</button>')
+    return (
+        f'<div class="rem-filtro" data-tabela-filtro data-unidade="{_esc(unidade)}" '
+        f'data-unidade-singular="{_esc(singular)}">'
+        f'<div class="rem-filtro-campos">{"".join(campos)}</div>'
+        f"{_tabela_nua(cabecalho, linhas, classe=classe, atributos=atributos)}"
+        '<p class="rem-filtro-vazio meta" data-papel="vazio" hidden>Nenhuma linha corresponde à pesquisa.</p>'
+        "</div>"
+    )
+
+
+#: Pesquisa e filtros das tabelas: um só script para todas (vai no fim da página,
+#: depois das tabelas que ele filtra). Escreve-se em JavaScript simples porque não
+#: há build nem dependências: é o mesmo ficheiro HTML que sai do servidor.
+_JS_FILTROS_TABELAS = r"""
+<script>(function(){
+var caixas=document.querySelectorAll('[data-tabela-filtro]');
+function semAcentos(valor){return (valor||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+Array.prototype.forEach.call(caixas,function(caixa){
+  var tabela=caixa.querySelector('table');
+  if(!tabela||!tabela.tBodies.length)return;
+  var linhas=Array.prototype.slice.call(tabela.tBodies[0].rows);
+  var busca=caixa.querySelector('[data-papel="busca"]');
+  var limpar=caixa.querySelector('[data-papel="limpar"]');
+  var conta=caixa.querySelector('[data-papel="conta"]');
+  var vazio=caixa.querySelector('[data-papel="vazio"]');
+  var unidade=caixa.getAttribute('data-unidade')||'linhas';
+  var singular=caixa.getAttribute('data-unidade-singular')||unidade;
+  var campos=Array.prototype.slice.call(caixa.querySelectorAll('[data-filtro]'));
+  var textos=linhas.map(function(linha){return semAcentos(linha.textContent);});
+  function aplicar(){
+    var termo=semAcentos(busca?busca.value.trim():'');
+    var escolhas=campos.map(function(campo){return [campo.getAttribute('data-filtro'),campo.value];});
+    var ativos=0;
+    linhas.forEach(function(linha,indice){
+      var mostra=!termo||textos[indice].indexOf(termo)>=0;
+      if(mostra){
+        escolhas.forEach(function(escolha){
+          if(!escolha[1])return;
+          if((linha.getAttribute('data-'+escolha[0])||'')!==escolha[1])mostra=false;
+        });
+      }
+      linha.classList.toggle('rem-filtro-linha',!mostra);
+      if(mostra)ativos+=1;
+    });
+    if(conta)conta.textContent=ativos+' de '+linhas.length+' '+(linhas.length===1?singular:unidade);
+    if(vazio)vazio.hidden=ativos>0;
+    if(limpar){
+      var aFiltrar=!!termo;
+      escolhas.forEach(function(escolha){if(escolha[1])aFiltrar=true;});
+      limpar.hidden=!aFiltrar;
+    }
+  }
+  if(busca)busca.addEventListener('input',aplicar);
+  campos.forEach(function(campo){campo.addEventListener('change',aplicar);});
+  if(limpar)limpar.addEventListener('click',function(){
+    if(busca)busca.value='';
+    campos.forEach(function(campo){campo.value='';});
+    aplicar();
+    if(busca)busca.focus();
+  });
+  aplicar();
+});
+})();</script>
+"""
+
+
+def _rem_euros(valor: Any) -> str:
+    """Euros com cêntimos, à portuguesa («1 442,57 €»).
+
+    A página das remunerações não pode arredondar: o quadro da DGAEP publica
+    valores exatos com cêntimos (934,99 €, 1 442,57 €), e é isso que quem lê
+    compara. O `_euros` do site é para os grandes números dos contratos.
+    """
+    try:
+        numero = float(valor or 0)
+    except (TypeError, ValueError):
+        numero = 0.0
+    return f"{numero:,.2f}".replace(",", " ").replace(".", ",") + " €"
+
+
+def _rem_barras(itens: List[Dict[str, Any]]) -> str:
+    """Barras das remunerações: euros exatos, como nas tabelas."""
+    return _barras(itens, formatador=_rem_euros)
+
+
+def _rem_seccao(chave: str, seccao: Dict[str, Any], corpo: str) -> str:
+    """Uma secção da página: cabeçalho editável, âncora e corpo.
+
+    Sem corpo não há secção — o quadro de um ano pode não trazer, por exemplo,
+    a série entre anos, e um cabeçalho sem nada por baixo seria um erro.
+    """
+    if not corpo:
+        return ""
+    cabeca = f'<h2>{_esc(seccao.get("titulo"))}</h2>'
+    sub = str(seccao.get("sub") or "").strip()
+    if sub:
+        cabeca += f'<p class="sub">{_esc(sub)}</p>'
+    return (
+        f'<section class="section rem-sec" id="rem-{_esc(chave)}">'
+        f'<header class="rem-sec-cabeca">{cabeca}</header>'
+        f'<div class="rem-sec-corpo">{corpo}</div></section>'
+    )
+
+
+def _rem_indice(secoes: List[Tuple[str, str, str]]) -> str:
+    """Índice das secções da página (só quando há mapa que justifique um)."""
+    if len(secoes) < 3:
+        return ""
+    itens = "".join(
+        f'<li><a href="#rem-{_esc(chave)}"><span class="num">{posicao}</span>{_esc(titulo)}</a></li>'
+        for posicao, (chave, titulo, _) in enumerate(secoes, start=1)
+    )
+    return f'<nav class="rem-indice" aria-label="Secções do quadro"><ol>{itens}</ol></nav>'
 
 
 def _rem_marca(doc: Dict[str, Any]) -> str:
@@ -1966,7 +2233,7 @@ def _rem_kpis(dados: Dict[str, Any]) -> str:
     contagens = dados.get("contagens") or {}
     parametros = dados.get("parametros") or {}
     cartoes = [
-        ("BRAP", _euros(parametros.get("brap")), f"nível 5 da TRU em {dados.get('ano')}"),
+        ("BRAP", _rem_euros(parametros.get("brap")), f"nível 5 da TRU em {dados.get('ano')}"),
         ("Níveis da TRU", _numero(contagens.get("niveis")), "do nível 5 ao 115"),
         ("Posições remuneratórias", _numero(contagens.get("posicoes")), f"{_numero(contagens.get('carreiras'))} carreiras/categorias"),
         ("Cargos dirigentes", _numero(contagens.get("dirigentes")), "índice, nível e remuneração"),
@@ -1977,20 +2244,40 @@ def _rem_kpis(dados: Dict[str, Any]) -> str:
         for titulo, valor, nota in cartoes
         if valor
     )
-    return f'<div class="section kpis">{abertos}</div>'
+    return f'<div class="kpis">{abertos}</div>' if abertos else ""
 
 
 def _rem_tru(dados: Dict[str, Any]) -> str:
-    """Tabela Remuneratória Única: nível, valor mensal e nota."""
+    """Tabela Remuneratória Única: nível, valor mensal e nota.
+
+    São 115 linhas: quem procura um nível escreve-o na pesquisa, e o filtro
+    «com/sem valor publicado» separa os níveis que o quadro não valoriza (têm
+    nota em vez de valor).
+    """
     niveis = [item for item in (dados.get("niveis") or []) if item.get("nivel")]
     if not niveis:
         return ""
     linhas = [
-        [_numero(item.get("nivel")), _euros(item.get("valor")) if item.get("valor") else "—", str(item.get("nota") or "")]
+        [_numero(item.get("nivel")), _rem_euros(item.get("valor")) if item.get("valor") else "—", str(item.get("nota") or "")]
         for item in niveis
     ]
-    tabela = _tabela("Tabela Remuneratória Única", ["Nível", "Remuneração base mensal", "Nota"], linhas)
-    return f'<div class="rem-tabela rem-niveis">{tabela}</div>'
+    return _tabela_filtravel(
+        ["Nível", "Remuneração base mensal", "Nota"],
+        linhas,
+        atributos=[{"valor": "sim" if item.get("valor") else "nao"} for item in niveis],
+        busca="Pesquisar por nível, valor ou nota…",
+        filtros=[
+            {
+                "rotulo": "Remuneração",
+                "atributo": "valor",
+                "todos": "Todas",
+                "opcoes": [("sim", "Com valor publicado"), ("nao", "Sem valor publicado")],
+            }
+        ],
+        classe="rem-tabela rem-niveis",
+        unidade="níveis",
+        unidade_singular="nível",
+    )
 
 
 def _rem_serie(dados: Dict[str, Any]) -> str:
@@ -2007,26 +2294,28 @@ def _rem_serie(dados: Dict[str, Any]) -> str:
     for ano in anos:
         brap_ano = (brap or {}).get("valores", {}).get(str(ano))
         ultimo_ano = (ultimo.get("valores") or {}).get(str(ano))
-        linhas.append([ano, _euros(brap_ano) if brap_ano else "—", _euros(ultimo_ano) if ultimo_ano else "—"])
-    tabela = _tabela(
-        f"Tabela entre anos ({anos[0]}–{anos[-1]})",
+        linhas.append([ano, _rem_euros(brap_ano) if brap_ano else "—", _rem_euros(ultimo_ano) if ultimo_ano else "—"])
+    pontos = [
+        {"rotulo": ano, "valor": (brap or {}).get("valores", {}).get(str(ano))}
+        for ano in anos
+        if (brap or {}).get("valores", {}).get(str(ano))
+    ]
+    # Sem dois anos com BRAP publicado não há evolução para desenhar: fica a
+    # tabela, em vez de barras todas a zero.
+    barras = _rem_barras(pontos) if len(pontos) >= 2 else ""
+    return barras + _tabela_nua(
         ["Ano", "Nível 5 (BRAP)", f"Nível {_numero(ultimo.get('nivel'))}"],
         linhas,
+        classe="rem-tabela",
     )
-    barras = _barras(
-        [
-            {"rotulo": ano, "valor": ((brap or {}).get("valores") or {}).get(str(ano)) or 0.0}
-            for ano in anos
-        ]
-    )
-    return f'<section class="section grafico"><h3>Base Remuneratória da Administração Pública</h3><p class="sub">nível 5 da TRU, ano a ano</p>{barras}</section>{tabela}'
 
 
 def _rem_carreiras(dados: Dict[str, Any], doc: Dict[str, Any]) -> str:
     """As carreiras com as suas posições remuneratórias.
 
     O editor escolhe quais detalhar (`destacar`): o resto fica na tabela-resumo
-    (primeira posição, última posição e amplitude).
+    (primeira posição, última posição e amplitude), que se pesquisa por carreira
+    e se filtra por secção (Carreiras Gerais, Especiais, …).
     """
     carreiras = dados.get("carreiras") or []
     if not carreiras:
@@ -2037,17 +2326,12 @@ def _rem_carreiras(dados: Dict[str, Any], doc: Dict[str, Any]) -> str:
             str(item.get("carreira") or ""),
             str(item.get("categoria") or ""),
             _numero((item.get("posicoes") or [{}])[0].get("posicao")) if item.get("posicoes") else "",
-            _euros(item.get("minimo")),
-            _euros(item.get("maximo")),
+            _rem_euros(item.get("minimo")),
+            _rem_euros(item.get("maximo")),
             str(item.get("seccao") or ""),
         ]
         for item in carreiras
     ]
-    tabela = _tabela(
-        "Carreiras e categorias",
-        ["Carreira", "Categoria", "1.ª posição", "Valor mínimo", "Valor máximo", "Secção"],
-        linhas,
-    )
     blocos: List[str] = []
     for item in carreiras:
         chaves = {_chave_nome(item.get("carreira")), _chave_nome(item.get("categoria"))}
@@ -2056,7 +2340,7 @@ def _rem_carreiras(dados: Dict[str, Any], doc: Dict[str, Any]) -> str:
         posicoes = item.get("posicoes") or []
         if not posicoes:
             continue
-        barras = _barras(
+        barras = _rem_barras(
             [
                 {
                     "rotulo": f"{posicao.get('posicao')} (nível {posicao.get('niveis_texto') or posicao.get('nivel')})",
@@ -2065,18 +2349,37 @@ def _rem_carreiras(dados: Dict[str, Any], doc: Dict[str, Any]) -> str:
                 for posicao in posicoes
             ]
         )
-        blocos.append(
-            f'<section class="section grafico"><h3>{_esc(item.get("carreira"))}'
-            + (f' · {_esc(item.get("categoria"))}' if item.get("categoria") != item.get("carreira") else "")
-            + f'</h3><p class="sub">{_esc(item.get("seccao") or "")} · posição remuneratória e remuneração base mensal</p>'
-            + barras
-            + "</section>"
+        titulo = str(item.get("carreira") or "")
+        if item.get("categoria") and item.get("categoria") != item.get("carreira"):
+            titulo += f" · {item.get('categoria')}"
+        subtitulo = " · ".join(
+            parte
+            for parte in (str(item.get("seccao") or ""), "posição remuneratória e remuneração base mensal")
+            if parte
         )
+        blocos.append(
+            f'<div class="rem-carreira"><h3>{_esc(titulo)}</h3>'
+            f'<p class="sub">{_esc(subtitulo)}</p>{barras}</div>'
+        )
+    tabela = _tabela_filtravel(
+        ["Carreira", "Categoria", "1.ª posição", "Valor mínimo", "Valor máximo", "Secção"],
+        linhas,
+        atributos=[{"seccao": str(item.get("seccao") or "")} for item in carreiras],
+        busca="Pesquisar por carreira, categoria ou valor…",
+        filtros=[{"rotulo": "Secção", "atributo": "seccao", "todos": "Todas"}],
+        classe="rem-tabela",
+        unidade="carreiras/categorias",
+        unidade_singular="carreira/categoria",
+    )
     return "".join(blocos) + tabela
 
 
 def _rem_dirigentes(dados: Dict[str, Any]) -> str:
-    """Cargos dirigentes: âmbito, serviço, cargo, índice, nível e remuneração."""
+    """Cargos dirigentes: âmbito, serviço, cargo, índice, nível e remuneração.
+
+    Lista longa e heterogénea: pesquisa pelo cargo ou serviço e filtra-se por
+    âmbito (universidades, polícia judiciária, …) e por grupo.
+    """
     dirigentes = dados.get("dirigentes") or []
     if not dirigentes:
         return ""
@@ -2087,14 +2390,25 @@ def _rem_dirigentes(dados: Dict[str, Any]) -> str:
             str(item.get("cargo") or ""),
             _numero(item.get("indice")) if item.get("indice") else "—",
             str(item.get("niveis_texto") or ""),
-            _euros(item.get("remuneracao")),
+            _rem_euros(item.get("remuneracao")),
         ]
         for item in dirigentes
     ]
-    return _tabela(
-        "Cargos dirigentes e equiparados",
+    return _tabela_filtravel(
         ["Âmbito", "Serviço", "Cargo", "Índice", "Nível da TRU", "Remuneração base"],
         linhas,
+        atributos=[
+            {"ambito": str(item.get("ambito") or ""), "grupo": str(item.get("grupo") or "")}
+            for item in dirigentes
+        ],
+        busca="Pesquisar por cargo, serviço, índice ou valor…",
+        filtros=[
+            {"rotulo": "Âmbito", "atributo": "ambito", "todos": "Todos"},
+            {"rotulo": "Grupo", "atributo": "grupo", "todos": "Todos"},
+        ],
+        classe="rem-tabela",
+        unidade="cargos",
+        unidade_singular="cargo",
     )
 
 
@@ -2103,7 +2417,7 @@ def _rem_simulador(dados: Dict[str, Any]) -> str:
 
     O valor anual são os 14 pagamentos (12 mensalidades, subsídio de férias e
     subsídio de Natal); as componentes que o quadro não publica ficam de fora e
-    a nota di-lo.
+    a nota di-lo. O título e o subtítulo da secção vêm de fora (`_rem_seccao`).
     """
     niveis = {str(item["nivel"]): item["valor"] for item in (dados.get("niveis") or []) if item.get("valor")}
     if not niveis:
@@ -2120,11 +2434,11 @@ def _rem_simulador(dados: Dict[str, Any]) -> str:
             etiqueta += f" (índice {registo['indice']})"
         cargos.setdefault(etiqueta, float(valor))
     opcoes = "".join(
-        f'<option value="{_esc(nivel)}">{_esc(nivel)} — {_euros(valor)}</option>'
+        f'<option value="{_esc(nivel)}">{_esc(nivel)} — {_rem_euros(valor)}</option>'
         for nivel, valor in sorted(niveis.items(), key=lambda par: int(par[0]))
     )
     opcoes_cargos = "".join(
-        f'<option value="{_esc(etiqueta)}">{_esc(etiqueta)} — {_euros(valor)}</option>'
+        f'<option value="{_esc(etiqueta)}">{_esc(etiqueta)} — {_rem_euros(valor)}</option>'
         for etiqueta, valor in cargos.items()
     )
     atual = next(iter(sorted(niveis, key=lambda chave: int(chave))), "")
@@ -2134,14 +2448,11 @@ def _rem_simulador(dados: Dict[str, Any]) -> str:
     if cargos:
         campos += f'<label>Cargo dirigente<select data-papel="cargo"><option value="">— usar o nível —</option>{opcoes_cargos}</select></label>'
     return (
-        '<section class="section"><h2>Simulador de posição remuneratória</h2>'
-        '<p class="sub">Escolha o nível da TRU ou um cargo dirigente para ver a remuneração base mensal e o valor do '
-        f"ano ({PAGAMENTOS_PUBLICO} pagamentos: 12 mensalidades, subsídio de férias e subsídio de Natal).</p>"
         f'<div class="rem-sim" data-niveis="{dados_json}" data-cargos="{cargos_json}" data-pagamentos="{PAGAMENTOS_PUBLICO}">'
         f'<div class="campos">{campos}</div>'
         '<div class="saida">'
-        f'<div><span>Remuneração base mensal</span><strong data-papel="mensal">{_euros(niveis.get(atual))}</strong></div>'
-        f'<div><span>Valor anual ({PAGAMENTOS_PUBLICO} pagamentos)</span><strong data-papel="anual">{_euros((niveis.get(atual) or 0) * PAGAMENTOS_PUBLICO)}</strong></div>'
+        f'<div><span>Remuneração base mensal</span><strong data-papel="mensal">{_rem_euros(niveis.get(atual))}</strong></div>'
+        f'<div><span>Valor anual ({PAGAMENTOS_PUBLICO} pagamentos)</span><strong data-papel="anual">{_rem_euros((niveis.get(atual) or 0) * PAGAMENTOS_PUBLICO)}</strong></div>'
         '<div><span>O que está a ser simulado</span><em data-papel="origem">Nível '
         f"{_esc(atual)} da TRU</em></div>"
         "</div></div>"
@@ -2159,7 +2470,7 @@ def _rem_simulador(dados: Dict[str, Any]) -> str:
         "c.querySelector('[data-papel=\"mensal\"]').textContent=f(v);"
         "c.querySelector('[data-papel=\"anual\"]').textContent=f(v*p)}"
         "if(s)s.addEventListener('change',function(){if(k)k.value='';u()});"
-        "if(k)k.addEventListener('change',function(){u()});u()})();</script></section>"
+        "if(k)k.addEventListener('change',function(){u()});u()})();</script>"
     )
 
 
@@ -2177,16 +2488,20 @@ def _rem_notas(dados: Dict[str, Any]) -> str:
             f'<details class="rem-notas"><summary>{_esc(nota.get("seccao"))}</summary>'
             f'<p class="meta">{_esc(texto)}</p></details>'
         )
-    if not blocos:
-        return ""
-    return f'<section class="section"><h2>Notas da DGAEP</h2>{"".join(blocos)}</section>'
+    return "".join(blocos)
 
 
 def _rem_base_legal(dados: Dict[str, Any]) -> str:
-    """Base legal por carreira (estrutura da carreira, remuneratória e outras)."""
+    """Base legal por carreira (estrutura da carreira, remuneratória e outras).
+
+    As linhas vêm de nove quadros do documento: o filtro por secção é o que
+    separa, por exemplo, «Carreiras Gerais» de «Cargos Dirigentes».
+    """
     tabelas = dados.get("base_legal") or []
     linhas: List[List[str]] = []
+    atributos: List[Dict[str, str]] = []
     for tabela in tabelas:
+        seccao = str(tabela.get("seccao") or "")
         for linha in tabela.get("linhas") or []:
             linhas.append(
                 [
@@ -2197,12 +2512,16 @@ def _rem_base_legal(dados: Dict[str, Any]) -> str:
                     str(linha.get("outras_componentes") or ""),
                 ]
             )
-    if not linhas:
-        return ""
-    return _tabela(
-        "Base legal",
+            atributos.append({"seccao": seccao})
+    return _tabela_filtravel(
         ["Carreira", "Grau", "Estrutura da carreira", "Estrutura remuneratória", "Outras componentes"],
         linhas,
+        atributos=atributos,
+        busca="Pesquisar por carreira, grau ou legislação…",
+        filtros=[{"rotulo": "Secção", "atributo": "seccao", "todos": "Todas"}],
+        classe="rem-tabela",
+        unidade="linhas",
+        unidade_singular="linha",
     )
 
 
@@ -2213,30 +2532,69 @@ def _chave_nome(texto: Any) -> str:
     return re.sub(r"\s+", " ", limpo.lower()).strip()
 
 
+def _rem_cabecalho(doc: Dict[str, Any], chave: str) -> Dict[str, str]:
+    """Título e subtítulo de uma secção: o que o editor escreveu ou o do modelo."""
+    seccoes = doc.get("seccoes") if isinstance(doc.get("seccoes"), dict) else {}
+    atual = seccoes.get(chave) if isinstance(seccoes.get(chave), dict) else {}
+    padrao = store.SECCOES_REMUNERACOES_PADRAO.get(chave) or {"titulo": "", "sub": ""}
+    return {
+        "titulo": str(atual.get("titulo") or padrao["titulo"]),
+        "sub": str(atual.get("sub") or padrao["sub"]),
+    }
+
+
+def _rem_ordem(doc: Dict[str, Any]) -> List[str]:
+    """Ordem das secções guardada no documento, com as que faltarem no fim."""
+    guardada = doc.get("ordem") if isinstance(doc.get("ordem"), list) else []
+    ordem = [str(chave) for chave in guardada if str(chave) in store.SECCOES_REMUNERACOES_IDS]
+    ordem = list(dict.fromkeys(ordem))
+    ordem.extend(chave for chave in store.SECCOES_REMUNERACOES_IDS if chave not in ordem)
+    return ordem
+
+
 def _corpo_do_modelo(dados: Dict[str, Any], doc: Dict[str, Any], *, preview: bool) -> str:
-    """Marca + texto editorial + os quadros do modelo que a página mostra."""
+    """Marca + texto editorial + os quadros do modelo, secção a secção.
+
+    A ordem, os cabeçalhos e o que está ligado vêm do documento; o estilo
+    (`cartoes`, `plano` ou `destaque`) decide como as secções se apresentam. Os
+    blocos editoriais (imagens incluídas) entram entre o índice e os quadros.
+    """
     mostrar = doc.get("mostrar") if isinstance(doc.get("mostrar"), dict) else {}
     ligado = lambda chave: mostrar.get(chave, True)  # noqa: E731
+
+    construtores = {
+        "kpis": lambda: _rem_kpis(dados),
+        "niveis": lambda: _rem_tru(dados),
+        "serie": lambda: _rem_serie(dados),
+        "carreiras": lambda: _rem_carreiras(dados, doc),
+        "dirigentes": lambda: _rem_dirigentes(dados),
+        "simulador": lambda: _rem_simulador(dados),
+        "notas": lambda: _rem_notas(dados),
+        "parametros": lambda: _rem_base_legal(dados),
+    }
+
+    seccoes: List[Tuple[str, str, str]] = []
+    for chave in _rem_ordem(doc):
+        if not ligado(chave):
+            continue
+        construtor = construtores.get(chave)
+        if construtor is None:
+            continue
+        cabecalho = _rem_cabecalho(doc, chave)
+        html = _rem_seccao(chave, cabecalho, construtor())
+        if html:
+            seccoes.append((chave, cabecalho["titulo"], html))
+
+    estilo = str(doc.get("estilo") or "")
+    if estilo not in store.ESTILOS_REMUNERACOES_IDS:
+        estilo = store.ESTILO_REMUNERACOES_PADRAO
 
     partes: List[str] = [_rem_marca(doc)]
     if doc.get("intro"):
         partes.append(f'<div class="section prose">{_md(str(doc["intro"]))}</div>')
-    partes.append(_rem_kpis(dados))
+    partes.append(_rem_indice(seccoes))
     partes.append(blocks_to_html(doc.get("blocks") or [], preview=preview))
-    if ligado("niveis"):
-        partes.append(_rem_tru(dados))
-    if ligado("serie"):
-        partes.append(_rem_serie(dados))
-    if ligado("carreiras"):
-        partes.append(_rem_carreiras(dados, doc))
-    if ligado("dirigentes"):
-        partes.append(_rem_dirigentes(dados))
-    if ligado("simulador"):
-        partes.append(_rem_simulador(dados))
-    if ligado("notas"):
-        partes.append(_rem_notas(dados))
-    if ligado("parametros"):
-        partes.append(_rem_base_legal(dados))
+    partes.extend(html for _, _, html in seccoes)
 
     fonte = dados.get("fonte") or {}
     if fonte.get("documento"):
@@ -2245,7 +2603,11 @@ def _corpo_do_modelo(dados: Dict[str, Any], doc: Dict[str, Any], *, preview: boo
         if recolhido:
             nota += f" · valores lidos a {recolhido}"
         partes.append(f'<div class="section aviso">{_esc(nota)}</div>')
-    return "".join(parte for parte in partes if parte)
+    corpo = "".join(parte for parte in partes if parte)
+    # A pesquisa das tabelas é um só script, no fim: tem de vir depois delas.
+    if "data-tabela-filtro" in corpo:
+        corpo += _JS_FILTROS_TABELAS
+    return f'<div class="rem-pagina rem-estilo-{_esc(estilo)}">{corpo}</div>'
 
 
 def render_remuneracao(

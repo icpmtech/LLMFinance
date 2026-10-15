@@ -124,6 +124,7 @@ const DOCK_APP_MODULE: Record<string, string | null> = {
   vortal: null,
   osint: null,
   reports: "reports",
+  "report-studio": "reports",
   subvencoes: null,
   "administracao-central": null,
   partidos: null,

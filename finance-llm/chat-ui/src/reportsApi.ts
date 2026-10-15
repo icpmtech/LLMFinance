@@ -27,6 +27,7 @@ export type ReportsPackage = {
   delivery_days: number;
   active: boolean;
   features: string[];
+  auto?: string;
 };
 
 export type ReportsPaymentMethod = { id: string; label: string; hint: string };
@@ -171,6 +172,7 @@ export type ReportsAdminSettings = ReportsPublicSettings & {
   auto_confirm_mbway_api: boolean;
   default_delivery_days: number;
   backoffice_users: string[];
+  report_managers: string[];
   notify_extra_emails: string[];
   updated_at: string;
   updated_by: string;

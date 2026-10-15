@@ -151,8 +151,8 @@ export const APP_MODULES: AppModule[] = [
   {
     id: "relatorios",
     label: "Relatórios",
-    hint: "Relatórios corporativos, financeiros e de concorrência a pedido (pagamento MB Way)",
-    ids: ["reports"],
+    hint: "Relatórios a pedido (pagamento MB Way) e o estúdio onde a equipa os cria, gera em PDF e publica com preço",
+    ids: ["reports", "report-studio"],
   },
   {
     id: "noticias",

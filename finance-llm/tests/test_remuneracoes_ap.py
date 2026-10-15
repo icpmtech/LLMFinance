@@ -6,7 +6,9 @@ O que se verifica:
 * a leitura do PDF real, quando ele está em disco (a recolha descarrega-o);
 * o modelo (níveis, carreiras, dirigentes) e a simulação de uma posição;
 * a fotografia que o CMS guarda e a página pública que dela se desenha;
-* a entidade `remuneracoes` do CMS (publicação, endereço e SEO).
+* a entidade `remuneracoes` do CMS (publicação, endereço e SEO);
+* as secções editáveis (título, subtítulo, ordem e estilo) e o artigo de blog
+  que anuncia a página.
 """
 from __future__ import annotations
 
@@ -14,11 +16,13 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List
 
 import pytest
 
 from api import cms_render as cms_render
+from api import cms_routes as cms_routes
 from api import cms_store as store
 from api import remuneracoes_ap_service as ap
 from api import remuneracoes_publicas as publicas
@@ -256,6 +260,14 @@ def test_dados_do_ano_monta_a_fotografia(modelo_falso: Dict[str, Any]) -> None:
     assert "BRAP 878,41 €" in publicas.resumo_dos_dados(dados)
 
 
+def test_dados_do_ano_guarda_a_serie_do_brap_e_do_topo(modelo_falso: Dict[str, Any]) -> None:
+    """A série da página traz o nível 5 (BRAP) — e o topo da tabela."""
+    dados = publicas.dados_do_ano(2025)
+
+    assert [int(linha["nivel"]) for linha in dados["serie"]] == [5]
+    assert dados["serie"][0]["valores"]["2025"] == 878.41
+
+
 def test_dados_do_ano_sem_recolha(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ap, "anos_disponiveis", lambda: [])
     monkeypatch.setattr(ap, "ano_de_referencia", lambda ano=None: None)
@@ -374,6 +386,160 @@ def test_render_do_modelo_respeita_o_que_esta_desligado(cms_limpo: Any) -> None:
     assert "Cargos dirigentes e equiparados" not in html
     assert "Notas da DGAEP" not in html
     assert "Tabela Remuneratória Única" in html  # esta continua ligada
+
+
+def test_pagina_do_modelo_guarda_seccoes_ordem_e_estilo(cms_limpo: Any) -> None:
+    item = store.save_item(
+        "remuneracoes",
+        _pagina(
+            seccoes={"niveis": {"titulo": "Quanto paga cada nível", "sub": "valores de 2025"}},
+            ordem=["simulador", "niveis", "seccao-que-nao-existe", "niveis"],
+            estilo="destaque",
+        ),
+        "qa@teste.pt",
+    )
+
+    assert item["seccoes"]["niveis"] == {"titulo": "Quanto paga cada nível", "sub": "valores de 2025"}
+    # as secções que o editor não escreveu ficam com o texto do modelo
+    assert item["seccoes"]["dirigentes"]["titulo"] == "Cargos dirigentes e equiparados"
+    assert item["seccoes"]["dirigentes"]["sub"]
+    # a ordem pedida manda no início, sem repetições nem chaves desconhecidas, e
+    # as secções que faltavam entram no fim
+    assert item["ordem"][:2] == ["simulador", "niveis"]
+    assert sorted(item["ordem"]) == sorted(store.SECCOES_REMUNERACOES_IDS)
+    assert item["estilo"] == "destaque"
+
+
+def test_pagina_do_modelo_recusa_estilo_desconhecido(cms_limpo: Any) -> None:
+    item = store.save_item("remuneracoes", _pagina(estilo="neon"), "qa@teste.pt")
+
+    assert item["estilo"] == store.ESTILO_REMUNERACOES_PADRAO
+
+
+def test_render_usa_os_titulos_e_a_ordem_das_seccoes(cms_limpo: Any) -> None:
+    item = store.save_item(
+        "remuneracoes",
+        _pagina(
+            seccoes={"niveis": {"titulo": "Quanto paga cada nível", "sub": "a partir do quadro da DGAEP"}},
+            ordem=["notas", "niveis"],
+            estilo="plano",
+            seo={"title": "Remunerações 2025", "description": "Os números do ano.", "keywords": ["TRU"]},
+        ),
+        "qa@teste.pt",
+    )
+
+    html = cms_render.render_remuneracao(item)
+
+    assert "Quanto paga cada nível" in html
+    assert "a partir do quadro da DGAEP" in html
+    assert "<h2>Tabela Remuneratória Única</h2>" not in html  # o título do modelo foi substituído
+    assert 'class="rem-pagina rem-estilo-plano"' in html
+    assert html.index('id="rem-notas"') < html.index('id="rem-niveis"')  # a ordem escolhida manda
+    assert html.index("#rem-notas") < html.index("#rem-niveis")  # o índice segue a mesma ordem
+
+
+def test_render_do_modelo_tem_indice_navegavel_e_seccoes_marcadas(cms_limpo: Any) -> None:
+    item = store.save_item("remuneracoes", _pagina(estilo="destaque", cor="#1d4ed8"), "qa@teste.pt")
+
+    html = cms_render.render_remuneracao(item)
+
+    assert 'class="rem-pagina rem-estilo-destaque"' in html
+    assert 'class="rem-indice"' in html and 'aria-label="Secções do quadro"' in html
+    assert 'class="rem-sec-cabeca"' in html and 'class="rem-sec-corpo"' in html
+    assert html.count('class="rem-sec-corpo"') == html.count('class="section rem-sec"') > 3
+    assert "rem-tabela rem-niveis" in html  # a TRU continua a rolar com cabeçalho preso
+
+
+def test_artigo_do_modelo_anuncia_a_pagina(cms_limpo: Any) -> None:
+    item = store.save_item("remuneracoes", _pagina(), "qa@teste.pt")
+
+    sugestao = publicas.artigo_do_modelo(item)
+
+    assert sugestao["title"] == "Remunerações da Administração Pública 2025: o que o quadro da DGAEP mostra"
+    assert sugestao["slug"] == "remuneracoes-administracao-publica-2025"
+    assert "878,41" in sugestao["markdown"]  # o BRAP da fotografia, em markdown
+    assert f"/site/remuneracoes/{item['slug']}" in sugestao["markdown"]  # liga à página publicada
+    assert sugestao["excerpt"] == item["excerpt"]
+    assert "DGAEP" in sugestao["tags"]
+
+
+def test_rota_do_artigo_cria_rascunho_e_liga_a_pagina(cms_limpo: Any) -> None:
+    capa = store.save_media({"title": "Capa", "url": "https://exemplo.test/capa.jpg"}, "qa@teste.pt")
+    item = store.save_item("remuneracoes", _pagina(capa_id=capa["id"]), "qa@teste.pt")
+    sessao = SimpleNamespace(user=SimpleNamespace(email="qa@teste.pt"))
+
+    corpo = cms_routes.cms_remuneracao_artigo(item["id"], {}, sessao)  # type: ignore[arg-type]
+
+    artigo = corpo["artigo"]
+    assert artigo["status"] == "rascunho"
+    assert artigo["cover_id"] == capa["id"]  # o artigo herda a capa da página
+    assert "878,41" in artigo["markdown"]
+    assert corpo["item"]["artigo_id"] == artigo["id"]  # a página fica a saber do artigo
+    assert corpo["url"] == f"/cms/blog?id={artigo['id']}"
+    assert store.get_item("posts", artigo["id"])["slug"] == artigo["slug"]
+
+
+def test_rota_do_artigo_recusa_pagina_inexistente(cms_limpo: Any) -> None:
+    from fastapi import HTTPException
+
+    sessao = SimpleNamespace(user=SimpleNamespace(email="qa@teste.pt"))
+
+    with pytest.raises(HTTPException) as erro:
+        cms_routes.cms_remuneracao_artigo("rem_nao_existe", {}, sessao)  # type: ignore[arg-type]
+
+    assert erro.value.status_code == 404
+
+
+def test_render_das_tabelas_traz_pesquisa_e_filtros(cms_limpo: Any, modelo_falso: Dict[str, Any]) -> None:
+    item = store.save_item("remuneracoes", _pagina(), "qa@teste.pt")
+
+    html = cms_render.render_remuneracao(item)
+
+    # Uma barra de pesquisa e filtros por cada tabela do modelo (TRU, carreiras,
+    # dirigentes e base legal) — e um só script para todas.
+    assert html.count('<div class="rem-filtro" data-tabela-filtro') == 4
+    assert html.count("[data-tabela-filtro]") == 1
+    assert html.count('<input type="search" data-papel="busca"') == 4
+    assert 'placeholder="Pesquisar por nível, valor ou nota…"' in html
+    assert 'data-filtro="valor"' in html and "Sem valor publicado" in html
+    assert 'data-filtro="seccao"' in html  # carreiras e base legal
+    assert 'data-filtro="ambito"' in html and 'data-filtro="grupo"' in html
+    # Os atributos das linhas são o que os filtros comparam (só o nível 1 do
+    # modelo pequeno não tem valor publicado).
+    assert 'data-valor="nao"' in html
+    assert html.count('data-valor="sim"') == 4
+    assert 'data-seccao="Carreiras Gerais"' in html
+    assert 'data-ambito="UNIVERSIDADES"' in html
+    # O contador começa com o total, com a unidade certa (singular incluído).
+    assert "5 níveis" in html and "1 carreira/categoria" in html
+    assert "1 cargo" in html and "1 linha" in html
+    assert "Nenhuma linha corresponde à pesquisa." in html
+
+
+def test_render_mostra_os_valores_sem_arredondar(cms_limpo: Any, modelo_falso: Dict[str, Any]) -> None:
+    """O quadro publica cêntimos: a página não pode mostrar «878 €»."""
+    item = store.save_item("remuneracoes", _pagina(), "qa@teste.pt")
+
+    html = cms_render.render_remuneracao(item)
+
+    assert "878,41 €" in html  # BRAP e, na TRU, o valor do nível 5
+    assert "1 442,57 €" in html  # 1.ª posição do técnico superior
+    assert "878 €" not in html  # o arredondamento dos grandes números fica fora daqui
+
+
+def test_render_sem_tabelas_nao_traz_o_script_dos_filtros(
+    cms_limpo: Any, modelo_falso: Dict[str, Any]
+) -> None:
+    item = store.save_item(
+        "remuneracoes",
+        _pagina(mostrar={"niveis": False, "serie": False, "carreiras": False, "dirigentes": False, "parametros": False}),
+        "qa@teste.pt",
+    )
+
+    html = cms_render.render_remuneracao(item)
+
+    assert "<table>" not in html
+    assert "[data-tabela-filtro]" not in html  # sem tabelas não há script
 
 
 def _scripts_js(html: str) -> List[str]:

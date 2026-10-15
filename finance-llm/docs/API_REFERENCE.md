@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1264 operações** em **44 grupos**.
+Versão `0.4.0` · **1290 operações** em **44 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -389,6 +389,10 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/people/{nif}/politician/profile` | Politician Profile Route |
 | `GET` | `/people/{nif}/social` | People Social Route |
 | `POST` | `/people/{nif}/social-collect` | People Social Collect Route |
+| `GET` | `/permissions` | Get Permissions |
+| `PUT` | `/permissions` | Put Permissions |
+| `GET` | `/permissions/me` | My Permissions |
+| `POST` | `/permissions/reset` | Reset Permissions |
 | `GET` | `/pessoas-iq` | Serve Spa Page |
 | `GET` | `/pessoas-iq/autarquicas` | Serve Spa Page |
 | `GET` | `/pessoas-iq/executivo` | Serve Spa Page |
@@ -462,6 +466,26 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/reports/requests/{request_id}/files/{file_id}` | Reports Download |
 | `POST` | `/reports/requests/{request_id}/payment` | Reports Declare Payment |
 | `GET` | `/reports/requests/{request_id}/payment/status` | Reports Payment Status |
+| `POST` | `/reports/studio/ai` | Studio Assist |
+| `GET` | `/reports/studio/me` | Studio Me |
+| `POST` | `/reports/studio/query` | Studio Query |
+| `GET` | `/reports/studio/reports` | Studio List Reports |
+| `POST` | `/reports/studio/reports` | Studio Create Report |
+| `GET` | `/reports/studio/reports/{report_id}` | Studio Get Report |
+| `PUT` | `/reports/studio/reports/{report_id}` | Studio Save Report |
+| `DELETE` | `/reports/studio/reports/{report_id}` | Studio Delete Report |
+| `POST` | `/reports/studio/reports/{report_id}/ai` | Studio Report Assist |
+| `POST` | `/reports/studio/reports/{report_id}/duplicate` | Studio Duplicate Report |
+| `GET` | `/reports/studio/reports/{report_id}/files/{file_id}` | Studio Download |
+| `DELETE` | `/reports/studio/reports/{report_id}/files/{file_id}` | Studio Remove File |
+| `POST` | `/reports/studio/reports/{report_id}/pdf` | Studio Pdf |
+| `POST` | `/reports/studio/reports/{report_id}/publish` | Studio Publish |
+| `POST` | `/reports/studio/reports/{report_id}/run` | Studio Run Report |
+| `POST` | `/reports/studio/reports/{report_id}/unpublish` | Studio Unpublish |
+| `GET` | `/reports/studio/sources` | Studio Sources |
+| `GET` | `/reports/studio/state` | Studio State |
+| `GET` | `/reports/studio/templates` | Studio Templates |
+| `GET` | `/reports/studio/templates/{template_id}` | Studio Template |
 | `GET` | `/reports/summary` | Reports Summary |
 | `POST` | `/risco/cache/clear` | Limpar a cache de risco |
 | `POST` | `/risco/comparar` | Comparar o risco de várias empresas |
@@ -520,6 +544,7 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/social/execucoes` | Serve Spa Page |
 | `GET` | `/social/modelos` | Serve Spa Page |
 | `GET` | `/social/pesquisa` | Serve Spa Page |
+| `GET` | `/ticker-detail` | Serve Spa Page |
 | `POST` | `/translate` | Translate |
 | `GET` | `/translate/{ticker}` | Get Ticker Translation |
 | `GET` | `/vortal/admin/indice` | Estado do índice das peças no Elasticsearch (só administradores) |
@@ -576,6 +601,7 @@ Consola de administração: panorama geral, gestão de contas e sessões, visual
 | `GET` | `/admin/mail/messages` | List Messages |
 | `GET` | `/admin/mail/messages/{message_id}` | Get Message |
 | `DELETE` | `/admin/mail/messages/{message_id}` | Delete Message |
+| `GET` | `/admin/mail/messages/{message_id}/attachments/{index}` | Get Attachment |
 | `POST` | `/admin/mail/messages/{message_id}/flags` | Set Flags |
 | `POST` | `/admin/mail/messages/{message_id}/move` | Move Message |
 | `GET` | `/admin/mail/meta` | Meta |
@@ -1008,6 +1034,7 @@ CMS: páginas por blocos, conteúdos reutilizáveis, blog com taxonomia, media, 
 | `POST` | `/cms/remuneracoes` | Cms Create Remuneracao |
 | `GET` | `/cms/remuneracoes/opcoes` | Cms Remuneracoes Opcoes |
 | `PATCH` | `/cms/remuneracoes/{item_id}` | Cms Patch Remuneracao |
+| `POST` | `/cms/remuneracoes/{item_id}/artigo` | Cms Remuneracao Artigo |
 | `POST` | `/cms/remuneracoes/{item_id}/modelo` | Cms Remuneracao Modelo |
 | `POST` | `/cms/revisions/{revision_id}/restore` | Cms Restore |
 | `GET` | `/cms/search` | Cms Search |
@@ -1617,7 +1644,6 @@ Páginas da interface (single-page app). Devolvem o `index.html` e existem para 
 | `GET` | `/search360/grafo` | Página da interface (SPA) |
 | `GET` | `/search360/projetos` | Página da interface (SPA) |
 | `GET` | `/sentimento` | Página da interface (SPA) |
-| `GET` | `/ticker-detail` | Página da interface (SPA) |
 | `GET` | `/trading` | Página da interface (SPA) |
 | `GET` | `/world` | Página da interface (SPA) |
 | `GET` | `/world/rede` | Página da interface (SPA) |

@@ -516,6 +516,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "14,165,233",
   },
   {
+    id: "report-studio",
+    label: "Estúdio de relatórios",
+    hint: "Criar relatórios com indicadores, gráficos, tabelas e grafos, gerar PDF e publicar com preço (plataforma e loja)",
+    icon: Layers,
+    gradient: "from-violet-200 via-violet-400 to-indigo-600",
+    accent: "139,92,246",
+  },
+  {
     id: "subvencoes",
     label: "Subvenções públicas",
     hint: "Subvenções e outros benefícios públicos por ano (Lei n.º 64/2013): quem deu, quem recebeu e quanto",

@@ -1,12 +1,18 @@
-# Relatórios a pedido (com pagamento por MB Way)
+# Relatórios a pedido (com pagamento por MB Way) e Estúdio de relatórios
 
-A plataforma vende **relatórios** que são produzidos à mão pela equipa: o cliente
-pede na página **Relatórios**, paga por **MB Way** para o número configurado na
-administração e, quando o relatório fica pronto, o ficheiro é anexado ao pedido e
-fica disponível para descarregar com o estado **Gerado**.
+A plataforma vende **relatórios**. Há duas formas de os produzir:
+
+1. **à mão** — o cliente pede na página **Relatórios**, paga por **MB Way** para
+   o número configurado na administração e, quando o relatório fica pronto, o
+   ficheiro é anexado ao pedido e fica disponível para descarregar com o estado
+   **Gerado**;
+2. no **Estúdio** (ver abaixo) — a equipa monta o relatório a partir das fontes
+   de dados da plataforma, gera o PDF e publica-o no catálogo ou na loja; quem
+   compra recebe o PDF **automaticamente** depois do pagamento.
 
 - Página do cliente: `/reports` (aplicação **Relatórios** no menu lateral). Quem tem
-  acesso de backoffice vê aí um separador **Backoffice** — a área de Administração
+  acesso de backoffice vê aí um separador **Backoffice**, e quem for administrador
+  ou gestor de relatórios vê também o separador **Estúdio** — a área de Administração
   é restrita ao papel `admin`, por isso é este o caminho das contas de equipa.
 - Backoffice: **Administração → Relatórios** (`/admin`, separador «Relatórios»).
 - Configuração: o mesmo separador, sub-separador **Definições** (e **Catálogo**).
@@ -50,6 +56,67 @@ O número de destino é configurável em *Definições → Número MB Way* (valo
    Nenhuma falha da API do MB Way trava o fluxo: o erro é mostrado ao cliente e o
    pedido segue no modo manual.
 
+## Estúdio de relatórios (administradores e gestores de relatórios)
+
+O **Estúdio** é a oficina onde a equipa monta os relatórios que a plataforma
+vende. Vive no separador **Estúdio** da página `/reports` e na API em
+`/reports/studio/*`.
+
+**Quem entra:** papel `admin`, papel `manager` (gestor de plataforma) ou qualquer
+conta da lista *Definições → Gestores de relatórios* (`settings.report_managers`).
+A lista existe para dar acesso a quem produz relatórios sem lhe dar papel de
+gestão; a escrita dessas contas em `/reports/studio/*` é autorizada no middleware
+de permissões (`main.py`), sem alargar o resto do módulo.
+
+**Como se monta um relatório:**
+
+1. **Modelo** — há 8 modelos prontos (`executivo`, `mercado-cpv`, `evolucao`,
+   `geografia`, `entidades`, `mercados`, `dossie` e uma folha em branco). Cada
+   modelo traz blocos já ligados às fontes; os blocos que não se aplicam às
+   fontes de agora são retirados com aviso (`warnings`) em vez de darem gráficos
+   vazios.
+2. **Blocos** — `heading`, `text`, `note`, `ai`, `kpi`, `chart`, `table` e
+   `graph`. Os blocos de dados guardam `source` (dataset do Visualizador),
+   `dimensions`, `measures`, `filters`, `limit`, `top_n` e `width` (12/6/4). Os
+   ids são validados contra o catálogo **ao gravar** (o que a fonte não tem sai do
+   bloco).
+3. **Fontes** — as mesmas do **Visualizador** (`/visualizador/*`): contratos,
+   CPV, regiões, marcas, firmas, notícias, instrumentos, cotações, CRM, dossiês e
+   documentos. Não há uma segunda implementação dos números: a pré-visualização e
+   o PDF usam `visualizador_service.run_query` com o âmbito da sessão.
+4. **Grafos** — um bloco `graph` usa **duas** dimensões (origem e destino) e
+   devolve nós e arestas (ex.: adjudicante ↔ adjudicatário, pelo valor). A
+   interface desenha-o em SVG; o PDF desenha o mesmo grafo e lista as relações.
+5. **IA** — o separador *Assistente* escreve o sumário executivo, o texto de uma
+   secção, os destaques dos dados e sugere blocos. Usa o modelo configurado da
+   plataforma (`ontology_ai.ask_model` + `people_360.resolve_backend`); **sem
+   modelo configurado devolve o texto factual** montado a partir dos indicadores
+   e das primeiras linhas de cada bloco, e di-lo nas notas. O texto gerado só
+   entra no PDF depois de estar escrito num bloco.
+6. **PDF** — gerado no servidor com `reportlab` (o mesmo renderizador da casa:
+   logótipo, cores da marca, rodapé com a página). Gráficos de barras, linhas e
+   circulares são desenhados nativamente; as tabelas repetem o cabeçalho. Fica em
+   `data/reports/studio/<relatório>/<id>-<nome>.pdf` e é substituído quando se
+   volta a gerar.
+
+**Publicar e vender** (`POST /reports/studio/reports/{id}/publish`):
+
+| Canal | O que acontece | Entrega |
+| --- | --- | --- |
+| `site` | Cria/atualiza o pacote `estudio-<slug>` no catálogo (`/reports`), com preço, preço antigo, etiqueta, dias e itens | `auto = estudio:<id>` |
+| `loja` | Cria/atualiza o produto digital na loja, com preço, preço antigo, IVA e descrição | `auto_report = estudio:<id>` |
+| `todos` | Os dois | — |
+
+- A chave `estudio:<id>` é a **entrega automática**: no pedido do catálogo
+  (`reports_store._gerar_automatico`) e na encomenda da loja
+  (`shop_store._gerar_pdf`) o PDF é montado a partir do relatório publicado, com
+  a referência do pedido e o nome de quem pediu. O cliente não espera pela equipa.
+- `unpublish` desativa o pacote (fica no catálogo como inativo, para o histórico
+  dos pedidos não perder o preço) e devolve o produto da loja a `rascunho`.
+- Um relatório **sem blocos** não pode ser publicado.
+- Publicar outra vez **atualiza** o pacote/produto (não duplica) — o preço do
+  pacote é o que o cliente passa a ver; os pedidos antigos mantêm o seu.
+
 ## Ciclo de vida
 
 ```
@@ -86,16 +153,23 @@ As contas de backoffice são geridas em *Definições → Contas de backoffice*
 
 ## Ficheiros
 
-- Guardados em `data/reports/files/<pedido>/<id>-<nome>` (volume `./data`).
+- Pedidos: guardados em `data/reports/files/<pedido>/<id>-<nome>` (volume `./data`).
+- Estúdio: PDFs em `data/reports/studio/<relatório>/<id>-<nome>`.
 - Limites: 25 MB por ficheiro, 12 ficheiros por pedido, extensões
   `pdf, doc, docx, xls, xlsx, csv, txt, md, json, zip, png, jpg, jpeg`.
-- O download exige sessão (o dono do pedido ou o backoffice). Na interface é
+- O download exige sessão (o dono do pedido ou o backoffice). No estúdio, o
+  download exige acesso ao estúdio. Na interface é
   feito por `fetch` + `blob` — um `<a href>` direto não levava o `Authorization`.
 
 ## Dados
 
-`data/reports/reports.json` (um documento, escrita atómica): `settings`,
-`catalogue`, `requests`, `notifications`, `activity`.
+`data/reports/reports.json` (um documento, escrita atómica): `settings`
+(inclui `backoffice_users` e `report_managers`), `catalogue`, `requests`,
+`studio_reports`, `notifications`, `activity`.
+
+Cada relatório do estúdio guarda os blocos, a publicação por canal
+(`publication.site` com `package_id`, `publication.loja` com `product_id`), os
+preços e os ficheiros gerados.
 
 ## API
 
@@ -121,11 +195,35 @@ As contas de backoffice são geridas em *Definições → Contas de backoffice*
 | POST | `/reports/admin/catalogue` · DELETE `/reports/admin/catalogue/{id}` | admin |
 | GET | `/reports/admin/overview` · `/reports/admin/export.csv` | admin |
 
+Estúdio de relatórios (**admin, gestor de plataforma ou gestor de relatórios**):
+
+| Método | Caminho | O que faz |
+| --- | --- | --- |
+| GET | `/reports/studio/me` | Confirma o acesso (papel, lista, canais) |
+| GET | `/reports/studio/state` | Estado: fontes, modelos, limites, PDF e IA |
+| GET | `/reports/studio/sources` | Fontes com dimensões, medidas e sugestões |
+| GET | `/reports/studio/templates` · `/templates/{id}` | Modelos prontos (já validados) |
+| GET | `/reports/studio/reports` | Relatórios do estúdio (procura, estado, canal) |
+| POST | `/reports/studio/reports` | Cria a partir de um modelo ou do zero |
+| GET/PUT/DELETE | `/reports/studio/reports/{id}` | Ficha, gravação e remoção |
+| POST | `/reports/studio/reports/{id}/duplicate` | Duplica |
+| POST | `/reports/studio/query` | Corre blocos de um rascunho (pré-visualização) |
+| POST | `/reports/studio/reports/{id}/run` | Corre o relatório gravado |
+| POST | `/reports/studio/reports/{id}/pdf` | Gera e guarda o PDF |
+| GET/DELETE | `/reports/studio/reports/{id}/files/{file}` | Descarrega/remove um PDF |
+| POST | `/reports/studio/reports/{id}/publish` · `/unpublish` | Publica/retira (`site`, `loja`, `todos`) |
+| POST | `/reports/studio/ai` · `/reports/studio/reports/{id}/ai` | Ajuda da IA (sumário, texto, destaques, blocos) |
+
 ## Testes
 
 - `tests/test_reports.py` — domínio (26 verificações): catálogo, totais com IVA,
   fluxo de pagamento, notificações dos dois lados, limites de alvos, ficheiros,
   visibilidade das notas internas, indicadores e CSV.
+- `tests/test_reports_studio.py` — estúdio (35 verificações): acessos (admin,
+  gestor, lista de gestores), modelos validados contra as fontes, validação e
+  limites dos blocos, ciclo de vida do relatório, execução dos blocos (incluindo
+  grafo), PDF real, publicação no catálogo e na loja, entrega automática do pedido
+  pago, IA (com e sem modelo) e as rotas HTTP de ponta a ponta.
 - `_probe_reports_asgi.py` — rotas completas em processo (42 verificações), sem
   servidor nem Elasticsearch (sessões falsas e `TestClient` sem lifespan).
 - `_probe_reports_api.py` — o mesmo ciclo contra a API a correr (precisa de
@@ -141,7 +239,19 @@ As contas de backoffice são geridas em *Definições → Contas de backoffice*
   aviso para a equipa configurada.
 - O ficheiro do relatório é servido por `FileResponse` a partir de `data/reports`;
   em Docker, `./data` é um volume, tal como o resto da plataforma.
-- A pasta `data/reports/` é **partilhada**: este módulo usa `reports.json` e
-  `files/<pedido>/`, mas há geradores de PDF da plataforma (ex.: recolha Racius)
-  que escrevem ficheiros soltos na mesma pasta (`entity_*.pdf`). Não colidem — não
-  reutilizar `reports.json` para outra coisa.
+- A pasta `data/reports/` é **partilhada**: este módulo usa `reports.json`,
+  `files/<pedido>/` e `studio/<relatório>/`, mas há geradores de PDF da plataforma
+  (ex.: recolha Racius) que escrevem ficheiros soltos na mesma pasta
+  (`entity_*.pdf`). Não colidem — não reutilizar `reports.json` para outra coisa.
+- **Publicar não gera o PDF na hora**: o ficheiro é produzido quando o cliente
+  paga (ou quando o backoffice repete em `produzir_pendentes`). Se o
+  Elasticsearch estiver em baixo, o pedido pago fica sem ficheiro, com nota
+  interna — a repetição gera-o sem o cliente pagar outra vez.
+- **Um relatório publicado fica ligado pelo id**: se o relatório for apagado do
+  estúdio, o pacote/produto continua a existir mas a geração falha (nota interna
+  no pedido). Retire-o do canal antes de apagar.
+- A lista *Gestores de relatórios* dá acesso ao **estúdio**, não ao backoffice nem
+  à administração: são três listas/papéis diferentes (`report_managers`,
+  `backoffice_users` e o papel `admin`).
+- O catálogo de fontes do estúdio fica em cache 60 s e é o do Visualizador: se
+  uma fonte nova não aparecer, aguarde esse tempo (ou reabra a página).

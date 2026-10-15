@@ -92,24 +92,85 @@ ENTITY_LABELS: Dict[str, str] = {
     "remuneracoes": "remuneração",
 }
 
-#: O que a página do **modelo de remunerações** mostra, além do texto e dos
-#: blocos editoriais. A ordem é a da página.
-MOSTRAR_REMUNERACOES: Tuple[Tuple[str, str], ...] = (
-    ("parametros", "Parâmetros do ano (BRAP, limites e base legal)"),
-    ("niveis", "Tabela Remuneratória Única"),
-    ("serie", "Evolução da tabela entre anos"),
-    ("carreiras", "Carreiras e posições remuneratórias"),
-    ("dirigentes", "Cargos dirigentes"),
-    ("simulador", "Simulador de posição remuneratória"),
-    ("notas", "Notas da DGAEP"),
+#: As secções do **modelo de remunerações**: o que a página mostra além do texto
+#: e dos blocos editoriais. Cada uma tem um título e um subtítulo que o editor
+#: pode reescrever (`seccoes`) e uma ordem (`ordem`); a lista é também a ordem
+#: por omissão da página.
+SECCOES_REMUNERACOES: Tuple[Tuple[str, str, str], ...] = (
+    ("kpis", "O quadro em números", "BRAP, níveis da TRU, posições remuneratórias e cargos dirigentes"),
+    ("niveis", "Tabela Remuneratória Única", "remuneração base mensal de cada nível"),
+    ("serie", "Base Remuneratória da Administração Pública", "nível 5 da TRU (BRAP), ano a ano"),
+    ("carreiras", "Carreiras e posições remuneratórias", "posição remuneratória e remuneração base mensal"),
+    ("dirigentes", "Cargos dirigentes e equiparados", "índice, nível da TRU e remuneração base"),
+    ("simulador", "Simulador de posição remuneratória", "escolha um nível da TRU ou um cargo dirigente"),
+    ("notas", "Notas da DGAEP", "o que o quadro publica, secção a secção"),
+    ("parametros", "Base legal", "estrutura da carreira, estrutura remuneratória e outras componentes"),
+)
+SECCOES_REMUNERACOES_IDS: Tuple[str, ...] = tuple(chave for chave, _, _ in SECCOES_REMUNERACOES)
+SECCOES_REMUNERACOES_PADRAO: Dict[str, Dict[str, str]] = {
+    chave: {"titulo": titulo, "sub": sub} for chave, titulo, sub in SECCOES_REMUNERACOES
+}
+#: Limites dos textos das secções (um título é uma linha; o subtítulo, uma frase).
+LIMITE_TITULO_SECCAO = 120
+LIMITE_SUB_SECCAO = 240
+
+#: O que a página do **modelo de remunerações** mostra. Chave e rótulo de cada
+#: secção — o rótulo é o título por omissão, que o editor pode substituir.
+MOSTRAR_REMUNERACOES: Tuple[Tuple[str, str], ...] = tuple(
+    (chave, titulo) for chave, titulo, _ in SECCOES_REMUNERACOES
 )
 MOSTRAR_REMUNERACOES_IDS = {chave for chave, _ in MOSTRAR_REMUNERACOES}
+
+#: Como as secções da página se apresentam (o editor escolhe um destes).
+ESTILOS_REMUNERACOES: Tuple[Tuple[str, str], ...] = (
+    ("cartoes", "Cartões — cada secção numa superfície"),
+    ("plano", "Plano — só linhas de separação"),
+    ("destaque", "Destaque — cabeçalhos em faixa"),
+)
+ESTILOS_REMUNERACOES_IDS = {chave for chave, _ in ESTILOS_REMUNERACOES}
+ESTILO_REMUNERACOES_PADRAO = "cartoes"
 
 
 def _mostrar_da_pagina(valor: Any) -> Dict[str, bool]:
     """Que partes do modelo a página mostra (por omissão, todas)."""
     dados = valor if isinstance(valor, dict) else {}
     return {chave: bool(dados.get(chave, True)) for chave, _ in MOSTRAR_REMUNERACOES}
+
+
+def _seccoes_da_pagina(valor: Any) -> Dict[str, Dict[str, str]]:
+    """Títulos e subtítulos das secções, com os do modelo onde o editor não mexeu.
+
+    Guarda **todas** as secções conhecidas (e não só as reescritas): assim a
+    página não muda de cabeçalho quando o modelo ganha uma secção nova.
+    """
+    guardado = valor if isinstance(valor, dict) else {}
+    seccoes: Dict[str, Dict[str, str]] = {}
+    for chave in SECCOES_REMUNERACOES_IDS:
+        atual = guardado.get(chave) if isinstance(guardado.get(chave), dict) else {}
+        padrao = SECCOES_REMUNERACOES_PADRAO[chave]
+        seccoes[chave] = {
+            "titulo": str(atual.get("titulo") or padrao["titulo"]).strip()[:LIMITE_TITULO_SECCAO],
+            "sub": str(atual.get("sub") or padrao["sub"]).strip()[:LIMITE_SUB_SECCAO],
+        }
+    return seccoes
+
+
+def _ordem_das_seccoes(valor: Any) -> List[str]:
+    """Ordem das secções: as conhecidas sem repetições, e as que faltarem no fim."""
+    ordem: List[str] = []
+    if isinstance(valor, list):
+        for item in valor:
+            chave = str(item)
+            if chave in SECCOES_REMUNERACOES_IDS and chave not in ordem:
+                ordem.append(chave)
+    ordem.extend(chave for chave in SECCOES_REMUNERACOES_IDS if chave not in ordem)
+    return ordem
+
+
+def _estilo_da_pagina(valor: Any) -> str:
+    """Estilo visual da página (`cartoes`, `plano` ou `destaque`)."""
+    estilo = str(valor or "").strip().lower()
+    return estilo if estilo in ESTILOS_REMUNERACOES_IDS else ESTILO_REMUNERACOES_PADRAO
 
 
 def _ano_valido(valor: Any, alternativa: Any = None) -> Optional[int]:
@@ -933,17 +994,24 @@ def _normalise(entity: str, payload: Dict[str, Any], existing: Optional[Dict[str
         # quadro da DGAEP fica no documento e o `dados` é a fotografia desse ano
         # (níveis da TRU, carreiras, dirigentes e base legal), lida quando o
         # editor a mandou ler (`POST /cms/remuneracoes/{id}/modelo`). O que a
-        # página mostra escolhe-se aqui; a marca é do documento.
+        # página mostra, com que cabeçalhos e por que ordem, escolhe-se aqui; a
+        # marca (cor, logótipo, imagens e estilo das secções) é do documento.
         dados = pick("dados")
         doc["ano"] = _ano_valido(pick("ano", existing.get("ano")))
         doc["intro"] = str(pick("intro") or "")
         doc["blocks"] = _normalise_blocks(pick("blocks", []))
         doc["dados"] = copy.deepcopy(dados) if isinstance(dados, dict) else {}
         doc["mostrar"] = _mostrar_da_pagina(pick("mostrar"))
+        doc["seccoes"] = _seccoes_da_pagina(pick("seccoes"))
+        doc["ordem"] = _ordem_das_seccoes(pick("ordem"))
         doc["destacar"] = [str(valor) for valor in (pick("destacar", []) or []) if str(valor).strip()][:12]
         doc["capa_id"] = pick("capa_id") or None
         doc["logo_id"] = pick("logo_id") or None
         doc["cor"] = _cor(pick("cor"))
+        doc["estilo"] = _estilo_da_pagina(pick("estilo"))
+        # Artigo de blog criado a partir desta página (`POST …/artigo`), para o
+        # editor não o perder de vista nem o criar duas vezes.
+        doc["artigo_id"] = str(pick("artigo_id") or "").strip() or None
         doc["excerpt"] = str(pick("excerpt") or "") or _excerpt(doc["intro"] or _resumo_do_modelo(doc["dados"]))
 
     if entity == "contactos":
@@ -1429,6 +1497,11 @@ def media_usage(media_id: str) -> List[Dict[str, str]]:
         if pesquisa.get("seo", {}).get("image_id") == media_id:
             usage.append({"entity": "pesquisas", "id": pesquisa["id"], "title": pesquisa.get("title") or "", "where": "SEO"})
     for modelo in store["remuneracoes"]:
+        for block in modelo.get("blocks") or []:
+            data = block.get("data") or {}
+            if data.get("media_id") == media_id or media_id in (data.get("media_ids") or []):
+                usage.append({"entity": "remuneracoes", "id": modelo["id"], "title": modelo.get("title") or "", "where": "bloco"})
+                break
         if modelo.get("capa_id") == media_id:
             usage.append({"entity": "remuneracoes", "id": modelo["id"], "title": modelo.get("title") or "", "where": "capa"})
         if modelo.get("logo_id") == media_id:

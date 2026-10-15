@@ -51,7 +51,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REPORTS_DIR = ROOT / "data" / "reports"
 REPORTS_PATH = REPORTS_DIR / "reports.json"
 FILES_DIR = REPORTS_DIR / "files"
-REPORTS_VERSION = 1
+REPORTS_VERSION = 2
 
 REPORT_STATUSES: Tuple[str, ...] = (
     "aguarda_pagamento",
@@ -293,6 +293,9 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "auto_confirm_mbway_api": True,
     # Contas com acesso ao backoffice de relatórios (além dos administradores).
     "backoffice_users": [],
+    # Contas com acesso ao **estúdio** (criam e publicam relatórios), além dos
+    # administradores e dos gestores de plataforma.
+    "report_managers": [],
     # Emails extra avisados de cada pedido novo.
     "notify_extra_emails": [],
     "updated_at": "",
@@ -379,6 +382,8 @@ def _empty_store() -> Dict[str, Any]:
         "settings": copy.deepcopy(DEFAULT_SETTINGS),
         "catalogue": copy.deepcopy(DEFAULT_CATALOGUE),
         "requests": [],
+        # Relatórios criados no **estúdio** (criação/publicação pela equipa).
+        "studio_reports": [],
         "notifications": [],
         "activity": [],
         "updated_at": _now(),
@@ -396,7 +401,7 @@ def _read_store() -> Dict[str, Any]:
     if not isinstance(raw, dict):
         return _empty_store()
     store = _empty_store()
-    for entity in ("requests", "notifications", "activity"):
+    for entity in ("requests", "notifications", "activity", "studio_reports"):
         value = raw.get(entity)
         if isinstance(value, list):
             store[entity] = [item for item in value if isinstance(item, dict)]
@@ -539,6 +544,8 @@ def save_settings(patch: Dict[str, Any], actor: str = "") -> Dict[str, Any]:
                     pass
         if "backoffice_users" in patch:
             data["backoffice_users"] = _emails(patch.get("backoffice_users"))
+        if "report_managers" in patch:
+            data["report_managers"] = _emails(patch.get("report_managers"))
         if "notify_extra_emails" in patch:
             data["notify_extra_emails"] = _emails(patch.get("notify_extra_emails"))
         data["updated_at"] = _now()
@@ -609,6 +616,13 @@ def save_package(payload: Dict[str, Any], actor: str = "") -> Dict[str, Any]:
         for key, limit in (("title", 120), ("subtitle", 160), ("note", 200), ("badge", 24), ("code", 12)):
             if key in payload:
                 existing[key] = _text(payload.get(key), limit)
+        # Pacotes entregues pela plataforma (`benchmark`, `estudio:<id>`): o PDF é
+        # calculado sem passar pela equipa. Só os pacotes automáticos o têm.
+        if "auto" in payload:
+            auto = _text(payload.get("auto"), 80)
+            if auto and not is_auto_report(auto):
+                raise ValueError(f"Entrega automática desconhecida: «{auto}».")
+            existing["auto"] = auto
         if not _text(existing.get("title")):
             raise ValueError("O pacote precisa de um título.")
         if "price" in payload:
@@ -661,6 +675,34 @@ def is_backoffice(email: str, role: str = "member") -> bool:
     if (role or "member") == "admin":
         return True
     return _email(email) in backoffice_users()
+
+
+def report_managers() -> List[str]:
+    """Contas autorizadas a criar/publicar relatórios no estúdio."""
+    return list(load()["settings"].get("report_managers") or [])
+
+
+def is_report_manager(email: str, role: str = "member") -> bool:
+    """Quem entra no estúdio: `admin`, `manager` ou conta da lista.
+
+    O papel `manager` (gestor de plataforma) tem acesso por definição; a lista
+    serve para dar acesso a outras contas sem papel de gestão.
+    """
+    if (role or "member") in ("admin", "manager"):
+        return True
+    return _email(email) in report_managers()
+
+
+#: Entregas automáticas conhecidas: `benchmark` (relatório de benchmark) e
+#: `estudio:<id>` (relatório criado no Estúdio). O PDF destes pacotes é gerado
+#: pela plataforma, sem passar pela equipa de backoffice.
+def is_auto_report(value: Any) -> bool:
+    text = _text(value, 80)
+    if text == "benchmark":
+        return True
+    if not text.startswith("estudio:"):
+        return False
+    return bool(text.split(":", 1)[1].strip())
 
 
 def backoffice_recipients(extra_admins: Sequence[str] = ()) -> List[str]:
@@ -1193,37 +1235,49 @@ def set_payment_result(
     return view
 
 
+def _gerar_automatico(item: Dict[str, Any], doc: Dict[str, Any]) -> Optional[Tuple[str, bytes, str]]:
+    """Gera o PDF de um pacote automático — `(nome, bytes, mime)`.
+
+    Os imports são tardios de propósito: o módulo do estúdio (e o do benchmark)
+    só são carregados quando há mesmo um pedido automático para produzir.
+    """
+    auto = _text(item.get("auto"), 80)
+    reference = str(doc.get("reference") or "")
+    requester = str((doc.get("requester") or {}).get("email") or "")
+    if auto.startswith("estudio:"):
+        from api import reports_studio  # noqa: PLC0415
+
+        return reports_studio.render_for_key(auto, reference=reference, requester=requester)
+    if auto == "benchmark":
+        from api import benchmark_report  # noqa: PLC0415
+
+        return benchmark_report.render(doc.get("benchmark") or {}, reference=reference, requester=requester)
+    return None
+
+
 def _produzir_automatico(request_id: str) -> Optional[Dict[str, Any]]:
     """Produz o relatório de um pacote automático e anexa-o ao pedido.
 
-    Hoje só o **benchmark** é automático: o PDF é calculado a partir dos
-    parâmetros guardados no pedido (país, empresa, CPV, anos), pelo que o
-    cliente o recebe logo após o pagamento. Os restantes pacotes continuam a ser
-    produzidos à mão pela equipa.
+    São automáticos o **benchmark** (PDF calculado a partir dos parâmetros do
+    pedido) e os **relatórios do estúdio** (`estudio:<id>`, publicados pela
+    equipa no catálogo): em ambos os casos o cliente recebe o ficheiro logo após
+    o pagamento. Os restantes pacotes continuam a ser produzidos à mão.
 
-    Falhas não travam o pedido: ficam registados como nota interna e o
+    Falhas não travam o pedido: ficam registadas como nota interna e o
     backoffice pode anexar o PDF manualmente.
     """
     doc = get_request(request_id)
     if doc is None:
         return None
     item = package(str(doc.get("package_id") or ""))
-    if not item or str(item.get("auto") or "") != "benchmark":
+    if not item or not is_auto_report(item.get("auto")):
         return None
     if str(doc.get("status")) in {"gerado", "entregue"} and (doc.get("files") or []):
         return None
-    parametros = doc.get("benchmark") or {}
-    requester = str((doc.get("requester") or {}).get("email") or "")
     try:
-        from api import benchmark_report
-
-        nome, dados, mime = benchmark_report.render(
-            parametros,
-            reference=str(doc.get("reference") or ""),
-            requester=requester,
-        )
+        rendered = _gerar_automatico(item, doc)
     except Exception as exc:  # noqa: BLE001 - o pedido não pode ficar preso
-        logger.warning("Falha ao gerar o PDF do benchmark %s: %s", doc.get("reference"), exc)
+        logger.warning("Falha ao gerar o PDF automático do pedido %s: %s", doc.get("reference"), exc)
         try:
             attach_note(
                 request_id,
@@ -1234,9 +1288,12 @@ def _produzir_automatico(request_id: str) -> Optional[Dict[str, Any]]:
         except ValueError:
             pass
         return None
+    if rendered is None:
+        return None
+    nome, dados, mime = rendered
     return add_file(
         request_id,
-        "sistema (benchmark)",
+        f"sistema ({_text(item.get('auto'), 40)})",
         name=nome,
         data=dados,
         mime=mime,
@@ -1258,7 +1315,7 @@ def produzir_pendentes(limit: int = 20) -> List[Dict[str, Any]]:
         if str(doc.get("status")) not in {"pagamento_confirmado", "em_producao"}:
             continue
         item = package(str(doc.get("package_id") or ""))
-        if not item or str(item.get("auto") or "") != "benchmark":
+        if not item or not is_auto_report(item.get("auto")):
             continue
         if doc.get("files"):
             continue
