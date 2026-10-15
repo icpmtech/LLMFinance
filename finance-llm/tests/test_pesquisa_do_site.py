@@ -15,6 +15,7 @@ Nada aqui toca em `data/`: o CMS e a loja de relatórios vivem em `tmp_path`.
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -101,6 +102,16 @@ def _titulos(grupos: List[Dict[str, Any]]) -> Dict[str, List[str]]:
     return {grupo["label"]: [item["title"] for item in grupo["items"]] for grupo in grupos}
 
 
+def _itens(grupos: List[Dict[str, Any]], rotulo: str) -> Dict[str, str]:
+    """Título → destino dos resultados de um grupo (vazio se o grupo não existir)."""
+    return {
+        item["title"]: item["href"]
+        for grupo in grupos
+        if grupo["label"] == rotulo
+        for item in grupo["items"]
+    }
+
+
 # ------------------------------------------------------------------ agrupar
 def test_agrupa_estudos_paginas_artigos_e_relatorios(instalacao):
     """Um termo encontra o que lhe pertence, já agrupado por tipo."""
@@ -115,29 +126,38 @@ def test_agrupa_estudos_paginas_artigos_e_relatorios(instalacao):
     _artigo("Como comparamos preços", "como-comparamos-precos", corpo="Normalizamos o mesmo produto.")
     _relatorio("Relatório de preços de mercado", tags=["mercados"])
 
-    grupos = _titulos(cms_render._resultados_da_pesquisa("preços"))
-    assert list(grupos) == ["Estudos de benchmark", "Páginas", "Artigos do blog", "Relatórios e documentos"]
-    assert grupos["Estudos de benchmark"] == ["Telemóveis — comparação entre lojas"]
-    assert grupos["Páginas"] == ["Fontes dos dados"]
-    assert grupos["Artigos do blog"] == ["Como comparamos preços"]
-    assert grupos["Relatórios e documentos"] == ["Relatório de preços de mercado"]
+    grupos = cms_render._resultados_da_pesquisa("preços")
+    # A instalação vem semeada com o editorial e o catálogo por omissão (o CMS
+    # semeia-se na primeira escrita): procura-se o que é nosso **dentro** de cada
+    # grupo, e os grupos saem sempre por esta ordem.
+    assert list(_titulos(grupos)) == [
+        "Estudos de benchmark",
+        "Páginas",
+        "Artigos do blog",
+        "Relatórios e documentos",
+    ]
+    assert "Telemóveis — comparação entre lojas" in _itens(grupos, "Estudos de benchmark")
+    assert _itens(grupos, "Estudos de benchmark")["Telemóveis — comparação entre lojas"] == "/site/benchmarks/lojas"
+    assert "Fontes dos dados" in _itens(grupos, "Páginas")
+    assert "Como comparamos preços" in _itens(grupos, "Artigos do blog")
+    assert "Relatório de preços de mercado" in _itens(grupos, "Relatórios e documentos")
 
 
 def test_comparacao_ignora_acentos_e_maiusculas(instalacao):
     _pagina("Preços e dispersão", "precos")
     _artigo("Precos na loja", "precos-na-loja", corpo="Sem acento no título.")
-    esperado = {"Páginas": ["Preços e dispersão"], "Artigos do blog": ["Precos na loja"]}
-    assert _titulos(cms_render._resultados_da_pesquisa("PRECOS")) == esperado
-    assert _titulos(cms_render._resultados_da_pesquisa("preços")) == esperado
+    for termo in ("PRECOS", "preços", "Preços"):
+        grupos = cms_render._resultados_da_pesquisa(termo)
+        assert "Preços e dispersão" in _itens(grupos, "Páginas"), termo
+        assert "Precos na loja" in _itens(grupos, "Artigos do blog"), termo
 
 
 def test_o_que_casa_no_titulo_vem_primeiro(instalacao):
     _pagina("Preços por loja", "precos-por-loja")
     _pagina("Método", "metodo", resumo="Falamos de preços aqui dentro.")
-    grupo = cms_render._resultados_da_pesquisa("precos")[0]
-    assert grupo["label"] == "Páginas"
-    assert [item["title"] for item in grupo["items"]] == ["Preços por loja", "Método"]
-    assert grupo["items"][0]["href"] == "/site/precos-por-loja"
+    titulos = _titulos(cms_render._resultados_da_pesquisa("precos"))["Páginas"]
+    assert titulos.index("Preços por loja") < titulos.index("Método")
+    assert _itens(cms_render._resultados_da_pesquisa("precos"), "Páginas")["Preços por loja"] == "/site/precos-por-loja"
 
 
 def test_rascunhos_e_relatorios_por_publicar_ficam_fora(instalacao):
@@ -147,7 +167,12 @@ def test_rascunhos_e_relatorios_por_publicar_ficam_fora(instalacao):
     _artigo("Artigo sobre preços", "artigo-precos", corpo="Preços.", estado="rascunho")
     _relatorio("Relatório de preços por publicar", tags=["mercados"], publicar=False)
 
-    assert _titulos(cms_render._resultados_da_pesquisa("precos")) == {"Páginas": ["Preços por loja"]}
+    grupos = cms_render._resultados_da_pesquisa("precos")
+    assert "Preços por loja" in _itens(grupos, "Páginas")
+    achados = {item["title"] for grupo in grupos for item in grupo["items"]}
+    assert "Preços (rascunho)" not in achados
+    assert "Artigo sobre preços" not in achados
+    assert "Relatório de preços por publicar" not in achados
 
 
 # -------------------------------------------------------------------- página
@@ -157,7 +182,8 @@ def test_pagina_de_resultados(instalacao):
 
     assert "<h1>Pesquisar no site</h1>" in html
     assert 'action="/site/pesquisa"' in html and 'value="preços"' in html
-    assert "Preços por loja" in html and "1 resultado(s)" in html
+    assert "Preços por loja" in html
+    assert re.search(r"\d+ resultado\(s\) para «preços»", html)
     assert 'content="noindex, nofollow"' in html
 
     # Sem termo explica-se; sem resultados diz que não há e sugere por onde ir.

@@ -19,7 +19,11 @@ Fases
    * `5xx` / exceção     → **FALHA**
 
 3. **UI** (opcional, `--ui-url`) — a SPA tem de responder 200 em `/` e numa rota interna
-   (`/empresas-iq`), com o `index.html` do Vite.
+   (`/empresas-iq`), com o `index.html` do Vite, **e o bundle que esse `index.html`
+   referencia tem de existir**. O `200` do HTML, sozinho, não prova nada: se o bundle
+   faltar no servidor que respondeu ao HTML, o JavaScript não arranca e a página fica
+   preta (medido a 2026-10-15, com o `index.html` do backend a apontar para um bundle
+   que o nginx ainda não tinha).
 
 Credenciais (opcionais): `IQOS_API_TOKEN`, ou `IQOS_API_EMAIL` + `IQOS_API_PASSWORD`
 (as mesmas variáveis do servidor MCP). Sem elas, as rotas guardadas contam como GUARDADO.
@@ -31,6 +35,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -347,6 +352,25 @@ def main(argv: Optional[List[str]] = None) -> int:
             report.add("ui", "GET", path, outcome, status, ms, detail or label)
             mark = "ok  " if outcome == "OK" else "FAIL"
             print(f"  [{mark}] {status} {ms:7.0f} ms  {path:<14} {label}")
+
+            # O `index.html` referencia o bundle principal por um nome com hash.
+            # Se o ficheiro não existir no servidor que respondeu, o browser fica
+            # com a página preta: é o sintoma, não um detalhe.
+            bundle = re.search(r'src="(/assets/index-[^"]+\.js)"', body)
+            if bundle is None:
+                continue
+            asset_status, asset_detail, asset_ms = call(
+                session, "HEAD", ui_url + bundle.group(1), args.ui_timeout
+            )
+            asset_ok = asset_status is not None and asset_status in OK_STATUSES
+            report.add(
+                "ui", "HEAD", bundle.group(1), "OK" if asset_ok else "FALHA",
+                asset_status, asset_ms, asset_detail or "bundle referido pelo index.html",
+            )
+            print(
+                f"  [{'ok  ' if asset_ok else 'FAIL'}] {asset_status} {asset_ms:7.0f} ms  "
+                f"{bundle.group(1)}  bundle de {path}"
+            )
 
     # ---------------------------------------------------------------- resumo
     report.print_summary()

@@ -34,8 +34,13 @@ menus):
   sem página nem URL é rótulo de grupo (não navega) e o submenu de segundo nível
   abre ao lado **dentro do ecrã**;
 - no rodapé os submenus aparecem ao lado do item que os abre;
-- no telemóvel (390×844) o botão «Menu» abre o painel, os submenus ficam à vista
-  e indentados, a página não ganha scroll horizontal e tocar num subitem navega.
+- no telemóvel (390×844) o botão «Menu» abre o painel, a lista começa
+  **fechada** e cada submenu abre e fecha pela sua própria seta (o rótulo do item
+  continua a ser o link); os itens ficam indentados, a página não ganha scroll
+  horizontal e tocar num subitem navega;
+- o painel do telemóvel traz a **pesquisa** (envia para `/site/pesquisa?q=`),
+  **entrar/criar conta** e um **ícone** em cada entrada de topo — nada disto passa
+  pelo CMS, é o HTML do site que o publica;
 
 Além do que o editor guarda, o cabeçalho mostra **submenus derivados dos dados**
 (calculados a cada renderização, nunca gravados no menu — ver
@@ -50,8 +55,10 @@ lista ficava fora do alcance.
 Estes testes **escrevem no CMS** (menu do cabeçalho e do rodapé, reposto no fim) e
 por isso exigem uma sessão com papel `admin` ou `manager` — escrever no CMS está
 reservado a esses papéis. Com a conta `member` que a suite provisiona por
-omissão, os testes do ficheiro são saltados com essa indicação; para os correr,
-promover a conta E2E na Administração ou passar `E2E_TOKEN` de uma conta gestora.
+omissão, os testes que mexem no menu são saltados com essa indicação (os que só
+olham para o site publicado — painel do telemóvel, pesquisa, ícones — correm com
+qualquer conta); para os correr todos, promover a conta E2E na Administração ou
+passar `E2E_TOKEN` de uma conta gestora.
 
 ## Preparação
 

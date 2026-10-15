@@ -378,7 +378,9 @@ def test_pagina_publica_traz_as_areas_no_menu(instalacao):
 
     html = cliente.get("/site/").text
     # O item «Relatórios» passou a abrir um painel: área (2.º nível) e documento.
-    assert '<a class="menu-pai" href="/site/relatorios-gratuitos">Relatórios' in html
+    # (O item leva o ícone do telemóvel antes do rótulo.)
+    assert '<a class="menu-pai" href="/site/relatorios-gratuitos">' in html
+    assert "Relatórios<span" in html
     assert '<span class="menu-pai" tabindex="0">Empresas e risco' in html
     assert '<ul class="submenu nivel-2">' in html
     assert f'href="/site/documento/{documento["id"]}"' in html

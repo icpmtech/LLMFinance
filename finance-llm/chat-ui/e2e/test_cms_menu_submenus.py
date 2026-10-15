@@ -203,7 +203,7 @@ def test_rodape_mostra_os_submenus_ao_lado(app, menus):
 
 
 # ----------------------------------------------------------- site no telemóvel
-def test_submenu_no_telemovel_fica_a_vista_e_indentado(app, menus):
+def test_submenu_no_telemovel_abre_pela_seta_e_fica_indentado(app, menus):
     menus.definir("header", _menu_com_submenus())
     page = app("/site/")
     page.set_viewport_size(TELEMOVEL)
@@ -211,18 +211,31 @@ def test_submenu_no_telemovel_fica_a_vista_e_indentado(app, menus):
     page.get_by_text("Menu", exact=True).click()
     expect(page.locator("nav.main")).to_be_visible()
 
-    pai = page.locator("nav.main > .menu-item > .menu-pai", has_text="Soluções")
-    submenu = page.locator("nav.main > .menu-item > .submenu")
-    blog = submenu.get_by_role("link", name="Blog")
+    grupo = page.locator("nav.main > .menu-item", has_text="Soluções")
+    submenu = grupo.locator("> .submenu")
+    pai = grupo.locator("> .menu-pai")
 
-    # Sem rato: no telemóvel o submenu está logo à vista.
+    # No telemóvel a lista começa fechada: quem abre cada submenu é a seta.
+    expect(submenu).to_be_hidden()
+    grupo.locator("> .menu-abre").click()
+    expect(submenu).to_be_visible()
+
+    blog = submenu.get_by_role("link", name="Blog")
     expect(blog).to_be_visible()
-    expect(submenu.locator(".submenu").get_by_role("link", name="Fontes")).to_be_visible()
+    # O grupo sem destino («Mais») abre o segundo nível pela sua própria seta.
+    mais = submenu.locator("> li", has_text="Mais")
+    expect(mais.locator("> .submenu")).to_be_hidden()
+    mais.locator("> .menu-abre").click()
+    expect(mais.locator("> .submenu").get_by_role("link", name="Fontes")).to_be_visible()
 
     assert blog.bounding_box()["x"] > pai.bounding_box()["x"], "o subitem deve ficar indentado sob o item"
 
     estouro = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
     assert estouro <= 0, f"a página ganhou {estouro}px de scroll horizontal com o menu aberto"
+
+    # Fechar outra vez arruma a lista (é o que o botão faz).
+    grupo.locator("> .menu-abre").click()
+    expect(submenu).to_be_hidden()
 
 
 def test_subitem_do_telemovel_navega(app, menus):
@@ -231,6 +244,43 @@ def test_subitem_do_telemovel_navega(app, menus):
     page.set_viewport_size(TELEMOVEL)
 
     page.get_by_text("Menu", exact=True).click()
+    page.locator("nav.main > .menu-item", has_text="Soluções").locator("> .menu-abre").click()
     page.locator("nav.main > .menu-item > .submenu").get_by_role("link", name="Blog").click()
 
     expect(page).to_have_url(re.compile(r"/site/blog/?$"), timeout=30000)
+
+
+# O painel do telemóvel não precisa do CMS: o que se prova é o que ele traz
+# (pesquisa, conta, ícones e as setas dos submenus) e para onde a pesquisa leva.
+def test_painel_do_telemovel_traz_pesquisa_conta_e_setas(app):
+    page = app("/site/")
+    page.set_viewport_size(TELEMOVEL)
+    page.get_by_text("Menu", exact=True).click()
+
+    expect(page.locator("nav.main .menu-pesquisa input[name='q']")).to_be_visible()
+    expect(page.locator("nav.main .menu-conta a[href='/login']")).to_be_visible()
+    expect(page.locator("nav.main .menu-conta a[href='/register']")).to_be_visible()
+    expect(page.locator("nav.main .menu-icone").first).to_be_visible()
+
+    abridores = page.locator("nav.main > .menu-item.tem-submenu")
+    assert abridores.count() >= 1, "o menu do cabeçalho não tem nenhum submenu para abrir"
+    primeiro = abridores.first
+    expect(primeiro.locator("> .submenu")).to_be_hidden()
+    primeiro.locator("> .menu-abre").click()
+    expect(primeiro.locator("> .submenu")).to_be_visible()
+    primeiro.locator("> .menu-abre").click()
+    expect(primeiro.locator("> .submenu")).to_be_hidden()
+
+
+def test_pesquisa_do_menu_leva_aos_resultados(app):
+    page = app("/site/")
+    page.set_viewport_size(TELEMOVEL)
+    page.get_by_text("Menu", exact=True).click()
+
+    page.locator("nav.main .menu-pesquisa input[name='q']").fill("telemoveis")
+    page.locator("nav.main .menu-pesquisa button[type='submit']").click()
+
+    expect(page).to_have_url(re.compile(r"/site/pesquisa\?q=telemoveis"), timeout=30000)
+    expect(page.locator("h1")).to_contain_text("Pesquisar no site")
+    # O estudo entra nos resultados (no menu ele também lá está, mas fechado).
+    expect(page.locator("article.card a[href='/site/benchmarks/telemoveis-lojas']")).to_be_visible()
