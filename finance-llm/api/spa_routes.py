@@ -95,6 +95,7 @@ SEGMENTOS_DA_APP = frozenset(
         "chart",
         "grafico",
         "lorenz",
+        "market",
         "mercado",
         "noticias",
         "sentimento",

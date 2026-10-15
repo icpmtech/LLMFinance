@@ -195,7 +195,13 @@ def document_from_dossier(
 def available_dossiers(limit: int = Query(40, ge=1, le=200)) -> Dict[str, Any]:
     """Dossiês 360 guardados disponíveis para trazer para o Office (com o documento ligado, se existir)."""
     dossiers = dossier_store.list_dossiers(limit=limit)
-    documents = {str((item.get("source") or {}).get("id")): item.get("id") for item in store.list_documents(limit=500)["items"] if (item.get("source") or {}).get("type") == "dossier360"}
+    # `source_metadata`: a origem dos documentos antigos é texto simples e não
+    # objeto — sem normalizar, `.get("type")` rebentava com 500 nesta rota.
+    documents: Dict[str, Any] = {}
+    for item in store.list_documents(limit=500)["items"]:
+        source = store.source_metadata(item.get("source"))
+        if source.get("type") == "dossier360":
+            documents[str(source.get("id"))] = item.get("id")
     return {
         "total": dossiers["total"],
         "items": [

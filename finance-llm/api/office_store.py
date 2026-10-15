@@ -130,6 +130,22 @@ def _store() -> Dict[str, Any]:
         return copy.deepcopy(_cache)
 
 
+def source_metadata(source: Any) -> Dict[str, Any]:
+    """`source` de um documento normalizado para objeto.
+
+    Os documentos mais antigos guardam a origem como texto simples
+    (`"mirofish"`) e os novos como objeto (`{"type": "dossier360", ...}`). Ler o
+    texto como se fosse objeto rebenta com `'str' object has no attribute 'get'`
+    — era o 500 do `/office/dossiers/available`, por causa de um documento de
+    semente com `source: "mirofish"`.
+    """
+    if isinstance(source, dict):
+        return dict(source)
+    if isinstance(source, str) and source.strip():
+        return {"type": source.strip()}
+    return {}
+
+
 def _summary(document: Dict[str, Any], folders: Dict[str, str]) -> Dict[str, Any]:
     return {
         "id": document.get("id"),
@@ -143,7 +159,7 @@ def _summary(document: Dict[str, Any], folders: Dict[str, str]) -> Dict[str, Any
         "pinned": bool(document.get("pinned")),
         "words": document.get("words") or 0,
         "excerpt": _excerpt(str(document.get("markdown") or "")),
-        "source": document.get("source"),
+        "source": source_metadata(document.get("source")),
         "created_at": document.get("created_at"),
         "updated_at": document.get("updated_at"),
     }
@@ -387,7 +403,7 @@ def document_from_dossier(
     existing = None
     if not create_new:
         for document in _store()["documents"]:
-            current = document.get("source") or {}
+            current = source_metadata(document.get("source"))
             if current.get("type") == "dossier360" and current.get("id") == dossier.get("id"):
                 existing = document
                 break

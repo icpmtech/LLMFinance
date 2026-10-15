@@ -134,7 +134,7 @@ export const APP_MODULES: AppModule[] = [
     id: "mercados",
     label: "Mercados e previsão",
     hint: "Cotações, gráficos, previsões e simulação de negociação",
-    ids: ["tickers", "ticker-chart", "forecast", "trading"],
+    ids: ["tickers", "market", "ticker-chart", "forecast", "trading"],
   },
   {
     id: "investigacao",

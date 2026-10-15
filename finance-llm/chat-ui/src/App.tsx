@@ -93,6 +93,8 @@ import MercadoCenariosPage from "./pages/MercadoCenariosPage";
 import VortalPage from "./pages/VortalPage";
 import OsintPage from "./pages/OsintPage";
 import ReportsPage from "./pages/ReportsPage";
+// Vista de mercado (`/market`): os tickers da plataforma agrupados por país.
+import MarketPage from "./pages/MarketPage";
 import ReportStudioPage from "./pages/ReportStudioPage";
 import SubvencoesPage from "./pages/SubvencoesPage";
 import AdministracaoCentralPage from "./pages/AdministracaoCentralPage";
@@ -215,6 +217,7 @@ type AppView =
   | "lorenz"
   | "mercado"
   | "mercado-cenarios"
+  | "market"
   | "vortal"
   | "osint"
   | "reports"
@@ -402,6 +405,9 @@ function pathForView(
   if (view === "world-rede") return "/world/rede";
   if (view === "osint") return "/osint";
   if (view === "reports") return "/reports";
+  // Vista de mercado: tickers por país (não confundir com `/mercado`, que é a
+  // inteligência de mercado da contratação pública).
+  if (view === "market") return "/market";
   // O Estúdio de relatórios vive em página própria (criação, publicação e PDF).
   if (view === "report-studio") return "/report-studio";
   if (view === "subvencoes") return "/subvencoes";
@@ -670,6 +676,8 @@ export default function App() {
     // O módulo de mercado vive em `/mercado` (benchmark) e `/mercado/cenarios`.
     if (path === "/mercado/cenarios" || path.startsWith("/mercado/cenarios/")) return "mercado-cenarios";
     if (path === "/mercado" || path.startsWith("/mercado/")) return "mercado";
+    // Vista de mercado: os tickers da plataforma agrupados por país.
+    if (path === "/market" || path.startsWith("/market/")) return "market";
     // Peças do procedimento (Vortal): recolha para disco + índice Elasticsearch.
     if (path === "/vortal" || path.startsWith("/vortal/")) return "vortal";
     if (path === "/mirofish" || path.startsWith("/mirofish/")) return "mirofish";
@@ -811,6 +819,7 @@ export default function App() {
       else if (path === "/lorenz" || path.startsWith("/lorenz/")) next = "lorenz";
       else if (path === "/mercado/cenarios" || path.startsWith("/mercado/cenarios/")) next = "mercado-cenarios";
       else if (path === "/mercado" || path.startsWith("/mercado/")) next = "mercado";
+      else if (path === "/market" || path.startsWith("/market/")) next = "market";
       else if (path === "/vortal" || path.startsWith("/vortal/")) next = "vortal";
       else if (path === "/osint" || path.startsWith("/osint/")) next = "osint";
       else if (path === "/reports" || path.startsWith("/reports/")) next = "reports";
@@ -1024,20 +1033,42 @@ export default function App() {
     [activeId],
   );
 
+  /**
+   * Navega e actualiza o endereço.
+   *
+   * `selecao` serve para quem acabou de escolher um detalhe (um ticker, uma
+   * empresa): o estado do React só muda no render seguinte, pelo que
+   * `pathForView` leria o valor **antigo** e o URL ficava uma escolha atrás —
+   * recarregar a página abria a ficha anterior.
+   */
   const setViewAndHistory = useCallback(
-    (next: AppView) => {
+    (
+      next: AppView,
+      selecao?: {
+        ticker?: string | null;
+        company?: string | null;
+        benchmark?: string | null;
+        region?: RegionDetailTarget | null;
+      },
+    ) => {
       setView(next);
       // No modo janelas, navegar abre (ou foca) a janela da aplicação.
       if (windowMode && typeof window !== "undefined") {
         if (windowFor(next)) restoreWindow(next);
         else openWindow(next, workspaceEstimate());
       }
-      const path = pathForView(next, selectedCompany, selectedTicker, regionDetail, selectedBenchmark);
+      const path = pathForView(
+        next,
+        selecao?.company !== undefined ? selecao.company : selectedCompany,
+        selecao?.ticker !== undefined ? selecao.ticker : selectedTicker,
+        selecao?.region !== undefined ? selecao.region : regionDetail,
+        selecao?.benchmark !== undefined ? selecao.benchmark : selectedBenchmark,
+      );
       if (typeof window !== "undefined" && window.location.pathname !== path) {
         window.history.pushState({}, "", path);
       }
     },
-    [regionDetail, selectedCompany, selectedTicker, windowMode],
+    [regionDetail, selectedCompany, selectedTicker, selectedBenchmark, windowMode],
   );
 
   const handleSwitchView = (v: string) => {
@@ -1052,8 +1083,9 @@ export default function App() {
     if (v === "ticker-detail") {
       if (!selectedTicker && typeof window !== "undefined") {
         const saved = localStorage.getItem(TICKER_DETAIL_KEY);
-        setSelectedTicker(saved || "AAPL");
-        setViewAndHistory("ticker-detail");
+        const alvo = saved || "AAPL";
+        setSelectedTicker(alvo);
+        setViewAndHistory("ticker-detail", { ticker: alvo });
       } else {
         setViewAndHistory("ticker-detail");
       }
@@ -1127,7 +1159,9 @@ export default function App() {
 
   const handleSelectTicker = (ticker: string) => {
     setSelectedTicker(ticker);
-    setViewAndHistory("ticker-detail");
+    // O ticker vai no caminho já nesta navegação (o estado só muda no render
+    // seguinte): sem isto o URL abria a ficha anterior ao recarregar.
+    setViewAndHistory("ticker-detail", { ticker });
   };
 
   /** Pesquisa nos dados do IQ OS (usada pelo browser). */
@@ -1664,6 +1698,10 @@ export default function App() {
     // Inteligência de mercado: empresas no mesmo mercado, dependências e cenários.
     if (target === "mercado") return <MercadoPage onAbrirCenarios={() => setViewAndHistory("mercado-cenarios")} />;
     if (target === "mercado-cenarios") return <MercadoCenariosPage onAbrirMercado={() => setViewAndHistory("mercado")} />;
+    // Vista de mercado: os tickers da plataforma agrupados por país, cada um
+    // ligado à sua ficha (`/tickers/<símbolo>`).
+    if (target === "market")
+      return <MarketPage onSelectTicker={handleSelectTicker} onBack={() => setViewAndHistory("dashboard")} />;
     // Peças do procedimento (Vortal): recolha para disco, índice e pesquisa.
     if (target === "vortal") return <VortalPage />;
     if (target === "osint") return <OsintPage />;

@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1291 operações** em **44 grupos**.
+Versão `0.4.0` · **1293 operações** em **44 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -651,6 +651,8 @@ Mercado e ativos: lista/pesquisa de tickers (Yahoo Finance), preços, informaç�
 | --- | --- | --- |
 | `POST` | `/forecast` | Forecast |
 | `GET` | `/forecast/plot/{filename}` | Forecast Plot |
+| `GET` | `/market/by-country` | Tickers da plataforma agrupados por país |
+| `GET` | `/market/meta` | Fonte, ressalva e limites da vista de mercado |
 | `POST` | `/sentiment/analyze/{ticker}` | Sentiment Analyze |
 | `GET` | `/tickers` | List Tickers |
 | `POST` | `/tickers/add` | Add New Ticker |

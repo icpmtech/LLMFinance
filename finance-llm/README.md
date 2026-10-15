@@ -289,6 +289,13 @@ página numa dessas rotas devolvia `{"detail":"Not Found"}`.
   (adjudicantes/adjudicatários) ou contratos, com valores, analítica por ano e CPV em comum.
 - **Gráfico Tempo Real** (`/chart`, `/tickers/<T>/grafico`) — cotações em tempo real com o
   *Advanced Real-Time Chart* da TradingView (ver abaixo).
+- **Mercado por país** (`/market`) — os tickers que a plataforma segue agrupados por país, com a
+  variação do dia, os agregados de cada país (cotados, altas/baixas, variação média, capitalização) e
+  o melhor/pior de cada um. O país vem do Yahoo Finance (o mesmo campo que a ficha do ticker mostra);
+  quando não responde, o sufixo do mercado decide (`.LS` → Portugal) e cada linha diz **de onde veio**
+  (`country_source`). Um ticker sem cotação aparece com o motivo, nunca com um valor suposto, e o país
+  aprendido de cada símbolo fica em `data/market_view/countries.json` — uma leitura ao Yahoo por
+  símbolo, não por visita (ver abaixo).
 - **Ontologia** (`/ontology`) — a camada semântica: tipos de objeto, propriedades, ligações,
   ações, explorador de objetos e o painel de IA que mostra (e valida) o grounding das respostas.
 - **Pesquisa 360** (`/search360`) — meta-modelo de analítica e exploração: federa a plataforma

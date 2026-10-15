@@ -868,6 +868,14 @@ export const DOCK_CATALOG: DockApp[] = [
     accent: "244,63,94",
   },
   {
+    id: "market",
+    label: "Mercado por país",
+    hint: "Os tickers da plataforma agrupados por país, com a variação do dia e o país de origem de cada um",
+    icon: Globe2,
+    gradient: "from-teal-200 via-cyan-400 to-blue-700",
+    accent: "45,212,191",
+  },
+  {
     id: "ticker-chart",
     label: "Gráfico Tempo Real",
     hint: "Cotações ao segundo com TradingView",
