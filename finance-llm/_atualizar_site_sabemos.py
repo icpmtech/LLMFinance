@@ -220,6 +220,20 @@ def _aplicar_paginas_de_benchmarks(media: Dict[str, str]) -> None:
         print(f"  página {caminho}: {len(novos)} blocos acrescentados")
 
 
+def _aplicar_templates() -> None:
+    """Acrescenta os modelos de página que a instalação ainda não tenha.
+
+    O deploy de código não leva a pasta `data/`, por isso uma instalação antiga
+    não recebe sozinha o modelo «Biblioteca de relatórios». Um modelo que já
+    exista fica como está — quem o tenha editado não o perde.
+    """
+    novos = store.instalar_templates_editoriais()
+    if novos:
+        print(f"  modelos acrescentados: {', '.join(novos)}")
+    else:
+        print("  modelos: já estavam todos instalados")
+
+
 def main() -> None:
     media = store.instalar_media_de_marca()
     print(f"media de marca instalados: {len(media)} ficheiros")
@@ -272,6 +286,7 @@ def main() -> None:
 
     _aplicar_paginas_do_site(media)
     _aplicar_paginas_de_benchmarks(media)
+    _aplicar_templates()
     _aplicar_menus()
     _aplicar_posts(media)
     _aplicar_conteudos()

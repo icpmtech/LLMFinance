@@ -281,6 +281,7 @@ SEED_MEDIA_LOJA: Sequence[Sequence[str]] = (
 MENU_PRINCIPAL: Sequence[Sequence[str]] = (
     ("Início", ""),
     ("Soluções", "solucoes"),
+    ("Relatórios", "relatorios-gratuitos"),
     ("Fontes", "fontes"),
     ("Benchmarks", "benchmarks"),
     ("Blog", "blog"),
@@ -293,6 +294,7 @@ MENU_PRINCIPAL: Sequence[Sequence[str]] = (
 #: Rodapé: o essencial, mais curto do que o cabeçalho.
 MENU_RODAPE: Sequence[Sequence[str]] = (
     ("Soluções", "solucoes"),
+    ("Relatórios", "relatorios-gratuitos"),
     ("Fontes", "fontes"),
     ("Blog", "blog"),
     ("Contactos", "contactos"),
@@ -395,6 +397,34 @@ class _Blocos:
 
     def blog(self, title: str, limit: int = 3) -> Dict[str, Any]:
         return self.add("blog", {"title": title, "limit": limit})
+
+    def relatorios(
+        self,
+        title: str,
+        *,
+        intro: str = "",
+        limit: int = 24,
+        free_only: bool = False,
+        areas: Sequence[str] = (),
+        cta_label: str = "Pedir este relatório",
+        cta_href: str = "/reports",
+    ) -> Dict[str, Any]:
+        """Biblioteca de relatórios e documentos, agrupada por área de trabalho.
+
+        O conteúdo é lido em tempo de renderização (`reports_library`): a página
+        não guarda listas que ficam velhas — publica-se um relatório novo no
+        Estúdio e ele aparece aqui.
+        """
+        data: Dict[str, Any] = {"title": title, "limit": limit, "free_only": free_only}
+        if intro:
+            data["intro"] = intro
+        if areas:
+            data["areas"] = list(areas)
+        if cta_label:
+            data["cta_label"] = cta_label
+        if cta_href:
+            data["cta_href"] = cta_href
+        return self.add("relatorios", data)
 
 
 def _pagina(
@@ -1191,6 +1221,80 @@ def paginas_do_site(media: Dict[str, str]) -> List[Dict[str, Any]]:
                         ("Quanto tempo demoram a responder?", "Pedidos simples, em dias úteis; análises à medida, dizemos o prazo quando soubermos o âmbito."),
                         ("O que fazem com os meus dados?", "Usamos o nome e o email apenas para responder a este pedido. Pode pedir a eliminação a qualquer momento, pela mesma via."),
                     ],
+                ),
+            ],
+        )
+    )
+
+    # --- Relatórios gratuitos e documentos já gerados ----------------------
+    b = _Blocos("relatorios")
+    paginas.append(
+        _pagina(
+            page_id="pag_relatorios",
+            title="Relatórios gratuitos",
+            path="relatorios-gratuitos",
+            prefixo="relatorios",
+            menu_order=2,
+            excerpt="Relatórios gratuitos e documentos já gerados pela plataforma, por área de trabalho — com download direto dos gratuitos.",
+            seo_title="Relatórios gratuitos e documentos já gerados",
+            seo_description=(
+                "Relatórios gratuitos e documentos já gerados a partir de dados abertos: contratação pública, "
+                "empresas e risco, mercados e setor público. Os gratuitos descarregam-se já; os restantes pedem-se no catálogo."
+            ),
+            keywords=[
+                "relatórios gratuitos",
+                "documentos",
+                "contratação pública",
+                "empresas",
+                "dados abertos",
+                "relatórios",
+                "Sabemos Studio",
+            ],
+            blocks=[
+                b.hero(
+                    "Relatórios gratuitos e documentos já gerados",
+                    "O que a plataforma já produziu, por área de trabalho — pronto a ler, com a fonte de cada número.",
+                    cta=("Ver o catálogo completo", "/reports"),
+                ),
+                b.texto(
+                    "O que está nesta página",
+                    "Cada documento foi montado a partir de **dados abertos** — contratos públicos, registos de "
+                    "empresas, imprensa e contas públicas — e fica aqui com a área a que pertence.\n\n"
+                    "- **Relatórios gratuitos**: os pacotes do catálogo que não se pagam (o corporativo, por exemplo). "
+                    "Pedem-se na plataforma e são produzidos a partir do NIF da empresa.\n"
+                    "- **Documentos já gerados**: relatórios do Estúdio que já têm PDF. Os **gratuitos "
+                    "descarregam-se nesta página**; os que têm preço pedem-se no catálogo.\n\n"
+                    "Os números não são uma fotografia fixa: a página lê o catálogo e o Estúdio a cada visita, por "
+                    "isso um documento publicado hoje aparece aqui sem ser preciso mexer nesta página.",
+                ),
+                b.relatorios(
+                    "Por área de trabalho",
+                    intro="Escolha a área e o documento. «Grátis» descarrega; o resto abre o catálogo.",
+                    limit=24,
+                ),
+                b.passos(
+                    "Como obter um relatório",
+                    [
+                        ("Escolher a área", "Contratação pública, empresas e risco, mercados ou setor público."),
+                        ("Abrir o documento", "Os gratuitos descarregam já; os outros abrem no catálogo com o preço."),
+                        ("Pedir com o NIF", "Indique a empresa ou as empresas (até 6) e recebe o PDF na plataforma."),
+                    ],
+                ),
+                b.faq(
+                    "Perguntas frequentes",
+                    [
+                        ("Os relatórios gratuitos são mesmo gratuitos?", "Sim. Os pacotes com preço 0 não passam pelo pagamento: pede-se e é produzido logo, quando a entrega é automática."),
+                        ("O que significa «documento já gerado»?", "É um relatório do Estúdio que já foi produzido e tem PDF. Quando é gratuito, o ficheiro está nesta página; quando tem preço, segue pelo catálogo."),
+                        ("Posso pedir um relatório sobre outra empresa?", "Pode. No catálogo escolhe-se a empresa (ou até seis, no caso da concorrência) e o relatório é montado a partir dos dados dessa entidade."),
+                        ("Que áreas vão aparecer aqui?", "As mesmas do catálogo: contratação pública, empresas e risco, mercados e notícias, setor público e os documentos de referência."),
+                    ],
+                ),
+                b.cta(
+                    "Precisa de um relatório à medida?",
+                    "Diga-nos a empresa, o setor ou a pergunta e montamos o relatório com a fonte de cada número.",
+                    "Pedir um relatório",
+                    "/reports",
+                    botoes=[("Falar connosco", "/site/contactos")],
                 ),
             ],
         )

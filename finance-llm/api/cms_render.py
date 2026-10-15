@@ -292,6 +292,26 @@ p {{ margin: 0 0 14px; }}
 a.tile {{ display: block; color: inherit; }}
 a.tile:hover {{ text-decoration: none; border-color: var(--accent); box-shadow: 0 1px 2px rgba(16,24,40,.06), 0 10px 28px rgba(16,24,40,.10); }}
 a.tile h3 {{ color: var(--accent); }}
+/* Biblioteca de relatórios (`relatorios`): áreas, cartões, etiquetas de preço. */
+.library-count {{ color: var(--muted); font-size: .94rem; margin: -4px 0 18px; }}
+.library-area + .library-area {{ margin-top: 26px; }}
+.library-area-head {{ display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 14px; }}
+.library-area-head h3 {{ margin: 0; }}
+.library-area-head p {{ margin: 0; color: var(--muted); font-size: .9rem; flex: 1 1 auto; }}
+.library-area-count {{ margin-left: auto; font-weight: 700; color: var(--muted); font-size: .86rem; }}
+.cards {{ display: grid; gap: 14px; grid-template-columns: 1fr; }}
+.library-card {{ display: flex; flex-direction: column; gap: 8px; }}
+.library-card h3 {{ margin: 0; font-size: 1.02rem; }}
+.library-card p {{ margin: 0; color: var(--muted); font-size: .93rem; }}
+.library-tags {{ display: flex; flex-wrap: wrap; gap: 6px; }}
+.tag {{ display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; font-size: .74rem; font-weight: 600; color: var(--muted); }}
+.tag-free {{ border-color: #12b886; color: #0b7a5b; background: rgba(18,184,134,.10); }}
+.tag-price {{ border-color: var(--accent); color: var(--accent); }}
+.tag-auto {{ border-color: #f59e0b; color: #b45309; background: rgba(245,158,11,.10); }}
+.library-list {{ margin: 0; padding-left: 18px; color: var(--muted); font-size: .9rem; }}
+.library-list li {{ margin: 2px 0; }}
+.library-actions {{ margin-top: auto; padding-top: 6px; }}
+.library-actions .btn {{ min-height: 40px; padding: 8px 16px; font-size: .9rem; }}
 figure {{ margin: 20px 0; }}
 figure img, .prose img {{ max-width: 100%; height: auto; border-radius: calc(var(--radius) - 4px); display: block; }}
 figure > picture {{ display: block; }}
@@ -442,6 +462,7 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
   h3 {{ margin: 24px 0 8px; }}
   .tile {{ padding: 20px; }}
   .tile-icon {{ width: 44px; height: 44px; margin-bottom: 12px; }}
+  .cards {{ grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }}
   .steps .step {{ padding-left: 52px; }}
   .steps .step::before {{ width: 34px; height: 34px; font-size: .9rem; }}
   /* A partir daqui há largura para a tabela larga caber inteira. */
@@ -512,6 +533,86 @@ def _render_content_block(content_id: str) -> str:
     if kind == "rodape":
         return f'<div class="prose">{body}</div>'
     return f'<div class="prose">{body}</div>'
+
+
+def _render_library_block(data: Dict[str, Any], *, preview: bool = False) -> str:
+    """Relatórios gratuitos e documentos já gerados, por área de trabalho.
+
+    O conteúdo é lido a cada renderização (`reports_library`): publicar um
+    relatório no Estúdio ou mudar um preço no catálogo muda a página sem a
+    reabrir no CMS. Sem nada publicado (instalação nova), a pré-visualização
+    mostra a explicação em vez de uma secção vazia.
+    """
+    from api import reports_library as library  # noqa: PLC0415 - import tardio: a loja é grande
+
+    free_only = bool(data.get("free_only"))
+    # As áreas podem vir como lista (editorial) ou como um texto do formulário.
+    raw_areas = data.get("areas")
+    if isinstance(raw_areas, str):
+        areas = [part.strip() for part in raw_areas.replace(";", ",").split(",") if part.strip()]
+    else:
+        areas = [str(item) for item in (raw_areas or []) if str(item).strip()]
+    limite = int(data.get("limit") or 24)
+    dados = library.library(areas=areas or None, limit=limite, free_only=free_only)
+    titulo = f"<h2>{_esc(data.get('title'))}</h2>" if data.get("title") else ""
+    intro = f'<p class="lead">{_esc(data.get("intro"))}</p>' if data.get("intro") else ""
+    cta_label = _esc(data.get("cta_label") or "Pedir este relatório")
+    cta_href = _esc(data.get("cta_href") or "/reports")
+
+    if not dados["items"]:
+        vazio = (
+            "Ainda não há relatórios publicados. Os relatórios gratuitos do catálogo e os documentos "
+            "gerados no Estúdio aparecem aqui automaticamente."
+        )
+        return f'<div class="section">{titulo}{intro}<p class="lead">{_esc(vazio)}</p></div>'
+
+    resumo = (
+        f'<p class="library-count">{dados["total"]} documento(s) em {dados["areas_total"]} área(s) — '
+        f'{dados["free"]} gratuito(s), {dados["documents"]} já gerado(s).</p>'
+    )
+    secoes: List[str] = []
+    for area in dados["areas"]:
+        cartoes = []
+        for item in area["items"]:
+            etiquetas = []
+            if item["free"]:
+                etiquetas.append('<span class="tag tag-free">Grátis</span>')
+            else:
+                preco = f"{item['price']:.2f}".replace(".", ",")
+                etiquetas.append(f'<span class="tag tag-price">{_esc(preco)} €</span>')
+            etiquetas.append(f'<span class="tag">{_esc(item["kind_label"])}</span>')
+            if item.get("badge"):
+                etiquetas.append(f'<span class="tag tag-auto">{_esc(item["badge"])}</span>')
+            if item.get("delivery_days"):
+                prazo = "1 dia" if int(item["delivery_days"]) == 1 else f'{int(item["delivery_days"])} dias'
+                etiquetas.append(f'<span class="tag">{_esc(prazo)}</span>')
+
+            descricao = item.get("subtitle") or item.get("note")
+            detalhe = f'<p>{_esc(descricao)}</p>' if descricao else ""
+            itens = [
+                f'<li>{_esc(feature)}</li>' for feature in (item.get("features") or [])[:4]
+            ]
+            lista = f'<ul class="library-list">{"".join(itens)}</ul>' if itens else ""
+
+            if item.get("download"):
+                acao = f'<a class="btn" href="{_esc(item["download"])}">Descarregar PDF</a>'
+            else:
+                acao = f'<a class="btn ghost" href="{cta_href}">{cta_label}</a>'
+            cartoes.append(
+                f'<article class="card library-card">'
+                f'<div class="library-tags">{"".join(etiquetas)}</div>'
+                f'<h3>{_esc(item["title"])}</h3>{detalhe}{lista}'
+                f'<div class="library-actions">{acao}</div>'
+                f"</article>"
+            )
+        cabeca = (
+            f'<div class="library-area-head"><h3>{_esc(area["label"])}</h3>'
+            + (f'<p>{_esc(area["hint"])}</p>' if area.get("hint") else "")
+            + f'<span class="library-area-count">{area["total"]}</span></div>'
+        )
+        secoes.append(f'<section class="library-area">{cabeca}<div class="cards">{"".join(cartoes)}</div></section>')
+
+    return f'<div class="section">{titulo}{intro}{resumo}{"".join(secoes)}</div>'
 
 
 def _render_blog_block(data: Dict[str, Any], *, preview: bool) -> str:
@@ -816,6 +917,9 @@ def _render_block(block: Dict[str, Any], *, preview: bool = False) -> str:
 
     if block_type == "blog":
         return _render_blog_block(data, preview=preview)
+
+    if block_type == "relatorios":
+        return _render_library_block(data, preview=preview)
 
     if block_type == "divisor":
         return '<hr class="hr">'

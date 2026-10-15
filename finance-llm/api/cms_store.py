@@ -243,6 +243,12 @@ BLOCK_TYPES: List[Dict[str, Any]] = [
     {"id": "contactos", "label": "Contactos", "hint": "Email, telefone e morada", "icon": "Phone"},
     {"id": "formulario", "label": "Formulário", "hint": "Formulário de contacto (as respostas ficam no CMS)", "icon": "MailPlus"},
     {"id": "blog", "label": "Últimos artigos", "hint": "Lista os artigos publicados", "icon": "Newspaper"},
+    {
+        "id": "relatorios",
+        "label": "Relatórios e documentos",
+        "hint": "Lista os relatórios do catálogo e os documentos já gerados, por área de trabalho",
+        "icon": "FileText",
+    },
     {"id": "conteudo", "label": "Conteúdo reutilizado", "hint": "Insere um conteúdo guardado no CMS", "icon": "Recycle"},
     {"id": "divisor", "label": "Divisor", "hint": "Linha de separação", "icon": "Minus"},
 ]
@@ -266,6 +272,46 @@ TEMPLATES_KINDS: List[Dict[str, str]] = [
     {"id": "page", "label": "Página"},
     {"id": "post", "label": "Artigo de blog"},
 ]
+
+#: Modelo da **biblioteca de relatórios** (página pública com os relatórios
+#: gratuitos e os documentos já gerados, por área de trabalho). Vive aqui, e não
+#: só na semente, porque uma instalação já em uso precisa de o receber pelo
+#: `instalar_templates_editoriais()` — o deploy de código não leva a pasta `data/`.
+TEMPLATE_BIBLIOTECA: Dict[str, Any] = {
+    "id": "tpl_biblioteca",
+    "name": "Biblioteca de relatórios",
+    "kind": "page",
+    "description": "Hero, números, relatórios gratuitos e documentos por área, e chamada à ação.",
+    "builtin": True,
+    "blocks": [
+        {
+            "id": "b1",
+            "type": "hero",
+            "data": {
+                "title": "Relatórios gratuitos e documentos já gerados",
+                "subtitle": "O que a plataforma já produziu, por área de trabalho.",
+                "cta_label": "Ver o catálogo",
+                "cta_href": "/reports",
+                "align": "esquerda",
+            },
+        },
+        {"id": "b2", "type": "numeros", "data": {"title": "O que já está disponível", "items": []}},
+        {"id": "b3", "type": "relatorios", "data": {"title": "Por área de trabalho", "limit": 24, "free_only": False}},
+        {
+            "id": "b4",
+            "type": "cta",
+            "data": {
+                "title": "Precisa de um relatório à medida?",
+                "text": "Diga-nos a empresa ou o setor e montamos o relatório.",
+                "button_label": "Pedir um relatório",
+                "button_href": "/reports",
+            },
+        },
+    ],
+}
+
+#: Modelos que toda a instalação deve ter (usados pelo instalador acima).
+TEMPLATES_GARANTIDOS: Tuple[Dict[str, Any], ...] = (TEMPLATE_BIBLIOTECA,)
 
 MENU_LOCATIONS: List[Dict[str, str]] = [
     {"id": "header", "label": "Cabeçalho"},
@@ -1980,6 +2026,28 @@ def instalar_media_de_marca() -> Dict[str, str]:
     return ids
 
 
+def instalar_templates_editoriais() -> List[str]:
+    """Acrescenta os modelos de página que faltam numa instalação já em uso.
+
+    Idempotente: um modelo que já exista (pelo `id`) fica como está — quem o
+    tenha editado não o perde. Devolve os `id` dos modelos acrescentados.
+    """
+    with _lock:
+        store = _load()
+        existentes = {str(item.get("id")) for item in store["templates"]}
+        novos: List[str] = []
+        for modelo in TEMPLATES_GARANTIDOS:
+            if str(modelo["id"]) in existentes:
+                continue
+            store["templates"].append(
+                {**copy.deepcopy(modelo), "created_at": _now(), "updated_at": _now()}
+            )
+            novos.append(str(modelo["id"]))
+        if novos:
+            _write_store(store)
+    return novos
+
+
 # --------------------------------------------------------------------------
 # Sementes (primeiro arranque)
 # --------------------------------------------------------------------------
@@ -2161,6 +2229,7 @@ def _seed(store: Dict[str, Any]) -> None:
             "created_at": now,
             "updated_at": now,
         },
+        {**TEMPLATE_BIBLIOTECA, "created_at": now, "updated_at": now},
         {
             "id": "tpl_artigo",
             "name": "Artigo de blog",

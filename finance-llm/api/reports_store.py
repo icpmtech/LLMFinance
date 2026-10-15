@@ -163,6 +163,7 @@ DEFAULT_CATALOGUE: List[Dict[str, Any]] = [
         "title": "Relatório Corporativo",
         "subtitle": "Dados estruturais da empresa",
         "note": "Informação atualizada diariamente",
+        "area": "empresas",
         "price": 0.0,
         "list_price": 7.0,
         "badge": "",
@@ -186,6 +187,7 @@ DEFAULT_CATALOGUE: List[Dict[str, Any]] = [
         "title": "Relatório Financeiro Resumido",
         "subtitle": "Saúde Financeira",
         "note": "Informações dos últimos 3 anos *",
+        "area": "empresas",
         "price": 18.0,
         "list_price": 0.0,
         "badge": "",
@@ -209,6 +211,7 @@ DEFAULT_CATALOGUE: List[Dict[str, Any]] = [
         "title": "Relatório Financeiro Detalhado",
         "subtitle": "Informações Contabilísticas",
         "note": "Informações dos últimos 3 anos *",
+        "area": "empresas",
         "price": 24.0,
         "list_price": 0.0,
         "badge": "RECOMENDADO",
@@ -231,6 +234,7 @@ DEFAULT_CATALOGUE: List[Dict[str, Any]] = [
         "title": "Relatório Concorrência",
         "subtitle": "Compare até 6 empresas",
         "note": "Evolução dos 3 últimos anos p/ empresa",
+        "area": "empresas",
         "price": 130.0,
         "list_price": 0.0,
         "badge": "",
@@ -258,6 +262,7 @@ DEFAULT_CATALOGUE: List[Dict[str, Any]] = [
         "title": "Relatório de Benchmark",
         "subtitle": "Preços, concorrência e oportunidades",
         "note": "PDF gerado automaticamente após o pagamento",
+        "area": "contratacao",
         "price": 14.9,
         "list_price": 0.0,
         "badge": "AUTOMÁTICO",
@@ -614,6 +619,8 @@ def save_package(payload: Dict[str, Any], actor: str = "") -> Dict[str, Any]:
                 "title": "",
                 "subtitle": "",
                 "note": "",
+                "area": "",
+                "tags": [],
                 "price": 0.0,
                 "list_price": 0.0,
                 "badge": "",
@@ -626,6 +633,15 @@ def save_package(payload: Dict[str, Any], actor: str = "") -> Dict[str, Any]:
         for key, limit in (("title", 120), ("subtitle", 160), ("note", 200), ("badge", 24), ("code", 12)):
             if key in payload:
                 existing[key] = _text(payload.get(key), limit)
+        # Área de trabalho (`/site/relatorios-gratuitos` agrupa por aqui). Vazio
+        # significa "deduzir das etiquetas e do identificador".
+        if "area" in payload:
+            existing["area"] = slug(payload.get("area"), "") if _text(payload.get("area")) else ""
+        if "tags" in payload:
+            raw = payload.get("tags")
+            if isinstance(raw, str):
+                raw = [part.strip() for part in raw.replace(";", ",").split(",")]
+            existing["tags"] = [_text(item, 40) for item in (raw or []) if _text(item, 40)][:12]
         # Pacotes entregues pela plataforma (`benchmark`, `estudio:<id>`): o PDF é
         # calculado sem passar pela equipa. Só os pacotes automáticos o têm.
         if "auto" in payload:

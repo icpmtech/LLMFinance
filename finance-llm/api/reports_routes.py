@@ -192,6 +192,8 @@ class CataloguePayload(BaseModel):
     max_targets: Optional[int] = None
     active: Optional[bool] = None
     features: Optional[List[str]] = None
+    area: Optional[str] = Field(None, description="Área de trabalho (agrupa a página pública de relatórios gratuitos)")
+    tags: Optional[List[str]] = None
     auto: Optional[str] = Field(None, description="Entrega automática: `benchmark` ou `estudio:<id>` (vazio desliga)")
 
 

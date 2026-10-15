@@ -58,6 +58,7 @@ DGAEP de um ano, com as secções editáveis, o texto, os blocos e a marca):
 from __future__ import annotations
 
 import logging
+import re
 from typing import Annotated, Any, Dict, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
@@ -983,6 +984,34 @@ def site_pwa_icon(ficheiro: str) -> Response:
 def site_offline() -> HTMLResponse:
     """Página de recurso, mostrada pelo service worker quando não há ligação."""
     return HTMLResponse(render.render_offline(settings=store.get_settings()), headers={"Cache-Control": "no-cache"})
+
+
+@router.get("/site/documento/{document_id}")
+def site_documento(document_id: str) -> Response:
+    """PDF de um documento **gratuito e publicado** (biblioteca pública).
+
+    É o download da página de relatórios gratuitos. A fronteira está em
+    `reports_library.document_for_download`: documento inexistente, não
+    publicado, sem PDF ou com preço responde 404 — esses pedem-se no catálogo,
+    como qualquer relatório pago.
+    """
+    from api import reports_library as library  # noqa: PLC0415 - import tardio: a loja é grande
+
+    encontrado = library.document_for_download(document_id)
+    if encontrado is None:
+        raise HTTPException(status_code=404, detail="Documento inexistente ou não disponível para download.")
+    nome, conteudo, mime = encontrado
+    # O nome vem do Estúdio; o cabeçalho é construído aqui, com o que ficar
+    # depois de tirar aspas e separadores de caminho.
+    seguro = re.sub(r"[^A-Za-z0-9._-]+", "-", nome).strip("-") or "documento.pdf"
+    return Response(
+        content=conteudo,
+        media_type=mime or "application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{seguro}"',
+            "Cache-Control": "public, max-age=300",
+        },
+    )
 
 
 @router.get("/site/{path:path}", response_class=HTMLResponse)

@@ -162,6 +162,53 @@ desaparece e o bloco mostra o mercado todo em vez de falhar.
 - Publicar outra vez **atualiza** o pacote/produto (não duplica) — o preço do
   pacote é o que o cliente passa a ver; os pedidos antigos mantêm o seu.
 
+## Área pública de relatórios gratuitos (`/site/relatorios-gratuitos`)
+
+A montra dos relatórios no site do CMS: junta os **pacotes gratuitos do
+catálogo** e os **documentos já gerados no Estúdio**, agrupados por **área de
+trabalho**. Quem produz relatórios não tem de mexer nesta página — ela lê os dois
+documentos (`reports.json`) a cada visita, por isso publicar um relatório no
+Estúdio ou mudar um preço no catálogo aparece logo ali.
+
+| Peça | Onde vive | O que faz |
+| --- | --- | --- |
+| `api/reports_library.py` | — | Lê o catálogo e o Estúdio, decide a **área** de cada documento e a **fronteira do download** |
+| Bloco `relatorios` | `cms_store.BLOCK_TYPES` + `cms_render._render_library_block` | Desenha a secção (áreas, cartões, etiquetas de preço, botões) |
+| Modelo `tpl_biblioteca` | `cms_store.TEMPLATE_BIBLIOTECA` | «Biblioteca de relatórios»: hero, números, o bloco e chamada à ação |
+| Página `pag_relatorios` | `cms_editorial.paginas_do_site` | A página publicada, com hero, texto, o bloco, passos, FAQ e chamada à ação; entra no menu (cabeçalho e rodapé) |
+| `GET /site/documento/{id}` | `cms_routes` | Descarrega o PDF **só** dos documentos gratuitos e publicados |
+
+**O que entra na montra:**
+
+- **pacotes do catálogo** ativos — os de preço 0 aparecem como «Grátis» e
+  encaminham para o pedido na plataforma (um pacote automático e grátis é
+  produzido logo, sem passar pelo pagamento);
+- **relatórios do Estúdio** com `publication.site.published` **e** PDF gerado —
+  aparecem como «Documento»; o gratuitos têm botão **Descarregar PDF**, os que
+  têm preço encaminham para o catálogo;
+- o pacote que a publicação cria no catálogo (`auto = estudio:<id>`) **não
+  duplica** o documento: fica o documento, que é o que tem o ficheiro.
+
+**A área** vem, por esta ordem: do campo `area` do pacote (editável no
+backoffice), da **primeira etiqueta conhecida** do relatório (nos modelos do
+Estúdio a primeira etiqueta é a matéria principal — `empresa`, `cae`, `cpv`…), do
+identificador do pacote e, em último recurso, da área com que o pacote nasceu no
+catálogo. O que não se conhece fica em **«Outros documentos»** — nunca
+desaparece. As áreas são: *Contratação pública*, *Empresas e risco*, *Mercados e
+notícias*, *Setor público* e *Documentos e dossiês*.
+
+**A fronteira do download** é `reports_library.document_for_download`: documento
+inexistente, não publicado, sem PDF ou **com preço** responde **404**. É o que
+separa a montra do que é de clientes — um relatório pago nunca sai por aqui.
+
+Para uma instalação já em uso (produção incluída) faltam duas coisas que o
+deploy de código não leva, porque não envia a pasta `data/`: o **modelo** e a
+**página**. Resolvem-se com o instalador do site, que é idempotente:
+
+```powershell
+python _atualizar_site_sabemos.py     # acrescenta o modelo e publica/atualiza a página
+```
+
 ## Ciclo de vida
 
 ```
@@ -262,6 +309,10 @@ Estúdio de relatórios (**admin, gestor de plataforma ou gestor de relatórios*
 | POST | `/reports/studio/reports/{id}/publish` · `/unpublish` | Publica/retira (`site`, `loja`, `todos`) |
 | POST | `/reports/studio/ai` · `/reports/studio/reports/{id}/ai` | Ajuda da IA (sumário, texto, destaques, blocos) |
 
+Área pública do site (sem sessão): `GET /site/documento/{id}` descarrega o PDF de
+um documento **gratuito e publicado** (404 em qualquer outro caso — ver
+*Área pública de relatórios gratuitos*, acima).
+
 ## Testes
 
 - `tests/test_reports.py` — domínio (26 verificações): catálogo, totais com IVA,
@@ -278,6 +329,12 @@ Estúdio de relatórios (**admin, gestor de plataforma ou gestor de relatórios*
   as secções da ficha e da web), publicação no catálogo e na loja, entrega
   automática do pedido pago, IA (com e sem modelo) e as rotas HTTP de ponta a
   ponta.
+- `tests/test_biblioteca_publica.py` — área pública de relatórios gratuitos (12
+  verificações): agrupamento por área (incluindo instalações antigas sem o campo
+  gravado), gratuitos vs pagos, **fronteira do download** (gratuito e publicado
+  descarrega; pago, não publicado e inexistente dão 404), desenho do bloco do CMS
+  (com e sem dados, filtro por área, só gratuitos), modelo e página editorial e
+  as rotas públicas `/site/documento/{id}` e `/site/relatorios-gratuitos`.
 - `_probe_reports_asgi.py` — rotas completas em processo (42 verificações), sem
   servidor nem Elasticsearch (sessões falsas e `TestClient` sem lifespan).
 - `_probe_reports_api.py` — o mesmo ciclo contra a API a correr (precisa de

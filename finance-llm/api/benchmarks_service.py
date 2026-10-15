@@ -27,6 +27,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import urljoin
 
 from api import benchmarks_store as store
+from api import cms_render as render
 from api import cms_store as cms
 from api import elasticsearch_client as esc
 from api import scraper_ai
@@ -900,46 +901,41 @@ def despublicar(slug: str, *, autor: str = "") -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Página pública com pesquisa (HTML servido pelo módulo)
 # ---------------------------------------------------------------------------
+# Estilos do **conteúdo** da página. O cabeçalho, rodapé e envolvente do site
+# vêm do `_layout()` do CMS (`cms_render.py`), para a página pública do
+# benchmark usar o mesmo menu de navegação e rodapé das restantes páginas.
 _ESTILO = """
-:root { color-scheme: dark; }
-* { box-sizing: border-box; }
-body { margin: 0; background: #0f1115; color: #e5e7eb;
-       font: 15px/1.55 "Segoe UI", system-ui, -apple-system, sans-serif; }
-a { color: #5eead4; text-decoration: none; }
-a:hover { text-decoration: underline; }
-header { padding: 28px 22px 18px; border-bottom: 1px solid #1f2937;
-         background: linear-gradient(180deg, #0b1220, #0f1115); }
-h1 { margin: 0 0 6px; font-size: 26px; }
-h2 { margin: 30px 0 10px; font-size: 18px; }
-.lead { color: #94a3b8; margin: 0; }
-.wrap { max-width: 1180px; margin: 0 auto; padding: 0 22px 60px; }
-.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin: 22px 0; }
-.kpi { background: #161c28; border: 1px solid #24303f; border-radius: 12px; padding: 14px 16px; }
-.kpi b { display: block; font-size: 22px; color: #5eead4; }
-.kpi span { color: #94a3b8; font-size: 12px; }
-form.pesquisa { display: flex; flex-wrap: wrap; gap: 10px; align-items: end;
-                background: #161c28; border: 1px solid #24303f; border-radius: 12px; padding: 14px; }
-form.pesquisa label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #94a3b8; }
-input, select, button { font: inherit; color: #e5e7eb; background: #0f1115;
+.bench-wrap { max-width: 1180px; margin: 0 auto; padding: 0 22px 60px; }
+.bench-hero { padding: 28px 22px 18px; border-bottom: 1px solid #1f2937;
+              background: linear-gradient(180deg, #0b1220, #0f1115); }
+.bench-hero h1 { margin: 0 0 6px; font-size: 26px; }
+.bench-hero .lead { color: #94a3b8; margin: 0; }
+.bench-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin: 22px 0; }
+.bench-kpi { background: #161c28; border: 1px solid #24303f; border-radius: 12px; padding: 14px 16px; }
+.bench-kpi b { display: block; font-size: 22px; color: #5eead4; }
+.bench-kpi span { color: #94a3b8; font-size: 12px; }
+form.bench-pesquisa { display: flex; flex-wrap: wrap; gap: 10px; align-items: end;
+                      background: #161c28; border: 1px solid #24303f; border-radius: 12px; padding: 14px; }
+form.bench-pesquisa label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #94a3b8; }
+.bench-pesquisa input, .bench-pesquisa select, .bench-pesquisa button { font: inherit; color: #e5e7eb; background: #0f1115;
                         border: 1px solid #2b3648; border-radius: 8px; padding: 8px 10px; }
-button { background: #0d9488; border-color: #0d9488; color: #04211d; font-weight: 600; cursor: pointer; }
-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13.5px; }
-th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #1f2937; vertical-align: top; }
-th { color: #94a3b8; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-tr:hover td { background: #141a25; }
-.min { color: #34d399; font-weight: 600; }
-.max { color: #f87171; }
-.tag { display: inline-block; padding: 1px 7px; border-radius: 999px; background: #1f2937; color: #cbd5e1; font-size: 11px; }
-.produto { display: flex; gap: 10px; align-items: flex-start; }
-.thumb { width: 46px; height: 46px; flex: 0 0 46px; border-radius: 8px; object-fit: contain;
-         background: #0b0f16; border: 1px solid #24303f; }
-.thumb.vazio { display: block; border-style: dashed; }
-.nome-produto { font-weight: 600; }
-.descricao { display: block; margin-top: 3px; color: #94a3b8; font-size: 12px;
-             max-width: 460px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2;
-             -webkit-box-orient: vertical; }
-footer { color: #64748b; font-size: 12px; padding: 24px 22px 40px; border-top: 1px solid #1f2937; }
-.vazio { background: #161c28; border: 1px dashed #334155; border-radius: 12px; padding: 18px; color: #94a3b8; }
+.bench-pesquisa button { background: #0d9488; border-color: #0d9488; color: #04211d; font-weight: 600; cursor: pointer; }
+.bench-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13.5px; }
+.bench-table th, .bench-table td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #1f2937; vertical-align: top; }
+.bench-table th { color: #94a3b8; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.bench-table tr:hover td { background: #141a25; }
+.bench-min { color: #34d399; font-weight: 600; }
+.bench-max { color: #f87171; }
+.bench-tag { display: inline-block; padding: 1px 7px; border-radius: 999px; background: #1f2937; color: #cbd5e1; font-size: 11px; }
+.bench-produto { display: flex; gap: 10px; align-items: flex-start; }
+.bench-thumb { width: 46px; height: 46px; flex: 0 0 46px; border-radius: 8px; object-fit: contain;
+               background: #0b0f16; border: 1px solid #24303f; }
+.bench-thumb.vazio { display: block; border-style: dashed; }
+.bench-nome { font-weight: 600; }
+.bench-descricao { display: block; margin-top: 3px; color: #94a3b8; font-size: 12px;
+                   max-width: 460px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2;
+                   -webkit-box-orient: vertical; }
+.bench-vazio { background: #161c28; border: 1px dashed #334155; border-radius: 12px; padding: 18px; color: #94a3b8; }
 """
 
 
@@ -1003,19 +999,19 @@ def html_publico(
         # quer ver antes de clicar.
         imagem = str(melhor.get("image") or "").strip()
         miniatura = (
-            f'<img class="thumb" src="{escape(imagem, quote=True)}" alt="" loading="lazy" referrerpolicy="no-referrer">'
+            f'<img class="bench-thumb" src="{escape(imagem, quote=True)}" alt="" loading="lazy" referrerpolicy="no-referrer">'
             if imagem
-            else '<span class="thumb vazio"></span>'
+            else '<span class="bench-thumb vazio"></span>'
         )
         descricao_bruta = str(melhor.get("description") or "").strip()
-        descricao = f'<span class="descricao">{escape(descricao_bruta[:240])}</span>' if descricao_bruta else ""
+        descricao = f'<span class="bench-descricao">{escape(descricao_bruta[:240])}</span>' if descricao_bruta else ""
         linhas.append(
             "<tr>"
-            f'<td><div class="produto">{miniatura}<div><span class="nome-produto">{nome_html}</span>'
-            f"<br><span class='tag'>{marca}</span>{descricao}</div></div></td>"
+            f'<td><div class="bench-produto">{miniatura}<div><span class="bench-nome">{nome_html}</span>'
+            f"<br><span class='bench-tag'>{marca}</span>{descricao}</div></div></td>"
             f"<td>{int(produto.get('stores') or 0)}</td>"
-            f"<td class='min'>{_eur(produto.get('price_min'))}</td>"
-            f"<td class='max'>{_eur(produto.get('price_max'))}</td>"
+            f"<td class='bench-min'>{_eur(produto.get('price_min'))}</td>"
+            f"<td class='bench-max'>{_eur(produto.get('price_max'))}</td>"
             f"<td>{_eur(produto.get('price_avg'))}</td>"
             f"<td>{dispersao}</td>"
             f"<td>{loja_barata}</td>"
@@ -1027,32 +1023,26 @@ def html_publico(
 
     recolha_em = ((benchmark.get("last_run") or {}).get("at") or "")[:19].replace("T", " ")
     dispersao_media = f"{kpis['avg_spread_pct']}%" if kpis.get("avg_spread_pct") is not None else "—"
-    return 200, f"""<!doctype html>
-<html lang="pt">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{escape(str(benchmark.get('name') or 'Benchmark'))} — comparação de preços</title>
-<meta name="description" content="{escape(str(benchmark.get('description') or 'Comparação de preços entre lojas.'))}">
-<style>{_ESTILO}</style>
-</head>
-<body>
-<header><div class="wrap">
-  <h1>{escape(str(benchmark.get('name') or 'Benchmark'))}</h1>
-  <p class="lead">{escape(str(benchmark.get('description') or 'O mesmo produto comparado entre lojas.'))}</p>
-</div></header>
-<div class="wrap">
-  <div class="grid">
-    <div class="kpi"><b>{kpis.get('offers', 0)}</b><span>ofertas recolhidas</span></div>
-    <div class="kpi"><b>{kpis.get('products', 0)}</b><span>produtos</span></div>
-    <div class="kpi"><b>{kpis.get('stores', 0)}</b><span>lojas</span></div>
-    <div class="kpi"><b>{kpis.get('comparable_products', 0)}</b><span>produtos em 2+ lojas</span></div>
-    <div class="kpi"><b>{dispersao_media}</b><span>dispersão média</span></div>
-    <div class="kpi"><b>{_eur(kpis.get('potential_saving_eur'))}</b><span>poupança se escolher sempre o mínimo</span></div>
+    titulo = str(benchmark.get('name') or 'Benchmark')
+    descricao = str(benchmark.get('description') or 'O mesmo produto comparado entre lojas.')
+    caminho = f"/site/benchmarks/{benchmark.get('slug')}/pesquisa"
+
+    corpo = f"""<div class="bench-hero"><div class="bench-wrap">
+  <h1>{escape(titulo)}</h1>
+  <p class="lead">{escape(descricao)}</p>
+</div></div>
+<div class="bench-wrap">
+  <div class="bench-grid">
+    <div class="bench-kpi"><b>{kpis.get('offers', 0)}</b><span>ofertas recolhidas</span></div>
+    <div class="bench-kpi"><b>{kpis.get('products', 0)}</b><span>produtos</span></div>
+    <div class="bench-kpi"><b>{kpis.get('stores', 0)}</b><span>lojas</span></div>
+    <div class="bench-kpi"><b>{kpis.get('comparable_products', 0)}</b><span>produtos em 2+ lojas</span></div>
+    <div class="bench-kpi"><b>{dispersao_media}</b><span>dispersão média</span></div>
+    <div class="bench-kpi"><b>{_eur(kpis.get('potential_saving_eur'))}</b><span>poupança se escolher sempre o mínimo</span></div>
   </div>
 
   <h2>Pesquisar</h2>
-  <form class="pesquisa" method="get" action="/site/benchmarks/{escape(str(benchmark.get('slug')))}/pesquisa">
+  <form class="bench-pesquisa" method="get" action="{escape(caminho)}">
     <label>Produto ou marca
       <input type="search" name="q" value="{escape(q)}" placeholder="ex.: portátil 16GB">
     </label>
@@ -1066,25 +1056,37 @@ def html_publico(
   </form>
 
   <h2>Onde está mais barato ({int(comparacao.get('total') or 0)} produtos)</h2>
-  <table>
+  <table class="bench-table">
     <thead><tr>
       <th>Produto</th><th>Lojas</th><th>Mínimo</th><th>Máximo</th><th>Média</th><th>Dispersão</th><th>Loja mais barata</th>
     </tr></thead>
     <tbody>{corpo_tabela}</tbody>
   </table>
-</div>
-<footer>
-  <div class="wrap">
+  <p class="bench-rodape" style="color:#64748b;font-size:12px;margin-top:24px;">
     Dados recolhidos automaticamente dos sites das lojas. Última recolha: {escape(recolha_em or 'sem registo')}.
     Os preços podem estar desactualizados — confirme sempre na loja. Este estudo não é uma recomendação de compra.
-  </div>
-</footer>
-</body>
-</html>"""
+  </p>
+</div>"""
+
+    html = render._layout(
+        title=titulo,
+        description=descricao,
+        body=corpo,
+        current_path=caminho,
+        settings=cms.get_settings(),
+        canonical=caminho,
+        extra_css=_ESTILO,
+        breadcrumb=[
+            {"label": "Início", "href": "/site"},
+            {"label": "Benchmarks", "href": "/site/benchmarks"},
+            {"label": titulo},
+        ],
+    )
+    return 200, html
 
 
 def _pagina_erro(mensagem: str) -> str:
     return f"""<!doctype html>
 <html lang="pt"><head><meta charset="utf-8"><title>Não disponível</title><style>{_ESTILO}</style></head>
-<body><div class="wrap"><h1>Não disponível</h1><p class="vazio">{escape(mensagem)}</p>
+<body><div class="bench-wrap"><h1>Não disponível</h1><p class="bench-vazio">{escape(mensagem)}</p>
 <p><a href="/site">Voltar ao site</a></p></div></body></html>"""

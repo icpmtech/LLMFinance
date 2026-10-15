@@ -739,6 +739,51 @@ function BlockForm({
           />
         </div>
       );
+    case "relatorios":
+      return (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <TextInput label="Título da secção" value={text("title")} onChange={(next) => set("title", next)} />
+          <NumberInput
+            label="Documentos a mostrar"
+            value={Number(data.limit ?? 24)}
+            onChange={(next) => set("limit", next)}
+            min={1}
+            max={60}
+            hint="Lidos do catálogo e do Estúdio a cada visita: publicar um relatório novo faz aparecer aqui."
+          />
+          <TextInput label="Texto de apoio" value={text("intro")} onChange={(next) => set("intro", next)} wide />
+          <SelectInput
+            label="Só desta área"
+            value={text("areas")}
+            onChange={(next) => set("areas", next)}
+            options={[
+              { value: "contratacao", label: "Contratação pública" },
+              { value: "empresas", label: "Empresas e risco" },
+              { value: "mercados", label: "Mercados e notícias" },
+              { value: "setor-publico", label: "Setor público" },
+              { value: "documentos", label: "Documentos e dossiês" },
+            ]}
+            placeholder="— todas —"
+            hint="Vazio mostra todas as áreas."
+          />
+          <TextInput label="Botão — texto" value={text("cta_label")} onChange={(next) => set("cta_label", next)} />
+          <TextInput
+            label="Botão — ligação"
+            value={text("cta_href")}
+            onChange={(next) => set("cta_href", next)}
+            placeholder="/reports"
+            hint="Para onde vai quem clica num documento que não é gratuito."
+          />
+          <div className="sm:col-span-2">
+            <Toggle
+              checked={Boolean(data.free_only)}
+              onChange={(next) => set("free_only", next)}
+              label="Mostrar apenas os gratuitos"
+              hint="Desligado, a secção mostra também os relatórios com preço (com o preço e a ligação ao catálogo)."
+            />
+          </div>
+        </div>
+      );
     case "conteudo":
       return (
         <SelectInput
