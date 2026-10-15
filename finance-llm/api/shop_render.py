@@ -1722,6 +1722,15 @@ def render_home(*, settings: Optional[Dict[str, Any]] = None, theme: Optional[Di
             title=str(settings.get("store_name") or "Loja"),
             description=str(settings.get("description") or ""),
         )
+    # O `<h1>` da vitrine vinha **só** do «hero»: com as secções todas sem
+    # título, a página da loja saía sem cabeçalho nenhum — o erro «H1 tag
+    # missing» dos relatórios de SEO. Sem nenhum no corpo, o nome da loja passa
+    # a ser o cabeçalho, com o mesmo embrulho do hero para não destoar.
+    if "<h1" not in body.lower():
+        body = _hero_section(
+            {"id": "sec_titulo", "type": "hero", "title": str(settings.get("store_name") or "Loja")},
+            settings,
+        ) + body
     base = _base_url(settings)
     seo = _seo_de(settings)
     json_ld = {

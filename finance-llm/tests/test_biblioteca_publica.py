@@ -14,6 +14,7 @@ Nada aqui toca em `data/`: a loja de relatórios e o CMS vivem em `tmp_path`.
 """
 from __future__ import annotations
 
+import copy
 import sys
 from pathlib import Path
 from typing import Any, Dict
@@ -289,3 +290,120 @@ def test_pagina_publica_responde_com_a_biblioteca(instalacao):
     assert "Relatórios gratuitos e documentos já gerados" in html
     assert "library-card" in html and "/site/documento/" in html
     assert "Empresas e risco" in html
+
+
+# ------------------------------------------------------------------- menu
+def _editorial_instalado() -> None:
+    """Põe o editorial no CMS: a página da biblioteca fica publicada e no menu."""
+    cms_store.list_items("pages")  # primeira leitura: semeia a loja do CMS
+    for pagina in cms_editorial.paginas_do_site({}):
+        cms_store.save_item("pages", pagina, "sistema")
+
+
+def _item_da_biblioteca(menu: Dict[str, Any]) -> Dict[str, Any]:
+    return next(item for item in menu["items"] if item["href"] == "/site/relatorios-gratuitos")
+
+
+def test_menu_do_cabecalho_ganha_submenus_por_area(instalacao):
+    """O item que abre a biblioteca mostra o que está publicado, agrupado por área."""
+    gratis = _documento("Concorrência — Empresa A", preco=0.0, tags=["empresa", "concorrência"])
+    pago = _documento("Mercados — Empresa A", preco=39.0, tags=["mercados"])
+    _documento("Rascunho não publicado", preco=0.0, tags=["mercados"], publicar=False)
+    _documento("Publicado sem PDF", preco=0.0, tags=["mercados"], com_pdf=False)
+    _editorial_instalado()
+
+    item = _item_da_biblioteca(cms_store.menu_for("header"))
+    # As áreas saem pela ordem da página e os rótulos agrupam (não navegam).
+    assert [area["label"] for area in item["children"]] == ["Empresas e risco", "Mercados e notícias"]
+    assert all(area["href"] == "" and area["page_id"] is None for area in item["children"])
+
+    empresas = {doc["label"]: doc for doc in item["children"][0]["children"]}
+    assert set(empresas) == {"Concorrência — Empresa A"}
+    assert empresas["Concorrência — Empresa A"]["href"] == f"/site/documento/{gratis['id']}"
+
+    # O que não é documento publicado não entra: os pacotes do catálogo ficam na
+    # montra e um relatório sem PDF ainda não se pode descarregar.
+    mercados = {doc["label"]: doc for doc in item["children"][1]["children"]}
+    assert set(mercados) == {"Mercados — Empresa A"}
+    assert mercados["Mercados — Empresa A"]["href"] == "/reports"
+    assert "Relatório Corporativo" not in {doc["label"] for area in item["children"] for doc in area["children"]}
+
+
+def test_submenus_do_menu_sao_derivados_e_so_no_cabecalho(instalacao):
+    """O menu guardado não é reescrito e o rodapé não leva os títulos todos."""
+    _documento("Concorrência — Empresa A", preco=0.0, tags=["empresa"])
+    _editorial_instalado()
+
+    guardado = next(menu for menu in cms_store.list_menus() if menu["location"] == "header")
+    assert not any(item.get("children") for item in guardado["items"])
+    # … mas a leitura traz os submenus.
+    assert _item_da_biblioteca(cms_store.menu_for("header"))["children"]
+    assert not any(item.get("children") for item in cms_store.menu_for("footer")["items"])
+
+
+def test_menu_sem_relatorios_publicados_fica_como_esta(instalacao):
+    _editorial_instalado()
+    assert not _item_da_biblioteca(cms_store.menu_for("header")).get("children")
+
+
+def test_submenus_escritos_a_mao_ficam_a_frente(instalacao):
+    _documento("Concorrência — Empresa A", preco=0.0, tags=["empresa"])
+    _editorial_instalado()
+
+    menu = next(menu for menu in cms_store.list_menus() if menu["location"] == "header")
+    itens = copy.deepcopy(menu["items"])
+    for item in itens:
+        if item.get("page_id") == "pag_relatorios":
+            item["children"] = [{"label": "Escrito à mão", "href": "/site/sobre", "page_id": None, "new_tab": False}]
+    cms_store.save_item("menus", {**menu, "items": itens}, "sistema")
+
+    filhos = _item_da_biblioteca(cms_store.menu_for("header"))["children"]
+    assert [filho["label"] for filho in filhos] == ["Escrito à mão", "Empresas e risco"]
+
+
+def test_pagina_publica_traz_as_areas_no_menu(instalacao):
+    """No HTML do site, o item do cabeçalho abre os submenus por área."""
+    from fastapi.testclient import TestClient
+
+    from api import main as api_main
+
+    documento = _documento("Concorrência — Empresa A", preco=0.0, tags=["empresa"])
+    _editorial_instalado()
+    cliente = TestClient(api_main.app, base_url="http://prova")
+
+    html = cliente.get("/site/").text
+    # O item «Relatórios» passou a abrir um painel: área (2.º nível) e documento.
+    assert '<a class="menu-pai" href="/site/relatorios-gratuitos">Relatórios' in html
+    assert '<span class="menu-pai" tabindex="0">Empresas e risco' in html
+    assert '<ul class="submenu nivel-2">' in html
+    assert f'href="/site/documento/{documento["id"]}"' in html
+    # … e o item «Soluções» abre as subpáginas publicadas (o editorial põe lá o
+    # «Benchmarks de produtos», com o rótulo do editor de páginas).
+    assert 'href="/site/solucoes/benchmarks-de-produtos"' in html
+
+
+def test_menu_do_cabecalho_ganha_as_paginas_filhas(instalacao):
+    """As subpáginas publicadas aparecem sob o item que abre a página-mãe."""
+    _editorial_instalado()
+    menu = cms_store.menu_for("header")
+    solucoes = next(item for item in menu["items"] if item["href"] == "/site/solucoes")
+    filhas = {filho["label"]: filho["href"] for filho in solucoes["children"]}
+    assert filhas["Benchmarks"] == "/site/solucoes/benchmarks-de-produtos"
+    assert all(href.startswith("/site/solucoes/") for href in filhas.values())
+    # O menu guardado continua a ser só o que o editor tem.
+    guardado = next(menu for menu in cms_store.list_menus() if menu["location"] == "header")
+    assert not any(item.get("children") for item in guardado["items"])
+
+
+def test_pagina_filha_fora_do_menu_nao_entra(instalacao):
+    """É o «Mostrar no menu» do editor de páginas que decide."""
+    _editorial_instalado()
+    pagina = next(
+        item
+        for item in cms_store.list_items("pages")["items"]
+        if item["path"] == "solucoes/benchmarks-de-produtos"
+    )
+    cms_store.save_item("pages", {**pagina, "show_in_menu": False}, "sistema")
+
+    solucoes = next(item for item in cms_store.menu_for("header")["items"] if item["href"] == "/site/solucoes")
+    assert "Benchmarks" not in {filho["label"] for filho in solucoes["children"]}

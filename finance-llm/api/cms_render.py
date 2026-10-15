@@ -93,6 +93,30 @@ def _envolver_tabelas(markup: str) -> str:
     return _TABELA_RE.sub(troca, markup)
 
 
+def _garantir_h1(body: str, titulo: str) -> str:
+    """Garante um `<h1>` no corpo da página, sem o repetir.
+
+    O cabeçalho das páginas montadas a blocos vinha **só** do bloco «hero»: uma
+    página feita com outros blocos (texto, KPIs, tabelas) saía sem `<h1>` nenhum
+    — o erro «H1 tag missing» dos relatórios de SEO. Sem hero (e sem um `<h1>`
+    vindo do Markdown), o título do documento passa a ser o cabeçalho; com hero,
+    o corpo já traz o seu e não se acrescenta outro.
+    """
+    if not titulo or "<h1" in body.lower():
+        return body
+    return f'<section class="section"><h1>{_esc(titulo)}</h1></section>{body}'
+
+
+def _titulo_visivel(doc: Dict[str, Any], alternativa: str = "") -> str:
+    """Título que serve de `<h1>`: o de SEO quando existe, senão o do documento.
+
+    É o mesmo valor que vai para o `<title>`, para o cabeçalho da página dizer
+    o mesmo que o resultado na pesquisa.
+    """
+    seo = doc.get("seo") if isinstance(doc.get("seo"), dict) else {}
+    return str(seo.get("title") or doc.get("title") or alternativa or "")
+
+
 def _media(media_id: Optional[str]) -> Dict[str, Any]:
     if not media_id:
         return {}
@@ -308,6 +332,14 @@ nav.main a[aria-current="page"] {{ background: var(--accent); color: #fff; }}
   /* Separadores entre entradas da lista e alvos de toque a toda a largura. */
   nav.main > * + * {{ border-top: 1px solid var(--border); }}
   nav.main > a {{ width: 100%; }}
+  /* Com submenus o painel fica mais alto que o ecrã e o cabeçalho é pegajoso:
+     sem tecto, o fim da lista ficava fora do alcance (o painel não anda com a
+     página). Aqui rola dentro do próprio painel; o `dvh` acompanha a barra do
+     browser a aparecer e a desaparecer, e o `vh` é a reserva dos mais antigos. */
+  .menu-estado:checked ~ nav.main {{
+    max-height: calc(100vh - 84px); max-height: calc(100dvh - 84px);
+    overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  }}
   .site-header.tema-linha nav.main > a,
   .site-header.tema-linha nav.main > .menu-item > .menu-pai {{ border-bottom: 0; border-radius: 10px; }}
 }}
@@ -1555,7 +1587,7 @@ def _layout(
         + (
             ""
             if preview
-            else '<script>(function(){var c=document.getElementById("menu-estado"),b=document.querySelector(".menu-botao"),n=document.querySelector("nav.main");if(!c||!n)return;function update(){var o=c.checked;b.setAttribute("aria-expanded",o?"true":"false");n.setAttribute("aria-expanded",o?"true":"false");b.setAttribute("aria-controls","menu-principal");n.id="menu-principal";}c.addEventListener("change",update);n.querySelectorAll("a").forEach(function(a){a.addEventListener("click",function(){c.checked=false;update();});});document.addEventListener("click",function(e){if(c.checked&&!n.contains(e.target)&&!b.contains(e.target)){c.checked=false;update();}});update();})();</script>'
+            else '<script>(function(){var c=document.getElementById("menu-estado"),b=document.querySelector(".menu-botao"),n=document.querySelector("nav.main");if(!c||!n)return;function update(){var o=c.checked;b.setAttribute("aria-expanded",o?"true":"false");n.setAttribute("aria-expanded",o?"true":"false");b.setAttribute("aria-controls","menu-principal");n.id="menu-principal";}c.addEventListener("change",update);n.querySelectorAll("a").forEach(function(a){a.addEventListener("click",function(){c.checked=false;update();});});document.addEventListener("click",function(e){if(c.checked&&e.target!==c&&!n.contains(e.target)&&!b.contains(e.target)){c.checked=false;update();}});update();})();</script>'
             # Um submenu dentro de outro abre ao lado; no fim da fila (o menu vive
             # à direita) não cabe e sai do ecrã. Aqui vira-se para a esquerda.
             '<script>(function(){document.querySelectorAll("nav.main .submenu .submenu").forEach(function(sub){var item=sub.parentElement;function ajustar(){sub.classList.remove("abre-esquerda");if(sub.getBoundingClientRect().right>window.innerWidth-8){sub.classList.add("abre-esquerda");}}item.addEventListener("mouseenter",ajustar);item.addEventListener("focusin",ajustar);});})();</script>'
@@ -1704,6 +1736,7 @@ def render_page(
     body = blocks_to_html(page.get("blocks") or [], preview=preview)
     if not body.strip():
         body = f'<div class="section prose">{_md(str(page.get("markdown") or page.get("excerpt") or ""))}</div>' or ""
+    body = _garantir_h1(body, _titulo_visivel(page))
     base_url = str(settings.get("base_url") or "")
     path = _caminho_da_pagina(page)
     casa = _site_home_url(settings)
@@ -1904,7 +1937,10 @@ def _corpo_do_municipio(dados: Dict[str, Any], doc: Dict[str, Any], *, preview: 
             nota += f" · dados recolhidos a {recolhido}"
         corpo.append(f'<div class="section aviso">{_esc(nota)}</div>')
 
-    return "".join(bloco for bloco in corpo if bloco)
+    return _garantir_h1(
+        "".join(bloco for bloco in corpo if bloco),
+        _titulo_visivel(doc, str(dados.get("municipio") or "")),
+    )
 
 
 def render_municipio(
@@ -2210,7 +2246,8 @@ aplicar();
 
 def _corpo_da_pesquisa(dados: Dict[str, Any], doc: Dict[str, Any], *, preview: bool) -> str:
     """Marca + texto editorial + os números que a pesquisa devolveu."""
-    partes: List[str] = [_marca_da_pesquisa(doc)]
+    marca = _marca_da_pesquisa(doc)
+    partes: List[str] = []
     if doc.get("intro"):
         partes.append(f'<div class="section prose">{_md(str(doc["intro"]))}</div>')
     if dados.get("descricao"):
@@ -2233,11 +2270,11 @@ def _corpo_da_pesquisa(dados: Dict[str, Any], doc: Dict[str, Any], *, preview: b
         if recolhido:
             nota += f" · valores lidos a {recolhido}"
         partes.append(f'<div class="section aviso">{_esc(nota)}</div>')
-    corpo = "".join(parte for parte in partes if parte)
+    corpo = _garantir_h1("".join(parte for parte in partes if parte), _titulo_visivel(doc))
     # O filtro do gráfico é um só script, no fim: tem de vir depois da tabela.
     if escolhiveis:
         corpo += _JS_PESQUISA_MUNICIPIO
-    return corpo
+    return marca + corpo
 
 
 def _barra_de_valor(valor: float, maximo: float) -> int:
@@ -3034,7 +3071,7 @@ def _corpo_do_modelo(dados: Dict[str, Any], doc: Dict[str, Any], *, preview: boo
     if estilo not in store.ESTILOS_REMUNERACOES_IDS:
         estilo = store.ESTILO_REMUNERACOES_PADRAO
 
-    partes: List[str] = [_rem_marca(doc)]
+    partes: List[str] = []
     if doc.get("intro"):
         partes.append(f'<div class="section prose">{_md(str(doc["intro"]))}</div>')
     partes.append(_rem_indice(seccoes))
@@ -3048,11 +3085,11 @@ def _corpo_do_modelo(dados: Dict[str, Any], doc: Dict[str, Any], *, preview: boo
         if recolhido:
             nota += f" · valores lidos a {recolhido}"
         partes.append(f'<div class="section aviso">{_esc(nota)}</div>')
-    corpo = "".join(parte for parte in partes if parte)
+    corpo = _garantir_h1("".join(parte for parte in partes if parte), _titulo_visivel(doc))
     # A pesquisa das tabelas é um só script, no fim: tem de vir depois delas.
     if "data-tabela-filtro" in corpo:
         corpo += _JS_FILTROS_TABELAS
-    return f'<div class="rem-pagina rem-estilo-{_esc(estilo)}">{corpo}</div>'
+    return f'<div class="rem-pagina rem-estilo-{_esc(estilo)}">{_rem_marca(doc)}{corpo}</div>'
 
 
 def render_remuneracao(

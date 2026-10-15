@@ -26,6 +26,33 @@ de números escritos à mão.
   exportação para PDF é rasterizada no browser e pode demorar minutos numa
   máquina carregada — o limite do teste é folgado por isso.
 
+`test_cms_menu_submenus.py` — **submenus do menu público** (CMS → Aparência →
+menus):
+
+- o editor acrescenta um subitem, guarda-o e o subitem chega à API;
+- no computador o submenu só aparece com o rato ou com o foco (teclado), um item
+  sem página nem URL é rótulo de grupo (não navega) e o submenu de segundo nível
+  abre ao lado **dentro do ecrã**;
+- no rodapé os submenus aparecem ao lado do item que os abre;
+- no telemóvel (390×844) o botão «Menu» abre o painel, os submenus ficam à vista
+  e indentados, a página não ganha scroll horizontal e tocar num subitem navega.
+
+Além do que o editor guarda, o cabeçalho mostra **submenus derivados dos dados**
+(calculados a cada renderização, nunca gravados no menu — ver
+`cms_store._acrescentar_submenus_derivados`): as **subpáginas publicadas** com
+«Mostrar no menu» entram sob o item que abre a página-mãe (é o caso dos estudos
+de benchmark sob «Benchmarks») e o que está publicado no Estúdio entra agrupado
+por área de trabalho sob o item que abre a biblioteca de relatórios. O rodapé não
+os recebe. Como o painel pode ficar mais alto do que o ecrã (e o cabeçalho é
+pegajoso), o painel do telemóvel rola dentro de si mesmo — sem isso, o fim da
+lista ficava fora do alcance.
+
+Estes testes **escrevem no CMS** (menu do cabeçalho e do rodapé, reposto no fim) e
+por isso exigem uma sessão com papel `admin` ou `manager` — escrever no CMS está
+reservado a esses papéis. Com a conta `member` que a suite provisiona por
+omissão, os testes do ficheiro são saltados com essa indicação; para os correr,
+promover a conta E2E na Administração ou passar `E2E_TOKEN` de uma conta gestora.
+
 ## Preparação
 
 ```powershell

@@ -112,6 +112,31 @@ def test_base_url_configurado_e_o_que_aparece(loja) -> None:
     assert '<link rel="canonical" href="https://loja.exemplo.pt/loja">' in html
 
 
+# ------------------------------------------------------------------ cabeçalho
+def test_home_tem_um_so_h1(loja) -> None:
+    html = render.render_home(settings=loja.get_settings())
+
+    assert html.count("<h1") == 1
+    assert "<h1>Inteligência financeira, pronta a usar</h1>" in html  # o título do «hero»
+
+
+def test_home_sem_hero_com_titulo_nao_fica_sem_h1(loja) -> None:
+    """O `<h1>` da vitrine vinha **só** do «hero».
+
+    Com as secções todas sem título, a loja saía sem cabeçalho nenhum — o erro
+    «H1 tag missing» dos relatórios de SEO. Nesse caso o nome da loja passa a
+    ser o cabeçalho.
+    """
+    tema = loja.get_theme()
+    tema["sections"] = [{"id": "sec_texto", "type": "texto", "markdown": "Texto corrido."}]
+    loja.save_theme(tema)
+
+    html = render.render_home(settings=loja.get_settings())
+
+    assert html.count("<h1") == 1
+    assert f'<h1>{loja.get_settings()["store_name"]}</h1>' in html
+
+
 # --------------------------------------------------------------------- produto
 def test_seo_do_produto_substitui_o_gerado(loja) -> None:
     produto = _produto("assinatura-analista")

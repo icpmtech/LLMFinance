@@ -260,6 +260,8 @@ def test_ficha_publicada_tem_seo_e_os_numeros(cms_limpo: Any, ficha_sintetica: D
     assert "Contratação pública por ano (Portal BASE)" in html
     assert "Obras do Vouga" in html
     assert "INE · indicador 0013909" in html
+    assert html.count("<h1") == 1
+    assert "<h1>Despesas de Águeda</h1>" in html  # sem hero, o título é o cabeçalho
 
 
 def test_ficha_ainda_em_rascunho_nao_serve_no_site(cms_limpo: Any, ficha_sintetica: Dict[str, Any]) -> None:

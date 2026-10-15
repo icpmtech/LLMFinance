@@ -382,6 +382,47 @@ def test_render_da_pagina_tem_seo_marca_e_tabela(cms_limpo: Any) -> None:
     assert "INE · indicador 0013909" in html  # proveniência
 
 
+def test_render_da_pagina_tem_h1_com_o_titulo(cms_limpo: Any) -> None:
+    """O `<h1>` vinha só do bloco «hero»: sem ele, a página saía sem cabeçalho.
+
+    É o erro «H1 tag missing» dos relatórios de SEO — o título do documento
+    passa a servir de cabeçalho quando mais nenhum existe.
+    """
+    item = store.save_item("pesquisas", _pagina(), "qa@teste.pt")
+
+    html = cms_render.render_pesquisa(item)
+
+    assert html.count("<h1") == 1
+    assert "<h1>Contratos do Porto em 2024</h1>" in html  # o mesmo que no `<title>`
+
+
+def test_pagina_com_hero_nao_ganha_um_segundo_h1(cms_limpo: Any) -> None:
+    """Com bloco «hero» é o hero que dá o `<h1>`: não se acrescenta outro."""
+    html = cms_render.render_page(
+        {
+            "title": "Sobre o projeto",
+            "path": "sobre",
+            "blocks": [{"type": "hero", "data": {"title": "Inteligência financeira"}}],
+        }
+    )
+
+    assert html.count("<h1") == 1
+    assert "<h1>Inteligência financeira</h1>" in html
+
+
+def test_pagina_sem_hero_tem_h1_com_o_titulo(cms_limpo: Any) -> None:
+    html = cms_render.render_page(
+        {
+            "title": "Sobre o projeto",
+            "path": "sobre",
+            "blocks": [{"type": "texto", "data": {"markdown": "Texto corrido."}}],
+        }
+    )
+
+    assert html.count("<h1") == 1
+    assert "<h1>Sobre o projeto</h1>" in html
+
+
 def test_render_da_pagina_tem_graficos_e_adjudicatarios(cms_limpo: Any) -> None:
     item = store.save_item("pesquisas", _pagina(), "qa@teste.pt")
 

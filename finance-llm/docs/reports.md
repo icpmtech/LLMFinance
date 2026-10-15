@@ -176,6 +176,7 @@ Estúdio ou mudar um preço no catálogo aparece logo ali.
 | Bloco `relatorios` | `cms_store.BLOCK_TYPES` + `cms_render._render_library_block` | Desenha a secção (áreas, cartões, etiquetas de preço, botões) |
 | Modelo `tpl_biblioteca` | `cms_store.TEMPLATE_BIBLIOTECA` | «Biblioteca de relatórios»: hero, números, o bloco e chamada à ação |
 | Página `pag_relatorios` | `cms_editorial.paginas_do_site` | A página publicada, com hero, texto, o bloco, passos, FAQ e chamada à ação; entra no menu (cabeçalho e rodapé) |
+| Submenus do cabeçalho | `reports_library.areas_for_menu` + `cms_store._acrescentar_submenus_dos_relatorios` | O item de menu que abre esta página ganha um submenu por área de trabalho, com os documentos publicados lá dentro |
 | `GET /site/documento/{id}` | `cms_routes` | Descarrega o PDF **só** dos documentos gratuitos e publicados (resposta `attachment`, com o nome do documento) |
 
 **O que entra na montra:**
@@ -188,6 +189,20 @@ Estúdio ou mudar um preço no catálogo aparece logo ali.
   têm preço encaminham para o catálogo;
 - o pacote que a publicação cria no catálogo (`auto = estudio:<id>`) **não
   duplica** o documento: fica o documento, que é o que tem o ficheiro.
+
+**No menu do site**, o item do cabeçalho que abre esta página ganha um **submenu
+por área de trabalho**, com um título de relatório por entrada (gratuito
+descarrega, pago vai para o catálogo — os mesmos destinos dos cartões). É
+derivado a cada leitura, não fica guardado no menu: publicar um relatório no
+Estúdio muda o cabeçalho sem ninguém voltar ao editor de menus e os relatórios já
+publicados não precisam de ser republicados. Fronteiras do que é automático:
+
+- entram **documentos** (relatórios publicados no site e com PDF), como na
+  montra — os pacotes do catálogo pedem-se na plataforma e ficam na página;
+- uma área sem documentos publicados não aparece no menu;
+- submenus escritos à mão no editor ficam à frente dos automáticos;
+- só o cabeçalho: no rodapé os submenus são uma fila de links
+  (`cms_render._footer_links`) e o rodapé inteiro ficava com os títulos todos.
 
 **A área** vem, por esta ordem: do campo `area` do pacote (editável no
 backoffice), da **primeira etiqueta conhecida** do relatório (nos modelos do

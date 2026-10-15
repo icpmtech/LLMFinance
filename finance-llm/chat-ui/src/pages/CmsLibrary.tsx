@@ -1149,7 +1149,10 @@ export function CmsAppearancePanel({ ctx }: { ctx: CmsCtx }) {
       const filhos = item.children ?? [];
       return (
         <div key={item.id} className="space-y-1.5">
-          <div className="flex flex-wrap items-end gap-2 rounded-lg border border-white/8 bg-white/[0.02] px-2.5 py-2">
+          <div
+            className="flex flex-wrap items-end gap-2 rounded-lg border border-white/8 bg-white/[0.02] px-2.5 py-2"
+            data-testid={depth === 0 ? "cms-menu-item" : "cms-menu-subitem"}
+          >
             {depth > 0 && (
               <span className="self-center rounded-full border border-white/10 px-2 py-0.5 text-[10.5px] text-muted-foreground">
                 {depth === 1 ? "Subitem" : "Sub-subitem"}

@@ -371,6 +371,8 @@ def test_render_da_pagina_do_modelo_tem_seo_tabelas_e_simulador(cms_limpo: Any) 
     assert "Base legal" in html
     assert 'class="breadcrumb"' in html
     assert '"@type": "BreadcrumbList"' in html
+    assert html.count("<h1") == 1
+    assert "<h1>Remunerações da Administração Pública 2025</h1>" in html
 
 
 def test_render_do_modelo_respeita_o_que_esta_desligado(cms_limpo: Any) -> None:

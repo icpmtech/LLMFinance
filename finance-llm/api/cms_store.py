@@ -1798,7 +1798,109 @@ def menu_for(location: str = "header") -> Dict[str, Any]:
         return out
 
     menu["items"] = walk(menu.get("items") or [])
+    if location == "header":
+        _acrescentar_submenus_derivados(menu, store)
     return menu
+
+
+def _href_da_pagina(page: Dict[str, Any]) -> str:
+    path = str(page.get("path") or "").strip("/")
+    return f"/site/{path}" if path else "/site"
+
+
+def _item_da_pagina(page: Dict[str, Any]) -> Dict[str, Any]:
+    """Item de menu de uma página: o texto é o rótulo do editor ou, sem ele, o título."""
+    return {
+        "label": str(page.get("menu_label") or page.get("title") or "").strip(),
+        "href": _href_da_pagina(page),
+        "page_id": page.get("id"),
+        "new_tab": False,
+    }
+
+
+def _pagina_da_biblioteca(pages: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Página publicada que mostra a biblioteca de relatórios (a que tem o bloco)."""
+    for page in pages:
+        if str(page.get("status") or "") != "publicado":
+            continue
+        for block in page.get("blocks") or []:
+            if isinstance(block, dict) and str(block.get("type")) == "relatorios":
+                return page
+    return None
+
+
+def _aponta_para_a_pagina(item: Dict[str, Any], page: Dict[str, Any]) -> bool:
+    """O item de menu abre esta página? Pela página ligada ou pela URL escrita."""
+    if item.get("page_id") and str(item.get("page_id")) == str(page.get("id")):
+        return True
+    return str(item.get("href") or "").rstrip("/") == _href_da_pagina(page).rstrip("/")
+
+
+def _submenus_das_filhas(item: Dict[str, Any], pages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """As páginas filhas publicadas da página que este item abre.
+
+    Manda o `show_in_menu` do editor de páginas: uma subpágina aparece (e
+    desaparece) do menu sem se mexer no editor de menus. A ordem é a do CMS —
+    `menu_order` e, depois, o título — a mesma da lista de páginas.
+    """
+    page_id = str(item.get("page_id") or "")
+    if not page_id:
+        return []
+    filhas = [
+        page
+        for page in pages
+        if str(page.get("parent_id") or "") == page_id
+        and str(page.get("status") or "") == "publicado"
+        and page.get("show_in_menu") is not False
+    ]
+    filhas.sort(key=lambda page: (int(page.get("menu_order") or 0), str(page.get("title") or "").lower()))
+    return [submenu for submenu in (_item_da_pagina(page) for page in filhas) if submenu["label"]]
+
+
+def _acrescentar_submenus_derivados(menu: Dict[str, Any], store: Dict[str, Any]) -> None:
+    """Acrescenta ao menu do cabeçalho os submenus que saem dos dados, não do editor.
+
+    Duas origens, ambas derivadas a cada leitura — publicar muda o menu sem
+    ninguém voltar ao editor de menus:
+
+    * as **páginas filhas** publicadas com «Mostrar no menu», no item que abre a
+      página-mãe (é o caso dos estudos de benchmark sob «Benchmarks»);
+    * o que está **publicado no Estúdio**, agrupado por área de trabalho, no item
+      que abre a biblioteca de relatórios (`reports_library.areas_for_menu`) —
+      gratuito descarrega, pago vai para o catálogo.
+
+    Só o cabeçalho: no rodapé os submenus são uma fila de links
+    (`cms_render._footer_links`) e o rodapé inteiro ficava com os títulos todos.
+    Submenus escritos à mão no editor ficam à frente destes.
+    """
+    pages = store.get("pages") or []
+    biblioteca = _pagina_da_biblioteca(pages)
+    areas: List[Dict[str, Any]] = []
+    if biblioteca is not None:
+        # Import tardio: a loja de relatórios é grande e esta leitura corre em
+        # todas as páginas do site.
+        from api import reports_library  # noqa: PLC0415
+
+        areas = [
+            {
+                "label": str(area["label"]),
+                "href": "",
+                "page_id": None,
+                "new_tab": False,
+                "children": [
+                    {"label": str(doc["label"]), "href": str(doc["href"]), "page_id": None, "new_tab": False}
+                    for doc in area["documents"]
+                ],
+            }
+            for area in reports_library.areas_for_menu()
+        ]
+    for item in menu.get("items") or []:
+        submenus = _submenus_das_filhas(item, pages)
+        if areas and biblioteca is not None and _aponta_para_a_pagina(item, biblioteca):
+            # As áreas agrupam: agem como rótulo (não navegam).
+            submenus = submenus + areas
+        if submenus:
+            item["children"] = list(item.get("children") or []) + submenus
 
 
 def itens_de_menu(location: str, store: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:

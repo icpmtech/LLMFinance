@@ -275,6 +275,43 @@ def items(include_paid: bool = True) -> List[Dict[str, Any]]:
     return out[:MAX_ITEMS]
 
 
+def areas_for_menu() -> List[Dict[str, Any]]:
+    """Áreas com documentos publicados, prontas para o menu do site.
+
+    Só entram **documentos** — relatórios do Estúdio publicados no site e com PDF
+    gerado: os pacotes do catálogo pedem-se na plataforma e continuam na montra.
+    Uma área sem documentos publicados não entra (o menu mostra o que existe
+    hoje) e a ordem é a mesma da página, para o menu e a montra contarem a mesma
+    história.
+    """
+    por_area: Dict[str, List[Dict[str, Any]]] = {}
+    for item in items():
+        if item.get("kind") != "documento":
+            continue
+        por_area.setdefault(str(item.get("area") or ""), []).append(item)
+    grupos: List[Dict[str, Any]] = []
+    for area in (*AREAS, FALLBACK_AREA):
+        documentos = por_area.get(str(area["id"])) or []
+        if not documentos:
+            continue
+        grupos.append(
+            {
+                "id": str(area["id"]),
+                "label": str(area["label"]),
+                "documents": [
+                    {
+                        "id": str(item.get("ref") or ""),
+                        "label": str(item.get("title") or ""),
+                        # Grátis descarrega-se na hora; os pagos pedem-se no catálogo.
+                        "href": str(item.get("download") or item.get("href") or ""),
+                    }
+                    for item in documentos
+                ],
+            }
+        )
+    return grupos
+
+
 def library(
     *,
     areas: Optional[Sequence[str]] = None,

@@ -2,9 +2,8 @@
 
 Página `/vortal` · router `/vortal/*` · motor `api/vortal_service.py` · rotas
 `api/vortal_routes.py` · cliente `chat-ui/src/vortalApi.ts` ·
-testes `tests/test_vortal.py` (59) · sondas `_probe_vortal_pecas.py` e
-`_probe_vortal_lote.py` · índice `finance_vortal_pecas` · destino em disco
-`data/vortal/`
+testes `tests/test_vortal.py` (42) · sonda `_probe_vortal_pecas.py` ·
+índice `finance_vortal_pecas` · destino em disco `data/vortal/`
 
 O módulo recolhe as **peças do procedimento** publicadas na plataforma de
 contratação eletrónica **Vortal** (caderno de encargos, programa do concurso,
@@ -46,7 +45,6 @@ resposta em XLSX, `espd-request.pdf|xml`, esclarecimentos e prorrogações.
 | Disco | manifesto por aviso (`_manifesto.json`) + texto em `_texto/<ficheiro>.txt` | `guardar_manifesto`, `listar_avisos_em_disco` |
 | Índice | `finance_vortal_pecas` (um documento por peça, `_id = uid::sha256[0:16]`) | `indexar_pecas`, `documento_para_indice` |
 | Consulta | listar, pesquisar (com trechos) e estado | `listar_pecas`, `pesquisar`, `estado` |
-| Lotes | ano/mês do índice de contratos → avisos únicos → lotes de recolha | `periodos`, `avisos_do_periodo`, `recolher_lote` |
 | Monitorização | disco + índice + histórico de recolhas (`_recolhas.json`) | `monitorizacao`, `historico_recolhas` |
 
 ## 3. Desenho do índice (`finance_vortal_pecas`)
@@ -77,9 +75,6 @@ analisador usado no resto da plataforma, pelo que `caucao` encontra «caução»
 | GET | `/vortal/avisos` | avisos já recolhidos (pelos manifestos) |
 | GET | `/vortal/aviso?url=&idioma=` | resolve o aviso e lista as peças **sem descarregar** |
 | POST | `/vortal/recolha` | descarrega para disco e (opcional) indexa — **exige sessão** |
-| GET | `/vortal/periodos` | anos e meses com avisos Vortal publicados (para o seletor de lotes) |
-| GET | `/vortal/periodo?ano=&mes=&limite=&escanear=` | o que há num mês/ano, sem descarregar |
-| POST | `/vortal/lote` | recolhe e indexa, **em lotes**, os avisos de um mês/ano — **exige sessão** |
 | POST | `/vortal/indexar` | indexa o que já está em disco (por `uid` ou tudo) — **exige sessão** |
 | GET | `/vortal/pecas?uid=&limite=` | peças indexadas |
 | GET | `/vortal/pesquisa?q=&uid=&limite=` | pesquisa no texto, com trechos (`highlight`) |
@@ -96,8 +91,7 @@ Quatro leituras, com KPIs no cabeçalho (peças em disco, documentos no índice)
    aviso** (lista as peças sem descarregar) e **Recolher** (descarrega +
    extrai + indexa, com opções de indexação, extração e nova descarga). Mostra a
    tabela das peças com tipo, tamanho, texto extraído e estado
-   (`com texto`, `precisa OCR`, `erro`). A mesma aba traz o cartão **Recolher em
-   lote por mês e ano** (ver 5.2).
+   (`com texto`, `precisa OCR`, `erro`).
 2. **Peças** — o que está indexado (por aviso), com páginas e caracteres de texto.
 3. **Pesquisa** — pesquisa no texto das peças, com trechos destacados.
 4. **Monitorização** — **só administradores**: peças em disco, com texto, avisos,
@@ -140,44 +134,6 @@ contrato continuam na ficha. Exemplo real: `11970015` (convite), contra
 `11970045` (2 peças) e `11970139` (3 peças, 7 valores) — os 324 994 contratos com
 ligação Vortal seguem o mesmo caminho.
 
-## 5.2 Recolher em lote por mês e ano
-
-Colar URLs não escala: cada contrato publicado já traz a **ligação das peças**
-no índice de contratos (`contratos.linkPecasProc` — 330 911 contratos com ligação
-Vortal, dos quais 64 600 publicados em 2026). O cartão **Recolher em lote por mês
-e ano** usa esse campo para não ser preciso colar nada:
-
-| Passo | O que faz | Onde |
-|---|---|---|
-| Período | agrega `dataPublicacao` dos contratos com ligação Vortal → anos e meses | `GET /vortal/periodos` (`periodos`) |
-| Leitura | contas do período em contratos, **avisos únicos** (o mesmo token repete-se por lote/adjudicação), quantos **já em disco** e quantos por recolher | `GET /vortal/periodo` (`avisos_do_periodo`) |
-| Recolha | corre N lotes de M avisos: resolve, descarrega, extrai e indexa | `POST /vortal/lote` (`recolher_lote`) |
-
-Decisões que valem a pena fixar:
-
-- o período é o da **publicação** (`dataPublicacao`), não o campo `Ano` do
-  contrato: 5 751 contratos com `Ano = 2025` foram publicados em 2026, e o mês
-  pedido tem de bater com o que se recolhe;
-- por omissão só entram avisos **ainda não recolhidos**, pelo que repetir
-  «Recolher lote» **avança** no período (a resposta traz `restantes`) em vez de
-  voltar ao princípio — com `forcar` o período é refeito desde o início;
-- a lista do período é lida com `search_after` e um teto (`escanear`, 5 000
-  contratos por omissão, 20 000 no máximo); acima disso a resposta vem com
-  `truncado: true`;
-- o mesmo aviso usado por vários contratos é recolhido **uma vez** (dedupe pelo
-  token) e o cartão mostra os contratos de origem;
-- uma ligação que não seja `*.vortal.biz` é ignorada na leitura (guarda contra
-  SSRF, como no resto do módulo);
-- cada lote é independente: um aviso que falhe fica nos `erros` e não aborta os
-  outros; o disco continua a ser a fonte de verdade (repetir é seguro);
-- `recolhidos` conta os avisos que ficaram **em disco** (é o progresso real) e
-  `restantes` os que ainda faltam; a Vortal limita o ritmo por IP e uma rajada
-  passa a dar `403` (ver 7.1).
-
-Limites da rota: `lote` ≤ 100 avisos, `lotes` ≤ 20 por chamada, `escanear` ≤
-20 000 contratos. As recolhas em lote entram no histórico de administração com
-`tipo: "lote"` e o período em `urls`.
-
 ## 6. Limites e decisões
 
 - Só se descarrega de anfitriões `*.vortal.biz` (guarda contra SSRF, como em
@@ -196,40 +152,10 @@ Limites da rota: `lote` ≤ 100 avisos, `lotes` ≤ 20 por chamada, `escanear` �
 ## 7. Operação
 
 - Testes: `.\\.venv\\Scripts\\python.exe -m pytest tests/test_vortal.py tests/test_contract_document_vortal.py -q`
-  (59 + 9, estes últimos cobrem a ligação à ficha: extração, deduplicação,
+  (42 + 9, estes últimos cobrem a ligação à ficha: extração, deduplicação,
   aviso por convite e cache).
 - Recolha real: `_probe_vortal_pecas.py [URL-ou-UID …]` (descarrega, indexa e
   mostra a pesquisa).
-- Lote real: `_probe_vortal_lote.py [ANO] [MÊS] [--recolher] [--lotes N]` — sem
-  `--recolher` só lê o período (contratos, avisos únicos, o que está em disco);
-  com `--recolher` corre os lotes (5 avisos por lote) e mostra as peças.
-- Lote longo (destacado, com log): `scripts/recolher_vortal_lotes.py --ano 2026
-  --mes 10 --lote 4 --lotes 1 --pausa 60`; na VM fica a correr com
-  `docker exec -d iqos-backend sh -c 'nohup python -u
-  /app/scripts/recolher_vortal_lotes.py … >> /app/logs/vortal_lote_2026-10.log 2>&1 &'`
-  (o log e o PID ficam no volume `logs/`).
-
-### 7.1 Ritmo (medido em produção)
-
-A Vortal **limita por IP** e responde `403` (e às vezes `500`) quando se excede
-o ritmo. Medição de 2026-10-13, na VM: uma recolha de outubro **sem pausas**
-(50 avisos por lote, um lote a cada 8 s) recolheu o primeiro lote (43 peças) e
-depois caiu para **~97 % de recusas** — 968 linhas `403 Client Error` em ~1 000
-tentativas, 41 avisos em disco. Os **mesmos tokens**, em pedido isolado,
-voltaram a responder **200 da VM** ~15 min depois: era ritmo, não bloqueio
-permanente nem token inválido.
-
-O que ficou a impedir que isto se repita:
-
-- `recolher_lote` conta o progresso pelo que **ficou em disco** (`recolhidos`) e
-  o `restantes` reflete os avisos que ainda faltam, não as tentativas — antes,
-  uma corrida de recusas dava `restantes: 0` sem ter trazido nada;
-- o runner começa com pausas de **60 s** entre lotes, **abranda** (até 600 s)
-  quando um lote falha em mais de metade e **para** ao fim de 3 lotes sem nada
-  recolhido.
-
-Regra prática: ~4 avisos por minuto é sustentável; qualquer coisa acima de ~100
-pedidos por minuto pára o IP durante alguns minutos.
 - Ficha (sem HTTP): `_probe_ficha_vortal.py 11970045`; pela API:
   `_probe_ficha_api.py /contracts/11970045/document`.
 - Índice: criado automaticamente na primeira utilização (`ensure_indices`); na VM
