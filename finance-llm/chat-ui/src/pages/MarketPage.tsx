@@ -176,6 +176,8 @@ export default function MarketPage({ onSelectTicker, onBack }: { onSelectTicker?
   const [novo, setNovo] = useState("");
   const [aAdicionar, setAAdicionar] = useState(false);
   const [aviso, setAviso] = useState<{ tom: "ok" | "erro"; texto: string } | null>(null);
+  /** Ticker acabado de acrescentar, à espera de aparecer na leitura em curso. */
+  const [pendente, setPendente] = useState<string | null>(null);
 
   const carregar = useCallback(async (opcoes: { refresh?: boolean; limiteNovo?: number } = {}) => {
     const alvo = opcoes.limiteNovo ?? limite;
@@ -196,6 +198,16 @@ export default function MarketPage({ onSelectTicker, onBack }: { onSelectTicker?
   useEffect(() => {
     void carregar({ limiteNovo: limite });
   }, [carregar, limite]);
+
+  // O ticker acabado de acrescentar é filtrado **assim que a leitura que o inclui
+  // chega**: enquanto não chegar, a vista continua a mostrar o que tinha.
+  useEffect(() => {
+    if (!pendente || !dados) return;
+    const existe = dados.countries.some((grupo) => grupo.tickers.some((ticker) => ticker.ticker === pendente));
+    if (!existe) return;
+    setTermo(pendente);
+    setPendente(null);
+  }, [pendente, dados]);
 
   useEffect(() => {
     getMarketMeta().then(setMeta).catch(() => setMeta(null));
@@ -233,7 +245,10 @@ export default function MarketPage({ onSelectTicker, onBack }: { onSelectTicker?
       setAviso({ tom: resultado.added ? "ok" : "erro", texto: resultado.message || `«${resultado.ticker}»: sem alteração.` });
       if (resultado.added) {
         setNovo("");
-        setTermo(resultado.ticker);
+        // Ler o universo (o limite por omissão corta-o) e só filtrar pelo símbolo
+        // novo **quando a leitura que o inclui chegar**: filtrar antes deixava a
+        // vista vazia sem explicação.
+        setPendente(resultado.ticker);
         setLimite(LIMITES[LIMITES.length - 1].valor);
       }
     } catch (e) {
@@ -357,7 +372,9 @@ export default function MarketPage({ onSelectTicker, onBack }: { onSelectTicker?
             >
               {aviso.tom === "ok" ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
               {aviso.texto}
-              {aviso.tom === "ok" && termo.trim() ? " A vista está filtrada para o mostrar." : ""}
+              {/* Avisar do que se segue: a vista passa a ler o universo todo, e
+                  isso demora — sem isto parecia que o pedido não tinha feito nada. */}
+              {aviso.tom === "ok" && pendente ? " A ler o universo para o mostrar…" : ""}
             </span>
           )}
         </form>
@@ -422,16 +439,32 @@ export default function MarketPage({ onSelectTicker, onBack }: { onSelectTicker?
         </div>
 
         {/* ------------------------------------------------------------- estados */}
-        {carregando && !dados && (
+        {carregando && (
           <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.02] p-6 text-sm text-muted-foreground">
             <Loader2 size={16} className="animate-spin" />
             A ler as cotações do Yahoo Finance…
           </div>
         )}
 
-        {dados && grupos.length === 0 && (
+        {!carregando && dados && grupos.length === 0 && (
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 text-sm text-muted-foreground">
-            {filtro ? `Nenhum ticker corresponde a «${termo}».` : "Não há tickers para mostrar."}
+            <p>{filtro ? `Nenhum ticker corresponde a «${termo}».` : "Não há tickers para mostrar."}</p>
+            {/* Um filtro sem resultados pode não querer dizer que o ticker não
+                existe: pode simplesmente não ter sido lido (o limite corta o
+                universo). Dizer qual dos dois é, e dar a saída. */}
+            {dados.universe.available > dados.universe.requested && (
+              <p className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                Foram lidos {dados.universe.requested} de {dados.universe.available} tickers do universo — este pode
+                estar entre os que ficaram de fora.
+                <button
+                  type="button"
+                  onClick={() => setLimite(LIMITES[LIMITES.length - 1].valor)}
+                  className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-foreground transition hover:bg-white/10"
+                >
+                  Ler o universo todo
+                </button>
+              </p>
+            )}
           </div>
         )}
 

@@ -471,6 +471,46 @@ def test_logo_reutiliza_o_ficheiro_guardado(monkeypatch: pytest.MonkeyPatch, cac
     assert encontrado[1] == "image/png"
 
 
+def test_marca_resolve_em_lote_sem_deixar_nenhuma_para_tras(monkeypatch: pytest.MonkeyPatch, cache_em_tmp: Path) -> None:
+    """A tabela cheia abre dezenas de pedidos de imagem de uma vez.
+
+    Com o semáforo **síncrono**, os pedidos que não apanhavam lugar desistiam
+    (metade da tabela ficava sem marca). Aqui verifica-se que todos são servidos
+    e que o limite de trabalho simultâneo continua a ser respeitado.
+    """
+    import asyncio
+    import threading as _threading
+    import time as _time
+
+    monkeypatch.setattr(mv, "logo_guardado", lambda ticker: None)
+    monkeypatch.setattr(mv, "_logo_alvo", lambda ticker, *, forcar=False: (ticker, f"n:{ticker.lower()}", "https://exemplo.pt"))
+    monkeypatch.setattr(mv, "_registar_logo_tentado", lambda ticker, chave: None)
+
+    em_curso = {"agora": 0, "maximo": 0}
+    trava = _threading.Lock()
+    ficheiro = cache_em_tmp.parent / "marca.png"
+    ficheiro.write_bytes(b"x" * 200)
+
+    def descobrir(code: str, chave: str, site: str) -> Tuple[Path, str]:
+        with trava:
+            em_curso["agora"] += 1
+            em_curso["maximo"] = max(em_curso["maximo"], em_curso["agora"])
+        _time.sleep(0.2)
+        with trava:
+            em_curso["agora"] -= 1
+        return ficheiro, "image/png"
+
+    monkeypatch.setattr(mv, "_logo_descobrir", descobrir)
+
+    async def correr() -> List[Any]:
+        return await asyncio.gather(*(mv.logo_async(f"TK{i}") for i in range(12)))
+
+    resultados = asyncio.run(correr())
+
+    assert all(item is not None for item in resultados)
+    assert em_curso["maximo"] <= 4, f"demasiadas marcas ao mesmo tempo: {em_curso['maximo']}"
+
+
 def test_meta_descreve_a_marca_sem_a_ir_buscar(monkeypatch: pytest.MonkeyPatch, cache_em_tmp: Path) -> None:
     monkeypatch.setattr(mv, "universe", lambda: ["AAPL"])
 

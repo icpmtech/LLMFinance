@@ -67,7 +67,7 @@ def market_meta() -> Dict[str, Any]:
     response_class=FileResponse,
     responses={404: {"description": "Sem logótipo para este ticker."}},
 )
-def market_logo(ticker: str, forcar: bool = Query(False, description="Voltar a procurar a marca no site, ignorando a última tentativa.")) -> Response:
+async def market_logo(ticker: str, forcar: bool = Query(False, description="Voltar a procurar a marca no site, ignorando a última tentativa.")) -> Response:
     """Marca da empresa, extraída do **site oficial** e guardada no servidor.
 
     A imagem vem da mesma cache dos logótipos das empresas
@@ -77,8 +77,12 @@ def market_logo(ticker: str, forcar: bool = Query(False, description="Voltar a p
     Sem logótipo guardado e sem site conhecido responde 404: é o sinal que o
     frontend usa para mostrar as iniciais em vez de uma imagem partida. Um site
     que não renda marca não volta a ser visitado antes de `retry_days`.
+
+    A rota é `async` de propósito: uma tabela cheia abre dezenas de pedidos de
+    imagem ao mesmo tempo, e a espera pelo lugar é feita no event loop em vez de
+    ocupar uma thread do servidor por pedido.
     """
-    encontrado = market_view.logo(ticker, forcar=bool(forcar))
+    encontrado = await market_view.logo_async(ticker, forcar=bool(forcar))
     if not encontrado:
         raise HTTPException(status_code=404, detail="Sem logótipo para este ticker.")
     caminho, tipo = encontrado

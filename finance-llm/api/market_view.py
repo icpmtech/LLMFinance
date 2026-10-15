@@ -26,6 +26,7 @@ pedidos ao Yahoo outra vez.
 from __future__ import annotations
 
 import concurrent.futures
+import asyncio
 import json
 import logging
 import threading
@@ -226,10 +227,22 @@ _CURRENCY_SYMBOLS: Dict[str, str] = {
 _cache: Optional[Tuple[float, str, Dict[str, Any]]] = None
 _cache_lock = threading.Lock()
 _profile_cache_lock = threading.Lock()
-#: Quantas leituras de logótipo podem estar a decorrer ao mesmo tempo. Sem isto,
-#: uma tabela com 40 linhas abre 40 pedidos em paralelo — cada um a abrir o site
-#: de uma empresa — e tanto o servidor como os sites alvo ficam saturados.
+#: Quantas marcas se procuram ao mesmo tempo. Sem limite, uma tabela de 40 linhas
+#: abre 40 sites de empresas em paralelo — satura o servidor e os sites alvo.
+#: (`asyncio` só existe no processo do servidor; o semáforo é criado à primeira
+#: utilização, quando já há um event loop.)
 _logo_slots = threading.BoundedSemaphore(3)
+_logo_async_slots: Optional[Any] = None
+_logo_async_lock = threading.Lock()
+
+
+def _slots_async() -> Any:
+    """Semáforo assíncrono das marcas (criado à primeira utilização)."""
+    global _logo_async_slots
+    with _logo_async_lock:
+        if _logo_async_slots is None:
+            _logo_async_slots = asyncio.Semaphore(4)
+        return _logo_async_slots
 
 
 # --------------------------------------------------------------------------
@@ -728,55 +741,111 @@ def _logo_key(ticker: str, perfil: Dict[str, Any]) -> str:
     return empresas_perfil.chave(None, _texto(perfil.get("name")) or ticker)
 
 
-def logo(ticker: str, *, forcar: bool = False) -> Optional[Tuple[Path, str]]:
-    """Ficheiro do logótipo de um ticker (e o seu tipo MIME), se houver.
+def _logo_perfil(code: str) -> Dict[str, Any]:
+    """Perfil guardado de um ticker (só a cache, sem rede)."""
+    with _profile_cache_lock:
+        return _read_profile_cache().get(code) or {}
 
-    Ordem: ficheiro já guardado → site conhecido (vai buscá-lo) → nada. O site
-    vem do Yahoo Finance, no perfil do ticker; sem site não há marca a procurar
-    (índices não têm, cripto aponta para a página do projeto).
 
-    A procura é deliberadamente contida: no máximo `_logo_slots` em paralelo, e
-    um resultado negativo não se repete antes de `LOGO_RETRY_DAYS`. Sem isto, cada
-    visita à página abria um pedido por linha a um site externo.
-    """
+def logo_guardado(ticker: str) -> Optional[Tuple[Path, str]]:
+    """Marca já em disco para um ticker — **sem** tocar na rede."""
     from api import empresas_perfil
 
     try:
         code = market.normalise_ticker(ticker)
     except KeyError:
         return None
-
-    with _profile_cache_lock:
-        perfil = _read_profile_cache().get(code) or {}
-    chave_logo = _logo_key(code, perfil)
+    chave_logo = _logo_key(code, _logo_perfil(code))
     if not chave_logo:
-        return None
-
-    existente = empresas_perfil.caminho_logo(chave_logo)
-    if existente:
-        return existente, empresas_perfil.media_type_do_logo(existente)
-
-    site = _texto(perfil.get("site"))
-    if not site:
-        return None
-
-    if not forcar and not _logo_vencido(perfil.get("logo_verificado_em")):
-        return None
-
-    # O semáforo é adquirido **antes** de tocar na rede: é o que impede 40 linhas
-    # de abrirem 40 sites ao mesmo tempo.
-    if not _logo_slots.acquire(timeout=1.0):
-        return None
-    try:
-        guardado = empresas_perfil.obter_logo_do_site(site, chave_logo)
-    finally:
-        _logo_slots.release()
-
-    _registar_logo_tentado(code, chave_logo)
-    if not guardado:
         return None
     caminho = empresas_perfil.caminho_logo(chave_logo)
     return (caminho, empresas_perfil.media_type_do_logo(caminho)) if caminho else None
+
+
+def _logo_alvo(ticker: str, *, forcar: bool) -> Optional[Tuple[str, str, str]]:
+    """Vale a pena ir procurar a marca? Devolve `(ticker, chave, site)`.
+
+    `None` quando não há site (um índice não tem), quando não há nome para
+    derivar a chave, ou quando a última tentativa foi recente — um site que não
+    rendeu marca não é visitado a cada imagem pedida.
+    """
+    try:
+        code = market.normalise_ticker(ticker)
+    except KeyError:
+        return None
+    perfil = _logo_perfil(code)
+    chave_logo = _logo_key(code, perfil)
+    if not chave_logo:
+        return None
+    site = _texto(perfil.get("site"))
+    if not site:
+        return None
+    if not forcar and str(perfil.get("logo_chave") or "") == chave_logo and not _logo_vencido(perfil.get("logo_verificado_em")):
+        return None
+    return code, chave_logo, site
+
+
+def _logo_descobrir(code: str, chave_logo: str, site: str) -> Optional[Tuple[Path, str]]:
+    """Vai buscar a marca ao site, guarda-a e devolve o ficheiro (bloqueante).
+
+    A tentativa fica registada mesmo quando falha — é isso que impede que a
+    mesma procura se repita a cada visita durante `LOGO_RETRY_DAYS`.
+    """
+    from api import empresas_perfil
+
+    empresas_perfil.obter_logo_do_site(site, chave_logo)
+    _registar_logo_tentado(code, chave_logo)
+    caminho = empresas_perfil.caminho_logo(chave_logo)
+    return (caminho, empresas_perfil.media_type_do_logo(caminho)) if caminho else None
+
+
+def logo(ticker: str, *, forcar: bool = False) -> Optional[Tuple[Path, str]]:
+    """Ficheiro do logótipo de um ticker (e o seu tipo MIME), se houver.
+
+    Ordem: ficheiro já guardado → site conhecido (vai buscá-lo) → nada. O site
+    vem do Yahoo Finance, no perfil do ticker; sem site não há marca a procurar.
+
+    Versão **síncrona**, para quem já está fora do event loop. A rota HTTP usa
+    `logo_async`, que espera pelo lugar sem ocupar uma thread do servidor.
+    """
+    guardado = logo_guardado(ticker)
+    if guardado:
+        return guardado
+    alvo = _logo_alvo(ticker, forcar=forcar)
+    if not alvo:
+        return None
+    code, chave_logo, site = alvo
+    if not _logo_slots.acquire(timeout=5.0):
+        return None
+    try:
+        return _logo_descobrir(code, chave_logo, site)
+    finally:
+        _logo_slots.release()
+
+
+async def logo_async(ticker: str, *, forcar: bool = False) -> Optional[Tuple[Path, str]]:
+    """`logo`, mas com a espera pelo lugar feita no event loop.
+
+    Uma tabela de 40 linhas abre 40 pedidos de imagem de uma vez. Com um
+    semáforo **síncrono**, cada pedido à espera ocupava uma thread do servidor: os
+    últimos 20 desistiam (ou, sem desistir, deixavam de haver threads para os
+    restantes pedidos da aplicação). Aqui a fila é do event loop — que é onde
+    esperar é barato — e só os pedidos com lugar ocupam uma thread, para o
+    trabalho bloqueante (abrir o site, normalizar a imagem).
+    """
+    guardado = await asyncio.to_thread(logo_guardado, ticker)
+    if guardado:
+        return guardado
+    alvo = await asyncio.to_thread(lambda: _logo_alvo(ticker, forcar=forcar))
+    if not alvo:
+        return None
+    code, chave_logo, site = alvo
+    async with _slots_async():
+        # Outro pedido pode ter resolvido a mesma marca enquanto esperávamos.
+        ja_tinha = await asyncio.to_thread(lambda: _logo_key(code, _logo_perfil(code)) == chave_logo and logo_guardado(code))
+        if ja_tinha:
+            return ja_tinha
+        return await asyncio.to_thread(_logo_descobrir, code, chave_logo, site)
 
 
 def _logo_vencido(marca: Any) -> bool:

@@ -291,11 +291,8 @@ página numa dessas rotas devolvia `{"detail":"Not Found"}`.
   *Advanced Real-Time Chart* da TradingView (ver abaixo).
 - **Mercado por país** (`/market`) — os tickers que a plataforma segue agrupados por país, com a
   variação do dia, os agregados de cada país (cotados, altas/baixas, variação média, capitalização) e
-  o melhor/pior de cada um. O país vem do Yahoo Finance (o mesmo campo que a ficha do ticker mostra);
-  quando não responde, o sufixo do mercado decide (`.LS` → Portugal) e cada linha diz **de onde veio**
-  (`country_source`). Um ticker sem cotação aparece com o motivo, nunca com um valor suposto, e o país
-  aprendido de cada símbolo fica em `data/market_view/countries.json` — uma leitura ao Yahoo por
-  símbolo, não por visita (ver abaixo).
+  o melhor/pior de cada um. Lê-se em **tabela ou em cartões**, mostra a **marca** de cada empresa
+  (extraída do site oficial) e deixa **acrescentar tickers** sem sair da página (ver abaixo).
 - **Ontologia** (`/ontology`) — a camada semântica: tipos de objeto, propriedades, ligações,
   ações, explorador de objetos e o painel de IA que mostra (e valida) o grounding das respostas.
 - **Pesquisa 360** (`/search360`) — meta-modelo de analítica e exploração: federa a plataforma
@@ -884,6 +881,43 @@ e *Mercado & capital* (mais *Outros indicadores* para chaves não mapeadas) — 
   (`45,34 mM EUR`); as variações levam sinal (`+24,48%`) e cor, margens e rácios não levam `+`.
 - Cada linha tem *tooltip* com a chave original e o valor cru (ex.: `trailingPE = 16.73`), para
   não haver dúvidas sobre a proveniência do número.
+
+### Mercado por país (tickers, marcas e lista editável)
+
+A vista `/market` responde a «de que países são os instrumentos que seguimos, e como se está a
+comportar cada um?». Não inventa um universo: usa os tickers que a plataforma já conhece — a
+**carteira seguida** no Sentimento (que vem à frente, por ser o que foi escolhido) e a lista de
+`data/tickers_extended.json`.
+
+- **País com origem declarada.** O país vem do campo `country` do Yahoo Finance (o mesmo que a ficha
+  do ticker mostra); quando o Yahoo não responde, o **sufixo do mercado** decide (`.LS` → Portugal,
+  `.DE` → Alemanha…) e, quando nada resolve, a linha fica «sem país identificado». Cada linha diz de
+  onde veio (`country_source`: `yahoo`, `mercado`, `desconhecido`) — nada é adivinhado em silêncio.
+  O grupo dos desconhecidos existe para um instrumento sem país (índices, cripto) não desaparecer.
+- **Uma falha não vira número.** Uma cotação que não venha fica com o motivo à vista, e continua a
+  contar para o país. O Yahoo chega a responder a símbolos **descontinuados** sem levantar erro
+  (`BPI.LS`, `REN.LS`…): devolve `fast_info` sem preço, e sem esta leitura apareciam linhas mudas.
+- **Marcas das empresas.** O logótipo é extraído do **site oficial** (o que o Yahoo dá no perfil do
+  ticker) pelo mesmo caminho dos logótipos das empresas: candidatos no HTML (`apple-touch-icon`,
+  `rel=icon`, `<img>` com «logo», `og:image`, `favicon.ico`), normalização para PNG quadrado 256×256
+  (um SVG guarda-se como está) e cache em `data/empresas/logos/`. **Nada é pedido a serviços de
+  terceiros.** Só se anuncia o endereço da imagem quando há razão para esperar marca: sem site (um
+  índice não tem) o frontend mostra as iniciais e não chega a pedir nada; um site que não rendeu
+  marca não volta a ser visitado antes de `LOGO_RETRY_DAYS` (7 dias).
+- **Descoberta contida.** Uma tabela de 40 linhas abre 40 pedidos de imagem de uma vez. A rota
+  `/market/logo/{ticker}` é `async` e espera pelo lugar **no event loop**, não numa thread do
+  servidor: só 4 pedidos ocupam threads (para abrir o site e normalizar a imagem). Com um semáforo
+  síncrono, os últimos 20 desistiam — metade da tabela ficava sem marca.
+- **Tabela ou cartões.** A lista de cada país lê-se das duas maneiras (`LayoutList`/`LayoutGrid`); são
+  os mesmos dados e a escolha não muda o que se pede ao servidor.
+- **Acrescentar tickers.** `POST /tickers/add` valida o símbolo no Yahoo Finance e junta-o à lista da
+  plataforma; a vista passa a ler o **universo todo** e filtra pelo símbolo novo assim que a leitura
+  que o inclui chega. (O limite por omissão lê 40 de ~90: sem isto, um ticker acabado de acrescentar
+  podia cair fora da leitura — e um filtro sem resultados diz se é «não corresponde» ou «não foi
+  lido», com a saída para ler o universo todo.)
+- **Uma leitura por símbolo.** O perfil aprendido de cada ticker (país, nome, setor, site e quando se
+  tentou a marca) fica em `data/market_view/tickers.json`; a resposta da vista é guardada 60 s em
+  memória. O `/market/meta` publica a fonte, a ressalva de preço e estes limites.
 
 ### Contratos de uma entidade (ver todos)
 
