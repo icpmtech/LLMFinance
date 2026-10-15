@@ -171,6 +171,7 @@ class SettingsPatch(BaseModel):
     auto_confirm_mbway_api: Optional[bool] = None
     iban: Optional[str] = None
     payment_instructions: Optional[str] = None
+    support_email: Optional[str] = Field(None, description="Email de apoio mostrado nos PDF dos relatórios")
     vat_rate: Optional[float] = None
     default_delivery_days: Optional[float] = None
     backoffice_users: Optional[List[str]] = None

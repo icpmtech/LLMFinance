@@ -25,6 +25,14 @@ DIMENSOES = ["ano", "adjudicatario"]
 MEDIDAS = ["contagem", "soma_preco"]
 
 
+def _pdf_text(conteudo: bytes) -> str:
+    """Texto de um PDF (para conferir o que sai impresso)."""
+    import pymupdf
+
+    documento = pymupdf.open(stream=conteudo, filetype="pdf")
+    return "\n".join(pagina.get_text() for pagina in documento)
+
+
 @pytest.fixture()
 def relatorios(tmp_path, monkeypatch):
     """Módulo de relatórios isolado em `tmp_path` (não toca em `data/`)."""
@@ -333,6 +341,66 @@ def test_pdf_gerado_e_guardado(relatorios, db):
     second = studio.attach_pdf(saved["id"], "autor@exemplo.pt")
     assert len(second["report"]["files"]) == 1
     assert second["file"]["id"] != result["file"]["id"]
+
+
+def test_pdf_tem_email_de_apoio(relatorios, db):
+    """O email de apoio vai no rodapé e na nota final; os indicadores por extenso."""
+    saved = studio.save_report(_rascunho(), actor="autor@exemplo.pt")["report"]
+    nome, conteudo, _mime = studio.render_pdf(studio.get_report(saved["id"]))
+    assert conteudo[:4] == b"%PDF"
+    texto = _pdf_text(conteudo)
+    assert studio.DEFAULT_SUPPORT_EMAIL in texto
+    assert "Apoio:" in texto
+    # O valor do indicador sai completo (a célula não parte o número).
+    assert "6 000,00 €" in texto
+
+    # Email de apoio configurado pela administração passa a ser o que sai no PDF.
+    store.save_settings({"support_email": "apoio@exemplo.pt"})
+    _nome, conteudo2, _mime = studio.render_pdf(studio.get_report(saved["id"]))
+    texto2 = _pdf_text(conteudo2)
+    assert "apoio@exemplo.pt" in texto2
+    assert studio.DEFAULT_SUPPORT_EMAIL not in texto2
+
+
+def test_rotulos_dos_graficos_sao_compactos(relatorios, db, monkeypatch):
+    """Valores de milhares de milhões não podem sair por extenso nos gráficos."""
+
+    def grande(payload: Dict[str, Any], scope: Any = None, es: Any = None) -> Dict[str, Any]:
+        resultado = _fake_query(payload, scope, es)
+        for indice, linha in enumerate(resultado["rows"]):
+            for medida in ("contagem", "soma_preco"):
+                if isinstance(linha.get(medida), (int, float)):
+                    linha[medida] = 1_500_000_000.0 * (indice + 1)
+        resultado["totals"] = {chave: 4_500_000_000.0 for chave in resultado["totals"]}
+        return resultado
+
+    monkeypatch.setattr(viz, "run_query", grande)
+    saved = studio.save_report(_rascunho(), actor="autor@exemplo.pt")["report"]
+    _nome, conteudo, _mime = studio.render_pdf(studio.get_report(saved["id"]))
+    texto = _pdf_text(conteudo)
+    assert "mM €" in texto
+    assert "4 500 000 000,00 €" in texto
+
+
+def test_email_de_apoio_validado(relatorios):
+    assert store.public_settings()["support_email"] == studio.DEFAULT_SUPPORT_EMAIL
+    assert store.save_settings({"support_email": "apoio@exemplo.pt"})["support_email"] == "apoio@exemplo.pt"
+    assert studio.support_email() == "apoio@exemplo.pt"
+    with pytest.raises(ValueError):
+        store.save_settings({"support_email": "sem-arroba"})
+    # Um valor vazio volta ao contacto por omissão (a limpeza é feita na leitura).
+    store.save_settings({"support_email": ""})
+    assert studio.support_email() == studio.DEFAULT_SUPPORT_EMAIL
+    assert store.public_settings()["support_email"] == studio.DEFAULT_SUPPORT_EMAIL
+
+
+def test_formatacao_de_valores_em_graficos(relatorios):
+    assert studio.format_compact(23_670_498_334.05, "currency") == "23,7 mM €"
+    assert studio.format_compact(1_163_721, "integer") == "1,2 M"
+    assert studio.format_compact(186_087, "integer") == "186 mil"
+    assert studio.format_compact(898, "integer") == "898"
+    assert studio.format_value(898, "integer") == "898"
+    assert studio.format_value(23_670_498_334.05, "currency") == "23 670 498 334,05 €"
 
 
 def test_pdf_de_relatorio_sem_dados_nao_rebenta(relatorios, db, monkeypatch):

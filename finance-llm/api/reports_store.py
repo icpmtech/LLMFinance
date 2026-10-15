@@ -139,6 +139,8 @@ PAYMENT_METHODS: List[Dict[str, str]] = [
 
 MAX_TARGETS = 6
 MAX_NOTES = 2000
+#: Contacto público mostrado nos PDF (editável em Definições → Apoio).
+DEFAULT_SUPPORT_EMAIL = "geral@iqos.pt"
 MAX_FILES_PER_REQUEST = 12
 MAX_FILE_BYTES = 25 * 1024 * 1024
 MAX_NOTIFICATIONS = 800
@@ -296,6 +298,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     # Contas com acesso ao **estúdio** (criam e publicam relatórios), além dos
     # administradores e dos gestores de plataforma.
     "report_managers": [],
+    # Email de apoio mostrado nos PDF dos relatórios (rodapé e nota final).
+    "support_email": DEFAULT_SUPPORT_EMAIL,
     # Emails extra avisados de cada pedido novo.
     "notify_extra_emails": [],
     "updated_at": "",
@@ -508,6 +512,7 @@ def public_settings() -> Dict[str, Any]:
         "mbway_api": bool(_text(data.get("mbway_api_key"))),
         "iban": data.get("iban", ""),
         "payment_instructions": data.get("payment_instructions", ""),
+        "support_email": _text(data.get("support_email")) or DEFAULT_SUPPORT_EMAIL,
         "vat_rate": money(data.get("vat_rate")) or 0.0,
         "methods": PAYMENT_METHODS,
     }
@@ -526,6 +531,11 @@ def save_settings(patch: Dict[str, Any], actor: str = "") -> Dict[str, Any]:
         for key in ("mbway_holder", "iban", "payment_instructions", "mbway_api_url"):
             if key in patch:
                 data[key] = _text(patch.get(key), 400)
+        if "support_email" in patch:
+            raw = _text(patch.get("support_email"), 160)
+            if raw and not re.match(r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$", raw):
+                raise ValueError("O email de apoio não parece um endereço válido.")
+            data["support_email"] = raw
         if "mbway_provider" in patch:
             provider = _text(patch.get("mbway_provider"), 40).lower() or "ifthenpay"
             if provider not in {"ifthenpay", "manual"}:

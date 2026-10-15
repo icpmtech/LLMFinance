@@ -111,6 +111,11 @@ AI_MODE_LABELS: Dict[str, str] = {
     "blocos": "Sugestões de blocos",
 }
 
+#: Email de apoio mostrado nos PDF (rodapé e nota final). É editável em
+#: *Administração → Relatórios → Definições* (`settings.support_email`); este é
+#: o contacto público da plataforma quando nada estiver configurado.
+DEFAULT_SUPPORT_EMAIL = store.DEFAULT_SUPPORT_EMAIL
+
 #: Fontes recomendadas (dataset do Visualizador → como aparece no estúdio).
 SOURCE_GROUPS: Tuple[Dict[str, str], ...] = (
     {"id": "contratacao", "label": "Contratação Pública", "hint": "Contratos, CPV, regiões, marcas e firmas."},
@@ -211,6 +216,12 @@ def can_studio(email: Any, role: str = "member") -> bool:
     papel de gestão — por exemplo a quem produz os relatórios na equipa.
     """
     return store.is_report_manager(email, role)
+
+
+def support_email() -> str:
+    """Email de apoio que vai nos PDF (configurável na administração)."""
+    configured = str(store.settings().get("support_email") or "").strip()
+    return configured or DEFAULT_SUPPORT_EMAIL
 
 
 # --------------------------------------------------------------------------
@@ -1236,6 +1247,27 @@ def format_value(value: Any, fmt: str = "") -> str:
     return _fmt_number(value)
 
 
+def format_compact(value: Any, fmt: str = "") -> str:
+    """Número curto para rótulos de gráficos (`23,7 mM €`, `158 mil`, `898`).
+
+    Os rótulos por cima das barras têm pouco espaço: por extenso, valores de
+    milhares de milhões sobrepõem-se ao rótulo do lado. Nos indicadores e nas
+    tabelas mantém-se o valor completo.
+    """
+    if not isinstance(value, (int, float)):
+        return "—" if value in (None, "") else str(value)
+    number = float(value)
+    magnitude = abs(number)
+    suffix = " €" if fmt == "currency" else ""
+    if magnitude >= 1_000_000_000:
+        return f"{number / 1_000_000_000:.1f}".replace(".", ",") + f" mM{suffix}"
+    if magnitude >= 1_000_000:
+        return f"{number / 1_000_000:.1f}".replace(".", ",") + f" M{suffix}"
+    if magnitude >= 10_000:
+        return f"{number / 1_000:.0f} mil{suffix}"
+    return format_value(value, fmt)
+
+
 def _measure_format(block: Dict[str, Any], result: Dict[str, Any]) -> str:
     if block.get("format"):
         return str(block.get("format"))
@@ -1247,47 +1279,63 @@ def _measure_format(block: Dict[str, Any], result: Dict[str, Any]) -> str:
 
 def _bar_drawing(rows: Sequence[Dict[str, Any]], dimension: str, measure: str, *, width: float, height: float,
                  horizontal: bool, fmt: str, labels: Dict[str, str], title: str = "") -> Any:
-    """Gráfico de barras desenhado à mão (evita depender de eixos complexos)."""
+    """Gráfico de barras desenhado à mão (evita depender de eixos complexos).
+
+    Os rótulos usam a forma compacta (`23,7 mM €`) e são truncados: por extenso,
+    um valor de milhares de milhões ficava por cima do rótulo da barra seguinte.
+    """
     from reportlab.graphics.shapes import Drawing, Rect, String  # noqa: PLC0415
     from reportlab.lib import colors  # noqa: PLC0415
 
     brand = colors.HexColor("#0F766E")
+    grid = colors.HexColor("#E2E8F0")
     muted = colors.HexColor("#64748B")
+    dark = colors.HexColor("#0F172A")
     data = [
         (str(row.get(dimension) or "—"), float(row.get(measure) or 0) if isinstance(row.get(measure), (int, float)) else 0.0)
         for row in rows[:9]
     ]
     drawing = Drawing(width, height)
     if title:
-        drawing.add(String(0, height - 9, title, fontName="Helvetica-Bold", fontSize=8.5, fillColor=colors.HexColor("#0F172A")))
+        drawing.add(String(0, height - 9, title, fontName="Helvetica-Bold", fontSize=8.5, fillColor=dark))
     if not data:
         return drawing
     maximum = max(value for _label, value in data) or 1.0
+    value_font = 6.5 if horizontal else (5.5 if len(data) > 6 else 6.5)
+    row_height = max(8.0, (height - 22) / len(data))
     if horizontal:
-        top = height - 20
-        row_height = max(8.0, (top - 4) / len(data))
-        label_width = width * 0.42
-        bar_width = width - label_width - 46
+        label_width = width * 0.40
+        value_width = 52.0
+        bar_width = max(20.0, width - label_width - value_width)
         for position, (label, value) in enumerate(data):
-            y = top - (position + 1) * row_height
-            drawing.add(String(0, y + row_height / 3, label[:32], fontSize=7, fillColor=muted))
+            y = height - 22 - (position + 1) * row_height
+            drawing.add(String(0, y + row_height / 3, _clip_label(label, 34), fontSize=6.5, fillColor=muted))
             bar = max(1.0, (value / maximum) * bar_width)
-            drawing.add(Rect(label_width, y + 1.5, bar, row_height - 3, fillColor=brand, strokeColor=None))
-            drawing.add(String(label_width + bar + 3, y + row_height / 3, format_value(value, fmt), fontSize=6.5, fillColor=muted))
+            drawing.add(Rect(label_width, y + row_height * 0.22, bar, max(3.0, row_height * 0.56), fillColor=brand, strokeColor=None))
+            drawing.add(
+                String(label_width + bar + 3, y + row_height / 3, format_compact(value, fmt), fontSize=value_font, fillColor=dark)
+            )
     else:
-        top = height - 24
-        base = 12
+        top = height - 26
+        base = 14
         slot = (width - 4) / len(data)
-        bar_width = max(3.0, slot * 0.6)
+        bar_width = max(4.0, slot * 0.55)
+        # Linha de base: dá referência sem eixo desenhado.
+        drawing.add(Rect(0, base - 0.4, width, 0.8, fillColor=grid, strokeColor=None))
         for position, (label, value) in enumerate(data):
             bar_height = max(1.0, (value / maximum) * (top - base))
             x = 2 + position * slot + (slot - bar_width) / 2
             drawing.add(Rect(x, base, bar_width, bar_height, fillColor=brand, strokeColor=None))
-            drawing.add(String(x, base - 8, label[:9], fontSize=6, fillColor=muted))
-            drawing.add(String(x, base + bar_height + 2, format_value(value, fmt), fontSize=5.5, fillColor=muted))
+            drawing.add(String(x + bar_width / 2 - 9, base + bar_height + 2, format_compact(value, fmt), fontSize=value_font, fillColor=dark))
+            drawing.add(String(x, base - 9, _clip_label(label, 9), fontSize=6, fillColor=muted))
     if labels:
         drawing.add(String(0, 1, labels.get("origin") or "", fontSize=6, fillColor=muted))
     return drawing
+
+
+def _clip_label(value: str, limit: int) -> str:
+    text = " ".join(str(value or "").split())
+    return text if len(text) <= limit else f"{text[: limit - 1]}…"
 
 
 def _line_drawing(rows: Sequence[Dict[str, Any]], dimension: str, measure: str, *, width: float, height: float, fmt: str) -> Any:
@@ -1296,6 +1344,7 @@ def _line_drawing(rows: Sequence[Dict[str, Any]], dimension: str, measure: str, 
 
     brand = colors.HexColor("#0F766E")
     muted = colors.HexColor("#64748B")
+    dark = colors.HexColor("#0F172A")
     data = [
         (str(row.get(dimension) or "—"), float(row.get(measure) or 0) if isinstance(row.get(measure), (int, float)) else 0.0)
         for row in rows[:24]
@@ -1306,7 +1355,7 @@ def _line_drawing(rows: Sequence[Dict[str, Any]], dimension: str, measure: str, 
             drawing.add(String(0, height / 2, f"{data[0][0]}: {format_value(data[0][1], fmt)}", fontSize=8, fillColor=muted))
         return drawing
     maximum = max(value for _label, value in data) or 1.0
-    base, top = 12.0, height - 14.0
+    base, top = 16.0, height - 14.0
     step = (width - 10) / (len(data) - 1)
     points: List[float] = []
     for position, (_label, value) in enumerate(data):
@@ -1314,17 +1363,25 @@ def _line_drawing(rows: Sequence[Dict[str, Any]], dimension: str, measure: str, 
         y = base + (value / maximum) * (top - base)
         points.extend([x, y])
     drawing.add(PolyLine(points, strokeColor=brand, strokeWidth=1.2))
+    every = max(1, len(data) // 6)
     for position, (label, value) in enumerate(data):
         x = 5 + position * step
         y = base + (value / maximum) * (top - base)
         drawing.add(Circle(x, y, 1.5, fillColor=brand, strokeColor=None))
-        if position % max(1, len(data) // 6) == 0 or position == len(data) - 1:
-            drawing.add(String(x - 6, base - 8, label[:9], fontSize=5.5, fillColor=muted))
-    drawing.add(String(5, height - 8, format_value(maximum, fmt), fontSize=5.5, fillColor=muted))
+        if position % every == 0 or position == len(data) - 1:
+            drawing.add(String(x - 8, base - 9, _clip_label(label, 10), fontSize=5.5, fillColor=muted))
+    # Uma única etiqueta de escala (o pico), em forma compacta.
+    drawing.add(String(5, height - 9, f"máx. {format_compact(maximum, fmt)}", fontSize=6, fontName="Helvetica-Bold", fillColor=dark))
+    drawing.add(Line(5, base, width - 5, base, strokeColor=colors.HexColor("#E2E8F0"), strokeWidth=0.6))
     return drawing
 
 
 def _pie_drawing(rows: Sequence[Dict[str, Any]], dimension: str, measure: str, *, width: float, height: float, fmt: str) -> Any:
+    """Circular com o **valor e a percentagem na legenda**.
+
+    Os rótulos dentro das fatias colidiam entre si (basta uma fatia pequena) — a
+    legenda leva o nome, o valor compacto e o peso de cada fatia.
+    """
     from reportlab.graphics.charts.legends import Legend  # noqa: PLC0415
     from reportlab.graphics.charts.piecharts import Pie  # noqa: PLC0415
     from reportlab.graphics.shapes import Drawing, String  # noqa: PLC0415
@@ -1332,7 +1389,7 @@ def _pie_drawing(rows: Sequence[Dict[str, Any]], dimension: str, measure: str, *
 
     palette = ["#0F766E", "#2563EB", "#F59E0B", "#DC2626", "#7C3AED", "#0891B2", "#16A34A", "#DB2777"]
     data = [
-        (str(row.get(dimension) or "—")[:24], float(row.get(measure) or 0) if isinstance(row.get(measure), (int, float)) else 0.0)
+        (_clip_label(str(row.get(dimension) or "—"), 26), float(row.get(measure) or 0) if isinstance(row.get(measure), (int, float)) else 0.0)
         for row in rows[:8]
     ]
     drawing = Drawing(width, height)
@@ -1341,26 +1398,31 @@ def _pie_drawing(rows: Sequence[Dict[str, Any]], dimension: str, measure: str, *
         drawing.add(String(0, height / 2, "Sem dados para representar.", fontSize=8, fillColor=colors.HexColor("#64748B")))
         return drawing
     pie = Pie()
-    pie.x = width * 0.42
-    pie.y = height * 0.12
-    pie.width = min(height * 0.85, width * 0.45)
+    pie.width = min(height * 0.78, width * 0.42)
     pie.height = pie.width
+    pie.x = width - pie.width - 6
+    pie.y = (height - pie.height) / 2
     pie.data = [value for _label, value in data]
-    pie.labels = [format_value(value, fmt) for _label, value in data]
+    pie.labels = None
     pie.slices.strokeColor = colors.white
     pie.slices.strokeWidth = 0.5
+    pie.slices.popout = 0
     total = sum(value for _label, value in data) or 1.0
-    for index, (label, value) in enumerate(data):
+    for index, (_label, _value) in enumerate(data):
         pie.slices[index].fillColor = colors.HexColor(palette[index % len(palette)])
     legend = Legend()
-    legend.x = width * 0.05
-    legend.y = height * 0.06
+    legend.x = 2
+    legend.y = max(2.0, height - 10 - len(data) * 8.5)
     legend.fontSize = 6.5
     legend.fontName = "Helvetica"
     legend.dxTextSpace = 3
-    legend.dy = 7
+    legend.dy = 8.5
+    legend.alignment = "left"
     legend.colorNamePairs = [
-        (colors.HexColor(palette[index % len(palette)]), f"{label} ({value / total * 100:.0f} %)")
+        (
+            colors.HexColor(palette[index % len(palette)]),
+            f"{label} · {format_compact(value, fmt)} ({value / total * 100:.0f} %)",
+        )
         for index, (label, value) in enumerate(data)
     ]
     drawing.add(pie)
@@ -1467,14 +1529,18 @@ def _pdf_sections(doc: Dict[str, Any], results: Sequence[Dict[str, Any]]) -> Lis
             continue
         if block_type == "graph":
             graph = result.get("graph") or {}
+            measures = result.get("measures") or []
+            value_label = str((measures[0] if measures else {}).get("label") or "Valor")
+            # Três colunas em vez de "A → B": a linha cabe numa linha só e lê-se
+            # melhor do que uma seta no meio de nomes longos.
             sections.append(
                 {
                     "kind": "graph",
                     "title": title,
                     "graph": graph,
-                    "columns": ["Relação", "Valor"],
+                    "columns": ["Origem", "Destino", value_label],
                     "rows": [
-                        [f"{edge['source']} → {edge['target']}", format_value(edge.get("value"), fmt)]
+                        [str(edge.get("source") or "—"), str(edge.get("target") or "—"), format_value(edge.get("value"), fmt)]
                         for edge in (graph.get("edges") or [])[:15]
                     ],
                 }
@@ -1536,12 +1602,13 @@ def render_pdf(
     title_style = ParagraphStyle("iq-title", parent=styles["Title"], fontSize=19, leading=22, textColor=dark, alignment=0)
     brand_style = ParagraphStyle("iq-brand", parent=styles["Normal"], fontSize=10, leading=12, textColor=brand_color, fontName="Helvetica-Bold")
     sub_style = ParagraphStyle("iq-sub", parent=styles["Normal"], fontSize=9, leading=12, textColor=muted)
-    section_style = ParagraphStyle("iq-section", parent=styles["Normal"], fontSize=12, leading=15, textColor=dark, fontName="Helvetica-Bold", spaceBefore=8, spaceAfter=4)
+    section_style = ParagraphStyle("iq-section", parent=styles["Normal"], fontSize=12, leading=15, textColor=dark, fontName="Helvetica-Bold", spaceBefore=6, spaceAfter=3)
     body_style = ParagraphStyle("iq-body", parent=styles["Normal"], fontSize=9.5, leading=13, textColor=dark)
     note_style = ParagraphStyle("iq-note", parent=body_style, fontSize=8.5, textColor=muted)
-    cell_style = ParagraphStyle("iq-cell", parent=styles["Normal"], fontSize=8, leading=10, textColor=dark)
+    cell_style = ParagraphStyle("iq-cell", parent=styles["Normal"], fontSize=8, leading=11, textColor=dark)
     cell_muted = ParagraphStyle("iq-cell-muted", parent=cell_style, textColor=muted, fontName="Helvetica-Bold")
     kpi_value = ParagraphStyle("iq-kpi", parent=cell_style, fontSize=13, leading=15, fontName="Helvetica-Bold", textColor=brand_color)
+    kpi_value_tight = ParagraphStyle("iq-kpi-tight", parent=kpi_value, fontSize=10.5, leading=12)
 
     def paragraph(value: Any, style: Any = cell_style) -> Paragraph:
         text = str(value if value is not None else "")
@@ -1550,6 +1617,7 @@ def render_pdf(
 
     executed = run_report(doc, scope)
     sections = _pdf_sections(doc, executed["blocks"])
+    support = support_email()
 
     story: List[Any] = []
     logo = base.logo_path()
@@ -1568,7 +1636,12 @@ def render_pdf(
         story.append(paragraph(str(doc.get("title") or "Relatório"), title_style))
         if doc.get("subtitle"):
             story.append(paragraph(str(doc["subtitle"]), sub_style))
+    # A linha da marca é um bloco à parte: sem espaço, o subtítulo encostava-lhe.
+    story.append(Spacer(1, 4))
     story.append(Paragraph(f"{base.BRAND} · {base.BRAND_TAGLINE}", brand_style))
+    if support:
+        story.append(Spacer(1, 2))
+        story.append(Paragraph(f"Apoio: {support}", sub_style))
     if doc.get("description"):
         story.append(Spacer(1, 3))
         story.append(paragraph(str(doc["description"]), body_style))
@@ -1618,7 +1691,14 @@ def render_pdf(
             pairs = section.get("pairs") or []
             if not pairs:
                 continue
-            data = [[paragraph(label, cell_muted) for label, _value in pairs], [paragraph(value, kpi_value) for _label, value in pairs]]
+            # Com valores longos (milhares de milhões), o tamanho grande transborda
+            # a célula: reduz-se a letra em vez de partir o número.
+            longest = max((len(str(value)) for _label, value in pairs), default=0)
+            style = kpi_value if longest <= 16 else kpi_value_tight
+            data = [
+                [paragraph(label, cell_muted) for label, _value in pairs],
+                [paragraph(value, style) for _label, value in pairs],
+            ]
             table = Table(data, colWidths=[(170 * mm) / max(1, len(pairs))] * len(pairs))
             table.setStyle(
                 TableStyle(
@@ -1626,14 +1706,16 @@ def render_pdf(
                         ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#ECFDF5")),
                         ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#99F6E4")),
                         ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#99F6E4")),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
                         ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
                         ("TOPPADDING", (0, 0), (-1, -1), 3),
                         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
                     ]
                 )
             )
             story.append(table)
-            story.append(Spacer(1, 6))
+            story.append(Spacer(1, 4))
             continue
         if kind == "chart":
             rows = section.get("rows") or []
@@ -1641,16 +1723,16 @@ def render_pdf(
             chart = section.get("chart")
             try:
                 if chart in {"donut", "pie"}:
-                    drawing = _pie_drawing(rows, section["dimension"], section["measure"], width=drawing_width, height=52 * mm, fmt=section.get("format") or "number")
+                    drawing = _pie_drawing(rows, section["dimension"], section["measure"], width=drawing_width, height=44 * mm, fmt=section.get("format") or "number")
                 elif chart in {"line", "area"}:
-                    drawing = _line_drawing(rows, section["dimension"], section["measure"], width=drawing_width, height=48 * mm, fmt=section.get("format") or "number")
+                    drawing = _line_drawing(rows, section["dimension"], section["measure"], width=drawing_width, height=42 * mm, fmt=section.get("format") or "number")
                 else:
                     drawing = _bar_drawing(
                         rows,
                         section["dimension"],
                         section["measure"],
                         width=drawing_width,
-                        height=52 * mm,
+                        height=44 * mm,
                         horizontal=chart == "bar-h",
                         fmt=section.get("format") or "number",
                         labels=section.get("labels") or {},
@@ -1664,7 +1746,7 @@ def render_pdf(
                 graph = section.get("graph") or {}
                 if graph.get("edges"):
                     try:
-                        story.append(_graph_drawing(graph, width=170 * mm, height=55 * mm, fmt="number"))
+                        story.append(_graph_drawing(graph, width=170 * mm, height=48 * mm, fmt="number"))
                     except Exception as exc:  # noqa: BLE001
                         logger.warning("Estúdio: grafo não desenhado (%s)", exc)
             columns = section.get("columns") or []
@@ -1680,7 +1762,8 @@ def render_pdf(
         story.append(Spacer(1, 4))
         story.append(paragraph(str(doc["targets_note"]), note_style))
     story.append(Spacer(1, 6))
-    story.append(Paragraph(f"Gerado pelo {base.BRAND} em {datetime.now().strftime('%d/%m/%Y às %H:%M')}.", sub_style))
+    generated = f"Gerado pelo {base.BRAND} em {datetime.now().strftime('%d/%m/%Y às %H:%M')}."
+    story.append(Paragraph(f"{generated}{f' · Apoio: {support}' if support else ''}", sub_style))
 
     buffer = BytesIO()
 
@@ -1692,7 +1775,10 @@ def render_pdf(
         canvas.line(18, 30, width - 18, 30)
         canvas.setFont("Helvetica", 7.5)
         canvas.setFillColor(muted)
-        canvas.drawString(18, 20, f"{base.BRAND} — {base.BRAND_TAGLINE}")
+        footer = f"{base.BRAND} — {base.BRAND_TAGLINE}"
+        if support:
+            footer += f" · apoio: {support}"
+        canvas.drawString(18, 20, footer)
         canvas.drawRightString(width - 18, 20, f"Página {canvas.getPageNumber()}")
         canvas.restoreState()
 

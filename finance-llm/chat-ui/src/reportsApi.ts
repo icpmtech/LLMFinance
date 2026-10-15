@@ -39,6 +39,7 @@ export type ReportsPublicSettings = {
   mbway_api: boolean;
   iban: string;
   payment_instructions: string;
+  support_email: string;
   vat_rate: number;
   methods: ReportsPaymentMethod[];
 };

@@ -11,9 +11,9 @@ A plataforma vende **relatórios**. Há duas formas de os produzir:
    compra recebe o PDF **automaticamente** depois do pagamento.
 
 - Página do cliente: `/reports` (aplicação **Relatórios** no menu lateral). Quem tem
-  acesso de backoffice vê aí um separador **Backoffice**, e quem for administrador
-  ou gestor de relatórios vê também o separador **Estúdio** — a área de Administração
-  é restrita ao papel `admin`, por isso é este o caminho das contas de equipa.
+  acesso de backoffice vê aí um separador **Backoffice**; o Estúdio tem página
+  própria (`/report-studio`) — a área de Administração é restrita ao papel `admin`,
+  por isso é este o caminho das contas de equipa.
 - Backoffice: **Administração → Relatórios** (`/admin`, separador «Relatórios»).
 - Configuração: o mesmo separador, sub-separador **Definições** (e **Catálogo**).
 
@@ -59,8 +59,9 @@ O número de destino é configurável em *Definições → Número MB Way* (valo
 ## Estúdio de relatórios (administradores e gestores de relatórios)
 
 O **Estúdio** é a oficina onde a equipa monta os relatórios que a plataforma
-vende. Vive no separador **Estúdio** da página `/reports` e na API em
-`/reports/studio/*`.
+vende. Tem **página própria** — `/report-studio`, com entrada no menu lateral
+(*Relatórios → Estúdio de relatórios*) e um atalho no cabeçalho de `/reports` —
+e a API vive em `/reports/studio/*`.
 
 **Quem entra:** papel `admin`, papel `manager` (gestor de plataforma) ou qualquer
 conta da lista *Definições → Gestores de relatórios* (`settings.report_managers`).
@@ -94,10 +95,16 @@ de permissões (`main.py`), sem alargar o resto do módulo.
    e das primeiras linhas de cada bloco, e di-lo nas notas. O texto gerado só
    entra no PDF depois de estar escrito num bloco.
 6. **PDF** — gerado no servidor com `reportlab` (o mesmo renderizador da casa:
-   logótipo, cores da marca, rodapé com a página). Gráficos de barras, linhas e
-   circulares são desenhados nativamente; as tabelas repetem o cabeçalho. Fica em
-   `data/reports/studio/<relatório>/<id>-<nome>.pdf` e é substituído quando se
-   volta a gerar.
+   logótipo, cores da marca, rodapé com o email de apoio e a página). Gráficos de
+   barras, linhas e circulares são desenhados nativamente, com os rótulos em
+   forma curta (`23,7 mM €`) para não se sobreporem; as tabelas repetem o
+   cabeçalho; os indicadores que não cabem na célula reduzem a letra em vez de
+   partir o número. Fica em `data/reports/studio/<relatório>/<id>-<nome>.pdf` e é
+   substituído quando se volta a gerar.
+7. **Email de apoio** — o contacto que sai no rodapé de todas as páginas e na
+   nota final é configurável em *Definições → Email de apoio*
+   (`settings.support_email`); sem valor configurado usa-se
+   `geral@iqos.pt` (`DEFAULT_SUPPORT_EMAIL`).
 
 **Publicar e vender** (`POST /reports/studio/reports/{id}/publish`):
 
@@ -195,6 +202,9 @@ preços e os ficheiros gerados.
 | POST | `/reports/admin/catalogue` · DELETE `/reports/admin/catalogue/{id}` | admin |
 | GET | `/reports/admin/overview` · `/reports/admin/export.csv` | admin |
 
+Configuração relevante para os PDF: `support_email` (email de apoio no rodapé,
+por omissão `geral@iqos.pt`) e `vat_rate` (preços finais).
+
 Estúdio de relatórios (**admin, gestor de plataforma ou gestor de relatórios**):
 
 | Método | Caminho | O que faz |
@@ -219,11 +229,12 @@ Estúdio de relatórios (**admin, gestor de plataforma ou gestor de relatórios*
 - `tests/test_reports.py` — domínio (26 verificações): catálogo, totais com IVA,
   fluxo de pagamento, notificações dos dois lados, limites de alvos, ficheiros,
   visibilidade das notas internas, indicadores e CSV.
-- `tests/test_reports_studio.py` — estúdio (35 verificações): acessos (admin,
+- `tests/test_reports_studio.py` — estúdio (40 verificações): acessos (admin,
   gestor, lista de gestores), modelos validados contra as fontes, validação e
   limites dos blocos, ciclo de vida do relatório, execução dos blocos (incluindo
-  grafo), PDF real, publicação no catálogo e na loja, entrega automática do pedido
-  pago, IA (com e sem modelo) e as rotas HTTP de ponta a ponta.
+  grafo), PDF real (com o email de apoio e os rótulos compactos), publicação no
+  catálogo e na loja, entrega automática do pedido pago, IA (com e sem modelo) e
+  as rotas HTTP de ponta a ponta.
 - `_probe_reports_asgi.py` — rotas completas em processo (42 verificações), sem
   servidor nem Elasticsearch (sessões falsas e `TestClient` sem lifespan).
 - `_probe_reports_api.py` — o mesmo ciclo contra a API a correr (precisa de

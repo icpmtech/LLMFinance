@@ -293,6 +293,11 @@ export default function ReportsPage({ onNavigate }: { onNavigate?: (view: string
             <Button variant="outline" size="sm" onClick={() => void load()} title="Atualizar">
               <RefreshCw size={14} />
             </Button>
+            {studioAllowed && onNavigate && (
+              <Button variant="outline" size="sm" onClick={() => onNavigate("report-studio")} title="Estúdio de relatórios">
+                <Sparkles size={14} /> Estúdio
+              </Button>
+            )}
             <div className="relative">
               <Button variant="outline" size="sm" onClick={() => void openBell()} title="Notificações">
                 <Bell size={14} />
@@ -330,7 +335,7 @@ export default function ReportsPage({ onNavigate }: { onNavigate?: (view: string
         {error && <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{error}</p>}
 
         {!loading && !error && (
-          <Tabs value={tab} onValueChange={(value) => setTab(value as "pedir" | "meus" | "backoffice" | "estudio")} className="w-full">
+          <Tabs value={tab} onValueChange={(value) => setTab(value as "pedir" | "meus" | "backoffice")} className="w-full">
             <TabsList className="mb-4">
               <TabsTrigger value="pedir" active={tab === "pedir"} onClick={() => setTab("pedir")}>
                 Pedir relatório
@@ -341,11 +346,6 @@ export default function ReportsPage({ onNavigate }: { onNavigate?: (view: string
               {backofficeAllowed && (
                 <TabsTrigger value="backoffice" active={tab === "backoffice"} onClick={() => setTab("backoffice")}>
                   Backoffice{backofficePending > 0 ? ` (${backofficePending})` : ""}
-                </TabsTrigger>
-              )}
-              {studioAllowed && (
-                <TabsTrigger value="estudio" active={tab === "estudio"} onClick={() => setTab("estudio")}>
-                  Estúdio
                 </TabsTrigger>
               )}
             </TabsList>
@@ -550,17 +550,8 @@ export default function ReportsPage({ onNavigate }: { onNavigate?: (view: string
               </TabsContent>
             )}
 
-            {/* ------------------------------------------------------ estúdio */}
-            {studioAllowed && (
-              <TabsContent value="estudio" active={tab === "estudio"} className="flex min-h-0 flex-col">
-                <ReportsStudioTab
-                  onError={(message) => {
-                    if (message) notify(message, "error");
-                  }}
-                  onToast={(toast) => notify(toast.message, toast.tone)}
-                />
-              </TabsContent>
-            )}
+            {/* O Estúdio de relatórios passou a ter página própria: `/report-studio`
+                (atalho no cabeçalho desta página, para quem tem acesso). */}
           </Tabs>
         )}
       </main>

@@ -620,6 +620,7 @@ export function ReportsSettingsPanel({
     auto_confirm_mbway_api: true,
     iban: "",
     payment_instructions: "",
+    support_email: "",
     vat_rate: 23,
     default_delivery_days: 2,
     backoffice_users: "",
@@ -641,6 +642,7 @@ export function ReportsSettingsPanel({
       auto_confirm_mbway_api: Boolean(data.auto_confirm_mbway_api),
       iban: data.iban || "",
       payment_instructions: data.payment_instructions || "",
+      support_email: data.support_email || "",
       vat_rate: Number(data.vat_rate || 23),
       default_delivery_days: Number(data.default_delivery_days || 2),
       backoffice_users: (data.backoffice_users || []).join("\n"),
@@ -672,6 +674,7 @@ export function ReportsSettingsPanel({
         auto_confirm_mbway_api: form.auto_confirm_mbway_api,
         iban: form.iban,
         payment_instructions: form.payment_instructions,
+        support_email: form.support_email,
         vat_rate: Number(form.vat_rate),
         default_delivery_days: Number(form.default_delivery_days),
         backoffice_users: form.backoffice_users.split(/[\n,;]+/).map((item) => item.trim()).filter(Boolean),
@@ -840,6 +843,22 @@ export function ReportsSettingsPanel({
             className="w-full rounded-xl border bg-background px-3 py-2 text-sm"
             disabled={!canEdit}
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="support-email">Email de apoio (nos PDF)</Label>
+          <Input
+            id="support-email"
+            value={form.support_email}
+            onChange={(event) => setForm((current) => ({ ...current, support_email: event.target.value }))}
+            placeholder="geral@iqos.pt"
+            inputMode="email"
+            autoComplete="off"
+            disabled={!canEdit}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Aparece no rodapé de todas as páginas do PDF e na nota final. Se ficar vazio, usa-se <code>geral@iqos.pt</code>.
+          </p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
