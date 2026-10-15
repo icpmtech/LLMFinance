@@ -70,7 +70,20 @@ import {
 
 type Toast = { message: string; tone: "info" | "ok" | "error" };
 
-const BLOCK_ORDER: StudioBlock["type"][] = ["heading", "text", "note", "ai", "kpi", "chart", "table", "graph"];
+const BLOCK_ORDER: StudioBlock["type"][] = ["heading", "text", "note", "ai", "kpi", "chart", "table", "graph", "empresa", "web"];
+
+const BLOCK_BUTTONS: Record<string, string> = {
+  heading: "Secção",
+  text: "Texto",
+  note: "Nota",
+  ai: "Texto IA",
+  kpi: "Indicadores",
+  chart: "Gráfico",
+  table: "Tabela",
+  graph: "Grafo",
+  empresa: "Ficha da empresa",
+  web: "Produtos/serviços (web)",
+};
 
 function newBlock(type: StudioBlock["type"], sources: StudioSources | null): StudioBlock {
   const source = sources?.sources?.[0];
@@ -90,8 +103,21 @@ function newBlock(type: StudioBlock["type"], sources: StudioSources | null): Stu
     top_n: 0,
     width: 12,
     format: "",
+    empresa: "",
+    query: "",
+    site: "",
   };
   if (type === "heading") block.title = "Nova secção";
+  if (type === "empresa") {
+    block.title = "Ficha da empresa";
+    block.empresa = "{{empresa}}";
+    block.limit = 12;
+  }
+  if (type === "web") {
+    block.title = "Produtos e serviços (pesquisa web)";
+    block.query = "{{nome}} produtos e serviços";
+    block.limit = 5;
+  }
   if (["kpi", "chart", "table", "graph"].includes(type) && source) {
     block.source = source.id;
     block.title = source.label;
@@ -246,6 +272,7 @@ export function ReportsStudioTab({ onError, onToast }: { onError: (message: stri
           description: report.description,
           summary: report.summary,
           template: report.template,
+          vars: report.vars ?? {},
           blocks: report.blocks,
         },
       });
@@ -305,6 +332,7 @@ export function ReportsStudioTab({ onError, onToast }: { onError: (message: stri
         summary: draft.summary,
         tags: draft.tags,
         targets_note: draft.targets_note,
+        vars: draft.vars ?? {},
         blocks: draft.blocks,
       });
       setDraft(saved.report);
@@ -631,6 +659,38 @@ export function ReportsStudioTab({ onError, onToast }: { onError: (message: stri
                   placeholder="Descrição curta (o que o relatório mostra)."
                   className="w-full rounded-xl border bg-background px-3 py-2 text-sm"
                 />
+                {(draft.vars_spec?.length ?? 0) > 0 && (
+                  <div className="space-y-2 rounded-xl border bg-background/60 p-3">
+                    <p className="text-xs font-semibold text-foreground/90">Parâmetros do relatório</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Os blocos usam estes parâmetros (<code>{"{{empresa}}"}</code>, <code>{"{{nif}}"}</code>, <code>{"{{cae}}"}</code>,{" "}
+                      <code>{"{{cpv}}"}</code>, <code>{"{{nome}}"}</code>): para outro relatório, duplique este e mude só a empresa.
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {(draft.vars_spec ?? []).map((spec) => (
+                        <div key={spec.id} className="space-y-1">
+                          <Label htmlFor={`var-${spec.id}`}>{spec.label}</Label>
+                          <Input
+                            id={`var-${spec.id}`}
+                            value={draft.vars?.[spec.id] ?? ""}
+                            onChange={(event) => patchDraft({ vars: { ...(draft.vars ?? {}), [spec.id]: event.target.value } })}
+                            placeholder={spec.id === "empresa" ? "504223933" : ""}
+                            autoComplete="off"
+                          />
+                          {spec.hint ? <p className="text-[11px] text-muted-foreground">{spec.hint}</p> : null}
+                        </div>
+                      ))}
+                    </div>
+                    {run?.vars && run.vars.empresa ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        Resolvido: {run.vars.nome || run.vars.empresa}
+                        {run.vars.nif ? ` · NIF ${run.vars.nif}` : ""}
+                        {run.vars.cae ? ` · CAE ${run.vars.cae}` : ""}
+                        {run.vars.cpv ? ` · CPV ${run.vars.cpv}` : ""}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
                 <p className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                   <Badge variant="outline">{access?.role === "manager" ? "Gestor de plataforma" : access?.role === "admin" ? "Administrador" : "Gestor de relatórios"}</Badge>
                   <span>{access?.email}</span>
@@ -665,7 +725,7 @@ export function ReportsStudioTab({ onError, onToast }: { onError: (message: stri
                 <div className="flex flex-wrap gap-2">
                   {BLOCK_ORDER.map((type) => (
                     <Button key={type} variant="outline" size="sm" onClick={() => addBlock(type)} disabled={busy}>
-                      <Plus size={12} /> {type === "heading" ? "Secção" : type === "text" ? "Texto" : type === "note" ? "Nota" : type === "ai" ? "Texto IA" : type === "kpi" ? "Indicadores" : type === "chart" ? "Gráfico" : type === "table" ? "Tabela" : "Grafo"}
+                      <Plus size={12} /> {BLOCK_BUTTONS[type] ?? type}
                     </Button>
                   ))}
                 </div>

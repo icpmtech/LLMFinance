@@ -52,7 +52,7 @@ REPORT_STYLE: Dict[str, str] = {"rascunho": "amber", "publicado": "emerald"}
 TARGETS: Tuple[str, ...] = ("site", "loja")
 TARGET_LABELS: Dict[str, str] = {"site": "Plataforma (catálogo de relatórios)", "loja": "Loja"}
 
-BLOCK_TYPES: Tuple[str, ...] = ("heading", "text", "note", "ai", "kpi", "chart", "table", "graph")
+BLOCK_TYPES: Tuple[str, ...] = ("heading", "text", "note", "ai", "kpi", "chart", "table", "graph", "empresa", "web")
 BLOCK_LABELS: Dict[str, str] = {
     "heading": "Secção",
     "text": "Texto",
@@ -62,6 +62,8 @@ BLOCK_LABELS: Dict[str, str] = {
     "chart": "Gráfico",
     "table": "Tabela",
     "graph": "Grafo de relações",
+    "empresa": "Ficha da empresa (360)",
+    "web": "Produtos e serviços (pesquisa web)",
 }
 BLOCK_HINTS: Dict[str, str] = {
     "heading": "Abre um capítulo do relatório.",
@@ -72,6 +74,8 @@ BLOCK_HINTS: Dict[str, str] = {
     "chart": "Gráfico de barras, linhas, área ou circular sobre uma fonte.",
     "table": "Tabela por uma ou duas dimensões.",
     "graph": "Relações entre duas dimensões (ex.: adjudicante ↔ adjudicatário).",
+    "empresa": "Ficha 360: cadastro e CAE, contratos por CPV, clientes, mercado, sócios e gerentes, pessoas, riscos (CIRE e devedores), marcas, firmas e subvenções.",
+    "web": "Pesquisa na web os produtos e serviços da empresa; com IA escreve o resumo e lista as fontes.",
 }
 
 CHART_KINDS: Tuple[str, ...] = ("bar", "bar-h", "line", "area", "donut", "pie")
@@ -124,6 +128,16 @@ SOURCE_GROUPS: Tuple[Dict[str, str], ...] = (
     {"id": "office", "label": "Plataforma", "hint": "Documentos e dossiês produzidos dentro da plataforma."},
 )
 RECOMMENDED_SOURCES: Tuple[str, ...] = ("contrato", "cpv", "regiao", "marca", "noticia", "ticker", "cotacao", "topico")
+
+#: Limites das fontes externas (ficha 360 e pesquisa web).
+MAX_FICHA_SECOES = 20
+MAX_FICHA_ROWS = 12
+MAX_WEB_RESULTS = 8
+#: Validade da ficha em memória: dentro de um mesmo relatório (ou de duas
+#: gerações seguidas) a empresa é recolhida uma só vez, apesar de as variáveis
+#: `{{cae}}`/`{{cpv}}` e o próprio bloco a pedirem.
+_FICHA_TTL = 600
+_ficha_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
 
 #: Cache do catálogo de fontes (o pedido é caro: ontologia + mapping do ES).
 _SOURCE_TTL = 60
@@ -204,6 +218,78 @@ def report_id_from_auto(key: Any) -> Optional[str]:
 
 def is_auto_key(key: Any) -> bool:
     return report_id_from_auto(key) is not None
+
+
+# --------------------------------------------------------------------------
+# Parâmetros do relatório (variáveis)
+# --------------------------------------------------------------------------
+# Um modelo que vale para muitas empresas (concorrência, área de CAE) não pode
+# ter o NIF escrito à mão em cada bloco: guarda **variáveis** no relatório e os
+# blocos referem-nas como `{{empresa}}`. Quem produz o relatório muda a empresa
+# num sítio só.
+VAR_IDS: Tuple[str, ...] = ("empresa", "nome", "nif", "cae", "cpv", "site")
+#: Variáveis que o estúdio calcula a partir da empresa (não se pedem ao autor).
+VAR_DERIVED: Tuple[str, ...] = ("nif", "nome", "cae", "cpv", "site")
+MAX_VAR_VALUE = 160
+
+_VAR_TOKEN = re.compile(r"\{\{\s*([a-z_]+)\s*\}\}", re.IGNORECASE)
+
+
+def vars_spec(template_id: str = "") -> List[Dict[str, str]]:
+    """Campos de parâmetros que este modelo pede (vazio nos modelos gerais)."""
+    model = TEMPLATES_BY_ID.get(_text(template_id, 60).lower())
+    return [dict(item) for item in (model or {}).get("vars") or []]
+
+
+def normalise_vars(value: Any, template_id: str = "") -> Dict[str, str]:
+    """Guarda só as variáveis conhecidas, com o tamanho limitado."""
+    raw = value if isinstance(value, dict) else {}
+    allowed = {str(item.get("id")) for item in vars_spec(template_id)} | set(VAR_IDS)
+    out: Dict[str, str] = {}
+    for key, item in raw.items():
+        ident = _text(key, 40).lower()
+        if ident not in allowed:
+            continue
+        text = _text(item, MAX_VAR_VALUE)
+        if text:
+            out[ident] = text
+    return out
+
+
+def has_tokens(value: Any) -> bool:
+    """Há alguma variável por substituir neste valor?"""
+    if isinstance(value, str):
+        return bool(_VAR_TOKEN.search(value))
+    if isinstance(value, dict):
+        return any(has_tokens(item) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(has_tokens(item) for item in value)
+    return False
+
+
+def substitute(value: Any, mapping: Dict[str, str]) -> Any:
+    """Troca `{{var}}` pelo valor. Sem valor, o token desaparece (não fica cru)."""
+    if isinstance(value, str):
+        texto = _VAR_TOKEN.sub(lambda match: str(mapping.get(match.group(1).lower(), "")), value)
+        # Um token sem valor deixava um espaço duplo no meio da frase.
+        return re.sub(r"[ \t]{2,}", " ", texto).strip()
+    if isinstance(value, dict):
+        return {key: substitute(item, mapping) for key, item in value.items()}
+    if isinstance(value, list):
+        return [substitute(item, mapping) for item in value]
+    return value
+
+
+def apply_vars(block: Dict[str, Any], mapping: Dict[str, str]) -> Dict[str, Any]:
+    """Cópia do bloco com as variáveis resolvidas (título, filtros, pesquisa…)."""
+    if not mapping or not has_tokens(block):
+        return block
+    resolved = copy.deepcopy(block)
+    for key in ("title", "subtitle", "description", "text", "prompt", "search", "empresa", "query", "site", "format", "chart"):
+        if key in resolved:
+            resolved[key] = substitute(resolved[key], mapping)
+    resolved["filters"] = substitute(resolved.get("filters") or {}, mapping)
+    return resolved
 
 
 # --------------------------------------------------------------------------
@@ -351,6 +437,782 @@ def _source_map(scope: Optional[Dict[str, Any]] = None) -> Dict[str, Dict[str, A
 
 
 # --------------------------------------------------------------------------
+# Ficha 360 da empresa (bloco `empresa`)
+# --------------------------------------------------------------------------
+# O Visualizador agrega contratos; a **ficha** junta o que não se agrega: quem é
+# a empresa (cadastro e CAE), quem a gere (órgãos sociais e pessoas), em que
+# processos entra (CIRE e devedores), que marcas e firmas tem e como se posiciona
+# no mercado. Vem do serviço de descoberta (`recolher`) — o mesmo que alimenta o
+# painel de empresa —, para não haver uma segunda recolha de dados.
+COLUNA = Tuple[str, Tuple[str, ...], str]  # (etiqueta, chaves possíveis, formato)
+
+
+def _digitos(value: Any) -> str:
+    return "".join(ch for ch in str(value or "") if ch.isdigit())
+
+
+def _valor(item: Any, chaves: Sequence[str]) -> Any:
+    """Primeiro campo preenchido entre as variantes de nome das fontes."""
+    if not isinstance(item, dict):
+        return None
+    for chave in chaves:
+        if item.get(chave) not in (None, "", [], {}):
+            return item[chave]
+    return None
+
+
+def _celula(value: Any, formato: str = "text") -> str:
+    if value in (None, "", [], {}):
+        return "—"
+    if isinstance(value, (list, tuple)):
+        return _text(" · ".join(_text(item, 50) for item in list(value)[:3]), 80)
+    if isinstance(value, dict):
+        return _text(" · ".join(f"{chave}: {_text(item, 40)}" for chave, item in list(value.items())[:2]), 80)
+    if isinstance(value, bool):
+        return "Sim" if value else "Não"
+    if isinstance(value, (int, float)):
+        return format_value(value, formato if formato in {"money", "number", "percent"} else "number")
+    return _text(value, 90)
+
+
+def _tabela(items: Any, colunas: Sequence[COLUNA], limit: int = MAX_FICHA_ROWS) -> Tuple[List[str], List[List[str]]]:
+    """Tabela a partir de registos de forma variável (o que não existe fica —)."""
+    linhas: List[List[str]] = []
+    for item in items if isinstance(items, (list, tuple)) else []:
+        if isinstance(item, dict):
+            linha = [_celula(_valor(item, chaves), formato) for _label, chaves, formato in colunas]
+        else:
+            linha = [_celula(item)] + ["—"] * (len(colunas) - 1)
+        if all(celula == "—" for celula in linha):
+            continue
+        linhas.append(linha)
+        if len(linhas) >= limit:
+            break
+    return [label for label, _chaves, _formato in colunas], linhas
+
+
+def _pessoa_linhas(pessoas: Any, colunas: Sequence[COLUNA], limit: int = MAX_FICHA_ROWS) -> Tuple[List[str], List[List[str]]]:
+    """Pessoas com os cargos: uma linha por pessoa (o cargo pode ser uma lista)."""
+    linhas: List[List[str]] = []
+    for pessoa in pessoas if isinstance(pessoas, (list, tuple)) else []:
+        if not isinstance(pessoa, dict):
+            continue
+        cargos = pessoa.get("latest_roles") or pessoa.get("roles") or pessoa.get("cargos") or []
+        cargo = cargos[0] if isinstance(cargos, (list, tuple)) and cargos else {}
+        if not isinstance(cargo, dict):
+            cargo = {}
+        registo = {
+            "nome": _valor(pessoa, ("name", "nome")),
+            "cargo": _valor(cargo, ("role", "cargo", "funcao")) or _valor(pessoa, ("role", "cargo")),
+            "orgao": _valor(cargo, ("role_org", "orgao", "orgao_social")) or _valor(pessoa, ("role_org", "orgao")),
+            "empresa": _valor(cargo, ("company_name", "empresa")) or _valor(pessoa, ("company_name", "empresa")),
+            "data": _valor(cargo, ("date", "publication_date", "data")) or _valor(pessoa, ("last_seen", "data")),
+            "quota": _valor(cargo, ("quota",)),
+            "nif": _valor(pessoa, ("nif",)),
+            "tipo": _valor(pessoa, ("is_company",)),
+        }
+        linha = [_celula(_valor(registo, chaves), formato) for _label, chaves, formato in colunas]
+        if all(celula == "—" for celula in linha):
+            continue
+        linhas.append(linha)
+        if len(linhas) >= limit:
+            break
+    return [label for label, _chaves, _formato in colunas], linhas
+
+
+def empresa_nif(value: Any) -> str:
+    """NIF de 9 dígitos a partir de um NIF ou do nome de uma empresa."""
+    texto = _text(value, 160)
+    if not texto or "{{" in texto:
+        # Um token por resolver (`{{empresa}}`) nunca é um nome de empresa: sem
+        # esta guarda, o resolver fuzzy devolvia outra empresa qualquer.
+        return ""
+    digitos = _digitos(texto)
+    if len(digitos) == 9 and digitos == texto.replace(" ", ""):
+        return digitos
+    from api import descoberta_service as descoberta  # noqa: PLC0415
+
+    try:
+        resolvido = descoberta.resolver(texto, size=5)
+    except Exception as exc:  # noqa: BLE001 - a resolução depende do Elasticsearch
+        logger.warning("Estúdio: NIF de «%s» não resolvido (%s)", texto, exc)
+        return ""
+    for item in resolvido.get("items") or []:
+        nif = _digitos((item or {}).get("nif"))
+        if len(nif) == 9:
+            return nif
+    return ""
+
+
+def _ficha_recolha(nif: str) -> Dict[str, Any]:
+    """Recolha da descoberta, em cache: as variáveis e o bloco pedem a mesma."""
+    agora = time.time()
+    guardado = _ficha_cache.get(nif)
+    if guardado and agora - guardado[0] < _FICHA_TTL:
+        return copy.deepcopy(guardado[1])
+    from api import descoberta_service as descoberta  # noqa: PLC0415
+
+    recolha = descoberta.recolher(nif)
+    _ficha_cache[nif] = (agora, copy.deepcopy(recolha))
+    return recolha
+
+
+def _agregados_dos_contratos(nif: str, scope: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Agregados por CPV, ano e adjudicante (Visualizador; amostra se falhar)."""
+    out: Dict[str, Any] = {"fonte": "", "cpv": [], "ano": [], "adjudicantes": []}
+    filtros = {"adjudicatario_nif": [nif]}
+    consultas = {
+        "cpv": (["cpv_codigo"], ["contagem", "soma_preco"], 12),
+        "ano": (["ano"], ["contagem", "soma_preco"], 24),
+        "adjudicantes": (["adjudicante"], ["contagem", "soma_preco"], 10),
+    }
+    try:
+        service = _viz()
+    except Exception:  # noqa: BLE001
+        return out
+    for chave, (dimensoes, medidas, limite) in consultas.items():
+        try:
+            resultado = service.run_query(
+                {
+                    "dataset": "contrato",
+                    "dimensions": dimensoes,
+                    "measures": medidas,
+                    "filters": dict(filtros),
+                    "limit": limite,
+                    "top_n": limite,
+                },
+                scope=scope,
+            )
+        except Exception as exc:  # noqa: BLE001 - a ficha continua com a amostra
+            logger.debug("Estúdio: agregado %s de %s falhou (%s)", chave, nif, exc)
+            continue
+        if resultado.get("error"):
+            continue
+        out[chave] = resultado.get("rows") or []
+    if out["cpv"] or out["ano"]:
+        out["fonte"] = "index"
+    return out
+
+
+def _ficha_contratos_sections(
+    secoes: Dict[str, Any],
+    agregados: Dict[str, Any],
+    *,
+    ano_key: str = "ano",
+    medida: str = "soma_preco",
+) -> List[Dict[str, Any]]:
+    sections: List[Dict[str, Any]] = []
+    cpv_rows = agregados.get("cpv") or []
+    if cpv_rows:
+        sections.append(
+            {
+                "kind": "table",
+                "title": "Contratos por CPV",
+                "columns": ["CPV", "Contratos", "Valor"],
+                "rows": [
+                    [
+                        _text(row.get("cpv_codigo") or "—", 40),
+                        _celula(row.get("contagem"), "number"),
+                        _celula(row.get(medida), "money"),
+                    ]
+                    for row in cpv_rows[:12]
+                ],
+            }
+        )
+    ano_rows = [row for row in (agregados.get("ano") or []) if _digitos(row.get(ano_key))]
+    if ano_rows:
+        sections.append(
+            {
+                "kind": "chart",
+                "title": "Valor contratado por ano",
+                "chart": "bar",
+                "dimension": ano_key,
+                "measure": medida,
+                "format": "money",
+                "rows": sorted(ano_rows, key=lambda row: str(row.get(ano_key)))[-14:],
+            }
+        )
+    adjudicantes = agregados.get("adjudicantes") or []
+    if adjudicantes:
+        sections.append(
+            {
+                "kind": "table",
+                "title": "Maiores clientes (adjudicantes)",
+                "columns": ["Adjudicante", "Contratos", "Valor"],
+                "rows": [
+                    [
+                        _text(row.get("adjudicante") or "—", 60),
+                        _celula(row.get("contagem"), "number"),
+                        _celula(row.get(medida), "money"),
+                    ]
+                    for row in adjudicantes[:10]
+                ],
+            }
+        )
+    contratos = secoes.get("contratos") or {}
+    if not cpv_rows and contratos.get("contratos"):
+        # Sem agregação do índice (ES em baixo, por exemplo): usa-se a amostra
+        # do dossiê, dizendo que é amostra.
+        por_cpv: Dict[str, List[float]] = {}
+        for contrato in contratos["contratos"]:
+            chave = f"{_text(contrato.get('cpv') or '—', 20)} — {_text(contrato.get('cpv_desc') or '', 40)}".strip(" —")
+            entrada = por_cpv.setdefault(chave, [0.0, 0.0])
+            entrada[0] += 1
+            entrada[1] += float(contrato.get("valor") or 0.0)
+        sections.append(
+            {
+                "kind": "table",
+                "title": f"Contratos por CPV (amostra de {len(contratos['contratos'])})",
+                "columns": ["CPV", "Contratos", "Valor"],
+                "rows": [
+                    [_text(chave, 70), _celula(valores[0], "number"), _celula(valores[1], "money")]
+                    for chave, valores in sorted(por_cpv.items(), key=lambda item: item[1][1], reverse=True)[:12]
+                ],
+            }
+        )
+    return sections
+
+
+def _ficha_registos_sections(secoes: Dict[str, Any]) -> List[Dict[str, Any]]:
+    sections: List[Dict[str, Any]] = []
+    cire = secoes.get("cire") or {}
+    insolvencias = cire.get("insolvencias") or []
+    if insolvencias:
+        colunas, linhas = _tabela(
+            insolvencias,
+            (
+                ("Data", ("data", "data_publicacao", "publication_date"), "text"),
+                ("Espécie", ("especie", "ato", "event"), "text"),
+                ("Tribunal", ("tribunal",), "text"),
+                ("Processo", ("processo", "processo_numero"), "text"),
+            ),
+        )
+        sections.append({"kind": "table", "title": "Insolvências (CIRE)", "columns": colunas, "rows": linhas})
+    # A mesma fronteira que a ficha de empresa usa: uma menção num processo de
+    # terceiros (credor) **não** é uma insolvência da empresa.
+    if cire:
+        total_insolvencias = int(cire.get("insolvencias_total") or len(insolvencias))
+        mencoes = int(cire.get("mencoes_total") or 0)
+        if cire.get("papel_insolvente"):
+            nota = f"Processos em que a empresa é insolvente: {total_insolvencias}."
+        elif mencoes:
+            nota = f"A empresa não é insolvente: aparece em {mencoes} processo(s) do CIRE como credora ou interveniente."
+        elif insolvencias or "insolvencias_total" in cire:
+            nota = "Sem insolvências nem processos registados no CIRE para esta empresa."
+        else:
+            nota = ""
+        if nota:
+            sections.append({"kind": "text", "title": "Processos no CIRE", "text": nota})
+    intervenientes = cire.get("intervenientes") or []
+    if intervenientes:
+        colunas, linhas = _tabela(
+            intervenientes,
+            (
+                ("Processo", ("processo", "processo_numero"), "text"),
+                ("Nome", ("nome", "insolvente"), "text"),
+                ("Papel", ("papel", "role"), "text"),
+                ("NIF", ("nif",), "text"),
+            ),
+            limit=10,
+        )
+        sections.append({"kind": "table", "title": "Intervenientes em processos (CIRE)", "columns": colunas, "rows": linhas})
+
+    devedores = secoes.get("devedores") or {}
+    if devedores.get("devedor") or devedores.get("items"):
+        itens = devedores.get("items") or devedores.get("entidades") or []
+        colunas, linhas = _tabela(
+            itens,
+            (
+                ("Entidade", ("entidade", "entidade_nome", "nome", "fonte"), "text"),
+                ("Escalão", ("escalao", "escaloes"), "text"),
+                ("Valor mínimo", ("valor_min", "maior_valor_min", "valor"), "money"),
+                ("Período", ("periodo", "ano", "data"), "text"),
+            ),
+        )
+        texto = "A empresa consta das listas públicas de devedores."
+        if isinstance(devedores.get("escaloes"), (list, tuple)) and devedores["escaloes"]:
+            texto = f"Escalões em que consta: {_text(' · '.join(_text(x, 30) for x in devedores['escaloes'][:4]), 120)}."
+        sections.append({"kind": "text", "title": "Devedores (Finanças e Segurança Social)", "text": texto})
+        if linhas:
+            sections.append({"kind": "table", "title": "Registos de dívida", "columns": colunas, "rows": linhas})
+
+    marcas = secoes.get("marcas") or {}
+    if marcas.get("items"):
+        colunas, linhas = _tabela(
+            marcas["items"],
+            (
+                ("Marca", ("mark_name", "nome", "marca"), "text"),
+                ("Tipo", ("mark_type", "tipo", "modalidade"), "text"),
+                ("Pedido", ("application_date", "data_pedido", "data"), "text"),
+                ("Fase", ("current_phase", "fase", "situacao"), "text"),
+            ),
+            limit=8,
+        )
+        sections.append({"kind": "table", "title": f"Marcas (INPI) — {int(marcas.get('total') or len(linhas))}", "columns": colunas, "rows": linhas})
+
+    firmas = secoes.get("firmas") or {}
+    if firmas.get("items"):
+        colunas, linhas = _tabela(
+            firmas["items"],
+            (
+                ("Firma", ("nome", "firma", "name"), "text"),
+                ("CAE", ("cae",), "text"),
+                ("Concelho", ("concelho",), "text"),
+                ("Situação", ("situacao",), "text"),
+                ("Score", ("score",), "number"),
+            ),
+            limit=8,
+        )
+        sections.append({"kind": "table", "title": f"Firmas e CAE (RNPC) — {int(firmas.get('total') or len(linhas))}", "columns": colunas, "rows": linhas})
+
+    subvencoes = secoes.get("subvencoes") or {}
+    itens = subvencoes.get("items") or []
+    if itens:
+        colunas, linhas = _tabela(
+            itens,
+            (
+                ("Entidade", ("entidade", "entidade_nome", "nome", "fonte"), "text"),
+                ("Ano", ("ano", "year", "data"), "text"),
+                ("Valor", ("valor", "montante", "importe"), "money"),
+                ("Programa", ("programa", "medida", "tipo"), "text"),
+            ),
+            limit=8,
+        )
+        sections.append(
+            {
+                "kind": "table",
+                "title": f"Subvenções públicas — {format_value(subvencoes.get('valor_total') or subvencoes.get('montante'), 'money')}",
+                "columns": colunas,
+                "rows": linhas,
+            }
+        )
+
+    noticias = secoes.get("noticias") or {}
+    if noticias.get("items"):
+        itens_noticia = [
+            f"{_text(_valor(item, ('title', 'titulo')) or '—', 90)} — {_text(_valor(item, ('publisher', 'fonte', 'source')) or '', 40)}"
+            f" ({_text(_valor(item, ('published', 'data', 'published_at')) or '', 20)})"
+            for item in noticias["items"][:6]
+        ]
+        sections.append({"kind": "list", "title": "Imprensa", "items": itens_noticia})
+    return sections
+
+
+def _ficha_pessoas_sections(secoes: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Sócios, gerentes e restantes pessoas com cargos registados."""
+    colunas: Tuple[COLUNA, ...] = (
+        ("Nome", ("nome",), "text"),
+        ("Cargo", ("cargo",), "text"),
+        ("Órgão", ("orgao",), "text"),
+        ("Quota", ("quota",), "text"),
+        ("Desde", ("data",), "text"),
+    )
+    pessoas: List[Dict[str, Any]] = []
+    rede = secoes.get("rede") or {}
+    pessoas.extend(rede.get("cargos_sociais") or [])
+    fonte_pessoas = secoes.get("pessoas") or {}
+    if isinstance(fonte_pessoas.get("pessoas"), (list, tuple)):
+        pessoas.extend(item for item in fonte_pessoas["pessoas"] if isinstance(item, dict))
+    if isinstance(fonte_pessoas.get("societario"), (list, tuple)):
+        for item in fonte_pessoas["societario"]:
+            if isinstance(item, dict):
+                pessoas.append(
+                    {
+                        "name": _valor(item, ("nome", "name")),
+                        "nif": _valor(item, ("nif",)),
+                        "latest_roles": [
+                            {
+                                "role": _valor(item, ("cargo", "role")),
+                                "role_org": _valor(item, ("orgao", "role_org")),
+                                "date": _valor(item, ("data", "date")),
+                                "quota": _valor(item, ("quota",)),
+                            }
+                        ],
+                    }
+                )
+    vistos: set = set()
+    unicas: List[Dict[str, Any]] = []
+    for pessoa in pessoas:
+        chave = _digitos(pessoa.get("nif")) or _text(pessoa.get("name") or pessoa.get("nome"), 80).lower()
+        if not chave or chave in vistos:
+            continue
+        vistos.add(chave)
+        unicas.append(pessoa)
+
+    sections: List[Dict[str, Any]] = []
+    if unicas:
+        etiquetas, linhas = _pessoa_linhas(unicas, colunas)
+        sections.append({"kind": "table", "title": f"Sócios, gerentes e pessoas — {len(unicas)}", "columns": etiquetas, "rows": linhas})
+
+    societario = secoes.get("societario") or {}
+    if societario.get("items"):
+        etiquetas, linhas = _tabela(
+            societario["items"],
+            (
+                ("Data", ("data", "data_publicacao", "publication_date"), "text"),
+                ("Ato", ("acto", "tipo", "descricao", "objeto", "sumario"), "text"),
+                ("Publicação", ("publicacao", "publicacao_id", "id"), "text"),
+            ),
+            limit=10,
+        )
+        titulo = f"Atos societários (registo comercial) — {int(societario.get('total') or len(linhas))}"
+        sections.append({"kind": "table", "title": titulo, "columns": etiquetas, "rows": linhas})
+    return sections
+
+
+def _ficha_mercado_sections(secoes: Dict[str, Any]) -> List[Dict[str, Any]]:
+    mercado = secoes.get("mercado") or {}
+    if not mercado:
+        return []
+    sections: List[Dict[str, Any]] = []
+    cae = mercado.get("cae") or {}
+    compatibilidade = mercado.get("compatibilidade") or {}
+    dependencia = mercado.get("dependencia") or {}
+    evolucao = mercado.get("evolucao") or {}
+    frases: List[str] = []
+    if cae.get("cae_principal_label") or cae.get("cae_principal"):
+        frases.append(f"CAE principal {cae.get('cae_principal') or '—'} — {cae.get('cae_principal_label') or 'sem descrição'}.")
+    if compatibilidade.get("grau") and compatibilidade.get("grau") != "desconhecida":
+        frases.append(f"Compatibilidade CAE/contratos: {compatibilidade.get('grau')} (score {compatibilidade.get('score')}).")
+    if dependencia.get("n_entidades"):
+        frases.append(
+            f"{int(dependencia.get('n_entidades') or 0)} entidades compradoras; maior quota "
+            f"{round(float(dependencia.get('maior_quota') or 0.0) * 100, 1)} %; HHI {round(float(dependencia.get('hhi') or 0.0), 3)}."
+        )
+    if evolucao.get("anos"):
+        variacao = evolucao.get("variacao")
+        variacao_texto = f"{round(float(variacao) * 100, 1)} %" if isinstance(variacao, (int, float)) else "n/d"
+        frases.append(
+            f"Evolução {evolucao['anos'][0]}–{evolucao['anos'][-1]}: variação {variacao_texto}"
+            + (f", CAGR {round(float(evolucao['cagr']) * 100, 1)} %" if isinstance(evolucao.get("cagr"), (int, float)) else "")
+            + "."
+        )
+    if mercado.get("taxa_sem_concurso") is not None:
+        frases.append(f"Contratos sem concurso: {round(float(mercado.get('taxa_sem_concurso') or 0.0) * 100, 1)} %.")
+    if mercado.get("perfil"):
+        frases.append(_text(mercado["perfil"], 240))
+    alertas = [
+        f"{_text(item.get('detalhe') or item.get('tipo'), 200)}" + (f" ({item['severidade']})" if item.get("severidade") else "")
+        for item in (mercado.get("alertas") or [])
+        if isinstance(item, dict)
+    ] or [str(item) for item in (mercado.get("alertas") or []) if not isinstance(item, dict)]
+    if frases:
+        sections.append({"kind": "text", "title": "Mercado e posicionamento", "text": " ".join(frases)})
+    if alertas:
+        sections.append({"kind": "list", "title": "Alertas de mercado", "items": alertas[:6]})
+    entidades = mercado.get("entidades") or []
+    if entidades:
+        etiquetas, linhas = _tabela(
+            entidades,
+            (
+                ("Entidade", ("nome", "name"), "text"),
+                ("Contratos", ("contratos",), "number"),
+                ("Valor", ("valor",), "money"),
+                ("Quota", ("quota",), "number"),
+            ),
+            limit=10,
+        )
+        sections.append({"kind": "table", "title": "Quem compra à empresa", "columns": etiquetas, "rows": linhas})
+    cpvs = mercado.get("cpvs") or []
+    if cpvs and (_valor(cpvs[0], ("classe", "cpv", "codigo")) if isinstance(cpvs[0], dict) else None):
+        etiquetas, linhas = _tabela(
+            cpvs,
+            (
+                ("CPV", ("cpv", "codigo", "classe"), "text"),
+                ("Divisão", ("divisao",), "text"),
+                ("Contratos", ("contratos", "contagem"), "number"),
+                ("Valor", ("valor",), "money"),
+                ("Quota", ("quota",), "number"),
+            ),
+            limit=10,
+        )
+        sections.append({"kind": "table", "title": "Famílias de CPV da empresa", "columns": etiquetas, "rows": linhas})
+    return sections
+
+
+def empresa_ficha(value: Any, scope: Optional[Dict[str, Any]] = None, *, nome: str = "") -> Dict[str, Any]:
+    """Ficha 360 de uma empresa (por NIF ou nome), normalizada em secções.
+
+    Devolve `kpis` e `sections` com formas genéricas (texto, tabela, lista,
+    gráfico) para o PDF e a pré-visualização desenharem sem código próprio.
+    """
+    ficha: Dict[str, Any] = {
+        "empresa": _text(value, 160),
+        "nif": "",
+        "nome": _text(nome, 160),
+        "encontrada": False,
+        "site": "",
+        "cae": "",
+        "cae_label": "",
+        "kpis": [],
+        "sections": [],
+        "fontes": [],
+        "avisos": [],
+        "error": None,
+    }
+    nif = empresa_nif(value)
+    ficha["nif"] = nif
+    if not nif:
+        ficha["error"] = (
+            f"Não foi possível identificar a empresa «{_text(value, 80) or '(vazio)'}»: indique o NIF (9 dígitos) "
+            "ou um nome que exista na plataforma."
+        )
+        return ficha
+
+    try:
+        recolha = _ficha_recolha(nif)
+    except Exception as exc:  # noqa: BLE001 - a ficha é uma fonte externa
+        logger.warning("Estúdio: ficha de %s falhou (%s)", nif, exc)
+        ficha["error"] = f"Ficha indisponível: {exc}"
+        return ficha
+
+    secoes = recolha.get("secoes") or {}
+    kpis = recolha.get("kpis") or {}
+    cadastro = (secoes.get("cadastro") or {}).get("cadastro") or {}
+    perfil = (secoes.get("cadastro") or {}).get("perfil") or {}
+    mercado = secoes.get("mercado") or {}
+    cae = mercado.get("cae") or {}
+    ficha.update(
+        {
+            "nome": _text(cadastro.get("name") or cadastro.get("nome") or recolha.get("nome") or ficha["nome"], 160),
+            "encontrada": bool(recolha.get("encontrada")),
+            "site": _text(perfil.get("site"), 160),
+            "cae": _text(cae.get("cae_principal") or cadastro.get("cae_principal"), 20),
+            "cae_label": _text(cae.get("cae_principal_label"), 120),
+            "fontes": [
+                {"id": item.get("id"), "label": item.get("label"), "estado": item.get("estado"), "total": item.get("total")}
+                for item in recolha.get("fontes") or []
+            ],
+            "avisos": [str(item) for item in recolha.get("avisos") or []],
+        }
+    )
+
+    # ------------------------------------------------------------ identificação
+    papeis = []
+    if cadastro.get("adjudicatario"):
+        papeis.append("adjudicatária")
+    if cadastro.get("adjudicante"):
+        papeis.append("adjudicante")
+    contratos = (secoes.get("contratos") or {}).get("resumo") or {}
+    anos = []
+    for item in (secoes.get("contratos") or {}).get("contratos") or []:
+        if item.get("ano"):
+            anos.append(int(item["ano"]))
+    identificacao = [
+        f"Empresa: {ficha['nome'] or '—'} (NIF {nif})",
+        f"Atividade (CAE): {ficha['cae'] or '—'} — {ficha['cae_label'] or 'sem descrição no registo'}",
+        f"Contratos no Portal BASE: {int(kpis.get('contratos') or 0)}"
+        + (f" · valor total {format_value(kpis.get('valor_total'), 'money')}" if kpis.get("valor_total") else ""),
+    ]
+    if anos:
+        identificacao.append(f"Período analisado (amostra de contratos): {min(anos)}–{max(anos)}")
+    if papeis:
+        identificacao.append(f"Papel na contratação pública: {', '.join(papeis)}")
+    if ficha["site"]:
+        identificacao.append(f"Site oficial: {ficha['site']}")
+    if contratos.get("adjudicantes_distintos"):
+        identificacao.append(f"Adjudicantes distintos: {int(contratos['adjudicantes_distintos'])}")
+    ficha["sections"].append({"kind": "text", "title": "Identificação", "text": " · ".join(identificacao)})
+
+    sinais = [
+        f"{_text(item.get('detalhe') or item.get('padrao'), 160)}"
+        for item in (kpis.get("sinais") or [])
+        if isinstance(item, dict)
+    ]
+    risco = (secoes.get("risco") or {}).get("risco") or {}
+    if risco.get("nivel_label"):
+        sinais.append(f"Risco de contratação: {risco.get('nivel_label')} (score {risco.get('score')}, cobertura {risco.get('cobertura')}).")
+    for aviso in risco.get("avisos") or []:
+        sinais.append(_text(aviso, 200))
+    if sinais:
+        ficha["sections"].append({"kind": "list", "title": "Sinais e alertas", "items": sinais[:8]})
+
+    # --------------------------------------------------------------- indicadores
+    indicadores = [
+        ("Contratos", kpis.get("contratos"), "number"),
+        ("Valor contratado", kpis.get("valor_total"), "money"),
+        ("Valor mediano", kpis.get("valor_mediano"), "money"),
+        ("Adjudicantes", kpis.get("adjudicantes"), "number"),
+        ("Concentração no maior cliente", kpis.get("concentracao_maior"), "percent"),
+        ("Insolvências (CIRE)", kpis.get("insolvencias"), "number"),
+        ("Pessoas com cargos", kpis.get("pessoas"), "number"),
+        ("Marcas", kpis.get("marcas"), "number"),
+        ("Firmas", kpis.get("firmas"), "number"),
+        ("Subvenções", kpis.get("subvencoes_valor"), "money"),
+    ]
+    ficha["kpis"] = [
+        {"label": label, "value": format_value(valor, formato)}
+        for label, valor, formato in indicadores
+        if valor not in (None, "", 0, 0.0)
+    ]
+
+    # ------------------------------------------------------------------ contratos
+    agregados = _agregados_dos_contratos(nif, scope)
+    ficha["contratos"] = agregados.get("fonte") or "amostra"
+    ficha["cpvs"] = [str(row.get("cpv_codigo")).strip() for row in agregados.get("cpv") or [] if _digitos(row.get("cpv_codigo"))]
+    ficha["sections"].extend(_ficha_contratos_sections(secoes, agregados))
+    ficha["sections"].extend(_ficha_mercado_sections(secoes))
+    ficha["sections"].extend(_ficha_pessoas_sections(secoes))
+    ficha["sections"].extend(_ficha_registos_sections(secoes))
+
+    # -------------------------------------------------------------------- fontes
+    com_dados = [item for item in ficha["fontes"] if item.get("estado") == "ok"]
+    sem_dados = [item.get("label") or item.get("id") for item in ficha["fontes"] if item.get("estado") != "ok"]
+    resumo = f"{len(com_dados)} de {len(ficha['fontes'])} fontes com dados"
+    if sem_dados:
+        resumo += f"; sem dados: {_text(', '.join(str(item) for item in sem_dados[:10]), 200)}"
+    ficha["sections"].append({"kind": "note", "title": "Fontes da ficha", "text": resumo + "."})
+    # A nota das fontes fica sempre: diz o que não respondeu. O corte é só uma
+    # válvula de segurança para uma ficha com tudo preenchido.
+    nota_fontes = ficha["sections"][-1]
+    ficha["sections"] = [section for section in ficha["sections"][:-1] if section.get("title")][:MAX_FICHA_SECOES]
+    ficha["sections"].append(nota_fontes)
+    return ficha
+
+
+# --------------------------------------------------------------------------
+# Produtos e serviços pela web (bloco `web`)
+# --------------------------------------------------------------------------
+_WEB_SISTEMA = (
+    "És analista de inteligência de mercado da plataforma IQ OS. Escreves em português de Portugal, "
+    "só com base nos excertos fornecidos: não inventes produtos, serviços, preços, certificações nem clientes."
+)
+
+
+def _dominio(url: Any) -> str:
+    texto = _text(url, 200)
+    texto = re.sub(r"^https?://", "", texto)
+    return texto.split("/", 1)[0].lower()
+
+
+def web_products(query: Any, *, limit: int = 5, site: Any = "", usar_ia: bool = True) -> Dict[str, Any]:
+    """Pesquisa na web os produtos e serviços descritos para uma consulta.
+
+    Devolve o texto da IA (quando há modelo) e, sempre, os excertos e as fontes
+    — sem modelo o relatório continua a ter material factual e verificável.
+    """
+    texto_pesquisa = _text(query, 300)
+    if "{{" in texto_pesquisa:
+        # Sem valor para a variável, não se pesquisa por `{{nome}}` à letra.
+        texto_pesquisa = _text(substitute(texto_pesquisa, {}), 300)
+    resultado: Dict[str, Any] = {
+        "query": texto_pesquisa,
+        "site": _text(site, 160),
+        "engine": "",
+        "results": [],
+        "text": "",
+        "ai": False,
+        "notes": [],
+        "sections": [],
+        "error": None,
+    }
+    if not texto_pesquisa:
+        resultado["error"] = "Indique o que pesquisar (ex.: «{{nome}} produtos e serviços»)."
+        return resultado
+    try:
+        from api import tools  # noqa: PLC0415
+
+        itens = tools.web_search(texto_pesquisa, max_results=max(1, min(limit, MAX_WEB_RESULTS)))
+    except Exception as exc:  # noqa: BLE001 - a web é uma ajuda, não um requisito
+        logger.warning("Estúdio: pesquisa web de %r falhou (%s)", texto_pesquisa, exc)
+        resultado["error"] = f"Pesquisa web indisponível: {exc}"
+        return resultado
+    limpos = [
+        {
+            "title": _text(item.get("title"), 200),
+            "href": _text(item.get("href") or item.get("url"), 300),
+            "body": _text(item.get("body") or item.get("snippet"), 400),
+            "source": _text(item.get("source") or item.get("engine"), 40),
+        }
+        for item in itens or []
+        if isinstance(item, dict)
+    ]
+    erros = [item for item in limpos if item["source"] and not item["href"] and not item["title"]]
+    limpos = [item for item in limpos if item["title"] or item["href"]]
+    resultado["results"] = limpos
+    resultado["engine"] = next((item["source"] for item in limpos if item["source"]), "")
+    if not limpos:
+        resultado["error"] = erros[0]["source"] if erros else "A pesquisa não devolveu resultados."
+        return resultado
+
+    if usar_ia:
+        texto = _web_summary(texto_pesquisa, limpos)
+        if texto:
+            resultado["text"] = texto
+            resultado["ai"] = True
+        else:
+            resultado["notes"].append("Sem modelo configurado: excertos da web apresentados sem síntese.")
+
+    excertos = [
+        f"{item['title'] or _dominio(item['href'])} — {item['body']}"
+        if item["body"]
+        else (item["title"] or item["href"])
+        for item in limpos[:6]
+    ]
+    resultado["sections"].append(
+        {
+            "kind": "text" if resultado["text"] else "list",
+            "title": "Produtos e serviços (pesquisa web)",
+            "text": resultado["text"],
+            "items": excertos,
+        }
+    )
+    resultado["sections"].append(
+        {
+            "kind": "table",
+            "title": f"Fontes da pesquisa — «{texto_pesquisa}»" + (f" · motor: {resultado['engine']}" if resultado["engine"] else ""),
+            "columns": ["Fonte", "Título", "Ligação"],
+            "rows": [
+                [_dominio(item["href"]) or item["source"] or "—", item["title"] or "—", item["href"] or "—"]
+                for item in limpos[:8]
+            ],
+        }
+    )
+    return resultado
+
+
+def _web_summary(query: str, results: Sequence[Dict[str, Any]]) -> str:
+    """Síntese dos excertos pela IA (vazio quando não há modelo utilizável)."""
+    excertos = "\n".join(
+        f"- {item['title']} ({_dominio(item['href'])}): {item['body']}" for item in results[:6]
+    )
+    instrucao = (
+        f"Consulta: {query}.\n"
+        "Descreve, em 3 a 5 frases corridas, os produtos e serviços da empresa a partir destes excertos. "
+        "Se os excertos não descreverem produtos ou serviços, escreve exatamente «Sem informação suficiente nas fontes consultadas.». "
+        "Não uses listas nem markdown."
+    )
+    return _ask_model_sync(_WEB_SISTEMA, instrucao + "\n\nEXCERTOS:\n" + excertos, max_tokens=500)
+
+
+def _ask_model_sync(system: str, prompt: str, *, max_tokens: int = 600) -> str:
+    """Chamada à IA a partir de código síncrono (o PDF e a pré-visualização).
+
+    Sem modelo configurado, ou dentro de um ciclo de eventos, devolve vazio: a
+    alternativa factual (os excertos) é o que fica no relatório.
+    """
+    try:
+        import asyncio  # noqa: PLC0415
+
+        try:
+            asyncio.get_running_loop()
+            return ""
+        except RuntimeError:
+            pass
+        from api import ontology_ai as ai  # noqa: PLC0415
+        from api import people_360  # noqa: PLC0415
+
+        backend, _note = people_360.resolve_backend(None, None)
+        if backend.get("kind") != "cloud":
+            return ""
+        texto = asyncio.run(ai.ask_model(backend, system=system, prompt=prompt, max_tokens=max_tokens, temperature=0.2))
+        return _text(texto, 1500)
+    except Exception as exc:  # noqa: BLE001 - a IA nunca bloqueia o relatório
+        logger.info("Estúdio: síntese da web sem IA (%s)", exc)
+        return ""
+
+
+# --------------------------------------------------------------------------
 # Blocos
 # --------------------------------------------------------------------------
 def _block(block_type: str, title: str = "", **extra: Any) -> Dict[str, Any]:
@@ -370,6 +1232,9 @@ def _block(block_type: str, title: str = "", **extra: Any) -> Dict[str, Any]:
         "top_n": extra.pop("top_n", 0),
         "width": extra.pop("width", 12),
         "format": extra.pop("format", ""),
+        "empresa": extra.pop("empresa", ""),
+        "query": extra.pop("query", ""),
+        "site": extra.pop("site", ""),
     }
     block.update(extra)
     return block
@@ -437,6 +1302,23 @@ def _normalise_block(raw: Any, source_map: Dict[str, Dict[str, Any]]) -> Dict[st
     if block_type == "ai":
         block["text"] = block["text"]
         block["prompt"] = block["prompt"]
+        return block
+
+    if block_type == "empresa":
+        # A empresa pode vir do bloco ou do parâmetro do relatório (`{{empresa}}`);
+        # exige-se em execução, não na gravação: o autor pode montar o modelo antes
+        # de escolher a empresa.
+        block["empresa"] = _text(data.get("empresa"), MAX_VAR_VALUE)
+        block["limit"] = max(4, min(_int(data.get("limit"), MAX_FICHA_ROWS) or MAX_FICHA_ROWS, MAX_FICHA_ROWS))
+        return block
+
+    if block_type == "web":
+        block["query"] = _text(data.get("query") or data.get("search"), 300)
+        block["search"] = ""
+        block["site"] = _text(data.get("site"), 160)
+        block["limit"] = max(1, min(_int(data.get("limit"), 5) or 5, MAX_WEB_RESULTS))
+        if not block["query"]:
+            raise ValueError("O bloco de pesquisa web precisa do que pesquisar (ex.: «{{nome}} produtos e serviços»).")
         return block
 
     source_id = _text(data.get("source"), 80)
@@ -523,6 +1405,7 @@ def _template(
     tags: Sequence[str],
     blocks: Sequence[Dict[str, Any]],
     subtitle: str = "",
+    vars: Sequence[Dict[str, str]] = (),
 ) -> Dict[str, Any]:
     return {
         "id": template_id,
@@ -531,8 +1414,26 @@ def _template(
         "subtitle": subtitle,
         "icon": icon,
         "tags": list(tags),
+        "vars": [dict(item) for item in vars],
         "blocks": [dict(block) for block in blocks],
     }
+
+
+#: Parâmetros do modelo «relatório de empresa»: muda-se a empresa e o resto do
+#: relatório (filtros, variáveis `{{nif}}`/`{{cae}}`/`{{cpv}}`) segue.
+VAR_EMPRESA: Tuple[Dict[str, str], ...] = (
+    {
+        "id": "empresa",
+        "label": "Empresa (NIF ou nome)",
+        "hint": "NIF de 9 dígitos (recomendado) ou o nome como consta no cadastro. É o único campo a mudar entre relatórios.",
+        "required": "1",
+    },
+    {
+        "id": "nome",
+        "label": "Nome a usar no relatório",
+        "hint": "Opcional: se ficar vazio, é lido do cadastro da empresa.",
+    },
+)
 
 
 TEMPLATES: List[Dict[str, Any]] = [
@@ -680,6 +1581,82 @@ TEMPLATES: List[Dict[str, Any]] = [
         ],
     ),
     _template(
+        "concorrencia",
+        "Concorrência (uma empresa)",
+        "A empresa, o que vende e com quem compete: ficha 360 (cadastro e CAE, sócios e gerentes, pessoas, riscos), contratos por CPV, clientes, concorrentes nos mesmos CPV e empresas do mesmo CAE. Muda-se a empresa e o relatório refaz-se.",
+        subtitle="Empresa, CPV, CAE, sócios, pessoas e risco",
+        icon="swords",
+        tags=["empresa", "concorrência", "cpv", "cae", "risco"],
+        vars=VAR_EMPRESA,
+        blocks=[
+            _block("heading", "Concorrência — {{nome}}",
+                   text="Posição da empresa na contratação pública: cadastro e CAE, CPV onde ganha, clientes, concorrentes, sócios e gerentes, pessoas com cargos e sinais de risco."),
+            _block("empresa", "Ficha 360 da empresa", empresa="{{empresa}}"),
+            _block("kpi", "Contratos da empresa", source="contrato", filters={"adjudicatario_nif": "{{nif}}"},
+                   measures=["contagem", "soma_preco", "media_preco", "distintos_cpv_codigo"]),
+            _block("chart", "Onde ganha (CPV)", source="contrato", chart="bar-h",
+                   dimensions=["cpv_codigo"], measures=["soma_preco"], filters={"adjudicatario_nif": "{{nif}}"},
+                   top_n=10, limit=25, width=6),
+            _block("chart", "Evolução por ano", source="contrato", chart="bar",
+                   dimensions=["ano"], measures=["soma_preco"], filters={"adjudicatario_nif": "{{nif}}"},
+                   limit=16, width=6),
+            _block("chart", "Como contrata (procedimento)", source="contrato", chart="donut",
+                   dimensions=["procedimento"], measures=["contagem"], filters={"adjudicatario_nif": "{{nif}}"},
+                   limit=6, width=6),
+            _block("graph", "Quem compra à empresa", source="contrato",
+                   dimensions=["adjudicante", "adjudicatario"], measures=["soma_preco"],
+                   filters={"adjudicatario_nif": "{{nif}}"}, limit=12, width=6),
+            _block("table", "Concorrentes no CPV principal", source="contrato",
+                   dimensions=["adjudicatario"], measures=["contagem", "soma_preco"],
+                   filters={"cpv_codigo": "{{cpv}}"}, limit=12),
+            _block("chart", "Onde se compra este CPV", source="regiao", chart="donut",
+                   dimensions=["regiao"], measures=["valor"], filters={"cpv_codigo": "{{cpv}}"}, limit=8),
+            _block("table", "Empresas no mesmo CAE", source="firma",
+                   dimensions=["nome", "concelho", "situacao"], measures=["contagem", "soma_score"],
+                   filters={"cae": "{{cae}}"}, limit=15),
+            _block("ai", "Leitura da concorrência",
+                   prompt="Compara a empresa com o mercado: onde ganha, de quem depende, como contrata e que sinais de risco apresenta. Sem inventar números."),
+            _block("note", "Método e limites",
+                   text="Contratos do Portal BASE indexados na plataforma à data de geração; registos de cadastro, RNPC (CAE), INPI, registo comercial e CIRE obtidos na ficha da empresa. A ficha trata os valores de amostra como amostra e distingue insolvências de simples menções em processos de terceiros."),
+        ],
+    ),
+    _template(
+        "area-cae",
+        "Área de CAE e da empresa",
+        "Olha primeiro para a área de atividade (CAE): quantas empresas, onde estão, em que situação registal e quem contrata no setor. Depois, a empresa dentro dele — CPV, clientes, concorrência — e os produtos e serviços descritos nas fontes web.",
+        subtitle="Setor de atividade (CAE) e a empresa dentro dele",
+        icon="layers",
+        tags=["cae", "setor", "empresa", "web", "produtos"],
+        vars=VAR_EMPRESA,
+        blocks=[
+            _block("heading", "Área de CAE e a empresa",
+                   text="A área de atividade (CAE) da empresa: dimensão do setor, implantação territorial, situação registal e contratação — e, no fim, os produtos e serviços da empresa descritos publicamente."),
+            _block("empresa", "Ficha 360 da empresa", empresa="{{empresa}}"),
+            _block("kpi", "Setor no CAE principal", source="firma", filters={"cae": "{{cae}}"},
+                   measures=["contagem", "distintos_nif_empresa", "media_score"]),
+            _block("chart", "CAE com mais empresas", source="firma", chart="bar-h",
+                   dimensions=["cae"], measures=["distintos_nif_empresa"], top_n=12, limit=30, width=6),
+            _block("chart", "Situação registal no setor", source="firma", chart="donut",
+                   dimensions=["situacao"], measures=["contagem"], filters={"cae": "{{cae}}"}, limit=6, width=6),
+            _block("chart", "Onde estão as empresas do setor", source="firma", chart="bar-h",
+                   dimensions=["concelho"], measures=["contagem"], filters={"cae": "{{cae}}"}, top_n=10, limit=25, width=6),
+            _block("table", "Empresas do mesmo CAE", source="firma",
+                   dimensions=["nome", "concelho", "situacao"], measures=["contagem", "soma_score"],
+                   filters={"cae": "{{cae}}"}, limit=15),
+            _block("table", "Contratos da empresa por tipo e procedimento", source="contrato",
+                   dimensions=["tipo_contrato", "procedimento"], measures=["contagem", "soma_preco"],
+                   filters={"adjudicatario_nif": "{{nif}}"}, limit=20),
+            _block("chart", "CPV da empresa", source="contrato", chart="bar-h",
+                   dimensions=["cpv_codigo"], measures=["soma_preco"], filters={"adjudicatario_nif": "{{nif}}"},
+                   top_n=10, limit=25),
+            _block("web", "Produtos e serviços (pesquisa web)", query="{{nome}} produtos e serviços", limit=6),
+            _block("ai", "Análise do setor e da empresa",
+                   prompt="Descreve o setor (CAE) e o posicionamento da empresa nele, incluindo o que os excertos da web dizem dos seus produtos e serviços. Só com os dados apresentados."),
+            _block("note", "Método e limites",
+                   text="O setor é lido a partir dos registos do RNPC indexados (firmas e CAE) e a empresa a partir do cadastro, contratos, registo comercial, CIRE e INPI. Os produtos e serviços vêm de pesquisa web: são excertos de terceiros, apresentados com a fonte, e não substituem o catálogo oficial da empresa."),
+        ],
+    ),
+    _template(
         "personalizado",
         "Em branco",
         "Começa do zero: junta os blocos que precisares, na ordem que quiseres.",
@@ -719,6 +1696,7 @@ def templates(scope: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
                 "subtitle": template["subtitle"],
                 "icon": template["icon"],
                 "tags": list(template["tags"]),
+                "vars": [dict(item) for item in template.get("vars") or []],
                 "blocks": blocks,
                 "block_count": len(blocks),
                 "warnings": warnings,
@@ -809,6 +1787,7 @@ def new_report(payload: Dict[str, Any], actor: str = "") -> Dict[str, Any]:
         "tags": tags,
         "theme": _text(payload.get("theme") or "iq", 40),
         "targets_note": _long_text(payload.get("targets_note"), 400),
+        "vars": normalise_vars(payload.get("vars"), template_id),
         "blocks": [_clean_block(block) for block in blocks],
         "publication": _empty_publication(),
         "files": [],
@@ -852,6 +1831,8 @@ def normalise_report(payload: Dict[str, Any], existing: Optional[Dict[str, Any]]
             raise ValueError(warnings[0] if warnings else "Nenhum bloco válido.")
         doc["blocks"] = [_clean_block(block) for block in blocks]
         doc["_warnings"] = warnings
+    if "vars" in payload:
+        doc["vars"] = normalise_vars(payload.get("vars"), _text(doc.get("template"), 60))
     return doc
 
 
@@ -869,6 +1850,8 @@ def report_view(doc: Dict[str, Any], *, include_internal: bool = False) -> Dict[
         "tags": list(doc.get("tags") or []),
         "theme": doc.get("theme") or "iq",
         "targets_note": doc.get("targets_note") or "",
+        "vars": normalise_vars(doc.get("vars"), doc.get("template") or ""),
+        "vars_spec": vars_spec(doc.get("template") or ""),
         "blocks": blocks,
         "publication": publication,
         "published": any(publication[target]["published"] for target in TARGETS),
@@ -955,7 +1938,7 @@ def create_report(payload: Dict[str, Any], actor: str = "") -> Dict[str, Any]:
         view = proposal["report"]
         seed = {
             key: view.get(key)
-            for key in ("title", "subtitle", "description", "summary", "tags", "template", "blocks")
+            for key in ("title", "subtitle", "description", "summary", "tags", "theme", "targets_note", "template", "vars", "blocks")
         }
         saved = save_report(seed, actor)
         saved["warnings"] = list(proposal.get("warnings") or []) + list(saved.get("warnings") or [])
@@ -1024,10 +2007,42 @@ def duplicate_report(report_id: str, actor: str = "", title: str = "") -> Dict[s
         "template": doc.get("template") or "",
         "tags": list(doc.get("tags") or []),
         "theme": doc.get("theme") or "iq",
+        # A cópia herda os parâmetros: é assim que se faz o mesmo relatório para
+        # outra empresa — duplicar e mudar o NIF.
+        "vars": dict(doc.get("vars") or {}),
         "blocks": copy.deepcopy(doc.get("blocks") or []),
     }
     saved = save_report(clone, actor)
     return saved
+
+
+def context_vars(doc: Optional[Dict[str, Any]], scope: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
+    """Variáveis do relatório: as do autor e as que se calculam da empresa.
+
+    `{{empresa}}` é o que o autor escreve (NIF ou nome); `{{nif}}`, `{{nome}}`,
+    `{{cae}}`, `{{cpv}}` e `{{site}}` são resolvidos a partir da ficha, para que
+    os blocos de mercado possam seguir a empresa sem trabalho manual.
+    """
+    mapping = {chave: _text(valor, MAX_VAR_VALUE) for chave, valor in ((doc or {}).get("vars") or {}).items()}
+    empresa = mapping.get("empresa") or mapping.get("nif") or ""
+    if not empresa:
+        return mapping
+    nif = empresa_nif(empresa)
+    if not nif:
+        return mapping
+    mapping.setdefault("nif", nif)
+    try:
+        ficha = empresa_ficha(nif, scope, nome=mapping.get("nome") or "")
+    except Exception as exc:  # noqa: BLE001 - sem ficha os tokens ficam vazios
+        logger.warning("Estúdio: variáveis de %s não resolvidas (%s)", nif, exc)
+        return mapping
+    for chave, valor in (("nome", ficha.get("nome")), ("cae", ficha.get("cae")), ("site", ficha.get("site"))):
+        if valor and not mapping.get(chave):
+            mapping[chave] = _text(valor, MAX_VAR_VALUE)
+    cpv = next(iter(ficha.get("cpvs") or []), "")
+    if cpv and not mapping.get("cpv"):
+        mapping["cpv"] = _text(cpv, MAX_VAR_VALUE)
+    return mapping
 
 
 def _block_query(block: Dict[str, Any]) -> Dict[str, Any]:
@@ -1081,9 +2096,61 @@ def _graph_from(result: Dict[str, Any], limit: int = MAX_GRAPH_EDGES) -> Dict[st
     }
 
 
-def run_block(block: Dict[str, Any], scope: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Corre a consulta de um bloco (ou devolve o texto, nos blocos de texto)."""
+def run_block(block: Dict[str, Any], scope: Optional[Dict[str, Any]] = None, *, mapping: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """Corre a consulta de um bloco (ou devolve o texto, nos blocos de texto).
+
+    `mapping` traz as variáveis do relatório: um bloco com `{{empresa}}` no filtro
+    é resolvido antes de correr, para que o mesmo modelo sirva qualquer empresa.
+    """
+    if mapping is not None:
+        # Um token por resolver não pode chegar à consulta nem ao NIF: com o mapa
+        # vazio (`None` é "não sei"), o token desaparece em vez de virar pesquisa.
+        block = apply_vars(block, mapping)
     block_type = str(block.get("type") or "")
+    if block_type == "empresa":
+        alvo = _text(block.get("empresa") or (mapping or {}).get("empresa") or (mapping or {}).get("nif"), MAX_VAR_VALUE)
+        if not alvo or "{{" in alvo:
+            return {
+                "type": block_type,
+                "id": block.get("id"),
+                "title": block.get("title"),
+                "width": block.get("width") or 12,
+                "ficha": {},
+                "kpis": [],
+                "sections": [],
+                "error": (
+                    "Sem empresa: preencha o parâmetro «Empresa» do relatório (NIF ou nome) ou o campo do bloco. "
+                    "A ficha 360 não é calculada sem uma empresa identificada."
+                ),
+                "notes": [],
+            }
+        ficha = empresa_ficha(alvo, scope, nome=(mapping or {}).get("nome") or "")
+        return {
+            "type": block_type,
+            "id": block.get("id"),
+            "title": block.get("title"),
+            "width": block.get("width") or 12,
+            "ficha": ficha,
+            "kpis": ficha.get("kpis") or [],
+            "sections": ficha.get("sections") or [],
+            "error": ficha.get("error"),
+            "notes": list(ficha.get("avisos") or []),
+        }
+    if block_type == "web":
+        dados = web_products(block.get("query") or block.get("search"), limit=_int(block.get("limit"), 5) or 5, site=block.get("site") or "")
+        return {
+            "type": block_type,
+            "id": block.get("id"),
+            "title": block.get("title"),
+            "width": block.get("width") or 12,
+            "text": dados.get("text") or "",
+            "query": dados.get("query") or "",
+            "engine": dados.get("engine") or "",
+            "results": dados.get("results") or [],
+            "sections": dados.get("sections") or [],
+            "error": dados.get("error"),
+            "notes": list(dados.get("notes") or []),
+        }
     if block_type in {"heading", "text", "note", "ai"}:
         return {"type": block_type, "id": block.get("id"), "title": block.get("title"), "text": block.get("text") or ""}
     try:
@@ -1126,17 +2193,19 @@ def run_block(block: Dict[str, Any], scope: Optional[Dict[str, Any]] = None) -> 
 def run_report(doc: Dict[str, Any], scope: Optional[Dict[str, Any]] = None, *, block_ids: Optional[Sequence[str]] = None) -> Dict[str, Any]:
     """Corre todos os blocos de um relatório (a pré-visualização e o PDF)."""
     wanted = {_text(item, 60) for item in (block_ids or []) if _text(item, 60)}
+    mapping = context_vars(doc, scope)
     results: List[Dict[str, Any]] = []
     for block in doc.get("blocks") or []:
         if wanted and str(block.get("id")) not in wanted:
             results.append({"type": block.get("type"), "id": block.get("id"), "title": block.get("title"), "skipped": True})
             continue
-        results.append(run_block(block, scope))
+        results.append(run_block(block, scope, mapping=mapping))
     problems = [f"{item.get('title') or item.get('id')}: {item['error']}" for item in results if item.get("error")]
     return {
         "report": report_view(doc, include_internal=True),
         "blocks": results,
         "problems": problems,
+        "vars": mapping,
         "generated_at": _now(),
     }
 
@@ -1483,13 +2552,27 @@ def _graph_drawing(graph: Dict[str, Any], *, width: float, height: float, fmt: s
     return drawing
 
 
-def _pdf_sections(doc: Dict[str, Any], results: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _pdf_sections(doc: Dict[str, Any], results: Sequence[Dict[str, Any]], mapping: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
     """Converte os blocos executados em secções do PDF da casa."""
     sections: List[Dict[str, Any]] = []
     for block, result in zip(doc.get("blocks") or [], results):
+        if mapping:
+            block = apply_vars(block, mapping)
         block_type = str(block.get("type") or "")
         title = str(block.get("title") or "")
         if result.get("skipped"):
+            continue
+        if block_type in {"empresa", "web"}:
+            # Estes blocos trazem as secções já montadas (texto, tabelas, listas,
+            # gráficos): o PDF desenha-as como qualquer outra.
+            if result.get("error"):
+                sections.append({"kind": "note", "title": title, "text": str(result["error"])})
+                continue
+            if block_type == "empresa" and result.get("kpis"):
+                pairs = [[str(item.get("label") or ""), str(item.get("value") or "—")] for item in result["kpis"]]
+                sections.append({"kind": "kpi", "title": f"{title or 'Empresa'} — indicadores", "pairs": pairs, "rows": pairs})
+            for sub in result.get("sections") or []:
+                sections.append({**sub, "title": sub.get("title") or title})
             continue
         if block_type in {"text", "note", "ai"}:
             text = str(block.get("text") or result.get("text") or "").strip()
@@ -1616,38 +2699,41 @@ def render_pdf(
         return Paragraph(escaped or "—", style)
 
     executed = run_report(doc, scope)
-    sections = _pdf_sections(doc, executed["blocks"])
+    # Títulos e subtítulos do relatório podem ter variáveis (`{{nome}}`): o que
+    # sai impresso é o texto já resolvido.
+    display = apply_vars(doc, executed.get("vars") or {})
+    sections = _pdf_sections(doc, executed["blocks"], executed.get("vars") or {})
     support = support_email()
 
     story: List[Any] = []
     logo = base.logo_path()
-    header_cells: List[Any] = [Paragraph(str(doc.get("title") or "Relatório"), title_style)]
+    header_cells: List[Any] = [Paragraph(str(display.get("title") or "Relatório"), title_style)]
     if logo:
         try:
             picture = PdfImage(str(logo), width=13 * mm, height=13 * mm)
-            header_cells = [picture, [Paragraph(str(doc.get("title") or "Relatório"), title_style), Paragraph(str(doc.get("subtitle") or ""), sub_style)]]
+            header_cells = [picture, [Paragraph(str(display.get("title") or "Relatório"), title_style), Paragraph(str(display.get("subtitle") or ""), sub_style)]]
             header = Table([header_cells], colWidths=[16 * mm, None])
             header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (0, 0), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0), ("TOPPADDING", (0, 0), (-1, -1), 0)]))
             story.append(header)
         except Exception as exc:  # pragma: no cover
             logger.debug("Logótipo não embutido no PDF do estúdio: %s", exc)
-            story.append(paragraph(str(doc.get("title") or "Relatório"), title_style))
+            story.append(paragraph(str(display.get("title") or "Relatório"), title_style))
     else:
-        story.append(paragraph(str(doc.get("title") or "Relatório"), title_style))
-        if doc.get("subtitle"):
-            story.append(paragraph(str(doc["subtitle"]), sub_style))
+        story.append(paragraph(str(display.get("title") or "Relatório"), title_style))
+        if display.get("subtitle"):
+            story.append(paragraph(str(display["subtitle"]), sub_style))
     # A linha da marca é um bloco à parte: sem espaço, o subtítulo encostava-lhe.
     story.append(Spacer(1, 4))
     story.append(Paragraph(f"{base.BRAND} · {base.BRAND_TAGLINE}", brand_style))
     if support:
         story.append(Spacer(1, 2))
         story.append(Paragraph(f"Apoio: {support}", sub_style))
-    if doc.get("description"):
+    if display.get("description"):
         story.append(Spacer(1, 3))
-        story.append(paragraph(str(doc["description"]), body_style))
-    if doc.get("summary"):
+        story.append(paragraph(str(display["description"]), body_style))
+    if display.get("summary"):
         story.append(Spacer(1, 4))
-        story.append(paragraph(str(doc["summary"]), body_style))
+        story.append(paragraph(str(display["summary"]), body_style))
     if requester or reference:
         story.append(Spacer(1, 3))
         story.append(Paragraph(f"Referência {reference or '—'} · {requester or '—'}", sub_style))
@@ -1685,6 +2771,14 @@ def render_pdf(
             continue
         if kind == "note":
             story.append(paragraph(section.get("text") or "", note_style))
+            story.append(Spacer(1, 6))
+            continue
+        if kind == "list":
+            items = [str(item) for item in (section.get("items") or []) if str(item or "").strip()]
+            if not items:
+                continue
+            for item in items[:10]:
+                story.append(paragraph(f"• {item}", body_style))
             story.append(Spacer(1, 6))
             continue
         if kind == "kpi":
@@ -1758,9 +2852,9 @@ def render_pdf(
                 table.setStyle(table_style)
                 story.append(KeepTogether(table) if len(data) <= 14 else table)
             story.append(Spacer(1, 6))
-    if doc.get("targets_note"):
+    if display.get("targets_note"):
         story.append(Spacer(1, 4))
-        story.append(paragraph(str(doc["targets_note"]), note_style))
+        story.append(paragraph(str(display["targets_note"]), note_style))
     story.append(Spacer(1, 6))
     generated = f"Gerado pelo {base.BRAND} em {datetime.now().strftime('%d/%m/%Y às %H:%M')}."
     story.append(Paragraph(f"{generated}{f' · Apoio: {support}' if support else ''}", sub_style))
@@ -2048,6 +3142,33 @@ def _facts(doc: Dict[str, Any], executed: Dict[str, Any]) -> Dict[str, Any]:
                  "formato": measure.get("format") or "number"}
                 for measure in result.get("measures") or []
             ]
+        elif block.get("type") == "empresa":
+            ficha = result.get("ficha") or {}
+            item.update(
+                {
+                    "empresa": ficha.get("nome") or ficha.get("empresa"),
+                    "nif": ficha.get("nif"),
+                    "cae": ficha.get("cae"),
+                    "site": ficha.get("site"),
+                    "indicadores": [f"{ponto.get('label')}: {ponto.get('value')}" for ponto in (result.get("kpis") or [])],
+                    "seccoes": [
+                        {
+                            "titulo": sub.get("title"),
+                            "linhas": (sub.get("rows") or [])[:6] if sub.get("kind") == "table" else [],
+                            "pontos": (sub.get("items") or [])[:6],
+                            "texto": sub.get("text") or "",
+                        }
+                        for sub in (result.get("sections") or [])
+                    ],
+                }
+            )
+        elif block.get("type") == "web":
+            item["pesquisa"] = result.get("query")
+            item["sintese"] = result.get("text") or ""
+            item["excertos"] = [
+                {"titulo": ponto.get("title"), "fonte": ponto.get("href"), "excerto": ponto.get("body")}
+                for ponto in (result.get("results") or [])[:5]
+            ]
         elif block.get("type") in {"chart", "table", "graph"}:
             rows = result.get("rows") or []
             columns = [entry.get("key") for entry in result.get("columns") or []]
@@ -2274,6 +3395,7 @@ async def assist(payload: Dict[str, Any], session: Any = None) -> Dict[str, Any]
 def reset_for_tests() -> None:
     """Só para testes: esquece o catálogo de fontes em cache."""
     _source_cache.clear()
+    _ficha_cache.clear()
 
 
 def state(scope: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

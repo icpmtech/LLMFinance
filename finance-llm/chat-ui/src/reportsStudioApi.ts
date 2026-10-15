@@ -82,7 +82,7 @@ export type StudioState = {
 };
 
 // --------------------------------------------------------------------- blocos
-export type StudioBlockType = "heading" | "text" | "note" | "ai" | "kpi" | "chart" | "table" | "graph";
+export type StudioBlockType = "heading" | "text" | "note" | "ai" | "kpi" | "chart" | "table" | "graph" | "empresa" | "web";
 
 export type StudioBlock = {
   id: string;
@@ -100,7 +100,15 @@ export type StudioBlock = {
   top_n: number;
   width: number;
   format: string;
+  /** Bloco `empresa`: NIF ou nome (aceita `{{empresa}}`/`{{nif}}`). */
+  empresa?: string;
+  /** Bloco `web`: pesquisa a fazer (aceita `{{nome}}`). */
+  query?: string;
+  site?: string;
 };
+
+/** Parâmetro do relatório pedido pelo modelo (ex.: a empresa). */
+export type StudioVarSpec = { id: string; label: string; hint?: string; required?: string };
 
 export type StudioPublication = {
   published: boolean;
@@ -131,6 +139,10 @@ export type StudioReport = {
   tags: string[];
   theme: string;
   targets_note: string;
+  /** Parâmetros preenchidos (ex.: `{ empresa: "504223933" }`). */
+  vars: Record<string, string>;
+  /** Parâmetros que o modelo pede. */
+  vars_spec: StudioVarSpec[];
   blocks: StudioBlock[];
   publication: { site: StudioPublication; loja: StudioPublication };
   published: boolean;
@@ -161,6 +173,7 @@ export type StudioTemplate = {
   subtitle: string;
   icon: string;
   tags: string[];
+  vars: StudioVarSpec[];
   blocks: StudioBlock[];
   block_count: number;
   warnings: string[];
@@ -205,6 +218,15 @@ export type StudioRunBlock = {
   rows?: Record<string, unknown>[];
   totals?: Record<string, number | null>;
   notes?: string[];
+  /** Bloco `empresa`: ficha 360 já normalizada em secções. */
+  ficha?: StudioFicha;
+  /** Bloco `empresa`/`web`: secções prontas a desenhar. */
+  sections?: StudioSection[];
+  kpis?: { label: string; value: string }[];
+  /** Bloco `web`: consulta, motor e resultados. */
+  query?: string;
+  engine?: string;
+  results?: { title: string; href: string; body: string; source: string }[];
   graph?: {
     nodes: { id: string; side: string; value: number }[];
     edges: { source: string; target: string; value: number }[];
@@ -219,7 +241,41 @@ export type StudioRun = {
   report: StudioReport;
   blocks: StudioRunBlock[];
   problems: string[];
+  vars?: Record<string, string>;
   generated_at: string;
+};
+
+/** Secção da ficha 360 ou da pesquisa web (forma comum ao PDF e à pré-visualização). */
+export type StudioSection =
+  | { kind: "text"; title: string; text?: string }
+  | { kind: "note"; title: string; text?: string }
+  | { kind: "list"; title: string; items: string[]; text?: string }
+  | { kind: "table"; title: string; columns: string[]; rows: string[][] }
+  | {
+      kind: "chart";
+      title: string;
+      chart: string;
+      dimension: string;
+      measure: string;
+      format?: string;
+      rows: Record<string, unknown>[];
+    };
+
+export type StudioFicha = {
+  empresa: string;
+  nif: string;
+  nome: string;
+  site: string;
+  cae: string;
+  cae_label: string;
+  encontrada: boolean;
+  contratos?: string;
+  cpvs?: string[];
+  kpis: { label: string; value: string }[];
+  sections: StudioSection[];
+  fontes: { id: string; label: string; estado: string; total: number }[];
+  avisos: string[];
+  error?: string | null;
 };
 
 export type StudioAssist = {
@@ -283,7 +339,7 @@ export const listStudioReports = (params: { q?: string; status?: string; channel
 
 export const getStudioReport = (id: string) => request<StudioReport>(`/reports/studio/reports/${encodeURIComponent(id)}`);
 
-export const createStudioReport = (payload: { template?: string; title?: string; blocks?: StudioBlock[] }) =>
+export const createStudioReport = (payload: { template?: string; title?: string; blocks?: StudioBlock[]; vars?: Record<string, string> }) =>
   request<{ report: StudioReport; warnings: string[] }>("/reports/studio/reports", withBody("POST", payload));
 
 export const saveStudioReport = (id: string, payload: Partial<StudioReport>) =>

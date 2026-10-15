@@ -160,7 +160,7 @@ def test_modelos_validados_contra_as_fontes(db):
     """Os modelos existem, têm blocos e nenhum bloco cai com as fontes de agora."""
     listing = studio.templates()
     ids = [item["id"] for item in listing["templates"]]
-    assert ids == ["executivo", "mercado-cpv", "evolucao", "geografia", "entidades", "mercados", "dossie", "personalizado"]
+    assert ids == ["executivo", "mercado-cpv", "evolucao", "geografia", "entidades", "mercados", "dossie", "concorrencia", "area-cae", "personalizado"]
     for item in listing["templates"]:
         if item["id"] == "personalizado":
             assert item["block_count"] == 0
@@ -765,3 +765,468 @@ def test_middleware_deixa_o_gestor_de_relatorios_escrever_no_estudio(cliente, mo
     store.save_settings({"report_managers": ["autor@exemplo.pt"]})
     permitido = client.post("/reports/studio/reports", json={"template": "executivo"}, headers=headers)
     assert permitido.status_code == 201, permitido.text
+
+
+# ------------------------------------------------- relatórios de empresa (360)
+def _recolha_falsa() -> Dict[str, Any]:
+    """Recolha da descoberta com todas as famílias de dados que a ficha junta."""
+    return {
+        "nif": "501234567",
+        "nome": "ACME PORTUGAL",
+        "encontrada": True,
+        "kpis": {
+            "contratos": 12,
+            "valor_total": 1_500_000.0,
+            "adjudicantes": 3,
+            "valor_mediano": 25_000.0,
+            "concentracao_maior": 62.5,
+            "insolvencias": 1,
+            "pessoas": 2,
+            "marcas": 1,
+            "firmas": 1,
+            "subvencoes_valor": 5_000.0,
+            "sinais": [{"padrao": "insolvencia", "detalhe": "1 processo no CIRE"}],
+        },
+        "secoes": {
+            "cadastro": {
+                "cadastro": {
+                    "nif": "501234567",
+                    "name": "ACME PORTUGAL",
+                    "cae_principal": "46460",
+                    "contracts_total": 12,
+                    "total_value": 1_500_000.0,
+                    "adjudicatario": {"contracts_count": 12},
+                },
+                "perfil": {"site": "https://acme.pt"},
+            },
+            "contratos": {
+                "contratos": [{"ano": 2024, "valor": 1000.0, "cpv": "33000000-0", "cpv_desc": "Equipamento"}],
+                "resumo": {"adjudicantes_distintos": 3},
+                "contratos_total": 12,
+            },
+            "rede": {
+                "cargos_sociais": [
+                    {
+                        "nif": "222333444",
+                        "name": "Maria Silva",
+                        "latest_roles": [{"role": "gerente", "role_org": "gerência", "date": "2023-05-02", "quota": "50 %"}],
+                    }
+                ]
+            },
+            "pessoas": {"pessoas": [], "societario": None, "total": 0},
+            "societario": {"items": [{"data": "2023-05-02", "acto": "Nomeação de gerente", "publicacao": "P-1"}], "total": 1},
+            "cire": {
+                "insolvencias": [
+                    {"data": "2022-01-10", "especie": "Insolvência", "tribunal": "Lisboa", "processo": "1/22"}
+                ],
+                "insolvencias_total": 1,
+                "mencoes_total": 1,
+                "papel_insolvente": True,
+                "intervenientes": [],
+            },
+            "risco": {
+                "risco": {
+                    "score": 71.0,
+                    "nivel": "alto",
+                    "nivel_label": "Elevado",
+                    "cobertura": 0.8,
+                    "avisos": ["Sem contratos nos últimos 12 meses"],
+                }
+            },
+            "mercado": {
+                "cae": {"cae_principal": "46460", "cae_principal_label": "Comércio por grosso de produtos médicos"},
+                "contratos": 12,
+                "valor": 1_500_000.0,
+                "entidades": [{"nome": "Câmara de Lisboa", "contratos": 5, "valor": 900_000.0, "quota": 0.6}],
+                "cpvs": [{"classe": "3314", "divisao": "33", "contratos": 5, "valor": 900_000.0, "quota": 0.6}],
+                "dependencia": {"hhi": 0.4, "maior_quota": 0.6, "n_entidades": 3},
+                "evolucao": {"anos": [2022, 2023], "valores": [100.0, 200.0], "variacao": 1.0, "cagr": 1.0},
+                "taxa_sem_concurso": 0.75,
+                "alertas": [{"tipo": "sem_concurso", "severidade": "média", "detalhe": "75 % sem concurso"}],
+                "perfil": "dependente de um cliente",
+            },
+            "marcas": {
+                "items": [
+                    {
+                        "mark_name": "ACME",
+                        "mark_type": "misto",
+                        "application_date": "2019-01-01",
+                        "current_phase": "REGISTO CONCEDIDO",
+                    }
+                ],
+                "total": 1,
+            },
+            "firmas": {
+                "items": [{"nome": "ACME Lda", "cae": "46460", "concelho": "Lisboa", "situacao": "Ativa", "score": 90.0}],
+                "total": 1,
+            },
+            "devedores": {"devedor": True, "escaloes": ["Finanças"], "items": [{"entidade": "AT", "escalao": "Finanças", "valor_min": 5000.0}]},
+            "subvencoes": {"items": [{"entidade": "IAPMEI", "ano": "2021", "valor": 5000.0}], "valor_total": 5000.0},
+            "noticias": {"items": [{"title": "ACME cresce", "publisher": "Jornal", "published": "2024-03-01"}]},
+        },
+        "fontes": [
+            {"id": "cadastro", "label": "Cadastro", "estado": "ok", "total": 1},
+            {"id": "pessoas", "label": "Pessoas e cargos", "estado": "vazio", "total": 0},
+        ],
+        "avisos": ["A empresa aparece em 1 processo do CIRE como credora ou interveniente."],
+    }
+
+
+def _preparar_ficha(monkeypatch, nif: str = "501234567") -> None:
+    monkeypatch.setattr(studio, "empresa_nif", lambda value: nif)
+    monkeypatch.setattr(studio, "_ficha_recolha", lambda _nif: _recolha_falsa())
+    monkeypatch.setattr(
+        studio,
+        "_agregados_dos_contratos",
+        lambda _nif, scope=None: {
+            "fonte": "index",
+            "cpv": [{"cpv_codigo": "33000000-0", "contagem": 7, "soma_preco": 90_000.0}],
+            "ano": [{"ano": 2023, "soma_preco": 1000.0}, {"ano": 2024, "soma_preco": 2000.0}],
+            "adjudicantes": [{"adjudicante": "Câmara de Lisboa", "contagem": 5, "soma_preco": 900_000.0}],
+        },
+    )
+
+
+def test_modelos_de_empresa_pedem_a_empresa(db):
+    """Os dois modelos novos filtram-se pela empresa, não por valores à mão."""
+    listing = studio.templates()
+    for template_id in ("concorrencia", "area-cae"):
+        item = next(entry for entry in listing["templates"] if entry["id"] == template_id)
+        assert [spec["id"] for spec in item["vars"]] == ["empresa", "nome"], template_id
+        assert item["vars"][0]["required"] == "1"
+        tipos = {block["type"] for block in item["blocks"]}
+        assert {"empresa", "ai", "note"} <= tipos, (template_id, tipos)
+        assert item["block_count"] > 0
+        tokens = {
+            str(value)
+            for block in item["blocks"]
+            for value in list((block.get("filters") or {}).values()) + [block.get("empresa"), block.get("query"), block.get("title")]
+        }
+        assert any("{{" in token for token in tokens if token), template_id
+    area = next(entry for entry in listing["templates"] if entry["id"] == "area-cae")
+    assert "web" in {block["type"] for block in area["blocks"]}
+
+
+def test_variaveis_do_relatorio_sao_validadas_e_guardadas(relatorios, db):
+    saved = studio.save_report(
+        _rascunho(template="concorrencia", vars={"empresa": "501 234 567", "lixo": "não conta"}),
+        actor="autor@exemplo.pt",
+    )["report"]
+    assert saved["vars"] == {"empresa": "501 234 567"}
+    assert [spec["id"] for spec in saved["vars_spec"]] == ["empresa", "nome"]
+    assert studio.get_report(saved["id"])["vars"] == {"empresa": "501 234 567"}
+    assert studio.normalise_vars({"empresa": "x" * 400})["empresa"] == "x" * studio.MAX_VAR_VALUE
+
+
+def test_substituicao_de_variaveis_nos_blocos():
+    bloco = {
+        "type": "kpi",
+        "title": "Contratos de {{nome}}",
+        "source": FONTE,
+        "filters": {"adjudicatario_nif": "{{nif}}", "ano": "{{desconhecida}}"},
+        "measures": ["contagem"],
+        "dimensions": [],
+        "limit": 5,
+    }
+    resolvido = studio.apply_vars(bloco, {"nome": "ACME", "nif": "501234567"})
+    assert resolvido["title"] == "Contratos de ACME"
+    assert resolvido["filters"] == {"adjudicatario_nif": "501234567", "ano": ""}
+    # O bloco original não é alterado (o mesmo modelo serve outra empresa).
+    assert bloco["filters"]["adjudicatario_nif"] == "{{nif}}"
+    assert studio.has_tokens(bloco) is True
+    assert studio.has_tokens({"title": "sem tokens"}) is False
+    assert studio.substitute("a {{x}} b", {}) == "a b"
+    # Um filtro que fica vazio desaparece na validação: não filtra por nada.
+    assert studio._filters({"ano": ""}) == {}
+
+
+def test_variaveis_derivadas_da_ficha(relatorios, monkeypatch):
+    _preparar_ficha(monkeypatch)
+    mapping = studio.context_vars({"vars": {"empresa": "ACME"}}, {"see_all": True})
+    assert mapping["nif"] == "501234567"
+    assert mapping["nome"] == "ACME PORTUGAL"
+    assert mapping["cae"] == "46460"
+    assert mapping["cpv"] == "33000000-0"
+    assert mapping["site"] == "https://acme.pt"
+    # Sem empresa não há nada a calcular.
+    assert studio.context_vars({"vars": {}}) == {}
+
+
+def test_ficha_da_empresa_junta_cadastro_pessoas_e_risco(relatorios, monkeypatch):
+    _preparar_ficha(monkeypatch)
+    ficha = studio.empresa_ficha("501234567", {"see_all": True})
+    assert ficha["nif"] == "501234567"
+    assert ficha["encontrada"] is True
+    assert ficha["cae"] == "46460" and ficha["site"] == "https://acme.pt"
+    assert ficha["contratos"] == "index"
+    assert ficha["cpvs"] == ["33000000-0"]
+    titulos = [str(section.get("title") or "") for section in ficha["sections"]]
+    for esperado in (
+        "Identificação",
+        "Sinais e alertas",
+        "Contratos por CPV",
+        "Valor contratado por ano",
+        "Maiores clientes",
+        "Mercado e posicionamento",
+        "Alertas de mercado",
+        "Quem compra à empresa",
+        "Famílias de CPV",
+        "Sócios, gerentes e pessoas",
+        "Atos societários",
+        "Insolvências (CIRE)",
+        "Processos no CIRE",
+        "Devedores",
+        "Marcas (INPI)",
+        "Firmas e CAE (RNPC)",
+        "Subvenções públicas",
+        "Imprensa",
+        "Fontes da ficha",
+    ):
+        assert any(titulo.startswith(esperado) for titulo in titulos), esperado
+    identificacao = next(section["text"] for section in ficha["sections"] if section["title"] == "Identificação")
+    for trecho in ("501234567", "46460", "acme.pt"):
+        assert trecho in identificacao, trecho
+    clientes = next(section for section in ficha["sections"] if str(section["title"]).startswith("Maiores clientes"))
+    assert clientes["rows"][0][0] == "Câmara de Lisboa"
+    pessoas = next(section for section in ficha["sections"] if str(section["title"]).startswith("Sócios"))
+    assert pessoas["columns"] == ["Nome", "Cargo", "Órgão", "Quota", "Desde"]
+    assert pessoas["rows"][0][0] == "Maria Silva"
+    assert pessoas["rows"][0][1] == "gerente"
+    assert any("insolvente" in str(section.get("text") or "").lower() for section in ficha["sections"])
+    assert {item["label"] for item in ficha["kpis"]} >= {"Contratos", "Valor contratado", "Insolvências (CIRE)"}
+    assert ficha["kpis"][0]["value"] == "12"
+    # A ficha diz quantas fontes responderam — e quais ficaram sem dados.
+    fontes = next(section["text"] for section in ficha["sections"] if section["title"] == "Fontes da ficha")
+    assert "1 de 2 fontes com dados" in fontes
+    assert "Pessoas e cargos" in fontes
+
+
+def test_ficha_sem_nif_identificavel_explica_o_problema(relatorios, monkeypatch):
+    monkeypatch.setattr(studio, "empresa_nif", lambda value: "")
+    ficha = studio.empresa_ficha("empresa que não existe")
+    assert "NIF" in str(ficha["error"])
+    assert ficha["sections"] == []
+    resultado = studio.run_block({"type": "empresa", "title": "Ficha", "empresa": "???"}, None)
+    assert resultado["error"] and resultado["sections"] == []
+
+
+def test_ficha_com_a_descoberta_em_baixo(relatorios, monkeypatch):
+    monkeypatch.setattr(studio, "empresa_nif", lambda value: "501234567")
+
+    def rebenta(_nif: str) -> Dict[str, Any]:
+        raise RuntimeError("descoberta fora")
+
+    monkeypatch.setattr(studio, "_ficha_recolha", rebenta)
+    ficha = studio.empresa_ficha("501234567")
+    assert "indisponível" in str(ficha["error"])
+
+
+def test_bloco_de_empresa_usa_a_variavel_do_relatorio(relatorios, monkeypatch):
+    _preparar_ficha(monkeypatch)
+    bloco = studio._clean_block(studio._normalise_block({"type": "empresa", "title": "Ficha", "empresa": "{{empresa}}"}, {}))
+    resultado = studio.run_block(bloco, None, mapping={"empresa": "ACME"})
+    assert resultado["error"] is None
+    assert resultado["ficha"]["nif"] == "501234567"
+    assert resultado["sections"]
+    assert resultado["width"] == 12
+
+
+def test_bloco_web_apresenta_excertos_e_fontes(relatorios, monkeypatch):
+    from api import tools
+
+    monkeypatch.setattr(
+        tools,
+        "web_search",
+        lambda query, max_results=5, source="auto": [
+            {"title": "Produtos — ACME", "href": "https://acme.pt/produtos", "body": "Equipamento médico e assistência.", "source": "searxng"},
+            {"title": "ACME serviços", "href": "https://www.acme.pt/servicos", "body": "Instalação e manutenção.", "source": "searxng"},
+        ],
+    )
+    monkeypatch.setattr(studio, "_ask_model_sync", lambda *_args, **_kwargs: "")
+    bloco = studio.apply_vars(
+        {"type": "web", "title": "Produtos e serviços", "query": "{{nome}} produtos e serviços", "limit": 5},
+        {"nome": "ACME PORTUGAL"},
+    )
+    resultado = studio.run_block(bloco, None)
+    assert resultado["error"] is None
+    assert resultado["query"] == "ACME PORTUGAL produtos e serviços"
+    assert resultado["engine"] == "searxng"
+    assert len(resultado["results"]) == 2
+    verbo = next(section for section in resultado["sections"] if str(section["title"]).startswith("Produtos e serviços"))
+    assert verbo["kind"] == "list"
+    assert "Equipamento médico" in verbo["items"][0]
+    fontes = next(section for section in resultado["sections"] if str(section["title"]).startswith("Fontes da pesquisa"))
+    assert fontes["columns"] == ["Fonte", "Título", "Ligação"]
+    assert fontes["rows"][0][0] == "acme.pt"
+    assert resultado["notes"], "sem IA, o bloco diz que ficou sem síntese"
+
+
+def test_bloco_web_com_ia_escreve_o_resumo(relatorios, monkeypatch):
+    from api import tools
+
+    monkeypatch.setattr(
+        tools,
+        "web_search",
+        lambda *_args, **_kwargs: [{"title": "ACME", "href": "https://acme.pt", "body": "Produtos", "source": "searxng"}],
+    )
+    monkeypatch.setattr(studio, "_ask_model_sync", lambda *_args, **_kwargs: "A ACME vende equipamento médico hospitalar.")
+    resultado = studio.run_block({"type": "web", "title": "Web", "query": "acme produtos", "limit": 3}, None)
+    assert resultado["text"] == "A ACME vende equipamento médico hospitalar."
+    assert resultado["sections"][0]["kind"] == "text"
+
+
+def test_bloco_web_sem_pesquisa_sem_resultados_e_em_baixo(relatorios, monkeypatch):
+    from api import tools
+
+    with pytest.raises(ValueError):
+        studio._normalise_block({"type": "web", "query": ""}, {})
+
+    monkeypatch.setattr(tools, "web_search", lambda *_args, **_kwargs: [])
+    vazio = studio.run_block({"type": "web", "title": "Web", "query": "acme", "limit": 3}, None)
+    assert vazio["error"]
+
+    def rebenta(*_args: Any, **_kwargs: Any) -> Any:
+        raise RuntimeError("motor fora")
+
+    monkeypatch.setattr(tools, "web_search", rebenta)
+    falha = studio.run_block({"type": "web", "title": "Web", "query": "acme", "limit": 3}, None)
+    assert "indisponível" in str(falha["error"])
+
+
+def test_pdf_inclui_a_ficha_e_a_pesquisa_web(relatorios, db, monkeypatch):
+    from api import tools
+
+    _preparar_ficha(monkeypatch)
+    monkeypatch.setattr(
+        tools,
+        "web_search",
+        lambda *_args, **_kwargs: [
+            {"title": "Produtos ACME", "href": "https://acme.pt/produtos", "body": "Equipamento médico.", "source": "searxng"}
+        ],
+    )
+    monkeypatch.setattr(studio, "_ask_model_sync", lambda *_args, **_kwargs: "")
+    saved = studio.save_report(
+        {
+            "title": "Concorrência — ACME",
+            "template": "concorrencia",
+            "vars": {"empresa": "ACME"},
+            "blocks": [
+                {"type": "heading", "title": "Concorrência — {{nome}}", "text": "Perfil competitivo."},
+                {"type": "empresa", "title": "Ficha 360 da empresa", "empresa": "{{empresa}}"},
+                {"type": "web", "title": "Produtos e serviços", "query": "{{nome}} produtos e serviços", "limit": 3},
+                {"type": "note", "title": "Método", "text": "Fontes indicadas no relatório."},
+            ],
+        },
+        actor="autor@exemplo.pt",
+    )["report"]
+    nome, conteudo, mime = studio.render_pdf(studio.get_report(saved["id"]))
+    assert mime == "application/pdf" and conteudo[:4] == b"%PDF"
+    assert nome.startswith("iq-os-concorrencia")
+    texto = _pdf_text(conteudo)
+    for esperado in (
+        # O token do título foi resolvido com o nome da ficha.
+        "Concorrência — ACME PORTUGAL",
+        "Ficha 360 da empresa — indicadores",
+        "Identificação",
+        "Sócios, gerentes e pessoas",
+        "Maria Silva",
+        "Insolvências (CIRE)",
+        "Devedores (Finanças e Segurança Social)",
+        "Produtos e serviços (pesquisa web)",
+        "Fontes da pesquisa",
+        "acme.pt",
+        studio.DEFAULT_SUPPORT_EMAIL,
+    ):
+        assert esperado in texto, esperado
+
+
+def test_execucao_da_ficha_nao_parte_o_relatorio(relatorios, db, monkeypatch):
+    """Uma fonte da ficha em baixo não impede o PDF: sai a nota de erro."""
+
+    def rebenta(_nif: str) -> Dict[str, Any]:
+        raise RuntimeError("descoberta fora")
+
+    monkeypatch.setattr(studio, "empresa_nif", lambda value: "501234567")
+    monkeypatch.setattr(studio, "_ficha_recolha", rebenta)
+    saved = studio.save_report(
+        {"title": "Ficha em baixo", "vars": {"empresa": "501234567"}, "blocks": [{"type": "empresa", "title": "Ficha", "empresa": "{{empresa}}"}]},
+        actor="autor@exemplo.pt",
+    )["report"]
+    execucao = studio.run_report(studio.get_report(saved["id"]))
+    assert execucao["problems"], "o problema é reportado"
+    _nome, conteudo, _mime = studio.render_pdf(studio.get_report(saved["id"]))
+    assert conteudo[:4] == b"%PDF"
+    assert "Ficha indisponível" in _pdf_text(conteudo)
+
+
+def test_criar_a_partir_do_modelo_guarda_os_parametros(relatorios, db):
+    """`create_report` (o que as rotas usam) não pode perder as variáveis."""
+    saved = studio.create_report(
+        {"template": "concorrencia", "vars": {"empresa": "501234567"}}, actor="autor@exemplo.pt"
+    )["report"]
+    assert saved["vars"] == {"empresa": "501234567"}
+    assert studio.get_report(saved["id"])["vars"] == {"empresa": "501234567"}
+    assert saved["vars_spec"] == studio.vars_spec("concorrencia")
+
+
+def test_bloco_de_empresa_com_token_por_resolver_nao_inventa_empresa(relatorios, monkeypatch):
+    """Sem empresa preenchida, o token não vai parar ao resolver fuzzy."""
+    chamadas: List[str] = []
+    monkeypatch.setattr(studio, "empresa_nif", lambda value: chamadas.append(str(value)) or "")
+    resultado = studio.run_block({"type": "empresa", "title": "Ficha", "empresa": "{{empresa}}"}, None, mapping={})
+    assert "Sem empresa" in str(resultado["error"])
+    assert resultado["sections"] == [] and resultado["ficha"] == {}
+    # Nem se chega a tentar identificar a empresa: nenhuma resolução é feita.
+    assert chamadas == []
+
+
+def test_nif_com_token_nao_e_resolvido():
+    assert studio.empresa_nif("{{empresa}}") == ""
+    assert studio.empresa_nif("") == ""
+    assert studio.empresa_nif("504223933") == "504223933"
+
+
+def test_duplicar_herda_os_parametros(relatorios, db):
+    saved = studio.save_report(_rascunho(template="concorrencia", vars={"empresa": "501234567"}), actor="autor@exemplo.pt")["report"]
+    clone = studio.duplicate_report(saved["id"], actor="autor@exemplo.pt")["report"]
+    assert clone["id"] != saved["id"]
+    assert clone["vars"] == {"empresa": "501234567"}
+    assert clone["vars_spec"] == saved["vars_spec"]
+
+
+def test_rotas_guardam_e_resolvem_os_parametros(cliente, monkeypatch):
+    client, _holder, _fake = cliente
+    _preparar_ficha(monkeypatch)
+    created = client.post(
+        "/reports/studio/reports",
+        json={
+            "template": "concorrencia",
+            "title": "Concorrência — ACME",
+            "vars": {"empresa": "501234567"},
+            "blocks": [
+                {"type": "empresa", "title": "Ficha 360", "empresa": "{{empresa}}"},
+                {"type": "web", "title": "Produtos e serviços", "query": "{{nome}} produtos e serviços", "limit": 3},
+            ],
+        },
+    )
+    assert created.status_code == 201, created.text
+    corpo = created.json()["report"]
+    assert corpo["vars"] == {"empresa": "501234567"}
+    assert [spec["id"] for spec in corpo["vars_spec"]] == ["empresa", "nome"]
+
+    run = client.post("/reports/studio/query", json={"report": {"id": corpo["id"], "vars": corpo["vars"]}})
+    assert run.status_code == 200, run.text
+    dados = run.json()
+    assert dados["vars"]["nif"] == "501234567"
+    assert dados["vars"]["cae"] == "46460"
+    ficha = next(block for block in dados["blocks"] if block["type"] == "empresa")
+    assert ficha["ficha"]["nome"] == "ACME PORTUGAL"
+    assert ficha["sections"]
+
+    # Alterar só a empresa muda o relatório todo (é o ponto destes modelos).
+    mudado = client.put(
+        f"/reports/studio/reports/{corpo['id']}",
+        json={"vars": {"empresa": "502000000"}},
+    )
+    assert mudado.status_code == 200, mudado.text
+    assert mudado.json()["report"]["vars"] == {"empresa": "502000000"}

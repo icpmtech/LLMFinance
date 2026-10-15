@@ -24,8 +24,8 @@ import {
   YAxis,
 } from "recharts";
 import { AlertCircle, ArrowRight, Loader2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui";
-import { studioCompact, studioNumber, type StudioRunBlock } from "../../reportsStudioApi";
+import { Badge, Card, CardContent, CardHeader, CardTitle } from "../ui";
+import { studioCompact, studioNumber, type StudioRunBlock, type StudioSection } from "../../reportsStudioApi";
 
 const CHART_COLORS = ["#10a37f", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#6366f1"];
 
@@ -233,6 +233,153 @@ export function StudioGraph({ block }: { block: StudioRunBlock }) {
 }
 
 // ---------------------------------------------------------------------------
+// Ficha 360 da empresa e produtos/serviços (pesquisa web)
+// ---------------------------------------------------------------------------
+function SectionBlock({ section }: { section: StudioSection }) {
+  if (section.kind === "text" || section.kind === "note") {
+    if (!section.text) return null;
+    return (
+      <p className={`text-sm ${section.kind === "note" ? "text-[11px] text-muted-foreground" : "text-foreground/90"}`}>
+        {section.text}
+      </p>
+    );
+  }
+  if (section.kind === "list") {
+    const items = section.items ?? [];
+    if (!items.length) return null;
+    return (
+      <ul className="space-y-1 text-xs text-muted-foreground">
+        {items.map((item, index) => (
+          <li key={index} className="flex gap-2">
+            <span className="text-primary">•</span>
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  if (section.kind === "table") {
+    if (!section.columns?.length || !section.rows?.length) return null;
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-[11px]">
+          <thead>
+            <tr className="border-b text-left text-muted-foreground">
+              {section.columns.map((column) => (
+                <th key={column} className="px-2 py-1.5 font-medium">
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {section.rows.slice(0, 25).map((row, index) => (
+              <tr key={index} className="border-b border-border/40">
+                {row.map((cell, cellIndex) => (
+                  <td key={cellIndex} className="px-2 py-1.5">
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+  const rows = (section.rows ?? []) as Record<string, unknown>[];
+  if (!rows.length) return null;
+  const data = rows.slice(0, 20).map((row) => ({
+    label: String(row?.[section.dimension] ?? "—"),
+    value: valueOf(row, section.measure),
+  }));
+  return (
+    <ResponsiveContainer width="100%" height={200}>
+      <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#2e323b" />
+        <XAxis dataKey="label" tick={{ fontSize: 10 }} tickFormatter={axisTick} />
+        <YAxis tick={{ fontSize: 10 }} tickFormatter={(value) => studioCompact(Number(value))} width={54} />
+        <Tooltip contentStyle={tooltipStyle} formatter={(value: unknown) => [studioNumber(value, String(section.format || "")), section.title]} />
+        <Bar dataKey="value" fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+/** Ficha 360 (bloco `empresa`): indicadores e secções tal como vão para o PDF. */
+export function StudioFicha({ block }: { block: StudioRunBlock }) {
+  const ficha = block.ficha;
+  const sections = block.sections ?? ficha?.sections ?? [];
+  const kpis = block.kpis ?? ficha?.kpis ?? [];
+  if (!ficha) return null;
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+        <Badge variant="outline">{ficha.nome || ficha.empresa || "empresa"}</Badge>
+        {ficha.nif ? <span>NIF {ficha.nif}</span> : null}
+        {ficha.cae ? (
+          <span>
+            CAE {ficha.cae}
+            {ficha.cae_label ? ` · ${ficha.cae_label}` : ""}
+          </span>
+        ) : null}
+        {ficha.site ? (
+          <a className="underline" href={ficha.site} target="_blank" rel="noreferrer">
+            {ficha.site}
+          </a>
+        ) : null}
+        {ficha.contratos ? <span>contratos: {ficha.contratos === "index" ? "índice" : "amostra"}</span> : null}
+      </div>
+      {kpis.length ? (
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {kpis.map((item) => (
+            <div key={item.label} className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-3 py-2">
+              <p className="text-[11px] text-muted-foreground">{item.label}</p>
+              <p className="text-sm font-semibold text-emerald-400">{item.value}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div className="space-y-3">
+        {sections.map((section, index) => (
+          <div key={`${section.title}-${index}`} className="space-y-1.5">
+            {section.title ? <p className="text-xs font-semibold text-foreground/90">{section.title}</p> : null}
+            <SectionBlock section={section} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Produtos e serviços pela web (bloco `web`). */
+export function StudioWebSources({ block }: { block: StudioRunBlock }) {
+  const results = block.results ?? [];
+  if (!results.length) {
+    return <p className="py-4 text-xs text-muted-foreground">{block.error || "A pesquisa não devolveu resultados."}</p>;
+  }
+  return (
+    <div className="space-y-3">
+      {block.text ? <p className="text-sm text-foreground/90">{block.text}</p> : null}
+      <ul className="space-y-2">
+        {results.map((item) => (
+          <li key={item.href || item.title} className="rounded-xl border bg-background/60 px-3 py-2">
+            <a className="text-xs font-medium underline" href={item.href} target="_blank" rel="noreferrer">
+              {item.title || item.href}
+            </a>
+            {item.body ? <p className="mt-1 text-[11px] text-muted-foreground">{item.body}</p> : null}
+          </li>
+        ))}
+      </ul>
+      <p className="text-[11px] text-muted-foreground">
+        Pesquisa: {block.query} {block.engine ? `· motor: ${block.engine}` : ""}
+        {block.text ? "" : " · sem IA configurada fica só o que as fontes dizem."}
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Pré-visualização de um bloco
 // ---------------------------------------------------------------------------
 export function BlockPreview({
@@ -260,6 +407,8 @@ export function BlockPreview({
   }
   if (block.type === "chart" && result) return <StudioChart block={result} />;
   if (block.type === "graph" && result) return <StudioGraph block={result} />;
+  if (block.type === "empresa" && result) return <StudioFicha block={result} />;
+  if (block.type === "web" && result) return <StudioWebSources block={result} />;
   if (block.type === "table" && result) {
     const columns = result.columns ?? [];
     const rows = (result.rows ?? []).slice(0, 40);
@@ -341,6 +490,8 @@ export function BlockCard({
     chart: "Gráfico",
     table: "Tabela",
     graph: "Grafo",
+    empresa: "Ficha 360",
+    web: "Pesquisa web",
   };
   return (
     <Card>

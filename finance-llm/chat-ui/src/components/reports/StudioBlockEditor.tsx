@@ -19,6 +19,8 @@ const BLOCK_LABELS: Record<string, string> = {
   chart: "Gráfico",
   table: "Tabela",
   graph: "Grafo de relações",
+  empresa: "Ficha da empresa (360)",
+  web: "Produtos e serviços (pesquisa web)",
 };
 
 const DATA_TYPES = ["kpi", "chart", "table", "graph"];
@@ -148,6 +150,52 @@ export function StudioBlockEditor({
             className="w-full rounded-xl border bg-background px-3 py-2 text-sm"
             placeholder={block.type === "heading" ? "Enquadramento, âmbito e período." : "Escreva aqui…"}
           />
+        </div>
+      )}
+
+      {block.type === "empresa" && (
+        <div className="space-y-2">
+          <Label htmlFor={`empresa-${block.id}`}>Empresa</Label>
+          <Input
+            id={`empresa-${block.id}`}
+            value={block.empresa ?? ""}
+            onChange={(event) => onChange({ empresa: event.target.value })}
+            placeholder="{{empresa}}"
+            autoComplete="off"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            NIF de 9 dígitos ou o nome no cadastro. Use <code>{"{{empresa}}"}</code> para seguir o parâmetro do relatório — assim o
+            mesmo modelo serve outra empresa sem mexer nos blocos.
+          </p>
+        </div>
+      )}
+
+      {block.type === "web" && (
+        <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
+          <div className="space-y-2">
+            <Label htmlFor={`query-${block.id}`}>Pesquisa na web</Label>
+            <Input
+              id={`query-${block.id}`}
+              value={block.query ?? ""}
+              onChange={(event) => onChange({ query: event.target.value })}
+              placeholder="{{nome}} produtos e serviços"
+              autoComplete="off"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Os excertos encontrados entram no relatório com a fonte; com IA configurada, é escrito também um resumo deles.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`weblimit-${block.id}`}>Resultados</Label>
+            <Input
+              id={`weblimit-${block.id}`}
+              type="number"
+              min={1}
+              max={8}
+              value={String(block.limit)}
+              onChange={(event) => onChange({ limit: Math.max(1, Math.min(8, Number(event.target.value) || 1)) })}
+            />
+          </div>
         </div>
       )}
 

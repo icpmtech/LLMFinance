@@ -71,40 +71,78 @@ de permissões (`main.py`), sem alargar o resto do módulo.
 
 **Como se monta um relatório:**
 
-1. **Modelo** — há 8 modelos prontos (`executivo`, `mercado-cpv`, `evolucao`,
-   `geografia`, `entidades`, `mercados`, `dossie` e uma folha em branco). Cada
-   modelo traz blocos já ligados às fontes; os blocos que não se aplicam às
-   fontes de agora são retirados com aviso (`warnings`) em vez de darem gráficos
-   vazios.
-2. **Blocos** — `heading`, `text`, `note`, `ai`, `kpi`, `chart`, `table` e
-   `graph`. Os blocos de dados guardam `source` (dataset do Visualizador),
-   `dimensions`, `measures`, `filters`, `limit`, `top_n` e `width` (12/6/4). Os
-   ids são validados contra o catálogo **ao gravar** (o que a fonte não tem sai do
-   bloco).
-3. **Fontes** — as mesmas do **Visualizador** (`/visualizador/*`): contratos,
+1. **Modelo** — há 10 modelos prontos (`executivo`, `mercado-cpv`, `evolucao`,
+   `geografia`, `entidades`, `mercados`, `dossie`, `concorrencia`, `area-cae` e
+   uma folha em branco). Cada modelo traz blocos já ligados às fontes; os blocos
+   que não se aplicam às fontes de agora são retirados com aviso (`warnings`) em
+   vez de darem gráficos vazios.
+2. **Parâmetros** — os modelos de empresa (`concorrencia`, `area-cae`) pedem a
+   **empresa** (`vars.empresa`: NIF de 9 dígitos ou nome no cadastro) e aceitam o
+   nome a usar (`vars.nome`). Os blocos escrevem `{{empresa}}`, `{{nif}}`,
+   `{{nome}}`, `{{cae}}`, `{{cpv}}` e `{{site}}` nos títulos, filtros e pesquisas;
+   o estúdio resolve-os em cada execução — `{{nif}}`, `{{nome}}`, `{{cae}}`,
+   `{{cpv}}` e `{{site}}` são **calculados da ficha da empresa**, pelo que um bloco
+   de mercado segue o CAE e o CPV principal sem trabalho manual. Para produzir o
+   mesmo relatório para outra empresa, **duplicar e mudar o NIF**: os parâmetros
+   herdam-se na cópia e nenhum filtro fica preso a uma empresa.
+3. **Blocos** — `heading`, `text`, `note`, `ai`, `kpi`, `chart`, `table`,
+   `graph`, `empresa` e `web`. Os blocos de dados guardam `source` (dataset do
+   Visualizador), `dimensions`, `measures`, `filters`, `limit`, `top_n` e `width`
+   (12/6/4). Os ids são validados contra o catálogo **ao gravar** (o que a fonte não
+   tem sai do bloco).
+   - **`empresa` (ficha 360)** — junta o que não se agrega: cadastro e **CAE**,
+     situação e site, órgãos sociais (**sócios e gerentes**) e restantes pessoas
+     com cargos, **atos societários**, **riscos** (CIRE: insolvências e menções
+     como credor, devedores das Finanças e Segurança Social, pontuação de risco),
+     marcas (INPI), firmas (RNPC), subvenções, imprensa e o **mercado** da empresa
+     (clientes, dependência/HHI, evolução, contratos sem concurso, famílias de
+     CPV) — mais os contratos por CPV, por ano e por cliente, agregações **exatas**
+     pedidas ao Visualizador. Vem do serviço de descoberta
+     (`descoberta_service.recolher`), o mesmo do painel de empresa; a ficha em
+     memória é reutilizada 10 minutos, e diz sempre quantas fontes responderam e
+     quais ficaram sem dados.
+   - **`web` (produtos e serviços)** — pesquisa na web (`tools.web_search`:
+     SearXNG da plataforma, Brave/SerpAPI ou DuckDuckGo, conforme o que estiver
+     configurado) os produtos e serviços da empresa e apresenta os **excertos com
+     a fonte**. Com modelo de IA configurado, escreve também um resumo de 3 a 5
+     frases só com o que os excertos dizem; sem modelo, ficam os excertos (e o
+     bloco di-lo).
+4. **Fontes** — as mesmas do **Visualizador** (`/visualizador/*`): contratos,
    CPV, regiões, marcas, firmas, notícias, instrumentos, cotações, CRM, dossiês e
    documentos. Não há uma segunda implementação dos números: a pré-visualização e
    o PDF usam `visualizador_service.run_query` com o âmbito da sessão.
-4. **Grafos** — um bloco `graph` usa **duas** dimensões (origem e destino) e
+5. **Grafos** — um bloco `graph` usa **duas** dimensões (origem e destino) e
    devolve nós e arestas (ex.: adjudicante ↔ adjudicatário, pelo valor). A
    interface desenha-o em SVG; o PDF desenha o mesmo grafo e lista as relações.
-5. **IA** — o separador *Assistente* escreve o sumário executivo, o texto de uma
+6. **IA** — o separador *Assistente* escreve o sumário executivo, o texto de uma
    secção, os destaques dos dados e sugere blocos. Usa o modelo configurado da
    plataforma (`ontology_ai.ask_model` + `people_360.resolve_backend`); **sem
    modelo configurado devolve o texto factual** montado a partir dos indicadores
    e das primeiras linhas de cada bloco, e di-lo nas notas. O texto gerado só
    entra no PDF depois de estar escrito num bloco.
-6. **PDF** — gerado no servidor com `reportlab` (o mesmo renderizador da casa:
+7. **PDF** — gerado no servidor com `reportlab` (o mesmo renderizador da casa:
    logótipo, cores da marca, rodapé com o email de apoio e a página). Gráficos de
    barras, linhas e circulares são desenhados nativamente, com os rótulos em
    forma curta (`23,7 mM €`) para não se sobreporem; as tabelas repetem o
-   cabeçalho; os indicadores que não cabem na célula reduzem a letra em vez de
-   partir o número. Fica em `data/reports/studio/<relatório>/<id>-<nome>.pdf` e é
-   substituído quando se volta a gerar.
-7. **Email de apoio** — o contacto que sai no rodapé de todas as páginas e na
+   cabeçalho; as listas saem como pontos; os indicadores que não cabem na célula
+   reduzem a letra em vez de partir o número. Fica em
+   `data/reports/studio/<relatório>/<id>-<nome>.pdf` e é substituído quando se
+   volta a gerar.
+8. **Email de apoio** — o contacto que sai no rodapé de todas as páginas e na
    nota final é configurável em *Definições → Email de apoio*
    (`settings.support_email`); sem valor configurado usa-se
    `geral@iqos.pt` (`DEFAULT_SUPPORT_EMAIL`).
+
+**Os dois modelos de empresa:**
+
+| Modelo | Para que serve | O que traz |
+| --- | --- | --- |
+| `concorrencia` — *Concorrência (uma empresa)* | Perceber onde a empresa ganha e com quem compete nas mesmas categorias | Ficha 360 (CPV, CAE, sócios e gerentes, pessoas, riscos, marcas, firmas, subvenções), indicadores e evolução dos contratos da empresa, CPV onde ganha, como contrata (procedimento), grafo de quem lhe compra, **concorrentes no CPV principal**, regiões onde esse CPV se compra, **empresas do mesmo CAE** e leitura com IA |
+| `area-cae` — *Área de CAE e da empresa* | Olhar para a **área de atividade** antes da empresa: dimensão, território e situação registal do setor | Ficha 360, setor do CAE (empresas, score médio), CAE com mais empresas, situação registal, concelhos, empresas do mesmo CAE, contratos da empresa por tipo e procedimento, CPV da empresa e **produtos e serviços** (pesquisa web) |
+
+Cada bloco de um modelo de empresa filtra-se pela variável (`{{nif}}`, `{{cae}}`,
+`{{cpv}}`); se uma variável não se resolve (sem empresa, por exemplo), o filtro
+desaparece e o bloco mostra o mercado todo em vez de falhar.
 
 **Publicar e vender** (`POST /reports/studio/reports/{id}/publish`):
 
@@ -217,8 +255,8 @@ Estúdio de relatórios (**admin, gestor de plataforma ou gestor de relatórios*
 | POST | `/reports/studio/reports` | Cria a partir de um modelo ou do zero |
 | GET/PUT/DELETE | `/reports/studio/reports/{id}` | Ficha, gravação e remoção |
 | POST | `/reports/studio/reports/{id}/duplicate` | Duplica |
-| POST | `/reports/studio/query` | Corre blocos de um rascunho (pré-visualização) |
-| POST | `/reports/studio/reports/{id}/run` | Corre o relatório gravado |
+| POST | `/reports/studio/query` | Corre blocos de um rascunho (pré-visualização); aceita `report.vars` |
+| POST | `/reports/studio/reports/{id}/run` | Corre o relatório gravado (devolve `vars` resolvidas) |
 | POST | `/reports/studio/reports/{id}/pdf` | Gera e guarda o PDF |
 | GET/DELETE | `/reports/studio/reports/{id}/files/{file}` | Descarrega/remove um PDF |
 | POST | `/reports/studio/reports/{id}/publish` · `/unpublish` | Publica/retira (`site`, `loja`, `todos`) |
@@ -229,12 +267,17 @@ Estúdio de relatórios (**admin, gestor de plataforma ou gestor de relatórios*
 - `tests/test_reports.py` — domínio (26 verificações): catálogo, totais com IVA,
   fluxo de pagamento, notificações dos dois lados, limites de alvos, ficheiros,
   visibilidade das notas internas, indicadores e CSV.
-- `tests/test_reports_studio.py` — estúdio (40 verificações): acessos (admin,
+- `tests/test_reports_studio.py` — estúdio (55 verificações): acessos (admin,
   gestor, lista de gestores), modelos validados contra as fontes, validação e
-  limites dos blocos, ciclo de vida do relatório, execução dos blocos (incluindo
-  grafo), PDF real (com o email de apoio e os rótulos compactos), publicação no
-  catálogo e na loja, entrega automática do pedido pago, IA (com e sem modelo) e
-  as rotas HTTP de ponta a ponta.
+  limites dos blocos, **parâmetros do relatório e substituição de variáveis**,
+  **ficha 360 da empresa** (cadastro e CAE, contratos por CPV, clientes, mercado,
+  sócios e gerentes, pessoas, CIRE e devedores, marcas, firmas, subvenções,
+  imprensa) e **pesquisa web de produtos e serviços** (com e sem IA, com a
+  pesquisa em baixo e sem resultados), ciclo de vida do relatório, execução dos
+  blocos (incluindo grafo), PDF real (com o email de apoio, os rótulos compactos e
+  as secções da ficha e da web), publicação no catálogo e na loja, entrega
+  automática do pedido pago, IA (com e sem modelo) e as rotas HTTP de ponta a
+  ponta.
 - `_probe_reports_asgi.py` — rotas completas em processo (42 verificações), sem
   servidor nem Elasticsearch (sessões falsas e `TestClient` sem lifespan).
 - `_probe_reports_api.py` — o mesmo ciclo contra a API a correr (precisa de

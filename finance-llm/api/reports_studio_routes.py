@@ -73,7 +73,7 @@ StudioSession = Annotated[CurrentSession, Depends(require_studio)]
 # -------------------------------------------------------------------- modelos
 class BlockPayload(BaseModel):
     id: Optional[str] = None
-    type: str = Field(..., description="heading | text | note | ai | kpi | chart | table | graph")
+    type: str = Field(..., description="heading | text | note | ai | kpi | chart | table | graph | empresa | web")
     title: str = ""
     text: Optional[str] = None
     prompt: Optional[str] = None
@@ -87,6 +87,9 @@ class BlockPayload(BaseModel):
     top_n: Optional[int] = None
     width: Optional[int] = None
     format: Optional[str] = None
+    empresa: Optional[str] = Field(None, description="Bloco `empresa`: NIF ou nome (aceita `{{empresa}}`/`{{nif}}`)")
+    query: Optional[str] = Field(None, description="Bloco `web`: pesquisa a fazer (aceita `{{nome}}`)")
+    site: Optional[str] = None
 
 
 class ReportPayload(BaseModel):
@@ -100,6 +103,7 @@ class ReportPayload(BaseModel):
     theme: Optional[str] = None
     targets_note: Optional[str] = None
     blocks: Optional[List[Any]] = None
+    vars: Optional[Dict[str, Any]] = Field(None, description="Parâmetros do relatório (ex.: `empresa`)")
 
 
 class RunPayload(BaseModel):
