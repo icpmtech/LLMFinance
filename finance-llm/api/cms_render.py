@@ -1815,7 +1815,11 @@ def _layout(
                 'c.addEventListener("change",update);'
                 'n.querySelectorAll("a").forEach(function(a){a.addEventListener("click",function(){'
                 'c.checked=false;update();});});'
-                'document.addEventListener("click",function(e){if(n.contains(e.target)||b.contains(e.target))return;'
+                # O clique no rótulo chega duas vezes ao `document` (o rótulo e a
+                # caixa que ele liga): a caixa fica de fora, senão o painel abria
+                # e fechava no mesmo toque.
+                'document.addEventListener("click",function(e){'
+                'if(e.target===c||n.contains(e.target)||b.contains(e.target))return;'
                 'if(c.checked){c.checked=false;update();}else{fechar();}});'
                 'document.addEventListener("keydown",function(e){if(e.key==="Escape")fechar();});update();})();</script>'
                 # Um submenu dentro de outro abre ao lado; no fim da fila (o menu

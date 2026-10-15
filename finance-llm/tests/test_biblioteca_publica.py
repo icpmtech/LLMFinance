@@ -480,7 +480,10 @@ def test_submenu_abre_ao_clique_da_seta_e_nao_ao_rato(instalacao):
     assert nav.count("menu-seta") == 0
     # Fechar: o clique fora e o Esc fecham o que estiver aberto.
     assert 'document.addEventListener("keydown"' in html and '"Escape"' in html
-    assert "if(n.contains(e.target)||b.contains(e.target))return;" in html
+    # O clique no rótulo chega duas vezes ao `document` (o rótulo e a caixa que
+    # ele liga): a caixa fica de fora, senão o painel abria e fechava no mesmo
+    # toque. Este é o mesmo cuidado que o menu tinha antes das setas.
+    assert 'if(e.target===c||n.contains(e.target)||b.contains(e.target))return;' in html
 
 
 def test_painel_do_telemovel_nao_repete_o_que_o_bloco_de_conta_ja_da(instalacao):
