@@ -230,27 +230,35 @@ a:hover {{ text-decoration: underline; }}
   margin-left: auto; display: inline-flex; align-items: center; gap: 9px;
   min-height: 44px; padding: 9px 15px; border: 1px solid var(--border); border-radius: 999px;
   background: var(--surface); color: var(--text); font-size: .95rem; font-weight: 700;
-  cursor: pointer; user-select: none;
+  cursor: pointer; user-select: none; transition: background .15s, border-color .15s, color .15s;
 }}
 .menu-botao:hover {{ border-color: var(--accent); }}
 .menu-barras, .menu-barras::before, .menu-barras::after {{
   display: block; width: 18px; height: 2px; border-radius: 2px; background: currentColor; content: "";
+  transition: transform .2s ease, opacity .2s ease;
 }}
 .menu-barras {{ position: relative; }}
 .menu-barras::before {{ position: absolute; top: -6px; }}
 .menu-barras::after {{ position: absolute; top: 6px; }}
 .menu-estado:checked + .menu-botao {{ background: var(--text); border-color: var(--text); color: var(--surface); }}
+.menu-estado:checked + .menu-botao .menu-barras {{ background: transparent; }}
+.menu-estado:checked + .menu-botao .menu-barras::before {{ transform: translateY(6px) rotate(45deg); }}
+.menu-estado:checked + .menu-botao .menu-barras::after {{ transform: translateY(-6px) rotate(-45deg); }}
 nav.main {{
-  display: none; flex-basis: 100%; flex-direction: column; gap: 4px; margin: 0;
-  padding: 8px; border: 1px solid var(--border); border-radius: var(--radius);
-  background: var(--surface); box-shadow: var(--shadow);
+  display: none; width: 100%; flex-direction: column; gap: 2px; margin: 6px 0 0;
+  padding: 10px; border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); box-shadow: 0 12px 28px rgba(16,24,40,.12);
 }}
 .menu-estado:checked ~ nav.main {{ display: flex; }}
 /* Alvos de toque com pelo menos 44px nos links do menu. */
 nav.main a {{
-  display: flex; align-items: center; min-height: 46px; padding: 11px 14px;
+  display: flex; align-items: center; min-height: 48px; padding: 12px 14px;
   border-radius: 10px; color: var(--text); font-size: 1rem; font-weight: 600;
 }}
+nav.main a + a {{ border-top: 1px solid var(--border); border-radius: 0; }}
+nav.main a:first-child {{ border-radius: 10px 10px 0 0; }}
+nav.main a:last-child {{ border-radius: 0 0 10px 10px; }}
+nav.main a:only-child {{ border-radius: 10px; }}
 nav.main a:hover, nav.main a:focus-visible {{ background: var(--code); text-decoration: none; }}
 nav.main a[aria-current="page"] {{ background: var(--accent); color: #fff; }}
 .breadcrumb {{ margin: 0 0 16px; font-size: .86rem; }}
@@ -260,6 +268,33 @@ nav.main a[aria-current="page"] {{ background: var(--accent); color: #fff; }}
 .breadcrumb a {{ color: var(--muted); }}
 .breadcrumb a:hover {{ color: var(--accent); }}
 .breadcrumb [aria-current="page"] {{ color: var(--text); font-weight: 600; }}
+/* Temas do menu público */
+.site-header.tema-central .wrap {{ justify-content: center; flex-direction: column; }}
+.site-header.tema-central .brand {{ text-align: center; }}
+.site-header.tema-central nav.main {{ margin: 8px auto 0; }}
+.site-header.tema-linha nav.main a {{ border-radius: 0; border-bottom: 2px solid transparent; padding-left: 10px; padding-right: 10px; background: none; }}
+.site-header.tema-linha nav.main a:hover, .site-header.tema-linha nav.main a:focus-visible {{ background: none; border-bottom-color: var(--accent); }}
+.site-header.tema-linha nav.main a[aria-current="page"] {{ background: none; color: var(--accent); border-bottom-color: var(--accent); }}
+.site-header.template-contorno nav.main a {{ background: transparent; border: 1px solid var(--border); }}
+.site-header.template-contorno nav.main a[aria-current="page"] {{ border-color: var(--accent); color: var(--accent); background: transparent; }}
+.site-header.template-preenchido nav.main a {{ background: var(--code); }}
+.site-header.template-subtil nav.main a {{ font-weight: 500; color: var(--muted); }}
+.site-header.template-subtil nav.main a[aria-current="page"] {{ color: var(--text); background: none; }}
+.site-header.template-grande .brand {{ font-size: 1.25rem; }}
+.site-header.template-grande nav.main a {{ font-size: 1.05rem; padding: 10px 16px; }}
+/* Menu responsivo para todos os ecrãs e equipamentos */
+@media (max-width: 799px) {{
+  .site-header .wrap {{ flex-direction: row; align-items: center; }}
+  .site-header.tema-central .brand {{ text-align: left; }}
+  .site-header.tema-central nav.main {{ margin-left: 0; margin-top: 6px; width: 100%; }}
+  nav.main a {{ width: 100%; min-height: 48px; }}
+  .site-header.tema-linha nav.main a {{ border-bottom: 0; border-radius: 10px; }}
+}}
+@media (min-width: 800px) {{
+  .site-header.tema-central .wrap {{ flex-direction: row; justify-content: space-between; }}
+  .site-header.tema-central .brand {{ text-align: left; }}
+  .site-header.tema-central nav.main {{ margin-left: auto; margin-top: 0; width: auto; }}
+}}
 main {{ padding: 20px 0 56px; }}
 .card {{
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
@@ -468,25 +503,28 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
   /* A partir daqui há largura para a tabela larga caber inteira. */
   .tabela-rolavel.larga table {{ min-width: 0; }}
 }}
-@media (min-width: 900px) and (max-width: 1160px) {{
-  /* Com 9 itens no menu, a fila de pastilhas encosta no logótipo em ecrãs de
-     900-1160px. Reduzir um pouco o tamanho das pastilhas e o separador evita
+@media (min-width: 800px) and (max-width: 1160px) {{
+  /* Com 9-10 itens no menu, a fila de pastilhas encosta no logótipo em ecrãs de
+     800-1160px. Reduzir um pouco o tamanho das pastilhas e o separador evita
      quebras de linha e mantém todos os links numa linha só. */
   .site-header .wrap {{ gap: 8px; padding-left: 12px; padding-right: 12px; }}
   .brand .brand-mark {{ height: 30px; }}
   nav.main {{ gap: 2px; }}
   nav.main a {{ padding: 7px 8px; font-size: .84rem; }}
 }}
-@media (min-width: 900px) {{
+@media (min-width: 800px) {{
   /* Cabeçalho de uma linha: o menu volta a ser uma fila de pastilhas. */
   .site-header .wrap {{ flex-wrap: nowrap; gap: 18px; padding-top: 12px; padding-bottom: 12px; }}
   .brand .brand-mark {{ height: 34px; }}
   .menu-estado, .menu-botao {{ display: none; }}
   nav.main {{
-    display: flex; flex-basis: auto; flex-direction: row; margin-left: auto; gap: 6px;
-    padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
+    display: flex !important; flex-basis: auto; flex-direction: row; margin-left: auto; gap: 6px;
+    width: auto; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
   }}
-  nav.main a {{ min-height: 0; padding: 8px 12px; font-size: .92rem; border-radius: 999px; }}
+  nav.main a {{
+    min-height: 0; padding: 8px 12px; font-size: .92rem;
+    border-top: 0 !important; border-radius: 999px !important;
+  }}
   /* Linhas com medida de leitura: no telefone a largura toda, aqui 760px. */
   .prose {{ max-width: 760px; }}
 }}
@@ -934,6 +972,19 @@ def blocks_to_html(blocks: Iterable[Dict[str, Any]], *, preview: bool = False) -
 # --------------------------------------------------------------------------
 # Layout
 # --------------------------------------------------------------------------
+def _menu_theme_classes(menu: Dict[str, Any]) -> str:
+    """Classes CSS que combinam o tema e a variação do menu."""
+    theme = str(menu.get("menu_theme") or "pastilhas").strip()
+    template = str(menu.get("menu_template") or "padrao").strip()
+    valid_themes = {"pastilhas", "linha", "central"}
+    if theme not in valid_themes:
+        theme = "pastilhas"
+    classes = [f"tema-{theme}"]
+    if template != "padrao":
+        classes.append(f"template-{template}")
+    return " ".join(classes)
+
+
 def _header(settings: Dict[str, Any], *, current_path: str, preview: bool = False) -> str:
     menu = store.menu_for("header")
     links = []
@@ -957,9 +1008,10 @@ def _header(settings: Dict[str, Any], *, current_path: str, preview: bool = Fals
     else:
         brand = f'{_esc(settings.get("site_name"))}{tagline}'
     banner = '<div class="draft-banner">Pré-visualização — este conteúdo ainda não está publicado</div>' if preview else ""
+    theme_classes = _menu_theme_classes(menu)
     return (
         banner
-        + '<header class="site-header"><div class="wrap">'
+        + f'<header class="site-header {theme_classes}"><div class="wrap">'
         + f'<a class="brand" href="/site">{brand}</a>'
         # Menu de telefone sem JavaScript: a caixa escondida guarda o estado e o
         # `:checked` mostra a lista. No ecrã grande o botão desaparece e a lista
@@ -988,8 +1040,9 @@ def _footer(settings: Dict[str, Any]) -> str:
     links = "".join(f'<a href="{_esc(item.get("href"))}">{_esc(item.get("label"))}</a>' for item in menu.get("items") or [])
     footer_text = _esc(settings.get("footer_text") or "")
     site_name = _esc(settings.get("site_name") or "")
+    theme_classes = _menu_theme_classes(menu)
     return (
-        '<footer class="site-footer"><div class="wrap">'
+        f'<footer class="site-footer {theme_classes}"><div class="wrap">'
         f'<div><strong>{site_name}</strong><br>{footer_text}</div>'
         f'<nav>{links}{_social_links(settings)}</nav>'
         "</div></footer>"
@@ -1392,6 +1445,11 @@ def _layout(
             else "<script>if(\"serviceWorker\" in navigator){window.addEventListener(\"load\","
             "function(){navigator.serviceWorker.register(\"" + SW_PATH + "\")"
             ".catch(function(){});});}</script>"
+        )
+        + (
+            ""
+            if preview
+            else '<script>(function(){var c=document.getElementById("menu-estado"),b=document.querySelector(".menu-botao"),n=document.querySelector("nav.main");if(!c||!n)return;function update(){var o=c.checked;b.setAttribute("aria-expanded",o?"true":"false");n.setAttribute("aria-expanded",o?"true":"false");b.setAttribute("aria-controls","menu-principal");n.id="menu-principal";}c.addEventListener("change",update);n.querySelectorAll("a").forEach(function(a){a.addEventListener("click",function(){c.checked=false;update();});});document.addEventListener("click",function(e){if(c.checked&&!n.contains(e.target)&&!b.contains(e.target)){c.checked=false;update();}});update();})();</script>'
         )
         + "</body></html>"
     )
