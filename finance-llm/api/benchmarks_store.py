@@ -255,6 +255,16 @@ def listar() -> List[Dict[str, Any]]:
     return benchmarks
 
 
+def publicos() -> List[Dict[str, Any]]:
+    """Benchmarks publicados no site, **sem** a volumetria.
+
+    `listar()` calcula as estatísticas de cada benchmark (três agregações no
+    Elasticsearch por item) porque as listas da aplicação as mostram. Quem só
+    quer os endereços públicos — o sitemap do site — não deve pagar isso.
+    """
+    return [b for b in esc.list_benchmark_definitions() if b.get("public") and not b.get("config")]
+
+
 def _stats_rapidas(slug: Optional[str]) -> Dict[str, Any]:
     """Nº de ofertas/produtos/lojas e preços, sem varrer o índice todo."""
     vazio = {"offers": 0, "products": 0, "stores": 0, "avg_price": None, "price_min": None, "price_max": None}

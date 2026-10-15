@@ -318,6 +318,44 @@ MENU_LOCATIONS: List[Dict[str, str]] = [
     {"id": "footer", "label": "Rodapé"},
 ]
 
+#: Temas de apresentação do menu público. Cada tema pode levar um conjunto de
+#: variações (templates) com pequenas diferenças visuais.
+MENU_THEMES: List[Dict[str, Any]] = [
+    {
+        "id": "pastilhas",
+        "label": "Pastilhas",
+        "templates": [
+            {"id": "padrao", "label": "Padrão"},
+            {"id": "contorno", "label": "Contorno"},
+            {"id": "preenchido", "label": "Preenchido"},
+        ],
+    },
+    {
+        "id": "linha",
+        "label": "Linha simples",
+        "templates": [
+            {"id": "padrao", "label": "Padrão"},
+            {"id": "subtil", "label": "Subtil"},
+        ],
+    },
+    {
+        "id": "central",
+        "label": "Centrado",
+        "templates": [
+            {"id": "padrao", "label": "Padrão"},
+            {"id": "grande", "label": "Grande"},
+        ],
+    },
+]
+
+#: Template por omissão para cada tema.
+DEFAULT_MENU_TEMPLATE: Dict[str, str] = {theme["id"]: theme["templates"][0]["id"] for theme in MENU_THEMES}
+
+
+def menu_themes() -> List[Dict[str, Any]]:
+    """Temas e templates disponíveis para o menu público."""
+    return copy.deepcopy(MENU_THEMES)
+
 MAX_MEDIA_BYTES = 12 * 1024 * 1024
 MAX_REVISIONS = 30
 MAX_ACTIVITY = 400
@@ -361,6 +399,10 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "theme": "claro",
     "accent": "#0ea5a4",
     "radius": 14,
+    "header_menu_theme": "pastilhas",
+    "header_menu_template": "padrao",
+    "footer_menu_theme": "pastilhas",
+    "footer_menu_template": "padrao",
     "footer_text": "© Sabemos Studio — todos os direitos reservados.",
     "logo_id": None,
     "favicon_id": None,
@@ -1110,6 +1152,18 @@ def _normalise(entity: str, payload: Dict[str, Any], existing: Optional[Dict[str
         doc["location"] = str(pick("location") or "header")
         if doc["location"] not in {item["id"] for item in MENU_LOCATIONS}:
             doc["location"] = "header"
+        valid_themes = {theme["id"] for theme in MENU_THEMES}
+        doc["menu_theme"] = str(pick("menu_theme") or "pastilhas").strip()
+        if doc["menu_theme"] not in valid_themes:
+            doc["menu_theme"] = "pastilhas"
+        template_id = str(pick("menu_template") or "").strip()
+        valid_templates = {
+            template["id"]
+            for theme in MENU_THEMES
+            if theme["id"] == doc["menu_theme"]
+            for template in theme["templates"]
+        }
+        doc["menu_template"] = template_id if template_id in valid_templates else DEFAULT_MENU_TEMPLATE.get(doc["menu_theme"], "padrao")
         doc["items"] = _normalise_menu_items(pick("items", []))
 
     return doc
@@ -1621,6 +1675,12 @@ def get_settings() -> Dict[str, Any]:
     settings = copy.deepcopy(store["settings"])
     for key, value in DEFAULT_SETTINGS.items():
         settings.setdefault(key, copy.deepcopy(value))
+    # Garantir chaves de tema/template do menu, mesmo em instalações antigas.
+    for location in ("header", "footer"):
+        theme_key = f"{location}_menu_theme"
+        template_key = f"{location}_menu_template"
+        settings.setdefault(theme_key, "pastilhas")
+        settings.setdefault(template_key, "padrao")
     return settings
 
 
@@ -1639,6 +1699,22 @@ def save_settings(payload: Dict[str, Any], author: str = "") -> Dict[str, Any]:
     settings["theme"] = str(settings.get("theme") or "claro")
     settings["accent"] = str(settings.get("accent") or DEFAULT_SETTINGS["accent"])
     settings["radius"] = max(0, min(int(settings.get("radius") or 14), 32))
+    for location in ("header", "footer"):
+        theme_key = f"{location}_menu_theme"
+        template_key = f"{location}_menu_template"
+        valid_themes = {theme["id"] for theme in MENU_THEMES}
+        settings[theme_key] = str(settings.get(theme_key) or "pastilhas").strip()
+        if settings[theme_key] not in valid_themes:
+            settings[theme_key] = "pastilhas"
+        valid_templates = {
+            template["id"]
+            for theme in MENU_THEMES
+            if theme["id"] == settings[theme_key]
+            for template in theme["templates"]
+        }
+        settings[template_key] = str(settings.get(template_key) or "").strip()
+        if settings[template_key] not in valid_templates:
+            settings[template_key] = DEFAULT_MENU_TEMPLATE.get(settings[theme_key], "padrao")
     settings["robots"] = str(settings.get("robots") or "index, follow")
     if not isinstance(settings.get("social"), dict):
         settings["social"] = copy.deepcopy(DEFAULT_SETTINGS["social"])
@@ -1680,8 +1756,12 @@ def menu_for(location: str = "header") -> Dict[str, Any]:
             "id": f"menu-{location}",
             "name": "Menu principal" if location == "header" else "Menu de rodapé",
             "location": location,
+            "menu_theme": "pastilhas",
+            "menu_template": "padrao",
             "items": _default_menu_items(store, location),
         }
+    menu.setdefault("menu_theme", "pastilhas")
+    menu.setdefault("menu_template", "padrao")
     resolved: List[Dict[str, Any]] = []
 
     def walk(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -1819,6 +1899,7 @@ def catalogue() -> Dict[str, Any]:
             {"id": template.get("id"), "name": template.get("name"), "kind": template.get("kind"), "builtin": template.get("builtin")}
             for template in store["templates"]
         ],
+        "menu_themes": MENU_THEMES,
         "blog_url": "/site/blog",
         "site_url": "/site",
         "home_page_id": settings.get("home_page_id") or "",
@@ -2287,8 +2368,8 @@ def _seed(store: Dict[str, Any]) -> None:
     )
 
     store["menus"] = [
-        {"id": "menu_header", "name": "Menu principal", "location": "header", "items": _default_menu_items(store, "header"), "created_at": now, "updated_at": now},
-        {"id": "menu_footer", "name": "Menu de rodapé", "location": "footer", "items": _default_menu_items(store, "footer"), "created_at": now, "updated_at": now},
+        {"id": "menu_header", "name": "Menu principal", "location": "header", "menu_theme": "pastilhas", "menu_template": "padrao", "items": _default_menu_items(store, "header"), "created_at": now, "updated_at": now},
+        {"id": "menu_footer", "name": "Menu de rodapé", "location": "footer", "menu_theme": "pastilhas", "menu_template": "padrao", "items": _default_menu_items(store, "footer"), "created_at": now, "updated_at": now},
     ]
 
     store["activity"] = [

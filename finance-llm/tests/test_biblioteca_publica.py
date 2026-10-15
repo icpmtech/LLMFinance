@@ -175,7 +175,7 @@ def test_so_se_descarregam_documentos_gratuitos_publicados(instalacao):
 
 # --------------------------------------------------------------- bloco do CMS
 def test_bloco_do_cms_desenha_areas_e_descarregamento(instalacao):
-    _documento("Concorrência — Empresa A", preco=0.0, tags=["empresa"])
+    documento = _documento("Concorrência — Empresa A", preco=0.0, tags=["empresa"])
     html = cms_render._render_block(
         {"type": "relatorios", "data": {"title": "Por área", "limit": 12, "intro": "Escolha a área."}}
     )
@@ -183,6 +183,8 @@ def test_bloco_do_cms_desenha_areas_e_descarregamento(instalacao):
     assert "library-area" in html and "library-card" in html
     assert "Empresas e risco" in html and "Contratação pública" in html
     assert "Descarregar PDF" in html and "/site/documento/" in html
+    # O botão descarrega mesmo: `download` no link e `attachment` na resposta.
+    assert f'href="/site/documento/{documento["id"]}" download' in html
     assert "tag-free" in html and "Grátis" in html
     # O contador diz o que a página tem (é a leitura rápida do topo).
     assert "documento(s) em" in html and "gratuito(s)" in html
@@ -261,7 +263,9 @@ def test_rota_publica_de_documento(instalacao):
     assert resposta.status_code == 200, resposta.text
     assert resposta.headers["content-type"].startswith("application/pdf")
     assert resposta.content[:4] == b"%PDF"
-    assert "filename=" in resposta.headers.get("content-disposition", "")
+    # Descarrega (não abre no leitor do browser) e com o nome do documento.
+    disposicao = resposta.headers.get("content-disposition", "")
+    assert disposicao.startswith("attachment;") and "filename=" in disposicao
 
     assert cliente.get(f"/site/documento/{pago['id']}").status_code == 404
     assert cliente.get("/site/documento/nao-existe").status_code == 404

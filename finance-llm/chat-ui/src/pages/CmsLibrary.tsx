@@ -42,7 +42,7 @@ import {
   timeAgo,
 } from "../components/cms/CmsKit";
 import * as cms from "../cmsApi";
-import type { CmsCategory, CmsContacto, CmsContent, CmsMedia, CmsMenu, CmsMenuItem, CmsSettings, CmsTemplate } from "../cmsApi";
+import type { CmsCategory, CmsContacto, CmsContent, CmsMedia, CmsMenu, CmsMenuItem, CmsMenuTheme, CmsSettings, CmsTemplate } from "../cmsApi";
 import type { CmsCtx } from "./CmsPanels";
 
 function openExternal(url: string) {
@@ -1021,6 +1021,7 @@ type MenuDraft = CmsMenu & { saved?: boolean };
 export function CmsAppearancePanel({ ctx }: { ctx: CmsCtx }) {
   const [settings, setSettings] = useState<CmsSettings | null>(null);
   const [menus, setMenus] = useState<MenuDraft[]>([]);
+  const [menuThemes, setMenuThemes] = useState<CmsMenuTheme[]>([]);
   const [pages, setPages] = useState<{ id: string; title: string; path: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -1036,6 +1037,7 @@ export function CmsAppearancePanel({ ctx }: { ctx: CmsCtx }) {
       ]);
       setSettings(payload.settings);
       setMenus(menuPayload.items.map((menu) => ({ ...menu, items: menu.items ?? [] })));
+      setMenuThemes(menuPayload.themes ?? []);
       setPages(pagesPayload.items.filter((page) => page.status === "publicado").map((page) => ({ id: page.id, title: page.title, path: page.path })));
     } catch (err) {
       ctx.notify((err as Error).message, "error");
@@ -1066,7 +1068,14 @@ export function CmsAppearancePanel({ ctx }: { ctx: CmsCtx }) {
   const saveMenu = async (menu: MenuDraft) => {
     setMenuBusy(menu.id);
     try {
-      const result = await cms.saveCmsMenu({ id: menu.id, name: menu.name, location: menu.location, items: menu.items });
+      const result = await cms.saveCmsMenu({
+        id: menu.id,
+        name: menu.name,
+        location: menu.location,
+        menu_theme: menu.menu_theme,
+        menu_template: menu.menu_template,
+        items: menu.items,
+      });
       setMenus((current) => current.map((entry) => (entry.id === menu.id ? { ...result.menu, items: result.menu.items ?? [] } : entry)));
       ctx.notify("Menu guardado.", "ok");
       await load();
@@ -1079,6 +1088,16 @@ export function CmsAppearancePanel({ ctx }: { ctx: CmsCtx }) {
 
   const patchMenuItems = (menuId: string, items: CmsMenuItem[]) => {
     setMenus((current) => current.map((menu) => (menu.id === menuId ? { ...menu, items } : menu)));
+  };
+
+  const patchMenuTheme = (menu: MenuDraft, themeId: string) => {
+    const theme = menuThemes.find((entry) => entry.id === themeId);
+    const templateId = theme?.templates[0]?.id ?? "padrao";
+    setMenus((current) => current.map((entry) => (entry.id === menu.id ? { ...entry, menu_theme: themeId, menu_template: templateId } : entry)));
+  };
+
+  const patchMenuTemplate = (menu: MenuDraft, templateId: string) => {
+    setMenus((current) => current.map((entry) => (entry.id === menu.id ? { ...entry, menu_template: templateId } : entry)));
   };
 
   const moveItem = (menu: MenuDraft, index: number, delta: number) => {
@@ -1184,9 +1203,26 @@ export function CmsAppearancePanel({ ctx }: { ctx: CmsCtx }) {
         </div>
       </div>
 
-      {menus.map((menu) => (
+      {menus.map((menu) => {
+        const currentTheme = menuThemes.find((entry) => entry.id === (menu.menu_theme || "pastilhas"));
+        const templateOptions = currentTheme?.templates ?? [{ id: "padrao", label: "Padrão" }];
+        return (
         <div key={menu.id} className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
           <PanelHeader title={menu.name} hint={menu.location === "header" ? "Menu do cabeçalho do site." : "Menu do rodapé do site."}>
+            <div className="flex flex-wrap items-end gap-2">
+              <SelectInput
+                label="Tema do menu"
+                value={menu.menu_theme || "pastilhas"}
+                onChange={(next) => patchMenuTheme(menu, next)}
+                options={menuThemes.map((entry) => ({ value: entry.id, label: entry.label }))}
+              />
+              <SelectInput
+                label="Variação"
+                value={menu.menu_template || "padrao"}
+                onChange={(next) => patchMenuTemplate(menu, next)}
+                options={templateOptions.map((entry) => ({ value: entry.id, label: entry.label }))}
+              />
+            </div>
             <Button size="sm" variant="ghost" onClick={() => {
               const items: CmsMenuItem[] = [
                 ...pages
@@ -1248,7 +1284,8 @@ export function CmsAppearancePanel({ ctx }: { ctx: CmsCtx }) {
             </Button>
           </div>
         </div>
-      ))}
+      );
+      })}
 
       <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
         <PanelHeader title="Ficheiros do site" hint="Ficheiros gerados automaticamente a partir do conteúdo publicado." />

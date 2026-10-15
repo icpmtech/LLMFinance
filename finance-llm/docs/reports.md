@@ -176,7 +176,7 @@ Estúdio ou mudar um preço no catálogo aparece logo ali.
 | Bloco `relatorios` | `cms_store.BLOCK_TYPES` + `cms_render._render_library_block` | Desenha a secção (áreas, cartões, etiquetas de preço, botões) |
 | Modelo `tpl_biblioteca` | `cms_store.TEMPLATE_BIBLIOTECA` | «Biblioteca de relatórios»: hero, números, o bloco e chamada à ação |
 | Página `pag_relatorios` | `cms_editorial.paginas_do_site` | A página publicada, com hero, texto, o bloco, passos, FAQ e chamada à ação; entra no menu (cabeçalho e rodapé) |
-| `GET /site/documento/{id}` | `cms_routes` | Descarrega o PDF **só** dos documentos gratuitos e publicados |
+| `GET /site/documento/{id}` | `cms_routes` | Descarrega o PDF **só** dos documentos gratuitos e publicados (resposta `attachment`, com o nome do documento) |
 
 **O que entra na montra:**
 
@@ -200,6 +200,9 @@ notícias*, *Setor público* e *Documentos e dossiês*.
 **A fronteira do download** é `reports_library.document_for_download`: documento
 inexistente, não publicado, sem PDF ou **com preço** responde **404**. É o que
 separa a montra do que é de clientes — um relatório pago nunca sai por aqui.
+O PDF sai como **descarregamento** (`Content-Disposition: attachment`, com o nome
+do documento) e o botão da página leva `download`: um PDF navegado abria — ou
+ficava em branco, em webviews — em vez de ser guardado.
 
 Para uma instalação já em uso (produção incluída) faltam duas coisas que o
 deploy de código não leva, porque não envia a pasta `data/`: o **modelo** e a
@@ -310,7 +313,8 @@ Estúdio de relatórios (**admin, gestor de plataforma ou gestor de relatórios*
 | POST | `/reports/studio/ai` · `/reports/studio/reports/{id}/ai` | Ajuda da IA (sumário, texto, destaques, blocos) |
 
 Área pública do site (sem sessão): `GET /site/documento/{id}` descarrega o PDF de
-um documento **gratuito e publicado** (404 em qualquer outro caso — ver
+um documento **gratuito e publicado** — resposta `attachment`, para o browser
+guardar o ficheiro em vez de o abrir (404 em qualquer outro caso — ver
 *Área pública de relatórios gratuitos*, acima).
 
 ## Testes

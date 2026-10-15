@@ -260,6 +260,25 @@ nav.main a[aria-current="page"] {{ background: var(--accent); color: #fff; }}
 .breadcrumb a {{ color: var(--muted); }}
 .breadcrumb a:hover {{ color: var(--accent); }}
 .breadcrumb [aria-current="page"] {{ color: var(--text); font-weight: 600; }}
+/* Temas do menu público */
+.site-header.tema-central .wrap {{ justify-content: center; flex-direction: column; }}
+.site-header.tema-central .brand {{ text-align: center; }}
+.site-header.tema-central nav.main {{ margin: 8px auto 0; }}
+.site-header.tema-linha nav.main a {{ border-radius: 0; border-bottom: 2px solid transparent; padding-left: 10px; padding-right: 10px; background: none; }}
+.site-header.tema-linha nav.main a:hover, .site-header.tema-linha nav.main a:focus-visible {{ background: none; border-bottom-color: var(--accent); }}
+.site-header.tema-linha nav.main a[aria-current="page"] {{ background: none; color: var(--accent); border-bottom-color: var(--accent); }}
+.site-header.template-contorno nav.main a {{ background: transparent; border: 1px solid var(--border); }}
+.site-header.template-contorno nav.main a[aria-current="page"] {{ border-color: var(--accent); color: var(--accent); background: transparent; }}
+.site-header.template-preenchido nav.main a {{ background: var(--code); }}
+.site-header.template-subtil nav.main a {{ font-weight: 500; color: var(--muted); }}
+.site-header.template-subtil nav.main a[aria-current="page"] {{ color: var(--text); background: none; }}
+.site-header.template-grande .brand {{ font-size: 1.25rem; }}
+.site-header.template-grande nav.main a {{ font-size: 1.05rem; padding: 10px 16px; }}
+@media (min-width: 900px) {{
+  .site-header.tema-central .wrap {{ flex-direction: row; justify-content: space-between; }}
+  .site-header.tema-central .brand {{ text-align: left; }}
+  .site-header.tema-central nav.main {{ margin-left: auto; margin-top: 0; }}
+}}
 main {{ padding: 20px 0 56px; }}
 .card {{
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
@@ -595,7 +614,12 @@ def _render_library_block(data: Dict[str, Any], *, preview: bool = False) -> str
             lista = f'<ul class="library-list">{"".join(itens)}</ul>' if itens else ""
 
             if item.get("download"):
-                acao = f'<a class="btn" href="{_esc(item["download"])}">Descarregar PDF</a>'
+                # `download` para o browser guardar o ficheiro em vez de o abrir
+                # na própria página (o nome vem do cabeçalho da resposta).
+                acao = (
+                    f'<a class="btn" href="{_esc(item["download"])}" download>'
+                    "Descarregar PDF</a>"
+                )
             else:
                 acao = f'<a class="btn ghost" href="{cta_href}">{cta_label}</a>'
             cartoes.append(
@@ -934,6 +958,16 @@ def blocks_to_html(blocks: Iterable[Dict[str, Any]], *, preview: bool = False) -
 # --------------------------------------------------------------------------
 # Layout
 # --------------------------------------------------------------------------
+def _menu_theme_classes(menu: Dict[str, Any]) -> str:
+    """Classes CSS que combinam o tema e a variação do menu."""
+    theme = str(menu.get("menu_theme") or "pastilhas").strip()
+    template = str(menu.get("menu_template") or "padrao").strip()
+    classes = [f"tema-{theme}"]
+    if template != "padrao":
+        classes.append(f"template-{template}")
+    return " ".join(classes)
+
+
 def _header(settings: Dict[str, Any], *, current_path: str, preview: bool = False) -> str:
     menu = store.menu_for("header")
     links = []
@@ -957,9 +991,10 @@ def _header(settings: Dict[str, Any], *, current_path: str, preview: bool = Fals
     else:
         brand = f'{_esc(settings.get("site_name"))}{tagline}'
     banner = '<div class="draft-banner">Pré-visualização — este conteúdo ainda não está publicado</div>' if preview else ""
+    theme_classes = _menu_theme_classes(menu)
     return (
         banner
-        + '<header class="site-header"><div class="wrap">'
+        + f'<header class="site-header {theme_classes}"><div class="wrap">'
         + f'<a class="brand" href="/site">{brand}</a>'
         # Menu de telefone sem JavaScript: a caixa escondida guarda o estado e o
         # `:checked` mostra a lista. No ecrã grande o botão desaparece e a lista
@@ -988,8 +1023,9 @@ def _footer(settings: Dict[str, Any]) -> str:
     links = "".join(f'<a href="{_esc(item.get("href"))}">{_esc(item.get("label"))}</a>' for item in menu.get("items") or [])
     footer_text = _esc(settings.get("footer_text") or "")
     site_name = _esc(settings.get("site_name") or "")
+    theme_classes = _menu_theme_classes(menu)
     return (
-        '<footer class="site-footer"><div class="wrap">'
+        f'<footer class="site-footer {theme_classes}"><div class="wrap">'
         f'<div><strong>{site_name}</strong><br>{footer_text}</div>'
         f'<nav>{links}{_social_links(settings)}</nav>'
         "</div></footer>"
@@ -3044,52 +3080,96 @@ def _rfc822(value: Optional[str]) -> str:
 
 
 def render_sitemap(settings: Optional[Dict[str, Any]] = None) -> str:
+    """Sitemap do site: **tudo** o que está publicado em `/site/…`.
+
+    Páginas do CMS, artigos e índice do blog, municípios, páginas de pesquisa de
+    dados, remunerações e estudos de benchmark publicados. Um endereço entra uma
+    só vez, mesmo quando duas regras o pedem — `/site/blog` é uma página do CMS
+    *e* o índice do blog, e `<loc>` repetido é um aviso no Search Console.
+    """
     settings = settings or store.get_settings()
     # Sem `base_url` configurado os `<loc>` sairiam relativos, e um sitemap com
     # endereços relativos é inválido (o motor de busca rejeita-o por inteiro).
     base_url = str(settings.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
-    entries: List[str] = []
+    # `loc` → (lastmod, prioridade). Quando duas regras apontam para o mesmo
+    # endereço fica a de maior prioridade (e o `lastmod` dela).
+    entradas: Dict[str, Tuple[str, float]] = {}
+
+    def juntar(caminho: str, lastmod: str, prioridade: float) -> None:
+        loc = _absolute(caminho, base_url)
+        anterior = entradas.get(loc)
+        if anterior and anterior[1] >= prioridade:
+            return
+        entradas[loc] = (lastmod, prioridade)
+
     for page in store.published_pages():
         if (page.get("seo") or {}).get("noindex"):
             continue
-        loc = _absolute(_caminho_da_pagina(page), base_url)
-        lastmod = str(page.get("updated_at") or "")[:10]
-        entries.append(f"<url><loc>{_esc(loc)}</loc>{f'<lastmod>{lastmod}</lastmod>' if lastmod else ''}<priority>0.9</priority></url>")
-    entries.append(f"<url><loc>{_esc(_absolute('/site/blog', base_url))}</loc></url>")
+        juntar(_caminho_da_pagina(page), str(page.get("updated_at") or "")[:10], 0.9)
+    juntar("/site/blog", "", 0.8)
     for municipio in store.published_municipios():
         if (municipio.get("seo") or {}).get("noindex"):
             continue
         slug = str(municipio.get("slug") or "")
         if not slug:
             continue
-        loc = _absolute(f"/site/municipio/{slug}", base_url)
-        lastmod = str(municipio.get("updated_at") or municipio.get("published_at") or "")[:10]
-        entries.append(f"<url><loc>{_esc(loc)}</loc>{f'<lastmod>{lastmod}</lastmod>' if lastmod else ''}<priority>0.8</priority></url>")
+        juntar(
+            f"/site/municipio/{slug}",
+            str(municipio.get("updated_at") or municipio.get("published_at") or "")[:10],
+            0.8,
+        )
     for post in store.published_posts(limit=500):
         if (post.get("seo") or {}).get("noindex"):
             continue
-        loc = _absolute(f"/site/blog/{post.get('slug')}", base_url)
-        lastmod = str(post.get("updated_at") or post.get("published_at") or "")[:10]
-        entries.append(f"<url><loc>{_esc(loc)}</loc>{f'<lastmod>{lastmod}</lastmod>' if lastmod else ''}<priority>0.7</priority></url>")
+        juntar(
+            f"/site/blog/{post.get('slug')}",
+            str(post.get("updated_at") or post.get("published_at") or "")[:10],
+            0.7,
+        )
     for pesquisa in store.published_pesquisas():
         if (pesquisa.get("seo") or {}).get("noindex"):
             continue
         slug = str(pesquisa.get("slug") or "")
         if not slug:
             continue
-        loc = _absolute(f"/site/pesquisa/{slug}", base_url)
-        lastmod = str(pesquisa.get("updated_at") or pesquisa.get("published_at") or "")[:10]
-        entries.append(f"<url><loc>{_esc(loc)}</loc>{f'<lastmod>{lastmod}</lastmod>' if lastmod else ''}<priority>0.8</priority></url>")
+        juntar(
+            f"/site/pesquisa/{slug}",
+            str(pesquisa.get("updated_at") or pesquisa.get("published_at") or "")[:10],
+            0.8,
+        )
     for remuneracao in store.published_remuneracoes():
         if (remuneracao.get("seo") or {}).get("noindex"):
             continue
         slug = str(remuneracao.get("slug") or "")
         if not slug:
             continue
-        loc = _absolute(f"/site/remuneracoes/{slug}", base_url)
-        lastmod = str(remuneracao.get("updated_at") or remuneracao.get("published_at") or "")[:10]
-        entries.append(f"<url><loc>{_esc(loc)}</loc>{f'<lastmod>{lastmod}</lastmod>' if lastmod else ''}<priority>0.8</priority></url>")
-    return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join(entries) + "</urlset>"
+        juntar(
+            f"/site/remuneracoes/{slug}",
+            str(remuneracao.get("updated_at") or remuneracao.get("published_at") or "")[:10],
+            0.8,
+        )
+    # Estudos de benchmark publicados: a página do estudo entra aqui por ser uma
+    # página do CMS; a versão com a pesquisa agregada tem endereço próprio
+    # (`/site/benchmarks/<slug>/pesquisa`) e também é pública — ficava de fora.
+    try:
+        from api import benchmarks_store  # noqa: PLC0415 - import tardio: ciclo
+
+        for benchmark in benchmarks_store.publicos():
+            slug = str(benchmark.get("slug") or "")
+            if slug:
+                juntar(f"/site/benchmarks/{slug}/pesquisa", str(benchmark.get("public_at") or "")[:10], 0.6)
+    except Exception:  # noqa: BLE001 - o sitemap do site não pode cair por causa dos benchmarks
+        logger.warning("Sitemap do site: não foi possível ler os benchmarks publicados", exc_info=True)
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        + "".join(
+            f"<url><loc>{_esc(loc)}</loc>"
+            + (f"<lastmod>{lastmod}</lastmod>" if lastmod else "")
+            + f"<priority>{prioridade:.1f}</priority></url>"
+            for loc, (lastmod, prioridade) in entradas.items()
+        )
+        + "</urlset>"
+    )
 
 
 def render_robots(settings: Optional[Dict[str, Any]] = None) -> str:
