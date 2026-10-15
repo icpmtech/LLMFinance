@@ -3,11 +3,12 @@
  * **modelos**, **contactos** recebidos pelo site e **aparência** (definições do
  * site + menus).
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ArrowDown,
   ArrowUp,
   Copy,
+  CornerDownRight,
   ExternalLink,
   FileText,
   Inbox,
@@ -1018,6 +1019,41 @@ export function CmsTemplatesPanel({ ctx }: { ctx: CmsCtx }) {
 
 type MenuDraft = CmsMenu & { saved?: boolean };
 
+/** Profundidade máxima dos submenus, igual à que o servidor aceita. */
+const MENU_MAX_DEPTH = 2;
+
+function newMenuItem(): CmsMenuItem {
+  return { id: `mi_${Math.random().toString(36).slice(2, 8)}`, label: "", href: "", page_id: null, new_tab: false };
+}
+
+/** Aplica uma alteração a um item, onde quer que ele esteja na árvore. */
+function mapMenuItem(items: CmsMenuItem[], id: string, mutate: (item: CmsMenuItem) => CmsMenuItem): CmsMenuItem[] {
+  return items.map((item) => {
+    if (item.id === id) return mutate(item);
+    return item.children?.length ? { ...item, children: mapMenuItem(item.children, id, mutate) } : item;
+  });
+}
+
+/** Retira um item (e os submenus que ele abria) da árvore. */
+function removeMenuItem(items: CmsMenuItem[], id: string): CmsMenuItem[] {
+  return items
+    .filter((item) => item.id !== id)
+    .map((item) => (item.children?.length ? { ...item, children: removeMenuItem(item.children, id) } : item));
+}
+
+/** Troca um item com o irmão de cima ou de baixo (dentro do mesmo nível). */
+function moveMenuItem(items: CmsMenuItem[], id: string, delta: number): CmsMenuItem[] {
+  const index = items.findIndex((entry) => entry.id === id);
+  if (index >= 0) {
+    const target = index + delta;
+    if (target < 0 || target >= items.length) return items;
+    const next = [...items];
+    [next[index], next[target]] = [next[target], next[index]];
+    return next;
+  }
+  return items.map((item) => (item.children?.length ? { ...item, children: moveMenuItem(item.children, id, delta) } : item));
+}
+
 export function CmsAppearancePanel({ ctx }: { ctx: CmsCtx }) {
   const [settings, setSettings] = useState<CmsSettings | null>(null);
   const [menus, setMenus] = useState<MenuDraft[]>([]);
@@ -1090,6 +1126,9 @@ export function CmsAppearancePanel({ ctx }: { ctx: CmsCtx }) {
     setMenus((current) => current.map((menu) => (menu.id === menuId ? { ...menu, items } : menu)));
   };
 
+  const mutateMenuItem = (menu: MenuDraft, id: string, mutate: (item: CmsMenuItem) => CmsMenuItem) =>
+    patchMenuItems(menu.id, mapMenuItem(menu.items, id, mutate));
+
   const patchMenuTheme = (menu: MenuDraft, themeId: string) => {
     const theme = menuThemes.find((entry) => entry.id === themeId);
     const templateId = theme?.templates[0]?.id ?? "padrao";
@@ -1100,13 +1139,62 @@ export function CmsAppearancePanel({ ctx }: { ctx: CmsCtx }) {
     setMenus((current) => current.map((entry) => (entry.id === menu.id ? { ...entry, menu_template: templateId } : entry)));
   };
 
-  const moveItem = (menu: MenuDraft, index: number, delta: number) => {
-    const target = index + delta;
-    if (target < 0 || target >= menu.items.length) return;
-    const items = [...menu.items];
-    [items[index], items[target]] = [items[target], items[index]];
-    patchMenuItems(menu.id, items);
-  };
+  /**
+   * Editor de um nível do menu. Cada item pode abrir um **submenu**: um segundo
+   * (e terceiro) nível, indentado por baixo do item que o abre e com os mesmos
+   * campos — texto, página ou URL, ordem e remoção.
+   */
+  const renderMenuItems = (menu: MenuDraft, items: CmsMenuItem[], depth: number): ReactNode =>
+    items.map((item) => {
+      const filhos = item.children ?? [];
+      return (
+        <div key={item.id} className="space-y-1.5">
+          <div className="flex flex-wrap items-end gap-2 rounded-lg border border-white/8 bg-white/[0.02] px-2.5 py-2">
+            {depth > 0 && (
+              <span className="self-center rounded-full border border-white/10 px-2 py-0.5 text-[10.5px] text-muted-foreground">
+                {depth === 1 ? "Subitem" : "Sub-subitem"}
+              </span>
+            )}
+            <TextInput label="Texto" value={item.label} onChange={(next) => mutateMenuItem(menu, item.id, (entry) => ({ ...entry, label: next }))} />
+            <SelectInput
+              label="Página"
+              value={String(item.page_id ?? "")}
+              onChange={(next) => mutateMenuItem(menu, item.id, (entry) => ({ ...entry, page_id: next || null }))}
+              options={pageOptions}
+              placeholder="— nenhuma —"
+            />
+            <TextInput
+              label="…ou URL"
+              value={item.href}
+              onChange={(next) => mutateMenuItem(menu, item.id, (entry) => ({ ...entry, href: next }))}
+              placeholder="/site/blog"
+            />
+            <div className="flex items-center gap-1 pb-1">
+              <IconAction title="Subir" onClick={() => patchMenuItems(menu.id, moveMenuItem(menu.items, item.id, -1))}>
+                <ArrowUp size={12} />
+              </IconAction>
+              <IconAction title="Descer" onClick={() => patchMenuItems(menu.id, moveMenuItem(menu.items, item.id, 1))}>
+                <ArrowDown size={12} />
+              </IconAction>
+              {depth < MENU_MAX_DEPTH && (
+                <IconAction
+                  title="Acrescentar subitem"
+                  onClick={() => mutateMenuItem(menu, item.id, (entry) => ({ ...entry, children: [...(entry.children ?? []), newMenuItem()] }))}
+                >
+                  <CornerDownRight size={12} />
+                </IconAction>
+              )}
+              <IconAction title="Remover" danger onClick={() => patchMenuItems(menu.id, removeMenuItem(menu.items, item.id))}>
+                <Trash2 size={12} />
+              </IconAction>
+            </div>
+          </div>
+          {filhos.length > 0 && (
+            <div className="ml-3 space-y-1.5 border-l border-white/10 pl-2.5">{renderMenuItems(menu, filhos, depth + 1)}</div>
+          )}
+        </div>
+      );
+    });
 
   const set = <K extends keyof CmsSettings>(key: K, value: CmsSettings[K]) => setSettings((current) => (current ? { ...current, [key]: value } : current));
 
@@ -1208,7 +1296,14 @@ export function CmsAppearancePanel({ ctx }: { ctx: CmsCtx }) {
         const templateOptions = currentTheme?.templates ?? [{ id: "padrao", label: "Padrão" }];
         return (
         <div key={menu.id} className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-          <PanelHeader title={menu.name} hint={menu.location === "header" ? "Menu do cabeçalho do site." : "Menu do rodapé do site."}>
+          <PanelHeader
+            title={menu.name}
+            hint={
+              menu.location === "header"
+                ? "Menu do cabeçalho do site. Um item com subitens abre-os por baixo (no telemóvel, indentados)."
+                : "Menu do rodapé do site. Os subitens aparecem ao lado do item que os abre."
+            }
+          >
             <div className="flex flex-wrap items-end gap-2">
               <SelectInput
                 label="Tema do menu"
@@ -1241,45 +1336,8 @@ export function CmsAppearancePanel({ ctx }: { ctx: CmsCtx }) {
 
           <div className="space-y-1.5">
             {menu.items.length === 0 && <p className="text-[12px] text-muted-foreground">Menu vazio. Acrescente itens ou gere a partir das páginas.</p>}
-            {menu.items.map((item, index) => (
-              <div key={item.id} className="flex flex-wrap items-end gap-2 rounded-lg border border-white/8 bg-white/[0.02] px-2.5 py-2">
-                <TextInput
-                  label="Texto"
-                  value={item.label}
-                  onChange={(next) => patchMenuItems(menu.id, menu.items.map((entry) => (entry.id === item.id ? { ...entry, label: next } : entry)))}
-                />
-                <SelectInput
-                  label="Página"
-                  value={String(item.page_id ?? "")}
-                  onChange={(next) => patchMenuItems(menu.id, menu.items.map((entry) => (entry.id === item.id ? { ...entry, page_id: next || null } : entry)))}
-                  options={pageOptions}
-                  placeholder="— nenhuma —"
-                />
-                <TextInput
-                  label="…ou URL"
-                  value={item.href}
-                  onChange={(next) => patchMenuItems(menu.id, menu.items.map((entry) => (entry.id === item.id ? { ...entry, href: next } : entry)))}
-                  placeholder="/site/blog"
-                />
-                <div className="flex items-center gap-1 pb-1">
-                  <IconAction title="Subir" onClick={() => moveItem(menu, index, -1)}>
-                    <ArrowUp size={12} />
-                  </IconAction>
-                  <IconAction title="Descer" onClick={() => moveItem(menu, index, 1)}>
-                    <ArrowDown size={12} />
-                  </IconAction>
-                  <IconAction title="Remover" danger onClick={() => patchMenuItems(menu.id, menu.items.filter((entry) => entry.id !== item.id))}>
-                    <Trash2 size={12} />
-                  </IconAction>
-                </div>
-              </div>
-            ))}
-            <Button
-              size="sm"
-              variant="secondary"
-              icon={<Plus size={12} />}
-              onClick={() => patchMenuItems(menu.id, [...menu.items, { id: `mi_${Math.random().toString(36).slice(2, 8)}`, label: "", href: "", page_id: null, new_tab: false }])}
-            >
+            {renderMenuItems(menu, menu.items, 0)}
+            <Button size="sm" variant="secondary" icon={<Plus size={12} />} onClick={() => patchMenuItems(menu.id, [...menu.items, newMenuItem()])}>
               Acrescentar item
             </Button>
           </div>

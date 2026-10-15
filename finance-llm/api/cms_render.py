@@ -250,16 +250,26 @@ nav.main {{
   background: var(--surface); box-shadow: 0 12px 28px rgba(16,24,40,.12);
 }}
 .menu-estado:checked ~ nav.main {{ display: flex; }}
-/* Alvos de toque com pelo menos 44px nos links do menu. */
-nav.main a {{
-  display: flex; align-items: center; min-height: 48px; padding: 12px 14px;
+/* Alvos de toque com pelo menos 44px nos links do menu. O item que abre um
+   submenu é um link (quando tem página própria) ou o próprio rótulo. */
+nav.main > a, nav.main .menu-pai {{
+  display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 12px 14px;
   border-radius: 10px; color: var(--text); font-size: 1rem; font-weight: 600;
 }}
-nav.main a + a {{ border-top: 1px solid var(--border); border-radius: 0; }}
-nav.main a:first-child {{ border-radius: 10px 10px 0 0; }}
-nav.main a:last-child {{ border-radius: 0 0 10px 10px; }}
-nav.main a:only-child {{ border-radius: 10px; }}
-nav.main a:hover, nav.main a:focus-visible {{ background: var(--code); text-decoration: none; }}
+nav.main span.menu-pai {{ width: 100%; cursor: pointer; }}
+.menu-seta {{
+  flex: none; width: 6px; height: 6px; margin-left: 2px; opacity: .65;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+}}
+/* No telefone o submenu fica logo à vista, indentado sob o item que o abre. */
+nav.main .submenu {{ margin: 0 0 6px 12px; padding: 0 0 0 10px; border-left: 1px solid var(--border); list-style: none; }}
+nav.main .submenu > li {{ list-style: none; }}
+nav.main .submenu a, nav.main .submenu .menu-pai {{
+  display: flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 9px 10px; font-size: .95rem; font-weight: 500;
+}}
+nav.main a:hover, nav.main a:focus-visible, nav.main .menu-pai:hover, nav.main .menu-pai:focus-visible {{ background: var(--code); text-decoration: none; }}
 nav.main a[aria-current="page"] {{ background: var(--accent); color: #fff; }}
 .breadcrumb {{ margin: 0 0 16px; font-size: .86rem; }}
 .breadcrumb ol {{ display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; padding: 0; list-style: none; }}
@@ -268,32 +278,62 @@ nav.main a[aria-current="page"] {{ background: var(--accent); color: #fff; }}
 .breadcrumb a {{ color: var(--muted); }}
 .breadcrumb a:hover {{ color: var(--accent); }}
 .breadcrumb [aria-current="page"] {{ color: var(--text); font-weight: 600; }}
-/* Temas do menu público */
+/* Temas do menu público: valem para as entradas de topo (links e os rótulos que
+   abrem submenus), não para os links de dentro dos submenus. */
 .site-header.tema-central .wrap {{ justify-content: center; flex-direction: column; }}
 .site-header.tema-central .brand {{ text-align: center; }}
 .site-header.tema-central nav.main {{ margin: 8px auto 0; }}
-.site-header.tema-linha nav.main a {{ border-radius: 0; border-bottom: 2px solid transparent; padding-left: 10px; padding-right: 10px; background: none; }}
-.site-header.tema-linha nav.main a:hover, .site-header.tema-linha nav.main a:focus-visible {{ background: none; border-bottom-color: var(--accent); }}
-.site-header.tema-linha nav.main a[aria-current="page"] {{ background: none; color: var(--accent); border-bottom-color: var(--accent); }}
-.site-header.template-contorno nav.main a {{ background: transparent; border: 1px solid var(--border); }}
-.site-header.template-contorno nav.main a[aria-current="page"] {{ border-color: var(--accent); color: var(--accent); background: transparent; }}
-.site-header.template-preenchido nav.main a {{ background: var(--code); }}
-.site-header.template-subtil nav.main a {{ font-weight: 500; color: var(--muted); }}
-.site-header.template-subtil nav.main a[aria-current="page"] {{ color: var(--text); background: none; }}
+.site-header.tema-linha nav.main > a,
+.site-header.tema-linha nav.main > .menu-item > .menu-pai {{ border-radius: 0; border-bottom: 2px solid transparent; padding-left: 10px; padding-right: 10px; background: none; }}
+.site-header.tema-linha nav.main > a:hover,
+.site-header.tema-linha nav.main > a:focus-visible,
+.site-header.tema-linha nav.main > .menu-item > .menu-pai:hover {{ background: none; border-bottom-color: var(--accent); }}
+.site-header.tema-linha nav.main > a[aria-current="page"] {{ background: none; color: var(--accent); border-bottom-color: var(--accent); }}
+.site-header.template-contorno nav.main > a,
+.site-header.template-contorno nav.main > .menu-item > .menu-pai {{ background: transparent; border: 1px solid var(--border); }}
+.site-header.template-contorno nav.main > a[aria-current="page"] {{ border-color: var(--accent); color: var(--accent); background: transparent; }}
+.site-header.template-preenchido nav.main > a,
+.site-header.template-preenchido nav.main > .menu-item > .menu-pai {{ background: var(--code); }}
+.site-header.template-subtil nav.main > a,
+.site-header.template-subtil nav.main > .menu-item > .menu-pai {{ font-weight: 500; color: var(--muted); }}
+.site-header.template-subtil nav.main > a[aria-current="page"] {{ color: var(--text); background: none; }}
 .site-header.template-grande .brand {{ font-size: 1.25rem; }}
-.site-header.template-grande nav.main a {{ font-size: 1.05rem; padding: 10px 16px; }}
+.site-header.template-grande nav.main > a,
+.site-header.template-grande nav.main > .menu-item > .menu-pai {{ font-size: 1.05rem; padding: 10px 16px; }}
 /* Menu responsivo para todos os ecrãs e equipamentos */
 @media (max-width: 799px) {{
   .site-header .wrap {{ flex-direction: row; align-items: center; }}
   .site-header.tema-central .brand {{ text-align: left; }}
   .site-header.tema-central nav.main {{ margin-left: 0; margin-top: 6px; width: 100%; }}
-  nav.main a {{ width: 100%; min-height: 48px; }}
-  .site-header.tema-linha nav.main a {{ border-bottom: 0; border-radius: 10px; }}
+  /* Separadores entre entradas da lista e alvos de toque a toda a largura. */
+  nav.main > * + * {{ border-top: 1px solid var(--border); }}
+  nav.main > a {{ width: 100%; }}
+  .site-header.tema-linha nav.main > a,
+  .site-header.tema-linha nav.main > .menu-item > .menu-pai {{ border-bottom: 0; border-radius: 10px; }}
 }}
 @media (min-width: 800px) {{
   .site-header.tema-central .wrap {{ flex-direction: row; justify-content: space-between; }}
   .site-header.tema-central .brand {{ text-align: left; }}
   .site-header.tema-central nav.main {{ margin-left: auto; margin-top: 0; width: auto; }}
+  /* Submenus: painel que abre por baixo da entrada (rato, teclado ou toque). */
+  nav.main > .menu-item {{ position: relative; display: flex; align-items: center; }}
+  nav.main .submenu {{
+    display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
+    min-width: 210px; margin: 0; padding: 8px; border: 1px solid var(--border);
+    border-radius: 12px; background: var(--surface); box-shadow: 0 14px 34px rgba(16,24,40,.18);
+  }}
+  nav.main .tem-submenu:hover > .submenu,
+  nav.main .tem-submenu:focus-within > .submenu {{ display: block; }}
+  /* Um submenu dentro de outro abre ao lado, alinhado com o item que o abre. */
+  nav.main .submenu > li {{ position: relative; }}
+  nav.main .submenu .submenu {{ top: -8px; left: calc(100% + 4px); }}
+  /* Sem espaço à direita, o submenu vira-se para a esquerda (ver o script). */
+  nav.main .submenu .submenu.abre-esquerda {{ left: auto; right: calc(100% + 4px); }}
+  nav.main .submenu a, nav.main .submenu .menu-pai {{
+    justify-content: space-between; width: 100%; min-height: 40px; padding: 8px 10px;
+    border-radius: 8px; font-size: .9rem; font-weight: 500;
+  }}
+  nav.main .submenu .tem-submenu > .menu-pai .menu-seta {{ transform: rotate(-45deg); }}
 }}
 main {{ padding: 20px 0 56px; }}
 .card {{
@@ -510,7 +550,8 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
   .site-header .wrap {{ gap: 8px; padding-left: 12px; padding-right: 12px; }}
   .brand .brand-mark {{ height: 30px; }}
   nav.main {{ gap: 2px; }}
-  nav.main a {{ padding: 7px 8px; font-size: .84rem; }}
+  nav.main > a,
+  nav.main > .menu-item > .menu-pai {{ padding: 7px 8px; font-size: .84rem; }}
 }}
 @media (min-width: 800px) {{
   /* Cabeçalho de uma linha: o menu volta a ser uma fila de pastilhas. */
@@ -521,9 +562,9 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
     display: flex !important; flex-basis: auto; flex-direction: row; margin-left: auto; gap: 6px;
     width: auto; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
   }}
-  nav.main a {{
-    min-height: 0; padding: 8px 12px; font-size: .92rem;
-    border-top: 0 !important; border-radius: 999px !important;
+  nav.main > a,
+  nav.main > .menu-item > .menu-pai {{
+    min-height: 0; padding: 8px 12px; font-size: .92rem; border-radius: 999px;
   }}
   /* Linhas com medida de leitura: no telefone a largura toda, aqui 760px. */
   .prose {{ max-width: 760px; }}
@@ -990,17 +1031,66 @@ def _menu_theme_classes(menu: Dict[str, Any]) -> str:
     return " ".join(classes)
 
 
-def _header(settings: Dict[str, Any], *, current_path: str, preview: bool = False) -> str:
-    menu = store.menu_for("header")
-    links = []
-    for item in menu.get("items") or []:
-        href = item.get("href") or ""
-        # Quando o item vem de uma página do site, o href já é o caminho
-        # completo (ex: "/site/solucoes"); quando é um link directo, o href
-        # contém a URL externa (ex: "/login" ou "https://...").
+def _menu_link(item: Dict[str, Any], current_path: str) -> str:
+    """Link de um item do menu (no topo ou dentro de um submenu)."""
+    href = str(item.get("href") or "")
+    active = ' aria-current="page"' if href and href in (current_path, f"/site{current_path}") else ""
+    target = ' target="_blank" rel="noopener"' if item.get("new_tab") else ""
+    return f'<a href="{_esc(href)}"{active}{target}>{_esc(item.get("label"))}</a>'
+
+
+def _menu_gatilho(item: Dict[str, Any], current_path: str) -> str:
+    """O que abre o submenu: a página do item ou, sem página, o próprio rótulo.
+
+    O rótulo sem destino é focável (`tabindex`) porque é o foco que revela o
+    submenu no computador — sem isso, um item que só agrupa nunca abriria pelo
+    teclado.
+    """
+    href = str(item.get("href") or "")
+    label = _esc(item.get("label"))
+    seta = '<span class="menu-seta" aria-hidden="true"></span>'
+    if href:
         active = ' aria-current="page"' if href in (current_path, f"/site{current_path}") else ""
         target = ' target="_blank" rel="noopener"' if item.get("new_tab") else ""
-        links.append(f'<a href="{_esc(href)}"{active}{target}>{_esc(item.get("label"))}</a>')
+        return f'<a class="menu-pai" href="{_esc(href)}"{active}{target}>{label}{seta}</a>'
+    return f'<span class="menu-pai" tabindex="0">{label}{seta}</span>'
+
+
+def _submenu(items: List[Dict[str, Any]], current_path: str, depth: int) -> str:
+    """Lista de um submenu, com os submenus aninhados que houver."""
+    partes: List[str] = []
+    for item in items:
+        filhos = item.get("children") or []
+        if filhos:
+            partes.append(
+                f'<li class="tem-submenu nivel-{depth}">'
+                f'{_menu_gatilho(item, current_path)}{_submenu(filhos, current_path, depth + 1)}'
+                "</li>"
+            )
+        else:
+            partes.append(f"<li>{_menu_link(item, current_path)}</li>")
+    return f'<ul class="submenu nivel-{depth}">{"".join(partes)}</ul>'
+
+
+def _itens_principais(items: List[Dict[str, Any]], current_path: str) -> str:
+    """Itens de topo: links soltos e entradas que abrem um submenu."""
+    partes: List[str] = []
+    for item in items:
+        filhos = item.get("children") or []
+        if filhos:
+            partes.append(
+                f'<div class="menu-item tem-submenu nivel-0">'
+                f'{_menu_gatilho(item, current_path)}{_submenu(filhos, current_path, 1)}'
+                "</div>"
+            )
+        else:
+            partes.append(_menu_link(item, current_path))
+    return "".join(partes)
+
+
+def _header(settings: Dict[str, Any], *, current_path: str, preview: bool = False) -> str:
+    menu = store.menu_for("header")
+    links = _itens_principais(menu.get("items") or [], current_path)
     tagline = f'<small>{_esc(settings.get("tagline"))}</small>' if settings.get("tagline") else ""
     # Com logótipo na biblioteca, o cabeçalho mostra a imagem (que já traz o
     # nome); sem ele, fica o nome em texto, como antes.
@@ -1023,7 +1113,7 @@ def _header(settings: Dict[str, Any], *, current_path: str, preview: bool = Fals
         # volta a ser uma fila de pastilhas (ver o `@media (min-width: 800px)`).
         + '<input type="checkbox" id="menu-estado" class="menu-estado" aria-label="Abrir o menu">'
         + '<label class="menu-botao" for="menu-estado"><span class="menu-barras" aria-hidden="true"></span>Menu</label>'
-        + f'<nav class="main" aria-label="Navegação principal">{"".join(links)}</nav>'
+        + f'<nav class="main" aria-label="Navegação principal">{links}</nav>'
         + "</div></header>"
     )
 
@@ -1040,9 +1130,20 @@ def _social_links(settings: Dict[str, Any]) -> str:
     return "".join(parts)
 
 
+def _footer_links(items: List[Dict[str, Any]]) -> str:
+    """Links do rodapé: os submenus aparecem lado a lado, sem painéis."""
+    partes: List[str] = []
+    for item in items:
+        href = str(item.get("href") or "")
+        if href:
+            partes.append(f'<a href="{_esc(href)}">{_esc(item.get("label"))}</a>')
+        partes.append(_footer_links(item.get("children") or []))
+    return "".join(partes)
+
+
 def _footer(settings: Dict[str, Any]) -> str:
     menu = store.menu_for("footer")
-    links = "".join(f'<a href="{_esc(item.get("href"))}">{_esc(item.get("label"))}</a>' for item in menu.get("items") or [])
+    links = _footer_links(menu.get("items") or [])
     footer_text = _esc(settings.get("footer_text") or "")
     site_name = _esc(settings.get("site_name") or "")
     theme_classes = _menu_theme_classes(menu)
@@ -1455,6 +1556,9 @@ def _layout(
             ""
             if preview
             else '<script>(function(){var c=document.getElementById("menu-estado"),b=document.querySelector(".menu-botao"),n=document.querySelector("nav.main");if(!c||!n)return;function update(){var o=c.checked;b.setAttribute("aria-expanded",o?"true":"false");n.setAttribute("aria-expanded",o?"true":"false");b.setAttribute("aria-controls","menu-principal");n.id="menu-principal";}c.addEventListener("change",update);n.querySelectorAll("a").forEach(function(a){a.addEventListener("click",function(){c.checked=false;update();});});document.addEventListener("click",function(e){if(c.checked&&!n.contains(e.target)&&!b.contains(e.target)){c.checked=false;update();}});update();})();</script>'
+            # Um submenu dentro de outro abre ao lado; no fim da fila (o menu vive
+            # à direita) não cabe e sai do ecrã. Aqui vira-se para a esquerda.
+            '<script>(function(){document.querySelectorAll("nav.main .submenu .submenu").forEach(function(sub){var item=sub.parentElement;function ajustar(){sub.classList.remove("abre-esquerda");if(sub.getBoundingClientRect().right>window.innerWidth-8){sub.classList.add("abre-esquerda");}}item.addEventListener("mouseenter",ajustar);item.addEventListener("focusin",ajustar);});})();</script>'
         )
         + "</body></html>"
     )

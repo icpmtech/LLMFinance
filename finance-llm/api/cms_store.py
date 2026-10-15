@@ -1768,11 +1768,18 @@ def menu_for(location: str = "header") -> Dict[str, Any]:
         out: List[Dict[str, Any]] = []
         for item in items or []:
             page = pages_by_id.get(item.get("page_id"))
-            if page and page.get("status") != "publicado":
-                continue
             href = item.get("href") or (f"/site/{page.get('path')}" if page else "")
             label = item.get("label") or (page.get("menu_label") or page.get("title") if page else "")
-            if not label or not href:
+            children = walk(item.get("children") or [])
+            if page and page.get("status") != "publicado":
+                # A página ainda é rascunho: o item desaparece, mas os submenus
+                # já publicados ficam, como rótulo de grupo — senão o rascunho do
+                # item que abre o submenu levava o submenu inteiro com ele.
+                if label and children:
+                    out.append({"label": label, "href": "", "new_tab": False, "page_id": None, "children": children})
+                continue
+            # Um item sem destino próprio é o rótulo de um submenu (agrupa, não navega).
+            if not label or (not href and not children):
                 continue
             out.append(
                 {
@@ -1780,7 +1787,7 @@ def menu_for(location: str = "header") -> Dict[str, Any]:
                     "href": href,
                     "new_tab": bool(item.get("new_tab")),
                     "page_id": item.get("page_id"),
-                    "children": walk(item.get("children") or []),
+                    "children": children,
                 }
             )
         return out
