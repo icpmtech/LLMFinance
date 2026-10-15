@@ -114,6 +114,15 @@ TAGS_METADATA: List[Dict[str, str]] = [
         ),
     },
     {
+        "name": "indexnow",
+        "description": (
+            "Indexação em tempo real: estado do anúncio de páginas públicas aos "
+            "motores de busca e envio imediato do que mudou (IndexNow — Bing, "
+            "Yandex, Seznam e Naver). O ficheiro da chave sai na raiz do domínio "
+            "(`/{chave}.txt`)."
+        ),
+    },
+    {
         "name": "rag",
         "description": (
             "RAG de documentos: carregar PDF, listar/editar/apagar documentos, "

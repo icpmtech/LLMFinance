@@ -85,6 +85,14 @@ services:
       - FRED_API_KEY=${FRED_API_KEY:-}
       - BRAVE_API_KEY=${BRAVE_API_KEY:-}
       - SERPAPI_KEY=${SERPAPI_KEY:-}
+      # IndexNow: com o interruptor ligado, cada publicacao avisa o Bing (e os
+      # motores que partilham o protocolo) do endereco que mudou. A VM e a
+      # instancia publica, por isso aqui fica **ligado** -- e fica escrito aqui,
+      # e nao no `.env`, porque o `.env` do PC e copiado para ca pelo
+      # `14-servico-vm.ps1` e um valor la dentro valeria tambem em
+      # desenvolvimento, que e precisamente o que nao se quer.
+      - INDEXNOW_ENABLED=true
+      - INDEXNOW_KEY=${INDEXNOW_KEY:-}
       - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}

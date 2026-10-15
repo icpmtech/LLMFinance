@@ -1155,6 +1155,51 @@ O IQ OS é **instalável** como aplicação: manifest (`public/manifest.webmanif
   (remover com `-Uninstall`; caminho do browser com `-BrowserPath`). A forma preferida continua a
   ser a instalação pelo próprio browser, que cria uma aplicação a sério com arranque offline.
 
+### Indexação em tempo real (IndexNow)
+
+Publicar uma página é meio caminho: falta o motor de busca saber que ela mudou. O
+**IndexNow** é o protocolo partilhado por **Bing, Yandex, Seznam e Naver** para
+isso — publica-se a lista de endereços que mudaram e o motor confirma que os
+recebeu. «Recebido» não é «indexado»: o protocolo não promete indexação, e o que
+a plataforma guarda é o pedido feito e a resposta do motor.
+
+- **Ligar.** O interruptor é `INDEXNOW_ENABLED` e a chave é `INDEXNOW_KEY`
+  (8 a 128 caracteres `A-Za-z0-9-`; é pública por natureza — é servida em claro
+  no domínio). Ambos vivem nos composes —
+  [`docker-compose.yml`](docker-compose.yml) deixa desligado (um publish local
+  anunciaria o domínio público a partir de dados que não são os que lá estão) e o
+  compose da VM
+  ([`deploy/kamatera/servicos/backend/compose.yml`](deploy/kamatera/servicos/backend/compose.yml))
+  deixa ligado. A chave também pode ser gravada em **Administração → Chaves e
+  integrações** (`indexnow_key`), que tem efeito imediato e ganha ao ambiente.
+- **Prova de posse.** O motor vai buscar `https://<domínio>/<chave>.txt` — a
+  plataforma serve-o ela própria (`api/main.py`), na raiz, sem ficheiro no disco.
+- **O que se anuncia.** Os endereços saem dos **sitemaps que a plataforma já
+  gera** (site, loja e aplicação), pelo que um tipo de página novo entra sozinho.
+  Anuncia-se só a **diferença** desde o último anúncio: página nova, página cujo
+  `lastmod` mudou e página que saiu do sitemap. O ponto de escrita do CMS e da
+  loja (`_write_store`) é o gancho: publicar, despublicar, agendar ou editar
+  chega ao motor **sem bloquear quem publicou** (o envio corre em segundo plano).
+- **Observar.** `GET /indexnow/state` (administração) mostra o que está ligado, a
+  origem da chave, o inventário público por fonte, o que falta anunciar e as
+  últimas submissões; `POST /indexnow/sync` anuncia já o que está pendente
+  (`?forcar=true` reenvia tudo o que é público). Cada submissão fica em
+  `data/indexnow/submissoes.jsonl` com o código HTTP do motor.
+- **Limite honesto.** O `lastmod` dos sitemaps tem granularidade de **dia**: uma
+  edição feita no mesmo dia em que a página já foi anunciada só volta a ser
+  anunciada quando a data mudar (ou com `forcar`). Um lote recusado (chave em
+  falta no host, endereços de outro domínio) **não** fica dado como anunciado —
+  continua pendente, para a tentativa seguinte não perder a página.
+- **O Google não entra nisto.** O IndexNow é dos motores acima; o Google não
+  participa (para ele contam o sitemap, a canónica e a paciência do rastreio, e a
+  *Indexing API* dele só serve `JobPosting`/`BroadcastEvent`). O Bing aceita
+  submissões assim que o ficheiro da chave responde no domínio, que é o que esta
+  plataforma passa a servir.
+
+Testes: [`tests/test_indexnow.py`](tests/test_indexnow.py) (inventário, diferenças,
+chave e interruptor, lotes, códigos de erro e gancho na escrita; nunca fala com o
+motor).
+
 ## CLI
 
 Cliente de linha de comandos (não precisa de servidor Python pesado: só `requests`).

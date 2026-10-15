@@ -294,6 +294,22 @@ CHAVES: List[Dict[str, Any]] = [
         "default": "ssl",
         "testavel": False,
     },
+    {
+        "id": "indexnow_key",
+        "label": "IndexNow — chave de indexação em tempo real",
+        "grupo": "Indexação (Bing, Yandex, Seznam, Naver)",
+        "descricao": (
+            "Chave de 8 a 128 caracteres (letras, dígitos e hífen) que prova à rede IndexNow que o domínio "
+            "é de quem submete. Com ela, cada publicação avisa o motor do endereço que mudou; sem ela, os "
+            "anúncios ficam desligados. Pode ser inventada — a plataforma serve-a sozinha em "
+            "`https://<domínio>/<chave>.txt`."
+        ),
+        "env": ["INDEXNOW_KEY"],
+        "onde": "Valor à escolha (ex.: saída de `openssl rand -hex 16`)",
+        "secreto": False,
+        "exemplo": "9c1f4b7a5e2d8f3061b4c7a9d2e5f801",
+        "testavel": False,
+    },
 ]
 
 CHAVE_BY_ID: Dict[str, Dict[str, Any]] = {chave["id"]: chave for chave in CHAVES}

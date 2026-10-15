@@ -472,6 +472,7 @@ Isto permite que os dados e modelos persistam entre execuções dos containers e
 | `FINANCE_ES_URL` | `http://elasticsearch:9200` | Endereço do Elasticsearch **visto de dentro do container**. |
 | `FINANCE_AUTH_SECRET` | vazio | Se vazio, é usado/reutilizado `data/.auth_secret`. |
 | `FRED_API_KEY`, `BRAVE_API_KEY`, `SERPAPI_KEY`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `OLLAMA_URL` | vazio | Chaves/endpoints opcionais das ferramentas do agente. |
+| `INDEXNOW_ENABLED` / `INDEXNOW_KEY` | `false` / vazio | Indexação em tempo real (IndexNow: Bing, Yandex, Seznam, Naver). Fica **desligada** no compose local — um publish aqui anunciaria o domínio público a partir de dados que não são os que lá estão; na VM o interruptor está ligado. A chave é pública (o domínio serve-a em `/<chave>.txt`) e também se grava em *Administração → Chaves e integrações* (`indexnow_key`). |
 
 ## Notas e armadilhas resolvidas
 

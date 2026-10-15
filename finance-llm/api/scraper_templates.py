@@ -40,8 +40,6 @@ CATEGORIES = [
     "Imprensa económica (Portugal)",
     "Imprensa económica (Espanha)",
     "Mercados (internacional)",
-    "Diretórios de empresas",
-    "Política e pessoas públicas",
     "Sites de exemplo",
 ]
 
@@ -59,15 +57,11 @@ def _field(
     all_: bool = False,
     max_length: int = 2000,
     selectors: Optional[List[str]] = None,
-    regex: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Campo de um template (mesma forma que o módulo de recolha usa).
 
     `selectors` serve os sites que desenham o mesmo dado de duas maneiras: a
     extração usa o primeiro seletor que devolver valor.
-
-    `regex` aplica-se sobre o valor devolvido pelo seletor (útil para tirar
-    um NIF ou ID de um `href` antes de o campo ser devolvido).
     """
     alternativos = [s for s in (selectors or []) if s]
     if selector and selector not in alternativos:
@@ -85,35 +79,18 @@ def _field(
         field["selectors"] = alternativos
     if attr:
         field["attr"] = attr
-    if regex:
-        field["regex"] = regex
     return field
 
 
-def _detail(
-    selector: str,
-    *,
-    max_items: int = 20,
-    delay: float = 0.6,
-    pairs: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    """Bloco do detalhe: o corpo do artigo e/ou a ficha estruturada.
-
-    `selector` é o contentor do texto na página de detalhe. `pairs` traz os
-    pares chave/valor da ficha (diretórios de empresas), que ficam no item como
-    `data[ficha]` — permite ter **dados diferentes** por item sem um campo por
-    cada linha da ficha.
-    """
-    block: Dict[str, Any] = {
-        "enabled": bool(selector) or bool(pairs),
+def _detail(selector: str, *, max_items: int = 20, delay: float = 0.6) -> Dict[str, Any]:
+    """Bloco do texto integral: o corpo do artigo na página de detalhe."""
+    return {
+        "enabled": bool(selector),
         "selector": selector,
         "max_items": max_items,
         "delay": delay,
         "max_chars": 20000,
     }
-    if pairs:
-        block["pairs"] = pairs
-    return block
 
 
 def _sentiment(*, max_items: int = 8, field: str = "text", engine: str = "auto", min_chars: int = 120) -> Dict[str, Any]:
@@ -449,195 +426,6 @@ TEMPLATES: List[Dict[str, Any]] = [
             "id_fields": ["autor", "citacao"],
             "title_field": "citacao",
             "detail": _detail("", max_items=0),
-        },
-    },
-    {
-        "id": "parlamento-deputados",
-        "name": "Parlamento · Deputados (XVII legislatura)",
-        "site": "parlamento.pt",
-        "category": "Política e pessoas públicas",
-        "description": "Deputados à Assembleia da República: nome, BID, círculo eleitoral, grupo parlamentar, ligações de atividade/presenças/interesses e a biografia completa.",
-        "tags": ["politica", "deputados", "pessoas", "parlamento", "assembleia-da-republica"],
-        "requires": "http",
-        "notes": (
-            "Página SharePoint/ASP.NET: **não tem endereço por página** — o «>» é um "
-            "`__doPostBack`, por isso a paginação é `type=\"postback\"`. Os cartões são "
-            "`.row.margin_h0.margin-Top-15`; o BID (identificador do deputado) sai do "
-            "`href` da biografia. O texto integral é a coluna `div.col-xs-12` da página "
-            "de biografia."
-        ),
-        "source": {
-            "name": "Parlamento · Deputados",
-            "description": "Deputados à Assembleia da República, com biografia (naturalidade, habilitações, profissão, comissões).",
-            "url": "https://www.parlamento.pt/deputadogp/paginas/deputados.aspx",
-            "enabled": False,
-            "fetcher": "http",
-            "list": {"selector": ".row.margin_h0.margin-Top-15", "type": "css"},
-            "fields": [
-                _field("nome", "Nome", "a::text", max_length=200),
-                _field(
-                    "bid",
-                    "BID",
-                    "a::attr(href)",
-                    max_length=20,
-                    regex=r"BID=(\d+)",
-                ),
-                _field(
-                    "url",
-                    "Biografia",
-                    "a[href*='Biografia.aspx']::attr(href)",
-                    selectors=["a[href*='Biografia.aspx']::attr(href)", "a::attr(href)"],
-                    max_length=1024,
-                ),
-                _field("circulo", "Círculo eleitoral", "span::text", max_length=160),
-                _field("partido", "Grupo parlamentar", "span:nth-of-type(2)::text", selectors=["span:nth-of-type(2)::text", "span::text"], max_length=160),
-                _field("url_atividade", "Atividade", "a[href*='ActividadeDeputado']::attr(href)", max_length=1024),
-                _field("url_presencas", "Presenças", "a[href*='PresencasReunioes']::attr(href)", max_length=1024),
-                _field("url_interesses", "Registo de interesses", "a[href*='RegInteresses']::attr(href)", max_length=1024),
-            ],
-            "pagination": {
-                "selector": 'a[href*="__doPostBack"]',
-                "type": "postback",
-                "next_text": ">",
-                "max_pages": 20,
-            },
-            "options": {"impersonate": "chrome", "timeout": 120, "http_version": 1, "retries": 3, "retry_delay": 2.0},
-            "schedule": {"cron": "0 5 * * 1", "timezone": "Europe/Lisbon"},
-            "respect_robots": True,
-            "tags": ["politica", "deputados", "pessoas", "parlamento"],
-            "id_fields": ["bid"],
-            "title_field": "nome",
-            "summary_field": "partido",
-            "detail": {
-                "enabled": False,
-                "selector": "//div[contains(@class, 'col-xs-12')][.//div[contains(@class, 'TitulosBio')]][.//div[@class='TextoRegular-Titulo']]",
-                "type": "xpath",
-                "max_items": 30,
-                "delay": 0.4,
-                "max_chars": 20000,
-                "retries": 2,
-            },
-        },
-    },
-    {
-        "id": "iberinform-diretorio",
-        "name": "Iberinform · Diretório de empresas (PT)",
-        "site": "iberinform.pt",
-        "category": "Diretórios de empresas",
-        "description": "Diretório de empresas portuguesas do Iberinform, recolhido por distrito e concelho, com detalhe de ficha.",
-        "tags": ["empresas", "iberinform", "diretorio", "nif", "caudal"],
-        "requires": "http",
-        "notes": "Cada linha da tabela `table.table-hover.tabla-directorio-geografico` tem nome, NIF no `href`, distrito e concelho. A paginação usa `a[aria-label='Next']`. O detalhe da empresa fica em `section.section-company-data`.",
-        "source": {
-            "name": "Iberinform · Diretório de empresas (PT)",
-            "description": "Recolha do diretório Iberinform por distrito e concelho, com ficha detalhada de cada empresa.",
-            "url": "https://www.iberinform.pt/diretorio/evora/alandroal/pagina/1",
-            "enabled": False,
-            "fetcher": "http",
-            "list": {"selector": "table.table-hover.tabla-directorio-geografico tbody tr", "type": "css"},
-            "fields": [
-                _field("nome", "Nome", "a h3::text", max_length=400),
-                _field("url", "URL", "a::attr(href)", max_length=1024),
-                _field("distrito", "Distrito", "td.hidden-xs::text", max_length=120),
-                _field("concelho", "Concelho", "td:not(.hidden-xs)::text", max_length=120),
-                _field(
-                    "nif",
-                    "NIF",
-                    "a::attr(href)",
-                    max_length=20,
-                    regex=r"/empresa/(\d+)/",
-                ),
-            ],
-            "pagination": {"selector": "a[aria-label='Next']", "type": "css", "attr": "href", "max_pages": 5},
-            "options": {"impersonate": "chrome", "timeout": 30},
-            "schedule": {"cron": "0 3 * * 1", "timezone": "Europe/Lisbon"},
-            "respect_robots": True,
-            "tags": ["empresas", "iberinform", "diretorio"],
-            "id_fields": ["nif", "url"],
-            "title_field": "nome",
-            "summary_field": "nome",
-            "detail": _detail("section.section-company-data", max_items=50, delay=1.2),
-        },
-    },
-    {
-        "id": "racius-diretorio",
-        "name": "Racius · Diretório de empresas (PT)",
-        "site": "racius.com",
-        "category": "Diretórios de empresas",
-        "description": "Diretório de empresas portuguesas do Racius: lista por pesquisa, com ficha detalhada (morada, forma jurídica, capital social, CAE…) de cada empresa.",
-        "tags": ["empresas", "racius", "diretorio", "nif", "ficha"],
-        "requires": "http",
-        "notes": "A lista é `a.results__col-link` (o cartão `article.results__entry` vem lá dentro, e é dele que saem o nome, o NIF e a localização). A página de resultados não publica ligações de paginação: a página é o parâmetro `page` do URL (`?q=<termo>&page=2`), pelo que a paginação usa `mode=query`. A ficha da empresa está em `li.detail__detail`, com o rótulo em `p.detail__key-info` e o valor em `p.t--d-blue`.",
-        "source": {
-            "name": "Racius · Diretório de empresas (PT)",
-            "description": "Recolha do diretório Racius por termo de pesquisa, com ficha detalhada de cada empresa.",
-            "url": "https://www.racius.com/pesquisa/empresas/?q=",
-            "enabled": False,
-            "fetcher": "http",
-            "list": {"selector": "a.results__col-link", "type": "css"},
-            "fields": [
-                _field("nome", "Nome", "p.results__name::text", max_length=400),
-                _field(
-                    "nif",
-                    "NIF",
-                    "p.results__activity::text",
-                    max_length=20,
-                    regex=r"(\d{9})",
-                ),
-                _field(
-                    "localizacao",
-                    "Localização",
-                    "div.results__col-location::text",
-                    max_length=200,
-                    regex=r"(?:ico-gps\s*)?([\s\S]+)",
-                ),
-                _field(
-                    "concelho",
-                    "Concelho",
-                    "div.results__col-location::text",
-                    max_length=120,
-                    regex=r"(?:ico-gps\s*)?([^,]+)",
-                ),
-                _field(
-                    "distrito",
-                    "Distrito",
-                    "div.results__col-location::text",
-                    max_length=120,
-                    regex=r",\s*([^,]+)\s*$",
-                ),
-                _field("url", "Ligação", "a.results__col-link::attr(href)", max_length=1024),
-            ],
-            "pagination": {"mode": "query", "param": "page", "start": 1, "max_pages": 5},
-            "options": {"impersonate": "chrome", "timeout": 30},
-            "schedule": {"cron": "0 4 * * 2", "timezone": "Europe/Lisbon"},
-            "respect_robots": True,
-            "tags": ["empresas", "racius", "diretorio"],
-            "id_fields": ["nif", "url"],
-            "title_field": "nome",
-            "summary_field": "nome",
-            "sink_index": "finance_racius",
-            "detail": _detail(
-                "",
-                max_items=50,
-                delay=1.0,
-                pairs={
-                    "enabled": True,
-                    "container": "li.detail__detail",
-                    "key_selector": "p.detail__key-info",
-                    "value_selector": "p.t--d-blue",
-                    "field": "ficha",
-                    "fields": {
-                        "Morada": "morada",
-                        "Forma Jurídica": "forma_juridica",
-                        # O texto original fica na `ficha`; aqui interessa o
-                        # número, para filtrar/ordenar por capital social.
-                        "Capital Social": {"field": "capital_social_eur", "cast": "float"},
-                        "Atividade": "atividade",
-                        "Acerca da Empresa": "acerca",
-                        "CAE": "cae",
-                    },
-                },
-            ),
         },
     },
 ]

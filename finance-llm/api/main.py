@@ -36,7 +36,7 @@ _carregar_env_do_projeto()
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Body, Request, UploadFile, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from api.models import (
@@ -257,6 +257,7 @@ from api.auth_routes import router as auth_router, optional_session, CurrentSess
 from api.billing_routes import router as billing_router
 from api.cli_routes import router as cli_router
 from api.admin_routes import router as admin_router
+from api.indexnow_routes import router as indexnow_router
 from api.providers_routes import router as providers_router
 from api.proxy_routes import router as proxy_router
 from api.crm_routes import router as crm_router
@@ -762,6 +763,7 @@ app.include_router(permissions_router)
 app.include_router(billing_router)
 app.include_router(cli_router)
 app.include_router(admin_router)
+app.include_router(indexnow_router)
 app.include_router(providers_router)
 app.include_router(proxy_router)
 # A arquitetura de CRM (genérica, 24 módulos) é registada antes do CRM comercial
@@ -2228,6 +2230,22 @@ def serve_sitemap_xml():
     if path.is_file():
         return FileResponse(str(path), media_type="application/xml")
     raise HTTPException(status_code=404, detail="Not Found")
+
+
+@app.get("/{nome}.txt")
+def serve_indexnow_key(nome: str):
+    """Ficheiro da chave do IndexNow, na raiz do domínio.
+
+    O protocolo exige-o aqui: é o que prova que quem anuncia controla o host.
+    Qualquer outro `.txt` (que não esteja no build, como o `robots.txt`) continua
+    a dar 404 — a rota é registada antes do *catch-all* que os serve.
+    """
+    from api import indexnow
+
+    conteudo = indexnow.ficheiro_chave(nome)
+    if conteudo is None:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return PlainTextResponse(conteudo, headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/favicon.svg")

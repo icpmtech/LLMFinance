@@ -1,6 +1,6 @@
 # IQ OS API — referência
 
-Versão `0.4.0` · **1294 operações** em **44 grupos**.
+Versão `0.4.0` · **1297 operações** em **45 grupos**.
 
 > Ficheiro gerado por `python scripts/export_openapi.py`. A especificação completa está em `docs/openapi.json`; a interface interativa corre em `/docs` (Swagger UI) e `/redoc`.
 
@@ -9,6 +9,7 @@ Versão `0.4.0` · **1294 operações** em **44 grupos**.
 - **core** — Estado do serviço e chat principal. `/health` confirma os modelos e *features* carregados; `/chat` responde seguindo a *skill* do pedido; `/chat/stream` faz streaming SSE.
 - **auth** — Contas e sessões: registo, login/logout, perfil, palavra-passe, dispositivos ligados e estatísticas de administração.
 - **admin** — Consola de administração: panorama geral, gestão de contas e sessões, visualizador de eventos e leitura de ficheiros de log.
+- **indexnow** — Indexação em tempo real: estado do anúncio de páginas públicas aos motores de busca e envio imediato do que mudou (IndexNow — Bing, Yandex, Seznam e Naver). O ficheiro da chave sai na raiz do domínio (`/{chave}.txt`).
 - **rag** — RAG de documentos: carregar PDF, listar/editar/apagar documentos, reprocessar, responder com citações, explicar a resposta e grafo de *chunks*.
 - **market** — Mercado e ativos: lista/pesquisa de tickers (Yahoo Finance), preços, informação fundamental, demonstrações financeiras, SEC filings, detentores, recomendações, calendário, notícias, opções, ações societárias, indicadores técnicos e previsão (ARIMA/Kronos).
 - **elastic** — Camada Elasticsearch: estado, ingestão de preços/notícias, pesquisa (preços, notícias, global, autocomplete), análise NLP de notícias, grafo de notícias/entidades e índices da plataforma.
@@ -562,6 +563,7 @@ Estado do serviço e chat principal. `/health` confirma os modelos e *features* 
 | `GET` | `/vortal/periodos` | Anos e meses com avisos Vortal publicados (para escolher o lote) |
 | `GET` | `/vortal/pesquisa` | Pesquisa no texto das peças recolhidas |
 | `POST` | `/vortal/recolha` | Descarregar as peças para disco e (opcionalmente) indexar (exige sessão) |
+| `GET` | `/{nome}.txt` | Serve Indexnow Key |
 
 ## auth
 
@@ -624,6 +626,15 @@ Consola de administração: panorama geral, gestão de contas e sessões, visual
 | `DELETE` | `/admin/users/{user_id}` | Admin Delete User |
 | `POST` | `/admin/users/{user_id}/approve` | Admin Approve User |
 | `POST` | `/admin/users/{user_id}/revoke-sessions` | Admin Revoke Sessions |
+
+## indexnow
+
+Indexação em tempo real: estado do anúncio de páginas públicas aos motores de busca e envio imediato do que mudou (IndexNow — Bing, Yandex, Seznam e Naver). O ficheiro da chave sai na raiz do domínio (`/{chave}.txt`).
+
+| Método | Caminho | Resumo |
+| --- | --- | --- |
+| `GET` | `/indexnow/state` | Indexnow State |
+| `POST` | `/indexnow/sync` | Indexnow Sync |
 
 ## rag
 

@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from api import cms_editorial as editorial
+from api import indexnow
 
 logger = logging.getLogger(__name__)
 
@@ -510,6 +511,10 @@ def _write_store(store: Dict[str, Any]) -> None:
     tmp.replace(CMS_PATH)
     _cache = store
     _cache_mtime = _file_mtime()
+    # Toda a escrita pública (publicar, despublicar, agendar, editar) passa por
+    # aqui: é o ponto único para avisar os motores de busca do que mudou. Sem
+    # chave do IndexNow configurada isto não faz nada.
+    indexnow.anunciar_em_fundo("escrita do CMS")
 
 
 def _file_mtime() -> Optional[int]:

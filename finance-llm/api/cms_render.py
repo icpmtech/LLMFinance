@@ -17,7 +17,7 @@ import logging
 import re
 import unicodedata
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from urllib.parse import quote
 
 import markdown as markdown_lib
@@ -1822,10 +1822,19 @@ def _tabela_nua(
     )
 
 
-def _tabela(titulo: str, cabecalho: List[str], linhas: List[List[str]]) -> str:
+def _tabela(
+    titulo: str,
+    cabecalho: List[str],
+    linhas: List[List[str]],
+    *,
+    atributos: Optional[List[Dict[str, str]]] = None,
+) -> str:
     if not linhas:
         return ""
-    return f'<div class="section prose"><h2>{_esc(titulo)}</h2>{_tabela_nua(cabecalho, linhas)}</div>'
+    return (
+        f'<div class="section prose"><h2>{_esc(titulo)}</h2>'
+        f"{_tabela_nua(cabecalho, linhas, atributos=atributos)}</div>"
+    )
 
 
 def _kpis_do_municipio(dados: Dict[str, Any]) -> str:
@@ -1964,6 +1973,26 @@ _CSS_PESQUISA = """
 .barras .barra i { display: block; height: 9px; border-radius: 999px; background: var(--accent); min-width: 2px; }
 .barras .valor { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
 .barras .valor small { display: block; color: var(--muted); font-weight: 400; font-size: .78rem; }
+/* Municípios clicáveis: a barra é o botão que filtra a tabela e abre o gráfico do município. */
+.barras li.clicavel > button {
+  grid-column: 1 / -1; display: grid; grid-template-columns: minmax(90px, 190px) 1fr auto;
+  align-items: center; gap: 10px; width: 100%; padding: 3px 6px; margin: -3px -6px;
+  border: 0; border-radius: 8px; background: none; color: inherit; font: inherit;
+  text-align: left; cursor: pointer;
+}
+.barras li.clicavel > button:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.barras li.clicavel > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.barras li.clicavel > button[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.barras li.clicavel > button[aria-pressed="true"] .rotulo { color: var(--accent); font-weight: 600; }
+.pesquisa-detalhes { margin: 0 0 26px; }
+.pesquisa-detalhes-cabeca { display: flex; justify-content: flex-end; margin: 0 0 10px; }
+.pesquisa-limpar {
+  min-height: 40px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border);
+  background: transparent; color: var(--accent); font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer;
+}
+.pesquisa-limpar:hover { border-color: var(--accent); }
+/* Linhas escondidas pelo município escolhido (classe, e não `hidden`: vale para `<tr>`). */
+.pesquisa-linha { display: none; }
 """
 
 
@@ -2034,6 +2063,7 @@ def _tabela_da_pesquisa(dados: Dict[str, Any]) -> str:
             "Anos recentes",
         ]
     linhas: List[List[str]] = []
+    atributos: List[Dict[str, str]] = []
     for item in itens:
         anos_recentes = " · ".join(
             str(registro.get("ano") or "") for registro in (item.get("anos_recentes") or [])[:5]
@@ -2049,13 +2079,133 @@ def _tabela_da_pesquisa(dados: Dict[str, Any]) -> str:
             linha += [_euros_curto(item.get("contratos_valor"))]
         linha.append(anos_recentes)
         linhas.append(linha)
-    tabela = _tabela("Municípios do filtro", cabecalho, linhas)
+        # O nome na linha é a chave do clique no gráfico (`_JS_PESQUISA_MUNICIPIO`).
+        atributos.append({"municipio": str(item.get("nome") or "")})
+    tabela = _tabela("Municípios do filtro", cabecalho, linhas, atributos=atributos)
     nota = f"{_numero(dados.get('linhas'))} de {_numero(dados.get('total'))} municípios"
     return (
-        f'<div class="pesquisa-tabela">{tabela}</div>'
-        f'<div class="section"><p class="meta">{_esc(nota)} · '
+        f'<div class="pesquisa-tabela" data-pesquisa-tabela data-total="{_esc(dados.get("total"))}">'
+        f"{tabela}</div>"
+        f'<div class="section"><p class="meta">'
+        f'<span data-papel="conta-municipios" aria-live="polite">{_esc(nota)}</span> · '
         f'{_esc(str(dados.get("descricao") or ""))}</p></div>'
     )
+
+
+def _series_da_contratacao(item: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """A contratação do Portal BASE nos anos recentes de um município, ano a ano.
+
+    Sai do mais antigo para o mais recente — a mesma leitura do gráfico «Contratado
+    por ano» — e só leva anos com valor: um ano sem contratação não é uma barra de zero.
+    """
+    series = [
+        {
+            "rotulo": str(registo.get("ano") or ""),
+            "valor": _para_float(registo.get("valor")),
+            "nota": f"{_numero(registo.get('contratos'))} contratos",
+        }
+        for registo in item.get("anos_recentes") or []
+        if str(registo.get("ano") or "") and _para_float(registo.get("valor")) > 0
+    ]
+    return sorted(series, key=lambda ponto: ponto["rotulo"])
+
+
+def _municipios_escolhiveis(dados: Dict[str, Any]) -> List[str]:
+    """Os municípios que o gráfico mostra **e** que têm linha na tabela.
+
+    São estes — e só estes — que se podem escolher: uma barra sem linha ao lado não
+    teria tabela para filtrar, e uma linha sem série anual não teria gráfico para abrir.
+    A ordem é a do gráfico (a ordenação que o editor congelou na pesquisa).
+    """
+    grafico = next((g for g in dados.get("graficos") or [] if g.get("id") == "municipios"), None)
+    if not grafico:
+        return []
+    por_nome = {str(item.get("nome") or ""): item for item in dados.get("itens") or []}
+    nomes: List[str] = []
+    for barra in grafico.get("itens") or []:
+        nome = str(barra.get("rotulo") or "")
+        if not nome or nome in nomes:
+            continue
+        item = por_nome.get(nome)
+        if item and _series_da_contratacao(item):
+            nomes.append(nome)
+    return nomes
+
+
+def _detalhes_da_pesquisa(dados: Dict[str, Any], escolhiveis: List[str]) -> str:
+    """O gráfico de cada município escolhível, escondido até se clicar na barra dele.
+
+    Fica **por cima da tabela** e é escrito aqui, no servidor: os valores têm o
+    mesmo formato do resto da página e não dependem de JavaScript para existir.
+    """
+    if not escolhiveis:
+        return ""
+    por_nome = {str(item.get("nome") or ""): item for item in dados.get("itens") or []}
+    ano_despesas = dados.get("ano_despesas")
+    paineis: List[str] = []
+    for nome in escolhiveis:
+        item = por_nome.get(nome) or {}
+        nota = "Contratado por ano (Portal BASE)"
+        if ano_despesas:
+            nota += f" · despesa total de {ano_despesas}: {_euros_curto(item.get('despesas_total'))}"
+        paineis.append(
+            f'<section class="section grafico" data-detalhe="{_esc(nome)}" hidden>'
+            f"<h3>{_esc(nome)}</h3>"
+            f'<p class="sub">{_esc(nota)}</p>'
+            f"{_barras(_series_da_contratacao(item))}</section>"
+        )
+    return (
+        '<div class="pesquisa-detalhes" data-pesquisa-detalhes hidden>'
+        '<div class="pesquisa-detalhes-cabeca">'
+        '<button type="button" class="pesquisa-limpar" data-papel="limpar-municipios">Limpar filtro</button>'
+        "</div>" + "".join(paineis) + "</div>"
+    )
+
+
+#: Município escolhido no gráfico: filtra a tabela e abre o gráfico anual dele.
+#: Vai no fim da página (precisa da tabela já no HTML) e escreve-se em JavaScript
+#: simples porque a página sai do servidor como um só ficheiro, sem build.
+_JS_PESQUISA_MUNICIPIO = """
+<script>(function(){
+var botoes=Array.prototype.slice.call(document.querySelectorAll('[data-escolher]'));
+var caixa=document.querySelector('[data-pesquisa-tabela]');
+if(!botoes.length||!caixa)return;
+var linhas=Array.prototype.slice.call(caixa.querySelectorAll('tbody tr'));
+var paineis=Array.prototype.slice.call(document.querySelectorAll('[data-detalhe]'));
+var detalhes=document.querySelector('[data-pesquisa-detalhes]');
+var conta=document.querySelector('[data-papel="conta-municipios"]');
+var limpar=document.querySelector('[data-papel="limpar-municipios"]');
+var semEscolha=conta?conta.textContent:'';
+var total=caixa.getAttribute('data-total')||String(linhas.length);
+var escolhido='';
+function aplicar(){
+  var visiveis=0;
+  linhas.forEach(function(linha){
+    var mostra=!escolhido||linha.getAttribute('data-municipio')===escolhido;
+    linha.classList.toggle('pesquisa-linha',!mostra);
+    if(mostra)visiveis+=1;
+  });
+  botoes.forEach(function(botao){
+    var ativo=!!escolhido&&botao.getAttribute('data-escolher')===escolhido;
+    botao.setAttribute('aria-pressed',ativo?'true':'false');
+  });
+  paineis.forEach(function(painel){
+    painel.hidden=!escolhido||painel.getAttribute('data-detalhe')!==escolhido;
+  });
+  if(detalhes)detalhes.hidden=!escolhido;
+  if(conta)conta.textContent=escolhido?visiveis+' de '+total+' municípios':semEscolha;
+}
+botoes.forEach(function(botao){
+  botao.addEventListener('click',function(){
+    var nome=botao.getAttribute('data-escolher')||'';
+    escolhido=escolhido===nome?'':nome;
+    aplicar();
+  });
+});
+if(limpar)limpar.addEventListener('click',function(){escolhido='';aplicar();});
+aplicar();
+})();</script>
+"""
 
 
 def _corpo_da_pesquisa(dados: Dict[str, Any], doc: Dict[str, Any], *, preview: bool) -> str:
@@ -2069,7 +2219,10 @@ def _corpo_da_pesquisa(dados: Dict[str, Any], doc: Dict[str, Any], *, preview: b
         )
     partes.append(_kpis_da_pesquisa(dados))
     partes.append(blocks_to_html(doc.get("blocks") or [], preview=preview))
-    partes.append(_graficos_da_pesquisa(dados))
+    # Quem se pode escolher no gráfico: filtra a tabela e abre o gráfico anual do município.
+    escolhiveis = _municipios_escolhiveis(dados)
+    partes.append(_graficos_da_pesquisa(dados, escolhiveis=set(escolhiveis)))
+    partes.append(_detalhes_da_pesquisa(dados, escolhiveis))
     partes.append(_tabela_da_pesquisa(dados))
     partes.append(_adjudicatarios_da_pesquisa(dados))
 
@@ -2080,7 +2233,11 @@ def _corpo_da_pesquisa(dados: Dict[str, Any], doc: Dict[str, Any], *, preview: b
         if recolhido:
             nota += f" · valores lidos a {recolhido}"
         partes.append(f'<div class="section aviso">{_esc(nota)}</div>')
-    return "".join(parte for parte in partes if parte)
+    corpo = "".join(parte for parte in partes if parte)
+    # O filtro do gráfico é um só script, no fim: tem de vir depois da tabela.
+    if escolhiveis:
+        corpo += _JS_PESQUISA_MUNICIPIO
+    return corpo
 
 
 def _barra_de_valor(valor: float, maximo: float) -> int:
@@ -2095,6 +2252,7 @@ def _barras(
     *,
     unidade: Optional[str] = None,
     formatador: Optional[Any] = None,
+    escolher: Optional[Set[str]] = None,
 ) -> str:
     """Gráfico de barras em HTML/CSS.
 
@@ -2105,6 +2263,9 @@ def _barras(
     O `formatador` deixa quem chama escolher a escala do valor: as despesas
     municipais são milhões (formato curto), mas uma remuneração base mostra-se
     com cêntimos («1 442,57 €»).
+
+    Os rótulos em `escolher` saem como **botões** (`data-escolher`): são as
+    barras que filtram a página (ver `_JS_PESQUISA_MUNICIPIO`).
     """
     valores = [_para_float(item.get("valor")) for item in itens]
     maximo = max(valores) if valores else 0.0
@@ -2115,27 +2276,40 @@ def _barras(
             texto = formatador(valor)
         else:
             texto = _numero(valor) if unidade == "contratos" else _euros_curto(valor)
-        linhas.append(
-            f'<li><span class="rotulo">{_esc(item.get("rotulo"))}</span>'
+        rotulo = _esc(item.get("rotulo"))
+        conteudo = (
+            f'<span class="rotulo">{rotulo}</span>'
             f'<span class="barra"><i style="width:{_barra_de_valor(valor, maximo)}%"></i></span>'
             f'<span class="valor">{_esc(texto)}'
             + (f"<small>{_esc(nota)}</small>" if nota else "")
-            + "</span></li>"
+            + "</span>"
         )
+        if escolher and str(item.get("rotulo") or "") in escolher:
+            linhas.append(
+                f'<li class="clicavel">'
+                f'<button type="button" data-escolher="{rotulo}" aria-pressed="false">{conteudo}</button>'
+                "</li>"
+            )
+        else:
+            linhas.append(f"<li>{conteudo}</li>")
     return f'<ul class="barras">{"".join(linhas)}</ul>'
 
 
-def _graficos_da_pesquisa(dados: Dict[str, Any]) -> str:
-    """As séries da pesquisa (municípios do topo, contratado e despesa por ano)."""
+def _graficos_da_pesquisa(dados: Dict[str, Any], escolhiveis: Optional[Set[str]] = None) -> str:
+    """As séries da pesquisa: municípios do topo, contratado e despesa por ano.
+
+    Os municípios em `escolhiveis` saem como **barras clicáveis** (`data-escolher`).
+    """
     partes = []
     for grafico in dados.get("graficos") or []:
         itens = grafico.get("itens") or []
         if not itens:
             continue
+        clicaveis = escolhiveis if grafico.get("id") == "municipios" else None
         partes.append(
             f'<section class="section grafico"><h3>{_esc(grafico.get("titulo"))}</h3>'
             f'<p class="sub">{_esc(grafico.get("subtitulo") or "")}</p>'
-            f'{_barras(itens, unidade=grafico.get("unidade"))}</section>'
+            f'{_barras(itens, unidade=grafico.get("unidade"), escolher=clicaveis)}</section>'
         )
     return "".join(partes)
 

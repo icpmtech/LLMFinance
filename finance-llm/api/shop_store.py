@@ -44,6 +44,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from api import indexnow
+
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -644,6 +646,10 @@ def _write_store(store: Dict[str, Any]) -> None:
         raise last if last else OSError(f"Não foi possível gravar {SHOP_PATH}.")
     _cache = store
     _cache_mtime = _file_mtime()
+    # Ponto único de escrita da loja: um produto publicado, esgotado ou
+    # arquivado muda os endereços públicos e é anunciado daqui. Sem chave do
+    # IndexNow configurada isto não faz nada.
+    indexnow.anunciar_em_fundo("escrita da loja")
 
 
 def _file_mtime() -> Optional[int]:
