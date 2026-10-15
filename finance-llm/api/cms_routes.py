@@ -856,6 +856,17 @@ def site_municipio(slug: str) -> HTMLResponse:
     return HTMLResponse(render.render_municipio(doc, settings=settings), headers=_PUBLIC_HEADERS)
 
 
+@router.get("/site/pesquisa", response_class=HTMLResponse)
+def site_search(q: str = Query("", description="Texto a procurar no site.")) -> HTMLResponse:
+    """Pesquisa no site: páginas, artigos, estudos de benchmark e relatórios.
+
+    Não se confunde com `/site/pesquisa/{slug}`, que serve uma **página
+    editorial** de uma pesquisa guardada: aqui são resultados de texto, sem
+    índice próprio (por isso não se indexa — `noindex`).
+    """
+    return HTMLResponse(render.render_search(q), headers=_PUBLIC_HEADERS)
+
+
 @router.get("/site/pesquisa/{slug}", response_class=HTMLResponse)
 def site_pesquisa(slug: str) -> HTMLResponse:
     """Página pública de uma pesquisa (a fotografia guardada, com marca e SEO)."""

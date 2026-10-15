@@ -286,6 +286,32 @@ nav.main span.menu-pai {{ width: 100%; cursor: pointer; }}
   border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
   transform: rotate(45deg) translateY(-2px);
 }}
+/* Campo de pesquisa do site: vive no painel do telemóvel e na página de
+   resultados (`/site/pesquisa`), que é o mesmo formulário. */
+.pesquisa-form, .menu-pesquisa {{
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 5px 6px 5px 12px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface);
+}}
+.pesquisa-form {{ margin: 0 0 18px; }}
+.pesquisa-form input, .menu-pesquisa input {{
+  flex: 1 1 auto; min-width: 0; min-height: 40px; border: 0; background: none;
+  color: var(--text); font: inherit;
+}}
+.pesquisa-form input:focus, .menu-pesquisa input:focus {{ outline: none; }}
+.pesquisa-form .pesquisa-icone, .menu-pesquisa .pesquisa-icone {{
+  display: flex; flex: none; color: var(--muted);
+}}
+.pesquisa-form button, .menu-pesquisa button {{
+  flex: none; min-height: 40px; padding: 8px 16px; border: 0; border-radius: 999px;
+  background: var(--accent); color: #fff; font: inherit; font-weight: 700; cursor: pointer;
+}}
+/* Entrar/criar conta: os dois botões do painel do telemóvel. */
+.menu-conta {{ display: flex; gap: 8px; align-items: stretch; margin: 2px 0 4px; }}
+.menu-conta .btn {{ flex: 1 1 0; gap: 8px; padding: 10px 14px; font-size: .95rem; }}
+/* O botão que abre e fecha cada submenu só existe no telemóvel (é a seguir
+   ligado no `@media (max-width: 799px)`). */
+.menu-abre {{ display: none; }}
 /* No telefone o submenu fica logo à vista, indentado sob o item que o abre. */
 nav.main .submenu {{ margin: 0 0 6px 12px; padding: 0 0 0 10px; border-left: 1px solid var(--border); list-style: none; }}
 nav.main .submenu > li {{ list-style: none; }}
@@ -332,6 +358,23 @@ nav.main a[aria-current="page"] {{ background: var(--accent); color: #fff; }}
   /* Separadores entre entradas da lista e alvos de toque a toda a largura. */
   nav.main > * + * {{ border-top: 1px solid var(--border); }}
   nav.main > a {{ width: 100%; }}
+  /* No telemóvel o menu começa todo fechado e cada submenu abre e fecha pela
+     seta (o rótulo do item continua a levar à página dele). Sem isto, com os
+     submenus derivados dos dados, o painel passava o ecrã num instante. */
+  nav.main .tem-submenu > .submenu {{ display: none; }}
+  nav.main .tem-submenu.aberto > .submenu {{ display: block; }}
+  nav.main .tem-submenu > .menu-pai .menu-seta {{ display: none; }}
+  nav.main .menu-item, nav.main .submenu > li {{ position: relative; }}
+  nav.main .tem-submenu > .menu-pai {{ padding-right: 56px; }}
+  .menu-abre {{
+    position: absolute; top: 2px; right: 4px; display: flex; align-items: center; justify-content: center;
+    width: 44px; height: 44px; padding: 0; border: 1px solid transparent; border-radius: 10px;
+    background: none; color: var(--muted); cursor: pointer;
+  }}
+  .menu-abre:hover {{ background: var(--code); color: var(--text); }}
+  .menu-abre svg {{ transition: transform .18s ease; }}
+  .menu-abre[aria-expanded="true"] {{ color: var(--accent); }}
+  .menu-abre[aria-expanded="true"] svg {{ transform: rotate(180deg); }}
   /* Com submenus o painel fica mais alto que o ecrã e o cabeçalho é pegajoso:
      sem tecto, o fim da lista ficava fora do alcance (o painel não anda com a
      página). Aqui rola dentro do próprio painel; o `dvh` acompanha a barra do
@@ -589,7 +632,9 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
   /* Cabeçalho de uma linha: o menu volta a ser uma fila de pastilhas. */
   .site-header .wrap {{ flex-wrap: nowrap; gap: 18px; padding-top: 12px; padding-bottom: 12px; }}
   .brand .brand-mark {{ height: 34px; }}
-  .menu-estado, .menu-botao {{ display: none; }}
+  /* No ecrã grande não há botão de menu, nem pesquisa, nem conta, nem setas, e
+     as pastilhas ficam sem ícones: a fila é larga e já tem o «Entrar» à vista. */
+  .menu-estado, .menu-botao, .menu-pesquisa, .menu-conta, .menu-abre, .menu-icone {{ display: none; }}
   nav.main {{
     display: flex !important; flex-basis: auto; flex-direction: row; margin-left: auto; gap: 6px;
     width: auto; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
@@ -1063,15 +1108,125 @@ def _menu_theme_classes(menu: Dict[str, Any]) -> str:
     return " ".join(classes)
 
 
-def _menu_link(item: Dict[str, Any], current_path: str) -> str:
+#: Ícones do menu (traço, 20×20, `currentColor`). Poucos e simples: um menu com
+#: um desenho diferente por entrada cansa mais do que ajuda a ler.
+_ICONES: Dict[str, str] = {
+    "inicio": '<path d="M4 9.5 10 4l6 5.5V17H4z"/><path d="M8.5 17v-5h3v5"/>',
+    "seccao": '<path d="M4 4h5v5H4zM11 4h5v5h-5zM4 11h5v5H4zM11 11h5v5h-5z"/>',
+    "documento": '<path d="M5.5 3H11l3.5 3.5V17h-9z"/><path d="M11 3v3.5h3.5"/><path d="M7.5 11h5M7.5 13.8h5"/>',
+    "estudo": '<path d="M4 16.5V11M8 16.5V5M12 16.5v-4M16 16.5V8"/>',
+    "base": '<ellipse cx="10" cy="5.5" rx="5.5" ry="2.5"/><path d="M4.5 5.5v9c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5v-9"/>',
+    "blog": '<path d="M4.5 4.5h11v11h-11z"/><path d="M7 8h6M7 11h6"/>',
+    "contacto": '<path d="M3.5 5h13v10h-13z"/><path d="m3.5 6 6.5 5 6.5-5"/>',
+    "informacao": '<circle cx="10" cy="10" r="6.5"/><path d="M10 9v5M10 6.8v.4"/>',
+    "conta": '<circle cx="10" cy="6.8" r="2.8"/><path d="M4.5 17c0-2.7 2.5-4.3 5.5-4.3s5.5 1.6 5.5 4.3"/>',
+    "registar": '<circle cx="8.6" cy="6.8" r="2.8"/><path d="M2.6 17c0-2.7 2.5-4.3 6-4.3"/><path d="M14.6 11.5v6M11.6 14.5h6"/>',
+    "loja": '<path d="M4 7h12l-1 10H5z"/><path d="M7.5 7V5.6a2.5 2.5 0 0 1 5 0V7"/>',
+    "pesquisa": '<circle cx="9" cy="9" r="4.6"/><path d="m12.6 12.6 3.4 3.4"/>',
+}
+
+#: Ícone por destino conhecido: vale a primeira palavra que apareça no caminho ou
+#: no rótulo do item; o que não se conhece fica com o ícone genérico. É um mapa
+#: (e não um campo do CMS) para os ícones aparecerem sem ninguém os configurar.
+_ICONE_POR_PALAVRA: Tuple[Tuple[str, str], ...] = (
+    ("inicio", "inicio"),
+    ("home", "inicio"),
+    ("solucoes", "seccao"),
+    ("servicos", "seccao"),
+    ("base-de-dados", "base"),
+    ("fonte", "base"),
+    ("dados", "base"),
+    ("estudo", "estudo"),
+    ("benchmark", "estudo"),
+    ("relatorio", "documento"),
+    ("documento", "documento"),
+    ("dossie", "documento"),
+    ("blog", "blog"),
+    ("artigo", "blog"),
+    ("noticia", "blog"),
+    ("contacto", "contacto"),
+    ("sobre", "informacao"),
+    ("ajuda", "informacao"),
+    ("loja", "loja"),
+    ("carrinho", "loja"),
+    ("regist", "registar"),
+    ("criar-conta", "registar"),
+    ("entrar", "conta"),
+    ("login", "conta"),
+    ("conta", "conta"),
+    ("pesquisa", "pesquisa"),
+    ("busca", "pesquisa"),
+)
+
+
+def _icone(nome: str) -> str:
+    """SVG de um ícone do menu (vazio quando o nome não existe)."""
+    desenho = _ICONES.get(nome)
+    if not desenho:
+        return ""
+    return (
+        '<svg class="menu-icone" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" '
+        f'focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" '
+        f'stroke-linecap="round" stroke-linejoin="round">{desenho}</svg>'
+    )
+
+
+def _icone_do_item(item: Dict[str, Any]) -> str:
+    """Ícone do item pelo destino que ele abre (caminho ou rótulo)."""
+    alvo = _chave_nome(f"{item.get('href') or ''} {item.get('label') or ''}")
+    for palavra, nome in _ICONE_POR_PALAVRA:
+        if palavra in alvo:
+            return _icone(nome)
+    return _icone("seccao")
+
+
+def _botao_do_submenu(label: str) -> str:
+    """Botão que abre e fecha o submenu no telemóvel (no ecrã grande não aparece).
+
+    O rótulo do item continua a ser o link para a sua página: quem quer navegar
+    toca no rótulo, quem quer ver o que está lá dentro toca na seta.
+    """
+    nome = " ".join(str(label or "").split())
+    return (
+        f'<button type="button" class="menu-abre" aria-expanded="false" '
+        f'aria-label="Abrir {_esc(nome)}">'
+        '<svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" focusable="false" '
+        'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" '
+        'stroke-linejoin="round"><path d="m5 8 5 5 5-5"/></svg></button>'
+    )
+
+
+def _form_de_pesquisa(termo: str = "", *, classe: str = "pesquisa-form") -> str:
+    """Campo de pesquisa do site (o menu do telemóvel e a página de resultados)."""
+    return (
+        f'<form class="{_esc(classe)}" action="/site/pesquisa" method="get" role="search">'
+        f'<span class="pesquisa-icone" aria-hidden="true">{_icone("pesquisa")}</span>'
+        f'<input type="search" name="q" value="{_esc(termo)}" placeholder="Pesquisar no site" '
+        'aria-label="Pesquisar no site" autocomplete="off" enterkeyhint="search">'
+        "<button type=\"submit\">Pesquisar</button></form>"
+    )
+
+
+def _menu_conta() -> str:
+    """Entrar e criar conta no menu do telemóvel (no ecrã grande há `Entrar` na fila)."""
+    return (
+        '<div class="menu-conta">'
+        f'<a class="btn ghost" href="/login">{_icone("conta")}Entrar</a>'
+        f'<a class="btn" href="/register">{_icone("registar")}Criar conta</a>'
+        "</div>"
+    )
+
+
+def _menu_link(item: Dict[str, Any], current_path: str, *, com_icone: bool = False) -> str:
     """Link de um item do menu (no topo ou dentro de um submenu)."""
     href = str(item.get("href") or "")
     active = ' aria-current="page"' if href and href in (current_path, f"/site{current_path}") else ""
     target = ' target="_blank" rel="noopener"' if item.get("new_tab") else ""
-    return f'<a href="{_esc(href)}"{active}{target}>{_esc(item.get("label"))}</a>'
+    icone = _icone_do_item(item) if com_icone else ""
+    return f'<a href="{_esc(href)}"{active}{target}>{icone}{_esc(item.get("label"))}</a>'
 
 
-def _menu_gatilho(item: Dict[str, Any], current_path: str) -> str:
+def _menu_gatilho(item: Dict[str, Any], current_path: str, *, com_icone: bool = False) -> str:
     """O que abre o submenu: a página do item ou, sem página, o próprio rótulo.
 
     O rótulo sem destino é focável (`tabindex`) porque é o foco que revela o
@@ -1081,11 +1236,12 @@ def _menu_gatilho(item: Dict[str, Any], current_path: str) -> str:
     href = str(item.get("href") or "")
     label = _esc(item.get("label"))
     seta = '<span class="menu-seta" aria-hidden="true"></span>'
+    icone = _icone_do_item(item) if com_icone else ""
     if href:
         active = ' aria-current="page"' if href in (current_path, f"/site{current_path}") else ""
         target = ' target="_blank" rel="noopener"' if item.get("new_tab") else ""
-        return f'<a class="menu-pai" href="{_esc(href)}"{active}{target}>{label}{seta}</a>'
-    return f'<span class="menu-pai" tabindex="0">{label}{seta}</span>'
+        return f'<a class="menu-pai" href="{_esc(href)}"{active}{target}>{icone}{label}{seta}</a>'
+    return f'<span class="menu-pai" tabindex="0">{icone}{label}{seta}</span>'
 
 
 def _submenu(items: List[Dict[str, Any]], current_path: str, depth: int) -> str:
@@ -1096,7 +1252,8 @@ def _submenu(items: List[Dict[str, Any]], current_path: str, depth: int) -> str:
         if filhos:
             partes.append(
                 f'<li class="tem-submenu nivel-{depth}">'
-                f'{_menu_gatilho(item, current_path)}{_submenu(filhos, current_path, depth + 1)}'
+                f'{_menu_gatilho(item, current_path)}{_botao_do_submenu(str(item.get("label") or ""))}'
+                f'{_submenu(filhos, current_path, depth + 1)}'
                 "</li>"
             )
         else:
@@ -1112,11 +1269,13 @@ def _itens_principais(items: List[Dict[str, Any]], current_path: str) -> str:
         if filhos:
             partes.append(
                 f'<div class="menu-item tem-submenu nivel-0">'
-                f'{_menu_gatilho(item, current_path)}{_submenu(filhos, current_path, 1)}'
+                f'{_menu_gatilho(item, current_path, com_icone=True)}'
+                f'{_botao_do_submenu(str(item.get("label") or ""))}'
+                f'{_submenu(filhos, current_path, 1)}'
                 "</div>"
             )
         else:
-            partes.append(_menu_link(item, current_path))
+            partes.append(_menu_link(item, current_path, com_icone=True))
     return "".join(partes)
 
 
@@ -1145,7 +1304,16 @@ def _header(settings: Dict[str, Any], *, current_path: str, preview: bool = Fals
         # volta a ser uma fila de pastilhas (ver o `@media (min-width: 800px)`).
         + '<input type="checkbox" id="menu-estado" class="menu-estado" aria-label="Abrir o menu">'
         + '<label class="menu-botao" for="menu-estado"><span class="menu-barras" aria-hidden="true"></span>Menu</label>'
-        + f'<nav class="main" aria-label="Navegação principal">{links}</nav>'
+        # O painel do telemóvel abre com a pesquisa e a conta à frente da lista
+        # (é o que se procura primeiro). No ecrã grande as duas desaparecem e a
+        # lista volta a ser uma fila de pastilhas.
+        + (
+            '<nav class="main" aria-label="Navegação principal">'
+            + _form_de_pesquisa(classe="menu-pesquisa")
+            + _menu_conta()
+            + links
+            + "</nav>"
+        )
         + "</div></header>"
     )
 
@@ -1587,10 +1755,32 @@ def _layout(
         + (
             ""
             if preview
-            else '<script>(function(){var c=document.getElementById("menu-estado"),b=document.querySelector(".menu-botao"),n=document.querySelector("nav.main");if(!c||!n)return;function update(){var o=c.checked;b.setAttribute("aria-expanded",o?"true":"false");n.setAttribute("aria-expanded",o?"true":"false");b.setAttribute("aria-controls","menu-principal");n.id="menu-principal";}c.addEventListener("change",update);n.querySelectorAll("a").forEach(function(a){a.addEventListener("click",function(){c.checked=false;update();});});document.addEventListener("click",function(e){if(c.checked&&e.target!==c&&!n.contains(e.target)&&!b.contains(e.target)){c.checked=false;update();}});update();})();</script>'
-            # Um submenu dentro de outro abre ao lado; no fim da fila (o menu vive
-            # à direita) não cabe e sai do ecrã. Aqui vira-se para a esquerda.
-            '<script>(function(){document.querySelectorAll("nav.main .submenu .submenu").forEach(function(sub){var item=sub.parentElement;function ajustar(){sub.classList.remove("abre-esquerda");if(sub.getBoundingClientRect().right>window.innerWidth-8){sub.classList.add("abre-esquerda");}}item.addEventListener("mouseenter",ajustar);item.addEventListener("focusin",ajustar);});})();</script>'
+            else (
+                # Menu do telemóvel: a caixa escondida guarda o estado do painel e
+                # cada item com submenu abre e fecha pela seta (o rótulo continua a
+                # ser o link). Fechar o painel fecha tudo, para a próxima abertura
+                # não aparecer a lista a meio.
+                '<script>(function(){var c=document.getElementById("menu-estado"),b=document.querySelector(".menu-botao"),'
+                'n=document.querySelector("nav.main");if(!c||!n)return;'
+                'function rotulo(i){var g=i.querySelector(".menu-pai");return g?g.textContent.trim():"";}'
+                'function fechar(){n.querySelectorAll(".tem-submenu.aberto").forEach(function(i){i.classList.remove("aberto");'
+                'var t=i.querySelector(".menu-abre");if(t){t.setAttribute("aria-expanded","false");'
+                't.setAttribute("aria-label","Abrir "+rotulo(i));}});}'
+                'function update(){var o=c.checked;b.setAttribute("aria-expanded",o?"true":"false");'
+                'n.setAttribute("aria-expanded",o?"true":"false");b.setAttribute("aria-controls","menu-principal");'
+                'n.id="menu-principal";if(!o)fechar();}'
+                'n.querySelectorAll(".menu-abre").forEach(function(t){t.addEventListener("click",function(){'
+                'var i=t.parentElement,a=i.classList.toggle("aberto");t.setAttribute("aria-expanded",a?"true":"false");'
+                't.setAttribute("aria-label",(a?"Fechar ":"Abrir ")+rotulo(i));});});'
+                'c.addEventListener("change",update);'
+                'n.querySelectorAll("a").forEach(function(a){a.addEventListener("click",function(){'
+                'c.checked=false;update();});});'
+                'document.addEventListener("click",function(e){if(c.checked&&e.target!==c&&!n.contains(e.target)'
+                '&&!b.contains(e.target)){c.checked=false;update();}});update();})();</script>'
+                # Um submenu dentro de outro abre ao lado; no fim da fila (o menu
+                # vive à direita) não cabe e sai do ecrã. Aqui vira-se para a esquerda.
+                '<script>(function(){document.querySelectorAll("nav.main .submenu .submenu").forEach(function(sub){var item=sub.parentElement;function ajustar(){sub.classList.remove("abre-esquerda");if(sub.getBoundingClientRect().right>window.innerWidth-8){sub.classList.add("abre-esquerda");}}item.addEventListener("mouseenter",ajustar);item.addEventListener("focusin",ajustar);});})();</script>'
+            )
         )
         + "</body></html>"
     )
@@ -3245,6 +3435,153 @@ def render_post(post: Dict[str, Any], *, preview: bool = False, settings: Option
         preview=preview,
         noindex=bool(seo.get("noindex")),
         breadcrumb=trilha,
+    )
+
+
+# --------------------------------------------------------------------------
+# Pesquisa do site
+# --------------------------------------------------------------------------
+def _seccao_dos_estudos(pages: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Página-mãe dos estudos de benchmark (a que os estudos têm por ascendente).
+
+    Sai da própria árvore de páginas — não há caminho escrito à mão — e sem
+    estudos publicados não há grupo nenhum para mostrar.
+    """
+    por_id = {str(page.get("id")): page for page in pages}
+    for page in pages:
+        mae = por_id.get(str(page.get("parent_id") or ""))
+        if mae and _chave_nome(mae.get("slug")) == "benchmarks":
+            return mae
+    return None
+
+
+def _resultados_da_pesquisa(termo: str, *, limite: int = 40) -> List[Dict[str, Any]]:
+    """Resultados agrupados: estudos de benchmark, páginas, artigos e relatórios.
+
+    Só entra o que está publicado (`published_pages`/`published_posts` e a
+    biblioteca pública), e a comparação ignora acentos e maiúsculas: quem escreve
+    «telemoveis» encontra «Telemóveis».
+    """
+    agulha = _chave_nome(termo)
+    if not agulha:
+        return []
+
+    pages = store.published_pages()
+    secao = _seccao_dos_estudos(pages)
+    estudos: List[Dict[str, str]] = []
+    paginas: List[Dict[str, str]] = []
+    for page in pages:
+        if agulha not in _chave_nome(
+            " ".join([str(page.get("title") or ""), str(page.get("excerpt") or ""), str(page.get("path") or "")])
+        ):
+            continue
+        caminho = str(page.get("path") or "").strip("/")
+        achado = {
+            "title": str(page.get("title") or ""),
+            "href": f"/site/{caminho}" if caminho else "/site",
+            "text": str(page.get("excerpt") or ""),
+        }
+        if secao is not None and str(page.get("parent_id") or "") == str(secao.get("id")):
+            estudos.append(achado)
+        else:
+            paginas.append(achado)
+
+    artigos = [
+        {
+            "title": str(post.get("title") or ""),
+            "href": f"/site/blog/{post.get('slug')}",
+            "text": str(post.get("excerpt") or ""),
+        }
+        for post in store.published_posts()
+        if agulha
+        in _chave_nome(
+            " ".join([str(post.get("title") or ""), str(post.get("excerpt") or ""), str(post.get("markdown") or "")])
+        )
+    ]
+
+    from api import reports_library  # noqa: PLC0415 - import tardio: a loja é grande
+
+    relatorios = [
+        {
+            "title": str(item["title"]),
+            "href": str(item.get("download") or item.get("href") or "/reports"),
+            "text": str(item.get("subtitle") or item.get("note") or ""),
+        }
+        for item in reports_library.items()
+        if agulha
+        in _chave_nome(
+            " ".join([item["title"], item["subtitle"], item["note"], item["area_label"], " ".join(item["tags"])])
+        )
+    ]
+
+    def ordem(item: Dict[str, str]) -> Tuple[bool, str]:
+        """O que casa no título vem primeiro; dentro disso, por título."""
+        return (agulha not in _chave_nome(item["title"]), _chave_nome(item["title"]))
+
+    grupos: List[Dict[str, Any]] = []
+    for rotulo, achados in (
+        ("Estudos de benchmark", estudos),
+        ("Páginas", paginas),
+        ("Artigos do blog", artigos),
+        ("Relatórios e documentos", relatorios),
+    ):
+        if not achados:
+            continue
+        achados.sort(key=ordem)
+        grupos.append({"label": rotulo, "items": achados[:limite]})
+    return grupos
+
+
+def render_search(query: str = "", *, settings: Optional[Dict[str, Any]] = None) -> str:
+    """Página de resultados da pesquisa do site (`/site/pesquisa?q=`)."""
+    settings = settings or store.get_settings()
+    termo = " ".join(str(query or "").split())
+    grupos = _resultados_da_pesquisa(termo)
+    total = sum(len(grupo["items"]) for grupo in grupos)
+
+    if not termo:
+        resumo = (
+            '<p class="lead">Escreva o que procura: encontra páginas do site, artigos do blog, '
+            "estudos de benchmark e relatórios publicados.</p>"
+        )
+    elif total:
+        resumo = f'<p class="library-count">{total} resultado(s) para «{_esc(termo)}».</p>'
+    else:
+        resumo = (
+            f'<p class="lead">Não encontrámos nada para «{_esc(termo)}». Tente outra palavra, veja o '
+            '<a href="/site/blog">blog</a> ou os <a href="/site/relatorios-gratuitos">relatórios</a>.</p>'
+        )
+
+    secoes = "".join(
+        f'<section class="section"><h2>{_esc(grupo["label"])}</h2><div class="cards">'
+        + "".join(
+            f'<article class="card"><h3><a href="{_esc(item["href"])}">{_esc(item["title"])}</a></h3>'
+            + (f'<p>{_esc(item["text"])}</p>' if item["text"] else "")
+            + "</article>"
+            for item in grupo["items"]
+        )
+        + "</div></section>"
+        for grupo in grupos
+    )
+    body = (
+        '<section class="section"><h1>Pesquisar no site</h1>'
+        + _form_de_pesquisa(termo)
+        + resumo
+        + "</section>"
+        + secoes
+    )
+    return _layout(
+        title="Pesquisar no site",
+        description=(
+            "Pesquisa no site: páginas, artigos do blog, estudos de benchmark e relatórios publicados "
+            "a partir de dados abertos."
+        ),
+        body=body,
+        current_path="/site/pesquisa",
+        settings=settings,
+        canonical="/site/pesquisa",
+        noindex=True,
+        breadcrumb=[{"label": "Início", "href": "/site"}, {"label": "Pesquisar"}],
     )
 
 

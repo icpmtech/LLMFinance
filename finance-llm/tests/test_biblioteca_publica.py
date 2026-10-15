@@ -8,6 +8,10 @@ O que se prova aqui:
   descarregam; os pagos encaminham para o catálogo;
 * o **bloco do CMS** (`relatorios`) que desenha a área pública, o modelo
   «Biblioteca de relatórios» e a página editorial que o usa;
+* o **menu do site** que sai destes dados: as áreas dos relatórios e as
+  subpáginas publicadas entram como submenus do item que abre a página-mãe, e o
+  painel do telemóvel traz pesquisa, entrar/criar conta, ícones e uma seta para
+  abrir cada submenu;
 * a rota pública `/site/documento/{id}`.
 
 Nada aqui toca em `data/`: a loja de relatórios e o CMS vivem em `tmp_path`.
@@ -15,6 +19,7 @@ Nada aqui toca em `data/`: a loja de relatórios e o CMS vivem em `tmp_path`.
 from __future__ import annotations
 
 import copy
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict
@@ -407,3 +412,36 @@ def test_pagina_filha_fora_do_menu_nao_entra(instalacao):
 
     solucoes = next(item for item in cms_store.menu_for("header")["items"] if item["href"] == "/site/solucoes")
     assert "Benchmarks" not in {filho["label"] for filho in solucoes["children"]}
+
+
+# -------------------------------------------------------------- telemóvel
+def test_painel_do_telemovel_traz_pesquisa_conta_icones_e_setas(instalacao):
+    """O painel do telemóvel: pesquisa, entrar/criar conta, ícones e setas."""
+    _documento("Concorrência — Empresa A", preco=0.0, tags=["empresa"])
+    _editorial_instalado()
+    html = cms_render.render_index(settings=cms_store.get_settings())
+    nav = re.search(r'<nav class="main".*?</nav>', html, re.S).group(0)
+
+    # Pesquisa: o mesmo formulário que a página de resultados usa.
+    assert 'class="menu-pesquisa" action="/site/pesquisa" method="get"' in nav and 'name="q"' in nav
+    # Conta: entrar e criar conta, à frente da lista.
+    assert 'class="menu-conta"' in nav
+    assert re.search(r'<a class="btn ghost" href="/login">\s*<svg class="menu-icone"', nav)
+    assert re.search(r'<a class="btn" href="/register">\s*<svg class="menu-icone"', nav)
+    # Ícones: cada entrada de topo tem o seu (a loja incluída).
+    assert re.search(r'<a href="/loja">\s*<svg class="menu-icone"', nav)
+    # Setas: cada item com submenu tem o botão que o abre no telemóvel.
+    assert re.search(
+        r'<div class="menu-item tem-submenu nivel-0"><a class="menu-pai" href="/site/solucoes">.*?'
+        r'<button type="button" class="menu-abre" aria-expanded="false" aria-label="Abrir Soluções">',
+        nav,
+        re.S,
+    )
+    # No ecrã grande nada disto aparece…
+    assert (
+        ".menu-estado, .menu-botao, .menu-pesquisa, .menu-conta, .menu-abre, .menu-icone { display: none; }"
+        in html
+    )
+    # … e no telemóvel a lista começa fechada: quem abre é a seta.
+    assert "nav.main .tem-submenu > .submenu { display: none; }" in html
+    assert "classList.toggle" in html
