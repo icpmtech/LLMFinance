@@ -932,7 +932,9 @@ def site_rss() -> Response:
 
 @router.get("/site/sitemap.xml")
 def site_sitemap() -> Response:
-    """Sitemap XML das páginas, artigos e fichas de município publicados."""
+    """Sitemap XML de **tudo** o que está publicado no site: páginas, artigos e
+    índice do blog, municípios, páginas de pesquisa de dados, remunerações e os
+    estudos de benchmark publicados (a página do estudo e a pesquisa agregada)."""
     return Response(render.render_sitemap(store.get_settings()), media_type="application/xml; charset=utf-8", headers=_PUBLIC_HEADERS)
 
 
@@ -1005,11 +1007,13 @@ def site_documento(document_id: str) -> Response:
     # O nome vem do Estúdio; o cabeçalho é construído aqui, com o que ficar
     # depois de tirar aspas e separadores de caminho.
     seguro = re.sub(r"[^A-Za-z0-9._-]+", "-", nome).strip("-") or "documento.pdf"
+    # `attachment` e não `inline`: o botão diz «Descarregar PDF» e um PDF
+    # navegado abre (ou falha) no leitor do browser — em webviews fica em branco.
     return Response(
         content=conteudo,
         media_type=mime or "application/pdf",
         headers={
-            "Content-Disposition": f'inline; filename="{seguro}"',
+            "Content-Disposition": f'attachment; filename="{seguro}"',
             "Cache-Control": "public, max-age=300",
         },
     )

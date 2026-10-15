@@ -633,7 +633,12 @@ def _render_library_block(data: Dict[str, Any], *, preview: bool = False) -> str
             lista = f'<ul class="library-list">{"".join(itens)}</ul>' if itens else ""
 
             if item.get("download"):
-                acao = f'<a class="btn" href="{_esc(item["download"])}">Descarregar PDF</a>'
+                # `download` para o browser guardar o ficheiro em vez de o abrir
+                # na própria página (o nome vem do cabeçalho da resposta).
+                acao = (
+                    f'<a class="btn" href="{_esc(item["download"])}" download>'
+                    "Descarregar PDF</a>"
+                )
             else:
                 acao = f'<a class="btn ghost" href="{cta_href}">{cta_label}</a>'
             cartoes.append(
@@ -1015,7 +1020,7 @@ def _header(settings: Dict[str, Any], *, current_path: str, preview: bool = Fals
         + f'<a class="brand" href="/site">{brand}</a>'
         # Menu de telefone sem JavaScript: a caixa escondida guarda o estado e o
         # `:checked` mostra a lista. No ecrã grande o botão desaparece e a lista
-        # volta a ser uma fila de pastilhas (ver o `@media (min-width: 900px)`).
+        # volta a ser uma fila de pastilhas (ver o `@media (min-width: 800px)`).
         + '<input type="checkbox" id="menu-estado" class="menu-estado" aria-label="Abrir o menu">'
         + '<label class="menu-botao" for="menu-estado"><span class="menu-barras" aria-hidden="true"></span>Menu</label>'
         + f'<nav class="main" aria-label="Navegação principal">{"".join(links)}</nav>'
@@ -3102,52 +3107,96 @@ def _rfc822(value: Optional[str]) -> str:
 
 
 def render_sitemap(settings: Optional[Dict[str, Any]] = None) -> str:
+    """Sitemap do site: **tudo** o que está publicado em `/site/…`.
+
+    Páginas do CMS, artigos e índice do blog, municípios, páginas de pesquisa de
+    dados, remunerações e estudos de benchmark publicados. Um endereço entra uma
+    só vez, mesmo quando duas regras o pedem — `/site/blog` é uma página do CMS
+    *e* o índice do blog, e `<loc>` repetido é um aviso no Search Console.
+    """
     settings = settings or store.get_settings()
     # Sem `base_url` configurado os `<loc>` sairiam relativos, e um sitemap com
     # endereços relativos é inválido (o motor de busca rejeita-o por inteiro).
     base_url = str(settings.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
-    entries: List[str] = []
+    # `loc` → (lastmod, prioridade). Quando duas regras apontam para o mesmo
+    # endereço fica a de maior prioridade (e o `lastmod` dela).
+    entradas: Dict[str, Tuple[str, float]] = {}
+
+    def juntar(caminho: str, lastmod: str, prioridade: float) -> None:
+        loc = _absolute(caminho, base_url)
+        anterior = entradas.get(loc)
+        if anterior and anterior[1] >= prioridade:
+            return
+        entradas[loc] = (lastmod, prioridade)
+
     for page in store.published_pages():
         if (page.get("seo") or {}).get("noindex"):
             continue
-        loc = _absolute(_caminho_da_pagina(page), base_url)
-        lastmod = str(page.get("updated_at") or "")[:10]
-        entries.append(f"<url><loc>{_esc(loc)}</loc>{f'<lastmod>{lastmod}</lastmod>' if lastmod else ''}<priority>0.9</priority></url>")
-    entries.append(f"<url><loc>{_esc(_absolute('/site/blog', base_url))}</loc></url>")
+        juntar(_caminho_da_pagina(page), str(page.get("updated_at") or "")[:10], 0.9)
+    juntar("/site/blog", "", 0.8)
     for municipio in store.published_municipios():
         if (municipio.get("seo") or {}).get("noindex"):
             continue
         slug = str(municipio.get("slug") or "")
         if not slug:
             continue
-        loc = _absolute(f"/site/municipio/{slug}", base_url)
-        lastmod = str(municipio.get("updated_at") or municipio.get("published_at") or "")[:10]
-        entries.append(f"<url><loc>{_esc(loc)}</loc>{f'<lastmod>{lastmod}</lastmod>' if lastmod else ''}<priority>0.8</priority></url>")
+        juntar(
+            f"/site/municipio/{slug}",
+            str(municipio.get("updated_at") or municipio.get("published_at") or "")[:10],
+            0.8,
+        )
     for post in store.published_posts(limit=500):
         if (post.get("seo") or {}).get("noindex"):
             continue
-        loc = _absolute(f"/site/blog/{post.get('slug')}", base_url)
-        lastmod = str(post.get("updated_at") or post.get("published_at") or "")[:10]
-        entries.append(f"<url><loc>{_esc(loc)}</loc>{f'<lastmod>{lastmod}</lastmod>' if lastmod else ''}<priority>0.7</priority></url>")
+        juntar(
+            f"/site/blog/{post.get('slug')}",
+            str(post.get("updated_at") or post.get("published_at") or "")[:10],
+            0.7,
+        )
     for pesquisa in store.published_pesquisas():
         if (pesquisa.get("seo") or {}).get("noindex"):
             continue
         slug = str(pesquisa.get("slug") or "")
         if not slug:
             continue
-        loc = _absolute(f"/site/pesquisa/{slug}", base_url)
-        lastmod = str(pesquisa.get("updated_at") or pesquisa.get("published_at") or "")[:10]
-        entries.append(f"<url><loc>{_esc(loc)}</loc>{f'<lastmod>{lastmod}</lastmod>' if lastmod else ''}<priority>0.8</priority></url>")
+        juntar(
+            f"/site/pesquisa/{slug}",
+            str(pesquisa.get("updated_at") or pesquisa.get("published_at") or "")[:10],
+            0.8,
+        )
     for remuneracao in store.published_remuneracoes():
         if (remuneracao.get("seo") or {}).get("noindex"):
             continue
         slug = str(remuneracao.get("slug") or "")
         if not slug:
             continue
-        loc = _absolute(f"/site/remuneracoes/{slug}", base_url)
-        lastmod = str(remuneracao.get("updated_at") or remuneracao.get("published_at") or "")[:10]
-        entries.append(f"<url><loc>{_esc(loc)}</loc>{f'<lastmod>{lastmod}</lastmod>' if lastmod else ''}<priority>0.8</priority></url>")
-    return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join(entries) + "</urlset>"
+        juntar(
+            f"/site/remuneracoes/{slug}",
+            str(remuneracao.get("updated_at") or remuneracao.get("published_at") or "")[:10],
+            0.8,
+        )
+    # Estudos de benchmark publicados: a página do estudo entra aqui por ser uma
+    # página do CMS; a versão com a pesquisa agregada tem endereço próprio
+    # (`/site/benchmarks/<slug>/pesquisa`) e também é pública — ficava de fora.
+    try:
+        from api import benchmarks_store  # noqa: PLC0415 - import tardio: ciclo
+
+        for benchmark in benchmarks_store.publicos():
+            slug = str(benchmark.get("slug") or "")
+            if slug:
+                juntar(f"/site/benchmarks/{slug}/pesquisa", str(benchmark.get("public_at") or "")[:10], 0.6)
+    except Exception:  # noqa: BLE001 - o sitemap do site não pode cair por causa dos benchmarks
+        logger.warning("Sitemap do site: não foi possível ler os benchmarks publicados", exc_info=True)
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        + "".join(
+            f"<url><loc>{_esc(loc)}</loc>"
+            + (f"<lastmod>{lastmod}</lastmod>" if lastmod else "")
+            + f"<priority>{prioridade:.1f}</priority></url>"
+            for loc, (lastmod, prioridade) in entradas.items()
+        )
+        + "</urlset>"
+    )
 
 
 def render_robots(settings: Optional[Dict[str, Any]] = None) -> str:

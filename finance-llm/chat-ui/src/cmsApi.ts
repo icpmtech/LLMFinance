@@ -968,7 +968,11 @@ export function cmsPreviewUrl(entity: "pages" | "posts" | "municipios" | "pesqui
 
 /** URL do site público correspondente (abre numa janela do browser). */
 export function cmsPublicUrl(path: string): string {
-  return `${API_BASE}/site${path ? (path.startsWith("/") ? path : `/${path}`) : ""}`;
+  // Sem o prefixo `/api`: o site público vive em `/site/...` na mesma origem (o
+  // nginx do frontend encaminha-o para o backend) e é esse o endereço que o
+  // `robots.txt` autoriza — `/api/` está fora dos motores de busca e os links
+  // partilhados têm de ser os endereços reais das páginas.
+  return `/site${path ? (path.startsWith("/") ? path : `/${path}`) : ""}`;
 }
 
 /**
