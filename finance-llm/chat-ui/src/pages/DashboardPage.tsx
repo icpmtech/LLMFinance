@@ -178,7 +178,12 @@ export function DashboardPage({
   const [translations, setTranslations] = useState<Record<string, string>>({});
   const [translating, setTranslating] = useState(false);
   const [translationError, setTranslationError] = useState<string | null>(null);
-  const [translationAi, setTranslationAi] = useState<{ provider_label?: string; model?: string } | null>(null);
+  const [translationInfo, setTranslationInfo] = useState<{
+    provider_label?: string;
+    model?: string;
+    translated: number;
+    unchanged: number;
+  } | null>(null);
 
   /** Tickers à vista: os índices do topo + os favoritos guardados (sem repetições). */
   const liveTickers = useMemo(
@@ -465,7 +470,12 @@ export function DashboardPage({
     try {
       const payload = await translateSentimentMarketHeadlines(untranslated.slice(0, 60));
       setTranslations((current) => ({ ...current, ...(payload.translations ?? {}) }));
-      setTranslationAi(payload.ai ?? null);
+      setTranslationInfo({
+        provider_label: payload.ai?.provider_label,
+        model: payload.ai?.model,
+        translated: payload.translated ?? 0,
+        unchanged: payload.unchanged ?? 0,
+      });
     } catch (err) {
       setTranslationError(
         err instanceof Error ? err.message : "Não foi possível traduzir as manchetes com IA.",
@@ -474,6 +484,19 @@ export function DashboardPage({
       setTranslating(false);
     }
   }, [translating, untranslated]);
+
+  /** O que a IA fez, sem exagerar: quantas traduziu e quantas já estavam em português. */
+  const translationNote = useMemo(() => {
+    if (!translationInfo) return null;
+    if (!translationInfo.translated) return "As manchetes desta leitura já estavam em português.";
+    const modelo =
+      [translationInfo.provider_label, translationInfo.model].filter(Boolean).join(" · ") ||
+      "fornecedor de IA";
+    const emPortugues = translationInfo.unchanged
+      ? ` · ${translationInfo.unchanged} já estava(m) em português`
+      : "";
+    return `Manchetes traduzidas com IA (${modelo})${emPortugues}`;
+  }, [translationInfo]);
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground orbit-bg">
@@ -853,7 +876,8 @@ export function DashboardPage({
             {live?.translated ? null : (
               <p className="mt-3 text-[10px] text-muted-foreground">
                 Tom lido pelo léxico PT e, nas manchetes em inglês, pelo léxico bilingue — sem tradução
-                (a tradução fina é opcional e muito mais lenta).
+                (a leitura fina é opcional e muito mais lenta). A tradução das manchetes é à parte, a
+                pedido, com IA.
               </p>
             )}
 
@@ -1032,11 +1056,8 @@ export function DashboardPage({
                 <AlertTriangle size={13} className="mt-0.5 shrink-0" />
                 <span>{translationError}</span>
               </p>
-            ) : translationAi ? (
-              <p className="mb-4 text-[11px] text-muted-foreground">
-                Manchetes traduzidas com IA · {translationAi.provider_label ?? "fornecedor"}
-                {translationAi.model ? ` · ${translationAi.model}` : ""}
-              </p>
+            ) : translationNote ? (
+              <p className="mb-4 text-[11px] text-muted-foreground">{translationNote}</p>
             ) : null}
             <div className="space-y-3">
               {(live?.news ?? []).slice(0, 8).map((item, i) => (

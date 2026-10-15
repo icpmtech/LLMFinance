@@ -432,6 +432,12 @@ def test_painel_do_telemovel_traz_pesquisa_conta_icones_e_setas(instalacao):
     assert re.search(r'<a class="btn" href="/register">\s*<svg class="menu-icone"', nav)
     # Ícones: cada entrada de topo tem o seu (a loja incluída).
     assert re.search(r'<a href="/loja">\s*<svg class="menu-icone"', nav)
+    # … e os ícones são os do Lucide: quadro de 24, traço de 2, sem preenchimento.
+    assert nav.count('class="menu-icone"') >= 10
+    assert nav.count('viewBox="0 0 24 24"') >= nav.count('class="menu-icone"')
+    assert 'stroke-width="2"' in nav and 'fill="none"' in nav and 'stroke="currentColor"' in nav
+    # A lupa da pesquisa não é um ícone de menu: aparece também no ecrã grande.
+    assert re.search(r'<span class="pesquisa-icone" aria-hidden="true"><svg viewBox="0 0 24 24"', nav)
     # Setas: cada item com submenu tem o botão que o abre no telemóvel.
     assert re.search(
         r'<div class="menu-item tem-submenu nivel-0"><a class="menu-pai" href="/site/solucoes">.*?'
@@ -447,3 +453,9 @@ def test_painel_do_telemovel_traz_pesquisa_conta_icones_e_setas(instalacao):
     # … e no telemóvel a lista começa fechada: quem abre é a seta.
     assert "nav.main .tem-submenu > .submenu { display: none; }" in html
     assert "classList.toggle" in html
+    # Ícones e botões não se deformam com a linha apertada: o desenho não encolhe
+    # e os botões de conta passam para a linha seguinte em vez de crescerem para
+    # o dobro da altura (o rótulo nunca muda de linha).
+    assert ".menu-icone { flex: none; }" in html
+    assert ".menu-conta { display: flex; flex-wrap: wrap;" in html
+    assert "white-space: nowrap;" in html

@@ -281,6 +281,9 @@ nav.main > a, nav.main .menu-pai {{
   border-radius: 10px; color: var(--text); font-size: 1rem; font-weight: 600;
 }}
 nav.main span.menu-pai {{ width: 100%; cursor: pointer; }}
+/* O ícone acompanha o rótulo: se a linha ficar apertada, cede o texto (muda de
+   linha) e não o desenho, que encolhido fica deformado. */
+.menu-icone {{ flex: none; }}
 .menu-seta {{
   flex: none; width: 6px; height: 6px; margin-left: 2px; opacity: .65;
   border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
@@ -306,9 +309,14 @@ nav.main span.menu-pai {{ width: 100%; cursor: pointer; }}
   flex: none; min-height: 40px; padding: 8px 16px; border: 0; border-radius: 999px;
   background: var(--accent); color: #fff; font: inherit; font-weight: 700; cursor: pointer;
 }}
-/* Entrar/criar conta: os dois botões do painel do telemóvel. */
-.menu-conta {{ display: flex; gap: 8px; align-items: stretch; margin: 2px 0 4px; }}
-.menu-conta .btn {{ flex: 1 1 0; gap: 8px; padding: 10px 14px; font-size: .95rem; }}
+/* Entrar/criar conta: os dois botões do painel do telemóvel. Partilham a linha
+   quando ela é larga o suficiente e empilham-se quando não é — o rótulo nunca
+   muda de linha, senão o botão cresce para o dobro da altura. */
+.menu-conta {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin: 2px 0 4px; }}
+.menu-conta .btn {{
+  flex: 1 1 auto; gap: 8px; min-width: 132px; padding: 10px 14px;
+  font-size: .95rem; white-space: nowrap;
+}}
 /* O botão que abre e fecha cada submenu só existe no telemóvel (é a seguir
    ligado no `@media (max-width: 799px)`). */
 .menu-abre {{ display: none; }}
@@ -1108,10 +1116,11 @@ def _menu_theme_classes(menu: Dict[str, Any]) -> str:
     return " ".join(classes)
 
 
-#: Ícones do menu. Geometria do Lucide (https://lucide.dev), licença ISC, copiada
-#: da versão que o `chat-ui` instala — vale a pena ter os mesmos desenhos dos dois
-#: lados da plataforma. Poucos: um desenho diferente por entrada cansa mais do que
-#: ajuda a ler. Só o conteúdo; as molduras ficam em `_svg`.
+#: Ícones do menu: geometria do Lucide (https://lucide.dev, licença ISC), copiada
+#: de `chat-ui/node_modules/lucide-react@1.39.0/dist/esm/icons/*.mjs` — os dois
+#: lados da plataforma ficam com os mesmos desenhos. Poucos: um desenho diferente
+#: por entrada cansa mais do que ajuda a ler. Aqui só o conteúdo; a moldura (que é
+#: igual em todos) fica em `_svg`.
 _ICONES: Dict[str, str] = {
     "inicio": '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
     "seccao": '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
@@ -1166,7 +1175,7 @@ def _svg(desenho: str, tamanho: int = 18, classe: Optional[str] = "menu-icone") 
     """SVG com a moldura do Lucide: quadro de 24, traço de 2, `currentColor`."""
     atributo = f' class="{classe}"' if classe else ""
     return (
-        f"<svg{atributo} viewBox=\"0 0 24 24\" width=\"{tamanho}\" height=\"{tamanho}\" "
+        f'<svg{atributo} viewBox="0 0 24 24" width="{tamanho}" height="{tamanho}" '
         'aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" '
         f'stroke-linecap="round" stroke-linejoin="round">{desenho}</svg>'
     )

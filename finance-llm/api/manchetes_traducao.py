@@ -249,13 +249,16 @@ def traduzir_manchetes(
                 if limpo:
                     resultado[original] = limpo
         with _lock:
+            adicionados = 0
             for texto in por_traduzir:
-                if texto in resultado:
+                if texto in resultado and cache.get(texto) != resultado[texto]:
                     cache[texto] = resultado[texto]
-            if len(cache) > MAX_CACHE:  # as mais antigas saem primeiro
-                for chave in list(cache)[: len(cache) - MAX_CACHE]:
-                    cache.pop(chave, None)
-            _gravar_cache()
+                    adicionados += 1
+            if adicionados:  # sem nada de novo não se toca no ficheiro
+                if len(cache) > MAX_CACHE:  # as mais antigas saem primeiro
+                    for chave in list(cache)[: len(cache) - MAX_CACHE]:
+                        cache.pop(chave, None)
+                _gravar_cache()
 
     novos = [texto for texto in por_traduzir if texto in resultado]
     inalterados = len([texto for texto in novos if resultado[texto] == texto])

@@ -39,8 +39,10 @@ menus):
   continua a ser o link); os itens ficam indentados, a página não ganha scroll
   horizontal e tocar num subitem navega;
 - o painel do telemóvel traz a **pesquisa** (envia para `/site/pesquisa?q=`),
-  **entrar/criar conta** e um **ícone** em cada entrada de topo — nada disto passa
-  pelo CMS, é o HTML do site que o publica;
+  **entrar/criar conta** e um **ícone** em cada entrada de topo — com a geometria
+  do **Lucide** (a mesma biblioteca que o `chat-ui` usa; ver `_ICONES` em
+  `api/cms_render.py`), escondida no ecrã grande; nada disto passa pelo CMS, é o
+  HTML do site que o publica;
 
 Além do que o editor guarda, o cabeçalho mostra **submenus derivados dos dados**
 (calculados a cada renderização, nunca gravados no menu — ver
@@ -50,7 +52,9 @@ de benchmark sob «Benchmarks») e o que está publicado no Estúdio entra agrup
 por área de trabalho sob o item que abre a biblioteca de relatórios. O rodapé não
 os recebe. Como o painel pode ficar mais alto do que o ecrã (e o cabeçalho é
 pegajoso), o painel do telemóvel rola dentro de si mesmo — sem isso, o fim da
-lista ficava fora do alcance.
+lista ficava fora do alcance. Numa linha apertada cedem o texto e os botões de
+entrar/criar conta (que passam para a linha seguinte): o desenho dos ícones tem
+`flex: none` para não encolher e ficar deformado.
 
 Estes testes **escrevem no CMS** (menu do cabeçalho e do rodapé, reposto no fim) e
 por isso exigem uma sessão com papel `admin` ou `manager` — escrever no CMS está
