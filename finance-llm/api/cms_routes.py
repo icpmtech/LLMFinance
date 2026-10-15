@@ -932,7 +932,9 @@ def site_rss() -> Response:
 
 @router.get("/site/sitemap.xml")
 def site_sitemap() -> Response:
-    """Sitemap XML das páginas, artigos e fichas de município publicados."""
+    """Sitemap XML de **tudo** o que está publicado no site: páginas, artigos e
+    índice do blog, municípios, páginas de pesquisa de dados, remunerações e os
+    estudos de benchmark publicados (a página do estudo e a pesquisa agregada)."""
     return Response(render.render_sitemap(store.get_settings()), media_type="application/xml; charset=utf-8", headers=_PUBLIC_HEADERS)
 
 
