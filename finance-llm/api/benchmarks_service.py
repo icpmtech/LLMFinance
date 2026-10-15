@@ -904,38 +904,126 @@ def despublicar(slug: str, *, autor: str = "") -> Dict[str, Any]:
 # Estilos do **conteúdo** da página. O cabeçalho, rodapé e envolvente do site
 # vêm do `_layout()` do CMS (`cms_render.py`), para a página pública do
 # benchmark usar o mesmo menu de navegação e rodapé das restantes páginas.
+# Os estilos abaixo usam as variáveis do CMS (--bg, --surface, --text, etc.)
+# para integrar-se no tema claro/escuro escolhido no site.
 _ESTILO = """
-.bench-wrap { max-width: 1180px; margin: 0 auto; padding: 0 22px 60px; }
-.bench-hero { padding: 28px 22px 18px; border-bottom: 1px solid #1f2937;
-              background: linear-gradient(180deg, #0b1220, #0f1115); }
-.bench-hero h1 { margin: 0 0 6px; font-size: 26px; }
-.bench-hero .lead { color: #94a3b8; margin: 0; }
-.bench-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin: 22px 0; }
-.bench-kpi { background: #161c28; border: 1px solid #24303f; border-radius: 12px; padding: 14px 16px; }
-.bench-kpi b { display: block; font-size: 22px; color: #5eead4; }
-.bench-kpi span { color: #94a3b8; font-size: 12px; }
-form.bench-pesquisa { display: flex; flex-wrap: wrap; gap: 10px; align-items: end;
-                      background: #161c28; border: 1px solid #24303f; border-radius: 12px; padding: 14px; }
-form.bench-pesquisa label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #94a3b8; }
-.bench-pesquisa input, .bench-pesquisa select, .bench-pesquisa button { font: inherit; color: #e5e7eb; background: #0f1115;
-                        border: 1px solid #2b3648; border-radius: 8px; padding: 8px 10px; }
-.bench-pesquisa button { background: #0d9488; border-color: #0d9488; color: #04211d; font-weight: 600; cursor: pointer; }
-.bench-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13.5px; }
-.bench-table th, .bench-table td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #1f2937; vertical-align: top; }
-.bench-table th { color: #94a3b8; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-.bench-table tr:hover td { background: #141a25; }
-.bench-min { color: #34d399; font-weight: 600; }
-.bench-max { color: #f87171; }
-.bench-tag { display: inline-block; padding: 1px 7px; border-radius: 999px; background: #1f2937; color: #cbd5e1; font-size: 11px; }
-.bench-produto { display: flex; gap: 10px; align-items: flex-start; }
-.bench-thumb { width: 46px; height: 46px; flex: 0 0 46px; border-radius: 8px; object-fit: contain;
-               background: #0b0f16; border: 1px solid #24303f; }
+.bench-wrap { max-width: 1200px; margin: 0 auto; }
+.bench-hero { padding: 32px 0 22px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+.bench-hero h1 { margin: 0 0 10px; font-size: 2rem; letter-spacing: -0.02em; }
+.bench-hero .lead { color: var(--muted); margin: 0; font-size: 1.05rem; }
+.bench-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 26px 0; }
+.bench-kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+             box-shadow: var(--shadow); padding: 18px; transition: transform .12s ease, box-shadow .12s ease; }
+.bench-kpi:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.08); }
+.bench-kpi b { display: block; font-size: 1.7rem; color: var(--accent); margin-bottom: 4px; }
+.bench-kpi span { color: var(--muted); font-size: .82rem; }
+form.bench-pesquisa { display: flex; flex-wrap: wrap; gap: 14px; align-items: end;
+                      background: var(--surface); border: 1px solid var(--border);
+                      border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+form.bench-pesquisa label { display: flex; flex-direction: column; gap: 6px; font-size: .86rem; color: var(--muted); font-weight: 500; }
+.bench-pesquisa input, .bench-pesquisa select { font: inherit; color: var(--text); background: var(--bg);
+                        border: 1px solid var(--border); border-radius: 12px; padding: 11px 14px; min-width: 180px; }
+.bench-pesquisa input:focus, .bench-pesquisa select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(13,148,136,.12); }
+.bench-pesquisa button { background: var(--accent); border: 1px solid var(--accent); color: #fff;
+                         font-weight: 700; border-radius: 999px; padding: 11px 24px; cursor: pointer; transition: filter .15s ease; }
+.bench-pesquisa button:hover { filter: brightness(1.08); }
+.bench-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.bench-table { width: 100%; min-width: 760px; border-collapse: separate; border-spacing: 0; font-size: .94rem; }
+.bench-table th, .bench-table td { text-align: left; padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.bench-table th { position: sticky; top: 0; background: var(--surface); color: var(--muted); font-weight: 700; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; z-index: 1; }
+.bench-table tbody tr { transition: background .1s ease; }
+.bench-table tbody tr:nth-child(even) { background: rgba(0,0,0,.02); }
+.bench-table tbody tr:hover { background: rgba(13,148,136,.06); }
+.bench-table td:first-child { width: 38%; min-width: 260px; }
+.bench-table td:nth-child(2), .bench-table td:nth-child(7) { white-space: nowrap; }
+.bench-table td:nth-child(3), .bench-table td:nth-child(4), .bench-table td:nth-child(5), .bench-table td:nth-child(6) { text-align: right; white-space: nowrap; }
+.bench-min { color: #16a34a; font-weight: 800; }
+.bench-max { color: #dc2626; font-weight: 700; }
+.bench-avg { color: var(--text); font-weight: 600; }
+.bench-tag { display: inline-block; padding: 3px 10px; border-radius: 999px; background: var(--code); color: var(--text); font-size: .76rem; font-weight: 600; }
+.bench-produto { display: flex; gap: 14px; align-items: flex-start; }
+.bench-thumb { width: 56px; height: 56px; flex: 0 0 56px; border-radius: 12px; object-fit: contain;
+               background: var(--bg); border: 1px solid var(--border); }
 .bench-thumb.vazio { display: block; border-style: dashed; }
-.bench-nome { font-weight: 600; }
-.bench-descricao { display: block; margin-top: 3px; color: #94a3b8; font-size: 12px;
-                   max-width: 460px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2;
-                   -webkit-box-orient: vertical; }
-.bench-vazio { background: #161c28; border: 1px dashed #334155; border-radius: 12px; padding: 18px; color: #94a3b8; }
+.bench-nome { font-weight: 700; font-size: .98rem; line-height: 1.35; }
+.bench-nome a { color: var(--text); text-decoration: none; }
+.bench-nome a:hover { color: var(--accent); text-decoration: underline; }
+.bench-descricao { display: block; margin-top: 5px; color: var(--muted); font-size: .84rem;
+                   max-width: 520px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2;
+                   -webkit-box-orient: vertical; line-height: 1.4; }
+.bench-stores { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--text); }
+.bench-store-best { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.bench-store-best::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #16a34a; }
+.bench-rodape { color: var(--muted); font-size: .86rem; margin-top: 24px; line-height: 1.5; }
+.bench-vazio { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius); padding: 28px; text-align: center; color: var(--muted); }
+.bench-cards { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); margin: 24px 0; }
+.bench-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+              box-shadow: var(--shadow); padding: 22px; }
+.bench-card h3 { margin: 0 0 18px; font-size: 1.08rem; }
+.bench-card .muted { color: var(--muted); font-size: .85rem; }
+.bench-bar-row { display: grid; grid-template-columns: 100px 1fr 46px; gap: 10px; align-items: center; margin-bottom: 12px; }
+.bench-bar-row .label { font-size: .88rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bench-bar-track { background: var(--code); border-radius: 999px; height: 18px; position: relative; }
+.bench-bar-fill { height: 100%; border-radius: 999px; background: #94a3b8; min-width: 4px; }
+.bench-bar-fill.best { background: var(--accent); }
+.bench-bar-marker { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--text); border-radius: 2px; }
+.bench-bar-value { font-size: .82rem; color: var(--muted); text-align: right; font-weight: 700; }
+.bench-index-axis { display: flex; justify-content: space-between; font-size: .75rem; color: var(--muted); margin: 8px 0 16px; padding: 0 90px 0 100px; }
+.bench-price-row { display: grid; grid-template-columns: 100px 1fr 90px; gap: 10px; align-items: center; margin-bottom: 12px; }
+.bench-price-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #0d9488); min-width: 4px; }
+.bench-price-fill.second { background: linear-gradient(90deg, #14b8a6, #0ea5a9); opacity: .85; }
+.bench-price-fill.third { background: linear-gradient(90deg, #38bdf8, #0ea5e4); }
+.bench-price-fill.rest { background: #94a3b8; }
+.bench-price-value { font-size: .92rem; font-weight: 800; color: var(--text); text-align: right; }
+.bench-highlight { display: flex; flex-direction: column; gap: 6px; }
+.bench-highlight .price { font-size: 2.1rem; font-weight: 800; color: var(--accent); line-height: 1; }
+.bench-highlight .price-label { color: var(--muted); font-size: .9rem; }
+.bench-highlight .price-store { font-size: .95rem; color: var(--text); font-weight: 700; }
+.bench-cta { display: inline-flex; align-items: center; justify-content: center; min-height: 44px;
+              padding: 10px 22px; border-radius: 999px; background: var(--text); color: var(--surface);
+              font-weight: 700; margin-top: 14px; transition: filter .15s ease; }
+.bench-cta:hover { text-decoration: none; filter: brightness(1.15); }
+.bench-banner { background: linear-gradient(90deg, var(--text), #334155); color: var(--surface); border-radius: var(--radius);
+                padding: 14px 18px; text-align: center; font-size: .9rem; margin-top: 28px; }
+.bench-section-title { font-size: 1.35rem; margin: 0; letter-spacing: -0.01em; }
+.bench-view-header { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: center; margin: 32px 0 16px; }
+.bench-view-toggle { display: inline-flex; gap: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 4px; box-shadow: var(--shadow); }
+.bench-view-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 999px; font-size: .86rem; font-weight: 600; color: var(--muted); text-decoration: none; transition: background .15s ease, color .15s ease; }
+.bench-view-btn:hover { background: var(--code); color: var(--text); }
+.bench-view-btn.active { background: var(--accent); color: #fff; }
+.bench-view-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.bench-view-panel[hidden] { display: none; }
+.bench-items-grid { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); margin: 18px 0 28px; }
+.bench-sort-icon { font-size: .8rem; color: var(--muted); margin-left: 4px; }
+.bench-table th[data-sort] { cursor: pointer; user-select: none; }
+.bench-table th[data-sort]:hover { background: var(--code); }
+.bench-table th.sort-asc .bench-sort-icon::after { content: " ↑"; }
+.bench-table th.sort-desc .bench-sort-icon::after { content: " ↓"; }
+.bench-item-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+                   padding: 18px; display: flex; flex-direction: column; gap: 14px; transition: transform .12s ease, box-shadow .12s ease; }
+.bench-item-card:hover { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(0,0,0,.1); }
+.bench-item-header { display: flex; gap: 14px; align-items: flex-start; }
+.bench-item-meta { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.bench-item-meta .bench-nome { font-size: 1.05rem; font-weight: 700; line-height: 1.35; }
+.bench-item-meta .bench-nome a { color: var(--text); }
+.bench-item-meta .bench-nome a:hover { color: var(--accent); }
+.bench-item-prices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.bench-price-pill { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.bench-price-pill .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+.bench-price-pill .value { font-size: 1rem; font-weight: 800; color: var(--text); }
+.bench-price-pill.best { border-color: rgba(22,163,74,.35); background: rgba(22,163,74,.08); }
+.bench-price-pill.best .value { color: #16a34a; }
+.bench-price-pill .value.max { color: #dc2626; }
+.bench-card-saving { display: inline-flex; align-items: center; gap: 6px; color: #16a34a; font-weight: 700; font-size: .9rem; }
+@media (max-width: 760px) {
+  .bench-hero h1 { font-size: 1.5rem; }
+  .bench-pesquisa input, .bench-pesquisa select, .bench-pesquisa button { width: 100%; }
+  .bench-items-grid { grid-template-columns: 1fr; }
+  .bench-thumb { width: 46px; height: 46px; flex-basis: 46px; }
+  .bench-cards { grid-template-columns: 1fr; }
+  .bench-bar-row, .bench-price-row { grid-template-columns: 80px 1fr 46px; }
+  .bench-index-axis { padding: 0 70px 0 80px; }
+}
 """
 
 
@@ -947,6 +1035,7 @@ def html_publico(
     ordem: str = "dispersao",
     pagina: int = 0,
     tamanho: int = 50,
+    view: str = "card",
 ) -> Tuple[int, str]:
     """Página pública do benchmark, com pesquisa (sem sessão).
 
@@ -956,6 +1045,18 @@ def html_publico(
     benchmark = store.obter(slug)
     if not benchmark or not benchmark.get("public"):
         return 404, _pagina_erro("Este benchmark não está publicado.")
+
+    # Normalizar loja: por vezes chega um dicionário serializado em vez do ID.
+    if loja and isinstance(loja, dict):
+        loja = str(loja.get("store_id") or "")
+    elif loja and isinstance(loja, str) and (loja.startswith("{") or loja.startswith("'{")):
+        try:
+            import ast
+            parsed = ast.literal_eval(loja)
+            loja = str(parsed.get("store_id") or "") if isinstance(parsed, dict) else str(parsed)
+        except Exception:
+            loja = ""
+    loja = (loja or "").strip()
 
     estudo = analise(slug)
     kpis = estudo.get("kpis") or {}
@@ -969,9 +1070,14 @@ def html_publico(
     )
     produtos = comparacao.get("items") or []
 
+    def _store_id(loja_dict: Any) -> str:
+        if isinstance(loja_dict, dict):
+            return str(loja_dict.get("store_id") or "")
+        return str(loja_dict or "")
+
     opcoes_loja = "".join(
-        f'<option value="{escape(str(l.get("store_id")))}"{" selected" if str(l.get("store_id")) == loja else ""}>'
-        f'{escape(str(l.get("store_name") or l.get("store_id")))} ({int(l.get("produtos") or 0)} produtos)</option>'
+        f'<option value="{escape(_store_id(l))}"{" selected" if _store_id(l) == loja else ""}>'
+        f'{escape(str(l.get("store_name") or _store_id(l) if isinstance(l, dict) else l))} ({int(l.get("produtos") or 0) if isinstance(l, dict) else 0} produtos)</option>'
         for l in estudo.get("stores") or []
     )
     ordem_opcoes = [
@@ -986,8 +1092,7 @@ def html_publico(
         for valor, rotulo in ordem_opcoes
     )
 
-    linhas = []
-    for produto in produtos:
+    def _render_linha_produto(produto: Dict[str, Any]) -> Dict[str, str]:
         melhor = produto.get("best") or {}
         link = str(melhor.get("url") or "")
         nome = escape(str(produto.get("product_name") or ""))
@@ -995,8 +1100,6 @@ def html_publico(
         marca = escape(str(produto.get("brand") or "sem marca"))
         dispersao = f"{produto['spread_pct']}%" if produto.get("spread_pct") is not None else "—"
         loja_barata = escape(str(melhor.get("store_name") or "—"))
-        # A imagem e a descrição vêm da oferta mais barata: é o que o visitante
-        # quer ver antes de clicar.
         imagem = str(melhor.get("image") or "").strip()
         miniatura = (
             f'<img class="bench-thumb" src="{escape(imagem, quote=True)}" alt="" loading="lazy" referrerpolicy="no-referrer">'
@@ -1005,27 +1108,186 @@ def html_publico(
         )
         descricao_bruta = str(melhor.get("description") or "").strip()
         descricao = f'<span class="bench-descricao">{escape(descricao_bruta[:240])}</span>' if descricao_bruta else ""
-        linhas.append(
+        stores_count = int(produto.get('stores') or 0)
+        return {
+            "miniatura": miniatura,
+            "nome_html": nome_html,
+            "marca": marca,
+            "descricao": descricao,
+            "stores_count": str(stores_count),
+            "lojas_label": f"{stores_count} loja{'s' if stores_count != 1 else ''}",
+            "price_min": _eur(produto.get("price_min")),
+            "price_max": _eur(produto.get("price_max")),
+            "price_avg": _eur(produto.get("price_avg")),
+            "dispersao": dispersao,
+            "loja_barata": loja_barata,
+            "economia": f"Poupa até {_eur(produto.get('saving_abs'))}" if produto.get('saving_abs') else "",
+        }
+
+    cards_lista = []
+    linhas_tabela = []
+    for produto in produtos:
+        dados = _render_linha_produto(produto)
+        stores_badge = f'<span class="bench-stores"><span class="bench-tag">{dados["lojas_label"]}</span></span>'
+        cards_lista.append(
+            '<article class="bench-item-card">'
+            f'<div class="bench-item-header">{dados["miniatura"]}<div class="bench-item-meta">'
+            f'<span class="bench-nome">{dados["nome_html"]}</span>'
+            f'<span class="bench-tag">{dados["marca"]}</span>'
+            f'{dados["descricao"]}</div></div>'
+            '<div class="bench-item-prices">'
+            '<div class="bench-price-pill best">'
+            '<span class="label">Mais barato</span>'
+            f'<span class="value">{dados["price_min"]}</span>'
+            f'<span class="store">{dados["loja_barata"]}</span></div>'
+            f'<div class="bench-price-pill"><span class="label">Máximo</span><span class="value max">{dados["price_max"]}</span></div>'
+            f'<div class="bench-price-pill"><span class="label">Média</span><span class="value">{dados["price_avg"]}</span></div>'
+            f'<div class="bench-price-pill"><span class="label">Lojas</span><span class="value">{dados["lojas_label"]}</span></div>'
+            f'<div class="bench-price-pill"><span class="label">Dispersão</span><span class="value">{dados["dispersao"]}</span></div>'
+            '</div>'
+            + (f'<span class="bench-card-saving">{dados["economia"]}</span>' if dados["economia"] else "")
+            + '</article>'
+        )
+        linhas_tabela.append(
             "<tr>"
-            f'<td><div class="bench-produto">{miniatura}<div><span class="bench-nome">{nome_html}</span>'
-            f"<br><span class='bench-tag'>{marca}</span>{descricao}</div></div></td>"
-            f"<td>{int(produto.get('stores') or 0)}</td>"
-            f"<td class='bench-min'>{_eur(produto.get('price_min'))}</td>"
-            f"<td class='bench-max'>{_eur(produto.get('price_max'))}</td>"
-            f"<td>{_eur(produto.get('price_avg'))}</td>"
-            f"<td>{dispersao}</td>"
-            f"<td>{loja_barata}</td>"
+            f'<td data-label="Produto"><div class="bench-produto">{dados["miniatura"]}<div><span class="bench-nome">{dados["nome_html"]}</span>'
+            f"{stores_badge}{dados['descricao']}</div></div></td>"
+            f'<td data-label="Lojas"><span class="bench-stores">{dados["stores_count"]}</span></td>'
+            f'<td data-label="Mínimo" class="bench-min">{dados["price_min"]}</td>'
+            f'<td data-label="Máximo" class="bench-max">{dados["price_max"]}</td>'
+            f'<td data-label="Média" class="bench-avg">{dados["price_avg"]}</td>'
+            f'<td data-label="Dispersão">{dados["dispersao"]}</td>'
+            f'<td data-label="Loja mais barata"><span class="bench-store-best">{dados["loja_barata"]}</span></td>'
             "</tr>"
         )
-    corpo_tabela = "".join(linhas) or (
-        "<tr><td colspan='7'>Sem ofertas para os filtros escolhidos.</td></tr>"
-    )
+    corpo_cards = "".join(cards_lista) or '<p class="bench-vazio">Sem ofertas para os filtros escolhidos.</p>'
+    corpo_tabela = "".join(linhas_tabela) or "<tr><td colspan='7'>Sem ofertas para os filtros escolhidos.</td></tr>"
 
     recolha_em = ((benchmark.get("last_run") or {}).get("at") or "")[:19].replace("T", " ")
     dispersao_media = f"{kpis['avg_spread_pct']}%" if kpis.get("avg_spread_pct") is not None else "—"
     titulo = str(benchmark.get('name') or 'Benchmark')
     descricao = str(benchmark.get('description') or 'O mesmo produto comparado entre lojas.')
     caminho = f"/site/benchmarks/{benchmark.get('slug')}/pesquisa"
+    view = str(view or "card")
+
+    def _view_url(novo_view: str) -> str:
+        params: Dict[str, str] = {}
+        loja_limpa = ""
+        if loja:
+            if isinstance(loja, dict):
+                loja_limpa = str(loja.get("store_id") or "")
+            else:
+                loja_limpa = str(loja).strip()
+                if loja_limpa.startswith("{"):
+                    try:
+                        import ast
+                        parsed = ast.literal_eval(loja_limpa)
+                        loja_limpa = str(parsed.get("store_id") or "") if isinstance(parsed, dict) else ""
+                    except Exception:
+                        loja_limpa = ""
+        if q:
+            params["q"] = q
+        if loja_limpa:
+            params["loja"] = loja_limpa
+        if ordem != "dispersao":
+            params["ordem"] = ordem
+        if novo_view != "card":
+            params["view"] = novo_view
+        query = "&".join(f"{k}={escape(str(v))}" for k, v in params.items())
+        return f"{caminho}?{query}" if query else caminho
+
+    # -----------------------------------------------------------------------
+    # Secções visuais: índice de preço, preço por loja e melhor preço destacado
+    # -----------------------------------------------------------------------
+    lojas_stats = estudo.get("stores") or []
+    lojas_ordenadas = sorted(lojas_stats, key=lambda l: float(l.get("indice_preco") or 9999))
+
+    def _bar_width_index(indice: Any) -> float:
+        try:
+            return max(4.0, min(100.0, float(indice) * 100.0 / 140.0))
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _bar_width_price(preco: Any, max_preco: float) -> float:
+        try:
+            return max(4.0, min(100.0, float(preco) * 100.0 / max_preco)) if max_preco else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+
+    # Índice de preço por loja (100 = média do estudo)
+    linhas_indice = []
+    marker_pct = 100.0 * 100.0 / 140.0  # posição do marcador "100"
+    for idx, loja in enumerate(lojas_ordenadas[:8]):
+        nome = escape(str(loja.get("store_name") or loja.get("store_id") or "Loja"))
+        indice = loja.get("indice_preco")
+        valor = f"{indice:.0f}" if indice is not None else "—"
+        pct = _bar_width_index(indice)
+        best_class = " best" if idx == 0 else ""
+        linhas_indice.append(
+            f'<div class="bench-bar-row">'
+            f'<div class="label" title="{nome}">{nome}</div>'
+            f'<div class="bench-bar-track">'
+            f'<div class="bench-bar-fill{best_class}" style="width:{pct:.1f}%"></div>'
+            f'<div class="bench-bar-marker" style="left:{marker_pct:.1f}%"></div>'
+            f'</div>'
+            f'<div class="bench-bar-value">{valor}</div>'
+            f'</div>'
+        )
+    indice_html = "".join(linhas_indice) if linhas_indice else '<p class="muted">Sem dados por loja.</p>'
+
+    # Preço por loja
+    precos_validos = [float(l.get("preco_medio") or 0) for l in lojas_stats if l.get("preco_medio")]
+    max_preco = max(precos_validos) if precos_validos else 0
+    lojas_preco = sorted(lojas_stats, key=lambda l: float(l.get("preco_medio") or 0))
+    linhas_preco = []
+    for idx, loja in enumerate(lojas_preco[:8]):
+        nome = escape(str(loja.get("store_name") or loja.get("store_id") or "Loja"))
+        preco = loja.get("preco_medio")
+        pct = _bar_width_price(preco, max_preco)
+        classe = "best" if idx == 0 else ("second" if idx == 1 else ("third" if idx == 2 else "rest"))
+        ofertas = int(loja.get("ofertas") or 0)
+        linhas_preco.append(
+            f'<div class="bench-price-row">'
+            f'<div class="label" title="{nome}">{nome}</div>'
+            f'<div class="bench-bar-track"><div class="bench-price-fill {classe}" style="width:{pct:.1f}%"></div></div>'
+            f'<div class="bench-price-value">{_eur(preco)}</div>'
+            f'</div>'
+            f'<div class="muted" style="margin-top:-8px;margin-bottom:10px;padding-left:100px;">{ofertas} ofertas</div>'
+        )
+    preco_html = "".join(linhas_preco) if linhas_preco else '<p class="muted">Sem preços por loja.</p>'
+
+    # Melhor preço / ficha comparada
+    oportunidades = estudo.get("opportunities") or []
+    melhor_geral = min(oportunidades, key=lambda p: p.get("price_min") or float("inf")) if oportunidades else None
+    melhor_oferta = melhor_geral.get("best") or {} if melhor_geral else {}
+    ficha_html = (
+        '<div class="bench-highlight">'
+        f'<span class="price-label">Melhor preço</span>'
+        f'<span class="price">{_eur(melhor_oferta.get("price"))}</span>'
+        f'<span class="price-store">{escape(str(melhor_oferta.get("store_name") or "—"))}</span>'
+        f'<span class="muted">{escape(str(melhor_geral.get("product_name") or "")[:60])}</span>'
+        f'<a class="bench-cta" href="#lista-completa">Ver a lista completa</a>'
+        '</div>'
+    ) if melhor_geral else '<p class="muted">Sem comparações disponíveis.</p>'
+
+    cards_html = f"""
+<div class="bench-cards">
+  <div class="bench-card">
+    <h3>Índice de preço · 100 = média do estudo</h3>
+    {indice_html}
+    <div class="bench-index-axis"><span>80</span><span>média</span><span>120</span></div>
+  </div>
+  <div class="bench-card">
+    <h3>Preço por loja</h3>
+    {preco_html}
+    <p class="muted">Comparação automática entre lojas</p>
+  </div>
+  <div class="bench-card">
+    <h3>Ficha comparada</h3>
+    {ficha_html}
+  </div>
+</div>
+""" if lojas_stats else ""
 
     corpo = f"""<div class="bench-hero"><div class="bench-wrap">
   <h1>{escape(titulo)}</h1>
@@ -1041,6 +1303,8 @@ def html_publico(
     <div class="bench-kpi"><b>{_eur(kpis.get('potential_saving_eur'))}</b><span>poupança se escolher sempre o mínimo</span></div>
   </div>
 
+  {cards_html}
+
   <h2>Pesquisar</h2>
   <form class="bench-pesquisa" method="get" action="{escape(caminho)}">
     <label>Produto ou marca
@@ -1055,17 +1319,130 @@ def html_publico(
     <button type="submit">Procurar</button>
   </form>
 
-  <h2>Onde está mais barato ({int(comparacao.get('total') or 0)} produtos)</h2>
-  <table class="bench-table">
-    <thead><tr>
-      <th>Produto</th><th>Lojas</th><th>Mínimo</th><th>Máximo</th><th>Média</th><th>Dispersão</th><th>Loja mais barata</th>
-    </tr></thead>
-    <tbody>{corpo_tabela}</tbody>
-  </table>
+  <div class="bench-view-header">
+    <h2 id="lista-completa" class="bench-section-title">Onde está mais barato ({int(comparacao.get('total') or 0)} produtos)</h2>
+    <div class="bench-view-actions">
+      <button type="button" class="bench-view-btn" data-bench-sort-dir title="Inverter ordem dos resultados">
+        <span data-sort-label>Ordem: crescente</span>
+      </button>
+      <div class="bench-view-toggle" role="group" aria-label="Tipo de visualização" data-bench-toggle>
+        <a class="bench-view-btn{' active' if view == 'card' else ''}" href="{escape(_view_url('card'))}" data-view="card" title="Cards">Cards</a>
+        <a class="bench-view-btn{' active' if view == 'table' else ''}" href="{escape(_view_url('table'))}" data-view="table" title="Tabela">Tabela</a>
+      </div>
+    </div>
+  </div>
+  <div class="bench-view-panel" data-view="card"{' hidden' if view != 'card' else ''}>
+    <div class="bench-items-grid" data-bench-items="card">{corpo_cards}</div>
+  </div>
+  <div class="bench-view-panel" data-view="table"{' hidden' if view != 'table' else ''}>
+    <div class="bench-table-wrap">
+      <table class="bench-table" data-bench-table>
+        <thead><tr>
+          <th data-sort="text">Produto <span class="bench-sort-icon">↕</span></th>
+          <th data-sort="number">Lojas <span class="bench-sort-icon">↕</span></th>
+          <th data-sort="price">Mínimo <span class="bench-sort-icon">↕</span></th>
+          <th data-sort="price">Máximo <span class="bench-sort-icon">↕</span></th>
+          <th data-sort="price">Média <span class="bench-sort-icon">↕</span></th>
+          <th data-sort="percent">Dispersão <span class="bench-sort-icon">↕</span></th>
+          <th data-sort="text">Loja mais barata <span class="bench-sort-icon">↕</span></th>
+        </tr></thead>
+        <tbody>{corpo_tabela}</tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    (function(){{
+      const toggle = document.querySelector('[data-bench-toggle]');
+      if (toggle) {{
+        const buttons = toggle.querySelectorAll('[data-view]');
+        const panels = document.querySelectorAll('.bench-view-panel');
+        buttons.forEach(function(btn){{
+          btn.addEventListener('click', function(e){{
+            e.preventDefault();
+            const view = btn.getAttribute('data-view');
+            buttons.forEach(function(b){{ b.classList.toggle('active', b.getAttribute('data-view') === view); }});
+            panels.forEach(function(p){{ p.hidden = p.getAttribute('data-view') !== view; }});
+            const url = new URL(btn.getAttribute('href'), window.location.href);
+            history.replaceState(null, '', url.toString());
+          }});
+        }});
+      }}
+
+      // Inverter ordem dos cards (global, mantém o primeiro/último)
+      const sortDirBtn = document.querySelector('[data-bench-sort-dir]');
+      if (sortDirBtn) {{
+        let ascending = true;
+        sortDirBtn.addEventListener('click', function(){{
+          ascending = !ascending;
+          sortDirBtn.querySelector('[data-sort-label]').textContent = ascending ? 'Ordem: crescente' : 'Ordem: decrescente';
+          const grid = document.querySelector('[data-bench-items="card"]');
+          if (grid) {{
+            const items = Array.from(grid.children);
+            grid.innerHTML = '';
+            items.reverse().forEach(function(item){{ grid.appendChild(item); }});
+          }}
+          const tbody = document.querySelector('[data-bench-table] tbody');
+          if (tbody) {{
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            tbody.innerHTML = '';
+            rows.reverse().forEach(function(row){{ tbody.appendChild(row); }});
+          }}
+        }});
+      }}
+
+      // Ordenação por coluna na tabela
+      const table = document.querySelector('[data-bench-table]');
+      if (table) {{
+        const tbody = table.querySelector('tbody');
+        const headers = table.querySelectorAll('thead th[data-sort]');
+        headers.forEach(function(header){{
+          header.style.cursor = 'pointer';
+          header.addEventListener('click', function(){{
+            const col = Array.from(header.parentNode.children).indexOf(header);
+            const type = header.getAttribute('data-sort');
+            const currentDir = header.getAttribute('data-dir') || 'asc';
+            const dir = currentDir === 'asc' ? 'desc' : 'asc';
+            headers.forEach(function(h){{ h.removeAttribute('data-dir'); h.classList.remove('sort-asc','sort-desc'); }});
+            header.setAttribute('data-dir', dir);
+            header.classList.add(dir === 'asc' ? 'sort-asc' : 'sort-desc');
+
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.sort(function(a, b){{
+              let av = a.children[col].textContent.trim();
+              let bv = b.children[col].textContent.trim();
+              if (type === 'text' && a.children[col].querySelector('.bench-nome')) {{
+                av = a.children[col].querySelector('.bench-nome').textContent.trim();
+                bv = b.children[col].querySelector('.bench-nome').textContent.trim();
+              }}
+              if (type === 'number') {{
+                av = parseFloat(av) || 0;
+                bv = parseFloat(bv) || 0;
+              }} else if (type === 'price') {{
+                av = parseFloat(av.replace(/[^0-9,]/g, '').replace(',', '.')) || 0;
+                bv = parseFloat(bv.replace(/[^0-9,]/g, '').replace(',', '.')) || 0;
+              }} else if (type === 'percent') {{
+                av = parseFloat(av.replace('%','')) || 0;
+                bv = parseFloat(bv.replace('%','')) || 0;
+              }}
+              if (typeof av === 'string') {{ av = av.toLocaleLowerCase('pt'); bv = bv.toLocaleLowerCase('pt'); }}
+              if (av < bv) return dir === 'asc' ? -1 : 1;
+              if (av > bv) return dir === 'asc' ? 1 : -1;
+              return 0;
+            }});
+            tbody.innerHTML = '';
+            rows.forEach(function(row){{ tbody.appendChild(row); }});
+          }});
+        }});
+      }}
+    }})();
+  </script>
   <p class="bench-rodape" style="color:#64748b;font-size:12px;margin-top:24px;">
     Dados recolhidos automaticamente dos sites das lojas. Última recolha: {escape(recolha_em or 'sem registo')}.
     Os preços podem estar desactualizados — confirme sempre na loja. Este estudo não é uma recomendação de compra.
   </p>
+  <div class="bench-banner">
+    Melhor preço assinalado · data de recolha à vista · preço publicado não é preço final
+  </div>
 </div>"""
 
     html = render._layout(

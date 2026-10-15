@@ -27,6 +27,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 if str(RAIZ) not in sys.path:
     sys.path.insert(0, str(RAIZ))
 
+from api import benchmarks_store  # noqa: E402
 from api import cms_render  # noqa: E402
 from api import cms_store  # noqa: E402
 from api import shop_render  # noqa: E402
@@ -197,6 +198,37 @@ def test_robots_do_site_indica_o_sitemap_sem_base_url(instalacao_limpa) -> None:
     robots = cms_render.render_robots({})
     assert "Sitemap: https://sabemos.studio/site/sitemap.xml" in robots
     assert "Allow: /site/" in robots
+
+
+def test_sitemap_do_site_nao_repete_enderecos(instalacao_limpa) -> None:
+    """`/site/blog` é uma página do CMS **e** o índice do blog: duas regras, um
+    `<loc>`. Repetido, o sitemap é um aviso no Search Console."""
+    locs = _locs(cms_render.render_sitemap({}))
+    assert f"{cms_render.DEFAULT_BASE_URL}/site/blog" in locs
+    assert len(locs) == len(set(locs)), [loc for loc in locs if locs.count(loc) > 1]
+
+
+def test_sitemap_do_site_inclui_os_benchmarks_publicados(instalacao_limpa, monkeypatch) -> None:
+    """A página do estudo é uma página do CMS, mas a versão com a pesquisa
+    agregada tem endereço próprio e tem de entrar no sitemap — estava de fora."""
+    monkeypatch.setattr(
+        benchmarks_store,
+        "publicos",
+        lambda: [{"slug": "portateis-lojas", "public": True, "public_at": "2026-10-01T10:00:00Z"}],
+    )
+    xml = cms_render.render_sitemap({})
+    endereco = f"{cms_render.DEFAULT_BASE_URL}/site/benchmarks/portateis-lojas/pesquisa"
+    assert endereco in _locs(xml)
+    # O `lastmod` é o dia em que o estudo foi publicado no site.
+    assert f"<loc>{endereco}</loc><lastmod>2026-10-01</lastmod>" in xml
+
+
+def test_sitemap_do_site_ignora_benchmarks_nao_publicados(instalacao_limpa, monkeypatch) -> None:
+    """O que não está publicado não entra: a lista sai do mesmo sítio que a
+    página pública usa para decidir o que mostrar."""
+    monkeypatch.setattr(benchmarks_store, "publicos", lambda: [])
+    locs = _locs(cms_render.render_sitemap({}))
+    assert not [loc for loc in locs if "benchmarks/" in loc and loc.endswith("/pesquisa")]
 
 
 # ------------------------------------------------------- canónicas com origem

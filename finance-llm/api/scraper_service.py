@@ -1809,6 +1809,41 @@ def preview_source(payload: Dict[str, Any], *, limit: int = 5, max_pages: int = 
     }
 
 
+def preview_on_page(page: Any, payload: Dict[str, Any], *, limit: int = 5) -> Dict[str, Any]:
+    """Testa uma definição numa página já aberta, devolvendo uma amostra de itens.
+
+    Usado pela sonda de produtos (`scraper_ai`) para validar uma proposta sem
+    fazer um segundo download, o que em listagens dinâmicas devolvia outro DOM.
+    """
+    source = normalize_source(payload, payload if payload.get("id") else None)
+    items: List[Dict[str, Any]] = []
+    seen_ids: set = set()
+    seen_titles: set = set()
+    try:
+        page_items = _extract_items(page, source)
+        page_items, repetitions = _dedupe_items(page_items, seen_ids, seen_titles)
+        items.extend(page_items)
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": f"{type(exc).__name__}: {exc}",
+            "pages": 1,
+            "items": items,
+            "total": len(items),
+        }
+    return {
+        "ok": True,
+        "pages": 1,
+        "total": len(items),
+        "items": items[: max(1, min(limit, 50))],
+        "fields": [f["name"] for f in source["fields"]],
+        "detail_count": 0,
+        "detail_errors": 0,
+        "detail_pairs_count": 0,
+            "duplicates": repetitions,
+    }
+
+
 # --------------------------------------------------------------- histórico
 def list_runs(source_id: Optional[str] = None, *, limit: int = 50) -> List[Dict[str, Any]]:
     """Lista as execuções conhecidas (mais recentes primeiro)."""

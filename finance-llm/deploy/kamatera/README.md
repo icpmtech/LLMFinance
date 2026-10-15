@@ -537,6 +537,14 @@ indice que junta a aplicação, o site (`/site/sitemap.xml`) e a loja
 `robots.txt` de `/site/` e o de `/loja/` existem para cada modulo se descrever,
 mas os motores de busca só lêem o da raiz.
 
+O sitemap do site é gerado a partir dos dados (`api/cms_render.render_sitemap`),
+por isso publicar chega: páginas do CMS, artigos e índice do blog, municípios,
+páginas de pesquisa de dados, remunerações e os **estudos de benchmark
+publicados** (a página do estudo *e* a versão com a pesquisa agregada,
+`/site/benchmarks/<slug>/pesquisa`). Cada endereço entra uma vez — `/site/blog` é
+página do CMS e índice do blog ao mesmo tempo, e um `<loc>` repetido é um aviso
+no Search Console. O da loja segue a mesma regra com produtos e categorias.
+
 Duas coisas a nao partir: se a `location /` voltar a servir `/index.html`,
 perdem-se os metadados por rota, o `noindex` das rotas privadas **e** o 404
 (passa tudo a responder 200 com a casca). E `tests/test_spa_rotas.py` compara

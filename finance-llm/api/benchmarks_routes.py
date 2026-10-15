@@ -522,9 +522,10 @@ def benchmark_pagina_publica(
     loja: str = Query("", description="Filtrar por loja"),
     ordem: str = Query("dispersao", pattern="^(dispersao|poupanca|lojas|preco|nome)$"),
     pagina: int = Query(0, ge=0),
+    view: str = Query("card", pattern="^(card|table)$"),
 ) -> HTMLResponse:
     """Página pública do benchmark, com pesquisa (sem sessão)."""
-    estado, html = servico.html_publico(slug, q=q, loja=loja, ordem=ordem, pagina=pagina)
+    estado, html = servico.html_publico(slug, q=q, loja=loja, ordem=ordem, pagina=pagina, view=view)
     return HTMLResponse(content=html, status_code=estado, headers={"Cache-Control": "no-store"})
 
 

@@ -19,6 +19,13 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
+      // O site público (CMS) vive em `/site/...`, servido pelo backend. Sem esta
+      // regra, no servidor de desenvolvimento os endereços do site caíam no
+      // `index.html` da SPA e a página abria "A validar a sessão…".
+      '/site': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
       '/chat': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
