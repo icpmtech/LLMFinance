@@ -208,6 +208,7 @@ def cms_list_menus() -> Dict[str, Any]:
             for location in store.MENU_LOCATIONS
         },
         "locations": store.MENU_LOCATIONS,
+        "themes": store.menu_themes(),
     }
 
 

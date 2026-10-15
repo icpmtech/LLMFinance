@@ -435,10 +435,20 @@ export type CmsMenuItem = {
   children?: CmsMenuItem[];
 };
 
+export type CmsMenuThemeTemplate = { id: string; label: string };
+
+export type CmsMenuTheme = {
+  id: string;
+  label: string;
+  templates: CmsMenuThemeTemplate[];
+};
+
 export type CmsMenu = {
   id: string;
   name: string;
   location: "header" | "footer";
+  menu_theme?: string;
+  menu_template?: string;
   items: CmsMenuItem[];
 };
 
@@ -454,6 +464,10 @@ export type CmsSettings = {
   theme: string;
   accent: string;
   radius: number;
+  header_menu_theme?: string;
+  header_menu_template?: string;
+  footer_menu_theme?: string;
+  footer_menu_template?: string;
   footer_text: string;
   logo_id?: string | null;
   favicon_id?: string | null;
@@ -470,6 +484,7 @@ export type CmsCatalogue = {
   content_kinds: { id: string; label: string }[];
   template_kinds: { id: string; label: string }[];
   menu_locations: { id: string; label: string }[];
+  menu_themes: CmsMenuTheme[];
   statuses: { id: CmsStatus; label: string; style: string }[];
   entities: string[];
   pages_index: { id: string; title: string; path: string; status: CmsStatus; parent_id?: string | null }[];
@@ -527,6 +542,7 @@ export type CmsMenuListing = {
   items: CmsMenu[];
   resolved: Record<string, CmsMenu>;
   locations: { id: string; label: string }[];
+  themes: CmsMenuTheme[];
 };
 
 export type CmsListPayload<T> = { total: number; count: number; items: T[] };
