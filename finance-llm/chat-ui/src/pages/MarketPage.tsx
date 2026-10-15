@@ -29,13 +29,25 @@ import {
   Coins,
   Globe2,
   Layers,
+  LayoutGrid,
+  LayoutList,
   Loader2,
   Minus,
+  Plus,
   RefreshCw,
   Search,
   TrendingUp,
 } from "lucide-react";
-import { getMarketByCountry, getMarketMeta, type MarketByCountry, type MarketCountryGroup, type MarketCountryTicker, type MarketMeta } from "../marketApi";
+import { addTicker } from "../api";
+import {
+  getMarketByCountry,
+  getMarketMeta,
+  type MarketByCountry,
+  type MarketCountryGroup,
+  type MarketCountryTicker,
+  type MarketMeta,
+} from "../marketApi";
+import EmpresaLogo from "../components/benchmark/EmpresaLogo";
 
 /** Quantos tickers ler por pedido. O universo da plataforma tem ~90 e cada
  *  ticker é uma leitura ao Yahoo: o valor por omissão é o que mantém a página
@@ -45,6 +57,9 @@ const LIMITES = [
   { valor: 60, label: "60 tickers" },
   { valor: 120, label: "Universo todo" },
 ];
+
+/** Como a lista de cada país é apresentada. */
+type Modo = "tabela" | "cartoes";
 
 /** Etiqueta curta da origem do país (coluna «País por»). */
 const ORIGEM_LABEL: Record<string, string> = {
@@ -103,6 +118,48 @@ function combina(ticker: MarketCountryTicker, grupo: MarketCountryGroup, termo: 
   return alvo.includes(termo);
 }
 
+/** Marca da empresa do ticker, com as iniciais como recurso.
+ *
+ * O `logo_url` só vem do backend quando há **de onde** tirar a marca (site
+ * conhecido ou imagem já guardada): sem ele não se pede nada e ficam as
+ * iniciais — um índice não tem site, e uma linha com uma imagem partida é pior
+ * do que um avatar assumido.
+ */
+function LogoDoTicker({ ticker, size }: { ticker: MarketCountryTicker; size: number }) {
+  const rotulo = ticker.name || ticker.ticker;
+  return (
+    <EmpresaLogo
+      nome={rotulo}
+      logoUrl={ticker.logo_url}
+      size={size}
+      titulo={ticker.site ? `${rotulo} · ${ticker.site}` : rotulo}
+    />
+  );
+}
+
+/** De onde veio o país da linha (ou porque é que a linha não tem cotação). */
+function OrigemDoPais({ ticker }: { ticker: MarketCountryTicker }) {
+  if (ticker.error) {
+    return (
+      <span className="inline-flex items-center gap-1 text-amber-200/90">
+        <AlertTriangle size={11} />
+        {ticker.error}
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-1">
+      {ticker.country_source === "yahoo" ? (
+        <CheckCircle2 size={11} className="text-emerald-300/80" />
+      ) : (
+        <Building2 size={11} />
+      )}
+      {ORIGEM_LABEL[ticker.country_source] ?? ticker.country_source}
+      {ticker.exchange ? ` · ${ticker.exchange}` : ""}
+    </span>
+  );
+}
+
 export default function MarketPage({ onSelectTicker, onBack }: { onSelectTicker?: (ticker: string) => void; onBack?: () => void }) {
   const [dados, setDados] = useState<MarketByCountry | null>(null);
   const [meta, setMeta] = useState<MarketMeta | null>(null);
@@ -113,6 +170,12 @@ export default function MarketPage({ onSelectTicker, onBack }: { onSelectTicker?
   const [erro, setErro] = useState<string | null>(null);
   /** Grupos fechados pelo utilizador (o resto fica aberto). */
   const [fechados, setFechados] = useState<Set<string>>(new Set());
+  /** Tabela ou cartões (a escolha é do utilizador e não muda os dados). */
+  const [modo, setModo] = useState<Modo>("tabela");
+  /** Ticker a acrescentar à lista da plataforma. */
+  const [novo, setNovo] = useState("");
+  const [aAdicionar, setAAdicionar] = useState(false);
+  const [aviso, setAviso] = useState<{ tom: "ok" | "erro"; texto: string } | null>(null);
 
   const carregar = useCallback(async (opcoes: { refresh?: boolean; limiteNovo?: number } = {}) => {
     const alvo = opcoes.limiteNovo ?? limite;
@@ -151,8 +214,36 @@ export default function MarketPage({ onSelectTicker, onBack }: { onSelectTicker?
 
   const visiveis = useMemo(() => grupos.reduce((total, grupo) => total + grupo.tickers.length, 0), [grupos]);
 
-  function alternar(pais: string) {
-    setFechados((atual) => {
+  /**
+   * Acrescenta um ticker à lista da plataforma (`POST /tickers/add`, que o
+   * confirma no Yahoo Finance) e mostra-o já.
+   *
+   * A vista passa a ler o **universo todo** e filtra pelo símbolo novo: com o
+   * limite por omissão (40 de ~90) um ticker acabado de acrescentar podia cair
+   * fora da leitura e o utilizador ficava sem sinal de que o pedido resultou.
+   */
+  async function adicionar(evento: React.FormEvent) {
+    evento.preventDefault();
+    const simbolo = novo.trim().toUpperCase();
+    if (!simbolo || aAdicionar) return;
+    setAAdicionar(true);
+    setAviso(null);
+    try {
+      const resultado = await addTicker(simbolo);
+      setAviso({ tom: resultado.added ? "ok" : "erro", texto: resultado.message || `«${resultado.ticker}»: sem alteração.` });
+      if (resultado.added) {
+        setNovo("");
+        setTermo(resultado.ticker);
+        setLimite(LIMITES[LIMITES.length - 1].valor);
+      }
+    } catch (e) {
+      setAviso({ tom: "erro", texto: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setAAdicionar(false);
+    }
+  }
+
+  function alternar(pais: string) {    setFechados((atual) => {
       const seguinte = new Set(atual);
       if (seguinte.has(pais)) seguinte.delete(pais);
       else seguinte.add(pais);
@@ -203,6 +294,29 @@ export default function MarketPage({ onSelectTicker, onBack }: { onSelectTicker?
                 ))}
               </select>
             </label>
+
+            {/* Tabela ou cartões: são os mesmos dados, só muda a leitura. */}
+            <div className="flex items-center overflow-hidden rounded-lg border border-white/10">
+              {([
+                { id: "tabela" as Modo, label: "Tabela", Icone: LayoutList },
+                { id: "cartoes" as Modo, label: "Cartões", Icone: LayoutGrid },
+              ]).map(({ id, label, Icone }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setModo(id)}
+                  aria-pressed={modo === id}
+                  title={`Ver em ${label.toLowerCase()}`}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs transition ${
+                    modo === id ? "bg-teal-400/15 text-teal-100" : "bg-white/5 text-muted-foreground hover:bg-white/10"
+                  }`}
+                >
+                  <Icone size={13} />
+                  {label}
+                </button>
+              ))}
+            </div>
+
             <button
               onClick={() => void carregar({ refresh: true })}
               disabled={atualizando}
@@ -214,6 +328,39 @@ export default function MarketPage({ onSelectTicker, onBack }: { onSelectTicker?
             </button>
           </div>
         </header>
+
+        {/* -------------------------------------------------- acrescentar ticker */}
+        <form onSubmit={adicionar} className="mb-4 flex flex-wrap items-center gap-2">
+          <div className="flex min-w-[260px] flex-1 items-center gap-2">
+            <Plus size={14} className="text-teal-300" />
+            <input
+              value={novo}
+              onChange={(evento) => setNovo(evento.target.value.toUpperCase())}
+              placeholder="Acrescentar ticker à lista da plataforma (ex.: TSLA, EDP.LS, ^GSPC)"
+              aria-label="Ticker a acrescentar"
+              className="w-full rounded-xl border border-white/10 bg-[#0d1117] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={aAdicionar || !novo.trim()}
+            className="flex items-center gap-1.5 rounded-xl border border-teal-400/30 bg-teal-400/10 px-3 py-2 text-xs text-teal-100 transition hover:bg-teal-400/20 disabled:opacity-40"
+            title="Validar no Yahoo Finance e acrescentar à lista de tickers da plataforma"
+          >
+            {aAdicionar ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+            Acrescentar
+          </button>
+          {aviso && (
+            <span
+              className={`flex items-center gap-1.5 text-xs ${aviso.tom === "ok" ? "text-emerald-300" : "text-amber-200"}`}
+              role="status"
+            >
+              {aviso.tom === "ok" ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+              {aviso.texto}
+              {aviso.tom === "ok" && termo.trim() ? " A vista está filtrada para o mostrar." : ""}
+            </span>
+          )}
+        </form>
 
         {/* --------------------------------------------------------------- erro */}
         {erro && (
@@ -324,7 +471,7 @@ export default function MarketPage({ onSelectTicker, onBack }: { onSelectTicker?
                   </span>
                 </button>
 
-                {!fechado && (
+                {!fechado && modo === "tabela" && (
                   <div className="overflow-x-auto border-t border-white/5">
                     <table className="w-full min-w-[820px] text-sm">
                       <thead className="text-[10.5px] uppercase tracking-wide text-muted-foreground">
@@ -342,7 +489,12 @@ export default function MarketPage({ onSelectTicker, onBack }: { onSelectTicker?
                       <tbody>
                         {grupo.tickers.map((ticker) => (
                           <tr key={ticker.ticker} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]">
-                            <td className="px-4 py-2 font-medium">{ticker.ticker}</td>
+                            <td className="px-4 py-2">
+                              <span className="flex items-center gap-2">
+                                <LogoDoTicker ticker={ticker} size={22} />
+                                <span className="font-medium">{ticker.ticker}</span>
+                              </span>
+                            </td>
                             <td className="max-w-[280px] truncate px-3 py-2 text-foreground/90" title={ticker.name ?? undefined}>
                               {ticker.name ?? "—"}
                             </td>
@@ -362,22 +514,7 @@ export default function MarketPage({ onSelectTicker, onBack }: { onSelectTicker?
                               {ticker.market_cap_label ?? capitalizacao(ticker.market_cap)}
                             </td>
                             <td className="px-3 py-2 text-[11px] text-muted-foreground">
-                              {ticker.error ? (
-                                <span className="inline-flex items-center gap-1 text-amber-200/90">
-                                  <AlertTriangle size={11} />
-                                  {ticker.error}
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1">
-                                  {ticker.country_source === "yahoo" ? (
-                                    <CheckCircle2 size={11} className="text-emerald-300/80" />
-                                  ) : (
-                                    <Building2 size={11} />
-                                  )}
-                                  {ORIGEM_LABEL[ticker.country_source] ?? ticker.country_source}
-                                  {ticker.exchange ? ` · ${ticker.exchange}` : ""}
-                                </span>
-                              )}
+                              <OrigemDoPais ticker={ticker} />
                             </td>
                             <td className="px-4 py-2 text-right">
                               {onSelectTicker ? (
@@ -396,6 +533,55 @@ export default function MarketPage({ onSelectTicker, onBack }: { onSelectTicker?
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+
+                {!fechado && modo === "cartoes" && (
+                  <div className="grid grid-cols-1 gap-2.5 border-t border-white/5 p-3 @lg:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4">
+                    {grupo.tickers.map((ticker) => (
+                      <article
+                        key={ticker.ticker}
+                        className="rounded-xl border border-white/10 bg-white/[0.03] p-3 transition hover:border-teal-300/30 hover:bg-white/[0.06]"
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <LogoDoTicker ticker={ticker} size={34} />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[13px] font-semibold">{ticker.ticker}</p>
+                            <p className="truncate text-[11px] text-muted-foreground" title={ticker.name ?? undefined}>
+                              {ticker.name ?? "—"}
+                            </p>
+                          </div>
+                          <span className={`flex items-center gap-0.5 text-xs tabular-nums ${tomVariacao(ticker.change_pct)}`}>
+                            <SetaVariacao valor={ticker.change_pct} />
+                            {ticker.change_label ?? variacao(ticker.change_pct)}
+                          </span>
+                        </div>
+
+                        <div className="mt-2.5 flex items-end justify-between gap-2">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Preço</p>
+                            <p className="text-sm font-semibold tabular-nums">{ticker.price_label ?? num(ticker.price)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Capitalização</p>
+                            <p className="text-sm tabular-nums">{ticker.market_cap_label ?? capitalizacao(ticker.market_cap)}</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-2 flex items-center justify-between gap-2 border-t border-white/5 pt-2 text-[10.5px] text-muted-foreground">
+                          <OrigemDoPais ticker={ticker} />
+                          {onSelectTicker && (
+                            <button
+                              type="button"
+                              onClick={() => onSelectTicker(ticker.ticker)}
+                              className="rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 transition hover:bg-white/10"
+                            >
+                              abrir
+                            </button>
+                          )}
+                        </div>
+                      </article>
+                    ))}
                   </div>
                 )}
               </section>
@@ -434,10 +620,17 @@ export default function MarketPage({ onSelectTicker, onBack }: { onSelectTicker?
               resposta é guardada {Math.round(meta.cache_seconds)} s no servidor.
             </p>
           )}
-          {meta?.country_cache && (
+          {meta?.logo && (
             <p>
-              O país aprendido de cada ticker fica em {meta.country_cache}: uma leitura ao Yahoo por símbolo, não por
-              visita.
+              Marcas: {meta.logo.fonte}. Vêm só quando há site de onde as tirar — um índice não tem, e nesse caso
+              ficam as iniciais. Um site que não renda marca não volta a ser visitado durante{" "}
+              {Math.round(meta.logo.retry_days)} dias.
+            </p>
+          )}
+          {meta?.profile_cache && (
+            <p>
+              O perfil aprendido de cada ticker (país, nome, setor, site) fica em {meta.profile_cache}: uma leitura ao
+              Yahoo por símbolo, não por visita.
             </p>
           )}
         </footer>

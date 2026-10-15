@@ -41,9 +41,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 #: Universo de tickers da plataforma, pela ordem em que é apresentado.
 EXTENDED_PATH = ROOT / "data" / "tickers_extended.json"
-#: Cache em disco do país de cada ticker (`data/` é volume: sobrevive ao deploy).
+#: Cache em disco do **perfil** de cada ticker (país, nome, setor, site e quando
+#: se tentou buscar a marca). `data/` é volume: sobrevive ao deploy.
 CACHE_DIR = ROOT / "data" / "market_view"
-COUNTRY_CACHE_PATH = CACHE_DIR / "countries.json"
+PROFILE_CACHE_PATH = CACHE_DIR / "tickers.json"
+
+#: Um logótipo que não apareceu não se volta a procurar antes disto — o site
+#: pode estar em baixo hoje e ter marca amanhã, mas não a cada visita à página.
+LOGO_RETRY_DAYS = 7.0
 
 #: Quantos tickers a vista lê por pedido. O universo tem ~90; ler tudo de uma vez
 #: são dezenas de pedidos ao Yahoo, e a página não fica melhor por isso.
@@ -220,7 +225,11 @@ _CURRENCY_SYMBOLS: Dict[str, str] = {
 
 _cache: Optional[Tuple[float, str, Dict[str, Any]]] = None
 _cache_lock = threading.Lock()
-_countries_lock = threading.Lock()
+_profile_cache_lock = threading.Lock()
+#: Quantas leituras de logótipo podem estar a decorrer ao mesmo tempo. Sem isto,
+#: uma tabela com 40 linhas abre 40 pedidos em paralelo — cada um a abrir o site
+#: de uma empresa — e tanto o servidor como os sites alvo ficam saturados.
+_logo_slots = threading.BoundedSemaphore(3)
 
 
 # --------------------------------------------------------------------------
@@ -262,25 +271,25 @@ def universe() -> List[str]:
 # --------------------------------------------------------------------------
 # País
 # --------------------------------------------------------------------------
-def _read_country_cache() -> Dict[str, Any]:
-    if not COUNTRY_CACHE_PATH.exists():
+def _read_profile_cache() -> Dict[str, Any]:
+    if not PROFILE_CACHE_PATH.exists():
         return {}
     try:
-        raw = json.loads(COUNTRY_CACHE_PATH.read_text(encoding="utf-8"))
+        raw = json.loads(PROFILE_CACHE_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        logger.warning("Cache de países ilegível (%s); a recomeçar.", exc)
+        logger.warning("Cache de perfis ilegível (%s); a recomeçar.", exc)
         return {}
     if not isinstance(raw, dict):
         return {}
     return {str(key).upper(): value for key, value in raw.items() if isinstance(value, dict)}
 
 
-def _write_country_cache(entries: Dict[str, Any]) -> None:
+def _write_profile_cache(entries: Dict[str, Any]) -> None:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = COUNTRY_CACHE_PATH.with_suffix(".json.tmp")
+    tmp = PROFILE_CACHE_PATH.with_suffix(".json.tmp")
     payload = json.dumps(entries, ensure_ascii=False, indent=2, sort_keys=True, default=str)
     tmp.write_text(payload, encoding="utf-8")
-    tmp.replace(COUNTRY_CACHE_PATH)
+    tmp.replace(PROFILE_CACHE_PATH)
 
 
 def _suffix_country(ticker: str) -> Optional[Tuple[str, str]]:
@@ -297,10 +306,11 @@ def _code_from_name(name: str) -> str:
 
 
 def _profile_from_yahoo(ticker: str) -> Optional[Dict[str, Any]]:
-    """País, nome e setor do Yahoo Finance (a mesma fonte da ficha do ticker).
+    """País, nome, setor e **site** do Yahoo Finance (a fonte da ficha do ticker).
 
-    Uma só leitura serve os três campos: pedir `country` e `name` em chamadas
-    separadas duplicava os pedidos ao Yahoo sem trazer nada de novo.
+    Uma só leitura serve os quatro campos: pedi-los em chamadas separadas
+    duplicava os pedidos ao Yahoo sem trazer nada de novo. O site é o que permite
+    ir buscar a **marca** da empresa (ver `logo`).
     """
     from api.tools import get_stock_info
 
@@ -321,6 +331,7 @@ def _profile_from_yahoo(ticker: str) -> Optional[Dict[str, Any]]:
         "sector": _texto(info.get("sector")),
         "exchange": _texto(info.get("exchange")),
         "currency": _texto(info.get("currency")),
+        "site": _texto(info.get("website")),
     }
 
 
@@ -335,41 +346,64 @@ def resolve_profile(
     *,
     consultar_yahoo: bool = True,
 ) -> Dict[str, Any]:
-    """País (e nome) de um ticker: cache em disco → Yahoo → sufixo do mercado.
+    """Perfil de um ticker: cache em disco → Yahoo → sufixo do mercado.
 
     Devolve sempre `country`, `country_label` e `country_source`; quando nada
     resolve o país, fica `desconhecido` — em vez de um palpite.
+
+    Uma entrada em cache só é dada por boa quando está **completa**
+    (`site_verificado`): as entradas gravadas antes de o site passar a ser lido
+    continuam a valer para o país, mas voltam a ser perguntadas ao Yahoo uma vez,
+    senão o site — e com ele a marca — nunca chegava a estas linhas.
     """
     guardado = cache.get(ticker) or {}
-    perfil: Dict[str, Any] = {
+    conhecido: Dict[str, Any] = {
         "name": _texto(guardado.get("name")),
         "sector": _texto(guardado.get("sector")),
         "exchange": _texto(guardado.get("exchange")),
         "currency": _texto(guardado.get("currency")),
+        "site": _texto(guardado.get("site")),
     }
-    codigo_cache = _texto(guardado.get("country"))
-    if codigo_cache:
+    codigo = _texto(guardado.get("country"))
+
+    def com_pais(base: Dict[str, Any], pais: str, rotulo: Optional[str], origem: str) -> Dict[str, Any]:
         return {
-            **perfil,
-            "country": codigo_cache,
-            "country_label": _texto(guardado.get("country_label")) or country_label(codigo_cache),
-            # Um código gravado veio do Yahoo quando foi resolvido; dizê-lo agora
-            # («cache») perderia a informação de onde o país nasceu.
-            "country_source": _texto(guardado.get("country_source")) or "yahoo",
+            **base,
+            "country": pais,
+            "country_label": rotulo or country_label(pais),
+            "country_source": origem,
         }
+
+    # `country_label` pode estar vazio se o código não for conhecido; recorre-se
+    # ao nome do Yahoo, que é o que a fonte devolveu.
+    site_verificado = bool(guardado.get("site_verificado"))
+    if codigo and site_verificado:
+        return com_pais(conhecido, codigo, _texto(guardado.get("country_label")), _texto(guardado.get("country_source")) or "yahoo")
 
     if consultar_yahoo:
         obtido = _profile_from_yahoo(ticker)
         if obtido:
-            perfil.update({chave: valor for chave, valor in obtido.items() if valor})
+            # O Yahoo respondeu: a entrada passa a estar **completa**, mesmo que
+            # não tenha dado país (uma cripto não tem). É esta marca que faz o
+            # site chegar à cache — sem ela, o `BTC-USD` não teria onde guardar o
+            # `bitcoin.org` e a marca nunca apareceria.
+            site_verificado = True
+            # O que o Yahoo deu substitui o que estava guardado; o que não deu
+            # mantém-se (não se apaga informação boa com uma resposta parcial).
+            conhecido = {**conhecido, **{c: v for c, v in obtido.items() if v}}
             if obtido.get("country"):
-                return {**perfil, "country": obtido["country"], "country_label": obtido["country_label"], "country_source": "yahoo"}
+                return {
+                    **com_pais(conhecido, obtido["country"], obtido.get("country_label"), "yahoo"),
+                    "site_verificado": True,
+                }
+
+    if codigo:
+        return {**com_pais(conhecido, codigo, _texto(guardado.get("country_label")), _texto(guardado.get("country_source")) or "yahoo"), "site_verificado": site_verificado}
 
     por_sufixo = _suffix_country(ticker)
     if por_sufixo:
-        codigo, rotulo = por_sufixo
-        return {**perfil, "country": codigo, "country_label": rotulo, "country_source": "mercado"}
-    return {**perfil, "country": UNKNOWN_CODE, "country_label": UNKNOWN_LABEL, "country_source": "desconhecido"}
+        return {**com_pais(conhecido, por_sufixo[0], por_sufixo[1], "mercado"), "site_verificado": site_verificado}
+    return {**com_pais(conhecido, UNKNOWN_CODE, UNKNOWN_LABEL, "desconhecido"), "site_verificado": site_verificado}
 
 
 # --------------------------------------------------------------------------
@@ -495,8 +529,33 @@ def _rank_summary(variacao: Optional[float]) -> Dict[str, Any]:
 # --------------------------------------------------------------------------
 # Leitura
 # --------------------------------------------------------------------------
+def _logo_url(code: str, perfil: Dict[str, Any], guardado: Dict[str, Any]) -> Optional[str]:
+    """Endereço do logótipo, ou `None` quando não vale a pena pedi-lo.
+
+    Só se anuncia o endereço quando há **razão para esperar** uma imagem: já
+    existe ficheiro guardado, ou conhece-se o site e a última tentativa não foi
+    recente. Anunciá-lo sempre — para o `<img>` de cada linha falhar — enchia a
+    rede de pedidos que só podiam dar 404, e o frontend não teria como distinguir
+    «ainda não há marca» de «falhou».
+    """
+    from api import empresas_perfil
+
+    chave_logo = _logo_key(code, perfil)
+    if not chave_logo:
+        return None
+    if empresas_perfil.caminho_logo(chave_logo):
+        return f"/market/logo/{code}"
+    if not _texto(perfil.get("site")):
+        return None
+    # Uma tentativa anterior só conta para a **mesma** chave: se o nome da
+    # empresa mudou, o que falhou foi outra procura.
+    if str(guardado.get("logo_chave") or "") == chave_logo and not _logo_vencido(guardado.get("logo_verificado_em")):
+        return None
+    return f"/market/logo/{code}"
+
+
 def _quote_row(ticker: str, cache: Dict[str, Any]) -> Dict[str, Any]:
-    """Cotação do dia + país/nome, para um ticker (o trabalho de cada thread)."""
+    """Cotação do dia + país/nome/site, para um ticker (o trabalho de cada thread)."""
     row = dict(market.live_quote(ticker))
     perfil = resolve_profile(ticker, cache)
     # O nome vem do perfil quando a cotação não traz nenhum.
@@ -505,6 +564,7 @@ def _quote_row(ticker: str, cache: Dict[str, Any]) -> Dict[str, Any]:
     row["price_label"] = _price(row.get("price"), row.get("currency"))
     row["change_label"] = _change(row.get("change_pct"))
     row["url"] = f"/tickers/{ticker}"
+    row["logo_url"] = _logo_url(ticker, row, cache.get(ticker) or {})
     # Uma linha sem cotação tem de dizer porquê — na própria linha e não só no
     # resumo, senão o ticker aparece mudo na lista.
     if row.get("price") is None:
@@ -572,17 +632,17 @@ def by_country(
         if not refresh and _cache and _cache[1] == chave and (time.time() - _cache[0]) < CACHE_TTL_SECONDS:
             return dict(_cache[2])
 
-    cache_paises = _read_country_cache()
+    perfis = _read_profile_cache()
 
     def trabalho(code: str) -> Dict[str, Any]:
         try:
-            return _quote_row(code, cache_paises)
+            return _quote_row(code, perfis)
         except Exception as exc:  # pragma: no cover - depende da rede
             logger.debug("Leitura de %s falhou: %s", code, exc)
             return {
                 "ticker": code,
                 "error": str(exc),
-                **resolve_profile(code, cache_paises),
+                **resolve_profile(code, perfis),
                 "url": f"/tickers/{code}",
             }
 
@@ -595,29 +655,36 @@ def by_country(
     # Guardar o que se aprendeu sobre os tickers (uma vez por símbolo, não por pedido).
     novos = {}
     for row in rows:
-        anterior = cache_paises.get(row["ticker"]) or {}
-        if row.get("country_source") != "yahoo":
+        anterior = perfis.get(row["ticker"]) or {}
+        # Só se grava o que veio de uma leitura completa ao Yahoo (um índice não
+        # tem site nem país, mas fica gravado para não se voltar a perguntar).
+        if not row.get("site_verificado"):
             continue
         perfil = {
             "country": row.get("country"),
             "country_label": row.get("country_label"),
-            "country_source": "yahoo",
+            "country_source": row.get("country_source"),
             "name": row.get("name"),
             "sector": row.get("sector"),
             "exchange": row.get("exchange"),
             "currency": row.get("currency"),
+            "site": row.get("site"),
+            "site_verificado": True,
+            # Preserva a marca do logótipo já tentado (não é assunto desta leitura).
+            "logo_chave": anterior.get("logo_chave"),
+            "logo_verificado_em": anterior.get("logo_verificado_em"),
         }
         if all(anterior.get(chave) == valor for chave, valor in perfil.items()):
             continue
         novos[row["ticker"]] = perfil
     if novos:
         try:
-            with _countries_lock:
-                atual = _read_country_cache()
+            with _profile_cache_lock:
+                atual = _read_profile_cache()
                 atual.update(novos)
-                _write_country_cache(atual)
+                _write_profile_cache(atual)
         except OSError as exc:  # pragma: no cover - disco cheio / sem permissão
-            logger.warning("Cache de países não gravado (%s).", exc)
+            logger.warning("Cache de perfis não gravado (%s).", exc)
     agrupado = group_by_country(rows)
     payload: Dict[str, Any] = {
         "source": market.LIVE_SOURCE,
@@ -647,6 +714,104 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _logo_key(ticker: str, perfil: Dict[str, Any]) -> str:
+    """Chave do logótipo na cache das empresas (a mesma que o resto da plataforma).
+
+    Sem NIF para um ticker, a chave é o nome da empresa — que é o que o
+    `empresas_perfil` usa quando não há NIF. Empresas que já tenham sido
+    resolvidas **por NIF** nos benchmarks ficam com uma entrada própria: são dois
+    ficheiros para a mesma marca, e é o preço de não haver um mapa
+    ticker → contribuinte fiável.
+    """
+    from api import empresas_perfil
+
+    return empresas_perfil.chave(None, _texto(perfil.get("name")) or ticker)
+
+
+def logo(ticker: str, *, forcar: bool = False) -> Optional[Tuple[Path, str]]:
+    """Ficheiro do logótipo de um ticker (e o seu tipo MIME), se houver.
+
+    Ordem: ficheiro já guardado → site conhecido (vai buscá-lo) → nada. O site
+    vem do Yahoo Finance, no perfil do ticker; sem site não há marca a procurar
+    (índices não têm, cripto aponta para a página do projeto).
+
+    A procura é deliberadamente contida: no máximo `_logo_slots` em paralelo, e
+    um resultado negativo não se repete antes de `LOGO_RETRY_DAYS`. Sem isto, cada
+    visita à página abria um pedido por linha a um site externo.
+    """
+    from api import empresas_perfil
+
+    try:
+        code = market.normalise_ticker(ticker)
+    except KeyError:
+        return None
+
+    with _profile_cache_lock:
+        perfil = _read_profile_cache().get(code) or {}
+    chave_logo = _logo_key(code, perfil)
+    if not chave_logo:
+        return None
+
+    existente = empresas_perfil.caminho_logo(chave_logo)
+    if existente:
+        return existente, empresas_perfil.media_type_do_logo(existente)
+
+    site = _texto(perfil.get("site"))
+    if not site:
+        return None
+
+    if not forcar and not _logo_vencido(perfil.get("logo_verificado_em")):
+        return None
+
+    # O semáforo é adquirido **antes** de tocar na rede: é o que impede 40 linhas
+    # de abrirem 40 sites ao mesmo tempo.
+    if not _logo_slots.acquire(timeout=1.0):
+        return None
+    try:
+        guardado = empresas_perfil.obter_logo_do_site(site, chave_logo)
+    finally:
+        _logo_slots.release()
+
+    _registar_logo_tentado(code, chave_logo)
+    if not guardado:
+        return None
+    caminho = empresas_perfil.caminho_logo(chave_logo)
+    return (caminho, empresas_perfil.media_type_do_logo(caminho)) if caminho else None
+
+
+def _logo_vencido(marca: Any) -> bool:
+    """Diz se já se pode voltar a procurar a marca deste ticker."""
+    from datetime import datetime, timezone
+
+    if not marca:
+        return True
+    try:
+        quando = datetime.fromisoformat(str(marca))
+    except ValueError:
+        return True
+    if quando.tzinfo is None:
+        quando = quando.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - quando).total_seconds() > LOGO_RETRY_DAYS * 86400
+
+
+def _registar_logo_tentado(ticker: str, chave_logo: str) -> None:
+    """Guarda a tentativa: um logótipo que não veio não se procura a cada visita."""
+    try:
+        with _profile_cache_lock:
+            atual = _read_profile_cache()
+            entrada = dict(atual.get(ticker) or {})
+            if str(entrada.get("logo_chave") or "") != chave_logo:
+                # A chave mudou (o nome do ticker é outro): a tentativa anterior
+                # já não diz nada sobre esta.
+                entrada.pop("logo_verificado_em", None)
+            entrada["logo_chave"] = chave_logo
+            entrada["logo_verificado_em"] = _now()
+            atual[ticker] = entrada
+            _write_profile_cache(atual)
+    except OSError as exc:  # pragma: no cover - disco cheio / sem permissão
+        logger.warning("Tentativa de logótipo não gravada (%s).", exc)
+
+
 def meta() -> Dict[str, Any]:
     """O que a página precisa de saber sobre a fonte, sem ir buscá-la."""
     return {
@@ -661,5 +826,10 @@ def meta() -> Dict[str, Any]:
             "mercado": "sufixo do mercado (ex.: .LS → Portugal)",
             "desconhecido": "sem país identificado",
         },
-        "country_cache": str(COUNTRY_CACHE_PATH.relative_to(ROOT)) if COUNTRY_CACHE_PATH.exists() else None,
+        "logo": {
+            "fonte": "marca extraída do site oficial da empresa (Yahoo Finance), normalizada e guardada em data/empresas/logos",
+            "rota": "/market/logo/{ticker}",
+            "retry_days": LOGO_RETRY_DAYS,
+        },
+        "profile_cache": str(PROFILE_CACHE_PATH.relative_to(ROOT)) if PROFILE_CACHE_PATH.exists() else None,
     }

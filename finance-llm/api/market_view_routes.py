@@ -2,6 +2,7 @@
 
 - `GET /market/by-country` — os tickers conhecidos, agrupados por país, com a
   cotação do dia, agregados por país e a origem do país de cada linha.
+- `GET /market/logo/{ticker}` — a marca da empresa (extraída do site oficial).
 - `GET /market/meta` — fonte, ressalva de preço, dimensão do universo e limites.
 
 O endereço `/market` (sem barra) é a página da aplicação e não uma rota da API:
@@ -12,7 +13,8 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse, Response
 
 from api import market_view
 from api.auth_routes import CurrentSession, optional_session
@@ -57,3 +59,34 @@ def market_by_country(
 def market_meta() -> Dict[str, Any]:
     """O que a página precisa de saber sobre a fonte, sem ir buscá-la."""
     return market_view.meta()
+
+
+@router.get(
+    "/logo/{ticker}",
+    summary="Logótipo da empresa de um ticker (imagem)",
+    response_class=FileResponse,
+    responses={404: {"description": "Sem logótipo para este ticker."}},
+)
+def market_logo(ticker: str, forcar: bool = Query(False, description="Voltar a procurar a marca no site, ignorando a última tentativa.")) -> Response:
+    """Marca da empresa, extraída do **site oficial** e guardada no servidor.
+
+    A imagem vem da mesma cache dos logótipos das empresas
+    (`data/empresas/logos/`), alimentada pela extracção do site que o Yahoo
+    Finance dá para o ticker — não se pede a marca a nenhum serviço de terceiros.
+
+    Sem logótipo guardado e sem site conhecido responde 404: é o sinal que o
+    frontend usa para mostrar as iniciais em vez de uma imagem partida. Um site
+    que não renda marca não volta a ser visitado antes de `retry_days`.
+    """
+    encontrado = market_view.logo(ticker, forcar=bool(forcar))
+    if not encontrado:
+        raise HTTPException(status_code=404, detail="Sem logótipo para este ticker.")
+    caminho, tipo = encontrado
+    return FileResponse(
+        caminho,
+        media_type=tipo,
+        headers={
+            "Cache-Control": "public, max-age=604800",
+            "Content-Disposition": f'inline; filename="{caminho.name}"',
+        },
+    )

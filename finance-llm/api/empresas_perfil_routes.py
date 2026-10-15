@@ -36,16 +36,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/empresas/perfil", tags=["empresas-perfil"])
 
-_TIPOS = {
-    ".png": "image/png",
-    ".svg": "image/svg+xml",
-    ".webp": "image/webp",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".gif": "image/gif",
-    ".ico": "image/x-icon",
-}
-
 
 class PerfilAlvo(BaseModel):
     """Empresa a identificar (site e logótipo)."""
@@ -203,7 +193,7 @@ def obter_logo(chave: str) -> Response:
     caminho = perfil.caminho_logo(chave)
     if not caminho:
         raise HTTPException(status_code=404, detail="Sem logótipo para esta empresa.")
-    tipo = _TIPOS.get(caminho.suffix.lower(), "application/octet-stream")
+    tipo = perfil.media_type_do_logo(caminho)
     return FileResponse(
         caminho,
         media_type=tipo,

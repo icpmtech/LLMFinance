@@ -54,6 +54,19 @@ CONFIG_FILE = EMPRESAS_DIR / "config.json"
 
 PERFIL_VERSION = 1
 
+#: Tipo MIME dos logótipos guardados (a extensão do ficheiro é a única pista
+#: depois de gravado). Vive aqui para haver **uma** lista: as rotas que servem a
+#: imagem e os módulos que a procuram lêem daqui.
+TIPOS_DE_IMAGEM: Dict[str, str] = {
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".webp": "image/webp",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".ico": "image/x-icon",
+}
+
 #: Índice do Elasticsearch com a mesma informação (é o que a ficha da empresa
 #: mostra e o que fica pesquisável, independentemente da máquina que resolveu).
 ES_INDEX = "empresas_perfil"
@@ -385,6 +398,54 @@ def _sem_acentos(valor: str) -> str:
 def slug(valor: str) -> str:
     """Texto em minúsculas, sem acentos nem pontuação (espaços simples)."""
     return _ESPACOS.sub(" ", _NAO_ALNUM.sub(" ", _sem_acentos(valor or "").lower())).strip()
+
+
+#: Caracteres que um nome de ficheiro não pode ter. No Windows o `:` é pior do
+#: que inválido: é lido como letra de unidade, pelo que `n:edp.png` não é um
+#: ficheiro na pasta, é um caminho para a unidade `n:` — a escrita falha com
+#: `FileNotFoundError` e o `glob` com `NotImplementedError`.
+_CARACTERES_PROIBIDOS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def ficheiro_da_chave(chave_perfil: str) -> str:
+    """Nome de ficheiro (sem extensão) que representa uma chave de perfil.
+
+    As chaves de **NIF** são só dígitos e ficam iguais — os logótipos já
+    guardados continuam a ser encontrados. As chaves de **nome** começam por
+    `n:` e perdem o `:` ao passar para o disco (``n:edp sa`` → ``n-edp sa``): a
+    chave lógica continua a identificar o perfil, o nome do ficheiro é só onde a
+    imagem vive.
+    """
+    return _CARACTERES_PROIBIDOS.sub("-", str(chave_perfil or ""))
+
+
+def ficheiros_da_chave(chave_perfil: str) -> List[Path]:
+    """Ficheiros de logótipo existentes para uma chave (qualquer extensão).
+
+    Percorre a pasta em vez de usar um padrão `glob`: além de o `:` partir o
+    `glob` no Windows, um nome de empresa pode trazer `[` ou `*`, que o mesmo
+    `glob` interpretaria como sintaxe.
+    """
+    ficheiro = ficheiro_da_chave(chave_perfil)
+    if not ficheiro or not LOGOS_DIR.exists():
+        return []
+    caminhos = []
+    for candidato in LOGOS_DIR.iterdir():
+        try:
+            if candidato.is_file() and candidato.stem == ficheiro:
+                caminhos.append(candidato)
+        except OSError:  # pragma: no cover - entrada ilegível
+            continue
+    return caminhos
+
+
+def _apagar_logos(chave_perfil: str) -> None:
+    """Remove os logótipos guardados de uma chave (antes de gravar outro)."""
+    for antigo in ficheiros_da_chave(chave_perfil):
+        try:
+            antigo.unlink()
+        except OSError:
+            pass
 
 
 def palavras_chave(nome: str) -> List[str]:
@@ -1164,12 +1225,9 @@ def _guardar_logo(chave_perfil: str, dados: bytes, url: str) -> Dict[str, Any]:
         if not normalizado:
             return {}
         conteudo = normalizado
-    for antigo in LOGOS_DIR.glob(f"{chave_perfil}.*"):
-        try:
-            antigo.unlink()
-        except OSError:
-            pass
-    caminho = LOGOS_DIR / f"{chave_perfil}.{extensao}"
+    ficheiro = ficheiro_da_chave(chave_perfil)
+    _apagar_logos(chave_perfil)
+    caminho = LOGOS_DIR / f"{ficheiro}.{extensao}"
     caminho.write_bytes(conteudo)
     return {
         "logo": f"{chave_perfil}.{extensao}",
@@ -1183,11 +1241,36 @@ def caminho_logo(chave_perfil: str) -> Optional[Path]:
     """Ficheiro de logótipo existente para esta chave, se houver."""
     if not chave_perfil:
         return None
+    ficheiro = ficheiro_da_chave(chave_perfil)
     for extensao in ("png", "svg", "webp", "jpg", "jpeg", "gif", "ico"):
-        caminho = LOGOS_DIR / f"{chave_perfil}.{extensao}"
+        caminho = LOGOS_DIR / f"{ficheiro}.{extensao}"
         if caminho.exists() and caminho.stat().st_size > 64:
             return caminho
     return None
+
+
+def obter_logo_do_site(site: str, chave_perfil: str, *, forcar: bool = False) -> Dict[str, Any]:
+    """Logótipo de uma empresa cujo **site já se conhece**, sem o ir descobrir.
+
+    `resolver_varios` faz a descoberta do site (pesquisa web + validação + IA),
+    que é a parte cara; quem já sabe onde a empresa vive — como a vista de
+    mercado, que recebe o site no perfil do ticker — só precisa de ir buscar a
+    marca. Devolve `{}` quando não houver nada a guardar.
+
+    Sem `forcar`, um logótipo já guardado é devolvido **sem tocar na rede**.
+    """
+    if not site or not chave_perfil:
+        return {}
+    if not forcar:
+        existente = caminho_logo(chave_perfil)
+        if existente:
+            return {"logo": existente.name, "logo_tipo": existente.suffix.lstrip("."), "logo_reutilizado": True}
+    return _obter_logo(site, chave_perfil)
+
+
+def media_type_do_logo(caminho: Path) -> str:
+    """Tipo MIME de um ficheiro de logótipo (por extensão)."""
+    return TIPOS_DE_IMAGEM.get(caminho.suffix.lower(), "application/octet-stream")
 
 
 def _obter_logo(site: str, chave_perfil: str, *, html: Optional[str] = None) -> Dict[str, Any]:
@@ -1457,11 +1540,7 @@ def guardar_perfil(perfil: Dict[str, Any]) -> Dict[str, Any]:
         anterior = dados["perfis"].get(chave_perfil) or {}
         if anterior.get("site") and anterior.get("site") != perfil.get("site"):
             # Mudou de site: o logótipo antigo deixou de fazer sentido.
-            for antigo in LOGOS_DIR.glob(f"{chave_perfil}.*"):
-                try:
-                    antigo.unlink()
-                except OSError:
-                    pass
+            _apagar_logos(chave_perfil)
         elif not perfil.get("logo") and anterior.get("logo"):
             perfil.setdefault("logo", anterior["logo"])
         dados["perfis"][chave_perfil] = perfil
@@ -1641,12 +1720,9 @@ def _ler_elastic(chave_perfil: str) -> Optional[Dict[str, Any]]:
             conteudo = base64.b64decode(dados_b64)
             extensao = str(fonte.get("logo_tipo") or "png").lower()
             _ensure_dirs()
-            for antigo in LOGOS_DIR.glob(f"{chave_perfil}.*"):
-                try:
-                    antigo.unlink()
-                except OSError:
-                    pass
-            (LOGOS_DIR / f"{chave_perfil}.{extensao}").write_bytes(conteudo)
+            _apagar_logos(chave_perfil)
+            caminho = LOGOS_DIR / f"{ficheiro_da_chave(chave_perfil)}.{extensao}"
+            caminho.write_bytes(conteudo)
             fonte["logo"] = f"{chave_perfil}.{extensao}"
         except Exception as exc:  # noqa: BLE001
             logger.info("Logótipo de %s ilegível no Elasticsearch: %s", chave_perfil, exc)
@@ -1846,11 +1922,7 @@ def limpar(nif: Optional[str], nome: Optional[str] = None, *, com_logo: bool = F
         if existia:
             _gravar(dados)
     if com_logo:
-        for caminho in LOGOS_DIR.glob(f"{chave_perfil}.*"):
-            try:
-                caminho.unlink()
-            except OSError:
-                pass
+        _apagar_logos(chave_perfil)
     return existia
 
 

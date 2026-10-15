@@ -5,6 +5,11 @@
  * Yahoo Finance), `mercado` (sufixo do símbolo, ex.: `.LS` → Portugal) ou
  * `desconhecido`. Nenhuma linha é preenchida com um valor suposto: um ticker sem
  * cotação traz o `error` que explica porquê.
+ *
+ * A **marca** de cada empresa vem em `logo_url` (rota `/market/logo/<ticker>`),
+ * extraída do site oficial e guardada no servidor. Vem `null` quando não há site
+ * de onde a tirar (um índice não tem) — nesse caso o frontend mostra as iniciais,
+ * sem chegar a pedir uma imagem que só podia falhar.
  */
 import { API_BASE } from "./api";
 
@@ -33,6 +38,10 @@ export type MarketCountryTicker = {
   sector?: string | null;
   exchange?: string | null;
   currency?: string | null;
+  /** Site oficial da empresa (Yahoo Finance) — a origem do logótipo. */
+  site?: string | null;
+  /** A empresa tem site? `true` quando o Yahoo respondeu (mesmo sem site). */
+  site_verificado?: boolean;
   price?: number | null;
   previous_close?: number | null;
   change?: number | null;
@@ -41,6 +50,8 @@ export type MarketCountryTicker = {
   price_label?: string | null;
   market_cap?: number | null;
   market_cap_label?: string | null;
+  /** Marca da empresa (`/market/logo/<ticker>`), ou `null` quando não há de onde a tirar. */
+  logo_url?: string | null;
   /** País (ISO alfa-2) e a sua etiqueta em português. */
   country: string;
   country_label: string;
@@ -101,7 +112,10 @@ export type MarketMeta = {
   max_limit: number;
   cache_seconds: number;
   country_sources: Record<string, string>;
-  country_cache: string | null;
+  /** De onde vem a marca de cada empresa e por quanto tempo não se repete. */
+  logo: { fonte: string; rota: string; retry_days: number };
+  /** Ficheiro onde fica o perfil aprendido de cada ticker (país, nome, site). */
+  profile_cache: string | null;
 };
 
 export type MarketQuery = {

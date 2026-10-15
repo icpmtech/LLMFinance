@@ -23,16 +23,23 @@ RAIZ = Path(__file__).resolve().parents[1]
 if str(RAIZ) not in sys.path:
     sys.path.insert(0, str(RAIZ))
 
+from api import empresas_perfil  # noqa: E402
 from api import market_view as mv  # noqa: E402
 
 
 @pytest.fixture()
 def cache_em_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Cache de países e cache de resposta isoladas (sem escrever em `data/`)."""
+    """Cache de perfis, cache de resposta e pasta de logótipos isoladas.
+
+    A pasta dos logótipos também é redireccionada: sem isso os testes liam os
+    ficheiros reais de `data/empresas/logos/` e o resultado dependia da máquina
+    (bastava ter lá a marca de uma empresa para um teste de «sem marca» falhar).
+    """
     monkeypatch.setattr(mv, "CACHE_DIR", tmp_path)
-    monkeypatch.setattr(mv, "COUNTRY_CACHE_PATH", tmp_path / "countries.json")
+    monkeypatch.setattr(mv, "PROFILE_CACHE_PATH", tmp_path / "tickers.json")
     monkeypatch.setattr(mv, "_cache", None)
-    return tmp_path / "countries.json"
+    monkeypatch.setattr(empresas_perfil, "LOGOS_DIR", tmp_path / "logos")
+    return tmp_path / "tickers.json"
 
 
 def _linha(ticker: str, country: str, *, price: Any = 10.0, change: Any = 1.0, cap: Any = 1e9) -> Dict[str, Any]:
@@ -110,6 +117,7 @@ def test_sem_yahoo_nem_sufixo_o_pais_fica_desconhecido(monkeypatch: pytest.Monke
 
 
 def test_pais_gravado_em_cache_nao_volta_a_pedir_ao_yahoo(monkeypatch: pytest.MonkeyPatch, cache_em_tmp: Path) -> None:
+    """Uma entrada **completa** responde sem tocar na rede."""
     chamadas: List[str] = []
 
     def yahoo(ticker: str) -> Dict[str, Any]:
@@ -118,10 +126,22 @@ def test_pais_gravado_em_cache_nao_volta_a_pedir_ao_yahoo(monkeypatch: pytest.Mo
 
     monkeypatch.setattr(mv, "_profile_from_yahoo", yahoo)
 
-    perfil = mv.resolve_profile("AAPL", {"AAPL": {"country": "US", "country_label": "Estados Unidos", "country_source": "yahoo", "name": "Apple Inc."}})
+    perfil = mv.resolve_profile(
+        "AAPL",
+        {
+            "AAPL": {
+                "country": "US",
+                "country_label": "Estados Unidos",
+                "country_source": "yahoo",
+                "name": "Apple Inc.",
+                "site": "https://www.apple.com",
+                "site_verificado": True,
+            }
+        },
+    )
 
     assert perfil["country"] == "US"
-    assert perfil["name"] == "Apple Inc."
+    assert perfil["site"] == "https://www.apple.com"
     assert chamadas == []
 
 
@@ -254,7 +274,6 @@ def test_leitura_completa_sem_rede(monkeypatch: pytest.MonkeyPatch, cache_em_tmp
         "_profile_from_yahoo",
         lambda ticker: {"country": "US", "country_label": "Estados Unidos", "name": f"{ticker} Inc."} if ticker == "AAPL" else None,
     )
-
     resultado = mv.by_country(limit=10, workers=2)
 
     assert resultado["source"] == mv.market.LIVE_SOURCE
@@ -316,6 +335,149 @@ def test_sem_universo_usa_os_tickers_predefinidos(monkeypatch: pytest.MonkeyPatc
 
     assert resultado["universe"]["requested"] == 3
     assert {row["ticker"] for grupo in resultado["countries"] for row in grupo["tickers"]} <= set(mv.market.LIVE_DEFAULT_TICKERS)
+
+
+# ---------------------------------------------------------------------- marcas
+def test_ficheiro_da_chave_troca_o_que_o_disco_nao_aceita() -> None:
+    """A chave lógica tem `:`, o nome do ficheiro não pode ter.
+
+    No Windows `n:edp.png` não é um ficheiro na pasta: o `:` é lido como letra de
+    unidade e a escrita falha (`FileNotFoundError`). Sem esta conversão, nenhum
+    logótipo encontrado **por nome** chegava ao disco.
+    """
+    from api import empresas_perfil
+
+    assert empresas_perfil.ficheiro_da_chave("n:apple inc") == "n-apple inc"
+    assert empresas_perfil.ficheiro_da_chave("n:edp s a") == "n-edp s a"
+    # As chaves de NIF são só dígitos: os logótipos já guardados continuam iguais.
+    assert empresas_perfil.ficheiro_da_chave("500023875") == "500023875"
+
+
+def test_perfil_sem_pais_mas_com_site_fica_marcado(monkeypatch: pytest.MonkeyPatch, cache_em_tmp: Path) -> None:
+    """Uma cripto não tem país; isso não pode impedir o site de ser guardado."""
+    monkeypatch.setattr(
+        mv,
+        "_profile_from_yahoo",
+        lambda ticker: {"country": None, "country_label": None, "name": "Bitcoin USD", "site": "https://bitcoin.org/"},
+    )
+
+    perfil = mv.resolve_profile("BTC-USD", {})
+
+    assert perfil["site"] == "https://bitcoin.org/"
+    assert perfil["name"] == "Bitcoin USD"
+    assert perfil["site_verificado"] is True
+    assert perfil["country"] == mv.UNKNOWN_CODE
+
+
+def test_perfil_completo_em_cache_nao_volta_a_pedir_o_site(monkeypatch: pytest.MonkeyPatch, cache_em_tmp: Path) -> None:
+    chamadas: List[str] = []
+
+    def yahoo(ticker: str) -> Dict[str, Any]:
+        chamadas.append(ticker)
+        return {}
+
+    monkeypatch.setattr(mv, "_profile_from_yahoo", yahoo)
+
+    perfil = mv.resolve_profile("AAPL", {"AAPL": {"country": "US", "country_label": "Estados Unidos", "site_verificado": True, "site": "https://www.apple.com"}})
+
+    assert perfil["site"] == "https://www.apple.com"
+    assert chamadas == []
+
+
+def test_perfil_antigo_sem_site_volta_a_ser_perguntado(monkeypatch: pytest.MonkeyPatch, cache_em_tmp: Path) -> None:
+    """Entradas gravadas antes de o site ser lido não podem ficar sem marca."""
+    chamadas: List[str] = []
+
+    def yahoo(ticker: str) -> Dict[str, Any]:
+        chamadas.append(ticker)
+        return {"country": "US", "country_label": "Estados Unidos", "name": "Apple Inc.", "site": "https://www.apple.com"}
+
+    monkeypatch.setattr(mv, "_profile_from_yahoo", yahoo)
+
+    perfil = mv.resolve_profile("AAPL", {"AAPL": {"country": "US", "country_label": "Estados Unidos", "name": "Apple Inc."}})
+
+    assert chamadas == ["AAPL"]
+    assert perfil["site"] == "https://www.apple.com"
+    assert perfil["site_verificado"] is True
+
+
+def test_sem_site_nao_se_anuncia_logotipo(monkeypatch: pytest.MonkeyPatch, cache_em_tmp: Path) -> None:
+    """Um índice não tem marca a procurar: não se pede uma imagem que só falha."""
+    linha = _linha("^GSPC", "US")
+    linha["name"] = "S&P 500"
+    linha["site"] = None
+
+    assert mv._logo_url("^GSPC", linha, {}) is None
+
+
+def test_com_site_anuncia_o_logotipo(monkeypatch: pytest.MonkeyPatch, cache_em_tmp: Path) -> None:
+    linha = _linha("AAPL", "US")
+    linha["name"] = "Apple Inc."
+    linha["site"] = "https://www.apple.com"
+
+    assert mv._logo_url("AAPL", linha, {}) == "/market/logo/AAPL"
+
+
+def test_tentativa_recente_nao_volta_a_ser_anunciada(monkeypatch: pytest.MonkeyPatch, cache_em_tmp: Path) -> None:
+    """Um site que não rendeu marca não é visitado a cada visita à página."""
+    linha = _linha("AAPL", "US")
+    linha["name"] = "Apple Inc."
+    linha["site"] = "https://www.apple.com"
+    chave = mv._logo_key("AAPL", linha)
+
+    recente = {"logo_chave": chave, "logo_verificado_em": mv._now()}
+    assert mv._logo_url("AAPL", linha, recente) is None
+
+    # Nome diferente: a tentativa anterior era outra procura e não conta.
+    outra = {"logo_chave": "n:outra empresa", "logo_verificado_em": mv._now()}
+    assert mv._logo_url("AAPL", linha, outra) == "/market/logo/AAPL"
+
+
+def test_marca_vencida_permite_nova_tentativa() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    antigo = (datetime.now(timezone.utc) - timedelta(days=mv.LOGO_RETRY_DAYS + 1)).isoformat()
+
+    assert mv._logo_vencido(antigo) is True
+    assert mv._logo_vencido(None) is True
+    assert mv._logo_vencido("não é uma data") is True
+    assert mv._logo_vencido(mv._now()) is False
+
+
+def test_logo_sem_site_conhecido_nao_vai_a_rede(monkeypatch: pytest.MonkeyPatch, cache_em_tmp: Path) -> None:
+    monkeypatch.setattr(mv, "PROFILE_CACHE_PATH", cache_em_tmp)
+    mv._write_profile_cache({"^GSPC": {"country": "US", "country_label": "Estados Unidos", "name": "S&P 500", "site_verificado": True}})
+
+    assert mv.logo("^GSPC") is None
+
+
+def test_logo_reutiliza_o_ficheiro_guardado(monkeypatch: pytest.MonkeyPatch, cache_em_tmp: Path) -> None:
+    """Com marca já guardada, a rota não volta a sair para a internet."""
+    monkeypatch.setattr(mv, "PROFILE_CACHE_PATH", cache_em_tmp)
+    mv._write_profile_cache({"AAPL": {"country": "US", "country_label": "Estados Unidos", "name": "Apple Inc.", "site": "https://www.apple.com", "site_verificado": True}})
+
+    empresas_perfil.LOGOS_DIR.mkdir(parents=True, exist_ok=True)
+    (empresas_perfil.LOGOS_DIR / f"{empresas_perfil.ficheiro_da_chave('n:apple inc')}.png").write_bytes(b"x" * 200)
+
+    def nao_chamar(*args: Any, **kwargs: Any) -> Dict[str, Any]:  # pragma: no cover - não deve ser chamado
+        raise AssertionError("não devia ir buscar a marca outra vez")
+
+    monkeypatch.setattr(empresas_perfil, "obter_logo_do_site", nao_chamar)
+
+    encontrado = mv.logo("AAPL")
+
+    assert encontrado is not None
+    assert encontrado[0].name == "n-apple inc.png"
+    assert encontrado[1] == "image/png"
+
+
+def test_meta_descreve_a_marca_sem_a_ir_buscar(monkeypatch: pytest.MonkeyPatch, cache_em_tmp: Path) -> None:
+    monkeypatch.setattr(mv, "universe", lambda: ["AAPL"])
+
+    dados = mv.meta()
+
+    assert dados["logo"]["rota"] == "/market/logo/{ticker}"
+    assert dados["logo"]["retry_days"] == mv.LOGO_RETRY_DAYS
 
 
 def test_meta_descreve_a_fonte_sem_a_ir_buscar(monkeypatch: pytest.MonkeyPatch, cache_em_tmp: Path) -> None:
