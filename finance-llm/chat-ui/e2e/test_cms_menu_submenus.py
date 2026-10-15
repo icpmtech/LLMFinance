@@ -3,8 +3,8 @@
 Cobrem os três lados da funcionalidade:
 
 * o **editor** do CMS (Aparência) acrescenta e guarda um subitem;
-* o **site público no computador** mostra o submenu ao rato e ao teclado, abre o
-  submenu de segundo nível ao lado e mantém-no dentro do ecrã;
+* o **site público no computador** mostra o submenu a um clique na seta (e ao
+  teclado), abre o submenu de segundo nível ao lado e mantém-no dentro do ecrã;
 * o **site público no telemóvel** mostra os submenus à vista e indentados, sem
   estouro horizontal, e os links navegam.
 
@@ -132,7 +132,8 @@ def test_editor_do_cms_acrescenta_subitem(app, api, menus):
 
 
 # --------------------------------------------------------- site no computador
-def test_submenu_abre_com_o_rato(app, menus):
+def test_submenu_abre_com_um_clique(app, menus):
+    """No computador o submenu abre com um clique na seta, não com o rato por cima."""
     menus.definir("header", _menu_com_submenus())
     page = app("/site/")
 
@@ -140,15 +141,23 @@ def test_submenu_abre_com_o_rato(app, menus):
     blog = submenu.get_by_role("link", name="Blog")
     assert not blog.is_visible(), "o submenu só deve aparecer quando o item é aberto"
 
-    pai = page.locator("nav.main .menu-item > .menu-pai", has_text="Soluções")
-    pai.hover()
+    seta = page.locator("nav.main > .menu-item", has_text="Soluções").locator("> .menu-abre")
+    seta.click()
 
     expect(blog).to_be_visible()
     expect(submenu.get_by_role("link", name="Contactos")).to_be_visible()
-    assert submenu.get_by_role("link", name="Blog").get_attribute("href") == "/site/blog"
+    assert blog.get_attribute("href") == "/site/blog"
+    assert seta.get_attribute("aria-expanded") == "true"
+    # O rótulo continua a ser o link para a página do item.
+    assert page.locator("nav.main > .menu-item > .menu-pai", has_text="Soluções").get_attribute("href") == "/site/solucoes"
+
+    # Clicar fora do menu fecha o que estava aberto.
+    page.locator("main h1").first.click()
+    expect(blog).to_be_hidden()
+    assert seta.get_attribute("aria-expanded") == "false"
 
 
-def test_submenu_abre_com_o_teclado(app, menus):
+def test_submenu_abre_e_fecha_com_o_teclado(app, menus):
     menus.definir("header", _menu_com_submenus())
     page = app("/site/")
 
@@ -156,8 +165,15 @@ def test_submenu_abre_com_o_teclado(app, menus):
     blog = submenu.get_by_role("link", name="Blog")
     assert not blog.is_visible()
 
-    page.locator("nav.main .menu-item > .menu-pai", has_text="Soluções").focus()
+    seta = page.locator("nav.main > .menu-item", has_text="Soluções").locator("> .menu-abre")
+    seta.focus()
+    assert not blog.is_visible(), "o foco sozinho não abre o submenu"
+
+    page.keyboard.press("Enter")
     expect(blog).to_be_visible()
+
+    page.keyboard.press("Escape")
+    expect(blog).to_be_hidden()
 
 
 def test_grupo_sem_destino_e_rotulo_e_nao_link(app, menus):
@@ -165,8 +181,8 @@ def test_grupo_sem_destino_e_rotulo_e_nao_link(app, menus):
     menus.definir("header", _menu_com_submenus())
     page = app("/site/")
 
-    pai, _ = _submenu_do_cabecalho(page)
-    pai.hover()
+    _submenu_do_cabecalho(page)
+    page.locator("nav.main > .menu-item", has_text="Soluções").locator("> .menu-abre").click()
 
     grupo = page.locator("nav.main .submenu > li.tem-submenu > .menu-pai")
     expect(grupo).to_be_visible()
@@ -179,9 +195,9 @@ def test_submenu_de_segundo_nivel_fica_dentro_do_ecra(app, menus):
     menus.definir("header", _menu_com_submenus())
     page = app("/site/")
 
-    pai, submenu = _submenu_do_cabecalho(page)
-    pai.hover()
-    page.locator("nav.main .submenu > li.tem-submenu > .menu-pai").hover()
+    _, submenu = _submenu_do_cabecalho(page)
+    page.locator("nav.main > .menu-item", has_text="Soluções").locator("> .menu-abre").click()
+    page.locator("nav.main .submenu > li.tem-submenu").locator("> .menu-abre").click()
 
     aninhado = submenu.locator(".submenu")
     expect(aninhado.get_by_role("link", name="Fontes")).to_be_visible()
@@ -261,6 +277,9 @@ def test_painel_do_telemovel_traz_pesquisa_conta_e_setas(app):
     expect(page.locator("nav.main .menu-conta a[href='/login']")).to_be_visible()
     expect(page.locator("nav.main .menu-conta a[href='/register']")).to_be_visible()
     expect(page.locator("nav.main .menu-icone").first).to_be_visible()
+    # A entrada do CMS que também leva ao login não se repete aqui: quem mostra o
+    # «Entrar» no painel é o bloco de conta (a entrada fica no HTML, escondida).
+    expect(page.locator("nav.main a[href='/login']:visible")).to_have_count(1)
 
     abridores = page.locator("nav.main > .menu-item.tem-submenu")
     assert abridores.count() >= 1, "o menu do cabeçalho não tem nenhum submenu para abrir"

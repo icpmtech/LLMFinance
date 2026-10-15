@@ -697,6 +697,23 @@ def _media_por_ficheiro(nome: str) -> str:
     return ""
 
 
+def _pagina_existe(page_id: str) -> bool:
+    """`True` se a página do CMS existir **nesta** instalação.
+
+    O `cms_page_id` guardado num benchmark pode ter vindo de outra instalação
+    (a definição foi migrada do PC para a VM, com o id do CMS do PC): aqui não
+    há página nenhuma com ele, e passá-lo ao `save_item`/`publish_item` levanta
+    `KeyError` — que o painel mostrava como 500. Sem página, publica-se uma nova.
+    """
+    if not page_id:
+        return False
+    try:
+        cms.get_item("pages", page_id)
+    except KeyError:
+        return False
+    return True
+
+
 def publicar(slug: str, *, autor: str = "") -> Dict[str, Any]:
     """Publica o benchmark: página no CMS + marca-o como público."""
     estudo = analise(slug)
@@ -837,6 +854,14 @@ def publicar(slug: str, *, autor: str = "") -> Dict[str, Any]:
     # o site fica com duas páginas para o mesmo estudo.
     definicao = store.obter(slug) or {}
     page_id = str(definicao.get("cms_page_id") or "")
+    if page_id and not _pagina_existe(page_id):
+        logger.warning(
+            "A página %s do benchmark %s não existe nesta instalação (id de outra origem); "
+            "a publicação resolve a página pelo caminho.",
+            page_id,
+            slug,
+        )
+        page_id = ""
     if not page_id:
         orfa = cms.resolve_page_by_path(caminho, published_only=False)
         page_id = str((orfa or {}).get("id") or "") if isinstance(orfa, dict) else ""
@@ -889,6 +914,14 @@ def despublicar(slug: str, *, autor: str = "") -> Dict[str, Any]:
     if not benchmark:
         return {"error": "Benchmark não encontrado"}
     page_id = str(benchmark.get("cms_page_id") or "")
+    if page_id and not _pagina_existe(page_id):
+        logger.warning(
+            "A página %s do benchmark %s não existe nesta instalação (id de outra origem); "
+            "retira-se só a marca de público.",
+            page_id,
+            slug,
+        )
+        page_id = ""
     if page_id:
         cms.unpublish_item("pages", page_id, author=autor)
         resultado = cms.save_item("pages", {"id": page_id, "status": "arquivado"}, author=autor)

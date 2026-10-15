@@ -284,11 +284,23 @@ nav.main span.menu-pai {{ width: 100%; cursor: pointer; }}
 /* O ícone acompanha o rótulo: se a linha ficar apertada, cede o texto (muda de
    linha) e não o desenho, que encolhido fica deformado. */
 .menu-icone {{ flex: none; }}
-.menu-seta {{
-  flex: none; width: 6px; height: 6px; margin-left: 2px; opacity: .65;
-  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
-  transform: rotate(45deg) translateY(-2px);
+/* O submenu está fechado por omissão e quem o abre é a seta do item, no
+   telemóvel e no computador: um menu que se abre sozinho com o rato por cima
+   tapa o que se estava a ler. O rótulo continua a ser o link para a página. */
+nav.main .tem-submenu > .submenu {{ display: none; }}
+nav.main .tem-submenu.aberto > .submenu {{ display: block; }}
+/* A seta que abre e fecha: pequena e encostada ao rótulo (no telemóvel passa a
+   44px e vai para o canto da linha, ver o `@media (max-width: 799px)`). */
+.menu-abre {{
+  flex: none; display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; margin-left: -4px; padding: 0;
+  border: 1px solid transparent; border-radius: 999px;
+  background: none; color: var(--muted); cursor: pointer;
 }}
+.menu-abre:hover, .menu-abre:focus-visible {{ background: var(--code); color: var(--text); }}
+.menu-abre[aria-expanded="true"] {{ color: var(--accent); }}
+.menu-abre svg {{ transition: transform .18s ease; }}
+.menu-abre[aria-expanded="true"] svg {{ transform: rotate(180deg); }}
 /* Campo de pesquisa do site: vive no painel do telemóvel e na página de
    resultados (`/site/pesquisa`), que é o mesmo formulário. */
 .pesquisa-form, .menu-pesquisa {{
@@ -317,9 +329,6 @@ nav.main span.menu-pai {{ width: 100%; cursor: pointer; }}
   flex: 1 1 auto; gap: 8px; min-width: 132px; padding: 10px 14px;
   font-size: .95rem; white-space: nowrap;
 }}
-/* O botão que abre e fecha cada submenu só existe no telemóvel (é a seguir
-   ligado no `@media (max-width: 799px)`). */
-.menu-abre {{ display: none; }}
 /* No telefone o submenu fica logo à vista, indentado sob o item que o abre. */
 nav.main .submenu {{ margin: 0 0 6px 12px; padding: 0 0 0 10px; border-left: 1px solid var(--border); list-style: none; }}
 nav.main .submenu > li {{ list-style: none; }}
@@ -366,23 +375,16 @@ nav.main a[aria-current="page"] {{ background: var(--accent); color: #fff; }}
   /* Separadores entre entradas da lista e alvos de toque a toda a largura. */
   nav.main > * + * {{ border-top: 1px solid var(--border); }}
   nav.main > a {{ width: 100%; }}
-  /* No telemóvel o menu começa todo fechado e cada submenu abre e fecha pela
-     seta (o rótulo do item continua a levar à página dele). Sem isto, com os
-     submenus derivados dos dados, o painel passava o ecrã num instante. */
-  nav.main .tem-submenu > .submenu {{ display: none; }}
-  nav.main .tem-submenu.aberto > .submenu {{ display: block; }}
-  nav.main .tem-submenu > .menu-pai .menu-seta {{ display: none; }}
   nav.main .menu-item, nav.main .submenu > li {{ position: relative; }}
   nav.main .tem-submenu > .menu-pai {{ padding-right: 56px; }}
+  /* O painel abre com os botões de entrar e criar conta: as entradas de topo do
+     CMS que levam aos mesmos sítios não se repetem aqui (no ecrã grande ficam). */
+  nav.main > .menu-igual-conta {{ display: none; }}
+  /* A seta do painel: alvo de toque de 44px, no canto direito da linha. */
   .menu-abre {{
-    position: absolute; top: 2px; right: 4px; display: flex; align-items: center; justify-content: center;
-    width: 44px; height: 44px; padding: 0; border: 1px solid transparent; border-radius: 10px;
-    background: none; color: var(--muted); cursor: pointer;
+    position: absolute; top: 2px; right: 4px;
+    width: 44px; height: 44px; margin: 0; border-radius: 10px;
   }}
-  .menu-abre:hover {{ background: var(--code); color: var(--text); }}
-  .menu-abre svg {{ transition: transform .18s ease; }}
-  .menu-abre[aria-expanded="true"] {{ color: var(--accent); }}
-  .menu-abre[aria-expanded="true"] svg {{ transform: rotate(180deg); }}
   /* Com submenus o painel fica mais alto que o ecrã e o cabeçalho é pegajoso:
      sem tecto, o fim da lista ficava fora do alcance (o painel não anda com a
      página). Aqui rola dentro do próprio painel; o `dvh` acompanha a barra do
@@ -398,25 +400,23 @@ nav.main a[aria-current="page"] {{ background: var(--accent); color: #fff; }}
   .site-header.tema-central .wrap {{ flex-direction: row; justify-content: space-between; }}
   .site-header.tema-central .brand {{ text-align: left; }}
   .site-header.tema-central nav.main {{ margin-left: auto; margin-top: 0; width: auto; }}
-  /* Submenus: painel que abre por baixo da entrada (rato, teclado ou toque). */
+  /* Submenus: painel que abre por baixo da entrada, a um clique na seta (o
+     rótulo é o link para a página do item). */
   nav.main > .menu-item {{ position: relative; display: flex; align-items: center; }}
   nav.main .submenu {{
     display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
     min-width: 210px; margin: 0; padding: 8px; border: 1px solid var(--border);
     border-radius: 12px; background: var(--surface); box-shadow: 0 14px 34px rgba(16,24,40,.18);
   }}
-  nav.main .tem-submenu:hover > .submenu,
-  nav.main .tem-submenu:focus-within > .submenu {{ display: block; }}
   /* Um submenu dentro de outro abre ao lado, alinhado com o item que o abre. */
-  nav.main .submenu > li {{ position: relative; }}
+  nav.main .submenu > li {{ display: flex; align-items: center; position: relative; }}
   nav.main .submenu .submenu {{ top: -8px; left: calc(100% + 4px); }}
   /* Sem espaço à direita, o submenu vira-se para a esquerda (ver o script). */
   nav.main .submenu .submenu.abre-esquerda {{ left: auto; right: calc(100% + 4px); }}
   nav.main .submenu a, nav.main .submenu .menu-pai {{
-    justify-content: space-between; width: 100%; min-height: 40px; padding: 8px 10px;
-    border-radius: 8px; font-size: .9rem; font-weight: 500;
+    justify-content: space-between; flex: 1 1 auto; min-width: 0; min-height: 40px;
+    padding: 8px 10px; border-radius: 8px; font-size: .9rem; font-weight: 500;
   }}
-  nav.main .submenu .tem-submenu > .menu-pai .menu-seta {{ transform: rotate(-45deg); }}
 }}
 main {{ padding: 20px 0 56px; }}
 .card {{
@@ -640,9 +640,10 @@ figcaption {{ color: var(--muted); font-size: .85rem; margin-top: 8px; }}
   /* Cabeçalho de uma linha: o menu volta a ser uma fila de pastilhas. */
   .site-header .wrap {{ flex-wrap: nowrap; gap: 18px; padding-top: 12px; padding-bottom: 12px; }}
   .brand .brand-mark {{ height: 34px; }}
-  /* No ecrã grande não há botão de menu, nem pesquisa, nem conta, nem setas, e
-     as pastilhas ficam sem ícones: a fila é larga e já tem o «Entrar» à vista. */
-  .menu-estado, .menu-botao, .menu-pesquisa, .menu-conta, .menu-abre, .menu-icone {{ display: none; }}
+  /* No ecrã grande não há botão de menu, nem pesquisa, nem conta, e as pastilhas
+     ficam sem ícones (da seta trata a regra própria, mais abaixo): a fila é larga
+     e já tem o «Entrar» à vista. */
+  .menu-estado, .menu-botao, .menu-pesquisa, .menu-conta, .menu-icone {{ display: none; }}
   nav.main {{
     display: flex !important; flex-basis: auto; flex-direction: row; margin-left: auto; gap: 6px;
     width: auto; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
@@ -1237,31 +1238,44 @@ def _menu_conta() -> str:
     )
 
 
-def _menu_link(item: Dict[str, Any], current_path: str, *, com_icone: bool = False) -> str:
+#: Destinos que o bloco de conta do telemóvel (`_menu_conta`) já dá. No painel, as
+#: entradas do CMS que levam lá não se repetem; no ecrã grande a fila fica como o
+#: editor a deixou (quem manda é o CMS).
+_DESTINOS_DA_CONTA: Set[str] = {"/login", "/register"}
+
+
+def _igual_ao_bloco_de_conta(item: Dict[str, Any]) -> bool:
+    """O item do menu leva a um destino que o bloco de conta já mostra?"""
+    href = str(item.get("href") or "").strip().lower().rstrip("/")
+    return href in _DESTINOS_DA_CONTA
+
+
+def _menu_link(
+    item: Dict[str, Any], current_path: str, *, com_icone: bool = False, classe: str = ""
+) -> str:
     """Link de um item do menu (no topo ou dentro de um submenu)."""
     href = str(item.get("href") or "")
     active = ' aria-current="page"' if href and href in (current_path, f"/site{current_path}") else ""
     target = ' target="_blank" rel="noopener"' if item.get("new_tab") else ""
     icone = _icone_do_item(item) if com_icone else ""
-    return f'<a href="{_esc(href)}"{active}{target}>{icone}{_esc(item.get("label"))}</a>'
+    atributo = f' class="{classe}"' if classe else ""
+    return f'<a{atributo} href="{_esc(href)}"{active}{target}>{icone}{_esc(item.get("label"))}</a>'
 
 
 def _menu_gatilho(item: Dict[str, Any], current_path: str, *, com_icone: bool = False) -> str:
     """O que abre o submenu: a página do item ou, sem página, o próprio rótulo.
 
-    O rótulo sem destino é focável (`tabindex`) porque é o foco que revela o
-    submenu no computador — sem isso, um item que só agrupa nunca abriria pelo
-    teclado.
+    Quem abre o submenu é a seta que vem a seguir (`_botao_do_submenu`); o rótulo
+    continua a ser o link. O rótulo sem destino é um `<span>` que não navega.
     """
     href = str(item.get("href") or "")
     label = _esc(item.get("label"))
-    seta = '<span class="menu-seta" aria-hidden="true"></span>'
     icone = _icone_do_item(item) if com_icone else ""
     if href:
         active = ' aria-current="page"' if href in (current_path, f"/site{current_path}") else ""
         target = ' target="_blank" rel="noopener"' if item.get("new_tab") else ""
-        return f'<a class="menu-pai" href="{_esc(href)}"{active}{target}>{icone}{label}{seta}</a>'
-    return f'<span class="menu-pai" tabindex="0">{icone}{label}{seta}</span>'
+        return f'<a class="menu-pai" href="{_esc(href)}"{active}{target}>{icone}{label}</a>'
+    return f'<span class="menu-pai" tabindex="0">{icone}{label}</span>'
 
 
 def _submenu(items: List[Dict[str, Any]], current_path: str, depth: int) -> str:
@@ -1286,16 +1300,21 @@ def _itens_principais(items: List[Dict[str, Any]], current_path: str) -> str:
     partes: List[str] = []
     for item in items:
         filhos = item.get("children") or []
+        # `menu-igual-conta` fica no HTML (o ecrã grande mostra a entrada) e é o
+        # CSS do painel do telemóvel que a esconde, para não repetir os botões.
+        # Só nas entradas de topo: dentro de um submenu a entrada não se repete
+        # ao lado dos botões e escondê-la podia deixar o grupo vazio.
+        igual = " menu-igual-conta" if _igual_ao_bloco_de_conta(item) else ""
         if filhos:
             partes.append(
-                f'<div class="menu-item tem-submenu nivel-0">'
+                f'<div class="menu-item tem-submenu nivel-0{igual}">'
                 f'{_menu_gatilho(item, current_path, com_icone=True)}'
                 f'{_botao_do_submenu(str(item.get("label") or ""))}'
                 f'{_submenu(filhos, current_path, 1)}'
                 "</div>"
             )
         else:
-            partes.append(_menu_link(item, current_path, com_icone=True))
+            partes.append(_menu_link(item, current_path, com_icone=True, classe=igual.strip()))
     return "".join(partes)
 
 
@@ -1325,8 +1344,9 @@ def _header(settings: Dict[str, Any], *, current_path: str, preview: bool = Fals
         + '<input type="checkbox" id="menu-estado" class="menu-estado" aria-label="Abrir o menu">'
         + '<label class="menu-botao" for="menu-estado"><span class="menu-barras" aria-hidden="true"></span>Menu</label>'
         # O painel do telemóvel abre com a pesquisa e a conta à frente da lista
-        # (é o que se procura primeiro). No ecrã grande as duas desaparecem e a
-        # lista volta a ser uma fila de pastilhas.
+        # (é o que se procura primeiro), e as entradas do CMS que levam aos mesmos
+        # sítios saem daqui (`menu-igual-conta`). No ecrã grande as duas
+        # desaparecem e a lista volta a ser uma fila de pastilhas.
         + (
             '<nav class="main" aria-label="Navegação principal">'
             + _form_de_pesquisa(classe="menu-pesquisa")
@@ -1776,10 +1796,10 @@ def _layout(
             ""
             if preview
             else (
-                # Menu do telemóvel: a caixa escondida guarda o estado do painel e
-                # cada item com submenu abre e fecha pela seta (o rótulo continua a
-                # ser o link). Fechar o painel fecha tudo, para a próxima abertura
-                # não aparecer a lista a meio.
+                # Menu: cada item com submenu abre e fecha pela seta (o rótulo
+                # continua a ser o link), no telemóvel e no computador. Fechar o
+                # painel, clicar fora ou carregar em Esc fecha tudo, para a
+                # próxima abertura não aparecer a lista a meio.
                 '<script>(function(){var c=document.getElementById("menu-estado"),b=document.querySelector(".menu-botao"),'
                 'n=document.querySelector("nav.main");if(!c||!n)return;'
                 'function rotulo(i){var g=i.querySelector(".menu-pai");return g?g.textContent.trim():"";}'
@@ -1795,11 +1815,13 @@ def _layout(
                 'c.addEventListener("change",update);'
                 'n.querySelectorAll("a").forEach(function(a){a.addEventListener("click",function(){'
                 'c.checked=false;update();});});'
-                'document.addEventListener("click",function(e){if(c.checked&&e.target!==c&&!n.contains(e.target)'
-                '&&!b.contains(e.target)){c.checked=false;update();}});update();})();</script>'
+                'document.addEventListener("click",function(e){if(n.contains(e.target)||b.contains(e.target))return;'
+                'if(c.checked){c.checked=false;update();}else{fechar();}});'
+                'document.addEventListener("keydown",function(e){if(e.key==="Escape")fechar();});update();})();</script>'
                 # Um submenu dentro de outro abre ao lado; no fim da fila (o menu
-                # vive à direita) não cabe e sai do ecrã. Aqui vira-se para a esquerda.
-                '<script>(function(){document.querySelectorAll("nav.main .submenu .submenu").forEach(function(sub){var item=sub.parentElement;function ajustar(){sub.classList.remove("abre-esquerda");if(sub.getBoundingClientRect().right>window.innerWidth-8){sub.classList.add("abre-esquerda");}}item.addEventListener("mouseenter",ajustar);item.addEventListener("focusin",ajustar);});})();</script>'
+                # vive à direita) não cabe e sai do ecrã. Aqui vira-se para a
+                # esquerda, no momento em que a seta o abre.
+                '<script>(function(){document.querySelectorAll("nav.main .submenu .submenu").forEach(function(sub){var item=sub.parentElement;function ajustar(){sub.classList.remove("abre-esquerda");if(sub.getBoundingClientRect().right>window.innerWidth-8){sub.classList.add("abre-esquerda");}}var t=item.querySelector(".menu-abre");if(t)t.addEventListener("click",ajustar);item.addEventListener("focusin",ajustar);});})();</script>'
             )
         )
         + "</body></html>"

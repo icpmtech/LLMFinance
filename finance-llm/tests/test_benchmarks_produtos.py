@@ -6,9 +6,12 @@ Cobrem as partes que decidem resultados e que já falharam uma vez:
 - normalização de uma oferta (chave de produto, desconto, stock);
 - `field_map` a sobrepor-se à deteção por nome de campo;
 - normalização/validação da definição (slug, lojas obrigatórias, chave de comparação);
-- atualização da definição sem perder o slug (o slug é o id do índice).
+- atualização da definição sem perder o slug (o slug é o id do índice);
+- publicação no CMS de uma definição migrada de outra instalação (o
+  `cms_page_id` que veio no índice não existe aqui e não pode dar 500).
 
-Não tocam no Elasticsearch nem no scraper: testam as funções puras.
+O Elasticsearch e o scraper estão sempre substituídos: testam-se as funções
+puras e a ligação ao CMS, com o CMS isolado numa pasta temporária.
 """
 from __future__ import annotations
 
@@ -447,3 +450,106 @@ def test_analise_de_lojas_calcula_indice_de_preco(monkeypatch):
     assert lojas["barata"]["indice_preco"] == 90.0
     assert lojas["cara"]["indice_preco"] == 110.0
     assert resultado["kpis"]["avg_price"] == 100.0
+
+
+# ---------------------------------------------------------------------------
+# Publicação no CMS
+# ---------------------------------------------------------------------------
+@pytest.fixture()
+def cms_isolado(tmp_path, monkeypatch):
+    """CMS numa pasta temporária: nada é lido nem escrito em `data/`."""
+    from api import cms_store, indexnow
+
+    pasta = tmp_path / "cms"
+    monkeypatch.setattr(cms_store, "CMS_DIR", pasta)
+    monkeypatch.setattr(cms_store, "CMS_PATH", pasta / "cms.json")
+    monkeypatch.setattr(cms_store, "MEDIA_DIR", pasta / "media")
+    monkeypatch.setattr(cms_store, "_cache", None)
+    monkeypatch.setattr(cms_store, "_cache_mtime", None)
+    # Uma escrita no CMS dispara o anúncio em fundo; aqui não sai daqui.
+    monkeypatch.setattr(indexnow, "anunciar_em_fundo", lambda motivo: None)
+    return cms_store
+
+
+def _estudo_para_publicar(slug: str) -> dict:
+    """O mínimo que o `publicar` consome do `analise`."""
+    return {
+        "benchmark": {
+            "slug": slug,
+            "name": "Sapatilhas",
+            "category": "Desporto",
+            "currency": "EUR",
+            "match_on": "ean",
+        },
+        "kpis": {
+            "products": 3,
+            "stores": 2,
+            "offers": 5,
+            "comparable_products": 2,
+            "avg_spread_pct": 12.0,
+            "potential_saving_eur": 10.0,
+        },
+        "opportunities": [],
+        "stores": [],
+    }
+
+
+def test_publicar_ignora_pagina_do_cms_de_outra_instalacao(cms_isolado, monkeypatch):
+    """O `cms_page_id` que veio de outra instalação não pode rebentar a publicação.
+
+    As definições chegam à VM pelo índice do Elasticsearch, com o id da página
+    do CMS do PC. Aí não existe página nenhuma com esse id: antes disto, o
+    `save_item` levantava `KeyError` e o painel mostrava 500 ao publicar.
+    """
+    monkeypatch.setattr(servico, "analise", _estudo_para_publicar)
+    monkeypatch.setattr(
+        servico.store,
+        "obter",
+        lambda slug: {"slug": slug, "cms_page_id": "pag_do_pc_que_nao_existe_aqui"},
+    )
+    guardado = {}
+    monkeypatch.setattr(servico.store, "marcar_publicacao", lambda slug, **kw: guardado.update(kw) or {"slug": slug})
+
+    resultado = servico.publicar("sapatilhas-lojas", autor="teste")
+
+    assert resultado["public"] is True
+    assert resultado["page_id"] != "pag_do_pc_que_nao_existe_aqui"
+    pagina = cms_isolado.get_item("pages", resultado["page_id"])
+    assert pagina["path"] == "benchmarks/sapatilhas-lojas"
+    assert pagina["status"] == "publicado"
+    # O id da página desta instalação fica guardado na definição.
+    assert guardado["page_id"] == resultado["page_id"]
+
+
+def test_publicar_reaproveita_a_pagina_que_ja_existe(cms_isolado, monkeypatch):
+    """Ao republicar não se cria uma segunda página para o mesmo estudo."""
+    monkeypatch.setattr(servico, "analise", _estudo_para_publicar)
+    definicao = {"slug": "sapatilhas-lojas", "cms_page_id": ""}
+    monkeypatch.setattr(servico.store, "obter", lambda slug: definicao)
+    monkeypatch.setattr(servico.store, "marcar_publicacao", lambda slug, **kw: {"slug": slug})
+
+    primeira = servico.publicar("sapatilhas-lojas", autor="teste")
+    definicao["cms_page_id"] = primeira["page_id"]
+    segunda = servico.publicar("sapatilhas-lojas", autor="teste")
+
+    assert segunda["page_id"] == primeira["page_id"]
+    paginas = cms_isolado.list_items("pages", limit=500)["items"]
+    assert len([p for p in paginas if p["path"] == "benchmarks/sapatilhas-lojas"]) == 1
+
+
+def test_despublicar_com_pagina_de_outra_instalacao_nao_rebenta(cms_isolado, monkeypatch):
+    """Sem a página, retira-se só a marca de público (antes dava 500)."""
+    monkeypatch.setattr(
+        servico.store,
+        "obter",
+        lambda slug: {"slug": slug, "cms_page_id": "pag_do_pc_que_nao_existe_aqui"},
+    )
+    guardado = {}
+    monkeypatch.setattr(servico.store, "marcar_publicacao", lambda slug, **kw: guardado.update(kw) or {"slug": slug})
+
+    resultado = servico.despublicar("sapatilhas-lojas", autor="teste")
+
+    assert resultado["public"] is False
+    assert guardado["page_id"] == ""
+    assert guardado["publico"] is False
+

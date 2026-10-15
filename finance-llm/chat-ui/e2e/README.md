@@ -30,9 +30,12 @@ de números escritos à mão.
 menus):
 
 - o editor acrescenta um subitem, guarda-o e o subitem chega à API;
-- no computador o submenu só aparece com o rato ou com o foco (teclado), um item
-  sem página nem URL é rótulo de grupo (não navega) e o submenu de segundo nível
-  abre ao lado **dentro do ecrã**;
+- o submenu (cabeçalho, no computador e no telemóvel) **abre e fecha com um
+  clique na seta do item, nunca com o rato por cima**: o rótulo continua a ser o
+  link e a seta traz `aria-expanded` com o estado. Clicar fora do menu ou
+  carregar em Esc fecha o que estivesse aberto. Um item sem página nem URL é
+  rótulo de grupo (não navega) e o submenu de segundo nível abre ao lado
+  **dentro do ecrã**;
 - no rodapé os submenus aparecem ao lado do item que os abre;
 - no telemóvel (390×844) o botão «Menu» abre o painel, a lista começa
   **fechada** e cada submenu abre e fecha pela sua própria seta (o rótulo do item
@@ -41,7 +44,9 @@ menus):
 - o painel do telemóvel traz a **pesquisa** (envia para `/site/pesquisa?q=`),
   **entrar/criar conta** e um **ícone** em cada entrada de topo — com a geometria
   do **Lucide** (a mesma biblioteca que o `chat-ui` usa; ver `_ICONES` em
-  `api/cms_render.py`), escondida no ecrã grande; nada disto passa pelo CMS, é o
+  `api/cms_render.py`), escondida no ecrã grande; as entradas de topo do CMS que
+  levam a `/login` ou `/register` não se repetem no painel (marca
+  `menu-igual-conta`, escondida só no telemóvel); nada disto passa pelo CMS, é o
   HTML do site que o publica;
 
 Além do que o editor guarda, o cabeçalho mostra **submenus derivados dos dados**

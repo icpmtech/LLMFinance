@@ -378,9 +378,9 @@ def test_pagina_publica_traz_as_areas_no_menu(instalacao):
 
     html = cliente.get("/site/").text
     # O item «Relatórios» passou a abrir um painel: área (2.º nível) e documento.
-    # (O item leva o ícone do telemóvel antes do rótulo.)
+    # (O item leva o ícone do telemóvel antes do rótulo e a seta depois dele.)
     assert '<a class="menu-pai" href="/site/relatorios-gratuitos">' in html
-    assert "Relatórios<span" in html
+    assert re.search(r'Relatórios</a><button type="button" class="menu-abre"', html)
     assert '<span class="menu-pai" tabindex="0">Empresas e risco' in html
     assert '<ul class="submenu nivel-2">' in html
     assert f'href="/site/documento/{documento["id"]}"' in html
@@ -447,8 +447,7 @@ def test_painel_do_telemovel_traz_pesquisa_conta_icones_e_setas(instalacao):
     )
     # No ecrã grande nada disto aparece…
     assert (
-        ".menu-estado, .menu-botao, .menu-pesquisa, .menu-conta, .menu-abre, .menu-icone { display: none; }"
-        in html
+        ".menu-estado, .menu-botao, .menu-pesquisa, .menu-conta, .menu-icone { display: none; }" in html
     )
     # … e no telemóvel a lista começa fechada: quem abre é a seta.
     assert "nav.main .tem-submenu > .submenu { display: none; }" in html
@@ -459,3 +458,48 @@ def test_painel_do_telemovel_traz_pesquisa_conta_icones_e_setas(instalacao):
     assert ".menu-icone { flex: none; }" in html
     assert ".menu-conta { display: flex; flex-wrap: wrap;" in html
     assert "white-space: nowrap;" in html
+
+
+def test_submenu_abre_ao_clique_da_seta_e_nao_ao_rato(instalacao):
+    """No computador o submenu não abre com o rato por cima: abre com um clique."""
+    _documento("Concorrência — Empresa A", preco=0.0, tags=["empresa"])
+    _editorial_instalado()
+    html = cms_render.render_index(settings=cms_store.get_settings())
+    nav = re.search(r'<nav class="main".*?</nav>', html, re.S).group(0)
+
+    # A seta existe nos dois layouts (não está na lista do que o ecrã grande esconde).
+    assert '<button type="button" class="menu-abre"' in nav
+    assert ".menu-abre { display: none; }" not in html
+    # O estado é o da classe `aberto` (posto pelo clique), não o do rato ou do foco.
+    assert "nav.main .tem-submenu.aberto > .submenu { display: block; }" in html
+    assert ":hover > .submenu" not in html
+    assert ":focus-within" not in html
+    # Uma seta por item com submenu, com o rótulo a continuar a ser o link, e sem
+    # a seta antiga (feita em CSS) ao lado.
+    assert nav.count('class="menu-abre"') >= 1
+    assert nav.count("menu-seta") == 0
+    # Fechar: o clique fora e o Esc fecham o que estiver aberto.
+    assert 'document.addEventListener("keydown"' in html and '"Escape"' in html
+    assert "if(n.contains(e.target)||b.contains(e.target))return;" in html
+
+
+def test_painel_do_telemovel_nao_repete_o_que_o_bloco_de_conta_ja_da(instalacao):
+    """A entrada de topo do CMS que leva ao mesmo sítio dos botões sai do painel."""
+    _editorial_instalado()
+    menu = next(menu for menu in cms_store.list_menus() if menu["location"] == "header")
+    itens = [item for item in copy.deepcopy(menu["items"]) if item.get("href") not in ("/login", "/register")]
+    itens.append({"label": "Entrar", "href": "/login"})
+    itens.append({"label": "Criar conta", "href": "/register/"})
+    cms_store.save_item("menus", {**menu, "items": itens}, "sistema")
+
+    html = cms_render.render_index(settings=cms_store.get_settings())
+    nav = re.search(r'<nav class="main".*?</nav>', html, re.S).group(0)
+
+    # A entrada continua no HTML — é o ecrã grande que a mostra — com a marca que
+    # o painel esconde (a barra final do destino não engana a comparação).
+    assert '<a class="menu-igual-conta" href="/login">' in nav
+    assert '<a class="menu-igual-conta" href="/register/">' in nav
+    assert nav.count('class="menu-igual-conta"') == 2
+    assert "nav.main > .menu-igual-conta { display: none; }" in html
+    # E quem não vai para lá fica sem marca nenhuma.
+    assert '<a href="/site/blog">' in nav
